@@ -3,6 +3,7 @@
   "//optional-1": "OPTIONAL servers (need accounts/auth — paste into mcpServers only AFTER you have credentials, otherwise they show as failed on every session start):",
   "//optional-2": "Sentry (prod errors, powers log-analyzer): \"sentry\": { \"command\": \"npx\", \"args\": [\"-y\", \"@sentry/mcp-server@latest\"], \"env\": { \"SENTRY_AUTH_TOKEN\": \"${SENTRY_AUTH_TOKEN}\" } }",
   "//optional-3": "GitHub (PRs/issues, powers /pr and /fix-issue): \"github\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"], \"env\": { \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"${GITHUB_PAT}\" } }",
+  "//playwright-note": "playwright is kept as qa-tester's FALLBACK only — the primary browser muscle is the agent-browser CLI (npm i -g agent-browser && agent-browser install), invoked via Bash. Remove the playwright server below after the first green /arc-qa run driven by agent-browser.",
   "mcpServers": {
     "supabase": {
       "command": "npx",

@@ -29,7 +29,8 @@ core concepts.
 
 ### `.mcp.json`
 Registers MCP servers so Claude gets real capabilities in chat: **Supabase** (your DB),
-**Stripe** (payments), **Playwright** (a real browser — powers qa-tester), **Context7**
+**Stripe** (payments), **Playwright** (real-browser fallback for qa-tester — the primary
+browser muscle is the **agent-browser CLI**, invoked via Bash), **Context7**
 (current, version-specific library docs — powers researcher). Must be at root.
 **Benefit:** "how many users signed up?" answered from real data; docs always current.
 **Use:** set `SUPABASE_PROJECT_REF` in env, delete servers you don't use. Secrets via `${VAR}`
@@ -112,9 +113,11 @@ model tier (the brain):
 - `log-analyzer.md` (sonnet) — first-error principle + differential diagnosis (≥2
   hypotheses, seek disconfirming evidence) → root cause vs trigger vs symptom → fix +
   prevention. Uses **Sentry/hosting MCPs** as primary evidence when connected.
-- `qa-tester.md` (sonnet) — armed with **Playwright MCP** (real browser),
-  **@axe-core/playwright** (WCAG 2.1 AA scans), **Lighthouse** (launch perf scores).
-  Happy path → sad paths → boundaries → exploratory tours → evidence-only reporting.
+- `qa-tester.md` (sonnet) — armed with **agent-browser** (Vercel Labs' native browser CLI:
+  `@ref` snapshots, `batch` flows, console/network evidence, Web Vitals; falls back to
+  Playwright MCP if missing), **@axe-core/playwright** (WCAG 2.1 AA scans), **Lighthouse**
+  (launch perf scores). Happy path → sad paths → boundaries → exploratory tours →
+  evidence-only reporting.
 
 **Benefit:** heavy exploration happens elsewhere; your main context stays clean.
 **Use:** `/arc-review` triggers the first; ask for the others by name.

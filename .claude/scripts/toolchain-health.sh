@@ -65,8 +65,10 @@ emit_all(){
   if [ -f package.json ] && grep -q '"knip"' package.json 2>/dev/null; then R_OK "knip" "devDep · dead code"; else R_OPT "knip" "npm i -D knip" "dead-code detection"; fi
 
   sec "QA"
+  if have agent-browser; then R_OK "agent-browser" "$(ver agent-browser) · browser CLI"
+  else R_MISS "agent-browser" "npm install -g agent-browser && agent-browser install" "agent-native browser · arms qa-tester/canary/design"; fi
   if [ -f package.json ] && grep -q '@axe-core/playwright' package.json 2>/dev/null; then R_OK "axe-core" "devDep · WCAG"; else R_OPT "axe-core" "npm i -D @axe-core/playwright" "WCAG 2.1 AA scans"; fi
-  if have npx; then R_OK "playwright / lighthouse" "via npx on demand"; else R_MISS "npx" "scoop install nodejs-lts" "runs playwright/lighthouse"; fi
+  if have npx; then R_OK "playwright / lighthouse" "via npx on demand"; else R_MISS "npx" "scoop install nodejs-lts" "runs playwright/lighthouse (qa fallback)"; fi
 
   sec "MEMORY & KNOWLEDGE GRAPH"
   if grep -qs 'claude-mem' "$HOME/.claude/settings.json" 2>/dev/null || ls "$HOME/.claude/plugins" 2>/dev/null | grep -qi 'claude-mem'; then

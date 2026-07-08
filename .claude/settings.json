@@ -12,6 +12,7 @@
       "Bash(git commit:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
+      "Bash(agent-browser:*)",
       "mcp__supabase",
       "mcp__playwright"
     ],

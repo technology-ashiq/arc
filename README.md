@@ -38,7 +38,7 @@ your-project/
     │   ├── code-reviewer.md  #   reviews diffs, returns summary
     │   ├── researcher.md     #   web fetch + synthesis
     │   ├── log-analyzer.md   #   parses errors / crash logs
-    │   └── qa-tester.md      #   real-browser flow tests via Playwright MCP
+    │   └── qa-tester.md      #   real-browser flow tests via the agent-browser CLI (Playwright MCP fallback)
     ├── output-styles/        # Custom response formats
     │   └── terse.md          #   code-only, no prose
     ├── rules/                # Path-scoped — load on frontmatter `paths:` glob match

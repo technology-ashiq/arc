@@ -23,6 +23,10 @@ Legend: `$` = terminal · `>` = what you type to Claude · ⚙ = fires automatic
       ```
       Semgrep trouble on Windows? Use **Opengrep** (rule-compatible fork, self-contained binary):
       `irm https://raw.githubusercontent.com/opengrep/opengrep/main/install.ps1 | iex`
+- [ ] Browser QA muscle (recommended): `npm install -g agent-browser` then `agent-browser install`
+      (downloads Chrome for Testing, one time). Arms qa-tester, `/arc-canary` and design-reviewer
+      with a fast agent-native browser CLI (`@ref` snapshots, `batch` flows, Web Vitals, visual
+      diffs). Verify: `agent-browser --version` · troubleshoot: `agent-browser doctor`.
 - [ ] Memory recall (recommended): `$ npx claude-mem install` — hooks-based session memory,
       local, no API keys, works across all projects. Verify: `claude-mem status`.
       (Coexists fine with this template's SessionStart/SessionEnd hooks — hooks compose.)
@@ -192,7 +196,7 @@ Claude keeps breaking (→ hook).
 | Bug ticket | `/arc-fix-issue <n>` | command |
 | "Compare X vs Y" | researcher agent | isolated research |
 | Scary error | log-analyzer agent | root cause, not noise |
-| Demo/smoke-test evidence | qa-tester agent | real-browser flows via Playwright |
+| Demo/smoke-test evidence | qa-tester agent | real-browser flows via agent-browser (Playwright MCP fallback) |
 | Phase closed | `/arc-retro` | corrections → permanent upgrades |
 | Marketing copy | seo-article-writer skill | model-invoked |
 | Dangerous command attempted | nothing — it's blocked | ⚙ destructive-guard |

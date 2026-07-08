@@ -151,7 +151,7 @@ Nee neradiya kupidama, **commands ivanga-ala Task subagent-ah** invoke pannum (i
 | Agent | Model | Enna pannudhu | Background tools | Yaaru kupidum |
 |-------|-------|---------------|------------------|---------------|
 | `code-reviewer` | opus | Scanner sweep + 4-pass OWASP review + blast-radius (callers/dependents) | semgrep/opengrep, gitleaks, osv-scanner, knip, codegraph/Graphify | `/arc-review` |
-| `qa-tester` | sonnet | Real browser-la app-a drive panni exploratory test (happy/sad/boundary/tours) + axe a11y | **Playwright MCP**, lighthouse, axe-core | `/arc-qa`, `/arc-canary`, `/arc-phase-done` demo |
+| `qa-tester` | sonnet | Real browser-la app-a drive panni exploratory test (happy/sad/boundary/tours) + axe a11y | **agent-browser CLI** (`@ref` snapshots, batch, vitals; fallback: Playwright MCP), lighthouse, axe-core | `/arc-qa`, `/arc-canary`, `/arc-phase-done` demo |
 | `security-auditor` *(pudhusu)* | opus | Deep **OWASP Top 10 + STRIDE** threat model, ovvoru finding-ku exploit scenario, zero-noise | Read/Grep/Bash | `/arc-audit` |
 | `design-reviewer` *(pudhusu)* | sonnet | Design dimensions 0-10 score, AI-slop detect, apram **fix** + before/after screenshot | Edit/Bash (+ browser) | `/arc-design` |
 | `product-challenger` *(pudhusu)* | sonnet | Idea-va challenge (6 forcing questions), 3 approaches, Klein pre-mortem -> **PLAN.md-la ezhudhum** | Read/Edit | kickoff-ku munnadi |
@@ -185,7 +185,7 @@ background-la enna, enna artifact.
 |---------|------|-----------|-------------------|
 | `/arc-review [base]` | phase code mudinjadhum | `code-reviewer` agent (scanners + OWASP) | `docs/reviews/...md`, verdict ship/fix-first/needs-discussion |
 | `/arc-audit [scope]` | auth/payments/high-risk diff | `security-auditor` agent (STRIDE) | `docs/security/...md`; high-sev -> tracked issue; stamp `security` (0 critical-na) |
-| `/arc-qa [url]` | UI/flow test | `qa-tester` agent (Playwright) -> bug report; **main thread fix + mandatory regression test** | `docs/qa/...md`; stamp `qa` |
+| `/arc-qa [url]` | UI/flow test | `qa-tester` agent (agent-browser CLI; fallback Playwright MCP) -> bug report; **main thread fix + mandatory regression test** | `docs/qa/...md`; stamp `qa` |
 | `/arc-design [route]` | UI phase | `design-reviewer` agent (score+fix) | `docs/design/...md`; stamp `design` (PASS-na) |
 | `/arc-second-opinion [base]` | critical diff | **codex CLI** (or 2nd model) cross-check vs `/arc-review` | `docs/reviews/...-second-opinion.md`; critical disagreement -> ship block |
 
@@ -200,7 +200,7 @@ background-la enna, enna artifact.
 | `/arc-commit` | changes ready | Grouped conventional commits -- **push panna maaten** |
 | `/arc-pr [base]` | branch ready | GitHub PR + summary + test plan |
 | `/arc-ship` | production-ku | `lint -> build -> test -> vercel --prod`. deploy-guard hook test + arc gates re-check pannum (red/gate-fail -> block) |
-| `/arc-canary <url>` | deploy apram | `qa-tester` post-deploy watch -- console errors/perf/page fail; **fail-na rollback/block** |
+| `/arc-canary <url>` | deploy apram | agent-browser watch loop (errors/5xx/vitals/visual diff vs `docs/canary/` baseline) + `qa-tester` money-flows; **fail-na rollback/block** |
 
 ### Stage 6 -- CLOSE PHASE
 | Command | Epdi | Enna |
@@ -348,14 +348,14 @@ State git-la irukkaradhaala, `/arc-resume` epovum session-a rebuild panna mudiyu
 | Change | `/arc-change`, `/arc-fix-issue` | tracker | phase-spec / ADR |
 | Review | `/arc-review` | code-reviewer + scanners | docs/reviews/ |
 | Security | `/arc-audit` | security-auditor (STRIDE) | docs/security/ + issue |
-| QA | `/arc-qa` | qa-tester + Playwright | docs/qa/ + regression test |
+| QA | `/arc-qa` | qa-tester + agent-browser | docs/qa/ + regression test |
 | Design | `/arc-design` | design-reviewer | docs/design/ |
 | 2nd opinion | `/arc-second-opinion` | codex CLI | docs/reviews/ |
 | Docs | `/arc-docs` | docs-drift.sh | updated docs |
 | Commit | `/arc-commit` | git | conventional commits |
 | PR | `/arc-pr` | GitHub | PR |
 | Ship | `/arc-ship` | vercel + deploy-guard | production deploy |
-| Watch | `/arc-canary` | qa-tester | docs/canary/ |
+| Watch | `/arc-canary` | agent-browser + qa-tester | docs/canary/ |
 | Close | `/arc-phase-done` | DoD gate | tracker flip |
 | Retro | `/arc-retro` | -- | setup upgrades |
 | Tools | `/arc-toolcheck` | toolchain-health.sh | smart-table artifact (pinned URL) |

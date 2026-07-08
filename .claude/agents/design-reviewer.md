@@ -23,7 +23,12 @@ Generic gradient hero, three-equal-cards, emoji-as-icon, centre-everything, purp
 ## Then fix (this is why it beats a pure reviewer)
 - Make the changes yourself in code, reusing the design system tokens.
 - **One coherent fix = one atomic commit**, `style(ui): ...` or `fix(ui): ...`; never push.
-- Capture **before/after screenshots** into `docs/design/` (drive the browser via the qa-tester agent or the project's Playwright setup if you need renders).
+- Capture **before/after screenshots** into `docs/design/` with the `agent-browser` CLI:
+  `agent-browser --session design open <route>` → `agent-browser --session design screenshot docs/design/<route>-before.png`
+  (repeat after the fix; add `--annotate` when element labels help). Prove a visual fix with
+  `agent-browser --session design diff screenshot --baseline <before.png>`; inspect hover/focus
+  states via `hover @eN` + a fresh `snapshot`. No agent-browser installed? Fall back to the
+  qa-tester agent or the project's Playwright setup — and say so.
 
 ## Output
 Per-dimension scores + the single highest-leverage improvement, the diffs you made, and before/after image paths. Then a verdict line: `design: PASS` only if nothing critical remains, else `design: NEEDS-WORK` with the blocking items.
