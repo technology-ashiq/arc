@@ -1,0 +1,35 @@
+{
+  "//": "MCP servers let Claude Code talk to external tools directly inside chat. Secrets are read from env (see .env / .gitignore) — never hardcode them here.",
+  "//optional-1": "OPTIONAL servers (need accounts/auth — paste into mcpServers only AFTER you have credentials, otherwise they show as failed on every session start):",
+  "//optional-2": "Sentry (prod errors, powers log-analyzer): \"sentry\": { \"command\": \"npx\", \"args\": [\"-y\", \"@sentry/mcp-server@latest\"], \"env\": { \"SENTRY_AUTH_TOKEN\": \"${SENTRY_AUTH_TOKEN}\" } }",
+  "//optional-3": "GitHub (PRs/issues, powers /pr and /fix-issue): \"github\": { \"command\": \"npx\", \"args\": [\"-y\", \"@modelcontextprotocol/server-github\"], \"env\": { \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"${GITHUB_PAT}\" } }",
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase@latest",
+        "--read-only",
+        "--project-ref=${SUPABASE_PROJECT_REF}"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      }
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"]
+    },
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp"]
+    },
+    "stripe": {
+      "command": "npx",
+      "args": ["-y", "@stripe/mcp", "--tools=all"],
+      "env": {
+        "STRIPE_SECRET_KEY": "${STRIPE_SECRET_KEY}"
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+# === Secrets & environment ===
+.env
+.env.*
+!.env.example
+
+# === Claude private / machine-local (NEVER pushed) ===
+CLAUDE.local.md
+.claude/settings.local.json
+
+# === Dependencies ===
+node_modules/
+.pnp.*
+
+# === Build output ===
+.next/
+out/
+dist/
+build/
+
+# === Logs ===
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# === OS / editor junk ===
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# === Test / coverage ===
+coverage/
+playwright-report/
+test-results/
+
+# Hook scratch state (PreCompact snapshots, graphify lock/log)
+.claude/state/
+
+# Graphify: graphify-out/ IS committed (team-shared graph) — only these two are local-only
+graphify-out/manifest.json
+graphify-out/cost.json
