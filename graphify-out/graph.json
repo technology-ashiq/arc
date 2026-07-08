@@ -4,6 +4,20 @@
   "graph": {
     "hyperedges": [
       {
+        "id": "browser_qa_stack",
+        "label": "Browser QA Stack (agent-browser primary, Playwright fallback)",
+        "nodes": [
+          "concept_agent_browser_cli",
+          "claude_agents_qa_tester",
+          "_claude_commands_arc_canary",
+          "claude_agents_design_reviewer"
+        ],
+        "relation": "participate_in",
+        "confidence": "EXTRACTED",
+        "confidence_score": 1.0,
+        "source_file": ".claude/agents/qa-tester.md"
+      },
+      {
         "id": "security_sensitive_review_chain",
         "label": "Security-Sensitive Review Chain (RLS + webhook verification + audit gate)",
         "nodes": [
@@ -17,19 +31,6 @@
         "confidence": "INFERRED",
         "confidence_score": 0.85,
         "source_file": ".claude/rules/security-sensitive.md"
-      },
-      {
-        "id": "build_tracker_template_trio",
-        "label": "Build Tracker Template Trio (PLAN + ADR + Phase Spec)",
-        "nodes": [
-          "docs_templates_plan_template",
-          "docs_templates_adr_template",
-          "docs_templates_phase_spec_template"
-        ],
-        "relation": "form",
-        "confidence": "EXTRACTED",
-        "confidence_score": 1.0,
-        "source_file": "README.md"
       },
       {
         "id": "ui_quality_gate",
@@ -110,19 +111,6 @@
         "confidence": "INFERRED",
         "confidence_score": 0.85,
         "source_file": "docs/build-playbook.md"
-      },
-      {
-        "id": "quality_gate_enforcement_system",
-        "label": "Quality Gate Enforcement System",
-        "nodes": [
-          "docs_build_playbook_quality_gates",
-          "docs_usermanual_review_ledger_gates",
-          "docs_deployment_deploy_guard_flow"
-        ],
-        "relation": "form",
-        "confidence": "INFERRED",
-        "confidence_score": 0.85,
-        "source_file": "docs/usermanual.md"
       }
     ]
   },
@@ -137,9 +125,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_hooks_posttooluse",
-      "community": 10,
-      "norm_label": "posttooluse.sh"
+      "community": 11,
+      "norm_label": "posttooluse.sh",
+      "id": "claude_hooks_posttooluse"
     },
     {
       "label": "PostToolUse.sh script",
@@ -151,9 +139,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_hooks_posttooluse_sh__entry",
-      "community": 10,
-      "norm_label": "posttooluse.sh script"
+      "community": 11,
+      "norm_label": "posttooluse.sh script",
+      "id": "claude_hooks_posttooluse_sh__entry"
     },
     {
       "label": "PreCompact.sh",
@@ -165,9 +153,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_hooks_precompact",
-      "community": 11,
-      "norm_label": "precompact.sh"
+      "community": 12,
+      "norm_label": "precompact.sh",
+      "id": "claude_hooks_precompact"
     },
     {
       "label": "PreCompact.sh script",
@@ -179,9 +167,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_hooks_precompact_sh__entry",
-      "community": 11,
-      "norm_label": "precompact.sh script"
+      "community": 12,
+      "norm_label": "precompact.sh script",
+      "id": "claude_hooks_precompact_sh__entry"
     },
     {
       "label": "PreToolUse-edit.sh",
@@ -193,9 +181,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_hooks_pretooluse_edit",
-      "community": 13,
-      "norm_label": "pretooluse-edit.sh"
+      "community": 14,
+      "norm_label": "pretooluse-edit.sh",
+      "id": "claude_hooks_pretooluse_edit"
     },
     {
       "label": "PreToolUse-edit.sh script",
@@ -207,9 +195,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_hooks_pretooluse_edit_sh__entry",
-      "community": 13,
-      "norm_label": "pretooluse-edit.sh script"
+      "community": 14,
+      "norm_label": "pretooluse-edit.sh script",
+      "id": "claude_hooks_pretooluse_edit_sh__entry"
     },
     {
       "label": "PreToolUse.sh",
@@ -221,9 +209,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_hooks_pretooluse",
-      "community": 12,
-      "norm_label": "pretooluse.sh"
+      "community": 13,
+      "norm_label": "pretooluse.sh",
+      "id": "claude_hooks_pretooluse"
     },
     {
       "label": "PreToolUse.sh script",
@@ -235,9 +223,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_hooks_pretooluse_sh__entry",
-      "community": 12,
-      "norm_label": "pretooluse.sh script"
+      "community": 13,
+      "norm_label": "pretooluse.sh script",
+      "id": "claude_hooks_pretooluse_sh__entry"
     },
     {
       "label": "SessionEnd.sh",
@@ -249,9 +237,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_hooks_sessionend",
-      "community": 14,
-      "norm_label": "sessionend.sh"
+      "community": 15,
+      "norm_label": "sessionend.sh",
+      "id": "claude_hooks_sessionend"
     },
     {
       "label": "SessionEnd.sh script",
@@ -263,9 +251,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_hooks_sessionend_sh__entry",
-      "community": 14,
-      "norm_label": "sessionend.sh script"
+      "community": 15,
+      "norm_label": "sessionend.sh script",
+      "id": "claude_hooks_sessionend_sh__entry"
     },
     {
       "label": "SessionStart.sh",
@@ -277,9 +265,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_hooks_sessionstart",
-      "community": 15,
-      "norm_label": "sessionstart.sh"
+      "community": 16,
+      "norm_label": "sessionstart.sh",
+      "id": "claude_hooks_sessionstart"
     },
     {
       "label": "SessionStart.sh script",
@@ -291,9 +279,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_hooks_sessionstart_sh__entry",
-      "community": 15,
-      "norm_label": "sessionstart.sh script"
+      "community": 16,
+      "norm_label": "sessionstart.sh script",
+      "id": "claude_hooks_sessionstart_sh__entry"
     },
     {
       "label": "coverage-gate.sh",
@@ -305,9 +293,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_scripts_coverage_gate",
-      "community": 8,
-      "norm_label": "coverage-gate.sh"
+      "community": 9,
+      "norm_label": "coverage-gate.sh",
+      "id": "claude_scripts_coverage_gate"
     },
     {
       "label": "coverage-gate.sh script",
@@ -319,9 +307,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_scripts_coverage_gate_sh__entry",
-      "community": 8,
-      "norm_label": "coverage-gate.sh script"
+      "community": 9,
+      "norm_label": "coverage-gate.sh script",
+      "id": "claude_scripts_coverage_gate_sh__entry"
     },
     {
       "label": "_json()",
@@ -333,9 +321,9 @@
         "kind": "bash_function"
       },
       "_origin": "ast",
-      "id": "claude_scripts_coverage_gate_json",
-      "community": 8,
-      "norm_label": "_json()"
+      "community": 9,
+      "norm_label": "_json()",
+      "id": "claude_scripts_coverage_gate_json"
     },
     {
       "label": "_fail_or_warn()",
@@ -347,9 +335,9 @@
         "kind": "bash_function"
       },
       "_origin": "ast",
-      "id": "claude_scripts_coverage_gate_fail_or_warn",
-      "community": 8,
-      "norm_label": "_fail_or_warn()"
+      "community": 9,
+      "norm_label": "_fail_or_warn()",
+      "id": "claude_scripts_coverage_gate_fail_or_warn"
     },
     {
       "label": "docs-drift.sh",
@@ -361,9 +349,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_scripts_docs_drift",
-      "community": 16,
-      "norm_label": "docs-drift.sh"
+      "community": 17,
+      "norm_label": "docs-drift.sh",
+      "id": "claude_scripts_docs_drift"
     },
     {
       "label": "docs-drift.sh script",
@@ -375,9 +363,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_scripts_docs_drift_sh__entry",
-      "community": 16,
-      "norm_label": "docs-drift.sh script"
+      "community": 17,
+      "norm_label": "docs-drift.sh script",
+      "id": "claude_scripts_docs_drift_sh__entry"
     },
     {
       "label": "freeze-check.sh",
@@ -389,9 +377,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_scripts_freeze_check",
-      "community": 17,
-      "norm_label": "freeze-check.sh"
+      "community": 18,
+      "norm_label": "freeze-check.sh",
+      "id": "claude_scripts_freeze_check"
     },
     {
       "label": "freeze-check.sh script",
@@ -403,9 +391,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_scripts_freeze_check_sh__entry",
-      "community": 17,
-      "norm_label": "freeze-check.sh script"
+      "community": 18,
+      "norm_label": "freeze-check.sh script",
+      "id": "claude_scripts_freeze_check_sh__entry"
     },
     {
       "label": "review-ledger.sh",
@@ -417,9 +405,9 @@
         "kind": "file"
       },
       "_origin": "ast",
-      "id": "claude_scripts_review_ledger",
-      "community": 9,
-      "norm_label": "review-ledger.sh"
+      "community": 10,
+      "norm_label": "review-ledger.sh",
+      "id": "claude_scripts_review_ledger"
     },
     {
       "label": "review-ledger.sh script",
@@ -431,9 +419,9 @@
         "kind": "bash_entrypoint"
       },
       "_origin": "ast",
-      "id": "claude_scripts_review_ledger_sh__entry",
-      "community": 9,
-      "norm_label": "review-ledger.sh script"
+      "community": 10,
+      "norm_label": "review-ledger.sh script",
+      "id": "claude_scripts_review_ledger_sh__entry"
     },
     {
       "label": "_is_valid()",
@@ -445,9 +433,9 @@
         "kind": "bash_function"
       },
       "_origin": "ast",
-      "id": "claude_scripts_review_ledger_is_valid",
-      "community": 9,
-      "norm_label": "_is_valid()"
+      "community": 10,
+      "norm_label": "_is_valid()",
+      "id": "claude_scripts_review_ledger_is_valid"
     },
     {
       "label": "_cmd_for()",
@@ -459,9 +447,1236 @@
         "kind": "bash_function"
       },
       "_origin": "ast",
-      "id": "claude_scripts_review_ledger_cmd_for",
-      "community": 9,
-      "norm_label": "_cmd_for()"
+      "community": 10,
+      "norm_label": "_cmd_for()",
+      "id": "claude_scripts_review_ledger_cmd_for"
+    },
+    {
+      "label": "statusline.sh",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "file"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "statusline.sh",
+      "id": "claude_statusline"
+    },
+    {
+      "label": "statusline.sh script",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L1",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_entrypoint"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "statusline.sh script",
+      "id": "claude_statusline_sh__entry"
+    },
+    {
+      "label": "_s()",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L50",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "_s()",
+      "id": "claude_statusline_s"
+    },
+    {
+      "label": "_n()",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L51",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "_n()",
+      "id": "claude_statusline_n"
+    },
+    {
+      "label": "fmt_tok()",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L64",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "fmt_tok()",
+      "id": "claude_statusline_fmt_tok"
+    },
+    {
+      "label": "fmt_dur()",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L67",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "fmt_dur()",
+      "id": "claude_statusline_fmt_dur"
+    },
+    {
+      "label": "fmt_left()",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L69",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "fmt_left()",
+      "id": "claude_statusline_fmt_left"
+    },
+    {
+      "label": "_mtime()",
+      "file_type": "code",
+      "source_file": ".claude/statusline.sh",
+      "source_location": "L74",
+      "metadata": {
+        "language": "bash",
+        "kind": "bash_function"
+      },
+      "_origin": "ast",
+      "community": 8,
+      "norm_label": "_mtime()",
+      "id": "claude_statusline_mtime"
+    },
+    {
+      "label": "sync-to-project.ps1",
+      "file_type": "code",
+      "source_file": "sync-to-project.ps1",
+      "source_location": "L1",
+      "_origin": "ast",
+      "community": 20,
+      "norm_label": "sync-to-project.ps1",
+      "id": "sync_to_project"
+    },
+    {
+      "label": "code-reviewer Agent",
+      "file_type": "document",
+      "source_file": ".claude/agents/code-reviewer.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "code-reviewer agent",
+      "id": "claude_agents_code_reviewer"
+    },
+    {
+      "label": "log-analyzer Agent",
+      "file_type": "document",
+      "source_file": ".claude/agents/log-analyzer.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "log-analyzer agent",
+      "id": "claude_agents_log_analyzer"
+    },
+    {
+      "label": "product-challenger Agent",
+      "file_type": "document",
+      "source_file": ".claude/agents/product-challenger.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "product-challenger agent",
+      "id": "claude_agents_product_challenger"
+    },
+    {
+      "label": "researcher Agent",
+      "file_type": "document",
+      "source_file": ".claude/agents/researcher.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "researcher agent",
+      "id": "claude_agents_researcher"
+    },
+    {
+      "label": "security-auditor Agent",
+      "file_type": "document",
+      "source_file": ".claude/agents/security-auditor.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "security-auditor agent",
+      "id": "claude_agents_security_auditor"
+    },
+    {
+      "label": "terse Output Style",
+      "file_type": "document",
+      "source_file": ".claude/output-styles/terse.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "terse output style",
+      "id": "claude_output_styles_terse"
+    },
+    {
+      "label": "API Route Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/api.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "api route rules",
+      "id": "claude_rules_api"
+    },
+    {
+      "label": "Security-Sensitive Code Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/security-sensitive.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "security-sensitive code rules",
+      "id": "claude_rules_security_sensitive"
+    },
+    {
+      "label": "Stripe Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/stripe.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "stripe rules",
+      "id": "claude_rules_stripe"
+    },
+    {
+      "label": "Supabase Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/supabase.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "supabase rules",
+      "id": "claude_rules_supabase"
+    },
+    {
+      "label": "Testing Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/testing.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "testing rules",
+      "id": "claude_rules_testing"
+    },
+    {
+      "label": "UI Rules",
+      "file_type": "document",
+      "source_file": ".claude/rules/ui.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 5,
+      "norm_label": "ui rules",
+      "id": "claude_rules_ui"
+    },
+    {
+      "label": "seo-article-writer Skill",
+      "file_type": "document",
+      "source_file": ".claude/skills/seo-article-writer/SKILL.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "seo-article-writer skill",
+      "id": "claude_skills_seo_article_writer_skill"
+    },
+    {
+      "label": "CLAUDE.md (Project Brain)",
+      "file_type": "document",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "claude.md (project brain)",
+      "id": "claude"
+    },
+    {
+      "label": "PLAN.md Template",
+      "file_type": "document",
+      "source_file": "docs/templates/PLAN-template.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "plan.md template",
+      "id": "docs_templates_plan_template"
+    },
+    {
+      "label": "ADR Template",
+      "file_type": "document",
+      "source_file": "docs/templates/adr-template.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "adr template",
+      "id": "docs_templates_adr_template"
+    },
+    {
+      "label": "Phase Spec Template",
+      "file_type": "document",
+      "source_file": "docs/templates/phase-spec-template.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "phase spec template",
+      "id": "docs_templates_phase_spec_template"
+    },
+    {
+      "label": "codegraph MCP",
+      "file_type": "concept",
+      "source_file": ".claude/agents/code-reviewer.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "codegraph mcp",
+      "id": "claude_agents_code_reviewer_codegraph_mcp"
+    },
+    {
+      "label": "Graphify Knowledge Graph",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "graphify knowledge graph",
+      "id": "claude_graphify_knowledge_graph"
+    },
+    {
+      "label": "OWASP Top 10",
+      "file_type": "concept",
+      "source_file": ".claude/agents/security-auditor.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "owasp top 10",
+      "id": "claude_agents_security_auditor_owasp_top_10"
+    },
+    {
+      "label": "STRIDE Threat Model",
+      "file_type": "concept",
+      "source_file": ".claude/agents/security-auditor.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "stride threat model",
+      "id": "claude_agents_security_auditor_stride_threat_model"
+    },
+    {
+      "label": "Row Level Security (RLS)",
+      "file_type": "concept",
+      "source_file": ".claude/rules/supabase.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "row level security (rls)",
+      "id": "claude_rules_supabase_rls"
+    },
+    {
+      "label": "Stripe Webhook Signature Verification",
+      "file_type": "concept",
+      "source_file": ".claude/rules/stripe.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "stripe webhook signature verification",
+      "id": "claude_rules_stripe_webhook_verification"
+    },
+    {
+      "label": "Klein Pre-Mortem",
+      "file_type": "concept",
+      "source_file": "docs/templates/PLAN-template.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "klein pre-mortem",
+      "id": "docs_templates_plan_template_klein_pre_mortem"
+    },
+    {
+      "label": "Appetite (Shape Up)",
+      "file_type": "concept",
+      "source_file": "docs/templates/PLAN-template.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "appetite (shape up)",
+      "id": "docs_templates_plan_template_appetite"
+    },
+    {
+      "label": "Build Playbook (docs/build-playbook.md)",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "build playbook (docs/build-playbook.md)",
+      "id": "claude_build_playbook"
+    },
+    {
+      "label": "/arc-design Command",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 5,
+      "norm_label": "/arc-design command",
+      "id": "claude_arc_design_command"
+    },
+    {
+      "label": "/arc-audit Command",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "/arc-audit command",
+      "id": "claude_arc_audit_command"
+    },
+    {
+      "label": "/arc-kickoff Command",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "/arc-kickoff command",
+      "id": "claude_arc_kickoff_command"
+    },
+    {
+      "label": "/arc-review Command",
+      "file_type": "concept",
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "/arc-review command",
+      "id": "claude_arc_review_command"
+    },
+    {
+      "label": "ARC_REQUIRED_REVIEWS",
+      "file_type": "concept",
+      "source_file": ".claude/rules/security-sensitive.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 0,
+      "norm_label": "arc_required_reviews",
+      "id": "claude_rules_security_sensitive_arc_required_reviews"
+    },
+    {
+      "label": "/arc-audit command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-audit.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-audit command",
+      "id": "_claude_commands_arc_audit"
+    },
+    {
+      "label": "/arc-change command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-change.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-change command",
+      "id": "_claude_commands_arc_change"
+    },
+    {
+      "label": "/arc-commit command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-commit.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-commit command",
+      "id": "_claude_commands_arc_commit"
+    },
+    {
+      "label": "/arc-design command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-design command",
+      "id": "_claude_commands_arc_design"
+    },
+    {
+      "label": "/arc-diagram command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-diagram.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 19,
+      "norm_label": "/arc-diagram command",
+      "id": "_claude_commands_arc_diagram"
+    },
+    {
+      "label": "/arc-docs command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-docs.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-docs command",
+      "id": "_claude_commands_arc_docs"
+    },
+    {
+      "label": "/arc-fix-issue command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-fix-issue.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-fix-issue command",
+      "id": "_claude_commands_arc_fix_issue"
+    },
+    {
+      "label": "/arc-freeze command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-freeze.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-freeze command",
+      "id": "_claude_commands_arc_freeze"
+    },
+    {
+      "label": "/arc-kickoff command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-kickoff.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-kickoff command",
+      "id": "_claude_commands_arc_kickoff"
+    },
+    {
+      "label": "/arc-phase-done command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-phase-done.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-phase-done command",
+      "id": "_claude_commands_arc_phase_done"
+    },
+    {
+      "label": "/arc-pr command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-pr.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-pr command",
+      "id": "_claude_commands_arc_pr"
+    },
+    {
+      "label": "/arc-qa command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-qa.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-qa command",
+      "id": "_claude_commands_arc_qa"
+    },
+    {
+      "label": "/arc-resume command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-resume.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-resume command",
+      "id": "_claude_commands_arc_resume"
+    },
+    {
+      "label": "/arc-retro command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-retro.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 5,
+      "norm_label": "/arc-retro command",
+      "id": "_claude_commands_arc_retro"
+    },
+    {
+      "label": "/arc-review command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-review.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-review command",
+      "id": "_claude_commands_arc_review"
+    },
+    {
+      "label": "/arc-second-opinion command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-second-opinion.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "/arc-second-opinion command",
+      "id": "_claude_commands_arc_second_opinion"
+    },
+    {
+      "label": "/arc-ship command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-ship.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-ship command",
+      "id": "_claude_commands_arc_ship"
+    },
+    {
+      "label": "/arc-unfreeze command",
+      "file_type": "document",
+      "source_file": ".claude/commands/arc-unfreeze.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "/arc-unfreeze command",
+      "id": "_claude_commands_arc_unfreeze"
+    },
+    {
+      "label": "qa-tester Subagent",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-qa.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "qa-tester subagent",
+      "id": "concept_qa_tester_agent"
+    },
+    {
+      "label": "code-reviewer Subagent",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-review.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "code-reviewer subagent",
+      "id": "concept_code_reviewer_agent"
+    },
+    {
+      "label": "security-auditor Subagent",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-audit.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "security-auditor subagent",
+      "id": "concept_security_auditor_agent"
+    },
+    {
+      "label": "design-reviewer Subagent",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-design.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "design-reviewer subagent",
+      "id": "concept_design_reviewer_agent"
+    },
+    {
+      "label": "researcher Subagent",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-kickoff.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "researcher subagent",
+      "id": "concept_researcher_agent"
+    },
+    {
+      "label": "Review Ledger (review-ledger.sh)",
+      "file_type": "rationale",
+      "source_file": ".claude/commands/arc-audit.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "review ledger (review-ledger.sh)",
+      "id": "concept_review_ledger"
+    },
+    {
+      "label": "Deploy-Guard Hook",
+      "file_type": "rationale",
+      "source_file": ".claude/commands/arc-ship.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "deploy-guard hook",
+      "id": "concept_deploy_guard"
+    },
+    {
+      "label": "Graphify Knowledge Graph",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-phase-done.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "graphify knowledge graph",
+      "id": "concept_graphify_knowledge_graph"
+    },
+    {
+      "label": "Docs-Drift Gate",
+      "file_type": "rationale",
+      "source_file": ".claude/commands/arc-docs.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 6,
+      "norm_label": "docs-drift gate",
+      "id": "concept_docs_drift_gate"
+    },
+    {
+      "label": "Golden Loop",
+      "file_type": "rationale",
+      "source_file": ".claude/commands/arc-change.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "golden loop",
+      "id": "concept_golden_loop"
+    },
+    {
+      "label": "Klein Pre-Mortem",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-kickoff.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "klein pre-mortem",
+      "id": "concept_klein_pre_mortem"
+    },
+    {
+      "label": "Definition of Done",
+      "file_type": "rationale",
+      "source_file": ".claude/commands/arc-phase-done.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "definition of done",
+      "id": "concept_definition_of_done"
+    },
+    {
+      "label": "OpenAI Codex CLI",
+      "file_type": "concept",
+      "source_file": ".claude/commands/arc-second-opinion.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 3,
+      "norm_label": "openai codex cli",
+      "id": "concept_codex_cli"
+    },
+    {
+      "label": "Branding / Social / Contact",
+      "file_type": "document",
+      "source_file": "docs/branding.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "branding / social / contact",
+      "id": "docs_branding"
+    },
+    {
+      "label": "The Build Playbook",
+      "file_type": "document",
+      "source_file": "docs/build-playbook.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "the build playbook",
+      "id": "docs_build_playbook"
+    },
+    {
+      "label": "Deployment Guide",
+      "file_type": "document",
+      "source_file": "docs/deployment.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "deployment guide",
+      "id": "docs_deployment"
+    },
+    {
+      "label": "How This Structure Works \u2014 Mental Model",
+      "file_type": "document",
+      "source_file": "docs/how-it-works.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "how this structure works \u2014 mental model",
+      "id": "docs_how_it_works"
+    },
+    {
+      "label": "Plugins",
+      "file_type": "document",
+      "source_file": "docs/plugins.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "plugins",
+      "id": "docs_plugins"
+    },
+    {
+      "label": "Stripe Setup",
+      "file_type": "document",
+      "source_file": "docs/stripe-setup.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "stripe setup",
+      "id": "docs_stripe_setup"
+    },
+    {
+      "label": "Supabase Setup",
+      "file_type": "document",
+      "source_file": "docs/supabase-setup.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "supabase setup",
+      "id": "docs_supabase_setup"
+    },
+    {
+      "label": "UI Conventions",
+      "file_type": "document",
+      "source_file": "docs/ui-conventions.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "ui conventions",
+      "id": "docs_ui_conventions"
+    },
+    {
+      "label": "The Golden Loop",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a71",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Never code without a written plan; a phase isn't done until tests are green AND you've seen it run; ship something runnable each phase \u2014 the repeating cycle Plan\u2192Build\u2192Test\u2192Demo\u2192Verify\u2192Update tracker\u2192Confirm\u2192Next phase keeps every phase both proven and visible.",
+      "community": 1,
+      "norm_label": "the golden loop",
+      "id": "docs_build_playbook_golden_loop"
+    },
+    {
+      "label": "3-Layer Tracking System",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a74",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Three separate views of the same work (PLAN.md vision, per-phase spec, PROGRESS.md status) are kept in sync so build status is never a mystery \u2014 any session, machine, or teammate resumes instantly from committed files rather than memory.",
+      "community": 1,
+      "norm_label": "3-layer tracking system",
+      "id": "docs_build_playbook_three_layer_tracking"
+    },
+    {
+      "label": "Definition of Done (DoD)",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a78",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Each phase lists its exit criteria before work starts so 'done' is objective, not a vibe \u2014 enforced by /arc-phase-done which refuses to close a phase without green tests, a live demo, and an updated tracker.",
+      "community": 1,
+      "norm_label": "definition of done (dod)",
+      "id": "docs_build_playbook_definition_of_done"
+    },
+    {
+      "label": "Walking Skeleton (Phase 0)",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a72",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Phase 0 wires the whole flow end-to-end on fake data before adding depth, de-risking the architecture on day one; phases are then ordered by risk, not ease, so the part that could kill the project is proven earliest.",
+      "community": 1,
+      "norm_label": "walking skeleton (phase 0)",
+      "id": "docs_build_playbook_walking_skeleton"
+    },
+    {
+      "label": "Offline-First / Interface+Fake+Real Pattern",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a73",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "An interface + fake + real implementation for every external dependency enables a stub mode with no keys or network \u2014 fast dev, deterministic tests, free CI \u2014 while real integrations stay optional until needed.",
+      "community": 1,
+      "norm_label": "offline-first / interface+fake+real pattern",
+      "id": "docs_build_playbook_offline_first"
+    },
+    {
+      "label": "Change Intake",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a72.1",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "A mid-build change, idea, or suggestion \u2014 even the AI's own \u2014 is never coded ad-hoc; it is routed through triage (current-phase note / new phase spec / ADR / bug fix) and the tracker updated first, so the tracker never drifts out of sync with the code.",
+      "community": 1,
+      "norm_label": "change intake",
+      "id": "docs_build_playbook_change_intake"
+    },
+    {
+      "label": "Quality & Safety Gates",
+      "file_type": "rationale",
+      "source_file": "docs/build-playbook.md",
+      "source_location": "\u00a75",
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Definition of Done, tests-per-feature, golden/eval sets, a security & privacy pass, cost/budget ceilings, observability, idempotency/resumability, and a rollback/kill switch are treated as non-skippable gates rather than optional polish.",
+      "community": 1,
+      "norm_label": "quality & safety gates",
+      "id": "docs_build_playbook_quality_gates"
+    },
+    {
+      "label": "Three Loading Behaviors",
+      "file_type": "rationale",
+      "source_file": "docs/how-it-works.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Golden rule: if something is a guideline, it belongs in CLAUDE.md (advisory, can be forgotten in long sessions); if it must always/never happen, it becomes a hook (deterministic, cannot be forgotten); if it's a capability, it loads on demand via command/agent/skill/rule to keep the context window lean.",
+      "community": 1,
+      "norm_label": "three loading behaviors",
+      "id": "docs_how_it_works_three_loading_behaviors"
+    },
+    {
+      "label": "Five-Layer Memory Stack",
+      "file_type": "rationale",
+      "source_file": "docs/how-it-works.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "File-based, git-versioned memory (CLAUDE.md+rules, PLAN.md+ADRs, PROGRESS.md+phases, session-log.md) plus Claude's machine-local native auto memory is the verified best practice for per-project coding \u2014 diffable, portable, zero infra \u2014 with vector/graph memory servers reserved for cross-project or team memory pools.",
+      "community": 1,
+      "norm_label": "five-layer memory stack",
+      "id": "docs_how_it_works_memory_stack"
+    },
+    {
+      "label": "Stripe Webhook Idempotency",
+      "file_type": "rationale",
+      "source_file": "docs/stripe-setup.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Webhook events are idempotent by storing processed event IDs, so Stripe's at-least-once delivery and retries can never double-apply an entitlement change.",
+      "community": 1,
+      "norm_label": "stripe webhook idempotency",
+      "id": "docs_stripe_setup_webhook_idempotency"
+    },
+    {
+      "label": "RLS Default-Deny Pattern",
+      "file_type": "rationale",
+      "source_file": "docs/supabase-setup.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Row Level Security defaults to deny, with explicit per-table policies (select/insert/update/delete) scoped to auth.uid() \u2014 least-privilege data access enforced at the database layer regardless of application-layer bugs.",
+      "community": 1,
+      "norm_label": "rls default-deny pattern",
+      "id": "docs_supabase_setup_rls_pattern"
+    },
+    {
+      "label": "Design System Reuse Convention",
+      "file_type": "rationale",
+      "source_file": "docs/ui-conventions.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "Reuse components/ui/* primitives before building new ones, keep styling to shared Tailwind tokens (no inline hex), and require loading/empty/error states on every async view \u2014 consistency and robustness enforced as a convention rather than left to each component.",
+      "community": 1,
+      "norm_label": "design system reuse convention",
+      "id": "docs_ui_conventions_design_system_reuse"
+    },
+    {
+      "label": "Deploy Flow with pre-deploy-guard",
+      "file_type": "rationale",
+      "source_file": "docs/deployment.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "rationale": "The pre-deploy-guard hook re-runs the test suite before vercel --prod and physically blocks the deploy on failure, so broken code cannot reach production even if a human forgets to check.",
+      "community": 1,
+      "norm_label": "deploy flow with pre-deploy-guard",
+      "id": "docs_deployment_deploy_guard_flow"
+    },
+    {
+      "label": "Plugin Anatomy",
+      "file_type": "concept",
+      "source_file": "docs/plugins.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "community": 1,
+      "norm_label": "plugin anatomy",
+      "id": "docs_plugins_plugin_anatomy"
     },
     {
       "label": "toolchain-health.sh",
@@ -694,7 +1909,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "claude_settings",
-      "community": 3,
+      "community": 2,
       "norm_label": "settings.json"
     },
     {
@@ -704,7 +1919,7 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "claude_settings_schema",
-      "community": 3,
+      "community": 2,
       "norm_label": "$schema"
     },
     {
@@ -714,7 +1929,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "claude_settings_permissions",
-      "community": 3,
+      "community": 2,
       "norm_label": "permissions"
     },
     {
@@ -724,7 +1939,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "claude_settings_permissions_defaultmode",
-      "community": 3,
+      "community": 2,
       "norm_label": "defaultmode"
     },
     {
@@ -734,270 +1949,158 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "claude_settings_permissions_allow",
-      "community": 3,
+      "community": 2,
       "norm_label": "allow"
     },
     {
       "label": "deny",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L18",
+      "source_location": "L19",
       "_origin": "ast",
       "id": "claude_settings_permissions_deny",
-      "community": 3,
+      "community": 2,
       "norm_label": "deny"
     },
     {
       "label": "statusLine",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L30",
+      "source_location": "L31",
       "_origin": "ast",
       "id": "claude_settings_statusline",
-      "community": 3,
+      "community": 2,
       "norm_label": "statusline"
     },
     {
       "label": "type",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L31",
+      "source_location": "L32",
       "_origin": "ast",
       "id": "claude_settings_statusline_type",
-      "community": 3,
+      "community": 2,
       "norm_label": "type"
     },
     {
       "label": "command",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L32",
+      "source_location": "L33",
       "_origin": "ast",
       "id": "claude_settings_statusline_command",
-      "community": 3,
+      "community": 2,
       "norm_label": "command"
     },
     {
       "label": "hooks",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L34",
+      "source_location": "L35",
       "_origin": "ast",
       "id": "claude_settings_hooks",
-      "community": 3,
+      "community": 2,
       "norm_label": "hooks"
     },
     {
       "label": "SessionStart",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L35",
+      "source_location": "L36",
       "_origin": "ast",
       "id": "claude_settings_hooks_sessionstart",
-      "community": 3,
+      "community": 2,
       "norm_label": "sessionstart"
     },
     {
       "label": "PreToolUse",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L38",
+      "source_location": "L39",
       "_origin": "ast",
       "id": "claude_settings_hooks_pretooluse",
-      "community": 3,
+      "community": 2,
       "norm_label": "pretooluse"
     },
     {
       "label": "PostToolUse",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L42",
+      "source_location": "L43",
       "_origin": "ast",
       "id": "claude_settings_hooks_posttooluse",
-      "community": 3,
+      "community": 2,
       "norm_label": "posttooluse"
     },
     {
       "label": "PreCompact",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L45",
+      "source_location": "L46",
       "_origin": "ast",
       "id": "claude_settings_hooks_precompact",
-      "community": 3,
+      "community": 2,
       "norm_label": "precompact"
     },
     {
       "label": "SessionEnd",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L48",
+      "source_location": "L49",
       "_origin": "ast",
       "id": "claude_settings_hooks_sessionend",
-      "community": 3,
+      "community": 2,
       "norm_label": "sessionend"
     },
     {
       "label": "arc",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L52",
+      "source_location": "L53",
       "_origin": "ast",
       "id": "claude_settings_arc",
-      "community": 3,
+      "community": 2,
       "norm_label": "arc"
     },
     {
       "label": "coverageFloor",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L53",
+      "source_location": "L54",
       "_origin": "ast",
       "id": "claude_settings_arc_coveragefloor",
-      "community": 3,
+      "community": 2,
       "norm_label": "coveragefloor"
     },
     {
       "label": "coverageSummary",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L54",
+      "source_location": "L55",
       "_origin": "ast",
       "id": "claude_settings_arc_coveragesummary",
-      "community": 3,
+      "community": 2,
       "norm_label": "coveragesummary"
     },
     {
       "label": "coverageMode",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L55",
+      "source_location": "L56",
       "_origin": "ast",
       "id": "claude_settings_arc_coveragemode",
-      "community": 3,
+      "community": 2,
       "norm_label": "coveragemode"
     },
     {
       "label": "docsGate",
       "file_type": "code",
       "source_file": ".claude/settings.json",
-      "source_location": "L56",
+      "source_location": "L57",
       "_origin": "ast",
       "id": "claude_settings_arc_docsgate",
-      "community": 3,
+      "community": 2,
       "norm_label": "docsgate"
-    },
-    {
-      "label": "statusline.sh",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L1",
-      "metadata": {
-        "language": "bash",
-        "kind": "file"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline",
-      "community": 7,
-      "norm_label": "statusline.sh"
-    },
-    {
-      "label": "statusline.sh script",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L1",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_entrypoint"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_sh__entry",
-      "community": 7,
-      "norm_label": "statusline.sh script"
-    },
-    {
-      "label": "_s()",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L50",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_function"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_s",
-      "community": 7,
-      "norm_label": "_s()"
-    },
-    {
-      "label": "_n()",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L51",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_function"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_n",
-      "community": 7,
-      "norm_label": "_n()"
-    },
-    {
-      "label": "fmt_tok()",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L64",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_function"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_fmt_tok",
-      "community": 7,
-      "norm_label": "fmt_tok()"
-    },
-    {
-      "label": "fmt_dur()",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L67",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_function"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_fmt_dur",
-      "community": 7,
-      "norm_label": "fmt_dur()"
-    },
-    {
-      "label": "fmt_left()",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L69",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_function"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_fmt_left",
-      "community": 7,
-      "norm_label": "fmt_left()"
-    },
-    {
-      "label": "_mtime()",
-      "file_type": "code",
-      "source_file": ".claude/statusline.sh",
-      "source_location": "L74",
-      "metadata": {
-        "language": "bash",
-        "kind": "bash_function"
-      },
-      "_origin": "ast",
-      "id": "claude_statusline_mtime",
-      "community": 7,
-      "norm_label": "_mtime()"
     },
     {
       "label": ".mcp.json",
@@ -1009,7 +2112,7 @@
       },
       "_origin": "ast",
       "id": "mcp",
-      "community": 6,
+      "community": 7,
       "norm_label": ".mcp.json"
     },
     {
@@ -1022,7 +2125,7 @@
       },
       "_origin": "ast",
       "id": "mcp_mcp_server_supabase",
-      "community": 6,
+      "community": 7,
       "norm_label": "supabase"
     },
     {
@@ -1035,7 +2138,7 @@
       },
       "_origin": "ast",
       "id": "mcp_command_npx",
-      "community": 6,
+      "community": 7,
       "norm_label": "npx"
     },
     {
@@ -1048,7 +2151,7 @@
       },
       "_origin": "ast",
       "id": "mcp_package_supabase_mcp_server_supabase",
-      "community": 6,
+      "community": 7,
       "norm_label": "@supabase/mcp-server-supabase"
     },
     {
@@ -1061,7 +2164,7 @@
       },
       "_origin": "ast",
       "id": "env_var_supabase_access_token",
-      "community": 6,
+      "community": 7,
       "norm_label": "supabase_access_token"
     },
     {
@@ -1074,7 +2177,7 @@
       },
       "_origin": "ast",
       "id": "mcp_mcp_server_playwright",
-      "community": 6,
+      "community": 7,
       "norm_label": "playwright"
     },
     {
@@ -1087,7 +2190,7 @@
       },
       "_origin": "ast",
       "id": "mcp_package_playwright_mcp",
-      "community": 6,
+      "community": 7,
       "norm_label": "@playwright/mcp"
     },
     {
@@ -1100,7 +2203,7 @@
       },
       "_origin": "ast",
       "id": "mcp_mcp_server_context7",
-      "community": 6,
+      "community": 7,
       "norm_label": "context7"
     },
     {
@@ -1113,7 +2216,7 @@
       },
       "_origin": "ast",
       "id": "mcp_package_upstash_context7_mcp",
-      "community": 6,
+      "community": 7,
       "norm_label": "@upstash/context7-mcp"
     },
     {
@@ -1126,7 +2229,7 @@
       },
       "_origin": "ast",
       "id": "mcp_mcp_server_stripe",
-      "community": 6,
+      "community": 7,
       "norm_label": "stripe"
     },
     {
@@ -1139,7 +2242,7 @@
       },
       "_origin": "ast",
       "id": "mcp_package_stripe_mcp",
-      "community": 6,
+      "community": 7,
       "norm_label": "@stripe/mcp"
     },
     {
@@ -1152,70 +2255,8 @@
       },
       "_origin": "ast",
       "id": "env_var_stripe_secret_key",
-      "community": 6,
+      "community": 7,
       "norm_label": "stripe_secret_key"
-    },
-    {
-      "label": "sync-to-project.ps1",
-      "file_type": "code",
-      "source_file": "sync-to-project.ps1",
-      "source_location": "L1",
-      "_origin": "ast",
-      "id": "sync_to_project",
-      "community": 19,
-      "norm_label": "sync-to-project.ps1"
-    },
-    {
-      "label": "code-reviewer Agent",
-      "file_type": "document",
-      "source_file": ".claude/agents/code-reviewer.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_code_reviewer",
-      "community": 0,
-      "norm_label": "code-reviewer agent"
-    },
-    {
-      "label": "design-reviewer Agent",
-      "file_type": "document",
-      "source_file": ".claude/agents/design-reviewer.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_design_reviewer",
-      "community": 0,
-      "norm_label": "design-reviewer agent"
-    },
-    {
-      "label": "log-analyzer Agent",
-      "file_type": "document",
-      "source_file": ".claude/agents/log-analyzer.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_log_analyzer",
-      "community": 0,
-      "norm_label": "log-analyzer agent"
-    },
-    {
-      "label": "product-challenger Agent",
-      "file_type": "document",
-      "source_file": ".claude/agents/product-challenger.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_product_challenger",
-      "community": 0,
-      "norm_label": "product-challenger agent"
     },
     {
       "label": "qa-tester Agent",
@@ -1227,285 +2268,25 @@
       "author": null,
       "contributor": null,
       "id": "claude_agents_qa_tester",
-      "community": 0,
+      "community": 5,
       "norm_label": "qa-tester agent"
     },
     {
-      "label": "researcher Agent",
+      "label": "design-reviewer Agent",
       "file_type": "document",
-      "source_file": ".claude/agents/researcher.md",
+      "source_file": ".claude/agents/design-reviewer.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "claude_agents_researcher",
-      "community": 0,
-      "norm_label": "researcher agent"
-    },
-    {
-      "label": "security-auditor Agent",
-      "file_type": "document",
-      "source_file": ".claude/agents/security-auditor.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_security_auditor",
-      "community": 0,
-      "norm_label": "security-auditor agent"
-    },
-    {
-      "label": "terse Output Style",
-      "file_type": "document",
-      "source_file": ".claude/output-styles/terse.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_output_styles_terse",
-      "community": 0,
-      "norm_label": "terse output style"
-    },
-    {
-      "label": "API Route Rules",
-      "file_type": "document",
-      "source_file": ".claude/rules/api.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_api",
-      "community": 0,
-      "norm_label": "api route rules"
-    },
-    {
-      "label": "Security-Sensitive Code Rules",
-      "file_type": "document",
-      "source_file": ".claude/rules/security-sensitive.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_security_sensitive",
-      "community": 0,
-      "norm_label": "security-sensitive code rules"
-    },
-    {
-      "label": "Stripe Rules",
-      "file_type": "document",
-      "source_file": ".claude/rules/stripe.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_stripe",
-      "community": 0,
-      "norm_label": "stripe rules"
-    },
-    {
-      "label": "Supabase Rules",
-      "file_type": "document",
-      "source_file": ".claude/rules/supabase.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_supabase",
-      "community": 0,
-      "norm_label": "supabase rules"
-    },
-    {
-      "label": "Testing Rules",
-      "file_type": "document",
-      "source_file": ".claude/rules/testing.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_testing",
-      "community": 0,
-      "norm_label": "testing rules"
-    },
-    {
-      "label": "UI Rules",
-      "file_type": "document",
-      "source_file": ".claude/rules/ui.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_ui",
-      "community": 0,
-      "norm_label": "ui rules"
-    },
-    {
-      "label": "seo-article-writer Skill",
-      "file_type": "document",
-      "source_file": ".claude/skills/seo-article-writer/SKILL.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_skills_seo_article_writer_skill",
-      "community": 0,
-      "norm_label": "seo-article-writer skill"
-    },
-    {
-      "label": "CLAUDE.md (Project Brain)",
-      "file_type": "document",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude",
-      "community": 0,
-      "norm_label": "claude.md (project brain)"
-    },
-    {
-      "label": "README.md (Template Structure Guide)",
-      "file_type": "document",
-      "source_file": "README.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "readme",
-      "community": 0,
-      "norm_label": "readme.md (template structure guide)"
-    },
-    {
-      "label": "PLAN.md Template",
-      "file_type": "document",
-      "source_file": "docs/templates/PLAN-template.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_templates_plan_template",
-      "community": 0,
-      "norm_label": "plan.md template"
-    },
-    {
-      "label": "ADR Template",
-      "file_type": "document",
-      "source_file": "docs/templates/adr-template.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_templates_adr_template",
-      "community": 0,
-      "norm_label": "adr template"
-    },
-    {
-      "label": "Phase Spec Template",
-      "file_type": "document",
-      "source_file": "docs/templates/phase-spec-template.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_templates_phase_spec_template",
-      "community": 0,
-      "norm_label": "phase spec template"
-    },
-    {
-      "label": "codegraph MCP",
-      "file_type": "concept",
-      "source_file": ".claude/agents/code-reviewer.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_code_reviewer_codegraph_mcp",
-      "community": 0,
-      "norm_label": "codegraph mcp"
-    },
-    {
-      "label": "Graphify Knowledge Graph",
-      "file_type": "concept",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_graphify_knowledge_graph",
-      "community": 0,
-      "norm_label": "graphify knowledge graph"
-    },
-    {
-      "label": "OWASP Top 10",
-      "file_type": "concept",
-      "source_file": ".claude/agents/security-auditor.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_security_auditor_owasp_top_10",
-      "community": 0,
-      "norm_label": "owasp top 10"
-    },
-    {
-      "label": "STRIDE Threat Model",
-      "file_type": "concept",
-      "source_file": ".claude/agents/security-auditor.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_agents_security_auditor_stride_threat_model",
-      "community": 0,
-      "norm_label": "stride threat model"
-    },
-    {
-      "label": "Row Level Security (RLS)",
-      "file_type": "concept",
-      "source_file": ".claude/rules/supabase.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_supabase_rls",
-      "community": 0,
-      "norm_label": "row level security (rls)"
-    },
-    {
-      "label": "Stripe Webhook Signature Verification",
-      "file_type": "concept",
-      "source_file": ".claude/rules/stripe.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_stripe_webhook_verification",
-      "community": 0,
-      "norm_label": "stripe webhook signature verification"
+      "id": "claude_agents_design_reviewer",
+      "community": 5,
+      "norm_label": "design-reviewer agent"
     },
     {
       "label": "AI Slop (Design Anti-Patterns)",
-      "file_type": "concept",
+      "file_type": "rationale",
       "source_file": ".claude/agents/design-reviewer.md",
       "source_location": null,
       "source_url": null,
@@ -1513,125 +2294,8 @@
       "author": null,
       "contributor": null,
       "id": "claude_agents_design_reviewer_ai_slop",
-      "community": 0,
+      "community": 5,
       "norm_label": "ai slop (design anti-patterns)"
-    },
-    {
-      "label": "Klein Pre-Mortem",
-      "file_type": "concept",
-      "source_file": "docs/templates/PLAN-template.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_templates_plan_template_klein_pre_mortem",
-      "community": 0,
-      "norm_label": "klein pre-mortem"
-    },
-    {
-      "label": "Appetite (Shape Up)",
-      "file_type": "concept",
-      "source_file": "docs/templates/PLAN-template.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_templates_plan_template_appetite",
-      "community": 0,
-      "norm_label": "appetite (shape up)"
-    },
-    {
-      "label": "Build Playbook (docs/build-playbook.md)",
-      "file_type": "concept",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_build_playbook",
-      "community": 0,
-      "norm_label": "build playbook (docs/build-playbook.md)"
-    },
-    {
-      "label": "/arc-design Command",
-      "file_type": "concept",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_arc_design_command",
-      "community": 0,
-      "norm_label": "/arc-design command"
-    },
-    {
-      "label": "/arc-audit Command",
-      "file_type": "concept",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_arc_audit_command",
-      "community": 0,
-      "norm_label": "/arc-audit command"
-    },
-    {
-      "label": "/arc-kickoff Command",
-      "file_type": "concept",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_arc_kickoff_command",
-      "community": 0,
-      "norm_label": "/arc-kickoff command"
-    },
-    {
-      "label": "/arc-review Command",
-      "file_type": "concept",
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_arc_review_command",
-      "community": 0,
-      "norm_label": "/arc-review command"
-    },
-    {
-      "label": "ARC_REQUIRED_REVIEWS",
-      "file_type": "concept",
-      "source_file": ".claude/rules/security-sensitive.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "claude_rules_security_sensitive_arc_required_reviews",
-      "community": 0,
-      "norm_label": "arc_required_reviews"
-    },
-    {
-      "label": "/arc-audit command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-audit.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_audit",
-      "community": 2,
-      "norm_label": "/arc-audit command"
     },
     {
       "label": "/arc-canary command",
@@ -1647,214 +2311,6 @@
       "norm_label": "/arc-canary command"
     },
     {
-      "label": "/arc-change command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-change.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_change",
-      "community": 2,
-      "norm_label": "/arc-change command"
-    },
-    {
-      "label": "/arc-commit command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-commit.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_commit",
-      "community": 2,
-      "norm_label": "/arc-commit command"
-    },
-    {
-      "label": "/arc-design command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-design.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_design",
-      "community": 5,
-      "norm_label": "/arc-design command"
-    },
-    {
-      "label": "/arc-diagram command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-diagram.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_diagram",
-      "community": 18,
-      "norm_label": "/arc-diagram command"
-    },
-    {
-      "label": "/arc-docs command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-docs.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_docs",
-      "community": 5,
-      "norm_label": "/arc-docs command"
-    },
-    {
-      "label": "/arc-fix-issue command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-fix-issue.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_fix_issue",
-      "community": 2,
-      "norm_label": "/arc-fix-issue command"
-    },
-    {
-      "label": "/arc-freeze command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-freeze.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_freeze",
-      "community": 5,
-      "norm_label": "/arc-freeze command"
-    },
-    {
-      "label": "/arc-kickoff command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-kickoff.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_kickoff",
-      "community": 2,
-      "norm_label": "/arc-kickoff command"
-    },
-    {
-      "label": "/arc-phase-done command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-phase-done.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_phase_done",
-      "community": 2,
-      "norm_label": "/arc-phase-done command"
-    },
-    {
-      "label": "/arc-pr command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-pr.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_pr",
-      "community": 5,
-      "norm_label": "/arc-pr command"
-    },
-    {
-      "label": "/arc-qa command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-qa.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_qa",
-      "community": 5,
-      "norm_label": "/arc-qa command"
-    },
-    {
-      "label": "/arc-resume command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-resume.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_resume",
-      "community": 2,
-      "norm_label": "/arc-resume command"
-    },
-    {
-      "label": "/arc-retro command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-retro.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_retro",
-      "community": 2,
-      "norm_label": "/arc-retro command"
-    },
-    {
-      "label": "/arc-review command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-review.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_review",
-      "community": 2,
-      "norm_label": "/arc-review command"
-    },
-    {
-      "label": "/arc-second-opinion command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-second-opinion.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_second_opinion",
-      "community": 2,
-      "norm_label": "/arc-second-opinion command"
-    },
-    {
-      "label": "/arc-ship command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-ship.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_ship",
-      "community": 5,
-      "norm_label": "/arc-ship command"
-    },
-    {
       "label": "/arc-toolcheck command",
       "file_type": "document",
       "source_file": ".claude/commands/arc-toolcheck.md",
@@ -1864,177 +2320,8 @@
       "author": null,
       "contributor": null,
       "id": "_claude_commands_arc_toolcheck",
-      "community": 2,
+      "community": 5,
       "norm_label": "/arc-toolcheck command"
-    },
-    {
-      "label": "/arc-unfreeze command",
-      "file_type": "document",
-      "source_file": ".claude/commands/arc-unfreeze.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "_claude_commands_arc_unfreeze",
-      "community": 5,
-      "norm_label": "/arc-unfreeze command"
-    },
-    {
-      "label": "qa-tester Subagent",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-qa.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_qa_tester_agent",
-      "community": 5,
-      "norm_label": "qa-tester subagent"
-    },
-    {
-      "label": "code-reviewer Subagent",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-review.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_code_reviewer_agent",
-      "community": 2,
-      "norm_label": "code-reviewer subagent"
-    },
-    {
-      "label": "security-auditor Subagent",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-audit.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_security_auditor_agent",
-      "community": 2,
-      "norm_label": "security-auditor subagent"
-    },
-    {
-      "label": "design-reviewer Subagent",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-design.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_design_reviewer_agent",
-      "community": 5,
-      "norm_label": "design-reviewer subagent"
-    },
-    {
-      "label": "researcher Subagent",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-kickoff.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_researcher_agent",
-      "community": 2,
-      "norm_label": "researcher subagent"
-    },
-    {
-      "label": "Review Ledger (review-ledger.sh)",
-      "file_type": "rationale",
-      "source_file": ".claude/commands/arc-audit.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_review_ledger",
-      "community": 5,
-      "norm_label": "review ledger (review-ledger.sh)"
-    },
-    {
-      "label": "Deploy-Guard Hook",
-      "file_type": "rationale",
-      "source_file": ".claude/commands/arc-ship.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_deploy_guard",
-      "community": 5,
-      "norm_label": "deploy-guard hook"
-    },
-    {
-      "label": "Graphify Knowledge Graph",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-phase-done.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_graphify_knowledge_graph",
-      "community": 2,
-      "norm_label": "graphify knowledge graph"
-    },
-    {
-      "label": "Docs-Drift Gate",
-      "file_type": "rationale",
-      "source_file": ".claude/commands/arc-docs.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_docs_drift_gate",
-      "community": 5,
-      "norm_label": "docs-drift gate"
-    },
-    {
-      "label": "Golden Loop",
-      "file_type": "rationale",
-      "source_file": ".claude/commands/arc-change.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_golden_loop",
-      "community": 2,
-      "norm_label": "golden loop"
-    },
-    {
-      "label": "Klein Pre-Mortem",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-kickoff.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_klein_pre_mortem",
-      "community": 2,
-      "norm_label": "klein pre-mortem"
-    },
-    {
-      "label": "Definition of Done",
-      "file_type": "rationale",
-      "source_file": ".claude/commands/arc-phase-done.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "concept_definition_of_done",
-      "community": 2,
-      "norm_label": "definition of done"
     },
     {
       "label": "toolchain-health.sh",
@@ -2046,21 +2333,34 @@
       "author": null,
       "contributor": null,
       "id": "concept_toolchain_health_script",
-      "community": 2,
+      "community": 5,
       "norm_label": "toolchain-health.sh"
     },
     {
-      "label": "OpenAI Codex CLI",
-      "file_type": "concept",
-      "source_file": ".claude/commands/arc-second-opinion.md",
+      "label": "Toolchain Health Artifact Template (smart table)",
+      "file_type": "document",
+      "source_file": ".claude/templates/toolchain-health-artifact.html",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "concept_codex_cli",
-      "community": 2,
-      "norm_label": "openai codex cli"
+      "id": "claude_templates_toolchain_health_artifact",
+      "community": 5,
+      "norm_label": "toolchain health artifact template (smart table)"
+    },
+    {
+      "label": "README.md (Template Structure Guide)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "readme",
+      "community": 0,
+      "norm_label": "readme.md (template structure guide)"
     },
     {
       "label": "Blueprint \u2014 Complete Structure Map",
@@ -2076,71 +2376,6 @@
       "norm_label": "blueprint \u2014 complete structure map"
     },
     {
-      "label": "Branding / Social / Contact",
-      "file_type": "document",
-      "source_file": "docs/branding.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_branding",
-      "community": 1,
-      "norm_label": "branding / social / contact"
-    },
-    {
-      "label": "The Build Playbook",
-      "file_type": "document",
-      "source_file": "docs/build-playbook.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_build_playbook",
-      "community": 1,
-      "norm_label": "the build playbook"
-    },
-    {
-      "label": "Deployment Guide",
-      "file_type": "document",
-      "source_file": "docs/deployment.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_deployment",
-      "community": 1,
-      "norm_label": "deployment guide"
-    },
-    {
-      "label": "How This Structure Works \u2014 Mental Model",
-      "file_type": "document",
-      "source_file": "docs/how-it-works.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_how_it_works",
-      "community": 1,
-      "norm_label": "how this structure works \u2014 mental model"
-    },
-    {
-      "label": "Plugins",
-      "file_type": "document",
-      "source_file": "docs/plugins.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_plugins",
-      "community": 1,
-      "norm_label": "plugins"
-    },
-    {
       "label": "Product Runbook \u2014 Idea to Shipped",
       "file_type": "document",
       "source_file": "docs/product-runbook.md",
@@ -2152,226 +2387,6 @@
       "id": "docs_product_runbook",
       "community": 1,
       "norm_label": "product runbook \u2014 idea to shipped"
-    },
-    {
-      "label": "Stripe Setup",
-      "file_type": "document",
-      "source_file": "docs/stripe-setup.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_stripe_setup",
-      "community": 1,
-      "norm_label": "stripe setup"
-    },
-    {
-      "label": "Supabase Setup",
-      "file_type": "document",
-      "source_file": "docs/supabase-setup.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_supabase_setup",
-      "community": 1,
-      "norm_label": "supabase setup"
-    },
-    {
-      "label": "UI Conventions",
-      "file_type": "document",
-      "source_file": "docs/ui-conventions.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_ui_conventions",
-      "community": 1,
-      "norm_label": "ui conventions"
-    },
-    {
-      "label": "User Manual \u2014 Sample Structure (arc- system)",
-      "file_type": "document",
-      "source_file": "docs/usermanual.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "id": "docs_usermanual",
-      "community": 1,
-      "norm_label": "user manual \u2014 sample structure (arc- system)"
-    },
-    {
-      "label": "The Golden Loop",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a71",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Never code without a written plan; a phase isn't done until tests are green AND you've seen it run; ship something runnable each phase \u2014 the repeating cycle Plan\u2192Build\u2192Test\u2192Demo\u2192Verify\u2192Update tracker\u2192Confirm\u2192Next phase keeps every phase both proven and visible.",
-      "id": "docs_build_playbook_golden_loop",
-      "community": 1,
-      "norm_label": "the golden loop"
-    },
-    {
-      "label": "3-Layer Tracking System",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a74",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Three separate views of the same work (PLAN.md vision, per-phase spec, PROGRESS.md status) are kept in sync so build status is never a mystery \u2014 any session, machine, or teammate resumes instantly from committed files rather than memory.",
-      "id": "docs_build_playbook_three_layer_tracking",
-      "community": 1,
-      "norm_label": "3-layer tracking system"
-    },
-    {
-      "label": "Definition of Done (DoD)",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a78",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Each phase lists its exit criteria before work starts so 'done' is objective, not a vibe \u2014 enforced by /arc-phase-done which refuses to close a phase without green tests, a live demo, and an updated tracker.",
-      "id": "docs_build_playbook_definition_of_done",
-      "community": 1,
-      "norm_label": "definition of done (dod)"
-    },
-    {
-      "label": "Walking Skeleton (Phase 0)",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a72",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Phase 0 wires the whole flow end-to-end on fake data before adding depth, de-risking the architecture on day one; phases are then ordered by risk, not ease, so the part that could kill the project is proven earliest.",
-      "id": "docs_build_playbook_walking_skeleton",
-      "community": 1,
-      "norm_label": "walking skeleton (phase 0)"
-    },
-    {
-      "label": "Offline-First / Interface+Fake+Real Pattern",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a73",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "An interface + fake + real implementation for every external dependency enables a stub mode with no keys or network \u2014 fast dev, deterministic tests, free CI \u2014 while real integrations stay optional until needed.",
-      "id": "docs_build_playbook_offline_first",
-      "community": 1,
-      "norm_label": "offline-first / interface+fake+real pattern"
-    },
-    {
-      "label": "Change Intake",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a72.1",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "A mid-build change, idea, or suggestion \u2014 even the AI's own \u2014 is never coded ad-hoc; it is routed through triage (current-phase note / new phase spec / ADR / bug fix) and the tracker updated first, so the tracker never drifts out of sync with the code.",
-      "id": "docs_build_playbook_change_intake",
-      "community": 1,
-      "norm_label": "change intake"
-    },
-    {
-      "label": "Quality & Safety Gates",
-      "file_type": "rationale",
-      "source_file": "docs/build-playbook.md",
-      "source_location": "\u00a75",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Definition of Done, tests-per-feature, golden/eval sets, a security & privacy pass, cost/budget ceilings, observability, idempotency/resumability, and a rollback/kill switch are treated as non-skippable gates rather than optional polish.",
-      "id": "docs_build_playbook_quality_gates",
-      "community": 1,
-      "norm_label": "quality & safety gates"
-    },
-    {
-      "label": "Three Loading Behaviors",
-      "file_type": "rationale",
-      "source_file": "docs/how-it-works.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Golden rule: if something is a guideline, it belongs in CLAUDE.md (advisory, can be forgotten in long sessions); if it must always/never happen, it becomes a hook (deterministic, cannot be forgotten); if it's a capability, it loads on demand via command/agent/skill/rule to keep the context window lean.",
-      "id": "docs_how_it_works_three_loading_behaviors",
-      "community": 1,
-      "norm_label": "three loading behaviors"
-    },
-    {
-      "label": "Five-Layer Memory Stack",
-      "file_type": "rationale",
-      "source_file": "docs/how-it-works.md",
-      "source_location": null,
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "File-based, git-versioned memory (CLAUDE.md+rules, PLAN.md+ADRs, PROGRESS.md+phases, session-log.md) plus Claude's machine-local native auto memory is the verified best practice for per-project coding \u2014 diffable, portable, zero infra \u2014 with vector/graph memory servers reserved for cross-project or team memory pools.",
-      "id": "docs_how_it_works_memory_stack",
-      "community": 1,
-      "norm_label": "five-layer memory stack"
-    },
-    {
-      "label": "The Arc Twist",
-      "file_type": "rationale",
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a70",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "Whatever gets done must produce a committed artifact + a gate + resumable state \u2014 not just a report. Enforcement, not assertion, is presented as the source of the whole system's power.",
-      "id": "docs_usermanual_arc_twist",
-      "community": 1,
-      "norm_label": "the arc twist"
-    },
-    {
-      "label": "Review Ledger + Gates",
-      "file_type": "rationale",
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a78",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "A per-commit-SHA ledger records which reviews (qa/security/design/docs) have passed; any new commit resets the ledger so code is always re-reviewed honestly, and ship is blocked until the required reviews are stamped.",
-      "id": "docs_usermanual_review_ledger_gates",
-      "community": 1,
-      "norm_label": "review ledger + gates"
-    },
-    {
-      "label": "arc vs gstack Division of Labor",
-      "file_type": "rationale",
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a712",
-      "source_url": null,
-      "captured_at": null,
-      "author": null,
-      "contributor": null,
-      "rationale": "One-owner-per-job: throwaway/preview work (design exploration, general browsing, ad-hoc knowledge bases) is delegated to gstack tooling, while anything that must end in a decision, a gate, or a tracked deliverable stays inside arc, avoiding duplicated workflow ownership.",
-      "id": "docs_usermanual_arc_vs_gstack",
-      "community": 1,
-      "norm_label": "arc vs gstack division of labor"
     },
     {
       "label": "Promptly (worked example SaaS)",
@@ -2395,79 +2410,87 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "rationale": "Specific signals (a repeated instruction, a folder-specific rule, a recurring multi-step request, exploration flooding context, something that must always/never happen) map to a specific mechanism to add (CLAUDE.md line, path-scoped rule, slash command, subagent, hook) \u2014 with named anti-patterns like duplicating one workflow as skill+agent+command, or secrets outside .env.local.",
       "id": "docs_product_runbook_growing_the_setup",
       "community": 1,
       "norm_label": "growing the setup"
     },
     {
-      "label": "Stripe Webhook Idempotency",
-      "file_type": "rationale",
-      "source_file": "docs/stripe-setup.md",
+      "label": "User Manual \u2014 Sample Structure (arc- system)",
+      "file_type": "document",
+      "source_file": "docs/usermanual.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "rationale": "Webhook events are idempotent by storing processed event IDs, so Stripe's at-least-once delivery and retries can never double-apply an entitlement change.",
-      "id": "docs_stripe_setup_webhook_idempotency",
+      "id": "docs_usermanual",
       "community": 1,
-      "norm_label": "stripe webhook idempotency"
+      "norm_label": "user manual \u2014 sample structure (arc- system)"
     },
     {
-      "label": "RLS Default-Deny Pattern",
+      "label": "The Arc Twist",
       "file_type": "rationale",
-      "source_file": "docs/supabase-setup.md",
+      "source_file": "docs/usermanual.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "rationale": "Row Level Security defaults to deny, with explicit per-table policies (select/insert/update/delete) scoped to auth.uid() \u2014 least-privilege data access enforced at the database layer regardless of application-layer bugs.",
-      "id": "docs_supabase_setup_rls_pattern",
+      "id": "docs_usermanual_arc_twist",
       "community": 1,
-      "norm_label": "rls default-deny pattern"
+      "norm_label": "the arc twist"
     },
     {
-      "label": "Design System Reuse Convention",
+      "label": "Review Ledger + Gates",
       "file_type": "rationale",
-      "source_file": "docs/ui-conventions.md",
+      "source_file": "docs/usermanual.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "rationale": "Reuse components/ui/* primitives before building new ones, keep styling to shared Tailwind tokens (no inline hex), and require loading/empty/error states on every async view \u2014 consistency and robustness enforced as a convention rather than left to each component.",
-      "id": "docs_ui_conventions_design_system_reuse",
+      "id": "docs_usermanual_review_ledger_gates",
       "community": 1,
-      "norm_label": "design system reuse convention"
+      "norm_label": "review ledger + gates"
     },
     {
-      "label": "Deploy Flow with pre-deploy-guard",
+      "label": "arc vs gstack Division of Labor",
       "file_type": "rationale",
-      "source_file": "docs/deployment.md",
+      "source_file": "docs/usermanual.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "rationale": "The pre-deploy-guard hook re-runs the test suite before vercel --prod and physically blocks the deploy on failure, so broken code cannot reach production even if a human forgets to check.",
-      "id": "docs_deployment_deploy_guard_flow",
+      "id": "docs_usermanual_arc_vs_gstack",
       "community": 1,
-      "norm_label": "deploy flow with pre-deploy-guard"
+      "norm_label": "arc vs gstack division of labor"
     },
     {
-      "label": "Plugin Anatomy",
+      "label": "agent-browser CLI (Vercel Labs)",
       "file_type": "concept",
-      "source_file": "docs/plugins.md",
+      "source_file": ".claude/agents/qa-tester.md",
       "source_location": null,
       "source_url": null,
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "id": "docs_plugins_plugin_anatomy",
-      "community": 1,
-      "norm_label": "plugin anatomy"
+      "id": "concept_agent_browser_cli",
+      "community": 5,
+      "norm_label": "agent-browser cli (vercel labs)"
+    },
+    {
+      "label": "agent-browser Integration Plan (PROPOSED \u2014 parallel draft)",
+      "file_type": "document",
+      "source_file": "docs/agent-browser-integration.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null,
+      "id": "docs_agent_browser_integration",
+      "community": 5,
+      "norm_label": "agent-browser integration plan (proposed \u2014 parallel draft)"
     }
   ],
   "links": [
@@ -2477,9 +2500,9 @@
       "source_file": ".claude/hooks/PostToolUse.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_hooks_posttooluse",
-      "target": "claude_hooks_posttooluse_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_hooks_posttooluse_sh__entry"
     },
     {
       "relation": "contains",
@@ -2487,9 +2510,9 @@
       "source_file": ".claude/hooks/PreCompact.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_hooks_precompact",
-      "target": "claude_hooks_precompact_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_hooks_precompact_sh__entry"
     },
     {
       "relation": "contains",
@@ -2497,9 +2520,9 @@
       "source_file": ".claude/hooks/PreToolUse-edit.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_hooks_pretooluse_edit",
-      "target": "claude_hooks_pretooluse_edit_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_hooks_pretooluse_edit_sh__entry"
     },
     {
       "relation": "contains",
@@ -2507,9 +2530,9 @@
       "source_file": ".claude/hooks/PreToolUse.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_hooks_pretooluse",
-      "target": "claude_hooks_pretooluse_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_hooks_pretooluse_sh__entry"
     },
     {
       "relation": "contains",
@@ -2517,9 +2540,9 @@
       "source_file": ".claude/hooks/SessionEnd.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_hooks_sessionend",
-      "target": "claude_hooks_sessionend_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_hooks_sessionend_sh__entry"
     },
     {
       "relation": "contains",
@@ -2527,9 +2550,9 @@
       "source_file": ".claude/hooks/SessionStart.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_hooks_sessionstart",
-      "target": "claude_hooks_sessionstart_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_hooks_sessionstart_sh__entry"
     },
     {
       "relation": "defines",
@@ -2537,9 +2560,9 @@
       "source_file": ".claude/scripts/coverage-gate.sh",
       "source_location": "L34",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_coverage_gate",
-      "target": "claude_scripts_coverage_gate_fail_or_warn",
-      "confidence_score": 1.0
+      "target": "claude_scripts_coverage_gate_fail_or_warn"
     },
     {
       "relation": "defines",
@@ -2547,9 +2570,9 @@
       "source_file": ".claude/scripts/coverage-gate.sh",
       "source_location": "L20",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_coverage_gate",
-      "target": "claude_scripts_coverage_gate_json",
-      "confidence_score": 1.0
+      "target": "claude_scripts_coverage_gate_json"
     },
     {
       "relation": "contains",
@@ -2557,9 +2580,9 @@
       "source_file": ".claude/scripts/coverage-gate.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_coverage_gate",
-      "target": "claude_scripts_coverage_gate_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_scripts_coverage_gate_sh__entry"
     },
     {
       "relation": "calls",
@@ -2568,9 +2591,9 @@
       "source_location": "L40",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "claude_scripts_coverage_gate_sh__entry",
-      "target": "claude_scripts_coverage_gate_fail_or_warn",
-      "confidence_score": 1.0
+      "target": "claude_scripts_coverage_gate_fail_or_warn"
     },
     {
       "relation": "contains",
@@ -2578,9 +2601,9 @@
       "source_file": ".claude/scripts/docs-drift.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_docs_drift",
-      "target": "claude_scripts_docs_drift_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_scripts_docs_drift_sh__entry"
     },
     {
       "relation": "contains",
@@ -2588,9 +2611,9 @@
       "source_file": ".claude/scripts/freeze-check.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_freeze_check",
-      "target": "claude_scripts_freeze_check_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_scripts_freeze_check_sh__entry"
     },
     {
       "relation": "defines",
@@ -2598,9 +2621,9 @@
       "source_file": ".claude/scripts/review-ledger.sh",
       "source_location": "L28",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_review_ledger",
-      "target": "claude_scripts_review_ledger_cmd_for",
-      "confidence_score": 1.0
+      "target": "claude_scripts_review_ledger_cmd_for"
     },
     {
       "relation": "defines",
@@ -2608,9 +2631,9 @@
       "source_file": ".claude/scripts/review-ledger.sh",
       "source_location": "L27",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_review_ledger",
-      "target": "claude_scripts_review_ledger_is_valid",
-      "confidence_score": 1.0
+      "target": "claude_scripts_review_ledger_is_valid"
     },
     {
       "relation": "contains",
@@ -2618,9 +2641,9 @@
       "source_file": ".claude/scripts/review-ledger.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_scripts_review_ledger",
-      "target": "claude_scripts_review_ledger_sh__entry",
-      "confidence_score": 1.0
+      "target": "claude_scripts_review_ledger_sh__entry"
     },
     {
       "relation": "calls",
@@ -2629,569 +2652,9 @@
       "source_location": "L39",
       "weight": 1.0,
       "context": "call",
+      "confidence_score": 1.0,
       "source": "claude_scripts_review_ledger_sh__entry",
-      "target": "claude_scripts_review_ledger_is_valid",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L53",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_emit_all",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L33",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_env_has",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L35",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_fix_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L31",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_have",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L42",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_man_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L50",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_r_env",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L47",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_r_miss",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L51",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_r_ng",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L46",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_r_ok",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L49",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_r_opt",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_r_stale",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L44",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L45",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_sec",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_sh__entry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "defines",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L32",
-      "weight": 1.0,
-      "source": "claude_scripts_toolchain_health",
-      "target": "claude_scripts_toolchain_health_ver",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_have",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L98",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_env_has",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L47",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_miss",
-      "target": "claude_scripts_toolchain_health_fix_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L49",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_opt",
-      "target": "claude_scripts_toolchain_health_fix_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_stale",
-      "target": "claude_scripts_toolchain_health_fix_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L50",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_env",
-      "target": "claude_scripts_toolchain_health_man_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L51",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_ng",
-      "target": "claude_scripts_toolchain_health_man_add",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L50",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_env",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L47",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_miss",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L51",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_ng",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L46",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_ok",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L49",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_opt",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L48",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_r_stale",
-      "target": "claude_scripts_toolchain_health_row",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L54",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_sec",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_r_ok",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L55",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_r_miss",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L85",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_r_stale",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L65",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_r_opt",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L89",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_r_env",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/scripts/toolchain-health.sh",
-      "source_location": "L81",
-      "weight": 1.0,
-      "context": "call",
-      "source": "claude_scripts_toolchain_health_emit_all",
-      "target": "claude_scripts_toolchain_health_r_ng",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L52",
-      "weight": 1.0,
-      "source": "claude_settings",
-      "target": "claude_settings_arc",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L34",
-      "weight": 1.0,
-      "source": "claude_settings",
-      "target": "claude_settings_hooks",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L3",
-      "weight": 1.0,
-      "source": "claude_settings",
-      "target": "claude_settings_permissions",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L2",
-      "weight": 1.0,
-      "source": "claude_settings",
-      "target": "claude_settings_schema",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L30",
-      "weight": 1.0,
-      "source": "claude_settings",
-      "target": "claude_settings_statusline",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L5",
-      "weight": 1.0,
-      "source": "claude_settings_permissions",
-      "target": "claude_settings_permissions_allow",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L4",
-      "weight": 1.0,
-      "source": "claude_settings_permissions",
-      "target": "claude_settings_permissions_defaultmode",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L18",
-      "weight": 1.0,
-      "source": "claude_settings_permissions",
-      "target": "claude_settings_permissions_deny",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L32",
-      "weight": 1.0,
-      "source": "claude_settings_statusline",
-      "target": "claude_settings_statusline_command",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L31",
-      "weight": 1.0,
-      "source": "claude_settings_statusline",
-      "target": "claude_settings_statusline_type",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L42",
-      "weight": 1.0,
-      "source": "claude_settings_hooks",
-      "target": "claude_settings_hooks_posttooluse",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L45",
-      "weight": 1.0,
-      "source": "claude_settings_hooks",
-      "target": "claude_settings_hooks_precompact",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L38",
-      "weight": 1.0,
-      "source": "claude_settings_hooks",
-      "target": "claude_settings_hooks_pretooluse",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L48",
-      "weight": 1.0,
-      "source": "claude_settings_hooks",
-      "target": "claude_settings_hooks_sessionend",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L35",
-      "weight": 1.0,
-      "source": "claude_settings_hooks",
-      "target": "claude_settings_hooks_sessionstart",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L53",
-      "weight": 1.0,
-      "source": "claude_settings_arc",
-      "target": "claude_settings_arc_coveragefloor",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L55",
-      "weight": 1.0,
-      "source": "claude_settings_arc",
-      "target": "claude_settings_arc_coveragemode",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L54",
-      "weight": 1.0,
-      "source": "claude_settings_arc",
-      "target": "claude_settings_arc_coveragesummary",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "source_file": ".claude/settings.json",
-      "source_location": "L56",
-      "weight": 1.0,
-      "source": "claude_settings_arc",
-      "target": "claude_settings_arc_docsgate",
-      "confidence_score": 1.0
+      "target": "claude_scripts_review_ledger_is_valid"
     },
     {
       "relation": "defines",
@@ -3199,9 +2662,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L67",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_fmt_dur",
-      "confidence_score": 1.0
+      "target": "claude_statusline_fmt_dur"
     },
     {
       "relation": "defines",
@@ -3209,9 +2672,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L69",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_fmt_left",
-      "confidence_score": 1.0
+      "target": "claude_statusline_fmt_left"
     },
     {
       "relation": "defines",
@@ -3219,9 +2682,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L64",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_fmt_tok",
-      "confidence_score": 1.0
+      "target": "claude_statusline_fmt_tok"
     },
     {
       "relation": "defines",
@@ -3229,9 +2692,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L74",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_mtime",
-      "confidence_score": 1.0
+      "target": "claude_statusline_mtime"
     },
     {
       "relation": "defines",
@@ -3239,9 +2702,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L51",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_n",
-      "confidence_score": 1.0
+      "target": "claude_statusline_n"
     },
     {
       "relation": "defines",
@@ -3249,9 +2712,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L50",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_s",
-      "confidence_score": 1.0
+      "target": "claude_statusline_s"
     },
     {
       "relation": "contains",
@@ -3259,157 +2722,9 @@
       "source_file": ".claude/statusline.sh",
       "source_location": "L1",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "claude_statusline",
-      "target": "claude_statusline_sh__entry",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "mcp",
-      "target": "mcp_mcp_server_context7"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "mcp",
-      "target": "mcp_mcp_server_playwright"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "mcp",
-      "target": "mcp_mcp_server_stripe"
-    },
-    {
-      "relation": "contains",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "mcp",
-      "target": "mcp_mcp_server_supabase"
-    },
-    {
-      "relation": "requires_env",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "mcp_mcp_server_supabase",
-      "target": "env_var_supabase_access_token"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "command",
-      "source": "mcp_mcp_server_supabase",
-      "target": "mcp_command_npx"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "package",
-      "source": "mcp_mcp_server_supabase",
-      "target": "mcp_package_supabase_mcp_server_supabase"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "command",
-      "source": "mcp_mcp_server_context7",
-      "target": "mcp_command_npx"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "command",
-      "source": "mcp_mcp_server_playwright",
-      "target": "mcp_command_npx"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "command",
-      "source": "mcp_mcp_server_stripe",
-      "target": "mcp_command_npx"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "package",
-      "source": "mcp_mcp_server_playwright",
-      "target": "mcp_package_playwright_mcp"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "package",
-      "source": "mcp_mcp_server_context7",
-      "target": "mcp_package_upstash_context7_mcp"
-    },
-    {
-      "relation": "requires_env",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "source": "mcp_mcp_server_stripe",
-      "target": "env_var_stripe_secret_key"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".mcp.json",
-      "source_location": "L1",
-      "weight": 1.0,
-      "context": "package",
-      "source": "mcp_mcp_server_stripe",
-      "target": "mcp_package_stripe_mcp"
+      "target": "claude_statusline_sh__entry"
     },
     {
       "relation": "references",
@@ -3480,46 +2795,6 @@
       "weight": 1.0,
       "source": "readme",
       "target": "claude_agents_code_reviewer"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".claude/agents/design-reviewer.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "claude_agents_design_reviewer",
-      "target": "claude_agents_design_reviewer_ai_slop"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".claude/agents/design-reviewer.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "claude_agents_design_reviewer",
-      "target": "claude_agents_qa_tester"
-    },
-    {
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": ".claude/agents/design-reviewer.md",
-      "source_location": null,
-      "weight": 0.95,
-      "source": "claude_agents_design_reviewer",
-      "target": "claude_rules_ui"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "CLAUDE.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "claude_arc_design_command",
-      "target": "claude_agents_design_reviewer"
     },
     {
       "relation": "references",
@@ -3602,46 +2877,6 @@
       "target": "docs_templates_plan_template_klein_pre_mortem"
     },
     {
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
-      "source_file": ".claude/agents/qa-tester.md",
-      "source_location": null,
-      "weight": 0.75,
-      "source": "claude_agents_qa_tester",
-      "target": "claude_agents_security_auditor"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".claude/agents/qa-tester.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "claude_agents_qa_tester",
-      "target": "docs_templates_phase_spec_template"
-    },
-    {
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.65,
-      "source_file": ".claude/rules/testing.md",
-      "source_location": null,
-      "weight": 0.65,
-      "source": "claude_rules_testing",
-      "target": "claude_agents_qa_tester"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "claude_agents_qa_tester"
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
@@ -3670,6 +2905,16 @@
       "weight": 1.0,
       "source": "readme",
       "target": "claude_agents_researcher"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": ".claude/agents/qa-tester.md",
+      "source_location": null,
+      "weight": 0.75,
+      "source": "claude_agents_qa_tester",
+      "target": "claude_agents_security_auditor"
     },
     {
       "relation": "references",
@@ -3852,6 +3097,16 @@
       "target": "claude_rules_supabase"
     },
     {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.65,
+      "source_file": ".claude/rules/testing.md",
+      "source_location": null,
+      "weight": 0.65,
+      "source": "claude_rules_testing",
+      "target": "claude_agents_qa_tester"
+    },
+    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
@@ -3870,6 +3125,16 @@
       "weight": 1.0,
       "source": "readme",
       "target": "claude_rules_testing"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": ".claude/agents/design-reviewer.md",
+      "source_location": null,
+      "weight": 0.95,
+      "source": "claude_agents_design_reviewer",
+      "target": "claude_rules_ui"
     },
     {
       "relation": "references",
@@ -3985,66 +3250,6 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "claude_arc_kickoff_command"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "claude_arc_review_command"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "claude_build_playbook"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "docs_templates_adr_template"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "docs_templates_phase_spec_template"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "readme",
-      "target": "docs_templates_plan_template"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
       "source_file": "docs/templates/PLAN-template.md",
       "source_location": null,
       "weight": 1.0,
@@ -4080,6 +3285,86 @@
       "weight": 1.0,
       "source": "docs_templates_plan_template",
       "target": "docs_templates_plan_template_klein_pre_mortem"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "docs_templates_plan_template"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "docs_templates_adr_template"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/agents/qa-tester.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "claude_agents_qa_tester",
+      "target": "docs_templates_phase_spec_template"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "docs_templates_phase_spec_template"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "claude_build_playbook"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "CLAUDE.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "claude_arc_design_command",
+      "target": "claude_agents_design_reviewer"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "claude_arc_kickoff_command"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "claude_arc_review_command"
     },
     {
       "relation": "references",
@@ -4130,26 +3415,6 @@
       "weight": 0.65,
       "source": "_claude_commands_arc_toolcheck",
       "target": "_claude_commands_arc_audit"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "AMBIGUOUS",
-      "confidence_score": 0.2,
-      "source_file": ".claude/commands/arc-canary.md",
-      "source_location": null,
-      "weight": 0.2,
-      "source": "_claude_commands_arc_canary",
-      "target": "concept_deploy_guard"
-    },
-    {
-      "relation": "implements",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": ".claude/commands/arc-canary.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "_claude_commands_arc_canary",
-      "target": "concept_qa_tester_agent"
     },
     {
       "relation": "references",
@@ -4425,18 +3690,18 @@
       "relation": "implements",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": ".claude/commands/arc-toolcheck.md",
+      "source_file": ".claude/commands/arc-canary.md",
       "source_location": null,
       "weight": 1.0,
-      "source": "_claude_commands_arc_toolcheck",
-      "target": "concept_toolchain_health_script"
+      "source": "_claude_commands_arc_canary",
+      "target": "concept_qa_tester_agent"
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_blueprint",
       "target": "docs_branding"
@@ -4446,140 +3711,10 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_blueprint",
       "target": "docs_build_playbook"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_deployment"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "hooks table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_deployment_deploy_guard_flow"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_how_it_works"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "Born at runtime",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_how_it_works_memory_stack"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "loading-behaviors diagram",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_how_it_works_three_loading_behaviors"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_plugins"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_product_runbook"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_stripe_setup"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "docs/blueprint.md",
-      "source_location": "rules/ table",
-      "weight": 0.95,
-      "source": "docs_blueprint",
-      "target": "docs_stripe_setup_webhook_idempotency"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_supabase_setup"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "docs/blueprint.md",
-      "source_location": "rules/ table",
-      "weight": 0.95,
-      "source": "docs_blueprint",
-      "target": "docs_supabase_setup_rls_pattern"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/blueprint.md",
-      "source_location": "docs/ table",
-      "weight": 1.0,
-      "source": "docs_blueprint",
-      "target": "docs_ui_conventions"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.75,
-      "source_file": "docs/plugins.md",
-      "source_location": "Anatomy",
-      "weight": 0.75,
-      "source": "docs_plugins_plugin_anatomy",
-      "target": "docs_blueprint"
     },
     {
       "relation": "references",
@@ -4666,10 +3801,20 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/usermanual.md",
-      "source_location": "\u00a72 folder tree",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_usermanual",
       "target": "docs_build_playbook"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_deployment"
     },
     {
       "relation": "references",
@@ -4696,10 +3841,20 @@
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "docs/product-runbook.md",
-      "source_location": "Stage 7",
+      "source_location": null,
       "weight": 0.85,
       "source": "docs_product_runbook",
       "target": "docs_deployment"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_how_it_works"
     },
     {
       "relation": "references",
@@ -4726,10 +3881,20 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/usermanual.md",
-      "source_location": "\u00a72 folder tree",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_usermanual",
       "target": "docs_how_it_works"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_plugins"
     },
     {
       "relation": "references",
@@ -4745,18 +3910,88 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "docs/product-runbook.md",
-      "source_location": "Stage 4 table",
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
       "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_stripe_setup"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/product-runbook.md",
+      "source_location": null,
+      "weight": 0.85,
       "source": "docs_product_runbook",
-      "target": "docs_build_playbook_change_intake"
+      "target": "docs_stripe_setup"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/stripe-setup.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_stripe_setup",
+      "target": "docs_stripe_setup_webhook_idempotency"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_supabase_setup"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/product-runbook.md",
+      "source_location": null,
+      "weight": 0.85,
+      "source": "docs_product_runbook",
+      "target": "docs_supabase_setup"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/supabase-setup.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_supabase_setup",
+      "target": "docs_supabase_setup_rls_pattern"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_ui_conventions"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/ui-conventions.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_ui_conventions",
+      "target": "docs_ui_conventions_design_system_reuse"
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/product-runbook.md",
-      "source_location": "Stage 3-4",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_product_runbook",
       "target": "docs_build_playbook_golden_loop"
@@ -4765,11 +4000,1059 @@
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "docs_build_playbook_golden_loop"
+    },
+    {
+      "relation": "semantically_similar_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 0.85,
+      "source": "docs_usermanual_arc_twist",
+      "target": "docs_build_playbook_golden_loop"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "docs_build_playbook_three_layer_tracking"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "docs_build_playbook_definition_of_done"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
       "source_file": "docs/product-runbook.md",
-      "source_location": "Stage 3",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_product_runbook",
       "target": "docs_build_playbook_walking_skeleton"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/product-runbook.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_product_runbook",
+      "target": "docs_build_playbook_change_intake"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "docs_build_playbook_change_intake"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 0.85,
+      "source": "docs_usermanual_review_ledger_gates",
+      "target": "docs_build_playbook_quality_gates"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_how_it_works_three_loading_behaviors"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/product-runbook.md",
+      "source_location": null,
+      "weight": 0.85,
+      "source": "docs_product_runbook_growing_the_setup",
+      "target": "docs_how_it_works_three_loading_behaviors"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "docs_how_it_works_three_loading_behaviors"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_how_it_works_memory_stack"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 0.95,
+      "source": "docs_blueprint",
+      "target": "docs_stripe_setup_webhook_idempotency"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 0.95,
+      "source": "docs_blueprint",
+      "target": "docs_supabase_setup_rls_pattern"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.95,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 0.95,
+      "source": "docs_usermanual",
+      "target": "docs_ui_conventions_design_system_reuse"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_deployment_deploy_guard_flow"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "docs_deployment_deploy_guard_flow"
+    },
+    {
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.75,
+      "source_file": "docs/plugins.md",
+      "source_location": "Anatomy",
+      "weight": 0.75,
+      "source": "docs_plugins_plugin_anatomy",
+      "target": "docs_blueprint"
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L53",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_emit_all",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_env_has",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_fix_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L31",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_have",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L42",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_man_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L50",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_r_env",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L47",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_r_miss",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L51",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_r_ng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L46",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_r_ok",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_r_opt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L48",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_r_stale",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L44",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L45",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_sec",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_sh__entry",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "defines",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "claude_scripts_toolchain_health",
+      "target": "claude_scripts_toolchain_health_ver",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_have",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L100",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_env_has",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L47",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_miss",
+      "target": "claude_scripts_toolchain_health_fix_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L49",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_opt",
+      "target": "claude_scripts_toolchain_health_fix_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L48",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_stale",
+      "target": "claude_scripts_toolchain_health_fix_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L50",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_env",
+      "target": "claude_scripts_toolchain_health_man_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_ng",
+      "target": "claude_scripts_toolchain_health_man_add",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L50",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_env",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L47",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_miss",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L51",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_ng",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L46",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_ok",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L49",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_opt",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L48",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_r_stale",
+      "target": "claude_scripts_toolchain_health_row",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L54",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_sec",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_r_ok",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L55",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_r_miss",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L87",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_r_stale",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L65",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_r_opt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L91",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_r_env",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/scripts/toolchain-health.sh",
+      "source_location": "L83",
+      "weight": 1.0,
+      "context": "call",
+      "source": "claude_scripts_toolchain_health_emit_all",
+      "target": "claude_scripts_toolchain_health_r_ng",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L53",
+      "weight": 1.0,
+      "source": "claude_settings",
+      "target": "claude_settings_arc",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L35",
+      "weight": 1.0,
+      "source": "claude_settings",
+      "target": "claude_settings_hooks",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L3",
+      "weight": 1.0,
+      "source": "claude_settings",
+      "target": "claude_settings_permissions",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L2",
+      "weight": 1.0,
+      "source": "claude_settings",
+      "target": "claude_settings_schema",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L31",
+      "weight": 1.0,
+      "source": "claude_settings",
+      "target": "claude_settings_statusline",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L5",
+      "weight": 1.0,
+      "source": "claude_settings_permissions",
+      "target": "claude_settings_permissions_allow",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L4",
+      "weight": 1.0,
+      "source": "claude_settings_permissions",
+      "target": "claude_settings_permissions_defaultmode",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L19",
+      "weight": 1.0,
+      "source": "claude_settings_permissions",
+      "target": "claude_settings_permissions_deny",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L33",
+      "weight": 1.0,
+      "source": "claude_settings_statusline",
+      "target": "claude_settings_statusline_command",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L32",
+      "weight": 1.0,
+      "source": "claude_settings_statusline",
+      "target": "claude_settings_statusline_type",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L43",
+      "weight": 1.0,
+      "source": "claude_settings_hooks",
+      "target": "claude_settings_hooks_posttooluse",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L46",
+      "weight": 1.0,
+      "source": "claude_settings_hooks",
+      "target": "claude_settings_hooks_precompact",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L39",
+      "weight": 1.0,
+      "source": "claude_settings_hooks",
+      "target": "claude_settings_hooks_pretooluse",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L49",
+      "weight": 1.0,
+      "source": "claude_settings_hooks",
+      "target": "claude_settings_hooks_sessionend",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L36",
+      "weight": 1.0,
+      "source": "claude_settings_hooks",
+      "target": "claude_settings_hooks_sessionstart",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L54",
+      "weight": 1.0,
+      "source": "claude_settings_arc",
+      "target": "claude_settings_arc_coveragefloor",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L56",
+      "weight": 1.0,
+      "source": "claude_settings_arc",
+      "target": "claude_settings_arc_coveragemode",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L55",
+      "weight": 1.0,
+      "source": "claude_settings_arc",
+      "target": "claude_settings_arc_coveragesummary",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": ".claude/settings.json",
+      "source_location": "L57",
+      "weight": 1.0,
+      "source": "claude_settings_arc",
+      "target": "claude_settings_arc_docsgate",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "mcp",
+      "target": "mcp_mcp_server_context7"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "mcp",
+      "target": "mcp_mcp_server_playwright"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "mcp",
+      "target": "mcp_mcp_server_stripe"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "mcp",
+      "target": "mcp_mcp_server_supabase"
+    },
+    {
+      "relation": "requires_env",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "mcp_mcp_server_supabase",
+      "target": "env_var_supabase_access_token"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "command",
+      "source": "mcp_mcp_server_supabase",
+      "target": "mcp_command_npx"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "package",
+      "source": "mcp_mcp_server_supabase",
+      "target": "mcp_package_supabase_mcp_server_supabase"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "command",
+      "source": "mcp_mcp_server_context7",
+      "target": "mcp_command_npx"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "command",
+      "source": "mcp_mcp_server_playwright",
+      "target": "mcp_command_npx"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "command",
+      "source": "mcp_mcp_server_stripe",
+      "target": "mcp_command_npx"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "package",
+      "source": "mcp_mcp_server_playwright",
+      "target": "mcp_package_playwright_mcp"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "package",
+      "source": "mcp_mcp_server_context7",
+      "target": "mcp_package_upstash_context7_mcp"
+    },
+    {
+      "relation": "requires_env",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "source": "mcp_mcp_server_stripe",
+      "target": "env_var_stripe_secret_key"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".mcp.json",
+      "source_location": "L1",
+      "weight": 1.0,
+      "context": "package",
+      "source": "mcp_mcp_server_stripe",
+      "target": "mcp_package_stripe_mcp"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/agents/design-reviewer.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "claude_agents_design_reviewer",
+      "target": "claude_agents_qa_tester"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/agents/qa-tester.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "claude_agents_qa_tester",
+      "target": "concept_agent_browser_cli"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/agent-browser-integration.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_agent_browser_integration",
+      "target": "claude_agents_qa_tester"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "claude_agents_qa_tester"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/agents/design-reviewer.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "claude_agents_design_reviewer",
+      "target": "claude_agents_design_reviewer_ai_slop"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/agents/design-reviewer.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "claude_agents_design_reviewer",
+      "target": "concept_agent_browser_cli"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/commands/arc-canary.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "_claude_commands_arc_canary",
+      "target": "concept_agent_browser_cli"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/agent-browser-integration.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_agent_browser_integration",
+      "target": "_claude_commands_arc_canary"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/commands/arc-toolcheck.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "_claude_commands_arc_toolcheck",
+      "target": "claude_templates_toolchain_health_artifact"
+    },
+    {
+      "relation": "implements",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/commands/arc-toolcheck.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "_claude_commands_arc_toolcheck",
+      "target": "concept_toolchain_health_script"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/agent-browser-integration.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_agent_browser_integration",
+      "target": "concept_toolchain_health_script"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "claude_templates_toolchain_health_artifact"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/usermanual.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_usermanual",
+      "target": "claude_templates_toolchain_health_artifact"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "README.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "readme",
+      "target": "concept_agent_browser_cli"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "concept_agent_browser_cli"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/blueprint.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_blueprint",
+      "target": "docs_product_runbook"
+    },
+    {
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/product-runbook.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_product_runbook",
+      "target": "concept_agent_browser_cli"
     },
     {
       "relation": "references",
@@ -4792,131 +5075,21 @@
       "target": "docs_product_runbook_promptly_example"
     },
     {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "docs/product-runbook.md",
-      "source_location": "Stage 5",
-      "weight": 0.85,
-      "source": "docs_product_runbook",
-      "target": "docs_stripe_setup"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "docs/product-runbook.md",
-      "source_location": "Stage 1",
-      "weight": 0.85,
-      "source": "docs_product_runbook",
-      "target": "docs_supabase_setup"
-    },
-    {
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "docs/stripe-setup.md",
+      "source_file": "docs/usermanual.md",
       "source_location": null,
       "weight": 1.0,
-      "source": "docs_stripe_setup",
-      "target": "docs_stripe_setup_webhook_idempotency"
+      "source": "docs_usermanual",
+      "target": "concept_agent_browser_cli"
     },
     {
       "relation": "references",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
-      "source_file": "docs/supabase-setup.md",
+      "source_file": "docs/usermanual.md",
       "source_location": null,
-      "weight": 1.0,
-      "source": "docs_supabase_setup",
-      "target": "docs_supabase_setup_rls_pattern"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/ui-conventions.md",
-      "source_location": null,
-      "weight": 1.0,
-      "source": "docs_ui_conventions",
-      "target": "docs_ui_conventions_design_system_reuse"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "Stage 2 table",
-      "weight": 1.0,
-      "source": "docs_usermanual",
-      "target": "docs_build_playbook_change_intake"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "Stage 6",
-      "weight": 1.0,
-      "source": "docs_usermanual",
-      "target": "docs_build_playbook_definition_of_done"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a77 Stage 3",
-      "weight": 1.0,
-      "source": "docs_usermanual",
-      "target": "docs_build_playbook_golden_loop"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a79",
-      "weight": 1.0,
-      "source": "docs_usermanual",
-      "target": "docs_build_playbook_three_layer_tracking"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a74a Guard 2",
-      "weight": 1.0,
-      "source": "docs_usermanual",
-      "target": "docs_deployment_deploy_guard_flow"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a71",
-      "weight": 1.0,
-      "source": "docs_usermanual",
-      "target": "docs_how_it_works_three_loading_behaviors"
-    },
-    {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.95,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a74b rules table",
-      "weight": 0.95,
-      "source": "docs_usermanual",
-      "target": "docs_ui_conventions_design_system_reuse"
-    },
-    {
-      "relation": "references",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a70",
       "weight": 1.0,
       "source": "docs_usermanual",
       "target": "docs_usermanual_arc_twist"
@@ -4926,7 +5099,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/usermanual.md",
-      "source_location": "\u00a712",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_usermanual",
       "target": "docs_usermanual_arc_vs_gstack"
@@ -4936,43 +5109,47 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "docs/usermanual.md",
-      "source_location": "\u00a78",
+      "source_location": null,
       "weight": 1.0,
       "source": "docs_usermanual",
       "target": "docs_usermanual_review_ledger_gates"
     },
     {
-      "relation": "semantically_similar_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a70",
-      "weight": 0.85,
-      "source": "docs_usermanual_arc_twist",
-      "target": "docs_build_playbook_golden_loop"
-    },
-    {
       "relation": "conceptually_related_to",
       "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "docs/usermanual.md",
-      "source_location": "\u00a78",
-      "weight": 0.85,
-      "source": "docs_usermanual_review_ledger_gates",
-      "target": "docs_build_playbook_quality_gates"
+      "confidence_score": 0.75,
+      "source_file": "docs/agent-browser-integration.md",
+      "source_location": null,
+      "weight": 0.75,
+      "source": "docs_agent_browser_integration",
+      "target": "docs_usermanual_arc_vs_gstack"
     },
     {
-      "relation": "conceptually_related_to",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "docs/product-runbook.md",
-      "source_location": "Growing the setup table",
-      "weight": 0.85,
-      "source": "docs_product_runbook_growing_the_setup",
-      "target": "docs_how_it_works_three_loading_behaviors"
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/agent-browser-integration.md",
+      "source_location": null,
+      "weight": 1.0,
+      "source": "docs_agent_browser_integration",
+      "target": "concept_agent_browser_cli"
     }
   ],
   "hyperedges": [
+    {
+      "id": "browser_qa_stack",
+      "label": "Browser QA Stack (agent-browser primary, Playwright fallback)",
+      "nodes": [
+        "concept_agent_browser_cli",
+        "claude_agents_qa_tester",
+        "_claude_commands_arc_canary",
+        "claude_agents_design_reviewer"
+      ],
+      "relation": "participate_in",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": ".claude/agents/qa-tester.md"
+    },
     {
       "id": "security_sensitive_review_chain",
       "label": "Security-Sensitive Review Chain (RLS + webhook verification + audit gate)",
@@ -4987,19 +5164,6 @@
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": ".claude/rules/security-sensitive.md"
-    },
-    {
-      "id": "build_tracker_template_trio",
-      "label": "Build Tracker Template Trio (PLAN + ADR + Phase Spec)",
-      "nodes": [
-        "docs_templates_plan_template",
-        "docs_templates_adr_template",
-        "docs_templates_phase_spec_template"
-      ],
-      "relation": "form",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "README.md"
     },
     {
       "id": "ui_quality_gate",
@@ -5080,19 +5244,7 @@
       "confidence": "INFERRED",
       "confidence_score": 0.85,
       "source_file": "docs/build-playbook.md"
-    },
-    {
-      "id": "quality_gate_enforcement_system",
-      "label": "Quality Gate Enforcement System",
-      "nodes": [
-        "docs_build_playbook_quality_gates",
-        "docs_usermanual_review_ledger_gates",
-        "docs_deployment_deploy_guard_flow"
-      ],
-      "relation": "form",
-      "confidence": "INFERRED",
-      "confidence_score": 0.85,
-      "source_file": "docs/usermanual.md"
     }
-  ]
+  ],
+  "built_at_commit": "1425f7c657c9ab8e3891cb1f9f75ce4245258189"
 }
