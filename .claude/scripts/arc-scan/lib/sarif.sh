@@ -78,7 +78,7 @@ arc_sarif_merge() {
               region: { startLine: .line }
             } } ],
             partialFingerprints: { arcFingerprint: .fingerprint },
-            properties: { tool: .tool }
+            properties: { tool: .tool, new: (.new != false) }
           } ]
         } ]
       }
