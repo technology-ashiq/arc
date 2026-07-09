@@ -1,0 +1,38 @@
+# arc-min -- a tiny, offline, network-free semgrep ruleset for the Phase 00
+# steel thread. NOT a real security ruleset (Phase 3 wires the full spine); it
+# exists so arc-scan has deterministic, offline findings to normalize/merge and
+# to prove the block path on a planted injection. Rules are intentionally narrow
+# and high-signal so the demo verdict is reproducible.
+rules:
+  - id: arc-js-eval-injection
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Use of eval() on a non-literal value allows code injection. Never eval
+      untrusted input.
+    patterns:
+      - pattern: eval(...)
+      - pattern-not: eval("...")
+
+  - id: arc-js-child-process-shell
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: >-
+      Command built from a variable and passed to a shell (exec) allows command
+      injection. Use execFile with an argument array instead.
+    patterns:
+      - pattern-either:
+          - pattern: $CP.exec($CMD, ...)
+          - pattern: exec($CMD, ...)
+      - pattern-not: $CP.exec("...", ...)
+      - pattern-not: exec("...", ...)
+
+  - id: arc-py-os-system
+    languages: [python]
+    severity: ERROR
+    message: >-
+      os.system() with a non-literal argument allows command injection. Use
+      subprocess.run([...]) with a list and shell=False.
+    patterns:
+      - pattern: os.system($CMD)
+      - pattern-not: os.system("...")
