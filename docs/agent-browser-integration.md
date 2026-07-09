@@ -1,6 +1,8 @@
 # agent-browser → arc integration plan
 
-> Status: **PROPOSED** (awaiting go-ahead). Author: Claude + Ashiq. Date: 2026-07-09.
+> Status: **SHIPPED** (agent-browser is the primary QA driver across agents/commands/docs;
+> Playwright MCP retained as the documented fallback until a green `/arc-qa` run validates the
+> agent-browser path). Author: Claude + Ashiq. Date: 2026-07-09.
 > Strategy chosen: **add alongside Playwright** (not a replacement). Session flow: this plan → approval → wire.
 
 ## 1. What it is (one screen)
