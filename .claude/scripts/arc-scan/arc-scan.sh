@@ -18,6 +18,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/common.sh"
 . "$HERE/lib/sarif.sh"
 . "$HERE/lib/triage.sh"
+. "$HERE/lib/triage-llm.sh"
 . "$HERE/lib/baseline.sh"
 . "$HERE/lib/suppress.sh"
 
@@ -116,6 +117,15 @@ if [ "$jq_ok" -eq 1 ]; then
 else
   arc_skip "SARIF normalize/merge (jq not installed) -- verdict degraded to skipped"
   printf '{"version":"2.1.0","runs":[]}\n' > "$merged"
+fi
+
+# --- 3b. LLM triage: downgrade-only false-positive filter (Phase 02 #3) -------
+# Runs before the verdict so a low-confidence NEW error becomes a note and stops
+# counting as new_errors. Downgrade-only + fail-closed (see lib/triage-llm.sh).
+if [ "$jq_ok" -eq 1 ]; then
+  arc_triage_llm_filter "$merged" "$work/triaged.sarif" && cp "$work/triaged.sarif" "$merged"
+  dg="$(jq '[.runs[].results[] | select(.properties.triage_downgraded==true)] | length' "$merged" 2>/dev/null || echo 0)"
+  [ "${dg:-0}" -gt 0 ] 2>/dev/null && arc_log "triage: downgraded $dg low-confidence finding(s) (< ${ARC_TRIAGE_MIN:-8}/10)"
 fi
 
 # --- 4. triage ---------------------------------------------------------------

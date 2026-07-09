@@ -5,15 +5,19 @@
 
 ## Now
 
-**Phase 02 IN PROGRESS — 7/8 slices done.** Gate engine v1 (`phases/phase-02-spec.md`, 2-week appetite),
-the highest-risk noise-defense phase (pre-mortem #1). On `main` (6 slices merged, 3-OS CI green):
-gitleaks path fidelity · baseline (new-code-only) · `arc.gates.yaml` + generic gate-runner · suppression
-ledger · evidence bundles · macOS CI + portability audit. On branch `feat/phase-02-runtime-fallback`:
-per-adapter runtime fallback (native→docker→SKIPPED, +7 bats). Suite at ~67 green.
+**Phase 02 — all 8 slices BUILT; closing via `/arc-phase-done 2`.** Gate engine v1
+(`phases/phase-02-spec.md`, 2-week appetite), the highest-risk noise-defense phase (pre-mortem #1).
+On `main` (7 slices merged, 3-OS CI green): gitleaks path fidelity · baseline (new-code-only) ·
+`arc.gates.yaml` + generic gate-runner · suppression ledger · evidence bundles · macOS CI +
+portability audit · per-adapter runtime fallback (native→docker→SKIPPED). On branch
+`feat/phase-02-llm-triage`: **LLM triage v1** — downgrade-only false-positive filter (<8/10 → error
+downgraded to note, tagged; never upgrades, never invents — PLAN rabbit hole #6). Pluggable backend
+`ARC_TRIAGE_CMD` (finding JSON → confidence), deterministic fake trusts-all offline, fail-closed on
+any backend error. +12 bats. Full suite ~79.
 
-**Only 1 slice left to close Phase 02: #3 LLM triage v1** (≥8/10 confidence, downgrade-only, invent
-nothing — PLAN rabbit hole #6). Offline-first: interface + deterministic fake + real. After it lands:
-`/arc-phase-done 2` (writes the first dogfooded evidence bundle via the new arc-evidence.sh).
+**Remaining to close Phase 02 (at `/arc-phase-done 2`):** hook-tier <30s budget check · live demo
+(new finding blocks / baseline passes / justified suppress passes / unjustified blocks) · first
+dogfooded evidence bundle via arc-evidence.sh · flip the Phase 02 row.
 
 Setup needed from user: **none (all local)**. Docker rung of #9 is fake-tested now; the real pinned
 arc-tools image is Phase 03 (ADR-0006 amendment).
