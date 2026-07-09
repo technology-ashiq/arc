@@ -21,6 +21,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 LEDGER="$ROOT/.claude/scripts/review-ledger.sh"
+# Scan gate mode from the active strictness profile (block-by-default). In warn
+# mode a block verdict is reported but downgraded to advisory (exit 0).
+SCAN_MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode scan 2>/dev/null || echo block)"
 
 # --- args --------------------------------------------------------------------
 base=""; scope_file=""; scope_mode="default"; out_dir=""
@@ -120,6 +123,10 @@ arc_log "sarif:   $merged"
 arc_log "verdict: $verdict_json"
 
 case "$verdict" in
-  block) [ "$exit_zero" -eq 1 ] && exit 0 || exit 2;;
-  *)     exit 0;;
+  block)
+    if   [ "$exit_zero" -eq 1 ];    then exit 0
+    elif [ "$SCAN_MODE" = "warn" ]; then arc_log "scan mode=warn: block downgraded to advisory (exit 0)"; exit 0
+    else exit 2; fi
+    ;;
+  *) exit 0;;
 esac

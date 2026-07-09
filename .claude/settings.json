@@ -51,9 +51,9 @@
     ]
   },
   "arc": {
+    "//profile": "strictness profile switches all gates as a set (ADR-0008 block-by-default). starter=warn-all | standard=block core + require code,security | strict=block all + full review set. Add an explicit coverageMode/docsGate/scanMode/requiredReviews key here to override the profile for one gate. Resolver: .claude/scripts/arc-profile.sh",
+    "profile": "standard",
     "coverageFloor": 80,
-    "coverageSummary": "coverage/coverage-summary.json",
-    "coverageMode": "warn",
-    "docsGate": "warn"
+    "coverageSummary": "coverage/coverage-summary.json"
   }
 }

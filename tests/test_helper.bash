@@ -20,6 +20,7 @@ _arc_sandbox() {
   mkdir -p "$SANDBOX/.claude/scripts"
   cp -r "$ARC_SCAN_SRC" "$SANDBOX/.claude/scripts/"
   cp "$ARC_ROOT/.claude/scripts/review-ledger.sh" "$SANDBOX/.claude/scripts/"
+  cp "$ARC_ROOT/.claude/scripts/arc-profile.sh"   "$SANDBOX/.claude/scripts/"   # arc-scan resolves scan mode through it
   cd "$SANDBOX" || return 1
   git init -q
   git config user.email test@arc.local
