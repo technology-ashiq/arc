@@ -108,3 +108,6 @@ machine-wide, zero sync — but keep hooks per-repo so they don't fire in unrela
   Plugins install globally from marketplaces — they are never committed here. See `docs/plugins.md`.
 - **One owner per job** — review logic lives in ONE place (the `code-reviewer` agent);
   `/arc-review` just delegates to it. Don't duplicate the same workflow as skill + agent + command.
+- **Block-by-default, with an escape hatch** — gates enforce (block) out of the box under the
+  `standard` strictness profile. One key in `settings.json` (`arc.profile`: `starter` | `standard` |
+  `strict`) switches every gate as a set; `bash .claude/scripts/arc-profile.sh show` prints the active modes.

@@ -37,6 +37,12 @@ test-results/
 # Hook scratch state (PreCompact snapshots, graphify lock/log)
 .claude/state/
 
+# Hook write-probes (freeze-check / edit-guard test their write access) — never commit
+.writetest*
+**/.writetest
+*.wt
+**/.wt
+
 # Graphify: graphify-out/ IS committed (team-shared graph) — only these two are local-only
 graphify-out/manifest.json
 graphify-out/cost.json

@@ -28,7 +28,9 @@ _json() { # _json <jq-path> <default>
 
 FLOOR="$(_json '.arc.coverageFloor' 80)"
 SUMMARY_REL="$(_json '.arc.coverageSummary' 'coverage/coverage-summary.json')"
-MODE="$(_json '.arc.coverageMode' 'warn')"
+# Mode resolves through the active strictness profile (block-by-default). An
+# explicit .arc.coverageMode in settings still overrides -- see arc-profile.sh.
+MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode coverage 2>/dev/null || echo block)"
 SUMMARY="$ROOT/$SUMMARY_REL"
 
 _fail_or_warn() { # <msg>

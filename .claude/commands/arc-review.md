@@ -1,7 +1,7 @@
 ---
 description: Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/.
 argument-hint: [base-branch (default main)]
-allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Task, Write
+allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/review-ledger.sh:*), Task, Write
 ---
 
 Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the branch is clean).
@@ -13,7 +13,8 @@ Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the bra
    and general-purpose agents have none of those tools. Pass it the diff scope and let it run in
    its isolated context; it returns only the summary. If no `code-reviewer` subagent is available
    in this project, STOP and tell me to sync the template
-   (`sync-to-project.ps1 -Target <this project>`) — do not silently fall back to general-purpose.
+   (`bash sync-to-project.sh <this project>`, or `sync-to-project.ps1 -Target <this project>` on
+   Windows-native) — do not silently fall back to general-purpose.
 2. Relay its findings verbatim in chat: scanner summary, Critical / Warning / Nit with
    `file:line` + fix, and the one-line verdict: ship / fix-first / needs-discussion.
 3. **Archive the review** to `docs/reviews/YYYY-MM-DD-HHMM-<branch>.md` (create the folder
@@ -22,3 +23,10 @@ Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the bra
 4. If there are Criticals: offer to fix them now. After the fix is committed, append
    "Resolved in <commit-hash>" under the relevant finding in the same review file —
    findings and their resolutions live together.
+5. **Stamp the review ledger** so the ship-gate reflects this review (block-by-default,
+   ADR-0008). Run exactly one, keyed to the verdict:
+   - verdict **ship** (no unresolved Criticals): `bash .claude/scripts/review-ledger.sh stamp code`
+   - verdict **fix-first / needs-discussion**: `bash .claude/scripts/review-ledger.sh unstamp code`
+     (leave the gate closed until a clean re-review).
+   The ledger is keyed to `HEAD`, so a new commit auto-invalidates the stamp — re-run `/arc-review`
+   after fixes. This closes the usermanual §8 "code review runs but never stamps" gap.

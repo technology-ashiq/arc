@@ -5,17 +5,19 @@
 
 ## Now
 
-**Phase 00 CLOSED ✅ (2026-07-09).** Steel thread proven end-to-end + cross-platform. Next up:
-**Phase 01 — Credibility & hygiene** (`phases/phase-01-spec.md`, 1-week appetite): flip gates to
-block-by-default (ADR-0008), wire `/arc-review` to code-stamp the `scan` verdict into the review
-ledger, cross-platform sync, strictness profiles, repo cleanup.
+**Phase 01 BUILT — ready for CI + `/arc-phase-done 1`.** Branch `feat/phase-01-credibility`
+(7 commits). All 8 exit criteria met locally: block-by-default profiles, `/arc-review` code-stamp,
+cross-platform sync, hygiene, docs. **30 bats tests green** (13 scan + 11 profile + 6 sync),
+docs-drift dogfood passes, version-gate green. Decisions applied: default profile = `standard`,
+Playwright kept as fallback.
 
-Open thread before Phase 01 code starts: PR #1 is green but branch `feat/phase-00-steel-thread` may
-still need merge → main (last local commit `bbda7cb` — tracker sync — unpushed). Merge first so
-Phase 01 branches off a clean main.
+Remaining to close: push → CI green on both legs → `/arc-phase-done 1`. Appetite: part of one
+session vs 1-week cap — well under.
 
-Phase 00 shipped: `arc-scan` spine (diff-scope → semgrep+gitleaks adapters → SARIF merge → triage
-stub → ledger stamp), 13 bats tests, CI matrix (ubuntu+windows), VERSION/CHANGELOG + version-gate.
+Open thread: PR #2 (Phase 00 close — tracker + graph) still unmerged; the Phase 01 branch stacks on
+it, so merge PR #2 → main first, then the Phase 01 PR shows only Phase 01 commits.
+
+Phase 00 (CLOSED ✅ 2026-07-09): `arc-scan` spine, 13 bats, CI matrix, VERSION/CHANGELOG + gate.
 
 ## Phases
 

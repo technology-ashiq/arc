@@ -132,15 +132,21 @@ Idhellam **auto** -- nee command type panna venaam. Aana enna nadakkudhu-nu ther
 
 ```jsonc
 "arc": {
+  "profile": "standard",               // strictness profile -- ONE key drives all gates (ADR-0008)
   "coverageFloor": 80,                 // deploy blocked below this % (block mode-la)
-  "coverageSummary": "coverage/coverage-summary.json",
-  "coverageMode": "warn",              // warn = advisory (default) | block = enforce
-  "docsGate": "warn"                   // warn (default) | block
+  "coverageSummary": "coverage/coverage-summary.json"
+  // optional per-gate override: "coverageMode"/"docsGate"/"scanMode": "warn"|"block", "requiredReviews": "code,security"
 }
 ```
 
-> **Default-la ella gate-um "warn"** -- normal deploy break aagadhu. Ready aana-podhu `block`-ku flip pannu.
-> Per-phase bar raise panna: `export ARC_REQUIRED_REVIEWS=code,qa,security,design`
+> **Block-by-default (Phase 01, ADR-0008).** Oru `profile` key ella gate-ayum set-ah switch pannum:
+> - `starter` -- ella gate-um **warn** (onnum block aagadhu; onboarding / try panna).
+> - `standard` *(default)* -- core gates (scan, coverage, docs) **block** + `code,security` reviews required.
+> - `strict` -- ella-um **block** + full review set (`code,security,qa,design,docs`).
+>
+> Profile maathu: `arc.profile` edit pannu, illa `ARC_PROFILE=starter` env. Oru gate-ah mattum override
+> panna explicit key podu (e.g. `"coverageMode":"warn"`) -- profile-a adhu beat pannum. Active modes paaru:
+> `bash .claude/scripts/arc-profile.sh show`. Required reviews-ah `ARC_REQUIRED_REVIEWS` env-um override pannalaam.
 
 ---
 
@@ -315,14 +321,16 @@ Ship panna-podhu required reviews stamp aagala-na -> **BLOCK**.
 - **Pudhu commit = pudhu SHA = ledger reset** -> pudhu code eppovum re-review aaganum (honest gate).
 - SessionStart oru line kaattum: `- reviews @ <sha>: qa security`.
 
-**Enable enforcement (default-la OFF):**
-1. Required set: `export ARC_REQUIRED_REVIEWS=code,qa,security,design` (phase risk-ku thakka).
-2. Coverage/docs hard block: `settings.json` -> `arc.coverageMode: "block"`, `arc.docsGate: "block"`.
-Ippo `/arc-ship` andha reviews + coverage + docs pass aanaal dhaan pogum.
+**Enforcement default-la ON (Phase 01, `standard` profile):**
+- Core gates (scan, coverage, docs) **block**, required reviews = `code,security`. Idhu default -- extra
+  setup illa. `/arc-ship` andha reviews + coverage + docs pass aanaal dhaan pogum.
+- Bar-a innum kootanum-na `arc.profile: "strict"` (ella-um block + full review set).
+- Friction venaam-na (onboarding / spike) `arc.profile: "starter"` -- ella gate-um warn, onnum block aagadhu.
+- Required set-ah adhoc-ah override: `export ARC_REQUIRED_REVIEWS=code,qa,security,design`.
 
-> **Note (`code` stamp):** `/arc-review` ippo `docs/reviews/`-la archive pannudhu aana `code`-a auto-stamp
-> panna villai. `code` gate venum-na, oru line add pannu (`/arc-review` end-la
-> `bash .claude/scripts/review-ledger.sh stamp code`) illa clean review apram manual-ah run pannu.
+> **`code` stamp (Phase 01-la wired):** `/arc-review` ippo `docs/reviews/`-la archive pannudhu **matum illama**,
+> ship verdict-la `bash .claude/scripts/review-ledger.sh stamp code` auto-run pannum (fix-first-na unstamp).
+> Pudhu commit = pudhu SHA = stamp reset, so fixes apram re-review aaganum. (Munna oru gap irundhadhu -- ippo close.)
 > (Venum-na naan andha auto-stamp-a wire panni tharen.)
 
 ---
@@ -367,7 +375,7 @@ State git-la irukkaradhaala, `/arc-resume` epovum session-a rebuild panna mudiyu
 ## 11. Troubleshooting / FAQ
 
 - **"subagent not available" solludhu** -> template sync pannala. `sync-to-project.ps1 -Target <project>`, apram session restart.
-- **Deploy unexpected-ah block aagudhu** -> deploy-guard message paaru: (a) test fail -> fix, (b) coverage floor -> test coverage kootu illa `arc.coverageMode:"warn"`, (c) review missing -> andha review run pannu illa `ARC_REQUIRED_REVIEWS` unset, (d) docs drift -> `/arc-docs` illa `arc.docsGate:"warn"`.
+- **Deploy unexpected-ah block aagudhu** -> deploy-guard message paaru: (a) test fail -> fix, (b) coverage floor -> test coverage kootu illa `arc.coverageMode:"warn"`, (c) review missing -> andha review run pannu illa `ARC_REQUIRED_REVIEWS` unset, (d) docs drift -> `/arc-docs` illa `arc.docsGate:"warn"`. Ella gate-ayum oru shot-la off panna: `arc.profile:"starter"` (block-by-default default `standard`).
 - **Edit block aagudhu "frozen boundary"** -> `/arc-freeze` active. `/arc-unfreeze` pannu.
 - **Gates romba strict** -> default warn/unset-ku thirumbu (Section 8).
 - **Maintainer note:** hooks + CLAUDE.md-la em-dash unicode iruku. Andha files edit panna-na **bash heredoc** use pannu, blind tool-edit venaam (unicode-la truncate aagum). Ezhudhina apram `wc -l` + `bash -n`-la verify pannu.

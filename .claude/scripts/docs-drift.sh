@@ -14,10 +14,9 @@ set -uo pipefail
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"; cd "$ROOT" || exit 0
 SETTINGS="$ROOT/.claude/settings.json"
 
-MODE="warn"
-if command -v jq >/dev/null 2>&1 && [ -f "$SETTINGS" ]; then
-  m="$(jq -r '.arc.docsGate // empty' "$SETTINGS" 2>/dev/null)"; [ -n "$m" ] && MODE="$m"
-fi
+# Mode resolves through the active strictness profile (block-by-default). An
+# explicit .arc.docsGate in settings still overrides -- see arc-profile.sh.
+MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode docs 2>/dev/null || echo block)"
 
 # Determine the changed-file set
 BASE=""
