@@ -5,25 +5,20 @@
 
 ## Now
 
-**Phase 01 CLOSED ✅ (2026-07-09).** Block-by-default profiles live, CI green on both legs (PR #3).
-Next up: **Phase 02 — Gate engine v1** (`phases/phase-02-spec.md`, 2-week appetite). **Highest-risk
-phase after 0** (noise defense — pre-mortem #1: if the first scan dumps 400 findings and gates get
-flipped to warn, the moat dies). Delivers: `arc.gates.yaml` declarative gates + generic gate-runner,
-baseline (new-code-only blocking), LLM triage v1 (≥8/10 confidence, downgrade-only), suppression
-ledger with justification, and committed evidence bundles at phase-close.
+**Phase 02 IN PROGRESS — 7/8 slices done.** Gate engine v1 (`phases/phase-02-spec.md`, 2-week appetite),
+the highest-risk noise-defense phase (pre-mortem #1). On `main` (6 slices merged, 3-OS CI green):
+gitleaks path fidelity · baseline (new-code-only) · `arc.gates.yaml` + generic gate-runner · suppression
+ledger · evidence bundles · macOS CI + portability audit. On branch `feat/phase-02-runtime-fallback`:
+per-adapter runtime fallback (native→docker→SKIPPED, +7 bats). Suite at ~67 green.
 
-Setup needed from user: **none (all local)**. Open thread: PR #3 (Phase 01) is green — merge → main
-before branching Phase 02.
+**Only 1 slice left to close Phase 02: #3 LLM triage v1** (≥8/10 confidence, downgrade-only, invent
+nothing — PLAN rabbit hole #6). Offline-first: interface + deterministic fake + real. After it lands:
+`/arc-phase-done 2` (writes the first dogfooded evidence bundle via the new arc-evidence.sh).
 
-**Change intake (`/arc-change` 2026-07-09) — routed, not yet coded:**
-- **#1 macOS support** → ADR-0007 amended (macos-latest + bash-3.2/POSIX portability rule). **Code home =
-  Phase 02** (user decision 2026-07-09): added as 2 Phase 02 exit criteria (matrix += macos-latest; portability audit).
-- **#2 `.gitattributes` eol=lf** → ✅ already shipped in Phase 00 (`843b212`). No action.
-- **#3 pinned arc-tools docker image** → ADR-0006 amended; code home = Phase 03 (new exit criterion added).
-- **#4 per-adapter runtime fallback (native→docker→SKIPPED)** → Phase 02 spec (gates.yaml schema criterion + new bullet).
-- **#5 gitleaks path fidelity** → Phase 02 spec (promoted from carry-forward to a hard exit criterion).
+Setup needed from user: **none (all local)**. Docker rung of #9 is fake-tested now; the real pinned
+arc-tools image is Phase 03 (ADR-0006 amendment).
 
-Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both CI-green on ubuntu + windows.
+Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both 3-OS CI-green, evidence-backed.
 
 ## Phases
 
