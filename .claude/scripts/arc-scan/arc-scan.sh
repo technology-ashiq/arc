@@ -100,8 +100,11 @@ else
 fi
 
 # --- 5. stamp ----------------------------------------------------------------
+# Guard on -f, not -x: the ledger is invoked via `bash "$LEDGER"`, so it needs
+# only to exist and be readable. git-on-Windows does not reliably track the exec
+# bit, so -x is false on Linux CI even when the file is present (pre-mortem #6).
 stamped="no"
-if [ "$do_stamp" != "no" ] && [ -x "$LEDGER" ]; then
+if [ "$do_stamp" != "no" ] && [ -f "$LEDGER" ]; then
   if [ "$verdict" = "pass" ]; then
     bash "$LEDGER" stamp scan >/dev/null 2>&1 && stamped="yes"
   else
