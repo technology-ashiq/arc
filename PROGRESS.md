@@ -15,6 +15,14 @@ ledger with justification, and committed evidence bundles at phase-close.
 Setup needed from user: **none (all local)**. Open thread: PR #3 (Phase 01) is green — merge → main
 before branching Phase 02.
 
+**Change intake (`/arc-change` 2026-07-09) — routed, not yet coded:**
+- **#1 macOS support** → ADR-0007 amended (macos-latest + bash-3.2/POSIX portability rule). **Code home =
+  Phase 02** (user decision 2026-07-09): added as 2 Phase 02 exit criteria (matrix += macos-latest; portability audit).
+- **#2 `.gitattributes` eol=lf** → ✅ already shipped in Phase 00 (`843b212`). No action.
+- **#3 pinned arc-tools docker image** → ADR-0006 amended; code home = Phase 03 (new exit criterion added).
+- **#4 per-adapter runtime fallback (native→docker→SKIPPED)** → Phase 02 spec (gates.yaml schema criterion + new bullet).
+- **#5 gitleaks path fidelity** → Phase 02 spec (promoted from carry-forward to a hard exit criterion).
+
 Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both CI-green on ubuntu + windows.
 
 ## Phases
