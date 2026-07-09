@@ -1,9 +1,10 @@
 name: arc-ci
 
-# ADR-0007: arc's own self-tests run on ubuntu + windows (Git Bash). Red = no merge.
-# Phase 00 steel thread: the spine tests (degrade, merge, triage, ledger, version
-# gate) gate every push; scanner-dependent tests run when the tool installs and
-# skip (visibly) otherwise, so CI is honest and never flaky on a tool hiccup.
+# ADR-0007 (+ macOS amendment): arc's self-tests run on ubuntu + windows (Git Bash)
+# + macos-latest. Red = no merge. The macOS leg exercises BSD userland (sed/stat/date
+# differ from GNU); bash-3.2 syntax is enforced by a static audit (no mapfile / assoc
+# arrays). Spine tests gate every push; scanner-dependent tests skip (visibly) when a
+# tool doesn't install, so CI is honest and never flaky on a tool hiccup.
 
 on:
   push:
@@ -19,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -42,14 +43,22 @@ jobs:
         if: runner.os == 'Windows'
         run: choco install jq -y --no-progress
 
+      - name: Install jq (macOS)
+        if: runner.os == 'macOS'
+        run: command -v jq >/dev/null 2>&1 || brew install jq
+
       - name: Install gitleaks (best-effort)
         run: |
           set -u
           VER=8.30.1
           mkdir -p "$HOME/bin"
+          arch=x64; [ "$(uname -m)" = "arm64" ] && arch=arm64
           if [ "$RUNNER_OS" = "Windows" ]; then
             curl -fsSL -o gl.zip "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_windows_x64.zip" \
               && unzip -o gl.zip gitleaks.exe -d "$HOME/bin" || echo "gitleaks install skipped"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_darwin_${arch}.tar.gz" \
+              && tar -xzf gl.tgz -C "$HOME/bin" gitleaks || echo "gitleaks install skipped"
           else
             curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
               && tar -xzf gl.tgz -C "$HOME/bin" gitleaks || echo "gitleaks install skipped"
@@ -63,6 +72,10 @@ jobs:
           base=https://github.com/opengrep/opengrep/releases/latest/download
           if [ "$RUNNER_OS" = "Windows" ]; then
             curl -fsSL -o "$HOME/bin/opengrep.exe" "$base/opengrep_windows_x86.exe" || echo "opengrep install skipped"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            asset=opengrep_osx_x86; [ "$(uname -m)" = "arm64" ] && asset=opengrep_osx_arm64
+            curl -fsSL -o "$HOME/bin/opengrep" "$base/$asset" \
+              && chmod +x "$HOME/bin/opengrep" || echo "opengrep install skipped"
           else
             curl -fsSL -o "$HOME/bin/opengrep" "$base/opengrep_manylinux_x86" \
               && chmod +x "$HOME/bin/opengrep" || echo "opengrep install skipped"

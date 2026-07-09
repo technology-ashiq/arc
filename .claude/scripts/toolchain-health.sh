@@ -83,7 +83,10 @@ emit_all(){
     R_NG "graphify" "/graphify ." "then graphify hook install"
   else
     if [ -f .git/hooks/post-commit ] && grep -qi graphify .git/hooks/post-commit 2>/dev/null; then GH="auto-rebuild hook OK"; else GH="run graphify hook install"; fi
-    LC=$(git log -1 --format=%ct 2>/dev/null || echo 0); GT=$(stat -c %Y graphify-out/graph.json 2>/dev/null || echo 0)
+    # portable mtime: GNU `stat -c %Y` then BSD/macOS `stat -f %m` (ADR-0007 bash-3.2 rule)
+    LC=$(git log -1 --format=%ct 2>/dev/null || echo 0)
+    GT=$( { stat -c %Y graphify-out/graph.json 2>/dev/null || stat -f %m graphify-out/graph.json 2>/dev/null; } || echo 0 )
+    [ -n "$GT" ] || GT=0
     if [ "$LC" -gt "$GT" ]; then R_STALE "graphify" "graphify update ." "$GH"; else R_OK "graphify" "ready · $GH"; fi
   fi
 
