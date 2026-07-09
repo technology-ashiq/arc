@@ -18,6 +18,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/common.sh"
 . "$HERE/lib/sarif.sh"
 . "$HERE/lib/triage.sh"
+. "$HERE/lib/baseline.sh"
+. "$HERE/lib/suppress.sh"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 LEDGER="$ROOT/.claude/scripts/review-ledger.sh"
@@ -27,12 +29,15 @@ SCAN_MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode scan 2>/dev/null |
 
 # --- args --------------------------------------------------------------------
 base=""; scope_file=""; scope_mode="default"; out_dir=""
-do_stamp="auto"; exit_zero=0
+do_stamp="auto"; exit_zero=0; mode="scan"; baseline_file=""; suppress_file=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base)     base="${2:-}"; scope_mode="base"; shift 2;;
     --scope)    scope_file="${2:-}"; scope_mode="explicit"; shift 2;;
     --all)      scope_mode="all"; shift;;
+    --baseline) mode="baseline"; shift;;
+    --baseline-file) baseline_file="${2:-}"; shift 2;;
+    --suppress-file) suppress_file="${2:-}"; shift 2;;
     --out-dir)  out_dir="${2:-}"; shift 2;;
     --stamp)    do_stamp="yes"; shift;;
     --no-stamp) do_stamp="no"; shift;;
@@ -83,6 +88,27 @@ run_adapter() {
 ran_csv="$(IFS=,; echo "${ran[*]:-}")"
 skipped_csv="$(IFS=,; echo "${skipped[*]:-}")"
 
+# --- 2b. baseline (new-code-only, ADR-0002) ----------------------------------
+baseline_file="${baseline_file:-${ARC_BASELINE:-$ROOT/.claude/state/scan-baseline.jsonl}}"
+if [ "$mode" = "baseline" ]; then
+  if [ "$jq_ok" -eq 1 ]; then
+    arc_baseline_freeze "$jsonl" "$baseline_file"
+    arc_log "baseline: froze $(arc_baseline_count "$baseline_file") fingerprint(s) -> $baseline_file"
+  else
+    arc_skip "baseline (jq not installed)"
+  fi
+  exit 0
+fi
+# normal scan: annotate each finding new (blocks) vs baseline, then suppression.
+# A finding blocks only if it is a NEW error AND not justified-suppressed.
+suppress_file="${suppress_file:-${ARC_SUPPRESSIONS:-$ROOT/docs/suppressions.md}}"
+if [ "$jq_ok" -eq 1 ]; then
+  arc_baseline_partition "$jsonl" "$baseline_file" > "$work/annotated.jsonl"
+  [ -s "$work/annotated.jsonl" ] && jsonl="$work/annotated.jsonl"
+  arc_suppress_annotate "$jsonl" "$suppress_file" > "$work/suppressed.jsonl"
+  [ -s "$work/suppressed.jsonl" ] && jsonl="$work/suppressed.jsonl"
+fi
+
 # --- 3. merge ----------------------------------------------------------------
 merged="$out_dir/scan-result.sarif"
 if [ "$jq_ok" -eq 1 ]; then
@@ -117,8 +143,9 @@ fi
 
 # --- 6. report ---------------------------------------------------------------
 findings="$(jq -r '.findings // 0' "$verdict_json" 2>/dev/null || echo 0)"
-errors="$(jq -r '.errors // 0' "$verdict_json" 2>/dev/null || echo 0)"
-arc_log "verdict: $verdict ($findings finding(s), $errors error(s)) | ran: ${ran_csv:-none} | skipped: ${skipped_csv:-none} | stamped: $stamped"
+new_errors="$(jq -r '.new_errors // 0' "$verdict_json" 2>/dev/null || echo 0)"
+baseline_n="$(jq -r '.baseline // 0' "$verdict_json" 2>/dev/null || echo 0)"
+arc_log "verdict: $verdict ($findings finding(s): $new_errors new error(s), $baseline_n baselined) | ran: ${ran_csv:-none} | skipped: ${skipped_csv:-none} | stamped: $stamped"
 arc_log "sarif:   $merged"
 arc_log "verdict: $verdict_json"
 

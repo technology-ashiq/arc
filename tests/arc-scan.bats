@@ -40,6 +40,17 @@ teardown() { _arc_teardown; }
   rm -rf "$d"
 }
 
+@test "gitleaks adapter: finding URI is repo-relative, not the staging temp dir" {
+  _arc_need_gitleaks
+  _arc_sandbox                                   # git repo; cwd = sandbox root
+  mkdir -p src
+  printf 'const t="ghp_16C7e42F292c6912E7710c838347Ae178B4a";\n' > src/config.js
+  printf 'src/config.js\n' > scope.txt
+  bash "$ARC_SCAN_SRC/adapters/gitleaks.sh" scope.txt g.sarif
+  run jq -r '.runs[].results[].locations[].physicalLocation.artifactLocation.uri' g.sarif
+  [ "$output" = "src/config.js" ]              # exact repo-relative path, no temp dir
+}
+
 # ---------------------------------------------------------------------------
 # 2. SARIF normalize + merge
 # ---------------------------------------------------------------------------

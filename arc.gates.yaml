@@ -1,0 +1,40 @@
+# arc.gates.yaml -- declarative gate definitions (Phase 02, ADR-0006 tier split).
+# The generic gate-runner (.claude/scripts/arc-gates.sh) reads this; NO gate logic
+# is hardcoded in hooks. This is a FLAT list by design (v1) -- conditions/DAGs are
+# Phase 07. Parser is strict: each gate starts with "- name:", one "key: value"
+# per indented line, no inline comments after a value.
+#
+# Per gate:
+#   name     - identifier (also the profile gate name for mode: profile)
+#   check    - shell command run from repo root; non-zero exit = gate failed
+#   mode     - block | warn | off | profile
+#              profile => trust the check's own exit code (2=block, 1=warn) which
+#              already resolved the strictness profile (Phase 01)
+#   tier     - hook | ci   (hook tier has a hard <30s budget, ADR-0006)
+#   runtime  - native | docker   (Phase 03 uses the pinned docker image for ci tier)
+#   evidence - path to the artifact this gate produces (for evidence bundles)
+gates:
+  - name: scan
+    check: bash .claude/scripts/arc-scan/arc-scan.sh --base main
+    mode: profile
+    tier: hook
+    runtime: native
+    evidence: .claude/state/scan/verdict.json
+  - name: coverage
+    check: bash .claude/scripts/coverage-gate.sh
+    mode: profile
+    tier: hook
+    runtime: native
+    evidence: coverage/coverage-summary.json
+  - name: reviews
+    check: bash .claude/scripts/review-ledger.sh require-profile
+    mode: block
+    tier: hook
+    runtime: native
+    evidence: .claude/state/reviews
+  - name: docs
+    check: bash .claude/scripts/docs-drift.sh
+    mode: profile
+    tier: hook
+    runtime: native
+    evidence: docs
