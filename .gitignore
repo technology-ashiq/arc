@@ -21,6 +21,8 @@ build/
 *.log
 npm-debug.log*
 yarn-error.log*
+# ...but evidence bundles ARE committed proof (test-output.log included) — never ignore them.
+!docs/evidence/**
 
 # === OS / editor junk ===
 .DS_Store

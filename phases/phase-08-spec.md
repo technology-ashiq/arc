@@ -11,11 +11,15 @@
 - [ ] **Public pre-registered benchmark**: "identical tasks, arc gates vs no gates — escaped defect rate", methodology published BEFORE results (gstack changelog discipline)
 - [ ] Opt-in telemetry: which gate catches which finding class (privacy: fingerprints only, no code)
 - [ ] Eval scorecard published per release (Phase 6 output, now ≥30-bug threshold met)
+- [ ] **Engine/adapter split executed** (ADR-0013): `engine/` (gates, scan, ledgers, evidence, CI — zero Claude assumptions) + `adapters/claude/` (commands, agents, hooks wiring); split is `git mv` + path updates because the writing rule held since ADR-0013
+- [ ] **AGENTS.md mirror** of CLAUDE.md project rules (cross-harness instruction standard — Codex/Cursor/Gemini readable); Claude Code stays the full-experience driver
+- [ ] Engine-only quickstart documented: git hooks + CI enforcement with NO AI harness (proves AI-agnostic claim)
 
 ## Rabbit holes
 
 - Marketing site before the benchmark exists → benchmark first, site after
 - Telemetry scope creep → fingerprint counts only, nothing else, ever
+- GSD-style per-runtime converter → refused (ADR-0013); Superpowers-style packaging (shared prose + per-harness manifest) only. A second-harness *driver* port waits for demand evidence
 
 ## Out of scope
 

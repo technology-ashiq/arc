@@ -5,24 +5,23 @@
 
 ## Now
 
-**Phase 02 — all 8 slices BUILT; closing via `/arc-phase-done 2`.** Gate engine v1
-(`phases/phase-02-spec.md`, 2-week appetite), the highest-risk noise-defense phase (pre-mortem #1).
-On `main` (7 slices merged, 3-OS CI green): gitleaks path fidelity · baseline (new-code-only) ·
-`arc.gates.yaml` + generic gate-runner · suppression ledger · evidence bundles · macOS CI +
-portability audit · per-adapter runtime fallback (native→docker→SKIPPED). On branch
-`feat/phase-02-llm-triage`: **LLM triage v1** — downgrade-only false-positive filter (<8/10 → error
-downgraded to note, tagged; never upgrades, never invents — PLAN rabbit hole #6). Pluggable backend
-`ARC_TRIAGE_CMD` (finding JSON → confidence), deterministic fake trusts-all offline, fail-closed on
-any backend error. +12 bats. Full suite ~79.
+**Phase 02 CLOSED ✅ (2026-07-10).** Gate engine v1 shipped — `arc.gates.yaml` + generic gate-runner,
+baseline (new-code-only), suppression ledger, **LLM triage v1** (downgrade-only, fail-closed),
+per-adapter runtime fallback (native→docker→SKIPPED), committed evidence bundles, macOS CI +
+portability. Full suite **79/79 green on 3-OS CI** (PR #8, run 29054053282). Live demo passed every
+scenario (baseline / suppression / triage). First dogfooded evidence bundle committed + verified
+(`docs/evidence/phase-02/`, verdict=pass, 8 test-fixture secrets justified-suppressed). **The
+noise-defense moat (pre-mortem #1) holds.**
 
-**Remaining to close Phase 02 (at `/arc-phase-done 2`):** hook-tier <30s budget check · live demo
-(new finding blocks / baseline passes / justified suppress passes / unjustified blocks) · first
-dogfooded evidence bundle via arc-evidence.sh · flip the Phase 02 row.
+Next up: **Phase 03 — Security pipeline** (`phases/phase-03-spec.md`, 1.5-week appetite): Trivy,
+trufflehog, CodeQL, RLS harness, ZAP — plus the **pinned arc-tools docker image** (ADR-0006 amendment;
+the real backend for #9's docker rung, currently fake-tested) and wiring a docker triage backend.
 
-Setup needed from user: **none (all local)**. Docker rung of #9 is fake-tested now; the real pinned
-arc-tools image is Phase 03 (ADR-0006 amendment).
+Setup needed from user: **check `phases/phase-03-spec.md` "your-setup / pending"** — Phase 03 adds
+real security tools (some may need local install or CI secrets); the docker image build lands here.
 
-Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both 3-OS CI-green, evidence-backed.
+Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene) · Phase 02 (gate engine v1). All
+3-OS CI-green, evidence-backed.
 
 ## Phases
 
@@ -30,7 +29,7 @@ Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both 3-OS C
 |---|---|---|---|---|
 | 00 | Steel thread: arc-scan skeleton + CI on arc | 1 week | ✅ done | 2026-07-09 |
 | 01 | Credibility & hygiene: block-by-default, code-stamp, cross-platform sync | 1 week | ✅ done | 2026-07-09 |
-| 02 | Gate engine v1: gates.yaml, baseline, suppression, evidence bundles | 2 weeks | ⬜ not started | |
+| 02 | Gate engine v1: gates.yaml, baseline, suppression, evidence bundles | 2 weeks | ✅ done | 2026-07-10 |
 | 03 | Security pipeline: Trivy, trufflehog, CodeQL, RLS harness, ZAP | 1.5 weeks | ⬜ not started | |
 | 04 | QA pipeline: Stryker, Lighthouse CI, visual regression, schemathesis | 1.5 weeks | ⬜ not started | |
 | 05 | Phase ratchet + docs gate v2 | 1 week | ⬜ not started | |
@@ -40,6 +39,25 @@ Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both 3-OS C
 
 ## Done log
 
+- **2026-07-10 · Phase 02 · Gate engine v1.** The moat became a product: gates are declarative data
+  (`arc.gates.yaml` + generic gate-runner, zero hardcoded gate logic in hooks) with the three noise
+  defenses built in — **baseline** (new-code-only: `--baseline` freezes to `scan-baseline.jsonl`,
+  only NEW findings block), **suppression ledger** (`docs/suppressions.md`: fingerprint + justification
+  + date; unjustified = block), and **LLM triage v1** (downgrade-only <8/10 → error→note, tagged;
+  never upgrades, never invents — rabbit hole #6; pluggable `ARC_TRIAGE_CMD`, deterministic offline
+  fake, fail-closed on any backend error). Plus **per-adapter runtime fallback** (native→docker→SKIPPED,
+  the permanent semgrep-on-Windows fix), **gitleaks path fidelity** (repo-relative URIs), **committed
+  tamper-evident evidence bundles** (`arc-evidence.sh`), and **macOS CI + bash-3.2/POSIX portability**
+  (ADR-0007). **79 bats tests** (13 scan + 11 profile + 6 sync + baseline + suppress + evidence + gates
+  + portability + 7 runtime + 12 triage), green **on 3-OS CI** (ubuntu + windows + macos; PR #5/#6/#7/#8,
+  final run 29054053282, `1..79`). Live demo: new secret → block; baselined → pass; suppress-no-reason
+  → block; suppress-justified → pass; triage conf=2/10 → pass (downgraded); garbage backend → block
+  (fail-closed). First **dogfooded evidence bundle** (`docs/evidence/phase-02/`): full-repo scan
+  verdict=pass with arc's own 8 test-fixture secrets justified-suppressed in the ledger; bundle verified
+  tamper-evident. Hook-tier scan measured **15.5s < 30s** (worst-case on a loaded machine). **Actual:
+  ~2 sessions vs 2-week appetite — well under, no retro flag.** Decisions (`/arc-change` 2026-07-09):
+  triage downgrade→note (not suppressed), pluggable `ARC_TRIAGE_CMD` backend. Carry-forward to Phase 03:
+  real pinned arc-tools docker image (ADR-0006) as the live backend for #9's docker rung + docker triage.
 - **2026-07-09 · Phase 01 · Credibility & hygiene.** Shipped block-by-default via strictness
   profiles (`arc-profile.sh`: starter/standard/strict, one `arc.profile` key switches coverage+docs+scan
   as a set, per-gate + env overrides); `/arc-review` auto-stamps `code` on ship verdict; cross-platform
