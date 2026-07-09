@@ -27,12 +27,15 @@ if echo "$CMD" | grep -Eq '(^|[;&|] *)(vercel( [^;&|]*)?(--prod|--prebuilt|deplo
   cd "${CLAUDE_PROJECT_DIR:-.}"
   if npm run test --silent >/tmp/predeploy.log 2>&1; then
     echo "deploy-guard: tests passed." >&2
-    # --- arc deploy gates (advisory by default; enable via .claude/settings.json arc.* + ARC_REQUIRED_REVIEWS) ---
-    GD="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts"
-    bash "$GD/coverage-gate.sh" >&2;                                    [ "$?" -eq 2 ] && exit 2
-    bash "$GD/review-ledger.sh" require "${ARC_REQUIRED_REVIEWS:-}" >&2; [ "$?" -eq 2 ] && exit 2
-    bash "$GD/docs-drift.sh" >&2;                                       [ "$?" -eq 2 ] && exit 2
-    echo "deploy-guard: all gates passed. Allowed." >&2; exit 0
+    # --- arc deploy gates: delegated to the generic gate-runner (Phase 02) ---
+    # Every gate is declared in arc.gates.yaml; NO gate logic is hardcoded here.
+    # The runner blocks (exit 2) iff a block-mode gate fails.
+    if bash "${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/arc-gates.sh" --tier hook >&2; then
+      echo "deploy-guard: all hook-tier gates passed. Allowed." >&2; exit 0
+    else
+      echo "BLOCKED by arc-gates: a block-mode gate failed (see above). Fix or adjust arc.gates.yaml / profile." >&2
+      exit 2
+    fi
   else
     echo "BLOCKED: tests are failing, not deploying. Fix them first. Last 20 lines:" >&2
     tail -n 20 /tmp/predeploy.log >&2; exit 2

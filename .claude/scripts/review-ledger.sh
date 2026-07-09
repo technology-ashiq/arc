@@ -67,6 +67,12 @@ case "$cmd" in
     fi
     exit 0
     ;;
+  require-profile)
+    # resolve the required review set from the active strictness profile (Phase 01)
+    reviews="$(bash "$ROOT/.claude/scripts/arc-profile.sh" reviews 2>/dev/null || echo '')"
+    if [ -z "$reviews" ]; then echo "review-ledger: no required reviews for this profile"; exit 0; fi
+    exec bash "$0" require "$reviews"
+    ;;
   status)
     if [ -f "$LEDGER" ] && [ -s "$LEDGER" ]; then
       printf 'reviews @ %s: ' "$SHA"; tr '\n' ' ' < "$LEDGER"; echo
@@ -75,5 +81,5 @@ case "$cmd" in
     fi
     ;;
   *)
-    echo "usage: review-ledger.sh {stamp|unstamp|check|require|status} [kind]" >&2; exit 1;;
+    echo "usage: review-ledger.sh {stamp|unstamp|check|require|require-profile|status} [kind]" >&2; exit 1;;
 esac
