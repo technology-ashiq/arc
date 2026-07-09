@@ -52,6 +52,11 @@ flowchart TB
 | 0006 | Heavy tools (ZAP, Stryker, CodeQL) run in CI tier / docker; local hook tier has a hard <30s budget | accepted |
 | 0007 | bats-core for arc's own self-tests; CI matrix = ubuntu + windows (Git Bash) | accepted |
 | 0008 | Gates flip to `block` by default; `warn` becomes the opt-in downgrade (reverses current default) | accepted |
+| 0009 | Deployment confidence score is a derived summary over gate evidence — never a gate itself | proposed |
+| 0010 | Quality Passport: signed per-commit/release evidence artifact (with reserved `control_refs`) | proposed |
+| 0011 | Root-cause memory = append-only JSONL findings ledger + review-context digest, not a graph DB | proposed |
+| 0012 | Policy packs map evidence to control IDs (ASVS first); arc never claims compliance | proposed |
+| 0013 | Engine/adapter separation: writing rule now (engine assumes no Claude), physical split + AGENTS.md at Phase 8 | proposed |
 
 ## Non-negotiables
 
@@ -109,5 +114,9 @@ Phase 0 is the steel thread: the riskiest integration (runner→SARIF→triage�
 | 6 | Measured agent quality: planted-bug corpus, precision/recall scoring, retro→eval loop | 2 weeks · **cut-line** | `phases/phase-06-spec.md` |
 | 7 | Adversarial orchestration: saboteur agent, parallel gates, cross-model quorum | 2 weeks · **cuttable** | `phases/phase-07-spec.md` |
 | 8 | Distribution: plugin packaging, English docs, public pre-registered benchmark, opt-in telemetry | next cycle | `phases/phase-08-spec.md` |
+| 9 | Deployment confidence score: weighted 0–100 + breakdown, derived from gate evidence (ADR-0009) | 3 days · next cycle | `phases/phase-09-spec.md` |
+| 10 | Quality Passport: signed per-release evidence artifact + `arc passport verify` (ADR-0010) | 1 week · next cycle | `phases/phase-10-spec.md` |
+| 11 | Findings ledger: root-cause JSONL memory → review context + escaped-defect→gate loop (ADR-0011) | 1 week · next cycle | `phases/phase-11-spec.md` |
+| 12 | Policy pack v1 (OWASP ASVS): gate→control-ID evidence mapping on the passport (ADR-0012) | 1.5 weeks · next cycle | `phases/phase-12-spec.md` |
 
 **North-star metric:** escaped defect rate (bugs found in production after all gates passed) — tracked per release from Phase 2 onward, target: monotonically decreasing.
