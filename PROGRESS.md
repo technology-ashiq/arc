@@ -5,26 +5,23 @@
 
 ## Now
 
-**Phase 00 built — ready for `/arc-phase-done 0`.** Steel thread runs end-to-end on Windows Git Bash:
-`arc-scan.sh` (diff-scope → semgrep+gitleaks adapters → minimal-SARIF normalize/merge → threshold
-triage → review-ledger stamp). 13/13 bats tests green; version gate green; live demo verified
-(seeded dirty repo → `block` exit 2 with 2 errors; clean → `pass` exit 0, stamps `scan`).
+**Phase 00 CLOSED ✅ (2026-07-09).** Steel thread proven end-to-end + cross-platform. Next up:
+**Phase 01 — Credibility & hygiene** (`phases/phase-01-spec.md`, 1-week appetite): flip gates to
+block-by-default (ADR-0008), wire `/arc-review` to code-stamp the `scan` verdict into the review
+ledger, cross-platform sync, strictness profiles, repo cleanup.
 
-Built this session:
-- `.claude/scripts/arc-scan/` — `arc-scan.sh`, `adapters/{semgrep,gitleaks}.sh`, `lib/{common,sarif,triage}.sh`, `rules/arc-min.yaml`, `version-gate.sh`
-- `tests/arc-scan.bats` + `tests/test_helper.bash` (13 tests: degrade · normalize · merge · triage · ledger · e2e)
-- `.github/workflows/ci.yml` — bats on ubuntu + windows Git Bash, version gate, best-effort tool install
-- `VERSION` (0.2.0) + `CHANGELOG.md`; `scan` kind added to `review-ledger.sh`
-- Toolchain: installed `jq` (scoop) + `bats` (npm); opengrep + gitleaks already present
+Open thread before Phase 01 code starts: PR #1 is green but branch `feat/phase-00-steel-thread` may
+still need merge → main (last local commit `bbda7cb` — tracker sync — unpushed). Merge first so
+Phase 01 branches off a clean main.
 
-Pending before close: push so CI proves green on **both** matrix legs (only Windows-local proven so far),
-then `/arc-phase-done 0` to stamp the tracker + record actual-vs-appetite.
+Phase 00 shipped: `arc-scan` spine (diff-scope → semgrep+gitleaks adapters → SARIF merge → triage
+stub → ledger stamp), 13 bats tests, CI matrix (ubuntu+windows), VERSION/CHANGELOG + version-gate.
 
 ## Phases
 
 | Phase | Capability | Appetite | Status | Closed |
 |---|---|---|---|---|
-| 00 | Steel thread: arc-scan skeleton + CI on arc | 1 week | ⬜ not started | |
+| 00 | Steel thread: arc-scan skeleton + CI on arc | 1 week | ✅ done | 2026-07-09 |
 | 01 | Credibility & hygiene: block-by-default, code-stamp, cross-platform sync | 1 week | ⬜ not started | |
 | 02 | Gate engine v1: gates.yaml, baseline, suppression, evidence bundles | 2 weeks | ⬜ not started | |
 | 03 | Security pipeline: Trivy, trufflehog, CodeQL, RLS harness, ZAP | 1.5 weeks | ⬜ not started | |
@@ -36,7 +33,15 @@ then `/arc-phase-done 0` to stamp the tracker + record actual-vs-appetite.
 
 ## Done log
 
-_(empty — filled by `/arc-phase-done`: date · phase · tests count · actual vs appetite)_
+- **2026-07-09 · Phase 00 · Steel thread.** Shipped `arc-scan` spine (diff-scope → semgrep+gitleaks
+  adapters → minimal-SARIF normalize/merge → threshold triage stub → review-ledger `scan` stamp),
+  offline `arc-min` ruleset, `version-gate`. **13 bats tests** (degrade · normalize · merge · triage ·
+  ledger · e2e), all green. CI matrix **green on ubuntu + windows Git Bash** (PR #1, run 29015093526).
+  Live demo: seeded repo (planted eval-injection + `ghp_` secret) → `block` exit 2; clean → `pass`
+  exit 0, stamps `scan`. **Actual: ~1 session (< 1 day) vs 1-week appetite — well under, no retro flag.**
+  CI caught a real Windows/Linux exec-bit split on run 1 (fixed in `e3e9d51`) — cross-platform moat
+  proved itself day one. Carry-forward to Phase 2: gitleaks staging-path fidelity (finding URIs show
+  the temp stage dir, not the repo-relative path).
 
 ## North-star metric
 
