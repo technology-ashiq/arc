@@ -17,8 +17,10 @@ Built this session:
 - `VERSION` (0.2.0) + `CHANGELOG.md`; `scan` kind added to `review-ledger.sh`
 - Toolchain: installed `jq` (scoop) + `bats` (npm); opengrep + gitleaks already present
 
-Pending before close: push so CI proves green on **both** matrix legs (only Windows-local proven so far),
-then `/arc-phase-done 0` to stamp the tracker + record actual-vs-appetite.
+CI proven green on **both** matrix legs (PR #1, run 29015093526: ubuntu 35s ✅ · windows 1m22s ✅).
+CI caught + we fixed a real Windows/Linux split (exec-bit stamping guard, `e3e9d51`) — cross-platform
+value demonstrated on day one. **All Phase 00 exit criteria met.** Remaining: merge PR #1 → main,
+then `/arc-phase-done 0` to flip the tracker row + record actual-vs-appetite (well under the 1-week cap).
 
 ## Phases
 
