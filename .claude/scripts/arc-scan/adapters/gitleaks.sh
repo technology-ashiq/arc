@@ -10,6 +10,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh
 . "$HERE/../lib/common.sh"
+. "$HERE/../lib/runtime.sh"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 scope="${1:?usage: gitleaks.sh <scope-file> <out-sarif>}"
 out="${2:?usage: gitleaks.sh <scope-file> <out-sarif>}"
@@ -17,13 +19,20 @@ out="${2:?usage: gitleaks.sh <scope-file> <out-sarif>}"
 _empty_sarif() { printf '{"version":"2.1.0","runs":[]}\n' > "$out"; }
 
 bin="$(arc_gitleaks_bin)"
-if [ -z "$bin" ]; then
-  arc_skip "gitleaks (not installed -- scoop install gitleaks)"
+rt="$(arc_runtime "$bin")"                 # native -> docker -> skip
+if [ "$rt" = "skip" ]; then
+  arc_skip "gitleaks (native missing + no docker image -- scoop install gitleaks or set ARC_DOCKER_IMAGE)"
   _empty_sarif; exit 0
 fi
+if [ "$rt" = "docker" ]; then
+  # gitleaks in the arc-tools image scans the mounted repo; SARIF to stdout (real image: Phase 03)
+  arc_docker_scan "$out" gitleaks dir /src --report-format sarif --report-path /dev/stdout --no-banner --exit-code 0
+  arc_log "gitleaks: scanned via docker ($ARC_DOCKER_IMAGE)"
+  [ -s "$out" ] || _empty_sarif
+  exit 0
+fi
 
-# Stage scoped files under their REPO-RELATIVE path so the URIs come back clean.
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# native: stage scoped files under their REPO-RELATIVE path so the URIs come back clean.
 stage="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-gl.$$")"
 mkdir -p "$stage"
 n=0

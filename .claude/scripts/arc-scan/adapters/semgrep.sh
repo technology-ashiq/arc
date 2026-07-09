@@ -14,6 +14,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh
 . "$HERE/../lib/common.sh"
+. "$HERE/../lib/runtime.sh"
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 scope="${1:?usage: semgrep.sh <scope-file> <out-sarif>}"
 out="${2:?usage: semgrep.sh <scope-file> <out-sarif>}"
@@ -23,8 +25,9 @@ rules="$(cd "$HERE/../rules" && pwd)/arc-min.yaml"
 _empty_sarif() { printf '{"version":"2.1.0","runs":[]}\n' > "$out"; }
 
 bin="$(arc_semgrep_bin)"
-if [ -z "$bin" ]; then
-  arc_skip "semgrep (not installed -- install opengrep or semgrep)"
+rt="$(arc_runtime "$bin")"                 # native -> docker -> skip
+if [ "$rt" = "skip" ]; then
+  arc_skip "semgrep (native missing + no docker image -- install opengrep/semgrep or set ARC_DOCKER_IMAGE)"
   _empty_sarif; exit 0
 fi
 
@@ -40,21 +43,27 @@ if [ "${#targets[@]}" -eq 0 ]; then
   _empty_sarif; exit 0
 fi
 
-# Offline, deterministic run: local rules only, no registry/telemetry/version
-# pings. opengrep and semgrep differ on the SARIF flag and metrics handling.
-case "$(basename "$bin")" in
-  opengrep*)
-    "$bin" scan --config "$rules" \
-      --sarif-output="$out" --disable-version-check --quiet \
-      "${targets[@]}" >/dev/null 2>&1 || true;;
-  *) # semgrep proper
-    "$bin" scan --config "$rules" \
-      --sarif --output="$out" \
-      --metrics=off --disable-version-check --quiet \
-      "${targets[@]}" >/dev/null 2>&1 || true;;
-esac
+# Offline, deterministic run: local rules only, no registry/telemetry/version pings.
+if [ "$rt" = "docker" ]; then
+  # semgrep in the arc-tools image emits SARIF to stdout (real image: Phase 03)
+  arc_docker_scan "$out" semgrep scan --config "$rules" --sarif --disable-version-check --quiet "${targets[@]}"
+  arc_log "semgrep: scanned ${#targets[@]} file(s) via docker ($ARC_DOCKER_IMAGE)"
+else
+  # native. opengrep and semgrep differ on the SARIF flag and metrics handling.
+  case "$(basename "$bin")" in
+    opengrep*)
+      "$bin" scan --config "$rules" \
+        --sarif-output="$out" --disable-version-check --quiet \
+        "${targets[@]}" >/dev/null 2>&1 || true;;
+    *) # semgrep proper
+      "$bin" scan --config "$rules" \
+        --sarif --output="$out" \
+        --metrics=off --disable-version-check --quiet \
+        "${targets[@]}" >/dev/null 2>&1 || true;;
+  esac
+  arc_log "semgrep: scanned ${#targets[@]} file(s) via $bin"
+fi
 
 # Adapter must always leave a valid SARIF behind for the merge step.
 [ -s "$out" ] || _empty_sarif
-arc_log "semgrep: scanned ${#targets[@]} file(s) via $bin"
 exit 0
