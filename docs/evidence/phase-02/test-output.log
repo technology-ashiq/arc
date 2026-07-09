@@ -1,0 +1,82 @@
+# arc full bats suite -- CI run 29054053282 (ubuntu-latest), PR #8 @ 19040b2
+# also green on macos-latest + windows-latest
+1..79
+ok 1 default profile is standard (block-by-default)
+ok 2 standard: core gates block, reviews = code,security
+ok 3 starter: all gates warn, no required reviews
+ok 4 strict: all gates block, full review set
+ok 5 ARC_PROFILE env overrides settings profile
+ok 6 explicit per-gate key overrides the profile for that gate only
+ok 7 ARC_REQUIRED_REVIEWS env overrides reviews
+ok 8 unknown profile falls back to standard (safe default)
+ok 9 arc-scan: standard profile blocks a dirty scope (exit 2)
+ok 10 arc-scan: starter profile downgrades block to advisory (exit 0)
+ok 11 ledger require enforces the standard review set (code,security)
+ok 12 semgrep adapter: missing tool degrades to SKIPPED (exit 0, empty runs)
+ok 13 gitleaks adapter: missing tool degrades to SKIPPED (exit 0, empty runs)
+ok 14 adapter: empty scope => empty SARIF, exit 0
+ok 15 gitleaks adapter: finding URI is repo-relative, not the staging temp dir
+ok 16 normalize: resolves rule-level severity (semgrep eval => error)
+ok 17 normalize: gitleaks finding defaults to error severity
+ok 18 merge: dedupes by fingerprint and emits minimal SARIF fields
+ok 19 triage: any error-level finding => block
+ok 20 triage: no error-level findings => pass
+ok 21 triage: empty findings => pass
+ok 22 ledger: scan is a valid kind (stamp/check/status)
+ok 23 e2e: seeded dirty repo BLOCKS and does not stamp scan
+ok 24 e2e: clean repo PASSES and stamps scan in the ledger
+ok 25 e2e: scan-result.sarif is valid SARIF with a version + runs
+ok 26 baseline freeze: fingerprints written sorted + unique
+ok 27 baseline freeze: append-only union with an existing baseline
+ok 28 baseline partition: known fp => new=false, novel fp => new=true
+ok 29 merge preserves new=false (regression: jq // treats false as absent)
+ok 30 triage: a baselined error does not block (new_errors excludes baseline)
+ok 31 e2e: freeze a finding -> rescan PASSES; a novel finding still BLOCKS
+ok 32 evidence: bundle assembles a manifest and gathers present artifacts
+ok 33 evidence: manifest records the current commit
+ok 34 evidence: verify passes on an intact bundle
+ok 35 evidence: verify FAILS on a tampered artifact (tamper-evident)
+ok 36 evidence: verify FAILS when no bundle exists (phase cannot close)
+ok 37 evidence: bundle degrades gracefully when no artifacts are present
+ok 38 parser: real arc.gates.yaml parses to 4 valid-JSON gates
+ok 39 parser: values with flags/paths survive (no truncation at spaces or colons)
+ok 40 runner: a failing block-mode gate blocks (exit 2)
+ok 41 runner: a failing warn-mode gate does NOT block (exit 0)
+ok 42 runner: an off-mode gate is skipped even if it would fail
+ok 43 runner: profile mode trusts the check exit code (2=block, 1=warn)
+ok 44 runner: tier filter -- ci gates do not run in the hook tier
+ok 45 runner: missing gates file degrades to advisory (exit 0, loud)
+ok 46 review-ledger require-profile blocks when required reviews are unstamped
+ok 47 portability: no bash-4+ syntax (mapfile/readarray, associative arrays, case-mod)
+ok 48 portability: no GNU-only date/grep flags
+ok 49 portability: no bare GNU 'stat -c' without a BSD 'stat -f' fallback on the line
+ok 50 runtime: native binary present => native
+ok 51 runtime: no native + no docker image => skip
+ok 52 runtime: no native + docker present + image set => docker
+ok 53 runtime: ARC_FORCE_RUNTIME overrides resolution
+ok 54 semgrep adapter: skip rung => SKIPPED, empty SARIF, exit 0
+ok 55 semgrep adapter: docker rung runs the tool via the image (fake docker)
+ok 56 gitleaks adapter: docker rung runs the tool via the image (fake docker)
+ok 57 suppress: only justified rows count; unjustified are excluded
+ok 58 suppress: annotate marks a justified fingerprint suppressed=true
+ok 59 triage: a suppressed error does not block
+ok 60 fingerprint is deterministic across identical scans (regression)
+ok 61 e2e: justified suppression PASSES, unjustified still BLOCKS
+ok 62 sync: copies machinery into target .claude
+ok 63 sync: copies the meta docs
+ok 64 sync: never leaks personal settings or working state
+ok 65 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+ok 66 sync: missing target dir fails cleanly (exit 1)
+ok 67 sync: requires a target argument
+ok 68 triage-llm: no backend => trust all (confidence 10)
+ok 69 triage-llm: backend object {confidence,reason} is parsed
+ok 70 triage-llm: backend bare number is accepted
+ok 71 triage-llm: garbage backend => fail-closed to 10 (kept)
+ok 72 triage-llm: no backend keeps a new error blocking
+ok 73 triage-llm: low-confidence new error is downgraded error->note (tagged)
+ok 74 triage-llm: high-confidence new error is kept blocking
+ok 75 triage-llm: never upgrades -- a note stays a note
+ok 76 triage-llm: never invents -- result count is unchanged
+ok 77 triage-llm: baseline + suppressed findings are never triaged
+ok 78 triage-llm: garbage backend keeps a real finding blocking (fail-closed)
+ok 79 triage-llm e2e: low-confidence backend downgrades a planted secret -> pass; without -> block

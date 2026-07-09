@@ -10,6 +10,11 @@
 *.yml   text eol=lf
 *.yaml  text eol=lf
 
+# Evidence bundles are sha256-hash-pinned (ADR-0002): git must NOT rewrite their
+# bytes (line endings included) or tamper-verification breaks on checkout across
+# platforms. Freeze them exactly as hashed -- this OVERRIDES `* text=auto eol=lf`.
+docs/evidence/** -text
+
 # Binary assets: never touch.
 *.png binary
 *.jpg binary
