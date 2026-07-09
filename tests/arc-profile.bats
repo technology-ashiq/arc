@@ -96,3 +96,20 @@ _settings() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
   [[ "$output" == *"advisory"* ]]
   rm -rf "$d"
 }
+
+# ---------------------------------------------------------------------------
+# Profile reviews -> ledger require (the block-by-default review backbone that
+# /arc-review's code-stamp feeds).
+# ---------------------------------------------------------------------------
+
+@test "ledger require enforces the standard review set (code,security)" {
+  _arc_sandbox
+  local reviews; reviews="$(bash .claude/scripts/arc-profile.sh reviews)"   # default standard
+  [ "$reviews" = "code,security" ]
+  run bash .claude/scripts/review-ledger.sh require "$reviews"
+  [ "$status" -eq 2 ]                                   # nothing stamped => BLOCK
+  bash .claude/scripts/review-ledger.sh stamp code
+  bash .claude/scripts/review-ledger.sh stamp security
+  run bash .claude/scripts/review-ledger.sh require "$reviews"
+  [ "$status" -eq 0 ]                                   # both stamped => pass
+}
