@@ -11,6 +11,7 @@
 - [ ] **RLS test harness**: generated SQL assertions per table ("anon cannot SELECT/INSERT/UPDATE x") runnable against local Supabase; wired as a gate check; `security-sensitive.md` rule updated to require it
 - [ ] **ZAP baseline scan**: docker, CI-tier, runs against preview deploy URL, findings → SARIF merge
 - [ ] `security-auditor` agent updated: consumes `arc-scan` merged results as Pass 0 evidence instead of re-running tools ad hoc
+- [ ] **Pinned `arc-tools` docker image** (ADR-0006 amendment, from `/arc-change` 2026-07-09): the CI-tier heavy verifiers (Trivy, CodeQL, ZAP, later Stryker/Lighthouse) run from ONE version-pinned image built from a committed `Dockerfile`; the image digest is pinned in CI so verdicts are reproducible (evidence integrity). Hook tier stays native — never pulls the image
 - [ ] `/arc-toolcheck` covers all new tools with Quick-fix lines
 - [ ] Live demo: repo with vulnerable dep + leaked (test) credential + missing RLS policy → 3 distinct blocks with correct fingerprints
 - [ ] bats + CI green both platforms (ZAP job linux-only, by design)
