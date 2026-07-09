@@ -54,3 +54,12 @@ arc_fingerprint() {
     printf '%s' "$raw" | cksum | tr -d ' ' | cut -c1-16
   fi
 }
+
+# arc_hash_file <path> -- portable sha256 of a file (GNU sha256sum / BSD-macOS
+# shasum / cksum fallback). Empty string if the file is missing.
+arc_hash_file() {
+  [ -f "$1" ] || { echo ""; return 0; }
+  if   arc_have sha256sum; then sha256sum "$1"      | cut -d' ' -f1
+  elif arc_have shasum;    then shasum -a 256 "$1"  | cut -d' ' -f1
+  else cksum "$1" | tr -s ' ' | cut -d' ' -f1; fi
+}

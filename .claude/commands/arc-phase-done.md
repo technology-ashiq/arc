@@ -1,7 +1,7 @@
 ---
 description: Close a phase per the build playbook's Definition of Done — or refuse.
 argument-hint: [phase-number]
-allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*)
+allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/arc-evidence.sh:*)
 ---
 
 Verify phase $1 against its spec `phases/phase-NN-spec.md` (NN = zero-padded $1, e.g.
@@ -17,11 +17,16 @@ over assertion — show output, don't claim.
 Do not update the tracker for an unfinished phase.
 
 If all pass:
-5. Update `PROGRESS.md`: flip the phase row to ✅, add a done-log entry (what shipped +
+5. **Write the evidence bundle** (Phase 02+, ADR-0002). Run
+   `bash .claude/scripts/arc-evidence.sh bundle $1` then
+   `bash .claude/scripts/arc-evidence.sh verify $1`. This commits `docs/evidence/phase-NN/`
+   (scan verdict, review stamps, coverage, + a sha256 manifest). **A phase cannot close if
+   `verify` fails** — the bundle is the tamper-evident proof the gates actually passed.
+6. Update `PROGRESS.md`: flip the phase row to ✅, add a done-log entry (what shipped +
    test count + actual time vs appetite — blown appetite gets flagged for /arc-retro), and
    move `## Now` to the next phase.
-6. Refresh the code knowledge graph if available (`graphify update .`) — the next phase's
+7. Refresh the code knowledge graph if available (`graphify update .`) — the next phase's
    reviews and diagnoses should see the current blast radius, not last phase's.
    (Skip if graphify's own git hook is installed — it already rebuilt on commit.)
-7. Reply with a one-line summary + anything phase $(($1+1)) needs from me (keys,
+8. Reply with a one-line summary + anything phase $(($1+1)) needs from me (keys,
    accounts, infra) per the "your-setup / pending" list.
