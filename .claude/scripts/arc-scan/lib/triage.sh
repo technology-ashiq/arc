@@ -11,7 +11,7 @@
 # (frozen in the baseline) and does NOT block; new_errors drives the verdict.
 arc_triage_counts() {
   local sarif="$1"
-  [ -f "$sarif" ] || { echo '{"findings":0,"errors":0,"warnings":0,"notes":0,"new_errors":0,"baseline":0}'; return 0; }
+  [ -f "$sarif" ] || { echo '{"findings":0,"errors":0,"warnings":0,"notes":0,"new_errors":0,"baseline":0,"suppressed":0}'; return 0; }
   jq '
     [ (.runs // [])[]? | (.results // [])[]? ] as $r
     | {
@@ -19,10 +19,11 @@ arc_triage_counts() {
         errors:     ([ $r[] | select(.level=="error") ] | length),
         warnings:   ([ $r[] | select(.level=="warning") ] | length),
         notes:      ([ $r[] | select(.level=="note") ] | length),
-        new_errors: ([ $r[] | select(.level=="error" and (.properties.new != false)) ] | length),
-        baseline:   ([ $r[] | select(.properties.new == false) ] | length)
+        new_errors: ([ $r[] | select(.level=="error" and (.properties.new != false) and (.properties.suppressed != true)) ] | length),
+        baseline:   ([ $r[] | select(.properties.new == false) ] | length),
+        suppressed: ([ $r[] | select(.properties.suppressed == true) ] | length)
       }
-  ' "$sarif" 2>/dev/null || echo '{"findings":0,"errors":0,"warnings":0,"notes":0,"new_errors":0,"baseline":0}'
+  ' "$sarif" 2>/dev/null || echo '{"findings":0,"errors":0,"warnings":0,"notes":0,"new_errors":0,"baseline":0,"suppressed":0}'
 }
 
 # arc_triage_verdict <merged-sarif> <ran-csv> <skipped-csv> -> full verdict JSON.
@@ -41,7 +42,7 @@ arc_triage_verdict() {
     {
       verdict: $verdict,
       findings: .findings, errors: .errors, warnings: .warnings, notes: .notes,
-      new_errors: .new_errors, baseline: .baseline,
+      new_errors: .new_errors, baseline: .baseline, suppressed: .suppressed,
       tools_ran:     ($ran     | split(",") | map(select(length>0))),
       tools_skipped: ($skipped | split(",") | map(select(length>0)))
     }'

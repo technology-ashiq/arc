@@ -44,8 +44,10 @@ arc_jq_bin() { arc_have jq && echo jq || echo ""; }
 # Stable per-finding fingerprint from identity fields, used when a tool does not
 # supply one. Append-only + sorted by fingerprint => merge-friendly baselines.
 arc_fingerprint() {
-  # args: tool ruleId file line message
-  local raw="$1|$2|$3|$4|$5"
+  # args: tool ruleId file line  (message is intentionally EXCLUDED -- tool
+  # messages embed volatile detail like the staging path, which would make the
+  # fingerprint non-deterministic and break baseline/suppression matching).
+  local raw="$1|$2|$3|$4"
   if   arc_have sha1sum;  then printf '%s' "$raw" | sha1sum  | cut -d' ' -f1
   elif arc_have shasum;   then printf '%s' "$raw" | shasum   | cut -d' ' -f1
   else # last-resort deterministic fallback: no crypto, still stable

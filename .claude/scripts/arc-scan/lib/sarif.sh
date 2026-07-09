@@ -34,7 +34,11 @@ arc_sarif_normalize() {
         message: ((($res.message.text) // ($res.message) // "") | tostring),
         file:    ((($res.locations[0].physicalLocation.artifactLocation.uri) // "") | tostring),
         line:    ((($res.locations[0].physicalLocation.region.startLine) // 0) | tonumber? // 0),
-        fingerprint: ((($res.fingerprints // $res.partialFingerprints // {}) | to_entries | (.[0].value // "")) | tostring)
+        # Always empty here so the shell pass computes our OWN deterministic
+        # fingerprint from the normalized fields. Tool-provided fingerprints are
+        # NOT stable (gitleaks keys on the fresh staging temp dir), which would
+        # break baseline + suppression matching and evidence reproducibility.
+        fingerprint: ""
       }
   ' "$sarif" 2>/dev/null | while IFS= read -r obj; do
     local fp; fp="$(printf '%s' "$obj" | jq -r '.fingerprint')"
@@ -78,7 +82,7 @@ arc_sarif_merge() {
               region: { startLine: .line }
             } } ],
             partialFingerprints: { arcFingerprint: .fingerprint },
-            properties: { tool: .tool, new: (.new != false) }
+            properties: { tool: .tool, new: (.new != false), suppressed: (.suppressed == true) }
           } ]
         } ]
       }

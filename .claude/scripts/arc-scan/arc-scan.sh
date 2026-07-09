@@ -19,6 +19,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/sarif.sh"
 . "$HERE/lib/triage.sh"
 . "$HERE/lib/baseline.sh"
+. "$HERE/lib/suppress.sh"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 LEDGER="$ROOT/.claude/scripts/review-ledger.sh"
@@ -28,7 +29,7 @@ SCAN_MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode scan 2>/dev/null |
 
 # --- args --------------------------------------------------------------------
 base=""; scope_file=""; scope_mode="default"; out_dir=""
-do_stamp="auto"; exit_zero=0; mode="scan"; baseline_file=""
+do_stamp="auto"; exit_zero=0; mode="scan"; baseline_file=""; suppress_file=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --base)     base="${2:-}"; scope_mode="base"; shift 2;;
@@ -36,6 +37,7 @@ while [ $# -gt 0 ]; do
     --all)      scope_mode="all"; shift;;
     --baseline) mode="baseline"; shift;;
     --baseline-file) baseline_file="${2:-}"; shift 2;;
+    --suppress-file) suppress_file="${2:-}"; shift 2;;
     --out-dir)  out_dir="${2:-}"; shift 2;;
     --stamp)    do_stamp="yes"; shift;;
     --no-stamp) do_stamp="no"; shift;;
@@ -97,10 +99,14 @@ if [ "$mode" = "baseline" ]; then
   fi
   exit 0
 fi
-# normal scan: annotate each finding new (blocks) vs baseline (reported, non-blocking)
+# normal scan: annotate each finding new (blocks) vs baseline, then suppression.
+# A finding blocks only if it is a NEW error AND not justified-suppressed.
+suppress_file="${suppress_file:-${ARC_SUPPRESSIONS:-$ROOT/docs/suppressions.md}}"
 if [ "$jq_ok" -eq 1 ]; then
   arc_baseline_partition "$jsonl" "$baseline_file" > "$work/annotated.jsonl"
   [ -s "$work/annotated.jsonl" ] && jsonl="$work/annotated.jsonl"
+  arc_suppress_annotate "$jsonl" "$suppress_file" > "$work/suppressed.jsonl"
+  [ -s "$work/suppressed.jsonl" ] && jsonl="$work/suppressed.jsonl"
 fi
 
 # --- 3. merge ----------------------------------------------------------------
