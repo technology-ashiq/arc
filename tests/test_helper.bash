@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Shared helpers for the arc-scan bats suite.
+
+# Real repo paths (tests/ lives at repo root).
+ARC_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+ARC_SCAN_SRC="$ARC_ROOT/.claude/scripts/arc-scan"
+
+# Source the pipeline libraries for unit-level tests (no git needed).
+_arc_load_libs() {
+  # shellcheck disable=SC1090
+  . "$ARC_SCAN_SRC/lib/common.sh"
+  . "$ARC_SCAN_SRC/lib/sarif.sh"
+  . "$ARC_SCAN_SRC/lib/triage.sh"
+}
+
+# Build a throwaway git repo carrying a copy of .claude/scripts, so stamp/e2e
+# tests never touch the real review ledger. Sets SANDBOX and cd's into it.
+_arc_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-bats.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts"
+  cp -r "$ARC_SCAN_SRC" "$SANDBOX/.claude/scripts/"
+  cp "$ARC_ROOT/.claude/scripts/review-ledger.sh" "$SANDBOX/.claude/scripts/"
+  cd "$SANDBOX" || return 1
+  git init -q
+  git config user.email test@arc.local
+  git config user.name arc-test
+  echo "seed" > seed.txt
+  git add -A && git commit -qm seed
+}
+
+_arc_teardown() { [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX" 2>/dev/null || true; }
+
+# Path to arc-scan in the current sandbox.
+_arc_scan() { echo "$SANDBOX/.claude/scripts/arc-scan/arc-scan.sh"; }
+_arc_ledger_file() {
+  local sha; sha="$(git -C "$SANDBOX" rev-parse --short HEAD)"
+  echo "$SANDBOX/.claude/state/reviews/$sha.txt"
+}
+
+# Write a file with planted content, return its path via stdout.
+_arc_write() { local p="$1"; shift; mkdir -p "$(dirname "$p")"; printf '%s\n' "$*" > "$p"; echo "$p"; }
+
+# Skip guards for tests that need a real scanner (keeps CI green + honest when a
+# runner cannot install a tool; local runs with tools present always execute).
+_arc_need_semgrep()  { command -v opengrep >/dev/null 2>&1 || command -v semgrep >/dev/null 2>&1 || skip "semgrep/opengrep not installed"; }
+_arc_need_gitleaks() { command -v gitleaks >/dev/null 2>&1 || skip "gitleaks not installed"; }

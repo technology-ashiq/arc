@@ -1,0 +1,17 @@
+# Cross-platform line-ending policy (PLAN pre-mortem #6: Windows breakage).
+# Shell scripts, bats tests, and YAML MUST be LF on checkout everywhere, or
+# bash on Linux CI chokes on carriage returns. Authored on Windows Git Bash,
+# executed on ubuntu CI -- LF is non-negotiable for anything a shell runs.
+* text=auto eol=lf
+
+*.sh    text eol=lf
+*.bash  text eol=lf
+*.bats  text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+
+# Binary assets: never touch.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary

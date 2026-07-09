@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# adapters/semgrep.sh -- run semgrep/opengrep over a diff scope, emit native SARIF.
+#
+# Adapter contract (v1, extracted after building semgrep + gitleaks):
+#   usage: semgrep.sh <scope-file> <out-sarif>
+#     scope-file : newline-separated list of files to scan (may be empty)
+#     out-sarif  : path to write the tool's native SARIF
+#   guarantees:
+#     * tool missing        -> arc_skip, write empty SARIF ({runs:[]}), exit 0
+#     * empty scope         -> write empty SARIF, exit 0
+#     * findings or not      -> always exit 0 (verdict is the triage stub's job)
+#   never: exit non-zero on a normal scan, or crash the hook on a missing tool.
+set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/common.sh
+. "$HERE/../lib/common.sh"
+
+scope="${1:?usage: semgrep.sh <scope-file> <out-sarif>}"
+out="${2:?usage: semgrep.sh <scope-file> <out-sarif>}"
+# Canonical path (no ../) so semgrep derives stable rule ids across call sites.
+rules="$(cd "$HERE/../rules" && pwd)/arc-min.yaml"
+
+_empty_sarif() { printf '{"version":"2.1.0","runs":[]}\n' > "$out"; }
+
+bin="$(arc_semgrep_bin)"
+if [ -z "$bin" ]; then
+  arc_skip "semgrep (not installed -- install opengrep or semgrep)"
+  _empty_sarif; exit 0
+fi
+
+# Collect existing, non-empty scope targets.
+targets=()
+if [ -s "$scope" ]; then
+  while IFS= read -r f; do
+    [ -n "$f" ] && [ -f "$f" ] && targets+=("$f")
+  done < "$scope"
+fi
+if [ "${#targets[@]}" -eq 0 ]; then
+  arc_log "semgrep: empty scope, nothing to scan"
+  _empty_sarif; exit 0
+fi
+
+# Offline, deterministic run: local rules only, no registry/telemetry/version
+# pings. opengrep and semgrep differ on the SARIF flag and metrics handling.
+case "$(basename "$bin")" in
+  opengrep*)
+    "$bin" scan --config "$rules" \
+      --sarif-output="$out" --disable-version-check --quiet \
+      "${targets[@]}" >/dev/null 2>&1 || true;;
+  *) # semgrep proper
+    "$bin" scan --config "$rules" \
+      --sarif --output="$out" \
+      --metrics=off --disable-version-check --quiet \
+      "${targets[@]}" >/dev/null 2>&1 || true;;
+esac
+
+# Adapter must always leave a valid SARIF behind for the merge step.
+[ -s "$out" ] || _empty_sarif
+arc_log "semgrep: scanned ${#targets[@]} file(s) via $bin"
+exit 0

@@ -14,20 +14,20 @@
 #   review-ledger.sh require <k1,k2,...>  # exit 0 if ALL stamped; else exit 2 (BLOCK)
 #   review-ledger.sh status               # print stamped kinds for HEAD
 #
-# Kinds: code security qa design docs
+# Kinds: scan code security qa design docs
 set -uo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 LEDGER_DIR="$ROOT/.claude/state/reviews"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'no-git')"
 LEDGER="$LEDGER_DIR/$SHA.txt"
-VALID_KINDS="code security qa design docs"
+VALID_KINDS="scan code security qa design docs"
 mkdir -p "$LEDGER_DIR"
 
 _is_valid() { case " $VALID_KINDS " in *" $1 "*) return 0;; *) return 1;; esac; }
 _cmd_for() {
   case "$1" in
-    code) echo "/arc-review";; security) echo "/arc-audit";;
+    scan) echo "arc-scan";; code) echo "/arc-review";; security) echo "/arc-audit";;
     qa) echo "/arc-qa";; design) echo "/arc-design";; docs) echo "/arc-docs";;
     *) echo "/arc-$1";;
   esac
