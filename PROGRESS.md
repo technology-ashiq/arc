@@ -5,26 +5,24 @@
 
 ## Now
 
-**Phase 01 BUILT — ready for CI + `/arc-phase-done 1`.** Branch `feat/phase-01-credibility`
-(7 commits). All 8 exit criteria met locally: block-by-default profiles, `/arc-review` code-stamp,
-cross-platform sync, hygiene, docs. **30 bats tests green** (13 scan + 11 profile + 6 sync),
-docs-drift dogfood passes, version-gate green. Decisions applied: default profile = `standard`,
-Playwright kept as fallback.
+**Phase 01 CLOSED ✅ (2026-07-09).** Block-by-default profiles live, CI green on both legs (PR #3).
+Next up: **Phase 02 — Gate engine v1** (`phases/phase-02-spec.md`, 2-week appetite). **Highest-risk
+phase after 0** (noise defense — pre-mortem #1: if the first scan dumps 400 findings and gates get
+flipped to warn, the moat dies). Delivers: `arc.gates.yaml` declarative gates + generic gate-runner,
+baseline (new-code-only blocking), LLM triage v1 (≥8/10 confidence, downgrade-only), suppression
+ledger with justification, and committed evidence bundles at phase-close.
 
-Remaining to close: push → CI green on both legs → `/arc-phase-done 1`. Appetite: part of one
-session vs 1-week cap — well under.
+Setup needed from user: **none (all local)**. Open thread: PR #3 (Phase 01) is green — merge → main
+before branching Phase 02.
 
-Open thread: PR #2 (Phase 00 close — tracker + graph) still unmerged; the Phase 01 branch stacks on
-it, so merge PR #2 → main first, then the Phase 01 PR shows only Phase 01 commits.
-
-Phase 00 (CLOSED ✅ 2026-07-09): `arc-scan` spine, 13 bats, CI matrix, VERSION/CHANGELOG + gate.
+Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene). Both CI-green on ubuntu + windows.
 
 ## Phases
 
 | Phase | Capability | Appetite | Status | Closed |
 |---|---|---|---|---|
 | 00 | Steel thread: arc-scan skeleton + CI on arc | 1 week | ✅ done | 2026-07-09 |
-| 01 | Credibility & hygiene: block-by-default, code-stamp, cross-platform sync | 1 week | ⬜ not started | |
+| 01 | Credibility & hygiene: block-by-default, code-stamp, cross-platform sync | 1 week | ✅ done | 2026-07-09 |
 | 02 | Gate engine v1: gates.yaml, baseline, suppression, evidence bundles | 2 weeks | ⬜ not started | |
 | 03 | Security pipeline: Trivy, trufflehog, CodeQL, RLS harness, ZAP | 1.5 weeks | ⬜ not started | |
 | 04 | QA pipeline: Stryker, Lighthouse CI, visual regression, schemathesis | 1.5 weeks | ⬜ not started | |
@@ -35,6 +33,15 @@ Phase 00 (CLOSED ✅ 2026-07-09): `arc-scan` spine, 13 bats, CI matrix, VERSION/
 
 ## Done log
 
+- **2026-07-09 · Phase 01 · Credibility & hygiene.** Shipped block-by-default via strictness
+  profiles (`arc-profile.sh`: starter/standard/strict, one `arc.profile` key switches coverage+docs+scan
+  as a set, per-gate + env overrides); `/arc-review` auto-stamps `code` on ship verdict; cross-platform
+  `sync-to-project.sh` (bash twin of .ps1); repo hygiene (5 write-probes removed+gitignored, agent-browser
+  SHIPPED, Playwright kept-as-fallback); docs (usermanual/README/how-it-works/CHANGELOG). **30 bats tests**
+  (13 scan + 11 profile + 6 sync), green **in CI on ubuntu + windows** (PR #3, run 29021894177, `1..30`).
+  Live demo: profile switches all gates; code-stamp gates ledger `require` (BLOCK exit 2 → PASS exit 0);
+  sync excludes personal/state. docs-drift dogfood exit 0. **Actual: part of one session vs 1-week
+  appetite — well under, no retro flag.** Decisions: default profile `standard`, Playwright kept.
 - **2026-07-09 · Phase 00 · Steel thread.** Shipped `arc-scan` spine (diff-scope → semgrep+gitleaks
   adapters → minimal-SARIF normalize/merge → threshold triage stub → review-ledger `scan` stamp),
   offline `arc-min` ruleset, `version-gate`. **13 bats tests** (degrade · normalize · merge · triage ·
