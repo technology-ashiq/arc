@@ -9,7 +9,7 @@ Run a deep security audit. Scope: **$ARGUMENTS** (default: `git diff main...HEAD
 1. **Invoke the `security-auditor` subagent explicitly** -- Task tool, `subagent_type: "security-auditor"`. It runs OWASP Top 10 + a STRIDE trust-boundary threat model with a concrete exploit scenario per finding. Do NOT fall back to general-purpose; if it is missing, STOP and tell me to sync the template.
 
 ## One owner per job
-This does NOT replace `/arc-review`. The `code-reviewer` agent still runs the scanners (semgrep/gitleaks/osv-scanner) + Pass-1 OWASP on **every** review. `/arc-audit` is the DEEP threat-model pass for security-sensitive diffs (auth, payments, data access) or on demand -- no duplication.
+This does NOT replace `/arc-review`. The `code-reviewer` agent still runs the scanners (semgrep/gitleaks/osv-scanner) + Pass-1 OWASP on **every** review. `/arc-audit` is the DEEP threat-model pass for security-sensitive diffs (auth, payments, data access) or on demand -- no duplication. The `security-auditor` starts from **Pass 0** = arc-scan's committed tool evidence (`arc-scan-summary.sh`), so it never re-runs the scanners; it spends its budget on the logic/threat-model gap the tools can't see.
 
 ## The arc twist -- findings can't be forgotten
 1. Archive the full report to `docs/security/YYYY-MM-DD-audit.md`.
