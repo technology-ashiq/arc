@@ -27,6 +27,13 @@ TC="$ARC_ROOT/.claude/scripts/toolchain-health.sh"
   [[ "$output" == *"install trivy"* ]]        # scoop/brew both match 'install trivy'
 }
 
+@test "toolcheck: lists codeql as an optional deep-SAST verifier" {
+  run bash "$TC"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"codeql"* ]]
+  [[ "$output" == *"Optional"* ]]              # codeql is optional (ADR-0004)
+}
+
 @test "toolcheck: --brief still emits the one-line summary" {
   run bash "$TC" --brief
   [ "$status" -eq 0 ]
