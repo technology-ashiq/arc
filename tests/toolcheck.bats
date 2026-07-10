@@ -34,6 +34,12 @@ TC="$ARC_ROOT/.claude/scripts/toolchain-health.sh"
   [[ "$output" == *"Optional"* ]]              # codeql is optional (ADR-0004)
 }
 
+@test "toolcheck: lists zap (DAST) among the security verifiers" {
+  run bash "$TC"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"zap"* ]]
+}
+
 @test "toolcheck: --brief still emits the one-line summary" {
   run bash "$TC" --brief
   [ "$status" -eq 0 ]
