@@ -51,7 +51,10 @@ fi
 
 if [ "$rt" = "docker" ]; then
   # CI-tier: whole-repo SCA from the pinned arc-tools image; SARIF to stdout.
-  arc_docker_scan "$out" trivy fs --scanners vuln --format sarif --no-progress --quiet /src
+  # --skip-db-update uses the DB baked into the image (never the network) so the
+  # image, not the run, fixes the DB version -> reproducible verdicts (ADR-0006).
+  arc_docker_scan "$out" trivy fs --scanners vuln --skip-db-update \
+    --format sarif --no-progress --quiet /src
   arc_log "trivy: scanned repo via docker ($ARC_DOCKER_IMAGE)"
   [ -s "$out" ] || _empty_sarif
   exit 0
