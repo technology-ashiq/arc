@@ -37,6 +37,15 @@ arc_gitleaks_bin() {
   else echo ""; fi
 }
 
+# trivy binary or empty (SCA: dependency/lockfile vulnerabilities, Phase 03).
+# ARC_TRIVY_BIN pins an explicit binary (empty result if it does not exist).
+arc_trivy_bin() {
+  if [ -n "${ARC_TRIVY_BIN:-}" ]; then
+    arc_have "$ARC_TRIVY_BIN" && echo "$ARC_TRIVY_BIN" || echo ""
+  elif arc_have trivy; then echo trivy
+  else echo ""; fi
+}
+
 # jq path or empty. Callers decide whether absence is fatal or a SKIP.
 arc_jq_bin() { arc_have jq && echo jq || echo ""; }
 
