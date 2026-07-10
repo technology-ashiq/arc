@@ -1,0 +1,232 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "arc-scan",
+          "informationUri": "https://github.com/technology-ashiq/arc"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/baseline.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/baseline.bats"
+                },
+                "region": {
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "540d4d16b8296869f0c326732847fc334bf0b6ff"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/suppress.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/suppress.bats"
+                },
+                "region": {
+                  "startLine": 63
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "74710d05728400a9a1e949fb8c38d9df843e6708"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/triage-llm.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/triage-llm.bats"
+                },
+                "region": {
+                  "startLine": 149
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "79dadf7f242e87dcb7d6c344c2abe3b122de84b4"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/arc-scan.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/arc-scan.bats"
+                },
+                "region": {
+                  "startLine": 47
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "a4e214153c8dde5c54e3902d7df4d080152b32de"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/arc-scan.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/arc-scan.bats"
+                },
+                "region": {
+                  "startLine": 73
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "aaed20bd333ca76fd48e50c2d8dfe06b4ae34447"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/arc-profile.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/arc-profile.bats"
+                },
+                "region": {
+                  "startLine": 82
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "ad6215f35f36e7edd4fd76cb0ec27adb980be8b0"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/arc-scan.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/arc-scan.bats"
+                },
+                "region": {
+                  "startLine": 148
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "d0a6174c191f002ebfd6b2378640c88305423261"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        },
+        {
+          "ruleId": "github-pat",
+          "level": "error",
+          "message": {
+            "text": "github-pat has detected secret for file C:/Users/ashiq/AppData/Local/Temp/tmp.aobLDv9A8V/tests/suppress.bats."
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tests/suppress.bats"
+                },
+                "region": {
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "partialFingerprints": {
+            "arcFingerprint": "dd315f9976538f05a513333cb1f3a92d5a9e71e5"
+          },
+          "properties": {
+            "tool": "gitleaks",
+            "new": true,
+            "suppressed": true
+          }
+        }
+      ]
+    }
+  ]
+}

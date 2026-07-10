@@ -1,0 +1,22 @@
+arc Phase 03 -- full bats self-test suite (18 files), 2026-07-11
+  arc-profile.bats      11  0 fail
+  arc-scan.bats         14  0 fail
+  arc-tools-image.bats  11  0 fail
+  baseline.bats          6  0 fail
+  codeql.bats            6  0 fail
+  evidence.bats          6  0 fail
+  gates.bats             9  0 fail
+  portability.bats       3  0 fail
+  rls.bats               5  0 fail
+  runtime.bats           7  0 fail
+  scan-summary.bats      4  0 fail
+  suppress.bats          5  0 fail
+  sync.bats              6  0 fail
+  toolcheck.bats         6  0 fail
+  triage-llm.bats       12  0 fail
+  trivy.bats             8  0 fail
+  trufflehog.bats        9  0 fail
+  zap.bats               5  0 fail
+  ------------------------------------
+  TOTAL: 133 tests, 0 failing
+Also green on 3-OS CI (ubuntu/windows/macos) + ci-tier (real arc-tools image build) -- PR #14.
