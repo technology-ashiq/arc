@@ -46,6 +46,15 @@ arc_trivy_bin() {
   else echo ""; fi
 }
 
+# trufflehog binary or empty (verified-secrets scan, Phase 03). ARC_TRUFFLEHOG_BIN
+# pins an explicit binary (empty result if it does not exist).
+arc_trufflehog_bin() {
+  if [ -n "${ARC_TRUFFLEHOG_BIN:-}" ]; then
+    arc_have "$ARC_TRUFFLEHOG_BIN" && echo "$ARC_TRUFFLEHOG_BIN" || echo ""
+  elif arc_have trufflehog; then echo trufflehog
+  else echo ""; fi
+}
+
 # jq path or empty. Callers decide whether absence is fatal or a SKIP.
 arc_jq_bin() { arc_have jq && echo jq || echo ""; }
 
