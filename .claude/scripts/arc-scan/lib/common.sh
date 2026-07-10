@@ -55,6 +55,15 @@ arc_trufflehog_bin() {
   else echo ""; fi
 }
 
+# codeql binary or empty (optional deep SAST, CI-tier, ADR-0004). ARC_CODEQL_BIN
+# pins an explicit binary (empty result if it does not exist).
+arc_codeql_bin() {
+  if [ -n "${ARC_CODEQL_BIN:-}" ]; then
+    arc_have "$ARC_CODEQL_BIN" && echo "$ARC_CODEQL_BIN" || echo ""
+  elif arc_have codeql; then echo codeql
+  else echo ""; fi
+}
+
 # jq path or empty. Callers decide whether absence is fatal or a SKIP.
 arc_jq_bin() { arc_have jq && echo jq || echo ""; }
 
