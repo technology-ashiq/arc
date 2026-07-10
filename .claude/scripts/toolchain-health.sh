@@ -65,6 +65,7 @@ emit_all(){
   if have trivy;      then R_OK "trivy"      "$(ver trivy) · SCA";              elif [ "$OS" = win ]; then R_MISS "trivy"      "scoop install trivy"      "dependency/lockfile CVEs (SCA) · CI tier via arc-tools image"; else R_MISS "trivy"      "brew install trivy"      "dependency/lockfile CVEs (SCA) · CI tier via arc-tools image"; fi
   if have trufflehog; then R_OK "trufflehog" "$(ver trufflehog) · verified secrets"; elif [ "$OS" = win ]; then R_MISS "trufflehog" "scoop install trufflehog" "verified live secrets (alongside gitleaks)"; else R_MISS "trufflehog" "brew install trufflehog" "verified live secrets (alongside gitleaks)"; fi
   if have codeql; then R_OK "codeql" "$(ver codeql) · deep SAST"; else R_OPT "codeql" "gh extension install github/gh-codeql" "optional deep SAST · CI tier only · semgrep is the spine (ADR-0004)"; fi
+  if have docker; then R_OK "zap (DAST)" "via docker · CI tier · set ARC_ZAP_TARGET"; else R_OPT "zap (DAST)" "install Docker Desktop" "docker-based DAST baseline · CI tier · needs a deploy URL"; fi
   if [ -f package.json ] && grep -q '"knip"' package.json 2>/dev/null; then R_OK "knip" "devDep · dead code"; else R_OPT "knip" "npm i -D knip" "dead-code detection"; fi
 
   sec "QA"

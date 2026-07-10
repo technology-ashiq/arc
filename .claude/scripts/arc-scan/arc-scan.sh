@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # arc-scan.sh -- the steel-thread spine (Phase 00).
-#   diff-scope -> adapters (semgrep, gitleaks, trivy, trufflehog, codeql) -> normalize -> SARIF merge
+#   diff-scope -> adapters (semgrep, gitleaks, trivy, trufflehog, codeql, zap) -> normalize -> SARIF merge
 #   -> triage stub -> review-ledger stamp.
 #
 # Every stage degrades loudly: a missing tool is SKIPPED (never silent), a
@@ -89,6 +89,9 @@ run_adapter() {
 # codeql self-gates on CI-tier + optionality (skips loudly in the hook tier or
 # when absent); register it whenever the binary is present.
 [ -n "$(arc_codeql_bin)" ]     && run_adapter codeql     || { skipped+=("codeql");     arc_skip "codeql"; }
+# zap (DAST) self-gates on target-url + CI-tier; register it only when a target
+# URL is configured (nothing to scan otherwise).
+[ -n "${ARC_ZAP_TARGET:-}" ]   && run_adapter zap        || { skipped+=("zap");        arc_skip "zap"; }
 # trivy resolves native->docker->skip inside the adapter; register it whenever a
 # runtime is reachable (native binary OR a docker image is set) so a missing
 # native trivy still runs via the CI image instead of being reported as skipped.
