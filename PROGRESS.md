@@ -5,23 +5,29 @@
 
 ## Now
 
-**Phase 02 CLOSED ✅ (2026-07-10).** Gate engine v1 shipped — `arc.gates.yaml` + generic gate-runner,
-baseline (new-code-only), suppression ledger, **LLM triage v1** (downgrade-only, fail-closed),
-per-adapter runtime fallback (native→docker→SKIPPED), committed evidence bundles, macOS CI +
-portability. Full suite **79/79 green on 3-OS CI** (PR #8, run 29054053282). Live demo passed every
-scenario (baseline / suppression / triage). First dogfooded evidence bundle committed + verified
-(`docs/evidence/phase-02/`, verdict=pass, 8 test-fixture secrets justified-suppressed). **The
-noise-defense moat (pre-mortem #1) holds.**
+**Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+**Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+secrets), **CodeQL** (optional CI-tier deep SAST), a **Supabase RLS harness** (anon-access gate nobody
+else has), and **ZAP** baseline DAST. Plus **security-auditor Pass-0** (consumes arc-scan evidence, no
+ad-hoc reruns) and full `/arc-toolcheck` coverage. Full suite **133/133 green on 3-OS CI** + `ci-tier`
+(real image build catches a live CVE) — PRs #10–#14. Live demos on **real infra**: RLS vs the live
+venturemind Supabase + ZAP vs the real Vercel deploy (`venturemind.vercel.app`, 49 findings). Combined
+**3-block demo**: vulnerable dep + leaked credential + missing RLS → 3 distinct blocks, correct
+fingerprints. Evidence bundle committed + verified (`docs/evidence/phase-03/`, verdict=pass).
 
-Next up: **Phase 03 — Security pipeline** (`phases/phase-03-spec.md`, 1.5-week appetite): Trivy,
-trufflehog, CodeQL, RLS harness, ZAP — plus the **pinned arc-tools docker image** (ADR-0006 amendment;
-the real backend for #9's docker rung, currently fake-tested) and wiring a docker triage backend.
+Carry-forward: the arc-tools image is version-pinned + reproducible (Dockerfile + Trivy 0.72.0 + baked
+DB; CI builds & validates it), but the registry **@sha256 digest pin** (GHCR push) is deferred —
+recorded in `docker/arc-tools/IMAGE`, needs a registry decision. Not blocking (version-pinning already
+delivers reproducible verdicts).
 
-Setup needed from user: **check `phases/phase-03-spec.md` "your-setup / pending"** — Phase 03 adds
-real security tools (some may need local install or CI secrets); the docker image build lands here.
+Next up: **Phase 04 — QA pipeline** (`phases/phase-04-spec.md`, 1.5-week appetite): Stryker mutation
+gate, Lighthouse CI budgets, visual regression, schemathesis.
 
-Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene) · Phase 02 (gate engine v1). All
-3-OS CI-green, evidence-backed.
+Setup needed from user: check `phases/phase-04-spec.md` "your-setup / pending". For live ZAP/RLS in CI
+later, a preview deploy URL + a CI Supabase service; GHCR creds if we wire the image digest pin.
+
+Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene) · Phase 02 (gate engine v1) ·
+Phase 03 (security pipeline). All 3-OS CI-green, evidence-backed.
 
 ## Phases
 
@@ -30,7 +36,7 @@ Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene) · Phase 02 
 | 00 | Steel thread: arc-scan skeleton + CI on arc | 1 week | ✅ done | 2026-07-09 |
 | 01 | Credibility & hygiene: block-by-default, code-stamp, cross-platform sync | 1 week | ✅ done | 2026-07-09 |
 | 02 | Gate engine v1: gates.yaml, baseline, suppression, evidence bundles | 2 weeks | ✅ done | 2026-07-10 |
-| 03 | Security pipeline: Trivy, trufflehog, CodeQL, RLS harness, ZAP | 1.5 weeks | ⬜ not started | |
+| 03 | Security pipeline: Trivy, trufflehog, CodeQL, RLS harness, ZAP | 1.5 weeks | ✅ done | 2026-07-11 |
 | 04 | QA pipeline: Stryker, Lighthouse CI, visual regression, schemathesis | 1.5 weeks | ⬜ not started | |
 | 05 | Phase ratchet + docs gate v2 | 1 week | ⬜ not started | |
 | 06 | Measured agent quality: eval corpus, retro→eval loop · **cut-line** | 2 weeks | ⬜ not started | |
@@ -39,6 +45,23 @@ Closed: Phase 00 (steel thread) · Phase 01 (credibility & hygiene) · Phase 02 
 
 ## Done log
 
+- **2026-07-11 · Phase 03 · Security pipeline.** The gate stopped running stubs and started running
+  real industry verifiers. Shipped: **Trivy** SCA adapter (dependency/lockfile CVEs, native→docker→
+  SKIPPED, baseline-aware) backed by a **pinned `arc-tools` docker image** (debian + Trivy 0.72.0 +
+  baked vuln DB, non-root, `/src` contract; a CI `ci-tier` job builds it and catches a live CVE);
+  **trufflehog** verified-secrets adapter (JSONL→SARIF, verified-only, never leaks the secret);
+  **CodeQL** optional CI-tier deep SAST (detect-or-SKIP + language detection, ADR-0004); **RLS harness**
+  (`rls-gate.sh` — every `public` table must have RLS or the anon role reaches it; generated per-table
+  anon assertions; wired as the 5th gate; `security-sensitive.md` updated); **ZAP** baseline DAST
+  (docker, CI-tier, risk→level so header noise never blocks); **security-auditor Pass-0** (consumes
+  `arc-scan-summary.sh` evidence instead of ad-hoc reruns); `/arc-toolcheck` covers every new tool.
+  **+54 bats tests → 133/133**, green on 3-OS CI + `ci-tier` (PRs #10–#14). Live demos on **real infra**:
+  RLS vs the live venturemind Supabase (pass, 5 tables) + a throwaway pg (block); ZAP vs the real Vercel
+  deploy `venturemind.vercel.app` (49 findings, 0 false blocks). Combined **3-block demo**: vulnerable
+  dep + leaked test credential + missing RLS → 3 distinct blocks with correct fingerprints. Evidence
+  bundle verified (`docs/evidence/phase-03/`). **Actual: ~1 session vs 1.5-week appetite — well under,
+  no retro flag.** Carry-forward: arc-tools image registry `@sha256` digest pin (GHCR push) deferred —
+  version-pinning already gives reproducible verdicts; needs a registry decision.
 - **2026-07-10 · Phase 02 · Gate engine v1.** The moat became a product: gates are declarative data
   (`arc.gates.yaml` + generic gate-runner, zero hardcoded gate logic in hooks) with the three noise
   defenses built in — **baseline** (new-code-only: `--baseline` freezes to `scan-baseline.jsonl`,
