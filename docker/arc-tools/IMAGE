@@ -1,0 +1,5 @@
+# arc-tools image pin (ADR-0006). CI records the built image's digest here
+# (e.g. ghcr.io/technology-ashiq/arc-tools@sha256:...) so the CI-tier scan is
+# byte-reproducible. Until a registry push is wired, the default local dev tag
+# below is used by `arc-tools-image.sh ref`. First non-comment line wins.
+arc-tools:dev

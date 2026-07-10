@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # arc-scan.sh -- the steel-thread spine (Phase 00).
-#   diff-scope -> adapters (semgrep, gitleaks) -> normalize -> SARIF merge
+#   diff-scope -> adapters (semgrep, gitleaks, trivy, trufflehog) -> normalize -> SARIF merge
 #   -> triage stub -> review-ledger stamp.
 #
 # Every stage degrades loudly: a missing tool is SKIPPED (never silent), a
@@ -83,8 +83,17 @@ run_adapter() {
   [ "$jq_ok" -eq 1 ] && [ -s "$native" ] && arc_sarif_normalize "$name" "$native" >> "$jsonl"
 }
 # Detect true skips (tool missing) up front for honest reporting.
-[ -n "$(arc_semgrep_bin)" ]  && run_adapter semgrep  || { skipped+=("semgrep");  arc_skip "semgrep"; }
-[ -n "$(arc_gitleaks_bin)" ] && run_adapter gitleaks || { skipped+=("gitleaks"); arc_skip "gitleaks"; }
+[ -n "$(arc_semgrep_bin)" ]    && run_adapter semgrep    || { skipped+=("semgrep");    arc_skip "semgrep"; }
+[ -n "$(arc_gitleaks_bin)" ]   && run_adapter gitleaks   || { skipped+=("gitleaks");   arc_skip "gitleaks"; }
+[ -n "$(arc_trufflehog_bin)" ] && run_adapter trufflehog || { skipped+=("trufflehog"); arc_skip "trufflehog"; }
+# trivy resolves native->docker->skip inside the adapter; register it whenever a
+# runtime is reachable (native binary OR a docker image is set) so a missing
+# native trivy still runs via the CI image instead of being reported as skipped.
+if [ -n "$(arc_trivy_bin)" ] || { command -v docker >/dev/null 2>&1 && [ -n "${ARC_DOCKER_IMAGE:-}" ]; }; then
+  run_adapter trivy
+else
+  skipped+=("trivy"); arc_skip "trivy"
+fi
 
 ran_csv="$(IFS=,; echo "${ran[*]:-}")"
 skipped_csv="$(IFS=,; echo "${skipped[*]:-}")"

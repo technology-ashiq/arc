@@ -62,6 +62,8 @@ emit_all(){
   else R_MISS "semgrep / opengrep" "pipx install semgrep" "SAST scan · or opengrep fork"; fi
   if have gitleaks;    then R_OK "gitleaks"    "$(ver gitleaks) · secrets"; elif [ "$OS" = win ]; then R_MISS "gitleaks"    "scoop install gitleaks"    "secret scan"; else R_MISS "gitleaks"    "brew install gitleaks"    "secret scan"; fi
   if have osv-scanner; then R_OK "osv-scanner" "$(ver osv-scanner) · CVEs"; elif [ "$OS" = win ]; then R_MISS "osv-scanner" "scoop install osv-scanner" "dependency CVEs"; else R_MISS "osv-scanner" "brew install osv-scanner" "dependency CVEs"; fi
+  if have trivy;      then R_OK "trivy"      "$(ver trivy) · SCA";              elif [ "$OS" = win ]; then R_MISS "trivy"      "scoop install trivy"      "dependency/lockfile CVEs (SCA) · CI tier via arc-tools image"; else R_MISS "trivy"      "brew install trivy"      "dependency/lockfile CVEs (SCA) · CI tier via arc-tools image"; fi
+  if have trufflehog; then R_OK "trufflehog" "$(ver trufflehog) · verified secrets"; elif [ "$OS" = win ]; then R_MISS "trufflehog" "scoop install trufflehog" "verified live secrets (alongside gitleaks)"; else R_MISS "trufflehog" "brew install trufflehog" "verified live secrets (alongside gitleaks)"; fi
   if [ -f package.json ] && grep -q '"knip"' package.json 2>/dev/null; then R_OK "knip" "devDep · dead code"; else R_OPT "knip" "npm i -D knip" "dead-code detection"; fi
 
   sec "QA"

@@ -94,3 +94,47 @@ jobs:
 
       - name: Run bats self-tests
         run: bats --print-output-on-failure tests/
+
+  # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
+  # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker
+  # rung against the REAL image -- a genuinely vulnerable dependency must be
+  # caught (the native rung + the fake-docker rung are covered by bats).
+  ci-tier:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build the arc-tools image
+        run: bash .claude/scripts/arc-tools-image.sh build
+
+      - name: Verify trivy runs inside the image
+        run: bash .claude/scripts/arc-tools-image.sh verify
+
+      - name: Trivy docker rung catches a real vulnerable dependency
+        run: |
+          set -euo pipefail
+          REF="$(bash .claude/scripts/arc-tools-image.sh ref)"
+          fx="$(mktemp -d)"
+          # PyYAML 5.1 -> CVE-2020-1747 (well-known, stable in the trivy DB).
+          printf 'PyYAML==5.1\n' > "$fx/requirements.txt"
+          # The image runs as non-root (uid 10001); mktemp -d is 0700, so make the
+          # mounted fixture world-readable or the container user can't read /src.
+          # (Real repo checkouts are already world-readable -- fixture-only fix.)
+          chmod -R a+rX "$fx"
+          out="$(mktemp)"
+          ARC_DOCKER_IMAGE="$REF" ARC_FORCE_RUNTIME=docker ROOT="$fx" \
+            bash .claude/scripts/arc-scan/adapters/trivy.sh /dev/null "$out"
+          n="$(jq '[.runs[].results[]?] | length' "$out")"
+          echo "trivy (real image) reported $n vulnerability finding(s)"
+          if [ "$n" -eq 0 ]; then
+            echo "::warning::0 findings -- mount/readability diagnostic:"
+            docker run --rm -v "$fx:/src:ro" "$REF" sh -c 'id; ls -la /src; cat /src/requirements.txt || echo CANNOT-READ-SRC' || true
+          fi
+          jq -r '.runs[].results[]?.ruleId' "$out" | sort -u | head
+          [ "$n" -gt 0 ] || { echo "expected >=1 finding from a vulnerable dep"; exit 1; }
