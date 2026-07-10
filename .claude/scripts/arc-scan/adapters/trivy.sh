@@ -19,7 +19,9 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh
 . "$HERE/../lib/common.sh"
 . "$HERE/../lib/runtime.sh"
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+# Respect an inherited ROOT (lets CI/tests point the docker rung at a specific
+# tree); default to the repo toplevel for normal in-repo scans.
+ROOT="${ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 scope="${1:?usage: trivy.sh <scope-file> <out-sarif>}"
 out="${2:?usage: trivy.sh <scope-file> <out-sarif>}"
