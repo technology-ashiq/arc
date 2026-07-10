@@ -38,3 +38,9 @@ gates:
     tier: hook
     runtime: native
     evidence: docs
+  - name: rls
+    check: bash .claude/scripts/rls-gate.sh
+    mode: block
+    tier: hook
+    runtime: native
+    evidence: .claude/state/rls/rls.json

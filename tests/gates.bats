@@ -8,10 +8,10 @@ RUNNER() { echo "$ARC_ROOT/.claude/scripts/arc-gates.sh"; }
 # Write a gates.yaml, echo its path.
 _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
 
-@test "parser: real arc.gates.yaml parses to 4 valid-JSON gates" {
+@test "parser: real arc.gates.yaml parses to 5 valid-JSON gates" {
   run bash "$(RUNNER)" --list --gates-file "$ARC_ROOT/arc.gates.yaml"
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 4 ]
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 5 ]
   # every line is valid JSON with a name + check
   printf '%s\n' "$output" | while IFS= read -r g; do
     echo "$g" | jq -e '.name != "" and .check != ""' >/dev/null
