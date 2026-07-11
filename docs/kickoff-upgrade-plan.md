@@ -127,3 +127,59 @@ the detail.
   PLAN, lint fails on an intentionally-broken PLAN, passes on a complete one.
 - Run `/arc-retro` on a fake session: exactly one line lands in retro-log.
 - `arc-kickoff.md` stays readable in one screen; CLAUDE.md untouched except nothing.
+
+---
+---
+
+# Round 2 — competitive-review borrows (GSD / Spec Kit / Superpowers / gstack)
+
+> Status: v1 AND Round 2 implemented & verified (2026-07-11). Round 2 = 4 small deltas from
+> comparing against GSD Core, Spec Kit, Superpowers, gstack, Harnessed. Same ground
+> rules: no structure change, no second planning universe, every addition is a gate or
+> a cap. Explicit rejects: Harnessed composition (immature — README promises 27
+> workflows, repo shows MVP docs), Spec Kit full clarify/analyze (LLM-judgment gates —
+> violates anti-slop rule #2), GSD `.planning` machinery (round 1 reject stands).
+
+## R2-1. Premise challenge — gstack borrow (conditional-MANDATORY, not optional)
+**File:** `.claude/commands/arc-kickoff.md`, step 2.
+If the goal is a new product / startup-risk build (someone must choose to adopt or pay):
+before the fork questions, ask ONE premise block — who needs this now · what's their
+status quo (the real competitor) · why would they switch · narrowest wedge that proves
+demand. Answers land in PLAN Goal/no-gos, weak answers become Assumptions-ledger entries
+with triggers. Internal tool / existing-system work: SKIP explicitly.
+Anti-slop: "optional" is banned wording — condition decides, not mood. One block, not an
+interview.
+
+## R2-2. Vague-acceptance check — Spec Kit borrow, deterministic subset only
+**File:** `.claude/scripts/kickoff-lint.mjs` (new check group `[vague]`).
+FAIL any REQ acceptance cell matching a ban-list: fast, easy, simple, properly, robust,
+seamless, user-friendly, intuitive, should work, good, better, nice, clean, smooth,
+performant, scalable (word-boundary, case-insensitive) — unless the cell also contains a
+digit or a verifiable token (`<`, `>`, `%`, `ms`, `s `, exact command/path). Same list as
+WARN-only on Assumption-trigger cells.
+Anti-slop: this is the deterministic 20% of Spec Kit's clarify gate; the judgment 80%
+stays in the kickoff conversation where it already lives.
+
+## R2-3. "Expected fail first" — Superpowers borrow
+**File:** `docs/templates/phase-spec-template.md`, Verification plan block.
+Add one field: **Expected failure first:** which test fails before the phase is built +
+the failure message we expect. Proves the test tests something (red → green), kills
+tests-written-after-the-fact theatre. Required for Phase 0–1 (same rule as the rest of
+the verification plan), coarse after.
+
+## R2-4. REQ quality wording — GSD borrow
+**File:** `docs/templates/PLAN-template.md`, Success-requirements comment.
+Add: each REQ must be **user-centric** (an outcome someone experiences, not a task),
+**atomic** (one outcome — "and" is a smell), **testable** (acceptance can fail).
+Comment-only; R2-2 enforces the testable half mechanically.
+
+## Implementation order
+1. R2-2 lint check + fixture tests (mutation: vague acceptance must FAIL, "< 5s" must pass)
+2. R2-3 + R2-4 template edits
+3. R2-1 kickoff step 2 edit (keep command within one screen)
+4. Rerun full lint fixture suite (broken / good / mutations)
+
+## Verification
+- Fixture with acceptance "works properly and fast" → FAIL [vague]; "PDF in < 5s" → pass.
+- Fixture with "seamless UX" + "< 200ms" in same cell → pass (verifiable token wins).
+- arc-kickoff.md still one screen; no new files, no new sections in PLAN.

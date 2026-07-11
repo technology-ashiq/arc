@@ -20,6 +20,8 @@
      "How we'll verify" is decided BEFORE any code — evidence over assertion. -->
 
 - **Test command:** (exact, e.g. `npm run test -- invoices`)
+- **Expected failure first:** (which test fails BEFORE this phase is built + the expected
+  failure message — proves the test tests something; red → green, no after-the-fact tests)
 - **Live demo scenario:** (steps + expected output, runnable by a human)
 - **Real-system check:** (what to inspect where, or "n/a — fakes only this phase")
 - **Expected evidence:** (what artifact proves it — test output, screenshot, DB row)

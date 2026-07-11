@@ -17,10 +17,15 @@ perfect one. In order:
    before any planning. Greenfield: delete that section.
 1. **Set the appetite first.** Ask my total time budget (Shape Up style) — a constraint,
    not an estimate. Write the kill criteria under it (50% burnt tripwire).
-2. **Clarify only at real forks — max 5 questions:** target user, core success, hard
-   constraint, brownfield/greenfield, deadline. Recommend a default for each. **Research
-   gate** — spawn the researcher agent ONLY for: current external API/library/version/
-   security claims · costly-to-reverse architecture · payment/auth/data/privacy/
+2. **Premise check** — new product / startup-risk build (someone must choose to adopt or
+   pay)? Then ONE block first, not an interview: who needs this now · their status quo
+   (the real competitor) · why they'd switch · narrowest wedge that proves demand.
+   Strong answers sharpen Goal/no-gos; weak answers become Assumptions-ledger entries
+   with triggers. Internal tool / existing-system work: skip, say so explicitly.
+   Then **clarify only at real forks — max 5 questions:** target user, core success,
+   hard constraint, brownfield/greenfield, deadline. Recommend a default for each.
+   **Research gate** — spawn the researcher agent ONLY for: current external API/library/
+   version/security claims · costly-to-reverse architecture · payment/auth/data/privacy/
    compliance · unknown domains. Everything else: decide without research. Findings land
    in the ADR (Evidence / Confidence / Rejected-because), never a separate file.
 3. **Record each resolved fork as an ADR** — `docs/adr/NNNN-title.md` per

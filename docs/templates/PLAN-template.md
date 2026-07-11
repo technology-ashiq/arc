@@ -7,10 +7,12 @@
 One sentence: who it's for + what it does + why they'd pay.
 
 ## Success requirements
-<!-- HARD CAP: 10 rows (small builds: 5). Acceptance must be measurable — a number, a
-     demo step, or a check that can fail. Every REQ maps to exactly ONE phase; every
-     phase (except 0) must serve ≥1 REQ. Unmapped REQ or goal-less phase = kickoff
-     incomplete (kickoff-lint enforces this). -->
+<!-- HARD CAP: 10 rows (small builds: 5). Each REQ must be: user-centric (an outcome
+     someone experiences, not a task), atomic (ONE outcome — "and" is a smell), and
+     testable (acceptance can fail: a number, a demo step, or a check). Vague acceptance
+     words (fast/easy/robust/seamless…) without a verifiable token fail kickoff-lint.
+     Every REQ maps to exactly ONE phase; every phase (except 0) must serve ≥1 REQ.
+     Unmapped REQ or goal-less phase = kickoff incomplete (lint enforces all of this). -->
 
 | REQ | User outcome | Measurable acceptance | Phase |
 |---|---|---|---|

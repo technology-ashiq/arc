@@ -76,6 +76,13 @@ for (const name of required) {
 }
 
 // ---------- 3. success requirements: cap 10, each maps to a phase ----------
+// Vague-language gate (Spec Kit borrow — deterministic subset only): ban-list words
+// fail UNLESS the cell also carries a verifiable token (digit, < > %, ms/sec, `cmd`).
+const VAGUE =
+  /\b(fast|quick(?:ly)?|easy|easily|simple|simply|properly|robust|seamless(?:ly)?|user-friendly|intuitive|should work|good|better|nice|nicely|clean|smooth(?:ly)?|performant|scalable|efficient(?:ly)?)\b/i;
+const VERIFIABLE = /[\d<>%]|\bms\b|\bsec(?:ond)?s?\b|`[^`]+`/;
+const isVague = (t) => VAGUE.test(t) && !VERIFIABLE.test(t);
+
 const reqRows = tableRows(section(secs, "success requirements"));
 const reqPhases = new Set();
 if (reqRows.length === 0) fail("reqs", "no REQ rows in Success requirements table");
@@ -87,8 +94,11 @@ for (const r of reqRows) {
   const m = phase.match(/\d+/);
   if (!m) fail("reqs", `${id} has no phase mapping`);
   else reqPhases.add(Number(m[0]));
-  if (!(r[2] || "").trim() || (r[2] || "").length < 8)
+  const acc = (r[2] || "").trim();
+  if (!acc || acc.length < 8)
     fail("reqs", `${id} acceptance criterion missing or not measurable`);
+  else if (isVague(acc))
+    fail("vague", `${id} acceptance "${acc.slice(0, 50)}" — vague word without a verifiable token (number, < > %, ms, or \`command\`). Make it falsifiable.`);
 }
 
 // ---------- 4. phases table: spec files exist, every phase >0 serves a REQ ----------
@@ -113,8 +123,11 @@ for (const p of reqPhases)
 const asmRows = tableRows(section(secs, "assumptions"));
 if (asmRows.length > 7) fail("assumptions", `${asmRows.length} entries — hard cap is 7`);
 asmRows.forEach((r, i) => {
-  if (!(r[1] || "").trim() || (r[1] || "").length < 8)
+  const trigger = (r[1] || "").trim();
+  if (!trigger || trigger.length < 8)
     fail("assumptions", `row ${i + 1} ("${(r[0] || "").slice(0, 40)}") has no falsification trigger — not an assumption, filler`);
+  else if (isVague(trigger))
+    warn("vague", `assumption trigger "${trigger.slice(0, 50)}" uses vague language — consider a verifiable token`);
 });
 
 // ---------- 6. pre-mortem: >=5 rows, each mitigated or accepted ----------
