@@ -15,7 +15,11 @@ What fork are we at, and why does it matter? Constraints in play (cost, time, sk
 
 ## Decision
 What we chose and the one reason that carried the most weight.
-(If the researcher agent ran: confidence level + key source.)
+
+<!-- ONLY when the researcher agent ran — delete this block otherwise. No empty headers. -->
+**Evidence:** key sources (links / doc versions checked)
+**Confidence:** high | medium | low
+**Rejected because:** one line per losing option — the disqualifier, not an essay.
 
 ## Consequences
 What becomes easier, what becomes harder, and what we'd revisit if this goes wrong.

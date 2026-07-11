@@ -174,15 +174,37 @@ Your-setup / pending (keys, accounts, infra):
 
 ## 9. Project kickoff checklist
 
-- [ ] Write `PLAN.md` — goal, architecture, key decisions, non-negotiables.
-- [ ] Critically review the plan; lock the hard decisions before coding.
-- [ ] Define phases by risk; Phase 0 = runnable skeleton with an offline/stub mode.
-- [ ] For each external dependency: interface + fake + real impl.
+Timebox: the whole kickoff = one session. Leftover open questions → Assumptions ledger
+(with falsification triggers), then proceed. A falsifiable plan beats a perfect one.
+
+- [ ] **Preflight**: existing PLAN/PROGRESS with content → ask "new or revise?", never
+      silently overwrite. Brownfield → codebase survey (Graphify → grep) into
+      `## Current state` first.
+- [ ] Appetite set (constraint, not estimate) + kill criteria (50% burnt tripwire,
+      appetite-burn tracked in `PROGRESS.md`).
+- [ ] Real forks clarified — max 5 questions, a recommended default each. Researcher
+      spawned ONLY for: current API/library/security claims, costly-to-reverse
+      architecture, payment/auth/data/compliance, unknown domains.
+- [ ] Every resolved fork → ADR (`docs/adr/NNNN-*.md`; Evidence/Confidence/Rejected
+      when researched).
+- [ ] Write `PLAN.md` — goal, **success requirements (REQ table, ≤10, each → exactly
+      one phase)**, architecture, ADR index, non-negotiables, no-gos, rabbit holes,
+      **assumptions ledger (≤7, trigger mandatory)**, **external dependencies
+      (interface + fake + real + contract test)**.
+- [ ] Pre-mortem seeded from `docs/retro-log.md` (past patterns are mandatory rows),
+      then top-5 causes each mitigated/accepted.
+- [ ] Define phases by risk; Phase 0 = steel thread on fakes (fake input → core flow →
+      output → deployed), contract tests green — no real APIs required.
+- [ ] Each phase spec includes its **Verification plan** (test command · demo scenario ·
+      real-system check · expected evidence) — detailed for Phase 0–1, coarse after.
 - [ ] All knobs in config/env; secrets in `.env` (gitignored) + `.env.example`.
 - [ ] Test harness + first tests; CI runs the offline suite on every push.
 - [ ] 3-layer tracker set up (`PLAN.md` / per-phase spec / `PROGRESS.md`).
 - [ ] Resilience baked in (retries, failover, cost cap, resume, alerts, clear errors).
 - [ ] README quickstart that actually runs offline in minutes ("10-minute onboarding" test).
+- [ ] **Lint gate**: `node .claude/scripts/kickoff-lint.mjs` passes — the script is the
+      gate, prose isn't. (Also rerun by `/arc-phase-done` to catch plan drift.)
+- [ ] STOP — show PLAN + phases, explicit approval before any product code.
 - [ ] Ship phase by phase; verify for real; confirm before moving on.
 
 ---
