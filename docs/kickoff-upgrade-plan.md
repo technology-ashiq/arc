@@ -253,4 +253,62 @@ catching it at phase close. Add the lint command to `allowed-tools`.
 ## Verification
 - All Round 1/2 fixtures still pass (5-column migration doesn't break good fixture).
 - Each Round 3 mutation behaves as listed above.
-- arc-
+- arc-change.md readable in one screen; no new files anywhere.
+
+---
+---
+
+# Round 4 — `/arc-resume` (Arc's answer to GSD context isolation)
+
+> Status: implemented & verified (2026-07-11, branch `feat-arc-resume-v2`). Trigger: resume is Arc's context weak spot vs GSD's per-phase fresh
+> context. Current command = 4-line basic reconstruction; it rebuilds *position* but not
+> *health* or *risk*. After Rounds 1–3 the plan carries machine-readable state (REQ
+> status, appetite burn, kill criteria, FIRED assumptions, lint) that resume completely
+> ignores. Same rules: ONE file changed (`arc-resume.md`), no new files, fixed-format
+> output — resume is a dashboard, not an essay.
+
+## R4-1. Deterministic health check first
+Before any summarising: run `node .claude/scripts/kickoff-lint.mjs` and `git status`
++ current branch. Drift that happened between sessions (or a mid-crash working tree,
+wrong branch, uncommitted files) surfaces BEFORE work resumes, not mid-Golden-Loop.
+Branch rule: if on `main` with pending build work, say so — work belongs on `feat/*`.
+
+## R4-2. State read widened (same files, more signal)
+Keep the current reads (PROGRESS `## Now`, `.claude/state/` snapshot, active phase spec)
+and add three PLAN.md reads that Rounds 1–3 made machine-parseable:
+- **Appetite position:** burn % vs kill criteria — "62% burnt, tripwire = Phase 2, Phase 2
+  not done → scope-cut conversation is DUE" is a resume-blocking flag, not a footnote.
+- **REQ scoreboard:** counts by status (validated / active / dropped) + the active
+  phase's own REQs with their acceptance criteria — the "why" of the current phase.
+- **FIRED assumptions:** any trigger marked FIRED that hasn't been routed through
+  `/arc-change` yet = unresolved risk, listed explicitly.
+
+## R4-3. Fixed 5-block output format (anti-slop cap)
+Resume replies in EXACTLY this shape, each block 1–3 lines, no prose padding:
+`POSITION` (phase, what's done) · `HEALTH` (lint pass/fail, git clean/dirty, branch) ·
+`SCOREBOARD` (REQ counts, appetite burn vs kill criteria) · `RISKS` (FIRED assumptions,
+overdue tripwire — "none" allowed) · `NEXT` (the one exact next action, from the phase
+spec's Verification plan / DoD). Then resume the Golden Loop. If HEALTH or RISKS is
+red, NEXT is fixing that — not feature work.
+
+## R4-4. allowed-tools update
+Add `Bash(node .claude/scripts/kickoff-lint.mjs:*)`, `Bash(git status)`, `Bash(git branch:*)`
+(current list: Read, Bash, Glob, Grep — Bash is already broad; narrow entries are
+documentation of intent).
+
+## Rejected for Round 4
+- Per-phase fresh-context automation (GSD auto mode) — identity change, human drives.
+- Writing a resume log/state file — resume READS state, never writes it.
+- Summarising the whole done-log — `## Now` + scoreboard is the point; history lives in git.
+
+## Implementation order
+1. `arc-resume.md` rewrite (one screen)
+2. Dry-run against a fixture repo (good fixture + a deliberately dirty one: lint-broken,
+   FIRED assumption, >50% burn) — confirm all 5 blocks populate correctly
+3. Commit on `feat-arc-resume-v2` (branch rule), no push
+
+## Verification
+- Fixture with healthy state → HEALTH green, NEXT = phase spec action.
+- Fixture with lint-broken plan → NEXT = fix drift, not feature work.
+- Fixture with FIRED assumption + 60% burn → both appear in RISKS.
+- Command stays one screen; no new files.
