@@ -183,3 +183,74 @@ Comment-only; R2-2 enforces the testable half mechanically.
 - Fixture with acceptance "works properly and fast" → FAIL [vague]; "PDF in < 5s" → pass.
 - Fixture with "seamless UX" + "< 200ms" in same cell → pass (verifiable token wins).
 - arc-kickoff.md still one screen; no new files, no new sections in PLAN.
+
+---
+---
+
+# Round 3 — `/arc-change` sync (fix the gap kickoff v2 created)
+
+> Status: implemented & verified (2026-07-11, branch `feat/arc-change-v2`). Trigger: kickoff v2 made the plan lint-enforced, but `/arc-change`
+> still mutates the plan WITHOUT respecting the new invariants — a mid-build "new
+> capability" creates a phase with no REQ, which then FAILS the drift check at
+> `/arc-phase-done`. Round 3 closes that loop + lands the GSD requirement-lifecycle
+> borrow where it belongs. Same rules: no new files, no new trackers, gates and caps only.
+
+## C1. REQ sync on scope change (the inconsistency fix — core)
+**File:** `.claude/commands/arc-change.md`, step 1 "New capability / scope".
+New phase NEVER ships without a REQ: add a REQ row (measurable acceptance — the vague
+gate applies) mapped to the new phase. REQ cap 10 is a forcing function, not an obstacle:
+table full → present the trade (drop/merge an existing REQ, or the change doesn't fit
+this cycle). Invariant stated in the command = invariant lint enforces: no phase without
+a REQ, no REQ without a phase.
+
+## C2. REQ status lifecycle (GSD borrow, Arc-weight)
+**Files:** `PLAN-template.md`, `kickoff-lint.mjs`, `arc-change.md`, `arc-phase-done.md`.
+REQ table gets a 5th column `status`: `active | validated | dropped` (fixed enum, nothing
+else). Kickoff creates rows as `active`. `/arc-phase-done` flips the closed phase's REQs
+to `validated`. `/arc-change` scope-cuts mark `dropped` — rows are NEVER deleted (the
+dropped row + date is the scope-cut history, no separate log file needed).
+Lint updates: status cell must be one of the 3 values (5-column table now expected) ·
+`dropped` rows exempt from phase-mapping checks · every phase must be served by ≥1
+active/validated REQ · cap 10 counts only active rows (dropped rows don't block new REQs).
+
+## C3. Assumption-trigger check
+**File:** `arc-change.md`, new sub-step in classification.
+Before classifying, scan the Assumptions ledger: is this change actually a trigger
+firing? If yes — mark the row (add "FIRED YYYY-MM-DD" to the trigger cell), and say
+what else that assumption was load-bearing for (other REQs/phases built on it get
+re-checked, ADRs premised on it get flagged). An assumption firing silently is how
+plans rot; this makes the ledger a live instrument instead of kickoff decoration.
+
+## C4. Appetite-burn context in the trade decision
+**File:** `arc-change.md`, step 2.
+"Check the appetite" upgraded from vibes to numbers: read PROGRESS.md's appetite-burn
+line + PLAN's kill criteria, state the position ("62% burnt, tripwire phase not done"),
+THEN propose the trade. If the change pushes past the kill-criteria tripwire, the
+scope-cut conversation is mandatory before the change proceeds — same rule
+`/arc-phase-done` step 7 enforces, referenced not duplicated.
+
+## C5. Lint gate before code
+**File:** `arc-change.md`, step 3→4 boundary.
+After the tracker update, before any code: run `node .claude/scripts/kickoff-lint.mjs`.
+The tracker mutation must leave the plan consistent — REQ mapped, spec file exists,
+status valid. Deterministic gate at the exact moment drift is introduced, instead of
+catching it at phase close. Add the lint command to `allowed-tools`.
+
+## Rejected for Round 3
+- Change-log file (PROGRESS done-log + dropped REQ rows already carry the history).
+- GSD-style requirement mutation workflow/state — enum column is the whole borrow.
+- Auto-classification of the change — human classifies, command routes.
+
+## Implementation order
+1. `kickoff-lint.mjs` — status column parsing + new invariants, mutation fixtures
+   (missing status → FAIL · bad enum → FAIL · dropped REQ w/o phase → pass ·
+   phase served only by dropped REQ → FAIL · 11 active REQs → FAIL, 8 active + 3 dropped → pass)
+2. `PLAN-template.md` — status column + comment
+3. `arc-change.md` — C1, C3, C4, C5 (stays one screen)
+4. `arc-phase-done.md` — validated flip in step 7
+5. Full fixture suite rerun (Rounds 1–3)
+
+## Verification
+- All Round 1/2 fixtures still pass (5-column migration doesn't break good fixture).
+- Each Round 3 mutation behaves as listed above.
+- arc-

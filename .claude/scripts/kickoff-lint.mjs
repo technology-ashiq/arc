@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * kickoff-lint — deterministic gate for /arc-kickoff (and drift check for /arc-phase-done).
+ * kickoff-lint — deterministic gate for /arc-kickoff, /arc-change and /arc-phase-done.
  * Zero deps. Exit 0 = plan structurally complete; exit 1 = named failures listed.
  * Usage: node .claude/scripts/kickoff-lint.mjs [repo-root]
  */
@@ -16,7 +16,6 @@ const warn = (check, msg) => warnings.push(`[${check}] ${msg}`);
 // ---------- helpers ----------
 const read = (p) => readFileSync(join(root, p), "utf8");
 
-/** Split a markdown doc into { heading: bodyText } (## level). */
 function sections(md) {
   const out = {};
   const parts = md.split(/^##\s+/m).slice(1);
@@ -28,24 +27,21 @@ function sections(md) {
   return out;
 }
 
-/** Find section body whose heading contains `needle` (case-insensitive). */
 function section(secs, needle) {
   const key = Object.keys(secs).find((h) => h.includes(needle.toLowerCase()));
   return key ? secs[key] : null;
 }
 
-/** Parse markdown table rows (skips header + divider). Returns array of cell arrays. */
 function tableRows(body) {
   if (!body) return [];
   return body
     .split("\n")
     .filter((l) => /^\s*\|/.test(l))
     .map((l) => l.trim().replace(/^\||\|$/g, "").split("|").map((c) => c.trim()))
-    .filter((cells) => !cells.every((c) => /^[-: ]*$/.test(c))) // divider rows
-    .slice(1); // header row
+    .filter((cells) => !cells.every((c) => /^[-: ]*$/.test(c)))
+    .slice(1);
 }
 
-/** Non-empty = has content beyond comments/blank lines/placeholder tokens. */
 function hasContent(body) {
   if (!body) return false;
   const stripped = body
@@ -75,21 +71,30 @@ for (const name of required) {
   else if (!hasContent(body)) fail("sections", `"## ${name}" is empty or placeholder`);
 }
 
-// ---------- 3. success requirements: cap 10, each maps to a phase ----------
-// Vague-language gate (Spec Kit borrow — deterministic subset only): ban-list words
-// fail UNLESS the cell also carries a verifiable token (digit, < > %, ms/sec, `cmd`).
+// ---------- 3. success requirements: status lifecycle, cap 10 active, phase mapping ----------
 const VAGUE =
   /\b(fast|quick(?:ly)?|easy|easily|simple|simply|properly|robust|seamless(?:ly)?|user-friendly|intuitive|should work|good|better|nice|nicely|clean|smooth(?:ly)?|performant|scalable|efficient(?:ly)?)\b/i;
 const VERIFIABLE = /[\d<>%]|\bms\b|\bsec(?:ond)?s?\b|`[^`]+`/;
 const isVague = (t) => VAGUE.test(t) && !VERIFIABLE.test(t);
 
+// Status lifecycle (GSD borrow, Arc-weight): active | validated | dropped.
+// dropped rows are scope-cut HISTORY — never deleted, exempt from mapping/acceptance
+// checks, and don't count toward the cap.
+const REQ_STATUS = new Set(["active", "validated", "dropped"]);
 const reqRows = tableRows(section(secs, "success requirements"));
 const reqPhases = new Set();
+let activeReqs = 0;
 if (reqRows.length === 0) fail("reqs", "no REQ rows in Success requirements table");
-if (reqRows.length > 10) fail("reqs", `${reqRows.length} REQs — hard cap is 10, cut scope`);
 for (const r of reqRows) {
   const id = r[0] || "?";
   if (!/^REQ-\d+/i.test(id)) fail("reqs", `row "${id}" — id must be REQ-NN`);
+  const status = (r[4] || "").trim().toLowerCase();
+  if (!REQ_STATUS.has(status)) {
+    fail("reqs", `${id} status "${(r[4] || "").trim() || "(empty)"}" — must be active | validated | dropped`);
+    continue;
+  }
+  if (status === "dropped") continue;
+  if (status === "active") activeReqs++;
   const phase = r[3] || "";
   const m = phase.match(/\d+/);
   if (!m) fail("reqs", `${id} has no phase mapping`);
@@ -100,8 +105,9 @@ for (const r of reqRows) {
   else if (isVague(acc))
     fail("vague", `${id} acceptance "${acc.slice(0, 50)}" — vague word without a verifiable token (number, < > %, ms, or \`command\`). Make it falsifiable.`);
 }
+if (activeReqs > 10) fail("reqs", `${activeReqs} active REQs — hard cap is 10, cut scope`);
 
-// ---------- 4. phases table: spec files exist, every phase >0 serves a REQ ----------
+// ---------- 4. phases: spec files exist, every phase >0 serves a live REQ ----------
 const phaseRows = tableRows(section(secs, "phases"));
 if (phaseRows.length === 0) fail("phases", "no rows in Phases table");
 const phaseNums = [];
@@ -113,7 +119,7 @@ for (const r of phaseRows) {
   const specPath = `phases/phase-${String(n).padStart(2, "0")}-spec.md`;
   if (!existsSync(join(root, specPath))) fail("phases", `${specPath} missing (phase ${n})`);
   if (n > 0 && !reqPhases.has(n))
-    fail("phases", `phase ${n} serves no REQ — phase without a goal`);
+    fail("phases", `phase ${n} serves no active/validated REQ — phase without a goal`);
 }
 if (!phaseNums.includes(0)) fail("phase0", "no Phase 0 (steel thread) in Phases table");
 for (const p of reqPhases)
@@ -138,7 +144,7 @@ pmRows.forEach((r, i) => {
     fail("pre-mortem", `row ${i + 1} has no mitigation / accepted-risk entry`);
 });
 
-// ---------- 7. external dependencies: interface + fake + real + contract test ----------
+// ---------- 7. external dependencies ----------
 const depRows = tableRows(section(secs, "external dependencies"));
 depRows.forEach((r) => {
   const dep = r[0] || "?";

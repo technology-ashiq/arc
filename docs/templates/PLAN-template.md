@@ -7,16 +7,19 @@
 One sentence: who it's for + what it does + why they'd pay.
 
 ## Success requirements
-<!-- HARD CAP: 10 rows (small builds: 5). Each REQ must be: user-centric (an outcome
-     someone experiences, not a task), atomic (ONE outcome — "and" is a smell), and
-     testable (acceptance can fail: a number, a demo step, or a check). Vague acceptance
-     words (fast/easy/robust/seamless…) without a verifiable token fail kickoff-lint.
-     Every REQ maps to exactly ONE phase; every phase (except 0) must serve ≥1 REQ.
-     Unmapped REQ or goal-less phase = kickoff incomplete (lint enforces all of this). -->
+<!-- HARD CAP: 10 ACTIVE rows (small builds: 5). Each REQ must be: user-centric (an
+     outcome someone experiences, not a task), atomic (ONE outcome — "and" is a smell),
+     and testable (acceptance can fail: a number, a demo step, or a check). Vague
+     acceptance words (fast/easy/robust/seamless…) without a verifiable token fail
+     kickoff-lint. Every REQ maps to exactly ONE phase; every phase (except 0) must
+     serve ≥1 active/validated REQ.
+     Status lifecycle: kickoff creates rows as `active` · /arc-phase-done flips the
+     closed phase's REQs to `validated` · /arc-change scope-cuts mark `dropped` — rows
+     are NEVER deleted, a dropped row IS the scope-cut history. Lint enforces all this. -->
 
-| REQ | User outcome | Measurable acceptance | Phase |
-|---|---|---|---|
-| REQ-01 | | | |
+| REQ | User outcome | Measurable acceptance | Phase | Status |
+|---|---|---|---|---|
+| REQ-01 | | | | active |
 
 ## Appetite
 Total time budget (e.g. "3 weeks part-time"). This is a **constraint, not an estimate**:
@@ -89,9 +92,4 @@ each with: mitigation now / accepted risk (explicitly chosen).
 
 ## Phases (risk-ordered)
 Phase 0 is ALWAYS a steel thread / walking skeleton: end-to-end through every
-integration on fakes, deployed. Then order by risk — the phase that could kill the
-project goes first. Each phase gets its own appetite.
-
-| Phase | Capability | Appetite | Spec |
-|---|---|---|---|
-| 0 | Steel thread on fakes | | `phases/phase-00-spec.md` |
+integration on fakes, deployed. 

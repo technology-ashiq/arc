@@ -30,7 +30,8 @@ If all pass:
    (scan verdict, review stamps, coverage, + a sha256 manifest). **A phase cannot close if
    `verify` fails** — the bundle is the tamper-evident proof the gates actually passed.
 7. Update `PROGRESS.md`: flip the phase row to ✅, add a done-log entry (what shipped +
-   test count + actual time vs appetite), and update the **appetite-burn line**. Check the
+   test count + actual time vs appetite), and update the **appetite-burn line**. In
+   PLAN.md's Success requirements, flip this phase's REQs from `active` to `validated`. Check the
    kill criteria: **if ≥50% of total appetite is burnt and the tripwire phase isn't done,
    STOP and force the scope-cut conversation now** — blown appetite gets flagged for
    /arc-retro. Then move `## Now` to the next phase.
