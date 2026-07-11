@@ -11,7 +11,18 @@
 - [ ] tests added & green
 - [ ] live demo run + output checked (qa-tester evidence for UI flows)
 - [ ] verified against the real system (if applicable)
+- [ ] contract tests green (Phase 0: against fakes; dep's own phase: against the real impl)
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+
+## Verification plan
+<!-- Written at kickoff for Phase 0–1 ONLY; later phases keep one coarse line and refine
+     it when the phase starts. Detailed verification for a far-future phase is fiction.
+     "How we'll verify" is decided BEFORE any code — evidence over assertion. -->
+
+- **Test command:** (exact, e.g. `npm run test -- invoices`)
+- **Live demo scenario:** (steps + expected output, runnable by a human)
+- **Real-system check:** (what to inspect where, or "n/a — fakes only this phase")
+- **Expected evidence:** (what artifact proves it — test output, screenshot, DB row)
 
 ## Rabbit holes in this phase
 Known traps + the decided detour.

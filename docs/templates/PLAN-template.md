@@ -6,9 +6,22 @@
 ## Goal
 One sentence: who it's for + what it does + why they'd pay.
 
+## Success requirements
+<!-- HARD CAP: 10 rows (small builds: 5). Acceptance must be measurable — a number, a
+     demo step, or a check that can fail. Every REQ maps to exactly ONE phase; every
+     phase (except 0) must serve ≥1 REQ. Unmapped REQ or goal-less phase = kickoff
+     incomplete (kickoff-lint enforces this). -->
+
+| REQ | User outcome | Measurable acceptance | Phase |
+|---|---|---|---|
+| REQ-01 | | | |
+
 ## Appetite
 Total time budget (e.g. "3 weeks part-time"). This is a **constraint, not an estimate**:
 if it's blown, we cut scope or kill a phase — never silently extend. No story points anywhere.
+
+**Kill criteria:** at 50% appetite burnt, if Phase <N> isn't done → mandatory scope-cut
+conversation. At 100% → cut or kill, never extend silently. (PROGRESS.md tracks the burn.)
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 <!-- Use C4 *vocabulary* (person / system / container) but plain `flowchart TB` + subgraphs.
@@ -43,9 +56,31 @@ What we are NOT building this cycle — the scope-creep firewall. Be specific.
 Known time-bombs spotted up front, and the decided detour around each
 (e.g. "OAuth providers → email-only for v1").
 
+## Assumptions ledger
+<!-- HARD CAP: 7. Rule: no falsification trigger → not an assumption, it's filler —
+     entry rejected. Unresolved kickoff questions land here (with triggers), then we
+     proceed: a falsifiable plan beats a perfect one. -->
+
+| Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
+|---|---|---|
+
+## External dependencies
+<!-- Real external APIs/services only — not every import. Feeds Phase 0: the contract
+     test suite must pass against the FAKE in Phase 0, and against the REAL impl before
+     the dep's phase closes. This is the fake-drift firewall. -->
+
+| Dep | Interface | Fake impl | Real impl | Contract test |
+|---|---|---|---|---|
+
 ## Pre-mortem (Klein)
 *It's 6 months later. The project shipped and failed.* The top 5 most likely causes,
 each with: mitigation now / accepted risk (explicitly chosen).
+<!-- Seed from docs/retro-log.md first: any past pattern matching this project type MUST
+     appear as a row. History beats imagination. -->
+
+## Current state
+<!-- BROWNFIELD ONLY (delete section for greenfield): what exists, what must not be
+     touched, key entry points. From the preflight codebase survey (Graphify → grep). -->
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|

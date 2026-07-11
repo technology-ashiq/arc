@@ -16,5 +16,9 @@ improve with every project* — this command is how.
    - repeated multi-step request → a new `.claude/commands/*.md`
    - safe-but-nagging command → `settings.json` allow rule
    - must ALWAYS/NEVER happen → a hook (highest bar — only if advisory failed)
-3. Show each proposal as a concrete diff. Wait for my approval, apply only what I approve.
-4. Nothing qualifies? Say so plainly — don't invent rules to look useful.
+3. **Feed the kickoff loop:** for each *recurring* finding (not one-offs), append ONE
+   line to `docs/retro-log.md`:
+   `YYYY-MM-DD | <project> | <pattern> | <prevention>`
+   One line, no essays — the next `/arc-kickoff` reads these to seed its pre-mortem.
+4. Show each proposal as a concrete diff. Wait for my approval, apply only what I approve.
+5. Nothing qualifies? Say so plainly — don't invent rules to look useful.
