@@ -83,12 +83,12 @@ each with: mitigation now / accepted risk (explicitly chosen).
 <!-- Seed from docs/retro-log.md first: any past pattern matching this project type MUST
      appear as a row. History beats imagination. -->
 
+| # | Failure cause | Mitigation or accepted |
+|---|---|---|
+
 ## Current state
 <!-- BROWNFIELD ONLY (delete section for greenfield): what exists, what must not be
      touched, key entry points. From the preflight codebase survey (Graphify → grep). -->
-
-| # | Failure cause | Mitigation or accepted |
-|---|---|---|
 
 ## Phases (risk-ordered)
 Phase 0 is ALWAYS a steel thread / walking skeleton: end-to-end through every
