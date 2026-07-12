@@ -2,6 +2,8 @@
 /**
  * kickoff-lint — deterministic gate for /arc-kickoff, /arc-change and /arc-phase-done.
  * Zero deps. Exit 0 = plan structurally complete; exit 1 = named failures listed.
+ * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
+ * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
  * Usage: node .claude/scripts/kickoff-lint.mjs [repo-root]
  */
 import { readFileSync, existsSync, readdirSync } from "node:fs";
@@ -48,7 +50,7 @@ function hasContent(body) {
     .replace(/<!--[\s\S]*?-->/g, "")
     .replace(/^\s*[|>\-#\s]*$/gm, "")
     .trim();
-  return stripped.length > 20 && !/TODO|TBD|<[a-z- ]+>/i.test(stripped.slice(0, 200));
+  return stripped.length > 20 && !/TODO|TBD|<[a-z- ]+>/i.test(stripped);
 }
 
 // ---------- 1. PLAN.md exists ----------
@@ -104,6 +106,8 @@ for (const r of reqRows) {
     fail("reqs", `${id} acceptance criterion missing or not measurable`);
   else if (isVague(acc))
     fail("vague", `${id} acceptance "${acc.slice(0, 50)}" — vague word without a verifiable token (number, < > %, ms, or \`command\`). Make it falsifiable.`);
+  else if (VAGUE.test(acc))
+    warn("vague", `${id} acceptance "${acc.slice(0, 50)}" — vague word next to a verifiable token; confirm the token actually measures the claim (heuristic).`);
 }
 if (activeReqs > 10) fail("reqs", `${activeReqs} active REQs — hard cap is 10, cut scope`);
 
@@ -172,7 +176,16 @@ if (adrRows.length === 0) fail("adr", "ADR index empty — no fork was resolved?
 if (!/kill|50%|scope-cut/i.test(section(secs, "appetite") || ""))
   fail("kill-criteria", "Appetite section has no kill criteria / 50% tripwire line");
 
-// ---------- 10. PROGRESS.md exists with ## Now ----------
+// ---------- 10. current state: if present, must not be placeholder ----------
+const curState = section(secs, "current state");
+if (curState !== null && !hasContent(curState))
+  warn("current-state", '"## Current state" present but empty/placeholder — fill it (brownfield) or delete the section (greenfield)');
+
+// ---------- 11. retro-log present (pre-mortem seed source) ----------
+if (!existsSync(join(root, "docs", "retro-log.md")))
+  warn("retro-log", "docs/retro-log.md missing — pre-mortem has no history to seed (copy docs/templates/retro-log.md)");
+
+// ---------- 12. PROGRESS.md exists with ## Now ----------
 if (!existsSync(join(root, "PROGRESS.md"))) fail("progress", "PROGRESS.md not found");
 else if (!/##\s*Now/i.test(read("PROGRESS.md"))) fail("progress", "PROGRESS.md missing '## Now' section");
 
