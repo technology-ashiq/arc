@@ -6,6 +6,11 @@
 ## Goal
 One sentence: who it's for + what it does + why they'd pay.
 
+## Current state
+<!-- BROWNFIELD ONLY (delete section for greenfield): what exists, what must not be
+     touched, key entry points. From the preflight codebase survey (Graphify → grep).
+     Sits here on purpose — read what exists BEFORE planning what to build. -->
+
 ## Success requirements
 <!-- HARD CAP: 10 ACTIVE rows (small builds: 5). Each REQ must be: user-centric (an
      outcome someone experiences, not a task), atomic (ONE outcome — "and" is a smell),
@@ -86,10 +91,7 @@ each with: mitigation now / accepted risk (explicitly chosen).
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
 
-## Current state
-<!-- BROWNFIELD ONLY (delete section for greenfield): what exists, what must not be
-     touched, key entry points. From the preflight codebase survey (Graphify → grep). -->
-
 ## Phases (risk-ordered)
-Phase 0 is ALWAYS a steel thread / walking skeleton: end-to-end through every
-integration on fakes, deployed. 
+Phase 0 is ALWAYS a steel thread / walking skeleton: the thinnest deployable end-to-end
+slice. Where external dependencies exist, it runs against their fakes with contract
+tests green; a dep-free build simply ships the slice. 
