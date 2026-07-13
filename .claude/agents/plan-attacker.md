@@ -17,8 +17,11 @@ You attack a drafted plan. You did not write it; you owe it nothing. Read `PLAN.
   the dependencies table.
 - **C — pre-mortem (Klein):** FIRST read `docs/retro-log.md` — any pattern matching this
   project type MUST appear as a finding (read as-is, never summarize; none matching →
-  state "no history to seed"). Then: it's 6 months later and this failed — the most likely
-  causes NOT already in the pre-mortem table.
+  state "no history to seed"). Match retro rows to this project by their `tags` column
+  (token overlap, not vibes). Seeded rows must BIND history to THIS plan: every row you
+  emit cites a REQ-NN / phase N / ADR number / dep name — the [pre-mortem-cite] gate
+  counts citations, and history applied to nothing fails it. Then: it's 6 months later
+  and this failed — the most likely causes NOT already in the pre-mortem table.
 
 ## Hard rules (findings violating these are dropped, not fixed)
 1. **Max 7 findings.** Rank by damage; drop the rest.

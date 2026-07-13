@@ -9,11 +9,34 @@
 
 One sentence: for solo/small teams building software with AI agents, arc becomes the layer that **proves** quality instead of asserting it — real industry tools verify every gate, evidence bundles commit to git, and agent quality is measured with planted-bug evals — the one axis where no stack (gstack included) competes.
 
+## Success requirements
+
+<!-- Backfilled 2026-07-13, kickoff v3.5 housekeeping-1: derived 1:1 from the Phases table
+     + done-log evidence — restated, not invented. Phases 00–03 closed → validated. -->
+
+| REQ | User outcome | Measurable acceptance | Phase | Status |
+|---|---|---|---|---|
+| REQ-01 | Builder gets block-by-default enforcement | `arc.profile` switch flips coverage+docs+scan as a set; ship verdict auto-stamps `code` in the ledger | 1 | validated |
+| REQ-02 | New findings block, old noise never does | new secret → exit 2 · baselined finding → exit 0 · unjustified suppression → exit 2 (`gates.bats` demo) | 2 | validated |
+| REQ-03 | Real verifiers gate security, not prose | 3-block demo: vulnerable dep + leaked credential + missing RLS → 3 distinct blocks, correct fingerprints | 3 | validated |
+| REQ-04 | Test quality is measured, not asserted | diff-scoped Stryker mutation score gates changed files; coverage % demoted to secondary (ADR-0005) | 4 | active |
+| REQ-05 | Gates ratchet up per phase | per-phase profiles in `arc.gates.yaml`; a threshold decrease without an ADR → exit 2 | 5 | active |
+| REQ-06 | Agent quality is a measured number | ≥30 planted bugs across ≥3 categories scored precision/recall before any public claim | 6 | active |
+| REQ-07 | Ship survives adversarial review | saboteur agent + cross-model quorum; critical disagreement → exit 2, blocks ship | 7 | active |
+| REQ-08 | arc installs as a plugin | package installs via 1 command; English docs site live | 8 | active |
+| REQ-09 | Deployment confidence is visible | 0–100 score + per-gate breakdown derived from evidence bundles; never itself a gate (ADR-0009) | 9 | active |
+| REQ-10 | Releases carry signed proof | `arc passport verify` → exit 0 untampered, exit 2 tampered (ADR-0010) | 10 | active |
+| REQ-11 | Escaped defects feed the gates | append-only `findings-ledger.jsonl`; each escaped defect maps to ≥1 new/changed gate rule (ADR-0011) | 11 | active |
+| REQ-12 | Evidence maps to controls | ≥1 ASVS control ID per gate on the passport (ADR-0012) | 12 | active |
+
 ## Appetite
 
 **10 weeks part-time, hard cap.** Phases 6–7 are the designated cut-line: if the appetite
 blows, they move to the next cycle — never silently extend. Phase 8 (distribution) is
 already next-cycle. No story points anywhere.
+
+**Kill criteria:** at 50% appetite burnt (5 weeks), if Phase 04 isn't closed → mandatory
+scope-cut conversation (designated cut-line: Phases 6–7). At 100% → cut or kill, never extend.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
@@ -85,6 +108,30 @@ flowchart TB
 - **ZAP on Windows** → docker-only, CI tier only. No local ZAP support attempted.
 - **Baseline file merge conflicts** → one JSONL line per finding fingerprint, append-only, sorted — merge-friendly by construction.
 - **Triage-agent over-blocking** → triage can only *downgrade* tool findings (FP filter), never invent new blocking findings; inventing = advisory note only.
+
+## Assumptions ledger
+
+<!-- Backfilled 2026-07-13 (v3.5 housekeeping-1) from recorded carry-forwards + rabbit holes. -->
+
+| Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
+|---|---|---|
+| Local hook tier stays under budget as tools grow | hook-tier scan > 30s on a loaded machine (Phase 02 measured 15.5s) | 4 |
+| Version-pinned arc-tools image is reproducible without a registry digest pin | two CI builds of the same VERSION produce differing scan verdicts | 4 |
+| Diff-scoped Stryker is fast enough to gate | mutation run on a ~500-line diff exceeds 10 min in CI | 4 |
+| Planted-bug corpus can reach the statistical floor | < 30 bugs or < 3 categories by Phase 06 close | 6 |
+
+## External dependencies
+
+<!-- Scanner tools are arc's external deps — every one is optional-degrade (SKIPPED, never
+     silent). Interface = the arc-scan adapter; fake = degrade path + fixtures; contract
+     test = the adapter's bats file. No remote APIs are hard dependencies. -->
+
+| Dep | Interface | Fake impl | Real impl | Contract test |
+|---|---|---|---|---|
+| Trivy (SCA) | arc-scan adapter | SKIPPED degrade + fixture SARIF | pinned arc-tools docker image | tests/trivy.bats |
+| trufflehog | arc-scan adapter | fixture JSONL | native binary → docker | tests/trufflehog.bats |
+| CodeQL | optional adapter (ADR-0004) | detect-or-SKIP | GitHub-hosted CI | tests/codeql.bats |
+| ZAP (DAST) | CI-tier adapter | risk→level fixtures | docker baseline scan | tests/zap.bats |
 
 ## Pre-mortem (Klein)
 

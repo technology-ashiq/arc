@@ -97,3 +97,80 @@ cost vs. kickoff frequency). The batch rejected these itself, on the right groun
   - **Deferred, not in Round 5:** B1#4a (sourced backfill, row-by-row approval) · B1#7 (ADR-0014 only).
 
 **Status: validated, awaiting Ashiq's go. Nothing implemented.**
+
+---
+
+## Reconciliation — 2026-07-13 · Batches 001+002 vs. `docs/kickoff-v3-plan.md` (implemented)
+
+Round 5 shipped as "the multi-agent planning engine" (4 new agents, 4 new lint groups, a bats
+suite). **Verified against the code, not the doc** — `kickoff-lint.mjs` (291 lines),
+`tests/kickoff-lint.bats` (10 tests), `arc-kickoff.md` (88 lines), `docs/retro-log.md`, and a live
+`node kickoff-lint.mjs .` run.
+
+### Landed
+
+| Item | v3 mechanism | Status |
+|---|---|---|
+| B1#0 / B2#1 — lint fixture tests | `tests/kickoff-lint.bats` + `tests/fixtures/kickoff-lint/good/` | **Partial — see gap G1** |
+| B1#1 — plan red-team | R5-2 `plan-attacker` ×3 (focus A/B/C) + R5-3 `plan-simulator` + R5-6 second opinion (L) | **Landed, superset.** Findings must mutate an existing section — stronger than the archive-file version proposed. Divergence: rejected findings die silently (anti-slop rule 6) instead of `fixed`/`accepted` — deliberate, accepted. |
+| B1 pre-mortem seeding | retro-log read moved into attacker focus-C charter | **Landed** (as a charter, not a gate — see G2) |
+| B2#4 — question taxonomy | R5-9 `question-planner` agent (fresh context, ≤5 ceiling) | **Superseded.** An agent picking high-information forks beats a category checklist. Close it. |
+| B1#7 — brain/adapter split | Parked to Round 7 (SaaS runway), explicitly | **Correctly deferred** |
+| B1#4a — retro backfill | Not attempted | **Correctly deferred** |
+
+### Still open — verified absent from the code
+
+| ID | Item | Evidence (2026-07-13) | Cost |
+|---|---|---|---|
+| **G1** | **Fixture suite covers only v3 checks** | All 10 bats tests target `[tier]` `[adr]` `[phase-deps]` `[spike]` + grandfather. **Zero mutations for Rounds 1–4 checks** — `[vague]`, REQ cap, missing trigger, unmapped REQ, pre-mortem < 5, deps columns, `[kill-criteria]`, `[progress]`. The original gap (Rounds 1–3 promised fixtures, never committed) is ~40% closed. Also: `bats` was not installed in the implementing sandbox — the suite was run *manually*, per the v3 notes. | Low |
+| **G2** | B1#2 — anti-generic pre-mortem lint | Lint §6 (lines 208–214) unchanged: row-count ≥ 5 + non-empty mitigation cell. Horoscope rows still pass. v3 hands pre-mortem quality entirely to an LLM charter (attacker focus C) with **no deterministic backstop**. | Low |
+| **G3** | B1#3 — appetite arithmetic | `[kill-criteria]` (line 264) is still the `/kill\|50%\|scope-cut/i` regex. Tier now *derives* from appetite, but nothing sums the phase appetites. "1 week, 6 phases" still passes. | Low |
+| **G4** | **B1#6b — REQ multi-phase bug** | **Line 118 is still `phase.match(/\d+/)`.** `"1, 3"` passes and silently maps to phase 1 only. This is a shipped bug in a gate, not a missing feature. | 3 lines |
+| **G5** | B1#6a — mermaid / `flowchart` / `C4Context` check | `grep -c "C4Context\|flowchart"` in the lint → **0**. Ban is still prose-only. | Low |
+| **G6** | **B2#2 — `[adr-wired]`** | v3's `[adr]` group checks Reversibility + Revisit trigger only. Nothing checks that a decision is *consumed*. arc's own ADRs **0001, 0002, 0003, 0008** are still referenced by zero phase specs. | ~15 lines |
+| **G7** | B2#3 — non-negotiables verbatim + drift gate | `grep -c "nonneg"` → 0. **v3 made this *more* important, not less:** `plan-simulator`'s charter is to read **only** `PLAN.md` + `phase-00-spec.md` — the context-isolated-executor argument is now baked into the design, and phase specs still carry no constraints. | Low |
+| **G8** | B1#5 — low-confidence ADR → assumption | v3's spike (R5-10) covers *high-impact* **and** low-confidence forks. A low-confidence ADR that isn't judged high-impact is still an orphan — no assumption row, no trigger. And "high-impact" is an LLM judgement, not a gate. The deterministic version was dropped. | Low |
+| **G9** | B2#5 — `## Current state` sub-headings | `codebase-surveyor` returns ≤30 lines, but lint §10 (line 269) is still WARN-only with no structure check. | Low |
+| **G10** | B2#6 — banned exits at STOP | Step 9 still reads "…before any product code". `/arc-change`, `/arc-ship` and friends remain unnamed — the door in the gate is still open. | 1 line |
+| **G11** | B2#7 — package legitimacy (slopsquatting) | Step 2c has no registry / official-docs verification requirement. arc is a security tool; this one is on-brand. | 1 sentence |
+| **G12** | B1#4b — retro-log `tags` column | R5-7 adds a *metrics* row (different format, different purpose). Tags never added; `docs/retro-log.md` still has **zero** pattern rows. n = 0, so the schema change is still free — and still not taken. | Low |
+
+### The pattern behind the gaps
+
+Round 5's brief was: *shape is enforced, now enforce substance — without LLM self-assessment.*
+v3's answer is **four agents**. Its four new lint groups (`[tier]` `[adr]` `[phase-deps]` `[spike]`)
+are all **structural again** — enum present, file exists, no cycles. Not one of them looks at
+content quality.
+
+So the original failure mode ("structurally perfect, substantively hollow") is now defended by
+**LLM charters**, while the doctrine line claims *"Scripts GATE (never LLM self-assessment)."*
+The `plan-simulator` blocker **count** is presented as deterministic — but the count is produced
+by an LLM. Fresh context ≠ self-assessment (the `/arc-second-opinion` argument, already accepted),
+so this is defensible — **but the doctrine as written overclaims, and it should say so.**
+
+G2–G8 are exactly the checks that would make the "scripts gate" claim true. Every one is cheap.
+They are the deterministic floor **under** the agents, not a replacement for them.
+
+### Live debt (from the v3 notes, confirmed)
+
+`node .claude/scripts/kickoff-lint.mjs .` on arc's own repo → **17 FAIL** (missing `## Success
+requirements`, `## Assumptions`, `## External dependencies`; 12 × phase-serves-no-REQ; no kill
+criteria) + 13 `[adr]` WARNs. arc's own plan cannot pass arc's own gate, and the next
+`/arc-phase-done` will block on it. G6 would add 4 more. **Fix or archive that PLAN deliberately —
+it's the loudest possible dogfood signal.** Also open from the v3 notes: `build-playbook.md` §9
+still documents the v2 flow.
+
+### Recommended next round (Round 5.5 — "make the gates real")
+
+Appetite: **1 day.** Kill criterion: if it isn't done in a day, the deterministic floor isn't the
+problem — the agents are.
+
+1. **G4** — the multi-phase bug (3 lines, it's live).
+2. **G1** — mutation fixtures for the Rounds 1–4 checks; install `bats` and actually run the suite.
+3. **G6, G2, G3, G5, G8** — the deterministic-floor checks, each with its fixture.
+4. **G10, G11** — two lines of command text.
+5. **G7** — verbatim non-negotiables **with** the drift gate (`[nonneg-drift]`), or not at all.
+6. **G9, G12** — structure check + retro-log `tags` while n = 0.
+7. Fix or archive arc's own PLAN.md; sync `build-playbook.md` §9.
+
+**Status: reconciled. Nothing implemented.**

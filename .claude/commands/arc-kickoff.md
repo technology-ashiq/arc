@@ -41,7 +41,10 @@ perfect one. In order:
    unknown domains. A well-known stable API with an established integration pattern does
    NOT qualify by domain label alone (payments/auth/data included). Qualifying forks ≥ 2 →
    spawn researchers **in parallel** (max 4, one fork per charter). Findings land in the
-   ADR (Evidence / Confidence / Rejected-because), never a separate file.
+   ADR (Evidence / Confidence / Rejected-because), never a separate file. Any package or
+   library a researcher cites must be VERIFIED to exist (registry entry + official docs),
+   verification recorded on the Evidence line — hallucinated package names are a live
+   supply-chain vector (slopsquatting).
    Still high-impact + low-confidence after research → **spike**: set the ADR status to
    `DEFERRED — spike scheduled` and put the spike task (question · timebox ≤ ½ day ·
    expected evidence · the ADR number) at the top of `phases/phase-00-spec.md`. Spike code
@@ -85,4 +88,5 @@ perfect one. In order:
    Evidence claims.
 9. **STOP.** Show me PLAN.md + the phase list + a one-screen summary (tier · active REQ
    count · top-3 pre-mortem risks · one-way doors decided · no-gos) and wait for explicit
-   confirmation before any product code.
+   confirmation. Until that approval: no product code, no `/arc-change`, no other
+   command — STOP means stop.

@@ -16,10 +16,13 @@ improve with every project* — this command is how.
    - repeated multi-step request → a new `.claude/commands/*.md`
    - safe-but-nagging command → `settings.json` allow rule
    - must ALWAYS/NEVER happen → a hook (highest bar — only if advisory failed)
+   - a vague/weasel word that escaped kickoff-lint → add it to the `VAGUE` regex in
+     `.claude/scripts/kickoff-lint.mjs` (the ban-list must compound, not ossify)
 3. **Feed the kickoff loop:** for each *recurring* finding (not one-offs), append ONE
    line to `docs/retro-log.md`:
-   `YYYY-MM-DD | <project> | <pattern> | <prevention>`
-   One line, no essays — the next `/arc-kickoff` reads these to seed its pre-mortem.
+   `YYYY-MM-DD | <project> | <pattern> | <prevention> | <tags>`
+   (tags = lowercase tokens like `deploy,ci,scope` — plan-attacker focus C matches history
+   to a new project by tag-token overlap, not vibes.) One line, no essays — the next `/arc-kickoff` reads these to seed its pre-mortem.
 4. **Scoreboard row (project retro / final phase only):** append the metrics row to
    `docs/retro-log.md`:
    `YYYY-MM-DD | <project> | <tier> | rework <reopened>/<closed> | amendments <n> | FIRED <n>/<total> | burn <actual %> | sim-blockers-r1 <n> | t-to-phase0 <days>`

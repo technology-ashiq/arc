@@ -1,6 +1,6 @@
 # Phase 01 — Real DB + health
 
-**Goal (one line):** swap fake DB for Postgres; add `/health` with build sha.
+**Goal (one line):** swap fake DB for Postgres (ADR 0001); add `/health` with build sha.
 **Appetite:** 3 days
 **Depends on:** phase-00
 
@@ -20,3 +20,9 @@ Auth, billing.
 
 ## Your-setup / pending
 Postgres connection string.
+
+## Non-negotiables (verbatim from PLAN)
+
+- Tests per feature — no untested code merges
+- No secrets in code — env only
+- CI green before merge

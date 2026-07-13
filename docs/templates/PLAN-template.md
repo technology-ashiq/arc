@@ -76,7 +76,11 @@ Known time-bombs spotted up front, and the decided detour around each
 ## Assumptions ledger
 <!-- HARD CAP: 7. Rule: no falsification trigger → not an assumption, it's filler —
      entry rejected. Unresolved kickoff questions land here (with triggers), then we
-     proceed: a falsifiable plan beats a perfect one. -->
+     proceed: a falsifiable plan beats a perfect one.
+     Every ADR with `Confidence: low` MUST have a row here citing that ADR's number
+     (lint [adr-confidence]). Enough low-confidence decisions will blow the cap — that is
+     a FEATURE, not a bug: research it, spike it, or accept it explicitly. `medium` stays
+     unconsumed on purpose. -->
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|

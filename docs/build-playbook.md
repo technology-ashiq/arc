@@ -177,34 +177,51 @@ Your-setup / pending (keys, accounts, infra):
 Timebox: the whole kickoff = one session. Leftover open questions → Assumptions ledger
 (with falsification triggers), then proceed. A falsifiable plan beats a perfect one.
 
+Doctrine (v3): **anchored creation · unanchored verification · deterministic gates** — the
+main session writes, fresh agents attack, scripts decide. Full spec: `docs/kickoff-v3-plan.md`
+(+ `docs/kickoff-v3.5-plan.md` for the substance-floor checks).
+
 - [ ] **Preflight**: existing PLAN/PROGRESS with content → ask "new or revise?", never
-      silently overwrite. Brownfield → codebase survey (Graphify → grep) into
-      `## Current state` first.
-- [ ] Appetite set (constraint, not estimate) + kill criteria (50% burnt tripwire,
-      appetite-burn tracked in `PROGRESS.md`).
-- [ ] Real forks clarified — max 5 questions, a recommended default each. Researcher
-      spawned ONLY for: current API/library/security claims, costly-to-reverse
-      architecture, payment/auth/data/compliance, unknown domains.
-- [ ] Every resolved fork → ADR (`docs/adr/NNNN-*.md`; Evidence/Confidence/Rejected
-      when researched).
-- [ ] Write `PLAN.md` — goal, **success requirements (REQ table, ≤10, each → exactly
-      one phase)**, architecture, ADR index, non-negotiables, no-gos, rabbit holes,
-      **assumptions ledger (≤7, trigger mandatory)**, **external dependencies
-      (interface + fake + real + contract test)**.
-- [ ] Pre-mortem seeded from `docs/retro-log.md` (past patterns are mandatory rows),
-      then top-5 causes each mitigated/accepted.
-- [ ] Define phases by risk; Phase 0 = steel thread on fakes (fake input → core flow →
-      output → deployed), contract tests green — no real APIs required.
-- [ ] Each phase spec includes its **Verification plan** (test command · demo scenario ·
-      real-system check · expected evidence) — detailed for Phase 0–1, coarse after.
+      silently overwrite. Brownfield → spawn **codebase-surveyor** (parallel with the
+      appetite step); its ≤30-line block becomes `## Current state`.
+- [ ] Appetite set (constraint, not estimate) + kill criteria (50% burnt tripwire) +
+      **tier derived from the number** (S ≤ 3d · M ≤ 3w · L > 3w) written under Appetite —
+      tier sets REQ cap, question cap, panel size, simulation & second-opinion.
+- [ ] Forks come from the **question-planner** agent (≤5; S: ≤3), a recommended default
+      each. **Two-way doors are auto-decided** — only one-way doors reach the human.
+      Researchers spawned ONLY for: current API/library/security claims, costly-to-reverse
+      architecture, payment/auth/data/compliance, unknown domains — **in parallel** (max 4)
+      when ≥2 forks qualify. Cited packages verified to exist (registry + official docs).
+      Still high-impact + low-confidence → **spike** (ADR `DEFERRED`, task atop phase-00
+      spec, code quarantined; blocks Phase-0 close, not the STOP).
+- [ ] Every resolved fork → ADR (`docs/adr/NNNN-*.md`; Evidence/Confidence/Rejected when
+      researched) + **Reversibility** (one-way | two-way) + revisit trigger for one-way.
+- [ ] Write `PLAN.md` — goal, **success requirements (REQ table, tier cap, each → exactly
+      one phase)**, architecture (mermaid `flowchart`, no C4Context), ADR index,
+      non-negotiables, no-gos, rabbit holes, **assumptions ledger (≤7, trigger mandatory;
+      low-confidence ADRs must have a row)**, **external dependencies (interface + fake +
+      real + contract test)**.
+- [ ] **Attack panel** (the pre-mortem lives here): plan-attacker ×3 — A edge/feasibility ·
+      B scope/hidden-deps · C pre-mortem seeded from `docs/retro-log.md` by tag overlap,
+      every row citing a REQ/phase/ADR/dep (S-tier: one merged A+C run). Findings land as
+      exact plan mutations or die silently; caps hold.
+- [ ] Define phases by risk; Phase 0 = steel thread on fakes, contract tests green — no
+      real APIs. Each spec: **Depends on** line (no cycles), **Verification plan** (detailed
+      Phase 0–1, coarse after), **Non-negotiables block verbatim from PLAN** (generated,
+      resynced by `/arc-change`, drift-gated).
 - [ ] All knobs in config/env; secrets in `.env` (gitignored) + `.env.example`.
 - [ ] Test harness + first tests; CI runs the offline suite on every push.
 - [ ] 3-layer tracker set up (`PLAN.md` / per-phase spec / `PROGRESS.md`).
 - [ ] Resilience baked in (retries, failover, cost cap, resume, alerts, clear errors).
 - [ ] README quickstart that actually runs offline in minutes ("10-minute onboarding" test).
 - [ ] **Lint gate**: `node .claude/scripts/kickoff-lint.mjs` passes — the script is the
-      gate, prose isn't. (Also rerun by `/arc-phase-done` to catch plan drift.)
-- [ ] STOP — show PLAN + phases, explicit approval before any product code.
+      gate, prose isn't. v3.5 substance groups run WARN-first until a retro promotes them.
+      (Also rerun by `/arc-change` and `/arc-phase-done` to catch plan drift.)
+- [ ] **Simulation gate (M/L)**: plan-simulator reads ONLY PLAN + phase-00 spec; blocker
+      count = 0 to pass (fix → one respawn → else human call). **L only**: cross-model
+      second opinion on the plan + researcher re-verifies top-3 load-bearing claims.
+- [ ] STOP — show PLAN + phases + one-screen summary, explicit approval. Until approval:
+      no product code, no `/arc-change`, no other command.
 - [ ] Ship phase by phase; verify for real; confirm before moving on.
 
 ---

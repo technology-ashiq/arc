@@ -37,3 +37,12 @@ Deferred to which phase.
 
 ## Your-setup / pending
 Keys, accounts, infra the human must provide.
+
+## Non-negotiables (verbatim from PLAN)
+
+<!-- COPY PLAN's ## Non-negotiables bullets here verbatim — context-isolated executors
+     (plan-simulator, /arc-resume, future subagents) read THIS file, not PLAN. The copy is
+     GENERATED, never hand-edited: /arc-change resyncs every spec when PLAN's bullets
+     change, and kickoff-lint [nonneg-drift] fails any copy that drifts. A stale copy lies. -->
+
+- <paste PLAN bullets verbatim>

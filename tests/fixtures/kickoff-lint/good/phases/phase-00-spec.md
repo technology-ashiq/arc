@@ -25,3 +25,9 @@ Real DB (phase 1).
 
 ## Your-setup / pending
 Hosting account token.
+
+## Non-negotiables (verbatim from PLAN)
+
+- Tests per feature — no untested code merges
+- No secrets in code — env only
+- CI green before merge

@@ -31,7 +31,10 @@ flowchart TB
 | 0001 | Postgres over SQLite | accepted |
 
 ## Non-negotiables
-Tests per feature, no secrets in code, CI green before merge — the quality bar never drops.
+
+- Tests per feature — no untested code merges
+- No secrets in code — env only
+- CI green before merge
 
 ## No-gos (explicitly out of scope)
 No auth, no billing, no admin UI this cycle — single public endpoint only.
@@ -56,10 +59,10 @@ Custom domain + TLS automation → use platform default domain for v1, revisit p
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
 | 1 | Deploy pipeline breaks late | Phase 0 deploys day one — steel thread first |
-| 2 | DB free tier throttles | Trigger in assumptions ledger, fallback plan named |
-| 3 | Scope creep past no-gos | /arc-change routing is mandatory, REQ cap enforced |
-| 4 | Appetite blown silently | Burn line + 50% tripwire in PROGRESS |
-| 5 | Contract tests drift from real impl | Real-impl pass required before phase close |
+| 2 | Postgres free tier throttles | Assumptions-ledger trigger covers it; ADR 0001 names the fallback |
+| 3 | Scope creep past no-gos | /arc-change routing is mandatory; REQ-01/REQ-02 acceptance stays the contract |
+| 4 | Appetite blown silently | Burn line + 50% tripwire in PROGRESS; phase 1 is the tripwire |
+| 5 | Contract tests drift from real impl | Real-impl pass required before phase 1 closes |
 
 ## Phases (risk-ordered)
 

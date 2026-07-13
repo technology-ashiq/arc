@@ -1,5 +1,9 @@
 # Kickoff v3 Plan — Round 5: The Multi-Agent Planning Engine
 
+> **Status: implemented & verified (2026-07-13).** Changes are in the working tree,
+> uncommitted — create `feat/kickoff-v3` before committing (Ashiq merges via PR).
+> Fixture suite: 10/10 mutations behave as specified (see Implementation notes at the end).
+>
 > Goal: make `/arc-kickoff` the world's best planning command — **provably, not rhetorically**.
 > Continues `docs/kickoff-upgrade-plan.md` (Rounds 1–4, implemented & verified 2026-07-11).
 > Kept as a separate file so no tracked file is modified outside a feat branch — merge or
@@ -26,6 +30,10 @@ executor simulation, decision reversibility, adaptive depth, and a measurement l
   research, attack, simulate. Rationale: anchoring bias — the mind that wrote the plan cannot
   attack it, and asks questions that confirm its own assumptions.
 - Scripts **GATE** (never LLM self-assessment): kickoff-lint, blocker counts, enum checks.
+  Honesty note (v3.5 housekeeping-3): the plan-simulator's blocker COUNT is produced by an
+  LLM — it is legitimate because the context is **fresh** (same principle as
+  `/arc-second-opinion`), not because it is deterministic. The deterministic substance
+  floor underneath the agents is what `kickoff-v3.5-plan.md` adds.
 - **Never-agent list (permanent):** lint (script forever) · STOP (human forever) · appetite (human forever).
 - Agent outputs NEVER become report files — every finding must land as a **mutation of an existing
   artifact section** (pre-mortem row, assumption entry, REQ cell, rabbit hole, ADR field) or be dropped.
@@ -267,3 +275,33 @@ Risk-first ordering stays the human call; the lines make violations visible and 
 - **Proof claim (earned later):** the R5-7 scoreboard across the next 2–3 builds, then the
   Round-6 benchmark harness. Evidence over assertion — the title is earned by the scoreboard,
   not by this document.
+
+---
+
+## Implementation notes (2026-07-13 — deviations & follow-ups)
+
+**Deviations from the spec above (all deliberate):**
+- Check group renamed `[deps]` → **`[phase-deps]`** — `[deps]` already belongs to the
+  external-dependencies table check (Rounds 1–4); reusing it would have muddled failures.
+- **Grandfather rule added** (not in the spec): lint treats a plan as v3 only when PLAN.md
+  has a `**Tier:**` line. Pre-v3 plans get WARNs for the new groups instead of FAILs —
+  without this, the repo's own live PLAN.md (and any in-flight build) would hard-fail
+  `/arc-phase-done`'s drift check the moment Round 5 landed. New kickoffs always write the
+  Tier line, so every new plan is fully strict.
+- `arc-kickoff.md` is 88 lines — slightly past "one screen"; accepted, the panel/simulation
+  steps carry real procedure. Detail still lives here + templates + agent charters.
+
+**Verified (mutation fixtures, `tests/fixtures/kickoff-lint/good/` + `tests/kickoff-lint.bats`):**
+good v3 plan passes · S-tier 6 REQs → FAIL [tier] · Tier placeholder → FAIL [tier] ·
+missing Reversibility → FAIL [adr] · one-way without trigger → FAIL [adr] · dep self-cycle →
+FAIL [phase-deps] · nonexistent dep → FAIL [phase-deps] · DEFERRED without spike → FAIL
+[spike] · DEFERRED with referenced spike → pass · pre-v3 plan → pass with WARNs.
+(bats not present in the implementation sandbox — suite executed manually, 10/10; the .bats
+file runs under the repo's existing bats setup.)
+
+**Known follow-ups (not done, on purpose):**
+1. The repo's own live PLAN.md pre-dates Round 1 discipline and fails 17 OLD checks
+   ([phases] REQ-mapping, [kill-criteria]) — pre-existing, untouched. Next
+   `/arc-phase-done` will block on it; fix or archive that plan deliberately.
+2. `docs/build-playbook.md` §9 still describes the v2 kickoff flow — sync it (was not in
+   this round's implementation order; route via `/arc-change` or fold into Round 6).

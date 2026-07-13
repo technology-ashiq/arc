@@ -25,7 +25,10 @@ What fork are we at, and why does it matter? Constraints in play (cost, time, sk
 ## Decision
 What we chose and the one reason that carried the most weight.
 
-<!-- ONLY when the researcher agent ran — delete this block otherwise. No empty headers. -->
+<!-- ONLY when the researcher agent ran — delete this block otherwise. No empty headers.
+     Any package/library cited here must be verified to EXIST (registry entry + official
+     docs) and that verification recorded on the Evidence line — hallucinated package
+     names are a live supply-chain vector (slopsquatting). -->
 **Evidence:** key sources (links / doc versions checked)
 **Confidence:** high | medium | low
 **Rejected because:** one line per losing option — the disqualifier, not an essay.
