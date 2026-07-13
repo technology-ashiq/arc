@@ -1,0 +1,5 @@
+A=arc
+B=superpowers
+C=raw
+D=gstack
+E=gsd

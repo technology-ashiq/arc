@@ -1,0 +1,11 @@
+{
+  "plan_quality": 9,
+  "risk_reasoning": 8,
+  "drift_resistance": 10,
+  "honesty": 10,
+  "rework_cost": 10,
+  "resumability": 10,
+  "operator_load": 9,
+  "blinded_as": "E",
+  "notes": "Heaviest ceremony (18-decision locked spec + a plan-check that found 14 gaps in its own plan) bought perfect trap recall and zero rework — and no better outcome."
+}

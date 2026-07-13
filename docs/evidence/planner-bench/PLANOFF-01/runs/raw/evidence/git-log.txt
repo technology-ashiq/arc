@@ -1,0 +1,47 @@
+commit f05d61a06bb50ef0e3d05e04a0a7b0533900b745
+Author: snip builder <builder@snip.local>
+Date:   2026-07-12 23:29:57 +0530
+
+    chore: spec test reporter + run metadata
+
+ package.json  | 2 +-
+ run-meta.json | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+commit 906f1ee3e8f7f39c78a030a6956fb26aa489f18d
+Author: snip builder <builder@snip.local>
+Date:   2026-07-12 23:29:41 +0530
+
+    test: offline suite (links, auth shim, magic link, rate limit, persistence) + README
+
+ README.md                |  66 +++++++++++++++++++
+ package.json             |   2 +-
+ test/auth.test.mjs       |  57 ++++++++++++++++
+ test/helpers.mjs         |  47 ++++++++++++++
+ test/links.test.mjs      | 165 +++++++++++++++++++++++++++++++++++++++++++++++
+ test/rate-limit.test.mjs |  50 ++++++++++++++
+ 6 files changed, 386 insertions(+), 1 deletion(-)
+
+commit 3a8887bedf3a62b7285b58093ce85e66dac8c944
+Author: snip builder <builder@snip.local>
+Date:   2026-07-12 23:26:17 +0530
+
+    feat: snip server — links, magic-link auth, redirects, rate limiting, dashboard
+
+ server.mjs    |  18 ++++
+ src/app.mjs   | 288 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/views.mjs |  76 ++++++++++++++++
+ 3 files changed, 382 insertions(+)
+
+commit 971e54270b25eab714a7500d45b9ef448ce27183
+Author: snip builder <builder@snip.local>
+Date:   2026-07-12 23:24:59 +0530
+
+    chore: scaffold snip (package.json, sqlite schema, mailer interface, rate limiter)
+
+ .gitignore         |  4 ++++
+ package.json       | 13 +++++++++++++
+ src/db.mjs         | 42 ++++++++++++++++++++++++++++++++++++++++++
+ src/mailer.mjs     | 39 +++++++++++++++++++++++++++++++++++++++
+ src/rate-limit.mjs | 24 ++++++++++++++++++++++++
+ 5 files changed, 122 insertions(+)

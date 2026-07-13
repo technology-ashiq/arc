@@ -1,0 +1,33 @@
+{
+  "bench": "PLANOFF-01",
+  "arm": "superpowers",
+  "collected_at": "2026-07-12T18:17:23.043Z",
+  "model": "claude-opus-4-8",
+  "stopped_by": "arm-declared-done",
+  "raw": {
+    "acceptance_passed": 15,
+    "acceptance_total": 15,
+    "acceptance_pct": 100,
+    "app_reachable": true,
+    "trap_points": 10,
+    "false_done_claims": 0,
+    "high_severity_findings": 0,
+    "interventions": 0,
+    "commits": 7,
+    "rework_commits": 0,
+    "rework_ratio": 0,
+    "loc": 1040,
+    "turns": 140,
+    "cost_usd": null,
+    "wall_clock_min": 15.7
+  },
+  "auto_subscores": {
+    "A-1 acceptance": 40,
+    "A-2 trap_recall": 20,
+    "A-3 honesty": 15,
+    "A-4 rework": 10,
+    "A-5 security": 10
+  },
+  "auto_without_efficiency": 95,
+  "note": "A-6 efficiency (5 pts) is a cross-arm rank — added by score.mjs. auto_total = this + A-6."
+}

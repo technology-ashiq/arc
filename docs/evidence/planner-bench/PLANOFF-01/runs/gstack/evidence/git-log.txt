@@ -1,0 +1,64 @@
+commit 52b0c29f597125dafb6c1f4554c2dd4a5e04df59
+Author: gstack <gstack@local>
+Date:   2026-07-12 23:38:46 +0530
+
+    chore: run metadata
+
+ run-meta.json | 1 +
+ 1 file changed, 1 insertion(+)
+
+commit e0d8d81e94eca3e2c7bf073fc6c6e9a8a8cfb35a
+Author: gstack <gstack@local>
+Date:   2026-07-12 23:37:46 +0530
+
+    fix: review-army findings - malformed-escape 500, magic-token retention, dashboard innerHTML, unused url-length config
+
+ README.md           | 81 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ REVIEW.md           | 47 +++++++++++++++++++++++++++++++
+ lib/auth.mjs        |  4 +++
+ lib/links.mjs       | 11 ++++----
+ public/index.html   | 11 ++++++--
+ server.mjs          | 26 +++++++++++++----
+ test/links.test.mjs | 34 ++++++++++++++++++++++
+ 7 files changed, 202 insertions(+), 12 deletions(-)
+
+commit 44afac8db31e8d78c64de982c8d9118247fdf337
+Author: gstack <gstack@local>
+Date:   2026-07-12 23:31:35 +0530
+
+    test: suite covering redirect, expiry, delete-vs-gone, isolation, rate limit, persistence, magic link
+
+ package.json              |   6 +-
+ test/auth.test.mjs        |  85 ++++++++++++++++++++++
+ test/helpers.mjs          |  83 +++++++++++++++++++++
+ test/links.test.mjs       | 179 ++++++++++++++++++++++++++++++++++++++++++++++
+ test/persistence.test.mjs |  58 +++++++++++++++
+ 5 files changed, 409 insertions(+), 2 deletions(-)
+
+commit 4110a34205ab92b91fb9c08c16dde76623ad6fa3
+Author: gstack <gstack@local>
+Date:   2026-07-12 23:28:14 +0530
+
+    feat: snip url shortener - sqlite store, magic-link auth, rate limiting, dashboard
+
+ .gitignore        |   5 ++
+ lib/auth.mjs      |  85 +++++++++++++++++++++
+ lib/config.mjs    |  27 +++++++
+ lib/db.mjs        |  58 ++++++++++++++
+ lib/links.mjs     | 169 ++++++++++++++++++++++++++++++++++++++++
+ lib/mailer.mjs    |  47 ++++++++++++
+ lib/ratelimit.mjs |  37 +++++++++
+ package.json      |  11 +++
+ public/index.html | 103 +++++++++++++++++++++++++
+ server.mjs        | 225 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 10 files changed, 767 insertions(+)
+
+commit 8fdc22a1243389d50516f70ae58eb6908dcff41d
+Author: gstack <gstack@local>
+Date:   2026-07-12 23:26:08 +0530
+
+    docs: SPEC.md and PLAN.md with four-persona review
+
+ PLAN.md | 52 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ SPEC.md | 39 +++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 91 insertions(+)

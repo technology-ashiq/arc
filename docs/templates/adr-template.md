@@ -3,8 +3,17 @@
 <!-- File convention: docs/adr/NNNN-kebab-title.md, zero-padded. Nygard core + MADR's
      options section. One decision per file. Never edit an accepted ADR — supersede it. -->
 
-**Status:** proposed | accepted | superseded by NNNN
+**Status:** proposed | accepted | superseded by NNNN | DEFERRED — spike scheduled
 **Date:** YYYY-MM-DD
+**Reversibility:** one-way | two-way
+<!-- two-way doors are AUTO-DECIDED at kickoff (recorded here, never user-asked).
+     one-way doors (schema, auth model, payments, framework class) are the ONLY forks
+     that consume the kickoff question budget. -->
+**Revisit trigger:** <condition that reopens this decision — REQUIRED for one-way, optional for two-way>
+<!-- DEFERRED = fork stayed high-impact + low-confidence after research. A spike task
+     (question · timebox ≤ ½ day · expected evidence · this ADR's number) must sit at the
+     top of phases/phase-00-spec.md. Spike code is quarantined — never merged. DEFERRED
+     blocks /arc-phase-done for Phase 0, not the kickoff STOP. -->
 
 ## Context
 What fork are we at, and why does it matter? Constraints in play (cost, time, skills, stack).

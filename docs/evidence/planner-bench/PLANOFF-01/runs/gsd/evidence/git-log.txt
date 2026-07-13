@@ -1,0 +1,64 @@
+commit 43c1c11c73b752f95da73896594259fd171ea7fb
+Author: GSD <gsd@local>
+Date:   2026-07-12 23:37:15 +0530
+
+    docs: README (one-command start) + STATE.md (VERIFY passed) + smoke walk + run-meta
+
+ .gitignore          |   4 ++
+ README.md           |  49 ++++++++++++++++
+ STATE.md            |  32 ++++++++++
+ final-test.txt      | 164 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ package.json        |   6 +-
+ run-meta.json       |   1 +
+ scripts/smoke.mjs   |  53 +++++++++++++++++
+ test/links.test.mjs |   4 +-
+ 8 files changed, 309 insertions(+), 4 deletions(-)
+
+commit 416df5dfc0be67d169c485df032abf2966f32fbb
+Author: GSD <gsd@local>
+Date:   2026-07-12 23:32:05 +0530
+
+    test: suite for D1-D18 (auth shim, gone-vs-unknown, expiry, alias, rate limit, persistence)
+
+ test/auth.test.mjs        |  68 +++++++++++++++++++
+ test/helpers.mjs          |  45 +++++++++++++
+ test/links.test.mjs       | 162 ++++++++++++++++++++++++++++++++++++++++++++++
+ test/persistence.test.mjs |  32 +++++++++
+ test/ratelimit.test.mjs   |  68 +++++++++++++++++++
+ 5 files changed, 375 insertions(+)
+
+commit 524ee01a3d823b3fec55e806f378992de89320e6
+Author: GSD <gsd@local>
+Date:   2026-07-12 23:29:03 +0530
+
+    feat: snip core — sqlite store, magic-link auth + test shim, links, rate limiter, http app
+
+ package.json      |  13 ++++++
+ server.mjs        |  18 ++++++++
+ src/app.mjs       | 132 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ src/auth.mjs      |  80 +++++++++++++++++++++++++++++++++
+ src/db.mjs        |  43 ++++++++++++++++++
+ src/errors.mjs    |   9 ++++
+ src/html.mjs      |  39 ++++++++++++++++
+ src/links.mjs     | 105 +++++++++++++++++++++++++++++++++++++++++++
+ src/mailer.mjs    |  34 ++++++++++++++
+ src/ratelimit.mjs |  32 +++++++++++++
+ 10 files changed, 505 insertions(+)
+
+commit 0af6297cf26482487e2e235bc95bc1f9444276d9
+Author: GSD <gsd@local>
+Date:   2026-07-12 23:25:44 +0530
+
+    docs: PLAN.md + plan-check (14 gaps found and folded back in)
+
+ PLAN.md | 80 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 80 insertions(+)
+
+commit a7ddd5ae36a3d4d8e4535cedd8685214821ac00f
+Author: GSD <gsd@local>
+Date:   2026-07-12 23:25:09 +0530
+
+    docs: SPEC.md — locked spec with 18 resolved ambiguities
+
+ SPEC.md | 115 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 115 insertions(+)

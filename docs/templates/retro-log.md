@@ -5,3 +5,9 @@
 > never summarized. This file is why kickoff quality compounds across projects.
 >
 > Format: `YYYY-MM-DD | project | pattern | prevention`
+>
+> Scoreboard rows (kickoff v3 — ONE per project, written by `/arc-retro` at project close):
+> `YYYY-MM-DD | project | tier | rework <reopened>/<closed> | amendments <n> | FIRED <n>/<total> | burn <actual %> | sim-blockers-r1 <n> | t-to-phase0 <days>`
+> Numbers come from PROGRESS done-log metrics + PLAN ledgers — counted, never estimated.
+> Read at retro only; metrics never gate mid-build. This is the evidence behind any
+> "world's best planning" claim — no scoreboard, no claim.

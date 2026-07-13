@@ -1,0 +1,4 @@
+No SAST scanners available in the sandbox (no semgrep/gitleaks/osv).
+Out-of-suite robustness probe instead:
+  GET /%%E0%%A4%%A (malformed percent-escape) -> 500 UNHANDLED CRASH
+  POST junk url -> 400 · POST broken JSON -> 400

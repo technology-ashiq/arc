@@ -2,6 +2,9 @@
 /**
  * kickoff-lint — deterministic gate for /arc-kickoff, /arc-change and /arc-phase-done.
  * Zero deps. Exit 0 = plan structurally complete; exit 1 = named failures listed.
+ * v3 check groups: [tier] [adr] [spike] [phase-deps]. A plan is "v3" when PLAN.md has a
+ * `**Tier:**` line under Appetite — plans written before v3 get WARNs (grandfathered),
+ * v3 plans get hard FAILs. New kickoffs always write the Tier line, so v3 is strict.
  * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
  * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
  * Usage: node .claude/scripts/kickoff-lint.mjs [repo-root]
@@ -73,7 +76,21 @@ for (const name of required) {
   else if (!hasContent(body)) fail("sections", `"## ${name}" is empty or placeholder`);
 }
 
-// ---------- 3. success requirements: status lifecycle, cap 10 active, phase mapping ----------
+// ---------- 2b. tier (kickoff v3): derived from appetite, sets caps ----------
+const appetiteBody = section(secs, "appetite") || "";
+const tierStrict = appetiteBody.match(/\*\*Tier:\*\*\s*([SML])\s*$/m);
+const tierLoose = /\*\*Tier:\*\*/.test(appetiteBody);
+const isV3 = tierLoose;
+let tier = null;
+if (!isV3)
+  warn("tier", "no `**Tier:** S|M|L` line under Appetite — plan pre-dates kickoff v3 (new kickoffs must set it; v3 checks relaxed to WARN)");
+else if (!tierStrict)
+  fail("tier", "Tier line present but not exactly one of S | M | L (template placeholder left in?)");
+else tier = tierStrict[1];
+const REQ_CAP = tier === "S" ? 5 : 10;
+const v3check = isV3 ? fail : warn;
+
+// ---------- 3. success requirements: status lifecycle, tier-capped active rows, phase mapping ----------
 const VAGUE =
   /\b(fast|quick(?:ly)?|easy|easily|simple|simply|properly|robust|seamless(?:ly)?|user-friendly|intuitive|should work|good|better|nice|nicely|clean|smooth(?:ly)?|performant|scalable|efficient(?:ly)?)\b/i;
 const VERIFIABLE = /[\d<>%]|\bms\b|\bsec(?:ond)?s?\b|`[^`]+`/;
@@ -109,7 +126,8 @@ for (const r of reqRows) {
   else if (VAGUE.test(acc))
     warn("vague", `${id} acceptance "${acc.slice(0, 50)}" — vague word next to a verifiable token; confirm the token actually measures the claim (heuristic).`);
 }
-if (activeReqs > 10) fail("reqs", `${activeReqs} active REQs — hard cap is 10, cut scope`);
+if (activeReqs > REQ_CAP)
+  fail(tier ? "tier" : "reqs", `${activeReqs} active REQs — hard cap${tier ? ` for tier ${tier}` : ""} is ${REQ_CAP}, cut scope`);
 
 // ---------- 4. phases: spec files exist, every phase >0 serves a live REQ ----------
 const phaseRows = tableRows(section(secs, "phases"));
@@ -128,6 +146,53 @@ for (const r of phaseRows) {
 if (!phaseNums.includes(0)) fail("phase0", "no Phase 0 (steel thread) in Phases table");
 for (const p of reqPhases)
   if (!phaseNums.includes(p)) fail("reqs", `REQ maps to phase ${p} which doesn't exist`);
+
+// ---------- 4b. phase dependency lines (kickoff v3): exist, valid refs, no cycles ----------
+const depGraph = new Map();
+for (const n of phaseNums) {
+  const specPath = `phases/phase-${String(n).padStart(2, "0")}-spec.md`;
+  if (!existsSync(join(root, specPath))) continue; // missing spec already failed above
+  const spec = read(specPath);
+  const depLine = spec.match(/\*\*Depends on:\*\*\s*(.+)/);
+  if (!depLine) {
+    v3check("phase-deps", `${specPath}: missing **Depends on:** line${isV3 ? "" : " (required from kickoff v3)"}`);
+    continue;
+  }
+  const val = depLine[1].trim();
+  if (/^phase-NN/.test(val)) {
+    v3check("phase-deps", `${specPath}: **Depends on:** still the template placeholder`);
+    continue;
+  }
+  if (/^none\b/i.test(val)) {
+    depGraph.set(n, []);
+    continue;
+  }
+  const deps = [...val.matchAll(/phase-(\d+)/gi)].map((m) => Number(m[1]));
+  if (deps.length === 0) {
+    v3check("phase-deps", `${specPath}: **Depends on:** "${val.slice(0, 40)}" — use \`none\` or a phase-NN list`);
+    continue;
+  }
+  if (n === 0) fail("phase-deps", "phase-00 must depend on `none` — the steel thread comes first");
+  for (const d of deps)
+    if (!phaseNums.includes(d))
+      fail("phase-deps", `${specPath} depends on phase-${String(d).padStart(2, "0")} which doesn't exist`);
+  depGraph.set(n, deps);
+}
+{
+  // cycle detection — DFS with visiting/done states
+  const state = new Map();
+  const visit = (n, path) => {
+    if (state.get(n) === 1) return;
+    if (state.get(n) === 0) {
+      fail("phase-deps", `dependency cycle: ${[...path, n].map((x) => `phase-${String(x).padStart(2, "0")}`).join(" → ")}`);
+      return;
+    }
+    state.set(n, 0);
+    for (const d of depGraph.get(n) || []) visit(d, [...path, n]);
+    state.set(n, 1);
+  };
+  for (const n of depGraph.keys()) visit(n, []);
+}
 
 // ---------- 5. assumptions ledger: cap 7, every row has a trigger ----------
 const asmRows = tableRows(section(secs, "assumptions"));
@@ -160,15 +225,37 @@ depRows.forEach((r) => {
 if (depRows.length === 0)
   warn("deps", "External dependencies table empty — fine only if the build truly has none");
 
-// ---------- 8. ADR index rows have matching files ----------
+// ---------- 8. ADR index rows: matching files + [adr] reversibility + [spike] deferred ----------
 const adrRows = tableRows(section(secs, "key decisions"));
 const adrDir = join(root, "docs", "adr");
 const adrFiles = existsSync(adrDir) ? readdirSync(adrDir) : [];
 adrRows.forEach((r) => {
   const num = (r[0] || "").match(/\d{4}/)?.[0];
   if (!num) return;
-  if (!adrFiles.some((f) => f.startsWith(num)))
+  const file = adrFiles.find((f) => f.startsWith(num));
+  if (!file) {
     fail("adr", `ADR ${num} in index but docs/adr/${num}-*.md not found`);
+    return;
+  }
+  const adr = read(`docs/adr/${file}`);
+  // [adr] reversibility (kickoff v3): every decision declares its door type
+  const rev = adr.match(/\*\*Reversibility:\*\*\s*(one-way|two-way)\s*$/m);
+  if (!rev) {
+    v3check("adr", `ADR ${num}: missing/invalid **Reversibility:** — must be exactly \`one-way\` or \`two-way\`${isV3 ? "" : " (required from kickoff v3)"}`);
+  } else if (rev[1] === "one-way") {
+    const rt = adr.match(/\*\*Revisit trigger:\*\*\s*(.+)/);
+    const rtVal = rt ? rt[1].trim() : "";
+    if (!rtVal || rtVal.length < 8 || rtVal.startsWith("<"))
+      v3check("adr", `ADR ${num}: one-way door without a real **Revisit trigger:** — one-way decisions must name what reopens them`);
+  }
+  // [spike] — DEFERRED ADRs must have a quarantined spike task in phase-00
+  const statusLine = (adr.match(/\*\*Status:\*\*.*$/m) || [""])[0];
+  if (/\bDEFERRED\b/.test(statusLine)) {
+    const p0Path = "phases/phase-00-spec.md";
+    const p0 = existsSync(join(root, p0Path)) ? read(p0Path) : "";
+    if (!(/spike/i.test(p0) && p0.includes(num)))
+      fail("spike", `ADR ${num} is DEFERRED but ${p0Path} has no spike task referencing ${num} — a deferred decision needs its scheduled spike (blocks Phase-0 close)`);
+  }
 });
 if (adrRows.length === 0) fail("adr", "ADR index empty — no fork was resolved? Unlikely.");
 

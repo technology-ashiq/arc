@@ -1,0 +1,11 @@
+{
+  "plan_quality": 8,
+  "risk_reasoning": 9,
+  "drift_resistance": 8,
+  "honesty": 8,
+  "rework_cost": 9,
+  "resumability": 6,
+  "operator_load": 9,
+  "blinded_as": "B",
+  "notes": "TDD-first task plan and the only other arm to survive the malformed-escape probe; ordered by feature not risk, and left no state file behind."
+}

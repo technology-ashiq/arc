@@ -5,6 +5,9 @@
 
 **Goal (one line):**
 **Appetite:** (e.g. 3 days — blown appetite = cut scope or kill, never extend silently)
+**Depends on:** phase-NN[, phase-MM] | none
+<!-- lint-checked [phase-deps]: referenced phases must exist · no cycles · Phase 0 is always `none`.
+     Risk-first ordering stays the human call — this line makes violations machine-visible. -->
 
 ## Exit criteria (Definition of Done)
 - [ ] <capability> works end-to-end

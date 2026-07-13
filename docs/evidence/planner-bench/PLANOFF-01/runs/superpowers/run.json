@@ -1,0 +1,16 @@
+{
+  "arm": "superpowers",
+  "bench": "PLANOFF-01A",
+  "model": "claude-opus-4-8",
+  "started_at": "2026-07-12T18:01:38.184Z",
+  "ended_at": "2026-07-12T18:17:22.584Z",
+  "turns": 140,
+  "tokens_in": 124196,
+  "tokens_out": null,
+  "cost_usd": null,
+  "cost_proxy_tokens": 124196,
+  "repo_path": "/tmp/planoff/superpowers",
+  "stopped_by": "arm-declared-done",
+  "interventions": 0,
+  "note": "PLANOFF-01A automated variant: planner-as-prompt, node:sqlite instead of Postgres. cost_usd unavailable -> efficiency ranked on wall-clock; tokens recorded as cost_proxy_tokens."
+}
