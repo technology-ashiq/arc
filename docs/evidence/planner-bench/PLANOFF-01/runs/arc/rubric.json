@@ -1,0 +1,11 @@
+{
+  "plan_quality": 9,
+  "risk_reasoning": 10,
+  "drift_resistance": 10,
+  "honesty": 10,
+  "rework_cost": 10,
+  "resumability": 10,
+  "operator_load": 9,
+  "blinded_as": "A",
+  "notes": "Only arm that ordered phases by what could kill the build; commit log is that plan executed verbatim, zero fix commits — but no better outcome than the arm that planned nothing."
+}

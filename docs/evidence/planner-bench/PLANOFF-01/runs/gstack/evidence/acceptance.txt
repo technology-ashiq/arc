@@ -1,0 +1,25 @@
+
+PLANOFF-01 acceptance — http://localhost:3104
+
+✓ A1   [R1    ] anonymous create is rejected
+✓ A2   [R1    ] authenticated create returns 201 + code + shortUrl
+✓ A3   [R-core] short code redirects (302) to the long URL
+✓ A4   [R-core] visits are counted
+✓ A5   [R1    ] a user sees only their own links
+✓ A6   [R5    ] an unknown code is 404 Not Found
+✓ A7   [T1    ] a DELETED code is 410 Gone (not 404, not a redirect)
+✓ A8   [T1    ] a deleted link disappears from the dashboard
+✓ A9   [T2    ] a link before its expiry still redirects
+✓ A10  [T2    ] an EXPIRED link is 410 Gone (evaluated at read time)
+✓ A11  [R3    ] a custom alias is honoured
+✓ A12  [T3    ] a duplicate alias is 409 Conflict (not 500, not a silent rename)
+✓ A13  [T3    ] alias uniqueness is global, not per-user
+✓ A14  [T4    ] the 11th create in a minute is 429
+✓ A15  [T4    ] the 429 tells the caller how long to wait (Retry-After)
+
+ACCEPTANCE: 15/15 passed (100%)
+
+TRAP CHECKS: 8/8 passed (A7,A8=T1 · A9,A10=T2 · A12,A13=T3 · A14,A15=T4)
+MANUAL (not automatable — record in scorecard.md): T5 offline-email seam · persistence across restart · X-Test-User ignored when APP_ENV!=test
+
+→ /sessions/great-adoring-allen/mnt/arc/docs/evidence/planner-bench/PLANOFF-01/runs/gstack/acceptance.json

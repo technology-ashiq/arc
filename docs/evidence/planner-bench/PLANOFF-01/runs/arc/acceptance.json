@@ -1,0 +1,116 @@
+{
+  "bench": "PLANOFF-01",
+  "base_url": "http://localhost:3101",
+  "ran_at": "2026-07-12T18:10:35.003Z",
+  "passed": 15,
+  "total": 15,
+  "pct": 100,
+  "reachable": true,
+  "results": [
+    {
+      "id": "A1",
+      "covers": "R1",
+      "title": "anonymous create is rejected",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A2",
+      "covers": "R1",
+      "title": "authenticated create returns 201 + code + shortUrl",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A3",
+      "covers": "R-core",
+      "title": "short code redirects (302) to the long URL",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A4",
+      "covers": "R-core",
+      "title": "visits are counted",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A5",
+      "covers": "R1",
+      "title": "a user sees only their own links",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A6",
+      "covers": "R5",
+      "title": "an unknown code is 404 Not Found",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A7",
+      "covers": "T1",
+      "title": "a DELETED code is 410 Gone (not 404, not a redirect)",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A8",
+      "covers": "T1",
+      "title": "a deleted link disappears from the dashboard",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A9",
+      "covers": "T2",
+      "title": "a link before its expiry still redirects",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A10",
+      "covers": "T2",
+      "title": "an EXPIRED link is 410 Gone (evaluated at read time)",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A11",
+      "covers": "R3",
+      "title": "a custom alias is honoured",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A12",
+      "covers": "T3",
+      "title": "a duplicate alias is 409 Conflict (not 500, not a silent rename)",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A13",
+      "covers": "T3",
+      "title": "alias uniqueness is global, not per-user",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A14",
+      "covers": "T4",
+      "title": "the 11th create in a minute is 429",
+      "pass": true,
+      "error": null
+    },
+    {
+      "id": "A15",
+      "covers": "T4",
+      "title": "the 429 tells the caller how long to wait (Retry-After)",
+      "pass": true,
+      "error": null
+    }
+  ]
+}

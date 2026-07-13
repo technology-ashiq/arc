@@ -19,6 +19,11 @@ over assertion — show output, don't claim.
 4. Check every exit criterion in the phase spec — tick or list what's missing.
 5. **Plan drift check:** run `node .claude/scripts/kickoff-lint.mjs`. A phase can't close
    on a drifted plan (missing spec, unmapped REQ, broken ADR index) — fix the plan first.
+   **Trigger scan:** read PLAN's Assumptions ledger and every indexed ADR's **Revisit
+   trigger** — a FIRED assumption not yet routed through `/arc-change`, or a revisit
+   condition that is now true, is unresolved risk: route it through `/arc-change` BEFORE
+   closing. **Phase 0 only:** any ADR still `DEFERRED — spike scheduled` blocks this
+   close — run the spike, land its evidence in the ADR, finalize the decision.
 
 **If anything fails: the phase is NOT done.** Say exactly what's missing and stop.
 Do not update the tracker for an unfinished phase.
@@ -30,11 +35,14 @@ If all pass:
    (scan verdict, review stamps, coverage, + a sha256 manifest). **A phase cannot close if
    `verify` fails** — the bundle is the tamper-evident proof the gates actually passed.
 7. Update `PROGRESS.md`: flip the phase row to ✅, add a done-log entry (what shipped +
-   test count + actual time vs appetite), and update the **appetite-burn line**. In
-   PLAN.md's Success requirements, flip this phase's REQs from `active` to `validated`. Check the
-   kill criteria: **if ≥50% of total appetite is burnt and the tripwire phase isn't done,
-   STOP and force the scope-cut conversation now** — blown appetite gets flagged for
-   /arc-retro. Then move `## Now` to the next phase.
+   test count + actual time vs appetite) **+ the phase metrics: `amendments: <n>`
+   (/arc-change entries touching this phase) · `reopened: y/n`. Phase 0 close also
+   records `t-to-phase0: <days since kickoff>`** — /arc-retro reads these for the
+   scoreboard. Update the **appetite-burn line**. In PLAN.md's Success requirements, flip
+   this phase's REQs from `active` to `validated`. Check the kill criteria: **if ≥50% of
+   total appetite is burnt and the tripwire phase isn't done, STOP and force the
+   scope-cut conversation now** — blown appetite gets flagged for /arc-retro. Then move
+   `## Now` to the next phase.
 8. Refresh the code knowledge graph if available (`graphify update .`) — the next phase's
    reviews and diagnoses should see the current blast radius, not last phase's.
    (Skip if graphify's own git hook is installed — it already rebuilt on commit.)

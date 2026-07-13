@@ -1,0 +1,11 @@
+{
+  "plan_quality": 0,
+  "risk_reasoning": 1,
+  "drift_resistance": 5,
+  "honesty": 5,
+  "rework_cost": 7,
+  "resumability": 1,
+  "operator_load": 7,
+  "blinded_as": "C",
+  "notes": "Wrote zero planning documents, shipped in 4 commits and 14 files, and passed the identical acceptance suite — the control condition, and the result that hurts."
+}

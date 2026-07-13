@@ -1,0 +1,89 @@
+commit a05995148ae26c9e64d3b1fa5a7a706179bdc60c
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:38:10 +0530
+
+    chore: record true end time
+
+ run-meta.json | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+commit f49bff66e5145d29278accbdd5a71fa389ef631f
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:37:59 +0530
+
+    docs: phase 6 — README (one-command start), PROGRESS tracker, run metadata
+
+ PROGRESS.md   |  40 ++++++++++++++++++++++
+ README.md     | 106 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ run-meta.json |   1 +
+ 3 files changed, 147 insertions(+)
+
+commit c9a9642349b1465f7445eca863082c774dc70121
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:36:23 +0530
+
+    feat: phase 5 — dashboard with hits + strict owner isolation (33/33 green)
+
+ test/dashboard.test.mjs | 78 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 78 insertions(+)
+
+commit b79ebc8fb7efaba4e97aeaba71eb2cb46f58a817
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:35:46 +0530
+
+    feat: phase 4 — 10/min/IP create limit with honest Retry-After (28/28 green)
+
+ src/app.mjs             | 16 +++++++-
+ src/ratelimit.mjs       | 34 +++++++++++++++++
+ test/ratelimit.test.mjs | 98 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 147 insertions(+), 1 deletion(-)
+
+commit 0ea8eb7f5ce7c9dc0765b80954d79b4931a879e5
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:33:04 +0530
+
+    feat: phases 2-3 — codes/aliases with DB-enforced uniqueness, redirect+hits, expiry, soft-delete 410 Gone (22/22 green)
+
+ src/app.mjs            |  63 +++++++++++++++++++
+ src/links.mjs          | 167 +++++++++++++++++++++++++++++++++++++++++++++++++
+ test/links.test.mjs    | 102 ++++++++++++++++++++++++++++++
+ test/redirect.test.mjs | 120 +++++++++++++++++++++++++++++++++++
+ 4 files changed, 452 insertions(+)
+
+commit 3c7be5af11c6a841d660de83620252321e97f824
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:30:00 +0530
+
+    feat: phase 1 — magic-link auth + APP_ENV-gated X-Test-User shim (8/8 green)
+
+ package.json       |   2 +-
+ server.mjs         |  26 +++++++++++++
+ src/app.mjs        |  91 ++++++++++++++++++++++++++++++++++++++++++++++
+ src/auth.mjs       |  87 ++++++++++++++++++++++++++++++++++++++++++++
+ src/config.mjs     |   1 +
+ src/http.mjs       |  62 +++++++++++++++++++++++++++++++
+ test/auth.test.mjs | 105 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ test/helpers.mjs   |  49 +++++++++++++++++++++++++
+ 8 files changed, 422 insertions(+), 1 deletion(-)
+
+commit 823edb1a5f4a9814631722487507fd70e6997a16
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:26:01 +0530
+
+    feat: phase 0 — config, ports (clock/ids/email fake+real), sqlite schema
+
+ .gitignore     |  2 ++
+ package.json   | 11 +++++++++
+ src/config.mjs | 44 +++++++++++++++++++++++++++++++++
+ src/db.mjs     | 49 +++++++++++++++++++++++++++++++++++++
+ src/ports.mjs  | 77 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 5 files changed, 183 insertions(+)
+
+commit de8ad71aa3f2bf020e2c6b2685a57ed9b3e25e02
+Author: snip builder <snip@local>
+Date:   2026-07-12 23:24:21 +0530
+
+    docs: PLAN.md — pre-mortem + risk-ordered phases before any code
+
+ PLAN.md | 117 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 117 insertions(+)

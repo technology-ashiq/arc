@@ -1,0 +1,11 @@
+{
+  "plan_quality": 8,
+  "risk_reasoning": 10,
+  "drift_resistance": 9,
+  "honesty": 10,
+  "rework_cost": 7,
+  "resumability": 7,
+  "operator_load": 9,
+  "blinded_as": "D",
+  "notes": "Its post-build review pass found the only real defect anyone caught (malformed percent-escape -> 500) — a defect no plan predicted and no acceptance test probed."
+}

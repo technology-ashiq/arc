@@ -36,6 +36,9 @@ Follow in order:
 
 3. **Update the tracker BEFORE any code** — the file(s) chosen in step 1, plus
    `PROGRESS.md`'s `## Now`. A decision also gets its ADR. The change now has a tracked home.
+   If PLAN's **Non-negotiables** bullets changed: resync the `## Non-negotiables (verbatim
+   from PLAN)` block in EVERY `phases/phase-NN-spec.md` in the same edit — lint's
+   [nonneg-drift] holds the copies honest; a stale copy lies.
    Then **run `node .claude/scripts/kickoff-lint.mjs`** — the tracker mutation must leave
    the plan consistent (REQ mapped, spec file exists, status valid). Fix before moving on.
 

@@ -12,7 +12,7 @@ One sentence: who it's for + what it does + why they'd pay.
      Sits here on purpose — read what exists BEFORE planning what to build. -->
 
 ## Success requirements
-<!-- HARD CAP: 10 ACTIVE rows (small builds: 5). Each REQ must be: user-centric (an
+<!-- HARD CAP: 10 ACTIVE rows (tier S: 5 — lint reads the Tier line). Each REQ must be: user-centric (an
      outcome someone experiences, not a task), atomic (ONE outcome — "and" is a smell),
      and testable (acceptance can fail: a number, a demo step, or a check). Vague
      acceptance words (fast/easy/robust/seamless…) without a verifiable token fail
@@ -29,6 +29,13 @@ One sentence: who it's for + what it does + why they'd pay.
 ## Appetite
 Total time budget (e.g. "3 weeks part-time"). This is a **constraint, not an estimate**:
 if it's blown, we cut scope or kill a phase — never silently extend. No story points anywhere.
+
+**Tier:** S | M | L
+<!-- Derived from the appetite NUMBER, never judgment: S ≤ 3 days · M ≤ 3 weeks · L > 3 weeks.
+     Tier sets kickoff depth (lint-enforced where countable):
+     S → ≤5 active REQs · ≤3 fork questions · 1 merged attacker run (A+C) · no simulation gate
+     M → ≤10 active REQs · ≤5 questions · attacker panel ×3 · simulation gate ON
+     L → M + /arc-second-opinion on the plan + researcher re-verifies top-3 load-bearing claims -->
 
 **Kill criteria:** at 50% appetite burnt, if Phase <N> isn't done → mandatory scope-cut
 conversation. At 100% → cut or kill, never extend silently. (PROGRESS.md tracks the burn.)
@@ -69,7 +76,11 @@ Known time-bombs spotted up front, and the decided detour around each
 ## Assumptions ledger
 <!-- HARD CAP: 7. Rule: no falsification trigger → not an assumption, it's filler —
      entry rejected. Unresolved kickoff questions land here (with triggers), then we
-     proceed: a falsifiable plan beats a perfect one. -->
+     proceed: a falsifiable plan beats a perfect one.
+     Every ADR with `Confidence: low` MUST have a row here citing that ADR's number
+     (lint [adr-confidence]). Enough low-confidence decisions will blow the cap — that is
+     a FEATURE, not a bug: research it, spike it, or accept it explicitly. `medium` stays
+     unconsumed on purpose. -->
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|

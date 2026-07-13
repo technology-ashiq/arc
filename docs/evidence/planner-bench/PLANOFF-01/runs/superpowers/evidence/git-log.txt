@@ -1,0 +1,80 @@
+commit e4e8db0eeb432652d239d92d6dc23d5fd054c85d
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:39:41 +0530
+
+    docs: readme + run metadata
+
+ .gitignore    |  2 ++
+ README.md     | 83 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ run-meta.json |  1 +
+ server.mjs    | 23 +++++++++++++++--
+ 4 files changed, 107 insertions(+), 2 deletions(-)
+
+commit f452b30c863be05ef3b5c4262a2927fa7bf9b78f
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:38:29 +0530
+
+    feat: rate limit (10 creates/min/IP) with Retry-After, test reset, magic-link sign-in
+
+ lib/app.mjs             | 85 ++++++++++++++++++++++++++++++++++++++-----------
+ lib/mailer.mjs          | 14 ++++++++
+ lib/ratelimit.mjs       | 48 ++++++++++++++++++++++++++++
+ lib/tokens.mjs          | 26 +++++++++++++++
+ test/harness.mjs        | 10 ++++--
+ test/ratelimit.test.mjs | 44 +++++++++++++++++++++++++
+ test/security.test.mjs  | 66 ++++++++++++++++++++++++++++++++++++++
+ 7 files changed, 272 insertions(+), 21 deletions(-)
+
+commit c90587f4f4dae06d0aa7e432a653ecd2f955e410
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:30:09 +0530
+
+    feat: soft delete - a deleted code is 410 gone, never 404
+
+ lib/app.mjs          | 11 +++++++++++
+ test/delete.test.mjs | 56 ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 67 insertions(+)
+
+commit 867773cad5a89920ca4e9ede7fe35b1d24db09df
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:29:00 +0530
+
+    feat: redirects with hit counting, custom aliases, expiry
+
+ lib/app.mjs            | 49 +++++++++++++++++++++++++++++++-
+ test/redirect.test.mjs | 76 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 124 insertions(+), 1 deletion(-)
+
+commit 206d83790e972bbf17752452084475ff2d592203
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:28:28 +0530
+
+    feat: create and list links behind the auth shim
+
+ lib/app.mjs         | 70 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ lib/auth.mjs        | 51 ++++++++++++++++++++++++++++++++++++++
+ lib/db.mjs          | 31 ++++++++++++++++++++++++
+ lib/store.mjs       | 66 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ package.json        | 11 +++++++++
+ server.mjs          | 14 +++++++++++
+ test/harness.mjs    | 40 ++++++++++++++++++++++++++++++
+ test/links.test.mjs | 48 ++++++++++++++++++++++++++++++++++++
+ 8 files changed, 331 insertions(+)
+
+commit e8a5963e1f0a13abafc26c22ffb76c08708b4dba
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:26:06 +0530
+
+    docs: implementation plan
+
+ PLAN.md | 59 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 59 insertions(+)
+
+commit 00fd29e10ed83793842cf4285c127c773ba8805c
+Author: snip builder <snip@example.com>
+Date:   2026-07-12 23:25:38 +0530
+
+    docs: design for snip (brainstorming gate)
+
+ DESIGN.md | 84 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 84 insertions(+)

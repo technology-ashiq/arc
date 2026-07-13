@@ -5,6 +5,9 @@
 
 **Goal (one line):**
 **Appetite:** (e.g. 3 days — blown appetite = cut scope or kill, never extend silently)
+**Depends on:** phase-NN[, phase-MM] | none
+<!-- lint-checked [phase-deps]: referenced phases must exist · no cycles · Phase 0 is always `none`.
+     Risk-first ordering stays the human call — this line makes violations machine-visible. -->
 
 ## Exit criteria (Definition of Done)
 - [ ] <capability> works end-to-end
@@ -34,3 +37,12 @@ Deferred to which phase.
 
 ## Your-setup / pending
 Keys, accounts, infra the human must provide.
+
+## Non-negotiables (verbatim from PLAN)
+
+<!-- COPY PLAN's ## Non-negotiables bullets here verbatim — context-isolated executors
+     (plan-simulator, /arc-resume, future subagents) read THIS file, not PLAN. The copy is
+     GENERATED, never hand-edited: /arc-change resyncs every spec when PLAN's bullets
+     change, and kickoff-lint [nonneg-drift] fails any copy that drifts. A stale copy lies. -->
+
+- <paste PLAN bullets verbatim>

@@ -2,6 +2,20 @@
 /**
  * kickoff-lint — deterministic gate for /arc-kickoff, /arc-change and /arc-phase-done.
  * Zero deps. Exit 0 = plan structurally complete; exit 1 = named failures listed.
+ *
+ * v3 check groups: [tier] [adr] [spike] [phase-deps]. A plan is "v3" when PLAN.md has a
+ * `**Tier:**` line under Appetite — plans written before v3 get WARNs (grandfathered),
+ * v3 plans get hard FAILs. New kickoffs always write the Tier line, so v3 is strict.
+ *
+ * v3.5 substance groups: [pre-mortem-cite] [appetite-sum] [adr-wired] [adr-confidence]
+ * [architecture] [current-state-structure] [nonneg-drift] — plus the G4 multi-phase fix
+ * in [reqs]. These raise the substance FLOOR; they do not guarantee substance (a
+ * determined author can still write "scope creep on REQ-03"). Honest limits stay honest.
+ *
+ * WARN-FIRST TRIAL: every v3.5 substance group starts in TRIAL (always WARN, even on v3
+ * plans). Promotion to FAIL = remove the group from the TRIAL set below after a build's
+ * retro has judged the gate useful. One line per promotion, auditable in git.
+ *
  * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
  * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
  * Usage: node .claude/scripts/kickoff-lint.mjs [repo-root]
@@ -17,6 +31,8 @@ const warn = (check, msg) => warnings.push(`[${check}] ${msg}`);
 
 // ---------- helpers ----------
 const read = (p) => readFileSync(join(root, p), "utf8");
+const pad = (n) => String(n).padStart(2, "0");
+const normLine = (l) => l.replace(/\s+/g, " ").trim();
 
 function sections(md) {
   const out = {};
@@ -73,7 +89,29 @@ for (const name of required) {
   else if (!hasContent(body)) fail("sections", `"## ${name}" is empty or placeholder`);
 }
 
-// ---------- 3. success requirements: status lifecycle, cap 10 active, phase mapping ----------
+// ---------- 2b. tier (kickoff v3): derived from appetite, sets caps ----------
+const appetiteBody = section(secs, "appetite") || "";
+const tierStrict = appetiteBody.match(/\*\*Tier:\*\*\s*([SML])\s*$/m);
+const tierLoose = /\*\*Tier:\*\*/.test(appetiteBody);
+const isV3 = tierLoose;
+let tier = null;
+if (!isV3)
+  warn("tier", "no `**Tier:** S|M|L` line under Appetite — plan pre-dates kickoff v3 (new kickoffs must set it; v3 checks relaxed to WARN)");
+else if (!tierStrict)
+  fail("tier", "Tier line present but not exactly one of S | M | L (template placeholder left in?)");
+else tier = tierStrict[1];
+const REQ_CAP = tier === "S" ? 5 : 10;
+const v3check = isV3 ? fail : warn;
+
+// v3.5 WARN-first trial set — remove a group to promote it to the v3check path (FAIL on
+// v3 plans). Promote only after /arc-retro reviews the gate's first-build usefulness.
+const TRIAL = new Set([
+  "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
+  "architecture", "current-state-structure", "nonneg-drift",
+]);
+const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) : v3check(group, msg));
+
+// ---------- 3. success requirements: status lifecycle, tier-capped active rows, phase mapping ----------
 const VAGUE =
   /\b(fast|quick(?:ly)?|easy|easily|simple|simply|properly|robust|seamless(?:ly)?|user-friendly|intuitive|should work|good|better|nice|nicely|clean|smooth(?:ly)?|performant|scalable|efficient(?:ly)?)\b/i;
 const VERIFIABLE = /[\d<>%]|\bms\b|\bsec(?:ond)?s?\b|`[^`]+`/;
@@ -98,9 +136,11 @@ for (const r of reqRows) {
   if (status === "dropped") continue;
   if (status === "active") activeReqs++;
   const phase = r[3] || "";
-  const m = phase.match(/\d+/);
-  if (!m) fail("reqs", `${id} has no phase mapping`);
-  else reqPhases.add(Number(m[0]));
+  // v3.5 G4: exactly ONE phase per REQ — match ALL integers, not just the first.
+  const ms = phase.match(/\d+/g);
+  if (!ms) fail("reqs", `${id} has no phase mapping`);
+  else if (ms.length > 1) fail("reqs", `${id} maps to ${ms.length} phases (${ms.join(", ")}) — every REQ maps to exactly one phase`);
+  else reqPhases.add(Number(ms[0]));
   const acc = (r[2] || "").trim();
   if (!acc || acc.length < 8)
     fail("reqs", `${id} acceptance criterion missing or not measurable`);
@@ -109,18 +149,21 @@ for (const r of reqRows) {
   else if (VAGUE.test(acc))
     warn("vague", `${id} acceptance "${acc.slice(0, 50)}" — vague word next to a verifiable token; confirm the token actually measures the claim (heuristic).`);
 }
-if (activeReqs > 10) fail("reqs", `${activeReqs} active REQs — hard cap is 10, cut scope`);
+if (activeReqs > REQ_CAP)
+  fail(tier ? "tier" : "reqs", `${activeReqs} active REQs — hard cap${tier ? ` for tier ${tier}` : ""} is ${REQ_CAP}, cut scope`);
 
 // ---------- 4. phases: spec files exist, every phase >0 serves a live REQ ----------
 const phaseRows = tableRows(section(secs, "phases"));
 if (phaseRows.length === 0) fail("phases", "no rows in Phases table");
 const phaseNums = [];
+const nextCycle = new Set();
 for (const r of phaseRows) {
   const m = (r[0] || "").match(/\d+/);
   if (!m) continue;
   const n = Number(m[0]);
   phaseNums.push(n);
-  const specPath = `phases/phase-${String(n).padStart(2, "0")}-spec.md`;
+  if (/next cycle|parked/i.test(r.join(" "))) nextCycle.add(n);
+  const specPath = `phases/phase-${pad(n)}-spec.md`;
   if (!existsSync(join(root, specPath))) fail("phases", `${specPath} missing (phase ${n})`);
   if (n > 0 && !reqPhases.has(n))
     fail("phases", `phase ${n} serves no active/validated REQ — phase without a goal`);
@@ -129,8 +172,86 @@ if (!phaseNums.includes(0)) fail("phase0", "no Phase 0 (steel thread) in Phases 
 for (const p of reqPhases)
   if (!phaseNums.includes(p)) fail("reqs", `REQ maps to phase ${p} which doesn't exist`);
 
+// ---------- 4b. phase dependency lines (kickoff v3): exist, valid refs, no cycles ----------
+const specTexts = new Map(); // n -> spec file text (reused by v3.5 checks)
+const depGraph = new Map();
+for (const n of phaseNums) {
+  const specPath = `phases/phase-${pad(n)}-spec.md`;
+  if (!existsSync(join(root, specPath))) continue; // missing spec already failed above
+  const spec = read(specPath);
+  specTexts.set(n, spec);
+  const depLine = spec.match(/\*\*Depends on:\*\*\s*(.+)/);
+  if (!depLine) {
+    v3check("phase-deps", `${specPath}: missing **Depends on:** line${isV3 ? "" : " (required from kickoff v3)"}`);
+    continue;
+  }
+  const val = depLine[1].trim();
+  if (/^phase-NN/.test(val)) {
+    v3check("phase-deps", `${specPath}: **Depends on:** still the template placeholder`);
+    continue;
+  }
+  if (/^none\b/i.test(val)) {
+    depGraph.set(n, []);
+    continue;
+  }
+  const deps = [...val.matchAll(/phase-(\d+)/gi)].map((m) => Number(m[1]));
+  if (deps.length === 0) {
+    v3check("phase-deps", `${specPath}: **Depends on:** "${val.slice(0, 40)}" — use \`none\` or a phase-NN list`);
+    continue;
+  }
+  if (n === 0) fail("phase-deps", "phase-00 must depend on `none` — the steel thread comes first");
+  for (const d of deps)
+    if (!phaseNums.includes(d))
+      fail("phase-deps", `${specPath} depends on phase-${pad(d)} which doesn't exist`);
+  depGraph.set(n, deps);
+}
+{
+  // cycle detection — DFS with visiting/done states
+  const state = new Map();
+  const visit = (n, path) => {
+    if (state.get(n) === 1) return;
+    if (state.get(n) === 0) {
+      fail("phase-deps", `dependency cycle: ${[...path, n].map((x) => `phase-${pad(x)}`).join(" → ")}`);
+      return;
+    }
+    state.set(n, 0);
+    for (const d of depGraph.get(n) || []) visit(d, [...path, n]);
+    state.set(n, 1);
+  };
+  for (const n of depGraph.keys()) visit(n, []);
+}
+
+// ---------- 4c. appetite arithmetic (v3.5 G3) — 1 week = 5 working days ----------
+{
+  const parseApp = (text) => {
+    const m = (text || "").match(/(\d+(?:\.\d+)?)\s*(day|week)s?\b/i);
+    return m ? Number(m[1]) * (/week/i.test(m[2]) ? 5 : 1) : null;
+  };
+  const totalDays = parseApp(appetiteBody);
+  if (totalDays === null)
+    warn("appetite-sum", "PLAN Appetite has no parseable `<N> days|weeks` — arithmetic skipped (never a FAIL)");
+  else {
+    let sumDays = 0;
+    const unparsed = [];
+    for (const [n, spec] of specTexts) {
+      if (nextCycle.has(n)) continue; // next-cycle/parked phases don't count against this cycle
+      const line = (spec.match(/\*\*Appetite:\*\*\s*(.+)/) || [, ""])[1];
+      const d = parseApp(line);
+      if (d === null) unparsed.push(`phase-${pad(n)}`);
+      else sumDays += d;
+    }
+    if (unparsed.length)
+      warn("appetite-sum", `unparseable phase appetites skipped: ${unparsed.join(", ")}`);
+    if (sumDays > totalDays)
+      gate("appetite-sum", `phase appetites sum to ${sumDays}d > total ${totalDays}d (1w=5d) — the plan over-commits; cut or re-scope`);
+    else if (sumDays > 0.8 * totalDays)
+      warn("appetite-sum", `phase appetites sum to ${sumDays}d = ${Math.round((100 * sumDays) / totalDays)}% of ${totalDays}d total — zero slack is its own fiction`);
+  }
+}
+
 // ---------- 5. assumptions ledger: cap 7, every row has a trigger ----------
-const asmRows = tableRows(section(secs, "assumptions"));
+const asmBody = section(secs, "assumptions") || "";
+const asmRows = tableRows(asmBody);
 if (asmRows.length > 7) fail("assumptions", `${asmRows.length} entries — hard cap is 7`);
 asmRows.forEach((r, i) => {
   const trigger = (r[1] || "").trim();
@@ -144,7 +265,11 @@ asmRows.forEach((r, i) => {
 const pmRows = tableRows(section(secs, "pre-mortem"));
 if (pmRows.length < 5) fail("pre-mortem", `${pmRows.length} rows — need top 5 failure causes`);
 pmRows.forEach((r, i) => {
-  if (!(r[2] || r[1] || "").trim())
+  // mitigation = col 3 in the (# | cause | mitigation) template; col 2 in 2-col tables.
+  // (v3.5 G1 fixture exposed the old r[2]||r[1] fallback as a hole: a blanked mitigation
+  // cell passed because the CAUSE cell was non-empty.)
+  const mit = ((r.length >= 3 ? r[2] : r[1]) || "").trim();
+  if (!mit)
     fail("pre-mortem", `row ${i + 1} has no mitigation / accepted-risk entry`);
 });
 
@@ -160,26 +285,105 @@ depRows.forEach((r) => {
 if (depRows.length === 0)
   warn("deps", "External dependencies table empty — fine only if the build truly has none");
 
-// ---------- 8. ADR index rows have matching files ----------
+// ---------- 8. ADR index rows: matching files + [adr] reversibility + [spike] deferred ----------
 const adrRows = tableRows(section(secs, "key decisions"));
 const adrDir = join(root, "docs", "adr");
 const adrFiles = existsSync(adrDir) ? readdirSync(adrDir) : [];
+const nonnegBody = section(secs, "non-negotiables") || "";
+const adrNums = [];
 adrRows.forEach((r) => {
   const num = (r[0] || "").match(/\d{4}/)?.[0];
   if (!num) return;
-  if (!adrFiles.some((f) => f.startsWith(num)))
+  adrNums.push(num);
+  const file = adrFiles.find((f) => f.startsWith(num));
+  if (!file) {
     fail("adr", `ADR ${num} in index but docs/adr/${num}-*.md not found`);
+    return;
+  }
+  const adr = read(`docs/adr/${file}`);
+  // [adr] reversibility (kickoff v3): every decision declares its door type
+  const rev = adr.match(/\*\*Reversibility:\*\*\s*(one-way|two-way)\s*$/m);
+  if (!rev) {
+    v3check("adr", `ADR ${num}: missing/invalid **Reversibility:** — must be exactly \`one-way\` or \`two-way\`${isV3 ? "" : " (required from kickoff v3)"}`);
+  } else if (rev[1] === "one-way") {
+    const rt = adr.match(/\*\*Revisit trigger:\*\*\s*(.+)/);
+    const rtVal = rt ? rt[1].trim() : "";
+    if (!rtVal || rtVal.length < 8 || rtVal.startsWith("<"))
+      v3check("adr", `ADR ${num}: one-way door without a real **Revisit trigger:** — one-way decisions must name what reopens them`);
+  }
+  // [spike] — DEFERRED ADRs must have a quarantined spike task in phase-00
+  const statusLine = (adr.match(/\*\*Status:\*\*.*$/m) || [""])[0];
+  if (/\bDEFERRED\b/.test(statusLine)) {
+    const p0Path = "phases/phase-00-spec.md";
+    const p0 = existsSync(join(root, p0Path)) ? read(p0Path) : "";
+    if (!(/spike/i.test(p0) && p0.includes(num)))
+      fail("spike", `ADR ${num} is DEFERRED but ${p0Path} has no spike task referencing ${num} — a deferred decision needs its scheduled spike (blocks Phase-0 close)`);
+  }
+  // [adr-wired] (v3.5 G6): a decision nobody consumes is decoration
+  const wired = [...specTexts.values()].some((t) => t.includes(num)) || nonnegBody.includes(num);
+  if (!wired)
+    gate("adr-wired", `ADR ${num} is never consumed — cite it in ≥1 phase spec or in ## Non-negotiables`);
+  // [adr-confidence] (v3.5 G8): low-confidence decisions must be tracked as assumptions
+  if (/\*\*Confidence:\*\*\s*low\b/i.test(adr) && !asmBody.includes(num))
+    gate("adr-confidence", `ADR ${num} has Confidence: low but no Assumptions-ledger row cites it — research it, spike it, or accept it explicitly`);
 });
 if (adrRows.length === 0) fail("adr", "ADR index empty — no fork was resolved? Unlikely.");
 
+// ---------- 8b. pre-mortem must cite THIS plan (v3.5 G2) ----------
+{
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const depNames = depRows.map((r) => (r[0] || "").split(/[\s(]/)[0]).filter((w) => w.length > 2);
+  const cites = (t) =>
+    /REQ-\d+/i.test(t) ||
+    /phase[- ]?\d+/i.test(t) ||
+    adrNums.some((n) => t.includes(n)) ||
+    depNames.some((d) => new RegExp(`\\b${esc(d)}\\b`, "i").test(t));
+  const nonCiting = pmRows.filter((r) => !cites(r.join(" ")));
+  if (pmRows.length >= 5 && nonCiting.length > 1)
+    gate("pre-mortem-cite", `pre-mortem looks generic — ${nonCiting.length} of ${pmRows.length} rows reference nothing in this plan (no REQ / phase N / ADR / dep name); max 1 plan-external row`);
+}
+
+// ---------- 8c. architecture diagram syntax (v3.5 G5) — family check, not correctness ----------
+{
+  const archBody = section(secs, "architecture") || "";
+  const fence = archBody.match(/```mermaid([\s\S]*?)```/);
+  if (!fence) gate("architecture", "## Architecture has no ```mermaid fence");
+  else if (/C4Context|C4Container/.test(fence[1]))
+    gate("architecture", "experimental C4 syntax (C4Context/C4Container) — use a plain flowchart with C4 vocabulary");
+  else if (!/flowchart/.test(fence[1]))
+    gate("architecture", "mermaid block is not a `flowchart`");
+}
+
+// ---------- 8d. non-negotiables verbatim blocks (v3.5 G7) — copies must not drift ----------
+{
+  const planBullets = nonnegBody.split("\n").filter((l) => /^\s*-\s+/.test(l)).map(normLine);
+  if (planBullets.length > 0) {
+    for (const [n, txt] of specTexts) {
+      const m = txt.match(/##\s*Non-negotiables \(verbatim from PLAN\)([\s\S]*?)(?=\n##\s|$)/);
+      if (!m) {
+        gate("nonneg-drift", `phase-${pad(n)}-spec.md: missing "## Non-negotiables (verbatim from PLAN)" block — context-isolated executors never see PLAN`);
+        continue;
+      }
+      const specBullets = m[1].split("\n").filter((l) => /^\s*-\s+/.test(l)).map(normLine);
+      if (planBullets.length !== specBullets.length || planBullets.some((b, i) => b !== specBullets[i]))
+        gate("nonneg-drift", `phase-${pad(n)}-spec.md: Non-negotiables block drifted from PLAN — resync (a stale copy lies; /arc-change resyncs on every PLAN nonneg change)`);
+    }
+  }
+}
+
 // ---------- 9. kill criteria present under appetite ----------
-if (!/kill|50%|scope-cut/i.test(section(secs, "appetite") || ""))
+if (!/kill|50%|scope-cut/i.test(appetiteBody))
   fail("kill-criteria", "Appetite section has no kill criteria / 50% tripwire line");
 
-// ---------- 10. current state: if present, must not be placeholder ----------
+// ---------- 10. current state: if present, must not be placeholder; v3.5 G9 structure ----------
 const curState = section(secs, "current state");
 if (curState !== null && !hasContent(curState))
   warn("current-state", '"## Current state" present but empty/placeholder — fill it (brownfield) or delete the section (greenfield)');
+if (curState !== null && hasContent(curState)) {
+  for (const label of ["Stack", "Entry points", "Conventions", "Do-not-touch"])
+    if (!new RegExp(`${label}\\s*:`, "i").test(curState))
+      gate("current-state-structure", `## Current state missing "${label}:" line (codebase-surveyor output contract)`);
+}
 
 // ---------- 11. retro-log present (pre-mortem seed source) ----------
 if (!existsSync(join(root, "docs", "retro-log.md")))
