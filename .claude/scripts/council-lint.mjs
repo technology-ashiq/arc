@@ -1,23 +1,40 @@
 #!/usr/bin/env node
 /**
- * council-lint — structural gate for the arc-council deliverable artifacts.
- * Zero deps. Exit 0 = artifacts structurally present & well-formed; exit 1 = named failures.
+ * council-lint — gate for the arc-council deliverable artifacts + rendered verdicts.
+ * Zero deps. Exit 0 = pass; exit 1 = named failures.
  *
- * Phase 0 scope (steel thread): the `/arc-council` command + the 3 core stance agents
- * (advocate/skeptic/neutral) exist with valid frontmatter.
- * Phase 1 extends this with the POINT-ID cross-reference + "verifier contested nothing" checks;
- * Phase 3 adds the researcher/verifier/7 domain agents to the roster below.
+ * Two modes:
+ *   node .claude/scripts/council-lint.mjs [repo-root]
+ *     Static — the /arc-council command + the core member agents exist with valid frontmatter.
+ *   node .claude/scripts/council-lint.mjs --verdict <file>
+ *     Verdict — POINT-ID cross-reference: every [Pn] cited in KEY REASONS/DISSENT must be rated
+ *     Supported/Plausible in the verifier's ratings, and the verifier must have contested >=1 point
+ *     (a run where 0 points are Weak/Contested is a rubber-stamp signal). (ADR-0007)
  *
- * Usage: node .claude/scripts/council-lint.mjs [repo-root]
+ * Roster grows per phase: Phase 0 = advocate/skeptic/neutral; Phase 1 adds verifier;
+ * Phase 3 adds researcher + the 7 domain experts.
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
-const root = process.argv[2] || ".";
+const args = process.argv.slice(2);
+const vIdx = args.indexOf("--verdict");
+const verdictFile = vIdx >= 0 ? args[vIdx + 1] : null;
+const root = args.find((a, i) => !a.startsWith("--") && i !== vIdx + 1) || ".";
+
 const failures = [];
 const fail = (msg) => failures.push(msg);
-const read = (p) => readFileSync(join(root, p), "utf8");
-const exists = (p) => existsSync(join(root, p));
+
+function report() {
+  if (failures.length) {
+    console.error(`council-lint: ${failures.length} check(s) FAILED\n`);
+    for (const f of failures) console.error(`FAIL  ${f}`);
+    console.error("\nFix and rerun.");
+    process.exit(1);
+  }
+  console.log("council-lint: all checks passed ✔");
+  process.exit(0);
+}
 
 // minimal YAML-frontmatter reader (key: value between the first --- fences)
 function frontmatter(text) {
@@ -31,7 +48,44 @@ function frontmatter(text) {
   return fm;
 }
 
-// ---- the command ----
+// ------------------------------------------------------------------ verdict mode
+if (verdictFile) {
+  if (!existsSync(verdictFile)) {
+    fail(`verdict file not found: ${verdictFile}`);
+    report();
+  }
+  const text = readFileSync(verdictFile, "utf8");
+
+  // verifier ratings: parse the "## VERIFIER RATINGS" section for `Pn: <rating>` lines
+  const rm = text.match(/##\s*VERIFIER RATINGS([\s\S]*?)(?=\n##\s|$)/i);
+  const ratings = {};
+  if (rm)
+    for (const mm of rm[1].matchAll(/\b([A-Z]{1,2}\d+)\s*[:\-–]\s*(Supported|Plausible|Weak|Contested)\b/gi))
+      ratings[mm[1].toUpperCase()] = mm[2][0].toUpperCase() + mm[2].slice(1).toLowerCase();
+  const ratedIds = Object.keys(ratings);
+  if (ratedIds.length === 0)
+    fail(`${verdictFile}: no "## VERIFIER RATINGS" section with \`Pn: <Supported|Plausible|Weak|Contested>\` lines`);
+
+  // rubber-stamp guard: the verifier must have contested at least one point
+  const contested = ratedIds.filter((id) => /^(Weak|Contested)$/.test(ratings[id]));
+  if (ratedIds.length > 0 && contested.length === 0)
+    fail(`${verdictFile}: verifier contested nothing — rated 0 of ${ratedIds.length} points Weak/Contested (rubber-stamp signal)`);
+
+  // cross-reference: every [Pn] cited in the verdict must be rated Supported/Plausible
+  const cited = [...new Set([...text.matchAll(/\[([A-Z]{1,2}\d+)\]/gi)].map((m) => m[1].toUpperCase()))];
+  if (cited.length === 0) fail(`${verdictFile}: no KEY REASON/DISSENT cites a [Pn] POINT-ID`);
+  for (const id of cited) {
+    if (!ratings[id]) fail(`${verdictFile}: cites unrated point ${id} — not in VERIFIER RATINGS`);
+    else if (!/^(Supported|Plausible)$/.test(ratings[id]))
+      fail(`${verdictFile}: cites ${id} rated ${ratings[id]} — only Supported/Plausible may ground a KEY REASON or DISSENT`);
+  }
+  report();
+}
+
+// ------------------------------------------------------------------ static mode
+const read = (p) => readFileSync(join(root, p), "utf8");
+const exists = (p) => existsSync(join(root, p));
+
 const CMD = ".claude/commands/arc-council.md";
 if (!exists(CMD)) fail(`${CMD} missing — build the arc-council command`);
 else {
@@ -42,8 +96,7 @@ else {
       if (!fm[k]) fail(`${CMD}: frontmatter missing "${k}"`);
 }
 
-// ---- the core stance agents (Phase 0) ----
-const CORE_AGENTS = ["council-advocate", "council-skeptic", "council-neutral"];
+const CORE_AGENTS = ["council-advocate", "council-skeptic", "council-neutral", "council-verifier"];
 for (const name of CORE_AGENTS) {
   const p = `.claude/agents/${name}.md`;
   if (!exists(p)) {
@@ -61,12 +114,4 @@ for (const name of CORE_AGENTS) {
     fail(`${p}: frontmatter name "${fm.name}" != filename "${name}"`);
 }
 
-// ---- report ----
-if (failures.length) {
-  console.error(`council-lint: ${failures.length} check(s) FAILED\n`);
-  for (const f of failures) console.error(`FAIL  ${f}`);
-  console.error("\nFix and rerun.");
-  process.exit(1);
-}
-console.log("council-lint: all checks passed ✔");
-process.exit(0);
+report();
