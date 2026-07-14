@@ -29,5 +29,12 @@ improve with every project* — this command is how.
    Numbers come from PROGRESS's done-log metrics + PLAN's ledgers — count, don't estimate.
    Metrics are read HERE only; they never gate mid-build. This row is how "world's best
    planning" stays a measured claim instead of a slogan.
-5. Show each proposal as a concrete diff. Wait for my approval, apply only what I approve.
-6. Nothing qualifies? Say so plainly — don't invent rules to look useful.
+5. **Promote trial gates (kickoff v4 F1):** read `docs/trial-ledger.md`. Append one row per
+   substance gate exercised this build (`date | gate | run-ref | fired? | false-positive?`). A gate
+   is **promotable** only when BOTH hold: its bats fixture proves it FAILs on its own mutation
+   (`good/` still clean), AND it now has ≥ 3 logged clean dogfood runs with zero false-positives.
+   For each promotable gate, propose the one-line diff that removes it from the `TRIAL` set in
+   `.claude/scripts/kickoff-lint.mjs`. Never promote on judgement — the ledger is the gate; a logged
+   false-positive resets that gate's count.
+6. Show each proposal as a concrete diff. Wait for my approval, apply only what I approve.
+7. Nothing qualifies? Say so plainly — don't invent rules to look useful.

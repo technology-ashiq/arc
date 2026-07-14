@@ -14,7 +14,9 @@
  *
  * WARN-FIRST TRIAL: every v3.5 substance group starts in TRIAL (always WARN, even on v3
  * plans). Promotion to FAIL = remove the group from the TRIAL set below after a build's
- * retro has judged the gate useful. One line per promotion, auditable in git.
+ * retro has judged the gate useful. One line per promotion, auditable in git. v4 F1 makes
+ * that promotion evidence-driven (fixture-proven + >=3 clean dogfood runs, logged in
+ * docs/trial-ledger.md) and prints a [trial-status] footer of live-vs-trial counts.
  *
  * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
  * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
@@ -28,6 +30,7 @@ const failures = [];
 const warnings = [];
 const fail = (check, msg) => failures.push(`[${check}] ${msg}`);
 const warn = (check, msg) => warnings.push(`[${check}] ${msg}`);
+let trialStatusLine = ""; // v4 F1: set once TRIAL/SUBSTANCE are known; printed by report()
 
 // ---------- helpers ----------
 const read = (p) => readFileSync(join(root, p), "utf8");
@@ -110,6 +113,18 @@ const TRIAL = new Set([
   "architecture", "current-state-structure", "nonneg-drift",
 ]);
 const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) : v3check(group, msg));
+
+// v4 F1: the full substance-gate set (superset of TRIAL). A group leaves TRIAL — becomes a
+// real FAIL-capable gate — only when /arc-retro promotes it against docs/trial-ledger.md
+// (fixture-proven + >=3 clean dogfood runs, zero false-positives). Promotion removes the
+// group from TRIAL but keeps it here, so the footer counts it as live.
+const SUBSTANCE = new Set([
+  "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
+  "architecture", "current-state-structure", "nonneg-drift",
+]);
+trialStatusLine =
+  `[trial-status] ${[...SUBSTANCE].filter((g) => !TRIAL.has(g)).length} substance gate(s) live, ` +
+  `${TRIAL.size} in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)`;
 
 // ---------- 3. success requirements: status lifecycle, tier-capped active rows, phase mapping ----------
 const VAGUE =
@@ -397,6 +412,7 @@ report();
 
 function report() {
   for (const w of warnings) console.log(`WARN  ${w}`);
+  if (trialStatusLine) console.log(trialStatusLine);
   if (failures.length) {
     console.error(`\nkickoff-lint: ${failures.length} check(s) FAILED\n`);
     for (const f of failures) console.error(`FAIL  ${f}`);
