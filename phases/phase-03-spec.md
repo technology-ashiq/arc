@@ -5,7 +5,7 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **Trivy adapter** (SCA: dependencies + lockfile), SARIF-merged, baseline-aware
+- [ ] **Trivy adapter** (SCA: dependencies + lockfile), SARIF-merged, baseline-aware (ADR-0003 — Trivy over Snyk: free, SARIF-native, no account gate)
 - [ ] **trufflehog adapter** (verified-secrets mode) alongside gitleaks
 - [ ] **CodeQL adapter** — optional tier (ADR-0004): detects availability, SKIPPED otherwise; CI-tier only
 - [ ] **RLS test harness**: generated SQL assertions per table ("anon cannot SELECT/INSERT/UPDATE x") runnable against local Supabase; wired as a gate check; `security-sensitive.md` rule updated to require it

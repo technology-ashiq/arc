@@ -5,7 +5,7 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `settings.json` defaults flip: `coverageMode:"block"`, `docsGate:"block"`, `ARC_REQUIRED_REVIEWS` documented default `code,security`
+- [ ] `settings.json` defaults flip: `coverageMode:"block"`, `docsGate:"block"`, `ARC_REQUIRED_REVIEWS` documented default `code,security` (ADR-0008 — block by default, warn is the opt-in downgrade)
 - [ ] Strictness profiles exist (`starter` / `standard` / `strict`) — one settings key switches gate modes as a set, so block-by-default has a sanctioned escape hatch
 - [ ] `/arc-review` auto-stamps the `code` ledger kind on verdict (closes the known usermanual §8 gap)
 - [ ] Cross-platform sync: bash equivalent of `sync-to-project.ps1` (rsync/cp based), bats-tested; PowerShell script kept but no longer the only path

@@ -6,7 +6,7 @@
 ## Exit criteria (Definition of Done)
 
 - [ ] `arc-scan` runs `semgrep` + `gitleaks` on a diff scope, each via an adapter file; missing tool → `SKIPPED` line, exit 0
-- [ ] Both outputs normalize to minimal SARIF (ruleId, level, message, location, fingerprint) and merge into one `scan-result.sarif`
+- [ ] Both outputs normalize to minimal SARIF (ruleId, level, message, location, fingerprint) and merge into one `scan-result.sarif` (ADR-0001 — single runner + per-tool adapters)
 - [ ] Triage stub consumes the merge and emits verdict JSON (pass/block + finding count) — no LLM yet, pure threshold (any `error`-level = block)
 - [ ] Verdict stamps the existing review ledger (`review-ledger.sh stamp scan`)
 - [ ] bats-core suite covers: adapter degrade, SARIF merge, verdict logic, ledger stamp — all green

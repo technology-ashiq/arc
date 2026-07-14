@@ -1,6 +1,6 @@
 # Phase 02 — Gate engine v1: manifest, baseline, suppression, evidence
 
-**Goal (one line):** gates become declarative data (`arc.gates.yaml`) with the three noise defenses built in, and phase-close produces a committed evidence bundle — the moat becomes a product.
+**Goal (one line):** gates become declarative data (`arc.gates.yaml`) with the three noise defenses built in (ADR-0002 — baseline + triage + suppression ship before any tool expansion), and phase-close produces a committed evidence bundle — the moat becomes a product.
 **Appetite:** 2 weeks. This is the highest-risk phase after 0: if noise defense fails here, everything after is dead (pre-mortem #1).
 
 ## Exit criteria (Definition of Done)
