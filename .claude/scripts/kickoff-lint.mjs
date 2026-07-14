@@ -12,9 +12,14 @@
  * in [reqs]. These raise the substance FLOOR; they do not guarantee substance (a
  * determined author can still write "scope creep on REQ-03"). Honest limits stay honest.
  *
+ * v4 substance group: [verify-red] — Phase 0 (and any already-detailed Phase 1) verification
+ * must name a Test command + an Expected-failure-first line (red before green). WARN-first.
+ *
  * WARN-FIRST TRIAL: every v3.5 substance group starts in TRIAL (always WARN, even on v3
  * plans). Promotion to FAIL = remove the group from the TRIAL set below after a build's
- * retro has judged the gate useful. One line per promotion, auditable in git.
+ * retro has judged the gate useful. One line per promotion, auditable in git. v4 F1 makes
+ * that promotion evidence-driven (fixture-proven + >=3 clean dogfood runs, logged in
+ * docs/trial-ledger.md) and prints a [trial-status] footer of live-vs-trial counts.
  *
  * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
  * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
@@ -28,6 +33,7 @@ const failures = [];
 const warnings = [];
 const fail = (check, msg) => failures.push(`[${check}] ${msg}`);
 const warn = (check, msg) => warnings.push(`[${check}] ${msg}`);
+let trialStatusLine = ""; // v4 F1: set once TRIAL/SUBSTANCE are known; printed by report()
 
 // ---------- helpers ----------
 const read = (p) => readFileSync(join(root, p), "utf8");
@@ -107,9 +113,21 @@ const v3check = isV3 ? fail : warn;
 // v3 plans). Promote only after /arc-retro reviews the gate's first-build usefulness.
 const TRIAL = new Set([
   "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
-  "architecture", "current-state-structure", "nonneg-drift",
+  "architecture", "current-state-structure", "nonneg-drift", "verify-red",
 ]);
 const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) : v3check(group, msg));
+
+// v4 F1: the full substance-gate set (superset of TRIAL). A group leaves TRIAL — becomes a
+// real FAIL-capable gate — only when /arc-retro promotes it against docs/trial-ledger.md
+// (fixture-proven + >=3 clean dogfood runs, zero false-positives). Promotion removes the
+// group from TRIAL but keeps it here, so the footer counts it as live.
+const SUBSTANCE = new Set([
+  "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
+  "architecture", "current-state-structure", "nonneg-drift", "verify-red",
+]);
+trialStatusLine =
+  `[trial-status] ${[...SUBSTANCE].filter((g) => !TRIAL.has(g)).length} substance gate(s) live, ` +
+  `${TRIAL.size} in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)`;
 
 // ---------- 3. success requirements: status lifecycle, tier-capped active rows, phase mapping ----------
 const VAGUE =
@@ -371,6 +389,29 @@ if (adrRows.length === 0) fail("adr", "ADR index empty — no fork was resolved?
   }
 }
 
+// ---------- 8e. expected-fail-first named for Phase 0–1 (v4 H1) ----------
+// Phase 0 (steel thread) MUST name a red-first test at kickoff. Phase 1 is gated only once
+// it has been detailed (a Test command present) — a coarse "refine when the phase starts"
+// line stays legal at kickoff, refined later via /arc-change. WARN-first (TRIAL).
+for (const vn of [0, 1]) {
+  const vspec = specTexts.get(vn);
+  if (!vspec) continue; // a missing spec already failed in [phases]
+  const vm = vspec.match(/##\s*Verification plan([\s\S]*?)(?=\n##\s|$)/i);
+  const vbody = vm ? vm[1] : "";
+  const filled = (label) => {
+    const m = vbody.match(new RegExp(`\\*\\*${label}:\\*\\*\\s*(.+)`, "i"));
+    const val = m ? m[1].trim() : "";
+    return val && !/^[(<]/.test(val) ? val : ""; // reject template placeholders (…) / <…>
+  };
+  const hasTestCmd = !!filled("Test command");
+  const hasRed = !!filled("Expected failure first");
+  if (!(vn === 0 || hasTestCmd)) continue; // phase-1 coarse line is legal at kickoff
+  if (!hasTestCmd)
+    gate("verify-red", `phase-${pad(vn)}-spec.md: Verification plan names no concrete **Test command:** — Phase 0 needs a real test before code`);
+  else if (!hasRed)
+    gate("verify-red", `phase-${pad(vn)}-spec.md: Verification plan has no **Expected failure first:** — name the test that fails RED before this phase is built`);
+}
+
 // ---------- 9. kill criteria present under appetite ----------
 if (!/kill|50%|scope-cut/i.test(appetiteBody))
   fail("kill-criteria", "Appetite section has no kill criteria / 50% tripwire line");
@@ -397,6 +438,7 @@ report();
 
 function report() {
   for (const w of warnings) console.log(`WARN  ${w}`);
+  if (trialStatusLine) console.log(trialStatusLine);
   if (failures.length) {
     console.error(`\nkickoff-lint: ${failures.length} check(s) FAILED\n`);
     for (const f of failures) console.error(`FAIL  ${f}`);
