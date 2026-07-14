@@ -261,3 +261,15 @@ addrow() {
   run $LINT_CMD "$TMP"
   [ "$status" -eq 0 ]; [[ "$output" == *"[nonneg-drift]"*"missing"* ]]
 }
+
+@test "[verify-red] phase-0 without expected-fail-first warns (trial)" {
+  sedi '/^- \*\*Expected failure first:\*\*/d' "$TMP/phases/phase-00-spec.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 0 ]; [[ "$output" == *"[verify-red]"*"[trial]"* ]]
+}
+
+@test "[verify-red] detailed phase-1 without red-first warns (trial)" {
+  sedi 's#^One coarse line.*#- **Test command:** `npm test -- health`#' "$TMP/phases/phase-01-spec.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 0 ]; [[ "$output" == *"[verify-red]"*"[trial]"* ]]
+}

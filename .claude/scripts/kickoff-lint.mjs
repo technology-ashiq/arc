@@ -12,6 +12,9 @@
  * in [reqs]. These raise the substance FLOOR; they do not guarantee substance (a
  * determined author can still write "scope creep on REQ-03"). Honest limits stay honest.
  *
+ * v4 substance group: [verify-red] — Phase 0 (and any already-detailed Phase 1) verification
+ * must name a Test command + an Expected-failure-first line (red before green). WARN-first.
+ *
  * WARN-FIRST TRIAL: every v3.5 substance group starts in TRIAL (always WARN, even on v3
  * plans). Promotion to FAIL = remove the group from the TRIAL set below after a build's
  * retro has judged the gate useful. One line per promotion, auditable in git. v4 F1 makes
@@ -110,7 +113,7 @@ const v3check = isV3 ? fail : warn;
 // v3 plans). Promote only after /arc-retro reviews the gate's first-build usefulness.
 const TRIAL = new Set([
   "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
-  "architecture", "current-state-structure", "nonneg-drift",
+  "architecture", "current-state-structure", "nonneg-drift", "verify-red",
 ]);
 const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) : v3check(group, msg));
 
@@ -120,7 +123,7 @@ const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) :
 // group from TRIAL but keeps it here, so the footer counts it as live.
 const SUBSTANCE = new Set([
   "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
-  "architecture", "current-state-structure", "nonneg-drift",
+  "architecture", "current-state-structure", "nonneg-drift", "verify-red",
 ]);
 trialStatusLine =
   `[trial-status] ${[...SUBSTANCE].filter((g) => !TRIAL.has(g)).length} substance gate(s) live, ` +
@@ -384,6 +387,29 @@ if (adrRows.length === 0) fail("adr", "ADR index empty — no fork was resolved?
         gate("nonneg-drift", `phase-${pad(n)}-spec.md: Non-negotiables block drifted from PLAN — resync (a stale copy lies; /arc-change resyncs on every PLAN nonneg change)`);
     }
   }
+}
+
+// ---------- 8e. expected-fail-first named for Phase 0–1 (v4 H1) ----------
+// Phase 0 (steel thread) MUST name a red-first test at kickoff. Phase 1 is gated only once
+// it has been detailed (a Test command present) — a coarse "refine when the phase starts"
+// line stays legal at kickoff, refined later via /arc-change. WARN-first (TRIAL).
+for (const vn of [0, 1]) {
+  const vspec = specTexts.get(vn);
+  if (!vspec) continue; // a missing spec already failed in [phases]
+  const vm = vspec.match(/##\s*Verification plan([\s\S]*?)(?=\n##\s|$)/i);
+  const vbody = vm ? vm[1] : "";
+  const filled = (label) => {
+    const m = vbody.match(new RegExp(`\\*\\*${label}:\\*\\*\\s*(.+)`, "i"));
+    const val = m ? m[1].trim() : "";
+    return val && !/^[(<]/.test(val) ? val : ""; // reject template placeholders (…) / <…>
+  };
+  const hasTestCmd = !!filled("Test command");
+  const hasRed = !!filled("Expected failure first");
+  if (!(vn === 0 || hasTestCmd)) continue; // phase-1 coarse line is legal at kickoff
+  if (!hasTestCmd)
+    gate("verify-red", `phase-${pad(vn)}-spec.md: Verification plan names no concrete **Test command:** — Phase 0 needs a real test before code`);
+  else if (!hasRed)
+    gate("verify-red", `phase-${pad(vn)}-spec.md: Verification plan has no **Expected failure first:** — name the test that fails RED before this phase is built`);
 }
 
 // ---------- 9. kill criteria present under appetite ----------

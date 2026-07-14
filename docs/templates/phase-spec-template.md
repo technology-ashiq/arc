@@ -20,7 +20,10 @@
 ## Verification plan
 <!-- Written at kickoff for Phase 0–1 ONLY; later phases keep one coarse line and refine
      it when the phase starts. Detailed verification for a far-future phase is fiction.
-     "How we'll verify" is decided BEFORE any code — evidence over assertion. -->
+     "How we'll verify" is decided BEFORE any code — evidence over assertion.
+     lint-gated [verify-red] (v4): Phase 0 must fill **Test command** + **Expected failure
+     first**; a Phase 1 that has a Test command must fill Expected failure first too. -->
+
 
 - **Test command:** (exact, e.g. `npm run test -- invoices`)
 - **Expected failure first:** (which test fails BEFORE this phase is built + the expected
