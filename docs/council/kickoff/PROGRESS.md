@@ -10,7 +10,7 @@
 |---|---|---|---|
 | 0 | Steel thread: Chair + advocate/skeptic/neutral → a rendered verdict | 2 days | ✅ done (2026-07-15) |
 | 1 | Verified synthesis: verifier + POINT-ID contracts + output format + `quick` | 3 days | ✅ done (2026-07-15) |
-| 2 | Deep research layer: researcher fan-out + neutral Evidence Brief + offline | 2 days | not started |
+| 2 | Deep research layer: researcher fan-out + neutral Evidence Brief + offline | 2 days | ✅ done (2026-07-15) |
 | 3 | Full domain roster: 7 experts + Chair roster selection (ceiling 4) | 2 days | not started |
 | 4 | Fairness invariants + auto-save sessions + sync wiring + docs | 3 days | not started |
 
@@ -34,13 +34,30 @@
   IDs → `council-lint --verdict` GREEN (exit 0). Quick dogfood ("self-host a blog?"): 3 members, no
   verifier, short verdict, 0 files written.
 
+- 2026-07-15 — **Phase 2 ✅ (deep research layer).** Built `council-researcher` (fan-out) + command
+  (research fan-out → neutral Evidence Brief → offline `model-knowledge` mode) + `council-lint --brief`
+  (≥3 facts; live brief needs ≥2 sources per High/Med fact or a low-mark). RED first: static (researcher
+  missing) + `bad-fewfacts` (<3) + `bad-unsourced` (High/1-URL) FAIL; `good-live`/`good-offline` PASS.
+  After build → static GREEN, both good briefs GREEN, bad still FAIL. Live dogfood ("adopt Rust for a
+  perf-sensitive backend?"): 3 parallel researchers (2 real-web, 15+23 tool calls fetching
+  discord/cloudflare/aws/rust-lang/crates.io; 1 offline model-knowledge) → live Evidence Brief (11 facts,
+  `--brief` GREEN) + offline brief (`--brief` GREEN) → URL spot-check confirmed Cloudflare Pingora (caught
+  a 70%-vs-67% imprecision) → 3 members debated from the brief AND gap-filled with sources → verifier
+  graded 16 POINT-IDs AND caught a brief error all 3 inherited (actix-web is 4.x, not pre-1.0) → verdict
+  `DECISION: CONDITIONAL` citing only Supported/Plausible IDs → `council-lint --verdict` GREEN.
+  Honest gap: offline mode proven at brief level; a full offline→verdict chain wasn't re-run (pipeline is
+  mode-agnostic, proven on the live run). New finding: a newly-created `council-*` agent isn't a
+  registered `subagent_type` until a turn boundary — create-and-same-turn-spawn fails (→ Phase 2 retro).
+
 ## Appetite burn
-5 of 12 phase-days used (42%). Total appetite: 3 weeks (kill criteria at 50% / 100% per PLAN).
+7 of 12 phase-days used (58%). Total appetite: 3 weeks. (50% tripwire passed; council demonstrably beats a
+raw answer — the verifier caught a propagated factual error + survivorship-bias framing — so kill-criteria PASS.)
 
 ## Now
-**Phases 0–1 ✅ — the council now researches nothing yet but debates, verifies, and decides.** Position:
-`/arc-council` convenes 3 independent members → `council-verifier` grades every point by POINT-ID → the
-Chair renders a verdict that cites only verifier-Supported/Plausible points (mechanically enforced by
-`council-lint --verdict`); `quick` opt-out works. Next step: **Phase 2** (deep research layer) — add
-`council-researcher` fan-out that builds ONE neutral, triangulated Evidence Brief the members debate from,
-plus the offline `model-knowledge` mode. Phase 3 (7 domain experts) then depends on Phases 1+2.
+**Phases 0–2 ✅ — the council now researches, debates, verifies, and decides end-to-end.** Position:
+`/arc-council` fans out `council-researcher` → ONE neutral triangulated Evidence Brief (live or offline) →
+3 independent members debate from it → `council-verifier` grades by POINT-ID (and flags brief-bias) → the
+Chair renders a mechanically-verified verdict (`council-lint --verdict`/`--brief` both gate it); `quick`
+opt-out works. Next step: **Phase 3** (full domain roster) — add the 7 domain experts (strategist,
+risk-analyst, marketer, designer, engineer, policy-analyst, life-counselor) + the Chair's per-question
+roster selection (domain match, ceiling 4, documented tie-break). Depends on Phases 1+2 (both done).
