@@ -1,0 +1,68 @@
+{
+  "app": "C:/Users/ashiq/AppData/Local/Temp/claude/E--Work-Hub-01-Automemory-arc/a50253c0-3506-4e64-a554-c527d2181906/scratchpad/planoff-02a/arms/raw-phase1",
+  "phase": "phase1",
+  "passed": 12,
+  "total": 12,
+  "probes": [
+    {
+      "id": "A1",
+      "pass": true,
+      "detail": "anonymous create in production -> 401 (expected 401)"
+    },
+    {
+      "id": "A2",
+      "pass": true,
+      "detail": "GET /Ei9fmT -> 302, Location=https://example.com/a2-target (expected 302 -> https://example.com/a2-target)"
+    },
+    {
+      "id": "A3",
+      "pass": true,
+      "detail": "second GET -> 302; hits now 2 (expected 2)"
+    },
+    {
+      "id": "A4",
+      "pass": true,
+      "detail": "GET unknown code -> 404 (expected 404)"
+    },
+    {
+      "id": "A5",
+      "pass": true,
+      "detail": "GET /kqtdYi after delete -> 410 (expected 410, NOT 404)"
+    },
+    {
+      "id": "A6",
+      "pass": true,
+      "detail": "past-dated expiresAt accepted at creation; GET /2ao24d -> 410 (expected 410)"
+    },
+    {
+      "id": "A7",
+      "pass": true,
+      "detail": "first create (alias=dupalias-d5a1e9) -> 201; duplicate-alias create -> 409 (expected 201 then 409)"
+    },
+    {
+      "id": "A8",
+      "pass": true,
+      "detail": "statuses 1-10=[201,201,201,201,201,201,201,201,201,201], 11th=429, Retry-After=\"60\""
+    },
+    {
+      "id": "A9",
+      "pass": true,
+      "detail": "alice sees 2 link(s) (expect 2, own only); bob sees 1 (expect 1, own only)"
+    },
+    {
+      "id": "A10",
+      "pass": true,
+      "detail": "production + X-Test-User header -> 401 (expected 401, header must be ignored)"
+    },
+    {
+      "id": "A11",
+      "pass": true,
+      "detail": "reset -> 204; post-reset list length=0 (expect 0); GET /YUllH0 -> 404 (expect 404)"
+    },
+    {
+      "id": "A12",
+      "pass": true,
+      "detail": "after restart, GET /Ie3d98 -> 302, Location=https://example.com/a12-persisted (expected 302 -> https://example.com/a12-persisted)"
+    }
+  ]
+}

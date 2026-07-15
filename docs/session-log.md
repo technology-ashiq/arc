@@ -14,3 +14,91 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
     **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-14 02:15 — feat/kickoff-v35
+- Last commit: a2a82ef feat(kickoff): v3.5 substance floor (WARN-first trial) + BSD-portable bats suite — fixes macOS CI
+- Uncommitted files at exit: 0
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-14 15:22 — main
+- Last commit: 4083ca7 Merge pull request #21 from technology-ashiq/feat/kickoff-v3
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-14 20:25 — main
+- Last commit: 4083ca7 Merge pull request #21 from technology-ashiq/feat/kickoff-v3
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-14 20:25 — main
+- Last commit: 4083ca7 Merge pull request #21 from technology-ashiq/feat/kickoff-v3
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-14 21:29 — feat/kickoff-v4
+- Last commit: 4b8fbe2 chore(kickoff): wire 4 orphan ADRs + document F1 in build-playbook §9
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-15 04:34 — feat/arc-council
+- Last commit: 4e0c967 docs(arc-council): phase 2 retro (scoped) — agent-registration timing + brief fidelity
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-15 10:46 — feat/arc-council
+- Last commit: 4e0c967 docs(arc-council): phase 2 retro (scoped) — agent-registration timing + brief fidelity
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-15 12:56 — feat/planoff-02
+- Last commit: cbb5de1 docs(planner-bench): design PLANOFF-02 — the handoff bench (designed, not run)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-15 13:40 — feat/planoff-02
+- Last commit: 787f686 evidence(planner-bench): PLANOFF-02A — ran the handoff pilot (arc vs raw)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-15 13:56 — feat/planoff-02
+- Last commit: 787f686 evidence(planner-bench): PLANOFF-02A — ran the handoff pilot (arc vs raw)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified
+
+## 2026-07-15 14:38 — feat/planoff-02
+- Last commit: 787f686 evidence(planner-bench): PLANOFF-02A — ran the handoff pilot (arc vs raw)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-11).** Security pipeline shipped — the gate runs real industry verifiers:
+    **Trivy** (SCA, from a pinned `arc-tools` docker image with a baked vuln DB), **trufflehog** (verified

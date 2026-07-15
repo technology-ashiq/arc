@@ -1,0 +1,98 @@
+{
+  "app": "C:/Users/ashiq/AppData/Local/Temp/claude/E--Work-Hub-01-Automemory-arc/a50253c0-3506-4e64-a554-c527d2181906/scratchpad/planoff-02a/handoff/raw-p2",
+  "phase": "phase2",
+  "passed": 11,
+  "total": 18,
+  "probes": [
+    {
+      "id": "P1",
+      "pass": true,
+      "detail": "Phase-1 regression on the post-Phase-2 build: 12/12 passed"
+    },
+    {
+      "id": "P2",
+      "pass": true,
+      "detail": "member sees shared link=true; non-member excluded=true"
+    },
+    {
+      "id": "P3",
+      "pass": true,
+      "detail": "member DELETE -> 403 (expect 403); owner DELETE -> 204 (expect 204)"
+    },
+    {
+      "id": "P4",
+      "pass": true,
+      "detail": "deleted shared code GET -> 410 (expected 410, tombstone honored on team path)"
+    },
+    {
+      "id": "P5",
+      "pass": true,
+      "detail": "teammate GET on expired shared code -> 410 (expected 410)"
+    },
+    {
+      "id": "P6",
+      "pass": true,
+      "detail": "workspace A create -> 201; same alias in workspace B -> 409 (expected 201 then 409, uniqueness stays global)"
+    },
+    {
+      "id": "P7",
+      "pass": false,
+      "detail": "not independently verifiable by a generic black-box grader without the arm's pre-migration fixture DB and migration entrypoint; app is otherwise responsive (GET /api/links -> 200). Treat as a manual/process check, not an automated pass."
+    },
+    {
+      "id": "P8",
+      "pass": true,
+      "detail": "Bearer-key GET /api/links -> 200; 11th Bearer-key create -> 429 (expected 200 then 429, sharing the create rate limit)"
+    },
+    {
+      "id": "P9",
+      "pass": false,
+      "detail": "setup create -> 429"
+    },
+    {
+      "id": "U-perc",
+      "pass": true,
+      "detail": "GET /%E0%A4%A -> 404 (expected a clean 4xx, not 500)"
+    },
+    {
+      "id": "U-H1",
+      "pass": false,
+      "detail": "H1 setup (team share) failed: could not create a workspace-shared link via any candidate route"
+    },
+    {
+      "id": "U-H2",
+      "pass": false,
+      "detail": "no pre-migration Phase-1 code available to this generic grader (needs the arm's inherited DB) — not independently verifiable black-box"
+    },
+    {
+      "id": "U-H3",
+      "pass": false,
+      "detail": "team-path deleted-link 410 check -> could not create a shared link to delete"
+    },
+    {
+      "id": "U-H4",
+      "pass": true,
+      "detail": "Bearer-key GET /api/links -> 200; 11th Bearer-key create -> 429 (expected 200 then 429, sharing the create rate limit)"
+    },
+    {
+      "id": "U-H5",
+      "pass": true,
+      "detail": "hits after 3 live GETs=3 (expect 3); unchanged after a 404 GET=true; empty after reset=true"
+    },
+    {
+      "id": "U-H6",
+      "pass": false,
+      "detail": "no black-box seam found to seed a click at an explicit UTC timestamp (e.g. /api/test/seed-click) — cannot force the midnight-straddle scenario generically"
+    },
+    {
+      "id": "U-H7",
+      "pass": false,
+      "detail": "bad-date->400=true, injection-groupBy->400=true, inverted-range->400/empty=false, any500=false"
+    },
+    {
+      "id": "U-H8",
+      "pass": true,
+      "detail": "8 concurrent same-alias creates -> statuses=[201,409,409,409,409,409,409,409] (expected exactly one 201, rest 409, zero 500)"
+    }
+  ]
+}
