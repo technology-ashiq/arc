@@ -11,7 +11,7 @@
 | 0 | Steel thread: Chair + advocate/skeptic/neutral → a rendered verdict | 2 days | ✅ done (2026-07-15) |
 | 1 | Verified synthesis: verifier + POINT-ID contracts + output format + `quick` | 3 days | ✅ done (2026-07-15) |
 | 2 | Deep research layer: researcher fan-out + neutral Evidence Brief + offline | 2 days | ✅ done (2026-07-15) |
-| 3 | Full domain roster: 7 experts + Chair roster selection (ceiling 4) | 2 days | not started |
+| 3 | Full domain roster: 7 experts + Chair roster selection (ceiling 4) | 2 days | ✅ done (2026-07-15) |
 | 4 | Fairness invariants + auto-save sessions + sync wiring + docs | 3 days | not started |
 
 ## Done-log
@@ -49,15 +49,29 @@
   mode-agnostic, proven on the live run). New finding: a newly-created `council-*` agent isn't a
   registered `subagent_type` until a turn boundary — create-and-same-turn-spawn fails (→ Phase 2 retro).
 
+- 2026-07-15 — **Phase 3 ✅ (full domain roster).** Built 7 domain experts (strategist, risk-analyst,
+  marketer, designer, engineer, policy-analyst, life-counselor; arc-native shadowing the global 5 per
+  ADR-0001, marketer+designer new) with the member contract + POINT-ID prefixes (ST/RK/MK/DS/EN/PO/LC) +
+  Chair roster-selection (domain match, ceiling 4, tie-break + disclosure) + `council-lint` static roster
+  (all 12 agents). RED (7 missing) → GREEN (all exist). Dogfood ("launch a paid AI writing assistant that
+  trains on user docs?", model-knowledge): Chair classified 6 matching domains → convened top-4 (strategist,
+  risk-analyst, marketer, policy-analyst) + **named the 2 dropped** (engineer, designer) → 3 stance + 4
+  experts (7) debated the brief + gap-filled with live sources → verifier graded all **34 POINT-IDs** AND
+  caught a **materially-misleading citation** (Garante €15M OpenAI fine ANNULLED 18-Mar-2026) + flagged the
+  Regime-A/B brief-framing bias → verdict `DECISION: CONDITIONAL` citing only Supported/Plausible IDs across
+  all 7 members → `council-lint --verdict` GREEN. This offline run also **closes Phase 2's offline→verdict gap**.
+  (Build was committed b648636; dogfood + close this commit.)
+
 ## Appetite burn
-7 of 12 phase-days used (58%). Total appetite: 3 weeks. (50% tripwire passed; council demonstrably beats a
-raw answer — the verifier caught a propagated factual error + survivorship-bias framing — so kill-criteria PASS.)
+9 of 12 phase-days used (75%). Total appetite: 3 weeks. (Council keeps beating a raw answer — this run the
+verifier caught an annulled-fine citation that would have made the verdict lean on dead law.)
 
 ## Now
-**Phases 0–2 ✅ — the council now researches, debates, verifies, and decides end-to-end.** Position:
-`/arc-council` fans out `council-researcher` → ONE neutral triangulated Evidence Brief (live or offline) →
-3 independent members debate from it → `council-verifier` grades by POINT-ID (and flags brief-bias) → the
-Chair renders a mechanically-verified verdict (`council-lint --verdict`/`--brief` both gate it); `quick`
-opt-out works. Next step: **Phase 3** (full domain roster) — add the 7 domain experts (strategist,
-risk-analyst, marketer, designer, engineer, policy-analyst, life-counselor) + the Chair's per-question
-roster selection (domain match, ceiling 4, documented tie-break). Depends on Phases 1+2 (both done).
+**Phases 0–3 ✅ — the council researches, convenes matched domain experts, debates, verifies, and decides.**
+Position: `/arc-council` classifies the domain(s) → convenes 3 stance members + the matched experts
+(ceiling 4, dropped named) → all debate from ONE neutral Evidence Brief (live/offline) → `council-verifier`
+grades every POINT-ID (and flags brief-bias) → the Chair renders a mechanically-verified verdict
+(`council-lint --verdict`/`--brief`); `quick` opt-out works. Next step (final): **Phase 4** — fairness
+invariants (`fairness.md` + PREDICTION-vs-RESULT, verified by lint/verifier not Chair self-grade) +
+auto-save deep verdicts to `docs/council/sessions/` + `sync-to-project` wiring (sessions excluded) +
+README/CHANGELOG/CLAUDE.md rows. Depends on Phases 2+3 (both done).
