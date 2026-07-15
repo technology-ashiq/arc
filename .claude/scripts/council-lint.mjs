@@ -140,7 +140,17 @@ const CORE_AGENTS = [
   "council-verifier",
   "council-researcher",
 ];
-for (const name of CORE_AGENTS) {
+// Phase 3: the 7 domain experts (convened per-question by the Chair, but all must EXIST). REQ-07.
+const DOMAIN_AGENTS = [
+  "council-strategist",
+  "council-risk-analyst",
+  "council-marketer",
+  "council-designer",
+  "council-engineer",
+  "council-policy-analyst",
+  "council-life-counselor",
+];
+for (const name of [...CORE_AGENTS, ...DOMAIN_AGENTS]) {
   const p = `.claude/agents/${name}.md`;
   if (!exists(p)) {
     fail(`${name} missing (${p})`);
