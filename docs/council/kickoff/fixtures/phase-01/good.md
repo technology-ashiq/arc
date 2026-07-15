@@ -7,6 +7,7 @@
 - P4: Contested — advocate and skeptic directly disagree
 
 ## VERDICT
+PREDICTION: CONDITIONAL / Medium (recorded before reading the verifier)
 DECISION: CONDITIONAL
 CONFIDENCE: Medium
 

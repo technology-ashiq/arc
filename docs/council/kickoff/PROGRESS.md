@@ -12,7 +12,7 @@
 | 1 | Verified synthesis: verifier + POINT-ID contracts + output format + `quick` | 3 days | ✅ done (2026-07-15) |
 | 2 | Deep research layer: researcher fan-out + neutral Evidence Brief + offline | 2 days | ✅ done (2026-07-15) |
 | 3 | Full domain roster: 7 experts + Chair roster selection (ceiling 4) | 2 days | ✅ done (2026-07-15) |
-| 4 | Fairness invariants + auto-save sessions + sync wiring + docs | 3 days | not started |
+| 4 | Fairness invariants + auto-save sessions + sync wiring + docs | 3 days | ✅ done (2026-07-15) |
 
 ## Done-log
 - 2026-07-15 — kickoff complete: PLAN + 7 ADRs + 5 phase specs written; attack panel (×3) reconciled;
@@ -62,16 +62,27 @@
   all 7 members → `council-lint --verdict` GREEN. This offline run also **closes Phase 2's offline→verdict gap**.
   (Build was committed b648636; dogfood + close this commit.)
 
+- 2026-07-15 — **Phase 4 ✅ (fairness + auto-save + sync + docs).** Built: **PREDICTION-vs-RESULT** (command
+  intake pre-registers a prediction; the verdict shows both; `council-lint --verdict` now REQUIRES a
+  `PREDICTION:` line — fairness enforced by the lint, not Chair self-grade) + **auto-save** (deep runs →
+  `docs/council/sessions/NNN-slug.md`; `quick` writes nothing) + `docs/council/references/fairness.md`
+  (11 invariants + what the lint enforces) + `docs/council/README.md`. RED (a verdict missing PREDICTION
+  fails — incl. the old good.md fixture) → GREEN (good.md + PREDICTION passes, bad-noprediction fails).
+  Dogfood: saved a real session (`001-ai-writing-assistant...`, with PREDICTION-vs-RESULT) →
+  `council-lint --verdict` GREEN; `sync-to-project` to a temp dir → command + 12 agents + lint landed,
+  `docs/council/` NOT synced (no sessions leak), 0 mods to pre-existing files (REQ-10). Concurrency
+  assumption (A1) validated — the Phase-3 run stacked 8 agents in one batch with 0 spawn errors.
+  Deferred (isolation): the arc-repo `CLAUDE.md`/`README`/`CHANGELOG` rows — documented in
+  `docs/council/README.md` instead, to avoid touching existing shared files.
+
 ## Appetite burn
-9 of 12 phase-days used (75%). Total appetite: 3 weeks. (Council keeps beating a raw answer — this run the
-verifier caught an annulled-fine citation that would have made the verdict lean on dead law.)
+12 of 12 phase-days used (100%) — **feature-complete, on appetite** (no scope cut, no overrun).
 
 ## Now
-**Phases 0–3 ✅ — the council researches, convenes matched domain experts, debates, verifies, and decides.**
-Position: `/arc-council` classifies the domain(s) → convenes 3 stance members + the matched experts
-(ceiling 4, dropped named) → all debate from ONE neutral Evidence Brief (live/offline) → `council-verifier`
-grades every POINT-ID (and flags brief-bias) → the Chair renders a mechanically-verified verdict
-(`council-lint --verdict`/`--brief`); `quick` opt-out works. Next step (final): **Phase 4** — fairness
-invariants (`fairness.md` + PREDICTION-vs-RESULT, verified by lint/verifier not Chair self-grade) +
-auto-save deep verdicts to `docs/council/sessions/` + `sync-to-project` wiring (sessions excluded) +
-README/CHANGELOG/CLAUDE.md rows. Depends on Phases 2+3 (both done).
+**FEATURE-COMPLETE — all 5 phases (0–4) ✅.** `/arc-council "<q>"` runs end-to-end: intake (disambiguate +
+pre-register a prediction + classify domains) → `council-researcher` fan-out → ONE neutral triangulated
+Evidence Brief (live/offline) → 3 stance members + matched domain experts (ceiling 4, dropped named) debate
+independently → `council-verifier` (opus) grades every POINT-ID + flags brief-bias → the Chair renders a
+mechanically-verified verdict (PREDICTION-vs-RESULT; only verifier-Supported/Plausible points cited; DISSENT
+preserved) → auto-saved to `sessions/`. `quick` opt-out works. `council-lint` gates artifacts, verdicts, and
+briefs. Next: **project-level `/arc-retro`** (scoreboard row) → then the branch is ready for `!git push` + PR.

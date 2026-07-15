@@ -87,6 +87,9 @@ if (verdictFile) {
     else if (!/^(Supported|Plausible)$/.test(ratings[id]))
       fail(`${verdictFile}: cites ${id} rated ${ratings[id]} — only Supported/Plausible may ground a KEY REASON or DISSENT`);
   }
+  // fairness invariant (Phase 4): the Chair pre-registers a prediction before reading the verifier
+  if (!/^\s*PREDICTION:/im.test(text))
+    fail(`${verdictFile}: no PREDICTION: line — the Chair must pre-register a prediction before reading the verifier (fairness invariant)`);
   report();
 }
 

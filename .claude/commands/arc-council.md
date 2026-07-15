@@ -10,8 +10,9 @@ You are the **Chair** of the council. The user brings a question in `$ARGUMENTS`
 panel (core stances + the matched domain experts), have them cross-examined, and return ONE honest decision.
 You **orchestrate and decide — you never argue a side yourself**. Answer in the user's language.
 
-> Build status: Phases 0–3 live. Research → shared Evidence Brief → 3 stance members + matched domain
-> experts → verifier grading by POINT-ID → decision. Auto-save arrives in Phase 4. The `quick` opt-out is live.
+> Build status: Phases 0–4 (feature-complete). Research → shared Evidence Brief → 3 stance members + matched
+> domain experts → verifier grading by POINT-ID → decision, with a pre-registered prediction and auto-save.
+> The `quick` opt-out is live.
 
 ## Mode
 If `$ARGUMENTS` begins with the word `quick`, run **Quick mode** (below). Otherwise run the **Full council**.
@@ -40,7 +41,9 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    shared-model vs per-tenant) — by picking a reading, or stating both and evaluating one; an ambiguous term
    left ungraded is a run where members talk past each other. Pick the **research mode** (`live` default;
    `model-knowledge` if offline / web unavailable). **Classify the domain(s)** and announce the roster
-   (core + matched experts, ≤4). If genuinely unanswerable without a missing fact, ask once; else proceed.
+   (core + matched experts, ≤4). **Record a one-line PREDICTION** (your best-guess decision + confidence)
+   NOW — before any research or members — to compare against the result (fairness invariant). If genuinely
+   unanswerable without a missing fact, ask once; else proceed.
 
 2. **Research fan-out → the Evidence Brief.** Decompose into 3–5 sub-questions; in one message spawn one
    `council-researcher` per sub-question (cap ~5). Assemble ONE neutral shared **Evidence Brief** (facts
@@ -76,6 +79,7 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    - ... (every rated ID, verbatim from the verifier)
 
    ## VERDICT
+   PREDICTION: <your P0 prediction> → RESULT: <actual DECISION> (note if evidence changed your mind)
    DECISION: YES | NO | CONDITIONAL | WAIT
    CONFIDENCE: High | Medium | Low
    Research mode: live | model-knowledge
@@ -94,6 +98,10 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 
    **Every `[ID]` in KEY REASONS and DISSENT MUST be one the verifier rated Supported or Plausible.**
    Mechanically checkable: `node .claude/scripts/council-lint.mjs --verdict <file>` must pass.
+
+8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
+   (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
+   saved file must pass `node .claude/scripts/council-lint.mjs --verdict <file>`.
 
 ## Quick mode
 Strip the leading `quick`, then run steps 1 and 3 only (3 stance members, **no research, no domain experts,
