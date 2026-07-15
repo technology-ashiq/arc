@@ -35,7 +35,10 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 
 ## Full council
 
-1. **Intake.** Restate `$ARGUMENTS` as ONE decision statement. Pick the **research mode** (`live` default;
+1. **Intake.** Restate `$ARGUMENTS` as ONE decision statement. **Disambiguate any load-bearing ambiguous
+   term first** — one that would make members analyze *different products* (e.g. "trains on user data" =
+   shared-model vs per-tenant) — by picking a reading, or stating both and evaluating one; an ambiguous term
+   left ungraded is a run where members talk past each other. Pick the **research mode** (`live` default;
    `model-knowledge` if offline / web unavailable). **Classify the domain(s)** and announce the roster
    (core + matched experts, ≤4). If genuinely unanswerable without a missing fact, ask once; else proceed.
 
