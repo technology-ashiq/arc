@@ -59,6 +59,16 @@ function frontmatter(text) {
   return fm;
 }
 
+// a real ISO calendar date (rejects shape-valid impossibilities like 2026-13-45 / 2026-11-31)
+function isValidISODate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || "");
+  if (!m) return false;
+  const y = +m[1], mo = +m[2], d = +m[3];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
+
 // ------------------------------------------------------------------ verdict mode
 if (verdictFile) {
   if (!existsSync(verdictFile)) {
@@ -147,6 +157,26 @@ if (verdictFile) {
     if (!unresolvedCited.some((id) => ratings[id] || disputedIds.has(id)))
       fail(`${verdictFile}: ## UNRESOLVED present but cites no bracketed rebuttal-set POINT-ID (a rated or DISPUTED id) — list the unresolved IDs or drop the section`);
   }
+
+  // v2 REQ-04 calibration lines (validate-if-present): deep runs emit Review-by/Resolution and
+  // review appends ## OUTCOME; pre-v2 sessions carry none of these and stay valid. When present,
+  // the format is enforced so the calibration script (council-calibrate.mjs) can always parse them.
+  // A verdict may carry MORE THAN ONE Review-by / ## OUTCOME (append-only re-review, ADR-0012) —
+  // EVERY one is validated, not just the first.
+  const rbLines = [...text.matchAll(/^Review-by:\s*(.+?)\s*$/gim)];
+  for (const m of rbLines)
+    if (!isValidISODate(m[1]))
+      fail(`${verdictFile}: Review-by: "${m[1]}" is not a valid YYYY-MM-DD calendar date (calibration line)`);
+  const resLine = text.match(/^Resolution:\s*(.*)$/im);
+  const resVal = resLine ? resLine[1].trim() : "";
+  const resPlaceholder = /^(TODO|TBD|N\/?A|x{2,}|\.{2,}|-+)$/i.test(resVal);
+  if (rbLines.length && (resVal.length < 4 || resPlaceholder))
+    fail(`${verdictFile}: a Review-by needs a real Resolution: criterion (a falsifiable HIT/MISS test, not empty or a placeholder) — a scheduled verdict with nothing to grade against is unreviewable`);
+  else if (resLine && (resVal.length < 4 || resPlaceholder))
+    fail(`${verdictFile}: Resolution: line is empty or a placeholder — name the falsifiable HIT/MISS criterion (calibration line)`);
+  for (const m of text.matchAll(/##\s*OUTCOME([\s\S]*?)(?=\n##\s|$)/gi))
+    if (!/^RESULT:\s*(HIT|MISS|UNRESOLVED)\s*$/im.test(m[1]))
+      fail(`${verdictFile}: a ## OUTCOME has no valid "RESULT: HIT|MISS|UNRESOLVED" line — outcomes are HIT, MISS, or UNRESOLVED, never free text (ADR-0012)`);
 
   // fairness invariant (Phase 4): the Chair pre-registers a prediction before reading the verifier
   if (!/^\s*PREDICTION:/im.test(text))

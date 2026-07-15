@@ -15,7 +15,8 @@ You **orchestrate and decide — you never argue a side yourself**. Answer in th
 > The `quick` opt-out is live.
 
 ## Mode
-If `$ARGUMENTS` begins with the word `quick`, run **Quick mode** (below). Otherwise run the **Full council**.
+If `$ARGUMENTS` begins with the word `review`, run **Review mode** (below). Else if it begins with the
+word `quick`, run **Quick mode** (below). Otherwise run the **Full council**.
 
 ## Domain roster (Chair selects per question)
 Classify the decision's domain(s) and convene every matched expert (POINT-ID prefix in parentheses):
@@ -99,8 +100,14 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 
    CHEAPEST TEST TO DE-RISK:
    - <the smallest, fastest thing that would most move the decision>
+
+   Review-by: <YYYY-MM-DD — a real date by which reality will have answered this>
+   Resolution: <the falsifiable criterion that will count this verdict HIT or MISS at Review-by>
    ```
 
+   **Deep runs MUST emit the `Review-by:` (ISO date) and `Resolution:` lines** — they are what makes
+   the verdict checkable later; `review` mode fills in the `## OUTCOME` when the date arrives. (A
+   `quick` run emits neither.)
    **Every `[ID]` in KEY REASONS and DISSENT MUST be one the verifier rated Supported or Plausible.**
    The `## UNRESOLVED` section is the ONE place a Contested/DISPUTED `[ID]` may appear — the lint
    scopes the Supported/Plausible rule to KEY REASONS + DISSENT only, so genuine unresolved
@@ -112,6 +119,46 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
    (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
    saved file must pass `node .claude/scripts/council-lint.mjs --verdict <file>`.
+
+## Review mode
+`/arc-council review` closes the loop on past verdicts: it records what actually happened and shows
+the council's calibration. It **never re-decides** anything and **only appends** to session files.
+
+1. **Find what's due.** Run `node .claude/scripts/council-calibrate.mjs --overdue docs/council/sessions`
+   (it lists every saved verdict whose latest `Review-by:` is before today AND that has no terminal
+   HIT/MISS outcome yet — already-closed sessions are skipped, so the loop terminates). If none are
+   overdue, say so and stop.
+2. **For each overdue session (oldest first):** show its question, `DECISION`, `CONFIDENCE`, and the
+   `Resolution:` criterion, then ask the user what actually happened. Grade the answer against the
+   **Resolution criterion** — not against what the verdict hoped for.
+3. **Append — never rewrite.** Add this `## OUTCOME` section to the END of the session file; nothing
+   above it (DECISION, CONFIDENCE, ratings) may change (ADR-0012, append-only non-negotiable):
+
+   ```
+   ## OUTCOME
+   Reviewed: <today, YYYY-MM-DD>
+   RESULT: HIT | MISS | UNRESOLVED
+   What happened: <one line, grounded in the Resolution criterion>
+   ```
+
+   `RESULT:` MUST be exactly `HIT`, `MISS`, or `UNRESOLVED` — never free text like "partly". If the
+   outcome genuinely can't be graded yet, use `UNRESOLVED` and add a fresh `Review-by:` line **inside
+   this OUTCOME block** so it resurfaces on that date:
+
+   ```
+   ## OUTCOME
+   Reviewed: <today, YYYY-MM-DD>
+   RESULT: UNRESOLVED
+   Review-by: <a later YYYY-MM-DD>
+   What happened: <why it can't be graded yet>
+   ```
+
+   The tools read the LAST `## OUTCOME` and the LAST `Review-by:` as authoritative, so a later
+   re-review's `HIT`/`MISS` (also appended, never overwriting) supersedes the `UNRESOLVED` and closes
+   the loop — the append-only history stays intact.
+4. **Show the scoreboard.** Run `node .claude/scripts/council-calibrate.mjs docs/council/sessions` and
+   show the calibration table (per-confidence hit-rate + Brier score, lower = better). That table is
+   the council keeping honest score on itself.
 
 ## Quick mode
 Strip the leading `quick`, then run steps 1 and 3 only (3 stance members, **no research, no domain experts,
