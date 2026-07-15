@@ -78,6 +78,11 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    - ST1: Plausible — <one line>
    - ... (every rated ID, verbatim from the verifier)
 
+   ## UNRESOLVED
+   - [S2] vs [A4]: <the genuine unresolved disagreement — cite the rebuttal-set IDs (Contested-rated
+     or verifier-DISPUTED) the debate left unsettled>
+   - ... (OMIT this whole section if nothing is genuinely unresolved; if present it MUST cite ≥1 POINT-ID)
+
    ## VERDICT
    PREDICTION: <your P0 prediction> → RESULT: <actual DECISION> (note if evidence changed your mind)
    DECISION: YES | NO | CONDITIONAL | WAIT
@@ -97,6 +102,11 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    ```
 
    **Every `[ID]` in KEY REASONS and DISSENT MUST be one the verifier rated Supported or Plausible.**
+   The `## UNRESOLVED` section is the ONE place a Contested/DISPUTED `[ID]` may appear — the lint
+   scopes the Supported/Plausible rule to KEY REASONS + DISSENT only, so genuine unresolved
+   disagreement is shown, not buried. A present `## UNRESOLVED` must cite ≥1 POINT-ID; omit it
+   entirely when nothing is genuinely unresolved. `DECISION:` and `CONFIDENCE:` lines are required,
+   and a `model-knowledge` run may not claim `CONFIDENCE: High`.
    Mechanically checkable: `node .claude/scripts/council-lint.mjs --verdict <file>` must pass.
 
 8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
