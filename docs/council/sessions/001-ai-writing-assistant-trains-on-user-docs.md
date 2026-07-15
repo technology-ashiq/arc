@@ -22,9 +22,9 @@ Verifier evidence-corrections: Garante €15M OpenAI fine ANNULLED (Court of Rom
 - PO4: Supported — can't honor erasure from shared weights, but CAN do opt-in per-tenant RAG
 
 ## VERDICT
-PREDICTION: CONDITIONAL / Medium (recorded at intake, before the research and the verifier) → RESULT: CONDITIONAL / High — prediction held; the evidence sharpened it (the decisive Regime-A-vs-B distinction, and the verifier gutting an annulled-fine citation, raised confidence).
+PREDICTION: CONDITIONAL / Medium (recorded at intake, before the research and the verifier) → RESULT: CONDITIONAL / Medium — prediction held; the evidence sharpened the reasoning (the decisive Regime-A-vs-B distinction, and the verifier gutting an annulled-fine citation), but this was a model-knowledge run, so per ADR-0010 the confidence is held at Medium — offline priors cannot carry High.
 DECISION: CONDITIONAL
-CONFIDENCE: High
+CONFIDENCE: Medium
 Research mode: model-knowledge
 
 KEY REASONS:
@@ -38,3 +38,12 @@ DISSENT (strongest surviving opposing point):
 
 CHEAPEST TEST TO DE-RISK:
 - Before building: (1) name ONE narrow, high-value vertical where you already have distribution or domain credibility and get 3-5 paying design partners to commit (proves willingness-to-pay above free tools); (2) fix the architecture as per-tenant RAG/personalization with explicit opt-in consent and NO shared-model training (removes the Regime-A ruin vector). Can't find design partners in a nameable niche, or can't commit to per-tenant → don't launch.
+
+---
+> **Correction (2026-07-15, ADR-0010).** CONFIDENCE lowered High → Medium and the PREDICTION→RESULT
+> line reworded to match. This was a `model-knowledge` (offline) run, and arc-council v2's confidence
+> discipline caps offline verdicts at Medium: facts drawn from model priors — not live, triangulated
+> sources — cannot ground a High-confidence decision. The verdict itself (CONDITIONAL, and its
+> reasoning) is unchanged; only the confidence claim is corrected. The original text is preserved in
+> git history. This is the single sanctioned edit of a saved verdict (see the v2 append-only
+> non-negotiable).
