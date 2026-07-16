@@ -40,6 +40,23 @@ for f in blueprint.md how-it-works.md build-playbook.md product-runbook.md plugi
   [ -f "$SRC/docs/$f" ] && cp "$SRC/docs/$f" "$TARGET/docs/$f"
 done
 
+# arc-council docs + sessions skeleton (the .claude council core already rode along above).
+# The target's own verdicts -- docs/council/sessions/** -- are never touched (v1 phase-04 contract).
+mkdir -p "$TARGET/docs/council/references" "$TARGET/docs/council/sessions/.juror"
+[ -f "$SRC/docs/council/README.md" ] && cp "$SRC/docs/council/README.md" "$TARGET/docs/council/README.md"
+[ -f "$SRC/docs/council/references/fairness.md" ] && cp "$SRC/docs/council/references/fairness.md" "$TARGET/docs/council/references/fairness.md"
+
+# Council juror env contract: append the JUROR_* block to the target's .env.example ONCE
+# (line-start declaration = present; real keys stay in the target's own .env.local, never synced).
+if [ -f "$SRC/.env.example" ] && ! grep -q '^JUROR_BASE_URL=' "$TARGET/.env.example" 2>/dev/null; then
+  jb_start=$(grep -nm1 -iE '^#.*juror|^JUROR_' "$SRC/.env.example" | cut -d: -f1)
+  jb_end=$(grep -nE '^JUROR2?_[A-Z_]*=' "$SRC/.env.example" | tail -1 | cut -d: -f1)
+  if [ -n "$jb_start" ] && [ -n "$jb_end" ] && [ "$jb_start" -le "$jb_end" ]; then
+    { [ -s "$TARGET/.env.example" ] && echo ""; sed -n "${jb_start},${jb_end}p" "$SRC/.env.example"; } >> "$TARGET/.env.example"
+    echo "sync: council -- JUROR_* block appended to .env.example (keys go in the target's .env.local)."
+  fi
+fi
+
 echo "sync: template -> $TARGET"
-echo "sync: untouched -- CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, .claude/state, app code."
+echo "sync: untouched -- CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, .claude/state, app code, docs/council/sessions."
 echo "sync: IMPORTANT -- restart the Claude Code session in that project (commands load at session start)."

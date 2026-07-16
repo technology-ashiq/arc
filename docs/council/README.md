@@ -24,6 +24,20 @@ finance, personal, politics, marketing, development, design). Prefix `quick` for
 - `sessions/` — saved deep-run verdicts (git-tracked here; **excluded** from `sync-to-project`).
 - `kickoff/` — the scoped build tracker (PLAN, ADRs, phase specs, retros).
 
+## Use arc-council in another project
+The usual template sync carries the council too — nothing extra to run:
+
+```
+bash sync-to-project.sh <target-project-dir>      # or: sync-to-project.ps1 -Target <dir>
+```
+
+Council-wise it brings the command + 12 agents + the scripts (with the rest of `.claude/`), these
+docs, the `docs/council/sessions/` skeleton, and appends the `JUROR_*` contract to the target's
+`.env.example` once. Re-run any time to update — the target's own verdicts
+(`docs/council/sessions/**`) are never touched. In the target: juror keys (optional) go in its own
+`.env.local`, then **restart the Claude Code session** — commands load at session start.
+Everything is project-relative; no path edits needed.
+
 ## Cross-model juror (v3)
 Deep runs invoke an independent second grader from a DIFFERENT model family on the debate's anchor set
 (first-pass Weak/Contested + rebuttal-log ids). `council-juror.mjs` — not the Chair — writes the juror
