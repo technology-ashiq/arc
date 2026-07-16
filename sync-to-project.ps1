@@ -33,7 +33,30 @@ foreach ($f in @("blueprint.md", "how-it-works.md", "build-playbook.md", "produc
   Copy-Item "$src\docs\$f" "$Target\docs\$f" -Force
 }
 
+# arc-council docs + sessions skeleton (the .claude council core already rode along above).
+# The target's own verdicts - docs\council\sessions\** - are never touched (v1 phase-04 contract).
+New-Item -ItemType Directory -Force -Path "$Target\docs\council\references", "$Target\docs\council\sessions\.juror" | Out-Null
+if (Test-Path "$src\docs\council\README.md") { Copy-Item "$src\docs\council\README.md" "$Target\docs\council\README.md" -Force }
+if (Test-Path "$src\docs\council\references\fairness.md") { Copy-Item "$src\docs\council\references\fairness.md" "$Target\docs\council\references\fairness.md" -Force }
+
+# Council juror env contract: append the JUROR_* block to the target's .env.example ONCE
+# (line-start declaration = present; real keys stay in the target's own .env.local, never synced).
+if (Test-Path "$src\.env.example") {
+  $envTgt = "$Target\.env.example"
+  $has = (Test-Path $envTgt) -and (Select-String -Path $envTgt -Pattern '^JUROR_BASE_URL=' -Quiet)
+  if (-not $has) {
+    $envLines = Get-Content "$src\.env.example"
+    $jbStart = ($envLines | Select-String -Pattern '^#.*juror|^JUROR_' | Select-Object -First 1).LineNumber
+    $jbEnd = ($envLines | Select-String -Pattern '^JUROR2?_[A-Z_]*=' | Select-Object -Last 1).LineNumber
+    if ($jbStart -and $jbEnd -and $jbStart -le $jbEnd) {
+      if ((Test-Path $envTgt) -and (Get-Item $envTgt).Length -gt 0) { Add-Content $envTgt "" }
+      $envLines[($jbStart - 1)..($jbEnd - 1)] | Add-Content $envTgt
+      Write-Host "Council: JUROR_* block appended to .env.example (keys go in the target's .env.local)."
+    }
+  }
+}
+
 Write-Host ""
 Write-Host "Synced template -> $Target" -ForegroundColor Green
-Write-Host "Untouched: CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, app code."
+Write-Host "Untouched: CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, app code, docs/council/sessions."
 Write-Host "IMPORTANT: restart the Claude Code session in that project (commands load at session start)."
