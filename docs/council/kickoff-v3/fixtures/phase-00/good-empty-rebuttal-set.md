@@ -14,6 +14,7 @@ DECISION: CONDITIONAL
 CONFIDENCE: Medium
 Research mode: live
 Juror: deepseek-chat @ api.deepseek.com
+Juror-Artifact-SHA256: 1a2b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809
 Roster: advocate, skeptic, neutral
 
 KEY REASONS:

@@ -18,6 +18,7 @@
  */
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 const args = process.argv.slice(2);
 const flagVal = (flag) => {
@@ -26,8 +27,9 @@ const flagVal = (flag) => {
 };
 const verdictFile = flagVal("--verdict");
 const briefFile = flagVal("--brief");
+const jurorArtifactFile = flagVal("--juror-artifact");
 const consumed = new Set();
-for (const f of ["--verdict", "--brief"]) {
+for (const f of ["--verdict", "--brief", "--juror-artifact"]) {
   const i = args.indexOf(f);
   if (i >= 0) consumed.add(i), consumed.add(i + 1);
 }
@@ -182,6 +184,42 @@ if (verdictFile) {
         fail(`${verdictFile}: ${aid} is on the anchor set (first-pass Weak/Contested or REBUTTAL LOG) but absent from ## JUROR RATINGS — the juror must cover the anchors (ADR-0017)`);
     if (anchorIds.size > 0 && jurorEmptyMarker && jurorIds.length === 0)
       fail(`${verdictFile}: ## JUROR RATINGS claims "(no rebuttal ran)" but the verdict carries ${anchorIds.size} anchor id(s) — the empty-set marker cannot stand in for grading real anchors (ADR-0017)`);
+  }
+
+  // v3 REQ-05 (ADR-0018, forced by the kickoff attack panel): the SHA-256 verdict↔artifact binding.
+  // A named juror requires a Juror-Artifact-SHA256: line; with --juror-artifact FILE the lint verifies
+  // the hash AND that the verdict's DISPLAYED juror section matches the script-written artifact
+  // id-for-id and rating-for-rating — a doctored display or a hand-made artifact is named, not passed.
+  const shaLines = [...text.matchAll(/^[ \t]*(?:\*{1,2})?Juror-Artifact-SHA256(?:\*{1,2})?[ \t]*:(?:\*{1,2})?[ \t]*(\S+)[ \t]*$/gim)]
+    .map((m) => m[1].replace(/\*{1,2}$/, ""));
+  if (shaLines.length > 1)
+    fail(`${verdictFile}: ${shaLines.length} Juror-Artifact-SHA256: lines — a verdict carries exactly one`);
+  if (jurorNamed && shaLines.length === 0)
+    fail(`${verdictFile}: Juror: names a model but no Juror-Artifact-SHA256: line — the verdict must be byte-bound to the script-written artifact (REQ-05, ADR-0018)`);
+  if (shaLines.length === 1 && !/^[a-f0-9]{64}$/i.test(shaLines[0]))
+    fail(`${verdictFile}: Juror-Artifact-SHA256 "${shaLines[0].slice(0, 20)}…" is not a 64-hex SHA-256`);
+  if (jurorArtifactFile) {
+    if (!existsSync(jurorArtifactFile)) fail(`${verdictFile}: --juror-artifact ${jurorArtifactFile} not found`);
+    else {
+      const artRaw = readFileSync(jurorArtifactFile, "utf8");
+      const artHash = createHash("sha256").update(artRaw, "utf8").digest("hex");
+      if (shaLines.length === 1 && /^[a-f0-9]{64}$/i.test(shaLines[0]) && artHash !== shaLines[0].toLowerCase())
+        fail(`${verdictFile}: artifact hash ${artHash.slice(0, 12)}… != the verdict's Juror-Artifact-SHA256 ${shaLines[0].toLowerCase().slice(0, 12)}… — the referenced file is not the artifact this verdict claims (REQ-05)`);
+      const am = artRaw.match(/(?:^|\n)[ \t]*#{1,6}[ \t]*JUROR\s+RATINGS[^\n]*\n([\s\S]*?)(?=\n[ \t]*#{1,6}[ \t]*\S|$)/i);
+      const pairRe = /^[ \t]*[-*]?\s*([A-Z]{1,2}\d+):\s*(Supported|Plausible|Weak|Contested)\b/gim;
+      const pairsOf = (s) => { const p = new Map(); if (s) for (const m of s.matchAll(pairRe)) if (!p.has(m[1].toUpperCase())) p.set(m[1].toUpperCase(), tc(m[2])); return p; };
+      const artPairs = pairsOf(am ? am[1] : null);
+      const verPairs = pairsOf(jm ? jm[1] : null);
+      for (const [aid, ar] of artPairs) {
+        if (!verPairs.has(aid))
+          fail(`${verdictFile}: the artifact rates ${aid} but the verdict's JUROR RATINGS omits it — the displayed section diverges from the script-written artifact (REQ-05)`);
+        else if (verPairs.get(aid) !== ar)
+          fail(`${verdictFile}: JUROR RATINGS shows ${aid}: ${verPairs.get(aid)} but the script-written artifact says ${ar} — the displayed rating was doctored (REQ-05)`);
+      }
+      for (const vid of verPairs.keys())
+        if (!artPairs.has(vid))
+          fail(`${verdictFile}: the verdict's JUROR RATINGS adds ${vid} which the script-written artifact never graded (REQ-05)`);
+    }
   }
 
   // v2 REQ-01 (decision core): EXACTLY ONE filled DECISION line and ONE filled CONFIDENCE line — an

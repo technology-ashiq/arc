@@ -24,6 +24,16 @@ finance, personal, politics, marketing, development, design). Prefix `quick` for
 - `sessions/` — saved deep-run verdicts (git-tracked here; **excluded** from `sync-to-project`).
 - `kickoff/` — the scoped build tracker (PLAN, ADRs, phase specs, retros).
 
+## Cross-model juror (v3)
+Deep runs invoke an independent second grader from a DIFFERENT model family on the debate's anchor set
+(first-pass Weak/Contested + rebuttal-log ids). `council-juror.mjs` — not the Chair — writes the juror
+artifact and prints the `Juror-Artifact-SHA256:` binding the lint verifies with `--juror-artifact`.
+Configure ANY OpenAI-compatible provider by env (never committed): `JUROR_BASE_URL` (e.g.
+`https://api.groq.com/openai/v1`, `https://generativelanguage.googleapis.com/v1beta/openai`,
+`https://openrouter.ai/api/v1`, `https://api.deepseek.com`), `JUROR_MODEL`, `JUROR_API_KEY`
+(+ optional `JUROR_TIMEOUT_MS`). Unset ⇒ the verdict says `Juror: unavailable (not configured)` and the
+run proceeds (offline-first); configured ⇒ the juror is required (ADR-0016). Free tiers work fine.
+
 Built fresh & arc-native (not the global `~/.claude` council, per ADR-0001). Ships via `sync-to-project`:
 the `.claude/` files travel into consumer projects; `docs/council/` stays in this repo, so no sample
 verdicts leak. The command is self-contained, so it runs without the reference docs.

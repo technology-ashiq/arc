@@ -21,15 +21,15 @@
 - A4: Weak — independent read: the timing claim remains single-sourced and thin
 
 ## UNRESOLVED
-- [A4]: the juror rates A4 Weak in the ## JUROR RATINGS section where the verifier re-graded Plausible — genuine cross-model disagreement
+- [A4]: the juror rates A4 Weak where the verifier re-graded Plausible — genuine cross-model disagreement
 
 ## VERDICT
 PREDICTION: YES / Medium → RESULT: YES / Medium
 DECISION: YES
 CONFIDENCE: Medium
 Research mode: live
-Juror: deepseek-chat @ api.deepseek.com
-Juror-Artifact-SHA256: 0f2b7c9a4e6d8135a7b9c1d3e5f70921436587a9cbdd0f1e2a3b4c5d6e7f8091
+Juror: fake-juror-model @ fake
+Juror-Artifact-SHA256: 2f67ffb6b1e9d4e2ebd769a0fab63fc948a416762196ef3e31895141113e29d7
 Roster: advocate, skeptic, neutral
 
 KEY REASONS:

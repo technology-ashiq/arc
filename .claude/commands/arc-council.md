@@ -86,6 +86,22 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    (ADR-0014). Record each rebuttal-set ID's pre→post rating in the `## REBUTTAL LOG`; a re-graded ID whose
    evidence still doesn't carry stays `Contested`/`Weak` and appears under `## UNRESOLVED`.
 
+5c. **Cross-model juror (deep runs; ADR-0015..0018).** After the rebuttal (or straight after step 5 when
+   no rebuttal ran), build a **points file** from the **anchor set** — every ID the verifier rated
+   Weak/Contested on the FIRST pass plus every rebuttal-set ID — one `## POINT <ID>` section each with
+   `FIRST-PASS:` / `FINAL:` / `TEXT:` (the member's point, verbatim) / `REBUTTAL:` (if any). Then run:
+
+   > `node .claude/scripts/council-juror.mjs --points <points-file> --out docs/council/sessions/.juror/<slug>-<UTC-run-id>.md`
+
+   with the user's env (`JUROR_BASE_URL` + `JUROR_MODEL` + `JUROR_API_KEY` — any OpenAI-compatible
+   provider). The SCRIPT writes the artifact and prints the `Juror:` and `Juror-Artifact-SHA256:` lines —
+   copy all three into the verdict EXACTLY as printed (the section verbatim, both lines untouched); the
+   lint verifies the byte-binding with `--juror-artifact`. If the env is not configured, write
+   `Juror: unavailable (not configured)` and move on (ADR-0016 — visible, never silent). If it IS
+   configured and the script fails, the run is BLOCKED until it succeeds or the user visibly unsets the
+   key. Where the juror's rating disagrees with the verifier's final rating, surface that ID under
+   `## UNRESOLVED` — disagreement between model families is signal, never suppressed (ADR-0018).
+
 6. **Deliberate.** DROP every ID rated Weak or listed under DROP THESE. Weigh the surviving
    Supported/Plausible points (CONSENSUS heavier, DISPUTED = genuine uncertainty). Commit to a decision.
    In `model-knowledge` mode, if every brief fact is Low-confidence, the honest decision is `WAIT` with a
@@ -109,6 +125,11 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    - ... (one line per rebuttal-set ID; PRE must equal that ID's ## FIRST-PASS RATING and POST its
      final ## VERIFIER RATING. OMIT this whole section entirely if no rebuttal ran.)
 
+   ## JUROR RATINGS
+   - S2: Supported — <the cross-model juror's independent one-line read>
+   - ... (copied VERBATIM from the script-written artifact — never edited; `(no rebuttal ran — nothing
+     to grade)` when the anchor set was empty. OMIT the section only when Juror: is unavailable.)
+
    ## UNRESOLVED
    - [S2] vs [A4]: <the genuine unresolved disagreement — cite the rebuttal-set IDs (Contested-rated
      or verifier-DISPUTED) the debate left unsettled>
@@ -119,6 +140,8 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    DECISION: YES | NO | CONDITIONAL | WAIT
    CONFIDENCE: High | Medium | Low
    Research mode: live | model-knowledge
+   Juror: <model> @ <host> | unavailable (<reason>)
+   Juror-Artifact-SHA256: <64-hex, exactly as the script printed — required whenever Juror names a model>
    Roster: advocate, skeptic, neutral, <experts convened>[; dropped: <domain(s)> if >4 matched]
 
    KEY REASONS:
