@@ -80,7 +80,7 @@ if (verdictFile) {
   // a real saved verdict is never fenced (session files carry the sections as plain markdown).
   const text = raw.replace(/```[\s\S]*?```/g, "\n");
 
-  const rm = text.match(/##\s*VERIFIER RATINGS([\s\S]*?)(?=\n##\s|$)/i);
+  const rm = text.match(/(?:^|\n)[ \t]*##\s*VERIFIER\s+RATINGS[^\n]*\n([\s\S]*?)(?=\n##\s|$)/i);
   const ratings = {};
   if (rm)
     for (const mm of rm[1].matchAll(/\b([A-Z]{1,2}\d+)\s*[:\-–]\s*(Supported|Plausible|Weak|Contested)\b/gi))
@@ -102,13 +102,13 @@ if (verdictFile) {
       r[mm[1].toUpperCase()] = tc(mm[2]);
     return r;
   };
-  if ((text.match(/##\s*REBUTTAL LOG\b/gi) || []).length > 1)
-    fail(`${verdictFile}: more than one ## REBUTTAL LOG section — a verdict has exactly one`);
-  if ((text.match(/##\s*FIRST-PASS RATINGS\b/gi) || []).length > 1)
-    fail(`${verdictFile}: more than one ## FIRST-PASS RATINGS section — a verdict has exactly one`);
-  const fpm = text.match(/##\s*FIRST-PASS RATINGS([\s\S]*?)(?=\n##\s|$)/i);
+  if ((text.match(/(^|\n)[ \t]*#{1,6}[ \t]*REBUTTAL\s+LOG\b/gi) || []).length > 1)
+    fail(`${verdictFile}: more than one REBUTTAL LOG section heading — a verdict has exactly one`);
+  if ((text.match(/(^|\n)[ \t]*#{1,6}[ \t]*FIRST-PASS\s+RATINGS\b/gi) || []).length > 1)
+    fail(`${verdictFile}: more than one FIRST-PASS RATINGS section heading — a verdict has exactly one`);
+  const fpm = text.match(/(?:^|\n)[ \t]*##\s*FIRST-PASS\s+RATINGS[^\n]*\n([\s\S]*?)(?=\n##\s|$)/i);
   const firstPass = fpm ? parseRatings(fpm[1]) : null;
-  const rebSec = text.match(/##\s*REBUTTAL LOG([\s\S]*?)(?=\n##\s|$)/i);
+  const rebSec = text.match(/(?:^|\n)[ \t]*##\s*REBUTTAL\s+LOG[^\n]*\n([\s\S]*?)(?=\n##\s|$)/i);
   if (rebSec) {
     if (!firstPass || Object.keys(firstPass).length === 0)
       fail(`${verdictFile}: ## REBUTTAL LOG present but no ## FIRST-PASS RATINGS section — the log's pre-column must be anchored to the verifier's persisted first-pass grades, else a contest can be fabricated (ADR-0014)`);
@@ -140,6 +140,49 @@ if (verdictFile) {
   const contested = gradedIds.filter((id) => /^(Weak|Contested)$/.test(graded[id]));
   if (gradedIds.length > 0 && contested.length === 0)
     fail(`${verdictFile}: verifier contested nothing — 0 of ${gradedIds.length} first-pass points Weak/Contested (rubber-stamp signal)`);
+
+  // v3 cross-model juror (ADR-0015..0018): a deep verdict carries ONE `Juror:` line — a model
+  // (`<model> @ <host>`) or `unavailable (<reason>)`. A named model requires the SCRIPT-written
+  // ## JUROR RATINGS to be present + parseable and to cover the ANCHOR SET: every id rated
+  // Weak/Contested in ## FIRST-PASS RATINGS plus every ## REBUTTAL LOG id — the no-rubber-stamp
+  // fabrication surface (ADR-0017). DETECTION is tolerant (a line a human reads as a juror
+  // attribution — bulleted, bolded, odd spacing, any heading level — is enforced as one, so a
+  // cosmetic variant can't display a juror while dodging the checks); the value GRAMMAR is strict
+  // and fails closed on near-misses. Pre-v3 verdicts carry no Juror: line and no requirement.
+  const jurorLines = [...text.matchAll(/^[ \t]*(?:[-*][ \t]+)?(?:\*{1,2})?Juror(?:\*{1,2})?[ \t]*:(?:\*{1,2})?[ \t]*(.+?)[ \t]*$/gim)]
+    .map((m) => m[1].replace(/\*{1,2}\s*$/, "").trim());
+  if (jurorLines.length > 1)
+    fail(`${verdictFile}: ${jurorLines.length} Juror: lines — a verdict carries exactly one (multiplicity guard; reword any prose line that begins with "Juror:")`);
+  if ((text.match(/(^|\n)[ \t]*#{1,6}[ \t]*JUROR\s+RATINGS\b/gi) || []).length > 1)
+    fail(`${verdictFile}: more than one JUROR RATINGS section heading — a verdict has exactly one (multiplicity guard)`);
+  const jm = text.match(/(?:^|\n)[ \t]*#{1,6}[ \t]*JUROR\s+RATINGS[^\n]*\n([\s\S]*?)(?=\n[ \t]*#{1,6}[ \t]*\S|$)/i);
+  let jurorNamed = false;
+  if (jurorLines.length === 1) {
+    const v = jurorLines[0];
+    if (/^unavailable\s*\(.+\)$/i.test(v)) jurorNamed = false; // the valid unavailable grammar
+    else if (/^unavailable\b/i.test(v))
+      fail(`${verdictFile}: Juror: line "${v}" matches neither grammar — "MODEL @ HOST" or "unavailable (REASON)"; an unavailable juror needs a parenthesized reason, and a model name must not begin with "unavailable" (ADR-0016)`);
+    else jurorNamed = true; // named model — artifact required
+  }
+  const jurorIds = jm
+    ? [...jm[1].matchAll(/^[ \t]*[-*]?\s*([A-Z]{1,2}\d+):\s*(Supported|Plausible|Weak|Contested)\b/gim)].map((m) => m[1].toUpperCase())
+    : [];
+  const jurorEmptyMarker = jm ? /\(no rebuttal ran — nothing to grade\)/.test(jm[1]) : false;
+  const jurorParseable = jurorIds.length > 0 || jurorEmptyMarker;
+  if (jurorNamed && (!jm || !jurorParseable))
+    fail(`${verdictFile}: Juror: names a model but ## JUROR RATINGS is ${jm ? 'unparseable — needs structured "ID: rating — reason" lines or the empty-set marker' : "missing"} (required-when-configured, ADR-0016)`);
+  if (jm && !jurorNamed)
+    fail(`${verdictFile}: ## JUROR RATINGS present but no single Juror: line naming a model — the artifact must be attributed (ADR-0018)`);
+  if (jurorNamed && jm && jurorParseable) {
+    const anchorIds = new Set();
+    if (firstPass) for (const [fid, fr] of Object.entries(firstPass)) if (/^(Weak|Contested)$/.test(fr)) anchorIds.add(fid);
+    if (rebSec) for (const m of rebSec[1].matchAll(/^[ \t]*[-*]?\s*([A-Z]{1,2}\d+):/gim)) anchorIds.add(m[1].toUpperCase());
+    for (const aid of anchorIds)
+      if (!jurorIds.includes(aid))
+        fail(`${verdictFile}: ${aid} is on the anchor set (first-pass Weak/Contested or REBUTTAL LOG) but absent from ## JUROR RATINGS — the juror must cover the anchors (ADR-0017)`);
+    if (anchorIds.size > 0 && jurorEmptyMarker && jurorIds.length === 0)
+      fail(`${verdictFile}: ## JUROR RATINGS claims "(no rebuttal ran)" but the verdict carries ${anchorIds.size} anchor id(s) — the empty-set marker cannot stand in for grading real anchors (ADR-0017)`);
+  }
 
   // v2 REQ-01 (decision core): EXACTLY ONE filled DECISION line and ONE filled CONFIDENCE line — an
   // unfilled template placeholder ("DECISION: YES | NO | ...") or a decoy second line is rejected.
@@ -176,7 +219,8 @@ if (verdictFile) {
   const citable = text
     .replace(/##\s*UNRESOLVED[\s\S]*?(?=\n##\s|$)/i, "")
     .replace(/##\s*DISPUTED[\s\S]*?(?=\n##\s|$)/i, "")
-    .replace(/##\s*REBUTTAL LOG[\s\S]*?(?=\n##\s|$)/i, ""); // rating-changes, not decision-grounding cites
+    .replace(/##\s*REBUTTAL\s+LOG[\s\S]*?(?=\n##\s|$)/i, "") // rating-changes, not decision-grounding cites
+    .replace(/#{1,6}[ \t]*JUROR\s+RATINGS[\s\S]*?(?=\n##\s|$)/i, ""); // independent grades, not decision-grounding cites
   const citedOutside = [...new Set([...citable.matchAll(/\[([A-Z]{1,2}\d+)\]/gi)].map((m) => m[1].toUpperCase()))];
   for (const id of citedOutside) {
     if (!ratings[id]) fail(`${verdictFile}: cites unrated point ${id} outside UNRESOLVED — not in VERIFIER RATINGS`);

@@ -25,6 +25,12 @@ verifier's first-pass and final ratings + the rebuttals) and independently rates
 The carrying reason: v3's job is to close ADR-0014's residual, not to rebuild the verifier — scope
 matches charter.
 
+**Reconcile note (2026-07-16, Phase-0 adversarial pass):** "rebuttal set + first-pass anchors" is defined
+precisely as the **anchor set** = every id rated **Weak or Contested** in `## FIRST-PASS RATINGS` plus
+every `## REBUTTAL LOG` id. Weak first-pass ids are included because the no-rubber-stamp invariant counts
+Weak as contest evidence — a fabricated first-pass *Weak* would otherwise launder a rubber-stamp with no
+juror coverage. The Chair's points file (phase 1) and the lint's coverage check both use exactly this set.
+
 ## Consequences
 Easier: one bounded juror call per deep run; the output contract stays small and parseable. Harder: the
 juror adds no coverage on non-rebuttal points (accepted; the revisit trigger names the evidence that
