@@ -33,7 +33,8 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 
 | date | gate | run-ref | fired? | false-positive? |
 |---|---|---|---|---|
-| 2026-07-14 | (example) architecture | good-fixture bats | yes (C4Context) | no |
+| 2026-07-16 | (all substance gates) | c036e63 (arc-council-v2 kickoff) | no (0 `[trial]` WARNs) | no |
+| 2026-07-16 | (all substance gates) | 58510be (arc-council-v3 kickoff) | no (0 `[trial]` WARNs) | no |
 
 <!-- Append one row per (gate × kickoff run). run-ref = a PLAN commit SHA, a dry-run id, or a
      fixture name. fired? = did the gate WARN on that run. false-positive? = did it WARN on a plan

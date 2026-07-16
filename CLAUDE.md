@@ -37,6 +37,9 @@
 - New build? Start with `/arc-kickoff` — PLAN.md + phases-by-risk + PROGRESS.md BEFORE any code.
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
 - Offline-first: every external dependency gets an interface + fake + real impl.
+- A gate/lint/parser is NOT done until an adversarial construct-a-breaking-input pass has run
+  against it and the found holes are fixed + pinned as fixtures (council v2+v3: 43 real holes
+  in code that looked correct and passed its own tests). Mandatory verification, not review.
 - **Change discipline (mid-build):** a new ask, idea, or suggestion is NEVER coded ad-hoc — run
   `/arc-change` to route it through the structure first (triage → phase spec / ADR / current-phase note
   → confirm → then build via the Golden Loop). Applies to MY own suggestions too. No code change
