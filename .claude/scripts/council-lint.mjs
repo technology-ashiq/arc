@@ -190,7 +190,7 @@ if (verdictFile) {
   // A named juror requires a Juror-Artifact-SHA256: line; with --juror-artifact FILE the lint verifies
   // the hash AND that the verdict's DISPLAYED juror section matches the script-written artifact
   // id-for-id and rating-for-rating — a doctored display or a hand-made artifact is named, not passed.
-  const shaLines = [...text.matchAll(/^[ \t]*(?:\*{1,2})?Juror-Artifact-SHA256(?:\*{1,2})?[ \t]*:(?:\*{1,2})?[ \t]*(\S+)[ \t]*$/gim)]
+  const shaLines = [...text.matchAll(/^[ \t]*(?:[-*][ \t]+)?(?:\*{1,2})?Juror-Artifact-SHA256(?:\*{1,2})?[ \t]*:(?:\*{1,2})?[ \t]*(\S+?)[ \t]*$/gim)]
     .map((m) => m[1].replace(/\*{1,2}$/, ""));
   if (shaLines.length > 1)
     fail(`${verdictFile}: ${shaLines.length} Juror-Artifact-SHA256: lines — a verdict carries exactly one`);
