@@ -15,7 +15,8 @@ You **orchestrate and decide — you never argue a side yourself**. Answer in th
 > The `quick` opt-out is live.
 
 ## Mode
-If `$ARGUMENTS` begins with the word `quick`, run **Quick mode** (below). Otherwise run the **Full council**.
+If `$ARGUMENTS` begins with the word `review`, run **Review mode** (below). Else if it begins with the
+word `quick`, run **Quick mode** (below). Otherwise run the **Full council**.
 
 ## Domain roster (Chair selects per question)
 Classify the decision's domain(s) and convene every matched expert (POINT-ID prefix in parentheses):
@@ -54,16 +55,36 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    (`council-advocate`, `council-skeptic`, `council-neutral`) **and every selected domain expert**, each
    given the SAME decision statement **and the same Evidence Brief**. Members argue from the brief and may
    gap-fill (fold new facts back with sources). **Never** spawn sequentially; **never** put one member's
-   answer into another's prompt.
+   answer into another's prompt. **Persist each member's returned output VERBATIM to a file** (and keep
+   each researcher's FACT PACK from step 2 in a file) — the verifier reads these files in step 5, so no
+   Chair summary can compress or distort a claim before it is graded (v1 retro F8).
 
 4. **Assign POINT-IDs.** Label every KEY POINT by member + position: Advocate → `A1…`, Skeptic → `S1…`,
    Neutral → `N1…`, and each domain expert by its prefix (Strategist → `ST1…`, Risk → `RK1…`,
    Marketer → `MK1…`, Designer → `DS1…`, Engineer → `EN1…`, Policy → `PO1…`, Life → `LC1…`).
 
-5. **Cross-examine.** Spawn `council-verifier` in one Task call with the FULL list of points + IDs **and the
-   Evidence Brief** (so it can flag brief-framing bias). It returns `## POINT RATINGS` (each ID →
+5. **Cross-examine.** Spawn `council-verifier` in one Task call with the FULL list of points + IDs, **the
+   member-output and researcher FACT-PACK files (as paths, verbatim — never a Chair summary)**, and the
+   Evidence Brief (so it can flag brief-framing bias). It returns `## POINT RATINGS` (each ID →
    Supported/Plausible/Weak/Contested) + CONTRADICTIONS / CONSENSUS / DISPUTED / DROP THESE. If it contested
    **nothing**, send it back once.
+
+5b. **Bounded rebuttal — ONE round.** Compute the **rebuttal set** = every ID the verifier rated
+   `Contested` PLUS every ID listed under its `DISPUTED` section. If it is empty, skip to step 6.
+   Otherwise, for EACH rebuttal-set ID spawn ONE targeted rebuttal Task with this FIXED template — the
+   author of the point sees ONLY the single opposing point, never any sibling output:
+
+   > You argued POINT `<ID>`: "`<the point, verbatim>`". A reviewer contested it against:
+   > "`<the single opposing point / DISPUTED note, verbatim>`". In ≤5 lines, defend or concede POINT
+   > `<ID>` with evidence. Do not raise new points.
+
+   Write each rebuttal verbatim to a file, then **re-spawn `council-verifier` ONCE** with ONLY the
+   rebuttal-set IDs + their original points + the rebuttals (as file paths). It re-grades **only those
+   IDs**; every other ID keeps its first-pass rating. This is exactly one round — **never iterate**.
+   **Persist the verifier's first-pass `## POINT RATINGS` verbatim as `## FIRST-PASS RATINGS`** (step 7) —
+   the REBUTTAL LOG's pre-column is anchored to it, so no-rubber-stamp is measured on the real first pass
+   (ADR-0014). Record each rebuttal-set ID's pre→post rating in the `## REBUTTAL LOG`; a re-graded ID whose
+   evidence still doesn't carry stays `Contested`/`Weak` and appears under `## UNRESOLVED`.
 
 6. **Deliberate.** DROP every ID rated Weak or listed under DROP THESE. Weigh the surviving
    Supported/Plausible points (CONSENSUS heavier, DISPUTED = genuine uncertainty). Commit to a decision.
@@ -76,7 +97,22 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    ## VERIFIER RATINGS
    - A1: Supported — <one line>
    - ST1: Plausible — <one line>
-   - ... (every rated ID, verbatim from the verifier)
+   - ... (every rated ID, verbatim from the verifier — these are the FINAL, post-rebuttal ratings)
+
+   ## FIRST-PASS RATINGS
+   - A1: Supported — <the verifier's ORIGINAL step-5 grade, verbatim>
+   - S2: Contested — <...>
+   - ... (the verifier's first-pass grades, verbatim; OMIT this whole section if no rebuttal ran)
+
+   ## REBUTTAL LOG
+   - S2: Contested → Supported — <one line: what the rebuttal changed>
+   - ... (one line per rebuttal-set ID; PRE must equal that ID's ## FIRST-PASS RATING and POST its
+     final ## VERIFIER RATING. OMIT this whole section entirely if no rebuttal ran.)
+
+   ## UNRESOLVED
+   - [S2] vs [A4]: <the genuine unresolved disagreement — cite the rebuttal-set IDs (Contested-rated
+     or verifier-DISPUTED) the debate left unsettled>
+   - ... (OMIT this whole section if nothing is genuinely unresolved; if present it MUST cite ≥1 POINT-ID)
 
    ## VERDICT
    PREDICTION: <your P0 prediction> → RESULT: <actual DECISION> (note if evidence changed your mind)
@@ -94,14 +130,72 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 
    CHEAPEST TEST TO DE-RISK:
    - <the smallest, fastest thing that would most move the decision>
+
+   Review-by: <YYYY-MM-DD — a real date by which reality will have answered this>
+   Resolution: <the falsifiable criterion that will count this verdict HIT or MISS at Review-by>
    ```
 
+   **Deep runs MUST emit the `Review-by:` (ISO date) and `Resolution:` lines** — they are what makes
+   the verdict checkable later; `review` mode fills in the `## OUTCOME` when the date arrives. (A
+   `quick` run emits neither.)
    **Every `[ID]` in KEY REASONS and DISSENT MUST be one the verifier rated Supported or Plausible.**
+   The `## UNRESOLVED` section is the ONE place a Contested/DISPUTED `[ID]` may appear — the lint
+   scopes the Supported/Plausible rule to KEY REASONS + DISSENT only, so genuine unresolved
+   disagreement is shown, not buried. A present `## UNRESOLVED` must cite ≥1 POINT-ID; omit it
+   entirely when nothing is genuinely unresolved. `DECISION:` and `CONFIDENCE:` lines are required,
+   and a `model-knowledge` run may not claim `CONFIDENCE: High`.
+   **The `## REBUTTAL LOG`** (present only when a rebuttal ran) records each rebuttal-set ID as
+   `<ID>: <pre> → <post> — <reason>`. It is anchored to `## FIRST-PASS RATINGS` (the verifier's original
+   grades, persisted verbatim): the lint requires each line's PRE to equal that ID's first-pass grade and
+   POST its final VERIFIER RATING, and the **no-rubber-stamp rule is measured on the FIRST-PASS ratings** —
+   so a rebuttal that legitimately resolved every contested point still satisfies it even when the FINAL
+   ratings show nothing Weak/Contested, and a fabricated `pre: Contested` with no matching first-pass
+   grade is rejected (ADR-0014). A verdict with a `## REBUTTAL LOG` MUST carry `## FIRST-PASS RATINGS`.
    Mechanically checkable: `node .claude/scripts/council-lint.mjs --verdict <file>` must pass.
 
 8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
    (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
    saved file must pass `node .claude/scripts/council-lint.mjs --verdict <file>`.
+
+## Review mode
+`/arc-council review` closes the loop on past verdicts: it records what actually happened and shows
+the council's calibration. It **never re-decides** anything and **only appends** to session files.
+
+1. **Find what's due.** Run `node .claude/scripts/council-calibrate.mjs --overdue docs/council/sessions`
+   (it lists every saved verdict whose latest `Review-by:` is before today AND that has no terminal
+   HIT/MISS outcome yet — already-closed sessions are skipped, so the loop terminates). If none are
+   overdue, say so and stop.
+2. **For each overdue session (oldest first):** show its question, `DECISION`, `CONFIDENCE`, and the
+   `Resolution:` criterion, then ask the user what actually happened. Grade the answer against the
+   **Resolution criterion** — not against what the verdict hoped for.
+3. **Append — never rewrite.** Add this `## OUTCOME` section to the END of the session file; nothing
+   above it (DECISION, CONFIDENCE, ratings) may change (ADR-0012, append-only non-negotiable):
+
+   ```
+   ## OUTCOME
+   Reviewed: <today, YYYY-MM-DD>
+   RESULT: HIT | MISS | UNRESOLVED
+   What happened: <one line, grounded in the Resolution criterion>
+   ```
+
+   `RESULT:` MUST be exactly `HIT`, `MISS`, or `UNRESOLVED` — never free text like "partly". If the
+   outcome genuinely can't be graded yet, use `UNRESOLVED` and add a fresh `Review-by:` line **inside
+   this OUTCOME block** so it resurfaces on that date:
+
+   ```
+   ## OUTCOME
+   Reviewed: <today, YYYY-MM-DD>
+   RESULT: UNRESOLVED
+   Review-by: <a later YYYY-MM-DD>
+   What happened: <why it can't be graded yet>
+   ```
+
+   The tools read the LAST `## OUTCOME` and the LAST `Review-by:` as authoritative, so a later
+   re-review's `HIT`/`MISS` (also appended, never overwriting) supersedes the `UNRESOLVED` and closes
+   the loop — the append-only history stays intact.
+4. **Show the scoreboard.** Run `node .claude/scripts/council-calibrate.mjs docs/council/sessions` and
+   show the calibration table (per-confidence hit-rate + Brier score, lower = better). That table is
+   the council keeping honest score on itself.
 
 ## Quick mode
 Strip the leading `quick`, then run steps 1 and 3 only (3 stance members, **no research, no domain experts,
