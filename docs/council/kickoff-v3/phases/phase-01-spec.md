@@ -7,7 +7,7 @@
 ## Exit criteria (Definition of Done)
 - [ ] Real impl in `council-juror.mjs`: `fetch` to `JUROR_BASE_URL` chat-completions with `JUROR_MODEL`/`JUROR_API_KEY` (the ADR-0015 provider-agnostic protocol); retry + timeout; failure taxonomy names timeout/auth/rate-limit/parse distinctly (REQ-03)
 - [ ] ≥2 real providers produce valid artifacts changing ONLY env (whichever two keys exist: OpenAI / Gemini-compat / DeepSeek / Groq / xAI / OpenRouter)
-- [ ] `arc-council.md`: juror step after 5b — the Chair builds the points file from the **anchor set** (every id rated Weak/Contested in the first-pass ratings + every rebuttal-set/REBUTTAL-LOG id — the same set the lint enforces, ADR-0017), script-invoked, writing `--out` to a path derived from the session slug + UTC run-id (e.g. `docs/council/sessions/.juror/<slug>-<utc-run-id>.md`) so concurrent/retried runs never overwrite or replay another run's artifact + step-7 `Juror:` line + `## JUROR RATINGS` + `Juror-Artifact-SHA256:` binding line (REQ-05); juror-vs-verifier disagreements surfaced under `## UNRESOLVED` (ADR-0018); env vars documented in the command + `docs/council/README.md` (never `.env.example` on-branch)
+- [ ] `arc-council.md`: juror step after 5b — the Chair builds the points file from the **anchor set** (every id rated Weak/Contested in the first-pass ratings + every rebuttal-set/REBUTTAL-LOG id — the same set the lint enforces, ADR-0017), script-invoked, writing `--out` to a path derived from the session slug + UTC run-id (e.g. `docs/council/sessions/.juror/<slug>-<utc-run-id>.md`) so concurrent/retried runs never overwrite or replay another run's artifact + step-7 `Juror:` line + `## JUROR RATINGS` + `Juror-Artifact-SHA256:` binding line (REQ-05); juror-vs-verifier disagreements surfaced under `## UNRESOLVED` (ADR-0018); env vars documented in the command + `docs/council/README.md` + declared in `.env.example` (owner-sanctioned)
 - [ ] Live dogfood on the v2 dogfood rebuttal artifacts with a real provider: script-written artifact, verdict passes lint (REQ-04)
 - [ ] Fabrication probe (REQ-05): the P2 attack fixture (fabricated first-pass contest) + juror configured → exit 1; honest twin → exit 0
 - [ ] Adversarial breaking-input pass on the full juror surface; key-leak grep clean; tracker updated
@@ -30,7 +30,7 @@ taxonomy demo (bad key → named auth failure, not a stack trace).
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Council-files-only (as v2): changes touch `.claude/commands/arc-council.md`, `.claude/scripts/council-*.mjs`, `docs/council/**`, and new council-scoped files; `.env.example` and every other root file stay untouched on this branch.
+- Council-files-only (as v2): changes touch `.claude/commands/arc-council.md`, `.claude/scripts/council-*.mjs`, `docs/council/**`, and new council-scoped files; every other root file stays untouched on this branch — sole owner-sanctioned exception (Ashiq, 2026-07-16): the `JUROR_*` declarations in `.env.example`, per arc's env-contract convention.
 - Secrets: `JUROR_API_KEY` is read from env only — never committed, never echoed into artifacts, run-records, fixtures, or logs (pre-mortem row 4 carries the grep check).
 - Offline-first: the fake impl + its contract test are green (Phase 0) before any real provider call exists (Phase 1); an unconfigured deep run always completes with a named `Juror: unavailable` line (ADR-0016).
 - The juror never modifies ratings — it is an append-only independent grader; disagreement is surfaced under `## UNRESOLVED`, and agreement is never required (ADR-0018).

@@ -32,7 +32,7 @@ None — Phase 0 needs no keys.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Council-files-only (as v2): changes touch `.claude/commands/arc-council.md`, `.claude/scripts/council-*.mjs`, `docs/council/**`, and new council-scoped files; `.env.example` and every other root file stay untouched on this branch.
+- Council-files-only (as v2): changes touch `.claude/commands/arc-council.md`, `.claude/scripts/council-*.mjs`, `docs/council/**`, and new council-scoped files; every other root file stays untouched on this branch — sole owner-sanctioned exception (Ashiq, 2026-07-16): the `JUROR_*` declarations in `.env.example`, per arc's env-contract convention.
 - Secrets: `JUROR_API_KEY` is read from env only — never committed, never echoed into artifacts, run-records, fixtures, or logs (pre-mortem row 4 carries the grep check).
 - Offline-first: the fake impl + its contract test are green (Phase 0) before any real provider call exists (Phase 1); an unconfigured deep run always completes with a named `Juror: unavailable` line (ADR-0016).
 - The juror never modifies ratings — it is an append-only independent grader; disagreement is surfaced under `## UNRESOLVED`, and agreement is never required (ADR-0018).
