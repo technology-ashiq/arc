@@ -204,7 +204,7 @@ ${ratingsBody}
 `;
 try { writeFileSync(outPath, artifact, "utf8"); }
 catch (e) { die("io", `cannot write artifact to ${outPath}: ${e.message}`); }
-const sha = createHash("sha256").update(artifact, "utf8").digest("hex");
+const sha = createHash("sha256").update(artifact.replace(/\r\n/g, "\n"), "utf8").digest("hex");
 console.log(`council-juror: artifact written → ${outPath} (${pointIds.length} id(s), ${providerLabel}, ${modelLabel})`);
 console.log(`Juror-Artifact-SHA256: ${sha}`);
 console.log(`Juror: ${FAKE ? `${modelLabel} @ fake` : `${modelLabel} @ ${providerLabel}`}`);

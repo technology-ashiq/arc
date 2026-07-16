@@ -13,9 +13,10 @@
   IN when the kickoff attack panel fired ADR-0018's revisit trigger (a hand-typed `## JUROR RATINGS`
   defeats the design); plus the owner-sanctioned `.env.example` exception. Both recorded in the plan.
 - **FIRED 1/5** — pre-mortem **row 1 materialized** (every fresh gate had holes an adversarial pass finds):
-  the P0 pass found 12, the P1 pass ran. Rows 2–5 (provider-parse, Juror-line-dodge, key-leak, provider
-  outage) did not fire as failures — though provider outages (429s) DID occur live and were handled by the
-  taxonomy exactly as row 5 designed.
+  the P0 pass found 12, the **P1 binding pass found 3** (1 med: a `## Juror:` heading / `+`/`1.`/`>` list
+  variant skipped the whole binding — the cosmetic-variant class again; 2 low: CRLF false-fail, reason-prose
+  unbound) — **all fixed + pinned before v3 merged.** Rows 2–5 did not fire as failures — though provider
+  outages (429s) DID occur live and were handled by the taxonomy exactly as row 5 designed.
 - **burn 90%** — 2.7 of 3 appetite-days; 0.3d slack unspent; no scope cut.
 - **attack-findings 7** — the merged kickoff attack panel raised 7, all applied before the STOP.
 - **t-to-phase0 0** — Phase 0 closed the same day as kickoff.

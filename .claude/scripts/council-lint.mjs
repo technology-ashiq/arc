@@ -151,7 +151,10 @@ if (verdictFile) {
   // attribution — bulleted, bolded, odd spacing, any heading level — is enforced as one, so a
   // cosmetic variant can't display a juror while dodging the checks); the value GRAMMAR is strict
   // and fails closed on near-misses. Pre-v3 verdicts carry no Juror: line and no requirement.
-  const jurorLines = [...text.matchAll(/^[ \t]*(?:[-*][ \t]+)?(?:\*{1,2})?Juror(?:\*{1,2})?[ \t]*:(?:\*{1,2})?[ \t]*(.+?)[ \t]*$/gim)]
+  // detection tolerates ANY shape a human reads as a juror attribution: bullets (-*+), numbered
+  // (1. 1)), blockquote (>), heading (#..), emphasis (**) — so none can display a juror yet dodge the gate.
+  const attrPrefix = "(?:[-*+>][ \\t]+|\\d+[.)][ \\t]+|#{1,6}[ \\t]*)?";
+  const jurorLines = [...text.matchAll(new RegExp(`^[ \\t]*${attrPrefix}(?:\\*{1,2})?Juror(?:\\*{1,2})?[ \\t]*:(?:\\*{1,2})?[ \\t]*(.+?)[ \\t]*$`, "gim"))]
     .map((m) => m[1].replace(/\*{1,2}\s*$/, "").trim());
   if (jurorLines.length > 1)
     fail(`${verdictFile}: ${jurorLines.length} Juror: lines — a verdict carries exactly one (multiplicity guard; reword any prose line that begins with "Juror:")`);
@@ -190,7 +193,7 @@ if (verdictFile) {
   // A named juror requires a Juror-Artifact-SHA256: line; with --juror-artifact FILE the lint verifies
   // the hash AND that the verdict's DISPLAYED juror section matches the script-written artifact
   // id-for-id and rating-for-rating — a doctored display or a hand-made artifact is named, not passed.
-  const shaLines = [...text.matchAll(/^[ \t]*(?:[-*][ \t]+)?(?:\*{1,2})?Juror-Artifact-SHA256(?:\*{1,2})?[ \t]*:(?:\*{1,2})?[ \t]*(\S+?)[ \t]*$/gim)]
+  const shaLines = [...text.matchAll(new RegExp(`^[ \\t]*${attrPrefix}(?:\\*{1,2})?Juror-Artifact-SHA256(?:\\*{1,2})?[ \\t]*:(?:\\*{1,2})?[ \\t]*(\\S+?)[ \\t]*$`, "gim"))]
     .map((m) => m[1].replace(/\*{1,2}$/, ""));
   if (shaLines.length > 1)
     fail(`${verdictFile}: ${shaLines.length} Juror-Artifact-SHA256: lines — a verdict carries exactly one`);
@@ -201,20 +204,24 @@ if (verdictFile) {
   if (jurorArtifactFile) {
     if (!existsSync(jurorArtifactFile)) fail(`${verdictFile}: --juror-artifact ${jurorArtifactFile} not found`);
     else {
-      const artRaw = readFileSync(jurorArtifactFile, "utf8");
+      // hash over CRLF-normalized bytes so a re-saved (Windows EOL) artifact isn't a false "wrong artifact".
+      const artRaw = readFileSync(jurorArtifactFile, "utf8").replace(/\r\n/g, "\n");
       const artHash = createHash("sha256").update(artRaw, "utf8").digest("hex");
       if (shaLines.length === 1 && /^[a-f0-9]{64}$/i.test(shaLines[0]) && artHash !== shaLines[0].toLowerCase())
-        fail(`${verdictFile}: artifact hash ${artHash.slice(0, 12)}… != the verdict's Juror-Artifact-SHA256 ${shaLines[0].toLowerCase().slice(0, 12)}… — the referenced file is not the artifact this verdict claims (REQ-05)`);
+        fail(`${verdictFile}: artifact hash ${artHash.slice(0, 12)}… != the verdict's Juror-Artifact-SHA256 ${shaLines[0].toLowerCase().slice(0, 12)}… — the referenced file is not the artifact this verdict claims, or its bytes changed (REQ-05)`);
       const am = artRaw.match(/(?:^|\n)[ \t]*#{1,6}[ \t]*JUROR\s+RATINGS[^\n]*\n([\s\S]*?)(?=\n[ \t]*#{1,6}[ \t]*\S|$)/i);
-      const pairRe = /^[ \t]*[-*]?\s*([A-Z]{1,2}\d+):\s*(Supported|Plausible|Weak|Contested)\b/gim;
-      const pairsOf = (s) => { const p = new Map(); if (s) for (const m of s.matchAll(pairRe)) if (!p.has(m[1].toUpperCase())) p.set(m[1].toUpperCase(), tc(m[2])); return p; };
+      const pairRe = /^[ \t]*[-*]?\s*([A-Z]{1,2}\d+):\s*(Supported|Plausible|Weak|Contested)\b\s*[—–-]?\s*(.*)$/gim;
+      const norm = (s) => s.trim().replace(/\s+/g, " ");
+      const pairsOf = (s) => { const p = new Map(); if (s) for (const m of s.matchAll(pairRe)) if (!p.has(m[1].toUpperCase())) p.set(m[1].toUpperCase(), { r: tc(m[2]), reason: norm(m[3] || "") }); return p; };
       const artPairs = pairsOf(am ? am[1] : null);
       const verPairs = pairsOf(jm ? jm[1] : null);
-      for (const [aid, ar] of artPairs) {
+      for (const [aid, a] of artPairs) {
         if (!verPairs.has(aid))
           fail(`${verdictFile}: the artifact rates ${aid} but the verdict's JUROR RATINGS omits it — the displayed section diverges from the script-written artifact (REQ-05)`);
-        else if (verPairs.get(aid) !== ar)
-          fail(`${verdictFile}: JUROR RATINGS shows ${aid}: ${verPairs.get(aid)} but the script-written artifact says ${ar} — the displayed rating was doctored (REQ-05)`);
+        else if (verPairs.get(aid).r !== a.r)
+          fail(`${verdictFile}: JUROR RATINGS shows ${aid}: ${verPairs.get(aid).r} but the script-written artifact says ${a.r} — the displayed rating was doctored (REQ-05)`);
+        else if (verPairs.get(aid).reason !== a.reason)
+          fail(`${verdictFile}: JUROR RATINGS reason for ${aid} differs from the script-written artifact — the displayed reasoning was doctored (REQ-05)`);
       }
       for (const vid of verPairs.keys())
         if (!artPairs.has(vid))
