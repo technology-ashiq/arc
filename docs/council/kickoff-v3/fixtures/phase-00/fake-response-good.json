@@ -1,0 +1,15 @@
+{
+  "id": "fake-cmpl-001",
+  "model": "fake-juror-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "S2: Supported — independent read: the migration data does answer the cost counter\nA4: Weak — independent read: the timing claim remains single-sourced and thin"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 420, "completion_tokens": 56 }
+}

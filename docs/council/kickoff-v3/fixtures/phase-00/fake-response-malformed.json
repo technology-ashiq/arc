@@ -1,0 +1,15 @@
+{
+  "id": "fake-cmpl-002",
+  "model": "fake-juror-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Broadly speaking the contested points seem fine to me and I agree with the panel's overall direction."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 420, "completion_tokens": 22 }
+}

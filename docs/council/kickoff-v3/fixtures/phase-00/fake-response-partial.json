@@ -1,0 +1,15 @@
+{
+  "id": "fake-cmpl-003",
+  "model": "fake-juror-model",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "S2: Supported — the migration data answers the cost counter (A4 omitted by the model)"
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": { "prompt_tokens": 420, "completion_tokens": 30 }
+}
