@@ -208,4 +208,8 @@ const sha = createHash("sha256").update(artifact, "utf8").digest("hex");
 console.log(`council-juror: artifact written → ${outPath} (${pointIds.length} id(s), ${providerLabel}, ${modelLabel})`);
 console.log(`Juror-Artifact-SHA256: ${sha}`);
 console.log(`Juror: ${FAKE ? `${modelLabel} @ fake` : `${modelLabel} @ ${providerLabel}`}`);
-process.exit(0);
+// Natural-drain exit (same reason as the failure path): a just-closed HTTPS socket can still be
+// tearing down, and an abrupt process.exit() races it into a libuv assertion + garbage exit code
+// on Windows. Set the code, park, and let the loop drain (backstop force-exits after 250ms).
+process.exitCode = 0;
+setTimeout(() => process.exit(0), 250).unref();
