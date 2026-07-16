@@ -7,7 +7,7 @@
 ## Exit criteria (Definition of Done)
 - [ ] `arc-council.md` gains the rebuttal step: compute the rebuttal set (ADR-0008: Contested-rated ∪ verifier-DISPUTED IDs), one FIXED single-point rebuttal prompt template per paired ID, ONE round, verifier re-grades only those IDs
 - [ ] `## REBUTTAL LOG` rendered (pre→post rating + one-line reason per ID); section absent when no rebuttal ran
-- [ ] `council-lint.mjs` no-rubber-stamp gains the ADR-0008 first-pass path (REBUTTAL LOG pre-column counts as contest evidence); red + good fixtures under `docs/council/kickoff-v2/fixtures/phase-02/` (incl. the all-resolved-after-rebuttal good fixture and the zero-rebuttal no-log good fixture)
+- [ ] `council-lint.mjs` no-rubber-stamp gains the ADR-0008 first-pass path — **hardened by ADR-0014**: the REBUTTAL LOG is anchored to a persisted `## FIRST-PASS RATINGS` section (pre must match first-pass, post must match final) and no-rubber-stamp is measured on the first-pass ratings, closing the fabricated-contest loophole the Phase-2 adversarial pass found; red + good fixtures under `docs/council/kickoff-v2/fixtures/phase-02/` (incl. all-resolved-after-rebuttal, zero-rebuttal, fabricated, and multi-section)
 - [ ] Verbatim handoff (REQ-07): every member output AND every researcher FACT PACK written to a file; the verifier Task input carries the paths, not summaries
 - [ ] Dogfood: one deep run with ≥1 rebuttal-set ID completes the four-hop chain (members → verifier → rebuttal → re-grade) in-session with 0 spawn/state-loss errors; transcript shows single-point rebuttal prompts only, and ≥1 brief fact spot-checked against its FACT PACK source (F8 both hops)
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)

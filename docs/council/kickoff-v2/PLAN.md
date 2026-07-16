@@ -118,6 +118,7 @@ flowchart TB
 | 0011 | Eval harness = hybrid fixtures + node grading script + runbook | accepted |
 | 0012 | Outcome data lives in session files; the calibration table is computed, never stored | accepted |
 | 0013 | `review` is a mode of /arc-council, not a separate command | accepted |
+| 0014 | Persist first-pass ratings to anchor the REBUTTAL LOG; no-rubber-stamp measured on first-pass (supersedes ADR-0008 final-only) | accepted |
 
 ## Non-negotiables
 - Member independence holds through rebuttal — a rebutting member sees ONLY the single opposing point it answers, never sibling outputs; failed members retried blind (fairness.md invariant 1).
