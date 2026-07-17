@@ -41,11 +41,21 @@ function checkPath(p, ctx) {
   if (typeof p !== "string" || p.length === 0) { err(`${ctx}: empty path entry`); return false; }
   let ok = true;
   if (/[\x00-\x1f]/.test(p)) { err(`${ctx}: control character in path: ${JSON.stringify(p)}`); ok = false; }
+  // A repo-relative payload path is forward-slash only. Reject any backslash
+  // outright -- `..\..\x` has no `/`-delimited `..` segment yet .NET/Join-Path
+  // resolves it as traversal on the PowerShell twin (review C1).
+  if (p.includes("\\")) { err(`${ctx}: backslash not allowed in path: ${JSON.stringify(p)}`); ok = false; }
   if (p !== p.trim()) { err(`${ctx}: leading/trailing whitespace in path: ${JSON.stringify(p)}`); ok = false; }
-  if (p.startsWith("/") || /^[A-Za-z]:/.test(p)) { err(`${ctx}: absolute path not allowed: ${p}`); ok = false; }
+  if (p.startsWith("/") || p.startsWith("\\") || /^[A-Za-z]:/.test(p)) { err(`${ctx}: absolute path not allowed: ${p}`); ok = false; }
   if (p.split("/").some((s) => s === "..")) { err(`${ctx}: path traversal not allowed: ${p}`); ok = false; }
   return ok;
 }
+
+// envSentinel becomes an unanchored regex in both twins (grep / Select-String) and
+// is emitted raw in the ENVBLOCK plan line -- a newline injects arbitrary protocol
+// lines (review C2) and a metachar is a ReDoS surface (review W2). Restrict it to a
+// simple anchored token: optional ^/$ anchors around [A-Za-z0-9_.=-].
+const ENV_SENTINEL_RE = /^\^?[A-Za-z0-9_.=-]+\$?$/;
 
 // ---------- load + per-manifest checks ----------
 const productsDir = join(root, "products");
@@ -127,6 +137,8 @@ for (const dir of readdirSync(productsDir)) {
     else for (const s of obj.skeletonDirs) checkPath(s, `products/${dir}.skeletonDirs`);
   }
   if (obj.envBlock !== undefined) checkPath(obj.envBlock, `products/${dir}.envBlock`);
+  if (obj.envSentinel !== undefined && (typeof obj.envSentinel !== "string" || !ENV_SENTINEL_RE.test(obj.envSentinel)))
+    err(`products/${dir}: envSentinel must be a simple anchored token (^?[A-Za-z0-9_.=-]+$?), got ${JSON.stringify(obj.envSentinel)}`);
 
   // case-collide across this manifest's declared paths
   const declared = [...payload, ...docPaths];

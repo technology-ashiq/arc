@@ -117,6 +117,30 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
   [[ "$output" == *"empty"* ]]
 }
 
+@test "lint: backslash traversal in a path is rejected (C1 review)" {
+  run node "$LINT" --root "$FIX/hostile/traversal-backslash"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"backslash"* ]]
+}
+
+@test "lint: an envSentinel carrying a control char / injection is rejected (C2 review)" {
+  run node "$LINT" --root "$FIX/hostile/envblock-injection"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"envSentinel"* ]]
+}
+
+# ---------- resolver must ALSO reject (single consumer-side guard, defense in depth) ----------
+
+@test "resolver: backslash traversal is rejected, never emitted (C1 review)" {
+  run node "$RESOLVE" --products core --root "$FIX/hostile/traversal-backslash"
+  [ "$status" -eq 2 ]
+}
+
+@test "resolver: envSentinel injection is rejected, never emitted (C2 review)" {
+  run node "$RESOLVE" --products core --root "$FIX/hostile/envblock-injection"
+  [ "$status" -eq 2 ]
+}
+
 # ---------- product-lint: spaces in paths are LEGAL (TAB protocol, ADR-0015) ----------
 
 @test "lint: a space in a path is accepted (TAB delimiter transports it safely)" {

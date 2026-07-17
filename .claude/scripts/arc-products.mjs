@@ -54,10 +54,27 @@ if (!mode) die("usage: arc-products.mjs (--products LIST | --list) [--root DIR]"
 function assertSafe(p, ctx) {
   if (typeof p !== "string" || p.length === 0) die(`${ctx}: empty path`);
   if (/[\x00-\x1f]/.test(p)) die(`${ctx}: control character in path: ${JSON.stringify(p)}`);
+  // Reject backslashes outright -- `..\..\x` escapes as traversal on the PowerShell
+  // twin though it has no `/`-delimited `..` segment (review C1).
+  if (p.includes("\\")) die(`${ctx}: backslash not allowed in path: ${p}`);
   if (p !== p.trim()) die(`${ctx}: leading/trailing whitespace in path: ${JSON.stringify(p)}`);
-  if (p.startsWith("/") || /^[A-Za-z]:/.test(p)) die(`${ctx}: absolute path not allowed: ${p}`);
+  if (p.startsWith("/") || p.startsWith("\\") || /^[A-Za-z]:/.test(p)) die(`${ctx}: absolute path not allowed: ${p}`);
   if (p.split("/").some((seg) => seg === "..")) die(`${ctx}: path traversal not allowed: ${p}`);
 }
+
+// envSentinel is emitted raw in the ENVBLOCK plan line and used as a regex by both
+// twins -- restrict it to a simple anchored token so a newline can't inject a plan
+// line (review C2) and a metachar can't ReDoS (review W2).
+const ENV_SENTINEL_RE = /^\^?[A-Za-z0-9_.=-]+\$?$/;
+
+// Guard a payload field that must be an array-or-absent -- the resolver is the only
+// consumer-side check, so a type-invalid manifest must die cleanly, not stack-trace
+// (review W1).
+const asArray = (v, ctx) => {
+  if (v === undefined) return [];
+  if (!Array.isArray(v)) die(`${ctx}: expected an array`);
+  return v;
+};
 
 // ---------- load manifests ----------
 const productsDir = join(root, "products");
@@ -151,15 +168,18 @@ const emitCopy = (src, dest, ctx) => {
 out.push(`PROTO${TAB}1`);
 for (const name of order) {
   const m = manifests.get(name);
-  for (const p of m.commands ?? []) emitCopy(p, p, `${name}.commands`);
-  for (const p of m.agents ?? []) emitCopy(p, p, `${name}.agents`);
-  for (const p of m.scripts ?? []) emitCopy(p, p, `${name}.scripts`);
-  for (const p of m.files ?? []) emitCopy(p, p, `${name}.files`);
-  for (const d of m.docs ?? []) emitCopy(d.src, d.dest, `${name}.docs`);
-  for (const dir of m.skeletonDirs ?? []) { assertSafe(dir, `${name}.skeletonDirs`); emitMkdir(dir); }
+  for (const p of asArray(m.commands, `${name}.commands`)) emitCopy(p, p, `${name}.commands`);
+  for (const p of asArray(m.agents, `${name}.agents`)) emitCopy(p, p, `${name}.agents`);
+  for (const p of asArray(m.scripts, `${name}.scripts`)) emitCopy(p, p, `${name}.scripts`);
+  for (const p of asArray(m.files, `${name}.files`)) emitCopy(p, p, `${name}.files`);
+  for (const d of asArray(m.docs, `${name}.docs`)) emitCopy(d?.src, d?.dest, `${name}.docs`);
+  for (const dir of asArray(m.skeletonDirs, `${name}.skeletonDirs`)) { assertSafe(dir, `${name}.skeletonDirs`); emitMkdir(dir); }
   if (m.envBlock) {
     assertSafe(m.envBlock, `${name}.envBlock`);
-    out.push(`ENVBLOCK${TAB}${m.envBlock}${TAB}${m.envSentinel ?? ""}`);
+    const sentinel = m.envSentinel ?? "";
+    if (!ENV_SENTINEL_RE.test(sentinel))
+      die(`${name}.envSentinel: must be a simple anchored token (^?[A-Za-z0-9_.=-]+$?), got ${JSON.stringify(sentinel)}`);
+    out.push(`ENVBLOCK${TAB}${m.envBlock}${TAB}${sentinel}`);
   }
 }
 process.stdout.write(out.join("\n") + "\n");
