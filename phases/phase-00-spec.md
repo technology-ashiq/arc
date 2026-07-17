@@ -7,7 +7,7 @@
 ## Exit criteria (Definition of Done)
 
 - [ ] `products/{core,plan,review,qa,council,git}/manifest.json` exist per the "Manifest schema (v1)" section below, following the "Product assignment" table below; every file the twins sync maps to exactly one product (REQ-03)
-- [ ] `arc-products.mjs` emits the COPY/MKDIR/ENVBLOCK plan; `product-lint.mjs` passes on the real manifests (WARN-tier TRIAL set registered in docs/trial-ledger.md)
+- [ ] `arc-products.mjs` emits the COPY/MKDIR/ENVBLOCK plan; `product-lint.mjs` passes on the real manifests. (product-lint's checks are hard invariants — schema, coverage/double-map, path-safety, byte-hygiene — so they FAIL by design, same class as kickoff-lint's structural `[sections]` check, NOT the WARN-first heuristic TRIAL set. Whether CI *blocks* on product-lint is decided when it is wired into CI in Phase 2.)
 - [ ] Hostile red fixtures pinned and ALL exit 2: path traversal (`../../settings.json`), duplicate product names, file double-mapped across products, CRLF/BOM manifest bytes, case-colliding paths declared as sibling string entries inside manifest JSON test data (never as two real git-tracked files — colliding-case filenames fail `git checkout` on Windows/default-macOS before the test can run), a control char (TAB/newline) in a path — the real protocol break; spaces are deliberately legal under the TAB delimiter (ADR-0015), proven by a separate good-path fixture — empty required fields
 - [ ] `--list` and `--products <x,y>` work in BOTH twins via the resolver plan; unknown product name → exit 2 with the valid list printed
 - [ ] Twin bugs fixed: .ps1 no longer copies `.claude/state/`; neither twin copies `scheduled_tasks.lock` (REQ-04)

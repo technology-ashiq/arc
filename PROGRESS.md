@@ -6,27 +6,32 @@
 
 ## Now
 
-**Phase 00 IN PROGRESS — Ashiq approved 2026-07-17, build started (TDD).** Kickoff artifacts
-committed (park v2 + full plan). Phase-00 slices done + committed so far:
-- **Slice 1 — resolver + linter (done).** `arc-products.mjs` (TAB line-protocol emitter) +
-  `product-lint.mjs` (schema + coverage/double-map + byte-hygiene + path-safety). 16 bats
-  cases red-first→green; 7-case hostile corpus all exit 2 (REQ-03); crlf-bom fixture byte-pinned
-  via .gitattributes -text.
-- **Slice 2 — the 6 real manifests (done).** products/{core,plan,review,qa,council,git}. Added
-  a `files` catch-all field (hooks/rules/output-styles/templates/skills/settings.json). Corrected
-  REQ-03: TAB delimiter makes spaces-in-paths legal; real break = control-char (Ashiq-approved).
-  `product-lint --root .` PASSES — all 90 .claude/ files map to exactly one product, no
-  double-map. `--products council` resolver plan = 54 files (core+council only, clean).
+**Phase 00 BUILD COMPLETE (2026-07-17) — every exit criterion met; awaiting formal
+`/arc-phase-done 00` (review + evidence bundle).** All slices done + committed (TDD throughout,
+red-first). Full bats suite **197/197 green, 0 fail, 0 skip** across 20 files.
 
-Appetite burn: ~2 of ~7.5 days of the Phase-00 slice budget (rough).
+- **Resolver + linter.** `arc-products.mjs` (TAB line-protocol: PROTO/MKDIR/COPY/ENVBLOCK, +
+  `--list`/`--status`) + `product-lint.mjs` (schema + coverage/double-map + byte-hygiene +
+  path-safety). 7-case hostile corpus all exit 2 (REQ-03); crlf-bom fixture byte-pinned.
+- **6 manifests** (products/{core,plan,review,qa,council,git}) + a `files` catch-all field.
+  `product-lint --root .` passes — all 92 .claude/ files map to exactly one product, no double-map.
+- **Twin bug fixes (REQ-04):** both twins now exclude `scheduled_tasks.lock`; .ps1 also excludes
+  `state/`. Bugfix test-first; ps1 verified via Windows PowerShell.
+- **Golden-output gate (REQ-02):** 109-file path+LF-SHA256 fingerprint; sync.bats diffs it on BOTH
+  rsync + cp-r paths (proven identical). Regenerated once (reviewed) for the /arc additions.
+- **Selective install (REQ-01):** `--products a,b` in both twins via the resolver plan. Live demo —
+  council-alone install (55 files, core rides along, zero plan/review/qa/git leak); inside the
+  target, council-lint on the pass-fixture → exit 0, fail-fixture → exit 1 (discrimination proven).
+- **`/arc` dashboard (stretch, ADR-0019, not cut):** read-only per-product INSTALLED table; degrades
+  gracefully in a consumer with no products/.
+- Spec corrections surfaced by the build (both flagged to Ashiq): REQ-03 space→control-char
+  (approved); product-lint is a hard-FAIL gate, not a WARN-first TRIAL gate (exit-criterion reworded).
 
-**Next up (careful — touches the daily-driver sync scripts):** (1) capture the golden-output
-fixture BEFORE editing twins (the byte-identical safety net); (2) wire `--list`/`--products`
-into sync-to-project.sh + .ps1 via the resolver plan; (3) fix the twin bugs (.ps1 state/ leak,
-both twins' scheduled_tasks.lock leak); (4) council-only install demo in a scratch repo (named
-pass/fail fixtures); (5) stretch `/arc`. Then evidence bundle + `/arc-phase-done 00`.
+Appetite burn: ~1 day of the ~7.5-day Phase-00 budget — well under (Claude speed).
 
-Second opinion still unavailable on this machine (no codex/JUROR) — noted, not faked.
+**Next:** `/arc-review` on the branch → fix any findings → `/arc-phase-done 00` (evidence bundle +
+tracker flip to ✅). Then Phase 01 (composable hooks). Second opinion still unavailable on this
+machine (no codex/JUROR) — noted, not faked.
 
 Appetite burn: **0 of 6 weeks (0%).**
 
