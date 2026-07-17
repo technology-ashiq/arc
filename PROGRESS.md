@@ -6,23 +6,24 @@
 
 ## Now
 
-**Phase 00 CLOSED ✅ (2026-07-17).** The selective-install spine ships: single resolver
-(`arc-products.mjs`, TAB line-protocol) + registry linter (`product-lint.mjs`, hostile-corpus
-gate) + 6 product manifests + `--products`/`--list` in both sync twins + twin leak fixes +
-byte-identical golden gate (rsync+cp-r) + read-only `/arc` dashboard. **204/204 bats green.**
-Reviewed (fix-first→ship: 2 real Criticals found + fixed + adversarially re-verified hole-free),
-evidence bundle committed + verified. REQ-01–04 validated. Live proof of the whole idea:
-`sync-to-project.sh <target> --products council` installs one product alone; `/arc` shows the
-umbrella.
+**Phase 01 CLOSED ✅ (2026-07-17).** The 6 lifecycle hooks are now composable: thin core
+dispatchers (`_dispatch.sh`) running `.claude/hooks/<Event>.d/NN-*.sh` fragments, advisory events
+isolate failures, blocking events propagate exit 2, the deploy-guard degrades loudly when
+`arc.gates.yaml` is absent (REQ-06), a missing dispatcher fails open loudly. Fixed a live
+pre-existing security hole (the destructive-guard was silently disarmed on Windows by the MS-Store
+python stub — now jq-first + raw fail-safe). **215/215 bats green**, reviewed (ship), evidence
+bundle verified. REQ-06 validated. Scope trimmed via /arc-change (dropped the hollow per-product
+SKIP; kept the dispatcher pattern + degradation + <30s). SessionStart 11.4s < 30s.
 
-Next up: **Phase 01 — composable hooks** (`phases/phase-01-spec.md`, 0.5-week appetite): split the
-6 monolithic hooks into `<event>.d/` fragments with loud-SKIP guards for absent products, a stable
-core `settings.json` template, and a measured <30s hook-tier budget on the Windows box (REQ-06).
+Next up: **Phase 02 — registry-aware core** (`phases/phase-02-spec.md`, 1-week appetite): targets
+carry an `arc-registry.json` ground truth; `/arc` + review-ledger read it instead of guessing from
+file presence; CI tree-diff invariant (`--products all` vs the mold) so manifests can never silently
+diverge from reality.
 
-Appetite burn: **~1 of ~30 days (~3%)** — Phase 00 closed in ~1 session vs its 1.5-week appetite.
-Kill tripwire (50%, Phase 1 must be done) is far off.
+Appetite burn: **~2 of ~30 days (~7%)** — Phases 00+01 both closed in ~1 session each, far under
+their 1.5w/0.5w appetites. Kill tripwire (50%) is far off.
 
-Setup needed from user: none for Phase 01. Phase 04 will need venturemind + InvoiceFly access
+Setup needed from user: none for Phase 02. Phase 04 will need venturemind + InvoiceFly access
 and the council-vs-core+plan target assignment.
 
 ## Phases
@@ -30,7 +31,7 @@ and the council-vs-core+plan target assignment.
 | Phase | Capability | Appetite | Status | Closed |
 |---|---|---|---|---|
 | 00 | Steel thread: manifests + resolver + product-lint + hostile fixtures + --products in both twins + twin-leak fixes + council-only install + /arc dashboard | 1.5 weeks | ✅ done | 2026-07-17 |
-| 01 | Composable hooks: event.d fragments, loud-SKIP guards, stable settings.json, <30s verified | 0.5 weeks | ⬜ not started | |
+| 01 | Composable hooks: event.d dispatcher + fragments, graceful partial-install degradation, <30s | 0.5 weeks | ✅ done | 2026-07-17 |
 | 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ⬜ not started | |
 | 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ⬜ not started | |
 | 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ⬜ not started | |
@@ -40,6 +41,28 @@ Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggere
 
 ## Done log
 
+- **2026-07-17 · Phase 01 · Composable hooks.** The 6 monolithic Claude Code lifecycle hooks
+  became thin core **dispatchers** (`_dispatch.sh`) that run `.claude/hooks/<Event>.d/NN-*.sh`
+  fragments in order — a product can drop in a fragment without editing the hook. Advisory events
+  (SessionStart/PostToolUse/PreCompact/SessionEnd) always exit 0 and isolate a fragment's failure;
+  blocking events (PreToolUse/edit) propagate a fragment's exit 2 (first block wins); the payload is
+  captured once and fed only to the three tool hooks (session events never wait on stdin); a
+  missing dispatcher fails open **loudly**. The current logic was split into fragments (all core);
+  the deploy-guard **degrades loudly** (`SKIP arc-gates … Allowed.` + exit 0) when `arc.gates.yaml`
+  isn't installed (REQ-06). **Scope trimmed via /arc-change** (Ashiq): the 6 hooks are ~90% core, so
+  the hollow "loud SKIP for every absent product on every event" was dropped; kept the dispatcher
+  pattern + graceful degradation + the <30s measure. **SECURITY FIX (pre-existing, live):** the
+  destructive-guard was silently disarmed on Windows — `python3` is the Microsoft-Store stub, so
+  command extraction failed and a recursive-force-remove of `/` was NOT blocked (the old hook let
+  it through, proven); `arc_hook_field` now parses jq-first + real-python + a RAW payload fail-safe
+  so a broken parser can never disarm the guard (proven live). **Full suite 215/215 green** (11 new
+  hooks-dispatch/guard bats incl. the stub + fail-open regressions). Live demo: council-only install
+  → all 6 events exit 0; deploy-guard loud-SKIP degradation; destructive blocks / normal allows;
+  SessionStart 11.4s < 30s (assumption "hook dispatch stays under budget on Windows" HELD).
+  **Code review fix-first→ship** (no Criticals; the reviewer verified the fix cannot introduce a
+  false-allow across ~every degraded path; W1 loud-fail-open + N1/N3 nits folded in). Evidence bundle
+  committed + verified (`docs/evidence/phase-01/`). settings.json unchanged. **Actual: ~1 session vs
+  0.5-week appetite — under.** · amendments: 1 (the scope trim) · reopened: n.
 - **2026-07-17 · Phase 00 · Steel thread (selective-install spine).** The orchestrator became
   real: `arc-products.mjs` (single resolver, TAB line-protocol PROTO/MKDIR/COPY/ENVBLOCK +
   `--list`/`--status`) + `product-lint.mjs` (registry police: schema, coverage/double-map,
