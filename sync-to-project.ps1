@@ -21,8 +21,10 @@ if (-not (Test-Path (Join-Path $Target ".git"))) {
   Write-Host "Note: target has no .git - is this really a project root?" -ForegroundColor Yellow
 }
 
-# Machinery (never the personal settings file)
-robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json /NFL /NDL /NJH /NJS | Out-Null
+# Machinery. Exclude the personal settings file + the scheduled-tasks runtime lock
+# (/XF), and the per-project working state dir (/XD) -- none belong in a consumer
+# repo. The .sh twin already excludes all three; keep them in lockstep (REQ-04).
+robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" /NFL /NDL /NJH /NJS | Out-Null
 
 # Planning templates
 robocopy "$src\docs\templates" "$Target\docs\templates" /E /NFL /NDL /NJH /NJS | Out-Null

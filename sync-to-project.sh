@@ -20,13 +20,16 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 [ -d "$TARGET" ] || { echo "sync: target folder not found: $TARGET" >&2; exit 1; }
 [ -d "$TARGET/.git" ] || echo "sync: note -- target has no .git, is this really a project root?" >&2
 
-# Excluded from the .claude sync: personal settings + per-project working state.
-EXCLUDES=("settings.local.json" "state")
+# Excluded from the .claude sync: personal settings + per-project working state +
+# the scheduled-tasks runtime lock (never belongs in a consumer repo -- REQ-04).
+EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock")
 
 mkdir -p "$TARGET/.claude" "$TARGET/docs/templates" "$TARGET/docs"
 
-if command -v rsync >/dev/null 2>&1; then
-  rsync -a --exclude 'settings.local.json' --exclude 'state/' "$SRC/.claude/" "$TARGET/.claude/"
+# ARC_SYNC_NO_RSYNC=1 forces the portable cp fallback even where rsync exists --
+# lets CI prove REQ-02 (byte-identical output) holds on BOTH copy paths.
+if command -v rsync >/dev/null 2>&1 && [ -z "${ARC_SYNC_NO_RSYNC:-}" ]; then
+  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' "$SRC/.claude/" "$TARGET/.claude/"
   rsync -a "$SRC/docs/templates/" "$TARGET/docs/templates/"
 else
   # Portable cp fallback (Git Bash has no rsync): copy all, then drop excludes.
