@@ -15,6 +15,11 @@
 # platforms. Freeze them exactly as hashed -- this OVERRIDES `* text=auto eol=lf`.
 docs/evidence/** -text
 
+# Byte-exact hostile fixture for product-lint (Phase 00): the crlf-bom case tests
+# BOM + CR rejection -- git must NOT normalize its bytes or the fixture silently
+# stops testing what it claims. OVERRIDES `* text=auto eol=lf`.
+tests/fixtures/products/hostile/crlf-bom/** -text
+
 # Binary assets: never touch.
 *.png binary
 *.jpg binary
