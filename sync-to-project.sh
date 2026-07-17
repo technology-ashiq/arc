@@ -1,25 +1,84 @@
 #!/usr/bin/env bash
 # sync-to-project.sh -- push this template's machinery into an existing project.
 # Cross-platform bash twin of sync-to-project.ps1 (Git Bash + Linux). The .ps1 is
-# kept for Windows-native use; this is now the primary, CI-testable path.
+# kept for Windows-native use; this is the primary, CI-testable path.
 #
-# Usage:   bash sync-to-project.sh <target-project-dir>
+# Usage:
+#   bash sync-to-project.sh <target-project-dir>              # full suite (default)
+#   bash sync-to-project.sh <target-project-dir> --products council,plan
+#   bash sync-to-project.sh --list                            # list products, exit
 #
-# Syncs:   .claude/ (agents, commands, hooks, rules, output-styles, skills,
-#          settings.json, statusline), docs/templates/, and the meta docs
-#          (blueprint, how-it-works, build-playbook, product-runbook, plugins,
-#          usermanual).
+# Full suite syncs:   .claude/ (agents, commands, hooks, rules, output-styles,
+#   skills, settings.json, statusline), docs/templates/, and the meta docs. It is
+#   byte-identical to the pre-initiative behaviour (REQ-02, golden-gated).
+# Selective (--products) drives the resolver (arc-products.mjs): only the named
+#   products + core are installed, via its COPY/MKDIR/ENVBLOCK line protocol.
 # Never touches:  CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN.md,
-#          PROGRESS.md, phases/, docs/adr/, docs/reviews/, docs/session-log.md,
-#          your app code -- and NOT .claude/state/ (per-project working state).
+#   PROGRESS.md, phases/, docs/adr/, docs/reviews/, docs/session-log.md, your app
+#   code -- and NOT .claude/state/ nor .claude/scheduled_tasks.lock (working state).
 set -euo pipefail
 
-TARGET="${1:?usage: sync-to-project.sh <target-project-dir>}"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RESOLVER="$SRC/.claude/scripts/arc-products.mjs"
 
+# ---------- args: <target> [--products a,b | --list] ----------
+TARGET=""; MODE="full"; PRODUCTS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --list)         MODE="list" ;;
+    --products)     MODE="products"; PRODUCTS="${2:?sync: --products needs a value}"; shift ;;
+    --products=*)   MODE="products"; PRODUCTS="${1#*=}" ;;
+    -*)             echo "sync: unknown option: $1" >&2; exit 2 ;;
+    *)              if [ -z "$TARGET" ]; then TARGET="$1"; else echo "sync: unexpected argument: $1" >&2; exit 2; fi ;;
+  esac
+  shift
+done
+
+# ---------- --list: names only, no target required ----------
+if [ "$MODE" = "list" ]; then
+  exec node "$RESOLVER" --list --root "$SRC"
+fi
+
+: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --list]}"
 [ -d "$TARGET" ] || { echo "sync: target folder not found: $TARGET" >&2; exit 1; }
 [ -d "$TARGET/.git" ] || echo "sync: note -- target has no .git, is this really a project root?" >&2
 
+# Council JUROR env contract: append the JUROR_* block from a source .env.example to
+# the target's ONCE (sentinel present = already there). Shared by both install paths;
+# council is the only product with an envBlock in v1 (the range regexes are JUROR-specific).
+_arc_env_block() {  # <src-env-file> <sentinel-regex>
+  local srcenv="$1" sentinel="$2" tgtenv="$TARGET/.env.example"
+  [ -f "$srcenv" ] || return 0
+  grep -q "$sentinel" "$tgtenv" 2>/dev/null && return 0
+  local jb_start jb_end
+  jb_start=$(grep -nm1 -iE '^#.*juror|^JUROR_' "$srcenv" | cut -d: -f1)
+  jb_end=$(grep -nE '^JUROR2?_[A-Z_]*=' "$srcenv" | tail -1 | cut -d: -f1)
+  if [ -n "$jb_start" ] && [ -n "$jb_end" ] && [ "$jb_start" -le "$jb_end" ]; then
+    { [ -s "$tgtenv" ] && echo ""; sed -n "${jb_start},${jb_end}p" "$srcenv"; } >> "$tgtenv"
+    echo "sync: council -- JUROR_* block appended to .env.example (keys go in the target's .env.local)."
+  fi
+}
+
+# ---------- --products: manifest-driven selective install ----------
+if [ "$MODE" = "products" ]; then
+  PLAN="$(node "$RESOLVER" --products "$PRODUCTS" --root "$SRC")" || exit 2
+  [ "$(printf '%s\n' "$PLAN" | head -1)" = "$(printf 'PROTO\t1')" ] \
+    || { echo "sync: unexpected resolver plan protocol" >&2; exit 3; }
+  printf '%s\n' "$PLAN" | while IFS=$'\t' read -r verb a b; do
+    case "$verb" in
+      PROTO)    : ;;
+      MKDIR)    mkdir -p "$TARGET/$a" ;;
+      COPY)     mkdir -p "$TARGET/$(dirname "$b")"; cp "$SRC/$a" "$TARGET/$b" ;;
+      ENVBLOCK) _arc_env_block "$SRC/$a" "$b" ;;
+      *)        echo "sync: unknown resolver plan verb: $verb" >&2; exit 3 ;;
+    esac
+  done
+  echo "sync: products [$PRODUCTS] + core -> $TARGET"
+  echo "sync: IMPORTANT -- restart the Claude Code session in that project (commands load at session start)."
+  exit 0
+fi
+
+# ---------- full (default): byte-identical to pre-initiative (REQ-02) ----------
 # Excluded from the .claude sync: personal settings + per-project working state +
 # the scheduled-tasks runtime lock (never belongs in a consumer repo -- REQ-04).
 EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock")
@@ -49,16 +108,7 @@ mkdir -p "$TARGET/docs/council/references" "$TARGET/docs/council/sessions/.juror
 [ -f "$SRC/docs/council/README.md" ] && cp "$SRC/docs/council/README.md" "$TARGET/docs/council/README.md"
 [ -f "$SRC/docs/council/references/fairness.md" ] && cp "$SRC/docs/council/references/fairness.md" "$TARGET/docs/council/references/fairness.md"
 
-# Council juror env contract: append the JUROR_* block to the target's .env.example ONCE
-# (line-start declaration = present; real keys stay in the target's own .env.local, never synced).
-if [ -f "$SRC/.env.example" ] && ! grep -q '^JUROR_BASE_URL=' "$TARGET/.env.example" 2>/dev/null; then
-  jb_start=$(grep -nm1 -iE '^#.*juror|^JUROR_' "$SRC/.env.example" | cut -d: -f1)
-  jb_end=$(grep -nE '^JUROR2?_[A-Z_]*=' "$SRC/.env.example" | tail -1 | cut -d: -f1)
-  if [ -n "$jb_start" ] && [ -n "$jb_end" ] && [ "$jb_start" -le "$jb_end" ]; then
-    { [ -s "$TARGET/.env.example" ] && echo ""; sed -n "${jb_start},${jb_end}p" "$SRC/.env.example"; } >> "$TARGET/.env.example"
-    echo "sync: council -- JUROR_* block appended to .env.example (keys go in the target's .env.local)."
-  fi
-fi
+_arc_env_block "$SRC/.env.example" "^JUROR_BASE_URL="
 
 echo "sync: template -> $TARGET"
 echo "sync: untouched -- CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, .claude/state, app code, docs/council/sessions."
