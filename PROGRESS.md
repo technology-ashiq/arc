@@ -19,9 +19,18 @@ a pre-existing REQ-04-class leak on first use — sync copied `.claude/worktrees
 into targets; fixed in both twins + pinned. REQ-05 + REQ-08 validated. **Actual: ~1 session vs 1-week
 appetite — under.** · amendments: 1 (phase-start /arc-change refinement) · reopened: n.
 
-Next up: **Phase 03 — physical re-homing** (`phases/phase-03-spec.md`, 1.5-week appetite): scripts move
-under `.claude/scripts/PRODUCT/`, tests under `products/NAME/tests/`, incrementally (council → core → plan →
-review → qa) each behind the byte-diff gate (ADR-0018) — installed tree provably unchanged per move.
+**Phase 03 — physical re-homing IN PROGRESS** (`phases/phase-03-spec.md`, 1.5-week appetite; **full
+re-home per plan**, ADR-0018 — the registry-only cut was proposed then reverted, Ashiq chose the full
+re-home 2026-07-18). **Checkpoint 0 DONE + committed (`7d5c907`):** the byte-diff gate — `arc-bytediff.sh
+verify-move <old> <new>` proves a `git mv` relocated a file without altering it (LF-normalized SHA-256 +
+git mode via plumbing, robust on Windows); 7/7 adversarial-tested, mapped to the plan product, golden
+regenerated. **Next: checkpoint 1 — council** (3 scripts → `scripts/council/`; fixtures/eval → 
+`products/council/tests/`; council-lint pinned paths; manifest; golden regen; `arc-bytediff verify-moves`
+transcript in evidence; full serial bats + tree-diff invariant; commit). Then core (spine, ~107 refs) →
+plan → review (arc-scan/ subtree, ~315 refs) → qa+git (no-op). **Per move:** regenerate the golden
+(reviewed-diff clause) + attach the byte-diff transcript to the checkpoint's evidence. Blast-radius mapped
+(6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters via relative
+paths — patch in the core commit.
 
 Appetite burn: **~3 of ~30 days (~10%)** — Phases 00+01+02 each closed in ~1 session, far under their
 1.5w/0.5w/1w appetites. Kill tripwire (50%) is far off.
