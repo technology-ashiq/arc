@@ -1,0 +1,1 @@
+stub: council-neutral agent

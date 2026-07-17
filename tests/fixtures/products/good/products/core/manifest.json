@@ -1,0 +1,7 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "commands": [".claude/commands/arc.md"],
+  "agents": [],
+  "scripts": [".claude/scripts/arc-gates.sh"]
+}
