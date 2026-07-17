@@ -36,6 +36,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
 
 @test "sync (ps1): never leaks state/ or scheduled_tasks.lock (REQ-04)" {
   local ps
+  command -v cygpath >/dev/null 2>&1 || skip "ps1 is Windows-native (robocopy/cygpath) — only the Windows CI leg runs it"
   ps="$(command -v pwsh 2>/dev/null || command -v powershell 2>/dev/null)" || skip "no PowerShell on this runner"
   "$ps" -NoProfile -File "$(cygpath -w "$ARC_ROOT/sync-to-project.ps1")" -Target "$(cygpath -w "$TARGET")" >/dev/null 2>&1 || true
   [ ! -e "$TARGET/.claude/state" ]
@@ -97,6 +98,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
 
 @test "sync (ps1): --products council installs council + core, not other products" {
   local ps
+  command -v cygpath >/dev/null 2>&1 || skip "ps1 is Windows-native (robocopy/cygpath) — only the Windows CI leg runs it"
   ps="$(command -v pwsh 2>/dev/null || command -v powershell 2>/dev/null)" || skip "no PowerShell on this runner"
   "$ps" -NoProfile -File "$(cygpath -w "$ARC_ROOT/sync-to-project.ps1")" -Target "$(cygpath -w "$TARGET")" -Products council >/dev/null 2>&1 || true
   [ -f "$TARGET/.claude/commands/arc-council.md" ]
