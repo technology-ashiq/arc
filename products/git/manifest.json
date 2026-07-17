@@ -1,0 +1,11 @@
+{
+  "name": "git",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "commands": [
+    ".claude/commands/arc-commit.md",
+    ".claude/commands/arc-pr.md",
+    ".claude/commands/arc-fix-issue.md",
+    ".claude/commands/arc-ship.md"
+  ]
+}

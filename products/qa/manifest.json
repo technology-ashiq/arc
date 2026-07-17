@@ -1,0 +1,14 @@
+{
+  "name": "qa",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "commands": [
+    ".claude/commands/arc-qa.md",
+    ".claude/commands/arc-design.md",
+    ".claude/commands/arc-canary.md"
+  ],
+  "agents": [
+    ".claude/agents/qa-tester.md",
+    ".claude/agents/design-reviewer.md"
+  ]
+}

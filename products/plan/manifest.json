@@ -1,0 +1,29 @@
+{
+  "name": "plan",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "commands": [
+    ".claude/commands/arc-kickoff.md",
+    ".claude/commands/arc-change.md",
+    ".claude/commands/arc-phase-done.md",
+    ".claude/commands/arc-retro.md",
+    ".claude/commands/arc-diagram.md"
+  ],
+  "agents": [
+    ".claude/agents/question-planner.md",
+    ".claude/agents/plan-attacker.md",
+    ".claude/agents/plan-simulator.md",
+    ".claude/agents/codebase-surveyor.md",
+    ".claude/agents/product-challenger.md"
+  ],
+  "scripts": [
+    ".claude/scripts/kickoff-lint.mjs",
+    ".claude/scripts/arc-evidence.sh"
+  ],
+  "docs": [
+    { "src": "docs/build-playbook.md", "dest": "docs/build-playbook.md" },
+    { "src": "docs/templates/PLAN-template.md", "dest": "docs/templates/PLAN-template.md" },
+    { "src": "docs/templates/phase-spec-template.md", "dest": "docs/templates/phase-spec-template.md" },
+    { "src": "docs/templates/adr-template.md", "dest": "docs/templates/adr-template.md" }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "name": "council",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "commands": [
+    ".claude/commands/arc-council.md"
+  ],
+  "agents": [
+    ".claude/agents/council-advocate.md",
+    ".claude/agents/council-skeptic.md",
+    ".claude/agents/council-neutral.md",
+    ".claude/agents/council-verifier.md",
+    ".claude/agents/council-researcher.md",
+    ".claude/agents/council-strategist.md",
+    ".claude/agents/council-risk-analyst.md",
+    ".claude/agents/council-marketer.md",
+    ".claude/agents/council-designer.md",
+    ".claude/agents/council-engineer.md",
+    ".claude/agents/council-policy-analyst.md",
+    ".claude/agents/council-life-counselor.md"
+  ],
+  "scripts": [
+    ".claude/scripts/council-lint.mjs",
+    ".claude/scripts/council-juror.mjs",
+    ".claude/scripts/council-calibrate.mjs"
+  ],
+  "docs": [
+    { "src": "docs/council/README.md", "dest": "docs/council/README.md" },
+    { "src": "docs/council/references/fairness.md", "dest": "docs/council/references/fairness.md" }
+  ],
+  "skeletonDirs": ["docs/council/sessions/.juror"],
+  "envBlock": ".env.example",
+  "envSentinel": "^JUROR_BASE_URL="
+}
