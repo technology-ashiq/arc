@@ -18,7 +18,8 @@
   ],
   "scripts": [
     ".claude/scripts/kickoff-lint.mjs",
-    ".claude/scripts/arc-evidence.sh"
+    ".claude/scripts/arc-evidence.sh",
+    ".claude/scripts/arc-bytediff.sh"
   ],
   "docs": [
     { "src": "docs/build-playbook.md", "dest": "docs/build-playbook.md" },
