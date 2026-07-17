@@ -1,0 +1,37 @@
+{
+  "name": "review",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "commands": [
+    ".claude/commands/arc-review.md",
+    ".claude/commands/arc-audit.md",
+    ".claude/commands/arc-second-opinion.md",
+    ".claude/commands/arc-docs.md"
+  ],
+  "agents": [
+    ".claude/agents/code-reviewer.md",
+    ".claude/agents/security-auditor.md"
+  ],
+  "scripts": [
+    ".claude/scripts/arc-scan/arc-scan.sh",
+    ".claude/scripts/arc-scan/arc-scan-summary.sh",
+    ".claude/scripts/arc-scan/version-gate.sh",
+    ".claude/scripts/arc-scan/adapters/codeql.sh",
+    ".claude/scripts/arc-scan/adapters/gitleaks.sh",
+    ".claude/scripts/arc-scan/adapters/semgrep.sh",
+    ".claude/scripts/arc-scan/adapters/trivy.sh",
+    ".claude/scripts/arc-scan/adapters/trufflehog.sh",
+    ".claude/scripts/arc-scan/adapters/zap.sh",
+    ".claude/scripts/arc-scan/lib/baseline.sh",
+    ".claude/scripts/arc-scan/lib/runtime.sh",
+    ".claude/scripts/arc-scan/lib/sarif.sh",
+    ".claude/scripts/arc-scan/lib/suppress.sh",
+    ".claude/scripts/arc-scan/lib/triage-llm.sh",
+    ".claude/scripts/arc-scan/lib/triage.sh",
+    ".claude/scripts/arc-scan/rules/arc-min.yaml",
+    ".claude/scripts/arc-tools-image.sh",
+    ".claude/scripts/docs-drift.sh",
+    ".claude/scripts/coverage-gate.sh",
+    ".claude/scripts/rls-gate.sh"
+  ]
+}

@@ -1,33 +1,56 @@
-# Phase 03 — Security pipeline
+# Phase 03 — Physical re-homing (incremental, council first)
 
-**Goal (one line):** the security gate runs on real industry verifiers — SCA, verified secrets, deep SAST, live DAST, and a stack-specific RLS harness nobody else has.
-**Appetite:** 1.5 weeks.
+**Goal (one line):** scripts move to `.claude/scripts/<product>/` and tests to `products/<name>/tests/`, one product at a time behind the byte-diff gate, with every hardcoded path updated (ADR-0018).
+**Appetite:** 1.5 weeks — blown appetite = cut scope or kill, never extend silently.
+**Depends on:** phase-02
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **Trivy adapter** (SCA: dependencies + lockfile), SARIF-merged, baseline-aware (ADR-0003 — Trivy over Snyk: free, SARIF-native, no account gate)
-- [ ] **trufflehog adapter** (verified-secrets mode) alongside gitleaks
-- [ ] **CodeQL adapter** — optional tier (ADR-0004): detects availability, SKIPPED otherwise; CI-tier only
-- [ ] **RLS test harness**: generated SQL assertions per table ("anon cannot SELECT/INSERT/UPDATE x") runnable against local Supabase; wired as a gate check; `security-sensitive.md` rule updated to require it
-- [ ] **ZAP baseline scan**: docker, CI-tier, runs against preview deploy URL, findings → SARIF merge
-- [ ] `security-auditor` agent updated: consumes `arc-scan` merged results as Pass 0 evidence instead of re-running tools ad hoc
-- [ ] **Pinned `arc-tools` docker image** (ADR-0006 amendment, from `/arc-change` 2026-07-09): the CI-tier heavy verifiers (Trivy, CodeQL, ZAP, later Stryker/Lighthouse) run from ONE version-pinned image built from a committed `Dockerfile`; the image digest is pinned in CI so verdicts are reproducible (evidence integrity). Hook tier stays native — never pulls the image
-- [ ] `/arc-toolcheck` covers all new tools with Quick-fix lines
-- [ ] Live demo: repo with vulnerable dep + leaked (test) credential + missing RLS policy → 3 distinct blocks with correct fingerprints
-- [ ] bats + CI green both platforms (ZAP job linux-only, by design)
-- [ ] Tracker updated
+Five checkpoints, one per product move, in order **council → core → plan → review → qa**
+(git has no scripts — manifest update only). Each checkpoint = git mv + THAT product's
+manifest.json explicit-path entries updated to the new locations (resolver plan regenerated,
+product-lint green) + hardcoded-path updates + the moved product's tests landing under
+`products/NAME/tests/` with the CI workflow's test-discovery path edited in the SAME commit +
+full serial bats green + Phase-02 tree-diff invariant re-verified + byte-diff gate green
+(installed tree unchanged) + the gate transcript attached to the checkpoint's evidence bundle
+(not just eyeballed locally) + commit (REQ-07); a checkpoint with no attached gate transcript
+fails phase-done review. The plan-product move additionally dry-runs kickoff-lint against a
+throwaway PLAN.md/phases layout (pre-mortem row 4):
+
+- [ ] council moved (council-*.mjs → scripts/council/; fixtures + eval harness → products/council/tests/; council-lint pinned paths updated)
+- [ ] core moved (gates/profile/ledger/toolcheck/freeze/common.sh → scripts/core/; common.sh relocated OUT of arc-scan/ — every source path inside the NOT-yet-moved arc-scan/ tree that points at the old common.sh location is patched in THIS checkpoint's commit, since review's own move lands two checkpoints later)
+- [ ] plan moved (kickoff-lint.mjs, arc-evidence.sh → scripts/plan/; kickoff-lint root assumptions verified)
+- [ ] review moved (arc-scan/ tree, docs-drift, coverage/rls/version gates → scripts/review/; scan-summary.bats grep + gates.yaml check commands updated)
+- [ ] qa + git manifests finalized; command frontmatter allowed-tools paths updated across all 21 commands
+- [ ] final: CI discovers every relocated test (no stale `tests/` path anywhere in workflow YAML); tracker updated (PROGRESS.md row ✅ + done-log)
+
+## Verification plan
+
+Coarse (refined at phase start): per-move = full bats (serial, foreground) + byte-diff gate
+transcript; final = one real `/arc-review` run + one council session on the mold itself
+proving the daily driver works post-move.
 
 ## Rabbit holes in this phase
 
-- ZAP on Windows local → forbidden (PLAN rabbit hole); CI-tier docker only
-- CodeQL query authoring → use standard security suites only this cycle
-- RLS harness generality → v1 targets Supabase/Postgres only; other DBs out
+Renaming scripts while moving them — NO: `git mv` only, names frozen (byte-diff depends on it).
+Fixing unrelated script debt "while in there" — file it via /arc-change instead.
 
 ## Out of scope for this phase
 
-- SonarQube (no-go this cycle) · Nuclei templates (next cycle) · Socket.dev (optional, next cycle) · LLM red-teaming tools (only if target app has LLM features — not arc's)
+External repos (Phase 4) · attic/prune (Phase 5) · any extraction (ADR-0016).
 
 ## Your-setup / pending
 
-- Docker Desktop running (CI handles ZAP regardless)
-- Local Supabase instance for RLS harness demo (`supabase start`)
+Nothing — all local.
+
+## Non-negotiables (verbatim from PLAN)
+
+- Bare `sync-to-project TARGET` output stays byte-identical to pre-initiative — golden-output bats case green on every PR of this initiative (products are additive under the umbrella, ADR-0014); the golden fixture may only be regenerated via a reviewed diff naming the intentional change — silently re-recording it to match new output is a gate failure, not a fix.
+- Every new parser (manifest reader, resolver, product-lint) AND the byte-diff/golden-output comparison gates get an adversarial construct-a-breaking-input pass; found holes fixed + pinned as red fixtures BEFORE any FAIL-mode promotion (council v2+v3: 43 holes in gates that passed their own tests).
+- Physical re-homing lands only behind the byte-diff gate — defined as: per-file SHA-256 over content with line endings normalized to LF before hashing, executable bit compared separately, symlinks resolved before hashing; installed tree provably unchanged, per product move (ADR-0018).
+- Consumer repos: never delete — attic move to `.claude/attic/DATE/` only, report before mutate.
+- Every hook/script change ships with a bats test. CI red = no merge on the arc repo.
+- Cross-platform: Git Bash (Windows) + ubuntu + macos CI; bash-3.2/POSIX; no new PowerShell logic beyond the dumb copy loop (ADR-0015).
+- New lint checks start WARN in the TRIAL set; FAIL promotion only via docs/trial-ledger.md evidence.
+- Engine scripts assume no Claude (ADR-0013 writing rule, inherited).
+- Every `/arc-phase-done` on this initiative commits an evidence bundle.

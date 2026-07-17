@@ -1,0 +1,6 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "scripts": [".claude/scripts/x.sh"],
+  "docs": [{ "src": "d.md", "dest": ".. /pwn.md" }]
+}

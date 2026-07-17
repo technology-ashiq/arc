@@ -1,0 +1,52 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "commands": [
+    ".claude/commands/arc.md",
+    ".claude/commands/arc-toolcheck.md",
+    ".claude/commands/arc-resume.md",
+    ".claude/commands/arc-freeze.md",
+    ".claude/commands/arc-unfreeze.md"
+  ],
+  "agents": [
+    ".claude/agents/log-analyzer.md",
+    ".claude/agents/researcher.md"
+  ],
+  "scripts": [
+    ".claude/scripts/arc-gates.sh",
+    ".claude/scripts/arc-profile.sh",
+    ".claude/scripts/review-ledger.sh",
+    ".claude/scripts/toolchain-health.sh",
+    ".claude/scripts/freeze-check.sh",
+    ".claude/scripts/arc-products.mjs",
+    ".claude/scripts/product-lint.mjs",
+    ".claude/scripts/arc-status.sh",
+    ".claude/scripts/arc-scan/lib/common.sh",
+    ".claude/statusline.sh"
+  ],
+  "files": [
+    ".claude/hooks/SessionStart.sh",
+    ".claude/hooks/SessionEnd.sh",
+    ".claude/hooks/PreToolUse.sh",
+    ".claude/hooks/PreToolUse-edit.sh",
+    ".claude/hooks/PostToolUse.sh",
+    ".claude/hooks/PreCompact.sh",
+    ".claude/output-styles/terse.md",
+    ".claude/rules/api.md",
+    ".claude/rules/security-sensitive.md",
+    ".claude/rules/stripe.md",
+    ".claude/rules/supabase.md",
+    ".claude/rules/testing.md",
+    ".claude/rules/ui.md",
+    ".claude/settings.json",
+    ".claude/skills/seo-article-writer/SKILL.md",
+    ".claude/templates/toolchain-health-artifact.html"
+  ],
+  "docs": [
+    { "src": "docs/how-it-works.md", "dest": "docs/how-it-works.md" },
+    { "src": "docs/usermanual.md", "dest": "docs/usermanual.md" },
+    { "src": "docs/blueprint.md", "dest": "docs/blueprint.md" },
+    { "src": "docs/product-runbook.md", "dest": "docs/product-runbook.md" },
+    { "src": "docs/plugins.md", "dest": "docs/plugins.md" }
+  ]
+}

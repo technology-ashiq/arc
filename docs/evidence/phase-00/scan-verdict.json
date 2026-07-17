@@ -1,0 +1,20 @@
+{
+  "verdict": "pass",
+  "findings": 8,
+  "errors": 8,
+  "warnings": 0,
+  "notes": 0,
+  "new_errors": 0,
+  "baseline": 0,
+  "suppressed": 8,
+  "tools_ran": [
+    "semgrep",
+    "gitleaks"
+  ],
+  "tools_skipped": [
+    "trufflehog",
+    "codeql",
+    "zap",
+    "trivy"
+  ]
+}

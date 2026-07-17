@@ -45,3 +45,22 @@ _arc_write() { local p="$1"; shift; mkdir -p "$(dirname "$p")"; printf '%s\n' "$
 # runner cannot install a tool; local runs with tools present always execute).
 _arc_need_semgrep()  { command -v opengrep >/dev/null 2>&1 || command -v semgrep >/dev/null 2>&1 || skip "semgrep/opengrep not installed"; }
 _arc_need_gitleaks() { command -v gitleaks >/dev/null 2>&1 || skip "gitleaks not installed"; }
+
+# Portable sha256 of stdin -> hex (GNU sha256sum / BSD-macOS shasum / openssl).
+# Mirrors common.sh's arc_hash_file fallback so macOS CI (no sha256sum) works.
+_arc_sha256() {
+  if   command -v sha256sum >/dev/null 2>&1; then sha256sum | cut -d' ' -f1
+  elif command -v shasum    >/dev/null 2>&1; then shasum -a 256 | cut -d' ' -f1
+  else openssl dgst -sha256 | sed 's/.* //'
+  fi
+}
+
+# Deterministic tree fingerprint for the sync golden-output gate (REQ-02):
+# every file's path + LF-normalized SHA-256, sorted (LC_ALL=C), .git excluded.
+# CR bytes are stripped before hashing so a Windows checkout and a Linux CI
+# checkout of the same committed bytes fingerprint identically.
+_arc_tree_manifest() {
+  ( cd "$1" && find . -type f -not -path './.git/*' | LC_ALL=C sort | while IFS= read -r f; do
+      printf '%s\t%s\n' "${f#./}" "$(tr -d '\r' < "$f" | _arc_sha256)"
+    done )
+}

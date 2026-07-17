@@ -1,0 +1,10 @@
+{
+  "name": "council",
+  "version": "1.0.0",
+  "requires": ["core"],
+  "commands": [".claude/commands/arc-council.md"],
+  "agents": [".claude/agents/council-neutral.md"],
+  "scripts": [".claude/scripts/council-lint.mjs"],
+  "docs": [{ "src": "docs/council/README.md", "dest": "docs/council/README.md" }],
+  "skeletonDirs": ["docs/council/sessions/.juror"]
+}

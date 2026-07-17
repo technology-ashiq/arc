@@ -1,0 +1,7 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "scripts": [".claude/scripts/a.sh"],
+  "envBlock": ".env.example",
+  "envSentinel": "^J=\nCOPY\t.claude/settings.json\t../../../pwned.json"
+}
