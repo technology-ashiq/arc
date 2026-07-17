@@ -6,16 +6,27 @@
 
 ## Now
 
-**Kickoff complete (2026-07-17), awaiting Ashiq's approval gate (kickoff step 9).** PLAN.md +
-6 phase specs + ADRs 0014–0019 written. Gates run: attack panel ×3 (20/20 findings accepted
-as exact mutations) · kickoff-lint all checks passed · simulation gate round 1 = 6 blockers →
-spec amended (manifest schema v1, line protocol v1, product-assignment table, golden-fixture +
-hostile-corpus + named-fixture locations) → round 2 = 0 blockers · L-tier researcher
-re-verified the top-3 load-bearing ADR claims against source (all VERIFIED, file:line quoted).
-Second opinion: NO second model available on this machine (codex CLI absent, JUROR_* unset,
-no second Claude profile) — recorded honestly per the command's own rule, not faked; wiring a
-juror/codex remains available anytime via env. No product code yet — Phase 00 (steel thread:
-manifests → resolver → twins → council-only install) starts on approval.
+**Phase 00 IN PROGRESS — Ashiq approved 2026-07-17, build started (TDD).** Kickoff artifacts
+committed (park v2 + full plan). Phase-00 slices done + committed so far:
+- **Slice 1 — resolver + linter (done).** `arc-products.mjs` (TAB line-protocol emitter) +
+  `product-lint.mjs` (schema + coverage/double-map + byte-hygiene + path-safety). 16 bats
+  cases red-first→green; 7-case hostile corpus all exit 2 (REQ-03); crlf-bom fixture byte-pinned
+  via .gitattributes -text.
+- **Slice 2 — the 6 real manifests (done).** products/{core,plan,review,qa,council,git}. Added
+  a `files` catch-all field (hooks/rules/output-styles/templates/skills/settings.json). Corrected
+  REQ-03: TAB delimiter makes spaces-in-paths legal; real break = control-char (Ashiq-approved).
+  `product-lint --root .` PASSES — all 90 .claude/ files map to exactly one product, no
+  double-map. `--products council` resolver plan = 54 files (core+council only, clean).
+
+Appetite burn: ~2 of ~7.5 days of the Phase-00 slice budget (rough).
+
+**Next up (careful — touches the daily-driver sync scripts):** (1) capture the golden-output
+fixture BEFORE editing twins (the byte-identical safety net); (2) wire `--list`/`--products`
+into sync-to-project.sh + .ps1 via the resolver plan; (3) fix the twin bugs (.ps1 state/ leak,
+both twins' scheduled_tasks.lock leak); (4) council-only install demo in a scratch repo (named
+pass/fail fixtures); (5) stretch `/arc`. Then evidence bundle + `/arc-phase-done 00`.
+
+Second opinion still unavailable on this machine (no codex/JUROR) — noted, not faked.
 
 Appetite burn: **0 of 6 weeks (0%).**
 
