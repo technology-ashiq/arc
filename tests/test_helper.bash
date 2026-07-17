@@ -41,6 +41,12 @@ _arc_ledger_file() {
 # Write a file with planted content, return its path via stdout.
 _arc_write() { local p="$1"; shift; mkdir -p "$(dirname "$p")"; printf '%s\n' "$*" > "$p"; echo "$p"; }
 
+# Extract a JS expression (over parsed `j`) from a JSON file -- no jq dependency.
+# Usage: _arc_json <file> 'j.some.path'  (objects/arrays print as JSON, scalars as-is)
+_arc_json() {
+  node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));const v=eval(process.argv[2]);process.stdout.write(typeof v==="object"?JSON.stringify(v):String(v))' "$1" "$2"
+}
+
 # Skip guards for tests that need a real scanner (keeps CI green + honest when a
 # runner cannot install a tool; local runs with tools present always execute).
 _arc_need_semgrep()  { command -v opengrep >/dev/null 2>&1 || command -v semgrep >/dev/null 2>&1 || skip "semgrep/opengrep not installed"; }
@@ -59,8 +65,11 @@ _arc_sha256() {
 # every file's path + LF-normalized SHA-256, sorted (LC_ALL=C), .git excluded.
 # CR bytes are stripped before hashing so a Windows checkout and a Linux CI
 # checkout of the same committed bytes fingerprint identically.
+# .claude/arc-registry.json is EXCLUDED (Phase 02): it is an intentional additive
+# per-install artifact carrying a volatile source.commit, so it lives outside the
+# byte-identical gate -- its own bats (sync.bats/products.bats) prove it correct.
 _arc_tree_manifest() {
-  ( cd "$1" && find . -type f -not -path './.git/*' | LC_ALL=C sort | while IFS= read -r f; do
+  ( cd "$1" && find . -type f -not -path './.git/*' -not -path './.claude/arc-registry.json' | LC_ALL=C sort | while IFS= read -r f; do
       printf '%s\t%s\n' "${f#./}" "$(tr -d '\r' < "$f" | _arc_sha256)"
     done )
 }

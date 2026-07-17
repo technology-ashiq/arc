@@ -22,6 +22,7 @@
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execFileSync } from "node:child_process";
 
 const TAB = "\t";
 
@@ -37,9 +38,10 @@ let productsArg = "";
 let root = null;
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
-  if (a === "--products") { mode = "plan"; productsArg = argv[++i] ?? ""; }
+  if (a === "--products") { productsArg = argv[++i] ?? ""; if (mode === null) mode = "plan"; }
   else if (a === "--list") { mode = "list"; }
   else if (a === "--status") { mode = "status"; }
+  else if (a === "--registry") { mode = "registry"; }
   else if (a === "--root") { root = argv[++i]; }
   else die(`unknown argument: ${a}`);
 }
@@ -77,6 +79,67 @@ const asArray = (v, ctx) => {
   if (!Array.isArray(v)) die(`${ctx}: expected an array`);
   return v;
 };
+
+// Source commit stamped into the registry: a deterministic test override
+// (ARC_SOURCE_COMMIT, validated hex) wins; else the mold's short HEAD; else
+// "unknown" (no git / not a repo) -- the registry writes cleanly regardless.
+function registrySourceCommit(dir) {
+  const override = process.env.ARC_SOURCE_COMMIT;
+  if (override && /^[0-9a-f]+$/i.test(override)) return override;
+  try {
+    return execFileSync("git", ["-C", dir, "rev-parse", "--short", "HEAD"], {
+      encoding: "utf8", stdio: ["ignore", "pipe", "ignore"],
+    }).trim() || "unknown";
+  } catch { return "unknown"; }
+}
+
+// The frozen product lineup (No-go this cycle: no 7th product, no re-slicing). Used ONLY
+// to enumerate ABSENT products in a consumer repo, which has no products/ dir to read;
+// INSTALLED state itself always comes from the registry, never from file presence (REQ-05).
+const CATALOG = ["core", "council", "git", "plan", "qa", "review"];
+
+// --status rendered from the registry (REQ-05): the registry is the ground truth for
+// INSTALLED; HEALTH is a live integrity check (are the files it claims still on disk?).
+function renderRegistryStatus(rootDir, reg) {
+  const installed = new Set(Object.keys(reg.products));
+  const commit = reg?.source?.commit ?? "unknown";
+  const out = [
+    `arc — product status  (registry @ ${commit})`,
+    `${"PRODUCT".padEnd(10)}${"INSTALLED".padEnd(11)}${"HEALTH".padEnd(10)}FILES`,
+  ];
+  for (const name of CATALOG) {
+    if (!installed.has(name)) { out.push(`${name.padEnd(10)}${"no".padEnd(11)}${"-".padEnd(10)}-`); continue; }
+    const files = Array.isArray(reg.products[name]?.files) ? reg.products[name].files : [];
+    const present = files.filter((p) => typeof p === "string" && existsSync(join(rootDir, p))).length;
+    const total = files.length;
+    const health = present === total ? "ok" : `degraded(${total - present} missing)`;
+    out.push(`${name.padEnd(10)}${"yes".padEnd(11)}${health.padEnd(10)}${present}/${total}`);
+  }
+  const absent = CATALOG.filter((n) => !installed.has(n));
+  if (absent.length) out.push(`\ninstall missing: sync-to-project.sh <target> --products ${absent.join(",")}`);
+  process.stdout.write(out.join("\n") + "\n");
+  process.exit(0);
+}
+
+// ---------- --status via registry (REQ-05): registry is ground truth when present ----------
+// Runs BEFORE the products/ requirement so a consumer repo (no synced manifests) still gets
+// a true status. A present-but-unreadable registry degrades loudly, never crashes (adversarial).
+if (mode === "status") {
+  const regPath = join(root, ".claude", "arc-registry.json");
+  if (existsSync(regPath)) {
+    let reg = null;
+    try { reg = JSON.parse(readFileSync(regPath, "utf8")); } catch { reg = null; }
+    if (reg && reg.products && typeof reg.products === "object" && !Array.isArray(reg.products)) {
+      renderRegistryStatus(root, reg); // prints + exits 0
+    }
+    process.stdout.write(
+      `arc — product status  (root: ${root})\n` +
+      `.claude/arc-registry.json present but unreadable — reinstall to repair (sync-to-project.sh <target>).\n`
+    );
+    process.exit(0);
+  }
+  // no registry here: fall through to the products/ file-presence path (mold) below.
+}
 
 // ---------- load manifests ----------
 const productsDir = join(root, "products");
@@ -129,6 +192,49 @@ if (mode === "status") {
   const absent = rows.filter((r) => r.state !== "yes").map((r) => r.name);
   if (absent.length) out.push(`\ninstall missing: sync-to-project.sh <target> --products ${absent.join(",")}`);
   process.stdout.write(out.join("\n") + "\n");
+  process.exit(0);
+}
+
+// ---------- --registry: emit the target's arc-registry.json (Phase 2, REQ-08) ----------
+// One JSON document (not the TAB plan): products, versions, per-product installed
+// file lists, source commit. Both twins redirect this to .claude/arc-registry.json.
+// v1 schema is LOCKED (PLAN rabbit hole): schema, source.commit, products.<name>.{version,files}.
+if (mode === "registry") {
+  const reqNames = productsArg.split(",").map((s) => s.trim()).filter(Boolean);
+  const names = reqNames.length ? reqNames : allNames; // no --products => every product (bare/full install)
+  for (const r of names) {
+    if (!manifests.has(r)) die(`unknown product: ${r}\nvalid products: ${allNames.join(", ")}`);
+  }
+  const inSet = new Set();
+  const addDeps = (name) => {
+    if (inSet.has(name)) return;
+    inSet.add(name);
+    for (const dep of manifests.get(name).requires ?? []) {
+      if (!manifests.has(dep)) die(`product "${name}" requires missing product "${dep}"`);
+      addDeps(dep);
+    }
+  };
+  if (manifests.has("core")) addDeps("core"); // core always rides along (REQ-01)
+  for (const r of names) addDeps(r);
+
+  const products = {};
+  for (const name of [...inSet].sort()) {
+    const m = manifests.get(name);
+    // version is a registry field AND transported to the ledger reader -- a hostile
+    // manifest must die cleanly, never emit a malformed token (adversarial pass).
+    if (typeof m.version !== "string" || !/^[\w.+-]+$/.test(m.version))
+      die(`${name}.version: must be a simple version token ([\\w.+-]+), got ${JSON.stringify(m.version)}`);
+    const files = [];
+    const addFile = (p, ctx) => { assertSafe(p, ctx); files.push(p); }; // same path safety as the plan
+    for (const p of asArray(m.commands, `${name}.commands`)) addFile(p, `${name}.commands`);
+    for (const p of asArray(m.agents, `${name}.agents`)) addFile(p, `${name}.agents`);
+    for (const p of asArray(m.scripts, `${name}.scripts`)) addFile(p, `${name}.scripts`);
+    for (const p of asArray(m.files, `${name}.files`)) addFile(p, `${name}.files`);
+    for (const d of asArray(m.docs, `${name}.docs`)) addFile(d?.dest, `${name}.docs`); // dest, not src
+    products[name] = { version: m.version, files };
+  }
+  const registry = { schema: 1, source: { commit: registrySourceCommit(root) }, products };
+  process.stdout.write(JSON.stringify(registry, null, 2) + "\n");
   process.exit(0);
 }
 

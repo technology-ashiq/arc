@@ -102,3 +102,48 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
   run bash .claude/scripts/review-ledger.sh require-profile
   [ "$status" -eq 0 ]
 }
+
+# ---------- Phase 02: review-ledger derives VALID_KINDS from the registry (REQ-08) ----------
+
+@test "review-ledger: no registry falls back to all kinds (old installs unbroken)" {
+  _arc_sandbox
+  run bash .claude/scripts/review-ledger.sh stamp design
+  [ "$status" -eq 0 ]                          # 'design' valid with no registry present
+}
+
+@test "review-ledger: a council-only registry rejects 'code' with a product-install hint (REQ-08)" {
+  _arc_sandbox
+  mkdir -p .claude
+  printf '{"schema":1,"source":{"commit":"x"},"products":{"core":{"files":[]},"council":{"files":[]}}}' > .claude/arc-registry.json
+  run bash .claude/scripts/review-ledger.sh stamp code
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"review"* ]]                # hints the product that provides 'code'
+  [[ "$output" == *"--products"* ]]
+}
+
+@test "review-ledger: a review+qa registry makes code+design valid" {
+  _arc_sandbox
+  mkdir -p .claude
+  printf '{"schema":1,"source":{"commit":"x"},"products":{"core":{"files":[]},"review":{"files":[]},"qa":{"files":[]}}}' > .claude/arc-registry.json
+  run bash .claude/scripts/review-ledger.sh stamp code
+  [ "$status" -eq 0 ]
+  run bash .claude/scripts/review-ledger.sh stamp design
+  [ "$status" -eq 0 ]
+}
+
+@test "review-ledger: a malformed registry falls back to all kinds, never blocks (adversarial)" {
+  _arc_sandbox
+  mkdir -p .claude
+  printf '{ not json ' > .claude/arc-registry.json
+  run bash .claude/scripts/review-ledger.sh stamp code
+  [ "$status" -eq 0 ]                          # fail-safe: bad registry -> hardcoded fallback
+}
+
+@test "review-ledger: a glob-metachar product key can't expand against CWD to grant kinds (adversarial, pinned)" {
+  _arc_sandbox
+  mkdir -p .claude
+  printf '{"schema":1,"source":{"commit":"x"},"products":{"*":{"files":[]}}}' > .claude/arc-registry.json
+  : > review                                   # the file '*' would glob to if the loop were unquoted
+  run bash .claude/scripts/review-ledger.sh stamp code
+  [ "$status" -eq 1 ]                          # '*' stays literal (set -f) -> 'code' never granted
+}
