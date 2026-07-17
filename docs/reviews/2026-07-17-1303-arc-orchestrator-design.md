@@ -57,9 +57,26 @@ product-lint.mjs and arc-products.mjs. Add an `envblock-injection` fixture.
 ## NIT
 
 - **N1** — skeletonDirs + the MKDIR verb inherit the C1 backslash blind spot; the C1 fix covers it —
-  confirm a fixture exercises a skeletonDirs backslash.
-- **N2** — `printf | while` partial-install has no rollback; consider a "partial install" warning.
-- **N3** — `padEnd(10)` misaligns product names >10 chars in `--status`. Cosmetic.
+  confirm a fixture exercises a skeletonDirs backslash. **Resolved in 421d6df** (traversal-backslash fixture includes a `skeletonDirs` backslash).
+- **N2** — `printf | while` partial-install has no rollback; consider a "partial install" warning. **Deferred** — filed as a Phase-5 follow-up (attic/prune phase is where partial-install safety lands); non-exploitable, cosmetic-robustness.
+- **N3** — `padEnd(10)` misaligns product names >10 chars in `--status`. Cosmetic. **Accepted** — all product names ≤7 chars; revisit if a longer product name is ever added.
+
+## Re-review (adversarial, commit 421d6df) — verdict: SHIP
+
+A second code-reviewer pass ran ~25 hostile manifests through the real scripts + an end-to-end
+Win32 `Copy-Item`: **both Criticals verified hole-free**, all bypasses failed, all 6 real manifests
+resolve clean, scanners + bats green. It surfaced two non-blocking same-class follow-ups, now closed:
+
+- **W3** — envBlock-without-envSentinel linted clean but died in the resolver (broke
+  lints-clean⇒resolves-clean). product-lint now requires envSentinel when envBlock is present.
+  **Resolved in deb41a5** (fixture: envblock-no-sentinel).
+- **W4** — the `..` segment check was exact-string, so `.. `/`...` (Windows trailing-dot/space
+  normalization, same class as C1) slipped both gates. Both parsers now reject `/^\.\.[.\s]*$/`.
+  **Resolved in deb41a5** (fixture: traversal-dotspace).
+- **N4** — dropped `.` from ENV_SENTINEL_RE (regex any-char over-matched the twins' grep probe).
+  **Resolved in deb41a5.**
+
+Final verdict: **ship** (all Criticals + all Warnings closed; N2 deferred to Phase 5, N3 accepted).
 
 ## Verdict
 
