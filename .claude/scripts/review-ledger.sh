@@ -21,10 +21,53 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 LEDGER_DIR="$ROOT/.claude/state/reviews"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'no-git')"
 LEDGER="$LEDGER_DIR/$SHA.txt"
-VALID_KINDS="scan code security qa design docs"
 mkdir -p "$LEDGER_DIR"
 
+# Every review kind arc knows about -- the no-registry fallback for VALID_KINDS.
+KNOWN_KINDS="scan code security qa design docs"
+
+# Which product enables each kind. Used to derive VALID_KINDS from an install's registry
+# AND to hint the right `--products` install when a kind isn't available here (REQ-08).
+# review ships arc-review/arc-audit/arc-docs + the scan pipeline; qa ships arc-qa/arc-design.
+_product_for_kind() {
+  case "$1" in
+    scan|code|security|docs) echo "review";;
+    qa|design)               echo "qa";;
+    *)                        echo "";;
+  esac
+}
+
+# Installed products from the target's arc-registry.json (space-separated); non-zero if
+# there is no registry or it doesn't parse. node does the JSON read (already an arc
+# requirement); ANY failure falls through to the hardcoded fallback -- old installs unbroken.
+_installed_products() {
+  local reg="$ROOT/.claude/arc-registry.json"
+  [ -f "$reg" ] || return 1
+  command -v node >/dev/null 2>&1 || return 1
+  node -e 'try{const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));if(j&&j.products&&typeof j.products==="object"&&!Array.isArray(j.products)){const k=Object.keys(j.products);if(!k.length)process.exit(1);process.stdout.write(k.join(" "))}else process.exit(1)}catch{process.exit(1)}' "$reg" 2>/dev/null
+}
+
+# VALID_KINDS: derived from the registry's installed products when present; else KNOWN_KINDS.
+_derive_valid_kinds() {
+  local prods kinds="" p
+  if prods="$(_installed_products)" && [ -n "$prods" ]; then
+    set -f                       # registry product keys are data, never shell globs
+    for p in $prods; do
+      case "$p" in
+        review) kinds="$kinds scan code security docs";;
+        qa)     kinds="$kinds qa design";;
+      esac
+    done
+    set +f
+    printf '%s\n' $kinds | sort -u | tr '\n' ' ' | sed 's/  */ /g;s/^ //;s/ $//'
+  else
+    echo "$KNOWN_KINDS"
+  fi
+}
+VALID_KINDS="$(_derive_valid_kinds)"
+
 _is_valid() { case " $VALID_KINDS " in *" $1 "*) return 0;; *) return 1;; esac; }
+_is_known() { case " $KNOWN_KINDS " in *" $1 "*) return 0;; *) return 1;; esac; }
 _cmd_for() {
   case "$1" in
     scan) echo "arc-scan";; code) echo "/arc-review";; security) echo "/arc-audit";;
@@ -36,7 +79,15 @@ _cmd_for() {
 cmd="${1:-status}"; kind="${2:-}"
 case "$cmd" in
   stamp)
-    _is_valid "$kind" || { echo "review-ledger: unknown kind '$kind' (valid: $VALID_KINDS)" >&2; exit 1; }
+    if ! _is_valid "$kind"; then
+      if _is_known "$kind"; then
+        p="$(_product_for_kind "$kind")"
+        echo "review-ledger: kind '$kind' needs the '$p' product, not installed here -- sync-to-project.sh <target> --products $p" >&2
+      else
+        echo "review-ledger: unknown kind '$kind' (valid here: ${VALID_KINDS:-none})" >&2
+      fi
+      exit 1
+    fi
     touch "$LEDGER"
     grep -qxF "$kind" "$LEDGER" 2>/dev/null || echo "$kind" >> "$LEDGER"
     echo "review-ledger: stamped '$kind' for $SHA"

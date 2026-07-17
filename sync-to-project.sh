@@ -15,7 +15,8 @@
 #   products + core are installed, via its COPY/MKDIR/ENVBLOCK line protocol.
 # Never touches:  CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN.md,
 #   PROGRESS.md, phases/, docs/adr/, docs/reviews/, docs/session-log.md, your app
-#   code -- and NOT .claude/state/ nor .claude/scheduled_tasks.lock (working state).
+#   code -- and NOT .claude/state/, .claude/worktrees/ (transient git worktrees), nor
+#   .claude/scheduled_tasks.lock (all working state, never belongs in a consumer repo).
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -73,6 +74,13 @@ if [ "$MODE" = "products" ]; then
       *)        echo "sync: unknown resolver plan verb: $verb" >&2; exit 3 ;;
     esac
   done
+  # arc-registry.json: the target's installed-products ground truth (REQ-08). The
+  # resolver (the single JSON parser) produces it. Capture-then-write (mirrors the ps1
+  # twin) so a generation failure never truncates the file to 0 bytes mid-install.
+  _reg="$(node "$RESOLVER" --registry --products "$PRODUCTS" --root "$SRC")" \
+    || { echo "sync: registry generation failed" >&2; exit 3; }
+  mkdir -p "$TARGET/.claude"
+  printf '%s\n' "$_reg" > "$TARGET/.claude/arc-registry.json"
   echo "sync: products [$PRODUCTS] + core -> $TARGET"
   echo "sync: IMPORTANT -- restart the Claude Code session in that project (commands load at session start)."
   exit 0
@@ -81,14 +89,14 @@ fi
 # ---------- full (default): byte-identical to pre-initiative (REQ-02) ----------
 # Excluded from the .claude sync: personal settings + per-project working state +
 # the scheduled-tasks runtime lock (never belongs in a consumer repo -- REQ-04).
-EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock")
+EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock" "worktrees")
 
 mkdir -p "$TARGET/.claude" "$TARGET/docs/templates" "$TARGET/docs"
 
 # ARC_SYNC_NO_RSYNC=1 forces the portable cp fallback even where rsync exists --
 # lets CI prove REQ-02 (byte-identical output) holds on BOTH copy paths.
 if command -v rsync >/dev/null 2>&1 && [ -z "${ARC_SYNC_NO_RSYNC:-}" ]; then
-  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' "$SRC/.claude/" "$TARGET/.claude/"
+  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' --exclude 'worktrees/' "$SRC/.claude/" "$TARGET/.claude/"
   rsync -a "$SRC/docs/templates/" "$TARGET/docs/templates/"
 else
   # Portable cp fallback (Git Bash has no rsync): copy all, then drop excludes.
@@ -109,6 +117,13 @@ mkdir -p "$TARGET/docs/council/references" "$TARGET/docs/council/sessions/.juror
 [ -f "$SRC/docs/council/references/fairness.md" ] && cp "$SRC/docs/council/references/fairness.md" "$TARGET/docs/council/references/fairness.md"
 
 _arc_env_block "$SRC/.env.example" "^JUROR_BASE_URL="
+
+# arc-registry.json: bare install = every product; same ground-truth file (REQ-08).
+# Excluded from the REQ-02 golden manifest (carries a per-install-volatile source.commit).
+# Capture-then-write (mirrors ps1): a generation failure never leaves a 0-byte registry.
+_reg="$(node "$RESOLVER" --registry --root "$SRC")" \
+  || { echo "sync: registry generation failed" >&2; exit 3; }
+printf '%s\n' "$_reg" > "$TARGET/.claude/arc-registry.json"
 
 echo "sync: template -> $TARGET"
 echo "sync: untouched -- CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN/PROGRESS/phases, adr, reviews, session-log, .claude/state, app code, docs/council/sessions."

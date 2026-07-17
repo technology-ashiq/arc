@@ -1,20 +1,24 @@
 {
   "phase": "02",
-  "commit": "19040b29dfab784db4d390f0a8b5d0c54c4f2e9d",
-  "short": "19040b2",
-  "generated": "2026-07-09T22:55:59Z",
+  "commit": "77cce2888c9806d9573ea7ae185c6165ab914b1d",
+  "short": "77cce28",
+  "generated": "2026-07-17T16:37:19Z",
   "files": [
     {
       "name": "scan-verdict.json",
-      "sha256": "c31a60c78ee5fb59d51dcb732cef7c734f1a2be8083a28a195e51d5270d25034"
+      "sha256": "6f291bad5ecdfe22b2f77ab4ba7f18f0701e29a0049154d413f3be55a8e20157"
     },
     {
       "name": "scan-result.sarif",
-      "sha256": "93ff1c2e214bf9138cfd5ab713e8d1c8b1ac1533ae1016065553f08d2fe1e4b2"
+      "sha256": "5d95ea4b78d22cc7e5d1093889b6b0f284ef06d941f4e11d0dd2aff3afbb0f34"
+    },
+    {
+      "name": "reviews.txt",
+      "sha256": "344c62d7995d86b77242c14e54d7b8bcf018811d360abdf565db8cf96fa3a109"
     },
     {
       "name": "test-output.log",
-      "sha256": "2a170ad70e8034bb43ea5752eb9636fd6c2710a6341011ebd6fadbb495bae643"
+      "sha256": "3136bba3c267a6b7f8bf8891d813a2f9d66ed0211d2173662b2538fe7ecea70c"
     }
   ]
 }

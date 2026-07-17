@@ -6,24 +6,27 @@
 
 ## Now
 
-**Phase 01 CLOSED ✅ (2026-07-17).** The 6 lifecycle hooks are now composable: thin core
-dispatchers (`_dispatch.sh`) running `.claude/hooks/<Event>.d/NN-*.sh` fragments, advisory events
-isolate failures, blocking events propagate exit 2, the deploy-guard degrades loudly when
-`arc.gates.yaml` is absent (REQ-06), a missing dispatcher fails open loudly. Fixed a live
-pre-existing security hole (the destructive-guard was silently disarmed on Windows by the MS-Store
-python stub — now jq-first + raw fail-safe). **215/215 bats green**, reviewed (ship), evidence
-bundle verified. REQ-06 validated. Scope trimmed via /arc-change (dropped the hollow per-product
-SKIP; kept the dispatcher pattern + degradation + <30s). SessionStart 11.4s < 30s.
+**Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+read it instead of guessing from file presence. (1) resolver `--registry` mode + registry-backed
+`/arc --status` (REQ-05); (2) **both** twins write the registry in bare **and** `--products` paths (ps1
+UTF8-no-BOM, sh capture-then-write, REQ-08); (3) `review-ledger.sh` derives `VALID_KINDS` from the registry
+(review→scan/code/security/docs, qa→qa/design), hardcoded fallback kept; (4) a tree-diff invariant proves
+installing all products reproduces the mold's `.claude/` exactly. Golden gate **excludes** `arc-registry.json`
+(volatile commit) so REQ-02 stays byte-identical. **236/236 bats green**, reviewed (ship — 2 Low + 2 Nits
+fixed fix-first, glob hole pinned), evidence bundle verified. **Bonus:** the new tree-diff invariant caught
+a pre-existing REQ-04-class leak on first use — sync copied `.claude/worktrees/` (transient git worktrees)
+into targets; fixed in both twins + pinned. REQ-05 + REQ-08 validated. **Actual: ~1 session vs 1-week
+appetite — under.** · amendments: 1 (phase-start /arc-change refinement) · reopened: n.
 
-Next up: **Phase 02 — registry-aware core** (`phases/phase-02-spec.md`, 1-week appetite): targets
-carry an `arc-registry.json` ground truth; `/arc` + review-ledger read it instead of guessing from
-file presence; CI tree-diff invariant (`--products all` vs the mold) so manifests can never silently
-diverge from reality.
+Next up: **Phase 03 — physical re-homing** (`phases/phase-03-spec.md`, 1.5-week appetite): scripts move
+under `.claude/scripts/PRODUCT/`, tests under `products/NAME/tests/`, incrementally (council → core → plan →
+review → qa) each behind the byte-diff gate (ADR-0018) — installed tree provably unchanged per move.
 
-Appetite burn: **~2 of ~30 days (~7%)** — Phases 00+01 both closed in ~1 session each, far under
-their 1.5w/0.5w appetites. Kill tripwire (50%) is far off.
+Appetite burn: **~3 of ~30 days (~10%)** — Phases 00+01+02 each closed in ~1 session, far under their
+1.5w/0.5w/1w appetites. Kill tripwire (50%) is far off.
 
-Setup needed from user: none for Phase 02. Phase 04 will need venturemind + InvoiceFly access
+Setup needed from user: none for Phase 03 (all local). Phase 04 will need venturemind + InvoiceFly access
 and the council-vs-core+plan target assignment.
 
 ## Phases
@@ -32,7 +35,7 @@ and the council-vs-core+plan target assignment.
 |---|---|---|---|---|
 | 00 | Steel thread: manifests + resolver + product-lint + hostile fixtures + --products in both twins + twin-leak fixes + council-only install + /arc dashboard | 1.5 weeks | ✅ done | 2026-07-17 |
 | 01 | Composable hooks: event.d dispatcher + fragments, graceful partial-install degradation, <30s | 0.5 weeks | ✅ done | 2026-07-17 |
-| 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ⬜ not started | |
+| 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ✅ done | 2026-07-17 |
 | 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ⬜ not started | |
 | 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ⬜ not started | |
 | 05 | Prune-report + attic, README/usermanual rewrite, TRIAL promotions, retro | 0.5 weeks | ⬜ not started | |
@@ -41,6 +44,28 @@ Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggere
 
 ## Done log
 
+- **2026-07-17 · Phase 02 · Registry-aware core.** Targets now carry `.claude/arc-registry.json`
+  ground truth and consumers read it instead of guessing from file presence. The single Node resolver
+  gained a `--registry` mode (v1 schema **locked**: `schema` · `source.commit` · per-product
+  `version`+`files`, nothing else) with version-format + hex-commit adversarial guards; **both** twins
+  write the registry in bare **and** `--products` paths (ps1 UTF8-**no-BOM** via `WriteAllText`, verified
+  live on Windows; sh capture-then-write, no truncate-on-failure). `/arc --status` reads the registry
+  for INSTALLED (zero file-presence guessing, REQ-05) with a live HEALTH check + absent-product install
+  hints; a malformed registry degrades, never crashes. `review-ledger.sh` derives `VALID_KINDS` from the
+  registry (review→scan/code/security/docs · qa→qa/design), hardcoded fallback preserved for old installs;
+  registry-aware install hint on an unavailable kind. A **tree-diff invariant** (bats, 3-OS matrix) proves
+  installing all products reproduces the mold's `.claude/` payload exactly — manifests can't silently drift.
+  Golden gate **excludes** `arc-registry.json` (volatile `source.commit`) so REQ-02 stays byte-identical;
+  golden fixture regenerated twice, each a proven diff of only the intentionally-changed synced scripts.
+  **236/236 bats green** (0 skip). **Code review fix-first → ship** (no Criticals; independent adversarial
+  pass confirmed every reader degrades safely on malformed/empty/array/`__proto__`/null/non-hex input, no
+  prototype pollution; 2 Low + 2 Nits all fixed, glob-key hole pinned as a red fixture). **Bonus find:** the
+  new tree-diff invariant caught a pre-existing **REQ-04-class leak on its first use** — bare sync copied
+  `.claude/worktrees/` (transient agent git-worktrees) into consumer targets; fixed in both twins (excluded
+  like `state/`) + pinned by a leak regression test. Evidence bundle committed + verified
+  (`docs/evidence/phase-02/`). Review archived (`docs/reviews/2026-07-17-2044-arc-phase-02-registry.md`).
+  **Actual: ~1 session vs 1-week appetite — under.** · amendments: 1 (phase-start /arc-change refinement)
+  · reopened: n.
 - **2026-07-17 · Phase 01 · Composable hooks.** The 6 monolithic Claude Code lifecycle hooks
   became thin core **dispatchers** (`_dispatch.sh`) that run `.claude/hooks/<Event>.d/NN-*.sh`
   fragments in order — a product can drop in a fragment without editing the hook. Advisory events

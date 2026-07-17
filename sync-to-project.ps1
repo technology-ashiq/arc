@@ -9,7 +9,7 @@
 # resolver (arc-products.mjs) for a selective install via its line protocol.
 # Never touches:  CLAUDE.md, CLAUDE.local.md, settings.local.json, PLAN.md,
 #   PROGRESS.md, phases\, docs\adr\, docs\reviews\, docs\session-log.md, app code,
-#   .claude\state\, .claude\scheduled_tasks.lock.
+#   .claude\state\, .claude\worktrees\ (transient git worktrees), .claude\scheduled_tasks.lock.
 # NOTE: keep this file ASCII-only. PowerShell 5.1 misparses UTF-8 without BOM.
 
 param(
@@ -68,6 +68,13 @@ if ($Products) {
       default { Write-Error "unknown resolver plan verb: $($f[0])"; exit 3 }
     }
   }
+  # arc-registry.json (REQ-08): the resolver emits the JSON, the twin writes it.
+  # UTF8 WITHOUT BOM -- PowerShell 5.1's `-Encoding utf8` prepends a BOM that Node's
+  # JSON.parse rejects; keep it byte-clean for the ledger / `/arc` readers.
+  New-Item -ItemType Directory -Force -Path (Join-Path $Target ".claude") | Out-Null
+  $regJson = (& node $resolver --registry --products $Products --root $src | Out-String -Width 4096)
+  if ($LASTEXITCODE -ne 0) { Write-Error "registry generation failed"; exit 3 }
+  [System.IO.File]::WriteAllText((Join-Path $Target ".claude\arc-registry.json"), $regJson, (New-Object System.Text.UTF8Encoding($false)))
   Write-Host "Synced products [$Products] + core -> $Target" -ForegroundColor Green
   Write-Host "IMPORTANT: restart the Claude Code session in that project (commands load at session start)."
   exit 0
@@ -77,7 +84,7 @@ if ($Products) {
 # Machinery. Exclude the personal settings file + the scheduled-tasks runtime lock
 # (/XF), and the per-project working state dir (/XD) -- none belong in a consumer
 # repo. The .sh twin excludes all three; keep them in lockstep (REQ-04).
-robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" /NFL /NDL /NJH /NJS | Out-Null
+robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" "$src\.claude\worktrees" /NFL /NDL /NJH /NJS | Out-Null
 
 # Planning templates
 robocopy "$src\docs\templates" "$Target\docs\templates" /E /NFL /NDL /NJH /NJS | Out-Null
@@ -94,6 +101,11 @@ if (Test-Path "$src\docs\council\README.md") { Copy-Item "$src\docs\council\READ
 if (Test-Path "$src\docs\council\references\fairness.md") { Copy-Item "$src\docs\council\references\fairness.md" "$Target\docs\council\references\fairness.md" -Force }
 
 Add-JurorBlock "$src\.env.example" '^JUROR_BASE_URL='
+
+# arc-registry.json: bare install = every product (REQ-08). UTF8 no-BOM (see -Products path).
+$regJson = (& node $resolver --registry --root $src | Out-String -Width 4096)
+if ($LASTEXITCODE -ne 0) { Write-Error "registry generation failed"; exit 3 }
+[System.IO.File]::WriteAllText((Join-Path $Target ".claude\arc-registry.json"), $regJson, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host ""
 Write-Host "Synced template -> $Target" -ForegroundColor Green

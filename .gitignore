@@ -39,6 +39,11 @@ test-results/
 # Hook scratch state (PreCompact snapshots, graphify lock/log)
 .claude/state/
 
+# arc-registry.json is a per-INSTALL artifact written into consumer targets, never the mold
+# itself (Phase 02, REQ-08). It's excluded from the golden + tree-diff gates by design, so
+# ignore it here too — a stray one can never be silently committed into the mold's .claude/.
+.claude/arc-registry.json
+
 # Hook write-probes (freeze-check / edit-guard test their write access) — never commit
 .writetest*
 **/.writetest

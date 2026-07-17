@@ -69,6 +69,26 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
   [[ "$output" == *"no product registry"* ]]
 }
 
+@test "status: reads INSTALLED from the registry, no products/ dir needed (REQ-05)" {
+  mkdir -p "$BATS_TEST_TMPDIR/consumer/.claude"
+  printf '{"schema":1,"source":{"commit":"abc1234"},"products":{"core":{"version":"1.0.0","files":[]},"council":{"version":"1.0.0","files":[]}}}' \
+    > "$BATS_TEST_TMPDIR/consumer/.claude/arc-registry.json"
+  run node "$RESOLVE" --status --root "$BATS_TEST_TMPDIR/consumer"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"registry @ abc1234"* ]]                 # registry-sourced, not file-presence
+  [[ "$output" == *"core"* ]] && [[ "$output" == *"council"* ]]
+  [[ "$output" == *"install missing"* ]]                    # absent products get an install hint
+  [[ "$output" == *"--products git,plan,qa,review"* ]]
+}
+
+@test "status: a malformed registry degrades gracefully, never crashes (adversarial)" {
+  mkdir -p "$BATS_TEST_TMPDIR/broken/.claude"
+  printf '{ this is not json ' > "$BATS_TEST_TMPDIR/broken/.claude/arc-registry.json"
+  run node "$RESOLVE" --status --root "$BATS_TEST_TMPDIR/broken"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"unreadable"* ]]
+}
+
 # ---------- product-lint: happy path ----------
 
 @test "lint: valid manifests pass (exit 0)" {
@@ -162,4 +182,45 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
 @test "lint: a space in a path is accepted (TAB delimiter transports it safely)" {
   run node "$LINT" --root "$FIX/good-space"
   [ "$status" -eq 0 ]
+}
+
+# ---------- resolver: --registry mode (Phase 02, REQ-08) ----------
+
+@test "resolver --registry: schema is 1, products are exactly core+council (deps resolved)" {
+  node "$RESOLVE" --registry --products council --root "$FIX/good" > "$BATS_TEST_TMPDIR/reg.json"
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'j.schema')" = "1" ]
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'Object.keys(j.products).sort().join(",")')" = "core,council" ]
+}
+
+@test "resolver --registry: each product carries a version and a non-empty files[]" {
+  node "$RESOLVE" --registry --products council --root "$FIX/good" > "$BATS_TEST_TMPDIR/reg.json"
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'j.products.core.version')" = "1.0.0" ]
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'j.products.council.files.length > 0')" = "true" ]
+}
+
+@test "resolver --registry: files[] carry the dest paths the resolver installs" {
+  node "$RESOLVE" --registry --products council --root "$FIX/good" > "$BATS_TEST_TMPDIR/reg.json"
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'j.products.council.files.includes(".claude/commands/arc-council.md")')" = "true" ]
+}
+
+@test "resolver --registry: no --products means every product (bare/full install)" {
+  node "$RESOLVE" --registry --root "$FIX/good" > "$BATS_TEST_TMPDIR/reg.json"
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'Object.keys(j.products).sort().join(",")')" = "core,council" ]
+}
+
+@test "resolver --registry: source.commit honors ARC_SOURCE_COMMIT (deterministic tests)" {
+  ARC_SOURCE_COMMIT=deadbee node "$RESOLVE" --registry --products core --root "$FIX/good" > "$BATS_TEST_TMPDIR/reg.json"
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'j.source.commit')" = "deadbee" ]
+}
+
+@test "resolver --registry: a malformed version is rejected, never emitted (adversarial, pinned)" {
+  run node "$RESOLVE" --registry --products core --root "$FIX/hostile/registry-bad-version"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"version"* ]]
+}
+
+@test "resolver --registry: a non-hex ARC_SOURCE_COMMIT is ignored, not written verbatim (adversarial)" {
+  ARC_SOURCE_COMMIT='not-a-hex-sha' node "$RESOLVE" --registry --products core --root "$FIX/good" > "$BATS_TEST_TMPDIR/reg.json"
+  # non-hex override must fall through to git/unknown, never land verbatim in the file
+  [ "$(_arc_json "$BATS_TEST_TMPDIR/reg.json" 'j.source.commit === "not-a-hex-sha"')" = "false" ]
 }
