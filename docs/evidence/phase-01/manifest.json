@@ -1,0 +1,20 @@
+{
+  "phase": "01",
+  "commit": "5c6d7635605b740f5783c8df607ec83a57a6ccc5",
+  "short": "5c6d763",
+  "generated": "2026-07-17T11:28:42Z",
+  "files": [
+    {
+      "name": "scan-verdict.json",
+      "sha256": "25b2442c272d1055c0013507e01079bf739497719fb747b7aae027c3e1e78685"
+    },
+    {
+      "name": "scan-result.sarif",
+      "sha256": "bc2092626ce1d854b328c5835fe6126e8464c0ff77d77d7476207385ba00794f"
+    },
+    {
+      "name": "reviews.txt",
+      "sha256": "b57b236c9bcd2a61fcd627b69ae2d7a6eb5bc13f2dc25311348ee08df43bc0c4"
+    }
+  ]
+}
