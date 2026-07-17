@@ -123,6 +123,7 @@ for (const name of order) {
   for (const p of m.commands ?? []) emitCopy(p, p, `${name}.commands`);
   for (const p of m.agents ?? []) emitCopy(p, p, `${name}.agents`);
   for (const p of m.scripts ?? []) emitCopy(p, p, `${name}.scripts`);
+  for (const p of m.files ?? []) emitCopy(p, p, `${name}.files`);
   for (const d of m.docs ?? []) emitCopy(d.src, d.dest, `${name}.docs`);
   for (const dir of m.skeletonDirs ?? []) { assertSafe(dir, `${name}.skeletonDirs`); emitMkdir(dir); }
   if (m.envBlock) {

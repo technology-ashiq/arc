@@ -31,7 +31,7 @@ if (!root) {
 }
 
 const KNOWN_FIELDS = new Set([
-  "name", "version", "requires", "commands", "agents", "scripts",
+  "name", "version", "requires", "commands", "agents", "scripts", "files",
   "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks",
 ]);
 const SEMVER = /^\d+\.\d+\.\d+$/;
@@ -85,19 +85,18 @@ for (const dir of readdirSync(productsDir)) {
   if (typeof obj.version !== "string" || !SEMVER.test(obj.version))
     err(`products/${dir}: version ${JSON.stringify(obj.version)} is not semver MAJOR.MINOR.PATCH`);
 
-  // payload arrays
-  const cmds = obj.commands ?? [], ags = obj.agents ?? [], scs = obj.scripts ?? [];
-  for (const [f, arr] of [["commands", cmds], ["agents", ags], ["scripts", scs]])
+  // payload arrays (files = catch-all for non-command/agent .claude payload:
+  // hooks, rules, output-styles, templates, skills, settings.json)
+  const cmds = obj.commands ?? [], ags = obj.agents ?? [], scs = obj.scripts ?? [], fls = obj.files ?? [];
+  for (const [f, arr] of [["commands", cmds], ["agents", ags], ["scripts", scs], ["files", fls]])
     if (!Array.isArray(arr)) err(`products/${dir}: ${f} must be an array`);
-  const nCmd = Array.isArray(cmds) ? cmds.length : 0;
-  const nAg = Array.isArray(ags) ? ags.length : 0;
-  const nSc = Array.isArray(scs) ? scs.length : 0;
-  if (nCmd + nAg + nSc === 0)
-    err(`products/${dir}: at least one of commands/agents/scripts must be non-empty`);
+  const len = (a) => (Array.isArray(a) ? a.length : 0);
+  if (len(cmds) + len(ags) + len(scs) + len(fls) === 0)
+    err(`products/${dir}: at least one of commands/agents/scripts/files must be non-empty`);
 
   // payload path checks + coverage mapping + existence
   const payload = [];
-  for (const [f, arr] of [["commands", cmds], ["agents", ags], ["scripts", scs]]) {
+  for (const [f, arr] of [["commands", cmds], ["agents", ags], ["scripts", scs], ["files", fls]]) {
     if (!Array.isArray(arr)) continue;
     for (const p of arr) {
       const safe = checkPath(p, `products/${dir}.${f}`);

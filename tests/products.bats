@@ -21,6 +21,12 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
   [[ "$output" == *"$(printf 'COPY\t.claude/commands/arc-council.md\t.claude/commands/arc-council.md')"* ]]
 }
 
+@test "resolver: emits a COPY line for a files[] catch-all entry" {
+  run node "$RESOLVE" --products core --root "$FIX/good"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$(printf 'COPY\t.claude/rules/example.md\t.claude/rules/example.md')"* ]]
+}
+
 @test "resolver: core is always included implicitly (even when only council asked)" {
   run node "$RESOLVE" --products council --root "$FIX/good"
   [ "$status" -eq 0 ]
