@@ -39,6 +39,7 @@ for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--products") { mode = "plan"; productsArg = argv[++i] ?? ""; }
   else if (a === "--list") { mode = "list"; }
+  else if (a === "--status") { mode = "status"; }
   else if (a === "--root") { root = argv[++i]; }
   else die(`unknown argument: ${a}`);
 }
@@ -60,7 +61,19 @@ function assertSafe(p, ctx) {
 
 // ---------- load manifests ----------
 const productsDir = join(root, "products");
-if (!existsSync(productsDir)) die(`no products/ dir under ${root}`);
+if (!existsSync(productsDir)) {
+  // /arc in a consumer repo has no products/ (manifests aren't synced) — degrade
+  // gracefully rather than erroring; registry-backed status lands in Phase 2.
+  if (mode === "status") {
+    process.stdout.write(
+      `arc — product status  (root: ${root})\n` +
+      `no product registry here yet.\n` +
+      `run /arc from the arc mold, or (Phase 2) a registry-backed install writes .claude/arc-registry.json.\n`
+    );
+    process.exit(0);
+  }
+  die(`no products/ dir under ${root}`);
+}
 
 const manifests = new Map(); // name -> manifest object
 for (const entry of readdirSync(productsDir)) {
@@ -79,6 +92,24 @@ const allNames = [...manifests.keys()].sort();
 // ---------- --list ----------
 if (mode === "list") {
   process.stdout.write(allNames.join("\n") + "\n");
+  process.exit(0);
+}
+
+// ---------- --status: read-only per-product install view (file-presence, Phase 0) ----------
+if (mode === "status") {
+  const rows = allNames.map((name) => {
+    const m = manifests.get(name);
+    const paths = [...(m.commands ?? []), ...(m.agents ?? []), ...(m.scripts ?? []), ...(m.files ?? [])];
+    const present = paths.filter((p) => existsSync(join(root, p))).length;
+    const total = paths.length;
+    const state = total > 0 && present === total ? "yes" : present > 0 ? "partial" : "no";
+    return { name, state, present, total };
+  });
+  const out = [`arc — product status  (root: ${root})`, `${"PRODUCT".padEnd(10)}${"INSTALLED".padEnd(11)}FILES`];
+  for (const r of rows) out.push(`${r.name.padEnd(10)}${r.state.padEnd(11)}${r.present}/${r.total}`);
+  const absent = rows.filter((r) => r.state !== "yes").map((r) => r.name);
+  if (absent.length) out.push(`\ninstall missing: sync-to-project.sh <target> --products ${absent.join(",")}`);
+  process.stdout.write(out.join("\n") + "\n");
   process.exit(0);
 }
 

@@ -53,6 +53,22 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
   [[ "$output" == *"council"* ]]
 }
 
+# ---------- resolver: --status (/arc dashboard backend) ----------
+
+@test "status: reports each product's install state (good fixture)" {
+  run node "$RESOLVE" --status --root "$FIX/good"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"INSTALLED"* ]]
+  [[ "$output" == *"core"* ]]
+  [[ "$output" == *"council"* ]]
+}
+
+@test "status: degrades gracefully (exit 0) where no products/ dir exists" {
+  run node "$RESOLVE" --status --root "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no product registry"* ]]
+}
+
 # ---------- product-lint: happy path ----------
 
 @test "lint: valid manifests pass (exit 0)" {

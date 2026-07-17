@@ -2,6 +2,7 @@
   "name": "core",
   "version": "1.0.0",
   "commands": [
+    ".claude/commands/arc.md",
     ".claude/commands/arc-toolcheck.md",
     ".claude/commands/arc-resume.md",
     ".claude/commands/arc-freeze.md",
@@ -19,6 +20,7 @@
     ".claude/scripts/freeze-check.sh",
     ".claude/scripts/arc-products.mjs",
     ".claude/scripts/product-lint.mjs",
+    ".claude/scripts/arc-status.sh",
     ".claude/scripts/arc-scan/lib/common.sh",
     ".claude/statusline.sh"
   ],
