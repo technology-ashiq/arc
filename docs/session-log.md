@@ -134,3 +134,11 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **Kickoff complete (2026-07-17), awaiting Ashiq's approval gate (kickoff step 9).** PLAN.md +
     6 phase specs + ADRs 0014–0019 written. Gates run: attack panel ×3 (20/20 findings accepted
+
+## 2026-07-17 14:50 — claude/arc-orchestrator-design-758d70
+- Last commit: df93b65 fix(tests): make the new golden + ps1 tests portable for 3-OS CI
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 00 CLOSED ✅ (2026-07-17).** The selective-install spine ships: single resolver
+    (`arc-products.mjs`, TAB line-protocol) + registry linter (`product-lint.mjs`, hostile-corpus
