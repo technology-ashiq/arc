@@ -59,13 +59,15 @@ function assertSafe(p, ctx) {
   if (p.includes("\\")) die(`${ctx}: backslash not allowed in path: ${p}`);
   if (p !== p.trim()) die(`${ctx}: leading/trailing whitespace in path: ${JSON.stringify(p)}`);
   if (p.startsWith("/") || p.startsWith("\\") || /^[A-Za-z]:/.test(p)) die(`${ctx}: absolute path not allowed: ${p}`);
-  if (p.split("/").some((seg) => seg === "..")) die(`${ctx}: path traversal not allowed: ${p}`);
+  // `..` and its Windows-normalizing variants (`.. `, `...`) -- .NET strips trailing
+  // dots/spaces so `.. ` becomes `..` (review W4).
+  if (p.split("/").some((seg) => /^\.\.[.\s]*$/.test(seg))) die(`${ctx}: path traversal not allowed: ${p}`);
 }
 
 // envSentinel is emitted raw in the ENVBLOCK plan line and used as a regex by both
 // twins -- restrict it to a simple anchored token so a newline can't inject a plan
 // line (review C2) and a metachar can't ReDoS (review W2).
-const ENV_SENTINEL_RE = /^\^?[A-Za-z0-9_.=-]+\$?$/;
+const ENV_SENTINEL_RE = /^\^?[A-Za-z0-9_=-]+\$?$/;
 
 // Guard a payload field that must be an array-or-absent -- the resolver is the only
 // consumer-side check, so a type-invalid manifest must die cleanly, not stack-trace

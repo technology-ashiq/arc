@@ -141,6 +141,22 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
   [ "$status" -eq 2 ]
 }
 
+@test "lint: a trailing-dot/space '.. ' path segment is rejected (W4 review)" {
+  run node "$LINT" --root "$FIX/hostile/traversal-dotspace"
+  [ "$status" -eq 2 ]
+}
+
+@test "resolver: a trailing-dot/space '.. ' segment is rejected, never emitted (W4 review)" {
+  run node "$RESOLVE" --products core --root "$FIX/hostile/traversal-dotspace"
+  [ "$status" -eq 2 ]
+}
+
+@test "lint: envBlock without envSentinel is rejected (W3 review: lints-clean must resolve-clean)" {
+  run node "$LINT" --root "$FIX/hostile/envblock-no-sentinel"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"envSentinel"* ]]
+}
+
 # ---------- product-lint: spaces in paths are LEGAL (TAB protocol, ADR-0015) ----------
 
 @test "lint: a space in a path is accepted (TAB delimiter transports it safely)" {
