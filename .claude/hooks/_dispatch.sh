@@ -22,6 +22,10 @@
 # returns garbage and disarms the destructive/deploy guards. We detect + drop that
 # noise and return "" so the caller can fail safe (scan the raw payload).
 arc_hook_field() {
+  # NOTE: <key> MUST be a literal identifier -- callers pass "command"/"file_path".
+  # It is interpolated into the jq filter and the python -c program, so a key bearing
+  # a quote/newline would break extraction (which then safely falls through to the raw
+  # scan, but silently). Do not pass attacker-influenced keys (review N3).
   local key="$1" data="$2" val=""
   if command -v jq >/dev/null 2>&1; then
     val=$(printf '%s' "$data" | jq -r ".tool_input.${key} // \"\"" 2>/dev/null)
@@ -41,7 +45,9 @@ arc_dispatch() {
 
   local input="/dev/null" pf=""
   if [ "$payload_flag" = "--payload" ]; then
-    pf="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-hook.$$.$RANDOM")"
+    # mktemp gives a private high-entropy path; the templated + predictable forms are
+    # last-resort fallbacks only if mktemp is entirely unavailable (review N1).
+    pf="$(mktemp 2>/dev/null || mktemp "${TMPDIR:-/tmp}/arc-hook.XXXXXX" 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-hook.$$.$RANDOM")"
     cat > "$pf"
     input="$pf"
     export ARC_HOOK_PAYLOAD="$pf"

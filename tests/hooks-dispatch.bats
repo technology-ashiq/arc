@@ -94,3 +94,11 @@ _run_dispatch() { run bash -c ". '$DISPATCH'; arc_dispatch $*"; }
   run bash -c ". '$DISPATCH'; arc_dispatch PreToolUse blocking --payload" <<< 'noise rm -rf / noise'
   [ "$status" -eq 2 ]
 }
+
+@test "dispatcher: a missing _dispatch.sh fails open LOUDLY (exit 0 + warning, review W1)" {
+  # $CPD (setup) has .claude/hooks but no _dispatch.sh -> a broken install must not brick
+  # every Bash command, but the disarmed guard must be visible, never silent.
+  run env CLAUDE_PROJECT_DIR="$CPD" bash "$ARC_ROOT/.claude/hooks/PreToolUse.sh" <<< '{"tool_input":{"command":"ls"}}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"disarmed"* ]]
+}
