@@ -1,7 +1,7 @@
 ---
 description: Intake a mid-build change, idea, or suggestion and route it THROUGH the build structure (tracker + spec/ADR) instead of editing code ad-hoc. Then build it step-by-step via the Golden Loop.
 argument-hint: [what changed / the new idea / the suggestion]
-allowed-tools: Read, Write, Edit, Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(node .claude/scripts/kickoff-lint.mjs:*)
+allowed-tools: Read, Write, Edit, Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*)
 ---
 
 A change came up mid-build: **$ARGUMENTS**
@@ -39,7 +39,7 @@ Follow in order:
    If PLAN's **Non-negotiables** bullets changed: resync the `## Non-negotiables (verbatim
    from PLAN)` block in EVERY `phases/phase-NN-spec.md` in the same edit — lint's
    [nonneg-drift] holds the copies honest; a stale copy lies.
-   Then **run `node .claude/scripts/kickoff-lint.mjs`** — the tracker mutation must leave
+   Then **run `node .claude/scripts/plan/kickoff-lint.mjs`** — the tracker mutation must leave
    the plan consistent (REQ mapped, spec file exists, status valid). Fix before moving on.
 
 4. **STOP and confirm** for anything load-bearing (new phase, schema change, new dependency,

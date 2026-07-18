@@ -17,7 +17,7 @@ improve with every project* — this command is how.
    - safe-but-nagging command → `settings.json` allow rule
    - must ALWAYS/NEVER happen → a hook (highest bar — only if advisory failed)
    - a vague/weasel word that escaped kickoff-lint → add it to the `VAGUE` regex in
-     `.claude/scripts/kickoff-lint.mjs` (the ban-list must compound, not ossify)
+     `.claude/scripts/plan/kickoff-lint.mjs` (the ban-list must compound, not ossify)
 3. **Feed the kickoff loop:** for each *recurring* finding (not one-offs), append ONE
    line to `docs/retro-log.md`:
    `YYYY-MM-DD | <project> | <pattern> | <prevention> | <tags>`
@@ -34,7 +34,7 @@ improve with every project* — this command is how.
    is **promotable** only when BOTH hold: its bats fixture proves it FAILs on its own mutation
    (`good/` still clean), AND it now has ≥ 3 logged clean dogfood runs with zero false-positives.
    For each promotable gate, propose the one-line diff that removes it from the `TRIAL` set in
-   `.claude/scripts/kickoff-lint.mjs`. Never promote on judgement — the ledger is the gate; a logged
+   `.claude/scripts/plan/kickoff-lint.mjs`. Never promote on judgement — the ledger is the gate; a logged
    false-positive resets that gate's count.
 6. Show each proposal as a concrete diff. Wait for my approval, apply only what I approve.
 7. Nothing qualifies? Say so plainly — don't invent rules to look useful.

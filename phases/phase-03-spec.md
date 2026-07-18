@@ -50,9 +50,9 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
       agents do not move in Phase 3 (assumptions ledger row 1), so editing them breaks a passing gate and
       fails byte-diff as a same-file edit. Record the verification, not an edit.
 - [x] core moved (gates/profile/ledger/toolcheck/freeze/common.sh → scripts/core/; common.sh relocated OUT of arc-scan/ — EVERY sourcer of common.sh repo-wide is patched in THIS checkpoint's commit, not only those inside the not-yet-moved arc-scan/ tree: `.claude/scripts/arc-evidence.sh:14` (plan-owned) and `tests/test_helper.bash:6,11,21` (used by 9 of 22 bats files, including evidence.bats and bytediff.bats) both source it from outside that tree, so the narrower reading would break the evidence tool during the checkpoint it must document)
-- [ ] plan moved (kickoff-lint.mjs, arc-evidence.sh → scripts/plan/; kickoff-lint root assumptions verified)
+- [x] plan moved (kickoff-lint.mjs, arc-evidence.sh → scripts/plan/; kickoff-lint root assumptions verified)
 - [ ] review moved (arc-scan/ tree, docs-drift, coverage/rls/version gates → scripts/review/; scan-summary.bats grep + gates.yaml check commands updated)
-- [ ] qa + git manifests finalized; command frontmatter allowed-tools paths updated across all 21 commands
+- [x] qa + git manifests finalized; command frontmatter allowed-tools paths updated across all 21 commands
 - [ ] final: CI discovers every relocated test (no stale `tests/` path anywhere in workflow YAML); tracker updated (PROGRESS.md row ✅ + done-log)
 
 ## Verification plan

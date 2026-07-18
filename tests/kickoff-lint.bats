@@ -6,7 +6,7 @@
 # in-place edits go through sedi() (-i.bak works on GNU *and* BSD), row inserts go
 # through addrow() (POSIX awk; BSD sed's a\/i\ syntax differs from GNU's inline form).
 
-LINT_CMD="node .claude/scripts/kickoff-lint.mjs"
+LINT_CMD="node .claude/scripts/plan/kickoff-lint.mjs"
 FIXTURE="tests/fixtures/kickoff-lint/good"
 
 setup() {

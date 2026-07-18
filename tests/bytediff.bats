@@ -4,7 +4,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-BD="$ARC_ROOT/.claude/scripts/arc-bytediff.sh"
+BD="$ARC_ROOT/.claude/scripts/plan/arc-bytediff.sh"
 
 # stage a file, git-mv it under core/, return in the moved state (old in HEAD, new in tree)
 _seed_move() {  # <content>

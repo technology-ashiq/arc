@@ -97,7 +97,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   # Exact-path negatives go vacuous the moment ckpt 3/4 relocate these files -- they would
   # then pass unconditionally, including in the exact leak they exist to catch. Assert the
   # product's whole future directory is absent too, so the guard survives its own phase.
-  [ ! -e "$TARGET/.claude/scripts/kickoff-lint.mjs" ]      # plan absent
+  [ ! -e "$TARGET/.claude/scripts/plan/kickoff-lint.mjs" ]      # plan absent
   [ ! -e "$TARGET/.claude/scripts/plan" ]
   [ ! -e "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]  # review absent
   [ ! -e "$TARGET/.claude/scripts/review" ]
@@ -126,7 +126,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ -f "$TARGET/.claude/scripts/council/council-lint.mjs" ]  # the twin must re-home identically
   [ -f "$TARGET/.claude/scripts/core/arc-gates.sh" ]
   [ ! -e "$TARGET/.claude/scripts/council-lint.mjs" ]
-  [ ! -e "$TARGET/.claude/scripts/kickoff-lint.mjs" ]
+  [ ! -e "$TARGET/.claude/scripts/plan/kickoff-lint.mjs" ]
   [ ! -e "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]
 }
 
