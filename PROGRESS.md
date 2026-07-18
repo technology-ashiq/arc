@@ -86,13 +86,20 @@ disk rather than assuming. Golden reconciles: 10 pure moves + 10 moved-then-edit
 place = 20 old paths gone. The gate's own post-edit `content altered` list named exactly the same 10
 files as the golden classification — two independent views agreeing. 85 affected-file tests local.
 
-**⚠ OPEN GAP — Phase 03 is NOT closeable yet.** The phase goal and REQ-07 both say scripts move to
-`.claude/scripts/<product>/` **and tests to `products/<name>/tests/`**. The scripts half is done; the
-**tests half was never started** — all 22 `.bats` files are still in `tests/`, and
-`products/NAME/tests/` does not exist. This was drift, not a decision: ckpt 1 deferred council's
-fixtures for a real reason and the per-product test move was never picked back up. Recorded in
-`phases/phase-03-spec.md` with two options — (a) a ckpt 5 that relocates them, or (b) amend REQ-07 to
-keep the suite centralised, with the reason recorded. **Ashiq's call before `/arc-phase-done 3`.** **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
+**Gap RESOLVED 2026-07-19 — REQ-07 amended (ADR-0021), not executed as a ckpt 5.** The phase goal and
+REQ-07 also required tests under `products/<name>/tests/`; that half was never started (drift, caught
+at ckpt-4 close rather than left silently unticked). Ashiq chose to amend rather than relocate.
+
+Deciding fact, verified not argued: a full sync ships **zero** `.bats` files and no manifest has a
+`tests` key — the resolver has no concept of a test as payload. REQ-07's outcome is "products have
+physical boundaries", and tests never cross that boundary, so the clause was drawing a boundary
+around something that never leaves the repo. Relocating would also have fragmented `bats -r tests/`
+(the single cheap invocation the CI-authority model depends on) and orphaned the cross-product suites
+— `sync.bats` tests *all* products' installation and belongs to no one product. Revisit trigger: a
+real physical extraction (ADR-0016) carries a product's tests with it.
+
+**Phase 03 is now closeable.** All five products re-homed, every checkpoint gated and evidenced;
+next action is `/arc-phase-done 3`. **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
 + a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
 per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
 (6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from
