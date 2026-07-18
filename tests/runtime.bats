@@ -3,7 +3,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-RTLIB() { echo ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/runtime.sh'"; }
+RTLIB() { echo ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/runtime.sh'"; }
 
 # Fake `docker` that emits a one-finding SARIF to stdout; echoes its bin dir.
 _fake_docker() {

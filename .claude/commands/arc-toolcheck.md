@@ -1,13 +1,13 @@
 ---
 description: Full toolchain health report — every tool's status (ready / missing / stale) rendered as the project's smart-table artifact, with the exact fix for anything not ready, then offers to install/repair what's broken.
 argument-hint: [--fix to run the fixes straight after the report]
-allowed-tools: Bash(bash .claude/scripts/toolchain-health.sh:*), Bash(git status), Bash(node --version), Bash(npm --version), Bash(npx --version), Read, Write, Artifact
+allowed-tools: Bash(bash .claude/scripts/core/toolchain-health.sh:*), Bash(git status), Bash(node --version), Bash(npm --version), Bash(npx --version), Read, Write, Artifact
 ---
 
 Report the full toolchain status for this project and help fix whatever isn't ready.
 
 1. Run the checker — it is the single source of truth for the status DATA:
-   `bash .claude/scripts/toolchain-health.sh`
+   `bash .claude/scripts/core/toolchain-health.sh`
    The SessionStart hook runs the same script `--brief`, so this is the detailed view of
    what that heads-up summarized. Do NOT re-sort, drop, or invent rows — the script's
    statuses are relayed faithfully; only the presentation changes in step 2.
@@ -52,5 +52,5 @@ Report the full toolchain status for this project and help fix whatever isn't re
    are missing (the script already does this safely, by name only).
 
 To extend this check as we add tools: add one `R_OK`/`R_MISS`/`R_OPT` line to `emit_all()`
-in `.claude/scripts/toolchain-health.sh`. It then self-reports here, in the session-start
+in `.claude/scripts/core/toolchain-health.sh`. It then self-reports here, in the session-start
 brief, and in the artifact — with its own fix command. Grow the toolchain one line at a time.

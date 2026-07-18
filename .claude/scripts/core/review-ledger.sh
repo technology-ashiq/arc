@@ -120,7 +120,7 @@ case "$cmd" in
     ;;
   require-profile)
     # resolve the required review set from the active strictness profile (Phase 01)
-    reviews="$(bash "$ROOT/.claude/scripts/arc-profile.sh" reviews 2>/dev/null || echo '')"
+    reviews="$(bash "$ROOT/.claude/scripts/core/arc-profile.sh" reviews 2>/dev/null || echo '')"
     if [ -z "$reviews" ]; then echo "review-ledger: no required reviews for this profile"; exit 0; fi
     exec bash "$0" require "$reviews"
     ;;

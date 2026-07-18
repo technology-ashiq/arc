@@ -19,5 +19,5 @@ Sync documentation to what you just shipped. Scope: **$ARGUMENTS** (default: dif
 - Commit doc updates on their own: `docs(scope): ...` (never push).
 - Stamp the ledger:
   ```bash
-  bash .claude/scripts/review-ledger.sh stamp docs
+  bash .claude/scripts/core/review-ledger.sh stamp docs
   ```

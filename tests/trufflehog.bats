@@ -103,7 +103,7 @@ EOF
   _arc_sandbox
   printf 'x\n' > config.env; printf 'config.env\n' > scope.txt
   ARC_TRUFFLEHOG_BIN="$ft/trufflehog" bash "$ARC_SCAN_SRC/adapters/trufflehog.sh" scope.txt t.sarif
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize trufflehog t.sarif | jq -r '.level' | head -1"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize trufflehog t.sarif | jq -r '.level' | head -1"
   [ "$status" -eq 0 ]
   [ "$output" = "error" ]
   rm -rf "$ft"

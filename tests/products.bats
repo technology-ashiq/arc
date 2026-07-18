@@ -4,8 +4,8 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 FIX="$ARC_ROOT/tests/fixtures/products"
-RESOLVE="$ARC_ROOT/.claude/scripts/arc-products.mjs"
-LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
+RESOLVE="$ARC_ROOT/.claude/scripts/core/arc-products.mjs"
+LINT="$ARC_ROOT/.claude/scripts/core/product-lint.mjs"
 
 # ---------- resolver: plan emission ----------
 
@@ -30,7 +30,10 @@ LINT="$ARC_ROOT/.claude/scripts/product-lint.mjs"
 @test "resolver: core is always included implicitly (even when only council asked)" {
   run node "$RESOLVE" --products council --root "$FIX/good"
   [ "$status" -eq 0 ]
-  # arc-gates.sh belongs to core, not council -- it must still appear
+  # arc-gates.sh belongs to core, not council -- it must still appear.
+  # Flat path on purpose: this asserts on the FIXTURE's output, and the fixture is a
+  # self-contained mini-repo whose own stub lives at .claude/scripts/. It does not
+  # mirror the real repo's Phase-03 layout and must not be rewritten to match it.
   [[ "$output" == *".claude/scripts/arc-gates.sh"* ]]
 }
 

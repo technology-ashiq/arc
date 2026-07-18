@@ -3,7 +3,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-PROFILE_SH() { echo "$ARC_ROOT/.claude/scripts/arc-profile.sh"; }
+PROFILE_SH() { echo "$ARC_ROOT/.claude/scripts/core/arc-profile.sh"; }
 
 # Write a throwaway settings.json, echo its path.
 _settings() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
@@ -104,12 +104,12 @@ _settings() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
 
 @test "ledger require enforces the standard review set (code,security)" {
   _arc_sandbox
-  local reviews; reviews="$(bash .claude/scripts/arc-profile.sh reviews)"   # default standard
+  local reviews; reviews="$(bash .claude/scripts/core/arc-profile.sh reviews)"   # default standard
   [ "$reviews" = "code,security" ]
-  run bash .claude/scripts/review-ledger.sh require "$reviews"
+  run bash .claude/scripts/core/review-ledger.sh require "$reviews"
   [ "$status" -eq 2 ]                                   # nothing stamped => BLOCK
-  bash .claude/scripts/review-ledger.sh stamp code
-  bash .claude/scripts/review-ledger.sh stamp security
-  run bash .claude/scripts/review-ledger.sh require "$reviews"
+  bash .claude/scripts/core/review-ledger.sh stamp code
+  bash .claude/scripts/core/review-ledger.sh stamp security
+  run bash .claude/scripts/core/review-ledger.sh require "$reviews"
   [ "$status" -eq 0 ]                                   # both stamped => pass
 }

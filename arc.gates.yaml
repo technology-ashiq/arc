@@ -1,5 +1,5 @@
 # arc.gates.yaml -- declarative gate definitions (Phase 02, ADR-0006 tier split).
-# The generic gate-runner (.claude/scripts/arc-gates.sh) reads this; NO gate logic
+# The generic gate-runner (.claude/scripts/core/arc-gates.sh) reads this; NO gate logic
 # is hardcoded in hooks. This is a FLAT list by design (v1) -- conditions/DAGs are
 # Phase 07. Parser is strict: each gate starts with "- name:", one "key: value"
 # per indented line, no inline comments after a value.
@@ -27,7 +27,7 @@ gates:
     runtime: native
     evidence: coverage/coverage-summary.json
   - name: reviews
-    check: bash .claude/scripts/review-ledger.sh require-profile
+    check: bash .claude/scripts/core/review-ledger.sh require-profile
     mode: block
     tier: hook
     runtime: native

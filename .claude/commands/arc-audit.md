@@ -1,7 +1,7 @@
 ---
 description: Deep security audit (OWASP + STRIDE) via the security-auditor subagent -- the DEEP pass beyond /arc-review's Pass-1 security. High/critical findings open tracked issues; archives + stamps the ledger.
 argument-hint: "[scope-or-paths] (default: diff since main)"
-allowed-tools: Task, Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/review-ledger.sh:*), Write
+allowed-tools: Task, Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Write
 ---
 
 Run a deep security audit. Scope: **$ARGUMENTS** (default: `git diff main...HEAD`).
@@ -17,5 +17,5 @@ This does NOT replace `/arc-review`. The `code-reviewer` agent still runs the sc
 3. Refresh the risks section of `PROGRESS.md`.
 4. Stamp the ledger **only if zero CRITICAL findings remain open**:
    ```bash
-   bash .claude/scripts/review-ledger.sh stamp security
+   bash .claude/scripts/core/review-ledger.sh stamp security
    ```

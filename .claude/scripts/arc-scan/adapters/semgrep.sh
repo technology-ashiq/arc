@@ -12,8 +12,8 @@
 #   never: exit non-zero on a normal scan, or crash the hook on a missing tool.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "$HERE/../lib/common.sh"
+# shellcheck source=../../core/common.sh
+. "$HERE/../../core/common.sh"
 . "$HERE/../lib/runtime.sh"
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 

@@ -45,8 +45,25 @@ SHA-256 unchanged (the pure-move proof), plus a hash change each for `arc-counci
 `docs/council/README.md` (1). Zero dangling command-body refs. 247/247 bats, product-lint + version-gate
 + kickoff-lint green, evidence bundle verified at `docs/evidence/ckpt-1-council/phase-03`.
 
-**Next: checkpoint 2 — core** (spine, ~107 refs) → plan → review (arc-scan/ subtree, ~315 refs) →
-qa+git (no-op). **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
+**Checkpoint 2 — core DONE 2026-07-18.** 10 files → `.claude/scripts/core/` (8 scripts + `common.sh`
+out of `arc-scan/lib/` + `statusline.sh` out of `.claude/`). Byte-diff gate green on all 10, and
+**4 of them are `100755`** — the mode half of the gate is finally exercised, which council could not
+do. Golden: 6 pure moves (hash identical) + 4 moved-then-edited + 25 edited in place, all accounted
+for. 92 affected-file tests local, full 247×3-OS on CI.
+
+**What the gate could NOT catch, and the per-product structure did** — all byte-perfect moves that
+still broke things: three scripts resolved the repo root by counting `..` segments and broke one
+level deeper (`product-lint.mjs`, `arc-products.mjs`, `arc-status.sh` — now walk up to the dir
+holding `products/`, so ckpt 3/4 cannot repeat it); `sync-to-project.sh`'s RESOLVER pointed at the
+old path so a bare sync failed outright; a path sweep silently rewrote two self-contained test
+fixtures **and the golden manifest itself** (restored, regenerated honestly); and a `sed` on the ps1
+twin mangled `\c`/`\a` as escapes (restored from git, redone with a literal edit).
+
+**ADR-0018 batching trigger evaluated:** gate caught zero issues ✅ but ceremony did NOT dominate ❌
+(the list above is why). **Decision: plan + qa + git batch into ONE checkpoint; review stays separate**
+(~315-ref `arc-scan/` subtree, earns its own gate run and rollback point).
+
+**Next: checkpoint 3 — plan + qa + git** (batched), then review last. **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
 + a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
 per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
 (6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from

@@ -16,8 +16,8 @@
 # rung. Vulnerabilities are reported via SARIF, never via trivy's exit code.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "$HERE/../lib/common.sh"
+# shellcheck source=../../core/common.sh
+. "$HERE/../../core/common.sh"
 . "$HERE/../lib/runtime.sh"
 # Respect an inherited ROOT (lets CI/tests point the docker rung at a specific
 # tree); default to the repo toplevel for normal in-repo scans.

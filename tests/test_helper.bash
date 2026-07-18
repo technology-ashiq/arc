@@ -4,11 +4,14 @@
 # Real repo paths (tests/ lives at repo root).
 ARC_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
 ARC_SCAN_SRC="$ARC_ROOT/.claude/scripts/arc-scan"
+# common.sh is core-owned and moved OUT of arc-scan/lib in Phase 03 ckpt 2 -- the review
+# product may not own a library the whole repo sources. Every other lib/ file stays put.
+ARC_CORE_SRC="$ARC_ROOT/.claude/scripts/core"
 
 # Source the pipeline libraries for unit-level tests (no git needed).
 _arc_load_libs() {
   # shellcheck disable=SC1090
-  . "$ARC_SCAN_SRC/lib/common.sh"
+  . "$ARC_CORE_SRC/common.sh"
   . "$ARC_SCAN_SRC/lib/sarif.sh"
   . "$ARC_SCAN_SRC/lib/triage.sh"
 }
@@ -17,10 +20,14 @@ _arc_load_libs() {
 # tests never touch the real review ledger. Sets SANDBOX and cd's into it.
 _arc_sandbox() {
   SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-bats.$$.$RANDOM")"
-  mkdir -p "$SANDBOX/.claude/scripts"
+  # The sandbox must mirror the REAL tree's product layout, not a flattened version of it:
+  # arc-scan now resolves both of these through .claude/scripts/core/, and sources common.sh
+  # at ../core/common.sh. A flat copy here would pass while the real layout was broken.
+  mkdir -p "$SANDBOX/.claude/scripts/core"
   cp -r "$ARC_SCAN_SRC" "$SANDBOX/.claude/scripts/"
-  cp "$ARC_ROOT/.claude/scripts/review-ledger.sh" "$SANDBOX/.claude/scripts/"
-  cp "$ARC_ROOT/.claude/scripts/arc-profile.sh"   "$SANDBOX/.claude/scripts/"   # arc-scan resolves scan mode through it
+  cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/review-ledger.sh" "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/arc-profile.sh"   "$SANDBOX/.claude/scripts/core/"   # arc-scan resolves scan mode through it
   cd "$SANDBOX" || return 1
   # Identity via env, not two `git config` subprocesses. Measured on Git Bash: the git
   # block was 751ms of the ~1s sandbox cost, and process spawn -- not work -- is what is

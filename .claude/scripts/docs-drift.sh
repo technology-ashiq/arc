@@ -16,7 +16,7 @@ SETTINGS="$ROOT/.claude/settings.json"
 
 # Mode resolves through the active strictness profile (block-by-default). An
 # explicit .arc.docsGate in settings still overrides -- see arc-profile.sh.
-MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode docs 2>/dev/null || echo block)"
+MODE="$(bash "$ROOT/.claude/scripts/core/arc-profile.sh" mode docs 2>/dev/null || echo block)"
 
 # Determine the changed-file set
 BASE=""

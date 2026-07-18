@@ -1,7 +1,7 @@
 ---
 description: UI/UX review-and-fix via the design-reviewer subagent -- scores 0-10, kills AI slop, fixes with atomic commits + before/after screenshots. Archives to docs/design/, stamps the ledger.
 argument-hint: "[route-or-component]"
-allowed-tools: Task, Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/review-ledger.sh:*), Read, Edit, Write
+allowed-tools: Task, Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Read, Edit, Write
 ---
 
 Review and fix the design of: **$ARGUMENTS** (default: the UI changed in this diff).
@@ -13,7 +13,7 @@ Review and fix the design of: **$ARGUMENTS** (default: the UI changed in this di
 - Committing fixes as `style(ui): ...` / `fix(ui): ...` (never push).
 - Stamping the ledger only if the verdict is `design: PASS`:
   ```bash
-  bash .claude/scripts/review-ledger.sh stamp design
+  bash .claude/scripts/core/review-ledger.sh stamp design
   ```
 
 For UI-bearing phases, add `design` to `ARC_REQUIRED_REVIEWS` so /arc-ship is gated on it.

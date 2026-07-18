@@ -8,8 +8,8 @@
 # temp dir. Path fidelity matters: Phase 02 baseline fingerprints key on it.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/common.sh
-. "$HERE/../lib/common.sh"
+# shellcheck source=../../core/common.sh
+. "$HERE/../../core/common.sh"
 . "$HERE/../lib/runtime.sh"
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 

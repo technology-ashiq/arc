@@ -8,7 +8,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-LIBS() { echo ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; . '$ARC_SCAN_SRC/lib/triage-llm.sh'"; }
+LIBS() { echo ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; . '$ARC_SCAN_SRC/lib/triage-llm.sh'"; }
 
 # _write -- slurp heredoc/stdin into a temp file, echo its path.
 _write() { local p; p="$(mktemp)"; cat > "$p"; echo "$p"; }

@@ -3,7 +3,7 @@
 # report + one-command fixes via /arc-toolcheck. Degrades loudly if the checker is absent.
 set -uo pipefail
 cd "${CLAUDE_PROJECT_DIR:-.}"
-HEALTH="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/toolchain-health.sh"
+HEALTH="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/core/toolchain-health.sh"
 if [ -f "$HEALTH" ]; then
   bash "$HEALTH" --brief 2>/dev/null || echo "- Toolchain: run /arc-toolcheck to verify tools"
 else

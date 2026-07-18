@@ -3,7 +3,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-RUNNER() { echo "$ARC_ROOT/.claude/scripts/arc-gates.sh"; }
+RUNNER() { echo "$ARC_ROOT/.claude/scripts/core/arc-gates.sh"; }
 
 # Write a gates.yaml, echo its path.
 _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
@@ -94,12 +94,12 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
 
 @test "review-ledger require-profile blocks when required reviews are unstamped" {
   _arc_sandbox
-  cp "$ARC_ROOT/.claude/scripts/arc-profile.sh" .claude/scripts/ 2>/dev/null || true
-  run bash .claude/scripts/review-ledger.sh require-profile
+  cp "$ARC_ROOT/.claude/scripts/core/arc-profile.sh" .claude/scripts/ 2>/dev/null || true
+  run bash .claude/scripts/core/review-ledger.sh require-profile
   [ "$status" -eq 2 ]                       # standard profile requires code,security
-  bash .claude/scripts/review-ledger.sh stamp code
-  bash .claude/scripts/review-ledger.sh stamp security
-  run bash .claude/scripts/review-ledger.sh require-profile
+  bash .claude/scripts/core/review-ledger.sh stamp code
+  bash .claude/scripts/core/review-ledger.sh stamp security
+  run bash .claude/scripts/core/review-ledger.sh require-profile
   [ "$status" -eq 0 ]
 }
 
@@ -107,7 +107,7 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
 
 @test "review-ledger: no registry falls back to all kinds (old installs unbroken)" {
   _arc_sandbox
-  run bash .claude/scripts/review-ledger.sh stamp design
+  run bash .claude/scripts/core/review-ledger.sh stamp design
   [ "$status" -eq 0 ]                          # 'design' valid with no registry present
 }
 
@@ -115,7 +115,7 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
   _arc_sandbox
   mkdir -p .claude
   printf '{"schema":1,"source":{"commit":"x"},"products":{"core":{"files":[]},"council":{"files":[]}}}' > .claude/arc-registry.json
-  run bash .claude/scripts/review-ledger.sh stamp code
+  run bash .claude/scripts/core/review-ledger.sh stamp code
   [ "$status" -eq 1 ]
   [[ "$output" == *"review"* ]]                # hints the product that provides 'code'
   [[ "$output" == *"--products"* ]]
@@ -125,9 +125,9 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
   _arc_sandbox
   mkdir -p .claude
   printf '{"schema":1,"source":{"commit":"x"},"products":{"core":{"files":[]},"review":{"files":[]},"qa":{"files":[]}}}' > .claude/arc-registry.json
-  run bash .claude/scripts/review-ledger.sh stamp code
+  run bash .claude/scripts/core/review-ledger.sh stamp code
   [ "$status" -eq 0 ]
-  run bash .claude/scripts/review-ledger.sh stamp design
+  run bash .claude/scripts/core/review-ledger.sh stamp design
   [ "$status" -eq 0 ]
 }
 
@@ -135,7 +135,7 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
   _arc_sandbox
   mkdir -p .claude
   printf '{ not json ' > .claude/arc-registry.json
-  run bash .claude/scripts/review-ledger.sh stamp code
+  run bash .claude/scripts/core/review-ledger.sh stamp code
   [ "$status" -eq 0 ]                          # fail-safe: bad registry -> hardcoded fallback
 }
 
@@ -144,6 +144,6 @@ _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
   mkdir -p .claude
   printf '{"schema":1,"source":{"commit":"x"},"products":{"*":{"files":[]}}}' > .claude/arc-registry.json
   : > review                                   # the file '*' would glob to if the loop were unquoted
-  run bash .claude/scripts/review-ledger.sh stamp code
+  run bash .claude/scripts/core/review-ledger.sh stamp code
   [ "$status" -eq 1 ]                          # '*' stays literal (set -f) -> 'code' never granted
 }

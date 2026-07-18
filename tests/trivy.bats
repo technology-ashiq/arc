@@ -93,7 +93,7 @@ EOF
   printf '{}\n' > package-lock.json
   printf 'package-lock.json\n' > scope.txt
   ARC_TRIVY_BIN="$ft/trivy" bash "$ARC_SCAN_SRC/adapters/trivy.sh" scope.txt t.sarif
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize trivy t.sarif | jq -r '.level' | head -1"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize trivy t.sarif | jq -r '.level' | head -1"
   [ "$status" -eq 0 ]
   [ "$output" = "error" ]
   rm -rf "$ft"

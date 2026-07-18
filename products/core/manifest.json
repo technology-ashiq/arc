@@ -13,16 +13,16 @@
     ".claude/agents/researcher.md"
   ],
   "scripts": [
-    ".claude/scripts/arc-gates.sh",
-    ".claude/scripts/arc-profile.sh",
-    ".claude/scripts/review-ledger.sh",
-    ".claude/scripts/toolchain-health.sh",
-    ".claude/scripts/freeze-check.sh",
-    ".claude/scripts/arc-products.mjs",
-    ".claude/scripts/product-lint.mjs",
-    ".claude/scripts/arc-status.sh",
-    ".claude/scripts/arc-scan/lib/common.sh",
-    ".claude/statusline.sh"
+    ".claude/scripts/core/arc-gates.sh",
+    ".claude/scripts/core/arc-profile.sh",
+    ".claude/scripts/core/review-ledger.sh",
+    ".claude/scripts/core/toolchain-health.sh",
+    ".claude/scripts/core/freeze-check.sh",
+    ".claude/scripts/core/arc-products.mjs",
+    ".claude/scripts/core/product-lint.mjs",
+    ".claude/scripts/core/arc-status.sh",
+    ".claude/scripts/core/common.sh",
+    ".claude/scripts/core/statusline.sh"
   ],
   "files": [
     ".claude/hooks/_dispatch.sh",
@@ -52,10 +52,25 @@
     ".claude/templates/toolchain-health-artifact.html"
   ],
   "docs": [
-    { "src": "docs/how-it-works.md", "dest": "docs/how-it-works.md" },
-    { "src": "docs/usermanual.md", "dest": "docs/usermanual.md" },
-    { "src": "docs/blueprint.md", "dest": "docs/blueprint.md" },
-    { "src": "docs/product-runbook.md", "dest": "docs/product-runbook.md" },
-    { "src": "docs/plugins.md", "dest": "docs/plugins.md" }
+    {
+      "src": "docs/how-it-works.md",
+      "dest": "docs/how-it-works.md"
+    },
+    {
+      "src": "docs/usermanual.md",
+      "dest": "docs/usermanual.md"
+    },
+    {
+      "src": "docs/blueprint.md",
+      "dest": "docs/blueprint.md"
+    },
+    {
+      "src": "docs/product-runbook.md",
+      "dest": "docs/product-runbook.md"
+    },
+    {
+      "src": "docs/plugins.md",
+      "dest": "docs/plugins.md"
+    }
   ]
 }

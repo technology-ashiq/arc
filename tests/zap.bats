@@ -73,7 +73,7 @@ EOF
   local fz; fz="$(_fake_zap)"; local d; d="$(mktemp -d)"; : > "$d/scope.txt"
   env -u CI ARC_TIER=ci ARC_ZAP_TARGET="https://app.example" ARC_ZAP_CMD="cat '$fz' | bash" \
     bash "$ARC_SCAN_SRC/adapters/zap.sh" "$d/scope.txt" "$d/z.sarif"
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize zap '$d/z.sarif' | jq -r 'select(.ruleId==\"40012\") | .level'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize zap '$d/z.sarif' | jq -r 'select(.ruleId==\"40012\") | .level'"
   [ "$status" -eq 0 ]
   [ "$output" = "error" ]
   rm -rf "$fz" "$d"
