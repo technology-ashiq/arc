@@ -8,8 +8,8 @@
 #   defaults to the committed .claude/state/scan/ artifacts.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/common.sh
-. "$HERE/lib/common.sh"
+# shellcheck source=../core/common.sh
+. "$HERE/../core/common.sh"
 ROOT="${ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 sarif="${1:-$ROOT/.claude/state/scan/scan-result.sarif}"

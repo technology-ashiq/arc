@@ -61,7 +61,7 @@ teardown() { _arc_teardown; }
   printf 'function h(req){ return eval(req.query.q); }\n' > "$d/app.js"
   echo "$d/app.js" > "$d/scope.txt"
   bash "$ARC_SCAN_SRC/adapters/semgrep.sh" "$d/scope.txt" "$d/n.sarif"
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize semgrep '$d/n.sarif' | jq -r '.level'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize semgrep '$d/n.sarif' | jq -r '.level'"
   [ "$status" -eq 0 ]
   [[ "$output" == *"error"* ]]
   rm -rf "$d"
@@ -73,7 +73,7 @@ teardown() { _arc_teardown; }
   printf 'const t = "ghp_16C7e42F292c6912E7710c838347Ae178B4a";\n' > "$d/c.js"
   echo "$d/c.js" > "$d/scope.txt"
   bash "$ARC_SCAN_SRC/adapters/gitleaks.sh" "$d/scope.txt" "$d/g.sarif"
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize gitleaks '$d/g.sarif' | jq -r '.level' | head -1"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize gitleaks '$d/g.sarif' | jq -r '.level' | head -1"
   [ "$status" -eq 0 ]
   [ "$output" = "error" ]
   rm -rf "$d"
@@ -83,10 +83,10 @@ teardown() { _arc_teardown; }
   local d; d="$(mktemp -d)"
   local f='{"tool":"semgrep","ruleId":"r1","level":"error","message":"m","file":"a.js","line":3,"fingerprint":"deadbeef"}'
   printf '%s\n%s\n' "$f" "$f" > "$d/findings.jsonl"   # duplicate fingerprint
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_merge '$d/findings.jsonl' | jq '[.runs[].results[]] | length'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_merge '$d/findings.jsonl' | jq '[.runs[].results[]] | length'"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]   # deduped to one
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_merge '$d/findings.jsonl' | jq -r '.runs[0].results[0] | .ruleId + \"|\" + .level + \"|\" + .message.text + \"|\" + .locations[0].physicalLocation.artifactLocation.uri + \"|\" + .partialFingerprints.arcFingerprint'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_merge '$d/findings.jsonl' | jq -r '.runs[0].results[0] | .ruleId + \"|\" + .level + \"|\" + .message.text + \"|\" + .locations[0].physicalLocation.artifactLocation.uri + \"|\" + .partialFingerprints.arcFingerprint'"
   [ "$output" = "r1|error|m|a.js|deadbeef" ]
   rm -rf "$d"
 }
@@ -100,7 +100,7 @@ teardown() { _arc_teardown; }
   cat > "$d/m.sarif" <<'EOF'
 {"version":"2.1.0","runs":[{"results":[{"level":"error"},{"level":"warning"}]}]}
 EOF
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; arc_triage_verdict '$d/m.sarif' semgrep '' | jq -r '.verdict'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; arc_triage_verdict '$d/m.sarif' semgrep '' | jq -r '.verdict'"
   [ "$output" = "block" ]
   rm -rf "$d"
 }
@@ -110,7 +110,7 @@ EOF
   cat > "$d/m.sarif" <<'EOF'
 {"version":"2.1.0","runs":[{"results":[{"level":"warning"},{"level":"note"}]}]}
 EOF
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; arc_triage_verdict '$d/m.sarif' semgrep '' | jq -r '.verdict'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; arc_triage_verdict '$d/m.sarif' semgrep '' | jq -r '.verdict'"
   [ "$output" = "pass" ]
   rm -rf "$d"
 }
@@ -118,7 +118,7 @@ EOF
 @test "triage: empty findings => pass" {
   local d; d="$(mktemp -d)"
   printf '{"version":"2.1.0","runs":[]}\n' > "$d/m.sarif"
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; arc_triage_verdict '$d/m.sarif' '' '' | jq -r '.verdict'"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'; arc_triage_verdict '$d/m.sarif' '' '' | jq -r '.verdict'"
   [ "$output" = "pass" ]
   rm -rf "$d"
 }
@@ -129,11 +129,11 @@ EOF
 
 @test "ledger: scan is a valid kind (stamp/check/status)" {
   _arc_sandbox
-  run bash .claude/scripts/review-ledger.sh stamp scan
+  run bash .claude/scripts/core/review-ledger.sh stamp scan
   [ "$status" -eq 0 ]
-  run bash .claude/scripts/review-ledger.sh check scan
+  run bash .claude/scripts/core/review-ledger.sh check scan
   [ "$status" -eq 0 ]
-  run bash .claude/scripts/review-ledger.sh status
+  run bash .claude/scripts/core/review-ledger.sh status
   [[ "$output" == *"scan"* ]]
 }
 

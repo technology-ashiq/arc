@@ -6,7 +6,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-TC="$ARC_ROOT/.claude/scripts/toolchain-health.sh"
+TC="$ARC_ROOT/.claude/scripts/core/toolchain-health.sh"
 
 @test "toolcheck: full report runs and lists trivy (SCA)" {
   run bash "$TC"

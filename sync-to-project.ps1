@@ -19,7 +19,7 @@ param(
 )
 
 $src = $PSScriptRoot
-$resolver = Join-Path $src ".claude\scripts\arc-products.mjs"
+$resolver = Join-Path $src ".claude\scripts\core\arc-products.mjs"
 
 # Council JUROR env contract: append the JUROR_* block from a source .env.example
 # to the target's ONCE (sentinel present = already there). Shared by both paths.

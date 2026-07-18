@@ -1,7 +1,7 @@
 ---
 description: Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/.
 argument-hint: [base-branch (default main)]
-allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/review-ledger.sh:*), Task, Write
+allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Task, Write
 ---
 
 Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the branch is clean).
@@ -25,8 +25,8 @@ Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the bra
    findings and their resolutions live together.
 5. **Stamp the review ledger** so the ship-gate reflects this review (block-by-default,
    ADR-0008). Run exactly one, keyed to the verdict:
-   - verdict **ship** (no unresolved Criticals): `bash .claude/scripts/review-ledger.sh stamp code`
-   - verdict **fix-first / needs-discussion**: `bash .claude/scripts/review-ledger.sh unstamp code`
+   - verdict **ship** (no unresolved Criticals): `bash .claude/scripts/core/review-ledger.sh stamp code`
+   - verdict **fix-first / needs-discussion**: `bash .claude/scripts/core/review-ledger.sh unstamp code`
      (leave the gate closed until a clean re-review).
    The ledger is keyed to `HEAD`, so a new commit auto-invalidates the stamp — re-run `/arc-review`
    after fixes. This closes the usermanual §8 "code review runs but never stamps" gap.

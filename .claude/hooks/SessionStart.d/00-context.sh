@@ -22,6 +22,6 @@ if [ -f PROGRESS.md ]; then
 fi
 
 # arc review readiness on the current commit (review-ledger is core -- present in any install).
-LEDGER="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/review-ledger.sh"
+LEDGER="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/core/review-ledger.sh"
 [ -f "$LEDGER" ] && echo "- $(bash "$LEDGER" status 2>/dev/null)"
 exit 0

@@ -20,7 +20,7 @@
 set -euo pipefail
 
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESOLVER="$SRC/.claude/scripts/arc-products.mjs"
+RESOLVER="$SRC/.claude/scripts/core/arc-products.mjs"
 
 # ---------- args: <target> [--products a,b | --list] ----------
 TARGET=""; MODE="full"; PRODUCTS=""

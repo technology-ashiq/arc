@@ -15,7 +15,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$HERE/lib/common.sh"
+. "$HERE/../core/common.sh"
 . "$HERE/lib/sarif.sh"
 . "$HERE/lib/triage.sh"
 . "$HERE/lib/triage-llm.sh"
@@ -23,10 +23,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$HERE/lib/suppress.sh"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-LEDGER="$ROOT/.claude/scripts/review-ledger.sh"
+LEDGER="$ROOT/.claude/scripts/core/review-ledger.sh"
 # Scan gate mode from the active strictness profile (block-by-default). In warn
 # mode a block verdict is reported but downgraded to advisory (exit 0).
-SCAN_MODE="$(bash "$ROOT/.claude/scripts/arc-profile.sh" mode scan 2>/dev/null || echo block)"
+SCAN_MODE="$(bash "$ROOT/.claude/scripts/core/arc-profile.sh" mode scan 2>/dev/null || echo block)"
 
 # --- args --------------------------------------------------------------------
 base=""; scope_file=""; scope_mode="default"; out_dir=""

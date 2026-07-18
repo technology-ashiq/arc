@@ -49,7 +49,7 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
       (`:356` → `.claude/commands/`, `:384` → `.claude/agents/`) are deliberately NOT touched: commands and
       agents do not move in Phase 3 (assumptions ledger row 1), so editing them breaks a passing gate and
       fails byte-diff as a same-file edit. Record the verification, not an edit.
-- [ ] core moved (gates/profile/ledger/toolcheck/freeze/common.sh → scripts/core/; common.sh relocated OUT of arc-scan/ — EVERY sourcer of common.sh repo-wide is patched in THIS checkpoint's commit, not only those inside the not-yet-moved arc-scan/ tree: `.claude/scripts/arc-evidence.sh:14` (plan-owned) and `tests/test_helper.bash:6,11,21` (used by 9 of 22 bats files, including evidence.bats and bytediff.bats) both source it from outside that tree, so the narrower reading would break the evidence tool during the checkpoint it must document)
+- [x] core moved (gates/profile/ledger/toolcheck/freeze/common.sh → scripts/core/; common.sh relocated OUT of arc-scan/ — EVERY sourcer of common.sh repo-wide is patched in THIS checkpoint's commit, not only those inside the not-yet-moved arc-scan/ tree: `.claude/scripts/arc-evidence.sh:14` (plan-owned) and `tests/test_helper.bash:6,11,21` (used by 9 of 22 bats files, including evidence.bats and bytediff.bats) both source it from outside that tree, so the narrower reading would break the evidence tool during the checkpoint it must document)
 - [ ] plan moved (kickoff-lint.mjs, arc-evidence.sh → scripts/plan/; kickoff-lint root assumptions verified)
 - [ ] review moved (arc-scan/ tree, docs-drift, coverage/rls/version gates → scripts/review/; scan-summary.bats grep + gates.yaml check commands updated)
 - [ ] qa + git manifests finalized; command frontmatter allowed-tools paths updated across all 21 commands
@@ -95,10 +95,27 @@ gate has caught zero issues AND per-move overhead dominates (ceremony > work), t
 three may merge into one move — recorded as a phase-spec amendment via /arc-change."*
 
 Ckpt 1: gate caught zero move-integrity issues (it did catch four holes in *itself*, pre-move —
-that is the adversarial pass working, not the gate firing). **At ckpt 2 close, evaluate the
-trigger explicitly and record the answer here.** If it fires, plan + review + qa merge into one
-checkpoint. Ckpt 2 is also the first move of genuinely `100755` files, so it is the run that
-finally exercises the mode half of the gate — do not batch it away.
+that is the adversarial pass working, not the gate firing).
+
+**Evaluated at ckpt 2 close (2026-07-18) — trigger does NOT fire cleanly. Partial batch.**
+The trigger has two conditions and they split:
+
+- *"byte-diff gate has caught zero issues"* — **true.** 13 moves across two checkpoints, all
+  content+mode preserved. Ckpt 2 did exercise the mode half for real (4 of its 10 files are
+  `100755`), so that half is no longer unrehearsed.
+- *"per-move overhead dominates (ceremony > work)"* — **false, and ckpt 2 is the evidence.**
+  The gate/evidence/golden ceremony was a small share of the time. The bulk was real breakage
+  that only the per-product structure surfaced: three scripts resolved the repo root by counting
+  `..` segments and broke the instant they moved one level deeper (`product-lint.mjs`,
+  `arc-products.mjs`, `arc-status.sh` — now depth-independent); `sync-to-project.sh`'s RESOLVER
+  path pointed at the old location, so a bare sync failed outright; and a path sweep quietly
+  rewrote two self-contained test fixtures and the golden manifest itself. None of that was
+  caught by the byte-diff gate — the moves were byte-perfect. It was caught by smoke-running each
+  moved script and by the affected-file tests.
+
+**Decision: batch plan + qa + git into ONE checkpoint; keep review separate.** plan is small,
+qa+git are manifest-only. review is the ~315-ref `arc-scan/` subtree and earns its own gate run
+and its own rollback point. Recorded here as the phase-spec amendment ADR-0018 requires.
 
 Consumer-side fallout of these moves — a re-homed script leaves an *executable* stale copy in every
 already-installed target — is tracked in **ADR-0020** (proposed): deletion is forbidden by

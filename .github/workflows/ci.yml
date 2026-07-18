@@ -95,7 +95,7 @@ jobs:
       - name: Product manifests lint
         # Had no CI step at all, so REQ-03's gate only ever ran against tests/fixtures/ --
         # "product-lint green" was in the Phase-03 checkpoint contract but unenforced.
-        run: node .claude/scripts/product-lint.mjs
+        run: node .claude/scripts/core/product-lint.mjs
 
       - name: Run bats self-tests
         # -r is required BEFORE Phase 03 relocates tests into products/NAME/tests/: bats does

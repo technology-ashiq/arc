@@ -102,7 +102,7 @@ EOF
   _arc_sandbox
   mkdir -p src; printf 'x\n' > src/app.js; printf 'src/app.js\n' > scope.txt
   env -u CI ARC_TIER=ci ARC_CODEQL_BIN="$fc/codeql" bash "$ARC_SCAN_SRC/adapters/codeql.sh" scope.txt c.sarif
-  run bash -c ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize codeql c.sarif | jq -r '.level' | head -1"
+  run bash -c ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; arc_sarif_normalize codeql c.sarif | jq -r '.level' | head -1"
   [ "$status" -eq 0 ]
   [ "$output" = "error" ]
   rm -rf "$fc"

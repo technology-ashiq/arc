@@ -1,0 +1,27 @@
+=== Phase 03 ckpt 2 (core) -- local affected-file run (CI is the authority for the full suite) ===
+sync 22/22 · products 34/34 · arc-scan 14/14 · hooks-dispatch 11/11 · arc-profile 11/11 = 92 local
+
+=== core scripts smoke, from .claude/scripts/core/ ===
+-- product-lint --
+product-lint: all manifests valid
+-- arc-products --list --
+core council git plan qa review 
+-- arc-status --
+arc — product status  (root: E:/Work_Hub/01_Automemory/arc)
+PRODUCT   INSTALLED  FILES
+core      yes        42/42
+council   yes        16/16
+-- arc-profile name --
+standard
+-- statusline (renders identical to pre-move baseline) --
+[1m[38;5;141m◆ Claude[0m [38;5;60m│[0m [1m[38;5;117m.[0m
+[38;5;150m[38;5;238m░░░░░░░░░░[0m [38;5;150m0%[0m [38;5;60m│[0m [38;5;179m$0.00[0m
+-- arc-scan resolves ../core/common.sh --
+arc-scan --help: OK
+
+=== kickoff-lint ===
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+kickoff-lint: all checks passed ✔
+
+=== dangling-reference check ===
+(no DANGLING lines = clean)

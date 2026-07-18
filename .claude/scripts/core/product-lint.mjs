@@ -12,7 +12,7 @@
  * Exit:  0 clean · 2 one or more violations.
  */
 import { readFileSync, readdirSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const errors = [];
@@ -26,8 +26,13 @@ for (let i = 0; i < argv.length; i++) {
   else { process.stderr.write(`product-lint: unknown argument: ${argv[i]}\n`); process.exit(2); }
 }
 if (!root) {
-  const here = fileURLToPath(new URL(".", import.meta.url));
-  root = join(here, "..", "..");
+  // Walk up to the dir that holds products/, rather than counting `..` segments. A
+  // hardcoded depth is correct only for the location the script happens to sit in today,
+  // and Phase 03 re-homes every script by exactly one level -- this resolver broke the
+  // moment it moved into core/. Walking up is depth-independent and survives ckpt 3/4.
+  let d = fileURLToPath(new URL(".", import.meta.url));
+  while (!existsSync(join(d, "products")) && dirname(d) !== d) d = dirname(d);
+  root = d;
 }
 
 const KNOWN_FIELDS = new Set([

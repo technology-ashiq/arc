@@ -3,7 +3,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-LIBS() { echo ". '$ARC_SCAN_SRC/lib/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; . '$ARC_SCAN_SRC/lib/suppress.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'"; }
+LIBS() { echo ". '$ARC_CORE_SRC/common.sh'; . '$ARC_SCAN_SRC/lib/sarif.sh'; . '$ARC_SCAN_SRC/lib/suppress.sh'; . '$ARC_SCAN_SRC/lib/triage.sh'"; }
 
 _sup() {  # write a suppressions.md with the given table body, echo path
   local p; p="$(mktemp)"

@@ -1,0 +1,11 @@
+arc-bytediff: OK  .claude/scripts/arc-gates.sh -> .claude/scripts/core/arc-gates.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-products.mjs -> .claude/scripts/core/arc-products.mjs  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-profile.sh -> .claude/scripts/core/arc-profile.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-status.sh -> .claude/scripts/core/arc-status.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/common.sh -> .claude/scripts/core/common.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/freeze-check.sh -> .claude/scripts/core/freeze-check.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/product-lint.mjs -> .claude/scripts/core/product-lint.mjs  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/review-ledger.sh -> .claude/scripts/core/review-ledger.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/toolchain-health.sh -> .claude/scripts/core/toolchain-health.sh  (content+mode preserved)
+arc-bytediff: verified 9 move(s) -- all preserved
+arc-bytediff: OK  .claude/statusline.sh -> .claude/scripts/core/statusline.sh  (content+mode preserved)

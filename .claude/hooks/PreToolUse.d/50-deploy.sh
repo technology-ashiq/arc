@@ -14,7 +14,7 @@ echo "PreToolUse/deploy-guard: deploy detected -> running tests..." >&2
 cd "${CLAUDE_PROJECT_DIR:-.}"
 if npm run test --silent >/tmp/predeploy.log 2>&1; then
   echo "deploy-guard: tests passed." >&2
-  GATES="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/arc-gates.sh"
+  GATES="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/core/arc-gates.sh"
   if [ ! -f "$GATES" ] || [ ! -f "${CLAUDE_PROJECT_DIR:-.}/arc.gates.yaml" ]; then
     echo "deploy-guard: SKIP arc-gates -- gate engine/config not installed (partial install). Allowed." >&2
     exit 0

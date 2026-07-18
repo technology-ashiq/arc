@@ -20,7 +20,7 @@
  * Exit: 0 ok · 2 bad usage / unknown product / unsafe path.
  */
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
@@ -46,9 +46,12 @@ for (let i = 0; i < argv.length; i++) {
   else die(`unknown argument: ${a}`);
 }
 if (!root) {
-  // default: repo root = two levels up from .claude/scripts/
-  const here = fileURLToPath(new URL(".", import.meta.url));
-  root = join(here, "..", "..");
+  // default: walk up to the dir holding products/. NOT a fixed `..` count -- that is
+  // correct only for wherever the script sits today, and Phase 03 moves it a level
+  // deeper. Depth-independent, so ckpt 3/4 cannot silently repeat the same break.
+  let d = fileURLToPath(new URL(".", import.meta.url));
+  while (!existsSync(join(d, "products")) && dirname(d) !== d) d = dirname(d);
+  root = d;
 }
 if (!mode) die("usage: arc-products.mjs (--products LIST | --list) [--root DIR]");
 

@@ -1,11 +1,11 @@
 ---
 description: arc orchestrator — read-only per-product install/health dashboard
-allowed-tools: Bash(bash .claude/scripts/arc-status.sh:*)
+allowed-tools: Bash(bash .claude/scripts/core/arc-status.sh:*)
 ---
 
 # /arc — the orchestrator umbrella
 
-Run `bash .claude/scripts/arc-status.sh` and render its table verbatim, then add a
+Run `bash .claude/scripts/core/arc-status.sh` and render its table verbatim, then add a
 one-line reading.
 
 The table shows every arc product (core · plan · review · qa · council · git) and its
