@@ -171,7 +171,11 @@ if (existsSync(claudeDir)) {
   const walk = (absDir, rel) => {
     for (const e of readdirSync(absDir, { withFileTypes: true })) {
       if (e.isDirectory()) {
-        if (e.name === "state" || e.name === "attic") continue;
+        // Must mirror sync-to-project's EXCLUDES exactly (sh:92 / the ps1 twin). `worktrees`
+        // holds transient git worktrees that are never synced, so every file under them was
+        // reported as "unmapped" -- 535 phantom errors at repo root, which is precisely the
+        // wall of known-bad output a real error would have hidden in.
+        if (e.name === "state" || e.name === "attic" || e.name === "worktrees") continue;
         walk(join(absDir, e.name), rel ? `${rel}/${e.name}` : e.name);
       } else {
         if (e.name === "settings.local.json" || e.name === "scheduled_tasks.lock") continue;

@@ -13,7 +13,7 @@
 #
 # Usage:
 #   arc-bytediff.sh verify-move <old-path> <new-path> [--ref <gitref>]   # default ref: HEAD
-#   arc-bytediff.sh verify-moves <pairs-file>   # TAB-separated old<TAB>new lines
+#   arc-bytediff.sh verify-moves <pairs-file> [--no-complete]   # TAB-separated old<TAB>new lines
 # Exit: 0 = content+mode preserved · 2 = altered (a real move-integrity failure) · 1 = usage.
 set -uo pipefail
 
@@ -26,6 +26,10 @@ _sha() {
 _lfsha() { tr -d '\r' | _sha; }                                   # LF-normalized content hash
 _mode_ref() { git ls-tree "$1" -- "$2" 2>/dev/null | awk '{print $1}'; }   # <ref> <path> -> git mode
 _mode_idx() { git ls-files -s -- "$1" 2>/dev/null | awk '{print $1}'; }     # <path> -> staged git mode
+# <path> -> a tracked path differing from it ONLY by case, if one exists. git is case-sensitive
+# even where the filesystem is not (core.ignorecase=true), so `[ -e ]` happily resolves a path
+# git does not track -- and the mode lookup then returns empty and gets masked by the fallback.
+_idx_case_variant() { git ls-files 2>/dev/null | awk -v p="$1" 'tolower($0)==tolower(p) && $0!=p {print; exit}'; }
 
 cmd="${1:-}"; shift || true
 case "$cmd" in
@@ -50,6 +54,23 @@ case "$cmd" in
     if [ ! -e "$new" ] && [ -z "$(_mode_idx "$new")" ]; then
       echo "arc-bytediff: FAIL -- new path '$new' missing from working tree AND index" >&2; exit 2
     fi
+    # Case check BEFORE trusting the filesystem: if git has no entry at this exact path but
+    # does have one that differs only by case, the operator typed the wrong case. Every
+    # downstream check would compare wrong-to-wrong and report OK. First honest detection
+    # would otherwise be a case-sensitive CI leg, post-commit, bundle already sealed.
+    if [ -z "$(_mode_idx "$new")" ]; then
+      variant="$(_idx_case_variant "$new")"
+      if [ -n "$variant" ]; then
+        echo "arc-bytediff: FAIL -- case mismatch: git tracks '$variant', not '$new'" >&2; exit 2
+      fi
+    fi
+
+    # A move means the old path is GONE. Identical content at the new path is necessary but
+    # not sufficient -- `cp` leaves a frozen duplicate behind that satisfies every hash check.
+    if [ -e "$old" ]; then
+      echo "arc-bytediff: FAIL -- old path '$old' is still present (copy, not move)" >&2; exit 2
+    fi
+
     if [ -e "$new" ]; then newsha="$(_lfsha < "$new")"
     else                  newsha="$(git show ":$new" 2>/dev/null | _lfsha)"; fi
     newmode="$(_mode_idx "$new")"; [ -z "$newmode" ] && newmode="$oldmode"   # unstaged -> trust git-mv preservation
@@ -64,14 +85,47 @@ case "$cmd" in
     ;;
 
   verify-moves)
-    f="${1:-}"; [ -f "$f" ] || { echo "usage: arc-bytediff.sh verify-moves <pairs-file>" >&2; exit 1; }
+    f=""; complete=1
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --no-complete) complete=0; shift ;;
+        -*) echo "arc-bytediff: unknown flag: $1" >&2; exit 1 ;;
+        *)  if [ -z "$f" ]; then f="$1"; else echo "arc-bytediff: too many arguments" >&2; exit 1; fi; shift ;;
+      esac
+    done
+    [ -f "$f" ] || { echo "usage: arc-bytediff.sh verify-moves <pairs-file> [--no-complete]" >&2; exit 1; }
     rc=0; n=0
-    while IFS=$'\t' read -r old new _rest; do
-      [ -z "${old:-}" ] && continue
-      case "$old" in \#*) continue ;; esac
+    # `|| [ -n "${old:-}" ]` is load-bearing: `read` returns nonzero at EOF-without-newline, so
+    # a pairs file whose last line lacks \n would have its FINAL pair read into the variables
+    # and then silently skipped -- while `verified N move(s)` under-counted to match, making the
+    # transcript self-consistent and wrong. Generate pairs from git, and still never trust `read`.
+    while IFS=$'\t' read -r old new _rest || [ -n "${old:-}" ]; do
+      if [ -z "${old:-}" ]; then old=""; continue; fi
+      case "$old" in \#*) old=""; continue ;; esac
       n=$((n+1))
       bash "$0" verify-move "$old" "$new" || rc=2
+      old=""
     done < "$f"
+
+    # Completeness: the gate cannot prove it was handed every move, so ask git directly. Any
+    # staged rename absent from the pairs file is an unverified move riding in the same commit.
+    if [ "$complete" -eq 1 ] && git rev-parse --verify -q HEAD >/dev/null 2>&1; then
+      _staged="$(mktemp)"
+      git diff --cached --diff-filter=R -M --name-status HEAD 2>/dev/null > "$_staged"
+      uncovered=""
+      while IFS=$'\t' read -r _st _sold snew || [ -n "${_st:-}" ]; do
+        [ -z "${snew:-}" ] && { _st=""; continue; }
+        awk -F'\t' -v t="$snew" '$0 !~ /^#/ && $2==t {found=1} END{exit !found}' "$f" \
+          || uncovered="$uncovered $snew"
+        _st=""
+      done < "$_staged"
+      rm -f "$_staged"
+      if [ -n "$uncovered" ]; then
+        echo "arc-bytediff: FAIL -- staged rename(s) uncovered by the pairs file:$uncovered" >&2
+        rc=2
+      fi
+    fi
+
     echo "arc-bytediff: verified $n move(s) -- $([ "$rc" -eq 0 ] && echo 'all preserved' || echo 'INTEGRITY FAILURE')"
     exit "$rc"
     ;;
