@@ -22,7 +22,7 @@ ROOT="$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null)"
 [ -n "$ROOT" ] || ROOT="$(cd "$HERE/../.." && pwd)"
 DOCKERDIR="$ROOT/docker/arc-tools"
 PINFILE="$DOCKERDIR/IMAGE"
-ADAPTER="$ROOT/.claude/scripts/arc-scan/adapters/trivy.sh"
+ADAPTER="$ROOT/.claude/scripts/review/arc-scan/adapters/trivy.sh"
 DEFAULT_REF="arc-tools:dev"
 
 log()  { printf 'arc-tools-image: %s\n' "$*" >&2; }

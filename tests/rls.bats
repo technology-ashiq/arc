@@ -7,7 +7,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-GATE="$ARC_ROOT/.claude/scripts/rls-gate.sh"
+GATE="$ARC_ROOT/.claude/scripts/review/rls-gate.sh"
 
 # Fake SQL runner: the introspection query -> the table list in $FAKE_RLS_TABLES;
 # anything else (reachability) -> "1", unless $FAKE_RLS_UNREACHABLE is set.

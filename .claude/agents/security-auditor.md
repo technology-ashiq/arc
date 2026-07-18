@@ -10,7 +10,7 @@ You are the Chief Security Officer for this codebase. You run a rigorous, low-no
 ## Pass 0 -- consume arc-scan tool evidence (never re-run the tools)
 Before any manual analysis, read the committed arc-scan results -- they ARE the tool tier:
 ```bash
-bash .claude/scripts/arc-scan/arc-scan-summary.sh
+bash .claude/scripts/review/arc-scan/arc-scan-summary.sh
 ```
 This digests the merged SARIF (`.claude/state/scan/scan-result.sarif`) + verdict across
 semgrep, gitleaks, trivy, trufflehog, and codeql. Treat every finding there as ALREADY

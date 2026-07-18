@@ -90,7 +90,7 @@ jobs:
           echo "opengrep: $(command -v opengrep || echo MISSING)"
 
       - name: Version gate
-        run: bash .claude/scripts/arc-scan/version-gate.sh
+        run: bash .claude/scripts/review/arc-scan/version-gate.sh
 
       - name: Product manifests lint
         # Had no CI step at all, so REQ-03's gate only ever ran against tests/fixtures/ --
@@ -131,15 +131,15 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y jq
 
       - name: Build the arc-tools image
-        run: bash .claude/scripts/arc-tools-image.sh build
+        run: bash .claude/scripts/review/arc-tools-image.sh build
 
       - name: Verify trivy runs inside the image
-        run: bash .claude/scripts/arc-tools-image.sh verify
+        run: bash .claude/scripts/review/arc-tools-image.sh verify
 
       - name: Trivy docker rung catches a real vulnerable dependency
         run: |
           set -euo pipefail
-          REF="$(bash .claude/scripts/arc-tools-image.sh ref)"
+          REF="$(bash .claude/scripts/review/arc-tools-image.sh ref)"
           fx="$(mktemp -d)"
           # PyYAML 5.1 -> CVE-2020-1747 (well-known, stable in the trivy DB).
           printf 'PyYAML==5.1\n' > "$fx/requirements.txt"
@@ -149,7 +149,7 @@ jobs:
           chmod -R a+rX "$fx"
           out="$(mktemp)"
           ARC_DOCKER_IMAGE="$REF" ARC_FORCE_RUNTIME=docker ROOT="$fx" \
-            bash .claude/scripts/arc-scan/adapters/trivy.sh /dev/null "$out"
+            bash .claude/scripts/review/arc-scan/adapters/trivy.sh /dev/null "$out"
           n="$(jq '[.runs[].results[]?] | length' "$out")"
           echo "trivy (real image) reported $n vulnerability finding(s)"
           if [ "$n" -eq 0 ]; then

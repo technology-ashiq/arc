@@ -8,15 +8,15 @@
 #   defaults to the committed .claude/state/scan/ artifacts.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../core/common.sh
-. "$HERE/../core/common.sh"
+# shellcheck source=../../core/common.sh
+. "$HERE/../../core/common.sh"
 ROOT="${ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 
 sarif="${1:-$ROOT/.claude/state/scan/scan-result.sarif}"
 verdict="${2:-$ROOT/.claude/state/scan/verdict.json}"
 
 if [ ! -f "$sarif" ]; then
-  echo "no arc-scan results at $sarif -- run: bash .claude/scripts/arc-scan/arc-scan.sh --all"
+  echo "no arc-scan results at $sarif -- run: bash .claude/scripts/review/arc-scan/arc-scan.sh --all"
   exit 0
 fi
 if [ -z "$(arc_jq_bin)" ]; then

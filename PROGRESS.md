@@ -74,9 +74,25 @@ The ckpt-2 lessons paid off immediately: the root-resolution landmine was checke
 all safe, no repeat of the ckpt-2 breakage), and the path sweep explicitly excluded `tests/fixtures/`
 and the golden manifest, so neither was silently rewritten this time. 110 affected-file tests local.
 
-**Next: checkpoint 4 — review** (the last one): `arc-scan/` tree, docs-drift, coverage/rls/version
-gates → `scripts/review/`; ~315 refs, kept separate on purpose so it gets its own gate run and
-rollback point. Then the phase-final item (CI test discovery + tracker) and `/arc-phase-done 3`. **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
+**Checkpoint 4 — review DONE 2026-07-19.** 20 files → `.claude/scripts/review/` (the whole
+`arc-scan/` subtree + docs-drift + coverage/rls gates + arc-tools-image). Byte-diff green on all 20,
+8 of them `100755`. **`.claude/scripts/` now holds nothing outside a product dir** — `core/`,
+`council/`, `plan/`, `review/`. That is the phase goal's scripts half, complete for all five products.
+
+The pre-check paid again: every review script resolves root via `git rev-parse` and every
+`$ROOT/.claude/scripts/core/...` reference is repo-root-absolute, so the move shifted only the nine
+`$HERE`-relative `common.sh` sources — depth math done up front, verified by resolving each path on
+disk rather than assuming. Golden reconciles: 10 pure moves + 10 moved-then-edited + 2 edited in
+place = 20 old paths gone. The gate's own post-edit `content altered` list named exactly the same 10
+files as the golden classification — two independent views agreeing. 85 affected-file tests local.
+
+**⚠ OPEN GAP — Phase 03 is NOT closeable yet.** The phase goal and REQ-07 both say scripts move to
+`.claude/scripts/<product>/` **and tests to `products/<name>/tests/`**. The scripts half is done; the
+**tests half was never started** — all 22 `.bats` files are still in `tests/`, and
+`products/NAME/tests/` does not exist. This was drift, not a decision: ckpt 1 deferred council's
+fixtures for a real reason and the per-product test move was never picked back up. Recorded in
+`phases/phase-03-spec.md` with two options — (a) a ckpt 5 that relocates them, or (b) amend REQ-07 to
+keep the suite centralised, with the reason recorded. **Ashiq's call before `/arc-phase-done 3`.** **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
 + a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
 per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
 (6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from

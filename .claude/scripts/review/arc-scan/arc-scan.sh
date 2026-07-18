@@ -15,7 +15,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$HERE/../core/common.sh"
+. "$HERE/../../core/common.sh"
 . "$HERE/lib/sarif.sh"
 . "$HERE/lib/triage.sh"
 . "$HERE/lib/triage-llm.sh"

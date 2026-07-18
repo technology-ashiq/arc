@@ -11,8 +11,8 @@
 # Scans the whole target (not diff-scoped); findings merge via the normal pipeline.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../../core/common.sh
-. "$HERE/../../core/common.sh"
+# shellcheck source=../../../core/common.sh
+. "$HERE/../../../core/common.sh"
 . "$HERE/../lib/runtime.sh"
 ROOT="${ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 

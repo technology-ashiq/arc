@@ -1,0 +1,43 @@
+arc-bytediff: OK  .claude/scripts/arc-scan/adapters/codeql.sh -> .claude/scripts/review/arc-scan/adapters/codeql.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/adapters/gitleaks.sh -> .claude/scripts/review/arc-scan/adapters/gitleaks.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/adapters/semgrep.sh -> .claude/scripts/review/arc-scan/adapters/semgrep.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/adapters/trivy.sh -> .claude/scripts/review/arc-scan/adapters/trivy.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/adapters/trufflehog.sh -> .claude/scripts/review/arc-scan/adapters/trufflehog.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/adapters/zap.sh -> .claude/scripts/review/arc-scan/adapters/zap.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/arc-scan-summary.sh -> .claude/scripts/review/arc-scan/arc-scan-summary.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/arc-scan.sh -> .claude/scripts/review/arc-scan/arc-scan.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/baseline.sh -> .claude/scripts/review/arc-scan/lib/baseline.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/runtime.sh -> .claude/scripts/review/arc-scan/lib/runtime.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/sarif.sh -> .claude/scripts/review/arc-scan/lib/sarif.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/suppress.sh -> .claude/scripts/review/arc-scan/lib/suppress.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/triage-llm.sh -> .claude/scripts/review/arc-scan/lib/triage-llm.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/lib/triage.sh -> .claude/scripts/review/arc-scan/lib/triage.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/rules/arc-min.yaml -> .claude/scripts/review/arc-scan/rules/arc-min.yaml  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-scan/version-gate.sh -> .claude/scripts/review/arc-scan/version-gate.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-tools-image.sh -> .claude/scripts/review/arc-tools-image.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/coverage-gate.sh -> .claude/scripts/review/coverage-gate.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/docs-drift.sh -> .claude/scripts/review/docs-drift.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/rls-gate.sh -> .claude/scripts/review/rls-gate.sh  (content+mode preserved)
+arc-bytediff: verified 20 move(s) -- all preserved
+=== Phase 03 ckpt 4 (review) -- the last script move ===
+local: arc-scan 14/14 · scan-summary 4/4 · rls 5/5 · baseline 6/6 · sync 22/22 · products 34/34 = 85
+
+=== moved review scripts, smoke-run from .claude/scripts/review/ ===
+  arc-scan --help OK ($HERE/../../core/common.sh resolves)
+  version-gate: version-gate: OK -- VERSION 0.2.0 referenced in CHANGELOG.md
+  rls-gate exit 0 ($HERE/../core/common.sh resolves)
+  docs-drift exit 0
+  coverage-gate exit 2 -- PRE-EXISTING (no coverage/coverage-summary.json in this repo); identical message on main pre-move
+
+=== .claude/scripts/ now holds NOTHING outside a product dir ===
+.claude/scripts/core/
+.claude/scripts/council/
+.claude/scripts/plan/
+.claude/scripts/review/
+
+=== product-lint / kickoff-lint ===
+product-lint: all manifests valid
+kickoff-lint: all checks passed ✔
+=== dangling refs ===
+(no DANGLING lines = clean)
+product-lint: all manifests valid

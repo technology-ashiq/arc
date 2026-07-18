@@ -13,7 +13,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   run bash "$ARC_ROOT/sync-to-project.sh" "$TARGET"
   [ "$status" -eq 0 ]
   [ -f "$TARGET/.claude/settings.json" ]
-  [ -f "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]
+  [ -f "$TARGET/.claude/scripts/review/arc-scan/arc-scan.sh" ]
   [ -f "$TARGET/.claude/scripts/core/arc-profile.sh" ]
 }
 
@@ -99,7 +99,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   # product's whole future directory is absent too, so the guard survives its own phase.
   [ ! -e "$TARGET/.claude/scripts/plan/kickoff-lint.mjs" ]      # plan absent
   [ ! -e "$TARGET/.claude/scripts/plan" ]
-  [ ! -e "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]  # review absent
+  [ ! -e "$TARGET/.claude/scripts/review/arc-scan/arc-scan.sh" ]  # review absent
   [ ! -e "$TARGET/.claude/scripts/review" ]
   [ ! -e "$TARGET/.claude/agents/qa-tester.md" ]           # qa absent
   [ ! -e "$TARGET/.claude/commands/arc-commit.md" ]        # git absent
@@ -127,7 +127,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ -f "$TARGET/.claude/scripts/core/arc-gates.sh" ]
   [ ! -e "$TARGET/.claude/scripts/council-lint.mjs" ]
   [ ! -e "$TARGET/.claude/scripts/plan/kickoff-lint.mjs" ]
-  [ ! -e "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]
+  [ ! -e "$TARGET/.claude/scripts/review/arc-scan/arc-scan.sh" ]
 }
 
 @test "sync: missing target dir fails cleanly (exit 1)" {
