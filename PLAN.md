@@ -34,7 +34,7 @@ five, while every existing arc command keeps working unchanged.
 | REQ-04 | One resolver, no twin drift | both twins consume `arc-products.mjs` plan output; .ps1 no longer copies `.claude/state/`; neither twin copies `scheduled_tasks.lock` — asserted in sync.bats; the ps1 leak + selective-install smoke tests run on the Windows CI leg (pwsh native) and skip on pwsh-less runners (the .sh is the cross-platform path) | 0 | validated |
 | REQ-05 | Umbrella status is visible and true | `/arc` renders per-product INSTALLED/HEALTH from `arc-registry.json` (zero file-presence guessing) + the exact install command for absent products | 2 | validated |
 | REQ-06 | Partial installs never break hooks | core+council-only install: all 6 hook events run exit 0; any hook fragment whose product dependency (a script or config) is absent degrades with a loud one-line SKIP (never silent, never fatal) — no blanket per-product SKIP spam; hook-tier wall time < 30s measured on the owner's Windows box | 1 | validated |
-| REQ-07 | Products have physical boundaries | scripts live under `.claude/scripts/PRODUCT/`, tests under `products/NAME/tests/`; per-product move lands only with byte-diff gate green (installed tree unchanged) | 3 | active |
+| REQ-07 | Products have physical boundaries | scripts live under `.claude/scripts/PRODUCT/`; per-product move lands only with byte-diff gate green (installed tree unchanged). **Amended 2026-07-19 (ADR-0021):** the original clause also required tests under `products/NAME/tests/` — dropped, because tests never cross the product boundary (a full sync ships zero `.bats` files and no manifest has a `tests` key), so it specified a boundary around something that never leaves the repo | 3 | active |
 | REQ-08 | Targets know what they have | sync writes `.claude/arc-registry.json` (products, versions, file lists, source commit) into every target; re-sync updates it | 2 | validated |
 | REQ-09 | A second real consumer exists | council-alone installed + 1 real council session in one external repo, AND core+plan installed + 1 real kickoff in another (venturemind / InvoiceFly); evidence bundles committed | 4 | active |
 | REQ-10 | Stale files are visible, never deleted | `--prune-report` lists unowned target files with exit 0; attic mode MOVES them to `.claude/attic/DATE/` and prints the list; no delete path exists in either twin | 5 | active |
@@ -90,6 +90,7 @@ ADRs 0001–0013 (v2 initiative) remain live decisions about this codebase. New 
 | 0018 | Phase 3 re-homing is incremental per product, council first | accepted |
 | 0019 | /arc dashboard ships minimal in Phase 0, registry-backed in Phase 2 | accepted |
 | 0020 | Re-homed scripts leave an executable stale copy in consumer trees — accelerate REQ-10 or accept the Phase 3→5 window | proposed |
+| 0021 | Tests stay centralised in `tests/`; REQ-07 amended to scripts only | accepted |
 
 ## Non-negotiables
 
@@ -170,7 +171,7 @@ Physical extraction is not a phase — it is demand-triggered next cycle (ADR-00
 | 0 | Steel thread: 6 manifests + `arc-products.mjs` + `product-lint.mjs` + hostile red fixtures + `--list`/`--products` in both twins + twin-leak bug fixes + council-only install proven in a scratch repo; minimal `/arc` (file-presence) is a stretch item, first cut under appetite pressure (ADR-0019) | 1.5 weeks | `phases/phase-00-spec.md` |
 | 1 | Composable hooks: EVENT.d/ fragment dirs with NN- ordering, loud-SKIP guards for absent products, stable core settings.json template, <30s budget verified on Windows | 0.5 weeks | `phases/phase-01-spec.md` |
 | 2 | Registry-aware core: ledger kinds from the registry, target-side `arc-registry.json`, `/arc` reads the registry, CI tree-diff invariant (`--products all` vs the CI checkout) | 1 week | `phases/phase-02-spec.md` |
-| 3 | Physical re-homing (incremental, council → core → plan → review → qa; ADR-0018): scripts to `.claude/scripts/PRODUCT/`, tests to `products/NAME/tests/`, every move behind the byte-diff gate | 1.5 weeks | `phases/phase-03-spec.md` |
+| 3 | Physical re-homing (incremental, council → core → plan → review → qa; ADR-0018): scripts to `.claude/scripts/PRODUCT/`, every move behind the byte-diff gate (tests stay centralised — ADR-0021) | 1.5 weeks | `phases/phase-03-spec.md` |
 | 4 | Dogfood: council-alone into one external repo + core+plan into another (venturemind / InvoiceFly), real sessions, evidence bundles committed | 0.5 weeks | `phases/phase-04-spec.md` |
 | 5 | Prune-report + attic, README/usermanual/blueprint rewrite, TRIAL→FAIL promotions via trial-ledger, `/arc-retro` | 0.5 weeks | `phases/phase-05-spec.md` |
 

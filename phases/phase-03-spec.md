@@ -1,6 +1,6 @@
 # Phase 03 — Physical re-homing (incremental, council first)
 
-**Goal (one line):** scripts move to `.claude/scripts/<product>/` and tests to `products/<name>/tests/`, one product at a time behind the byte-diff gate, with every hardcoded path updated (ADR-0018).
+**Goal (one line):** scripts move to `.claude/scripts/<product>/`, one product at a time behind the byte-diff gate, with every hardcoded path updated (ADR-0018). *(The original goal also moved tests to `products/<name>/tests/`; dropped 2026-07-19 per ADR-0021 — tests never cross the product boundary, so REQ-07 was specifying a boundary around something that never leaves the repo.)*
 **Appetite:** 1.5 weeks — blown appetite = cut scope or kill, never extend silently.
 **Depends on:** phase-02
 
@@ -9,8 +9,7 @@
 Five checkpoints, one per product move, in order **council → core → plan → review → qa**
 (git has no scripts — manifest update only). Each checkpoint = git mv + THAT product's
 manifest.json explicit-path entries updated to the new locations (resolver plan regenerated,
-product-lint green) + hardcoded-path updates + the moved product's tests landing under
-`products/NAME/tests/` with the CI workflow's test-discovery path edited in the SAME commit +
+product-lint green) + hardcoded-path updates +
 the full suite green **on CI, which is the authority** (see the velocity note below) + Phase-02
 tree-diff invariant re-verified + byte-diff gate green
 (installed tree unchanged) + the gate transcript attached to the checkpoint's evidence bundle
@@ -59,25 +58,27 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
 - [x] plan moved (kickoff-lint.mjs, arc-evidence.sh → scripts/plan/; kickoff-lint root assumptions verified)
 - [x] review moved (arc-scan/ tree, docs-drift, coverage/rls/version gates → scripts/review/; scan-summary.bats grep + gates.yaml check commands updated)
 - [x] qa + git manifests finalized; command frontmatter allowed-tools paths updated across all 21 commands
-- [ ] final: CI discovers every relocated test (no stale `tests/` path anywhere in workflow YAML); tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] final: CI discovers the whole suite (`bats -r tests/` + a 247-test floor, both already in `ci.yml`); tracker updated (PROGRESS.md row ✅ + done-log)
 
-### OPEN GAP at ckpt-4 close — the tests half of REQ-07 was never executed
+### RESOLVED at ckpt-4 close — the tests half of REQ-07, amended not executed
 
-This phase's goal is *"scripts move to `.claude/scripts/<product>/` **and tests to
-`products/<name>/tests/`**"*, and REQ-07's acceptance says the same. **The scripts half is done
-for all five products. The tests half has not been started for any of them** — all 22 `.bats`
-files still live in `tests/` at the repo root, and `products/NAME/tests/` does not exist.
+Flagged honestly at ckpt-4 close: the phase goal and REQ-07 both also required tests under
+`products/<name>/tests/`, and that half was never started — all 22 `.bats` files were still in
+`tests/`. Drift, not a decision.
 
-This was not a decision, it was a drift: ckpt 1 deferred council's fixtures for a real reason
-(closed Phase 00 pins two of them as REQ-01 evidence), and the per-checkpoint test move was never
-picked up again after that. CI already carries `bats -r` and a test-count floor, added in
-anticipation of exactly this move, so the discovery side is ready.
+**Ashiq's call, 2026-07-19: option (b) — amend REQ-07, keep the suite centralised.** Recorded as
+**ADR-0021**, with REQ-07's row amended in PLAN.md and the goal line above corrected.
 
-**Do not close Phase 03 without resolving this.** Two honest options, Ashiq's call:
-(a) a ckpt 5 that relocates the bats files per product — mechanical but touches `test_helper.bash`
-paths, CI discovery and the count floor; or (b) amend REQ-07 to keep tests centralised in `tests/`,
-with the reason recorded, since a single flat suite is what makes the CI-authority model cheap.
-Closing the phase with the row silently unticked is the one thing that is not allowed.
+The deciding fact was verified rather than argued: a full `sync-to-project.sh TARGET` ships **zero**
+`.bats` files, and no product manifest carries a `tests` key — the resolver has no concept of a test
+as payload. REQ-07's outcome is *"products have physical boundaries"*, and a boundary matters where
+something crosses it. Tests never do. Relocating them would have changed nothing a consumer can
+observe, while fragmenting `bats -r tests/` — the single cheap invocation the CI-authority model
+adopted this same phase depends on — and orphaning the genuinely cross-product suites (`sync.bats`
+tests *all* products' installation and belongs to no one product).
+
+Revisit trigger lives in ADR-0021: if a product is ever physically extracted to its own repo
+(ADR-0016, demand-triggered), its tests go with it — carried by the extraction, not by a re-home.
 
 ## Verification plan
 
