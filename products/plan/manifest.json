@@ -17,9 +17,9 @@
     ".claude/agents/product-challenger.md"
   ],
   "scripts": [
-    ".claude/scripts/kickoff-lint.mjs",
-    ".claude/scripts/arc-evidence.sh",
-    ".claude/scripts/arc-bytediff.sh"
+    ".claude/scripts/plan/kickoff-lint.mjs",
+    ".claude/scripts/plan/arc-evidence.sh",
+    ".claude/scripts/plan/arc-bytediff.sh"
   ],
   "docs": [
     { "src": "docs/build-playbook.md", "dest": "docs/build-playbook.md" },

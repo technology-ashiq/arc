@@ -1,0 +1,20 @@
+=== Phase 03 ckpt 3 (plan + qa + git, batched per ADR-0018) ===
+local affected-file run: sync 22/22 · products 34/34 · kickoff-lint 37/37 · evidence 6/6 · bytediff 11/11 = 110
+full 247 x 3 OS is CI's job (PLAN: CI is the authority)
+
+=== moved plan scripts, smoke-run from .claude/scripts/plan/ ===
+-- kickoff-lint --
+kickoff-lint: all checks passed ✔
+-- arc-evidence (verifies the ckpt-2 bundle => ../core/common.sh resolves) --
+arc-evidence: bundle verified (/e/Work_Hub/01_Automemory/arc/docs/evidence/ckpt-2-core/phase-03)
+-- arc-bytediff (usage) --
+usage: arc-bytediff.sh {verify-move <old> <new> [--ref REF] | verify-moves <pairs-file>}
+
+=== qa + git: manifest-only products, finalized ===
+qa: 3 commands, 2 agents, 0 scripts
+git: 4 commands, 0 agents, 0 scripts
+
+=== product-lint ===
+product-lint: all manifests valid
+=== dangling-reference check across all 22 commands + hooks + gates + ci ===
+(no DANGLING lines = clean)

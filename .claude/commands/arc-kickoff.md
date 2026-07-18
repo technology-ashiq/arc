@@ -76,7 +76,7 @@ perfect one. In order:
 7. **Create `PROGRESS.md`**: phase table (capability | appetite | status), done-log,
    appetite-burn line (X of Y days used), and a `## Now` section ("current position →
    next step").
-8. **Self-check gate:** run `node .claude/scripts/kickoff-lint.mjs`. Fix and rerun until
+8. **Self-check gate:** run `node .claude/scripts/plan/kickoff-lint.mjs`. Fix and rerun until
    it passes — the script's verdict is the gate, prose assurances don't count.
    **(8.5) Simulation gate (M/L):** spawn **plan-simulator** — it reads ONLY PLAN.md +
    phase-00-spec.md, the executor's real information set. BLOCKERS > 0 → fix each (spec

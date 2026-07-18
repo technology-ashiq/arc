@@ -3,7 +3,7 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-EV() { echo "$ARC_ROOT/.claude/scripts/arc-evidence.sh"; }
+EV() { echo "$ARC_ROOT/.claude/scripts/plan/arc-evidence.sh"; }
 
 @test "evidence: bundle assembles a manifest and gathers present artifacts" {
   _arc_sandbox

@@ -214,7 +214,7 @@ main session writes, fresh agents attack, scripts decide. Full spec: `docs/kicko
 - [ ] 3-layer tracker set up (`PLAN.md` / per-phase spec / `PROGRESS.md`).
 - [ ] Resilience baked in (retries, failover, cost cap, resume, alerts, clear errors).
 - [ ] README quickstart that actually runs offline in minutes ("10-minute onboarding" test).
-- [ ] **Lint gate**: `node .claude/scripts/kickoff-lint.mjs` passes — the script is the
+- [ ] **Lint gate**: `node .claude/scripts/plan/kickoff-lint.mjs` passes — the script is the
       gate, prose isn't. v3.5 substance groups run WARN-first until a retro promotes them —
       **v4 F1**: promotion is evidence-driven (fixture-proven + ≥3 clean dogfood runs logged in
       `docs/trial-ledger.md`), and lint prints a `[trial-status]` footer of live-vs-trial gates.

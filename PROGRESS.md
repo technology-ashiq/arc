@@ -63,7 +63,20 @@ twin mangled `\c`/`\a` as escapes (restored from git, redone with a literal edit
 (the list above is why). **Decision: plan + qa + git batch into ONE checkpoint; review stays separate**
 (~315-ref `arc-scan/` subtree, earns its own gate run and rollback point).
 
-**Next: checkpoint 3 — plan + qa + git** (batched), then review last. **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
+**Checkpoint 3 — plan + qa + git DONE 2026-07-19** (batched per the ADR-0018 amendment). 3 scripts
+→ `.claude/scripts/plan/` (`kickoff-lint.mjs`, `arc-evidence.sh`, `arc-bytediff.sh` — the gate
+verifying its own relocation). qa and git are manifest-only, finalized; zero dangling refs across all
+22 commands. Byte-diff green on all 3. Golden: 2 pure moves + 1 moved-then-edited (`arc-evidence.sh`
+gained a `..` for `../core/common.sh`) + 6 edited, 3 old paths gone — reconciles.
+
+The ckpt-2 lessons paid off immediately: the root-resolution landmine was checked **before** moving
+(`kickoff-lint` is cwd-based, `arc-evidence` uses `git rev-parse`, `arc-bytediff` has no root logic —
+all safe, no repeat of the ckpt-2 breakage), and the path sweep explicitly excluded `tests/fixtures/`
+and the golden manifest, so neither was silently rewritten this time. 110 affected-file tests local.
+
+**Next: checkpoint 4 — review** (the last one): `arc-scan/` tree, docs-drift, coverage/rls/version
+gates → `scripts/review/`; ~315 refs, kept separate on purpose so it gets its own gate run and
+rollback point. Then the phase-final item (CI test discovery + tracker) and `/arc-phase-done 3`. **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
 + a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
 per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
 (6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from

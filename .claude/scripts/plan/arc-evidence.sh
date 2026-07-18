@@ -11,7 +11,7 @@
 # Exit: 0 ok | 2 verify failed (missing bundle or hash mismatch) | 1 usage error
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-. "$HERE/core/common.sh"
+. "$HERE/../core/common.sh"
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 cmd="${1:-}"; shift || true

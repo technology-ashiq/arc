@@ -1,7 +1,7 @@
 ---
 description: Close a phase per the build playbook's Definition of Done — or refuse.
 argument-hint: [phase-number]
-allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/arc-evidence.sh:*), Bash(node .claude/scripts/kickoff-lint.mjs:*)
+allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/plan/arc-evidence.sh:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*)
 ---
 
 Verify phase $1 against its spec `phases/phase-NN-spec.md` (NN = zero-padded $1, e.g.
@@ -17,7 +17,7 @@ over assertion — show output, don't claim.
    If this phase owns an external dep: contract tests must now pass against the REAL
    impl, not just the fake.
 4. Check every exit criterion in the phase spec — tick or list what's missing.
-5. **Plan drift check:** run `node .claude/scripts/kickoff-lint.mjs`. A phase can't close
+5. **Plan drift check:** run `node .claude/scripts/plan/kickoff-lint.mjs`. A phase can't close
    on a drifted plan (missing spec, unmapped REQ, broken ADR index) — fix the plan first.
    **Trigger scan:** read PLAN's Assumptions ledger and every indexed ADR's **Revisit
    trigger** — a FIRED assumption not yet routed through `/arc-change`, or a revisit
@@ -30,8 +30,8 @@ Do not update the tracker for an unfinished phase.
 
 If all pass:
 6. **Write the evidence bundle** (Phase 02+, ADR-0002). Run
-   `bash .claude/scripts/arc-evidence.sh bundle $1` then
-   `bash .claude/scripts/arc-evidence.sh verify $1`. This commits `docs/evidence/phase-NN/`
+   `bash .claude/scripts/plan/arc-evidence.sh bundle $1` then
+   `bash .claude/scripts/plan/arc-evidence.sh verify $1`. This commits `docs/evidence/phase-NN/`
    (scan verdict, review stamps, coverage, + a sha256 manifest). **A phase cannot close if
    `verify` fails** — the bundle is the tamper-evident proof the gates actually passed.
 7. Update `PROGRESS.md`: flip the phase row to ✅, add a done-log entry (what shipped +

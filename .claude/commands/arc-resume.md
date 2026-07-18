@@ -1,13 +1,13 @@
 ---
 description: Reconstruct where we left off — position, health, scoreboard, risks, next action — from the committed tracker + last snapshot. Read-only: resume never writes state.
-allowed-tools: Read, Glob, Grep, Bash(git status), Bash(git branch:*), Bash(git log:*), Bash(node .claude/scripts/kickoff-lint.mjs:*)
+allowed-tools: Read, Glob, Grep, Bash(git status), Bash(git branch:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*)
 ---
 
 Reconstruct session state. Resume is a dashboard, not an essay — gather facts first,
 then report in EXACTLY the 5-block format below (each block 1–3 lines, no padding).
 
 **Gather (deterministic first):**
-1. **Health:** run `node .claude/scripts/kickoff-lint.mjs` (plan drift since last session)
+1. **Health:** run `node .claude/scripts/plan/kickoff-lint.mjs` (plan drift since last session)
    and `git status` + current branch. Dirty tree, lint failures, or build work sitting on
    `main` (belongs on `feat/*`) are flags, not footnotes.
 2. **Position:** read `PROGRESS.md` `## Now` (single source of truth), the latest

@@ -1,0 +1,4 @@
+arc-bytediff: OK  .claude/scripts/arc-bytediff.sh -> .claude/scripts/plan/arc-bytediff.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/arc-evidence.sh -> .claude/scripts/plan/arc-evidence.sh  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/kickoff-lint.mjs -> .claude/scripts/plan/kickoff-lint.mjs  (content+mode preserved)
+arc-bytediff: verified 3 move(s) -- all preserved
