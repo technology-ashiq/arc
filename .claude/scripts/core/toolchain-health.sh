@@ -2,8 +2,8 @@
 # === Toolchain health check ===  Single source of truth for "is my toolchain ready?"
 #
 #   Full report (Markdown table + copy-paste fixes) on demand:  /arc-toolcheck
-#   Run it directly:                                            bash .claude/scripts/toolchain-health.sh
-#   The SessionStart hook calls it brief (one line):            bash .claude/scripts/toolchain-health.sh --brief
+#   Run it directly:                                            bash .claude/scripts/core/toolchain-health.sh
+#   The SessionStart hook calls it brief (one line):            bash .claude/scripts/core/toolchain-health.sh --brief
 #
 # Full output = a Markdown table (Tool | Status | Action needed | Details) + a "Quick fix" block
 # (paste to install the missing ones) + a "You do these" list (steps only a human can do).

@@ -23,7 +23,7 @@ rebuilding and **re-pinning the image digest** (below).
 
 ## Build / verify / scan
 
-All via `.claude/scripts/arc-tools-image.sh` (docker required — CI tier only):
+All via `.claude/scripts/review/arc-tools-image.sh` (docker required — CI tier only):
 
 ```bash
 arc-tools-image.sh ref              # resolved image ref (override: $ARC_TOOLS_IMAGE)

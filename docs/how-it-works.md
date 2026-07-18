@@ -38,7 +38,7 @@ Root files (shared infra): .mcp.json (MCP servers) · .env.example (→ .env.loc
    mid-command) and a deploy-guard (re-runs tests before any deploy; failing tests = blocked).
    Gate strictness is **block-by-default**: the `arc.profile` key (`starter`/`standard`/`strict`)
    in `settings.json` switches coverage, docs, and scan gates as a set — resolved by
-   `.claude/scripts/arc-profile.sh`, which each gate consults for its warn-vs-block mode.
+   `.claude/scripts/core/arc-profile.sh`, which each gate consults for its warn-vs-block mode.
 
 3. **Loads on demand.** Keeps the context window lean:
    - `commands/` — **you** invoke (`/arc-ship`, `/arc-commit`, `/arc-pr`, `/arc-review`, `/arc-fix-issue`)

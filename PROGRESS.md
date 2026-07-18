@@ -6,117 +6,31 @@
 
 ## Now
 
-**Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
-ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
-read it instead of guessing from file presence. (1) resolver `--registry` mode + registry-backed
-`/arc --status` (REQ-05); (2) **both** twins write the registry in bare **and** `--products` paths (ps1
-UTF8-no-BOM, sh capture-then-write, REQ-08); (3) `review-ledger.sh` derives `VALID_KINDS` from the registry
-(review→scan/code/security/docs, qa→qa/design), hardcoded fallback kept; (4) a tree-diff invariant proves
-installing all products reproduces the mold's `.claude/` exactly. Golden gate **excludes** `arc-registry.json`
-(volatile commit) so REQ-02 stays byte-identical. **236/236 bats green**, reviewed (ship — 2 Low + 2 Nits
-fixed fix-first, glob hole pinned), evidence bundle verified. **Bonus:** the new tree-diff invariant caught
-a pre-existing REQ-04-class leak on first use — sync copied `.claude/worktrees/` (transient git worktrees)
-into targets; fixed in both twins + pinned. REQ-05 + REQ-08 validated. **Actual: ~1 session vs 1-week
-appetite — under.** · amendments: 1 (phase-start /arc-change refinement) · reopened: n.
+**Phase 03 CLOSED ✅ (2026-07-19).** Physical re-homing complete: `.claude/scripts/` holds nothing
+outside a product directory — `core/` · `council/` · `plan/` · `review/`. 36 scripts, 42 gated moves,
+four checkpoints, every one with a byte-diff transcript and a checkpoint-private evidence bundle.
+248/248 bats on 3 OS + ci-tier. REQ-07 validated (as amended by ADR-0021 — scripts only; tests stay
+centralised because a full sync ships zero `.bats` files). Reviewed fix-first: 2 warnings from
+`/arc-review` resolved before close, including a fifth byte-diff hole (a file moved *and* rewritten
+stages as D+A, never R, and slipped the completeness sweep) now pinned as a red fixture.
 
-**Phase 03 — physical re-homing IN PROGRESS** (`phases/phase-03-spec.md`, 1.5-week appetite; **full
-re-home per plan**, ADR-0018 — the registry-only cut was proposed then reverted, Ashiq chose the full
-re-home 2026-07-18). **Checkpoint 0 DONE + committed (`7d5c907`):** the byte-diff gate — `arc-bytediff.sh
-verify-move <old> <new>` proves a `git mv` relocated a file without altering it (LF-normalized SHA-256 +
-git mode via plumbing, robust on Windows); 7/7 adversarial-tested, mapped to the plan product, golden
-regenerated. **Checkpoint 0 REOPENED 2026-07-18** — a 10-agent adversarial pass on the gate (the one PLAN
-non-negotiable #49 mandates) found 4 holes, so by our own rule the gate is not done: the pairs file drops
-its last entry without a trailing newline and still exits 0; `[ -e ]` is case-blind under
-`core.ignorecase=true` and the mode check then masks it; no completeness check; no old-path-removed check.
-Fixed + pinned before ckpt 1 ran.
+**Next up: Phase 04 — dogfood** (`phases/phase-04-spec.md`, 0.5-week appetite). Install council-alone
+into one real external repo and core+plan into another, run a real session in each, commit the
+evidence bundles (REQ-09). This is the first time arc is installed anywhere other than its own repo.
 
-**Checkpoint 0 hardening DONE 2026-07-18.** All four holes fixed and pinned as red fixtures
-(bytediff.bats 7→11). product-lint now mirrors sync's EXCLUDES (535 phantom errors → 0, live worktree
-untouched), gained its first CI step, and bats gained `-r` + a 247-test floor before ckpt 2 relocates
-any test.
+**Phase 04 carries a hard deadline from ADR-0020:** Phase 03 re-homed every product, so any
+already-installed consumer now carries stale *executable* copies of the old flat scripts — they
+still run, and they are frozen. The report half of the remedy is **REQ-10, due before Phase 04
+closes** (`--prune-report` listing unowned target files, exit 0). No delete path, in either half —
+non-negotiable #51. The attic half is REQ-11 in Phase 05. If Phase 04 closes without the report
+half, ADR-0020 says reopen it rather than slide the deadline again.
 
-**Checkpoint 1 — council DONE 2026-07-18.** 3 scripts → `.claude/scripts/council/` (dest confirmed,
-Ashiq 2026-07-18). Fixtures + eval harness **deferred** — they're pinned by closed Phase 00 as REQ-01 evidence.
-Council-lint's `:356`/`:384` pins deliberately untouched (commands/agents don't move; the old spec line
-saying otherwise was dead text — corrected in spec, PLAN hot-zones and ADR-0018). Byte-diff gate green:
-3 moves verified, all three blob hashes byte-identical across the move, modes 100644→100644, completeness
-check clean. Golden regen landed the predicted **5**-line signature — the 3 scripts change PATH ONLY with
-SHA-256 unchanged (the pure-move proof), plus a hash change each for `arc-council.md` (6 refs) and
-`docs/council/README.md` (1). Zero dangling command-body refs. 247/247 bats, product-lint + version-gate
-+ kickoff-lint green, evidence bundle verified at `docs/evidence/ckpt-1-council/phase-03`.
+Appetite burn: **~5 of ~30 days (~17%)** — four phases closed, every one under appetite (Phase 03:
+~2 days against 1.5 weeks). Kill tripwire (50%) is far off; no scope-cut conversation triggered.
 
-**Checkpoint 2 — core DONE 2026-07-18.** 10 files → `.claude/scripts/core/` (8 scripts + `common.sh`
-out of `arc-scan/lib/` + `statusline.sh` out of `.claude/`). Byte-diff gate green on all 10, and
-**4 of them are `100755`** — the mode half of the gate is finally exercised, which council could not
-do. Golden: 6 pure moves (hash identical) + 4 moved-then-edited + 25 edited in place, all accounted
-for. 92 affected-file tests local, full 247×3-OS on CI.
-
-**What the gate could NOT catch, and the per-product structure did** — all byte-perfect moves that
-still broke things: three scripts resolved the repo root by counting `..` segments and broke one
-level deeper (`product-lint.mjs`, `arc-products.mjs`, `arc-status.sh` — now walk up to the dir
-holding `products/`, so ckpt 3/4 cannot repeat it); `sync-to-project.sh`'s RESOLVER pointed at the
-old path so a bare sync failed outright; a path sweep silently rewrote two self-contained test
-fixtures **and the golden manifest itself** (restored, regenerated honestly); and a `sed` on the ps1
-twin mangled `\c`/`\a` as escapes (restored from git, redone with a literal edit).
-
-**ADR-0018 batching trigger evaluated:** gate caught zero issues ✅ but ceremony did NOT dominate ❌
-(the list above is why). **Decision: plan + qa + git batch into ONE checkpoint; review stays separate**
-(~315-ref `arc-scan/` subtree, earns its own gate run and rollback point).
-
-**Checkpoint 3 — plan + qa + git DONE 2026-07-19** (batched per the ADR-0018 amendment). 3 scripts
-→ `.claude/scripts/plan/` (`kickoff-lint.mjs`, `arc-evidence.sh`, `arc-bytediff.sh` — the gate
-verifying its own relocation). qa and git are manifest-only, finalized; zero dangling refs across all
-22 commands. Byte-diff green on all 3. Golden: 2 pure moves + 1 moved-then-edited (`arc-evidence.sh`
-gained a `..` for `../core/common.sh`) + 6 edited, 3 old paths gone — reconciles.
-
-The ckpt-2 lessons paid off immediately: the root-resolution landmine was checked **before** moving
-(`kickoff-lint` is cwd-based, `arc-evidence` uses `git rev-parse`, `arc-bytediff` has no root logic —
-all safe, no repeat of the ckpt-2 breakage), and the path sweep explicitly excluded `tests/fixtures/`
-and the golden manifest, so neither was silently rewritten this time. 110 affected-file tests local.
-
-**Checkpoint 4 — review DONE 2026-07-19.** 20 files → `.claude/scripts/review/` (the whole
-`arc-scan/` subtree + docs-drift + coverage/rls gates + arc-tools-image). Byte-diff green on all 20,
-8 of them `100755`. **`.claude/scripts/` now holds nothing outside a product dir** — `core/`,
-`council/`, `plan/`, `review/`. That is the phase goal's scripts half, complete for all five products.
-
-The pre-check paid again: every review script resolves root via `git rev-parse` and every
-`$ROOT/.claude/scripts/core/...` reference is repo-root-absolute, so the move shifted only the nine
-`$HERE`-relative `common.sh` sources — depth math done up front, verified by resolving each path on
-disk rather than assuming. Golden reconciles: 10 pure moves + 10 moved-then-edited + 2 edited in
-place = 20 old paths gone. The gate's own post-edit `content altered` list named exactly the same 10
-files as the golden classification — two independent views agreeing. 85 affected-file tests local.
-
-**Gap RESOLVED 2026-07-19 — REQ-07 amended (ADR-0021), not executed as a ckpt 5.** The phase goal and
-REQ-07 also required tests under `products/<name>/tests/`; that half was never started (drift, caught
-at ckpt-4 close rather than left silently unticked). Ashiq chose to amend rather than relocate.
-
-Deciding fact, verified not argued: a full sync ships **zero** `.bats` files and no manifest has a
-`tests` key — the resolver has no concept of a test as payload. REQ-07's outcome is "products have
-physical boundaries", and tests never cross that boundary, so the clause was drawing a boundary
-around something that never leaves the repo. Relocating would also have fragmented `bats -r tests/`
-(the single cheap invocation the CI-authority model depends on) and orphaned the cross-product suites
-— `sync.bats` tests *all* products' installation and belongs to no one product. Revisit trigger: a
-real physical extraction (ADR-0016) carries a product's tests with it.
-
-**Phase 03 is now closeable.** All five products re-homed, every checkpoint gated and evidenced;
-next action is `/arc-phase-done 3`. **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
-+ a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
-per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
-(6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from
-outside arc-scan/ (`arc-evidence.sh:14`, `test_helper.bash`) — patch every sourcer in the core commit.
-Ckpt 2 is the first move of files that are genuinely `100755`, so the mode half of the byte-diff gate
-gets exercised for real there; council could not rehearse it (all three were `100644`).
-
-**Open decision — ADR-0020 (proposed):** re-homed scripts leave an *executable* stale copy in consumer
-trees (all sync paths additive; deletion forbidden by non-negotiable #51; REQ-10 owns it in Phase 5).
-Recommendation: instrument in Phase 3, land the report half before Phase 4 closes — that's when REQ-09
-puts the first real consumers in play. Awaiting Ashiq.
-
-Appetite burn: **~3 of ~30 days (~10%)** — Phases 00+01+02 each closed in ~1 session, far under their
-1.5w/0.5w/1w appetites. Kill tripwire (50%) is far off.
-
-Setup needed from user: none for Phase 03 (all local). Phase 04 will need venturemind + InvoiceFly access
-and the council-vs-core+plan target assignment.
+Setup needed from user: **Phase 04 needs real input** — access to venturemind + InvoiceFly (or two
+substitute repos), and the call on which gets council-alone vs core+plan. Everything through Phase 03
+was local; Phase 04 is the first that touches repos outside this one.
 
 ## Phases
 
@@ -125,13 +39,42 @@ and the council-vs-core+plan target assignment.
 | 00 | Steel thread: manifests + resolver + product-lint + hostile fixtures + --products in both twins + twin-leak fixes + council-only install + /arc dashboard | 1.5 weeks | ✅ done | 2026-07-17 |
 | 01 | Composable hooks: event.d dispatcher + fragments, graceful partial-install degradation, <30s | 0.5 weeks | ✅ done | 2026-07-17 |
 | 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ✅ done | 2026-07-17 |
-| 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ⬜ not started | |
+| 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ✅ done | 2026-07-19 |
 | 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ⬜ not started | |
 | 05 | Prune-report + attic, README/usermanual rewrite, TRIAL promotions, retro | 0.5 weeks | ⬜ not started | |
 
 Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggered next cycle (ADR-0016).
 
 ## Done log
+
+- **2026-07-19 · Phase 03 · Physical re-homing.** Every script left the flat `.claude/scripts/`
+  for a product directory — `core/` · `council/` · `plan/` · `review/` — 36 scripts across four
+  checkpoints, each one `git mv` + same-commit path updates + a byte-diff gate transcript + a
+  checkpoint-private evidence bundle. 42 moves gated, all content+mode preserved; ckpt 2 and 4
+  finally exercised the mode half (12 of the moved files are `100755`). `common.sh` left `arc-scan/`
+  because the review product may not own a library the whole repo sources, and every sourcer
+  repo-wide was patched at four different relative depths. `statusline.sh` moved too, with
+  `settings.json` repointed and its render verified byte-identical.
+  **248/248 bats on 3 OS + ci-tier green.**
+  **Actual: ~2 days vs a 1.5-week appetite — well under.** · amendments: 4 · reopened: **y** (ckpt 0).
+
+  The honest part: the byte-diff gate was **not** what protected this phase. Every real break it
+  shipped past was byte-perfect — three scripts that resolved the repo root by counting `..` and
+  died one level deeper, `sync-to-project.sh`'s resolver pointing at a moved file so a bare sync
+  failed outright, a path sweep that rewrote two self-contained fixtures **and the golden manifest
+  itself**, and a `sed` that mangled `\c`/`\a` in the ps1 twin. Smoke-running each moved script is
+  what caught them, which is why that is now in the per-checkpoint contract and why the PLAN
+  assumption "the byte-diff gate is sufficient protection" is marked FALSIFIED rather than left to
+  rot. The gate itself was reopened twice: four adversarial holes before ckpt 1 (non-negotiable
+  #49's mandated pass, which had never actually been run), and a fifth found by code review at
+  phase close — a file moved *and* rewritten past git's similarity threshold stages as D+A, never
+  R, so it slipped the completeness sweep entirely. All five pinned as red fixtures.
+  Amendments: ADR-0020 (consumer stale copies → REQ-10 split, report half pulled to Phase 4),
+  ADR-0018 batching (plan+qa+git merged into one checkpoint after the trigger was evaluated, not
+  assumed), ADR-0021 (REQ-07 amended — tests stay centralised, because a full sync ships zero
+  `.bats` files so the clause drew a boundary around something that never leaves the repo), and
+  the test-policy change making CI the authority for the full suite after measuring the local
+  Windows suite at 8.9× the ubuntu leg for the same tests.
 
 - **2026-07-17 · Phase 02 · Registry-aware core.** Targets now carry `.claude/arc-registry.json`
   ground truth and consumers read it instead of guessing from file presence. The single Node resolver

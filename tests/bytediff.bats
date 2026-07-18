@@ -138,6 +138,29 @@ _seed_move() {  # <content>
   [[ "$output" == *"still present"* ]]
 }
 
+@test "verify-moves: a move git does NOT classify as a rename is still caught (hole 5)" {
+  # Found by code review of the hardening itself. The completeness sweep trusted
+  # `--diff-filter=R -M`, so a file moved AND rewritten past git's ~50% similarity
+  # threshold is staged as D + A, never R, and never enters the sweep at all.
+  # The guarantee inverts: the MORE the content was altered, the less likely git calls
+  # it a rename, and the more likely it escapes the gate entirely.
+  _arc_sandbox
+  mkdir -p a
+  printf 'keep me unchanged\n' > a/keep.sh
+  printf 'original victim content\nline two\nline three\n' > a/victim.sh
+  git add -A && git commit -qm seed
+  mkdir -p b
+  git mv a/keep.sh b/keep.sh
+  git rm -q a/victim.sh
+  printf 'COMPLETELY DIFFERENT CONTENT\nnothing in common at all\n' > b/victim.sh
+  git add -A
+  # pairs file honestly lists the one move the operator knew about
+  printf 'a/keep.sh\tb/keep.sh\n' > moves.tsv
+  run bash "$BD" verify-moves moves.tsv
+  [ "$status" -eq 2 ]                       # victim.sh rode along unverified
+  [[ "$output" == *"uncovered"* ]]
+}
+
 @test "verify-move: new path whose case differs from git's tracked path fails (hole 4)" {
   _arc_sandbox
   mkdir -p .claude/scripts

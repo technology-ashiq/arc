@@ -4,10 +4,10 @@
  * Zero deps. Exit 0 = table rendered (or nothing to score); exit 1 = malformed outcome / bad args.
  *
  * Modes:
- *   node .claude/scripts/council-calibrate.mjs [dir]
+ *   node .claude/scripts/council/council-calibrate.mjs [dir]
  *     Scoring table: per-confidence-bucket hit-rate + an overall Brier score. Default dir:
  *     docs/council/sessions. (ADR-0009 buckets: High=0.85, Medium=0.65, Low=0.5.)
- *   node .claude/scripts/council-calibrate.mjs --overdue [dir] [--today YYYY-MM-DD]
+ *   node .claude/scripts/council/council-calibrate.mjs --overdue [dir] [--today YYYY-MM-DD]
  *     List sessions that still NEED an outcome recorded: their latest Review-by is before today AND
  *     they have no terminal (HIT/MISS) outcome yet. Used by /arc-council review.
  *
