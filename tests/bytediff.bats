@@ -88,3 +88,68 @@ _seed_move() {  # <content>
   [ "$status" -eq 2 ]
   [[ "$output" == *"INTEGRITY FAILURE"* ]]
 }
+
+# --- adversarial pass 2026-07-18 (PLAN non-negotiable #49) -------------------------------
+# Four holes found by a construct-a-breaking-input pass against a gate that passed its own
+# 7 tests. Each is pinned below as a red fixture. The shape of every one is the same and is
+# the reason this pass was mandated: the gate reported SUCCESS while doing less than claimed.
+
+@test "verify-moves: final pair without a trailing newline is NOT silently dropped (hole 1)" {
+  _arc_sandbox
+  mkdir -p .claude/scripts
+  printf 'A\n' > .claude/scripts/a.sh; printf 'B\n' > .claude/scripts/b.sh
+  git add -A && git commit -qm seed
+  mkdir -p .claude/scripts/core
+  git mv .claude/scripts/a.sh .claude/scripts/core/a.sh
+  git mv .claude/scripts/b.sh .claude/scripts/core/b.sh
+  # pairs file with NO trailing newline -- `read` returns nonzero at EOF and the loop body
+  # never runs for the final pair, so the gate skipped it AND said "all preserved".
+  printf '.claude/scripts/a.sh\t.claude/scripts/core/a.sh\n.claude/scripts/b.sh\t.claude/scripts/core/b.sh' > moves.tsv
+  printf 'TAMPER\n' >> .claude/scripts/core/b.sh            # break ONLY the final pair
+  run bash "$BD" verify-moves moves.tsv
+  [ "$status" -eq 2 ]                                        # must be caught, not skipped
+  [[ "$output" == *"verified 2 move(s)"* ]]                  # and both must have been counted
+}
+
+@test "verify-moves: a staged rename missing from the pairs file fails (hole 2: completeness)" {
+  _arc_sandbox
+  mkdir -p .claude/scripts
+  printf 'A\n' > .claude/scripts/a.sh; printf 'B\n' > .claude/scripts/b.sh
+  git add -A && git commit -qm seed
+  mkdir -p .claude/scripts/core
+  git mv .claude/scripts/a.sh .claude/scripts/core/a.sh
+  git mv .claude/scripts/b.sh .claude/scripts/core/b.sh
+  printf '.claude/scripts/a.sh\t.claude/scripts/core/a.sh\n' > moves.tsv   # b.sh OMITTED
+  run bash "$BD" verify-moves moves.tsv
+  [ "$status" -eq 2 ]                       # the gate must notice it was handed an incomplete list
+  [[ "$output" == *"uncovered"* ]]
+}
+
+@test "verify-move: old path still present (cp instead of mv) fails (hole 3)" {
+  _arc_sandbox
+  mkdir -p .claude/scripts
+  printf 'x\n' > .claude/scripts/x.sh
+  git add -A && git commit -qm seed
+  mkdir -p .claude/scripts/core
+  cp .claude/scripts/x.sh .claude/scripts/core/x.sh          # COPY -- the old file survives
+  git add -A
+  run bash "$BD" verify-move .claude/scripts/x.sh .claude/scripts/core/x.sh
+  [ "$status" -eq 2 ]                                        # content matches, but it was not a MOVE
+  [[ "$output" == *"still present"* ]]
+}
+
+@test "verify-move: new path whose case differs from git's tracked path fails (hole 4)" {
+  _arc_sandbox
+  mkdir -p .claude/scripts
+  printf 'x\n' > .claude/scripts/x.sh
+  git add -A && git commit -qm seed
+  mkdir -p .claude/scripts/Core                              # WRONG case
+  git mv .claude/scripts/x.sh .claude/scripts/Core/x.sh
+  # Ask about the lowercase path the operator *meant*. On a case-insensitive filesystem
+  # (core.ignorecase=true, the owner's box) `[ -e ]` resolves it, the index lookup returns
+  # empty, and the mode check then falls back to oldmode -- a clean OK for a path git does
+  # not track. On a case-sensitive CI leg it is simply missing. Both must be exit 2.
+  run bash "$BD" verify-move .claude/scripts/x.sh .claude/scripts/core/x.sh
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"case"* || "$output" == *"missing"* ]]
+}

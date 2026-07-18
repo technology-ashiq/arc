@@ -92,8 +92,25 @@ jobs:
       - name: Version gate
         run: bash .claude/scripts/arc-scan/version-gate.sh
 
+      - name: Product manifests lint
+        # Had no CI step at all, so REQ-03's gate only ever ran against tests/fixtures/ --
+        # "product-lint green" was in the Phase-03 checkpoint contract but unenforced.
+        run: node .claude/scripts/product-lint.mjs
+
       - name: Run bats self-tests
-        run: bats --print-output-on-failure tests/
+        # -r is required BEFORE Phase 03 relocates tests into products/NAME/tests/: bats does
+        # not recurse without it, and on a directory holding no *.bats it prints 1..0 and
+        # exits 0 -- a moved-away suite would vanish from a green CI without a word.
+        run: bats -r --print-output-on-failure tests/
+
+      - name: Test-count floor
+        # A suite that silently shrinks is the failure mode -r alone cannot catch. Raise this
+        # number when tests are added; never lower it to make a red build green.
+        shell: bash
+        run: |
+          n="$(bats -r --count tests/)"
+          echo "bats discovered $n test(s)"
+          [ "$n" -ge 247 ] || { echo "::error::test count $n fell below the floor of 247"; exit 1; }
 
   # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
   # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker

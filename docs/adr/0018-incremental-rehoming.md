@@ -34,3 +34,17 @@ level down: retire procedure risk on the cheapest product before touching the sp
 Easier: diagnosing a red gate (diff = one product); stopping mid-phase with partial value
 banked. Harder: 5 gate runs instead of 1 (accepted — the gate is scripted). Phase-03-spec
 carries 5 exit checkpoints, one per product move.
+
+## Correction (2026-07-18, /arc-change)
+
+The Context above lists "council-lint.mjs pinned agent paths (lines 356/384)" among the paths
+Phase 3 rewrites. That is **wrong** and was inherited by `phases/phase-03-spec.md` and `PLAN.md`
+(both now corrected). Those two constants pin `.claude/commands/arc-council.md` and
+`.claude/agents/<name>.md` — runtime payload that does NOT move in Phase 3 (assumptions ledger
+row 1: Claude Code loads commands/agents only from fixed `.claude/` paths). Editing them would
+break a passing gate and would additionally fail the byte-diff gate as a same-file edit during a
+move. The decision (incremental, council first) is unaffected.
+
+The real ungated surface found by the ckpt-1 adversarial pass is the `/arc-council` command
+**body** — 6 script invocations that `council-lint.mjs:357-364` never parses, because it validates
+YAML frontmatter keys only.

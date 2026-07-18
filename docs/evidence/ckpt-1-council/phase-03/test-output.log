@@ -1,0 +1,27 @@
+arc-bytediff: OK  .claude/scripts/council-calibrate.mjs -> .claude/scripts/council/council-calibrate.mjs  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/council-juror.mjs -> .claude/scripts/council/council-juror.mjs  (content+mode preserved)
+arc-bytediff: OK  .claude/scripts/council-lint.mjs -> .claude/scripts/council/council-lint.mjs  (content+mode preserved)
+arc-bytediff: verified 3 move(s) -- all preserved
+--- modes (HEAD old vs index new) ---
+100644 blob 8ad4f3e6b93bda330bdf80d19647fb3a48590877	.claude/scripts/council-calibrate.mjs
+100644 blob bcb28cfb046547fc6096cc012a91fd68ac564870	.claude/scripts/council-juror.mjs
+100644 blob 6224110388139eb10a3efa82453489db413b494c	.claude/scripts/council-lint.mjs
+100644 8ad4f3e6b93bda330bdf80d19647fb3a48590877 0	.claude/scripts/council/council-calibrate.mjs
+100644 bcb28cfb046547fc6096cc012a91fd68ac564870 0	.claude/scripts/council/council-juror.mjs
+100644 6224110388139eb10a3efa82453489db413b494c 0	.claude/scripts/council/council-lint.mjs
+product-lint: all manifests valid
+=== Phase 03 checkpoint 1 (council) -- full serial bats, 22 files ===
+arc-profile 11 · arc-scan 14 · arc-tools-image 11 · baseline 6 · bytediff 11 · codeql 6
+evidence 6 · gates 14 · hooks-dispatch 11 · kickoff-lint 37 · portability 3 · products 34
+rls 5 · runtime 7 · scan-summary 4 · suppress 5 · sync 22 · toolcheck 6 · triage-llm 12
+trivy 8 · trufflehog 9 · zap 5   => 247 tests, 0 failures
+
+=== version-gate ===
+version-gate: OK -- VERSION 0.2.0 referenced in CHANGELOG.md
+
+=== kickoff-lint ===
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+kickoff-lint: all checks passed ✔
+
+=== dangling-reference check (new per-checkpoint contract item) ===
+(no DANGLING lines = every command-body script reference resolves)

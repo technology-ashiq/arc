@@ -88,11 +88,19 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   run bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" --products council
   [ "$status" -eq 0 ]
   [ -f "$TARGET/.claude/commands/arc-council.md" ]
-  [ -f "$TARGET/.claude/scripts/council-lint.mjs" ]
+  [ -f "$TARGET/.claude/scripts/council/council-lint.mjs" ]       # re-homed (Phase 03 ckpt 1)
+  [ -f "$TARGET/.claude/scripts/council/council-juror.mjs" ]
+  [ -f "$TARGET/.claude/scripts/council/council-calibrate.mjs" ]
+  [ ! -e "$TARGET/.claude/scripts/council-lint.mjs" ]       # and NOT at the pre-move flat path
   [ -f "$TARGET/.claude/scripts/arc-gates.sh" ]             # core rides along
   [ -f "$TARGET/.claude/scripts/arc-scan/lib/common.sh" ]  # core-owned (ADR-0018)
+  # Exact-path negatives go vacuous the moment ckpt 3/4 relocate these files -- they would
+  # then pass unconditionally, including in the exact leak they exist to catch. Assert the
+  # product's whole future directory is absent too, so the guard survives its own phase.
   [ ! -e "$TARGET/.claude/scripts/kickoff-lint.mjs" ]      # plan absent
+  [ ! -e "$TARGET/.claude/scripts/plan" ]
   [ ! -e "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]  # review absent
+  [ ! -e "$TARGET/.claude/scripts/review" ]
   [ ! -e "$TARGET/.claude/agents/qa-tester.md" ]           # qa absent
   [ ! -e "$TARGET/.claude/commands/arc-commit.md" ]        # git absent
   [ -d "$TARGET/docs/council/sessions/.juror" ]            # skeleton created
@@ -115,7 +123,9 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   ps="$(command -v pwsh 2>/dev/null || command -v powershell 2>/dev/null)" || skip "no PowerShell on this runner"
   "$ps" -NoProfile -File "$(cygpath -w "$ARC_ROOT/sync-to-project.ps1")" -Target "$(cygpath -w "$TARGET")" -Products council >/dev/null 2>&1 || true
   [ -f "$TARGET/.claude/commands/arc-council.md" ]
+  [ -f "$TARGET/.claude/scripts/council/council-lint.mjs" ]  # the twin must re-home identically
   [ -f "$TARGET/.claude/scripts/arc-gates.sh" ]
+  [ ! -e "$TARGET/.claude/scripts/council-lint.mjs" ]
   [ ! -e "$TARGET/.claude/scripts/kickoff-lint.mjs" ]
   [ ! -e "$TARGET/.claude/scripts/arc-scan/arc-scan.sh" ]
 }

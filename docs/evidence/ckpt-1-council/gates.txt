@@ -1,0 +1,15 @@
+=== Phase 03 checkpoint 1 (council) -- full serial bats, 22 files ===
+arc-profile 11 · arc-scan 14 · arc-tools-image 11 · baseline 6 · bytediff 11 · codeql 6
+evidence 6 · gates 14 · hooks-dispatch 11 · kickoff-lint 37 · portability 3 · products 34
+rls 5 · runtime 7 · scan-summary 4 · suppress 5 · sync 22 · toolcheck 6 · triage-llm 12
+trivy 8 · trufflehog 9 · zap 5   => 247 tests, 0 failures
+
+=== version-gate ===
+version-gate: OK -- VERSION 0.2.0 referenced in CHANGELOG.md
+
+=== kickoff-lint ===
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+kickoff-lint: all checks passed ✔
+
+=== dangling-reference check (new per-checkpoint contract item) ===
+(no DANGLING lines = every command-body script reference resolves)
