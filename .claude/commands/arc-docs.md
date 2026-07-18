@@ -8,7 +8,7 @@ Sync documentation to what you just shipped. Scope: **$ARGUMENTS** (default: dif
 
 1. Run the drift check first to see what is stale:
    ```bash
-   bash .claude/scripts/docs-drift.sh
+   bash .claude/scripts/review/docs-drift.sh
    ```
 2. Read every doc that could be affected -- `README*`, `docs/**`, `ARCHITECTURE*`, `CLAUDE.md`, `.claude/rules/*` -- and cross-reference against the diff.
 3. Update whatever drifted: API changes, new env vars (mirror into `.env.example`, key names only), new commands, changed behaviour. Apply the Diataxis lens (reference / how-to / tutorial / explanation) and note gaps you did not fill.

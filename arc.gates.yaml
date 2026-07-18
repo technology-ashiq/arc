@@ -15,13 +15,13 @@
 #   evidence - path to the artifact this gate produces (for evidence bundles)
 gates:
   - name: scan
-    check: bash .claude/scripts/arc-scan/arc-scan.sh --base main
+    check: bash .claude/scripts/review/arc-scan/arc-scan.sh --base main
     mode: profile
     tier: hook
     runtime: native
     evidence: .claude/state/scan/verdict.json
   - name: coverage
-    check: bash .claude/scripts/coverage-gate.sh
+    check: bash .claude/scripts/review/coverage-gate.sh
     mode: profile
     tier: hook
     runtime: native
@@ -33,13 +33,13 @@ gates:
     runtime: native
     evidence: .claude/state/reviews
   - name: docs
-    check: bash .claude/scripts/docs-drift.sh
+    check: bash .claude/scripts/review/docs-drift.sh
     mode: profile
     tier: hook
     runtime: native
     evidence: docs
   - name: rls
-    check: bash .claude/scripts/rls-gate.sh
+    check: bash .claude/scripts/review/rls-gate.sh
     mode: block
     tier: hook
     runtime: native

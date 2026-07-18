@@ -20,6 +20,12 @@ throwaway PLAN.md/phases layout (pre-mortem row 4).
 
 Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (2026-07-18):
 
+- **The byte-diff gate runs at move time, before any ref edit — its transcript is not
+  reproducible afterwards.** A checkpoint's own path fixes (depth-sensitive `$HERE` sources,
+  self-referencing paths) legitimately alter moved files, so re-running the gate after them
+  reports `content altered` by design. Capture the transcript immediately after `git mv`, then
+  edit. Cross-check the altered set against the golden's moved-then-edited list afterwards —
+  two independent views of the same fact, and they must agree (ckpt 4: both said the same 10).
 - **Reference integrity is checked separately from content integrity.** The byte-diff gate proves
   the moved bytes are unchanged; NOTHING proves the callers still resolve. Each checkpoint greps
   every `.claude/scripts/...` reference out of `.claude/commands/*.md` and asserts each path exists
@@ -51,9 +57,27 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
       fails byte-diff as a same-file edit. Record the verification, not an edit.
 - [x] core moved (gates/profile/ledger/toolcheck/freeze/common.sh → scripts/core/; common.sh relocated OUT of arc-scan/ — EVERY sourcer of common.sh repo-wide is patched in THIS checkpoint's commit, not only those inside the not-yet-moved arc-scan/ tree: `.claude/scripts/arc-evidence.sh:14` (plan-owned) and `tests/test_helper.bash:6,11,21` (used by 9 of 22 bats files, including evidence.bats and bytediff.bats) both source it from outside that tree, so the narrower reading would break the evidence tool during the checkpoint it must document)
 - [x] plan moved (kickoff-lint.mjs, arc-evidence.sh → scripts/plan/; kickoff-lint root assumptions verified)
-- [ ] review moved (arc-scan/ tree, docs-drift, coverage/rls/version gates → scripts/review/; scan-summary.bats grep + gates.yaml check commands updated)
+- [x] review moved (arc-scan/ tree, docs-drift, coverage/rls/version gates → scripts/review/; scan-summary.bats grep + gates.yaml check commands updated)
 - [x] qa + git manifests finalized; command frontmatter allowed-tools paths updated across all 21 commands
 - [ ] final: CI discovers every relocated test (no stale `tests/` path anywhere in workflow YAML); tracker updated (PROGRESS.md row ✅ + done-log)
+
+### OPEN GAP at ckpt-4 close — the tests half of REQ-07 was never executed
+
+This phase's goal is *"scripts move to `.claude/scripts/<product>/` **and tests to
+`products/<name>/tests/`**"*, and REQ-07's acceptance says the same. **The scripts half is done
+for all five products. The tests half has not been started for any of them** — all 22 `.bats`
+files still live in `tests/` at the repo root, and `products/NAME/tests/` does not exist.
+
+This was not a decision, it was a drift: ckpt 1 deferred council's fixtures for a real reason
+(closed Phase 00 pins two of them as REQ-01 evidence), and the per-checkpoint test move was never
+picked up again after that. CI already carries `bats -r` and a test-count floor, added in
+anticipation of exactly this move, so the discovery side is ready.
+
+**Do not close Phase 03 without resolving this.** Two honest options, Ashiq's call:
+(a) a ckpt 5 that relocates the bats files per product — mechanical but touches `test_helper.bash`
+paths, CI discovery and the count floor; or (b) amend REQ-07 to keep tests centralised in `tests/`,
+with the reason recorded, since a single flat suite is what makes the CI-authority model cheap.
+Closing the phase with the row silently unticked is the one thing that is not allowed.
 
 ## Verification plan
 

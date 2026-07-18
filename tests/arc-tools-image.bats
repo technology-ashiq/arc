@@ -8,7 +8,7 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 DOCKERFILE="$ARC_ROOT/docker/arc-tools/Dockerfile"
-IMGSCRIPT="$ARC_ROOT/.claude/scripts/arc-tools-image.sh"
+IMGSCRIPT="$ARC_ROOT/.claude/scripts/review/arc-tools-image.sh"
 
 @test "arc-tools image: Dockerfile exists" {
   [ -f "$DOCKERFILE" ]

@@ -15,8 +15,8 @@
 # documented boundary for a later slice.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../../core/common.sh
-. "$HERE/../../core/common.sh"
+# shellcheck source=../../../core/common.sh
+. "$HERE/../../../core/common.sh"
 . "$HERE/../lib/runtime.sh"
 # Respect an inherited ROOT (CI/tests); default to the repo toplevel.
 ROOT="${ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
