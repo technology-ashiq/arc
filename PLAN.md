@@ -19,7 +19,7 @@ five, while every existing arc command keeps working unchanged.
 - **Entry points:** `.claude/commands/arc-*.md` (kickoff/review/qa/council/git/core) · `.claude/agents/*.md` · sync-to-project.sh/.ps1
 - **Core modules:** arc-scan/ tree (adapters+lib, SARIF pipeline) · council-*.mjs (lint/juror/calibrate) · kickoff-lint.mjs (builder gate) · review-ledger.sh (findings ledger) · arc-gates.sh (flat YAML parser)
 - **Conventions:** zero-dep Node; flat awk-parseable YAML (arc.gates.yaml); ARC_*/JUROR_* env namespaces; degrade-loud SKIPPED; bash-3.2 portability (portability.bats enforces no mapfile/GNU flags)
-- **Hot zones (re-homing blast radius):** council-lint.mjs hardcoded agent paths (lines 356, 384) · scan-summary.bats grep (line 49) · command frontmatter allowed-tools refs · arc.gates.yaml check commands · kickoff-lint.mjs root/PLAN.md/phases assumptions
+- **Hot zones (re-homing blast radius):** scan-summary.bats grep (line 49) · command frontmatter allowed-tools refs · arc.gates.yaml check commands · kickoff-lint.mjs root/PLAN.md/phases assumptions · common.sh sourcers repo-wide (arc-evidence.sh:14, test_helper.bash:6/11/21 — NOT only the arc-scan/ tree) · `/arc-council` command BODY invocations (6, ungated: council-lint validates frontmatter only). **NOT a hot zone** (corrected 2026-07-18): council-lint.mjs:356/384 pin `.claude/commands/` and `.claude/agents/`, which do not move in Phase 3 — editing them breaks a passing gate. phase-03-spec and ADR-0018 carried the same stale claim; both corrected.
 - **Known bugs to fix in Phase 0:** .ps1 leaks `.claude/state/` (sh excludes correctly) · both twins leak `scheduled_tasks.lock` · settings.json clobbered on sync
 - **Do-not-touch:** docs/archive/ (v2 tracker parked 2026-07-17) · ADRs 0001–0013 remain live · `.claude/state/` per-project working dir
 - **Unknowns:** exact agent co-location per product (manifests settle it in Phase 0) · legacy state files (toolcheck-artifact-url lifecycle)
@@ -89,6 +89,7 @@ ADRs 0001–0013 (v2 initiative) remain live decisions about this codebase. New 
 | 0017 | v2 world-best initiative parked at ~13% burnt; resume trigger recorded | accepted |
 | 0018 | Phase 3 re-homing is incremental per product, council first | accepted |
 | 0019 | /arc dashboard ships minimal in Phase 0, registry-backed in Phase 2 | accepted |
+| 0020 | Re-homed scripts leave an executable stale copy in consumer trees — accelerate REQ-10 or accept the Phase 3→5 window | proposed |
 
 ## Non-negotiables
 

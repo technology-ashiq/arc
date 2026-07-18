@@ -24,13 +24,29 @@ re-home per plan**, ADR-0018 — the registry-only cut was proposed then reverte
 re-home 2026-07-18). **Checkpoint 0 DONE + committed (`7d5c907`):** the byte-diff gate — `arc-bytediff.sh
 verify-move <old> <new>` proves a `git mv` relocated a file without altering it (LF-normalized SHA-256 +
 git mode via plumbing, robust on Windows); 7/7 adversarial-tested, mapped to the plan product, golden
-regenerated. **Next: checkpoint 1 — council** (3 scripts → `scripts/council/`; fixtures/eval → 
-`products/council/tests/`; council-lint pinned paths; manifest; golden regen; `arc-bytediff verify-moves`
-transcript in evidence; full serial bats + tree-diff invariant; commit). Then core (spine, ~107 refs) →
-plan → review (arc-scan/ subtree, ~315 refs) → qa+git (no-op). **Per move:** regenerate the golden
-(reviewed-diff clause) + attach the byte-diff transcript to the checkpoint's evidence. Blast-radius mapped
-(6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters via relative
-paths — patch in the core commit.
+regenerated. **Checkpoint 0 REOPENED 2026-07-18** — a 10-agent adversarial pass on the gate (the one PLAN
+non-negotiable #49 mandates) found 4 holes, so by our own rule the gate is not done: the pairs file drops
+its last entry without a trailing newline and still exits 0; `[ -e ]` is case-blind under
+`core.ignorecase=true` and the mode check then masks it; no completeness check; no old-path-removed check.
+Fix + pin as red fixtures in `bytediff.bats` BEFORE ckpt 1. Same item: `product-lint.mjs` doesn't skip
+`worktrees` (fails at repo root today, 535 errors from a stale worktree) and has no CI step — so
+"product-lint green" in the checkpoint contract is currently unenforced.
+
+**Then checkpoint 1 — council:** 3 scripts → `.claude/scripts/council/` (dest confirmed, Ashiq
+2026-07-18). Fixtures + eval harness **deferred** — they're pinned by closed Phase 00 as REQ-01 evidence.
+Council-lint's `:356`/`:384` pins deliberately untouched (commands/agents don't move; the old spec line
+saying otherwise was dead text — corrected in spec, PLAN hot-zones and ADR-0018). ~11 same-commit edits;
+golden diff is **5** lines, not 3. Then core (spine, ~107 refs) → plan → review (arc-scan/ subtree, ~315
+refs) → qa+git (no-op). **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
++ a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
+per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
+(6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from
+outside arc-scan/ (`arc-evidence.sh:14`, `test_helper.bash`) — patch every sourcer in the core commit.
+
+**Open decision — ADR-0020 (proposed):** re-homed scripts leave an *executable* stale copy in consumer
+trees (all sync paths additive; deletion forbidden by non-negotiable #51; REQ-10 owns it in Phase 5).
+Recommendation: instrument in Phase 3, land the report half before Phase 4 closes — that's when REQ-09
+puts the first real consumers in play. Awaiting Ashiq.
 
 Appetite burn: **~3 of ~30 days (~10%)** — Phases 00+01+02 each closed in ~1 session, far under their
 1.5w/0.5w/1w appetites. Kill tripwire (50%) is far off.
