@@ -15,7 +15,7 @@ five, while every existing arc command keeps working unchanged.
 ## Current state
 
 - **Stack:** bash-3.2/POSIX + Node.js zero-deps (21 arc-* commands, 23 agents, 30 scripts, 6 hooks)
-- **Runs via:** `bats tests/ --print-output-on-failure` (3-OS CI matrix: ubuntu/windows/macos); Windows foreground serial-only
+- **Runs via:** `bats -r tests/ --print-output-on-failure` (3-OS CI matrix: ubuntu/windows/macos). **CI is the authority for the full suite** — locally run only the files a change touches. Windows foreground serial-only: `bats -j` needs `flock`/`shlock`, which Git Bash lacks and scoop has no package for, and it exits instantly with an error that reads like a fast pass. Measured 2026-07-18: local full suite ~20-25 min on one OS vs ~13 min on CI across three; the windows CI leg runs the same tests 8.9× slower than ubuntu (674s vs 76s) on process-spawn overhead alone.
 - **Entry points:** `.claude/commands/arc-*.md` (kickoff/review/qa/council/git/core) · `.claude/agents/*.md` · sync-to-project.sh/.ps1
 - **Core modules:** arc-scan/ tree (adapters+lib, SARIF pipeline) · council-*.mjs (lint/juror/calibrate) · kickoff-lint.mjs (builder gate) · review-ledger.sh (findings ledger) · arc-gates.sh (flat YAML parser)
 - **Conventions:** zero-dep Node; flat awk-parseable YAML (arc.gates.yaml); ARC_*/JUROR_* env namespaces; degrade-loud SKIPPED; bash-3.2 portability (portability.bats enforces no mapfile/GNU flags)

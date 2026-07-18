@@ -22,9 +22,12 @@ _arc_sandbox() {
   cp "$ARC_ROOT/.claude/scripts/review-ledger.sh" "$SANDBOX/.claude/scripts/"
   cp "$ARC_ROOT/.claude/scripts/arc-profile.sh"   "$SANDBOX/.claude/scripts/"   # arc-scan resolves scan mode through it
   cd "$SANDBOX" || return 1
+  # Identity via env, not two `git config` subprocesses. Measured on Git Bash: the git
+  # block was 751ms of the ~1s sandbox cost, and process spawn -- not work -- is what is
+  # expensive on Windows. Same identity, two fewer spawns per test, 247 tests per run.
+  export GIT_AUTHOR_NAME=arc-test GIT_AUTHOR_EMAIL=test@arc.local \
+         GIT_COMMITTER_NAME=arc-test GIT_COMMITTER_EMAIL=test@arc.local
   git init -q
-  git config user.email test@arc.local
-  git config user.name arc-test
   echo "seed" > seed.txt
   git add -A && git commit -qm seed
 }
