@@ -11,7 +11,8 @@ Five checkpoints, one per product move, in order **council → core → plan →
 manifest.json explicit-path entries updated to the new locations (resolver plan regenerated,
 product-lint green) + hardcoded-path updates + the moved product's tests landing under
 `products/NAME/tests/` with the CI workflow's test-discovery path edited in the SAME commit +
-full serial bats green + Phase-02 tree-diff invariant re-verified + byte-diff gate green
+the full suite green **on CI, which is the authority** (see the velocity note below) + Phase-02
+tree-diff invariant re-verified + byte-diff gate green
 (installed tree unchanged) + the gate transcript attached to the checkpoint's evidence bundle
 (not just eyeballed locally) + commit (REQ-07); a checkpoint with no attached gate transcript
 fails phase-done review. The plan-product move additionally dry-runs kickoff-lint against a
@@ -56,9 +57,48 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
 
 ## Verification plan
 
-Coarse (refined at phase start): per-move = full bats (serial, foreground) + byte-diff gate
-transcript; final = one real `/arc-review` run + one council session on the mold itself
-proving the daily driver works post-move.
+Per-move = the byte-diff gate transcript + the full suite green on CI; final = one real
+`/arc-review` run + one council session on the mold itself proving the daily driver works
+post-move.
+
+### Velocity note — where the checkpoint time actually goes (measured 2026-07-18)
+
+Checkpoint 1 took ~2.5h wall clock. The move itself was ~15 min; the rest was analysis,
+tracker ceremony, and **waiting on a local test suite that duplicates CI and is slower than it**.
+Numbers, so this is not re-litigated from memory:
+
+| | measured |
+|---|---|
+| bats per-test floor, Git Bash (5 no-op tests) | **2.5s/test** — framework overhead, not our code |
+| `_arc_sandbox` per test | ~1s (git block 751ms of it) |
+| Full suite, local, one OS | **~20-25 min** |
+| Full suite, CI, **three** OS in parallel | **~13 min** |
+| `bats self-tests` step: windows leg vs ubuntu leg | **674s vs 76s (8.9×)** |
+
+Consequences, now binding on every remaining checkpoint:
+
+- **CI is the authority for the full suite.** Locally run only the files a checkpoint touches
+  (sync/products/gates/bytediff for a move). Running all 22 locally blocks ~20 min to learn
+  what CI establishes better, on three platforms, unattended.
+- **The evidence bundle carries the CI run reference**, not a local test log. That is stronger
+  evidence — 3 OS instead of 1 — and free.
+- **Parallelism is unavailable here, do not keep re-testing it:** `bats -j` requires
+  `flock`/`shlock`; Git Bash ships neither and scoop has no package. `-j` exits instantly with
+  an error, which is easy to misread as a fast green run. It is not one.
+- The windows leg's 674s is process-spawn cost, not our tests. It is not optimizable from here;
+  it is the price of proving the target runtime works, and it is CI's time, not ours.
+
+### Checkpoint batching — decide after ckpt 2, do not skip
+
+ADR-0018 pre-authorized this exact trade: *"after the first two product moves, if the byte-diff
+gate has caught zero issues AND per-move overhead dominates (ceremony > work), the remaining
+three may merge into one move — recorded as a phase-spec amendment via /arc-change."*
+
+Ckpt 1: gate caught zero move-integrity issues (it did catch four holes in *itself*, pre-move —
+that is the adversarial pass working, not the gate firing). **At ckpt 2 close, evaluate the
+trigger explicitly and record the answer here.** If it fires, plan + review + qa merge into one
+checkpoint. Ckpt 2 is also the first move of genuinely `100755` files, so it is the run that
+finally exercises the mode half of the gate — do not batch it away.
 
 Consumer-side fallout of these moves — a re-homed script leaves an *executable* stale copy in every
 already-installed target — is tracked in **ADR-0020** (proposed): deletion is forbidden by

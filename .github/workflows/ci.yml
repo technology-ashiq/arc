@@ -106,10 +106,13 @@ jobs:
       - name: Test-count floor
         # A suite that silently shrinks is the failure mode -r alone cannot catch. Raise this
         # number when tests are added; never lower it to make a red build green.
+        # Counted by grep, not `bats -r --count`: measured on the windows leg that call cost
+        # 67s (it loads and parses every file through bats itself) for a number grep produces
+        # in 157ms. Both report 247 here. A gate must not cost more than what it guards.
         shell: bash
         run: |
-          n="$(bats -r --count tests/)"
-          echo "bats discovered $n test(s)"
+          n="$(grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}')"
+          echo "discovered $n test(s)"
           [ "$n" -ge 247 ] || { echo "::error::test count $n fell below the floor of 247"; exit 1; }
 
   # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
