@@ -68,6 +68,7 @@
 .claude/scripts/core/arc-gates.sh	e014e5f2ddfd3a857895e8b640b9a5218739cc89fda7fb709a6d78491adb4c13
 .claude/scripts/core/arc-products.mjs	61c14834b88fd4efed5a704d529fd59d5786572bd68a3c7326155f92a38c43e6
 .claude/scripts/core/arc-profile.sh	8583b252787e2c5424e2dff090dfc0050fe4f7d5213984c5d2c7cfbfc98944ba
+.claude/scripts/core/arc-settings-merge.mjs	bab6957e3a4277a9facaec78be27b42736b75730c5536919c65672ea6a161b48
 .claude/scripts/core/arc-status.sh	923697030d9ae7c0a786727b09871463fc521b74362b044bd22f5cb16c588e21
 .claude/scripts/core/common.sh	62cb89ced2c73adfd92560db77b5ecafc6f94a7a1f76ffec5179d9746da49b20
 .claude/scripts/core/freeze-check.sh	2cb1ba28ea40aa1e4638b7d9a78adfffe34beee03f7616b107143b62ac8eeb30

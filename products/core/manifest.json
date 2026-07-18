@@ -19,6 +19,7 @@
     ".claude/scripts/core/toolchain-health.sh",
     ".claude/scripts/core/freeze-check.sh",
     ".claude/scripts/core/arc-products.mjs",
+    ".claude/scripts/core/arc-settings-merge.mjs",
     ".claude/scripts/core/product-lint.mjs",
     ".claude/scripts/core/arc-status.sh",
     ".claude/scripts/core/common.sh",

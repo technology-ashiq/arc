@@ -60,8 +60,34 @@ _arc_env_block() {  # <src-env-file> <sentinel-regex>
   fi
 }
 
+# ---------- consumer settings preservation (Phase 04 dogfood finding) ----------
+# The copy overwrites .claude/settings.json wholesale, which silently deleted a real
+# consumer's `coverageMode: warn` / `docsGate: warn` and flipped their gates to block --
+# keys arc's OWN doc string in that file tells them to add. Snapshot before the copy,
+# merge after. node does the thinking so the .ps1 twin stays a dumb caller (ADR-0015).
+MERGER="$SRC/.claude/scripts/core/arc-settings-merge.mjs"
+_ARC_SETTINGS_BAK=""
+_arc_settings_save() {
+  [ -f "$TARGET/.claude/settings.json" ] || return 0
+  _ARC_SETTINGS_BAK="$(mktemp)"
+  cp "$TARGET/.claude/settings.json" "$_ARC_SETTINGS_BAK"
+}
+_arc_settings_merge() {
+  [ -n "$_ARC_SETTINGS_BAK" ] || return 0
+  [ -f "$TARGET/.claude/settings.json" ] || return 0
+  # Capture-then-write, like the registry: a failed merge must never leave a truncated
+  # settings.json behind, and the operator is told where their original still lives.
+  _merged="$(node "$MERGER" "$TARGET/.claude/settings.json" "$_ARC_SETTINGS_BAK")" || {
+    echo "sync: settings merge failed -- your previous settings.json is preserved at $_ARC_SETTINGS_BAK" >&2
+    exit 3
+  }
+  printf '%s\n' "$_merged" > "$TARGET/.claude/settings.json"
+  rm -f "$_ARC_SETTINGS_BAK"
+}
+
 # ---------- --products: manifest-driven selective install ----------
 if [ "$MODE" = "products" ]; then
+  _arc_settings_save
   PLAN="$(node "$RESOLVER" --products "$PRODUCTS" --root "$SRC")" || exit 2
   [ "$(printf '%s\n' "$PLAN" | head -1)" = "$(printf 'PROTO\t1')" ] \
     || { echo "sync: unexpected resolver plan protocol" >&2; exit 3; }
@@ -81,6 +107,7 @@ if [ "$MODE" = "products" ]; then
     || { echo "sync: registry generation failed" >&2; exit 3; }
   mkdir -p "$TARGET/.claude"
   printf '%s\n' "$_reg" > "$TARGET/.claude/arc-registry.json"
+  _arc_settings_merge
   echo "sync: products [$PRODUCTS] + core -> $TARGET"
   echo "sync: IMPORTANT -- restart the Claude Code session in that project (commands load at session start)."
   exit 0
@@ -92,6 +119,9 @@ fi
 EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock" "worktrees")
 
 mkdir -p "$TARGET/.claude" "$TARGET/docs/templates" "$TARGET/docs"
+# No-ops on a fresh target (nothing to preserve), so REQ-02's byte-identical golden --
+# which syncs into an empty mktemp dir -- is unaffected.
+_arc_settings_save
 
 # ARC_SYNC_NO_RSYNC=1 forces the portable cp fallback even where rsync exists --
 # lets CI prove REQ-02 (byte-identical output) holds on BOTH copy paths.
@@ -104,6 +134,8 @@ else
   for x in "${EXCLUDES[@]}"; do rm -rf "$TARGET/.claude/${x:?}" 2>/dev/null || true; done
   [ -d "$SRC/docs/templates" ] && cp -r "$SRC/docs/templates/." "$TARGET/docs/templates/"
 fi
+
+_arc_settings_merge
 
 # Meta docs describe the system, not your product -- safe to overwrite.
 for f in blueprint.md how-it-works.md build-playbook.md product-runbook.md plugins.md usermanual.md; do
