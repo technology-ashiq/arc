@@ -12,7 +12,7 @@
  * with `--juror-artifact` (REQ-05, ADR-0018).
  *
  * Usage:
- *   node .claude/scripts/council-juror.mjs --points FILE --out ARTIFACT
+ *   node .claude/scripts/council/council-juror.mjs --points FILE --out ARTIFACT
  *
  * Config (env — exactly ONE mode):
  *   JUROR_FAKE=FIXTURE                            offline fake: read a canned OpenAI-compatible

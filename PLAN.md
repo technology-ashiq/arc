@@ -34,10 +34,11 @@ five, while every existing arc command keeps working unchanged.
 | REQ-04 | One resolver, no twin drift | both twins consume `arc-products.mjs` plan output; .ps1 no longer copies `.claude/state/`; neither twin copies `scheduled_tasks.lock` — asserted in sync.bats; the ps1 leak + selective-install smoke tests run on the Windows CI leg (pwsh native) and skip on pwsh-less runners (the .sh is the cross-platform path) | 0 | validated |
 | REQ-05 | Umbrella status is visible and true | `/arc` renders per-product INSTALLED/HEALTH from `arc-registry.json` (zero file-presence guessing) + the exact install command for absent products | 2 | validated |
 | REQ-06 | Partial installs never break hooks | core+council-only install: all 6 hook events run exit 0; any hook fragment whose product dependency (a script or config) is absent degrades with a loud one-line SKIP (never silent, never fatal) — no blanket per-product SKIP spam; hook-tier wall time < 30s measured on the owner's Windows box | 1 | validated |
-| REQ-07 | Products have physical boundaries | scripts live under `.claude/scripts/PRODUCT/`; per-product move lands only with byte-diff gate green (installed tree unchanged). **Amended 2026-07-19 (ADR-0021):** the original clause also required tests under `products/NAME/tests/` — dropped, because tests never cross the product boundary (a full sync ships zero `.bats` files and no manifest has a `tests` key), so it specified a boundary around something that never leaves the repo | 3 | active |
+| REQ-07 | Products have physical boundaries | scripts live under `.claude/scripts/PRODUCT/`; per-product move lands only with byte-diff gate green (installed tree unchanged). **Amended 2026-07-19 (ADR-0021):** the original clause also required tests under `products/NAME/tests/` — dropped, because tests never cross the product boundary (a full sync ships zero `.bats` files and no manifest has a `tests` key), so it specified a boundary around something that never leaves the repo | 3 | validated |
 | REQ-08 | Targets know what they have | sync writes `.claude/arc-registry.json` (products, versions, file lists, source commit) into every target; re-sync updates it | 2 | validated |
 | REQ-09 | A second real consumer exists | council-alone installed + 1 real council session in one external repo, AND core+plan installed + 1 real kickoff in another (venturemind / InvoiceFly); evidence bundles committed | 4 | active |
-| REQ-10 | Stale files are visible, never deleted | `--prune-report` lists unowned target files with exit 0; attic mode MOVES them to `.claude/attic/DATE/` and prints the list; no delete path exists in either twin | 5 | active |
+| REQ-10 | Stale files in a consumer tree are visible | `--prune-report` lists every unowned target file with exit 0, including the pre-move copies Phase 3's re-homing left behind; no delete path exists in either twin. Split out of the original REQ-10 and pulled forward to Phase 4 by ADR-0020: Phase 3 re-homed all five products, so every already-installed consumer now carries stale *executable* copies, and Phase 4 is when the first real consumers appear | 4 | active |
+| REQ-11 | Stale files can be quarantined, never deleted | attic mode MOVES unowned files to `.claude/attic/DATE/` and prints the list; still no delete path in either twin (non-negotiable). The other half of the original REQ-10, kept in Phase 5 (ADR-0020) | 5 | active |
 
 ## Appetite
 
@@ -89,7 +90,7 @@ ADRs 0001–0013 (v2 initiative) remain live decisions about this codebase. New 
 | 0017 | v2 world-best initiative parked at ~13% burnt; resume trigger recorded | accepted |
 | 0018 | Phase 3 re-homing is incremental per product, council first | accepted |
 | 0019 | /arc dashboard ships minimal in Phase 0, registry-backed in Phase 2 | accepted |
-| 0020 | Re-homed scripts leave an executable stale copy in consumer trees — accelerate REQ-10 or accept the Phase 3→5 window | proposed |
+| 0020 | Re-homed scripts leave an executable stale copy in consumer trees — REQ-10's report half moves to Phase 4, attic half stays Phase 5 | accepted |
 | 0021 | Tests stay centralised in `tests/`; REQ-07 amended to scripts only | accepted |
 
 ## Non-negotiables
@@ -127,7 +128,7 @@ ADRs 0001–0013 (v2 initiative) remain live decisions about this codebase. New 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
 | Claude Code loads commands/agents only from fixed `.claude/` paths (runtime payload cannot move) | a Claude Code release ships configurable command dirs / official packaging → revisit ADR-0016 timing | 3 |
-| The byte-diff gate is sufficient protection for re-homing | a path bug reaches main despite a green gate | 3 |
+| ~~The byte-diff gate is sufficient protection for re-homing~~ — **FALSIFIED 2026-07-19 by Phase 03 itself.** The gate proves a move did not alter bytes; it says nothing about whether the moved thing still *works*. In ckpt 2 three scripts broke on root-resolution and `sync-to-project.sh` broke outright — every one of them with a **green** gate. Smoke-running each moved script is what caught them. Replacement control, now binding in the phase-03 per-checkpoint contract: gate **+** smoke-run every moved script **+** a dangling-reference sweep. | trigger RETIRED, not fired: "a path bug reaches main" is a lagging indicator that stayed quiet only because a different control caught the bugs pre-commit. Waiting for it would have meant learning this from a broken main. | 3 |
 | Hook fragment dispatch stays under budget on Windows | measured hook-tier wall time ≥ 30s on the owner's loaded machine | 1 |
 | Council has zero coupling outside core (extraction-pilot validity) | a council-only install session fails on a missing non-council file | 0 |
 | venturemind + InvoiceFly are viable Phase-4 dogfood targets | at Phase 4 start either repo is unavailable or unsuitable → re-pick; Phase 4 blocked until targets named | 4 |

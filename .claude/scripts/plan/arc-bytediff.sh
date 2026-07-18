@@ -107,21 +107,36 @@ case "$cmd" in
       old=""
     done < "$f"
 
-    # Completeness: the gate cannot prove it was handed every move, so ask git directly. Any
-    # staged rename absent from the pairs file is an unverified move riding in the same commit.
+    # Completeness: the gate cannot prove it was handed every move, so ask git directly.
+    #
+    # Do NOT filter on --diff-filter=R. git only reports a rename when the two blobs are
+    # ~50% similar, so a file that is moved AND rewritten is staged as D + A and would never
+    # enter the sweep -- inverting the guarantee, since the more the content was altered the
+    # more likely it escapes. Found by review after the first hardening pass shipped; pinned
+    # in bytediff.bats as "a move git does NOT classify as a rename".
+    #
+    # So: a move destination is (a) any renamed new-path, OR (b) any added path whose basename
+    # also appears among the staged deletions. Both must be covered by the pairs file.
     if [ "$complete" -eq 1 ] && git rev-parse --verify -q HEAD >/dev/null 2>&1; then
-      _staged="$(mktemp)"
-      git diff --cached --diff-filter=R -M --name-status HEAD 2>/dev/null > "$_staged"
+      _staged="$(mktemp)"; _targets="$(mktemp)"
+      git diff --cached -M --name-status HEAD 2>/dev/null > "$_staged"
+      awk -F'\t' '
+        $1 ~ /^R/ { print $3; next }
+        $1 == "D" { n = split($2, p, "/"); del[p[n]] = 1; next }
+        $1 == "A" { n = split($2, p, "/"); add[p[n]] = add[p[n]] " " $2 }
+        END { for (b in del) if (b in add) { c = split(add[b], arr, " ")
+                for (i = 1; i <= c; i++) if (arr[i] != "") print arr[i] } }
+      ' "$_staged" | LC_ALL=C sort -u > "$_targets"
       uncovered=""
-      while IFS=$'\t' read -r _st _sold snew || [ -n "${_st:-}" ]; do
-        [ -z "${snew:-}" ] && { _st=""; continue; }
-        awk -F'\t' -v t="$snew" '$0 !~ /^#/ && $2==t {found=1} END{exit !found}' "$f" \
-          || uncovered="$uncovered $snew"
-        _st=""
-      done < "$_staged"
-      rm -f "$_staged"
+      while IFS= read -r t || [ -n "${t:-}" ]; do
+        if [ -z "${t:-}" ]; then t=""; continue; fi
+        awk -F'\t' -v x="$t" '$0 !~ /^#/ && $2==x {found=1} END{exit !found}' "$f" \
+          || uncovered="$uncovered $t"
+        t=""
+      done < "$_targets"
+      rm -f "$_staged" "$_targets"
       if [ -n "$uncovered" ]; then
-        echo "arc-bytediff: FAIL -- staged rename(s) uncovered by the pairs file:$uncovered" >&2
+        echo "arc-bytediff: FAIL -- staged move(s) uncovered by the pairs file:$uncovered" >&2
         rc=2
       fi
     fi

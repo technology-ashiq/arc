@@ -4,12 +4,12 @@
  * Zero deps. Exit 0 = pass; exit 1 = named failures.
  *
  * Modes:
- *   node .claude/scripts/council-lint.mjs [repo-root]
+ *   node .claude/scripts/council/council-lint.mjs [repo-root]
  *     Static — the /arc-council command + the core member agents exist with valid frontmatter.
- *   node .claude/scripts/council-lint.mjs --verdict <file>
+ *   node .claude/scripts/council/council-lint.mjs --verdict <file>
  *     Verdict — POINT-ID cross-reference: every [Pn] cited in KEY REASONS/DISSENT must be rated
  *     Supported/Plausible in the verifier's ratings, and the verifier must have contested >=1 point. (ADR-0007)
- *   node .claude/scripts/council-lint.mjs --brief <file>
+ *   node .claude/scripts/council/council-lint.mjs --brief <file>
  *     Brief — a deep Evidence Brief needs >=3 facts, each with a confidence label; in a `live` brief
  *     each High/Med fact needs >=2 independent source URLs or an explicit low-confidence mark. (REQ-04, ADR-0003)
  *

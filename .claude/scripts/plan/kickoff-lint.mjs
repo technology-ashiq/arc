@@ -23,7 +23,7 @@
  *
  * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
  * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
- * Usage: node .claude/scripts/kickoff-lint.mjs [repo-root]
+ * Usage: node .claude/scripts/plan/kickoff-lint.mjs [repo-root]
  */
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";

@@ -146,7 +146,7 @@ Idhellam **auto** -- nee command type panna venaam. Aana enna nadakkudhu-nu ther
 >
 > Profile maathu: `arc.profile` edit pannu, illa `ARC_PROFILE=starter` env. Oru gate-ah mattum override
 > panna explicit key podu (e.g. `"coverageMode":"warn"`) -- profile-a adhu beat pannum. Active modes paaru:
-> `bash .claude/scripts/arc-profile.sh show`. Required reviews-ah `ARC_REQUIRED_REVIEWS` env-um override pannalaam.
+> `bash .claude/scripts/core/arc-profile.sh show`. Required reviews-ah `ARC_REQUIRED_REVIEWS` env-um override pannalaam.
 
 ---
 
@@ -317,7 +317,7 @@ Triage -> phase spec / ADR / fix-issue -> `PROGRESS.md ## Now` update -> confirm
 Ship panna-podhu required reviews stamp aagala-na -> **BLOCK**.
 
 - Review command pass aana-udan thaana stamp pannum:
-  `bash .claude/scripts/review-ledger.sh stamp qa` (qa/security/design/docs auto).
+  `bash .claude/scripts/core/review-ledger.sh stamp qa` (qa/security/design/docs auto).
 - **Pudhu commit = pudhu SHA = ledger reset** -> pudhu code eppovum re-review aaganum (honest gate).
 - SessionStart oru line kaattum: `- reviews @ <sha>: qa security`.
 
@@ -329,7 +329,7 @@ Ship panna-podhu required reviews stamp aagala-na -> **BLOCK**.
 - Required set-ah adhoc-ah override: `export ARC_REQUIRED_REVIEWS=code,qa,security,design`.
 
 > **`code` stamp (Phase 01-la wired):** `/arc-review` ippo `docs/reviews/`-la archive pannudhu **matum illama**,
-> ship verdict-la `bash .claude/scripts/review-ledger.sh stamp code` auto-run pannum (fix-first-na unstamp).
+> ship verdict-la `bash .claude/scripts/core/review-ledger.sh stamp code` auto-run pannum (fix-first-na unstamp).
 > Pudhu commit = pudhu SHA = stamp reset, so fixes apram re-review aaganum. (Munna oru gap irundhadhu -- ippo close.)
 > (Venum-na naan andha auto-stamp-a wire panni tharen.)
 

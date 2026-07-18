@@ -48,7 +48,7 @@ This keeps arc reliable-as-a-mold while giving the owner (you) the superpowers o
    ```
    Not placed in active `mcpServers` by default (graceful degradation). One-line comment on how to activate.
 
-2. **`.claude/scripts/toolchain-health.sh`** — one new row in `emit_all()` under the `QA` section, self-reporting (flows into session brief + `/arc-toolcheck` artifact automatically):
+2. **`.claude/scripts/core/toolchain-health.sh`** — one new row in `emit_all()` under the `QA` section, self-reporting (flows into session brief + `/arc-toolcheck` artifact automatically):
    - `have agent-browser` **and** Chrome present → `R_OK "agent-browser" "vitals + diff + fast CDP"`
    - binary present, Chrome missing → `R_STALE "agent-browser" "agent-browser install" "download Chrome-for-Testing"`
    - absent → `R_OPT "agent-browser" "npm i -g agent-browser" "then agent-browser install — arms canary vitals/diff"`
@@ -85,7 +85,7 @@ agent-browser install       # downloads Chrome-for-Testing (~684 MB); or point A
 ## 9. Verification (task #9)
 
 - `node -e "JSON.parse(require('fs').readFileSync('.mcp.json','utf8'))"` → `.mcp.json` still valid.
-- `bash .claude/scripts/toolchain-health.sh` → new agent-browser row renders with correct status on a machine without the binary (should read ⚪ optional, arc otherwise green).
+- `bash .claude/scripts/core/toolchain-health.sh` → new agent-browser row renders with correct status on a machine without the binary (should read ⚪ optional, arc otherwise green).
 - `grep -rn "agent-browser" .claude docs CLAUDE.md` → no orphaned/half-wired refs; every mention has its fallback.
 - Read-through: qa-tester + canary both clearly state the "if available … else …" branch.
 

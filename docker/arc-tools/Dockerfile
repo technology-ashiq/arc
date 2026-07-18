@@ -11,7 +11,7 @@
 #   * ZAP    (DAST baseline, linux-only)           -- later slice
 # The hook tier NEVER pulls this image (native only, <30s budget) -- ADR-0006.
 #
-# Build / pin:  .claude/scripts/arc-tools-image.sh build   (then `... digest`)
+# Build / pin:  .claude/scripts/review/arc-tools-image.sh build   (then `... digest`)
 # Base pinned to an explicit Debian point release; the FINAL image is digest-
 # pinned in CI (docker/arc-tools/IMAGE) so the scan step is byte-reproducible.
 FROM debian:bookworm-slim

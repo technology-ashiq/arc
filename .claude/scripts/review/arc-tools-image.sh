@@ -19,7 +19,11 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null)"
-[ -n "$ROOT" ] || ROOT="$(cd "$HERE/../.." && pwd)"
+# $HERE is .claude/scripts/review since Phase 03 ckpt 4, so the repo root is three up.
+# This fallback only runs when git rev-parse fails -- a non-git consumer install, a tarball,
+# a `git archive` export -- which is exactly why it went unnoticed: the phase caught three
+# other `..`-count survivors, and this one hid behind the `||`.
+[ -n "$ROOT" ] || ROOT="$(cd "$HERE/../../.." && pwd)"
 DOCKERDIR="$ROOT/docker/arc-tools"
 PINFILE="$DOCKERDIR/IMAGE"
 ADAPTER="$ROOT/.claude/scripts/review/arc-scan/adapters/trivy.sh"

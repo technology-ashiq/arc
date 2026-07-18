@@ -1,6 +1,6 @@
 # ADR 0020 — Re-homed scripts leave an executable stale copy in consumer trees
 
-**Status:** proposed — awaiting decision
+**Status:** accepted
 **Date:** 2026-07-18
 **Reversibility:** two-way
 **Raised by:** `/arc-change`, from the Phase 03 checkpoint-1 adversarial pre-mortem
@@ -67,22 +67,33 @@ time anyone would *upgrade* an existing install rather than create a fresh one.
 
 ## Decision
 
-**PENDING — Ashiq's call.**
+**Option 3 — accepted by Ashiq, 2026-07-19.** Instrument now, remediate before Phase 4 closes.
 
-Recommendation: **Option 3.** It is the only one that respects both the non-negotiable (never
-delete) and Phase 3's risk-ordering, while refusing to let a known-broken upgrade path ride
-through the entire dogfood phase unowned. The sequencing falls out of the plan's own structure:
-the problem becomes real when consumers become real, which REQ-09 pins to Phase 4 — so that is
-the deadline, not Phase 5.
+It is the only option that respects both the non-negotiable (never delete) and Phase 3's
+risk-ordering, while refusing to let a known-broken upgrade path ride through the entire dogfood
+phase unowned. The sequencing falls out of the plan's own structure: the problem becomes real when
+consumers become real, which REQ-09 pins to Phase 4 — so that is the deadline, not Phase 5.
 
-If Option 3 is taken, REQ-10's row moves from Phase 5 to "5 (attic) / 4 (report)" and the
-instrumentation test lands as a Phase 3 exit-criteria line.
+Concretely:
+
+- **The original REQ-10 splits into two REQs**, because the plan lint enforces one phase per REQ
+  (correctly — a REQ spanning two phases has no single close): **REQ-10** is now the *report* half
+  (`--prune-report`, exit 0) in **Phase 4**, and **REQ-11** is the *attic* half (move to
+  `.claude/attic/DATE/`) in **Phase 5**. Phase 5 keeps a goal; Phase 4 gains a hard deadline.
+- **No delete path is invented anywhere**, in either half. Non-negotiable #51 stands untouched.
+- The instrumentation test — sync a pre-move export, then a post-move export, into the **same**
+  target and assert the old path survives — is **not** retrofitted into Phase 3, which is closing.
+  It lands with the report half in Phase 4, where it becomes an assertion about the report rather
+  than a pin on current behaviour.
 
 ## Consequences
 
-Whichever option is chosen, two facts are now recorded and must not be rediscovered:
+Whichever option was chosen, two facts are now recorded and must not be rediscovered:
 
 - deletion is permanently off the table for consumer trees (non-negotiable #51) — any future
   "just clean it up" proposal is already answered
 - `tests/sync.bats` has no upgrade-over-existing-install coverage at all; every case starts from
   a fresh mktemp target. That blind spot is independent of this decision and outlives it.
+
+**Revisit trigger:** if Phase 4 reaches its close without the report half landed, this ADR has
+failed to bind — reopen it rather than sliding the deadline again.

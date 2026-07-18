@@ -98,7 +98,7 @@ jobs:
         run: node .claude/scripts/core/product-lint.mjs
 
       - name: Run bats self-tests
-        # -r is required BEFORE Phase 03 relocates tests into products/NAME/tests/: bats does
+        # -r is kept although ADR-0021 decided tests stay centralised in tests/: bats does
         # not recurse without it, and on a directory holding no *.bats it prints 1..0 and
         # exits 0 -- a moved-away suite would vanish from a green CI without a word.
         run: bats -r --print-output-on-failure tests/
@@ -108,12 +108,12 @@ jobs:
         # number when tests are added; never lower it to make a red build green.
         # Counted by grep, not `bats -r --count`: measured on the windows leg that call cost
         # 67s (it loads and parses every file through bats itself) for a number grep produces
-        # in 157ms. Both report 247 here. A gate must not cost more than what it guards.
+        # in 157ms. Both report 248 here. A gate must not cost more than what it guards.
         shell: bash
         run: |
           n="$(grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}')"
           echo "discovered $n test(s)"
-          [ "$n" -ge 247 ] || { echo "::error::test count $n fell below the floor of 247"; exit 1; }
+          [ "$n" -ge 248 ] || { echo "::error::test count $n fell below the floor of 248"; exit 1; }
 
   # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
   # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker

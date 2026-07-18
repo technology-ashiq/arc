@@ -8,5 +8,6 @@ set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # git first, `..` chain only as the fallback: the fixed depth was correct for
 # .claude/scripts/ and broke when Phase 03 moved this into .claude/scripts/core/.
-ROOT="${1:-$(git rev-parse --show-toplevel 2>/dev/null || (cd "$HERE/../../.." && pwd))}"
+# -C "$HERE" so the answer is this script's repo, not the caller's cwd's repo.
+ROOT="${1:-$(git -C "$HERE" rev-parse --show-toplevel 2>/dev/null || (cd "$HERE/../../.." && pwd))}"
 exec node "$HERE/arc-products.mjs" --status --root "$ROOT"

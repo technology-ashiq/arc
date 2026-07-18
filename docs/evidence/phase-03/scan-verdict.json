@@ -1,12 +1,12 @@
 {
   "verdict": "pass",
-  "findings": 8,
-  "errors": 8,
+  "findings": 0,
+  "errors": 0,
   "warnings": 0,
   "notes": 0,
   "new_errors": 0,
   "baseline": 0,
-  "suppressed": 8,
+  "suppressed": 0,
   "tools_ran": [
     "semgrep",
     "gitleaks"
