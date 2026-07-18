@@ -20,9 +20,9 @@
     ".claude/agents/council-life-counselor.md"
   ],
   "scripts": [
-    ".claude/scripts/council-lint.mjs",
-    ".claude/scripts/council-juror.mjs",
-    ".claude/scripts/council-calibrate.mjs"
+    ".claude/scripts/council/council-lint.mjs",
+    ".claude/scripts/council/council-juror.mjs",
+    ".claude/scripts/council/council-calibrate.mjs"
   ],
   "docs": [
     { "src": "docs/council/README.md", "dest": "docs/council/README.md" },

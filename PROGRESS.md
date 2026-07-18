@@ -28,20 +28,31 @@ regenerated. **Checkpoint 0 REOPENED 2026-07-18** — a 10-agent adversarial pas
 non-negotiable #49 mandates) found 4 holes, so by our own rule the gate is not done: the pairs file drops
 its last entry without a trailing newline and still exits 0; `[ -e ]` is case-blind under
 `core.ignorecase=true` and the mode check then masks it; no completeness check; no old-path-removed check.
-Fix + pin as red fixtures in `bytediff.bats` BEFORE ckpt 1. Same item: `product-lint.mjs` doesn't skip
-`worktrees` (fails at repo root today, 535 errors from a stale worktree) and has no CI step — so
-"product-lint green" in the checkpoint contract is currently unenforced.
+Fixed + pinned before ckpt 1 ran.
 
-**Then checkpoint 1 — council:** 3 scripts → `.claude/scripts/council/` (dest confirmed, Ashiq
-2026-07-18). Fixtures + eval harness **deferred** — they're pinned by closed Phase 00 as REQ-01 evidence.
+**Checkpoint 0 hardening DONE 2026-07-18.** All four holes fixed and pinned as red fixtures
+(bytediff.bats 7→11). product-lint now mirrors sync's EXCLUDES (535 phantom errors → 0, live worktree
+untouched), gained its first CI step, and bats gained `-r` + a 247-test floor before ckpt 2 relocates
+any test.
+
+**Checkpoint 1 — council DONE 2026-07-18.** 3 scripts → `.claude/scripts/council/` (dest confirmed,
+Ashiq 2026-07-18). Fixtures + eval harness **deferred** — they're pinned by closed Phase 00 as REQ-01 evidence.
 Council-lint's `:356`/`:384` pins deliberately untouched (commands/agents don't move; the old spec line
-saying otherwise was dead text — corrected in spec, PLAN hot-zones and ADR-0018). ~11 same-commit edits;
-golden diff is **5** lines, not 3. Then core (spine, ~107 refs) → plan → review (arc-scan/ subtree, ~315
-refs) → qa+git (no-op). **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
+saying otherwise was dead text — corrected in spec, PLAN hot-zones and ADR-0018). Byte-diff gate green:
+3 moves verified, all three blob hashes byte-identical across the move, modes 100644→100644, completeness
+check clean. Golden regen landed the predicted **5**-line signature — the 3 scripts change PATH ONLY with
+SHA-256 unchanged (the pure-move proof), plus a hash change each for `arc-council.md` (6 refs) and
+`docs/council/README.md` (1). Zero dangling command-body refs. 247/247 bats, product-lint + version-gate
++ kickoff-lint green, evidence bundle verified at `docs/evidence/ckpt-1-council/phase-03`.
+
+**Next: checkpoint 2 — core** (spine, ~107 refs) → plan → review (arc-scan/ subtree, ~315 refs) →
+qa+git (no-op). **Per move:** regenerate the golden (reviewed-diff clause) + byte-diff transcript
 + a dangling-reference check + a checkpoint-private evidence dir (`--out`), since arc-evidence.sh's
 per-phase dir would otherwise have ckpt 2 silently overwrite ckpt 1's transcript. Blast-radius mapped
 (6-agent survey): ~466 non-doc refs total; `common.sh` (core) sourced by ~20 review adapters AND from
 outside arc-scan/ (`arc-evidence.sh:14`, `test_helper.bash`) — patch every sourcer in the core commit.
+Ckpt 2 is the first move of files that are genuinely `100755`, so the mode half of the byte-diff gate
+gets exercised for real there; council could not rehearse it (all three were `100644`).
 
 **Open decision — ADR-0020 (proposed):** re-homed scripts leave an *executable* stale copy in consumer
 trees (all sync paths additive; deletion forbidden by non-negotiable #51; REQ-10 owns it in Phase 5).

@@ -19,7 +19,7 @@ finance, personal, politics, marketing, development, design). Prefix `quick` for
 ## Files
 - `.claude/commands/arc-council.md` — the Chair protocol (self-contained source of truth).
 - `.claude/agents/council-*.md` — the 12 members (advocate, skeptic, neutral, researcher, verifier + 7 experts).
-- `.claude/scripts/council-lint.mjs` — the gate (`--verdict`, `--brief`, static).
+- `.claude/scripts/council/council-lint.mjs` — the gate (`--verdict`, `--brief`, static).
 - `references/fairness.md` — the fairness & anti-rigging invariants (and what the lint enforces).
 - `sessions/` — saved deep-run verdicts (git-tracked here; **excluded** from `sync-to-project`).
 - `kickoff/` — the scoped build tracker (PLAN, ADRs, phase specs, retros).

@@ -29,7 +29,7 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
   five checkpoints otherwise resolve to `docs/evidence/phase-03/` and silently overwrite each other —
   and `verify` (`:68-78`) only re-hashes what is currently listed, so the loss leaves no trace.
 
-- [ ] ckpt 0 hardening (gate is not done until this lands — PLAN non-negotiable #49): the four holes
+- [x] ckpt 0 hardening (gate is not done until this lands — PLAN non-negotiable #49): the four holes
       the adversarial pass found in `arc-bytediff.sh` are fixed AND pinned as red fixtures in
       `tests/bytediff.bats` — (a) `:69` `while IFS=$'\t' read` drops the final pair when the pairs file
       has no trailing newline and still exits 0, with `verified N move(s)` corroborating the omission;
@@ -41,7 +41,7 @@ Two additions to the per-checkpoint contract, from the ckpt-1 adversarial pass (
       step today, so "product-lint green" in the contract above is currently unenforced). Fix this by
       teaching product-lint the exclusion, NOT by removing the worktree: `.claude/worktrees/` holds a
       LIVE registered worktree (`claude/arc-orchestrator-design-758d70`), not stale leftovers.
-- [ ] council moved (council-*.mjs → scripts/council/). Fixtures + eval harness **DEFERRED** (Ashiq,
+- [x] council moved (council-*.mjs → scripts/council/). Fixtures + eval harness **DEFERRED** (Ashiq,
       2026-07-18): `docs/council/kickoff-v2/fixtures/phase-00/{good-full,bad-nodecision}.md` are pinned
       by `phases/phase-00-spec.md:26` as a CLOSED phase's named REQ-01 fixtures — moving them invalidates
       a closed phase's evidence. Revisit in Phase 5 alongside the doc rewrite. Council-lint's pinned paths

@@ -17,7 +17,7 @@ check at the end proves `docs/council/sessions/` was untouched.
 The planted briefs follow the same Evidence-Brief schema as a real run (cf. the phase-2 dogfood
 `dogfood/brief.md`). Schema-validate every brief before probing:
 ```
-for f in planted/*.md; do node ../../../../.claude/scripts/council-lint.mjs --brief "$f"; done
+for f in planted/*.md; do node ../../../../.claude/scripts/council/council-lint.mjs --brief "$f"; done
 ```
 (from `docs/council/kickoff-v2/eval/`). A brief that fails `--brief` is stale — fix it before probing.
 

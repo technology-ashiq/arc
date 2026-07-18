@@ -49,7 +49,7 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
 2. **Research fan-out → the Evidence Brief.** Decompose into 3–5 sub-questions; in one message spawn one
    `council-researcher` per sub-question (cap ~5). Assemble ONE neutral shared **Evidence Brief** (facts
    only, renumbered `F1…`, headed with a `Research mode:` line). Keep it lint-clean:
-   `node .claude/scripts/council-lint.mjs --brief <file>`.
+   `node .claude/scripts/council/council-lint.mjs --brief <file>`.
 
 3. **Convene — parallel and independent.** In a **single message**, spawn the 3 stance members
    (`council-advocate`, `council-skeptic`, `council-neutral`) **and every selected domain expert**, each
@@ -91,7 +91,7 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    Weak/Contested on the FIRST pass plus every rebuttal-set ID — one `## POINT <ID>` section each with
    `FIRST-PASS:` / `FINAL:` / `TEXT:` (the member's point, verbatim) / `REBUTTAL:` (if any). Then run:
 
-   > `node .claude/scripts/council-juror.mjs --points <points-file> --out docs/council/sessions/.juror/<slug>-<UTC-run-id>.md`
+   > `node .claude/scripts/council/council-juror.mjs --points <points-file> --out docs/council/sessions/.juror/<slug>-<UTC-run-id>.md`
 
    with the user's env (`JUROR_BASE_URL` + `JUROR_MODEL` + `JUROR_API_KEY` — any OpenAI-compatible
    provider). The SCRIPT writes the artifact and prints the `Juror:` and `Juror-Artifact-SHA256:` lines —
@@ -174,17 +174,17 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    so a rebuttal that legitimately resolved every contested point still satisfies it even when the FINAL
    ratings show nothing Weak/Contested, and a fabricated `pre: Contested` with no matching first-pass
    grade is rejected (ADR-0014). A verdict with a `## REBUTTAL LOG` MUST carry `## FIRST-PASS RATINGS`.
-   Mechanically checkable: `node .claude/scripts/council-lint.mjs --verdict <file>` must pass.
+   Mechanically checkable: `node .claude/scripts/council/council-lint.mjs --verdict <file>` must pass.
 
 8. **Save (deep runs only).** Write the full rendered verdict to `docs/council/sessions/NNN-slug.md`
    (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
-   saved file must pass `node .claude/scripts/council-lint.mjs --verdict <file>`.
+   saved file must pass `node .claude/scripts/council/council-lint.mjs --verdict <file>`.
 
 ## Review mode
 `/arc-council review` closes the loop on past verdicts: it records what actually happened and shows
 the council's calibration. It **never re-decides** anything and **only appends** to session files.
 
-1. **Find what's due.** Run `node .claude/scripts/council-calibrate.mjs --overdue docs/council/sessions`
+1. **Find what's due.** Run `node .claude/scripts/council/council-calibrate.mjs --overdue docs/council/sessions`
    (it lists every saved verdict whose latest `Review-by:` is before today AND that has no terminal
    HIT/MISS outcome yet — already-closed sessions are skipped, so the loop terminates). If none are
    overdue, say so and stop.
@@ -216,7 +216,7 @@ the council's calibration. It **never re-decides** anything and **only appends**
    The tools read the LAST `## OUTCOME` and the LAST `Review-by:` as authoritative, so a later
    re-review's `HIT`/`MISS` (also appended, never overwriting) supersedes the `UNRESOLVED` and closes
    the loop — the append-only history stays intact.
-4. **Show the scoreboard.** Run `node .claude/scripts/council-calibrate.mjs docs/council/sessions` and
+4. **Show the scoreboard.** Run `node .claude/scripts/council/council-calibrate.mjs docs/council/sessions` and
    show the calibration table (per-confidence hit-rate + Brier score, lower = better). That table is
    the council keeping honest score on itself.
 

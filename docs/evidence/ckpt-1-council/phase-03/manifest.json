@@ -1,0 +1,20 @@
+{
+  "phase": "03",
+  "commit": "c3d3ec5e7128ec0ebb00b1bfbacce45658115355",
+  "short": "c3d3ec5",
+  "generated": "2026-07-18T13:11:10Z",
+  "files": [
+    {
+      "name": "scan-verdict.json",
+      "sha256": "6f291bad5ecdfe22b2f77ab4ba7f18f0701e29a0049154d413f3be55a8e20157"
+    },
+    {
+      "name": "scan-result.sarif",
+      "sha256": "5d95ea4b78d22cc7e5d1093889b6b0f284ef06d941f4e11d0dd2aff3afbb0f34"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "9e80436ea3812a5fff0f3b6a080b41040fa2f9f2f31e08ca7b15767d6dbe0621"
+    }
+  ]
+}
