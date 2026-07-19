@@ -19,7 +19,7 @@
  *
  * Exit: 0 ok · 2 bad usage / unknown product / unsafe path.
  */
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -33,7 +33,7 @@ function die(msg) {
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
-let mode = null; // "plan" | "list" | "status" | "registry" | "prune-report"
+let mode = null; // "plan" | "list" | "status" | "registry" | "prune-report" | "attic"
 let productsArg = "";
 let root = null;
 let target = null; // prune-report's subject: the CONSUMER tree, not the source repo
@@ -44,6 +44,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === "--status") { mode = "status"; }
   else if (a === "--registry") { mode = "registry"; }
   else if (a === "--prune-report") { mode = "prune-report"; }
+  else if (a === "--attic") { mode = "attic"; }
   else if (a === "--target") { target = argv[++i]; }
   else if (a === "--root") { root = argv[++i]; }
   else die(`unknown argument: ${a}`);
@@ -56,59 +57,208 @@ if (!root) {
   while (!existsSync(join(d, "products")) && dirname(d) !== d) d = dirname(d);
   root = d;
 }
-if (!mode) die("usage: arc-products.mjs (--products LIST | --list | --status | --registry | --prune-report --target DIR) [--root DIR]");
+if (!mode) die("usage: arc-products.mjs (--products LIST | --list | --status | --registry | --prune-report --target DIR | --attic --target DIR) [--root DIR]");
 
-// ---------- prune-report (REQ-10): make stale files in a consumer tree VISIBLE ----------
+// ---------- unowned-file computation (shared by --prune-report and --attic) ----------
 // Every sync path is additive by design, and non-negotiable #51 forbids deleting anything in a
 // consumer repo. So a target that installed arc before Phase 03's re-homing now carries BOTH
 // layouts, and the registry still reports it clean -- the registry lists what was installed, not
-// what is present. This mode diffs those two. It reports and exits 0; it never removes anything.
-// Quarantining is REQ-11 (Phase 05), and even that moves to .claude/attic/DATE/ rather than rm.
-if (mode === "prune-report") {
-  if (!target) die("--prune-report needs --target <consumer-dir>");
-  const regPath = join(target, ".claude", "arc-registry.json");
+// what is present. This diffs those two.
+//
+// ONE implementation on purpose: --prune-report is --attic's dry run, so the list you were shown
+// is provably the list that moves. Two copies of this walk could drift, and the drift would only
+// ever be discovered by a consumer losing sight of a file.
+//
+// Path-safety note: these paths come from walking the real filesystem under <target>/.claude, NOT
+// from the registry. The registry contributes only set membership (`owned`), never a path used for
+// an fs operation -- so a hostile registry cannot steer a move outside the target.
+function unownedEntries(targetDir) {
+  const regPath = join(targetDir, ".claude", "arc-registry.json");
   if (!existsSync(regPath))
-    die(`no arc-registry.json in ${target} -- cannot report ownership without a registry (a pre-Phase-02 install; re-sync to write one)`);
+    die(`no arc-registry.json in ${targetDir} -- cannot report ownership without a registry (a pre-Phase-02 install; re-sync to write one)`);
   let reg;
   try {
     reg = JSON.parse(readFileSync(regPath, "utf8"));
   } catch (e) {
-    die(`unreadable arc-registry.json in ${target}: ${e.message} -- refusing to guess ownership from file presence`);
+    die(`unreadable arc-registry.json in ${targetDir}: ${e.message} -- refusing to guess ownership from file presence`);
   }
   const owned = new Set();
   for (const p of Object.values(reg.products || {}))
     for (const f of Array.isArray(p.files) ? p.files : []) owned.add(String(f).replace(/\\/g, "/"));
 
-  // Never reported: the consumer's own personal settings and working state (deliberately never
-  // synced -- REQ-04), transient agent worktrees, the attic itself, and the registry, which is
-  // written by the sync rather than owned by any one product.
+  // Never reported, never moved: the consumer's own personal settings and working state
+  // (deliberately never synced -- REQ-04), transient agent worktrees, the attic itself (without
+  // this an attic run would re-attic its own output on every subsequent run, forever), and the
+  // registry, which is written by the sync rather than owned by any one product.
   const SKIP_DIRS = new Set(["state", "worktrees", "attic"]);
-  const SKIP_FILES = new Set(["settings.local.json", "scheduled_tasks.lock", "arc-registry.json"]);
+  // "attic" is in BOTH sets: SKIP_DIRS covers the normal case, SKIP_FILES covers a consumer who
+  // has a stray regular file sitting at .claude/attic -- without it that file becomes its own move
+  // candidate and the run tries to move .claude/attic into .claude/attic/DATE/.
+  const SKIP_FILES = new Set(["settings.local.json", "scheduled_tasks.lock", "arc-registry.json", "attic"]);
 
-  const unowned = [];
+  const entries = [];
   const walk = (abs, rel) => {
     for (const e of readdirSync(abs, { withFileTypes: true })) {
+      const p = `${rel}/${e.name}`;
+      // Symlinks and Windows junctions FIRST. A link to a directory is not isDirectory() on a
+      // Dirent, so without this branch it falls through to the file case: reported as ONE path,
+      // and then renameSync relocates the entire subtree behind it. The operator would approve a
+      // one-line report and lose a tree -- which breaks the guarantee that the report is an exact
+      // preview of the move. Reported distinctly; never moved (see the attic mode below).
+      if (e.isSymbolicLink()) {
+        if (SKIP_FILES.has(e.name)) continue;
+        if (!owned.has(p)) entries.push({ rel: p, link: true });
+        continue;
+      }
       if (e.isDirectory()) {
         if (SKIP_DIRS.has(e.name)) continue;
-        walk(join(abs, e.name), `${rel}/${e.name}`);
+        walk(join(abs, e.name), p);
       } else {
         if (SKIP_FILES.has(e.name)) continue;
-        const p = `${rel}/${e.name}`;
-        if (!owned.has(p)) unowned.push(p);
+        if (!owned.has(p)) entries.push({ rel: p, link: false });
       }
     }
   };
-  const claudeDir = join(target, ".claude");
+  const claudeDir = join(targetDir, ".claude");
   if (existsSync(claudeDir)) walk(claudeDir, ".claude");
 
-  unowned.sort();
-  for (const p of unowned) process.stdout.write(`unowned  ${p}\n`);
+  entries.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+  return entries;
+}
+
+// A path containing a control character (newline, TAB, CR) can forge lines in a line-oriented
+// report -- `ghost\nunowned .claude/evil.md` prints as two plausible entries. Legal filenames on
+// Linux/macOS, so this is reachable on two of the three CI legs. The report renders them
+// unambiguously; the mutating path refuses to run at all.
+const CTRL = new RegExp("[" + String.fromCharCode(0) + "-" + String.fromCharCode(31) + "]");
+function renderPath(p) { return CTRL.test(p) ? JSON.stringify(p) : p; }
+
+// ---------- prune-report (REQ-10): make stale files in a consumer tree VISIBLE ----------
+// Reports and exits 0; it never removes anything. Quarantining is REQ-11 below, and even that
+// moves to .claude/attic/DATE/ rather than rm.
+if (mode === "prune-report") {
+  if (!target) die("--prune-report needs --target <consumer-dir>");
+  const entries = unownedEntries(target);
+  // A link is marked distinctly: it is ONE directory entry but may stand in front of a whole
+  // subtree, so calling it a "file" would understate what quarantining it would relocate.
+  for (const e of entries)
+    process.stdout.write(`${e.link ? "unowned-link" : "unowned"}  ${renderPath(e.rel)}\n`);
   process.stdout.write(
-    unowned.length
-      ? `arc-prune-report: ${unowned.length} unowned file(s) in ${target} -- present but owned by no installed product. Nothing was removed.\n`
+    entries.length
+      ? `arc-prune-report: ${entries.length} unowned file(s) in ${target} -- present but owned by no installed product. Nothing was removed.\n`
       : `arc-prune-report: 0 unowned file(s) in ${target}.\n`
   );
   process.exit(0);
+}
+
+// ---------- attic (REQ-11): quarantine stale files -- MOVE, never delete ----------
+// The other half of ADR-0020. Non-negotiable: there is NO delete call anywhere in this mode --
+// renameSync is the only mutation. No unlink, no rm, no rmdir. That is a property you can grep
+// for, which is the point: "we never delete" has to be checkable, not promised.
+//
+// Consequences of that rule, accepted deliberately:
+//   - directories left empty by a move stay behind (rmdir is still a delete)
+//   - a name collision suffixes rather than overwrites (clobbering is a delete wearing a move's
+//     clothes -- it destroys the earlier quarantined copy)
+//   - a failed move is reported and exits non-zero, never swallowed to make the run look clean
+if (mode === "attic") {
+  if (!target) die("--attic needs --target <consumer-dir>");
+  const entries = unownedEntries(target);
+
+  // Report BEFORE mutate (non-negotiable). The operator sees the full list first, and on an empty
+  // set nothing is created at all -- no stray empty dated directory to explain later.
+  for (const e of entries)
+    process.stdout.write(`${e.link ? "skipped-link" : "attic   "} ${renderPath(e.rel)}\n`);
+
+  // Links and junctions are reported but NEVER moved. renameSync on a link relocates the entire
+  // subtree behind it while the report showed a single line -- the operator would approve one path
+  // and lose a tree. Quarantining links safely needs a decision this phase has not taken, and
+  // "skip loudly" is the only option here that cannot destroy something.
+  const movable = entries.filter((e) => !e.link);
+  const skippedLinks = entries.length - movable.length;
+  const linkNote = skippedLinks ? ` ${skippedLinks} link(s) skipped (never moved).` : "";
+
+  if (!movable.length) {
+    process.stdout.write(`arc-attic: 0 unowned file(s) in ${target} -- nothing moved.${linkNote}\n`);
+    process.exit(0);
+  }
+
+  // A control character in a path can forge lines in the very report this move is approved from,
+  // so the mutating path refuses outright rather than moving on a report it cannot trust. The
+  // read-only report renders them quoted instead -- seeing them is exactly how you find them.
+  const forged = movable.filter((e) => CTRL.test(e.rel));
+  if (forged.length)
+    die(
+      `refusing to move ${forged.length} path(s) containing a control character -- e.g. ${JSON.stringify(forged[0].rel)}. ` +
+        `A newline in a filename forges lines in the report this move would be approved from; rename the file, then re-run.`
+    );
+
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const atticRel = `.claude/attic/${stamp}`;
+  const atticAbs = join(target, ".claude", "attic", stamp);
+
+  // Long-path pre-check. The attic prefix adds ~25 chars to every destination, and Windows caps
+  // paths at 260 unless LongPathsEnabled is on (it is OFF by default, and it is ON on this dev box
+  // -- which is exactly why this would not have been caught by hand). Report-before-mutate applies
+  // to this failure too: a length problem is knowable without moving a single file, so it is worth
+  // refusing up front rather than stopping half way through a tree.
+  const longest = movable.reduce((m, e) => Math.max(m, join(atticAbs, e.rel).length + 2), 0);
+  if (longest > 240)
+    die(
+      `refusing to move: the longest attic destination would be ${longest} characters, over the 240 safety limit ` +
+        `(Windows MAX_PATH is 260 without LongPathsEnabled). Quarantining would stop part-way through the tree. ` +
+        `Move the target to a shorter path, or enable long paths, then re-run.`
+    );
+
+  const moved = [];
+  const failed = [];
+  for (const { rel } of movable) {
+    const from = join(target, rel);
+    // The full relative path is preserved under the attic (.claude/attic/DATE/.claude/...), so a
+    // restore is a dumb tree copy back to the target root with no path arithmetic to get wrong.
+    let destRel = `${atticRel}/${rel}`;
+    let destAbs = join(atticAbs, rel);
+    let n = 1;
+    while (existsSync(destAbs)) {
+      n += 1;
+      destRel = `${atticRel}/${rel}.${n}`;
+      destAbs = join(atticAbs, `${rel}.${n}`);
+    }
+    try {
+      mkdirSync(dirname(destAbs), { recursive: true });
+      renameSync(from, destAbs);
+      moved.push([rel, destRel]);
+    } catch (e) {
+      failed.push([rel, e.message]);
+    }
+  }
+
+  // The manifest is both the receipt and the restore instruction, and it is written even after a
+  // partial failure -- a half-finished run must still be fully reversible.
+  if (moved.length) {
+    mkdirSync(atticAbs, { recursive: true });
+    const manifest =
+      `# arc attic manifest -- ${stamp}\n` +
+      `# ${moved.length} file(s) moved out of ${target}\n` +
+      `# restore: move each SECOND column back to its FIRST column, both relative to the target root\n` +
+      `# original${TAB}attic\n` +
+      moved.map(([a, b]) => `${a}${TAB}${b}`).join("\n") +
+      "\n";
+    writeFileSync(join(atticAbs, "MANIFEST.tsv"), manifest, "utf8");
+  }
+
+  for (const [rel, dest] of moved) process.stdout.write(`moved    ${rel}  ->  ${dest}\n`);
+  for (const [rel, msg] of failed) process.stderr.write(`arc-attic: FAILED to move ${rel}: ${msg}\n`);
+  process.stdout.write(
+    `arc-attic: ${moved.length} file(s) moved to ${atticRel}/ in ${target}; ${failed.length} failed.${linkNote} Nothing was deleted.\n`
+  );
+  if (moved.length) process.stdout.write(`arc-attic: restore instructions in ${atticRel}/MANIFEST.tsv\n`);
+  // Exit 3, not 2: a per-file move failure is a mutation outcome, and a caller must be able to tell
+  // it apart from "your flags or your registry were wrong" (die's 2). Every file is still on disk
+  // either way -- the loop collects failures and keeps going, so one locked file can never deadlock
+  // the remaining N-1 behind it on every future run.
+  process.exit(failed.length ? 3 : 0);
 }
 
 // ---------- path safety (defense in depth with product-lint) ----------

@@ -16,7 +16,8 @@ param(
   [string]$Target,
   [string]$Products = "",
   [switch]$List,
-  [switch]$PruneReport
+  [switch]$PruneReport,
+  [switch]$Attic
 )
 
 $src = $PSScriptRoot
@@ -44,7 +45,7 @@ if ($List) {
   exit $LASTEXITCODE
 }
 
-if (-not $Target) { Write-Error "usage: sync-to-project.ps1 -Target <dir> [-Products a,b | -List | -PruneReport]"; exit 2 }
+if (-not $Target) { Write-Error "usage: sync-to-project.ps1 -Target <dir> [-Products a,b | -List | -PruneReport | -Attic]"; exit 2 }
 if (-not (Test-Path $Target)) { Write-Error "Target folder not found: $Target"; exit 1 }
 if (-not (Test-Path (Join-Path $Target ".git"))) {
   Write-Host "Note: target has no .git - is this really a project root?" -ForegroundColor Yellow
@@ -55,6 +56,15 @@ if (-not (Test-Path (Join-Path $Target ".git"))) {
 # thinking, same as --list and --registry (ADR-0015).
 if ($PruneReport) {
   & node $resolver --prune-report --target $Target
+  exit $LASTEXITCODE
+}
+
+# ---- -Attic (REQ-11): quarantine stale files. MOVES them to .claude\attic\DATE\, never deletes.
+# The only mutating flag that is not an install, so it sits before every copy path like
+# -PruneReport. node performs the moves: this twin must not grow its own move logic, because the
+# one operation where a .sh/.ps1 divergence costs a consumer a real file is this one (ADR-0015).
+if ($Attic) {
+  & node $resolver --attic --target $Target
   exit $LASTEXITCODE
 }
 
@@ -103,7 +113,7 @@ if (Test-Path $settingsPath) {
 # Machinery. Exclude the personal settings file + the scheduled-tasks runtime lock
 # (/XF), and the per-project working state dir (/XD) -- none belong in a consumer
 # repo. The .sh twin excludes all three; keep them in lockstep (REQ-04).
-robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" "$src\.claude\worktrees" /NFL /NDL /NJH /NJS | Out-Null
+robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" "$src\.claude\worktrees" "$src\.claude\attic" /NFL /NDL /NJH /NJS | Out-Null
 
 if ($settingsBak -and (Test-Path $settingsPath)) {
   $merger = Join-Path $src ".claude\scripts\core\arc-settings-merge.mjs"

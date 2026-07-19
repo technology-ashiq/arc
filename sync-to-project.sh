@@ -7,6 +7,8 @@
 #   bash sync-to-project.sh <target-project-dir>              # full suite (default)
 #   bash sync-to-project.sh <target-project-dir> --products council,plan
 #   bash sync-to-project.sh --list                            # list products, exit
+#   bash sync-to-project.sh <target-project-dir> --prune-report  # list stale files, mutate nothing
+#   bash sync-to-project.sh <target-project-dir> --attic         # MOVE stale files to .claude/attic/DATE/
 #
 # Full suite syncs:   .claude/ (agents, commands, hooks, rules, output-styles,
 #   skills, settings.json, statusline), docs/templates/, and the meta docs. It is
@@ -30,6 +32,7 @@ while [ $# -gt 0 ]; do
     --products)     MODE="products"; PRODUCTS="${2:?sync: --products needs a value}"; shift ;;
     --products=*)   MODE="products"; PRODUCTS="${1#*=}" ;;
     --prune-report) MODE="prune-report" ;;
+    --attic)        MODE="attic" ;;
     -*)             echo "sync: unknown option: $1" >&2; exit 2 ;;
     *)              if [ -z "$TARGET" ]; then TARGET="$1"; else echo "sync: unexpected argument: $1" >&2; exit 2; fi ;;
   esac
@@ -41,7 +44,7 @@ if [ "$MODE" = "list" ]; then
   exec node "$RESOLVER" --list --root "$SRC"
 fi
 
-: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --list | --prune-report]}"
+: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --list | --prune-report | --attic]}"
 [ -d "$TARGET" ] || { echo "sync: target folder not found: $TARGET" >&2; exit 1; }
 [ -d "$TARGET/.git" ] || echo "sync: note -- target has no .git, is this really a project root?" >&2
 
@@ -50,6 +53,15 @@ fi
 # flag writes nothing to the target, not even the registry.
 if [ "$MODE" = "prune-report" ]; then
   exec node "$RESOLVER" --prune-report --target "$TARGET"
+fi
+
+# ---------- --attic (REQ-11): quarantine stale files -- MOVES them, never deletes ----------
+# The only mutating flag that is not an install. Same placement rule as --prune-report: before
+# every copy path, so it can never run as a side effect of a sync. node does the moving so this
+# twin and the .ps1 cannot drift on the one operation where drift would cost a consumer a file
+# (ADR-0015).
+if [ "$MODE" = "attic" ]; then
+  exec node "$RESOLVER" --attic --target "$TARGET"
 fi
 
 # Council JUROR env contract: append the JUROR_* block from a source .env.example to
@@ -124,7 +136,10 @@ fi
 # ---------- full (default): byte-identical to pre-initiative (REQ-02) ----------
 # Excluded from the .claude sync: personal settings + per-project working state +
 # the scheduled-tasks runtime lock (never belongs in a consumer repo -- REQ-04).
-EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock" "worktrees")
+# "attic" joins this list the same commit the attic feature ships: a quarantine is consumer working
+# state by definition, and syncing arc's own attic into a target could overwrite the target's
+# quarantined copies through a routine install.
+EXCLUDES=("settings.local.json" "state" "scheduled_tasks.lock" "worktrees" "attic")
 
 mkdir -p "$TARGET/.claude" "$TARGET/docs/templates" "$TARGET/docs"
 # No-ops on a fresh target (nothing to preserve), so REQ-02's byte-identical golden --
@@ -134,7 +149,7 @@ _arc_settings_save
 # ARC_SYNC_NO_RSYNC=1 forces the portable cp fallback even where rsync exists --
 # lets CI prove REQ-02 (byte-identical output) holds on BOTH copy paths.
 if command -v rsync >/dev/null 2>&1 && [ -z "${ARC_SYNC_NO_RSYNC:-}" ]; then
-  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' --exclude 'worktrees/' "$SRC/.claude/" "$TARGET/.claude/"
+  rsync -a --exclude 'settings.local.json' --exclude 'state/' --exclude 'scheduled_tasks.lock' --exclude 'worktrees/' --exclude 'attic/' "$SRC/.claude/" "$TARGET/.claude/"
   rsync -a "$SRC/docs/templates/" "$TARGET/docs/templates/"
 else
   # Portable cp fallback (Git Bash has no rsync): copy all, then drop excludes.
