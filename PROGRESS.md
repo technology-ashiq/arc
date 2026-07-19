@@ -17,10 +17,32 @@ registry reported clean, and arc changing the plan contract without telling anyo
 with a regression test each. Plus the trial ledger's first real fire data in its existence: five
 gates fired on a real external plan, where two prior logged runs had fired nothing at all.
 
-**Next up: Phase 05 — prune/attic + docs + retro** (`phases/phase-05-spec.md`, 0.5-week appetite).
-Three strands: **REQ-11** (attic — move unowned files to `.claude/attic/DATE/`, never delete; the
-report half already shipped in Phase 4), the README/usermanual rewrite, and TRIAL-gate promotions
-via `/arc-retro`.
+**Phase 05 OPEN — docs + promotions + retro** (`phases/phase-05-spec.md`, 0.5-week appetite).
+Two strands now, not three: the README/usermanual rewrite, and TRIAL-gate promotions via
+`/arc-retro`. **REQ-11 (attic) was built and then scope-cut on the same day — ADR-0023.**
+
+**Why attic was cut, since "we built it and dropped it" deserves the reason.** The mode worked:
+16 hostile-input bats green, MANIFEST-based restore, collision suffixing, no delete call anywhere.
+Then the mandatory adversarial pass found the eligibility rule was wrong at the root — *"not in the
+registry"* also describes **every file the consumer wrote themselves**, since arc never installed
+those and they can never appear in the registry. Reproduced on a **fresh** install with a valid
+registry (`deploy-staging.md` and `my-reviewer.md` both quarantined), which killed the natural
+hypothesis that this was old-install drift and that new-cycle registries would fix it. It is not,
+and they would not.
+
+The fix that would have made it safe — an append-only ownership ledger with content hashes — means
+changing the **sync write path**, the most golden-gated code in the repo, to serve a cleanup tool
+whose entire demand is **one repo we own and 21 files**. Estimated 4–6 days against a 0.5-week
+appetite for the whole phase. So: cut, with triggers recorded, implementation preserved at
+`e2b3646`, and the phase's appetite spent on the two strands that have real demand. Nothing
+dangerous ever merged — the bug lived only in unmerged code, which is the whole reason the
+adversarial pass runs before the merge and not after.
+
+**One live defect did come out of it, and is fixed here:** `--prune-report` (shipped, Phase 4) lists
+consumer-authored files as `unowned` with no hint that it is a *"not installed by arc"* list rather
+than a *"safe to delete"* list. A person could reasonably read it as arc calling their own work
+junk. Output now says so plainly; three bats cases pin the wording. **REQ-12** added for what the
+phase actually delivers, since dropping REQ-11 would otherwise have left Phase 05 goalless.
 
 **Plan reconciled 2026-07-19 (ADR-0022), before Phase 05 opened.** `/arc-resume` caught PLAN.md
 saying Phase 4 was *"blocked until targets named"* while REQ-09 read `validated` — the ledger
@@ -50,7 +72,7 @@ Setup needed from user: none for Phase 05 — all local.
 | 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ✅ done | 2026-07-17 |
 | 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ✅ done | 2026-07-19 |
 | 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ✅ done | 2026-07-19 |
-| 05 | Prune-report + attic, README/usermanual rewrite, TRIAL promotions, retro | 0.5 weeks | ⬜ not started | |
+| 05 | README/usermanual/blueprint rewrite, TRIAL→FAIL promotions, retro (attic scope-cut — ADR-0023; prune-report shipped in Phase 04) | 0.5 weeks | 🔄 in progress | |
 
 Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggered next cycle (ADR-0016).
 

@@ -8,8 +8,11 @@
 # review-ledger.sh still executes. The registry reports the target clean because it lists what
 # was installed, not what is present.
 #
-# This gate reports. It never deletes -- that is REQ-11 (attic), Phase 05, and even there the
-# move is to .claude/attic/DATE/, never rm.
+# This gate reports, and it stays report-only PERMANENTLY. The attic half (REQ-11) was built at
+# Phase 05 start and then scope-cut by ADR-0023: "not in the registry" also describes every file
+# the CONSUMER wrote, so acting on this list automatically quarantined their own commands and
+# agents -- reproduced on a FRESH install with a valid registry. Implementation preserved at
+# e2b3646. What survives is this: a list a human reads, that says what it is.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
@@ -48,7 +51,7 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ -f "$TARGET/.claude/scripts/ghost.sh" ]     # non-negotiable #51
 }
 
-@test "prune-report: the consumer's OWN personal files are not reported as unowned" {
+@test "prune-report: skip-listed consumer paths (settings.local.json, state/) are never reported" {
   printf '{}' > "$TARGET/.claude/settings.local.json"
   mkdir -p "$TARGET/.claude/state/reviews"
   printf 'x\n' > "$TARGET/.claude/state/reviews/abc.txt"
@@ -76,4 +79,33 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   run bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" --prune-report
   [ "$status" -eq 0 ]
   [[ "$output" == *"ghost.sh"* ]]
+}
+
+# --- the report must not be mistaken for a verdict (ADR-0023) -------------------------------
+# A consumer's own files are unowned BY DEFINITION -- arc never installed them, so they can never
+# be in the registry. REQ-11 (attic) was scope-cut precisely because acting on this list
+# automatically ate them. The list still has to be safe for a HUMAN to act on, so it says what it
+# is. These cases pin that wording; deleting them silently re-arms the same trap.
+
+@test "prune-report: a consumer's OWN authored command is listed (this is the trap)" {
+  printf '# my own command\n' > "$TARGET/.claude/commands/deploy-staging.md"
+  run node "$R" --prune-report --target "$TARGET"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"deploy-staging.md"* ]]      # unavoidable: arc has no record of it
+}
+
+@test "prune-report: ...so the output says it is NOT a delete list" {
+  printf '# my own command\n' > "$TARGET/.claude/commands/deploy-staging.md"
+  run node "$R" --prune-report --target "$TARGET"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not installed by arc"* ]]
+  [[ "$output" == *"not a \"safe to delete\" list"* ]]
+  [[ "$output" == *"Files you wrote yourself appear here too"* ]]
+}
+
+@test "prune-report: no scary note when there is nothing to report" {
+  run node "$R" --prune-report --target "$TARGET"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"0 unowned"* ]]
+  [[ "$output" != *"safe to delete"* ]]         # a clean tree needs no warning
 }

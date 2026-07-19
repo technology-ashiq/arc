@@ -108,12 +108,12 @@ jobs:
         # number when tests are added; never lower it to make a red build green.
         # Counted by grep, not `bats -r --count`: measured on the windows leg that call cost
         # 67s (it loads and parses every file through bats itself) for a number grep produces
-        # in 157ms. Both report 268 here. A gate must not cost more than what it guards.
+        # in 157ms. Both report 271 here. A gate must not cost more than what it guards.
         shell: bash
         run: |
           n="$(grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}')"
           echo "discovered $n test(s)"
-          [ "$n" -ge 268 ] || { echo "::error::test count $n fell below the floor of 268"; exit 1; }
+          [ "$n" -ge 271 ] || { echo "::error::test count $n fell below the floor of 271"; exit 1; }
 
   # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
   # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker

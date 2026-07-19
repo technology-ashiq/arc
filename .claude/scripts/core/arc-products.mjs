@@ -63,7 +63,12 @@ if (!mode) die("usage: arc-products.mjs (--products LIST | --list | --status | -
 // consumer repo. So a target that installed arc before Phase 03's re-homing now carries BOTH
 // layouts, and the registry still reports it clean -- the registry lists what was installed, not
 // what is present. This mode diffs those two. It reports and exits 0; it never removes anything.
-// Quarantining is REQ-11 (Phase 05), and even that moves to .claude/attic/DATE/ rather than rm.
+//
+// It stays report-only permanently. REQ-11 (attic: MOVE the unowned set to .claude/attic/DATE/) was
+// built and then SCOPE-CUT by ADR-0023: "not in the registry" also describes every file the consumer
+// wrote, so acting on this list automatically quarantined their own commands and agents -- proven on
+// a FRESH install with a valid registry, so it was never an old-install problem. The list is a
+// diagnostic for a human to read, which is why the output says so in as many words.
 if (mode === "prune-report") {
   if (!target) die("--prune-report needs --target <consumer-dir>");
   const regPath = join(target, ".claude", "arc-registry.json");
@@ -80,8 +85,11 @@ if (mode === "prune-report") {
     for (const f of Array.isArray(p.files) ? p.files : []) owned.add(String(f).replace(/\\/g, "/"));
 
   // Never reported: the consumer's own personal settings and working state (deliberately never
-  // synced -- REQ-04), transient agent worktrees, the attic itself, and the registry, which is
+  // synced -- REQ-04), transient agent worktrees, an `attic/` dir (arc does not create one -- since
+  // ADR-0023 that is an operator convention for hand-moved files, and re-reporting what someone
+  // deliberately set aside would be the report arguing with itself), and the registry, which is
   // written by the sync rather than owned by any one product.
+  // NOTE: this skip list is NOT a claim that everything else is arc's. See the note printed below.
   const SKIP_DIRS = new Set(["state", "worktrees", "attic"]);
   const SKIP_FILES = new Set(["settings.local.json", "scheduled_tasks.lock", "arc-registry.json"]);
 
@@ -103,11 +111,22 @@ if (mode === "prune-report") {
 
   unowned.sort();
   for (const p of unowned) process.stdout.write(`unowned  ${p}\n`);
-  process.stdout.write(
-    unowned.length
-      ? `arc-prune-report: ${unowned.length} unowned file(s) in ${target} -- present but owned by no installed product. Nothing was removed.\n`
-      : `arc-prune-report: 0 unowned file(s) in ${target}.\n`
-  );
+  if (unowned.length) {
+    process.stdout.write(
+      `arc-prune-report: ${unowned.length} unowned file(s) in ${target} -- present but owned by no installed product. Nothing was removed.\n`
+    );
+    // "unowned" is a fact about the registry, not a verdict on the file. A consumer's own commands,
+    // agents and skills are unowned BY DEFINITION -- arc never installed them, so they can never
+    // appear in the registry, on a fresh install or an old one. Without this line the report reads
+    // as "arc says these are junk", and the person most likely to act on it is the person who wrote
+    // them. Acting on this list AUTOMATICALLY is exactly what REQ-11 was scope-cut for (ADR-0023).
+    process.stdout.write(
+      `arc-prune-report: NOTE -- this is a "not installed by arc" list, not a "safe to delete" list. ` +
+        `Files you wrote yourself appear here too. Review each one before removing anything.\n`
+    );
+  } else {
+    process.stdout.write(`arc-prune-report: 0 unowned file(s) in ${target}.\n`);
+  }
   process.exit(0);
 }
 
