@@ -142,3 +142,163 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **Phase 00 CLOSED ✅ (2026-07-17).** The selective-install spine ships: single resolver
     (`arc-products.mjs`, TAB line-protocol) + registry linter (`product-lint.mjs`, hostile-corpus
+
+## 2026-07-18 16:11 — main
+- Last commit: 14fac62 chore(gitignore): stop tracking regenerable graphify-out; fix mangled ignore line
+- Uncommitted files at exit: 0
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 01 CLOSED ✅ (2026-07-17).** The 6 lifecycle hooks are now composable: thin core
+    dispatchers (`_dispatch.sh`) running `.claude/hooks/<Event>.d/NN-*.sh` fragments, advisory events
+
+## 2026-07-18 16:25 — main
+- Last commit: 5aa9cda chore(progress): Phase 03 checkpoint 0 done (byte-diff gate); next = council move
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 17:29 — main
+- Last commit: 5aa9cda chore(progress): Phase 03 checkpoint 0 done (byte-diff gate); next = council move
+- Uncommitted files at exit: 8
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 17:43 — main
+- Last commit: 5aa9cda chore(progress): Phase 03 checkpoint 0 done (byte-diff gate); next = council move
+- Uncommitted files at exit: 10
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 17:43 — main
+- Last commit: 5aa9cda chore(progress): Phase 03 checkpoint 0 done (byte-diff gate); next = council move
+- Uncommitted files at exit: 10
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 19:25 — claude/arc-phase-03-ckpt0-hardening
+- Last commit: c10e692 refactor(council): re-home council-*.mjs to .claude/scripts/council/ (Phase 03 ckpt 1)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 21:49 — claude/arc-phase-03-speedup
+- Last commit: d53daed perf(tests): make CI the authority for the full suite; stop paying for it twice
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 22:10 — claude/arc-phase-03-speedup
+- Last commit: d53daed perf(tests): make CI the authority for the full suite; stop paying for it twice
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-18 23:03 — claude/arc-phase-03-speedup
+- Last commit: d53daed perf(tests): make CI the authority for the full suite; stop paying for it twice
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 01:26 — feat/arc-phase-03-ckpt4-review
+- Last commit: 93fb7ff refactor(review): re-home the review product to .claude/scripts/review/ (Phase 03 ckpt 4)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 01:39 — feat/arc-phase-03-ckpt4-review
+- Last commit: 93fb7ff refactor(review): re-home the review product to .claude/scripts/review/ (Phase 03 ckpt 4)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 01:59 — feat/arc-phase-03-ckpt4-review
+- Last commit: 93fb7ff refactor(review): re-home the review product to .claude/scripts/review/ (Phase 03 ckpt 4)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 02:14 — docs/arc-req07-tests-centralised
+- Last commit: 953e74d docs(req-07): amend REQ-07 to scripts only; tests stay centralised (ADR-0021)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 02:19 — docs/arc-req07-tests-centralised
+- Last commit: 953e74d docs(req-07): amend REQ-07 to scripts only; tests stay centralised (ADR-0021)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 02:23 — main
+- Last commit: c6d566e Merge pull request #37 from technology-ashiq/docs/arc-req07-tests-centralised
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 02:24 — main
+- Last commit: c6d566e Merge pull request #37 from technology-ashiq/docs/arc-req07-tests-centralised
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED ✅ (2026-07-17).** Registry-aware core: targets now carry `.claude/arc-registry.json`
+    ground truth (v1 schema locked: `schema` · `source.commit` · per-product `version`+`files`) and consumers
+
+## 2026-07-19 03:55 — feat/arc-phase-03-close
+- Last commit: 591a931 chore(phase-done): close Phase 03 -- physical re-homing (248/248, reviewed fix-first)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-19).** Physical re-homing complete: `.claude/scripts/` holds nothing
+    outside a product directory — `core/` · `council/` · `plan/` · `review/`. 36 scripts, 42 gated moves,
+
+## 2026-07-19 03:58 — feat/arc-phase-03-close
+- Last commit: 591a931 chore(phase-done): close Phase 03 -- physical re-homing (248/248, reviewed fix-first)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-19).** Physical re-homing complete: `.claude/scripts/` holds nothing
+    outside a product directory — `core/` · `council/` · `plan/` · `review/`. 36 scripts, 42 gated moves,
+
+## 2026-07-19 11:38 — feat/arc-phase-04-dogfood
+- Last commit: 7616af6 feat(prune-report): make stale consumer files visible (REQ-10, ADR-0020 deadline)
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 CLOSED ✅ (2026-07-19).** Physical re-homing complete: `.claude/scripts/` holds nothing
+    outside a product directory — `core/` · `council/` · `plan/` · `review/`. 36 scripts, 42 gated moves,
+
+## 2026-07-19 14:49 — main
+- Last commit: 655c8ba Merge pull request #40 from technology-ashiq/docs/arc-phase-04-close
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+    took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
