@@ -9,7 +9,7 @@
 
 Every v3.5 substance gate — `pre-mortem-cite` · `appetite-sum` · `adr-wired` · `adr-confidence` ·
 `architecture` · `current-state-structure` · `nonneg-drift` — ships in the `TRIAL` set in
-`.claude/scripts/kickoff-lint.mjs`. A trial gate **always WARNs** (suffix `[trial]`), even on a v3
+`.claude/scripts/plan/kickoff-lint.mjs`. A trial gate **always WARNs** (suffix `[trial]`), even on a v3
 plan; it never FAILs. `kickoff-lint` prints a `[trial-status]` footer showing the live-vs-trial count.
 
 ## Promotion criteria (both must hold)

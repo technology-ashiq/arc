@@ -15,7 +15,8 @@
 param(
   [string]$Target,
   [string]$Products = "",
-  [switch]$List
+  [switch]$List,
+  [switch]$PruneReport
 )
 
 $src = $PSScriptRoot
@@ -43,10 +44,18 @@ if ($List) {
   exit $LASTEXITCODE
 }
 
-if (-not $Target) { Write-Error "usage: sync-to-project.ps1 -Target <dir> [-Products a,b | -List]"; exit 2 }
+if (-not $Target) { Write-Error "usage: sync-to-project.ps1 -Target <dir> [-Products a,b | -List | -PruneReport]"; exit 2 }
 if (-not (Test-Path $Target)) { Write-Error "Target folder not found: $Target"; exit 1 }
 if (-not (Test-Path (Join-Path $Target ".git"))) {
   Write-Host "Note: target has no .git - is this really a project root?" -ForegroundColor Yellow
+}
+
+# ---- -PruneReport (REQ-10): read-only. Reports stale files, writes nothing, deletes nothing.
+# Placed before every copy path so it can never be mistaken for an install. node does the
+# thinking, same as --list and --registry (ADR-0015).
+if ($PruneReport) {
+  & node $resolver --prune-report --target $Target
+  exit $LASTEXITCODE
 }
 
 # ---- -Products: manifest-driven selective install ----
@@ -81,10 +90,31 @@ if ($Products) {
 }
 
 # ---- full (default): byte-identical to pre-initiative ----
+# Snapshot the consumer's settings.json before robocopy overwrites it (Phase 04 dogfood
+# finding: their per-gate overrides were being deleted). Merge is done by node, same as
+# the registry -- this twin stays a dumb caller (ADR-0015).
+$settingsPath = Join-Path $Target ".claude\settings.json"
+$settingsBak = $null
+if (Test-Path $settingsPath) {
+  $settingsBak = [System.IO.Path]::GetTempFileName()
+  Copy-Item $settingsPath $settingsBak -Force
+}
+
 # Machinery. Exclude the personal settings file + the scheduled-tasks runtime lock
 # (/XF), and the per-project working state dir (/XD) -- none belong in a consumer
 # repo. The .sh twin excludes all three; keep them in lockstep (REQ-04).
 robocopy "$src\.claude" "$Target\.claude" /E /XF settings.local.json scheduled_tasks.lock /XD "$src\.claude\state" "$src\.claude\worktrees" /NFL /NDL /NJH /NJS | Out-Null
+
+if ($settingsBak -and (Test-Path $settingsPath)) {
+  $merger = Join-Path $src ".claude\scripts\core\arc-settings-merge.mjs"
+  $merged = & node $merger $settingsPath $settingsBak
+  if ($LASTEXITCODE -eq 0 -and $merged) {
+    [System.IO.File]::WriteAllText($settingsPath, ($merged -join "`n") + "`n", (New-Object System.Text.UTF8Encoding $false))
+    Remove-Item $settingsBak -Force
+  } else {
+    Write-Host "sync: settings merge failed -- your previous settings.json is preserved at $settingsBak"
+  }
+}
 
 # Planning templates
 robocopy "$src\docs\templates" "$Target\docs\templates" /E /NFL /NDL /NJH /NJS | Out-Null

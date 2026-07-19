@@ -206,6 +206,38 @@ addrow() {
 
 # ---------- v3.5 substance groups (WARN-first trial) ----------
 
+@test "[sections] a missing required section says WHAT to add and WHERE from, not just 'missing'" {
+  # Phase 04 dogfood: a real consumer's plan (venturemind, written 2026-07-07) failed 7 checks
+  # after upgrading arc, because four of them were added 2026-07-11. The author had not touched
+  # the file. A bare "missing section" leaves them guessing at a contract that changed under
+  # them -- and on a solo project there is nobody to ask. The message has to carry the fix.
+  sedi 's@^## Success requirements@## Removed requirements@' "$TMP/PLAN.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"success requirements"* ]]
+  [[ "$output" == *"REQ-01"* ]]                 # says what the section actually contains
+  [[ "$output" == *"PLAN-template.md"* ]]       # and where to copy it from
+}
+
+@test "[sections] the same treatment for assumptions and external dependencies" {
+  sedi 's@^## Assumptions ledger@## Bets we are making@' "$TMP/PLAN.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"betting on"* ]]             # what the section is FOR, in the operator's words
+  [[ "$output" == *"PLAN-template.md"* ]]
+}
+
+@test "[phases] a goalless phase names both ways out, not just the complaint" {
+  # both fixture REQs map to phase 1, and phase 0 is exempt by design (steel thread),
+  # so phase 1 only goes goalless once BOTH are dropped
+  sedi 's#^| REQ-01 |\(.*\)| 1 | active |#| REQ-01 |\1| 1 | dropped |#' "$TMP/PLAN.md"
+  sedi 's#^| REQ-02 |\(.*\)| 1 | active |#| REQ-02 |\1| 1 | dropped |#' "$TMP/PLAN.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"phase without a goal"* ]]
+  [[ "$output" == *"CUT"* ]]                    # mapping a REQ is one fix; CUT is the other
+}
+
 @test "[pre-mortem-cite] generic pre-mortem warns (trial), still exits 0" {
   sedi 's#^| 4 | Appetite blown silently |.*#| 4 | Team gets busy | Watch it carefully |#' "$TMP/PLAN.md"
   sedi 's#^| 5 | Contract tests drift from real impl |.*#| 5 | Things break | Be careful |#' "$TMP/PLAN.md"

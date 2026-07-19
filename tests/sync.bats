@@ -130,6 +130,24 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ ! -e "$TARGET/.claude/scripts/review/arc-scan/arc-scan.sh" ]
 }
 
+@test "sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)" {
+  # Every other case in this file mktemps a FRESH target, so upgrade-over-an-existing-install
+  # had zero coverage -- the blind spot ADR-0020 recorded. Dogfooding into a real consumer
+  # then found the bug it was hiding: the copy deleted their per-gate overrides and their
+  # gates went warn -> block, silently, for keys arc's own //profile doc tells them to add.
+  bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" --products council >/dev/null
+  cd "$TARGET"                                  # relative paths: node resolves from cwd
+  node -e 'const fs=require("fs"),p=".claude/settings.json";
+    const j=JSON.parse(fs.readFileSync(p,"utf8"));
+    j.arc=j.arc||{}; j.arc.coverageMode="warn";  // exactly what the shipped doc string invites
+    j.permissions=j.permissions||{}; j.permissions.allow=(j.permissions.allow||[]).concat("Bash(their-tool:*)");
+    fs.writeFileSync(p,JSON.stringify(j,null,2));'
+  bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" --products council >/dev/null   # re-sync == upgrade
+  grep -q '"coverageMode": "warn"' .claude/settings.json                        # their override lived
+  grep -q 'their-tool' .claude/settings.json                                    # their allowlist entry lived
+  grep -q '"hooks"' .claude/settings.json                                       # arc's machinery still there
+}
+
 @test "sync: missing target dir fails cleanly (exit 1)" {
   run bash "$ARC_ROOT/sync-to-project.sh" "/no/such/target/$$"
   [ "$status" -eq 1 ]
