@@ -89,10 +89,26 @@ const required = [
   "non-negotiables", "no-gos", "rabbit holes", "assumptions", "external dependencies",
   "pre-mortem", "phases",
 ];
+// What each section is FOR, in one line. A gate that only says "missing" makes the operator
+// guess -- and four of these became required on 2026-07-11, so a plan written before that fails
+// here through no fault of its author, who never touched the file. Found by dogfooding into a
+// real consumer (Phase 04). On a solo project there is nobody to ask, so the message carries the fix.
+const SECTION_HELP = {
+  "success requirements":
+    "one REQ row per measurable outcome — `| REQ-01 | outcome | how you'd verify it | phase | active |`. Without it no phase has a definition of done",
+  assumptions:
+    "what the plan is betting on, and the trigger that would tell you the bet is wrong",
+  "external dependencies":
+    "every service or API the build leans on, each with an interface + fake so the build runs offline",
+  "non-negotiables": "the rules that hold even when the schedule slips",
+  "pre-mortem": "how this build fails, written before it does",
+};
 for (const name of required) {
   const body = section(secs, name);
-  if (body === null) fail("sections", `missing "## ${name}" section`);
-  else if (!hasContent(body)) fail("sections", `"## ${name}" is empty or placeholder`);
+  const why = SECTION_HELP[name] ? ` — ${SECTION_HELP[name]}` : "";
+  const from = " Copy the block from docs/templates/PLAN-template.md.";
+  if (body === null) fail("sections", `missing "## ${name}" section${why}.${from}`);
+  else if (!hasContent(body)) fail("sections", `"## ${name}" is empty or placeholder${why}.${from}`);
 }
 
 // ---------- 2b. tier (kickoff v3): derived from appetite, sets caps ----------
@@ -142,7 +158,11 @@ const REQ_STATUS = new Set(["active", "validated", "dropped"]);
 const reqRows = tableRows(section(secs, "success requirements"));
 const reqPhases = new Set();
 let activeReqs = 0;
-if (reqRows.length === 0) fail("reqs", "no REQ rows in Success requirements table");
+if (reqRows.length === 0)
+  fail(
+    "reqs",
+    "no REQ rows in Success requirements table — add one row per measurable outcome, e.g. `| REQ-01 | a user can X | acceptance you could run | 1 | active |`. A phase with no REQ has nothing to close against. See docs/templates/PLAN-template.md."
+  );
 for (const r of reqRows) {
   const id = r[0] || "?";
   if (!/^REQ-\d+/i.test(id)) fail("reqs", `row "${id}" — id must be REQ-NN`);
@@ -184,7 +204,10 @@ for (const r of phaseRows) {
   const specPath = `phases/phase-${pad(n)}-spec.md`;
   if (!existsSync(join(root, specPath))) fail("phases", `${specPath} missing (phase ${n})`);
   if (n > 0 && !reqPhases.has(n))
-    fail("phases", `phase ${n} serves no active/validated REQ — phase without a goal`);
+    fail(
+      "phases",
+      `phase ${n} serves no active/validated REQ — phase without a goal. Either point some REQ's phase column at ${n}, or mark the phase CUT if it is no longer in scope.`
+    );
 }
 if (!phaseNums.includes(0)) fail("phase0", "no Phase 0 (steel thread) in Phases table");
 for (const p of reqPhases)
