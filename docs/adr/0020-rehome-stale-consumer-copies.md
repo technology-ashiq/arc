@@ -39,10 +39,16 @@ Across all five checkpoints this compounds — up to five products' worth of fro
 
 ## Decisive constraint on timing
 
-**REQ-09 places the first real external consumers in Phase 4** (venturemind / InvoiceFly), status
-`active`. Today the count is effectively zero. The residue is therefore near-theoretical during
-Phase 3 and becomes real the moment Phase 4 dogfoods into a live repo — which is also the first
-time anyone would *upgrade* an existing install rather than create a fresh one.
+**REQ-09 places the first real external consumers in Phase 4** (venturemind / Opportunity-Scout —
+name corrected 2026-07-19 by ADR-0022; the original text said InvoiceFly, which never existed),
+status `active`. Today the count is effectively zero. The residue is therefore near-theoretical
+during Phase 3 and becomes real the moment Phase 4 dogfoods into a live repo — which is also the
+first time anyone would *upgrade* an existing install rather than create a fresh one.
+
+**Confirmed by events (2026-07-19).** This paragraph's reasoning held: venturemind carried a
+pre-Phase-02 install, making it the first real upgrade-over-existing case, and `--prune-report`
+found **21 unowned files** there — including the 6 the Phase-03 re-home left behind. Only the
+repo name in this ADR was wrong, never the timing argument.
 
 ## Options considered
 
