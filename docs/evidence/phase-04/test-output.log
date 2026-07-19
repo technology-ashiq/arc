@@ -1,0 +1,49 @@
+=== Phase 04 — Dogfood: two real external consumers. Verification evidence ===
+
+--- Targets (assumption row 5 FIRED at phase start) ---
+InvoiceFly: DOES NOT EXIST -- absent from disk and from the GitHub account. Named in the
+plan 2026-07-16, never created. Assumption marked FIRED and committed (d80434c) BEFORE any
+work proceeded, per the trigger's own wording ('Phase 4 blocked until targets named').
+Re-picked by Ashiq: Opportunity-Scout (council) + venturemind (core+plan).
+
+--- Repo #1: Opportunity-Scout — FRESH INSTALL path ---
+install: sync-to-project.sh . --products council   ->  registry {core, council}, schema 1
+REQ-01 discrimination, run with the TARGET's own installed council-lint:
+   good-full.md      -> exit 0
+   bad-nodecision.md -> exit 1     (discrimination, not merely non-crash)
+REQ-05: /arc status renders from the registry -- core+council ok, git/plan absent
+additive: .env.example +16 lines, -0 lines. Their 8 in-progress files untouched.
+REAL council session (genuine open question, not a fixture): 5 members, verifier-graded,
+one rebuttal round, verdict passes the target's own council-lint. Committed there: 034b474.
+arc-prune-report: 0 unowned file(s) in E:/Work_Hub/01_Automemory/Opportunity-Scout.
+
+--- Repo #2: venturemind — UPGRADE path (pre-Phase-02 install) ---
+install: sync-to-project.sh . --products plan  ->  registry {core, plan}
+This path is why two targets were needed: a fresh install exercises none of it.
+arc-prune-report: 21 unowned file(s) in E:/Work_Hub/01_Automemory/venturemind -- present but owned by no installed product. Nothing was removed.
+plan product exercised: /arc-change routed the PageReader feature (commit 7b4a6b5).
+  their installed kickoff-lint: 7 FAILs -> 0 FAILs
+  five trial gates fired on a real plan -- first fire data in docs/trial-ledger.md's history
+real work built there: lib/providers/reader/ + 16 tests (commit 23322d6), full suite 145 pass
+
+--- Issues found -> fixed in the mold, each with a regression test (spec line 13) ---
+1. sync deleted a consumer's settings.json customisations (measured: their coverageMode and
+   docsGate were wiped, gates went warn -> block). Fix 644accc, arc-settings-merge.mjs, 8 tests.
+2. re-homed products leave stale EXECUTABLE copies; registry reports the target clean.
+   Fix 7616af6, --prune-report (REQ-10, pulled forward by ADR-0020), 8 tests.
+3. arc changed the plan contract on 2026-07-11 and said nothing; a consumer plan written
+   2026-07-07 failed 7 checks with no indication of the remedy. Fix 3367f20, actionable
+   failure messages, 3 tests.
+All three surfaced on a real consumer. None was found by a fixture.
+
+--- KNOWN GAP (spec line 11) ---
+Classifying PRE-EXISTING legacy files in an older install was out of scope for this phase.
+It is now PARTLY closed: --prune-report shipped here and lists them (venturemind: 21).
+Still open, and deliberately: prune-report REPORTS. Quarantine is REQ-11 (Phase 05), and
+even there the move is to .claude/attic/DATE/ -- non-negotiable #51 forbids deleting in a
+consumer repo, in either half. Retry after Phase 5 ships.
+
+--- Gates ---
+kickoff-lint: all checks passed ✔
+product-lint: all manifests valid
+full suite: CI on merge commit 801de48 -- 268 tests green on ubuntu + windows + macos + ci-tier
