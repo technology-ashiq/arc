@@ -15,7 +15,8 @@
 param(
   [string]$Target,
   [string]$Products = "",
-  [switch]$List
+  [switch]$List,
+  [switch]$PruneReport
 )
 
 $src = $PSScriptRoot
@@ -43,10 +44,18 @@ if ($List) {
   exit $LASTEXITCODE
 }
 
-if (-not $Target) { Write-Error "usage: sync-to-project.ps1 -Target <dir> [-Products a,b | -List]"; exit 2 }
+if (-not $Target) { Write-Error "usage: sync-to-project.ps1 -Target <dir> [-Products a,b | -List | -PruneReport]"; exit 2 }
 if (-not (Test-Path $Target)) { Write-Error "Target folder not found: $Target"; exit 1 }
 if (-not (Test-Path (Join-Path $Target ".git"))) {
   Write-Host "Note: target has no .git - is this really a project root?" -ForegroundColor Yellow
+}
+
+# ---- -PruneReport (REQ-10): read-only. Reports stale files, writes nothing, deletes nothing.
+# Placed before every copy path so it can never be mistaken for an install. node does the
+# thinking, same as --list and --registry (ADR-0015).
+if ($PruneReport) {
+  & node $resolver --prune-report --target $Target
+  exit $LASTEXITCODE
 }
 
 # ---- -Products: manifest-driven selective install ----

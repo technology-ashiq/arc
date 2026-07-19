@@ -29,6 +29,7 @@ while [ $# -gt 0 ]; do
     --list)         MODE="list" ;;
     --products)     MODE="products"; PRODUCTS="${2:?sync: --products needs a value}"; shift ;;
     --products=*)   MODE="products"; PRODUCTS="${1#*=}" ;;
+    --prune-report) MODE="prune-report" ;;
     -*)             echo "sync: unknown option: $1" >&2; exit 2 ;;
     *)              if [ -z "$TARGET" ]; then TARGET="$1"; else echo "sync: unexpected argument: $1" >&2; exit 2; fi ;;
   esac
@@ -40,9 +41,16 @@ if [ "$MODE" = "list" ]; then
   exec node "$RESOLVER" --list --root "$SRC"
 fi
 
-: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --list]}"
+: "${TARGET:?usage: sync-to-project.sh <target-project-dir> [--products a,b | --list | --prune-report]}"
 [ -d "$TARGET" ] || { echo "sync: target folder not found: $TARGET" >&2; exit 1; }
 [ -d "$TARGET/.git" ] || echo "sync: note -- target has no .git, is this really a project root?" >&2
+
+# ---------- --prune-report (REQ-10): read-only, reports stale files, never mutates ----------
+# Deliberately placed BEFORE every copy path so it cannot be confused with an install: this
+# flag writes nothing to the target, not even the registry.
+if [ "$MODE" = "prune-report" ]; then
+  exec node "$RESOLVER" --prune-report --target "$TARGET"
+fi
 
 # Council JUROR env contract: append the JUROR_* block from a source .env.example to
 # the target's ONCE (sentinel present = already there). Shared by both install paths;

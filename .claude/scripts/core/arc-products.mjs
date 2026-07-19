@@ -33,15 +33,18 @@ function die(msg) {
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
-let mode = null; // "plan" | "list"
+let mode = null; // "plan" | "list" | "status" | "registry" | "prune-report"
 let productsArg = "";
 let root = null;
+let target = null; // prune-report's subject: the CONSUMER tree, not the source repo
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--products") { productsArg = argv[++i] ?? ""; if (mode === null) mode = "plan"; }
   else if (a === "--list") { mode = "list"; }
   else if (a === "--status") { mode = "status"; }
   else if (a === "--registry") { mode = "registry"; }
+  else if (a === "--prune-report") { mode = "prune-report"; }
+  else if (a === "--target") { target = argv[++i]; }
   else if (a === "--root") { root = argv[++i]; }
   else die(`unknown argument: ${a}`);
 }
@@ -53,7 +56,60 @@ if (!root) {
   while (!existsSync(join(d, "products")) && dirname(d) !== d) d = dirname(d);
   root = d;
 }
-if (!mode) die("usage: arc-products.mjs (--products LIST | --list) [--root DIR]");
+if (!mode) die("usage: arc-products.mjs (--products LIST | --list | --status | --registry | --prune-report --target DIR) [--root DIR]");
+
+// ---------- prune-report (REQ-10): make stale files in a consumer tree VISIBLE ----------
+// Every sync path is additive by design, and non-negotiable #51 forbids deleting anything in a
+// consumer repo. So a target that installed arc before Phase 03's re-homing now carries BOTH
+// layouts, and the registry still reports it clean -- the registry lists what was installed, not
+// what is present. This mode diffs those two. It reports and exits 0; it never removes anything.
+// Quarantining is REQ-11 (Phase 05), and even that moves to .claude/attic/DATE/ rather than rm.
+if (mode === "prune-report") {
+  if (!target) die("--prune-report needs --target <consumer-dir>");
+  const regPath = join(target, ".claude", "arc-registry.json");
+  if (!existsSync(regPath))
+    die(`no arc-registry.json in ${target} -- cannot report ownership without a registry (a pre-Phase-02 install; re-sync to write one)`);
+  let reg;
+  try {
+    reg = JSON.parse(readFileSync(regPath, "utf8"));
+  } catch (e) {
+    die(`unreadable arc-registry.json in ${target}: ${e.message} -- refusing to guess ownership from file presence`);
+  }
+  const owned = new Set();
+  for (const p of Object.values(reg.products || {}))
+    for (const f of Array.isArray(p.files) ? p.files : []) owned.add(String(f).replace(/\\/g, "/"));
+
+  // Never reported: the consumer's own personal settings and working state (deliberately never
+  // synced -- REQ-04), transient agent worktrees, the attic itself, and the registry, which is
+  // written by the sync rather than owned by any one product.
+  const SKIP_DIRS = new Set(["state", "worktrees", "attic"]);
+  const SKIP_FILES = new Set(["settings.local.json", "scheduled_tasks.lock", "arc-registry.json"]);
+
+  const unowned = [];
+  const walk = (abs, rel) => {
+    for (const e of readdirSync(abs, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        if (SKIP_DIRS.has(e.name)) continue;
+        walk(join(abs, e.name), `${rel}/${e.name}`);
+      } else {
+        if (SKIP_FILES.has(e.name)) continue;
+        const p = `${rel}/${e.name}`;
+        if (!owned.has(p)) unowned.push(p);
+      }
+    }
+  };
+  const claudeDir = join(target, ".claude");
+  if (existsSync(claudeDir)) walk(claudeDir, ".claude");
+
+  unowned.sort();
+  for (const p of unowned) process.stdout.write(`unowned  ${p}\n`);
+  process.stdout.write(
+    unowned.length
+      ? `arc-prune-report: ${unowned.length} unowned file(s) in ${target} -- present but owned by no installed product. Nothing was removed.\n`
+      : `arc-prune-report: 0 unowned file(s) in ${target}.\n`
+  );
+  process.exit(0);
+}
 
 // ---------- path safety (defense in depth with product-lint) ----------
 function assertSafe(p, ctx) {
