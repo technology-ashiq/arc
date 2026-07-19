@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC HQ — second brain for business (concept mock)</title>
+<style>
+  :root{
+    --page:#0d0d0d; --surface:#1a1a19; --surface-2:#212120;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
+    --blue:#3987e5; --green:#008300; --magenta:#d55181; --yellow:#c98500;
+    --aqua:#199e70; --orange:#d95926; --violet:#9085e9; --red:#e66767;
+    --good:#0ca30c; --warn:#fab219; --serious:#ec835a; --critical:#d03b3b;
+    --delta-up:#0ca30c;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--page); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",sans-serif;
+    font-size:14px; line-height:1.45; padding:20px 22px 40px;
+  }
+  a{color:var(--ink-2)}
+  .num{font-variant-numeric:tabular-nums}
+
+  /* ---------- topbar ---------- */
+  header{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:6px}
+  .wordmark{font-size:22px;font-weight:700;letter-spacing:.14em}
+  .wordmark span{color:var(--blue)}
+  .tagline{color:var(--muted);font-size:12px;margin-top:2px}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{border:1px solid var(--ring);background:var(--surface);border-radius:999px;
+        padding:5px 12px;font-size:12px;color:var(--ink-2);display:flex;gap:6px;align-items:center}
+  .dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .chip strong{color:var(--ink);font-weight:600}
+
+  /* ---------- brief ---------- */
+  .brief{background:var(--surface);border:1px solid var(--ring);border-radius:12px;
+         padding:14px 18px;margin:14px 0 18px;color:var(--ink-2)}
+  .brief b{color:var(--ink);font-weight:600}
+
+  /* ---------- KPI tiles ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px}
+  .kpi{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:12px 14px}
+  .kpi .label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .kpi .value{font-size:24px;font-weight:700;margin-top:4px}
+  .kpi .sub{font-size:12px;color:var(--ink-2);margin-top:2px}
+  .up{color:var(--delta-up);font-weight:600}
+  .down{color:var(--red);font-weight:600}
+
+  /* ---------- layout grid ---------- */
+  .cols{display:grid;grid-template-columns:1.25fr 1fr;gap:14px;align-items:start}
+  @media (max-width:980px){.cols{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--ring);border-radius:12px;padding:16px;margin-bottom:14px}
+  .panel h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+            font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:baseline}
+  .panel h2 .hint{font-size:11px;letter-spacing:0;text-transform:none;color:var(--muted);font-weight:400}
+
+  /* ---------- feed ---------- */
+  .event{display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid var(--grid);align-items:baseline}
+  .event:last-child{border-bottom:none}
+  .t{color:var(--muted);font-size:12px;min-width:44px}
+  .ptag{font-size:11px;color:var(--ink-2);border:1px solid var(--ring);border-radius:999px;
+        padding:1px 8px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
+  .etext{flex:1}
+  .etext b{font-weight:600}
+  .ev{color:var(--muted);font-size:11px;text-decoration:none;border:1px dashed var(--baseline);
+      border-radius:6px;padding:1px 6px;white-space:nowrap}
+  .lvl{font-size:10px;color:var(--muted);border:1px solid var(--baseline);border-radius:4px;padding:0 4px}
+  .money-in{color:var(--good);font-weight:700}
+
+  /* ---------- approvals ---------- */
+  .card{border:1px solid var(--ring);background:var(--surface-2);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .card .head{display:flex;justify-content:space-between;gap:8px;align-items:baseline;margin-bottom:4px}
+  .card .head b{font-size:14px}
+  .kind{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .card p{color:var(--ink-2);font-size:13px;margin:4px 0 10px}
+  .btns{display:flex;gap:8px}
+  button{font:inherit;font-size:12.5px;border-radius:8px;border:1px solid var(--ring);
+         background:transparent;color:var(--ink-2);padding:6px 14px;cursor:pointer}
+  button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+  button:hover{border-color:var(--ink-2)}
+  button.primary:hover{filter:brightness(1.1)}
+  .resolved{color:var(--good);font-weight:600;font-size:13px}
+  .rejected{color:var(--muted);font-weight:600;font-size:13px}
+
+  /* ---------- autonomy ---------- */
+  .arow{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--grid)}
+  .arow:last-child{border-bottom:none}
+  .lbadge{font-size:11px;font-weight:700;border-radius:6px;padding:2px 7px;min-width:30px;text-align:center}
+  .L0{background:#2c2c2a;color:var(--muted)} .L1{background:#26343f;color:#9ec5f4}
+  .L2{background:#1c3a5e;color:#b7d3f6} .L3{background:#184f95;color:#fff}
+  .aname{flex:1}
+  .aname small{display:block;color:var(--muted);font-size:11px}
+  .cap{font-size:11px;color:var(--muted);white-space:nowrap}
+
+  /* ---------- pipeline ---------- */
+  .pipe{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+  @media (max-width:980px){.pipe{grid-template-columns:repeat(3,1fr)}}
+  .stage{background:var(--surface-2);border:1px solid var(--ring);border-radius:10px;padding:10px 12px;min-height:96px}
+  .stage .sname{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  .stage .count{font-size:20px;font-weight:700;margin:2px 0 6px}
+  .mini{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px;padding:2px 0}
+
+  /* ---------- portfolio ---------- */
+  .folio{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+  .prod{background:var(--surface-2);border:1px solid var(--ring);border-radius:10px;padding:12px 14px}
+  .prod .head{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .prod .head b{font-size:14px}
+  .stagechip{font-size:10px;color:var(--muted);border:1px solid var(--baseline);border-radius:4px;padding:0 5px;margin-left:auto}
+  .prod .big{font-size:19px;font-weight:700}
+  .prod .row{font-size:12px;color:var(--ink-2);margin-top:2px}
+  .meter{height:4px;background:var(--grid);border-radius:2px;margin-top:10px;overflow:hidden}
+  .meter i{display:block;height:100%;border-radius:2px}
+  .mlabel{font-size:11px;margin-top:4px;display:flex;gap:5px;align-items:center}
+
+  /* ---------- chart ---------- */
+  .chartwrap{position:relative}
+  svg text{font-family:inherit}
+  .tip{position:absolute;pointer-events:none;background:var(--surface-2);border:1px solid var(--ring);
+       border-radius:8px;padding:6px 10px;font-size:12px;color:var(--ink-2);display:none;white-space:nowrap}
+  .tip b{color:var(--ink)}
+
+  /* ---------- learning ---------- */
+  .jur{width:100%;border-collapse:collapse;font-size:13px}
+  .jur td{padding:6px 4px;border-bottom:1px solid var(--grid);color:var(--ink-2)}
+  .jur tr:last-child td{border-bottom:none}
+  .bar{background:var(--grid);border-radius:2px;height:5px;width:110px;display:inline-block;vertical-align:middle}
+  .bar i{display:block;height:100%;background:var(--blue);border-radius:2px}
+  .rule{padding:6px 0;border-bottom:1px solid var(--grid);color:var(--ink-2);font-size:13px}
+  .rule:last-child{border-bottom:none}
+  .rule b{color:var(--ink);font-weight:600}
+
+  footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="wordmark">ARC <span>HQ</span></div>
+    <div class="tagline">second brain for business · concept mock v0 · all data illustrative</div>
+  </div>
+  <div class="chips">
+    <span class="chip"><span class="dot" style="background:var(--good)"></span> 2 sessions live</span>
+    <span class="chip">7 automated processes</span>
+    <span class="chip">today's cost <strong>₹1,130</strong> · return <strong>7.4×</strong></span>
+    <span class="chip"><span class="dot" style="background:var(--warn)"></span> <strong>3 approvals</strong> waiting</span>
+    <span class="chip num">Fri 18 Jul 2026 · 21:42 IST</span>
+  </div>
+</header>
+
+<div class="brief">
+  Good evening, Ashiq. Today the company <b>captured 5 ideas</b>, closed <b>1 build phase</b>,
+  published <b>4 pieces of content</b>, booked <b>1 sales call</b>, and earned
+  <b>₹8,420</b> against <b>₹1,130</b> of AI spend. One kill decision and one kickoff await you — 9 minutes of your time.
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="label">Revenue · today</div><div class="value">₹8,420</div><div class="sub"><span class="up">▲ 12%</span> vs 7-day avg</div></div>
+  <div class="kpi"><div class="label">MRR · portfolio</div><div class="value">₹1,54,300</div><div class="sub"><span class="up">▲ 9%</span> MoM · 3 earning products</div></div>
+  <div class="kpi"><div class="label">Ideas captured</div><div class="value">5</div><div class="sub">2 sent to council</div></div>
+  <div class="kpi"><div class="label">Builds active</div><div class="value">2</div><div class="sub">GST-Recon P0 · InvoiceFly P3</div></div>
+  <div class="kpi"><div class="label">Content published</div><div class="value">4</div><div class="sub">2 articles · 1 video · 1 thread</div></div>
+  <div class="kpi"><div class="label">Your time needed</div><div class="value">9 min</div><div class="sub">3 decisions in inbox</div></div>
+</div>
+
+<div class="cols">
+  <!-- ================= LEFT ================= -->
+  <div>
+    <div class="panel">
+      <h2>Today — everything the company did <span class="hint">every line = an event on the spine · click 🧾 for evidence</span></h2>
+      <div class="event"><span class="t num">06:02</span><span class="ptag"><span class="dot" style="background:var(--aqua)"></span>discover</span><span class="etext">Nightly hunt: 214 posts scanned (r/smallbusiness, r/IndiaTax) → clustered → <b>5 candidates scored</b></span><a class="ev" href="#" onclick="return false">🧾 run</a><span class="lvl">L2</span></div>
+      <div class="event"><span class="t num">07:00</span><span class="ptag"><span class="dot" style="background:var(--violet)"></span>council</span><span class="etext">Judged “GST reconciliation for CAs” → <b>PROCEED 8.1/10</b> (market juror 9, risk juror 6) → kickoff drafted, sent to your inbox</span><a class="ev" href="#" onclick="return false">🧾 verdict</a><span class="lvl">L1</span></div>
+      <div class="event"><span class="t num">08:04</span><span class="ptag"><span class="dot" style="background:var(--yellow)"></span>growth</span><span class="etext">2 SEO articles published (invoice-late-fees, e-invoice-rules) · Monday batch drafted → inbox</span><a class="ev" href="#" onclick="return false">🧾 diff</a><span class="lvl">L2</span></div>
+      <div class="event"><span class="t num">08:31</span><span class="ptag"><span class="dot" style="background:var(--magenta)"></span>finflicks</span><span class="etext">Video published: “5 invoicing mistakes killing your cash flow” · 1.2k views in 13h</span><a class="ev" href="#" onclick="return false">🧾 link</a><span class="lvl">L2</span></div>
+      <div class="event"><span class="t num">09:12</span><span class="ptag"><span class="dot" style="background:var(--blue)"></span>invoicefly</span><span class="etext"><b>Phase 3 closed</b> — payment-reminder engine · 41/41 tests · live demo ✓ · evidence bundle committed</span><a class="ev" href="#" onclick="return false">🧾 bundle</a><span class="lvl">arc</span></div>
+      <div class="event"><span class="t num">11:30</span><span class="ptag"><span class="dot" style="background:var(--yellow)"></span>leads</span><span class="etext">Outreach: 18 sent (cap 20/day) · 3 replies · <b>1 call booked</b> Mon 11:00 — added to your calendar</span><a class="ev" href="#" onclick="return false">🧾 thread</a><span class="lvl">L2</span></div>
+      <div class="event"><span class="t num">13:05</span><span class="ptag"><span class="dot" style="background:var(--blue)"></span>invoicefly</span><span class="etext"><span class="money-in">+ ₹4,998</span> — 2 × Pro annual (webhook → ledger) · total users 341</span><a class="ev" href="#" onclick="return false">🧾 txn</a><span class="lvl">auto</span></div>
+      <div class="event"><span class="t num">14:47</span><span class="ptag"><span class="dot" style="background:var(--violet)"></span>arc-oss</span><span class="etext"><span class="money-in">+ ₹3,422</span> — 2 new GitHub sponsors after yesterday's launch thread (2,140 ⭐, ▲86 today)</span><a class="ev" href="#" onclick="return false">🧾 repo</a><span class="lvl">auto</span></div>
+      <div class="event"><span class="t num">16:40</span><span class="ptag"><span class="dot" style="background:var(--green)"></span>ops</span><span class="etext">Canary sweep: 5/5 products healthy · 2 support tickets triaged → replies drafted for your OK</span><a class="ev" href="#" onclick="return false">🧾 report</a><span class="lvl">L1</span></div>
+      <div class="event"><span class="t num">18:00</span><span class="ptag"><span class="dot" style="background:var(--orange)"></span>trader</span><span class="etext">Paper portfolio +0.4% today · 61-day sim P&L +2.1% · <b>real money: locked (L0)</b></span><a class="ev" href="#" onclick="return false">🧾 log</a><span class="lvl">L0</span></div>
+      <div class="event"><span class="t num">21:00</span><span class="ptag"><span class="dot" style="background:var(--green)"></span>retro</span><span class="etext">Daily retro: <b>2 playbook rules added</b> · market-juror weight +0.03 (hit-rate ↑) · 1 autonomy promotion proposed ↓</span><a class="ev" href="#" onclick="return false">🧾 delta</a><span class="lvl">auto</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Revenue — last 14 days <span class="hint">hover for daily detail</span></h2>
+      <div class="chartwrap">
+        <svg id="spark" viewBox="0 0 640 150" width="100%" height="150" role="img" aria-label="Revenue line chart, last 14 days, rising from about 3 thousand to about 8 thousand rupees per day"></svg>
+        <div class="tip" id="tip"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Pipeline — idea → money <span class="hint">the factory floor, live</span></h2>
+      <div class="pipe">
+        <div class="stage"><div class="sname">Captured</div><div class="count num">12</div><div class="mini">this week, deduped</div></div>
+        <div class="stage"><div class="sname">Council</div><div class="count num">3</div><div class="mini"><span class="dot" style="background:var(--aqua)"></span>gst-recon ✓ 8.1</div><div class="mini">2 queued</div></div>
+        <div class="stage"><div class="sname">Kickoff</div><div class="count num">1</div><div class="mini">awaiting your OK</div></div>
+        <div class="stage"><div class="sname">Building</div><div class="count num">2</div><div class="mini"><span class="dot" style="background:var(--blue)"></span>InvoiceFly P3/5</div><div class="mini"><span class="dot" style="background:var(--aqua)"></span>GST-Recon P0</div></div>
+        <div class="stage"><div class="sname">Shipped</div><div class="count num">5</div><div class="mini">lifetime</div></div>
+        <div class="stage"><div class="sname">Earning</div><div class="count num">3</div><div class="mini">₹1.54L MRR</div><div class="mini">1 in kill-review</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Portfolio <span class="hint">kill-distance = how far from its own kill criteria</span></h2>
+      <div class="folio">
+        <div class="prod">
+          <div class="head"><span class="dot" style="background:var(--blue)"></span><b>InvoiceFly</b><span class="stagechip">earning</span></div>
+          <div class="big">₹84,500 <span style="font-size:12px" class="up">▲ 11%</span></div>
+          <div class="row">MRR · 341 users · churn 2.1%</div>
+          <div class="meter"><i style="width:88%;background:var(--good)"></i></div>
+          <div class="mlabel"><span style="color:var(--good)">●</span> healthy — far from kill line</div>
+        </div>
+        <div class="prod">
+          <div class="head"><span class="dot" style="background:var(--violet)"></span><b>arc (open-source)</b><span class="stagechip">earning</span></div>
+          <div class="big">₹12,400</div>
+          <div class="row">sponsors/mo · 2,140 ⭐ · 41 forks</div>
+          <div class="meter"><i style="width:74%;background:var(--good)"></i></div>
+          <div class="mlabel"><span style="color:var(--good)">●</span> growing — launch spike active</div>
+        </div>
+        <div class="prod">
+          <div class="head"><span class="dot" style="background:var(--magenta)"></span><b>FinFlicks channel</b><span class="stagechip">earning</span></div>
+          <div class="big">₹9,100</div>
+          <div class="row">ads+affiliate/mo · 28.4k subs</div>
+          <div class="meter"><i style="width:61%;background:var(--warn)"></i></div>
+          <div class="mlabel"><span style="color:var(--warn)">▲</span> watch — RPM dipped 8%</div>
+        </div>
+        <div class="prod">
+          <div class="head"><span class="dot" style="background:var(--aqua)"></span><b>GST-Recon</b><span class="stagechip">building</span></div>
+          <div class="big">P0 / 5</div>
+          <div class="row">appetite 2w · burn 0% · council 8.1</div>
+          <div class="meter"><i style="width:8%;background:var(--blue)"></i></div>
+          <div class="mlabel"><span style="color:var(--blue)">●</span> kicked off today</div>
+        </div>
+        <div class="prod">
+          <div class="head"><span class="dot" style="background:var(--orange)"></span><b>PromptVault</b><span class="stagechip">kill-review</span></div>
+          <div class="big">₹0</div>
+          <div class="row">61 days · 0 sales · 214 visits</div>
+          <div class="meter"><i style="width:9%;background:var(--critical)"></i></div>
+          <div class="mlabel"><span style="color:var(--critical)">✕</span> kill criteria met — decision in inbox</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT ================= -->
+  <div>
+    <div class="panel">
+      <h2>Approval inbox <span class="hint">your 9 minutes — every tap teaches HQ your taste</span></h2>
+
+      <div class="card" id="ap1">
+        <div class="head"><b>Kickoff: GST-Recon micro-SaaS</b><span class="kind">build · L1</span></div>
+        <p>Council 8.1/10 · pain score 9 (218 complaint posts) · appetite 2 weeks · stack: standard mold ·
+           distribution plan: 12 SEO pages + CA-community outreach. PLAN.md drafted, 5 phases risk-ordered.</p>
+        <div class="btns">
+          <button class="primary" onclick="resolve('ap1','✓ Approved — kickoff queued for tomorrow 06:00')">Approve</button>
+          <button onclick="resolve('ap1','↩ Sent back with your notes')">Modify</button>
+          <button onclick="reject('ap1')">Reject</button>
+        </div>
+      </div>
+
+      <div class="card" id="ap2">
+        <div class="head"><b>Content batch — Monday (7 pieces)</b><span class="kind">growth · L1→L2 trial</span></div>
+        <p>4 articles + 2 shorts + 1 thread. 23 of last 23 drafts approved unedited — this batch counts toward
+           the L2 promotion evidence.</p>
+        <div class="btns">
+          <button class="primary" onclick="resolve('ap2','✓ Approved — scheduled across Mon–Tue')">Approve all</button>
+          <button onclick="resolve('ap2','👁 Opened in review view')">Review each</button>
+        </div>
+      </div>
+
+      <div class="card" id="ap3">
+        <div class="head"><b>Kill: PromptVault → attic</b><span class="kind">portfolio · human-only</span></div>
+        <p>Kill criteria met (60d, zero revenue). Recommendation: attic the repo (never delete — arc rule),
+           redirect domain to InvoiceFly, harvest its 3 reusable components into the mold.</p>
+        <div class="btns">
+          <button class="primary" onclick="resolve('ap3','✓ Confirmed — attic move + harvest queued, retro scheduled')">Confirm kill</button>
+          <button onclick="resolve('ap3','⏳ Snoozed 30 days — one growth experiment granted')">Give it 30 days</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Autonomy ladder <span class="hint">trust is earned by evidence, never assumed</span></h2>
+      <div class="arow"><span class="lbadge L2" id="pb">L2</span><span class="aname">content.publish<small id="ps">23/20 unedited approvals — promotion to L3 proposed</small></span><button style="font-size:11px;padding:3px 10px" onclick="promote()" id="pbtn">Promote</button></div>
+      <div class="arow"><span class="lbadge L2">L2</span><span class="aname">outreach.send<small>capped 20/day · reply rate 16%</small></span><span class="cap">cap: hard</span></div>
+      <div class="arow"><span class="lbadge L2">L2</span><span class="aname">deploy.production<small>arc gates: tests green required — 14 clean deploys</small></span><span class="cap">arc-gated</span></div>
+      <div class="arow"><span class="lbadge L1">L1</span><span class="aname">pricing.change<small>every change needs your tap — permanent</small></span><span class="cap">human</span></div>
+      <div class="arow"><span class="lbadge L1">L1</span><span class="aname">support.reply<small>drafts only · 41 drafts, 92% sent unedited</small></span><span class="cap">trial</span></div>
+      <div class="arow"><span class="lbadge L0">L0</span><span class="aname">trading.real-money<small>paper only · 61-day sim · unlock needs your explicit rule change</small></span><span class="cap">locked</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>What the company learned this week <span class="hint">calibration + rules, not vibes</span></h2>
+      <table class="jur">
+        <tr><td>Market juror</td><td class="num">71% hit</td><td><span class="bar"><i style="width:71%"></i></span></td><td class="up num">+0.03 wt</td></tr>
+        <tr><td>Risk juror</td><td class="num">64% hit</td><td><span class="bar"><i style="width:64%"></i></span></td><td class="num" style="color:var(--muted)">—</td></tr>
+        <tr><td>Distribution juror</td><td class="num">58% hit</td><td><span class="bar"><i style="width:58%"></i></span></td><td class="down num">−0.02 wt</td></tr>
+      </table>
+      <div style="height:10px"></div>
+      <div class="rule"><b>R-114:</b> ideas scoring &lt;6 on distribution never recovered post-launch (5/5 cases) → council now hard-flags them.</div>
+      <div class="rule"><b>R-115:</b> videos with a number in the title: +38% CTR across 21 uploads → title template updated.</div>
+      <div class="rule"><b>R-116 (proposed):</b> CA-niche outreach replies 2.1× on Tue–Wed mornings → reschedule sends.</div>
+    </div>
+  </div>
+</div>
+
+<footer>ARC HQ · concept mock v0 · every number here is illustrative — the real thing renders the event spine · design target for dashboard v1</footer>
+
+<script>
+  // ---- approvals (in-memory only) ----
+  function resolve(id, msg){
+    var c = document.getElementById(id);
+    c.querySelector('.btns').outerHTML = '<div class="resolved">'+msg+' · decision logged to spine</div>';
+  }
+  function reject(id){
+    var c = document.getElementById(id);
+    c.style.opacity = .55;
+    c.querySelector('.btns').outerHTML = '<div class="rejected">✕ Rejected — reason captured for juror calibration</div>';
+  }
+  function promote(){
+    document.getElementById('pb').textContent='L3';
+    document.getElementById('pb').className='lbadge L3';
+    document.getElementById('ps').textContent='promoted with trial-ledger evidence · weekly digest mode · auto-demote on incident';
+    document.getElementById('pbtn').remove();
+  }
+
+  // ---- revenue sparkline (single series → no legend; title names it) ----
+  var days = ['5 Jul','6 Jul','7 Jul','8 Jul','9 Jul','10 Jul','11 Jul','12 Jul','13 Jul','14 Jul','15 Jul','16 Jul','17 Jul','18 Jul'];
+  var vals = [3120, 2840, 3910, 3450, 4620, 4180, 5030, 4720, 5480, 6120, 5760, 6890, 7510, 8420];
+  var svg = document.getElementById('spark'), NS='http://www.w3.org/2000/svg';
+  var W=640,H=150,padL=8,padR=64,padT=16,padB=22;
+  var maxV=9000, minV=0;
+  function x(i){return padL+(W-padL-padR)*i/(vals.length-1)}
+  function y(v){return padT+(H-padT-padB)*(1-(v-minV)/(maxV-minV))}
+  function el(n,a){var e=document.createElementNS(NS,n);for(var k in a)e.setAttribute(k,a[k]);return e}
+  // hairline grid (recessive): 3 lines
+  [3000,6000,9000].forEach(function(g){
+    svg.appendChild(el('line',{x1:padL,x2:W-padR,y1:y(g),y2:y(g),stroke:'#2c2c2a','stroke-width':1}));
+    var t=el('text',{x:W-padR+6,y:y(g)+4,fill:'#898781','font-size':10}); t.textContent='₹'+(g/1000)+'k'; svg.appendChild(t);
+  });
+  // baseline
+  svg.appendChild(el('line',{x1:padL,x2:W-padR,y1:y(0),y2:y(0),stroke:'#383835','stroke-width':1}));
+  // area (subtle) + line 2px
+  var pts=vals.map(function(v,i){return x(i)+','+y(v)}).join(' ');
+  svg.appendChild(el('polygon',{points:padL+','+y(0)+' '+pts+' '+x(vals.length-1)+','+y(0),fill:'#3987e5',opacity:.12}));
+  svg.appendChild(el('polyline',{points:pts,fill:'none',stroke:'#3987e5','stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  // last-point marker + direct label (selective, not every point)
+  svg.appendChild(el('circle',{cx:x(13),cy:y(8420),r:4,fill:'#3987e5',stroke:'#1a1a19','stroke-width':2}));
+  var lbl=el('text',{x:x(13)-4,y:y(8420)-10,fill:'#ffffff','font-size':11,'font-weight':'600','text-anchor':'end'});
+  lbl.textContent='₹8,420 today'; svg.appendChild(lbl);
+  // hover layer: crosshair + tooltip, hit target = full column
+  var cross=el('line',{y1:padT,y2:H-padB,stroke:'#52514e','stroke-width':1,'stroke-dasharray':'3,3',visibility:'hidden'});
+  var hpt=el('circle',{r:4,fill:'#3987e5',stroke:'#1a1a19','stroke-width':2,visibility:'hidden'});
+  svg.appendChild(cross); svg.appendChild(hpt);
+  var tip=document.getElementById('tip');
+  svg.addEventListener('mousemove',function(evt){
+    var r=svg.getBoundingClientRect(), mx=(evt.clientX-r.left)*(W/r.width);
+    var i=Math.round((mx-padL)/((W-padL-padR)/(vals.length-1)));
+    i=Math.max(0,Math.min(vals.length-1,i));
+    cross.setAttribute('x1',x(i)); cross.setAttribute('x2',x(i)); cross.setAttribute('visibility','visible');
+    hpt.setAttribute('cx',x(i)); hpt.setAttribute('cy',y(vals[i])); hpt.setAttribute('visibility','visible');
+    tip.style.display='block';
+    tip.innerHTML='<b>'+days[i]+'</b> · revenue <b>₹'+vals[i].toLocaleString('en-IN')+'</b>';
+    var wrap=svg.parentElement.getBoundingClientRect();
+    var tx=(evt.clientX-wrap.left)+14, ty=(evt.clientY-wrap.top)-10;
+    if(tx+150>wrap.width) tx-=170;
+    tip.style.left=tx+'px'; tip.style.top=ty+'px';
+  });
+  svg.addEventListener('mouseleave',function(){cross.setAttribute('visibility','hidden');hpt.setAttribute('visibility','hidden');tip.style.display='none'});
+</script>
+</body>
+</html>

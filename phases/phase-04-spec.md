@@ -1,8 +1,9 @@
 # Phase 04 — Dogfood: two real external consumers
 
-**Goal (one line):** council-alone and core+plan each installed into a REAL external repo (venturemind / InvoiceFly) and used for real work — the ADR-0013 "second concrete consumer" evidence, manufactured.
+**Goal (one line):** council-alone and core+plan each installed into a REAL external repo (venturemind / Opportunity-Scout) and used for real work — the ADR-0013 "second concrete consumer" evidence, manufactured.
 **Appetite:** 0.5 weeks — blown appetite = cut scope or kill, never extend silently.
 **Depends on:** phase-03
+**Amended 2026-07-19 (ADR-0022, post-close):** every "InvoiceFly" in this spec now reads **Opportunity-Scout**. InvoiceFly never existed; the assumptions-ledger trigger fired at phase start and the second target was re-picked before any work proceeded. The phase is closed, so this is amended in place with the reason rather than rewritten.
 
 ## Exit criteria (Definition of Done)
 
@@ -15,7 +16,7 @@
 
 ## Verification plan
 
-Coarse (refined at phase start): target assignment between venturemind and InvoiceFly decided
+Coarse (refined at phase start): target assignment between venturemind and Opportunity-Scout decided
 then (assumption row 5 fires if either is unsuitable); evidence = install transcripts +
 registry files + the real session/kickoff artifacts in each target repo.
 
@@ -29,7 +30,7 @@ Docs rewrite + prune (Phase 5).
 
 ## Your-setup / pending
 
-Confirm venturemind + InvoiceFly access on this machine; pick which repo gets council vs core+plan at phase start.
+Confirm venturemind + Opportunity-Scout access on this machine; pick which repo gets council vs core+plan at phase start.
 
 ## Non-negotiables (verbatim from PLAN)
 

@@ -22,6 +22,14 @@ Three strands: **REQ-11** (attic — move unowned files to `.claude/attic/DATE/`
 report half already shipped in Phase 4), the README/usermanual rewrite, and TRIAL-gate promotions
 via `/arc-retro`.
 
+**Plan reconciled 2026-07-19 (ADR-0022), before Phase 05 opened.** `/arc-resume` caught PLAN.md
+saying Phase 4 was *"blocked until targets named"* while REQ-09 read `validated` — the ledger
+trigger fired correctly at Phase 4 start, but the re-pick was never routed back into the plan, so
+**Opportunity-Scout appeared in no plan artifact at all**, only in the evidence bundle. Now named
+across REQ-09, the ledger row (RESOLVED), the external-deps table, the phase table, the Phase 04
+spec and ADR-0020. ADR-0020's timing argument was confirmed by events, not weakened — only its
+repo name was wrong. The kickoff done-log below is deliberately unedited: it is history.
+
 **Phase 05 inherits a live decision.** Council session 001 (run in Opportunity-Scout, committed
 there) ruled CONDITIONAL on promoting the 8 WARN-only gates: promote `appetite-sum`'s over-commit
 branch only, and only after a governed escape hatch exists — today `fail()` is an unconditional
