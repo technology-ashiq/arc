@@ -86,6 +86,12 @@ Concretely:
   (correctly — a REQ spanning two phases has no single close): **REQ-10** is now the *report* half
   (`--prune-report`, exit 0) in **Phase 4**, and **REQ-11** is the *attic* half (move to
   `.claude/attic/DATE/`) in **Phase 5**. Phase 5 keeps a goal; Phase 4 gains a hard deadline.
+  — **Superseded 2026-07-19 by ADR-0023, for the attic half only.** REQ-11 was built at Phase 5
+  start and then scope-cut: "not in the registry" also describes every file the *consumer* wrote,
+  so the mode quarantined their own commands and agents — reproduced on a **fresh** install with a
+  valid registry. The attic half does not ship; Phase 5's goal is REQ-12 (docs + TRIAL promotions).
+  **The split itself, and the report half, were correct and are unaffected** — `--prune-report`
+  shipped in Phase 4 and found 21 real files in venturemind, including the 6 this ADR predicted.
 - **No delete path is invented anywhere**, in either half. Non-negotiable #51 stands untouched.
 - The instrumentation test — sync a pre-move export, then a post-move export, into the **same**
   target and assert the old path survives — is **not** retrofitted into Phase 3, which is closing.

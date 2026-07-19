@@ -38,7 +38,8 @@ five, while every existing arc command keeps working unchanged.
 | REQ-08 | Targets know what they have | sync writes `.claude/arc-registry.json` (products, versions, file lists, source commit) into every target; re-sync updates it | 2 | validated |
 | REQ-09 | A second real consumer exists | council-alone installed + 1 real council session in one external repo, AND core+plan installed + 1 real kickoff in another (venturemind / Opportunity-Scout); evidence bundles committed. **Amended 2026-07-19 (ADR-0022):** the original text named InvoiceFly, a repo that never existed — the ledger trigger fired at Phase 4 start and the second target was re-picked to Opportunity-Scout before anything proceeded. Acceptance bar unedited and met in full; only the second repo's identity changed | 4 | validated |
 | REQ-10 | Stale files in a consumer tree are visible | `--prune-report` lists every unowned target file with exit 0, including the pre-move copies Phase 3's re-homing left behind; no delete path exists in either twin. Split out of the original REQ-10 and pulled forward to Phase 4 by ADR-0020: Phase 3 re-homed all five products, so every already-installed consumer now carries stale *executable* copies, and Phase 4 is when the first real consumers appear | 4 | validated |
-| REQ-11 | Stale files can be quarantined, never deleted | attic mode MOVES unowned files to `.claude/attic/DATE/` and prints the list; still no delete path in either twin (non-negotiable). The other half of the original REQ-10, kept in Phase 5 (ADR-0020) | 5 | active |
+| REQ-11 | Stale files can be quarantined, never deleted | attic mode MOVES unowned files to `.claude/attic/DATE/` and prints the list; still no delete path in either twin (non-negotiable). The other half of the original REQ-10, kept in Phase 5 (ADR-0020). **Scope-cut 2026-07-19 (ADR-0023)** — built, then cut on the adversarial pass: "not in the registry" also describes every file the CONSUMER wrote, so the mode quarantined their own commands and agents (reproduced on a FRESH install with a valid registry, so registry coverage does not fix it). Demand is one self-owned repo and 21 files. `--prune-report` (REQ-10) already covers the real need — making stale files visible. Implementation + 16 hostile-input tests preserved at `e2b3646`; revisit triggers in ADR-0023 | 5 | dropped |
+| REQ-12 | The docs describe the product model, and gates that earned it become blocking | README + `docs/usermanual.md` + `docs/blueprint.md` + `docs/how-it-works.md` each name the six products and the selective-install command, with zero stale installer/architecture claims left against the Phase 00–05 diff; and every check in the TRIAL set is either promoted to FAIL carrying its `docs/trial-ledger.md` evidence row (fixture-proven + 3 clean runs) or explicitly kept WARN with the ledger stating why; and `--prune-report`'s output states in words that it is a "not installed by arc" list rather than a "safe to delete" list, pinned by bats cases (the one live defect the scope-cut attic investigation surfaced — ADR-0023) | 5 | active |
 
 ## Appetite
 
@@ -93,13 +94,14 @@ ADRs 0001–0013 (v2 initiative) remain live decisions about this codebase. New 
 | 0020 | Re-homed scripts leave an executable stale copy in consumer trees — REQ-10's report half moves to Phase 4, attic half stays Phase 5 | accepted |
 | 0021 | Tests stay centralised in `tests/`; REQ-07 amended to scripts only | accepted |
 | 0022 | Opportunity-Scout replaces InvoiceFly as the second dogfood target; REQ-09 amended, ledger trigger closed | accepted |
+| 0023 | REQ-11 attic scope-cut — the registry answers "installed", not "ours"; prune-report stays the shipped half | accepted |
 
 ## Non-negotiables
 
 - Bare `sync-to-project TARGET` output stays byte-identical to pre-initiative — golden-output bats case green on every PR of this initiative (products are additive under the umbrella, ADR-0014); the golden fixture may only be regenerated via a reviewed diff naming the intentional change — silently re-recording it to match new output is a gate failure, not a fix.
 - Every new parser (manifest reader, resolver, product-lint) AND the byte-diff/golden-output comparison gates get an adversarial construct-a-breaking-input pass; found holes fixed + pinned as red fixtures BEFORE any FAIL-mode promotion (council v2+v3: 43 holes in gates that passed their own tests).
 - Physical re-homing lands only behind the byte-diff gate — defined as: per-file SHA-256 over content with line endings normalized to LF before hashing, executable bit compared separately, symlinks resolved before hashing; installed tree provably unchanged, per product move (ADR-0018).
-- Consumer repos: never delete — attic move to `.claude/attic/DATE/` only, report before mutate.
+- Consumer repos: never delete, and never mutate without reporting first. `--prune-report` is read-only and stays that way. Automated quarantine (the attic move) is **scope-cut — ADR-0023**; building one requires an ADR-0023 revisit trigger, because deciding what is arc's to move is the hard part, not the moving.
 - Every hook/script change ships with a bats test. CI red = no merge on the arc repo.
 - Cross-platform: Git Bash (Windows) + ubuntu + macos CI; bash-3.2/POSIX; no new PowerShell logic beyond the dumb copy loop (ADR-0015).
 - New lint checks start WARN in the TRIAL set; FAIL promotion only via docs/trial-ledger.md evidence.
@@ -175,7 +177,7 @@ Physical extraction is not a phase — it is demand-triggered next cycle (ADR-00
 | 2 | Registry-aware core: ledger kinds from the registry, target-side `arc-registry.json`, `/arc` reads the registry, CI tree-diff invariant (`--products all` vs the CI checkout) | 1 week | `phases/phase-02-spec.md` |
 | 3 | Physical re-homing (incremental, council → core → plan → review → qa; ADR-0018): scripts to `.claude/scripts/PRODUCT/`, every move behind the byte-diff gate (tests stay centralised — ADR-0021) | 1.5 weeks | `phases/phase-03-spec.md` |
 | 4 | Dogfood: council-alone into one external repo + core+plan into another (venturemind / Opportunity-Scout — ADR-0022), real sessions, evidence bundles committed | 0.5 weeks | `phases/phase-04-spec.md` |
-| 5 | Prune-report + attic, README/usermanual/blueprint rewrite, TRIAL→FAIL promotions via trial-ledger, `/arc-retro` | 0.5 weeks | `phases/phase-05-spec.md` |
+| 5 | README/usermanual/blueprint rewrite, TRIAL→FAIL promotions via trial-ledger, `/arc-retro` (attic scope-cut — ADR-0023; prune-report already shipped in Phase 4) | 0.5 weeks | `phases/phase-05-spec.md` |
 
 **North-star metric:** time-to-install-one-product into a fresh repo (target: one command,
 <60s, zero manual file picking) — measured at every phase close from Phase 0 onward.
