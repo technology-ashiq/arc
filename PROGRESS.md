@@ -6,31 +6,32 @@
 
 ## Now
 
-**Phase 03 CLOSED ✅ (2026-07-19).** Physical re-homing complete: `.claude/scripts/` holds nothing
-outside a product directory — `core/` · `council/` · `plan/` · `review/`. 36 scripts, 42 gated moves,
-four checkpoints, every one with a byte-diff transcript and a checkpoint-private evidence bundle.
-248/248 bats on 3 OS + ci-tier. REQ-07 validated (as amended by ADR-0021 — scripts only; tests stay
-centralised because a full sync ships zero `.bats` files). Reviewed fix-first: 2 warnings from
-`/arc-review` resolved before close, including a fifth byte-diff hole (a file moved *and* rewritten
-stages as D+A, never R, and slipped the completeness sweep) now pinned as a red fixture.
+**Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+upgrade path is where all three defects lived, and a fresh install would have shown none of them.
+REQ-09 and REQ-10 validated. 268/268 on 3 OS + ci-tier. Evidence at `docs/evidence/phase-04/`.
 
-**Next up: Phase 04 — dogfood** (`phases/phase-04-spec.md`, 0.5-week appetite). Install council-alone
-into one real external repo and core+plan into another, run a real session in each, commit the
-evidence bundles (REQ-09). This is the first time arc is installed anywhere other than its own repo.
+**What dogfooding actually bought:** three arc defects that no fixture could have produced — sync
+deleting a consumer's gate settings, re-homed products leaving stale *executable* copies while the
+registry reported clean, and arc changing the plan contract without telling anyone. All three fixed
+with a regression test each. Plus the trial ledger's first real fire data in its existence: five
+gates fired on a real external plan, where two prior logged runs had fired nothing at all.
 
-**Phase 04 carries a hard deadline from ADR-0020:** Phase 03 re-homed every product, so any
-already-installed consumer now carries stale *executable* copies of the old flat scripts — they
-still run, and they are frozen. The report half of the remedy is **REQ-10, due before Phase 04
-closes** (`--prune-report` listing unowned target files, exit 0). No delete path, in either half —
-non-negotiable #51. The attic half is REQ-11 in Phase 05. If Phase 04 closes without the report
-half, ADR-0020 says reopen it rather than slide the deadline again.
+**Next up: Phase 05 — prune/attic + docs + retro** (`phases/phase-05-spec.md`, 0.5-week appetite).
+Three strands: **REQ-11** (attic — move unowned files to `.claude/attic/DATE/`, never delete; the
+report half already shipped in Phase 4), the README/usermanual rewrite, and TRIAL-gate promotions
+via `/arc-retro`.
 
-Appetite burn: **~5 of ~30 days (~17%)** — four phases closed, every one under appetite (Phase 03:
-~2 days against 1.5 weeks). Kill tripwire (50%) is far off; no scope-cut conversation triggered.
+**Phase 05 inherits a live decision.** Council session 001 (run in Opportunity-Scout, committed
+there) ruled CONDITIONAL on promoting the 8 WARN-only gates: promote `appetite-sum`'s over-commit
+branch only, and only after a governed escape hatch exists — today `fail()` is an unconditional
+`process.exit(1)` with no recorded-reason bypass anywhere in `.claude/scripts/plan/`. Phase 5 owns
+that call, and now has real fire data to make it on.
 
-Setup needed from user: **Phase 04 needs real input** — access to venturemind + InvoiceFly (or two
-substitute repos), and the call on which gets council-alone vs core+plan. Everything through Phase 03
-was local; Phase 04 is the first that touches repos outside this one.
+Appetite burn: **~6 of ~30 days (~20%)** — five phases closed, every one under appetite. Kill
+tripwire (50%) not approached; no scope-cut conversation triggered.
+
+Setup needed from user: none for Phase 05 — all local.
 
 ## Phases
 
@@ -40,12 +41,45 @@ was local; Phase 04 is the first that touches repos outside this one.
 | 01 | Composable hooks: event.d dispatcher + fragments, graceful partial-install degradation, <30s | 0.5 weeks | ✅ done | 2026-07-17 |
 | 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ✅ done | 2026-07-17 |
 | 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ✅ done | 2026-07-19 |
-| 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ⬜ not started | |
+| 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ✅ done | 2026-07-19 |
 | 05 | Prune-report + attic, README/usermanual rewrite, TRIAL promotions, retro | 0.5 weeks | ⬜ not started | |
 
 Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggered next cycle (ADR-0016).
 
 ## Done log
+
+- **2026-07-19 · Phase 04 · Dogfood into two real external consumers.** arc left its own repo.
+  Opportunity-Scout took council-alone on a clean slate; venturemind took core+plan on top of a
+  **pre-Phase-02 install** — two paths on purpose, because a fresh install exercises none of the
+  upgrade code. **268/268 bats on 3 OS + ci-tier.**
+  **Actual: ~1 day vs a 0.5-week appetite — under.** · amendments: 2 · reopened: n.
+
+  The phase opened by firing its own assumption: **InvoiceFly does not exist** — never created,
+  absent from disk and from the account. The trigger said "Phase 4 blocked until targets named",
+  so nothing proceeded until Ashiq re-picked. That is the ledger working rather than decorating.
+
+  **Three arc defects, all found on a real consumer, none findable by a fixture:**
+  (1) sync silently deleted a consumer's `settings.json` customisations — venturemind's
+  `coverageMode`/`docsGate` were wiped and their gates flipped warn → block, for keys arc's own
+  shipped doc string invites them to add. (2) Re-homed products leave stale **executable** copies
+  while the registry reports the tree clean — measured, not theorised: 6 orphans, and the stale
+  `review-ledger.sh` still runs. (3) arc changed the plan contract on 2026-07-11 and told nobody;
+  a plan written 2026-07-07 failed 7 checks with no indication of the remedy. Fixed as
+  `arc-settings-merge.mjs`, `--prune-report` (REQ-10, pulled forward by ADR-0020), and actionable
+  lint messages — 19 tests between them.
+
+  **The trial ledger got its first real fire data in its life.** It held two runs, both zero-fire,
+  both this author's own kickoffs — so "3 clean runs" had been measuring silence. Against a real
+  external plan, five trial gates fired, and `appetite-sum`'s over-commit branch is a verified
+  TRUE positive (phase appetites sum past the stated total, checked by hand). One run is not three
+  and one repo is not several; it promotes nothing. It is the first evidence in that file that
+  measures a gate rather than its absence.
+
+  Amendments: the `/arc-kickoff` criterion became "one real plan-product command", with the reason
+  recorded — venturemind carries a live 5-phase product plan, and archiving it to satisfy a word
+  would have been the criterion driving the work. `/arc-change` ran instead and took their lint
+  from 7 FAILs to 0. Second amendment: ADR-0020's REQ-10 split, landed here rather than Phase 5.
+
 
 - **2026-07-19 · Phase 03 · Physical re-homing.** Every script left the flat `.claude/scripts/`
   for a product directory — `core/` · `council/` · `plan/` · `review/` — 36 scripts across four
