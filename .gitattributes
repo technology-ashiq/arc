@@ -20,6 +20,11 @@ docs/evidence/** -text
 # stops testing what it claims. OVERRIDES `* text=auto eol=lf`.
 tests/fixtures/products/hostile/crlf-bom/** -text
 
+# Cycle 2 Phase 00: the spine's hostile corpus attacks the emitter at the BYTE level --
+# CRLF, BOM, invalid UTF-8, raw control characters. Normalizing any of it would leave the
+# fixture green while testing nothing. OVERRIDES `* text=auto eol=lf`.
+tests/fixtures/spine/hostile/** -text
+
 # Binary assets: never touch.
 *.png binary
 *.jpg binary

@@ -76,9 +76,10 @@ Checkpoint B — replay + reader + CI:
 
 ## Verification plan
 
-- **Test command:** `npx bats tests/spine-emit.bats` then `tests/spine-replay.bats` then
+- **Test command:** `bats tests/spine-emit.bats` then `tests/spine-replay.bats` then
   `tests/spine-reader.bats` then `tests/spine-equivalence.bats` (one file at a time,
-  foreground) + `node .claude/scripts/core/product-lint.mjs` + `node
+  foreground — the globally installed `bats`, which is what CI runs; `npx bats` mis-resolves
+  the loader path on Windows) + `node .claude/scripts/core/product-lint.mjs` + `node
   .claude/scripts/plan/kickoff-lint.mjs`.
 - **Expected failure first:** every hostile fixture lands RED before its guard exists
   (write fixture → watch strict mode wrongly accept / hook mode wrongly append → fix →

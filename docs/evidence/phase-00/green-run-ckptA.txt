@@ -1,0 +1,24 @@
+1..22
+ok 1 strict mode: every hostile fixture exits 2 with its own reject code
+ok 2 hook mode: every hostile fixture exits 0, appends nothing, and quarantines
+ok 3 both modes: ACCEPT fixtures are accepted and round-trip byte-stable
+ok 4 secret fixture: the secret never appears anywhere under the spine root (hook mode)
+ok 5 secret fixture: the secret never appears anywhere under the spine root (strict mode)
+ok 6 secret quarantine record is stub-only: no payload field names or values
+ok 7 non-secret quarantine keeps the raw input for debugging
+ok 8 valid event: appends exactly one canonical line and prints its id
+ok 9 canonical form: keys sorted, no insignificant whitespace, LF-terminated
+ok 10 sha: recomputing the canonical form of a stored event reproduces its sha
+ok 11 dup idem: the same event twice yields ONE event (strict rejects the second)
+ok 12 dup idem holds ACROSS DAYS (the cross-day dedupe REQ-03 depends on)
+ok 13 dup idem in hook mode never blocks: exit 0, still ONE event
+ok 14 closed day: appending to a closed day is refused, and the close pins a file sha
+ok 15 concurrent emitters: every line is whole, none interleave, none are lost
+ok 16 a killed emitter leaves no torn line behind
+ok 17 hook mode survives a missing node: SKIP, exit 0
+ok 18 strict mode refuses to pretend when node is missing
+ok 19 unreadable event file: strict exits 2, hook skips
+ok 20 emit <kind>: synthesizes a complete, valid event from flags alone
+ok 21 emit <kind>: identical input twice dedupes by derived idem
+ok 22 emit <kind>: an unknown kind is refused before anything is written
+BATS_EXIT=0

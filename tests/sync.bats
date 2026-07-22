@@ -168,10 +168,14 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ "$(_arc_json "$TARGET/.claude/arc-registry.json" 'Object.keys(j.products).sort().join(",")')" = "core,council" ]
 }
 
-@test "sync: bare install writes a registry naming all six products (REQ-08)" {
+@test "sync: bare install writes a registry naming every product in products/ (REQ-08)" {
   bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null
   [ -f "$TARGET/.claude/arc-registry.json" ]
-  [ "$(_arc_json "$TARGET/.claude/arc-registry.json" 'Object.keys(j.products).sort().join(",")')" = "core,council,git,plan,qa,review" ]
+  # Derived from products/, not a hardcoded list: this repo's recurring failure is a count
+  # frozen into a test or a doc that silently disagrees with reality one cycle later
+  # (docs/retro-log.md). Cycle 2 adding `hq` is exactly the event that would have broken it.
+  expected="$(ls "$ARC_ROOT/products" | LC_ALL=C sort | tr '\n' ',' | sed 's/,$//')"
+  [ "$(_arc_json "$TARGET/.claude/arc-registry.json" 'Object.keys(j.products).sort().join(",")')" = "$expected" ]
 }
 
 @test "sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)" {

@@ -1,0 +1,15 @@
+sync: note -- target has no .git, is this really a project root?
+=== diff: committed golden -> what a bare sync produces now ===
+69c69
+< .claude/scripts/core/arc-products.mjs	0f8f6464518d55a14b1347f1031a597bc0e5ac19bd896aa219d44e9ac22d8af7
+---
+> .claude/scripts/core/arc-products.mjs	86b7980f17adf44340f1b298a92f6f8b8430dc588a28c25d49b782ed33846334
+81a82,87
+> .claude/scripts/hq/arc-event.mjs	b0191bbb9ccc1b6709c36d1281a1e351c33ab05228a30ca581222d59b2f0ceaf
+> .claude/scripts/hq/arc-event.sh	796beb1fc07a5ea0053d801c096eb31421df002e5cf1620489530662d1c5e4bc
+> .claude/scripts/hq/lib/canonical.mjs	edbb535e94602ec723ba7b52e6de872ce36e787aee42f957e8fdf4d172ec5282
+> .claude/scripts/hq/lib/redact.mjs	c8c4eb74df631ba957d3a8aff389465f549e3b8ac405281b969badd6ab76f6e5
+> .claude/scripts/hq/lib/spine-io.mjs	06e8c11aad67d3b2a166a02efa59cffc1ce4143d3a92a9a528607768652b9203
+> .claude/scripts/hq/lib/validate.mjs	509305bcd63038fdc1beaf12b6f31b620b6b163d1ca10dcf84af22a1f42e49ec
+=== end diff ===
+golden updated: /e/Work_Hub/01_Automemory/arc/tests/fixtures/sync-golden/tree-manifest.txt
