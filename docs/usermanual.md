@@ -1,17 +1,16 @@
-# User Manual -- Sample Structure (arc- system)
+# User Manual -- arc
 
-> Intha manual project structure-a **fulla epdi use panradhu**-nu explain pannudhu (Tanglish).
+> Intha manual arc-a **fulla epdi use panradhu**-nu explain pannudhu (Tanglish).
 > Ella commands, hooks, agents, scripts + background tools, and oru real **pipeline** --
 > kickoff -> phase build -> review -> ship -> retro -- step-by-step.
-> Idhu "ipo iruka structure"-ku exact-ah match aagum (2026-07-07 integrated version).
 
 ---
 
 ## 0. Idhu enna? (One-minute picture)
 
-Idhu oru **project mold** -- Claude Code-ku "brain + rails". Nee code ezhudhradhukku munnadi,
-intha structure Claude-a oru disciplined engineer-ah maathudhu: enna plan pannanum, epo test
-pannanum, epo dhaan ship pannalaam-nu rules + automation vachi enforce pannudhu.
+arc = Claude Code-ku "brain + rails". Nee code ezhudhradhukku munnadi, idhu Claude-a oru
+disciplined engineer-ah maathudhu: enna plan pannanum, epo test pannanum, epo dhaan ship
+pannalaam-nu rules + automation vachi enforce pannudhu.
 
 Oru line-la whole system:
 
@@ -21,6 +20,30 @@ Oru line-la whole system:
 Rendu "half" iruku:
 1. **Discipline spine (arc-)** -- un core process: plan, phase-by-risk, gates, committed tracker.
 2. **Capability tools** -- review, security, QA, design, docs, cross-model -- ella-um arc- commands.
+
+### Aaru products (idhu mudhal-la puriyanum)
+
+arc oru single blob illa -- **aaru products**, oru umbrella-la. `core` dhaan base; matha
+ellame `core`-a require pannum. Un project-ku ethana venumo adhu mattum install pannalaam.
+
+| Product | Requires | Commands |
+|---------|----------|----------|
+| `core` | -- | `/arc` `/arc-toolcheck` `/arc-resume` `/arc-freeze` `/arc-unfreeze` |
+| `plan` | core | `/arc-kickoff` `/arc-change` `/arc-phase-done` `/arc-retro` `/arc-diagram` |
+| `review` | core | `/arc-review` `/arc-audit` `/arc-second-opinion` `/arc-docs` |
+| `qa` | core | `/arc-qa` `/arc-design` `/arc-canary` |
+| `git` | core | `/arc-commit` `/arc-pr` `/arc-fix-issue` `/arc-ship` |
+| `council` | core | `/arc-council` |
+
+```bash
+./sync-to-project.sh <project>                       # ellame
+./sync-to-project.sh <project> --products plan,review # ithu mattum (core thaana varum)
+```
+
+Ovvoru sync-um target-la `.claude/arc-registry.json` ezhudhum -- enna install aachu, enna
+version, enna files, edhu commit-la irundhu. **`/arc`** andha file-a padichi status kaattum
+(file irukka-nu guess panradhu illa). Oru command kaanom-na, "edhu product-la irukku +
+install command enna"-nu `/arc` sollum.
 
 **"arc twist"** (whole system-oda soul): edhuvum sonna, adhu oru **committed artifact + oru gate +
 resumable state** produce pannanum. Just "report" panna maaten -- enforce pannum. Adhu dhaan
@@ -42,34 +65,48 @@ Structure-la ella piece-um moonu "loading behavior"-la ondhu:
 
 ---
 
-## 2. Folder structure (ipo iruka mold)
+## 2. Folder structure (arc repo-la iruka full set)
+
+Keezha iruka-dhu **arc repo** -- ella product-um serndhu. Oru target project ithula
+adhoda install pannina products-oda pangu mattum dhaan paakkum.
 
 ```
-Sample Structure/
+arc/
 |- CLAUDE.md                 # team brain (advisory, <200 lines)
 |- CLAUDE.local.md           # private (gitignored) -- un port, secrets pointers
 |- README.md
 |- .env.example              # env contract (key names only)
 |- .mcp.json                 # MCP servers (supabase, playwright, codegraph...)
-|- sync-to-project.ps1       # mold -> existing project-ku machinery push
+|- sync-to-project.sh        # installer (bash)  -- rendum same resolver-a drive pannum
+|- sync-to-project.ps1       # installer (PowerShell twin)
+|- products/                 # aaru manifests -- edhu enna file own pannudhu-nu source of truth
+|  |- core/manifest.json     #   council/ git/ plan/ qa/ review/ -um inge
 |- .claude/
 |  |- settings.json          # permissions + hooks wiring + arc.* config
 |  |- settings.local.json    # personal taste (gitignored)
-|  |- statusline.sh          # status bar
 |  |- output-styles/terse.md
-|  |- commands/  (20)        # /arc-*  -- nee type panradhu
-|  |- agents/    (7)         # background specialists (Task subagents)
+|  |- commands/  (22)        # /arc-*  -- nee type panradhu (product-wise Section 6)
+|  |- agents/    (23)        # background specialists (Task subagents; 12 council roles)
 |  |- rules/     (6)         # path-glob-la auto-load aagum guidance
-|  |- hooks/     (6)         # event-driven enforcement
-|  |- scripts/   (5)         # shared scripts (hooks + commands kupidum)
+|  |- hooks/     (7)         # event-driven enforcement
+|  |- scripts/               # PRODUCT-ku oru folder (flat illa -- Phase 03-la re-home aachu)
+|  |  |- core/    (11)       #   toolchain-health, arc-products (resolver), arc-profile...
+|  |  |- plan/    (3)        #   kickoff-lint, arc-bytediff, arc-evidence
+|  |  |- review/  (5)        #   arc-scan, coverage-gate, docs-drift, rls-gate
+|  |  `- council/ (3)        #   council-lint, council-juror, council-calibrate
 |  |- skills/                # model self-invoke skills (seo-article-writer...)
 |  `- state/                 # ledger + freeze + snapshots (auto)
 `- docs/                     # depth -- build-playbook, setup guides, THIS manual
    |- usermanual.md          # <- neenga inga
    |- build-playbook.md      # Golden Loop, DoD, tracker method (full)
    |- how-it-works.md
+   |- adr/                   # oru decision oru file (immutable)
    `- templates/             # PLAN / phase-spec / ADR templates
 ```
+
+> `git` and `qa` products scripts-e ship pannaadhu -- avai commands + agents mattum.
+> Target-la install aana-pinnadi `.claude/arc-registry.json` varum -- adhu dhaan `/arc`-oda
+> source of truth.
 
 Build-time la innum moonu tracker files varum (root-la):
 `PLAN.md` | `phases/phase-NN-spec.md` | `PROGRESS.md` -- (Section 8 paaru).
@@ -78,7 +115,12 @@ Build-time la innum moonu tracker files varum (root-la):
 
 ## 3. One-time setup (pudhu project start panna)
 
-1. Intha mold folder-a copy panni un pudhu project repo root-la merge pannu (app code + `.claude/` ellam **ONE git repo**-la -- split panna venaam).
+1. arc-a un project root-la install pannu (app code + `.claude/` ellam **ONE git repo**-la -- split panna venaam):
+   ```bash
+   ./sync-to-project.sh /path/to/un-project                        # ellame
+   ./sync-to-project.sh /path/to/un-project --products plan,review # subset (core thaana varum)
+   ```
+   Enna install aagirukku-nu paakka: `/arc`. Innum onnu venum-na `/arc` andha install command-ayum kaattum.
 2. `CLAUDE.md`-la `<PROJECT_NAME>` replace panni ella `TODO`-vaiyum fill pannu (name, goal, stack).
 3. `.env.example` -> `.env.local` copy panni real secrets pODu (`.env.local` gitignored -- commit panna koodadhu).
 4. `.claude/rules/*` globs-a un folder layout-ku adjust pannu.
@@ -118,15 +160,24 @@ Idhellam **auto** -- nee command type panna venaam. Aana enna nadakkudhu-nu ther
 | `ui.md` *(pudhusu)* | `app/**/*.tsx`, `components/**`, `*.css` | design system reuse, ella state design pannu, a11y, `/arc-design` pass venum |
 | `security-sensitive.md` *(pudhusu)* | `**/auth/**`, `**/api/**`, `**/payments/**`, `supabase/**` | authz server-side, secrets, `/arc-audit` run pannu |
 
-### 4c. Moat scripts (`.claude/scripts/`) -- hooks + commands kupidum
+### 4c. Moat scripts (`.claude/scripts/<product>/`) -- hooks + commands kupidum
 
-| Script | Enna | Yaaru kupidum |
-|--------|------|---------------|
-| `toolchain-health.sh` | Ella tool (graphify, codegraph, claude-mem, scanners, MCP, env) health | SessionStart (`--brief`), `/arc-toolcheck` (full) |
-| `review-ledger.sh` *(pudhusu)* | Enna review pass aachu-nu commit-SHA-la stamp; `require` -> ship block | review commands (stamp), PreToolUse deploy-guard (require), SessionStart (status) |
-| `coverage-gate.sh` *(pudhusu)* | Coverage floor-ku keezha-na deploy block | PreToolUse deploy-guard |
-| `docs-drift.sh` *(pudhusu)* | Public surface maari docs maaraama-na gate | PreToolUse deploy-guard |
-| `freeze-check.sh` *(pudhusu)* | Freeze active-na boundary-ku veliya edit block | PreToolUse-edit hook |
+Scripts product-ku oru folder-la irukku (Phase 03-la re-home aachu -- munna flat-ah irundhadhu).
+Andha product install aagalaina, andha folder-e target-la varaadhu.
+
+| Script | Product | Enna | Yaaru kupidum |
+|--------|---------|------|---------------|
+| `core/toolchain-health.sh` | core | Ella tool (graphify, codegraph, claude-mem, scanners, MCP, env) health | SessionStart (`--brief`), `/arc-toolcheck` (full) |
+| `core/arc-products.mjs` | core | **Resolver** -- edhu product enna file own pannudhu; rendu installer twin-um idhe drive pannum; `--list` / `--registry` / `--prune-report` | sync twins, `/arc` |
+| `core/arc-profile.sh` | core | Active gate modes (`starter`/`standard`/`strict`) resolve pannum | ella gate-um |
+| `core/review-ledger.sh` | core | Enna review pass aachu-nu commit-SHA-la stamp; `require` -> ship block | review commands (stamp), PreToolUse deploy-guard (require), SessionStart (status) |
+| `core/product-lint.mjs` | core | Oru synced file manifest-la unmapped illa double-mapped-na exit 2 | CI |
+| `core/freeze-check.sh` | core | Freeze active-na boundary-ku veliya edit block | PreToolUse-edit hook |
+| `review/coverage-gate.sh` | review | Coverage floor-ku keezha-na deploy block | PreToolUse deploy-guard |
+| `review/docs-drift.sh` | review | Public surface maari docs maaraama-na gate | PreToolUse deploy-guard |
+| `plan/kickoff-lint.mjs` | plan | PLAN.md structure + substance gates (TRIAL set: `docs/trial-ledger.md`) | `/arc-kickoff`, `/arc-resume` |
+| `plan/arc-bytediff.sh` | plan | Byte-diff gate -- installed tree maaralaya-nu prove pannum | phase moves |
+| `council/council-lint.mjs` | council | Council session structure validate | `/arc-council` |
 
 ### 4d. settings.json -- `arc.*` config (safe defaults)
 
@@ -171,8 +222,14 @@ Nee neradiya kupidama, **commands ivanga-ala Task subagent-ah** invoke pannum (i
 
 ## 6. Commands (`.claude/commands/`) -- nee type panradhu (stage-wise)
 
-Motha **20 commands**. Pipeline order-la group panniruken. Ovvondhukum: enna, epdi kupidradhu,
-background-la enna, enna artifact.
+Motha **22 commands**. Pipeline order-la group panniruken. Ovvondhukum: enna, epdi kupidradhu,
+background-la enna, enna artifact. Ovvoru command-ukum oru **owner product** iruku (Section 0
+table) -- andha product install aagala-na, andha command target-la irukkaadhu.
+
+### Stage 0 -- ENGA IRUKOM (core)
+| Command | Epdi | Enna nadakkum | Artifact |
+|---------|------|---------------|----------|
+| `/arc` | eppo venumo | Enna product install aachu + ovvondhoda health, `.claude/arc-registry.json`-la irundhu padichi. Illaadha product-ku exact install command | -- (read-only) |
 
 ### Stage 1 -- PLAN
 | Command | Epdi | Enna nadakkum | Artifact |
@@ -225,7 +282,12 @@ background-la enna, enna artifact.
 | `/arc-freeze <dir>` | debugging-la scope lock | Edit-a andha dir-ku mattum limit (PreToolUse-edit hook enforce) |
 | `/arc-unfreeze` | mudinjadhu | Boundary remove |
 | `/arc-diagram <what>` | diagram venum | English -> mermaid, PLAN/ADR/`docs/`-la commit |
-| `/arc-resume` | session-a thirumba pidikka | `PROGRESS.md ## Now` + last snapshot-la irundhu state rebuild |
+| `/arc-resume` | session-a thirumba pidikka | `PROGRESS.md ## Now` + last snapshot-la irundhu state rebuild. **Read-only** -- resume state ezhudhaadhu |
+
+### Decision (council)
+| Command | Epdi | Enna |
+|---------|------|------|
+| `/arc-council <q>` | oru periya decision -- business, tech, money, personal | Research -> adversarial debate (advocate / skeptic / neutral) -> question-ku match aana domain experts -> **verifier** ovvoru point-oda *evidence*-a grade pannum (conclusion-a illa) -> oru recorded decision. Artifact: `docs/council/` |
 
 ---
 
@@ -350,31 +412,35 @@ State git-la irukkaradhaala, `/arc-resume` epovum session-a rebuild panna mudiyu
 
 ## 10. Cheat-sheet (ella command onnu paarvaila)
 
-| Stage | Command | Background | Artifact |
-|-------|---------|-----------|----------|
-| Plan | `/arc-kickoff` | (product-challenger) | PLAN.md, phases, PROGRESS.md |
-| Change | `/arc-change`, `/arc-fix-issue` | tracker | phase-spec / ADR |
-| Review | `/arc-review` | code-reviewer + scanners | docs/reviews/ |
-| Security | `/arc-audit` | security-auditor (STRIDE) | docs/security/ + issue |
-| QA | `/arc-qa` | qa-tester + agent-browser | docs/qa/ + regression test |
-| Design | `/arc-design` | design-reviewer | docs/design/ |
-| 2nd opinion | `/arc-second-opinion` | codex CLI | docs/reviews/ |
-| Docs | `/arc-docs` | docs-drift.sh | updated docs |
-| Commit | `/arc-commit` | git | conventional commits |
-| PR | `/arc-pr` | GitHub | PR |
-| Ship | `/arc-ship` | vercel + deploy-guard | production deploy |
-| Watch | `/arc-canary` | agent-browser + qa-tester | docs/canary/ |
-| Close | `/arc-phase-done` | DoD gate | tracker flip |
-| Retro | `/arc-retro` | -- | setup upgrades |
-| Tools | `/arc-toolcheck` | toolchain-health.sh | smart-table artifact (pinned URL) |
-| Safety | `/arc-freeze`,`/arc-unfreeze` | freeze-check.sh | edit boundary |
-| Util | `/arc-diagram`,`/arc-resume` | -- | mermaid / restored state |
+| Stage | Command | Product | Background | Artifact |
+|-------|---------|---------|-----------|----------|
+| Status | `/arc` | core | arc-registry.json | -- (read-only) |
+| Plan | `/arc-kickoff` | plan | (product-challenger) | PLAN.md, phases, PROGRESS.md |
+| Change | `/arc-change`, `/arc-fix-issue` | plan, git | tracker | phase-spec / ADR |
+| Review | `/arc-review` | review | code-reviewer + scanners | docs/reviews/ |
+| Security | `/arc-audit` | review | security-auditor (STRIDE) | docs/security/ + issue |
+| QA | `/arc-qa` | qa | qa-tester + agent-browser | docs/qa/ + regression test |
+| Design | `/arc-design` | qa | design-reviewer | docs/design/ |
+| 2nd opinion | `/arc-second-opinion` | review | codex CLI | docs/reviews/ |
+| Docs | `/arc-docs` | review | docs-drift.sh | updated docs |
+| Commit | `/arc-commit` | git | git | conventional commits |
+| PR | `/arc-pr` | git | GitHub | PR |
+| Ship | `/arc-ship` | git | vercel + deploy-guard | production deploy |
+| Watch | `/arc-canary` | qa | agent-browser + qa-tester | docs/canary/ |
+| Close | `/arc-phase-done` | plan | DoD gate | tracker flip |
+| Retro | `/arc-retro` | plan | -- | setup upgrades |
+| Decision | `/arc-council` | council | 12 debate/expert roles + verifier | docs/council/ |
+| Tools | `/arc-toolcheck` | core | toolchain-health.sh | smart-table artifact (pinned URL) |
+| Safety | `/arc-freeze`,`/arc-unfreeze` | core | freeze-check.sh | edit boundary |
+| Util | `/arc-diagram`,`/arc-resume` | plan, core | -- | mermaid / restored state |
 
 ---
 
 ## 11. Troubleshooting / FAQ
 
-- **"subagent not available" solludhu** -> template sync pannala. `sync-to-project.ps1 -Target <project>`, apram session restart.
+- **"subagent not available" solludhu** -> andha agent-oda product install aagala. `/arc` run panni enna kaanom-nu paaru, adhu kaattura command-a run pannu (`./sync-to-project.sh <project> --products <name>`), apram session restart (commands session start-la dhaan load aagum).
+- **Oru command-e kaanom** -> same vishayam: `/arc` -> owner product install pannu -> restart.
+- **Target-la enna file arc install pannaadhu-nu paakanum** -> `./sync-to-project.sh <project> --prune-report`. Read-only, exit 0, edhuvum delete aagaadhu. **Aana:** "arc install pannaladhu"-nga list-la **nee ezhudhina files-um varum** -- adhu "delete panna safe" list illa. Output-e idha sollum.
 - **Deploy unexpected-ah block aagudhu** -> deploy-guard message paaru: (a) test fail -> fix, (b) coverage floor -> test coverage kootu illa `arc.coverageMode:"warn"`, (c) review missing -> andha review run pannu illa `ARC_REQUIRED_REVIEWS` unset, (d) docs drift -> `/arc-docs` illa `arc.docsGate:"warn"`. Ella gate-ayum oru shot-la off panna: `arc.profile:"starter"` (block-by-default default `standard`).
 - **Edit block aagudhu "frozen boundary"** -> `/arc-freeze` active. `/arc-unfreeze` pannu.
 - **Gates romba strict** -> default warn/unset-ku thirumbu (Section 8).

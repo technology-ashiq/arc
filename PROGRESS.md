@@ -6,62 +6,42 @@
 
 ## Now
 
-**Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
-took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
-upgrade path is where all three defects lived, and a fresh install would have shown none of them.
-REQ-09 and REQ-10 validated. 268/268 on 3 OS + ci-tier. Evidence at `docs/evidence/phase-04/`.
+**INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
+six products — `core` `plan` `review` `qa` `git` `council` — with selective install
+(`--products`), a per-target `arc-registry.json`, physical per-product script boundaries, and
+two real external consumers. 271/271 bats local at close; evidence per phase in
+`docs/evidence/phase-NN/`.
 
-**What dogfooding actually bought:** three arc defects that no fixture could have produced — sync
-deleting a consumer's gate settings, re-homed products leaving stale *executable* copies while the
-registry reported clean, and arc changing the plan contract without telling anyone. All three fixed
-with a regression test each. Plus the trial ledger's first real fire data in its existence: five
-gates fired on a real external plan, where two prior logged runs had fired nothing at all.
+**Nothing is in progress. The next move is a decision, not a task.**
 
-**Phase 05 OPEN — docs + promotions + retro** (`phases/phase-05-spec.md`, 0.5-week appetite).
-Two strands now, not three: the README/usermanual rewrite, and TRIAL-gate promotions via
-`/arc-retro`. **REQ-11 (attic) was built and then scope-cut on the same day — ADR-0023.**
+**ADR-0017's revisit trigger FIRED at this close** — *"the orchestrator initiative closes … the
+v2 tracker un-parks and Phase 04 (QA pipeline) resumes as next up."* Routed and recorded, not
+acted on: the owner chose to hold the resume decision rather than un-park in the closing
+minutes. The reason is in ADR-0017 itself — on resume, v2's Phase 8 must be **re-scoped against
+what the orchestrator shipped**, because selective install already delivers part of what v2's
+REQ-08 was going to build. That is real work, not a close-time formality. v2 stays archived at
+`docs/archive/PROGRESS-2026-07-17.md`, its appetite clock still **stopped at ~13%**.
 
-**Why attic was cut, since "we built it and dropped it" deserves the reason.** The mode worked:
-16 hostile-input bats green, MANIFEST-based restore, collision suffixing, no delete call anywhere.
-Then the mandatory adversarial pass found the eligibility rule was wrong at the root — *"not in the
-registry"* also describes **every file the consumer wrote themselves**, since arc never installed
-those and they can never appear in the registry. Reproduced on a **fresh** install with a valid
-registry (`deploy-staging.md` and `my-reviewer.md` both quarantined), which killed the natural
-hypothesis that this was old-install drift and that new-cycle registries would fix it. It is not,
-and they would not.
+**So the open question, whenever you want it:** resume v2 (re-scope Phase 8 first, then Phase 04
+QA pipeline), or start something else. Neither is scheduled here.
 
-The fix that would have made it safe — an append-only ownership ledger with content hashes — means
-changing the **sync write path**, the most golden-gated code in the repo, to serve a cleanup tool
-whose entire demand is **one repo we own and 21 files**. Estimated 4–6 days against a 0.5-week
-appetite for the whole phase. So: cut, with triggers recorded, implementation preserved at
-`e2b3646`, and the phase's appetite spent on the two strands that have real demand. Nothing
-dangerous ever merged — the bug lived only in unmerged code, which is the whole reason the
-adversarial pass runs before the merge and not after.
+**Two things this initiative decided that outlive it.** REQ-11 (attic) was built and cut on the
+same day — the adversarial pass proved *"not in the registry"* also describes every file the
+consumer wrote, so the mode quarantined their own work (ADR-0023; implementation preserved at
+`e2b3646`, revisit triggers recorded and all currently false). And the eight substance gates in
+`kickoff-lint.mjs` stay **WARN**, each with a reason in `docs/trial-ledger.md`: none clears the
+three-exercised-run bar, and council session 001 made any promotion conditional on a governed
+escape hatch that does not exist — `report()` is still an unconditional `process.exit(1)`.
+Building that hatch needs `/arc-change` and its own ADR.
 
-**One live defect did come out of it, and is fixed here:** `--prune-report` (shipped, Phase 4) lists
-consumer-authored files as `unowned` with no hint that it is a *"not installed by arc"* list rather
-than a *"safe to delete"* list. A person could reasonably read it as arc calling their own work
-junk. Output now says so plainly; three bats cases pin the wording. **REQ-12** added for what the
-phase actually delivers, since dropping REQ-11 would otherwise have left Phase 05 goalless.
+Appetite burn: **~6.5 of ~30 days (~22%)** — six phases closed, every one under appetite. Kill
+tripwire (50%) never approached; no scope-cut conversation was ever forced by burn. (The one
+scope cut, REQ-11, was a safety call, not a time call.)
 
-**Plan reconciled 2026-07-19 (ADR-0022), before Phase 05 opened.** `/arc-resume` caught PLAN.md
-saying Phase 4 was *"blocked until targets named"* while REQ-09 read `validated` — the ledger
-trigger fired correctly at Phase 4 start, but the re-pick was never routed back into the plan, so
-**Opportunity-Scout appeared in no plan artifact at all**, only in the evidence bundle. Now named
-across REQ-09, the ledger row (RESOLVED), the external-deps table, the phase table, the Phase 04
-spec and ADR-0020. ADR-0020's timing argument was confirmed by events, not weakened — only its
-repo name was wrong. The kickoff done-log below is deliberately unedited: it is history.
-
-**Phase 05 inherits a live decision.** Council session 001 (run in Opportunity-Scout, committed
-there) ruled CONDITIONAL on promoting the 8 WARN-only gates: promote `appetite-sum`'s over-commit
-branch only, and only after a governed escape hatch exists — today `fail()` is an unconditional
-`process.exit(1)` with no recorded-reason bypass anywhere in `.claude/scripts/plan/`. Phase 5 owns
-that call, and now has real fire data to make it on.
-
-Appetite burn: **~6 of ~30 days (~20%)** — five phases closed, every one under appetite. Kill
-tripwire (50%) not approached; no scope-cut conversation triggered.
-
-Setup needed from user: none for Phase 05 — all local.
+**Setup needed from user: one thing.** The branch `feat/arc-phase-05-docs-promotions` is not
+pushed, so **CI has not run on this phase** — the 271/271 above is a local single-OS run, and
+Phase 04's bar was "CI green on ubuntu + windows + macos". Push it and let CI confirm before
+treating this close as final. If CI red-lights it, this phase reopens.
 
 ## Phases
 
@@ -72,11 +52,55 @@ Setup needed from user: none for Phase 05 — all local.
 | 02 | Registry-aware core: arc-registry.json in targets, ledger kinds from registry, /arc registry-backed, CI tree-diff invariant | 1 week | ✅ done | 2026-07-17 |
 | 03 | Physical re-homing, incremental council→core→plan→review→qa behind the byte-diff gate (ADR-0018) | 1.5 weeks | ✅ done | 2026-07-19 |
 | 04 | Dogfood: council-alone + core+plan into two real external repos, evidence bundles | 0.5 weeks | ✅ done | 2026-07-19 |
-| 05 | README/usermanual/blueprint rewrite, TRIAL→FAIL promotions, retro (attic scope-cut — ADR-0023; prune-report shipped in Phase 04) | 0.5 weeks | 🔄 in progress | |
+| 05 | README/usermanual/blueprint/how-it-works rewrite for the product model, TRIAL-gate decision (all 8 kept WARN with recorded reasons), retro (attic scope-cut — ADR-0023; prune-report shipped in Phase 04) | 0.5 weeks | ✅ done | 2026-07-22 |
 
 Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggered next cycle (ADR-0016).
 
 ## Done log
+
+- **2026-07-22 · Phase 05 · Docs, the gate decision, and the retro — initiative close.** The
+  phase that shipped no code. Its three deliverables were a documentation set that matches the
+  machine, a recorded decision on eight lint gates, and a retro.
+  **271/271 bats local (Windows/Git Bash), 0 failures.** Evidence at `docs/evidence/phase-05/`.
+  **Actual: ~1 session vs a 0.5-week appetite — under.** · amendments: 2 · reopened: n.
+
+  **The docs had been describing a product that no longer existed.** arc became six products on
+  2026-07-17 and re-homed its scripts on 07-18; README, usermanual, blueprint and how-it-works
+  went on describing a single copy-the-folder template for five more days. Corrected against
+  the machine, not from memory: commands 20 → 22, agents 7 → 23, hooks 6 → 7, scripts flat →
+  per-product, blueprint's command table 10 → 22 rows. Each of the four now names the six
+  products and the selective-install command, and every `/arc-*` command they mention was
+  checked to exist. Proved by installing rather than asserting — `--products plan,review` into
+  a scratch target pulled core in as a dependency and landed exactly 14 commands, and
+  `--prune-report` listed a consumer-authored file as unowned with the "not a delete list"
+  wording the phase added.
+
+  **No gate was promoted, and that is the deliverable, not a shortfall.** REQ-12 allows either
+  promotion with evidence or an explicit WARN with the ledger saying why. All eight took the
+  second branch: `appetite-sum`, `nonneg-drift` and `verify-red` have one exercised run against
+  a three-run bar; `pre-mortem-cite` and `adr-wired` fired but remain unadjudicated;
+  `adr-confidence`, `architecture` and `current-state-structure` have never fired at all, and
+  promoting those would promote silence. Independent of evidence, council session 001 made
+  promotion conditional on a governed escape hatch, and `report()` in `kickoff-lint.mjs` is
+  still an unconditional `process.exit(1)`. Building that hatch sits in no REQ and no exit
+  criterion, so it needs `/arc-change` and its own ADR rather than this phase's last half-week.
+
+  **The retro found the phase's own cause.** Two recurring patterns logged: meta-docs hardcode
+  counts a script already reports and rot the moment code moves (this phase's entire docs
+  strand); and the golden fixture has broken across 10 commits because any content edit to a
+  product-shipped file moves its hash, twice arriving as a surprise rather than a planned step.
+  Both regenerations this phase followed the corrected procedure — delta checked first, exactly
+  the intended paths confirmed, then re-recorded and named in the commit. A third finding, a
+  piped test runner masking a red suite's exit code, went to `.claude/rules/testing.md`; it
+  happened once, so it is a rule, not a retro-log line.
+
+  `appetite-sum` also earned a ledger row against itself: its zero-slack branch fired on arc's
+  own PLAN (27.5d = 92% of 30d), and the initiative closed at ~22% burn. The arithmetic was
+  right and the risk inverted. Recorded against that branch only — the over-commit branch
+  council named is untouched.
+
+  Amendments: REQ-11 dropped (ADR-0023) and REQ-12 added in its place, both on 2026-07-19,
+  before the phase's working session.
 
 - **2026-07-19 · Phase 04 · Dogfood into two real external consumers.** arc left its own repo.
   Opportunity-Scout took council-alone on a clean slate; venturemind took core+plan on top of a

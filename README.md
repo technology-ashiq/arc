@@ -1,10 +1,36 @@
-# Claude Code — Canonical Project Folder Structure (Template)
+# arc — a Claude Code build system, shipped as six installable products
 
-A reusable, production-grade Claude Code setup, mapped to the canonical `.claude/` layout.
-Copy this folder into any new project, replace `<PROJECT_NAME>`, fill the `TODO`s, and Claude
-Code behaves like a 10x developer instead of a generic chatbot.
+A production-grade Claude Code setup, mapped to the canonical `.claude/` layout. Install it
+into any project — all of it, or only the parts you want — and Claude Code behaves like a
+10x developer instead of a generic chatbot.
 
 > **CLAUDE.md is advisory. Hooks are deterministic. Skills load on demand.**
+
+## The six products
+
+arc is not one blob. It is six products under one umbrella; `core` is the base and every
+other product requires it. Install any subset.
+
+| Product | Requires | Commands |
+|---|---|---|
+| `core` | — | `/arc` `/arc-toolcheck` `/arc-resume` `/arc-freeze` `/arc-unfreeze` |
+| `plan` | core | `/arc-kickoff` `/arc-change` `/arc-phase-done` `/arc-retro` `/arc-diagram` |
+| `review` | core | `/arc-review` `/arc-audit` `/arc-second-opinion` `/arc-docs` |
+| `qa` | core | `/arc-qa` `/arc-design` `/arc-canary` |
+| `git` | core | `/arc-commit` `/arc-pr` `/arc-fix-issue` `/arc-ship` |
+| `council` | core | `/arc-council` — a multi-agent advisory council for hard decisions |
+
+```bash
+# everything
+./sync-to-project.sh /path/to/your-project
+
+# only what you want — core comes along automatically as a dependency
+./sync-to-project.sh /path/to/your-project --products plan,review
+```
+
+Run **`/arc`** inside a target to see which products are installed, their health, and the
+exact command to add the missing ones. That dashboard reads `.claude/arc-registry.json`,
+which every sync writes into the target — so the answer is looked up, never guessed.
 
 ## Structure
 ```
@@ -21,24 +47,20 @@ your-project/
     │   ├── PreToolUse.sh     #   destructive-guard + deploy-guard (block on failing tests)
     │   ├── PreCompact.sh     #   save state before context compaction
     │   └── SessionEnd.sh     #   append session trail to docs/session-log.md
-    ├── commands/             # Slash commands (user-invoked)
-    │   ├── arc-ship.md           #   /arc-ship — lint, build, test, deploy in one go
-    │   ├── arc-commit.md         #   /arc-commit — grouped conventional commits
-    │   ├── arc-pr.md             #   /arc-pr — open a GitHub PR
-    │   ├── arc-review.md         #   /arc-review — delegates to the code-reviewer agent
-    │   ├── arc-kickoff.md        #   /arc-kickoff — plan + phases + tracker (build playbook)
-    │   ├── arc-change.md         #   /arc-change — route a mid-build change through the structure
-    │   ├── arc-phase-done.md     #   /arc-phase-done <n> — enforce Definition of Done
-    │   ├── arc-retro.md          #   /arc-retro — corrections → permanent setup upgrades
-    │   ├── arc-fix-issue.md      #   /arc-fix-issue <n>
-    │   └── arc-toolcheck.md      #   /arc-toolcheck — full toolchain status + one-command fixes
+    ├── commands/             # Slash commands (user-invoked) — 22, one owner product each
+    │   │                     #   see the product table above for which command ships with what
+    │   ├── arc.md            #   /arc — umbrella status: installed products + health (core)
+    │   ├── arc-kickoff.md    #   /arc-kickoff — plan + phases + tracker (plan)
+    │   ├── arc-review.md     #   /arc-review — delegates to the code-reviewer agent (review)
+    │   └── …                 #   a target only receives the commands of its installed products
     ├── skills/               # Model-invokable workflows, load on demand
     │   └── seo-article-writer/   # SKILL.md
     ├── agents/               # Subagents — isolated context window
-    │   ├── code-reviewer.md  #   reviews diffs, returns summary
-    │   ├── researcher.md     #   web fetch + synthesis
-    │   ├── log-analyzer.md   #   parses errors / crash logs
-    │   └── qa-tester.md      #   real-browser flow tests via the agent-browser CLI (Playwright MCP fallback)
+    │   ├── code-reviewer.md  #   reviews diffs, returns summary (review)
+    │   ├── qa-tester.md      #   real-browser flow tests via the agent-browser CLI (qa)
+    │   ├── plan-attacker.md  #   adversarial pass over a drafted PLAN (plan)
+    │   ├── council-*.md      #   12 debate/expert roles behind /arc-council (council)
+    │   └── …                 #   researcher, log-analyzer, security-auditor, design-reviewer …
     ├── output-styles/        # Custom response formats
     │   └── terse.md          #   code-only, no prose
     ├── rules/                # Path-scoped — load on frontmatter `paths:` glob match
@@ -46,8 +68,11 @@ your-project/
     │   ├── supabase.md       #   loads for lib/supabase/**
     │   ├── stripe.md         #   loads for stripe paths
     │   └── testing.md        #   loads for **/*.test.*, tests/**, e2e/**
-    ├── scripts/              # Shared shell scripts that hooks + commands call
-    │   └── toolchain-health.sh  #   tool status + fixes — /arc-toolcheck & SessionStart --brief
+    ├── scripts/              # One directory per product — physical boundaries, not one flat bag
+    │   ├── core/             #   toolchain-health.sh, arc-products.mjs, arc-profile.sh, review-ledger.sh …
+    │   ├── plan/             #   kickoff-lint.mjs, arc-bytediff.sh, arc-evidence.sh
+    │   ├── review/           #   scanner + gate scripts
+    │   └── council/          #   council session scripts
     ├── statusline.sh         # Bottom-bar display config
     ├── settings.json         # Permissions, hook registry, statusLine (shared — no model pin)
     └── settings.local.json   # Personal — model choice, extra allows. Gitignored
@@ -65,31 +90,53 @@ your-project/
 4. Make scripts executable: `chmod +x .claude/hooks/*.sh .claude/statusline.sh`
 5. Open in Claude Code — `CLAUDE.md`, hooks, statusline and settings load automatically.
 
-## Template vs project — where does the app code live?
-**Same repo, same root.** This folder is only the *mold* — it is not a project and never gets
-pushed anywhere. Each real project = your app code (`app/`, `lib/`, `package.json` …) **plus**
-these template files, merged at the root of ONE git repo. Don't split them: rules path-match
-against your code paths, hooks run inside the repo, CLAUDE.md describes *that* codebase.
+## arc repo vs your project — where does the app code live?
+**Same repo, same root.** This repo is where the six products are *developed*; it is not
+itself one of your projects. Each real project = your app code (`app/`, `lib/`,
+`package.json` …) **plus** the products you installed, merged at the root of ONE git repo.
+Don't split them: rules path-match against your code paths, hooks run inside the repo,
+CLAUDE.md describes *that* codebase.
 
 Commit & push everything — `.claude/`, `CLAUDE.md`, `docs/`, `PLAN.md`, `PROGRESS.md`, `phases/`
 are team config and should be versioned with the code. The only exceptions are personal/secret
 files, and `.gitignore` already excludes them: `CLAUDE.local.md`, `.claude/settings.local.json`,
 `.env.local`.
 
-## Keeping projects in sync with the template
-The mold improves over time (via `/arc-retro` learnings). Projects do NOT auto-sync — that's
-intentional (no silent changes). To push template updates into an existing project:
+## Installing and updating a project
+arc improves over time (via `/arc-retro` learnings). Projects do NOT auto-sync — that's
+intentional (no silent changes). Two equivalent twins do the install; use whichever your
+shell prefers:
 
+```bash
+./sync-to-project.sh /path/to/your-project --products plan,review
+```
 ```powershell
 & "<this-folder>\sync-to-project.ps1" -Target "E:\path\to\your-project"
 ```
 
+Both write `.claude/arc-registry.json` into the target — products, versions, file lists,
+source commit — so `/arc` can report what's installed instead of guessing from file presence.
+Re-running a sync updates it. Omit `--products` to install everything.
+
 It syncs the machinery (`.claude/`, `docs/templates/`, meta docs) and never touches anything
 project-specific (CLAUDE.md, PLAN/PROGRESS, ADRs, reviews, code, personal settings). Restart
-the project's Claude Code session afterwards. Reverse direction: when a project's `/arc-retro`
-produces a good improvement, copy it back into the mold by hand — then every future sync
-carries it. (Alternative for solo devs: move generic agents/commands to `~/.claude/` —
-machine-wide, zero sync — but keep hooks per-repo so they don't fire in unrelated projects.)
+the project's Claude Code session afterwards.
+
+**Nothing is ever deleted from a target.** To see files in a target that arc did not install —
+including copies left behind when arc reorganised its own layout — run:
+
+```bash
+./sync-to-project.sh /path/to/your-project --prune-report
+```
+
+It lists and exits 0. It mutates nothing, and there is no delete path in either twin. Read
+its output carefully: "not installed by arc" includes every file *you* wrote, so the list is
+a visibility aid, not a delete list.
+
+Reverse direction: when a project's `/arc-retro` produces a good improvement, copy it back
+into arc by hand — then every future sync carries it. (Alternative for solo devs: move generic
+agents/commands to `~/.claude/` — machine-wide, zero sync — but keep hooks per-repo so they
+don't fire in unrelated projects.)
 
 ## Root files (MUST stay in project root, not inside `.claude/`)
 | File | Purpose |
