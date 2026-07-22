@@ -3,7 +3,7 @@
 **Status:** accepted
 **Date:** 2026-07-19
 **Reversibility:** two-way
-**Decided by:** Ashiq, at Phase 04 start (re-pick recorded in `docs/evidence/phase-04/verification.txt`)
+**Decided by:** Ashiq, at Phase 04 start (re-pick recorded in `docs/archive/evidence-orchestrator-2026-07-22/phase-04/verification.txt`)
 **Amends:** REQ-09 · the Phase 04 spec's goal/verification/setup lines · ADR-0020's timing paragraph (name only)
 **Closes:** the assumptions-ledger trigger *"venturemind + InvoiceFly are viable Phase-4 dogfood targets"*, FIRED 2026-07-19
 
