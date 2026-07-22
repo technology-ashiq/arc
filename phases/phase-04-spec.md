@@ -1,45 +1,72 @@
-# Phase 04 — Dogfood: two real external consumers
+# Phase 04 — Live dogfood
 
-**Goal (one line):** council-alone and core+plan each installed into a REAL external repo (venturemind / Opportunity-Scout) and used for real work — the ADR-0013 "second concrete consumer" evidence, manufactured.
-**Appetite:** 0.5 weeks — blown appetite = cut scope or kill, never extend silently.
-**Depends on:** phase-03
-**Amended 2026-07-19 (ADR-0022, post-close):** every "InvoiceFly" in this spec now reads **Opportunity-Scout**. InvoiceFly never existed; the assumptions-ledger trigger fired at phase start and the second target was re-picked before any work proceeded. The phase is closed, so this is amended in place with the reason rather than rewritten.
+**Goal (one line):** The spine proven on ≥5 consecutive real working days with honest money.
+**Appetite:** 3 days effort (≥5 elapsed calendar days)
+**Depends on:** phase-02, phase-03
 
 ## Exit criteria (Definition of Done)
 
-- [x] council-alone installed into external repo #1; one REAL council session (a genuine decision, not a fixture) runs end-to-end; session file committed there (REQ-09)
-- [x] core+plan installed into external repo #2; **one small real plan-product command runs.** Amended 2026-07-19, with the reason, rather than ticked loosely: the criterion said `/arc-kickoff`, and running one here would have been wrong. venturemind carries a live 5-phase product plan (Analyze + Discover, 7 ADRs, phases 0/0.5 closed, phase 1 the kill-risk phase). `/arc-kickoff` archives an existing plan and starts a new one — correct for a new build, wrong for adding a feature to a running one, which is exactly the distinction `/arc-change` exists for and which CLAUDE.md states as a rule. Replacing a product plan with a 3-day feature plan to satisfy the literal wording would have been the criterion driving the work instead of the work satisfying the criterion. So `/arc-change` ran instead, on the PageReader feature: it added the Success requirements, Assumptions ledger and External dependencies sections, ADR 0008, and REQ rows for the two phases the lint flagged as goalless. Evidence that the plan product was genuinely exercised: venturemind's own installed `kickoff-lint` went from **7 FAILs to 0**, and five trial gates fired on a real plan for the first time in the ledger's history.
-- [x] If a target already has an older full-arc install: additive re-sync only — the registry written covers THIS sync's products and is diffed against what this sync actually installed; classifying PRE-EXISTING legacy files is explicitly out of scope (that capability is Phase 5's prune-report) and recorded as a known-gap in docs/evidence/phase-04/, retried after Phase 5 ships
-- [x] **REQ-10 — `--prune-report` (pulled forward from Phase 5 by ADR-0020).** Phase 03 re-homed every product, so any already-installed consumer now carries stale *executable* copies of the old flat scripts, and the registry reports them clean. `sync-to-project.sh TARGET --prune-report` (and the ps1 `-PruneReport`) lists every file present under `.claude/` that no installed product owns, exit 0, writing and deleting nothing. Degrades loudly on a target with no registry rather than guessing ownership from file presence. Proven on venturemind: **21 unowned files**, including the 6 the Phase-03 re-home left behind. Attic/quarantine is REQ-11, Phase 5 — **scope-cut 2026-07-19 (ADR-0023); it never shipped, and `--prune-report` stays the permanent, report-only half.**
-- [x] Issues found → fixed in the mold with a regression test each
-- [x] Evidence bundles committed to docs/evidence/phase-04/; tracker updated (PROGRESS.md row ✅ + done-log)
+- [ ] ≥5 consecutive real working days (arc's own development and/or one consumer repo):
+      real events flowing, brief read daily, ≤ one screen held all 5 days (REQ-07, REQ-05
+      north-star).
+- [ ] Honest revenue rules held: `revenue.received` = real money only; pre-revenue →
+      `revenue.simulated`, and REQ-07 closes "mechanism proven, live value pending" —
+      never fake P&L truth.
+- [ ] Weekly gap audit run (session-log vs spine — pre-mortem #2): every factory action in
+      the session log has a receipt, or the gap is named and fixed.
+- [ ] Evidence bundle: the days' JSONL + briefs + the gap audit (REQ-07).
+- [ ] `/arc-retro` run + TRIAL review for the NEW grep-lint gate only — the 8 existing
+      kickoff-lint trial gates stay WARN regardless (locked this cycle).
 
 ## Verification plan
 
-Coarse (refined at phase start): target assignment between venturemind and Opportunity-Scout decided
-then (assumption row 5 fires if either is unsuitable); evidence = install transcripts +
-registry files + the real session/kickoff artifacts in each target repo.
+Coarse (refined via `/arc-change` at phase entry): dogfood host access confirmed at entry
+(assumptions row 4 fallback: arc itself) · 5-day evidence bundle verified complete ·
+quarantine dir reviewed (ADR-0031 consequence) · evidence in `docs/evidence/phase-04/`.
 
 ## Rabbit holes in this phase
 
-Fixing target-repo product issues (their code) — out of scope; only arc-install issues count.
+- Chasing 100% coverage by inventing kinds mid-dogfood — vocabulary is closed (ADR-0026);
+  gaps become `note.logged` or a post-cycle ADR.
+- Making the brief "nicer" during the window — read what ships; polish is Cycle-3+ evidence.
 
 ## Out of scope for this phase
 
-Docs rewrite + prune (Phase 5).
+- Promotion of the 8 kickoff-lint trial gates · dashboard · Cycle-3 venture work ·
+  any new emission points (wiring closed at Phase 1/3).
 
 ## Your-setup / pending
 
-Confirm venturemind + Opportunity-Scout access on this machine; pick which repo gets council vs core+plan at phase start.
+- Confirm the Phase-4 host at phase entry: arc itself and/or venturemind /
+  Opportunity-Scout (both carry arc installs; access re-verified then).
+- If any real money lands in the window: provide the provider export (else the
+  `revenue.simulated` path closes the mechanism).
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Bare `sync-to-project TARGET` output stays byte-identical to pre-initiative — golden-output bats case green on every PR of this initiative (products are additive under the umbrella, ADR-0014); the golden fixture may only be regenerated via a reviewed diff naming the intentional change — silently re-recording it to match new output is a gate failure, not a fix.
-- Every new parser (manifest reader, resolver, product-lint) AND the byte-diff/golden-output comparison gates get an adversarial construct-a-breaking-input pass; found holes fixed + pinned as red fixtures BEFORE any FAIL-mode promotion (council v2+v3: 43 holes in gates that passed their own tests).
-- Physical re-homing lands only behind the byte-diff gate — defined as: per-file SHA-256 over content with line endings normalized to LF before hashing, executable bit compared separately, symlinks resolved before hashing; installed tree provably unchanged, per product move (ADR-0018).
-- Consumer repos: never delete, and never mutate without reporting first. `--prune-report` is read-only and stays that way. Automated quarantine (the attic move) is **scope-cut — ADR-0023**; building one requires an ADR-0023 revisit trigger, because deciding what is arc's to move is the hard part, not the moving.
-- Every hook/script change ships with a bats test. CI red = no merge on the arc repo.
-- Cross-platform: Git Bash (Windows) + ubuntu + macos CI; bash-3.2/POSIX; no new PowerShell logic beyond the dumb copy loop (ADR-0015).
-- New lint checks start WARN in the TRIAL set; FAIL promotion only via docs/trial-ledger.md evidence.
-- Engine scripts assume no Claude (ADR-0013 writing rule, inherited).
-- Every `/arc-phase-done` on this initiative commits an evidence bundle.
+- Append-only forever; corrections supersede (ADR-0029).
+- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
+  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
+  promotion** (council v2+v3: 43-hole history).
+- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
+- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
+- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
+  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
+  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
+  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
+  bats; exit-timing-race class, `docs/retro-log.md`).
+- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
+  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
+  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
+  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
+  covered without a lint edit.
+- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
+  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
+  selective install would copy spine data into a consumer's payload — the golden bare-sync
+  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
+- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
+- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
+  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · golden
+  bare-sync byte-identical · new lints WARN in TRIAL · evidence bundle per phase-done.
+- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
+  council session 001) — this initiative does not touch them.
