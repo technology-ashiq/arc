@@ -40,6 +40,7 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-07-19 | nonneg-drift | venturemind PLAN (Phase-04 dogfood) | YES — 4 phase specs missing the verbatim block | no — the blocks genuinely are absent |
 | 2026-07-19 | adr-wired | venturemind PLAN (Phase-04 dogfood) | YES — ADRs 0001-0004, 0006, 0008 not cited in any phase spec | unadjudicated — the decisions are implemented; the citation strings are absent (the known adr-wired ambiguity) |
 | 2026-07-19 | verify-red | venturemind PLAN (Phase-04 dogfood) | YES — phase-00 names no **Test command:** | no — the field genuinely is missing |
+| 2026-07-22 | appetite-sum | arc's own PLAN (Phase-05 close) | **YES** — zero-slack branch: phases sum 27.5d = 92% of 30d | **unadjudicated, leaning false** — the arithmetic is correct, but the build closed at ~20% burn (~6 days actual against 27.5 budgeted). The risk the branch warns about (no buffer) did not materialise; it inverted. Counts against the **zero-slack** branch only — the **over-commit** branch (venturemind, 16d > 15d) is untouched by this row |
 
 <!-- Append one row per (gate × kickoff run). run-ref = a PLAN commit SHA, a dry-run id, or a
      fixture name. fired? = did the gate WARN on that run. false-positive? = did it WARN on a plan
