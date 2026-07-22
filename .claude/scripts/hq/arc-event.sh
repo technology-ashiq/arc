@@ -3,7 +3,9 @@
 # ADR-0031); this file exists so hook fragments have a shell entry point and so a missing or
 # broken Node interpreter still cannot block a session.
 #
-# bash-3.2 / POSIX-safe: no arrays, no ${var,,}, no GNU-only flags (macOS BSD leg).
+# bash-3.2 / POSIX-safe: no arrays, no case-modifying expansions, no GNU-only flags
+# (macOS BSD leg). Note the portability lint greps raw text, so naming a forbidden
+# construct literally here would flag this file -- describe them, do not spell them.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
