@@ -342,3 +342,59 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
     took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+
+## 2026-07-20 13:02 — main
+- Last commit: bac2314 Merge pull request #42 from technology-ashiq/feat/arc-phase-05-defer-attic
+- Uncommitted files at exit: 0
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+    took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+
+## 2026-07-22 10:43 — main
+- Last commit: bac2314 Merge pull request #42 from technology-ashiq/feat/arc-phase-05-defer-attic
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+    took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+
+## 2026-07-22 10:44 — main
+- Last commit: bac2314 Merge pull request #42 from technology-ashiq/feat/arc-phase-05-defer-attic
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+    took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+
+## 2026-07-22 10:49 — main
+- Last commit: bac2314 Merge pull request #42 from technology-ashiq/feat/arc-phase-05-defer-attic
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+    took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+
+## 2026-07-22 10:58 — main
+- Last commit: bac2314 Merge pull request #42 from technology-ashiq/feat/arc-phase-05-defer-attic
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 CLOSED ✅ (2026-07-19).** arc left its own repo for the first time. Opportunity-Scout
+    took council-alone on a clean slate; venturemind took core+plan over a pre-Phase-02 install — the
+
+## 2026-07-22 16:06 — main
+- Last commit: 3e38b6f docs(phase-05): record the CI result the close was waiting on
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
+    six products — `core` `plan` `review` `qa` `git` `council` — with selective install
+
+## 2026-07-22 16:18 — main
+- Last commit: 3e38b6f docs(phase-05): record the CI result the close was waiting on
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
+    six products — `core` `plan` `review` `qa` `git` `council` — with selective install
