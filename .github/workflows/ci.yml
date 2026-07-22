@@ -113,7 +113,7 @@ jobs:
         run: |
           n="$(grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}')"
           echo "discovered $n test(s)"
-          [ "$n" -ge 271 ] || { echo "::error::test count $n fell below the floor of 271"; exit 1; }
+          [ "$n" -ge 300 ] || { echo "::error::test count $n fell below the floor of 300"; exit 1; }
 
   # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
   # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker
