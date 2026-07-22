@@ -8,7 +8,7 @@
 ## What "in trial" means
 
 Every v3.5 substance gate — `pre-mortem-cite` · `appetite-sum` · `adr-wired` · `adr-confidence` ·
-`architecture` · `current-state-structure` · `nonneg-drift` — ships in the `TRIAL` set in
+`architecture` · `current-state-structure` · `nonneg-drift` · `verify-red` — ships in the `TRIAL` set in
 `.claude/scripts/plan/kickoff-lint.mjs`. A trial gate **always WARNs** (suffix `[trial]`), even on a v3
 plan; it never FAILs. `kickoff-lint` prints a `[trial-status]` footer showing the live-vs-trial count.
 
@@ -61,3 +61,40 @@ known ambiguity predicts and are left unadjudicated rather than scored either wa
 This is one run, not three, and one repo, not several. It does not promote anything. It is
 recorded because it is the first evidence in this file that measures a gate rather than its
 silence.
+
+## Phase 05 promotion decision — 2026-07-22: all 8 gates KEPT WARN
+
+Phase 05 (REQ-12) requires that every TRIAL check is either promoted to FAIL carrying its
+evidence row, **or explicitly kept WARN with this ledger stating why**. This is that record.
+Nothing is promoted. The per-gate reasons:
+
+| gate | fire data | kept WARN because |
+|---|---|---|
+| `appetite-sum` | 1 verified true positive (venturemind), 2 silent runs | 1 exercised run, not 3. The only gate with a clean true positive, and still short of the bar. |
+| `nonneg-drift` | 1 true positive (venturemind) | 1 exercised run, not 3. |
+| `verify-red` | 1 true positive (venturemind) | 1 exercised run, not 3. |
+| `pre-mortem-cite` | 1 fire, **unadjudicated** | Its known ambiguity is unresolved — the fire can be scored neither clean nor false, so it counts toward nothing. |
+| `adr-wired` | 1 fire, **unadjudicated** | Same: the decisions were implemented, only the citation strings absent. The gate's own semantics are the open question. |
+| `adr-confidence` | never fired in any logged run | Zero fire data. Promoting it would promote silence — the exact thing the "First real fire" note above says this file must stop counting. |
+| `architecture` | never fired | Zero fire data. Same reason. |
+| `current-state-structure` | never fired | Zero fire data. Same reason. |
+
+**A blocker that applies to all eight, independent of evidence.** Council session 001 ruled
+promotion CONDITIONAL on a governed escape hatch existing first. It does not. `report()` in
+`.claude/scripts/plan/kickoff-lint.mjs` ends in an unconditional `process.exit(1)` — there is
+no recorded-reason bypass anywhere in `.claude/scripts/plan/`. A gate that can block a build
+with no way to accept-with-reason means one false positive wedges the caller until someone
+edits the linter. That is not a promotion-ready shape, regardless of how much fire data a
+gate accumulates.
+
+**What was considered and not done.** Building the escape hatch inside Phase 05 was the other
+path. Rejected: it appears in no REQ and no phase-05 exit criterion, so it would need routing
+through `/arc-change` with its own ADR, and its cost lands against a 0.5-week phase appetite
+already committed to the docs rewrite. Promoting `appetite-sum` on one fire to get the phase
+a promotion is the failure mode WARN-first exists to prevent — the threshold would be met by
+redefining it, not by clearing it.
+
+**What would change this.** Two more exercised runs on plans this author did not write against
+these checks, plus the escape hatch shipped with a recorded-reason bypass and bats coverage.
+The next dogfood cycle is the natural place for both. Until then the honest state of these
+eight gates is: useful advisory output, insufficient evidence to block on.
