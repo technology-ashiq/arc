@@ -1,0 +1,120 @@
+=== Phase 05 — Docs + gate promotions + retro. Verification evidence ===
+
+Phase 05 closed 2026-07-22. This phase shipped no code: its deliverables are a corrected
+documentation set, a recorded decision on eight lint gates, and a retro. Verification is
+therefore mostly "does the documentation match the machine", checked by running the machine.
+
+--- Verification plan, item by item (phases/phase-05-spec.md) ---
+
+The spec's plan: "Prune-report bats stay green (the shipped half) + a bats case pinning the new
+'not everything here is stale' note + docs-drift gate green + the trial-ledger showing a
+decision recorded for every TRIAL check."
+
+1. prune-report bats green ......... 11/11, 0 failures
+2. the pinning bats case ........... tests/prune-report.bats:97
+                                     "prune-report: ...so the output says it is NOT a delete list"
+3. docs-drift gate ................. exit 0 — "ok (surface changes have matching doc updates)"
+4. a decision for every TRIAL gate .. 8/8 recorded in docs/trial-ledger.md
+                                     pre-mortem-cite, appetite-sum, adr-wired, adr-confidence,
+                                     architecture, current-state-structure, nonneg-drift, verify-red
+
+--- Tests ---
+
+Full suite, local, Windows/Git Bash:  271/271 green, 0 failures, exit 0 (1..271).
+
+NOTE ON AUTHORITY, recorded honestly: since d53daed, CI is the authority for the full suite
+and Phase 04's bundle recorded "CI on merge commit 801de48 — 268 tests green on ubuntu +
+windows + macos + ci-tier". Phase 05 cannot cite CI at close time: the branch
+feat/arc-phase-05-docs-promotions has not been pushed, and pushing is the owner's action.
+The 271/271 above is a real local run on one OS, not a substitute for the 3-OS matrix. If CI
+red-lights this branch, this bundle is wrong and the phase reopens.
+
+--- REQ-12 acceptance, checked mechanically ---
+
+"README + docs/usermanual.md + docs/blueprint.md + docs/how-it-works.md each name the six
+products and the selective-install command":
+
+  README.md            products-named 6/6 | --products mentions 3
+  docs/usermanual.md   products-named 6/6 | --products mentions 3
+  docs/blueprint.md    products-named 6/6 | --products mentions 2
+  docs/how-it-works.md products-named 6/6 | --products mentions 2
+
+Every /arc-* command named across the four docs was checked to exist as a file in
+.claude/commands/ — no doc names a command that isn't installed.
+
+"zero stale installer/architecture claims left against the Phase 00–05 diff": the four docs
+described a pre-Phase-00 product. Corrected counts — commands 20 → 22, agents 7 → 23,
+hooks 6 → 7, scripts flat → per-product dirs, blueprint commands table 10 → 22 rows,
+blueprint agents 4 → 23. The gstack-comparison installer line REQ-12 names was corrected, and
+two further claims in that doc that events overtook ("zero tests, zero CI"; "needs a bash
+version of sync") carry a dated update note rather than a silent rewrite.
+
+"--prune-report's output states in words that it is a 'not installed by arc' list": verified
+live, not just by fixture — see the install proof below.
+
+--- Live proof: a real selective install into a scratch target ---
+
+  $ ./sync-to-project.sh <scratch> --products plan,review
+    sync: products [plan,review] + core -> <scratch>
+  $ registry
+    products: core, plan, review            <- core pulled in as a dependency, as documented
+  $ ls .claude/commands/
+    arc-audit arc-change arc-diagram arc-docs arc-freeze arc-kickoff arc-phase-done
+    arc-resume arc-retro arc-review arc-second-opinion arc-toolcheck arc-unfreeze arc.md
+    (14 = core 5 + plan 5 + review 4; no arc-qa, no arc-commit, no arc-council)
+
+  $ (author a consumer-owned file, then)
+  $ ./sync-to-project.sh <scratch> --prune-report
+    unowned  .claude/commands/my-deploy.md
+    arc-prune-report: 1 unowned file(s) ... Nothing was removed.
+    arc-prune-report: NOTE -- this is a "not installed by arc" list, not a "safe to delete"
+    list. Files you wrote yourself appear here too. Review each one before removing anything.
+    exit 0
+
+The consumer-authored file appears as unowned — the exact behaviour that made REQ-11's attic
+unsafe (ADR-0023) — and the shipped wording now says so plainly. The README documents this
+caveat rather than omitting it.
+
+--- Golden fixture ---
+
+Regenerated twice this phase, both times deliberately and both times delta-checked first:
+
+  (1) core ships how-it-works.md, usermanual.md, blueprint.md — editing them moved 3 hashes.
+      Verified delta = exactly those 3 paths, nothing added or removed, before re-recording.
+  (2) core ships .claude/rules/testing.md — the retro's new rule moved 1 hash.
+      Verified delta = exactly 1 path, 1 hash.
+
+sync.bats 23/23 after each. Per the non-negotiable, neither was a silent re-record; both are
+named in their commit message.
+
+--- Plan drift + trigger scan ---
+
+kickoff-lint: all checks passed (2 WARNs, both pre-existing and heuristic: [vague] on REQ-12's
+acceptance string, [appetite-sum] at 92%).
+product-lint: all manifests valid.
+
+Assumptions ledger: 8 rows. One FIRED (venturemind/InvoiceFly, Phase 4) and already RESOLVED
+via ADR-0022. No unrouted fire.
+
+ADR revisit triggers, all indexed ADRs read:
+  ADR-0023 (attic) — three triggers, all FALSE: only 2 consumers exist (bar is >=3); no
+    consumer has reported un-hand-cleanable stale files; no second bug in the settings.json
+    clobber class.
+  ADR-0020 — bound and satisfied (report half landed in Phase 4).
+  ADR-0022 — trigger explicitly none.
+  ADR-0014/0015/0016/0018/0019/0021 — conditions not met.
+  ADR-0017 (park v2) — **FIRES AT THIS CLOSE.** Its trigger is "the orchestrator initiative
+    closes ... the v2 tracker un-parks and Phase 04 (QA pipeline) resumes as next up."
+    Routed, not ignored: the owner chose to record the fire and hold the resume decision
+    rather than un-park inside this phase's last minutes. ADR-0017 itself requires v2's Phase 8
+    to be re-scoped against what the orchestrator shipped, which is real work and not a
+    close-time task. PROGRESS ## Now carries the pending decision.
+
+--- Scope cuts in this phase, for the record ---
+
+REQ-11 (attic) — dropped, ADR-0023. Built, then cut on the mandatory adversarial pass when the
+eligibility rule proved unsafe. Implementation preserved at e2b3646.
+Per-product docs sets — cut; no REQ or ADR ever backed that architecture.
+TRIAL->FAIL promotions — not taken. All eight gates kept WARN with a per-gate reason recorded,
+which is REQ-12's other branch, not a miss. No gate clears the >=3-exercised-run bar, and
+council session 001 made promotion conditional on a governed escape hatch that does not exist.

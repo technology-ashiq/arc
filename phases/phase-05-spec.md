@@ -11,9 +11,9 @@
 - [ ] ~~Attic mode moves unowned files to `.claude/attic/<date>/`~~ **SCOPE-CUT (ADR-0023)** — REQ-11 `dropped`. Not a deferral for lack of time: the eligibility rule was unsafe and the feature has no user yet. Revisit triggers live in ADR-0023
 - [x] `--prune-report`'s output says plainly that the list includes files arc did not install — including the consumer's own — and that not everything in it is stale (REQ-12). The one live defect the attic investigation surfaced — **done 2026-07-19**, three bats cases pin the wording (`tests/prune-report.bats`)
 - [ ] ~~per-product docs sets~~ CUT (no REQ or ADR behind that architecture); sync keeps ONE corrected meta-doc set
-- [ ] README + docs/usermanual.md + docs/blueprint.md + docs/how-it-works.md rewritten for the product model; known drift fixed (gstack-comparison installer line) (REQ-12)
-- [ ] product-lint TRIAL checks promoted to FAIL via docs/trial-ledger.md evidence (fixture-proven + 3 clean runs) — or explicitly kept WARN with the ledger saying why (REQ-12)
-- [ ] `/arc-retro` run; scoreboard row appended to docs/retro-log.md; tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] README + docs/usermanual.md + docs/blueprint.md + docs/how-it-works.md rewritten for the product model; known drift fixed (gstack-comparison installer line) (REQ-12) — **done 2026-07-22**, all four name the six products and the selective-install command (checked mechanically, 6/6 each); every `/arc-*` command they mention verified to exist
+- [x] product-lint TRIAL checks promoted to FAIL via docs/trial-ledger.md evidence (fixture-proven + 3 clean runs) — or explicitly kept WARN with the ledger saying why (REQ-12) — **done 2026-07-22 via the second branch**: all 8 kept WARN, each with a recorded per-gate reason. No gate clears the ≥3-exercised-run bar, and council session 001 conditioned promotion on a governed escape hatch that does not exist
+- [x] `/arc-retro` run; scoreboard row appended to docs/retro-log.md; tracker updated (PROGRESS.md row ✅ + done-log) — **done 2026-07-22**: 2 recurring patterns + the scoreboard row in `docs/retro-log.md`, 1 gate-fire row in `docs/trial-ledger.md`, 1 rule in `.claude/rules/testing.md`
 
 ## Verification plan
 

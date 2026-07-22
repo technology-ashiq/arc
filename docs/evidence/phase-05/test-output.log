@@ -1,0 +1,272 @@
+1..271
+ok 1 default profile is standard (block-by-default)
+ok 2 standard: core gates block, reviews = code,security
+ok 3 starter: all gates warn, no required reviews
+ok 4 strict: all gates block, full review set
+ok 5 ARC_PROFILE env overrides settings profile
+ok 6 explicit per-gate key overrides the profile for that gate only
+ok 7 ARC_REQUIRED_REVIEWS env overrides reviews
+ok 8 unknown profile falls back to standard (safe default)
+ok 9 arc-scan: standard profile blocks a dirty scope (exit 2)
+ok 10 arc-scan: starter profile downgrades block to advisory (exit 0)
+ok 11 ledger require enforces the standard review set (code,security)
+ok 12 semgrep adapter: missing tool degrades to SKIPPED (exit 0, empty runs)
+ok 13 gitleaks adapter: missing tool degrades to SKIPPED (exit 0, empty runs)
+ok 14 adapter: empty scope => empty SARIF, exit 0
+ok 15 gitleaks adapter: finding URI is repo-relative, not the staging temp dir
+ok 16 normalize: resolves rule-level severity (semgrep eval => error)
+ok 17 normalize: gitleaks finding defaults to error severity
+ok 18 merge: dedupes by fingerprint and emits minimal SARIF fields
+ok 19 triage: any error-level finding => block
+ok 20 triage: no error-level findings => pass
+ok 21 triage: empty findings => pass
+ok 22 ledger: scan is a valid kind (stamp/check/status)
+ok 23 e2e: seeded dirty repo BLOCKS and does not stamp scan
+ok 24 e2e: clean repo PASSES and stamps scan in the ledger
+ok 25 e2e: scan-result.sarif is valid SARIF with a version + runs
+ok 26 arc-tools image: Dockerfile exists
+ok 27 arc-tools image: no floating :latest tags (reproducibility)
+ok 28 arc-tools image: base image is pinned (explicit tag or digest, not latest)
+ok 29 arc-tools image: Trivy version is pinned via ARG
+ok 30 arc-tools image: vuln DB is baked at build time (download-db-only)
+ok 31 arc-tools image: runs as a non-root user
+ok 32 arc-tools image: /src workdir contract (matches arc_docker_scan mount)
+ok 33 arc-tools image: trivy docker rung pins the DB (--skip-db-update -> baked DB)
+ok 34 arc-tools image: helper script exposes build/verify/scan/ref/digest subcommands
+ok 35 arc-tools image: ref honors the ARC_TOOLS_IMAGE override (offline)
+ok 36 arc-tools image: ref falls back to a default and is never empty
+ok 37 baseline freeze: fingerprints written sorted + unique
+ok 38 baseline freeze: append-only union with an existing baseline
+ok 39 baseline partition: known fp => new=false, novel fp => new=true
+ok 40 merge preserves new=false (regression: jq // treats false as absent)
+ok 41 triage: a baselined error does not block (new_errors excludes baseline)
+ok 42 e2e: freeze a finding -> rescan PASSES; a novel finding still BLOCKS
+ok 43 verify-move: a clean git-mv (content preserved) passes (exit 0)
+ok 44 verify-move: content altered during the move fails (exit 2, names the file)
+ok 45 verify-move: a git mode change (exec bit dropped) fails (exit 2)
+ok 46 verify-move: line-ending-only change is normalized away, still passes (LF-norm, adversarial)
+ok 47 verify-move: old path absent in HEAD fails cleanly (exit 2, no crash)
+ok 48 verify-move: new path missing (move forgotten) fails cleanly (exit 2)
+ok 49 verify-moves: batch passes when all preserved, fails if any altered
+ok 50 verify-moves: final pair without a trailing newline is NOT silently dropped (hole 1)
+ok 51 verify-moves: a staged rename missing from the pairs file fails (hole 2: completeness)
+ok 52 verify-move: old path still present (cp instead of mv) fails (hole 3)
+ok 53 verify-moves: a move git does NOT classify as a rename is still caught (hole 5)
+ok 54 verify-move: new path whose case differs from git's tracked path fails (hole 4)
+ok 55 codeql adapter: hook tier (not CI) => SKIPPED, empty SARIF
+ok 56 codeql adapter: CI-tier + tool missing => SKIPPED (optional), empty SARIF
+ok 57 codeql adapter: CI-tier + codeql + JS in scope => finding (fake)
+ok 58 codeql adapter: CI-tier + no supported language in scope => empty SARIF
+ok 59 codeql adapter: detects python when no JS in scope
+ok 60 normalize: codeql finding resolves to error severity
+ok 61 evidence: bundle assembles a manifest and gathers present artifacts
+ok 62 evidence: manifest records the current commit
+ok 63 evidence: verify passes on an intact bundle
+ok 64 evidence: verify FAILS on a tampered artifact (tamper-evident)
+ok 65 evidence: verify FAILS when no bundle exists (phase cannot close)
+ok 66 evidence: bundle degrades gracefully when no artifacts are present
+ok 67 parser: real arc.gates.yaml parses to 5 valid-JSON gates
+ok 68 parser: values with flags/paths survive (no truncation at spaces or colons)
+ok 69 runner: a failing block-mode gate blocks (exit 2)
+ok 70 runner: a failing warn-mode gate does NOT block (exit 0)
+ok 71 runner: an off-mode gate is skipped even if it would fail
+ok 72 runner: profile mode trusts the check exit code (2=block, 1=warn)
+ok 73 runner: tier filter -- ci gates do not run in the hook tier
+ok 74 runner: missing gates file degrades to advisory (exit 0, loud)
+ok 75 review-ledger require-profile blocks when required reviews are unstamped
+ok 76 review-ledger: no registry falls back to all kinds (old installs unbroken)
+ok 77 review-ledger: a council-only registry rejects 'code' with a product-install hint (REQ-08)
+ok 78 review-ledger: a review+qa registry makes code+design valid
+ok 79 review-ledger: a malformed registry falls back to all kinds, never blocks (adversarial)
+ok 80 review-ledger: a glob-metachar product key can't expand against CWD to grant kinds (adversarial, pinned)
+ok 81 dispatch: runs .d fragments in NN order (advisory)
+ok 82 dispatch: missing .d dir is a clean no-op (exit 0)
+ok 83 dispatch: advisory event survives a failing fragment (exit 0)
+ok 84 dispatch: blocking event propagates a fragment's exit 2 and stops
+ok 85 dispatch: blocking event allows (exit 0) when no fragment blocks
+ok 86 dispatch: --payload feeds the captured stdin to each fragment
+ok 87 dispatch: non-payload event never blocks on stdin (fragments get /dev/null)
+ok 88 guard: a destructive command is blocked (exit 2)
+ok 89 guard: a normal command is allowed (exit 0)
+ok 90 guard: destructive is blocked even when extraction fails / payload isn't JSON (raw fail-safe)
+ok 91 dispatcher: a missing _dispatch.sh fails open LOUDLY (exit 0 + warning, review W1)
+ok 92 good v3 fixture passes with zero trial warnings
+ok 93 [tier] S tier with 6 active REQs fails cap
+ok 94 [tier] placeholder 'S | M | L' fails
+ok 95 [adr] missing Reversibility fails on v3 plan
+ok 96 [adr] one-way without real Revisit trigger fails
+ok 97 [phase-deps] self-cycle fails
+ok 98 [phase-deps] dependency on nonexistent phase fails
+ok 99 [spike] DEFERRED ADR without spike task fails
+ok 100 [spike] DEFERRED ADR with referenced spike task passes
+ok 101 grandfather: pre-v3 plan warns but passes
+ok 102 [vague] vague acceptance without verifiable token fails
+ok 103 [vague] vague word next to verifiable token passes with warn
+ok 104 [tier] 11 active REQs on tier M fails cap
+ok 105 [reqs] REQ mapped to nonexistent phase fails
+ok 106 [reqs] bad status enum fails
+ok 107 [reqs] G4: REQ mapped to two phases fails
+ok 108 [assumptions] row without falsification trigger fails
+ok 109 [assumptions] 8 entries breaks cap 7
+ok 110 [pre-mortem] 4 rows fails (need 5)
+ok 111 [pre-mortem] row without mitigation fails
+ok 112 [deps] empty column in external dependencies fails
+ok 113 [kill-criteria] missing tripwire line fails
+ok 114 [progress] missing '## Now' fails
+ok 115 [adr] index row without file fails
+ok 116 [phases] missing phase spec file fails
+ok 117 [phase0] no phase zero fails
+ok 118 [sections] a missing required section says WHAT to add and WHERE from, not just 'missing'
+ok 119 [sections] the same treatment for assumptions and external dependencies
+ok 120 [phases] a goalless phase names both ways out, not just the complaint
+ok 121 [pre-mortem-cite] generic pre-mortem warns (trial), still exits 0
+ok 122 [appetite-sum] phase appetites over total warns (trial)
+ok 123 [appetite-sum] unparseable PLAN appetite warns, never fails
+ok 124 [architecture] C4Context syntax warns (trial)
+ok 125 [adr-wired] orphan ADR warns (trial)
+ok 126 [adr-confidence] low-confidence ADR without assumption row warns (trial)
+ok 127 [current-state-structure] unstructured Current state warns (trial)
+ok 128 [nonneg-drift] drifted verbatim block warns (trial)
+ok 129 [nonneg-drift] missing verbatim block warns (trial)
+ok 130 [verify-red] phase-0 without expected-fail-first warns (trial)
+ok 131 [verify-red] detailed phase-1 without red-first warns (trial)
+ok 132 portability: no bash-4+ syntax (mapfile/readarray, associative arrays, case-mod)
+ok 133 portability: no GNU-only date/grep flags
+ok 134 portability: no bare GNU 'stat -c' without a BSD 'stat -f' fallback on the line
+ok 135 resolver: first line is the PROTO 1 header
+ok 136 resolver: emits a COPY line for the requested product's command
+ok 137 resolver: emits a COPY line for a files[] catch-all entry
+ok 138 resolver: core is always included implicitly (even when only council asked)
+ok 139 resolver: emits ENVBLOCK/skeleton MKDIR for council's skeleton dir
+ok 140 resolver: --list prints product names one per line, exit 0
+ok 141 resolver: unknown product name exits 2 and prints the valid list
+ok 142 status: reports each product's install state (good fixture)
+ok 143 status: degrades gracefully (exit 0) where no products/ dir exists
+ok 144 status: reads INSTALLED from the registry, no products/ dir needed (REQ-05)
+ok 145 status: a malformed registry degrades gracefully, never crashes (adversarial)
+ok 146 lint: valid manifests pass (exit 0)
+ok 147 lint: path traversal is rejected
+ok 148 lint: duplicate/mismatched product name is rejected
+ok 149 lint: a file mapped by two products is rejected
+ok 150 lint: BOM/CRLF manifest bytes are rejected
+ok 151 lint: case-colliding path entries are rejected
+ok 152 lint: a control char (TAB) in a path is rejected (real protocol break)
+ok 153 lint: an empty required field is rejected
+ok 154 lint: backslash traversal in a path is rejected (C1 review)
+ok 155 lint: an envSentinel carrying a control char / injection is rejected (C2 review)
+ok 156 resolver: backslash traversal is rejected, never emitted (C1 review)
+ok 157 resolver: envSentinel injection is rejected, never emitted (C2 review)
+ok 158 lint: a trailing-dot/space '.. ' path segment is rejected (W4 review)
+ok 159 resolver: a trailing-dot/space '.. ' segment is rejected, never emitted (W4 review)
+ok 160 lint: envBlock without envSentinel is rejected (W3 review: lints-clean must resolve-clean)
+ok 161 lint: a space in a path is accepted (TAB delimiter transports it safely)
+ok 162 resolver --registry: schema is 1, products are exactly core+council (deps resolved)
+ok 163 resolver --registry: each product carries a version and a non-empty files[]
+ok 164 resolver --registry: files[] carry the dest paths the resolver installs
+ok 165 resolver --registry: no --products means every product (bare/full install)
+ok 166 resolver --registry: source.commit honors ARC_SOURCE_COMMIT (deterministic tests)
+ok 167 resolver --registry: a malformed version is rejected, never emitted (adversarial, pinned)
+ok 168 resolver --registry: a non-hex ARC_SOURCE_COMMIT is ignored, not written verbatim (adversarial)
+ok 169 prune-report: a freshly synced target has zero unowned files
+ok 170 prune-report: a stale pre-move script is listed (the venturemind case)
+ok 171 prune-report: exit 0 even when unowned files are found -- it reports, never fails
+ok 172 prune-report: never deletes -- the reported file is still there afterwards
+ok 173 prune-report: skip-listed consumer paths (settings.local.json, state/) are never reported
+ok 174 prune-report: the registry itself is not reported as unowned
+ok 175 prune-report: a target with no registry degrades loudly (cannot infer ownership)
+ok 176 prune-report: reachable through the sync twin's own flag
+ok 177 prune-report: a consumer's OWN authored command is listed (this is the trap)
+ok 178 prune-report: ...so the output says it is NOT a delete list
+ok 179 prune-report: no scary note when there is nothing to report
+ok 180 rls-gate: a public table without RLS => BLOCK (exit 2)
+ok 181 rls-gate: all public tables RLS-enabled => PASS (exit 0)
+ok 182 rls-gate: no public tables => PASS (nothing to check)
+ok 183 rls-gate: unreachable DB => SKIPPED, exit 0 (never crashes the hook)
+ok 184 rls-gate: generates runnable per-table anon assertions as evidence
+ok 185 runtime: native binary present => native
+ok 186 runtime: no native + no docker image => skip
+ok 187 runtime: no native + docker present + image set => docker
+ok 188 runtime: ARC_FORCE_RUNTIME overrides resolution
+ok 189 semgrep adapter: skip rung => SKIPPED, empty SARIF, exit 0
+ok 190 semgrep adapter: docker rung runs the tool via the image (fake docker)
+ok 191 gitleaks adapter: docker rung runs the tool via the image (fake docker)
+ok 192 scan-summary: no scan results => notice, exit 0
+ok 193 scan-summary: digests verdict, per-tool tally, and findings
+ok 194 scan-summary: empty SARIF => reports zero findings
+ok 195 security-auditor agent: Pass 0 consumes arc-scan (not ad-hoc tool reruns)
+ok 196 merge: a consumer's per-gate override survives (the venturemind bug)
+ok 197 merge: arc's new keys still land (the consumer is not frozen in time)
+ok 198 merge: permissions.allow is a UNION -- consumer entries are not deleted
+ok 199 merge: a top-level key only the consumer has is preserved
+ok 200 merge: arc's // doc strings are refreshed, not frozen at the consumer's stale copy
+ok 201 merge: unparseable consumer settings fails closed (exit 2, no partial output)
+ok 202 merge: no consumer file (fresh install) emits arc's version verbatim
+ok 203 merge: reports what it preserved, on stderr, before mutating (non-negotiable)
+ok 204 suppress: only justified rows count; unjustified are excluded
+ok 205 suppress: annotate marks a justified fingerprint suppressed=true
+ok 206 triage: a suppressed error does not block
+ok 207 fingerprint is deterministic across identical scans (regression)
+ok 208 e2e: justified suppression PASSES, unjustified still BLOCKS
+ok 209 sync: copies machinery into target .claude
+ok 210 sync: copies the meta docs
+ok 211 sync: never leaks personal settings or working state
+ok 212 sync: never leaks the scheduled_tasks.lock runtime file (REQ-04)
+ok 213 sync: never leaks a .claude/worktrees/ dir into the target (REQ-04 class, pinned)
+ok 214 sync (ps1): never leaks state/ or scheduled_tasks.lock (REQ-04)
+ok 215 sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)
+ok 216 sync: bare install is byte-identical to the golden fixture, rsync path (REQ-02)
+ok 217 sync: bare install is byte-identical to the golden fixture, cp-r fallback path (REQ-02)
+ok 218 sync: --list prints product names (no target needed)
+ok 219 sync: --products council installs council + core only (REQ-01)
+ok 220 sync: --products unknown name fails (exit 2) and prints the valid list
+ok 221 sync: an unknown option is rejected (exit 2)
+ok 222 sync (ps1): --products council installs council + core, not other products
+ok 223 sync: an UPGRADE preserves the consumer's settings.json customisations (Phase 04 dogfood)
+ok 224 sync: missing target dir fails cleanly (exit 1)
+ok 225 sync: requires a target argument
+ok 226 sync: --products writes a registry naming exactly core+council (REQ-08)
+ok 227 sync: bare install writes a registry naming all six products (REQ-08)
+ok 228 sync: re-sync overwrites the registry to the new set, no stale products (REQ-08)
+ok 229 sync: the registry is present in a bare target but EXCLUDED from the golden manifest (REQ-02)
+ok 230 sync (ps1): writes a BOM-free, parseable registry naming core+council (REQ-08)
+ok 231 invariant: installing all products reproduces the mold's .claude payload exactly (manifests vs reality)
+ok 232 toolcheck: full report runs and lists trivy (SCA)
+ok 233 toolcheck: full report lists trufflehog (verified secrets)
+ok 234 toolcheck: a missing trivy flows an install action into Quick-fix
+ok 235 toolcheck: lists codeql as an optional deep-SAST verifier
+ok 236 toolcheck: lists zap (DAST) among the security verifiers
+ok 237 toolcheck: --brief still emits the one-line summary
+ok 238 triage-llm: no backend => trust all (confidence 10)
+ok 239 triage-llm: backend object {confidence,reason} is parsed
+ok 240 triage-llm: backend bare number is accepted
+ok 241 triage-llm: garbage backend => fail-closed to 10 (kept)
+ok 242 triage-llm: no backend keeps a new error blocking
+ok 243 triage-llm: low-confidence new error is downgraded error->note (tagged)
+ok 244 triage-llm: high-confidence new error is kept blocking
+ok 245 triage-llm: never upgrades -- a note stays a note
+ok 246 triage-llm: never invents -- result count is unchanged
+ok 247 triage-llm: baseline + suppressed findings are never triaged
+ok 248 triage-llm: garbage backend keeps a real finding blocking (fail-closed)
+ok 249 triage-llm e2e: low-confidence backend downgrades a planted secret -> pass; without -> block
+ok 250 trivy adapter: missing tool degrades to SKIPPED (exit 0, empty runs)
+ok 251 trivy adapter: empty scope => empty SARIF, exit 0
+ok 252 trivy adapter: non-manifest files in scope => nothing staged, empty SARIF
+ok 253 trivy adapter: vulnerable manifest in scope => CVE finding, repo-relative path
+ok 254 normalize: trivy CVE finding resolves to error severity
+ok 255 trivy adapter: skip rung => SKIPPED, empty SARIF, exit 0
+ok 256 trivy adapter: docker rung runs the tool via the image (fake docker)
+ok 257 e2e: vulnerable manifest BLOCKS via trivy and does not stamp scan
+ok 258 trufflehog adapter: missing tool degrades to SKIPPED (exit 0, empty runs)
+ok 259 trufflehog adapter: empty scope => empty SARIF, exit 0
+ok 260 trufflehog adapter: verified secret in scope => error finding, repo-relative path
+ok 261 trufflehog adapter: UNVERIFIED secrets are dropped (verified-only mode)
+ok 262 trufflehog adapter: message does not leak the raw secret
+ok 263 normalize: trufflehog verified finding resolves to error severity
+ok 264 trufflehog adapter: skip rung => SKIPPED, empty SARIF, exit 0
+ok 265 trufflehog adapter: docker rung runs via the image (fake docker, JSONL->SARIF)
+ok 266 e2e: a verified secret BLOCKS via trufflehog and does not stamp scan
+ok 267 zap adapter: no target URL => SKIPPED, empty SARIF
+ok 268 zap adapter: hook tier (not CI) => SKIPPED
+ok 269 zap adapter: CI-tier + target + fake ZAP => findings converted to SARIF
+ok 270 zap adapter: risk maps to level (high=error, medium=warning, low=note)
+ok 271 normalize: a high ZAP finding resolves to error severity
