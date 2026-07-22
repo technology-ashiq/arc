@@ -9,7 +9,7 @@
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | 🟡 ckpt A DONE (hardened), ckpt B next |
+| 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | 🟡 both ckpts built + green; awaiting CI, then `/arc-phase-done 0` |
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ⬜ not started |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ⬜ not started |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ⬜ not started |
@@ -17,6 +17,17 @@
 
 ## Done log
 
+- 2026-07-22 — **Phase 00 ckpt B built** (`33357bb`). `spine.mjs` reader (arc's only public
+  API — `--since` resolves by append order, not ULID sort), `arc-replay.mjs` (rebuilds all
+  derived state from empty; repairs both crash windows), minimal `arc-brief.mjs`. REQ-04
+  twin determinism + sqlite-vs-scan equivalence gate in CI; matrix 3 → 5 jobs (Node 18 leg
+  for the no-sqlite path, Node 22 for the accelerator). Assumptions row 2 **measured and
+  HOLDS**: 1.1s over a 90-day/3600-event synthetic spine against a 5s trigger, so the
+  accelerator stays optional. 47/47 spine tests green. Two bugs found while writing the
+  gate: sqlite couldn't see torn lines (engines disagreed on damage), and `withLock` dropped
+  the lock when handed an async body.
+- 2026-07-22 — **ckpt A validated on 3-OS CI** — PR #44, run 29958837544: ubuntu, windows,
+  macOS, ci-tier all green. Local runs are one OS; this is the authority (`d53daed`).
 - 2026-07-22 — **Phase 00 ckpt A hardened and DONE** (`107c3c8`). Adversarial pass: 45
   agents, 6 lenses, 38 claims, **25 confirmed** after independent refutation attempts —
   including an escaped-duplicate-key bypass that let a forged `actor`/`outcome` be sealed in
@@ -40,22 +51,25 @@
 
 ## Appetite burn
 
-**~0.5 of ~12.5 part-time days used** (2.5-week hard cap). Kill check at ~6 days: REQ-02 +
+**~2 of ~12.5 part-time days used** (2.5-week hard cap). Kill check at ~6 days: REQ-02 +
 REQ-04 green? If not → cut to spine+replay only. First cut REQ-08; second cut REQ-09's
 cursor demo (lint stays). 100% → cut or kill, never extend.
 
 ## Now
 
-**Phase 00 ckpt A is DONE and hardened; ckpt B is the next build step.**
+**Phase 00 is built end to end (both checkpoints); the 5-job CI run is the last gate before
+it closes.**
 Kickoff approved by Ashiq 2026-07-22 (all three simulation blockers ruled "apply the
 proposed fixes"; constants and the ADR-0028 reading accepted; Constitution adoption
 deferred). The mandatory adversarial pass has run and its 25 confirmed holes are fixed and
 pinned, which is what ckpt B was gated on.
 
-**Next step — ckpt B (~2 days):** `arc-replay.mjs` (JSONL → derived state at
-`.claude/state/hq/derived/state.db`, whole-spine idem index rebuilt every replay) ·
-`spine.mjs` reader v1 (`--kind --since --venture` + cursors, tie-break by append order) ·
-minimal `arc-brief.mjs --date` renderer · twin determinism bats (REQ-04 a+b) ·
-`tests/spine-equivalence.bats` (sqlite vs scan, byte-identical) · 90-day synthetic spine
-generator + timed brief on the owner's box · CI matrix gains a Node 18 leg and a Node 22+
-leg. Then Phase 00 closes via `/arc-phase-done 0`.
+**Next step:** Ashiq pushes `feat/arc-cycle2-receipt-spine` so PR #44 re-runs CI with the
+new 5-job matrix (the Node 18 and Node 22 legs have never executed — they were added in this
+same commit). Green → `/arc-phase-done 0` closes Phase 00 against its exit criteria and
+bundles evidence. Red → fix before Phase 01 starts; Phase 01 wires hooks on top of this and
+debugging two layers at once is the thing to avoid.
+
+Then **Phase 01 (2.5 days):** EVENT.d `NN-emit` fragments + explicit emissions in the
+kickoff/phase-done/review/qa/commit/ship/council flows · the REQ-01 dry-run golden sequence ·
+emitter overhead measured (<1s or async) · guard-chain regression bats.
