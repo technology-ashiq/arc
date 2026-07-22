@@ -9,7 +9,7 @@
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | 🟡 both ckpts built + green; awaiting CI, then `/arc-phase-done 0` |
+| 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | ✅ done 2026-07-23 |
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ⬜ not started |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ⬜ not started |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ⬜ not started |
@@ -17,6 +17,17 @@
 
 ## Done log
 
+- 2026-07-23 — **Phase 00 CLOSED ✅** via `/arc-phase-done 0`. Both checkpoints shipped;
+  REQ-02 + REQ-04 → validated. Full suite **318/318** local (Windows) + 3-OS × 3-Node CI
+  green (ubuntu/windows/macOS on Node 20, ubuntu on Node 18 no-sqlite + Node 22 accelerator);
+  spine suites 47/47. Live demo shown (hook-append, secret SKIP/exit-2, byte-identical
+  rebuild). Evidence bundle verified (`docs/evidence/phase-00/`: scan-verdict + sarif +
+  test-output.log pinned; adversarial-report, ckptB-measurements, red/green runs, golden diff
+  committed alongside). **Metrics:** appetite 5d → **actual ~2d part-time** (well under) ·
+  `amendments: 0` · `reopened: n` · `t-to-phase0: ~1 day since kickoff`. Adversarial pass
+  found + fixed **25 confirmed holes** in code that had passed its own 22 tests — the phase's
+  defining event. Assumption row 2 measured and HOLDS (1.1s vs 5s), so the sqlite accelerator
+  stays optional.
 - 2026-07-22 — **Phase 00 ckpt B built** (`33357bb`). `spine.mjs` reader (arc's only public
   API — `--since` resolves by append order, not ULID sort), `arc-replay.mjs` (rebuilds all
   derived state from empty; repairs both crash windows), minimal `arc-brief.mjs`. REQ-04
@@ -51,25 +62,27 @@
 
 ## Appetite burn
 
-**~2 of ~12.5 part-time days used** (2.5-week hard cap). Kill check at ~6 days: REQ-02 +
-REQ-04 green? If not → cut to spine+replay only. First cut REQ-08; second cut REQ-09's
-cursor demo (lint stays). 100% → cut or kill, never extend.
+**~2 of ~12.5 part-time days used** (Phase 00 done, ~3d under its own 5d appetite).
+2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? — **already
+validated at Phase-0 close, so the tripwire is satisfied early.** First cut REQ-08; second
+cut REQ-09's cursor demo (lint stays). 100% → cut or kill, never extend.
 
 ## Now
 
-**Phase 00 is built end to end (both checkpoints); the 5-job CI run is the last gate before
-it closes.**
-Kickoff approved by Ashiq 2026-07-22 (all three simulation blockers ruled "apply the
-proposed fixes"; constants and the ADR-0028 reading accepted; Constitution adoption
-deferred). The mandatory adversarial pass has run and its 25 confirmed holes are fixed and
-pinned, which is what ckpt B was gated on.
+**Phase 00 is CLOSED. Phase 01 (factory wiring) is next.**
+The spine exists, cannot be poisoned in either mode, and has its single read contract —
+everything downstream now consumes it instead of touching files. Kill-criteria check at
+close: ~2 of 12.5 days burnt (well under the 50%/6.25d tripwire), and the tripwire REQs
+(02 + 04) are validated — no scope-cut pressure.
 
-**Next step:** Ashiq pushes `feat/arc-cycle2-receipt-spine` so PR #44 re-runs CI with the
-new 5-job matrix (the Node 18 and Node 22 legs have never executed — they were added in this
-same commit). Green → `/arc-phase-done 0` closes Phase 00 against its exit criteria and
-bundles evidence. Red → fix before Phase 01 starts; Phase 01 wires hooks on top of this and
-debugging two layers at once is the thing to avoid.
+**Next step — Phase 01 (appetite 2.5d, depends on Phase 00):** drop EVENT.d `NN-emit`
+fragments (SessionStart/End, PostToolUse summary) through the existing hooks dispatcher +
+explicit emissions in the kickoff/phase-done/review/qa/commit/ship/council flows · the
+REQ-01 dry-run golden sequence · emitter overhead measured (<1s per event, else async
+append — assumptions row 3) · redaction live on real emissions · guard-chain regression
+bats (`arc_hook_field` untouched) + the SIGKILL/concurrent durability bats from the Phase-0
+corpus. This is where the spine starts capturing arc's own factory actions for real.
 
-Then **Phase 01 (2.5 days):** EVENT.d `NN-emit` fragments + explicit emissions in the
-kickoff/phase-done/review/qa/commit/ship/council flows · the REQ-01 dry-run golden sequence ·
-emitter overhead measured (<1s or async) · guard-chain regression bats.
+**Before Phase 01 code:** the branch has `feat/arc-cycle2-receipt-spine` commits through the
+close; Ashiq pushes so PR #44 stays current. Phase 01 wiring sits on top of Phase 00, so a
+red Phase-0 CI must be caught before stacking.
