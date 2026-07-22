@@ -1,4 +1,4 @@
-1..22
+1..29
 ok 1 strict mode: every hostile fixture exits 2 with its own reject code
 ok 2 hook mode: every hostile fixture exits 0, appends nothing, and quarantines
 ok 3 both modes: ACCEPT fixtures are accepted and round-trip byte-stable
@@ -21,4 +21,11 @@ ok 19 unreadable event file: strict exits 2, hook skips
 ok 20 emit <kind>: synthesizes a complete, valid event from flags alone
 ok 21 emit <kind>: identical input twice dedupes by derived idem
 ok 22 emit <kind>: an unknown kind is refused before anything is written
+ok 23 quarantine never persists a secret when a NON-secret error fires first (ADR-0028)
+ok 24 a torn tail is healed, never welded onto the next event
+ok 25 releasing the lock never deletes a lock this process does not own
+ok 26 hook mode absorbs a broken emitter library instead of dumping a stack trace
+ok 27 a flag VALUE never flips the mode: --actor ingest stays hook mode
+ok 28 ingest derives its own idem, ignoring a caller-supplied one
+ok 29 the spine refuses to guess a location when there is no repo above cwd
 BATS_EXIT=0

@@ -4,30 +4,45 @@
 // ADR-0025: everything here lives in the INSTANCE at .claude/state/hq/ and never enters the
 // sync payload -- `state` is already excluded by sync-to-project.sh, which is the real gate.
 // ADR-0029: the active day is append-only; a closed day is immutable forever.
+//
+// The locking and append rules below are the output of the Phase-0 adversarial pass, which
+// confirmed that the first version could hand the same lock to three processes, silently
+// destroy the next event after a torn tail, and report SKIP for an event it had already
+// written (docs/evidence/phase-00/adversarial-report.md).
 
 import {
   closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync,
-  readdirSync, statSync, unlinkSync, writeFileSync, writeSync,
+  readSync, readdirSync, statSync, unlinkSync, writeFileSync, writeSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { SpineError, canonicalize, formatIst, nowMs } from "./canonical.mjs";
 
-const LOCK_TIMEOUT_MS = Number(process.env.ARC_SPINE_LOCK_TIMEOUT_MS || 3000);
-const LOCK_STALE_MS = Number(process.env.ARC_SPINE_LOCK_STALE_MS || 15000);
+// The critical section is a few file appends -- single-digit milliseconds. A stale
+// threshold three orders of magnitude above that is already absurdly generous, and keeping
+// it SHORT is what bounds how long a crashed emitter can wedge the next session.
+const LOCK_STALE_MS = Number(process.env.ARC_SPINE_LOCK_STALE_MS || 5000);
+// Strict callers (CI, ingest) can afford to wait; a hook must never hold a session up.
+const DEFAULT_TIMEOUT_MS = Number(process.env.ARC_SPINE_LOCK_TIMEOUT_MS || 8000);
 
 // ARC_SPINE_ROOT is how tests (and a consumer with a non-standard layout) point the spine
-// somewhere else. Otherwise: the nearest .claude/ at or above cwd owns the spine.
+// somewhere else. Otherwise the spine belongs to a REPO: we require .claude and .git in the
+// same directory. Walking up for `.claude` alone found the user's HOME config from an
+// unrelated cwd and quietly wrote one project's receipts into a global spine.
 export function spineRoot() {
   if (process.env.ARC_SPINE_ROOT) return resolve(process.env.ARC_SPINE_ROOT);
   let dir = process.cwd();
   for (;;) {
-    if (existsSync(join(dir, ".claude"))) return join(dir, ".claude", "state", "hq");
+    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git")))
+      return join(dir, ".claude", "state", "hq");
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;
   }
-  throw new SpineError("NO_ROOT", "no .claude/ directory found at or above cwd -- cannot locate the spine");
+  throw new SpineError(
+    "NO_ROOT",
+    "no repository with .claude/ and .git/ at or above cwd -- refusing to guess a spine location (set ARC_SPINE_ROOT to be explicit)",
+  );
 }
 
 export const eventsDir = (root) => join(root, "events");
@@ -47,15 +62,18 @@ function sleepSync(ms) {
 
 /**
  * Serializes every mutation of a day file and the idem index behind one lock file.
- * Belt and braces with the single-write append below: the lock keeps two emitters from
- * interleaving their read-modify-write of the index, the single write keeps the JSONL line
- * whole even if the lock were somehow bypassed.
+ *
+ * Ownership is a TOKEN, not the mere existence of the file. The first version released the
+ * lock with an unconditional unlink, so once a stale-breaker had handed the lock to someone
+ * else, the original holder's release deleted the NEW holder's lock -- and three processes
+ * ended up inside the critical section at once.
  */
-export function withLock(root, fn) {
+export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const dir = eventsDir(root);
   ensureDir(dir);
   const lock = join(dir, ".lock");
-  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
+  const deadline = Date.now() + timeoutMs;
   let fd = null;
 
   for (;;) {
@@ -71,31 +89,62 @@ export function withLock(root, fn) {
         if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) { unlinkSync(lock); continue; }
       } catch { /* the holder released it between our check and now -- retry */ }
       if (Date.now() > deadline)
-        throw new SpineError("LOCK_TIMEOUT", `spine lock held for more than ${LOCK_TIMEOUT_MS}ms`);
+        throw new SpineError("LOCK_TIMEOUT", `spine lock held for more than ${timeoutMs}ms`);
       sleepSync(15);
     }
   }
 
   try {
-    try { writeSync(fd, Buffer.from(`${process.pid}\n`, "utf8")); } catch { /* advisory only */ }
+    writeSync(fd, Buffer.from(`${token}\n`, "utf8"));
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = null;
+    // If a stale-breaker took our lock away between creation and here, we are not the
+    // holder and must not write. Cheap re-read; the alternative is a silent double writer.
+    if (readLockToken(lock) !== token)
+      throw new SpineError("LOCK_LOST", "another process took the spine lock mid-acquire");
     return fn();
   } finally {
-    try { closeSync(fd); } catch { /* already closed */ }
-    try { unlinkSync(lock); } catch { /* already gone */ }
+    if (fd !== null) { try { closeSync(fd); } catch { /* already closed */ } }
+    try {
+      if (readLockToken(lock) === token) unlinkSync(lock);
+    } catch { /* never let releasing the lock be the thing that throws */ }
   }
+}
+
+function readLockToken(lock) {
+  try { return readFileSync(lock, "utf8").trim(); } catch { return null; }
 }
 
 // One line, one write, then fsync: the whole line reaches the page cache in a single call,
 // so a kill between events can never leave half a line behind.
+//
+// The heal below matters more than it looks. If a previous write was truncated mid-line,
+// appending straight onto it welds our event to the torn remains and BOTH become
+// unparseable -- the emitter reports success for a receipt that no longer exists.
 function appendLine(file, line) {
   ensureDir(dirname(file));
+  let prefix = "";
+  try {
+    const size = statSync(file).size;
+    if (size > 0) {
+      const fdCheck = openSync(file, "r");
+      try {
+        const tail = Buffer.alloc(1);
+        readSync(fdCheck, tail, 0, 1, size - 1);
+        if (tail[0] !== 0x0a) prefix = "\n";
+      } finally { closeSync(fdCheck); }
+    }
+  } catch { /* no file yet, or unreadable -- the append below surfaces the real error */ }
+
   const fd = openSync(file, "a");
   try {
-    writeSync(fd, Buffer.from(line, "utf8"));
+    writeSync(fd, Buffer.from(prefix + line, "utf8"));
     fsyncSync(fd);
   } finally {
     closeSync(fd);
   }
+  return prefix !== "";
 }
 
 export function isDayClosed(root, day) {
@@ -132,8 +181,8 @@ export function fileSha(path) {
  * Append one validated event. Caller supplies the canonical line (sha included).
  * Throws DUP_IDEM / DAY_CLOSED -- both are refusals, not crashes.
  */
-export function appendEvent(root, event, canonicalLine) {
-  return withLock(root, () => appendEventUnlocked(root, event, canonicalLine));
+export function appendEvent(root, event, canonicalLine, opts = {}) {
+  return withLock(root, () => appendEventUnlocked(root, event, canonicalLine), opts);
 }
 
 /** The same append, for a caller that ALREADY holds the lock (day-close). */
@@ -152,16 +201,27 @@ export function appendEventUnlocked(root, event, canonicalLine) {
   // because truth is the JSONL and replay rebuilds the index from it. The reverse order
   // would leave an index entry with no event, and a legitimate retry would be refused as a
   // duplicate forever: a silently LOST receipt. Prefer a duplicate you can supersede.
-  appendLine(dayFile(root, day), canonicalLine + "\n");
-  ensureDir(derivedDir(root));
-  appendLine(idemIndexPath(root), `${event.idem}\t${event.id}\n`);
-  return { day, file: dayFile(root, day) };
+  const healed = appendLine(dayFile(root, day), canonicalLine + "\n");
+
+  // Past this point the receipt EXISTS. An index failure is a derived-state problem, and
+  // reporting failure here would be a lie that makes the caller retry and duplicate it.
+  let indexed = true;
+  try {
+    ensureDir(derivedDir(root));
+    appendLine(idemIndexPath(root), `${event.idem}\t${event.id}\n`);
+  } catch {
+    indexed = false;
+  }
+  return { day, file: dayFile(root, day), healed, indexed };
 }
 
 /**
  * Quarantine an input that must not reach the spine.
- * `stubOnly` is the secret path (ADR-0028): the record proves THAT something was refused
- * and why, and carries no field names, no values, and no lengths.
+ *
+ * `raw` is written ONLY when the caller has proven it carries no secret. Every rejection
+ * that fires BEFORE the scanner runs (a bad ts, an unknown kind) used to persist the raw
+ * bytes verbatim -- so a payload holding a live credential landed in cleartext in an
+ * append-only file, which is precisely what ADR-0028 exists to prevent.
  */
 export function quarantine(root, { code, message, day, raw, stubOnly }) {
   const dir = quarantineDir(root);
@@ -169,7 +229,7 @@ export function quarantine(root, { code, message, day, raw, stubOnly }) {
   const record = {
     code,
     day,
-    reason: stubOnly ? "refused: secret pattern (stub-only record, ADR-0028)" : String(message || "").slice(0, 1000),
+    reason: stubOnly ? "refused: secret-bearing or unscannable input (stub-only record, ADR-0028)" : String(message || "").slice(0, 1000),
     stub_only: !!stubOnly,
     ts: formatIst(nowMs()),
   };

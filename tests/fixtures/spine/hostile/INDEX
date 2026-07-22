@@ -35,3 +35,16 @@
 35-secret-privatekey.json	SECRET	PEM private key block
 36-secret-bearer.json	SECRET	JWT bearer header
 37-unicode.json	ACCEPT	non-ASCII must round-trip byte-stable
+38-dup-key-escaped.json	DUP_KEY	duplicate key spelled with a \u escape -- JSON.parse collapses them, a raw-text scanner does not
+39-bigint-precision.json	NUMBER_PRECISION	integer beyond 2^53: storing the rounded value would hash a number nobody sent
+40-deep-nesting.json	DEPTH_EXCEEDED	200 levels of nesting -- the verdict must come from the schema, not the V8 stack size
+41-negative-zero.json	NEGATIVE_ZERO	-0 canonicalizes to 0, so it would collide with a real 0 event as a duplicate
+42-secret-structural.json	SECRET	credential in a STRUCTURAL json field -- the shape a real config dump actually has
+43-secret-prefixed-key.json	SECRET	prefixed/suffixed credential names that a bare-word boundary rule cannot see
+44-secret-zero-width.json	SECRET	zero-width character inserted mid-token
+45-secret-split-reordered.json	SECRET	split secret whose fields concatenate in the WRONG order -- adjacency in one order is not adjacency
+46-secret-dsn.json	SECRET	password inline in a connection string
+47-secret-modern-formats.json	SECRET	current-generation key format (fine-grained PAT) that the first rule set had no rule for
+48-ts-far-future.json	BAD_TS	far-future ts creates a day file no close will ever reach
+49-cost-huge.json	BAD_COST	unbounded magnitude poisons every downstream aggregate
+50-supersedes-self.json	BAD_SUPERSEDES	an event superseding itself is a cycle for any replay that resolves chains

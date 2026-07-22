@@ -4,7 +4,15 @@
 // values are rejected, never normalized. Normalizing is how a validator quietly becomes a
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
-import { SpineError, ULID_RE, canonicalize, MAX_EVENT_BYTES } from "./canonical.mjs";
+import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES } from "./canonical.mjs";
+
+// How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
+// one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
+// that sorts after every real day forever.
+const MAX_FUTURE_MS = Number(process.env.ARC_SPINE_MAX_FUTURE_MS || 2 * 24 * 60 * 60 * 1000);
+// Token counts and rupee amounts are bounded because an unbounded one poisons every
+// aggregate downstream: 1e308 + anything is still 1e308, and two of them are Infinity.
+const MAX_COST_MAGNITUDE = 1e12;
 
 // ADR-0026: the vocabulary is CLOSED at 18. Extensions only via a new ADR.
 export const KINDS = Object.freeze([
@@ -52,14 +60,23 @@ function assertTimestamp(ts) {
   const probe = new Date(Date.UTC(y, mo - 1, d));
   if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d)
     throw new SpineError("BAD_TS", `ts "${ts}" is not a real calendar date`);
+
+  // Bound it against the spine's own clock. A far-future ts creates a day file that no
+  // close will ever reach; a wildly backdated one rewrites the order of a day that later
+  // days already assume is settled.
+  const eventMs = Date.parse(ts);
+  if (Number.isFinite(eventMs) && eventMs - nowMs() > MAX_FUTURE_MS)
+    throw new SpineError("BAD_TS", `ts "${ts}" is further ahead than the spine accepts (now ${formatIst(nowMs())})`);
 }
 
 // Evidence paths are dereferenced by humans and tools later; a traversal or absolute path
 // stored today is a file read somewhere else tomorrow.
 function assertEvidencePath(p) {
   if (p === null) return;
-  if (typeof p !== "string" || p.length === 0 || p.length > 512)
-    throw new SpineError("BAD_EVIDENCE", "evidence must be null or a 1..512 char path");
+  // Bytes, not UTF-16 units: a "512 char" limit counted in code units lets a path of
+  // astral characters occupy four times the budget a reader allocated for it.
+  if (typeof p !== "string" || p.length === 0 || Buffer.byteLength(p, "utf8") > 512)
+    throw new SpineError("BAD_EVIDENCE", "evidence must be null or at most 512 bytes");
   if (/[\u0000-\u001f\u007f]/.test(p)) throw new SpineError("BAD_EVIDENCE", "evidence contains a control character");
   if (p.includes("\\")) throw new SpineError("BAD_EVIDENCE", `evidence "${p}" contains a backslash -- POSIX-relative paths only`);
   if (p.startsWith("/") || /^[A-Za-z]:/.test(p) || p.startsWith("~"))
@@ -78,10 +95,13 @@ function assertCost(cost) {
     if (!(k in cost)) throw new SpineError("BAD_COST", `cost is missing "${k}"`);
   for (const k of ["tokens_in", "tokens_out"]) {
     const v = cost[k];
-    if (!Number.isInteger(v) || v < 0) throw new SpineError("BAD_COST", `cost.${k} must be a non-negative integer`);
+    if (!Number.isSafeInteger(v) || v < 0) throw new SpineError("BAD_COST", `cost.${k} must be a non-negative integer`);
+    if (v > MAX_COST_MAGNITUDE) throw new SpineError("BAD_COST", `cost.${k} of ${v} is beyond any real run`);
   }
   if (typeof cost.inr_estimate !== "number" || !Number.isFinite(cost.inr_estimate) || cost.inr_estimate < 0)
     throw new SpineError("BAD_COST", "cost.inr_estimate must be a non-negative finite number");
+  if (cost.inr_estimate > MAX_COST_MAGNITUDE)
+    throw new SpineError("BAD_COST", `cost.inr_estimate of ${cost.inr_estimate} is beyond any real run`);
   if (!COST_SOURCES.has(cost.source))
     throw new SpineError("BAD_COST", `cost.source "${cost.source}" is outside ${[...COST_SOURCES].join("|")}`);
 }
@@ -129,6 +149,10 @@ export function validateEvent(event) {
   assertEvidencePath(event.evidence);
   if (event.supersedes !== null && (typeof event.supersedes !== "string" || !ULID_RE.test(event.supersedes)))
     throw new SpineError("BAD_SUPERSEDES", "supersedes must be a ULID or null");
+  // A correction that supersedes itself is a cycle: any replay resolving supersedes chains
+  // would never terminate on it.
+  if (event.supersedes !== null && event.supersedes === event.id)
+    throw new SpineError("BAD_SUPERSEDES", "an event cannot supersede itself");
   if ("sha" in event && (typeof event.sha !== "string" || !HEX64.test(event.sha)))
     throw new SpineError("BAD_SHA", "sha must be lowercase sha256 hex");
 

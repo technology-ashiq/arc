@@ -19,7 +19,9 @@ setup() {
   export ARC_SPINE_ROOT="$SPINE"
   # Frozen clock + frozen randomness: golden comparisons need the emitter to be a pure
   # function of its input. Both are test-only env doors, documented in arc-event.mjs.
-  export ARC_SPINE_NOW="1753205400000"
+  # The clock is pinned to the fixtures' own day (2026-07-22T16:00:00Z) because ts is now
+  # bounded against the spine's clock -- a clock a year behind the corpus would reject it.
+  export ARC_SPINE_NOW="1784736000000"
   export ARC_SPINE_RAND="00112233445566778899"
 }
 
@@ -192,7 +194,9 @@ _quarantine_lines() { cat "$SPINE"/events/_quarantine/*.jsonl 2>/dev/null | sed 
   node -e '
     const fs=require("fs");
     const ev=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
-    ev.ts="2026-07-29T10:00:00+05:30";
+    // A different DAY, but inside the future bound the validator now enforces -- the point
+    // of this test is the day boundary, not how far ahead it sits.
+    ev.ts="2026-07-23T10:00:00+05:30";
     ev.id="01JQ8XZ9K1ABCDEFGH01234567";
     delete ev.sha;
     fs.writeFileSync(process.env.BATS_TEST_TMPDIR+"/nextday.json", JSON.stringify(ev,null,2)+"\n");
@@ -334,4 +338,92 @@ _quarantine_lines() { cat "$SPINE"/events/_quarantine/*.jsonl 2>/dev/null | sed 
   [ "$status" -eq 2 ]
   [[ "$output" == *"UNKNOWN_KIND"* ]]
   [ "$(_event_lines)" = "0" ]
+}
+
+# ---------- regressions pinned by the Phase-0 adversarial pass ----------
+# Each test below is a hole that was CONFIRMED against the first implementation. Fixtures
+# cover the input-shaped ones; these cover the ones that only exist as behaviour.
+
+@test "quarantine never persists a secret when a NON-secret error fires first (ADR-0028)" {
+  # The rejection here is UNKNOWN_KIND -- it fires long before the secret scanner would
+  # normally run. The raw input still carries a live-shaped credential, and writing it to
+  # the append-only quarantine log would be exactly the leak ADR-0028 exists to prevent.
+  cat > "$BATS_TEST_TMPDIR/leak.json" <<'JSON'
+{"note":"deploy key AKIAIOSFODNN7EXAMPLE rotated"}
+JSON
+  run bash "$EVENT" emit not.a.kind --payload-file "$BATS_TEST_TMPDIR/leak.json"
+  [ "$status" -eq 0 ]
+  run grep -rl "$CANARY" "$SPINE"
+  [ "$status" -ne 0 ]
+}
+
+@test "a torn tail is healed, never welded onto the next event" {
+  run bash "$EVENT" emit --event-file "$HOSTILE/30-valid.json" --strict
+  [ "$status" -eq 0 ]
+  # Simulate a truncated previous write: no trailing newline.
+  printf '{"partial":true' >> "$SPINE/events/2026-07-22.jsonl"
+  run bash "$EVENT" emit note.logged --payload '{"note":"after the tear"}' --strict
+  [ "$status" -eq 0 ]
+  # The new event must be its own parseable line, not glued to the torn remains.
+  run node -e '
+    const fs=require("fs"), path=require("path");
+    const dir=path.join(process.env.ARC_SPINE_ROOT,"events");
+    let good=0, torn=0;
+    for (const f of fs.readdirSync(dir).filter(n=>n.endsWith(".jsonl"))) {
+      for (const line of fs.readFileSync(path.join(dir,f),"utf8").split("\n")) {
+        if (!line) continue;
+        try { JSON.parse(line); good++; } catch { torn++; }
+      }
+    }
+    if (good < 2) { console.log("lost an event: only "+good+" parseable"); process.exit(1); }
+    if (torn !== 1) { console.log("expected exactly the one pre-existing torn line, got "+torn); process.exit(1); }
+  '
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "releasing the lock never deletes a lock this process does not own" {
+  run bash "$EVENT" emit --event-file "$HOSTILE/30-valid.json" --strict
+  [ "$status" -eq 0 ]
+  # A foreign holder's token sits in the lock. Our emitter must wait it out and then break
+  # it as stale -- and must not delete it while believing it is its own.
+  printf 'someone-else:deadbeef\n' > "$SPINE/events/.lock"
+  ARC_SPINE_LOCK_STALE_MS=1 run bash "$EVENT" emit note.logged --payload '{"note":"after stale"}' --strict
+  [ "$status" -eq 0 ]
+  [ "$(_event_lines)" = "2" ]
+}
+
+@test "hook mode absorbs a broken emitter library instead of dumping a stack trace" {
+  # A truncated lib/*.mjs fails at import time, BELOW the emitter's own error handler.
+  # Only the wrapper can catch that, and in hook mode it must still exit 0.
+  cp -r "$ARC_ROOT/.claude/scripts/hq" "$BATS_TEST_TMPDIR/hq"
+  printf 'this is not valid javascript {{{\n' > "$BATS_TEST_TMPDIR/hq/lib/validate.mjs"
+  run bash "$BATS_TEST_TMPDIR/hq/arc-event.sh" emit note.logged --payload '{"note":"x"}'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SKIP"* ]]
+}
+
+@test "a flag VALUE never flips the mode: --actor ingest stays hook mode" {
+  run bash "$EVENT" emit not.a.kind --actor ingest --payload '{"n":"x"}'
+  [ "$status" -eq 0 ]   # hook mode: refused, but never blocking
+  run bash "$EVENT" emit not.a.kind --actor --strict --payload '{"n":"x"}'
+  [ "$status" -eq 0 ]
+}
+
+@test "ingest derives its own idem, ignoring a caller-supplied one" {
+  echo '{"txn":"T-1","amount":100}' > "$BATS_TEST_TMPDIR/p.json"
+  # Pre-claiming an idem must not let anyone suppress the genuine receipt that follows.
+  run bash "$EVENT" emit revenue.received --payload '{"unrelated":true}' --idem "$(printf 'a%.0s' $(seq 64))" --strict
+  [ "$status" -eq 0 ]
+  run bash "$EVENT" ingest revenue.received --json "$BATS_TEST_TMPDIR/p.json" --idem "$(printf 'a%.0s' $(seq 64))"
+  [ "$status" -eq 0 ]
+  [ "$(_event_lines)" = "2" ]
+}
+
+@test "the spine refuses to guess a location when there is no repo above cwd" {
+  mkdir -p "$BATS_TEST_TMPDIR/orphan"
+  # No .git/.claude pair anywhere above: the emitter must say so, not silently adopt the
+  # user's global ~/.claude and write one project's receipts into it.
+  run env -u ARC_SPINE_ROOT bash -c "cd '$BATS_TEST_TMPDIR/orphan' && bash '$EVENT' emit note.logged --payload '{\"n\":\"x\"}' --strict"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"NO_ROOT"* ]]
 }
