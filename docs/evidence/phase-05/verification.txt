@@ -22,12 +22,22 @@ decision recorded for every TRIAL check."
 
 Full suite, local, Windows/Git Bash:  271/271 green, 0 failures, exit 0 (1..271).
 
-NOTE ON AUTHORITY, recorded honestly: since d53daed, CI is the authority for the full suite
-and Phase 04's bundle recorded "CI on merge commit 801de48 — 268 tests green on ubuntu +
-windows + macos + ci-tier". Phase 05 cannot cite CI at close time: the branch
-feat/arc-phase-05-docs-promotions has not been pushed, and pushing is the owner's action.
-The 271/271 above is a real local run on one OS, not a substitute for the 3-OS matrix. If CI
-red-lights this branch, this bundle is wrong and the phase reopens.
+CI, added after the close (the bundle was written before the branch was pushed):
+
+  ci-tier .................... pass    36s
+  selftest (ubuntu-latest) ... pass  1m33s
+  selftest (macos-latest) .... pass  1m41s
+  selftest (windows-latest) .. pass 13m23s
+
+  PR #43, head ced2693 — the same tree the local run used. Merged as 0aaa3f2.
+  Run: github.com/technology-ashiq/arc/actions/runs/29904874724
+
+Since d53daed, CI is the authority for the full suite; Phase 04's bundle recorded "CI on merge
+commit 801de48 — 268 tests green on ubuntu + windows + macos + ci-tier", and this is the
+equivalent. At the moment this bundle was first written CI had not run, because the branch was
+unpushed and pushing is the owner's action — the local 271/271 was one OS, not the 3-OS matrix.
+That gap is now closed rather than papered over. The macOS leg was the one that mattered: it
+exercises BSD userland (sed/stat/date diverge from GNU) and no local run covered it.
 
 --- REQ-12 acceptance, checked mechanically ---
 

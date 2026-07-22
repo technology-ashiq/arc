@@ -38,10 +38,10 @@ Appetite burn: **~6.5 of ~30 days (~22%)** — six phases closed, every one unde
 tripwire (50%) never approached; no scope-cut conversation was ever forced by burn. (The one
 scope cut, REQ-11, was a safety call, not a time call.)
 
-**Setup needed from user: one thing.** The branch `feat/arc-phase-05-docs-promotions` is not
-pushed, so **CI has not run on this phase** — the 271/271 above is a local single-OS run, and
-Phase 04's bar was "CI green on ubuntu + windows + macos". Push it and let CI confirm before
-treating this close as final. If CI red-lights it, this phase reopens.
+**Setup needed from user: none.** The close's one outstanding condition — CI — is met. PR #43
+merged as `0aaa3f2`; CI green on **ubuntu + windows + macos + ci-tier** against head `ced2693`,
+the same tree the local 271/271 ran on. The macOS leg mattered: it exercises BSD userland, and
+the local run was Windows-only.
 
 ## Phases
 
@@ -61,7 +61,8 @@ Extraction to separate repos/plugins/SaaS is **not a phase** — demand-triggere
 - **2026-07-22 · Phase 05 · Docs, the gate decision, and the retro — initiative close.** The
   phase that shipped no code. Its three deliverables were a documentation set that matches the
   machine, a recorded decision on eight lint gates, and a retro.
-  **271/271 bats local (Windows/Git Bash), 0 failures.** Evidence at `docs/evidence/phase-05/`.
+  **271/271 bats — local (Windows/Git Bash) and CI green on ubuntu + windows + macos + ci-tier**
+  (PR #43, head `ced2693`, merged `0aaa3f2`). Evidence at `docs/evidence/phase-05/`.
   **Actual: ~1 session vs a 0.5-week appetite — under.** · amendments: 2 · reopened: n.
 
   **The docs had been describing a product that no longer existed.** arc became six products on
