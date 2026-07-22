@@ -1,18 +1,10 @@
 sync: note -- target has no .git, is this really a project root?
 === diff: committed golden -> what a bare sync produces now ===
-82,87c82,87
-< .claude/scripts/hq/arc-event.mjs	b0191bbb9ccc1b6709c36d1281a1e351c33ab05228a30ca581222d59b2f0ceaf
-< .claude/scripts/hq/arc-event.sh	796beb1fc07a5ea0053d801c096eb31421df002e5cf1620489530662d1c5e4bc
-< .claude/scripts/hq/lib/canonical.mjs	edbb535e94602ec723ba7b52e6de872ce36e787aee42f957e8fdf4d172ec5282
-< .claude/scripts/hq/lib/redact.mjs	c8c4eb74df631ba957d3a8aff389465f549e3b8ac405281b969badd6ab76f6e5
-< .claude/scripts/hq/lib/spine-io.mjs	06e8c11aad67d3b2a166a02efa59cffc1ce4143d3a92a9a528607768652b9203
-< .claude/scripts/hq/lib/validate.mjs	509305bcd63038fdc1beaf12b6f31b620b6b163d1ca10dcf84af22a1f42e49ec
----
-> .claude/scripts/hq/arc-event.mjs	fc975f6046ad515cedf21921234d928228072f53e4f843e416b232af61c3032d
-> .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
-> .claude/scripts/hq/lib/canonical.mjs	0fff8d369815873d831794d7ca64afdafad89e8173fcb9263309cccee7560ca6
-> .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314
-> .claude/scripts/hq/lib/spine-io.mjs	0ce8138277c916aee8c5a6ecd4e437e697fb450655fb8fcc9bfea0cbeed536ff
-> .claude/scripts/hq/lib/validate.mjs	9579de2d6e9152d53e06be748ebf9aa637d8aa43c7cad1416fb4fffd83c21e5c
+81a82
+> .claude/scripts/hq/arc-brief.mjs	dfc2fc8087a2f77bc015e230dff2b5957364275f430e736a64e5b65129fd9e4b
+83a85
+> .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
+87a90
+> .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
 === end diff ===
 golden updated: /e/Work_Hub/01_Automemory/arc/tests/fixtures/sync-golden/tree-manifest.txt
