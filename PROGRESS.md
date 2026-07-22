@@ -9,7 +9,7 @@
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | 🟡 ckpt A built, adversarial pass running |
+| 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | 🟡 ckpt A DONE (hardened), ckpt B next |
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ⬜ not started |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ⬜ not started |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ⬜ not started |
@@ -17,6 +17,13 @@
 
 ## Done log
 
+- 2026-07-22 — **Phase 00 ckpt A hardened and DONE** (`107c3c8`). Adversarial pass: 45
+  agents, 6 lenses, 38 claims, **25 confirmed** after independent refutation attempts —
+  including an escaped-duplicate-key bypass that let a forged `actor`/`outcome` be sealed in
+  strict mode, structural credentials landing on the spine untouched, raw secret bytes
+  written to quarantine on non-secret rejections (ADR-0028 violated by the code citing it),
+  and a lock three processes could hold at once. All 25 fixed. Corpus 37 → 50 fixtures +
+  7 behavioural regressions; 29/29 green. Report: `docs/evidence/phase-00/adversarial-report.md`.
 - 2026-07-22 — **Phase 00 ckpt A built** (`54c20ac`, `701e990`). Dual-mode `arc-event`
   (hook never blocks / `--strict` exits 2, one validator core), canonical serializer + sha +
   ULID, strict JSON reader, fail-safe multi-view secret scan, lock + single-write append +
@@ -39,11 +46,16 @@ cursor demo (lint stays). 100% → cut or kill, never extend.
 
 ## Now
 
-**Phase 00 ckpt A is built and green; the adversarial pass decides whether it closes.**
+**Phase 00 ckpt A is DONE and hardened; ckpt B is the next build step.**
 Kickoff approved by Ashiq 2026-07-22 (all three simulation blockers ruled "apply the
 proposed fixes"; constants and the ADR-0028 reading accepted; Constitution adoption
-deferred). Six attacker agents are currently constructing breaking inputs against
-emitter/validator/serializer/redaction/storage/dual-mode, each finding verified by a fresh
-skeptic. **Next step:** fix + pin every confirmed hole as a red fixture, commit the
-adversarial report, then start ckpt B (replay · reader · twin determinism CI · Node 18/22
-legs). ckpt B does not start before that pass lands — the spec's own ordering.
+deferred). The mandatory adversarial pass has run and its 25 confirmed holes are fixed and
+pinned, which is what ckpt B was gated on.
+
+**Next step — ckpt B (~2 days):** `arc-replay.mjs` (JSONL → derived state at
+`.claude/state/hq/derived/state.db`, whole-spine idem index rebuilt every replay) ·
+`spine.mjs` reader v1 (`--kind --since --venture` + cursors, tie-break by append order) ·
+minimal `arc-brief.mjs --date` renderer · twin determinism bats (REQ-04 a+b) ·
+`tests/spine-equivalence.bats` (sqlite vs scan, byte-identical) · 90-day synthetic spine
+generator + timed brief on the owner's box · CI matrix gains a Node 18 leg and a Node 22+
+leg. Then Phase 00 closes via `/arc-phase-done 0`.
