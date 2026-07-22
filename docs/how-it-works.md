@@ -1,6 +1,37 @@
 # How this structure works — the mental model
 
-Everything in this template belongs to one of **three loading behaviors**. Knowing which is
+Two questions, two answers. **What is installed here?** — arc ships as six products, and a
+target gets only the ones it asked for. **When does an installed thing load?** — one of three
+loading behaviors. Get both and the whole system is predictable.
+
+## What is installed — six products, one umbrella
+
+| Product | Requires | Commands |
+|---|---|---|
+| `core` | — | `/arc` `/arc-toolcheck` `/arc-resume` `/arc-freeze` `/arc-unfreeze` |
+| `plan` | core | `/arc-kickoff` `/arc-change` `/arc-phase-done` `/arc-retro` `/arc-diagram` |
+| `review` | core | `/arc-review` `/arc-audit` `/arc-second-opinion` `/arc-docs` |
+| `qa` | core | `/arc-qa` `/arc-design` `/arc-canary` |
+| `git` | core | `/arc-commit` `/arc-pr` `/arc-fix-issue` `/arc-ship` |
+| `council` | core | `/arc-council` |
+
+```bash
+./sync-to-project.sh /path/to/project --products plan,review   # core follows as a dependency
+```
+
+Each sync writes `.claude/arc-registry.json` into the target — products, versions, file lists,
+source commit. `/arc` renders installed-vs-absent from that file rather than sniffing for
+files, which is why its answer is trustworthy on a half-installed repo. Scripts live under
+`.claude/scripts/<product>/`, so a product's code has a physical boundary, not just a naming
+convention.
+
+**The consequence to internalise:** a command, agent, or script that isn't in an installed
+product simply isn't there. When something is missing, the question is which product owns it —
+`/arc` prints both the answer and the install command.
+
+## When it loads — three behaviors
+
+Everything installed belongs to one of **three loading behaviors**. Knowing which is
 which tells you where any new rule or automation should live.
 
 ```
@@ -41,7 +72,8 @@ Root files (shared infra): .mcp.json (MCP servers) · .env.example (→ .env.loc
    `.claude/scripts/core/arc-profile.sh`, which each gate consults for its warn-vs-block mode.
 
 3. **Loads on demand.** Keeps the context window lean:
-   - `commands/` — **you** invoke (`/arc-ship`, `/arc-commit`, `/arc-pr`, `/arc-review`, `/arc-fix-issue`)
+   - `commands/` — **you** invoke (`/arc`, `/arc-kickoff`, `/arc-review`, `/arc-commit` …) — a
+     target has only the commands of its installed products; `/arc` lists what's present
    - `skills/` — the **model** invokes when a task matches the skill description
    - `agents/` — run in an **isolated context**; only the summary returns to your session
    - `rules/` — auto-load when Claude touches a file matching their frontmatter `paths:` globs
@@ -92,7 +124,8 @@ formatting, or worry about deploying broken code.
 
 ## Per-project checklist
 
-1. Copy this folder into the new project root.
+1. Install into the project root: `./sync-to-project.sh <project>` for everything, or
+   `--products a,b` for a subset. Restart the Claude Code session — commands load at start.
 2. Fill every `TODO` in `CLAUDE.md` (name, goal, stack, architecture, pricing).
 3. Copy `.env.example` → `.env.local`, fill real secrets (gitignored).
 4. Adjust `rules/` globs if your folder layout differs.

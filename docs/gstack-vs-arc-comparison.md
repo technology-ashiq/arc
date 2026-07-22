@@ -2,6 +2,16 @@
 
 **Date:** 2026-07-09 · **Sources:** full clone of `github.com/garrytan/gstack` @ v1.58.5.0 (1,169 files) vs `E:\Work_Hub\01_Automemory\arc` @ commit `b79caef` (3 commits). Every claim below was checked against actual files, not READMEs alone.
 
+> **Update 2026-07-22 — four of the five gaps this document named have since closed.** The
+> assessment below is left unedited because it is a dated record, not a live scoreboard; read
+> it as "arc as of 2026-07-09". What changed since: gates block by default (`standard`
+> profile, ADR-0008); arc has **271 bats cases across 24 files running on ubuntu + windows +
+> macOS CI**; the `/arc-review` code-stamp is wired; and `sync-to-project.sh` exists as a bash
+> twin of the PowerShell installer, both driving one resolver. arc also became a six-product
+> umbrella with selective install. The "zero tests, zero CI" line in the TL;DR and the
+> credibility-gap verdict in §7 were both true when written and are both false now. What has
+> *not* changed: arc is still solo-maintained, and still far smaller in capability.
+
 ---
 
 ## TL;DR — the honest verdict
@@ -18,9 +28,9 @@
 
 | | **gstack** | **arc** |
 |---|---|---|
-| Nature | Open-source skill suite: "virtual engineering team" as slash commands | Personal project **template/mold**: copied into each project, then synced |
-| Author/scale | Garry Tan + contributors; public, versioned, telemetry, community | Solo (Ashiq); 3 commits; Tanglish usermanual |
-| Install | Global `~/.claude/skills/gstack` + optional team mode w/ auto-update SessionStart hook | Per-project copy; `sync-to-project.ps1` (PowerShell/robocopy, Windows-only) |
+| Nature | Open-source skill suite: "virtual engineering team" as slash commands | Personal build system shipped as **six installable products** (`core` `plan` `review` `qa` `git` `council`) under one umbrella |
+| Author/scale | Garry Tan + contributors; public, versioned, telemetry, community | Solo (Ashiq); Tanglish usermanual |
+| Install | Global `~/.claude/skills/gstack` + optional team mode w/ auto-update SessionStart hook | Per-project install via twin installers (`sync-to-project.sh` / `.ps1`, both driving one resolver); selective — `--products plan,review` — and each target carries an `arc-registry.json` recording what it has |
 | Philosophy | "Boil the Ocean" completeness; **user sovereignty — advisory by default** | "CLAUDE.md guides · **hooks enforce** · docs hold depth · tracker remembers"; artifact + gate + resumable state |
 | Hard technical core | Compiled Bun+Playwright browser daemon (~100-200ms calls) | Bash hook gate chain + commit-SHA review ledger |
 
@@ -39,12 +49,14 @@
 - Memory: `setup-gbrain`/`sync-gbrain` (semantic code search + call graph + cross-session memory, PGLite or Supabase), `learn`, `context-save/restore`.
 - Safety: `careful`, `freeze`/`unfreeze`, `guard` — and note, these ARE hook-enforced (skill frontmatter registers PreToolUse command hooks; edits outside the boundary are blocked, not warned).
 
-**arc: 20 commands**, all pointed at one spine:
+**arc: 22 commands**, all pointed at one spine — and a target only gets the ones whose product
+it installed (`/arc` reports which, and prints the command to add the rest):
 
 - **The Golden Loop — gstack has no equivalent:** `/arc-kickoff` (appetite, risk-ordered phases, walking skeleton, pre-mortem, ADRs — STOPS before code) → `/arc-change` (every mid-build idea, including Claude's own, must get a tracked home BEFORE code) → `/arc-phase-done` (DoD gate: tests green + live demo + exit criteria, **refuses to close** otherwise) → `/arc-retro` (repeated corrections become permanent setup upgrades).
 - Review gates that **stamp a commit-SHA ledger**: `/arc-review`, `/arc-audit`, `/arc-qa` (every bug fix requires a fail-before/pass-after regression test), `/arc-design`, `/arc-docs`, `/arc-second-opinion` (Codex CLI; critical disagreement blocks ship; refuses to fake a second opinion if Codex is absent).
 - Ship chain: `/arc-commit` → `/arc-pr` → `/arc-ship` (deploy-guard re-checks everything) → `/arc-canary` (**CWV baseline diff + rollback on regression — arc's docs correctly claim gstack has no equivalent; verified true**).
-- Utility: `/arc-toolcheck` (pinned smart-table artifact), `/arc-freeze` (persistent state-file boundary vs gstack's session-scoped skill), `/arc-resume`, `/arc-diagram`, `/arc-fix-issue`.
+- Utility: `/arc` (umbrella status from the registry), `/arc-toolcheck` (pinned smart-table artifact), `/arc-freeze` (persistent state-file boundary vs gstack's session-scoped skill), `/arc-resume`, `/arc-diagram`, `/arc-fix-issue`.
+- Decision: `/arc-council` — research → adversarial debate → matched domain experts → a verifier that grades the *evidence* behind each point rather than the conclusions.
 - Skills: arc has exactly **one** (`seo-article-writer`, unrelated utility). gstack's 54-vs-1 here is not a fair fight and doesn't need to be — arc's units of work are commands.
 
 **Honest call:** breadth, depth-per-skill, and eval coverage → gstack, decisively. Build-lifecycle discipline (kickoff→change→phase-done→retro, DoD gates, change intake) → arc, and it's not a niche win: this is the layer that stops AI-driven projects from becoming ad-hoc sprawl. Several arc pieces are frankly gstack-inspired (`product-challenger` ≈ office-hours, `security-auditor` ≈ cso, `arc-second-opinion` ≈ codex, freeze/canary names match) — arc even credits this in its own files.
