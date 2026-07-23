@@ -59,9 +59,9 @@ _seed_spine() {
   run diff "$BATS_TEST_TMPDIR/scan.txt" "$BATS_TEST_TMPDIR/scan2.txt"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # REQ-05 groups the brief (the ckpt-B flat "events: N" is gone): the 3 seeded events render
-  # as 2 progress (commit.done, review.completed) + 1 background (note.logged).
+  # as 2 progress (commit.done, review.completed) + 1 background (note.logged, collapsed to a count).
   run grep -qF "progress (2)" "$BATS_TEST_TMPDIR/scan2.txt"; [ "$status" -eq 0 ]
-  run grep -qF "background (1)" "$BATS_TEST_TMPDIR/scan2.txt"; [ "$status" -eq 0 ]
+  run grep -qF "background: 1 (note.logged 1)" "$BATS_TEST_TMPDIR/scan2.txt"; [ "$status" -eq 0 ]
 }
 
 @test "replay repairs an idem index that lost an entry to a crash" {

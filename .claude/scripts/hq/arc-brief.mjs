@@ -34,7 +34,6 @@ const GROUPS = [
 ];
 const GROUP_OF = new Map();
 for (const [g, kinds] of GROUPS) for (const k of kinds) GROUP_OF.set(k, g);
-const COLLAPSE_ORDER = ["background", "progress"];
 
 // Money is stored in MINOR units (paise); a receipt shows major.minor. Non-money lines are
 // just the kind -- the group + its count is the signal; per-event detail lives in the feed.
@@ -100,12 +99,11 @@ export function render(day, events, torn, { full = false } = {}) {
 
   let out = assemble();
   if (!full) {
-    // Overflow collapses the noisy groups to counts (background first, then progress) until
-    // the day fits one screen. needs-you and money always stay expanded.
-    for (const g of COLLAPSE_ORDER) {
-      if (out.length <= budget) break;
-      if (buckets.get(g).length) { collapsed.add(g); out = assemble(); }
-    }
+    // background is the noise floor -- ALWAYS a count, never a wall of note.logged lines.
+    // progress then collapses too only when the day STILL overflows one screen. needs-you and
+    // money always stay expanded.
+    if (buckets.get("background").length) { collapsed.add("background"); out = assemble(); }
+    if (out.length > budget && buckets.get("progress").length) { collapsed.add("progress"); out = assemble(); }
     if (collapsed.size)
       for (let i = 0; i < out.length; i++)
         if (/^(background|progress): \d+ \(/.test(out[i])) { out[i] += "   — --full to expand"; break; }

@@ -49,13 +49,16 @@ progress (5)
   commit.done
   ship.done
 
-background (3)
-  note.logged
-  note.logged
-  redaction.applied
+background: 3 (note.logged 2 · redaction.applied 1)   — --full to expand
 EOF
 )
   [ "$output" = "$want" ] || { echo "=== diff (want < / got >) ==="; diff <(printf '%s\n' "$want") <(printf '%s\n' "$output"); false; }
+
+  # background is the noise floor -- collapsed by default even under budget; --full expands it.
+  run _brief --full
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"background (3)"* ]]
+  [[ "$output" != *"--full to expand"* ]]
 }
 
 @test "brief: an overflowing day collapses the noisy groups to counts; --full expands" {
