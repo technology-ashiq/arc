@@ -8,9 +8,11 @@
 # runs that session and asserts the ordered kind-sequence matches the golden.
 #
 # Golden rule (PLAN REQ-01): a "step" = one flow command's own emissions — order-insensitive
-# WITHIN a command, strict ACROSS commands. Every flow emits exactly one kind today, so the
-# sequence is a flat ordered list and exact-match is correct; the day a command emits two
-# kinds, the golden gains a per-command block and this comparison relaxes ordering inside it.
+# WITHIN a command, strict ACROSS commands. kickoff and phase-done now emit TWO kinds each
+# (their core receipt + an approval.requested sign-off gate, REQ-06); the command markdown pins
+# that intra-command order, so the session stays a deterministic flat sequence and exact-match
+# still holds. If a command's internal emission order ever became non-deterministic, the golden
+# would split into per-command blocks and this comparison would relax ordering inside them.
 #
 # RED-FIRST (this commit): tests/spine-dryrun.sh does not exist and no flow is wired, so the
 # session drops nothing — the missing-kind diff below names every gap. GREEN arrives when the

@@ -3,9 +3,10 @@
 #
 # The six factory flows are Claude slash-command markdown a test can't execute, so this
 # script stands in for ONE real session: it drops each flow's command-level receipt, in
-# order, through the spine's only writer (arc-event.sh, ADR-0031). It emits ONLY the six
-# flow receipts — no SessionStart/End lifecycle noise — because REQ-01's golden is the
-# command-level chain (hook fragments alone do not produce these kinds).
+# order, through the spine's only writer (arc-event.sh, ADR-0031). It emits the six core flow
+# receipts plus the two approval.requested sign-off gates kickoff and phase-done now raise
+# (REQ-06) — no SessionStart/End lifecycle noise, because REQ-01's golden is the command-level
+# chain (hook fragments alone do not produce these kinds).
 #
 # Determinism: the caller (tests/spine-golden-dryrun.bats) pins the clock and randomness via
 # ARC_SPINE_ROOT / ARC_SPINE_NOW / ARC_SPINE_RAND, so this session is a pure function of its
@@ -24,9 +25,11 @@ emit() {
   step=$(( step + 1 ))
 }
 
-emit kickoff.done     '{"goal":"receipt-spine","tier":"M"}'
-emit phase.closed     '{"phase":"01","name":"factory-wiring"}'
-emit review.completed '{"scope":"branch","findings":0}'
-emit qa.completed     '{"flow":"golden-dryrun","pass":true}'
-emit commit.done      '{"type":"test","subject":"golden dry-run"}'
-emit ship.done        '{"target":"branch"}'
+emit kickoff.done      '{"goal":"receipt-spine","tier":"M"}'
+emit approval.requested '{"what":"approve the plan to start building","gate":"kickoff"}'
+emit phase.closed      '{"phase":"01","name":"factory-wiring"}'
+emit approval.requested '{"what":"approve moving past phase 01","gate":"phase-done","phase":"01"}'
+emit review.completed  '{"scope":"branch","findings":0}'
+emit qa.completed      '{"flow":"golden-dryrun","pass":true}'
+emit commit.done       '{"type":"test","subject":"golden dry-run"}'
+emit ship.done         '{"target":"branch"}'
