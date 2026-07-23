@@ -1,0 +1,16 @@
+{
+  "phase": "02",
+  "commit": "6a380fc9014cd159928c22f01f0f671a3cd1e7fb",
+  "short": "6a380fc",
+  "generated": "2026-07-23T15:31:11Z",
+  "files": [
+    {
+      "name": "scan-verdict.json",
+      "sha256": "6f291bad5ecdfe22b2f77ab4ba7f18f0701e29a0049154d413f3be55a8e20157"
+    },
+    {
+      "name": "scan-result.sarif",
+      "sha256": "5d95ea4b78d22cc7e5d1093889b6b0f284ef06d941f4e11d0dd2aff3afbb0f34"
+    }
+  ]
+}

@@ -410,9 +410,11 @@ JSON
 }
 
 @test "ingest derives its own idem, ignoring a caller-supplied one" {
-  echo '{"txn":"T-1","amount":100}' > "$BATS_TEST_TMPDIR/p.json"
+  echo '{"txn":"T-1","amount":100,"currency":"INR"}' > "$BATS_TEST_TMPDIR/p.json"
   # Pre-claiming an idem must not let anyone suppress the genuine receipt that follows.
-  run bash "$EVENT" emit revenue.received --payload '{"unrelated":true}' --idem "$(printf 'a%.0s' $(seq 64))" --strict
+  # (Payloads are valid money now — REQ-03 validates revenue amount/currency; the point here
+  # is still that ingest derives its OWN idem, ignoring the caller-supplied one.)
+  run bash "$EVENT" emit revenue.received --payload '{"amount":200,"currency":"INR"}' --idem "$(printf 'a%.0s' $(seq 64))" --strict
   [ "$status" -eq 0 ]
   run bash "$EVENT" ingest revenue.received --json "$BATS_TEST_TMPDIR/p.json" --idem "$(printf 'a%.0s' $(seq 64))"
   [ "$status" -eq 0 ]

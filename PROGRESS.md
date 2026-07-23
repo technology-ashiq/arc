@@ -11,12 +11,27 @@
 |---|---|---|---|
 | 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | ✅ done 2026-07-23 |
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ✅ done 2026-07-23 |
-| 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ⬜ not started |
+| 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ✅ done 2026-07-23 |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ⬜ not started |
 | 04 | Live dogfood: 5 real days · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | ⬜ not started |
 
 ## Done log
 
+- 2026-07-23 — **Phase 02 CLOSED ✅** via `/arc-phase-done 2`. Money reaches the spine exactly
+  once and the day reads in one screen. **REQ-03:** `revenue.received` / `revenue.simulated`
+  ingest validates `amount` (positive integer, minor units, 1..1e12) + `currency` (ISO-4217);
+  same-day AND cross-day duplicates dedupe to ONE (content idem). Parser-class **adversarial
+  pass** (5 lenses, ~135 candidates) found + fixed **1 hole** — a fractional amount that
+  IEEE-rounded to an integer was sealed as a value nobody sent; closed at the number-token
+  scanner, pinned red. **REQ-05:** `arc brief` groups needs-you / money / progress / background
+  (reader-only), money from minor units, background always collapses to a count (the noise
+  floor), `--full` expands; REQ-04 determinism intact. **REQ-08 (cost) CUT** — owner's call
+  (the pre-planned stretch cut; cost deferred to a later cycle). Full suite **334/334** (+10)
+  3-OS CI green (run on 6a380fc). Live demo: ingest twice → ONE event, `arc brief` shows the
+  money line. Evidence bundle verified (`docs/evidence/phase-02/`). **Metrics:** appetite 2.5d →
+  **actual ~1d part-time** · `amendments: 0` · `reopened: n` · REQs: 2 validated / 1 dropped.
+  Two CI catches (both the bare-sync golden going stale after editing synced hq scripts) —
+  regenerated; now memorized as a pre-push step.
 - 2026-07-23 — **Phase 01 CLOSED ✅** via `/arc-phase-done 1`. Every factory action now leaves a
   receipt: 7 flows wired to emit their Appendix-A kinds (6 core + council deep-runs-only) with
   scoped `arc-event.sh` permissions, and EVENT.d `90-emit` fragments (SessionStart/End +
@@ -76,27 +91,28 @@
 
 ## Appetite burn
 
-**~3 of ~12.5 part-time days used** (Phase 00 + Phase 01 done, each well under its own
-appetite — ~24% burnt). 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04
-green? — **validated at Phase-0 close, so the tripwire is satisfied early; well under it.**
-First cut REQ-08; second cut REQ-09's cursor demo (lint stays). 100% → cut or kill, never extend.
+**~4 of ~12.5 part-time days used** (Phase 00 + 01 + 02 done, each well under its own appetite
+— ~32% burnt). 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? —
+**validated at Phase-0 close, so the tripwire is satisfied early; well under it.** REQ-08 was
+the pre-planned **first cut** (taken at Phase-02 close, owner's call — NOT burn pressure);
+REQ-09's cursor demo is the reserved second cut (lint stays). 100% → cut or kill, never extend.
 
 ## Now
 
-**Phase 01 is CLOSED. Phase 02 (money + brief) is next.**
-Every factory action now leaves a receipt — the 7 flows emit their command-level kinds and the
-EVENT.d fragments capture session lifecycle; the spine is already recording arc's own work
-(gitignored `.claude/state/hq`) and `arc brief` reads it back. Kill-criteria check at close:
-~3 of 12.5 days burnt (~24%, well under the 50%/6.25d tripwire); REQ-02 + REQ-04 stay validated
-— no scope-cut pressure.
+**Phase 02 is CLOSED. Phase 03 (inbox + API seal) is next.**
+Money reaches the spine exactly once and the day reads in one screen — `arc brief` groups
+needs-you / money / progress / background (reader-only), money from minor units, background
+collapsed to a count (the noise floor), `--full` expands. REQ-08 (cost) was cut (pre-planned
+stretch). Kill-criteria check at close: ~4 of 12.5 days burnt (~32%, well under the 50%/6.25d
+tripwire); REQ-02 + REQ-04 stay validated — no scope-cut pressure.
 
-**Next step — Phase 02 (appetite 2.5d, depends on Phase 01):** strict `revenue.received`
-ingest with cross-day idempotency (REQ-03) · the one-screen `arc brief` grouped
-needs-you / money / progress / background with overflow-to-counts (REQ-05) ·
-`cost.incurred` / `run.completed` cost line (REQ-08, stretch — first cut under pressure).
-Refine `phases/phase-02-spec.md`'s Verification plan first (it's the coarse one-liner), then
-build via the Golden Loop. **`revenue.received` = real money only** — never fake P&L truth.
+**Next step — Phase 03 (appetite 1.5d):** the approvals/inbox flow (REQ-06: `arc inbox` lists
+`approval.requested`; `arc approve/reject ID --reason` writes `decision.recorded`; the full
+request→decision flow replays identically; approving an unknown/already-decided ID is a pinned
+error fixture) + per-consumer cursor catch-up + the reader-only grep-lint (REQ-09, TRIAL —
+WARN-first). Refine `phases/phase-03-spec.md`'s Verification plan first (coarse), then the
+Golden Loop.
 
-**Branch state:** `feat/arc-cycle2-phase-01`, CI green on `22cd656`; draft PR #45 covers all of
-Phase 01. Mark it ready + merge to main before stacking Phase 02 (a fresh branch off the
-updated main), so Phase-02 wiring never sits on an unmerged base.
+**Branch state:** `feat/arc-cycle2-phase-02`, CI green on `6a380fc`; draft PR #46 covers all of
+Phase 02 (REQ-03 + REQ-05; REQ-08 cut). Mark it ready + merge to main before stacking Phase 03
+(a fresh branch off the updated main).

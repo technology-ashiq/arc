@@ -13,15 +13,34 @@
 - [ ] `arc brief` via the reader ONLY (REQ-05, CLI-first per ADR-0027): ≤40 lines,
       needs-you / money / progress / background grouping, overflow collapses to counts
       (+ `--full`), golden-fixtured, <5s on the owner's Windows box.
-- [ ] REQ-08 (stretch, first cut under pressure): `cost` union (null | object — PLAN
-      Appendix B clarification); brief shows daily spend when present.
+- [x] REQ-08 — **CUT at Phase-02 close** (stretch; owner's call, cost tracking deferred to a
+      later cycle). Was: `cost` union (null | object — PLAN Appendix B); brief shows daily spend.
 - [ ] Tracker updated · evidence bundle written.
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` when the phase starts): ingest dedupe fixtures (same-day +
-cross-day pairs) red-first → green · brief golden + noise-budget cases · <5s timing measured
-on the owner's box · evidence in `docs/evidence/phase-02/`.
+**Revenue payload schema (defined at phase start — arc is pre-revenue, so manual/simulated):**
+`revenue.received` / `revenue.simulated` payloads carry `amount` (**positive integer, minor
+units** e.g. paise — integers avoid float-aggregation error, `1 ≤ amount ≤ 1e12`), `currency`
+(**ISO-4217**, three uppercase letters), and any provider metadata; `venture` is the envelope
+slug (already validated). Ingest idem is content-derived (Phase 0), so an identical payload —
+same-day OR cross-day — dedupes to ONE. The validator (`validate.mjs`) is EXTENDED with a
+per-kind revenue check; no parallel validator.
+
+- **Test command:** `bats tests/spine-ingest.bats` then `tests/spine-brief.bats` (one file at
+  a time, foreground; global `bats`, not `npx`).
+- **RED-first:** a `revenue.received` with a bad `amount`/`currency` is currently ACCEPTED —
+  the payload is validated only as "an object" (validate.mjs:144) — so the reject cases land
+  RED before the per-kind revenue check exists. The same-day/cross-day dedupe pairs
+  characterise the Phase-0 idem mechanism (green from the start).
+- **Adversarial pass (parser-class non-negotiable):** construct-a-breaking-input on the revenue
+  check — missing / zero / negative / non-integer / float / unicode-digit / oversize amount;
+  missing / lowercase / non-string / wrong-length currency — holes fixed + pinned as red
+  fixtures in `tests/fixtures/spine/` BEFORE FAIL-mode promotion.
+- **Live demo:** ingest a manual revenue payload twice → ONE event; `arc brief --date <today>`
+  shows the money line; <5s on the owner's Windows box.
+- **Evidence:** `docs/evidence/phase-02/` — ingest red/green, brief golden + noise-budget cases,
+  timing.
 
 ## Rabbit holes in this phase
 

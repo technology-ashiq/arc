@@ -20,6 +20,29 @@ import { spineRoot } from "./lib/spine-io.mjs";
 import { query } from "./spine.mjs";
 
 const VALUE_FLAGS = new Set(["date", "venture", "engine"]);
+const BOOL_FLAGS = new Set(["full"]);
+
+// REQ-05: every kind maps to exactly one group; the order here is the render order. needs-you
+// and money are never collapsed; background then progress collapse to counts when a day
+// overflows the line budget.
+const GROUPS = [
+  ["needs-you", ["approval.requested", "incident.raised"]],
+  ["money",     ["revenue.received", "revenue.simulated", "cost.incurred"]],
+  ["progress",  ["kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
+                 "ship.done", "run.completed", "decision.recorded", "council.verdict"]],
+  ["background",["note.logged", "redaction.applied", "day.closed", "idea.captured"]],
+];
+const GROUP_OF = new Map();
+for (const [g, kinds] of GROUPS) for (const k of kinds) GROUP_OF.set(k, g);
+
+// Money is stored in MINOR units (paise); a receipt shows major.minor. Non-money lines are
+// just the kind -- the group + its count is the signal; per-event detail lives in the feed.
+function moneyLine(ev) {
+  const p = ev.payload || {};
+  if (Number.isInteger(p.amount) && typeof p.currency === "string")
+    return `  ${ev.kind}  ${p.currency} ${Math.floor(p.amount / 100)}.${String(p.amount % 100).padStart(2, "0")}  ${ev.venture}`;
+  return `  ${ev.kind}`;
+}
 
 function parseArgs(argv) {
   const flags = {};
@@ -29,6 +52,7 @@ function parseArgs(argv) {
     const eq = a.indexOf("=");
     if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
     const name = a.slice(2);
+    if (BOOL_FLAGS.has(name)) { flags[name] = true; continue; }
     if (!VALUE_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
     const next = argv[i + 1];
     if (next === undefined) throw new SpineError("BAD_ARGS", `flag --${name} needs a value`);
@@ -38,19 +62,52 @@ function parseArgs(argv) {
   return flags;
 }
 
-export function render(day, events, torn) {
-  const out = [`brief ${day}`];
-  out.push(`events: ${events.length}`);
+export function render(day, events, torn, { full = false } = {}) {
+  // Test-only door; production budget is 40 lines (one screen).
+  const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
-  const counts = new Map();
-  for (const e of events) counts.set(e.event.kind, (counts.get(e.event.kind) || 0) + 1);
-  for (const kind of [...counts.keys()].sort()) out.push(`  ${kind}: ${counts.get(kind)}`);
+  const buckets = new Map(GROUPS.map(([g]) => [g, []]));
+  for (const e of events) {
+    const g = GROUP_OF.get(e.event.kind);
+    if (g) buckets.get(g).push(e.event); // every closed-vocabulary kind maps to a group
+  }
+  const collapsed = new Set();
 
-  for (const e of events) out.push(`${e.event.id}  ${e.event.kind}  ${e.event.outcome}`);
+  const groupLines = (g) => {
+    const evs = buckets.get(g);
+    if (!evs.length) return [];
+    if (collapsed.has(g)) {
+      const c = new Map();
+      for (const ev of evs) c.set(ev.kind, (c.get(ev.kind) || 0) + 1);
+      const parts = [...c.keys()].sort().map((k) => `${k} ${c.get(k)}`).join(" · ");
+      return [`${g}: ${evs.length} (${parts})`];
+    }
+    return [`${g} (${evs.length})`, ...evs.map((ev) => (g === "money" ? moneyLine(ev) : `  ${ev.kind}`))];
+  };
 
-  // A damaged line is reported in the brief itself, not only on stderr: "the day looks
-  // quiet" and "the day is unreadable" must never render the same.
-  if (torn.length) out.push(`UNREADABLE LINES: ${torn.length}`);
+  const assemble = () => {
+    const out = [`brief ${day}`];
+    for (const [g] of GROUPS) {
+      const gl = groupLines(g);
+      if (gl.length) out.push("", ...gl);
+    }
+    // A damaged line is reported in the brief itself: "the day looks quiet" and "the day is
+    // unreadable" must never render the same.
+    if (torn.length) out.push("", `UNREADABLE LINES: ${torn.length}`);
+    return out;
+  };
+
+  let out = assemble();
+  if (!full) {
+    // background is the noise floor -- ALWAYS a count, never a wall of note.logged lines.
+    // progress then collapses too only when the day STILL overflows one screen. needs-you and
+    // money always stay expanded.
+    if (buckets.get("background").length) { collapsed.add("background"); out = assemble(); }
+    if (out.length > budget && buckets.get("progress").length) { collapsed.add("progress"); out = assemble(); }
+    if (collapsed.size)
+      for (let i = 0; i < out.length; i++)
+        if (/^(background|progress): \d+ \(/.test(out[i])) { out[i] += "   — --full to expand"; break; }
+  }
   return out.join("\n") + "\n";
 }
 
@@ -61,7 +118,7 @@ async function main(argv) {
 
   const root = spineRoot();
   const { events, torn } = await query(root, { date: day, venture: flags.venture, engine: flags.engine });
-  process.stdout.write(render(day, events, torn));
+  process.stdout.write(render(day, events, torn, { full: flags.full === true }));
   return 0;
 }
 
