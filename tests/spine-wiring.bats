@@ -50,3 +50,28 @@ MAP
   grep -qF "$WRITER council.verdict" "$CMDS/arc-council.md" \
     || { echo "arc-council.md: no '$WRITER council.verdict' line — council not wired to leave its verdict receipt"; false; }
 }
+
+# The EVENT.d NN-emit fragments — the AUTOMATIC layer: session lifecycle + tool-use receipts
+# dropped through the existing dispatcher (hooks themselves untouched), and REGISTERED in
+# products/hq/manifest.json so a selective `--products hq` install carries them (a core-only
+# install never sees them). Session lifecycle has no dedicated Appendix-A kind, so these emit
+# `note.logged` (phase-01 rabbit-hole: anything outside the 18 is note.logged or waits for an ADR).
+_emit_fragments() {
+  cat <<'MAP'
+.claude/hooks/SessionStart.d/90-emit.sh
+.claude/hooks/SessionEnd.d/90-emit.sh
+.claude/hooks/PostToolUse.d/90-emit.sh
+MAP
+}
+
+@test "the EVENT.d emit fragments exist, emit, and are registered in hq's manifest" {
+  local fails="" frag manifest="$ARC_ROOT/products/hq/manifest.json"
+  while read -r frag; do
+    [ -n "$frag" ] || continue
+    [ -f "$ARC_ROOT/$frag" ] || { fails="$fails|$frag: fragment missing"; continue; }
+    grep -qF "arc-event.sh" "$ARC_ROOT/$frag" || fails="$fails|$frag: does not reference the spine writer (arc-event.sh)"
+    grep -qF "emit note.logged" "$ARC_ROOT/$frag" || fails="$fails|$frag: does not emit note.logged (session lifecycle has no dedicated kind)"
+    grep -qF "\"$frag\"" "$manifest" || fails="$fails|$frag: not registered in products/hq/manifest.json"
+  done < <(_emit_fragments)
+  [ -z "$fails" ] || { echo "FRAGMENT WIRING:"; echo "$fails" | tr '|' '\n'; false; }
+}
