@@ -43,6 +43,10 @@ const TS_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?\+05:
 const OUTCOMES = new Set(["ok", "fail", "partial"]);
 const COST_SOURCES = new Set(["measured", "estimated", "manual"]);
 const COST_KEYS = ["tokens_in", "tokens_out", "inr_estimate", "source"];
+// Money kinds carry amount + currency in their payload (REQ-03). amount is an integer in
+// MINOR UNITS (paise): floats don't sum exactly, and the brief sums money.
+const REVENUE_KINDS = new Set(["revenue.received", "revenue.simulated"]);
+const CURRENCY_RE = /^[A-Z]{3}$/;
 
 const isPlainObject = (v) =>
   v !== null && typeof v === "object" && !Array.isArray(v) &&
@@ -106,6 +110,17 @@ function assertCost(cost) {
     throw new SpineError("BAD_COST", `cost.source "${cost.source}" is outside ${[...COST_SOURCES].join("|")}`);
 }
 
+// Money payloads (revenue.received / revenue.simulated) -- amount + currency (REQ-03).
+// Everything else in the payload is free provider metadata; these two are the fields the brief
+// will sum and label, so they are closed and exact.
+function assertMoney(payload) {
+  const { amount, currency } = payload;
+  if (!Number.isSafeInteger(amount) || amount < 1 || amount > MAX_COST_MAGNITUDE)
+    throw new SpineError("BAD_AMOUNT", `amount ${JSON.stringify(amount)} must be a positive integer in minor units (1..${MAX_COST_MAGNITUDE})`);
+  if (typeof currency !== "string" || !CURRENCY_RE.test(currency))
+    throw new SpineError("BAD_CURRENCY", `currency ${JSON.stringify(currency)} must be an ISO-4217 alpha code (3 uppercase letters)`);
+}
+
 // Throws SpineError on the first violation. The caller decides what a violation MEANS
 // (exit 2 vs quarantine) -- this function never knows which mode it is running in.
 export function validateEvent(event) {
@@ -143,6 +158,7 @@ export function validateEvent(event) {
     throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed 18 (ADR-0026)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
+  if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);
