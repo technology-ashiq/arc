@@ -171,10 +171,12 @@ function registrySourceCommit(dir) {
   } catch { return "unknown"; }
 }
 
-// The frozen product lineup (No-go this cycle: no 7th product, no re-slicing). Used ONLY
-// to enumerate ABSENT products in a consumer repo, which has no products/ dir to read;
-// INSTALLED state itself always comes from the registry, never from file presence (REQ-05).
-const CATALOG = ["core", "council", "git", "plan", "qa", "review"];
+// The product lineup. Used ONLY to enumerate ABSENT products in a consumer repo, which has
+// no products/ dir to read; INSTALLED state itself always comes from the registry, never
+// from file presence (REQ-05). The orchestrator cycle froze this at six ("no 7th product");
+// Cycle 2 adds `hq` (the receipt spine) -- a product missing here is invisible to --status
+// and to the install hint, however complete its manifest is.
+const CATALOG = ["core", "council", "git", "hq", "plan", "qa", "review"];
 
 // --status rendered from the registry (REQ-05): the registry is the ground truth for
 // INSTALLED; HEALTH is a live integrity check (are the files it claims still on disk?).

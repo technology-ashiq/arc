@@ -1,0 +1,10 @@
+sync: note -- target has no .git, is this really a project root?
+=== diff: committed golden -> what a bare sync produces now ===
+81a82
+> .claude/scripts/hq/arc-brief.mjs	dfc2fc8087a2f77bc015e230dff2b5957364275f430e736a64e5b65129fd9e4b
+83a85
+> .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
+87a90
+> .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
+=== end diff ===
+golden updated: /e/Work_Hub/01_Automemory/arc/tests/fixtures/sync-golden/tree-manifest.txt

@@ -1,97 +1,148 @@
-# Phase 00 — Steel thread: manifests → resolver → twins → council-only install
+# Phase 00 — Spine core (emitter · canonical serializer · replay · reader)
 
-**Goal (one line):** the full selective-install spine works end-to-end with zero file moves — 6 manifests, one hardened resolver, both twins consuming its plan, hostile fixtures pinned, and a council-only install proven in a scratch repo.
-**Appetite:** 1.5 weeks — blown appetite = cut scope or kill, never extend silently. Designated cut inside this phase: the minimal `/arc` (ADR-0019).
+**Goal (one line):** The spine exists and cannot be poisoned — dual-mode emitter + canonical
+serializer + hostile corpus survive an adversarial pass (ckpt A), then replay + reader +
+twin determinism enter CI (ckpt B).
+**Appetite:** 5 days (ckpt A ~3d · ckpt B ~2d; **ckpt B starts only after ckpt A's
+adversarial pass**)
 **Depends on:** none
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `products/{core,plan,review,qa,council,git}/manifest.json` exist per the "Manifest schema (v1)" section below, following the "Product assignment" table below; every file the twins sync maps to exactly one product (REQ-03)
-- [ ] `arc-products.mjs` emits the COPY/MKDIR/ENVBLOCK plan; `product-lint.mjs` passes on the real manifests. (product-lint's checks are hard invariants — schema, coverage/double-map, path-safety, byte-hygiene — so they FAIL by design, same class as kickoff-lint's structural `[sections]` check, NOT the WARN-first heuristic TRIAL set. Whether CI *blocks* on product-lint is decided when it is wired into CI in Phase 2.)
-- [ ] Hostile red fixtures pinned and ALL exit 2: path traversal (`../../settings.json`), duplicate product names, file double-mapped across products, CRLF/BOM manifest bytes, case-colliding paths declared as sibling string entries inside manifest JSON test data (never as two real git-tracked files — colliding-case filenames fail `git checkout` on Windows/default-macOS before the test can run), a control char (TAB/newline) in a path — the real protocol break; spaces are deliberately legal under the TAB delimiter (ADR-0015), proven by a separate good-path fixture — empty required fields
-- [ ] `--list` and `--products <x,y>` work in BOTH twins via the resolver plan; unknown product name → exit 2 with the valid list printed
-- [ ] Twin bugs fixed: .ps1 no longer copies `.claude/state/`; neither twin copies `scheduled_tasks.lock` (REQ-04)
-- [ ] Golden-output case green: bare `sync-to-project.sh <target>` tree byte-identical to pre-initiative (REQ-02)
-- [ ] Council-only install works: scratch repo gets ONLY core+council files; inside the target, council-lint exits 0 on a named pass-fixture AND non-zero on a named fail-fixture — discrimination, not just non-crash (REQ-01)
-- [ ] STRETCH (first cut under appetite pressure, ADR-0019 — the checkbox is droppable without failing the phase): minimal `/arc` (`.claude/commands/arc.md` + `.claude/scripts/arc-status.sh`, file-presence detection) renders the 6-product table
-- [ ] tests added & green; live demo run + output checked; tracker updated (PROGRESS.md row ✅ + done-log)
+Checkpoint A — emitter + corpus:
+- [ ] `.claude/scripts/hq/arc-event.sh` — `emit` in hook mode (validate → redact → append;
+      invalid input → `events/_quarantine/` + loud SKIP + exit 0) and `--strict` (exit 2 on
+      the same inputs) — one validator core (ADR-0031). Secret handling per ADR-0028: HIT →
+      refused, stub-only quarantine record (secret bytes never persisted anywhere); scanner
+      FAILURE → payload dropped + stub-only `redaction.applied`. Append path: ALL writes go
+      through one shared Node helper — acquire `events/.lock` (bounded retry), write the
+      full canonical line in a single append call, fsync, release; no direct shell appends
+      (assumptions ledger row 6 names the fallback).
+- [ ] Canonical serializer defined ONCE (UTF-8, LF, sorted keys, no insignificant
+      whitespace) + SHA-256 (`sha` field excluded) + ULID gen — zero-dep, shared by
+      emitter/hasher/reader (ADR-0024).
+- [ ] Hostile corpus pinned in `tests/fixtures/spine/` — ≥15 fixtures: missing field ·
+      bad ULID · bad ts · dup idem · oversize payload (canonical event > 64 KiB — the
+      schema-level cap, PLAN Appendix B) · plain secret · obfuscated secrets
+      (split-line, base64, whitespace-varied — pre-mortem #5) · CRLF/BOM · non-UTF8 ·
+      nested quotes · evidence path traversal · unknown kind · schema-version mismatch ·
+      duplicate-key object · case-varied enum value · embedded-newline-mid-value ·
+      torn/partial-line (kill mid-append) · concurrent-append interleave. **Each fixture
+      asserted in BOTH modes** (REQ-02).
+- [ ] Idem uniqueness has a source at ckpt A (blocker fix, 2026-07-22): the emitter checks
+      `idem` against `.claude/state/hq/derived/idem.index` — an append-only sidecar of
+      `idem<TAB>event-id` lines, DERIVED not truth (`arc-replay` rebuilds it whole from the
+      spine at ckpt B). A missing index on a fresh instance is an empty set, never an error;
+      a duplicate within one run AND a duplicate across days both reject (strict) /
+      quarantine (hook). Index writes happen under the same lock as the append.
+- [ ] Adversarial construct-a-breaking-input pass run against emitter/validator/serializer;
+      every hole fixed + pinned as a red fixture; report committed (43-hole rule).
+
+Checkpoint B — replay + reader + CI:
+- [ ] `.claude/scripts/hq/arc-replay.mjs` — JSONL → derived state at
+      `.claude/state/hq/derived/state.db`; whole-spine idem index rebuilt every replay;
+      `node:sqlite` accelerator behind the sqlite-vs-scan equivalence gate; JSONL scan
+      stays the canonical path (ADR-0024).
+- [ ] `spine` reader v1 at `.claude/scripts/hq/spine.mjs` (lib + CLI in one file) —
+      `--kind` `--since <ulid>` `--venture` + cursor helpers, nothing more (ADR-0030).
+- [ ] Minimal `arc brief --date D` renderer at `.claude/scripts/hq/arc-brief.mjs`
+      (JSONL-scan render only — REQ-04's acceptance invokes it before Phase 2 exists;
+      grouping/noise budget stay Phase 2).
+- [ ] Twin determinism bats in CI (REQ-04 a+b): (a) `rm state.db && arc-replay &&
+      arc brief --date D` byte-identical to golden; (b) no-sqlite leg byte-identical via
+      the JSONL-scan path. CI matrix gains the Node 18 leg + a Node 22+ leg (PLAN external
+      dependencies).
+- [ ] sqlite-vs-scan equivalence gate defined and green (blocker fix, 2026-07-22):
+      `tests/spine-equivalence.bats` runs `arc-replay` + `arc brief --date D` twice over the
+      SAME spine — once with the `node:sqlite` accelerator (`ARC_SPINE_ENGINE=sqlite`), once
+      forced onto the canonical JSONL-scan path (`ARC_SPINE_ENGINE=scan`) — across both the
+      golden fixture spine and the 90-day synthetic spine. Pass = byte-identical stdout AND
+      identical derived-state dumps; the (empty) diff is the committed evidence artifact.
+- [ ] Volume check operationalized (blocker fix, 2026-07-22 — assumptions ledger row 2):
+      `tests/fixtures/spine/gen-synthetic.mjs` generates a deterministic 90-day synthetic
+      spine (seeded PRNG, timestamps passed in — no wall-clock, no `Math.random`);
+      `arc brief` is timed against it on the owner's Windows box. <5s → assumption holds,
+      the measured number goes in the evidence bundle; ≥5s → the trigger fires, the sqlite
+      accelerator is promoted to recommended (equivalence-gated) and the ledger row updated.
+- [ ] Module registered: `products/hq/manifest.json` lists every hq file
+      (`node .claude/scripts/core/product-lint.mjs` green — blocking CI step);
+      `.claude/scripts/core/arc-products.mjs` `CATALOG` gains `hq`; manifest declares
+      NO `.claude/state/**` path (bats-asserted). Golden `tests/fixtures/sync-golden/
+      tree-manifest.txt` regenerated ONCE with a reviewed diff — every added line must be a
+      `.claude/scripts/hq/**` path and nothing else; rsync-path vs cp-path output stays
+      byte-identical; no `.claude/state/**` line ever appears (it is under the `state`
+      exclude — the real SPINE-B gate).
+- [ ] All fixtures green on 3-OS CI · tracker updated · evidence bundle written.
 
 ## Verification plan
 
-- **Test command:** `bats tests/products.bats --print-output-on-failure` then `bats tests/sync.bats --print-output-on-failure` (one file at a time, foreground — Windows rule)
-- **Expected failure first:** `tests/products.bats` is written before `arc-products.mjs` exists — first run fails with `arc-products.mjs: No such file or directory` on every resolver case; the new `--products council` case in `tests/sync.bats` fails with `unknown option: --products` from the untouched twin. Red → green, no after-the-fact tests.
-- **New file locations:** resolver `.claude/scripts/arc-products.mjs` · lint `.claude/scripts/product-lint.mjs` · dashboard `.claude/scripts/arc-status.sh` (alongside kickoff-lint.mjs, house convention) · manifests `products/NAME/manifest.json`.
-- **Golden fixture:** `tests/fixtures/sync-golden/tree-manifest.txt` — sorted `path + SHA-256` listing (LF-normalized content hashes) of a bare `sync-to-project.sh` run into a temp dir, captured ONCE at the pre-initiative commit (cd91baf) and committed. The golden bats case re-runs bare sync into a fresh temp dir, recomputes the listing, diffs against the fixture — run on BOTH the rsync path and the cp-r fallback. Regeneration only via a reviewed diff naming the intentional change (non-negotiable).
-- **Hostile corpus:** `tests/fixtures/products/hostile/CASE-NAME/` — one dir per case (traversal, dup-name, double-map, crlf-bom, case-collide-json, control-char-path, empty-field), each holding the malicious manifest set; `tests/products.bats` iterates the corpus and asserts `product-lint.mjs` exit 2 + a case-specific message token per dir. Good-path fixtures live in `tests/fixtures/products/good/` and `good-space/` (space-in-path is legal).
-- **Named council fixtures (REQ-01):** pass = `docs/council/kickoff-v2/fixtures/phase-00/good-full.md`, fail = `docs/council/kickoff-v2/fixtures/phase-00/bad-nodecision.md` — both ALREADY EXIST in the repo (council v2 corpus, no new authoring); the demo copies them into the scratch target before running `council-lint.mjs --verdict` on each (they are test data, not product payload).
-- **Live demo scenario:** (1) `bash sync-to-project.sh /tmp/arc-scratch --products council` → tree shows ONLY core+council files (no arc-scan/, no kickoff-lint, no qa agents); (2) inside `/tmp/arc-scratch` run council-lint on the named pass-fixture → exit 0, then on the named fail-fixture → exit non-zero; (3) bare `bash sync-to-project.sh /tmp/arc-full` → diff against pre-initiative golden tree = empty, on BOTH the rsync path and the cp-r fallback path; (4) `bash .claude/scripts/arc-status.sh` → 6-product table; (5) each hostile fixture through `product-lint.mjs` → exit 2 each.
-- **Real-system check:** n/a — scratch repos only this phase (real external repos are Phase 4).
-- **Expected evidence:** bats `1..N` green output for both files, empty golden diff output, scratch-repo tree listing, six exit-2 lint transcripts, ps1 smoke-test transcript showing no `state/` in the target.
-
-## Manifest schema (v1)
-
-`products/NAME/manifest.json` — zero-dep JSON, parsed ONLY by `arc-products.mjs` (ADR-0015). Fields:
-
-- `name` (required, string): must match `^[a-z][a-z-]*$` AND equal the containing `products/NAME/` dir name.
-- `version` (required, string): semver `MAJOR.MINOR.PATCH`.
-- `requires` (optional, array of product names): dependency products; `core` is implicit for every product.
-- `commands`, `agents`, `scripts` (arrays of repo-root-relative explicit paths — no globs, no `..`, no absolute paths, no drive letters): the synced payload.
-- `files` (same path rules): the catch-all for non-command/non-agent `.claude` payload — rules, output-styles, templates, skills, settings.json, and (in Phase 0, before the `hooks` field is used) the hook scripts. At least one of commands/agents/scripts/files must be non-empty.
-- `docs` (optional, array of `{src, dest}` objects, both repo-root-relative): doc payload copied src→dest in target.
-- `skeletonDirs` (optional, array): dirs created empty in the target (e.g. council sessions dir).
-- `envBlock` (optional, string path + `envSentinel` regex string): file appended to the target's `.env.example` iff the sentinel regex matches nothing there.
-- `hooks` (optional, array): hook fragment files — EMPTY in Phase 0 (fragments are Phase 1).
-
-Validation (product-lint): unknown fields = error; every listed path must exist in the repo; every file the twins sync must appear in exactly ONE product's payload (coverage + double-map checks); path entries differing only by case = error (case-collide); any control char, TAB, or leading/trailing space in a path = error.
-
-## Resolver line protocol (v1)
-
-`arc-products.mjs --products LIST` emits the install plan on stdout, one record per line, UTF-8, LF endings. Field separator: **TAB** (this is why a TAB inside a manifest path is a lint error, and why paths with spaces transport safely — no quoting layer). Records:
-
-- Line 1 always: `PROTO` TAB `1` — twins reject any other version, loudly.
-- `MKDIR` TAB dest-relative-dir
-- `COPY` TAB src-relative-path TAB dest-relative-path
-- `ENVBLOCK` TAB source-file-path TAB sentinel-regex
-
-Both twins consume this as a dumb loop (bash `while IFS=$'\t' read -r`, PowerShell `foreach` over tab-split) — no twin ever parses JSON or makes a decision beyond executing the verb. Resolver re-validates no-traversal/no-absolute on every path before emit (defense in depth with product-lint).
-
-## Product assignment (decision record)
-
-The manifests are the authoritative machine-readable assignment (exit criterion 1); this table records the decisions, including tiebreaks. New files this phase marked ★.
-
-| Product | Commands | Agents | Scripts |
-|---|---|---|---|
-| core | arc ★, arc-toolcheck, arc-resume, arc-freeze, arc-unfreeze | log-analyzer, researcher (shared utility — used by plan AND change flows, tiebreak: core) | arc-gates.sh, arc-profile.sh, review-ledger.sh, toolchain-health.sh, freeze-check.sh, statusline.sh, arc-scan/lib/common.sh (owned by core from Phase 0, physically moves Phase 3), arc-products.mjs ★, product-lint.mjs ★, arc-status.sh ★; all 6 hooks; settings.json template; arc.gates.yaml; .claude/rules/*; .claude/output-styles/*; .claude/templates/*; .claude/skills/* |
-| plan | arc-kickoff, arc-change, arc-phase-done, arc-retro, arc-diagram | question-planner, plan-attacker, plan-simulator, codebase-surveyor, product-challenger | kickoff-lint.mjs, arc-evidence.sh; docs/templates/ (PLAN/phase-spec/ADR templates), docs/build-playbook.md |
-| review | arc-review, arc-audit, arc-second-opinion, arc-docs | code-reviewer, security-auditor | arc-scan/ tree (adapters, lib minus common.sh ownership, rules), arc-scan-summary.sh, version-gate.sh, docs-drift.sh, coverage-gate.sh, rls-gate.sh, arc-tools-image.sh |
-| qa | arc-qa, arc-design, arc-canary | qa-tester, design-reviewer | (none) |
-| council | arc-council | the 12 council-* agents | council-lint.mjs, council-juror.mjs, council-calibrate.mjs; docs/council/README.md + references/fairness.md; skeleton: docs/council/sessions/.juror |
-| git | arc-commit, arc-pr, arc-fix-issue, arc-ship | (none) | (none — arc-ship calls core's gates via dependency on core) |
-
-Every remaining synced file not named above (e.g. .mcp.json template pieces) is assigned during manifest authoring under the coverage rule: exactly one product, tiebreak = core; any file that cannot be assigned honestly = product-lint error to resolve in this phase, never silently skipped.
+- **Test command:** `bats tests/spine-emit.bats` then `tests/spine-replay.bats` then
+  `tests/spine-reader.bats` then `tests/spine-equivalence.bats` (one file at a time,
+  foreground — the globally installed `bats`, which is what CI runs; `npx bats` mis-resolves
+  the loader path on Windows) + `node .claude/scripts/core/product-lint.mjs` + `node
+  .claude/scripts/plan/kickoff-lint.mjs`.
+- **Expected failure first:** every hostile fixture lands RED before its guard exists
+  (write fixture → watch strict mode wrongly accept / hook mode wrongly append → fix →
+  green); the twin-determinism case lands RED before canonical serialization is wired into
+  the reader path.
+- **Live demo scenario:** on the owner's Windows box — `arc-event emit note.logged …`
+  appends one valid event to `.claude/state/hq/events/<today>.jsonl`; feed the plain-secret
+  fixture in hook mode → loud SKIP, exit 0, stub-only quarantine record, nothing on the
+  spine; same input with `--strict` → exit 2; `rm state.db && arc-replay && arc brief
+  --date <today>` reproduces the byte-identical brief.
+- **Real-system check:** a real Claude Code session on this repo with the emitter installed
+  but NOT yet wired (wiring is Phase 1) — session behaves normally; `arc_hook_field`
+  guard-chain bats still green; bare `sync-to-project.sh` output still matches the golden.
+- **Expected evidence:** `docs/evidence/phase-00/` — adversarial report · fixture list ·
+  3-OS CI run link · equivalence-gate output (empty diff) · measured brief time against the
+  90-day synthetic spine · bare-sync golden diff (empty).
 
 ## Rabbit holes in this phase
 
-- Manifest globs — v1 is explicit paths only (No-go); a missing-file entry is a lint error, not a glob invitation.
-- settings.json handling — Phase 0 does NOT touch settings composition (Phase 1); the golden test simply proves today's behavior unchanged.
-- rsync exclude cleverness — the selective path uses plain copy loops; a bats case forces the no-rsync Git Bash fallback AND a second bats case runs the rsync-available path (ubuntu/macOS CI default) asserting its output tree byte-identical to the same golden tree — REQ-02 must hold on both code paths, not only the fallback.
+- ULID library shopping — zero-dep rule: implement Crockford base32 inline (one-page spec);
+  no npm package, ever.
+- Perfect redaction pattern set — start from gitleaks-class basics + the pinned fixtures;
+  the corpus grows via the adversarial pass and dogfood, not speculation.
+- Windows Unicode chase — canonical form + pinned CRLF/BOM/non-UTF8 fixtures only.
+- Reader features beyond `kind`/`since`/`venture` — the sqlite3 CLI answers ad-hoc questions.
 
 ## Out of scope for this phase
 
-Hook fragments + partial-install guards (Phase 1) · registry file in targets + registry-backed /arc (Phase 2) · any file moves (Phase 3) · external repos (Phase 4) · prune/attic (Phase 5).
+- Factory wiring (EVENT.d fragments, flow emissions) — Phase 1.
+- Revenue ingest, one-screen brief polish, cost — Phase 2. Inbox/approvals — Phase 3.
+- Promoting the sqlite accelerator to recommended (only if the <5s assumption fires).
+- Any spine data in the sync payload; any change to the 8 kickoff-lint trial gates.
 
 ## Your-setup / pending
 
-Nothing — all local. Node ≥18 already required.
+- None — all decisions locked (ADR-0024..0031). Node ≥18 confirmed on the owner's box;
+  a local Node 22+ is optional (only to exercise the sqlite accelerator locally).
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Bare `sync-to-project TARGET` output stays byte-identical to pre-initiative — golden-output bats case green on every PR of this initiative (products are additive under the umbrella, ADR-0014); the golden fixture may only be regenerated via a reviewed diff naming the intentional change — silently re-recording it to match new output is a gate failure, not a fix.
-- Every new parser (manifest reader, resolver, product-lint) AND the byte-diff/golden-output comparison gates get an adversarial construct-a-breaking-input pass; found holes fixed + pinned as red fixtures BEFORE any FAIL-mode promotion (council v2+v3: 43 holes in gates that passed their own tests).
-- Physical re-homing lands only behind the byte-diff gate — defined as: per-file SHA-256 over content with line endings normalized to LF before hashing, executable bit compared separately, symlinks resolved before hashing; installed tree provably unchanged, per product move (ADR-0018).
-- Consumer repos: never delete, and never mutate without reporting first. `--prune-report` is read-only and stays that way. Automated quarantine (the attic move) is **scope-cut — ADR-0023**; building one requires an ADR-0023 revisit trigger, because deciding what is arc's to move is the hard part, not the moving.
-- Every hook/script change ships with a bats test. CI red = no merge on the arc repo.
-- Cross-platform: Git Bash (Windows) + ubuntu + macos CI; bash-3.2/POSIX; no new PowerShell logic beyond the dumb copy loop (ADR-0015).
-- New lint checks start WARN in the TRIAL set; FAIL promotion only via docs/trial-ledger.md evidence.
-- Engine scripts assume no Claude (ADR-0013 writing rule, inherited).
-- Every `/arc-phase-done` on this initiative commits an evidence bundle.
+- Append-only forever; corrections supersede (ADR-0029).
+- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
+  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
+  promotion** (council v2+v3: 43-hole history).
+- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
+- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
+- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
+  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
+  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
+  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
+  bats; exit-timing-race class, `docs/retro-log.md`).
+- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
+  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
+  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
+  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
+  covered without a lint edit.
+- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
+  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
+  selective install would copy spine data into a consumer's payload — the golden bare-sync
+  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
+- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
+- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
+  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · golden
+  bare-sync byte-identical · new lints WARN in TRIAL · evidence bundle per phase-done.
+- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
+  council session 001) — this initiative does not touch them.

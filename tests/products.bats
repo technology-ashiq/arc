@@ -81,7 +81,11 @@ LINT="$ARC_ROOT/.claude/scripts/core/product-lint.mjs"
   [[ "$output" == *"registry @ abc1234"* ]]                 # registry-sourced, not file-presence
   [[ "$output" == *"core"* ]] && [[ "$output" == *"council"* ]]
   [[ "$output" == *"install missing"* ]]                    # absent products get an install hint
-  [[ "$output" == *"--products git,plan,qa,review"* ]]
+  # Derived, not frozen: this also pins the invariant that arc-products.mjs's CATALOG matches
+  # products/ on disk. A new product whose manifest lands but whose CATALOG entry is
+  # forgotten is invisible to --status and to this hint -- that gap is what fails here.
+  absent="$(ls "$ARC_ROOT/products" | LC_ALL=C sort | grep -vE '^(core|council)$' | tr '\n' ',' | sed 's/,$//')"
+  [[ "$output" == *"--products $absent"* ]]
 }
 
 @test "status: a malformed registry degrades gracefully, never crashes (adversarial)" {

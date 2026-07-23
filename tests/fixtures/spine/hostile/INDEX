@@ -1,0 +1,50 @@
+01-missing-field.json	MISSING_FIELD	required key `kind` absent
+02-bad-ulid.json	BAD_ULID	id is not Crockford base32 x26
+03-bad-ts.json	BAD_TS	month 13 / day 45 / hour 99
+04-ts-wrong-offset.json	BAD_TS	UTC Z instead of +05:30
+05-oversize.json	OVERSIZE	canonical event > 64 KiB
+06-secret-plain.json	SECRET	plain AWS access key id
+07-secret-spaced.json	SECRET	whitespace-varied key=value (council v3 cosmetic-variant class)
+08-secret-base64.json	SECRET	base64-wrapped AWS key
+09-secret-split.json	SECRET	secret split across two adjacent fields
+10-crlf.json	CR_BYTE	CRLF line endings in a canonical-LF world
+11-bom.json	BOM	UTF-8 BOM prefix
+12-non-utf8.bin	BAD_UTF8	invalid UTF-8 byte sequence
+13-nested-quotes.json	ACCEPT	escaped quotes/backslashes must round-trip
+14-evidence-traversal.json	BAD_EVIDENCE	`..` segment escapes the repo
+15-evidence-absolute.json	BAD_EVIDENCE	absolute Windows path + backslashes
+16-unknown-kind.json	UNKNOWN_KIND	kind outside the closed 18 (ADR-0026)
+17-schema-version.json	BAD_VERSION	schema version mismatch
+18-duplicate-key.json	DUP_KEY	duplicate object key -- JSON.parse silently takes the LAST (council v2 class)
+19-case-varied-enum.json	BAD_OUTCOME	case-varied enum must NOT normalize (council v2 class)
+20-embedded-newline.json	BAD_JSON	raw newline inside a JSON string
+21-bad-sha.json	SHA_MISMATCH	supplied sha does not match the canonical form
+22-control-char.json	BAD_JSON	raw control char inside a JSON string
+23-nonfinite.json	NONFINITE	1e999 parses to Infinity -- must never reach the spine
+24-unknown-field.json	UNKNOWN_FIELD	closed schema rejects extra top-level keys
+25-null-payload.json	BAD_PAYLOAD	payload must be an object, not null
+26-bad-cost.json	BAD_COST	negative token count
+27-bad-cost-source.json	BAD_COST	cost.source outside the enum
+28-bad-venture.json	BAD_VENTURE	venture slug carrying path syntax
+29-trailing-content.json	BAD_JSON	a second JSON document after the event
+30-valid.json	ACCEPT	the clean baseline event
+31-bad-actor-control.json	BAD_ACTOR	control char smuggled into actor (escaped, so it parses)
+32-bad-process.json	BAD_PROCESS	process without @semver
+33-bad-idem.json	BAD_IDEM	idem is not sha256 hex
+34-bad-supersedes.json	BAD_SUPERSEDES	supersedes must be a ULID or null
+35-secret-privatekey.json	SECRET	PEM private key block
+36-secret-bearer.json	SECRET	JWT bearer header
+37-unicode.json	ACCEPT	non-ASCII must round-trip byte-stable
+38-dup-key-escaped.json	DUP_KEY	duplicate key spelled with a \u escape -- JSON.parse collapses them, a raw-text scanner does not
+39-bigint-precision.json	NUMBER_PRECISION	integer beyond 2^53: storing the rounded value would hash a number nobody sent
+40-deep-nesting.json	DEPTH_EXCEEDED	200 levels of nesting -- the verdict must come from the schema, not the V8 stack size
+41-negative-zero.json	NEGATIVE_ZERO	-0 canonicalizes to 0, so it would collide with a real 0 event as a duplicate
+42-secret-structural.json	SECRET	credential in a STRUCTURAL json field -- the shape a real config dump actually has
+43-secret-prefixed-key.json	SECRET	prefixed/suffixed credential names that a bare-word boundary rule cannot see
+44-secret-zero-width.json	SECRET	zero-width character inserted mid-token
+45-secret-split-reordered.json	SECRET	split secret whose fields concatenate in the WRONG order -- adjacency in one order is not adjacency
+46-secret-dsn.json	SECRET	password inline in a connection string
+47-secret-modern-formats.json	SECRET	current-generation key format (fine-grained PAT) that the first rule set had no rule for
+48-ts-far-future.json	BAD_TS	far-future ts creates a day file no close will ever reach
+49-cost-huge.json	BAD_COST	unbounded magnitude poisons every downstream aggregate
+50-supersedes-self.json	BAD_SUPERSEDES	an event superseding itself is a cycle for any replay that resolves chains

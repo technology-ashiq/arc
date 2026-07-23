@@ -1,0 +1,531 @@
+1..22
+not ok 1 strict mode: every hostile fixture exits 2 with its own reject code
+# (in test file tests/spine-emit.bats, line 54)
+#   `[ -z "$fails" ] || { echo "STRICT FAILURES:"; echo "$fails" | tr '|' '\n'; false; }' failed
+# STRICT FAILURES:
+#
+# 01-missing-field.json: expected exit 2, got 127
+# 02-bad-ulid.json: expected exit 2, got 127
+# 03-bad-ts.json: expected exit 2, got 127
+# 04-ts-wrong-offset.json: expected exit 2, got 127
+# 05-oversize.json: expected exit 2, got 127
+# 06-secret-plain.json: expected exit 2, got 127
+# 07-secret-spaced.json: expected exit 2, got 127
+# 08-secret-base64.json: expected exit 2, got 127
+# 09-secret-split.json: expected exit 2, got 127
+# 10-crlf.json: expected exit 2, got 127
+# 11-bom.json: expected exit 2, got 127
+# 12-non-utf8.bin: expected exit 2, got 127
+# 14-evidence-traversal.json: expected exit 2, got 127
+# 15-evidence-absolute.json: expected exit 2, got 127
+# 16-unknown-kind.json: expected exit 2, got 127
+# 17-schema-version.json: expected exit 2, got 127
+# 18-duplicate-key.json: expected exit 2, got 127
+# 19-case-varied-enum.json: expected exit 2, got 127
+# 20-embedded-newline.json: expected exit 2, got 127
+# 21-bad-sha.json: expected exit 2, got 127
+# 22-control-char.json: expected exit 2, got 127
+# 23-nonfinite.json: expected exit 2, got 127
+# 24-unknown-field.json: expected exit 2, got 127
+# 25-null-payload.json: expected exit 2, got 127
+# 26-bad-cost.json: expected exit 2, got 127
+# 27-bad-cost-source.json: expected exit 2, got 127
+# 28-bad-venture.json: expected exit 2, got 127
+# 29-trailing-content.json: expected exit 2, got 127
+# 31-bad-actor-control.json: expected exit 2, got 127
+# 32-bad-process.json: expected exit 2, got 127
+# 33-bad-idem.json: expected exit 2, got 127
+# 34-bad-supersedes.json: expected exit 2, got 127
+# 35-secret-privatekey.json: expected exit 2, got 127
+# 36-secret-bearer.json: expected exit 2, got 127
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 2 hook mode: every hostile fixture exits 0, appends nothing, and quarantines
+# (in test file tests/spine-emit.bats, line 72)
+#   `[ -z "$fails" ] || { echo "HOOK FAILURES:"; echo "$fails" | tr '|' '\n'; false; }' failed
+# HOOK FAILURES:
+#
+# 01-missing-field.json: hook mode must never block, got exit 127
+# 01-missing-field.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 01-missing-field.json: nothing was quarantined
+# 02-bad-ulid.json: hook mode must never block, got exit 127
+# 02-bad-ulid.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 02-bad-ulid.json: nothing was quarantined
+# 03-bad-ts.json: hook mode must never block, got exit 127
+# 03-bad-ts.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 03-bad-ts.json: nothing was quarantined
+# 04-ts-wrong-offset.json: hook mode must never block, got exit 127
+# 04-ts-wrong-offset.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 04-ts-wrong-offset.json: nothing was quarantined
+# 05-oversize.json: hook mode must never block, got exit 127
+# 05-oversize.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 05-oversize.json: nothing was quarantined
+# 06-secret-plain.json: hook mode must never block, got exit 127
+# 06-secret-plain.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 06-secret-plain.json: nothing was quarantined
+# 07-secret-spaced.json: hook mode must never block, got exit 127
+# 07-secret-spaced.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 07-secret-spaced.json: nothing was quarantined
+# 08-secret-base64.json: hook mode must never block, got exit 127
+# 08-secret-base64.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 08-secret-base64.json: nothing was quarantined
+# 09-secret-split.json: hook mode must never block, got exit 127
+# 09-secret-split.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 09-secret-split.json: nothing was quarantined
+# 10-crlf.json: hook mode must never block, got exit 127
+# 10-crlf.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 10-crlf.json: nothing was quarantined
+# 11-bom.json: hook mode must never block, got exit 127
+# 11-bom.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 11-bom.json: nothing was quarantined
+# 12-non-utf8.bin: hook mode must never block, got exit 127
+# 12-non-utf8.bin: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 12-non-utf8.bin: nothing was quarantined
+# 14-evidence-traversal.json: hook mode must never block, got exit 127
+# 14-evidence-traversal.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 14-evidence-traversal.json: nothing was quarantined
+# 15-evidence-absolute.json: hook mode must never block, got exit 127
+# 15-evidence-absolute.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 15-evidence-absolute.json: nothing was quarantined
+# 16-unknown-kind.json: hook mode must never block, got exit 127
+# 16-unknown-kind.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 16-unknown-kind.json: nothing was quarantined
+# 17-schema-version.json: hook mode must never block, got exit 127
+# 17-schema-version.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 17-schema-version.json: nothing was quarantined
+# 18-duplicate-key.json: hook mode must never block, got exit 127
+# 18-duplicate-key.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 18-duplicate-key.json: nothing was quarantined
+# 19-case-varied-enum.json: hook mode must never block, got exit 127
+# 19-case-varied-enum.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 19-case-varied-enum.json: nothing was quarantined
+# 20-embedded-newline.json: hook mode must never block, got exit 127
+# 20-embedded-newline.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 20-embedded-newline.json: nothing was quarantined
+# 21-bad-sha.json: hook mode must never block, got exit 127
+# 21-bad-sha.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 21-bad-sha.json: nothing was quarantined
+# 22-control-char.json: hook mode must never block, got exit 127
+# 22-control-char.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 22-control-char.json: nothing was quarantined
+# 23-nonfinite.json: hook mode must never block, got exit 127
+# 23-nonfinite.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 23-nonfinite.json: nothing was quarantined
+# 24-unknown-field.json: hook mode must never block, got exit 127
+# 24-unknown-field.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 24-unknown-field.json: nothing was quarantined
+# 25-null-payload.json: hook mode must never block, got exit 127
+# 25-null-payload.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 25-null-payload.json: nothing was quarantined
+# 26-bad-cost.json: hook mode must never block, got exit 127
+# 26-bad-cost.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 26-bad-cost.json: nothing was quarantined
+# 27-bad-cost-source.json: hook mode must never block, got exit 127
+# 27-bad-cost-source.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 27-bad-cost-source.json: nothing was quarantined
+# 28-bad-venture.json: hook mode must never block, got exit 127
+# 28-bad-venture.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 28-bad-venture.json: nothing was quarantined
+# 29-trailing-content.json: hook mode must never block, got exit 127
+# 29-trailing-content.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 29-trailing-content.json: nothing was quarantined
+# 31-bad-actor-control.json: hook mode must never block, got exit 127
+# 31-bad-actor-control.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 31-bad-actor-control.json: nothing was quarantined
+# 32-bad-process.json: hook mode must never block, got exit 127
+# 32-bad-process.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 32-bad-process.json: nothing was quarantined
+# 33-bad-idem.json: hook mode must never block, got exit 127
+# 33-bad-idem.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 33-bad-idem.json: nothing was quarantined
+# 34-bad-supersedes.json: hook mode must never block, got exit 127
+# 34-bad-supersedes.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 34-bad-supersedes.json: nothing was quarantined
+# 35-secret-privatekey.json: hook mode must never block, got exit 127
+# 35-secret-privatekey.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 35-secret-privatekey.json: nothing was quarantined
+# 36-secret-bearer.json: hook mode must never block, got exit 127
+# 36-secret-bearer.json: hook mode must print a loud SKIP, got [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 36-secret-bearer.json: nothing was quarantined
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 3 both modes: ACCEPT fixtures are accepted and round-trip byte-stable
+# (in test file tests/spine-emit.bats, line 94)
+#   `[ -z "$fails" ] || { echo "ACCEPT FAILURES:"; echo "$fails" | tr '|' '\n'; false; }' failed
+# ACCEPT FAILURES:
+#
+# 13-nested-quotes.json: expected accept, got exit 127 [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 30-valid.json: expected accept, got exit 127 [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# 37-unicode.json: expected accept, got exit 127 [bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory]
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 4 secret fixture: the secret never appears anywhere under the spine root (hook mode)
+# (in test file tests/spine-emit.bats, line 101)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 5 secret fixture: the secret never appears anywhere under the spine root (strict mode)
+# (in test file tests/spine-emit.bats, line 108)
+#   `[ "$status" -eq 2 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 6 secret quarantine record is stub-only: no payload field names or values
+# (in test file tests/spine-emit.bats, line 115)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 7 non-secret quarantine keeps the raw input for debugging
+# (in test file tests/spine-emit.bats, line 125)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 8 valid event: appends exactly one canonical line and prints its id
+# (in test file tests/spine-emit.bats, line 134)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 9 canonical form: keys sorted, no insignificant whitespace, LF-terminated
+# (in test file tests/spine-emit.bats, line 141)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 10 sha: recomputing the canonical form of a stored event reproduces its sha
+# (in test file tests/spine-emit.bats, line 158)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 11 dup idem: the same event twice yields ONE event (strict rejects the second)
+# (in test file tests/spine-emit.bats, line 181)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 12 dup idem holds ACROSS DAYS (the cross-day dedupe REQ-03 depends on)
+# (in test file tests/spine-emit.bats, line 190)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 13 dup idem in hook mode never blocks: exit 0, still ONE event
+# (in test file tests/spine-emit.bats, line 208)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 14 closed day: appending to a closed day is refused, and the close pins a file sha
+# (in test file tests/spine-emit.bats, line 219)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 15 concurrent emitters: every line is whole, none interleave, none are lost
+# (in test file tests/spine-emit.bats, line 258)
+#   `[ "$(_event_lines)" = "8" ]' failed
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 16 a killed emitter leaves no torn line behind
+# (in test file tests/spine-emit.bats, line 276)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 17 hook mode survives a missing node: SKIP, exit 0
+# (in test file tests/spine-emit.bats, line 294)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# env: 'bash': No such file or directory
+not ok 18 strict mode refuses to pretend when node is missing
+# (in test file tests/spine-emit.bats, line 300)
+#   `[ "$status" -eq 2 ]' failed
+# Last output:
+# env: 'bash': No such file or directory
+not ok 19 unreadable event file: strict exits 2, hook skips
+# (in test file tests/spine-emit.bats, line 305)
+#   `[ "$status" -eq 2 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 20 emit <kind>: synthesizes a complete, valid event from flags alone
+# (in test file tests/spine-emit.bats, line 314)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 21 emit <kind>: identical input twice dedupes by derived idem
+# (in test file tests/spine-emit.bats, line 323)
+#   `[ "$status" -eq 0 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+not ok 22 emit <kind>: an unknown kind is refused before anything is written
+# (in test file tests/spine-emit.bats, line 331)
+#   `[ "$status" -eq 2 ]' failed
+# Last output:
+# bash: /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh: No such file or directory
+
+The following warnings were encountered during tests:
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/01-missing-field.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/02-bad-ulid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/03-bad-ts.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/04-ts-wrong-offset.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/05-oversize.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/06-secret-plain.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/07-secret-spaced.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/08-secret-base64.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/09-secret-split.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/10-crlf.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/11-bom.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/12-non-utf8.bin --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/14-evidence-traversal.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/15-evidence-absolute.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/16-unknown-kind.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/17-schema-version.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/18-duplicate-key.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/19-case-varied-enum.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/20-embedded-newline.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/21-bad-sha.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/22-control-char.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/23-nonfinite.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/24-unknown-field.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/25-null-payload.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/26-bad-cost.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/27-bad-cost-source.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/28-bad-venture.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/29-trailing-content.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/31-bad-actor-control.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/32-bad-process.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/33-bad-idem.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/34-bad-supersedes.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/35-secret-privatekey.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/36-secret-bearer.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 44)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/01-missing-field.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/02-bad-ulid.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/03-bad-ts.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/04-ts-wrong-offset.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/05-oversize.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/06-secret-plain.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/07-secret-spaced.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/08-secret-base64.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/09-secret-split.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/10-crlf.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/11-bom.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/12-non-utf8.bin` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/14-evidence-traversal.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/15-evidence-absolute.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/16-unknown-kind.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/17-schema-version.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/18-duplicate-key.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/19-case-varied-enum.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/20-embedded-newline.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/21-bad-sha.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/22-control-char.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/23-nonfinite.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/24-unknown-field.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/25-null-payload.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/26-bad-cost.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/27-bad-cost-source.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/28-bad-venture.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/29-trailing-content.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/31-bad-actor-control.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/32-bad-process.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/33-bad-idem.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/34-bad-supersedes.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/35-secret-privatekey.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/36-secret-bearer.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 63)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/13-nested-quotes.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 80)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 80)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/37-unicode.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 80)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/06-secret-plain.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 100)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/06-secret-plain.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 107)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/07-secret-spaced.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 114)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/16-unknown-kind.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 124)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 133)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 140)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/37-unicode.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 157)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 180)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 189)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 207)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 218)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 275)
+BW01: `run`'s command `env PATH=/nonexistent ARC_NODE=definitely-not-node bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 293)
+BW01: `run`'s command `env PATH=/nonexistent ARC_NODE=definitely-not-node bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /e/Work_Hub/01_Automemory/arc/tests/fixtures/spine/hostile/30-valid.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 299)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit --event-file /tmp/bats-run-Yaywp3/test/19/nope.json --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 304)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit note.logged --payload {"note":"from flags"} --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 313)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit note.logged --payload {"note":"same"} --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 322)
+BW01: `run`'s command `bash /e/Work_Hub/01_Automemory/arc/.claude/scripts/hq/arc-event.sh emit not.a.kind --payload {} --strict` exited with code 127, indicating 'Command not found'. Use run's return code checks, e.g. `run -127`, to fix this message.
+      (from function `run' in file C:/Users/ashiq/AppData/Roaming/npm/node_modules/bats/lib/bats-core/test_functions.bash, line 420,
+       in test file tests/spine-emit.bats, line 330)

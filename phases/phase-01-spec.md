@@ -1,55 +1,85 @@
-# Phase 01 — Composable hooks + stable settings.json
+# Phase 01 — Factory wiring
 
-**Goal (one line):** the 6 monolithic hooks become per-event fragment dirs with loud-SKIP guards so a partial install (core+council only) runs every hook event clean, inside the <30s budget.
-**Appetite:** 0.5 weeks — blown appetite = cut scope or kill, never extend silently.
+**Goal (one line):** Every factory action leaves a receipt — EVENT.d `NN-emit` fragments +
+explicit flow emissions produce the golden dry-run sequence without ever disturbing a session.
+**Appetite:** 2.5 days
 **Depends on:** phase-00
-
-> **Scope trim (Ashiq, /arc-change 2026-07-17):** the 6 hooks are ~90% core logic — products
-> barely contribute hook fragments. So build the dispatcher pattern + graceful partial-install
-> degradation + the <30s measure (the real, forward-looking value), and DROP the hollow
-> "loud SKIP for plan/review/qa/git on every event" (that's mostly noise — a council-only
-> consumer doesn't care the plan product is absent). SKIP is emitted only where a fragment
-> actually depends on an absent product script/config.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Each of the 6 hooks (SessionStart, PreToolUse, PreToolUse-edit, PostToolUse, SessionEnd, PreCompact) becomes a thin core **dispatcher** that runs `.claude/hooks/<event>.d/NN-*.sh` fragments in deterministic NN- order; the current monolithic logic is split into fragments (mostly core)
-- [ ] Exit-code semantics preserved: PreToolUse + PreToolUse-edit propagate a fragment's exit 2 (block); the advisory events (SessionStart/PostToolUse/PreCompact/SessionEnd) always exit 0 and never let one fragment's failure break the event
-- [ ] **Graceful degradation (REQ-06):** any fragment that depends on a product script/config which may be absent in a partial install (the deploy-guard's `arc-gates.sh`/`arc.gates.yaml`, `toolchain-health.sh`) degrades with a loud one-line `SKIP: <reason>` + exit 0 — never silent, never fatal
-- [ ] settings.json stays the stable core-owned template pointing at the 6 dispatchers (paths unchanged; no wiring edit needed)
-- [ ] core+council-only scratch install: all 6 hook events fire exit 0 (no product-absence breakage)
-- [ ] Hook-tier wall time measured before/after on the owner's Windows box: < 30s (ADR-0006 budget, assumption row 3)
-- [ ] tests added & green; live demo run + output checked; tracker updated (PROGRESS.md row ✅ + done-log)
+- [ ] EVENT.d `NN-emit` fragments (SessionStart/End, PostToolUse summary) dropped via the
+      existing dispatcher — hooks themselves untouched; fragments listed in
+      `products/hq/manifest.json` (product-lint green).
+- [ ] Explicit emissions in the kickoff / phase-done / review / qa / commit / ship / council
+      flows, kinds per PLAN Appendix A only.
+- [ ] Dry-run golden sequence green (REQ-01): scripted session kickoff → phase-done →
+      review → qa → commit → ship produces the expected sequence; every event passes strict
+      validation; matches golden — order-insensitive WITHIN one command's own emissions
+      only, never across commands.
+- [ ] Overhead measured: <1s added per session event, or async append (assumptions ledger).
+- [ ] Redaction live on real emissions; guard-chain regression bats green
+      (`arc_hook_field` untouched).
+- [ ] Durability bats: emitter killed mid-append (SIGKILL/hard-exit) → zero torn lines,
+      zero silently-lost acknowledged events; concurrent-emitter interleave fixture green.
+- [ ] Tracker updated · evidence bundle written.
 
 ## Verification plan
 
-- **Test command:** `bats tests/hooks-dispatch.bats --print-output-on-failure`
-- **Expected failure first:** dispatcher cases written first fail with `hooks.d: No such file or directory` on the unsplit hooks — proves the test sees the new layout, red → green.
-- **Live demo scenario:** in a core+council-only scratch install, run each of the 6 dispatchers; expect exit 0 (no breakage from absent products) and a loud one-line SKIP wherever a fragment's product dependency is absent (e.g. the deploy-guard when arc.gates.yaml isn't installed); run `time` on the full hook chain on the real machine → wall time printed < 30s.
-- **Real-system check:** the arc mold's own session hooks keep working after the split (dogfood: this very repo's next session runs on the fragment dispatchers).
-- **Expected evidence:** bats green output, demo transcript with SKIP lines, before/after timing numbers recorded in the done-log.
+- **Test command:** `npx bats tests/spine-wiring.bats` then `tests/spine-golden-dryrun.bats`
+  (one file at a time, foreground).
+- **Expected failure first:** the golden dry-run lands RED before each flow's emission
+  exists — the missing-kind diff names the gap (this is also assumptions-ledger row 1's
+  trigger check: hook fragments alone vs command-level emission).
+- **Live demo scenario:** a real session on this repo with fragments live — work normally
+  for one session, then `arc brief --date <today>` (Phase-0 renderer) shows the session's
+  receipts; `kill -9` an in-flight emit → session unaffected, JSONL intact, no torn line.
+- **Real-system check:** SessionStart/SessionEnd timing measured on the owner's Windows
+  box — no perceptible session delay (<1s per event); one full working session's events
+  strict-validate afterwards.
+- **Expected evidence:** `docs/evidence/phase-01/` — golden dry-run output · overhead
+  numbers · guard-chain bats · durability bats.
 
 ## Rabbit holes in this phase
 
-- Settings-merge engine temptation — NO (No-go); template + guards only.
-- Per-fragment subshell overhead on Git Bash — measure first; only optimize if the 30s budget is actually threatened.
+- Emitting kinds beyond the 18 (vocabulary is closed — ADR-0026; anything else is
+  `note.logged` or waits for an ADR).
+- Polishing PostToolUse summaries into prose — payload is data, not narrative.
+- Async-queue engineering before the >1s trigger actually fires.
 
 ## Out of scope for this phase
 
-Registry (Phase 2) · file moves (Phase 3).
+- Revenue ingest + brief polish (Phase 2) · approvals (Phase 3) · consumer-repo installs
+  (Phase 4) · any change to the 8 kickoff-lint trial gates.
 
 ## Your-setup / pending
 
-Nothing — all local.
+- None.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Bare `sync-to-project TARGET` output stays byte-identical to pre-initiative — golden-output bats case green on every PR of this initiative (products are additive under the umbrella, ADR-0014); the golden fixture may only be regenerated via a reviewed diff naming the intentional change — silently re-recording it to match new output is a gate failure, not a fix.
-- Every new parser (manifest reader, resolver, product-lint) AND the byte-diff/golden-output comparison gates get an adversarial construct-a-breaking-input pass; found holes fixed + pinned as red fixtures BEFORE any FAIL-mode promotion (council v2+v3: 43 holes in gates that passed their own tests).
-- Physical re-homing lands only behind the byte-diff gate — defined as: per-file SHA-256 over content with line endings normalized to LF before hashing, executable bit compared separately, symlinks resolved before hashing; installed tree provably unchanged, per product move (ADR-0018).
-- Consumer repos: never delete, and never mutate without reporting first. `--prune-report` is read-only and stays that way. Automated quarantine (the attic move) is **scope-cut — ADR-0023**; building one requires an ADR-0023 revisit trigger, because deciding what is arc's to move is the hard part, not the moving.
-- Every hook/script change ships with a bats test. CI red = no merge on the arc repo.
-- Cross-platform: Git Bash (Windows) + ubuntu + macos CI; bash-3.2/POSIX; no new PowerShell logic beyond the dumb copy loop (ADR-0015).
-- New lint checks start WARN in the TRIAL set; FAIL promotion only via docs/trial-ledger.md evidence.
-- Engine scripts assume no Claude (ADR-0013 writing rule, inherited).
-- Every `/arc-phase-done` on this initiative commits an evidence bundle.
+- Append-only forever; corrections supersede (ADR-0029).
+- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
+  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
+  promotion** (council v2+v3: 43-hole history).
+- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
+- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
+- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
+  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
+  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
+  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
+  bats; exit-timing-race class, `docs/retro-log.md`).
+- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
+  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
+  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
+  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
+  covered without a lint edit.
+- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
+  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
+  selective install would copy spine data into a consumer's payload — the golden bare-sync
+  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
+- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
+- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
+  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · golden
+  bare-sync byte-identical · new lints WARN in TRIAL · evidence bundle per phase-done.
+- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
+  council session 001) — this initiative does not touch them.
