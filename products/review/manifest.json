@@ -32,6 +32,7 @@
     ".claude/scripts/review/arc-tools-image.sh",
     ".claude/scripts/review/docs-drift.sh",
     ".claude/scripts/review/coverage-gate.sh",
-    ".claude/scripts/review/rls-gate.sh"
+    ".claude/scripts/review/rls-gate.sh",
+    ".claude/scripts/review/spine-reader-lint.sh"
   ]
 }

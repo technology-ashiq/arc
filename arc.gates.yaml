@@ -44,3 +44,9 @@ gates:
     tier: hook
     runtime: native
     evidence: .claude/state/rls/rls.json
+  - name: spine-api
+    check: bash .claude/scripts/review/spine-reader-lint.sh
+    mode: warn
+    tier: hook
+    runtime: native
+    evidence: .claude/state/spine-lint/violations.txt
