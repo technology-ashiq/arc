@@ -1,7 +1,7 @@
 ---
 description: Browser QA loop -- qa-tester finds bugs, you fix each with an atomic commit + a REQUIRED regression test, then re-verify. Archives to docs/qa/ and stamps the review ledger.
 argument-hint: "[url-or-flow] [--report-only]"
-allowed-tools: Task, Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(npm run test:*), Bash(npm run e2e), Bash(bash .claude/scripts/core/review-ledger.sh:*), Read, Edit, Write
+allowed-tools: Task, Bash(git diff:*), Bash(git add:*), Bash(git commit:*), Bash(npm run test:*), Bash(npm run e2e), Bash(bash .claude/scripts/core/review-ledger.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Read, Edit, Write
 ---
 
 Run a QA pass on: **$ARGUMENTS** (default: the current phase's exit-criteria flows).
@@ -20,4 +20,8 @@ Run a QA pass on: **$ARGUMENTS** (default: the current phase's exit-criteria flo
 - Stamping the ledger (skip in `--report-only`):
   ```bash
   bash .claude/scripts/core/review-ledger.sh stamp qa
+  ```
+- Leaving the receipt (spine) — hook-mode, never blocks the flow:
+  ```bash
+  bash .claude/scripts/hq/arc-event.sh emit qa.completed --payload '{"phase":"<phase>","bugs":"<n>","fixed":"<n>"}'
   ```

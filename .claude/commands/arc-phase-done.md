@@ -1,7 +1,7 @@
 ---
 description: Close a phase per the build playbook's Definition of Done — or refuse.
 argument-hint: [phase-number]
-allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/plan/arc-evidence.sh:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*)
+allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/plan/arc-evidence.sh:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/hq/arc-event.sh:*)
 ---
 
 Verify phase $1 against its spec `phases/phase-NN-spec.md` (NN = zero-padded $1, e.g.
@@ -48,3 +48,7 @@ If all pass:
    (Skip if graphify's own git hook is installed — it already rebuilt on commit.)
 9. Reply with a one-line summary + anything phase $(($1+1)) needs from me (keys,
    accounts, infra) per the "your-setup / pending" list.
+10. **Leave the receipt (spine)** — record the phase close on the spine (hook-mode, never blocks):
+    ```bash
+    bash .claude/scripts/hq/arc-event.sh emit phase.closed --payload '{"phase":"<NN>","tests":"<count>"}'
+    ```
