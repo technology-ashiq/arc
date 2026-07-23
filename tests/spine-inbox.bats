@@ -222,3 +222,65 @@ _decisions() { grep -ho '"kind":"decision.recorded"' "$SPINE"/events/*.jsonl 2>/
   run bash -c "ls -1 '$SPINE' | sort | tr '\n' ' '"
   [ "$output" = "derived events " ] || { echo "unexpected spine layout: $output"; false; }
 }
+
+# ---------- adversarial pass (W7): holes found + fixed + pinned in BOTH modes ----------
+# The mandatory construct-a-breaking-input pass over the decision path (council v2/v3 discipline)
+# found two real holes; both are fixed at the validator core and pinned here strict + hook.
+
+@test "adversarial: an idem pre-claiming another approval's key with a DECOY decides is refused (strict); the target stays decidable" {
+  local A; A="$(_request '{"what":"pre-claim-target"}')"
+  local decoy="01JQ8XZ9K0NEVERSEENNNNNNNN"          # a valid ULID that is NOT the target
+  local idemA; idemA="$(printf 'decision.recorded|%s' "$A" | _arc_sha256)"
+  # attacker keys the idem to A but names the decoy -> idem/decides desync (the two-key attack)
+  run bash "$EVENT" emit decision.recorded --idem "$idemA" --payload "{\"decides\":\"$decoy\",\"verdict\":\"approve\",\"reason\":\"forged\"}" --strict
+  [ "$status" -eq 2 ] || { echo "pre-claim not refused: $output"; false; }
+  [[ "$output" == *"DECISION"* ]]
+  [ "$(_decisions)" = "0" ]
+  # A's decision-key slot was never taken -> the legit decision still lands
+  run node "$INBOX" approve "$A" --reason "legit"
+  [ "$status" -eq 0 ] || { echo "target no longer decidable: $output"; false; }
+  [ "$(_decisions)" = "1" ]
+}
+
+@test "adversarial: the idem pre-claim in HOOK mode never blocks and seals nothing" {
+  local A; A="$(_request '{"what":"pre-claim-hook"}')"
+  local decoy="01JQ8XZ9K0NEVERSEENNNNNNNN"
+  local idemA; idemA="$(printf 'decision.recorded|%s' "$A" | _arc_sha256)"
+  run bash "$EVENT" emit decision.recorded --idem "$idemA" --payload "{\"decides\":\"$decoy\",\"verdict\":\"approve\",\"reason\":\"forged\"}"
+  [ "$status" -eq 0 ]                  # hook mode: a bad input never blocks a session
+  [ "$(_decisions)" = "0" ]            # ...and never seals
+  run node "$INBOX" approve "$A" --reason "legit"
+  [ "$status" -eq 0 ]; [ "$(_decisions)" = "1" ]
+}
+
+@test "adversarial: a C1 control char (CSI U+009B / NEL U+0085) in a decision reason is refused (strict), nothing sealed" {
+  local A; A="$(_request '{"what":"c1-strict"}')"
+  local idemA; idemA="$(printf 'decision.recorded|%s' "$A" | _arc_sha256)"
+  # build the C1 char at runtime (no raw control byte or \\u in the test source)
+  local pay; pay="$(node -e 'process.stdout.write(JSON.stringify({decides:process.argv[1],verdict:"approve",reason:"ok"+String.fromCharCode(0x9b)+"2K"}))' "$A")"
+  run bash "$EVENT" emit decision.recorded --idem "$idemA" --payload "$pay" --strict
+  [ "$status" -eq 2 ] || { echo "CSI reason not refused: $output"; false; }
+  [[ "$output" == *"REASON"* ]]
+  local nel; nel="$(node -e 'process.stdout.write(JSON.stringify({decides:process.argv[1],verdict:"approve",reason:"a"+String.fromCharCode(0x85)+"b"}))' "$A")"
+  run bash "$EVENT" emit decision.recorded --idem "$idemA" --payload "$nel" --strict
+  [ "$status" -eq 2 ]; [[ "$output" == *"REASON"* ]]
+  [ "$(_decisions)" = "0" ]
+}
+
+@test "adversarial: a C1 control char in a decision reason in HOOK mode never blocks and seals nothing" {
+  local A; A="$(_request '{"what":"c1-hook"}')"
+  local idemA; idemA="$(printf 'decision.recorded|%s' "$A" | _arc_sha256)"
+  local pay; pay="$(node -e 'process.stdout.write(JSON.stringify({decides:process.argv[1],verdict:"approve",reason:"ok"+String.fromCharCode(0x9b)}))' "$A")"
+  run bash "$EVENT" emit decision.recorded --idem "$idemA" --payload "$pay"
+  [ "$status" -eq 0 ]
+  [ "$(_decisions)" = "0" ]
+}
+
+@test "adversarial guard: a normal international reason (accents, check mark) is still accepted (no over-rejection)" {
+  local A; A="$(_request '{"what":"intl"}')"
+  local idemA; idemA="$(printf 'decision.recorded|%s' "$A" | _arc_sha256)"
+  local pay; pay="$(node -e 'process.stdout.write(JSON.stringify({decides:process.argv[1],verdict:"approve",reason:"café ✓ ok"}))' "$A")"
+  run bash "$EVENT" emit decision.recorded --idem "$idemA" --payload "$pay" --strict
+  [ "$status" -eq 0 ] || { echo "normal unicode reason wrongly refused: $output"; false; }
+  [ "$(_decisions)" = "1" ]
+}

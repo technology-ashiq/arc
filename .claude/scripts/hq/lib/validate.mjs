@@ -4,7 +4,7 @@
 // values are rejected, never normalized. Normalizing is how a validator quietly becomes a
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
-import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES } from "./canonical.mjs";
+import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex } from "./canonical.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -60,7 +60,10 @@ const isPlainObject = (v) =>
 function hasControlChar(s) {
   for (let i = 0; i < s.length; i++) {
     const c = s.charCodeAt(i);
-    if (c < 0x20 || c === 0x7f) return true;
+    // C0 (< 0x20), DEL (0x7f), AND C1 (0x80-0x9f). The C1 range includes NEL (U+0085) and CSI
+    // (U+009B, a single-char terminal-escape introducer): the adversarial pass sealed a reason
+    // carrying one past a C0-only check, smuggling a terminal escape onto the append-only spine.
+    if (c < 0x20 || c === 0x7f || (c >= 0x80 && c <= 0x9f)) return true;
   }
   return false;
 }
@@ -159,6 +162,14 @@ function assertDecision(event) {
   // prints the brief, and makes the receipt unreadable.
   if (hasControlChar(payload.reason))
     throw new SpineError("BAD_REASON", "decision.reason contains a control character");
+  // Bind the idem to the approval this decision names (checked LAST, so a bad shape/verdict/
+  // reason still reports its own error first). arc-inbox keys a decision's idem on its decides,
+  // and the emit path honours a caller-supplied --idem -- so without this an attacker could seal
+  // a decision whose decides is a DECOY but whose idem pre-claims the stable key of a REAL
+  // approval A: A can then never be decided (the legit decision collides on DUP_IDEM) yet still
+  // shows open. Welding the mechanical key to the semantic decides closes that two-key desync.
+  if (event.idem !== sha256Hex(`decision.recorded|${payload.decides}`))
+    throw new SpineError("BAD_DECISION", `decision.idem must be sha256("decision.recorded|"+decides) -- a decision's idem is bound to the approval it decides`);
 }
 
 // Throws SpineError on the first violation. The caller decides what a violation MEANS
