@@ -3,12 +3,24 @@ name: arc-ci
 # ADR-0007 (+ macOS amendment): arc's self-tests run on ubuntu + windows (Git Bash)
 # + macos-latest. Red = no merge. The macOS leg exercises BSD userland (sed/stat/date
 # differ from GNU); bash-3.2 syntax is enforced by a static audit (no mapfile / assoc
-# arrays). Spine tests gate every push; scanner-dependent tests skip (visibly) when a
-# tool doesn't install, so CI is honest and never flaky on a tool hiccup.
+# arrays). Scanner-dependent tests skip (visibly) when a tool doesn't install, so CI is
+# honest and never flaky on a tool hiccup.
+#
+# CI runs ONCE per change, on the PULL REQUEST -- not again on the merge to main. The
+# earlier `push: branches:[main]` trigger re-ran the whole 6-job matrix on every merge, a
+# third pass over a tree the PR had already proven green ("stop paying for it twice",
+# d53daed). The `pull_request` trigger already covers every push to an open PR (opened +
+# synchronize), so a fix pushed to a red PR re-runs; a clean merge does not. This matches
+# the repo's own branch-then-PR rule (CLAUDE.md) -- nothing lands on main except through a
+# PR that CI has already gated.
+# NOTE (owner action, GitHub UI): turn on branch protection for `main` with "require the
+# arc-ci checks to pass" + "require branches to be up to date before merging". The second
+# option closes the one gap this leaves -- if main moves between a PR going green and its
+# merge, it forces the PR to re-run against the new base, so the merged tree is always a
+# tested tree. On a solo repo main rarely moves mid-merge, so the gap is small, but the
+# setting makes it zero. I cannot set branch protection from here.
 
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 
