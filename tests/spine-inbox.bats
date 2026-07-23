@@ -15,8 +15,9 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
-EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
-INBOX="$ARC_ROOT/.claude/scripts/hq/arc-inbox.mjs"
+HQ="$ARC_ROOT/.claude/scripts/hq"
+EVENT="$HQ/arc-event.sh"
+INBOX="$HQ/arc-inbox.mjs"
 
 setup() {
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE"
@@ -159,4 +160,65 @@ _decisions() { grep -ho '"kind":"decision.recorded"' "$SPINE"/events/*.jsonl 2>/
   [ "$status" -eq 2 ]; [[ "$output" == *"DECISION"* ]]
 
   [ "$(_decisions)" = "$before" ]     # nothing sealed
+}
+
+# ---------- state is derived, never truth (W3 — REQ-04 x REQ-06) ----------
+
+@test "inbox+brief reproduce byte-identically after a derived wipe + replay, and the re-decide stays blocked" {
+  local a b
+  a="$(_request '{"what":"alpha","gate":"kickoff"}')"
+  b="$(_request '{"what":"bravo","gate":"phase-done"}')"
+  run node "$INBOX" approve "$a" --reason "done"
+  [ "$status" -eq 0 ]
+
+  node "$INBOX" inbox > "$BATS_TEST_TMPDIR/inbox-before.txt" 2>/dev/null
+  node "$HQ/arc-brief.mjs" --date 2026-07-22 > "$BATS_TEST_TMPDIR/brief-before.txt"
+
+  rm -rf "$SPINE/derived"
+  [ ! -d "$SPINE/derived" ]
+  node "$HQ/arc-replay.mjs" --quiet
+
+  node "$INBOX" inbox > "$BATS_TEST_TMPDIR/inbox-after.txt" 2>/dev/null
+  node "$HQ/arc-brief.mjs" --date 2026-07-22 > "$BATS_TEST_TMPDIR/brief-after.txt"
+
+  run diff "$BATS_TEST_TMPDIR/inbox-before.txt" "$BATS_TEST_TMPDIR/inbox-after.txt"
+  [ "$status" -eq 0 ] || { echo "inbox drifted across replay:"; echo "$output"; false; }
+  run diff "$BATS_TEST_TMPDIR/brief-before.txt" "$BATS_TEST_TMPDIR/brief-after.txt"
+  [ "$status" -eq 0 ] || { echo "brief drifted across replay:"; echo "$output"; false; }
+
+  # the fold survived the wipe: a still decided (hidden), b still open
+  run node "$INBOX" inbox
+  [[ "$output" != *"$a"* ]]
+  [[ "$output" == *"$b"* ]]
+
+  # and a re-decide of a is still refused after the wipe (read-check over the reader)
+  run node "$INBOX" approve "$a" --reason "again"
+  [ "$status" -ne 0 ]; [[ "$output" == *"ALREADY_DECIDED"* ]]
+  [ "$(_decisions)" = "1" ]
+}
+
+@test "the rebuilt idem index still refuses a duplicate decision after a derived wipe (DUP_IDEM backstop)" {
+  local a; a="$(_request '{"what":"idem"}')"
+  run node "$INBOX" approve "$a" --reason "yes"
+  [ "$status" -eq 0 ]
+
+  rm -rf "$SPINE/derived"
+  node "$HQ/arc-replay.mjs" --quiet
+
+  # the SAME (kind|decides) idem arc-inbox uses -- computed independently in bash. The rebuilt
+  # index must carry the sealed decision's idem, so a direct re-emit collides even though the
+  # derived state was wiped between the two decisions.
+  local idem; idem="$(printf 'decision.recorded|%s' "$a" | _arc_sha256)"
+  run bash "$EVENT" emit decision.recorded --payload "{\"decides\":\"$a\",\"verdict\":\"approve\",\"reason\":\"dup\"}" --idem "$idem" --strict
+  [ "$status" -eq 2 ] || { echo "expected DUP_IDEM reject: $output"; false; }
+  [[ "$output" == *"DUP_IDEM"* ]]
+  [ "$(_decisions)" = "1" ]
+}
+
+@test "approving writes no approval state outside the spine (only events/ and derived/)" {
+  local a; a="$(_request '{"what":"nostate"}')"
+  run node "$INBOX" approve "$a" --reason ok
+  [ "$status" -eq 0 ]
+  run bash -c "ls -1 '$SPINE' | sort | tr '\n' ' '"
+  [ "$output" = "derived events " ] || { echo "unexpected spine layout: $output"; false; }
 }
