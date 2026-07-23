@@ -1,7 +1,7 @@
 ---
 description: Convene the arc council — deep research + independent adversarial debate + matched domain experts + verifier-graded synthesis → one decision, on any question (startup/business/finance/personal/politics/marketing/dev/design).
 argument-hint: [your question]  (prefix `quick` for a fast, unverified run)
-allowed-tools: Task, Read, Write, WebSearch, WebFetch, Glob, Grep
+allowed-tools: Task, Read, Write, WebSearch, WebFetch, Glob, Grep, Bash(bash .claude/scripts/hq/arc-event.sh:*)
 ---
 
 # /arc-council — the arc advisory council
@@ -180,6 +180,12 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    (NNN = next zero-padded number; slug = short kebab of the question). A `quick` run writes nothing. The
    saved file must pass `node .claude/scripts/council/council-lint.mjs --verdict <file>`.
 
+9. **Leave the receipt (spine) — deep runs only.** After saving, record the verdict on the spine
+   (hook-mode, never blocks; a `quick` run emits nothing — it wrote no verdict to receipt):
+   ```bash
+   bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload '{"decision":"<YES|NO|CONDITIONAL|WAIT>","confidence":"<High|Medium|Low>","session":"<NNN-slug>"}'
+   ```
+
 ## Review mode
 `/arc-council review` closes the loop on past verdicts: it records what actually happened and shows
 the council's calibration. It **never re-decides** anything and **only appends** to session files.
@@ -237,4 +243,5 @@ take**. For fast, low-stakes calls.
   depends"; offline, if every brief fact is low-confidence, the honest answer is WAIT with a named de-risk test.
 - **Never hide the opposition** — the strongest surviving opposing point always appears as DISSENT.
 - **Additive-only** — this command and its members are new files; never modify arc's own tracker or any
-  pre-existing file.
+  pre-existing file. Appending a `council.verdict` receipt to the append-only spine (deep runs only) IS
+  additive — it adds a new event, never rewrites the tracker or a session file (Phase 01 wiring).

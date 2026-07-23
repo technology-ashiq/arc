@@ -8,10 +8,11 @@
 # actually running it (that is the golden dry-run's job). Grep-level, matching the WARN-first
 # grep-lint culture this cycle inherits.
 #
-# Council is deferred (skipped below, not silently dropped): arc-council.md carries an
-# "additive-only — never modify any pre-existing file" non-negotiable and has NO Bash in its
-# allowed-tools, so wiring council.verdict changes both its contract and its tool surface.
-# It is also excluded from the REQ-01 golden chain (kickoff -> ship). Awaiting an explicit call.
+# Council is wired too, but deep runs ONLY (a quick run writes nothing). It stays OUT of the
+# REQ-01 golden chain (kickoff -> ship) yet must still leave its verdict receipt. Its
+# "additive-only, never modify a pre-existing file" non-negotiable now reads an append to the
+# append-only spine as additive (clarified in arc-council.md), and a scoped arc-event Bash
+# permission was added to its allowed-tools.
 #
 # RED-first: no command wires arc-event yet, so every core row below is missing — the
 # command-level half of assumptions-ledger row 1 (hook fragments alone vs command emission).
@@ -45,7 +46,7 @@ MAP
   [ -z "$fails" ] || { echo "UNWIRED FLOWS:"; echo "$fails" | tr '|' '\n'; false; }
 }
 
-@test "council flow is wired to emit its verdict" {
-  skip "deferred for an explicit call: arc-council.md is 'additive-only, never modify a pre-existing file' and has no Bash in allowed-tools — wiring council.verdict changes its contract + tool surface"
-  grep -qF "$WRITER council.verdict" "$CMDS/arc-council.md"
+@test "council flow is wired to emit its verdict (deep runs)" {
+  grep -qF "$WRITER council.verdict" "$CMDS/arc-council.md" \
+    || { echo "arc-council.md: no '$WRITER council.verdict' line — council not wired to leave its verdict receipt"; false; }
 }
