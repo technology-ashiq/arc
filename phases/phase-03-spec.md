@@ -41,7 +41,11 @@ under appetite pressure — W6 alone still closes DoD-3).
   parser path (6 lenses, skeptic-reproduces-before-CONFIRMED); holes fixed + pinned in BOTH modes
   BEFORE FAIL-mode promotion; report in `docs/evidence/phase-03/adversarial-report.md`.
 - **W8** — per-consumer cursor store (`spine cursor get/set <consumer>` at
-  `.claude/state/hq/cursors/`). **RESERVED SECOND SCOPE-CUT.**
+  `.claude/state/hq/cursors/`). **CUT — the pre-planned reserved cut, taken 2026-07-24
+  (owner-informed).** REQ-09's measurable acceptance and DoD-3 are fully met by W5 (grep-lint)
+  + W6 (catch-up-from-cursor via `--since` + same-ms-burst); a persistent store would only serve
+  future dashboard/evolve modules (this-cycle no-gos), so building it now is speculative infra
+  no current consumer uses. Banked; drops no REQ and no DoD checkbox.
 
 **Decisions locked at phase start (owner-approved 2026-07-23):**
 - Decision payload validated at the spine core (`assertDecision()` in `validate.mjs`) — a malformed
