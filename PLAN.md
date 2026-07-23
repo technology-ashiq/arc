@@ -65,7 +65,7 @@ Verified 2026-07-22 at kickoff (design-source block re-checked against the repo 
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Every factory action leaves a receipt | Scripted dry-run session (kickoff → phase-done → review → qa → commit → ship) produces the expected event sequence; every event passes strict validation; sequence matches a golden fixture where a "step" = one flow command's own emissions (order-insensitive WITHIN that command only, never across commands) — bats green | 1 | active |
+| REQ-01 | Every factory action leaves a receipt | Scripted dry-run session (kickoff → phase-done → review → qa → commit → ship) produces the expected event sequence; every event passes strict validation; sequence matches a golden fixture where a "step" = one flow command's own emissions (order-insensitive WITHIN that command only, never across commands) — bats green | 1 | validated |
 | REQ-02 | The spine cannot be silently poisoned — in either mode | **Strict mode** (`--strict`: CI/ingest/tests): every pinned hostile fixture (missing field, bad ULID, bad ts, dup idem, oversize payload, secret pattern, CRLF/BOM, non-UTF8) exits 2. **Hook mode**: the SAME inputs never block — quarantined to `events/_quarantine/` + loud SKIP + exit 0. Both asserted per fixture | 0 | validated |
 | REQ-03 | Money reaches the spine exactly once | `arc-event ingest revenue.received --json FILE` records a real provider payload; the same payload delivered twice — **including across days** — yields ONE event (idem index, fixture-proven); amount/currency/venture validated | 2 | active |
 | REQ-04 | State is derived, never truth — twice over | (a) `rm state.db && arc-replay && arc brief --date D` byte-identical to golden; (b) on a **no-sqlite runner** (Node 18 leg) the same brief byte-identical via the canonical JSONL-scan path — both bats cases in 3-OS CI | 0 | validated |
@@ -210,6 +210,10 @@ dashboard temptation · perfect cost accounting (nullable + `source`) · Windows
 | Real work available for the 5-day dogfood | none mid-build at Phase 4 → dogfood arc's own development (mold factory actions are events too) | 4 |
 | File-drop/manual ingest sufficient for revenue | provider is webhook-push-only → manual entry from dashboard export until a later cycle | 2 |
 | Lock-file + single-write append via one shared Node helper is atomic on NTFS/ext4/APFS | a torn or interleaved line ever observed in fixtures/CI or dogfood → switch to per-writer segment files merged at day-close | 0 |
+
+**Fired at Phase 01 — both resolved exactly as the row pre-specified (implemented + CI-green, no untracked scope, so recorded here rather than re-routed through `/arc-change`):**
+- *Hook fragments capture enough factory actions* → the dry-run golden landed RED with hook fragments alone, so command-level emission was added to all 7 flows (`4936371`, `13e6ddb`).
+- *Emitter overhead negligible* → measured **~2s/emit** on the owner's Windows box (>1s), so PostToolUse + SessionStart emit **async** (`dc94dd1`; 0.565s return, event still lands); SessionEnd stays synchronous for durability.
 
 ## External dependencies
 

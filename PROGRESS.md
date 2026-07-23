@@ -10,13 +10,27 @@
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | ✅ done 2026-07-23 |
-| 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ⬜ not started |
+| 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ✅ done 2026-07-23 |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ⬜ not started |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ⬜ not started |
 | 04 | Live dogfood: 5 real days · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | ⬜ not started |
 
 ## Done log
 
+- 2026-07-23 — **Phase 01 CLOSED ✅** via `/arc-phase-done 1`. Every factory action now leaves a
+  receipt: 7 flows wired to emit their Appendix-A kinds (6 core + council deep-runs-only) with
+  scoped `arc-event.sh` permissions, and EVENT.d `90-emit` fragments (SessionStart/End +
+  PostToolUse) drop `note.logged` lifecycle receipts through the existing dispatcher. REQ-01 →
+  validated. Full suite **324/324** (+6) across 3-OS × Node CI green (run 29997447315). Live
+  demo shown: a real session (this one) captured 5 receipts in gitignored `.claude/state/hq`,
+  `arc brief` renders them; redaction-live pinned on the synthesis path (4/4), guard-chain
+  regression 11/11, durability inherited from the Phase-0 corpus. Evidence bundle verified
+  (`docs/evidence/phase-01/`). **Metrics:** appetite 2.5d → **actual ~1d part-time** (well
+  under) · `amendments: 0` · `reopened: n`. **Assumptions fired-as-planned:** row 1 (golden gap
+  → command-level emission) + row 3 (overhead ~2s > 1s → async append) — recorded in PLAN's
+  ledger. One CI catch: the bare-sync golden was stale after the wiring (7 rehashed command
+  files + 3 new fragments) → regenerated (`22cd656`) — the gate the local touched-files runs
+  can't see, exactly why CI owns the full suite.
 - 2026-07-23 — **Phase 00 CLOSED ✅** via `/arc-phase-done 0`. Both checkpoints shipped;
   REQ-02 + REQ-04 → validated. Full suite **318/318** local (Windows) + 3-OS × 3-Node CI
   green (ubuntu/windows/macOS on Node 20, ubuntu on Node 18 no-sqlite + Node 22 accelerator);
@@ -62,27 +76,27 @@
 
 ## Appetite burn
 
-**~2 of ~12.5 part-time days used** (Phase 00 done, ~3d under its own 5d appetite).
-2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? — **already
-validated at Phase-0 close, so the tripwire is satisfied early.** First cut REQ-08; second
-cut REQ-09's cursor demo (lint stays). 100% → cut or kill, never extend.
+**~3 of ~12.5 part-time days used** (Phase 00 + Phase 01 done, each well under its own
+appetite — ~24% burnt). 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04
+green? — **validated at Phase-0 close, so the tripwire is satisfied early; well under it.**
+First cut REQ-08; second cut REQ-09's cursor demo (lint stays). 100% → cut or kill, never extend.
 
 ## Now
 
-**Phase 00 is CLOSED. Phase 01 (factory wiring) is next.**
-The spine exists, cannot be poisoned in either mode, and has its single read contract —
-everything downstream now consumes it instead of touching files. Kill-criteria check at
-close: ~2 of 12.5 days burnt (well under the 50%/6.25d tripwire), and the tripwire REQs
-(02 + 04) are validated — no scope-cut pressure.
+**Phase 01 is CLOSED. Phase 02 (money + brief) is next.**
+Every factory action now leaves a receipt — the 7 flows emit their command-level kinds and the
+EVENT.d fragments capture session lifecycle; the spine is already recording arc's own work
+(gitignored `.claude/state/hq`) and `arc brief` reads it back. Kill-criteria check at close:
+~3 of 12.5 days burnt (~24%, well under the 50%/6.25d tripwire); REQ-02 + REQ-04 stay validated
+— no scope-cut pressure.
 
-**Next step — Phase 01 (appetite 2.5d, depends on Phase 00):** drop EVENT.d `NN-emit`
-fragments (SessionStart/End, PostToolUse summary) through the existing hooks dispatcher +
-explicit emissions in the kickoff/phase-done/review/qa/commit/ship/council flows · the
-REQ-01 dry-run golden sequence · emitter overhead measured (<1s per event, else async
-append — assumptions row 3) · redaction live on real emissions · guard-chain regression
-bats (`arc_hook_field` untouched) + the SIGKILL/concurrent durability bats from the Phase-0
-corpus. This is where the spine starts capturing arc's own factory actions for real.
+**Next step — Phase 02 (appetite 2.5d, depends on Phase 01):** strict `revenue.received`
+ingest with cross-day idempotency (REQ-03) · the one-screen `arc brief` grouped
+needs-you / money / progress / background with overflow-to-counts (REQ-05) ·
+`cost.incurred` / `run.completed` cost line (REQ-08, stretch — first cut under pressure).
+Refine `phases/phase-02-spec.md`'s Verification plan first (it's the coarse one-liner), then
+build via the Golden Loop. **`revenue.received` = real money only** — never fake P&L truth.
 
-**Before Phase 01 code:** the branch has `feat/arc-cycle2-receipt-spine` commits through the
-close; Ashiq pushes so PR #44 stays current. Phase 01 wiring sits on top of Phase 00, so a
-red Phase-0 CI must be caught before stacking.
+**Branch state:** `feat/arc-cycle2-phase-01`, CI green on `22cd656`; draft PR #45 covers all of
+Phase 01. Mark it ready + merge to main before stacking Phase 02 (a fresh branch off the
+updated main), so Phase-02 wiring never sits on an unmerged base.

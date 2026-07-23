@@ -15,5 +15,10 @@
     ".claude/scripts/hq/lib/redact.mjs",
     ".claude/scripts/hq/lib/spine-io.mjs"
   ],
+  "files": [
+    ".claude/hooks/SessionStart.d/90-emit.sh",
+    ".claude/hooks/SessionEnd.d/90-emit.sh",
+    ".claude/hooks/PostToolUse.d/90-emit.sh"
+  ],
   "docs": []
 }

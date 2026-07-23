@@ -1,0 +1,19 @@
+# REQ-01 golden dry-run sequence — the receipt every factory action must leave.
+#
+# One line = one flow command's emission, in session order:
+#   kickoff → phase-done → review → qa → commit → ship
+#
+# A "step" is one command's own emissions: order-insensitive WITHIN a command, strict
+# ACROSS commands (PLAN REQ-01). Each flow emits exactly one kind today, so this is a flat
+# ordered list; when a flow grows to multiple kinds, this file gains a per-command block and
+# the test's comparison relaxes ordering inside that block only.
+#
+# Lifecycle events from the SessionStart/End/PostToolUse hook fragments are NOT here — this
+# golden is the command-level flow chain only (assumptions-ledger row 1: the whole point is
+# that hook fragments alone do NOT produce these kinds).
+kickoff.done
+phase.closed
+review.completed
+qa.completed
+commit.done
+ship.done

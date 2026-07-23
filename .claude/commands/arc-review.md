@@ -1,7 +1,7 @@
 ---
 description: Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/.
 argument-hint: [base-branch (default main)]
-allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Task, Write
+allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Task, Write
 ---
 
 Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the branch is clean).
@@ -30,3 +30,7 @@ Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the bra
      (leave the gate closed until a clean re-review).
    The ledger is keyed to `HEAD`, so a new commit auto-invalidates the stamp — re-run `/arc-review`
    after fixes. This closes the usermanual §8 "code review runs but never stamps" gap.
+6. **Leave the receipt (spine)** — record the review on the spine (hook-mode, never blocks):
+   ```bash
+   bash .claude/scripts/hq/arc-event.sh emit review.completed --payload '{"branch":"<branch>","verdict":"<ship|fix-first|needs-discussion>"}'
+   ```
