@@ -103,3 +103,21 @@ _pay()   { printf '%s' "$2" > "$BATS_TEST_TMPDIR/$1.json"; printf '%s' "$BATS_TE
   done
   [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
 }
+
+# ---------- adversarial pass: pinned hole (parser-class non-negotiable) ----------
+
+@test "revenue.received: a fractional amount that resolves to an integer is refused (pinned hole)" {
+  # Found by the REQ-03 adversarial pass: 999999999999.99995 IEEE-rounds to 1000000000000 and
+  # was SEALED as a value the caller never sent. Fixed at the number-token scanner (canonical.mjs)
+  # so it also covers redundant non-canonical integer forms (100.0, 1e3) for every numeric field.
+  local i=0 bad fails=""
+  for bad in '{"amount":999999999999.99995,"currency":"INR"}' \
+             '{"amount":500000000000.00003,"currency":"INR"}' \
+             '{"amount":100.0,"currency":"INR"}' \
+             '{"amount":1e3,"currency":"INR"}'; do
+    i=$((i+1)); _fresh "prec-$i"
+    run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
+    { [ "$status" -eq 2 ] && [ "$(_lines)" = "0" ]; } || fails="$fails|[$bad] status=$status out=$output"
+  done
+  [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
+}

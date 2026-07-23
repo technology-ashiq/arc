@@ -278,6 +278,12 @@ function assertNumberToken(token, where) {
       throw new SpineError("NUMBER_PRECISION", `${where}: integer ${token} cannot be represented exactly`);
     return;
   }
+  // A fractional/exponent token whose value is an integer either ROUNDED its fractional part
+  // away (999999999999.99995 -> 1000000000000, a number nobody sent -- the adversarial hole
+  // REQ-03 closed) or is a redundant non-canonical form (100.0, 1e3). Either way a receipt
+  // spine stores exact values in canonical form: an integer is written plainly.
+  if (Number.isInteger(value))
+    throw new SpineError("NUMBER_PRECISION", `${where}: ${token} resolves to an integer but is written in fractional/exponent form -- that hides rounding; write integers plainly`);
   const significant = token.replace(/^-/, "").replace(/[eE].*$/, "").replace(/\./, "").replace(/^0+/, "");
   if (significant.length > 17)
     throw new SpineError("NUMBER_PRECISION", `${where}: ${token} carries more precision than a double holds`);
