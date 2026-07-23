@@ -75,3 +75,26 @@ MAP
   done < <(_emit_fragments)
   [ -z "$fails" ] || { echo "FRAGMENT WIRING:"; echo "$fails" | tr '|' '\n'; false; }
 }
+
+# Redaction is LIVE on the EXACT emission path the wired flows and fragments use -- the flag
+# synthesis path (`emit <kind> --payload`), not only the --event-file fixtures Phase 0 pinned.
+# A secret in a real emission's payload must never reach the spine, in EITHER mode (ADR-0028:
+# fail-safe, stub-only, never fail-open). This is the "redaction live on real emissions" DoD.
+@test "redaction is live on the flows'/fragments' emission path (emit <kind> --payload)" {
+  local SPINE; SPINE="$BATS_TEST_TMPDIR/redact-spine"; mkdir -p "$SPINE"
+  export ARC_SPINE_ROOT="$SPINE" ARC_SPINE_NOW="1784736000000" ARC_SPINE_RAND="00112233445566778899"
+  local CANARY="AKIAIOSFODNN7EXAMPLE"
+  local EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
+
+  # strict mode (CI/ingest): a secret in the synthesized payload is REFUSED, nothing leaks.
+  run bash "$EVENT" emit note.logged --payload "{\"note\":\"deploy key $CANARY rotated\"}" --strict
+  [ "$status" -eq 2 ] || { echo "strict did not refuse the secret (got $status): $output"; false; }
+  run grep -rl "$CANARY" "$SPINE"
+  [ "$status" -ne 0 ] || { echo "SECRET LEAKED to disk under the spine root (strict)"; false; }
+
+  # hook mode (a live session): the SAME input never blocks (exit 0) and still never leaks.
+  run bash "$EVENT" emit note.logged --payload "{\"note\":\"deploy key $CANARY rotated\"}"
+  [ "$status" -eq 0 ] || { echo "hook mode blocked a session on a secret (got $status)"; false; }
+  run grep -rl "$CANARY" "$SPINE"
+  [ "$status" -ne 0 ] || { echo "SECRET LEAKED to disk under the spine root (hook mode)"; false; }
+}
