@@ -9,6 +9,7 @@
     ".claude/scripts/hq/arc-event.mjs",
     ".claude/scripts/hq/arc-replay.mjs",
     ".claude/scripts/hq/arc-brief.mjs",
+    ".claude/scripts/hq/arc-inbox.mjs",
     ".claude/scripts/hq/spine.mjs",
     ".claude/scripts/hq/lib/canonical.mjs",
     ".claude/scripts/hq/lib/validate.mjs",
