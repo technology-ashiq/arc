@@ -13,8 +13,8 @@
 - [ ] `arc brief` via the reader ONLY (REQ-05, CLI-first per ADR-0027): ≤40 lines,
       needs-you / money / progress / background grouping, overflow collapses to counts
       (+ `--full`), golden-fixtured, <5s on the owner's Windows box.
-- [ ] REQ-08 (stretch, first cut under pressure): `cost` union (null | object — PLAN
-      Appendix B clarification); brief shows daily spend when present.
+- [x] REQ-08 — **CUT at Phase-02 close** (stretch; owner's call, cost tracking deferred to a
+      later cycle). Was: `cost` union (null | object — PLAN Appendix B); brief shows daily spend.
 - [ ] Tracker updated · evidence bundle written.
 
 ## Verification plan
