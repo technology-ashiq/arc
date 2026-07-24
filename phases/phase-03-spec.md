@@ -18,12 +18,47 @@
       or `state.db` references.
 - [ ] Tracker updated · evidence bundle written.
 
-## Verification plan
+## Verification plan (concrete — refined at phase start 2026-07-23, owner-approved)
 
-Coarse (refined via `/arc-change` when the phase starts): inbox flow bats (request →
-decision → replay-identical) red-first → green · double-decision + unknown-ID fixtures ·
-cursor catch-up + same-ms burst · grep-lint visible in gates output as TRIAL/WARN ·
-evidence in `docs/evidence/phase-03/`.
+Red-first Golden Loop, risk-ordered; **W8 is the reserved second scope-cut** (drop first
+under appetite pressure — W6 alone still closes DoD-3).
+
+- **W1** — `arc-inbox.mjs` (NEW, reader-only) `inbox`/`approve`/`reject`: bats proves list-open
+  → approve/reject writes exactly ONE `decision.recorded`; open-set recomputed via the reader.
+- **W2** — refusal path: unknown-ID → `UNKNOWN_APPROVAL`, wrong-kind → `WRONG_KIND`,
+  already-decided (incl. DIFFERENT reason) → refused, decision count stays 1, empty/non-ULID
+  → `BAD_ARGS`, concurrent → exactly one. Guard = app read-check **+** `(kind|decides)` `--idem`.
+- **W3** — replay-identical: `rm derived && arc-replay` → inbox+brief byte-identical; rebuilt
+  idem index still blocks re-decide; only new bytes in `events/`+`derived/` (no state outside spine).
+- **W4** — `approval.requested` emission points live: kickoff plan-approval + phase-done sign-off
+  (hook-mode, never blocks); brief routes them to needs-you; manifest + tree-manifest updated.
+- **W5** — reader-only grep-lint enters TRIAL: `.claude/scripts/review/spine-reader-lint.sh`
+  glob-scans tracked hq source; `mode: warn` `tier: hook` row in `arc.gates.yaml`; gates.bats 5→6.
+  **MUST-SHIP — never the cut.**
+- **W6** — same-ms-burst fixture (`tests/fixtures/spine/same-ms-burst/`) + `--since` catch-up walk
+  + a mutation test proving append-order, never ULID string compare. **Closes DoD-3 on its own.**
+- **W7** — **mandatory adversarial** construct-a-breaking-input pass over the decision/inbox
+  parser path (6 lenses, skeptic-reproduces-before-CONFIRMED); holes fixed + pinned in BOTH modes
+  BEFORE FAIL-mode promotion; report in `docs/evidence/phase-03/adversarial-report.md`.
+- **W8** — per-consumer cursor store (`spine cursor get/set <consumer>` at
+  `.claude/state/hq/cursors/`). **CUT — the pre-planned reserved cut, taken 2026-07-24
+  (owner-informed).** REQ-09's measurable acceptance and DoD-3 are fully met by W5 (grep-lint)
+  + W6 (catch-up-from-cursor via `--since` + same-ms-burst); a persistent store would only serve
+  future dashboard/evolve modules (this-cycle no-gos), so building it now is speculative infra
+  no current consumer uses. Banked; drops no REQ and no DoD checkbox.
+
+**Decisions locked at phase start (owner-approved 2026-07-23):**
+- Decision payload validated at the spine core (`assertDecision()` in `validate.mjs`) — a malformed
+  decision can never be sealed (REQ-02 alignment). **[owner: yes]**
+- `arc-inbox.mjs` is a NEW dedicated reader-only script, not bolted onto emitter/reader. **[owner: yes]**
+- No-duplicate = read-check + `(kind|decides)` idem key · `payload.decides` is the fold key ·
+  grep-lint lives at `.claude/scripts/review/`. **[locked defaults]**
+
+**CI tripwires handled on every synced edit:** `gates.bats` count 5→6 · sync-golden `tree-manifest` regen.
+
+DoD mapping: W4→DoD-1 · W1+W2+W3→DoD-2 · W6(+W8)→DoD-3 · W5→DoD-4 · W7+packaging→DoD-5.
+Evidence in `docs/evidence/phase-03/` (red/green logs, replay-identity, cursor-burst, adversarial
+report, golden-regen diff, scan verdict).
 
 ## Rabbit holes in this phase
 

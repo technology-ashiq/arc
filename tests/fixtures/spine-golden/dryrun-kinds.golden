@@ -4,15 +4,19 @@
 #   kickoff → phase-done → review → qa → commit → ship
 #
 # A "step" is one command's own emissions: order-insensitive WITHIN a command, strict
-# ACROSS commands (PLAN REQ-01). Each flow emits exactly one kind today, so this is a flat
-# ordered list; when a flow grows to multiple kinds, this file gains a per-command block and
-# the test's comparison relaxes ordering inside that block only.
+# ACROSS commands (PLAN REQ-01). kickoff and phase-done each emit TWO kinds — their core
+# receipt plus an approval.requested sign-off gate (REQ-06) — in an order the command markdown
+# pins, so this stays a deterministic flat ordered list and exact-match holds. If a command's
+# intra-command order ever became non-deterministic, this file would split into per-command
+# blocks and the test's comparison would relax ordering inside them.
 #
 # Lifecycle events from the SessionStart/End/PostToolUse hook fragments are NOT here — this
 # golden is the command-level flow chain only (assumptions-ledger row 1: the whole point is
 # that hook fragments alone do NOT produce these kinds).
 kickoff.done
+approval.requested
 phase.closed
+approval.requested
 review.completed
 qa.completed
 commit.done

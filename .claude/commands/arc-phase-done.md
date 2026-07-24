@@ -48,7 +48,11 @@ If all pass:
    (Skip if graphify's own git hook is installed — it already rebuilt on commit.)
 9. Reply with a one-line summary + anything phase $(($1+1)) needs from me (keys,
    accounts, infra) per the "your-setup / pending" list.
-10. **Leave the receipt (spine)** — record the phase close on the spine (hook-mode, never blocks):
+10. **Leave the receipt (spine)** — record the phase close, and that moving past it needs my
+    sign-off (both hook-mode, never block):
     ```bash
     bash .claude/scripts/hq/arc-event.sh emit phase.closed --payload '{"phase":"<NN>","tests":"<count>"}'
+    # Moving past a closed phase is a human sign-off gate: leave that approval request on the
+    # spine too. Record my decision via `arc-inbox approve <id> --reason ...` / `reject` (REQ-06).
+    bash .claude/scripts/hq/arc-event.sh emit approval.requested --payload '{"what":"approve moving past phase <NN>","gate":"phase-done","phase":"<NN>"}'
     ```

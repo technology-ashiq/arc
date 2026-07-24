@@ -8,14 +8,24 @@ RUNNER() { echo "$ARC_ROOT/.claude/scripts/core/arc-gates.sh"; }
 # Write a gates.yaml, echo its path.
 _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
 
-@test "parser: real arc.gates.yaml parses to 5 valid-JSON gates" {
+@test "parser: real arc.gates.yaml parses to 6 valid-JSON gates" {
   run bash "$(RUNNER)" --list --gates-file "$ARC_ROOT/arc.gates.yaml"
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 5 ]
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 6 ]
   # every line is valid JSON with a name + check
   printf '%s\n' "$output" | while IFS= read -r g; do
     echo "$g" | jq -e '.name != "" and .check != ""' >/dev/null
   done
+}
+
+@test "the spine-api reader-lint is registered as a non-blocking warn/hook gate (REQ-09 TRIAL)" {
+  run bash "$(RUNNER)" --list --gates-file "$ARC_ROOT/arc.gates.yaml"
+  [ "$status" -eq 0 ]
+  local row; row="$(printf '%s\n' "$output" | jq -c 'select(.name=="spine-api")')"
+  [ -n "$row" ] || { echo "spine-api gate missing from arc.gates.yaml"; false; }
+  [ "$(printf '%s' "$row" | jq -r '.mode')" = "warn" ]   # TRIAL: reports, never blocks
+  [ "$(printf '%s' "$row" | jq -r '.tier')" = "hook" ]
+  [ "$(printf '%s' "$row" | jq -r '.check')" = "bash .claude/scripts/review/spine-reader-lint.sh" ]
 }
 
 @test "parser: values with flags/paths survive (no truncation at spaces or colons)" {

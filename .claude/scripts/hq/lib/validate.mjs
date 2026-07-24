@@ -4,7 +4,7 @@
 // values are rejected, never normalized. Normalizing is how a validator quietly becomes a
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
-import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES } from "./canonical.mjs";
+import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex } from "./canonical.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -47,10 +47,26 @@ const COST_KEYS = ["tokens_in", "tokens_out", "inr_estimate", "source"];
 // MINOR UNITS (paise): floats don't sum exactly, and the brief sums money.
 const REVENUE_KINDS = new Set(["revenue.received", "revenue.simulated"]);
 const CURRENCY_RE = /^[A-Z]{3}$/;
+// decision.recorded (REQ-06) is a FIRST-PARTY event with a closed shape (assertDecision).
+const VERDICTS = new Set(["approve", "reject"]);
+const MAX_REASON_BYTES = 2000;
 
 const isPlainObject = (v) =>
   v !== null && typeof v === "object" && !Array.isArray(v) &&
   (Object.getPrototypeOf(v) === Object.prototype || Object.getPrototypeOf(v) === null);
+
+// True if s carries an ASCII control character (C0 range or DEL). Checked by code point so no
+// control byte is ever written literally into this source file.
+function hasControlChar(s) {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    // C0 (< 0x20), DEL (0x7f), AND C1 (0x80-0x9f). The C1 range includes NEL (U+0085) and CSI
+    // (U+009B, a single-char terminal-escape introducer): the adversarial pass sealed a reason
+    // carrying one past a C0-only check, smuggling a terminal escape onto the append-only spine.
+    if (c < 0x20 || c === 0x7f || (c >= 0x80 && c <= 0x9f)) return true;
+  }
+  return false;
+}
 
 function assertTimestamp(ts) {
   if (typeof ts !== "string") throw new SpineError("BAD_TS", "ts must be a string");
@@ -81,7 +97,7 @@ function assertEvidencePath(p) {
   // astral characters occupy four times the budget a reader allocated for it.
   if (typeof p !== "string" || p.length === 0 || Buffer.byteLength(p, "utf8") > 512)
     throw new SpineError("BAD_EVIDENCE", "evidence must be null or at most 512 bytes");
-  if (/[\u0000-\u001f\u007f]/.test(p)) throw new SpineError("BAD_EVIDENCE", "evidence contains a control character");
+  if (hasControlChar(p)) throw new SpineError("BAD_EVIDENCE", "evidence contains a control character");
   if (p.includes("\\")) throw new SpineError("BAD_EVIDENCE", `evidence "${p}" contains a backslash -- POSIX-relative paths only`);
   if (p.startsWith("/") || /^[A-Za-z]:/.test(p) || p.startsWith("~"))
     throw new SpineError("BAD_EVIDENCE", `evidence "${p}" is absolute`);
@@ -119,6 +135,41 @@ function assertMoney(payload) {
     throw new SpineError("BAD_AMOUNT", `amount ${JSON.stringify(amount)} must be a positive integer in minor units (1..${MAX_COST_MAGNITUDE})`);
   if (typeof currency !== "string" || !CURRENCY_RE.test(currency))
     throw new SpineError("BAD_CURRENCY", `currency ${JSON.stringify(currency)} must be an ISO-4217 alpha code (3 uppercase letters)`);
+}
+
+// decision.recorded (REQ-06) decides exactly one approval, with a case-exact verdict and a
+// human reason. Unlike a provider money payload it carries no free metadata, so the shape is
+// CLOSED: a malformed decision must never be sealed onto an append-only spine (REQ-02), and an
+// un-normalized verdict keeps "Approve" or "reject " from ever counting as a real decision.
+function assertDecision(event) {
+  const payload = event.payload;
+  for (const k of Object.keys(payload))
+    if (k !== "decides" && k !== "verdict" && k !== "reason")
+      throw new SpineError("BAD_DECISION", `decision.recorded payload has unknown key "${k}" (shape is closed to decides|verdict|reason)`);
+  if (typeof payload.decides !== "string" || !ULID_RE.test(payload.decides))
+    throw new SpineError("BAD_DECISION", "decision.decides must be the ULID of the approval.requested it decides");
+  // A decision that decides its own id is a cycle no fold can resolve (mirrors supersedes-self).
+  if (payload.decides === event.id)
+    throw new SpineError("BAD_DECISION", "a decision cannot decide itself");
+  if (typeof payload.verdict !== "string" || !VERDICTS.has(payload.verdict))
+    throw new SpineError("BAD_VERDICT", `decision.verdict ${JSON.stringify(payload.verdict)} is outside approve|reject (exact case)`);
+  if (typeof payload.reason !== "string" || payload.reason.length === 0)
+    throw new SpineError("BAD_REASON", "decision.reason must be a non-empty string");
+  const reasonBytes = Buffer.byteLength(payload.reason, "utf8");
+  if (reasonBytes > MAX_REASON_BYTES)
+    throw new SpineError("BAD_REASON", `decision.reason is ${reasonBytes} bytes, ceiling is ${MAX_REASON_BYTES}`);
+  // A control character in the reason would smuggle terminal escapes into anything that later
+  // prints the brief, and makes the receipt unreadable.
+  if (hasControlChar(payload.reason))
+    throw new SpineError("BAD_REASON", "decision.reason contains a control character");
+  // Bind the idem to the approval this decision names (checked LAST, so a bad shape/verdict/
+  // reason still reports its own error first). arc-inbox keys a decision's idem on its decides,
+  // and the emit path honours a caller-supplied --idem -- so without this an attacker could seal
+  // a decision whose decides is a DECOY but whose idem pre-claims the stable key of a REAL
+  // approval A: A can then never be decided (the legit decision collides on DUP_IDEM) yet still
+  // shows open. Welding the mechanical key to the semantic decides closes that two-key desync.
+  if (event.idem !== sha256Hex(`decision.recorded|${payload.decides}`))
+    throw new SpineError("BAD_DECISION", `decision.idem must be sha256("decision.recorded|"+decides) -- a decision's idem is bound to the approval it decides`);
 }
 
 // Throws SpineError on the first violation. The caller decides what a violation MEANS
@@ -159,6 +210,7 @@ export function validateEvent(event) {
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
+  if (event.kind === "decision.recorded") assertDecision(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

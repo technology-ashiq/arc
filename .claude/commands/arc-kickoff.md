@@ -86,9 +86,14 @@ perfect one. In order:
    + phase-00-spec.md — disagreements become pre-mortem rows or reopened forks (agreement:
    proceed, no note). Also have a researcher re-verify the top-3 load-bearing ADR
    Evidence claims.
-9. **Leave the receipt (spine)** — record that kickoff produced its plan (hook-mode, never blocks):
+9. **Leave the receipt (spine)** — record that kickoff produced its plan, and that the plan now
+   needs my approval before any code (both hook-mode, never block):
    ```bash
    bash .claude/scripts/hq/arc-event.sh emit kickoff.done --payload '{"goal":"<one-line goal>","tier":"<S|M|L>"}'
+   # The plan is a human sign-off gate: leave that approval request on the spine too. The printed
+   # ULID is the approval id — once I confirm, record my decision with
+   # `arc-inbox approve <id> --reason ...` (or `reject`), so it is a receipt too (REQ-06).
+   bash .claude/scripts/hq/arc-event.sh emit approval.requested --payload '{"what":"approve the plan to start building","gate":"kickoff"}'
    ```
    Then **STOP.** Show me PLAN.md + the phase list + a one-screen summary (tier · active REQ
    count · top-3 pre-mortem risks · one-way doors decided · no-gos) and wait for explicit

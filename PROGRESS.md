@@ -12,11 +12,31 @@
 | 00 | Spine core: dual-mode emitter · canonical serializer · hostile corpus + adversarial pass (ckpt A) · replay · reader · twin determinism CI (ckpt B) | 5 days | ✅ done 2026-07-23 |
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ✅ done 2026-07-23 |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ✅ done 2026-07-23 |
-| 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ⬜ not started |
+| 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ✅ done 2026-07-24 |
 | 04 | Live dogfood: 5 real days · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | ⬜ not started |
 
 ## Done log
 
+- 2026-07-24 — **Phase 03 CLOSED ✅** via `/arc-phase-done 3`. Approvals are receipts and the
+  reader is the sealed, only API. **REQ-06:** `arc inbox` lists open `approval.requested` by
+  folding `decision.recorded` through the reader; `arc approve/reject ID --reason` writes exactly
+  one `decision.recorded` via the one writer; unknown / wrong-kind / already-decided (even a
+  different reason) refuse and never duplicate; replays byte-identically; no approval state
+  outside the spine. Decision payload **sealed at the validator core** (`assertDecision`,
+  owner-approved). `approval.requested` emission points live at the kickoff plan-approval +
+  phase-done sign-off gates (REQ-01 dry-run golden extended). **REQ-09:** reader-only grep-lint
+  enters TRIAL (`spine-api` `mode: warn` gate, glob-scan of tracked hq source — brief/inbox are
+  reader-only); same-ms-burst fixture proves `--since` resolves ties by append order, never ULID
+  string compare. **Mandatory adversarial pass (7 lenses, 40 candidates) found + fixed 2 real
+  holes** — an idem pre-claim / two-key desync that permanently locked an approval out of the
+  inbox, and C1 terminal-escape smuggling in a reason — both pinned strict+hook. **W8 (cursor
+  store) CUT** — the pre-planned reserved cut; REQ-09 acceptance + DoD-3 met by the grep-lint +
+  same-ms-burst, so it drops no REQ and no DoD checkbox. **REQ-06 + REQ-09 → validated.**
+  Touched-file suites green (spine-inbox 18/18, spine-cursor 2/2, spine-reader-lint 5/5, gates
+  15/15, golden-dryrun 2/2) + validator node smoke check; the full 3-OS × Node matrix is the push
+  authority. sync-golden `tree-manifest` regenerated (exactly 5 intended paths moved). Evidence:
+  `docs/evidence/phase-03/`. **Metrics:** appetite 1.5d → **actual ~1d part-time** ·
+  `amendments: 0` · REQs: 2 validated / 0 dropped-this-phase (W8 an implementation cut, not a REQ).
 - 2026-07-23 — **Phase 02 CLOSED ✅** via `/arc-phase-done 2`. Money reaches the spine exactly
   once and the day reads in one screen. **REQ-03:** `revenue.received` / `revenue.simulated`
   ingest validates `amount` (positive integer, minor units, 1..1e12) + `currency` (ISO-4217);
@@ -91,28 +111,29 @@
 
 ## Appetite burn
 
-**~4 of ~12.5 part-time days used** (Phase 00 + 01 + 02 done, each well under its own appetite
-— ~32% burnt). 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? —
+**~5 of ~12.5 part-time days used** (Phase 00 + 01 + 02 + 03 done, each under its own appetite
+— ~40% burnt). 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? —
 **validated at Phase-0 close, so the tripwire is satisfied early; well under it.** REQ-08 was
 the pre-planned **first cut** (taken at Phase-02 close, owner's call — NOT burn pressure);
 REQ-09's cursor demo is the reserved second cut (lint stays). 100% → cut or kill, never extend.
 
 ## Now
 
-**Phase 02 is CLOSED. Phase 03 (inbox + API seal) is next.**
-Money reaches the spine exactly once and the day reads in one screen — `arc brief` groups
-needs-you / money / progress / background (reader-only), money from minor units, background
-collapsed to a count (the noise floor), `--full` expands. REQ-08 (cost) was cut (pre-planned
-stretch). Kill-criteria check at close: ~4 of 12.5 days burnt (~32%, well under the 50%/6.25d
-tripwire); REQ-02 + REQ-04 stay validated — no scope-cut pressure.
+**Phase 03 is CLOSED. Phase 04 (live dogfood) is next — the last phase.**
+Approvals are receipts and the reader is the sealed, only API: `arc inbox` / `approve` / `reject`
+write `decision.recorded` through the one writer (sealed at the validator core), the same-ms
+tie-break is pinned, and a reader-only grep-lint (TRIAL WARN) proves every consumer goes through
+the reader. The mandatory adversarial pass found + fixed 2 real holes (idem pre-claim, C1
+smuggling). REQ-06 + REQ-09 validated; W8 (cursor store) cut as the pre-planned reserved cut.
+Kill-criteria check at close: ~5 of 12.5 days burnt (~40%, under the 50%/6.25d tripwire);
+REQ-02 + REQ-04 stay validated — no scope-cut pressure.
 
-**Next step — Phase 03 (appetite 1.5d):** the approvals/inbox flow (REQ-06: `arc inbox` lists
-`approval.requested`; `arc approve/reject ID --reason` writes `decision.recorded`; the full
-request→decision flow replays identically; approving an unknown/already-decided ID is a pinned
-error fixture) + per-consumer cursor catch-up + the reader-only grep-lint (REQ-09, TRIAL —
-WARN-first). Refine `phases/phase-03-spec.md`'s Verification plan first (coarse), then the
-Golden Loop.
+**Branch state:** `feat/arc-cycle2-phase-03`, 8 commits (W1–W7 + packaging). Local touched-file
+suites green; **push → the 3-OS CI is the full-suite authority**, then open the PR + merge to
+main before Phase 04.
 
-**Branch state:** `feat/arc-cycle2-phase-02`, CI green on `6a380fc`; draft PR #46 covers all of
-Phase 02 (REQ-03 + REQ-05; REQ-08 cut). Mark it ready + merge to main before stacking Phase 03
-(a fresh branch off the updated main).
+**Next step — Phase 04 (appetite 3d effort, ≥5 elapsed):** live dogfood (REQ-07) — arc's own
+development and/or a consumer repo emit real receipts for ≥5 consecutive days, brief read daily,
+honest revenue rules (`revenue.received` = real money only), the weekly gap audit (session-log
+vs spine), evidence bundle + retro. Refine `phases/phase-04-spec.md`'s Verification plan first,
+then the Golden Loop.
