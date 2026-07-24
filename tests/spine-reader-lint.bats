@@ -22,9 +22,12 @@ setup() {
   # a clean consumer -- reader-only, plus a COMMENT naming the tokens (must be ignored)
   printf '%s\n' '// this consumer never opens events/*.jsonl or state.db -- it uses the reader' 'import { query } from "./spine.mjs";' 'export const rows = 1;' > "$SB/.claude/scripts/hq/arc-brief.mjs"
 
-  ( cd "$SB" \
-      && export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
-      && git init -q && git add -A && git commit -qm seed )
+  # Repo-LOCAL identity (in $SB/.git/config), so the per-test `git commit`s below inherit it on
+  # a clean runner too -- exporting it only inside this subshell scoped it to the seed commit and
+  # left the CI Ubuntu legs (no global identity) failing the later commits with status 128.
+  ( cd "$SB" && git init -q \
+      && git config user.email arc-test@arc.local && git config user.name arc-test \
+      && git add -A && git commit -qm seed )
 }
 
 _lint() { ( cd "$SB" && bash .claude/scripts/review/spine-reader-lint.sh ); }
