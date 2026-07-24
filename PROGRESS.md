@@ -119,21 +119,26 @@ REQ-09's cursor demo is the reserved second cut (lint stays). 100% → cut or ki
 
 ## Now
 
-**Phase 03 is CLOSED. Phase 04 (live dogfood) is next — the last phase.**
-Approvals are receipts and the reader is the sealed, only API: `arc inbox` / `approve` / `reject`
-write `decision.recorded` through the one writer (sealed at the validator core), the same-ms
-tie-break is pinned, and a reader-only grep-lint (TRIAL WARN) proves every consumer goes through
-the reader. The mandatory adversarial pass found + fixed 2 real holes (idem pre-claim, C1
-smuggling). REQ-06 + REQ-09 validated; W8 (cursor store) cut as the pre-planned reserved cut.
-Kill-criteria check at close: ~5 of 12.5 days burnt (~40%, under the 50%/6.25d tripwire);
-REQ-02 + REQ-04 stay validated — no scope-cut pressure.
+**Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+concrete daily-cadence checklist (`phases/phase-04-spec.md`). Venture repos (venturemind /
+Opportunity-Scout) deferred — they carry the arc framework but NOT the spine (no `scripts/hq/`
+emitter, `hq` unregistered; would need a one-time install). Assumptions row 4 holds via its
+arc-self branch — no FIRED. REQ-07 is the last open requirement; closing Phase 04 closes the cycle.
 
-**Branch state:** `feat/arc-cycle2-phase-03`, 8 commits (W1–W7 + packaging). Local touched-file
-suites green; **push → the 3-OS CI is the full-suite authority**, then open the PR + merge to
-main before Phase 04.
+**Daily loop (Day 1 = 2026-07-24, this session):** work normally → receipts auto-emit to
+`.claude/state/hq/events/DATE.jsonl` (Phase 1/3 wiring) → `arc brief` once/day (confirm ≤ one
+screen) → copy that day's brief + JSONL into `docs/evidence/phase-04/`. Revenue = `revenue.simulated`
+only (arc earns nothing real; REQ-07 closes "mechanism proven, live value pending" — no fabricated
+`revenue.received`). At window end: gap audit (session-log vs spine) → quarantine review →
+`/arc-retro` + grep-lint TRIAL decision → `/arc-phase-done 4`.
 
-**Next step — Phase 04 (appetite 3d effort, ≥5 elapsed):** live dogfood (REQ-07) — arc's own
-development and/or a consumer repo emit real receipts for ≥5 consecutive days, brief read daily,
-honest revenue rules (`revenue.received` = real money only), the weekly gap audit (session-log
-vs spine), evidence bundle + retro. Refine `phases/phase-04-spec.md`'s Verification plan first,
-then the Golden Loop.
+**Progress:** **Day 1/≥5 captured (2026-07-24)** — brief 10 lines / 306 ms ✅ (REQ-05) · 22 real
+receipts (note.logged 19 · approval.requested · decision.recorded · phase.closed) · quarantine =
+all 22 dup-idem (dedup working, no gap). Retro note logged: hook+command emissions overlap (noise,
+not a defect — fix out of scope this phase). Day log: `docs/evidence/phase-04/day-log.md`.
+
+**Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed. Tripwire
+(50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria satisfied, no scope-cut pressure.
+
+**Scoreboard:** REQ-07 active (this phase) · 7 validated (01–06, 09) · 1 dropped (REQ-08 cost).
