@@ -398,3 +398,163 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
     six products — `core` `plan` `review` `qa` `git` `council` — with selective install
+
+## 2026-07-22 20:11 — main
+- Last commit: ac49016 Arc Evolve Strategy Configs
+- Uncommitted files at exit: 0
+- Position (PROGRESS.md ## Now):
+    
+    **INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
+    six products — `core` `plan` `review` `qa` `git` `council` — with selective install
+
+## 2026-07-22 20:12 — main
+- Last commit: ac49016 Arc Evolve Strategy Configs
+- Uncommitted files at exit: 1
+- Position (PROGRESS.md ## Now):
+    
+    **INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
+    six products — `core` `plan` `review` `qa` `git` `council` — with selective install
+
+## 2026-07-23 00:24 — feat/arc-cycle2-receipt-spine
+- Last commit: f489b87 docs(progress): record Phase 00 ckpt A built, adversarial pass in flight
+- Uncommitted files at exit: 5
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 00 ckpt A is built and green; the adversarial pass decides whether it closes.**
+    Kickoff approved by Ashiq 2026-07-22 (all three simulation blockers ruled "apply the
+
+## 2026-07-23 10:35 — feat/arc-cycle2-receipt-spine
+- Last commit: c17e544 chore(phase-done): close Phase 00 — receipt spine core
+- Uncommitted files at exit: 2
+
+## 2026-07-23 11:24 — feat/arc-cycle2-receipt-spine
+- Last commit: a3f353c ci: run once per PR, not again on merge to main
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 00 is CLOSED. Phase 01 (factory wiring) is next.**
+    The spine exists, cannot be poisoned in either mode, and has its single read contract —
+
+## 2026-07-23 11:33 — feat/arc-cycle2-receipt-spine
+- Last commit: a3f353c ci: run once per PR, not again on merge to main
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 00 is CLOSED. Phase 01 (factory wiring) is next.**
+    The spine exists, cannot be poisoned in either mode, and has its single read contract —
+
+## 2026-07-23 11:35 — main
+- Last commit: ac49016 Arc Evolve Strategy Configs
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **INITIATIVE CLOSED ✅ (2026-07-22).** All six phases done, every one under appetite. arc is now
+    six products — `core` `plan` `review` `qa` `git` `council` — with selective install
+
+## 2026-07-23 11:49 — feat/arc-cycle2-phase-01
+- Last commit: 2cc8e62 Merge pull request #44 from technology-ashiq/feat/arc-cycle2-receipt-spine
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 00 is CLOSED. Phase 01 (factory wiring) is next.**
+    The spine exists, cannot be poisoned in either mode, and has its single read contract —
+
+## 2026-07-23 22:15 — main
+- Last commit: 4983339 Merge pull request #46 from technology-ashiq/feat/arc-cycle2-phase-02
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 is CLOSED. Phase 03 (inbox + API seal) is next.**
+    Money reaches the spine exactly once and the day reads in one screen — `arc brief` groups
+
+## 2026-07-24 09:13 — feat/arc-cycle2-phase-03
+- Last commit: b8fb9e3 chore(phase-done): close Phase 03 — inbox + API seal (REQ-06 + REQ-09 validated)
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 is CLOSED. Phase 04 (live dogfood) is next — the last phase.**
+    Approvals are receipts and the reader is the sealed, only API: `arc inbox` / `approve` / `reject`
+
+## 2026-07-24 10:52 — main
+- Last commit: no commits yet
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 is CLOSED. Phase 04 (live dogfood) is next — the last phase.**
+    Approvals are receipts and the reader is the sealed, only API: `arc inbox` / `approve` / `reject`
+
+## 2026-07-24 11:06 — main
+- Last commit: 9471bd0 Merge pull request #47 from technology-ashiq/feat/arc-cycle2-phase-03
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 03 is CLOSED. Phase 04 (live dogfood) is next — the last phase.**
+    Approvals are receipts and the reader is the sealed, only API: `arc inbox` / `approve` / `reject`
+
+## 2026-07-24 13:43 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+
+## 2026-07-24 14:41 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-24 17:43 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-25 12:57 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-25 14:05 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-25 14:09 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-25 14:24 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-25 14:37 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-25 17:31 — feat/arc-cycle2-phase-04
+- Last commit: 4b738cb chore(phase-04): start live dogfood — host=arc, verification plan refined, Day 1 captured
+- Uncommitted files at exit: 2
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
+    Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
