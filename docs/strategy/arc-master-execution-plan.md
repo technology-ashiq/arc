@@ -64,7 +64,7 @@ the venture track wins the week.
 
 ## 4. Cycle 2 — Receipt Spine (PLAN v2 final; phase specs worked out)
 
-Full PLAN: `arc-cycle2-receipt-spine-PLAN-v2.md` (9 REQs · appetite 2.5w Tier M ·
+Full PLAN: `plans/PLAN-cycle2-receipt-spine-v2.1.md` (9 REQs · appetite 2.5w Tier M ·
 ADRs 0021–0028 · 18-kind vocabulary · schema v1). Phase specs:
 
 ### phase-00-spec — Spine core (5 days, 2 checkpoints)

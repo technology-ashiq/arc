@@ -36,8 +36,9 @@ arc/
 ├── tests/               ← central bats tests (ADR-0021)
 └── docs/
     ├── HISTORY.md       ← company logbook — what's been done, one entry per cycle
-    ├── strategy/        ← vision docs (constitution, architecture, org blueprint)
-    │   └── plans/       ← THE QUEUE: PLAN-*.md + BRIEF-*.md + README (trigger index)
+    ├── strategy/        ← ACTIVE vision docs (constitution, architecture, org blueprint)
+    │   ├── plans/       ← THE QUEUE: PLAN-*.md + BRIEF-*.md + README (trigger index)
+    │   └── records/     ← rationale history — closed analysis briefs still cite
     ├── adr/             ← permanent decisions — the "why is it like this" answers
     ├── evidence/        ← proof bundles emitted by /arc-phase-done
     ├── archive/         ← closed/parked initiatives — do not read, do not touch
