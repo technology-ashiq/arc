@@ -13,7 +13,7 @@
 ## 1. The honest frame
 
 A 100%-autonomous company does not exist in mid-2026. The achievable, evidence-backed
-target — already stated in `arc-money-engine-plan.md` §2 — is:
+target — already stated in `records/arc-money-engine-plan.md` §2 — is:
 
 > **~85–90% of execution automated; the human CEO spends 30–60 min/day on approvals,
 > kill calls, taste, and everything that touches money, accounts, or law.**
