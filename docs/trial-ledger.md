@@ -3,7 +3,7 @@
 > The evidence log that decides when a WARN-first substance gate becomes a real (FAIL-capable)
 > gate. Written by `/arc-retro`; consumed by a human before flipping a gate. This file is the
 > reason "scripts GATE, never LLM self-assessment" stays literally true — promotion is driven by
-> recorded runs, not a judgement call. (Kickoff v4, item F1. Spec: `docs/kickoff-v4-plan.md`.)
+> recorded runs, not a judgement call. (Kickoff v4, item F1. Spec: `docs/archive/kickoff-v4-plan.md`.)
 
 ## What "in trial" means
 
