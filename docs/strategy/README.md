@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-07-25, evening reorg)
+## File map & status (updated 2026-07-26, arc-design plan added)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (18 files) | **ACTIVE — the operational layer** | Kickoff-ready: 4 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (19 files) | **ACTIVE — the operational layer** | Kickoff-ready: 5 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
 | `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -42,10 +42,14 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
    updated in org-blueprint + master plan + PLAN-v2.1); the superseded Cycle-2 v2 draft
    moved to `docs/archive/`. Frozen docs in `archive/`/`evidence/` may still cite the old
    root paths — this table is the authority.
+5. **2026-07-26:** `plans/PLAN-design.md` added (arc-design "The Designer" — design
+   capability module; decisions DES-A…H locked, ADR numbers at kickoff). Slotted 1.5 in
+   the plans ordering: after Cycle-2 close, before/alongside Cycle-3 (it serves Cycle-3's
+   UI phases).
 
 ## Provenance
 
-Produced 2026-07-18 → 2026-07-25 in Cowork planning sessions (Ashiq + Claude), grounded
+Produced 2026-07-18 → 2026-07-26 in Cowork planning sessions (Ashiq + Claude), grounded
 against the repo before AND after the orchestrator initiative closed. Nothing in this
 folder changes code or gates by itself; implementation always goes through
 `/arc-kickoff` → review → explicit approval.
