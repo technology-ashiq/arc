@@ -24,7 +24,7 @@
 | Two real consumer repos installed (venturemind · Opportunity-Scout) | ✅ Cycle-1 era |
 | Company runs on receipts (spine live on real work) | ✅ 2026-07-24 — dogfood day 1+ |
 | Constitution adopted (first `constitution.adopted` event) | ⏳ pending — Phase-04 retro |
-| Venture chosen for Cycle-3 | ⏳ pending — decision overdue |
+| Venture chosen for Cycle-3 | ✅ 2026-07-26 — **LexOS** (legal-practice SaaS, Phase 1 live; ADR-0007 in the LexOS repo) |
 | First real ₹ (`revenue.received`) | ⏳ target Sep 2026 |
 
 ## Entries (newest first)

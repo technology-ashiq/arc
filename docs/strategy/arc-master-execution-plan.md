@@ -49,6 +49,12 @@ the five laws graduate into its articles; every future decision passes it first.
 Two tracks always: **OS track builds only what the venture track pulls.** When in doubt,
 the venture track wins the week.
 
+> **2026-07-26 update — Venture #1 NAMED: LexOS** (legal practice-management SaaS,
+> sibling repo `Lexos`, Phase 1 live; decision ADR-0007 in the LexOS repo). The Cycle-3
+> row reads as "LexOS continues under its own Tier-L plan" — the Tier-M 3-week shape in
+> `plans/PLAN-cycle3-venture-launch.md` does not run as written (see its header note).
+> Older InvoiceFly mentions here → read as LexOS (strategy/README correction #1).
+
 ## 3. Cycle 1 — close-out checklist (current work, already planned)
 
 1. Phase 03: ckpt 2 core (~107 refs, first real `100755` moves) → ckpt 3 plan →

@@ -1,11 +1,20 @@
-# PLAN (design source) — Cycle 3 · First Money: [VENTURE] launch
+# PLAN (design source) — Cycle 3 · First Money: LexOS launch
 
 > **Trigger:** Cycle 2 (receipt spine) closed, or running late — first money must not wait
 > past ~2 weeks after it. **Prerequisite decision:** VENTURE named (see "Venture slot").
 > This kickoff runs **in the venture's repo** (arc installed there), not in the mold.
 > arc-side work is FROZEN during this cycle except retro fixes.
+>
+> **VENTURE NAMED — 2026-07-26: LexOS** — legal practice-management SaaS
+> (`E:\Work_Hub\01_Automemory\Lexos`, Phase 1 live at lexos-bay.vercel.app; decision
+> **ADR-0007 in the LexOS repo**). LexOS already runs its own council-reviewed Tier-L
+> plan (completeness-first — its ADR-0006), so this Tier-M 3-week plan does **not** run
+> as written: Cycle-3 = LexOS continues under its own PLAN.md, and this document's
+> launch content (SEO pages · 5-channel launch week · pivot rule · funnel counts ·
+> V-B/V-C/V-D) merges into LexOS's launch phase. V-A already decided there: Razorpay
+> (LexOS ADR-0003 / REQ-05).
 
-## Venture slot — decide before kickoff (candidates as of 2026-07-22)
+## Venture slot — DECIDED 2026-07-26: **LexOS** (candidates below were as of 2026-07-22)
 
 **InvoiceFly does not exist** (never created — ADR-0022 in the arc repo). Real options:
 
