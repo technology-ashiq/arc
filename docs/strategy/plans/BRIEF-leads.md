@@ -2,6 +2,8 @@
 
 > **Trigger (pull):** a venture or the MVP-service lane needs outbound. **Prereqs:** spine
 > + inbox (every send is an event; sequences need approval flow) · a real offer to sell.
+> **v1.1 (2026-07-25):** pipeline receipt kinds flagged as an ADR at this kickoff — from
+> `../arc-company-org-blueprint.md` §6 (role #41), approved docs-only.
 
 **Goal:** `/arc-leads <icp>` builds a small, deeply-researched lead list (quality over
 volume), drafts genuinely-personalized first-touches, and runs a capped sequence — every
@@ -35,8 +37,11 @@ domain decision at kickoff; (2) generic outreach = 0 replies + reputation cost �
 personalization lint + 25-not-2500 philosophy; (3) replies rot unanswered → same-day
 triage REQ + inbox surfacing.
 
-**Open decisions at kickoff:** sending domain/tool · which offer (venture vs service) ·
-calendar link setup.
+**Open decisions at kickoff:** sending domain/tool (decide once with growth's
+transactional-email choice — one ADR) · which offer (venture vs service) · calendar link
+setup · **pipeline receipt kinds** — the spine vocabulary is a closed 18-kind set, so
+`lead.replied` / `meeting.booked` / `deal.won` as new kinds vs reusing `note.logged`
+with tags is an ADR at this kickoff (RevOps truth lives on the spine either way).
 
 **Kickoff prompt:**
 ```

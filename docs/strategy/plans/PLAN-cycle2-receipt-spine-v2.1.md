@@ -2,7 +2,7 @@
 
 > **Status: READY FOR KICKOFF NOW.** v2.1, 2026-07-22 — reground of v2 against the CLOSED
 > orchestrator initiative (all 6 phases done 2026-07-22, ~22% burn). Supersedes
-> `../arc-cycle2-receipt-spine-PLAN-v2.md` on every point where they differ.
+> `../../archive/arc-cycle2-receipt-spine-PLAN-v2.md` on every point where they differ.
 > **Corrections vs v2:** (1) proposed-ADR numbers 0021–0028 COLLIDED with real ADRs
 > 0021–0023 — decisions renamed SPINE-A…H, numbered at kickoff from the next free slot
 > (0024+ as of 2026-07-22; re-check `docs/adr/`). (2) Tests live in central `tests/`

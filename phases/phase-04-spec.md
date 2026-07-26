@@ -20,9 +20,46 @@
 
 ## Verification plan
 
-Coarse (refined via `/arc-change` at phase entry): dogfood host access confirmed at entry
-(assumptions row 4 fallback: arc itself) · 5-day evidence bundle verified complete ·
-quarantine dir reviewed (ADR-0031 consequence) · evidence in `docs/evidence/phase-04/`.
+Refined at phase entry (2026-07-24) via `/arc-change` — host confirmed, coarse plan made
+concrete + checkable. In-scope refinement of REQ-07; no REQ added/dropped.
+
+**Host (confirmed at entry): arc itself.** Spine live at `.claude/state/hq/`; receipts already
+captured 2026-07-23 + 24 (proof-of-life). Venture repos deferred — venturemind / Opportunity-Scout
+carry the arc *framework* but NOT the receipt-spine (no `scripts/hq/` emitter, `hq` unregistered),
+so each would need a one-time install; not taken this cycle. Assumptions row 4 holds via its
+arc-self branch — no FIRED.
+
+**Window:** ≥5 consecutive real working days. Day N = Nth day real arc work happens (≥1 real
+factory action); Day 1 = first working day on/after entry (2026-07-24). Calendar span ≥5 elapsed.
+
+**Each working day (1..5):**
+1. Work normally — receipts auto-emit to `.claude/state/hq/events/DATE.jsonl` (Phase 1/3 wiring;
+   no manual "make a receipt" step).
+2. `arc brief` once → confirm it renders ≤ one screen (REQ-05); save output to
+   `docs/evidence/phase-04/brief-DATE.txt`.
+3. Copy that day's receipts → `docs/evidence/phase-04/events-DATE.jsonl` (live `hq/` is gitignored
+   — SPINE-B — so the bundle must hold the copies to persist).
+4. Log any `events/_quarantine/` entry (expected hook-mode reject) on the day's line.
+
+**Revenue (honest money):** arc earns nothing real → ZERO `revenue.received`; exercise the money
+path only via `revenue.simulated` (clearly practice). REQ-07 closes "mechanism proven, live value
+pending." A real `revenue.received` requires a provider export — fabrication forbidden.
+
+**Gap audit (pre-mortem #2, at window end):** diff `docs/session-log.md` (window dates) vs spine
+receipts. Every logged factory action has a receipt, OR the gap is named + filed as `note.logged`
+/ a post-cycle ADR — NO new emission points this phase (out of scope; vocabulary closed, ADR-0026).
+Write → `docs/evidence/phase-04/gap-audit.md`.
+
+**Quarantine review (ADR-0031):** review `events/_quarantine/` at close; explain each entry in
+the bundle.
+
+**Close:** bundle complete (per-day briefs + JSONL copies + gap-audit + quarantine note + summary)
+→ `/arc-retro` → TRIAL review of the NEW reader-only grep-lint gate ONLY (8 existing kickoff-lint
+trials stay WARN, locked this cycle) → `/arc-phase-done 4`.
+
+**Checkable acceptance:** 5 working-day briefs each ≤ one screen · every working day's JSONL in the
+bundle · zero unbacked `revenue.received` · gap-audit shows full coverage or named+filed gaps ·
+quarantine explained · retro + grep-lint trial decision recorded.
 
 ## Rabbit holes in this phase
 
@@ -37,8 +74,9 @@ quarantine dir reviewed (ADR-0031 consequence) · evidence in `docs/evidence/pha
 
 ## Your-setup / pending
 
-- Confirm the Phase-4 host at phase entry: arc itself and/or venturemind /
-  Opportunity-Scout (both carry arc installs; access re-verified then).
+- ✅ RESOLVED 2026-07-24 — Phase-4 host = **arc itself** (owner's call). Entry re-verification
+  found venturemind / Opportunity-Scout carry the arc framework but NOT the spine, so they're
+  deferred (would need a one-time install); the arc-self spine is live and already capturing.
 - If any real money lands in the window: provide the provider export (else the
   `revenue.simulated` path closes the mechanism).
 

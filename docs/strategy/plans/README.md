@@ -31,6 +31,7 @@
 | — | growth v1 | `BRIEF-growth.md` | Pull: live venture needs traffic |
 | — | leads v1 | `BRIEF-leads.md` | Pull: an offer needs outbound |
 | — | ops v1 | `BRIEF-ops.md` | Pull: ≥2 live ventures / support volume |
+| — | legal pack | `BRIEF-legal-pack.md` | Pull: first venture reaches launch prep (policies before real payments) |
 | — | ledger module | `BRIEF-ledger.md` | Pull: ≥2 revenue sources |
 | — | evolve v1 | `BRIEF-evolve.md` | Pull: 4+ weeks of real metrics |
 | — | memory v1 | `BRIEF-memory.md` | Pull: recall pain (>2 min to find a lesson) |
@@ -46,6 +47,10 @@ phases, pre-mortems. **BRIEFs** are deliberately lighter — real REQs and locke
 non-negotiables, but current-state gets filled at their kickoff (writing 400-line plans
 for far-future modules today would be stale slop by the time their triggers fire; the
 brief + the kickoff process produce the full plan when it's actually needed).
+
+**Org-chart lens over this pack** — which department each module is, what exists vs
+what's missing, and why roles ≠ standing agents: `../arc-company-org-blueprint.md`
+(added 2026-07-25 with `BRIEF-legal-pack.md` + v1.1 scope notes in growth/leads/ledger).
 
 ## How to start ANY initiative (the 4-step ritual)
 

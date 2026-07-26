@@ -1,0 +1,10 @@
+brief 2026-07-24
+
+needs-you (1)
+  approval.requested
+
+progress (2)
+  phase.closed
+  decision.recorded
+
+background: 19 (note.logged 19)   — --full to expand
