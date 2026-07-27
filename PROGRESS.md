@@ -175,8 +175,19 @@ Not fixed during the dogfood (wiring/vocabulary closed, ADR-0026) — named and 
 cycle. **Still open, honestly:** 07-26 produced neither receipts NOR quarantine lines, and the
 idem defect does not explain total silence — a second cause is unidentified (audit §5).
 
-**Remaining to close Phase 04:** ② quarantine review written into the bundle · ③ bundle summary ·
-④ `/arc-retro` + grep-lint TRIAL decision + the REQ-01 call · ⑤ `/arc-phase-done 4`.
+**② QUARANTINE REVIEW DONE** → `docs/evidence/phase-04/quarantine-review.md`. 101 entries, two
+codes, all accounted for: **100 `DUP_IDEM`** (every one a lost real receipt, per ①, NOT benign
+dedup) + **1 `BAD_JSON`** (2026-07-23, pre-window, empty payload correctly refused; `raw` empty so
+not root-caused — filed low-priority). Containment itself proved sound: no session ever blocked,
+nothing invalid reached `events/*.jsonl`, and `stub_only:false` on all 101 → the ADR-0028
+redaction fail-safe never had to fire and no secret bytes were written. The defect is the idem
+policy, not the quarantine mechanism. No entry is replayed — lost receipts are recorded as lost.
+
+**③ BUNDLE SUMMARY DONE** → `docs/evidence/phase-04/SUMMARY.md`. Bundle now complete: 3 briefs +
+3 JSONL copies + day-log + gap-audit + quarantine-review + summary.
+
+**Remaining to close Phase 04:** ④ `/arc-retro` + grep-lint TRIAL decision + the REQ-01 call ·
+⑤ `/arc-phase-done 4`.
 
 **Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed — elapsed
 MET (07-24 → 07-28). Tripwire (50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria
