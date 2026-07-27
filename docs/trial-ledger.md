@@ -126,3 +126,55 @@ on the one gate closest to the bar.
 
 **Net: no gate moves.** Nothing is deleted from the `TRIAL` set. The honest state of all eight is
 unchanged from 2026-07-22: useful advisory output, insufficient evidence to block on.
+
+---
+
+# Non-kickoff TRIAL gates
+
+The gates above are `kickoff-lint.mjs` substance gates. Cycle 2 added a TRIAL gate outside that
+set — recorded here because the promotion discipline is the same, but the promotion mechanism is
+different (an `arc.gates.yaml` `mode:` flip, not a `TRIAL` set edit).
+
+## `spine-api` — reader-only grep-lint (REQ-09 / ADR-0030)
+
+**What it enforces.** The spine is arc's only public API: every hq module outside the
+implementation layer (`spine.mjs`, `arc-replay.mjs`, `lib/*`) must reach events and derived state
+through the reader — never by opening `events/*.jsonl` or `state.db`, never by importing
+`node:sqlite`. Scans tracked `.claude/scripts/hq/**.mjs` by glob (not a hardcoded list), ignores
+comment-only tokens. Registered at `arc.gates.yaml:47` as `mode: warn`, `tier: hook`.
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-07-24 | spine-api | Phase-03 close (`b8fb9e3`) — gate created | no — 5/5 bats green, no violations in tracked source | no |
+| 2026-07-28 | spine-api | Phase-04 close review — `bash .claude/scripts/review/spine-reader-lint.sh` | no — exit 0, zero violations | no |
+
+## Phase 04 promotion decision — 2026-07-28: `spine-api` KEPT WARN
+
+Required by the Phase-04 exit criteria, which scope the TRIAL review to **this** gate only (the
+8 kickoff-lint gates are locked WARN for the cycle regardless).
+
+**Criterion 1 — fixture-proven: MET.** `tests/spine-reader-lint.bats` is 5/5 green on the owner's
+box and asserts the gate FAILs on its own named mutations, not merely that it passes:
+
+| # | Assertion | Covers |
+|---|---|---|
+| 2 | a consumer opening `events/*.jsonl` directly is flagged (exit 1), naming the file | true positive |
+| 3 | a consumer reaching `state.db` / `node:sqlite` directly is flagged | true positive |
+| 1 | clean consumers pass; the exempt implementation layer carrying the same real tokens is NOT flagged | false-positive edge |
+| 4 | a token only inside a line or block comment does NOT trip the lint | false-positive edge |
+| 5 | an untracked violating file is not scanned (tracked source only) | scope boundary |
+
+This is stronger fixture coverage than any of the eight kickoff-lint gates has.
+
+**Criterion 2 — ≥3 clean runs with zero false-positives: NOT MET.** Two runs are logged above,
+both clean, and both on the same author's code written against this very check. By this file's
+own standard — established in the "First real fire" note — that measures silence, not accuracy.
+The honest reading is that the gate has never been exercised against source it did not already
+agree with. It is also plausible the gate is clean because the reader-only discipline genuinely
+holds (Phase 03 verified `brief`/`inbox` are reader-only); clean-because-correct and
+clean-because-blind are indistinguishable without a fire on code the gate did not shape.
+
+**Net: no flip.** `arc.gates.yaml` keeps `mode: warn` for `spine-api`. What would change it: one
+more clean run plus at least one run against hq consumer code written by someone not designing to
+this lint — the natural occasion is the next cycle's first new spine consumer (dashboard, evolve,
+or policy), each of which is a genuine outside caller of the reader contract.

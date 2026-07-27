@@ -208,7 +208,31 @@ policy, not the quarantine mechanism. No entry is replayed — lost receipts are
 - **Scoreboard row appended** → `docs/retro-log.md`: `M | rework 0/4 | amendments 1 | FIRED 2/6 |
   burn ~40% | sim-blockers-r1 not-recorded | t-to-phase0 ~1d`.
 
-**Remaining to close Phase 04:** ⑤ `/arc-phase-done 4`.
+**⑤ `/arc-phase-done 4` RAN 2026-07-28 → REFUSED the close, correctly.** Two blockers it caught
+that the retro had missed; both now cleared:
+- **ADR-0031's revisit trigger had FIRED and was unrouted.** Its trigger — *"Phase-4 gap audit
+  shows quarantine swallowing events … silent data loss"* — is exactly what ① found. Phase-done's
+  trigger scan refuses to close on unrouted risk. Routed via `/arc-change` → **[ADR-0032]
+  (docs/adr/0032-spine-i-hook-mode-rejections-must-surface.md)**: hook-mode rejections must
+  surface in the **brief** (needs-you group), because ADR-0031's "loud SKIP" is loud on stderr
+  inside a hook nobody watches, and the quarantine file is gitignored — a channel nobody reads is
+  not surfacing. **"Never block a session" is untouched and stays inviolate.** Decided, not built
+  (no wiring changes this phase — ADR-0026); enters the next cycle with the idem fix. ADR-0031
+  stamped FIRED with the pointer. The other 7 ADRs were scanned — none fired (ADR-0028's trigger
+  is *redaction* false-positives; every rejection here was `DUP_IDEM`, `stub_only:false`).
+- **Exit criterion 5 had reviewed the WRONG gate.** The spec scopes the TRIAL review to the NEW
+  reader-only grep-lint gate ONLY; the retro reviewed the 8 kickoff-lint gates, which the spec
+  locks WARN regardless. Corrected: **`spine-api` reviewed and KEPT WARN**
+  (`docs/trial-ledger.md`). Criterion 1 (fixture-proven) is MET and is stronger than any
+  kickoff-lint gate's — 5/5 bats green, asserting the gate FAILs on its own mutations plus three
+  false-positive edges. Criterion 2 is NOT met: 2 logged runs, both on the author's own code
+  written against the check, which this ledger scores as silence, not accuracy.
+
+**Also confirmed at phase-done:** zero source or test files changed during Phase 04 (docs and
+tracker only), so the suite state is unchanged from the Phase-03 close (3-OS CI green); plan-drift
+lint passes.
+
+**Remaining to close Phase 04:** re-run `/arc-phase-done 4` now that both blockers are cleared.
 
 **Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed — elapsed
 MET (07-24 → 07-28). Tripwire (50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria

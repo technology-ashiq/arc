@@ -148,6 +148,7 @@ sync exclusion as the spine, deletable at will (REQ-04).
 | [0029](docs/adr/0029-spine-f-immutability-windows-supersedes.md) | SPINE-F — active day append-only; closed day immutable forever; corrections via `supersedes` | one-way |
 | [0030](docs/adr/0030-spine-g-spine-is-the-only-public-api.md) | SPINE-G — the spine is arc's only public API: one reader + per-consumer cursors; no pub/sub | two-way |
 | [0031](docs/adr/0031-spine-h-emitter-dual-mode.md) | SPINE-H — emitter dual-mode: hook mode never blocks, strict mode exits 2; one validator core | two-way |
+| [0032](docs/adr/0032-spine-i-hook-mode-rejections-must-surface.md) | SPINE-I — hook-mode rejections must surface in the brief (needs-you), not just stderr + a gitignored quarantine file. **Amends 0031's surfacing half only; "never block a session" untouched.** Written 2026-07-28 because 0031's own revisit trigger fired: the Phase-04 gap audit found 100 receipts silently lost over 4 days | two-way |
 
 Inherited and still binding: [0017](docs/adr/0017-park-v2-initiative.md) (v2 stays parked) ·
 [0021](docs/adr/0021-tests-stay-centralised.md) (central `tests/`) ·
