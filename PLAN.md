@@ -11,7 +11,7 @@
 For Ashiq, arc gains a **receipt spine** — every factory action and every rupee becomes one
 append-only event stream, consumed by everything else only through one read contract,
 rendered as a one-screen daily brief and an approval inbox, and proven on real work for
-five real days — so the company's day is replayable from receipts and every future module
+three real days (amended from five, 2026-07-28) — so the company's day is replayable from receipts and every future module
 (engine, evolve, dashboard, policy) plugs into a stable API instead of each other's internals.
 
 ## Current state
@@ -65,13 +65,13 @@ Verified 2026-07-22 at kickoff (design-source block re-checked against the repo 
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Every factory action leaves a receipt | Scripted dry-run session (kickoff → phase-done → review → qa → commit → ship) produces the expected event sequence; every event passes strict validation; sequence matches a golden fixture where a "step" = one flow command's own emissions (order-insensitive WITHIN that command only, never across commands) — bats green | 1 | validated |
+| REQ-01 | Every factory action leaves a receipt | **DOWNGRADED validated → active 2026-07-28 (owner's call at `/arc-retro 4`).** The Phase-04 dogfood proved the acceptance below passes while the outcome is false: the idem preimage (`arc-event.mjs:99`) carries no time and no per-session identity, so repeat actions collide and are silently dropped — 100 real receipts lost across the window (`docs/evidence/phase-04/gap-audit.md`). The golden cannot catch it because every event in a scripted run is distinct. **Re-validation now additionally requires a repeat-action fixture** (the same file edited twice, the same branch entered twice, both landing distinct receipts). Original acceptance, still required: scripted dry-run session (kickoff → phase-done → review → qa → commit → ship) produces the expected event sequence; every event passes strict validation; sequence matches a golden fixture where a "step" = one flow command's own emissions (order-insensitive WITHIN that command only, never across commands) — bats green | 1 | active |
 | REQ-02 | The spine cannot be silently poisoned — in either mode | **Strict mode** (`--strict`: CI/ingest/tests): every pinned hostile fixture (missing field, bad ULID, bad ts, dup idem, oversize payload, secret pattern, CRLF/BOM, non-UTF8) exits 2. **Hook mode**: the SAME inputs never block — quarantined to `events/_quarantine/` + loud SKIP + exit 0. Both asserted per fixture | 0 | validated |
 | REQ-03 | Money reaches the spine exactly once | `arc-event ingest revenue.received --json FILE` records a real provider payload; the same payload delivered twice — **including across days** — yields ONE event (idem index, fixture-proven); amount/currency/venture validated | 2 | validated |
 | REQ-04 | State is derived, never truth — twice over | (a) `rm state.db && arc-replay && arc brief --date D` byte-identical to golden; (b) on a **no-sqlite runner** (Node 18 leg) the same brief byte-identical via the canonical JSONL-scan path — both bats cases in 3-OS CI | 0 | validated |
 | REQ-05 | The day is readable in ONE screen | `arc brief` renders from the **spine reader only**: ≤ 40 lines, grouped needs-you / money / progress / background; overflow collapses to counts (+ `--full`); golden-fixtured; <5s on the owner's Windows box | 2 | validated |
 | REQ-06 | Approvals are receipts too | `arc inbox` lists `approval.requested` via the reader; `arc approve/reject ID --reason` writes `decision.recorded`; full request→decision flow replays identically; no approval state outside the spine; approving/rejecting an unknown or already-decided ID is a pinned error fixture (non-zero exit, no duplicate `decision.recorded`) | 3 | validated |
-| REQ-07 | Proven on real work with honest money | ≥5 consecutive real working days (arc's own development and/or one consumer repo): real events, brief read daily. **`revenue.received` = real money only**; pre-revenue → `revenue.simulated` (separate kind) and REQ-07 closes "mechanism proven, live value pending" — never fake P&L truth. Evidence bundle = the days' JSONL + briefs + the weekly gap audit (session-log vs spine, pre-mortem #2) | 4 | active |
+| REQ-07 | Proven on real work with honest money | **AMENDED 2026-07-28 (amendment #1, owner's call): ≥3 real working days, was ≥5 — and "consecutive" dropped, since the captured days (07-24, 07-25, 07-28) are not calendar-consecutive.** Not appetite-forced (~40% burnt, 50% tripwire never reached) and not an assumption failure (ledger row 4's trigger did not fire); the cut is owner reprioritization toward the Lexos venture. Bar now: ≥3 real working days (arc's own development): real events, brief read daily. **`revenue.received` = real money only**; pre-revenue → `revenue.simulated` (separate kind) and REQ-07 closes "mechanism proven, live value pending" — never fake P&L truth. Evidence bundle = the days' JSONL + briefs + the gap audit (session-log vs spine, pre-mortem #2) — the audit is NOT cut with the days. **VALIDATED 2026-07-28** on 3 working days (07-24/25/28) as **"mechanism proven, live value pending"**: zero `revenue.received`, nothing fabricated, briefs read and ≤ one screen 3/3 days, gap audit run (it found a real defect — see REQ-01) | 4 | validated |
 | REQ-08 | (stretch) Runs know their cost honestly | `run.completed` may carry `cost: null` or `{tokens_in, tokens_out, inr_estimate, source: measured / estimated / manual}`; brief shows daily spend when present. **First cut under pressure** — CUT at Phase-02 close (owner's call; cost tracking deferred to a later cycle) | 2 | dropped |
 | REQ-09 | The spine is the ONLY api | `brief`/`inbox` code contains zero direct `events/*.jsonl` or `state.db` references — all access via the `spine` reader lib/CLI (grep-lint, WARN-first per trial culture); each consumer keeps its own **cursor** (last ULID) and demonstrates catch-up-from-cursor in bats, including a same-millisecond-burst fixture proving `--since` resolves ties by append order (file order), never raw ULID string comparison | 3 | validated |
 
@@ -148,6 +148,7 @@ sync exclusion as the spine, deletable at will (REQ-04).
 | [0029](docs/adr/0029-spine-f-immutability-windows-supersedes.md) | SPINE-F — active day append-only; closed day immutable forever; corrections via `supersedes` | one-way |
 | [0030](docs/adr/0030-spine-g-spine-is-the-only-public-api.md) | SPINE-G — the spine is arc's only public API: one reader + per-consumer cursors; no pub/sub | two-way |
 | [0031](docs/adr/0031-spine-h-emitter-dual-mode.md) | SPINE-H — emitter dual-mode: hook mode never blocks, strict mode exits 2; one validator core | two-way |
+| [0032](docs/adr/0032-spine-i-hook-mode-rejections-must-surface.md) | SPINE-I — hook-mode rejections must surface in the brief (needs-you), not just stderr + a gitignored quarantine file. **Amends 0031's surfacing half only; "never block a session" untouched.** Written 2026-07-28 because 0031's own revisit trigger fired: the Phase-04 gap audit found 100 receipts silently lost over 4 days | two-way |
 
 Inherited and still binding: [0017](docs/adr/0017-park-v2-initiative.md) (v2 stays parked) ·
 [0021](docs/adr/0021-tests-stay-centralised.md) (central `tests/`) ·
@@ -207,13 +208,22 @@ dashboard temptation · perfect cost accounting (nullable + `source`) · Windows
 | Hook fragments capture enough factory actions | dry-run golden shows a gap → add command-level emission | 1 |
 | JSONL-scan brief <5s at realistic volume | ≥5s on owner's box with 90-day synthetic spine → promote sqlite accelerator to recommended (equivalence-gated) | 0 |
 | Emitter overhead negligible | >1s added per session event → async append | 1 |
-| Real work available for the 5-day dogfood | none mid-build at Phase 4 → dogfood arc's own development (mold factory actions are events too) | 4 |
+| Real work available for the dogfood window | none mid-build at Phase 4 → dogfood arc's own development (mold factory actions are events too) | 4 |
 | File-drop/manual ingest sufficient for revenue | provider is webhook-push-only → manual entry from dashboard export until a later cycle | 2 |
 | Lock-file + single-write append via one shared Node helper is atomic on NTFS/ext4/APFS | a torn or interleaved line ever observed in fixtures/CI or dogfood → switch to per-writer segment files merged at day-close | 0 |
 
 **Fired at Phase 01 — both resolved exactly as the row pre-specified (implemented + CI-green, no untracked scope, so recorded here rather than re-routed through `/arc-change`):**
 - *Hook fragments capture enough factory actions* → the dry-run golden landed RED with hook fragments alone, so command-level emission was added to all 7 flows (`4936371`, `13e6ddb`).
 - *Emitter overhead negligible* → measured **~2s/emit** on the owner's Windows box (>1s), so PostToolUse + SessionStart emit **async** (`dc94dd1`; 0.565s return, event still lands); SessionEnd stays synchronous for durability.
+
+**Strained but NOT fired at Phase 04 — *Real work available for the dogfood window* (2026-07-28):**
+the trigger as written is "none mid-build" and work was never none — the arc-self branch held and
+captured 3 days. But the row assumed arc-self work would be *dense enough* to fill the window;
+in practice the owner's real work moved to the Lexos venture (a separate repo with no spine
+installed), leaving arc-self days thin (Day 2 = 1 receipt) and 2026-07-27 empty of arc work
+entirely. Recorded as strain, not a FIRED trigger — no downstream REQ or ADR is premised on the
+row beyond REQ-07's day count, which was amended openly instead. If a future cycle wants a dense
+dogfood, the lesson is to install the spine where the real work actually happens.
 
 ## External dependencies
 
@@ -222,7 +232,7 @@ None new (zero-dep initiative). The rows below are the cycle's only external tou
 | Dependency | Interface | Fake | Real | Contract test |
 |---|---|---|---|---|
 | Revenue provider payloads | `arc-event ingest revenue.received --json FILE` (file-drop / manual CLI) | Pinned fixture payloads incl. same-day AND cross-day duplicate pairs (`tests/fixtures/spine/`) | Provider dashboard export or manual CLI entry (Phase 4) | Ingest bats: fixtures validate, duplicates dedupe to ONE event (REQ-03) |
-| Phase-4 real-work host | arc install on the host repo (spine via `--products hq`) | Dry-run scripted session (REQ-01 golden) | arc's own development and/or venturemind / Opportunity-Scout (access confirmed at Phase 4 entry) | 5-day evidence bundle: days' JSONL + briefs + gap audit (REQ-07) |
+| Phase-4 real-work host | arc install on the host repo (spine via `--products hq`) | Dry-run scripted session (REQ-01 golden) | arc's own development (confirmed at Phase 4 entry; venturemind / Opportunity-Scout deferred — no spine installed) | 3-day evidence bundle: days' JSONL + briefs + gap audit (REQ-07, amended 2026-07-28) |
 | CI matrix — sqlite/no-sqlite legs | `.github/workflows/ci.yml` Node matrix (today: single `node-version: '20'` on all 3 OSes) | n/a — CI infra, not a fake/real split | Node 18 leg added (no `node:sqlite` — REQ-04(b)) + one Node 22+ leg (accelerator + sqlite-vs-scan equivalence gate, ADR-0024) | REQ-04 twin determinism + the equivalence gate have no legs to run on without both — added at Phase 0 ckpt B |
 
 ## Pre-mortem (Klein)
@@ -247,10 +257,11 @@ everything else consumes it. Effort appetites sum to 14.5 part-time days ≈ the
 | 1 | Factory wiring: EVENT.d `NN-emit` fragments + explicit flow emissions + dry-run golden + overhead measured | 2.5 days | Phase 00 | `phases/phase-01-spec.md` |
 | 2 | Money + brief: strict revenue ingest (cross-day idem) + `arc brief` one-screen + nullable cost (stretch) | 2.5 days | Phase 00 | `phases/phase-02-spec.md` |
 | 3 | Inbox + API seal: approval/decision flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | Phase 01 | `phases/phase-03-spec.md` |
-| 4 | Live dogfood: 5 consecutive real days, honest revenue rules, gap audit, evidence bundle, retro | 3 days effort (≥5 elapsed) | Phase 02, Phase 03 | `phases/phase-04-spec.md` |
+| 4 | Live dogfood: 3 real working days (amended from 5, 2026-07-28), honest revenue rules, gap audit, evidence bundle, retro | 3 days effort (≥5 elapsed) | Phase 02, Phase 03 | `phases/phase-04-spec.md` |
 
 **North-star:** 100% of factory actions + revenue with receipts during dogfood · briefs
-read 5/5 days and ≤ one screen · twin replay determinism green in CI from Phase 0 ckpt B onward.
+read 3/3 days and ≤ one screen (amended from 5/5, 2026-07-28) · twin replay determinism green in
+CI from Phase 0 ckpt B onward.
 
 ## Appendix A — event kinds v1 (18, closed — ADR-0026)
 

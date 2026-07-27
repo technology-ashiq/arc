@@ -1,21 +1,23 @@
 # Phase 04 — Live dogfood
 
-**Goal (one line):** The spine proven on ≥5 consecutive real working days with honest money.
-**Appetite:** 3 days effort (≥5 elapsed calendar days)
+**Goal (one line):** The spine proven on ≥3 real working days with honest money
+(amended from ≥5 consecutive, 2026-07-28 — see Amendment below).
+**Appetite:** 3 days effort (≥5 elapsed calendar days) — unchanged and MET (07-24 → 07-28 = 5 elapsed)
 **Depends on:** phase-02, phase-03
 
 ## Exit criteria (Definition of Done)
 
-- [ ] ≥5 consecutive real working days (arc's own development and/or one consumer repo):
-      real events flowing, brief read daily, ≤ one screen held all 5 days (REQ-07, REQ-05
-      north-star).
-- [ ] Honest revenue rules held: `revenue.received` = real money only; pre-revenue →
+- [x] ≥3 real working days (arc's own development): real events flowing, brief read daily,
+      ≤ one screen held all 3 days (REQ-07, REQ-05 north-star). **Amended 2026-07-28 from
+      "≥5 consecutive" — see Amendment #1 below.** MET: 07-24 (10 lines / 306 ms), 07-25
+      (1 line), 07-28 (3 lines) — every brief inside one screen and under the 5s budget.
+- [x] Honest revenue rules held (MET — zero `revenue.received` emitted; nothing fabricated): `revenue.received` = real money only; pre-revenue →
       `revenue.simulated`, and REQ-07 closes "mechanism proven, live value pending" —
       never fake P&L truth.
-- [ ] Weekly gap audit run (session-log vs spine — pre-mortem #2): every factory action in
+- [x] Gap audit run (MET — `docs/evidence/phase-04/gap-audit.md`; it FOUND a real defect) (session-log vs spine — pre-mortem #2): every factory action in
       the session log has a receipt, or the gap is named and fixed.
-- [ ] Evidence bundle: the days' JSONL + briefs + the gap audit (REQ-07).
-- [ ] `/arc-retro` run + TRIAL review for the NEW grep-lint gate only — the 8 existing
+- [x] Evidence bundle (MET — 10 files, `arc-evidence.sh verify 4` passed): the days' JSONL + briefs + the gap audit (REQ-07).
+- [x] `/arc-retro` run (MET) + TRIAL review (MET — `spine-api` reviewed and kept WARN) for the NEW grep-lint gate only — the 8 existing
       kickoff-lint trial gates stay WARN regardless (locked this cycle).
 
 ## Verification plan
@@ -29,10 +31,15 @@ carry the arc *framework* but NOT the receipt-spine (no `scripts/hq/` emitter, `
 so each would need a one-time install; not taken this cycle. Assumptions row 4 holds via its
 arc-self branch — no FIRED.
 
-**Window:** ≥5 consecutive real working days. Day N = Nth day real arc work happens (≥1 real
-factory action); Day 1 = first working day on/after entry (2026-07-24). Calendar span ≥5 elapsed.
+**Window:** ≥3 real working days (amended 2026-07-28). Day N = Nth day real arc work happens (≥1
+real factory action); Day 1 = first working day on/after entry (2026-07-24). Calendar span ≥5
+elapsed — unchanged and met (07-24 → 07-28). **Days captured: 07-24, 07-25, 07-28** — NOT
+calendar-consecutive, which is why "consecutive" was dropped rather than quietly assumed:
+07-26 was a real arc working day whose receipts are MISSING — **audited at close: not a wiring
+gap but silent data loss from the idem defect, with a second unexplained cause still open**
+(`docs/evidence/phase-04/gap-audit.md`) — and 07-27 was Lexos work, outside this cycle's host scope.
 
-**Each working day (1..5):**
+**Each working day (1..3):**
 1. Work normally — receipts auto-emit to `.claude/state/hq/events/DATE.jsonl` (Phase 1/3 wiring;
    no manual "make a receipt" step).
 2. `arc brief` once → confirm it renders ≤ one screen (REQ-05); save output to
@@ -57,9 +64,36 @@ the bundle.
 → `/arc-retro` → TRIAL review of the NEW reader-only grep-lint gate ONLY (8 existing kickoff-lint
 trials stay WARN, locked this cycle) → `/arc-phase-done 4`.
 
-**Checkable acceptance:** 5 working-day briefs each ≤ one screen · every working day's JSONL in the
+**Checkable acceptance:** 3 working-day briefs each ≤ one screen · every working day's JSONL in the
 bundle · zero unbacked `revenue.received` · gap-audit shows full coverage or named+filed gaps ·
 quarantine explained · retro + grep-lint trial decision recorded.
+
+## Amendment #1 — dogfood window 5 → 3 working days (2026-07-28)
+
+Routed through `/arc-change`; owner's call. Recorded openly so no later reader mistakes this for
+a 5-day proof.
+
+**What changed:** REQ-07's bar drops from "≥5 consecutive real working days" to "≥3 real working
+days", and "consecutive" is dropped as inaccurate (see Window). Nothing else in the DoD is cut —
+the gap audit, quarantine review, evidence bundle, retro and grep-lint trial decision all stand.
+The 3-days-effort / ≥5-elapsed appetite line is unchanged and was already met.
+
+**Why, honestly:**
+- NOT appetite-forced. Burn at the time of the cut was **~40% (~5 of 12.5 days)**; the 50%
+  (~6.25d) kill tripwire was never reached, and its condition (REQ-02 + REQ-04 green) had been
+  satisfied since Phase 0. The plan's two pre-planned cuts (REQ-08, then REQ-09's cursor demo)
+  were already spent/reserved — this is an unplanned third cut, and calling it anything else
+  would be false.
+- NOT an assumption failure. Ledger row 4's trigger ("none mid-build at Phase 4") did not fire —
+  arc-self work existed. The row is recorded as *strained*, not FIRED, in PLAN.md.
+- The actual reason: **owner reprioritization toward the Lexos venture** (revenue/time pressure).
+  Real work moved to a repo with no spine installed, so extending the window would have bought
+  thin arc-self days, not richer evidence.
+
+**What this costs, stated plainly:** a 3-day window has less chance of surfacing rare/intermittent
+defects than 5. The known example is already in hand — the 2026-07-26 receipt gap surfaced only
+because the window ran past Day 2. REQ-07 therefore closes as "mechanism proven on 3 real days,
+live value pending", never as "proven on 5".
 
 ## Rabbit holes in this phase
 

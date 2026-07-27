@@ -13,10 +13,36 @@
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ✅ done 2026-07-23 |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ✅ done 2026-07-23 |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ✅ done 2026-07-24 |
-| 04 | Live dogfood: 5 real days · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | ⬜ not started |
+| 04 | Live dogfood: 3 real working days (amended from 5, 2026-07-28) · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | ✅ done 2026-07-28 |
 
 ## Done log
 
+- 2026-07-28 — **Phase 04 CLOSED ✅** via `/arc-phase-done 4` — **and with it Cycle 2.** The spine
+  ran on real work for **3 working days** (07-24, 07-25, 07-28; amended from 5 — amendment #1,
+  owner's call, not appetite-forced). **REQ-07 → validated as "mechanism proven, live value
+  pending"** — the exact wording the plan reserved for a pre-revenue close: zero
+  `revenue.received`, nothing fabricated. **REQ-05 held every day** (briefs 10 / 1 / 3 lines,
+  306 ms measured — inside one screen and far under the 5s budget), read from the reader only.
+  **The dogfood earned its keep by failing:** the gap audit found the spine **silently destroying
+  real receipts** — the idem preimage (`arc-event.mjs:99`) carries no time and no per-session
+  identity, so `run_id` stays `r-adhoc` and the key collapses to a function of the payload alone;
+  session receipts key on the branch name, file-edit receipts on the file path, so **every repeat
+  action is dropped as a duplicate**. 100+ real receipts lost across the window; 2026-07-26 lost a
+  whole working day. Watched reproducing live at close (PROGRESS.md rejected 9×, PLAN.md 7× while
+  documenting the bug). **Two honest downgrades followed:** the Day-1 "dedup working, no data loss"
+  reading was **wrong** and is superseded, and **REQ-01 was downgraded `validated` → `active`** —
+  its golden passes while its outcome is false, and re-validation now needs a repeat-action
+  fixture. **`/arc-phase-done` refused the first close attempt** and was right to: ADR-0031's
+  revisit trigger had fired unrouted (→ **ADR-0032**, hook-mode rejections must surface in the
+  brief; "never block a session" untouched), and the retro had reviewed the wrong TRIAL gate
+  (corrected: **`spine-api` kept WARN** — fixture-proven, but only same-author clean runs).
+  Zero source/test files changed this phase, so the suite is unchanged from the Phase-03 close
+  (3-OS CI green); plan-drift lint green; evidence bundle `verify 4` passed (10 files).
+  **Still open, stated not buried:** the idem fix and ADR-0032's brief surfacing are next-cycle
+  work (no wiring changes during a dogfood — ADR-0026), and 2026-07-26's *total* silence — no
+  receipts AND no quarantine lines — has a second cause that is **not identified**.
+  **Metrics:** appetite 3d effort / ≥5 elapsed → **actual ~0.5d effort over 5 elapsed days** ·
+  `amendments: 1` · `reopened: n` · REQs: 1 validated (07), 1 downgraded (01).
 - 2026-07-24 — **Phase 03 CLOSED ✅** via `/arc-phase-done 3`. Approvals are receipts and the
   reader is the sealed, only API. **REQ-06:** `arc inbox` lists open `approval.requested` by
   folding `decision.recorded` through the reader; `arc approve/reject ID --reason` writes exactly
@@ -111,34 +137,52 @@
 
 ## Appetite burn
 
-**~5 of ~12.5 part-time days used** (Phase 00 + 01 + 02 + 03 done, each under its own appetite
-— ~40% burnt). 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? —
+**CYCLE CLOSED 2026-07-28 at ~5.5 of ~12.5 part-time days (~44% burnt)** — all 5 phases done,
+every one under its own appetite. 2.5-week hard cap never approached; the plan finished with
+~56% of its appetite unspent. (`appetite-sum` had WARNed at kickoff that 14.5d of phases exceeded
+the 12.5d total — the arithmetic was right and the risk inverted; logged in `docs/trial-ledger.md`.)
+
+Historical line, kept: ~5 of ~12.5 days used with Phase 00 + 01 + 02 + 03 done, each under its
+own appetite — ~40% burnt. 2.5-week hard cap. Kill check at ~6.25 days (50%): REQ-02 + REQ-04 green? —
 **validated at Phase-0 close, so the tripwire is satisfied early; well under it.** REQ-08 was
 the pre-planned **first cut** (taken at Phase-02 close, owner's call — NOT burn pressure);
 REQ-09's cursor demo is the reserved second cut (lint stays). 100% → cut or kill, never extend.
+**Third, unplanned cut taken 2026-07-28** — Phase 04's dogfood window 5 → 3 working days
+(amendment #1). Taken at ~40% burn with the tripwire never reached, so it is NOT one of the
+plan's pressure-cuts: it is an owner priority call (Lexos focus). Named here so the cut ledger
+stays honest.
 
 ## Now
 
-**Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
-Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
-concrete daily-cadence checklist (`phases/phase-04-spec.md`). Venture repos (venturemind /
-Opportunity-Scout) deferred — they carry the arc framework but NOT the spine (no `scripts/hq/`
-emitter, `hq` unregistered; would need a one-time install). Assumptions row 4 holds via its
-arc-self branch — no FIRED. REQ-07 is the last open requirement; closing Phase 04 closes the cycle.
+**CYCLE 2 (Receipt Spine) CLOSED ✅ 2026-07-28.** All 5 phases done. Nothing is in progress; the
+next move is a new cycle's kickoff, not a phase.
 
-**Daily loop (Day 1 = 2026-07-24, this session):** work normally → receipts auto-emit to
-`.claude/state/hq/events/DATE.jsonl` (Phase 1/3 wiring) → `arc brief` once/day (confirm ≤ one
-screen) → copy that day's brief + JSONL into `docs/evidence/phase-04/`. Revenue = `revenue.simulated`
-only (arc earns nothing real; REQ-07 closes "mechanism proven, live value pending" — no fabricated
-`revenue.received`). At window end: gap audit (session-log vs spine) → quarantine review →
-`/arc-retro` + grep-lint TRIAL decision → `/arc-phase-done 4`.
+**What shipped.** Every factory action and every rupee lands as one append-only event, consumed
+only through one reader, rendered as a one-screen daily brief and an approval inbox — proven on
+real work for 3 working days. 8 REQs closed: **7 validated** (02 spine-cannot-be-poisoned · 03
+money-exactly-once · 04 twin-replay-determinism · 05 one-screen brief · 06 approvals-are-receipts
+· 07 proven-on-real-work · 09 spine-is-the-only-API), **1 dropped** (08 cost — pre-planned cut).
+ADRs 0024–0032 (SPINE-A..I).
 
-**Progress:** **Day 1/≥5 captured (2026-07-24)** — brief 10 lines / 306 ms ✅ (REQ-05) · 22 real
-receipts (note.logged 19 · approval.requested · decision.recorded · phase.closed) · quarantine =
-all 22 dup-idem (dedup working, no gap). Retro note logged: hook+command emissions overlap (noise,
-not a defect — fix out of scope this phase). Day log: `docs/evidence/phase-04/day-log.md`.
+**What did NOT close, stated plainly.**
+- **REQ-01 is `active`, not validated** — downgraded at the retro. "Every factory action leaves a
+  receipt" is false in real use: the idem preimage carries no time, so repeat actions on the same
+  file or branch collide and are silently dropped (100+ receipts lost during the dogfood itself).
+  Its golden passes because scripted runs never repeat. Re-validation needs a **repeat-action
+  fixture**.
+- **ADR-0032 is decided, not built** — hook-mode rejections must surface in the brief. No wiring
+  changed during the dogfood (ADR-0026).
+- **2026-07-26's total silence is unexplained** — no receipts *and* no quarantine lines. The idem
+  defect explains dropped receipts, not silence. A second cause is unidentified.
 
-**Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed. Tripwire
-(50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria satisfied, no scope-cut pressure.
+**Carried into the next cycle** (the three above are its natural first slice): the idem fix, the
+brief surfacing, the 07-26 unknown, plus the standing blocker on promoting any TRIAL gate —
+`kickoff-lint.mjs:469` is still an unconditional `process.exit(1)` with no recorded-reason bypass.
 
-**Scoreboard:** REQ-07 active (this phase) · 7 validated (01–06, 09) · 1 dropped (REQ-08 cost).
+**Evidence:** `docs/evidence/phase-04/` (10 files, `verify 4` passed) — day log, per-day briefs +
+JSONL, gap audit, quarantine review, summary. **Retro:** `docs/retro-log.md` (pattern + scoreboard
+row `M | rework 0/4 | amendments 1 | FIRED 2/6 | burn ~44%`).
+
+**Owner's next call:** Cycle 3. The stated direction is the Lexos venture — and the dogfood just
+made the case for installing the spine *where the real work actually happens*, since arc-self days
+were thin precisely because the work had moved.

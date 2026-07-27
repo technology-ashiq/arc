@@ -3,10 +3,15 @@
 **Status:** accepted
 **Date:** 2026-07-22
 **Reversibility:** two-way
-**Revisit trigger:** Phase-4 gap audit shows quarantine swallowing events that strict mode
+**Revisit trigger:** ~~Phase-4 gap audit shows quarantine swallowing events that strict mode
 would have surfaced in time (silent data loss exceeding what the weekly audit catches) →
 revisit the hook-mode contract via ADR (e.g. louder surfacing), keeping "never block a
-session" inviolate.
+session" inviolate.~~ — **FIRED 2026-07-28.** The Phase-04 gap audit found 100 receipts
+silently lost across the window, unnoticed for 4 days
+(`docs/evidence/phase-04/gap-audit.md`). Routed through `/arc-change` and answered by
+[ADR-0032](0032-spine-i-hook-mode-rejections-must-surface.md), which amends the *surfacing*
+half of this contract only. **The "never block a session" rule below is untouched and remains
+inviolate.**
 
 ## Context
 

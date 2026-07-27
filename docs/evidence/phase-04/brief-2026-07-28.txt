@@ -1,0 +1,9 @@
+brief 2026-07-28
+
+needs-you (1)
+  approval.requested
+
+progress (1)
+  phase.closed
+
+background: 12 (note.logged 12)   — --full to expand
