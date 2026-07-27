@@ -63,3 +63,19 @@ _Day 2 of ≥5 — ✅ captured (backfilled 2026-07-28)._
   day's work happened under conditions where the hook/command emission path didn't fire (e.g.
   a tool/session flow outside the wired 7 commands) — needs the actual gap-audit diff to confirm,
   not asserted here.
+
+## Day 3 — 2026-07-28
+
+- **Brief** (`brief-2026-07-28.txt`): **3 lines** — ≤ one screen ✅ (REQ-05). Background 3
+  (`note.logged`), no needs-you/progress today.
+- **Receipts** (`events-2026-07-28.jsonl`): **3 valid** — `note.logged` ×3: session.start
+  (branch `feat/design-plan`) + 2 `tool.postuse` (PostToolUse hook capturing this session's own
+  file edits — the Day-2 backfill work).
+- **Quarantine** (`events/_quarantine/2026-07-28.jsonl`, reviewed — not copied, transient):
+  **2 entries, both `DUP_IDEM`** — same overlap pattern as Day 1 (hook + command emission
+  double-fire), dedup absorbed cleanly. No data loss, not a gap.
+- **Revenue:** none.
+- **Note:** snapshot taken 02:25 IST while the session is still live — same caveat as Day 1;
+  refresh at session/day close to capture the full day.
+
+_Day 3 of ≥5 — ✅ captured (live snapshot, will refresh at close)._

@@ -133,13 +133,15 @@ only (arc earns nothing real; REQ-07 closes "mechanism proven, live value pendin
 `revenue.received`). At window end: gap audit (session-log vs spine) → quarantine review →
 `/arc-retro` + grep-lint TRIAL decision → `/arc-phase-done 4`.
 
-**Progress:** **Day 2/≥5 captured (2026-07-24, 2026-07-25)** — Day 1: brief 10 lines / 306 ms ✅
-(REQ-05) · 22 real receipts (note.logged 19 · approval.requested · decision.recorded ·
+**Progress:** **Day 3/≥5 captured (2026-07-24, 2026-07-25, 2026-07-28)** — Day 1: brief 10 lines /
+306 ms ✅ (REQ-05) · 22 real receipts (note.logged 19 · approval.requested · decision.recorded ·
 phase.closed) · quarantine = all 22 dup-idem (dedup working, no gap). Day 2: brief 1 line ·
 1 receipt (note.logged, session-end only) — backfilled 2026-07-28, bundle step was missed
-same-day. Retro note logged: hook+command emissions overlap (noise, not a defect — fix out of
-scope this phase). **Gap flagged early:** 2026-07-26 has 4 real commits but no spine event
-file — pre-flagged in day-log for the window-end gap audit, not yet root-caused. Day log:
+same-day. Day 3: brief 3 lines · 3 receipts (note.logged: session.start + 2 tool.postuse) ·
+quarantine 2 dup-idem (same overlap pattern, no gap) — live snapshot, refresh at close. Retro
+note logged: hook+command emissions overlap (noise, not a defect — fix out of scope this phase).
+**Gap flagged early:** 2026-07-26 has 4 real commits but no spine event file — pre-flagged in
+day-log for the window-end gap audit, not yet root-caused. Day log:
 `docs/evidence/phase-04/day-log.md`.
 
 **Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed. Tripwire
