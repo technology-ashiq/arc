@@ -66,19 +66,21 @@ _Day 2 of ≥5 — ✅ captured (backfilled 2026-07-28)._
 
 ## Day 3 — 2026-07-28
 
-- **Brief** (`brief-2026-07-28.txt`): **4 lines** — ≤ one screen ✅ (REQ-05). Background 4
+- **Brief** (`brief-2026-07-28.txt`): **5 lines** — ≤ one screen ✅ (REQ-05). Background 5
   (`note.logged`), no needs-you/progress today.
-- **Receipts** (`events-2026-07-28.jsonl`): **4 valid** — `note.logged` ×4: session.start
-  (branch `feat/design-plan`) + 3 `tool.postuse` (PostToolUse hook capturing this session's own
-  file edits — the Day-2 backfill + Day-3 first-snapshot work).
+- **Receipts** (`events-2026-07-28.jsonl`): **5 valid** — `note.logged` ×5: session.start
+  (branch `feat/design-plan`) + 4 `tool.postuse` (PostToolUse hook capturing this session's own
+  file edits — Day-2 backfill, Day-3 snapshots, the Lexos memory-file write).
 - **Quarantine** (`events/_quarantine/2026-07-28.jsonl`, reviewed — not copied, transient):
-  **4 entries, all `DUP_IDEM`** — same overlap pattern as Day 1 (hook + command emission
-  double-fire), dedup absorbed cleanly. No data loss, not a gap.
+  **11 entries, all `DUP_IDEM`** — same overlap pattern as Day 1 (hook + command emission
+  double-fire, amplified here by several same-file re-edits this session: day-log.md rewritten
+  multiple times). Dedup absorbed cleanly each time. No data loss, not a gap.
 - **Revenue:** none.
-- **Note:** refreshed 02:25→02:26 IST at end-of-session (superseding the earlier 02:25 mid-session
-  snapshot) — this is the closing capture for Day 3, same as Day 1's close-of-day refresh.
+- **Note:** this is still the SAME calendar day (07-28) — refreshed again at 02:36 IST as the
+  session continued (superseding the earlier 02:25/02:29 snapshots). Not a Day 4; the day only
+  advances when the calendar date does.
 
-_Day 3 of ≥5 — ✅ captured (refreshed at session close)._
+_Day 3 of ≥5 — ✅ captured (refreshed, still same day)._
 
 ## Note — 2026-07-27 (not a gap, out of scope)
 

@@ -137,8 +137,8 @@ only (arc earns nothing real; REQ-07 closes "mechanism proven, live value pendin
 306 ms ✅ (REQ-05) · 22 real receipts (note.logged 19 · approval.requested · decision.recorded ·
 phase.closed) · quarantine = all 22 dup-idem (dedup working, no gap). Day 2: brief 1 line ·
 1 receipt (note.logged, session-end only) — backfilled 2026-07-28, bundle step was missed
-same-day. Day 3: brief 4 lines · 4 receipts (note.logged: session.start + 3 tool.postuse) ·
-quarantine 4 dup-idem (same overlap pattern, no gap) — refreshed at session close. Retro
+same-day. Day 3: brief 5 lines · 5 receipts (note.logged: session.start + 4 tool.postuse) ·
+quarantine 11 dup-idem (same overlap pattern, no gap) — refreshed same-day, most recent snapshot. Retro
 note logged: hook+command emissions overlap (noise, not a defect — fix out of scope this phase).
 **Gap flagged early:** 2026-07-26 has 4 real commits but no spine event file — pre-flagged in
 day-log for the window-end gap audit, not yet root-caused. Day log:
