@@ -20,6 +20,8 @@
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `refactor:`.
 - Deploy target: Vercel. Always reply with the direct preview/production link after deploying.
 - Work on a branch, open a PR — don't commit straight to `main`.
+- Run `git branch --show-current` immediately BEFORE every commit — the branch can change
+  between turns without me saying so. If it's `main`, stop and move the work to a `feat/*` branch.
 
 ### Code standards
 - Write **production-ready, robust** code from day one. No stubbed logic, no "// fix later".

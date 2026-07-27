@@ -41,6 +41,8 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-07-19 | adr-wired | venturemind PLAN (Phase-04 dogfood) | YES — ADRs 0001-0004, 0006, 0008 not cited in any phase spec | unadjudicated — the decisions are implemented; the citation strings are absent (the known adr-wired ambiguity) |
 | 2026-07-19 | verify-red | venturemind PLAN (Phase-04 dogfood) | YES — phase-00 names no **Test command:** | no — the field genuinely is missing |
 | 2026-07-22 | appetite-sum | arc's own PLAN (Phase-05 close) | **YES** — zero-slack branch: phases sum 27.5d = 92% of 30d | **unadjudicated, leaning false** — the arithmetic is correct, but the build closed at ~20% burn (~6 days actual against 27.5 budgeted). The risk the branch warns about (no buffer) did not materialise; it inverted. Counts against the **zero-slack** branch only — the **over-commit** branch (venturemind, 16d > 15d) is untouched by this row |
+| 2026-07-28 | appetite-sum | arc's own PLAN (Cycle 2 receipt spine, Phase-04 retro) | **YES** — over-commit branch: phases sum 14.5d > 12.5d total | **unadjudicated, leaning false** — the arithmetic is correct (5+2.5+2.5+1.5+3), but the build reached Phase-04 close at **~40% burn (~5 of 12.5 days)** with every closed phase coming in *under* its own appetite (5d→~2d, 2.5d→~1d, 2.5d→~1d, 1.5d→~1d). The over-commit the branch warns about did not materialise; it inverted — the **second** logged inversion of this gate, after 2026-07-22. This one hits the over-commit branch, the same branch venturemind scored a true positive on, so that branch now has 1 true positive and 1 inverted fire |
+| 2026-07-28 | (7 other substance gates) | arc's own PLAN (Cycle 2 receipt spine) | no — silent across the whole build | **n/a — not counted as a clean run.** Same-author silence on a plan written against these checks, which the "First real fire" note above says this file must stop scoring as accuracy. Recorded for completeness only |
 
 <!-- Append one row per (gate × kickoff run). run-ref = a PLAN commit SHA, a dry-run id, or a
      fixture name. fired? = did the gate WARN on that run. false-positive? = did it WARN on a plan
@@ -99,3 +101,28 @@ redefining it, not by clearing it.
 these checks, plus the escape hatch shipped with a recorded-reason bypass and bats coverage.
 The next dogfood cycle is the natural place for both. Until then the honest state of these
 eight gates is: useful advisory output, insufficient evidence to block on.
+
+## Cycle 2 (receipt spine) promotion decision — 2026-07-28: all 8 gates KEPT WARN
+
+Second consecutive build to reach a promotion decision with nothing promotable. Recorded by
+`/arc-retro 4`.
+
+**Evidence added this cycle.** `appetite-sum` fired once (over-commit branch, 14.5d > 12.5d) and
+the fire inverted: the build reached Phase-04 close at ~40% burn with every closed phase under
+its own appetite. That is the gate's **second logged inversion** in a row. Its over-commit branch
+now stands at 1 verified true positive (venturemind) against 1 inversion (here) — which is not
+progress toward the bar, it is evidence the branch needs a stronger predicate than raw arithmetic
+before it can block anything. The other seven gates stayed silent on a plan their own author
+wrote against them; per the "First real fire" note this counts as silence, not accuracy, and adds
+nothing to any gate's tally.
+
+**The governing blocker still stands, unchanged and re-verified today.** Council session 001 made
+promotion conditional on a governed escape hatch existing first. It still does not exist:
+`report()` in `.claude/scripts/plan/kickoff-lint.mjs` still ends in an unconditional
+`process.exit(1)` (line 469), and no recorded-reason bypass exists anywhere in
+`.claude/scripts/plan/`. Until that ships, a promoted gate means one false positive wedges the
+caller until someone edits the linter — and this cycle just produced another false-leaning fire
+on the one gate closest to the bar.
+
+**Net: no gate moves.** Nothing is deleted from the `TRIAL` set. The honest state of all eight is
+unchanged from 2026-07-22: useful advisory output, insufficient evidence to block on.

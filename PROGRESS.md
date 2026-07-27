@@ -186,12 +186,33 @@ policy, not the quarantine mechanism. No entry is replayed — lost receipts are
 **③ BUNDLE SUMMARY DONE** → `docs/evidence/phase-04/SUMMARY.md`. Bundle now complete: 3 briefs +
 3 JSONL copies + day-log + gap-audit + quarantine-review + summary.
 
-**Remaining to close Phase 04:** ④ `/arc-retro` + grep-lint TRIAL decision + the REQ-01 call ·
-⑤ `/arc-phase-done 4`.
+**④ RETRO DONE 2026-07-28** (`/arc-retro 4`). Findings, corrections and decisions:
+- **Recurring pattern logged** → `docs/retro-log.md`: an instrument anomaly was explained away
+  with a plausible benign story instead of tested — twice this phase (the 22 quarantine dups read
+  as "dedup working, no data loss"; a zero-receipt day read as "no work happened"). Prevention:
+  test the benign explanation against the **mechanism** before recording it as fine. A plausible
+  story hid a real data-loss defect for 4 days inside the phase built to catch it.
+- **Guideline added** → `CLAUDE.md`: verify `git branch --show-current` immediately before every
+  commit (this session committed to `main` after an unnoticed branch switch; one-off, so no
+  retro-log line — guideline only).
+- **REQ-01 DOWNGRADED `validated` → `active`** (owner's call, option A). Its acceptance passes
+  while its outcome is false; re-validation now additionally requires a **repeat-action fixture**
+  (same file edited twice, same branch entered twice, both landing distinct receipts). Recorded
+  in PLAN.md's REQ table.
+- **TRIAL gates: all 8 KEPT WARN, nothing promoted** → `docs/trial-ledger.md`. `appetite-sum`
+  fired (14.5d > 12.5d) and **inverted** — the build reached this point at ~40% burn with every
+  closed phase under its own appetite; that is its second consecutive inverted fire. The other 7
+  stayed silent on their own author's plan, which the ledger scores as silence, not accuracy.
+  The governing blocker also re-verified as still standing: `kickoff-lint.mjs:469` remains an
+  unconditional `process.exit(1)` with no recorded-reason bypass.
+- **Scoreboard row appended** → `docs/retro-log.md`: `M | rework 0/4 | amendments 1 | FIRED 2/6 |
+  burn ~40% | sim-blockers-r1 not-recorded | t-to-phase0 ~1d`.
+
+**Remaining to close Phase 04:** ⑤ `/arc-phase-done 4`.
 
 **Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed — elapsed
 MET (07-24 → 07-28). Tripwire (50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria
 satisfied. The amendment above was a priority call, not burn pressure.
 
-**Scoreboard:** REQ-07 active (this phase, amended bar) · 7 validated (01–06, 09) · 1 dropped
-(REQ-08 cost).
+**Scoreboard:** 2 active — REQ-07 (this phase, amended bar) + **REQ-01 (downgraded at the retro,
+needs a repeat-action fixture)** · 6 validated (02–06, 09) · 1 dropped (REQ-08 cost).
