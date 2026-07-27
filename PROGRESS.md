@@ -13,7 +13,7 @@
 | 01 | Factory wiring: EVENT.d fragments + flow emissions + dry-run golden + overhead check | 2.5 days | ✅ done 2026-07-23 |
 | 02 | Money + brief: strict revenue ingest (cross-day idem) + one-screen brief + cost (stretch) | 2.5 days | ✅ done 2026-07-23 |
 | 03 | Inbox + API seal: approvals flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | ✅ done 2026-07-24 |
-| 04 | Live dogfood: 5 real days · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | ⬜ not started |
+| 04 | Live dogfood: 3 real working days (amended from 5, 2026-07-28) · honest revenue · gap audit · evidence bundle · retro | 3 days (≥5 elapsed) | 🟡 in progress |
 
 ## Done log
 
@@ -116,6 +116,10 @@
 **validated at Phase-0 close, so the tripwire is satisfied early; well under it.** REQ-08 was
 the pre-planned **first cut** (taken at Phase-02 close, owner's call — NOT burn pressure);
 REQ-09's cursor demo is the reserved second cut (lint stays). 100% → cut or kill, never extend.
+**Third, unplanned cut taken 2026-07-28** — Phase 04's dogfood window 5 → 3 working days
+(amendment #1). Taken at ~40% burn with the tripwire never reached, so it is NOT one of the
+plan's pressure-cuts: it is an owner priority call (Lexos focus). Named here so the cut ledger
+stays honest.
 
 ## Now
 
@@ -126,25 +130,41 @@ Opportunity-Scout) deferred — they carry the arc framework but NOT the spine (
 emitter, `hq` unregistered; would need a one-time install). Assumptions row 4 holds via its
 arc-self branch — no FIRED. REQ-07 is the last open requirement; closing Phase 04 closes the cycle.
 
-**Daily loop (Day 1 = 2026-07-24, this session):** work normally → receipts auto-emit to
-`.claude/state/hq/events/DATE.jsonl` (Phase 1/3 wiring) → `arc brief` once/day (confirm ≤ one
-screen) → copy that day's brief + JSONL into `docs/evidence/phase-04/`. Revenue = `revenue.simulated`
-only (arc earns nothing real; REQ-07 closes "mechanism proven, live value pending" — no fabricated
-`revenue.received`). At window end: gap audit (session-log vs spine) → quarantine review →
-`/arc-retro` + grep-lint TRIAL decision → `/arc-phase-done 4`.
+**AMENDMENT #1 — 2026-07-28, owner's call, routed via `/arc-change`:** the dogfood window is cut
+from **≥5 consecutive real working days to ≥3 real working days**, and "consecutive" is dropped
+as inaccurate. **Not appetite-forced** (~40% burnt; the 50%/6.25d tripwire was never reached and
+its REQ-02+REQ-04 condition has been green since Phase 0) and **not an assumption failure**
+(ledger row 4's trigger never fired — recorded as *strained* in PLAN.md). Real reason: owner
+reprioritization toward the **Lexos** venture, whose repo has no spine installed, so more days
+would have bought thin arc-self evidence. **Nothing else is cut** — gap audit, quarantine review,
+evidence bundle, retro and the grep-lint TRIAL decision all still gate the close. REQ-07 will
+close as "mechanism proven on 3 real days, live value pending" — never as "proven on 5".
+Full rationale + cost: `phases/phase-04-spec.md` § Amendment #1.
 
-**Progress:** **Day 3/≥5 captured (2026-07-24, 2026-07-25, 2026-07-28)** — Day 1: brief 10 lines /
-306 ms ✅ (REQ-05) · 22 real receipts (note.logged 19 · approval.requested · decision.recorded ·
-phase.closed) · quarantine = all 22 dup-idem (dedup working, no gap). Day 2: brief 1 line ·
-1 receipt (note.logged, session-end only) — backfilled 2026-07-28, bundle step was missed
-same-day. Day 3: brief 5 lines · 5 receipts (note.logged: session.start + 4 tool.postuse) ·
-quarantine 11 dup-idem (same overlap pattern, no gap) — refreshed same-day, most recent snapshot. Retro
-note logged: hook+command emissions overlap (noise, not a defect — fix out of scope this phase).
-**Gap flagged early:** 2026-07-26 has 4 real commits but no spine event file — pre-flagged in
-day-log for the window-end gap audit, not yet root-caused. Day log:
-`docs/evidence/phase-04/day-log.md`.
+**Daily loop:** work normally → receipts auto-emit to `.claude/state/hq/events/DATE.jsonl`
+(Phase 1/3 wiring) → `arc brief` once/day (confirm ≤ one screen) → copy that day's brief + JSONL
+into `docs/evidence/phase-04/`. Revenue = `revenue.simulated` only (arc earns nothing real; no
+fabricated `revenue.received`).
 
-**Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed. Tripwire
-(50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria satisfied, no scope-cut pressure.
+**Progress: window CLOSED at 3/3 working days ✅** — captured 2026-07-24, 07-25, 07-28.
+- **Day 1 (07-24):** brief 10 lines / 306 ms ✅ (REQ-05) · 22 receipts (note.logged 19 ·
+  approval.requested · decision.recorded · phase.closed) · quarantine 22 dup-idem (dedup working).
+- **Day 2 (07-25):** brief 1 line · 1 receipt (note.logged, session-end) — a thin day; bundled
+  2026-07-28 (backfill, the same-day copy step was missed).
+- **Day 3 (07-28):** brief 5 lines · 5 receipts (session.start + 4 tool.postuse) · quarantine 11
+  dup-idem (amplified by repeated same-file edits this session).
+- **Non-days:** 07-26 = real arc commits with **zero receipts → the open gap**, still to be
+  audited. 07-27 = Lexos work, outside this cycle's host scope (not a gap).
+- Retro note logged: hook+command emissions overlap (noise, not a defect — fix out of scope here).
+  Day log: `docs/evidence/phase-04/day-log.md`.
 
-**Scoreboard:** REQ-07 active (this phase) · 7 validated (01–06, 09) · 1 dropped (REQ-08 cost).
+**Remaining to close Phase 04 (~30–45 min, no new code):** ① gap audit of 2026-07-26 →
+`docs/evidence/phase-04/gap-audit.md` · ② quarantine review written into the bundle · ③ bundle
+summary · ④ `/arc-retro` + grep-lint TRIAL decision · ⑤ `/arc-phase-done 4`.
+
+**Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed — elapsed
+MET (07-24 → 07-28). Tripwire (50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria
+satisfied. The amendment above was a priority call, not burn pressure.
+
+**Scoreboard:** REQ-07 active (this phase, amended bar) · 7 validated (01–06, 09) · 1 dropped
+(REQ-08 cost).
