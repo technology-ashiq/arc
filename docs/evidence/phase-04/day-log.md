@@ -79,3 +79,19 @@ _Day 2 of ≥5 — ✅ captured (backfilled 2026-07-28)._
   snapshot) — this is the closing capture for Day 3, same as Day 1's close-of-day refresh.
 
 _Day 3 of ≥5 — ✅ captured (refreshed at session close)._
+
+## Note — 2026-07-27 (not a gap, out of scope)
+
+- Confirmed real work happened this date: work on **Lexos** (a separate project, not arc), plus
+  non-code work (planning, reading, meetings). Correction to an earlier assistant claim of
+  "no work that day" — real work existed, it was just outside this phase's capture scope.
+- **Why zero receipts is correct, not a gap:** Phase-04 host is **arc itself only, this cycle**
+  (`phases/phase-04-spec.md`) — a separate project like Lexos has no arc receipt-spine wired
+  into it (`scripts/hq/` unregistered there), so no action taken there can ever emit to this
+  spine without a one-time install not taken this cycle. Non-code work (reading, planning,
+  meetings) was never in the "factory action" vocabulary (Appendix A) regardless of host —
+  nothing to receipt.
+- **Contrast with 2026-07-26:** that date has real *arc-repo* commits with zero receipts —
+  a genuine wiring gap, still open for the audit. 07-27 is not that; it's correctly out of
+  scope, not missing instrumentation.
+- Does not count as a dogfood Day (host scope, not "no work") — Day count stays 3/≥5 either way.
