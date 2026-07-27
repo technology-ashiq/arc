@@ -66,16 +66,16 @@ _Day 2 of ≥5 — ✅ captured (backfilled 2026-07-28)._
 
 ## Day 3 — 2026-07-28
 
-- **Brief** (`brief-2026-07-28.txt`): **3 lines** — ≤ one screen ✅ (REQ-05). Background 3
+- **Brief** (`brief-2026-07-28.txt`): **4 lines** — ≤ one screen ✅ (REQ-05). Background 4
   (`note.logged`), no needs-you/progress today.
-- **Receipts** (`events-2026-07-28.jsonl`): **3 valid** — `note.logged` ×3: session.start
-  (branch `feat/design-plan`) + 2 `tool.postuse` (PostToolUse hook capturing this session's own
-  file edits — the Day-2 backfill work).
+- **Receipts** (`events-2026-07-28.jsonl`): **4 valid** — `note.logged` ×4: session.start
+  (branch `feat/design-plan`) + 3 `tool.postuse` (PostToolUse hook capturing this session's own
+  file edits — the Day-2 backfill + Day-3 first-snapshot work).
 - **Quarantine** (`events/_quarantine/2026-07-28.jsonl`, reviewed — not copied, transient):
-  **2 entries, both `DUP_IDEM`** — same overlap pattern as Day 1 (hook + command emission
+  **4 entries, all `DUP_IDEM`** — same overlap pattern as Day 1 (hook + command emission
   double-fire), dedup absorbed cleanly. No data loss, not a gap.
 - **Revenue:** none.
-- **Note:** snapshot taken 02:25 IST while the session is still live — same caveat as Day 1;
-  refresh at session/day close to capture the full day.
+- **Note:** refreshed 02:25→02:26 IST at end-of-session (superseding the earlier 02:25 mid-session
+  snapshot) — this is the closing capture for Day 3, same as Day 1's close-of-day refresh.
 
-_Day 3 of ≥5 — ✅ captured (live snapshot, will refresh at close)._
+_Day 3 of ≥5 — ✅ captured (refreshed at session close)._
