@@ -1,0 +1,3 @@
+brief 2026-07-25
+
+background: 1 (note.logged 1)   — --full to expand

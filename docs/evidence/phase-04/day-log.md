@@ -35,3 +35,31 @@ quarantine (count + reason, reviewed per ADR-0031) · observations · revenue. R
   refreshed at day/session close to capture the full day.
 
 _Day 1 of ≥5 — ✅ captured._
+
+## Day 2 — 2026-07-25
+
+- **Brief** (`brief-2026-07-25.txt`): **1 line** — ≤ one screen ✅ (REQ-05). Background 1
+  (`note.logged`), no needs-you/progress that day.
+- **Receipts** (`events-2026-07-25.jsonl`): **1 valid** — `note.logged` (session-end marker on
+  branch `feat/arc-cycle2-phase-04`, ts 14:05:40 IST). Minimal day — session opened/closed with
+  no other factory action captured.
+- **Quarantine:** none observed for this date.
+- **Revenue:** none.
+- **Note:** brief regenerated 2026-07-28 (backfill — the Day 2 bundle step was missed same-day);
+  content is a byte-for-byte read of the live spine file, no reconstruction.
+
+_Day 2 of ≥5 — ✅ captured (backfilled 2026-07-28)._
+
+## Gap note — 2026-07-26 (pre-audit, flagged early)
+
+- Git log shows 4 real commits this date (docs/strategy work: org-blueprint, legal-pack brief,
+  strategy 3-layer reorg, PLAN-design). This is real factory action per the Phase-04 host
+  definition (arc's own development).
+- `.claude/state/hq/events/2026-07-26.jsonl` **does not exist** — zero receipts for a day with
+  confirmed real work.
+- **Not fixed here** — no new emission points this phase (vocabulary/wiring closed, ADR-0026).
+  Logging now so the window-end gap audit (session-log vs spine, pre-mortem #2) has this
+  pre-flagged rather than discovered cold. Candidate explanation to check at audit time: that
+  day's work happened under conditions where the hook/command emission path didn't fire (e.g.
+  a tool/session flow outside the wired 7 commands) — needs the actual gap-audit diff to confirm,
+  not asserted here.
