@@ -158,9 +158,25 @@ fabricated `revenue.received`).
 - Retro note logged: hook+command emissions overlap (noise, not a defect — fix out of scope here).
   Day log: `docs/evidence/phase-04/day-log.md`.
 
-**Remaining to close Phase 04 (~30–45 min, no new code):** ① gap audit of 2026-07-26 →
-`docs/evidence/phase-04/gap-audit.md` · ② quarantine review written into the bundle · ③ bundle
-summary · ④ `/arc-retro` + grep-lint TRIAL decision · ⑤ `/arc-phase-done 4`.
+**① GAP AUDIT DONE 2026-07-28 → `docs/evidence/phase-04/gap-audit.md`. A REAL DEFECT WAS FOUND.**
+The idem preimage (`arc-event.mjs:99`) carries no time and no per-session identity — `run_id` is
+always the default `r-adhoc` and every other component is constant for hook emissions — so the
+idem collapses to a pure function of the payload: **session receipts key on the branch name,
+file-edit receipts key on the file path.** Every repeat session on a branch, and every repeat
+edit of a file, is silently rejected as `DUP_IDEM` and lost. Hook mode never blocks (ADR-0031),
+so the loss is invisible. Evidence: 07-25 = 1 valid / 9 dropped · 07-28 = 5 valid / 11 dropped ·
+**07-26 = zero valid, no day file at all**. Two consequences:
+- **The Day-1 log's "dedup working, no data loss, not a gap" was WRONG** — corrected in the audit
+  (§3); the original text stays (corrections supersede, ADR-0029).
+- **REQ-01 ("every factory action leaves a receipt") is `validated` but false in real use** — its
+  dry-run golden can't catch this, since every event in a scripted run is distinct. Status
+  deliberately NOT changed here; it is a `/arc-retro` + `/arc-phase-done 4` decision.
+Not fixed during the dogfood (wiring/vocabulary closed, ADR-0026) — named and filed for the next
+cycle. **Still open, honestly:** 07-26 produced neither receipts NOR quarantine lines, and the
+idem defect does not explain total silence — a second cause is unidentified (audit §5).
+
+**Remaining to close Phase 04:** ② quarantine review written into the bundle · ③ bundle summary ·
+④ `/arc-retro` + grep-lint TRIAL decision + the REQ-01 call · ⑤ `/arc-phase-done 4`.
 
 **Appetite:** ~40% burnt (~5 of 12.5 days); Phase 04 appetite 3d effort / ≥5 elapsed — elapsed
 MET (07-24 → 07-28). Tripwire (50% / 6.25d) not reached; REQ-02 + REQ-04 green → kill-criteria
