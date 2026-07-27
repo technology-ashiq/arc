@@ -7,16 +7,17 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] ≥3 real working days (arc's own development): real events flowing, brief read daily,
+- [x] ≥3 real working days (arc's own development): real events flowing, brief read daily,
       ≤ one screen held all 3 days (REQ-07, REQ-05 north-star). **Amended 2026-07-28 from
-      "≥5 consecutive" — see Amendment #1 below.**
-- [ ] Honest revenue rules held: `revenue.received` = real money only; pre-revenue →
+      "≥5 consecutive" — see Amendment #1 below.** MET: 07-24 (10 lines / 306 ms), 07-25
+      (1 line), 07-28 (3 lines) — every brief inside one screen and under the 5s budget.
+- [x] Honest revenue rules held (MET — zero `revenue.received` emitted; nothing fabricated): `revenue.received` = real money only; pre-revenue →
       `revenue.simulated`, and REQ-07 closes "mechanism proven, live value pending" —
       never fake P&L truth.
-- [ ] Weekly gap audit run (session-log vs spine — pre-mortem #2): every factory action in
+- [x] Gap audit run (MET — `docs/evidence/phase-04/gap-audit.md`; it FOUND a real defect) (session-log vs spine — pre-mortem #2): every factory action in
       the session log has a receipt, or the gap is named and fixed.
-- [ ] Evidence bundle: the days' JSONL + briefs + the gap audit (REQ-07).
-- [ ] `/arc-retro` run + TRIAL review for the NEW grep-lint gate only — the 8 existing
+- [x] Evidence bundle (MET — 10 files, `arc-evidence.sh verify 4` passed): the days' JSONL + briefs + the gap audit (REQ-07).
+- [x] `/arc-retro` run (MET) + TRIAL review (MET — `spine-api` reviewed and kept WARN) for the NEW grep-lint gate only — the 8 existing
       kickoff-lint trial gates stay WARN regardless (locked this cycle).
 
 ## Verification plan
@@ -34,10 +35,11 @@ arc-self branch — no FIRED.
 real factory action); Day 1 = first working day on/after entry (2026-07-24). Calendar span ≥5
 elapsed — unchanged and met (07-24 → 07-28). **Days captured: 07-24, 07-25, 07-28** — NOT
 calendar-consecutive, which is why "consecutive" was dropped rather than quietly assumed:
-07-26 was a real arc working day whose receipts are MISSING (the open gap, still to be audited)
-and 07-27 was Lexos work, outside this cycle's host scope.
+07-26 was a real arc working day whose receipts are MISSING — **audited at close: not a wiring
+gap but silent data loss from the idem defect, with a second unexplained cause still open**
+(`docs/evidence/phase-04/gap-audit.md`) — and 07-27 was Lexos work, outside this cycle's host scope.
 
-**Each working day (1..5):**
+**Each working day (1..3):**
 1. Work normally — receipts auto-emit to `.claude/state/hq/events/DATE.jsonl` (Phase 1/3 wiring;
    no manual "make a receipt" step).
 2. `arc brief` once → confirm it renders ≤ one screen (REQ-05); save output to

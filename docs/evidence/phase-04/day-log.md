@@ -1,8 +1,11 @@
 # Phase 04 — Live dogfood day log
 
 **Host:** arc itself (owner's call, confirmed 2026-07-24). **Spine:** `.claude/state/hq/`
-(gitignored — SPINE-B; per-day copies live in this bundle). **Window:** ≥5 consecutive real
-working days. **Revenue:** `revenue.simulated` only this window (arc earns no real money) —
+(gitignored — SPINE-B; per-day copies live in this bundle). **Window:** ≥3 real working days —
+**amended 2026-07-28 from "≥5 consecutive"** (amendment #1, owner's call; `phases/phase-04-spec.md`).
+Per-day footers below still read "of ≥5": they are left as written at the time, since this file
+records what was true when each entry was made. Days captured: **07-24, 07-25, 07-28**.
+**Revenue:** `revenue.simulated` only this window (arc earns no real money) —
 REQ-07 closes "mechanism proven, live value pending"; a real `revenue.received` would need a
 provider export.
 
@@ -66,21 +69,25 @@ _Day 2 of ≥5 — ✅ captured (backfilled 2026-07-28)._
 
 ## Day 3 — 2026-07-28
 
-- **Brief** (`brief-2026-07-28.txt`): **5 lines** — ≤ one screen ✅ (REQ-05). Background 5
-  (`note.logged`), no needs-you/progress today.
-- **Receipts** (`events-2026-07-28.jsonl`): **5 valid** — `note.logged` ×5: session.start
-  (branch `feat/design-plan`) + 4 `tool.postuse` (PostToolUse hook capturing this session's own
-  file edits — Day-2 backfill, Day-3 snapshots, the Lexos memory-file write).
+- **Brief** (`brief-2026-07-28.txt`, final): **9 lines** — ≤ one screen ✅ (REQ-05). At close the
+  brief finally rendered ALL THREE groups from real data: **needs-you (1 `approval.requested`)** ·
+  **progress (1 `phase.closed`)** · background 12 (`note.logged`) collapsed to a count. The
+  one-screen grouping shipped in Phase 02 doing its actual job on the phase's own close.
+- **Receipts** (`events-2026-07-28.jsonl`, final): **14 valid** — `note.logged` ×12 (session.start
+  on `feat/design-plan` + 11 `tool.postuse` from this session's closing work) + `phase.closed` ×1
+  + `approval.requested` ×1, the last two emitted by `/arc-phase-done 4` itself.
 - **Quarantine** (`events/_quarantine/2026-07-28.jsonl`, reviewed — not copied, transient):
-  **11 entries, all `DUP_IDEM`** — same overlap pattern as Day 1 (hook + command emission
-  double-fire, amplified here by several same-file re-edits this session: day-log.md rewritten
-  multiple times). Dedup absorbed cleanly each time. No data loss, not a gap.
+  **36 entries, all `DUP_IDEM`** — **NOT benign.** Every one is a real receipt destroyed by the
+  idem defect (`gap-audit.md` §2): the preimage carries no time, so each repeat edit of a file
+  already touched collides and is dropped. The count climbed 11 → 30 → 36 across this session as
+  the same tracker files were edited to document the defect — the bug reproducing live on the
+  files describing it. Full classification: `quarantine-review.md`.
 - **Revenue:** none.
-- **Note:** this is still the SAME calendar day (07-28) — refreshed again at 02:36 IST as the
-  session continued (superseding the earlier 02:25/02:29 snapshots). Not a Day 4; the day only
-  advances when the calendar date does.
+- **Note:** all of 07-28 is ONE day, re-captured several times as the session ran (02:25 → 02:29
+  → 02:36 → phase-done). This entry is the **closing capture**; earlier counts in this file's
+  history were mid-session snapshots, superseded. The day only advances when the calendar does.
 
-_Day 3 of ≥5 — ✅ captured (refreshed, still same day)._
+_Day 3 of 3 — ✅ captured (closing capture at phase-done)._
 
 ## Note — 2026-07-27 (not a gap, out of scope)
 
