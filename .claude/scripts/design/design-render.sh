@@ -83,7 +83,7 @@ _ab() { agent-browser --session "$SESSION" "$@"; }
 # - pinned font stack + antialiasing off: font substitution and subpixel AA differ across the
 #   3 CI legs; without pinning, the hash drifts between Windows dev and Linux CI on identical
 #   bytes (phase-00-spec cross-OS drift rabbit hole)
-RECIPE='viewport-fixed;media-light;animations-off;font-pinned;aa-off'
+RECIPE='viewport-fixed;full-page;media-light;animations-off;font-pinned;aa-off'
 DETERMINISM_CSS='(() => { const s = document.createElement("style"); s.textContent = `
   *,*::before,*::after { animation: none !important; transition: none !important;
     caret-color: transparent !important;
@@ -117,8 +117,17 @@ if [ "$TEXT_LEN" -lt 200 ]; then
   exit 1
 fi
 
+# --full captures the WHOLE page, not just the viewport. Found the hard way: a viewport-only
+# capture of any page taller than the viewport shows content sliced at the fold, and the critic
+# correctly-but-uselessly reports "hard clip with no affordance" every single time. That is a
+# permanent false VIOLATION on every real dashboard, and it makes the fix loop unable to
+# converge -- there is nothing on the page to fix, the defect is in the camera.
+# The viewport still matters (it sets layout width and breakpoints); it just no longer decides
+# how much of the page the critic is allowed to see. Judging what sits above the fold is a
+# separate question that needs a declared platform contract, not a silent side effect of how
+# the screenshot was taken.
 rm -f "$PNG" 2>/dev/null || true
-if ! _ab screenshot "$PNG" >/dev/null 2>&1 || [ ! -s "$PNG" ]; then
+if ! _ab screenshot "$PNG" --full >/dev/null 2>&1 || [ ! -s "$PNG" ]; then
   echo "design-render: screenshot failed for $URL" >&2
   _ab close >/dev/null 2>&1 || true
   exit 1

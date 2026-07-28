@@ -7,7 +7,10 @@
 <style>
   :root{
     --page:#0d0d0d; --surface:#1a1a19; --surface-2:#212120;
-    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
+    /* --muted was #898781: 4.85:1 on --surface but 4.49:1 on --surface-2, so the same
+       token passed AA on one card and failed it on another. #918f88 clears 4.5:1 on both
+       (5.38 / 4.98) and is a barely-perceptible shift, so the dim-label intent survives. */
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#918f88;
     --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
     --blue:#3987e5; --green:#008300; --magenta:#d55181; --yellow:#c98500;
     --aqua:#199e70; --orange:#d95926; --violet:#9085e9; --red:#e66767;
@@ -76,8 +79,12 @@
   .kind{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
   .card p{color:var(--ink-2);font-size:13px;margin:4px 0 10px}
   .btns{display:flex;gap:8px}
+  /* min-height 44px, not padding alone: these were 32px, under the a11y floor this project
+     declares (>=44px targets). inline-flex keeps the label optically centred once the box is
+     taller than its text. */
   button{font:inherit;font-size:12.5px;border-radius:8px;border:1px solid var(--ring);
-         background:transparent;color:var(--ink-2);padding:6px 14px;cursor:pointer}
+         background:transparent;color:var(--ink-2);padding:6px 14px;cursor:pointer;
+         min-height:44px;display:inline-flex;align-items:center;justify-content:center}
   button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
   button:hover{border-color:var(--ink-2)}
   button.primary:hover{filter:brightness(1.1)}
