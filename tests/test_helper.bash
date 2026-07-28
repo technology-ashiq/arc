@@ -55,6 +55,10 @@ _arc_design_sandbox() {
            "$SANDBOX/.claude/scripts/hq/lib" \
            "$SANDBOX/.claude/hooks/PreToolUse-edit.d"
   cp "$ARC_ROOT"/.claude/scripts/design/*.sh      "$SANDBOX/.claude/scripts/design/" 2>/dev/null
+  # The gate shells out to design-lint.mjs (ADR-0046, one gate row) -- a sandbox without it
+  # would fail the lint half of every gate test for a reason that has nothing to do with
+  # the behaviour under test.
+  cp "$ARC_ROOT"/.claude/scripts/design/*.mjs     "$SANDBOX/.claude/scripts/design/" 2>/dev/null
   cp "$ARC_CORE_SRC/review-ledger.sh"             "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/arc-profile.sh"               "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_ROOT"/.claude/scripts/hq/arc-event.sh  "$SANDBOX/.claude/scripts/hq/"

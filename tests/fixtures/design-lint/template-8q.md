@@ -23,6 +23,7 @@
 5. **Progressive disclosure vs always-visible — the explicit split.**
 6. **After success / failure / interruption / return — what does the user see?**
 7. **What becomes FASTER once the user has learned the product** (the expert path).
+8. **What does the user NEVER want to see?**
 
 ## B. Art direction
 

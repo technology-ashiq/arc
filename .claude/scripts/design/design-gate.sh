@@ -22,18 +22,34 @@ mkdir -p "$(dirname "$EVIDENCE")" 2>/dev/null || true
 
 _write_evidence() { printf '%s\n' "$1" > "$EVIDENCE" 2>/dev/null || true; }
 
-# Nothing critiqued -> nothing to enforce. A repo with no design work must not nag.
+if ! command -v node >/dev/null 2>&1; then
+  msg="design-gate: WARN -- node not on PATH, cannot run design-lint or read the spine."
+  _write_evidence "$msg"; echo "$msg" >&2
+  exit 1
+fi
+
+# The design gate is ONE row covering both deterministic halves (ADR-0046): design-lint
+# (briefs + lorem in critiqued routes) and the receipt check below. The lint is no-nag by
+# construction -- a repo with no briefs and no critiques passes it silently.
+LINT_OUT="$(cd "$ROOT" && node "$ROOT/.claude/scripts/design/design-lint.mjs" 2>&1)"
+LINT_STATUS=$?
+if [ "$LINT_STATUS" -ne 0 ]; then
+  {
+    echo "design-gate: WARN -- design-lint found problems:"
+    printf '%s\n' "$LINT_OUT"
+  } > "$EVIDENCE" 2>/dev/null || true
+  cat "$EVIDENCE" >&2 2>/dev/null || true
+  # Receipts are still checked below so one run reports BOTH halves' problems -- but the
+  # exit is already decided: findings from either half warn.
+fi
+
+# Nothing critiqued -> no receipts to enforce (the lint half above already ran).
 have_any=0
 for f in "$CRITIQUE_DIR"/*.md; do [ -f "$f" ] && { have_any=1; break; }; done
 if [ "$have_any" -eq 0 ]; then
-  _write_evidence "design-gate: OK -- no critique artifacts in docs/design/critique/, nothing to enforce."
+  if [ "$LINT_STATUS" -ne 0 ]; then exit 1; fi
+  _write_evidence "design-gate: OK -- lint clean; no critique artifacts in docs/design/critique/, nothing to enforce."
   exit 0
-fi
-
-if ! command -v node >/dev/null 2>&1; then
-  msg="design-gate: WARN -- node not on PATH, cannot read the spine; design receipts unverified."
-  _write_evidence "$msg"; echo "$msg" >&2
-  exit 1
 fi
 
 # Read receipts through the reader ONLY (ADR-0030: the spine's reader is arc's public API; a
@@ -209,7 +225,10 @@ fi
 
 case "$REPORT" in
   OK*)
-    _write_evidence "design-gate: OK -- $(printf '%s' "$REPORT" | cut -f2-)"
+    # Receipts are fine -- but the gate's verdict is BOTH halves, and the lint evidence must
+    # not be clobbered by a receipts-OK line when the lint already warned.
+    if [ "$LINT_STATUS" -ne 0 ]; then exit 1; fi
+    _write_evidence "design-gate: OK -- lint clean; $(printf '%s' "$REPORT" | cut -f2-)"
     exit 0
     ;;
 esac
