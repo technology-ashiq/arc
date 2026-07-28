@@ -90,7 +90,7 @@
 .claude/scripts/design/design-gate.sh	d57eb7b2976de148491b1606f0f9b22f16d5162a49a7b78d7abcd516659cd2d1
 .claude/scripts/design/design-render.sh	472821a988a458a2a5f6a91670e5c9e265269de7cfb38992d54ba2f8296d02a1
 .claude/scripts/hq/arc-brief.mjs	a8cd98e2c16ca9d5a0c57f21765a4cff6aed0a648867543fe28cbcffbce23979
-.claude/scripts/hq/arc-event.mjs	fc975f6046ad515cedf21921234d928228072f53e4f843e416b232af61c3032d
+.claude/scripts/hq/arc-event.mjs	9e5af0e6e90bf5b3addb86681602cdd38a494cc5c45862303e0cee8883eccccc
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	2217cc2dfd8e0129d8ec78b859baed93c2a8b075e314769eb6ac48180c95a256
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
