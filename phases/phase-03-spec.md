@@ -1,104 +1,46 @@
-# Phase 03 — Inbox + API seal
+# Phase 03 — Intelligence library + LexOS pilot + blind-test launch
 
-**Goal (one line):** Approvals become receipts and the reader becomes the sealed, only API.
-**Appetite:** 1.5 days
-**Depends on:** phase-01
+**Goal (one line):** The tagged design-intelligence library exists, the full loop runs end-to-end on LexOS (real premise, upgraded pilot brief), and the two-stream blind test (ADR-0040) is LAUNCHED — evidence may trail the build (ADR-0041); REQ-01 stays `active` until both streams pass.
+**Appetite:** 0.75 days
+**Depends on:** phase-02
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `approval.requested` emission points live (kickoff, phase-done request-OK moments).
-- [ ] `arc inbox` lists `approval.requested` via the reader; `arc approve/reject ID
-      --reason` writes `decision.recorded`; full request→decision flow replays identically;
-      no approval state outside the spine; unknown or already-decided ID → pinned error
-      fixture (non-zero exit, no duplicate `decision.recorded`) (REQ-06).
-- [ ] Cursor catch-up bats (REQ-09), including the same-millisecond-burst fixture proving
-      `--since` resolves ties by append order (file order), never raw ULID string comparison.
-- [ ] Reader-only grep-lint enters TRIAL: `mode: warn` row in `arc.gates.yaml`, glob-scan
-      over tracked source paths; `brief`/`inbox` code contains zero direct `events/*.jsonl`
-      or `state.db` references.
-- [ ] Tracker updated · evidence bundle written.
+- [ ] Library schema + first entries: every entry typed (Pattern/Craft/Brand/Anti) + tagged (domain · user type · platform · interaction problem · confidence · outcome) — untagged observations rejected; principle recorded, never just the screenshot
+- [ ] LexOS pilot: the 4 companion drafts re-read fresh; pilot brief upgraded (primary object case-vs-client answered with real lawyer input — doubles as Stream B's first data point; platform contract: desktop Y · mobile Y · tablet N · keyboard-first Y · reduced-motion Y); full loop run on the real LexOS stack
+- [ ] Blind test launched: 3 directions packaged blind (arc origin undisclosed); Stream A + Stream B requests actually sent; two evidence files created to receive results
+- [ ] Pick + prediction receipts on the spine; outcome-evidence path (`note.logged`) documented
+- [ ] tests green · live demo · tracker updated — the phase-done call on trailing evidence is the OWNER's (ADR-0041)
 
-## Verification plan (concrete — refined at phase start 2026-07-23, owner-approved)
+## Verification plan
 
-Red-first Golden Loop, risk-ordered; **W8 is the reserved second scope-cut** (drop first
-under appetite pressure — W6 alone still closes DoD-3).
-
-- **W1** — `arc-inbox.mjs` (NEW, reader-only) `inbox`/`approve`/`reject`: bats proves list-open
-  → approve/reject writes exactly ONE `decision.recorded`; open-set recomputed via the reader.
-- **W2** — refusal path: unknown-ID → `UNKNOWN_APPROVAL`, wrong-kind → `WRONG_KIND`,
-  already-decided (incl. DIFFERENT reason) → refused, decision count stays 1, empty/non-ULID
-  → `BAD_ARGS`, concurrent → exactly one. Guard = app read-check **+** `(kind|decides)` `--idem`.
-- **W3** — replay-identical: `rm derived && arc-replay` → inbox+brief byte-identical; rebuilt
-  idem index still blocks re-decide; only new bytes in `events/`+`derived/` (no state outside spine).
-- **W4** — `approval.requested` emission points live: kickoff plan-approval + phase-done sign-off
-  (hook-mode, never blocks); brief routes them to needs-you; manifest + tree-manifest updated.
-- **W5** — reader-only grep-lint enters TRIAL: `.claude/scripts/review/spine-reader-lint.sh`
-  glob-scans tracked hq source; `mode: warn` `tier: hook` row in `arc.gates.yaml`; gates.bats 5→6.
-  **MUST-SHIP — never the cut.**
-- **W6** — same-ms-burst fixture (`tests/fixtures/spine/same-ms-burst/`) + `--since` catch-up walk
-  + a mutation test proving append-order, never ULID string compare. **Closes DoD-3 on its own.**
-- **W7** — **mandatory adversarial** construct-a-breaking-input pass over the decision/inbox
-  parser path (6 lenses, skeptic-reproduces-before-CONFIRMED); holes fixed + pinned in BOTH modes
-  BEFORE FAIL-mode promotion; report in `docs/evidence/phase-03/adversarial-report.md`.
-- **W8** — per-consumer cursor store (`spine cursor get/set <consumer>` at
-  `.claude/state/hq/cursors/`). **CUT — the pre-planned reserved cut, taken 2026-07-24
-  (owner-informed).** REQ-09's measurable acceptance and DoD-3 are fully met by W5 (grep-lint)
-  + W6 (catch-up-from-cursor via `--since` + same-ms-burst); a persistent store would only serve
-  future dashboard/evolve modules (this-cycle no-gos), so building it now is speculative infra
-  no current consumer uses. Banked; drops no REQ and no DoD checkbox.
-
-**Decisions locked at phase start (owner-approved 2026-07-23):**
-- Decision payload validated at the spine core (`assertDecision()` in `validate.mjs`) — a malformed
-  decision can never be sealed (REQ-02 alignment). **[owner: yes]**
-- `arc-inbox.mjs` is a NEW dedicated reader-only script, not bolted onto emitter/reader. **[owner: yes]**
-- No-duplicate = read-check + `(kind|decides)` idem key · `payload.decides` is the fold key ·
-  grep-lint lives at `.claude/scripts/review/`. **[locked defaults]**
-
-**CI tripwires handled on every synced edit:** `gates.bats` count 5→6 · sync-golden `tree-manifest` regen.
-
-DoD mapping: W4→DoD-1 · W1+W2+W3→DoD-2 · W6(+W8)→DoD-3 · W5→DoD-4 · W7+packaging→DoD-5.
-Evidence in `docs/evidence/phase-03/` (red/green logs, replay-identity, cursor-burst, adversarial
-report, golden-regen diff, scan verdict).
+- One coarse line (refined via `/arc-change` when the phase starts): live demo = the
+  LexOS explore-critique-pick run end-to-end + both stream requests sent + library
+  entries lint-valid (tag completeness).
 
 ## Rabbit holes in this phase
 
-- Approval UX beyond list + decide — no notification plumbing, no reminders.
-- Policy logic of any kind (no-go: no policy ENGINE — approve/reject is human-only).
+LexOS tokens-proposal boundaries — the drafts deliberately do NOT touch danger/status/
+spacing/disabled values (`disabled:bg-gray-500` 4.83:1 and the Map-based statusBadge are
+intentional; do not "clean up") · waiting on evidence inside the appetite (launch ≠ wait,
+ADR-0041).
 
 ## Out of scope for this phase
 
-- Dogfood (Phase 4) · auto-approval rules · bus/watcher (ADR-0030) · promoting the new
-  grep-lint past WARN · any change to the 8 kickoff-lint trial gates.
+Evals suite (§2.9, later cycle) · W3+ tools (ADR-0039) · gate promotion · outcome-evidence
+tooling beyond the documented `note.logged` path.
 
 ## Your-setup / pending
 
-- None.
+LexOS repo checked out locally + its `docs/design/` drafts current · recruiting channels
+for Stream A (design communities/peers) and Stream B (LexOS lawyer contacts) at ₹0.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Append-only forever; corrections supersede (ADR-0029).
-- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
-  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
-  promotion** (council v2+v3: 43-hole history).
-- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
-- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
-- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
-  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
-  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
-  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
-  bats; exit-timing-race class, `docs/retro-log.md`).
-- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
-  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
-  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
-  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
-  covered without a lint edit.
-- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
-  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
-  selective install would copy spine data into a consumer's payload — the golden bare-sync
-  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
-- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
-- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
-  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · golden
-  bare-sync byte-identical · new lints WARN in TRIAL · evidence bundle per phase-done.
-- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
-  council session 001) — this initiative does not touch them.
+- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
+- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
+- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
+- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
+- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
+- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
+- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.

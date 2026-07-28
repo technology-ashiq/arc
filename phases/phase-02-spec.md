@@ -1,87 +1,56 @@
-# Phase 02 — Money + brief
+# Phase 02 — Explore mode: theses → variants → critique loop → blind ranking → pick
 
-**Goal (one line):** Money reaches the spine exactly once and the day reads in one screen.
-**Appetite:** 2.5 days
-**Depends on:** phase-00
+**Goal (one line):** Three genuinely different directions (thesis-diverged, IA matrix ≥3/7, isolated worktrees, per-variant temp tokens, one shared render command) survive the read-only critique loop and a blind ×3 ranking, ending in an owner pick recorded with a falsifiable prediction (`decision.recorded`).
+**Appetite:** 1.5 days (opens with a 0.5-day infra timebox — pre-mortem #5)
+**Depends on:** phase-01
+
+**Dependency gate (ADR-0044):** the spine idem-preimage dedup fix (separate /arc-change)
+must have landed AND be proven against the mechanism before this phase can CLOSE —
+Phase-2 close evidence must show 2 distinct `review.completed` receipts (distinct idem
+keys) for the same route's 2 critique rounds, not a merged-PR attestation alone (retro
+2026-07-28: a plausible "fix landed" story hid a real collision for 4 days). Not
+landed/not proven at phase open → re-scope to single-round critique per the assumptions
+ledger — and REQ-08's exit criterion below downgrades from "≤2 rounds" to "1 round
+demoed, 2-round path logged as a known gap". No owner is currently assigned to the dedup
+`/arc-change` outside this appetite; if still unowned at Phase-2 open, the single-round
+re-scope is MANDATORY, not a fallback to attempt.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Strict-mode revenue ingest (REQ-03): `arc-event ingest revenue.received --json FILE`
-      validates amount/currency/venture; the same payload twice — same-day AND cross-day —
-      yields ONE event (idem index, fixture pairs pinned).
-- [ ] `revenue.simulated` path — separate kind, never mixed into P&L truth (ADR-0026).
-- [ ] `arc brief` via the reader ONLY (REQ-05, CLI-first per ADR-0027): ≤40 lines,
-      needs-you / money / progress / background grouping, overflow collapses to counts
-      (+ `--full`), golden-fixtured, <5s on the owner's Windows box.
-- [x] REQ-08 — **CUT at Phase-02 close** (stretch; owner's call, cost tracking deferred to a
-      later cycle). Was: `cost` union (null | object — PLAN Appendix B); brief shows daily spend.
-- [ ] Tracker updated · evidence bundle written.
+- [ ] REQ-07 acceptance end-to-end on an arc-internal surface (theses assigned + director divergence rejection · IA matrix ≥3/7 · worktree isolation from one recorded base SHA, or the pre-approved route-namespace fallback (ADR-0037) decided at phase open · per-variant temp tokens, no raw hex · shared render command · blind ranking ×3 · pick + falsifiable prediction receipt per ADR-0038)
+- [ ] REQ-08 acceptance captured from the SAME run as REQ-07 above (no separate demo run): the critique loop inside that one explore run shows VIOLATION → creation fixes → critic re-verifies, ≤2 rounds; critic session diff shows zero product-code changes
+- [ ] tests added & green · live demo · tracker updated
 
 ## Verification plan
 
-**Revenue payload schema (defined at phase start — arc is pre-revenue, so manual/simulated):**
-`revenue.received` / `revenue.simulated` payloads carry `amount` (**positive integer, minor
-units** e.g. paise — integers avoid float-aggregation error, `1 ≤ amount ≤ 1e12`), `currency`
-(**ISO-4217**, three uppercase letters), and any provider metadata; `venture` is the envelope
-slug (already validated). Ingest idem is content-derived (Phase 0), so an identical payload —
-same-day OR cross-day — dedupes to ONE. The validator (`validate.mjs`) is EXTENDED with a
-per-kind revenue check; no parallel validator.
-
-- **Test command:** `bats tests/spine-ingest.bats` then `tests/spine-brief.bats` (one file at
-  a time, foreground; global `bats`, not `npx`).
-- **RED-first:** a `revenue.received` with a bad `amount`/`currency` is currently ACCEPTED —
-  the payload is validated only as "an object" (validate.mjs:144) — so the reject cases land
-  RED before the per-kind revenue check exists. The same-day/cross-day dedupe pairs
-  characterise the Phase-0 idem mechanism (green from the start).
-- **Adversarial pass (parser-class non-negotiable):** construct-a-breaking-input on the revenue
-  check — missing / zero / negative / non-integer / float / unicode-digit / oversize amount;
-  missing / lowercase / non-string / wrong-length currency — holes fixed + pinned as red
-  fixtures in `tests/fixtures/spine/` BEFORE FAIL-mode promotion.
-- **Live demo:** ingest a manual revenue payload twice → ONE event; `arc brief --date <today>`
-  shows the money line; <5s on the owner's Windows box.
-- **Evidence:** `docs/evidence/phase-02/` — ingest red/green, brief golden + noise-budget cases,
-  timing.
+- One coarse line (refined via `/arc-change` when the phase starts): bats + live demo of
+  one full explore run — IA matrix present (lint-checked existence only) and the
+  ≥3/7-differ judgment recorded as the director's explicit written call in the brief dir —
+  not machine-diffed (Rabbit hole: no string-distance metrics; lint only checks the matrix
+  exists) — three critique artifacts with receipts visible via the reader, one
+  `decision.recorded` with a prediction sentence; plus a `git diff` scoped to the critic's
+  session worktree/branch attached as evidence of zero product-file changes (REQ-08).
 
 ## Rabbit holes in this phase
 
-- Perfect cost accounting — nullable + `source`, stop (PLAN rabbit hole).
-- Brief layout polish beyond the noise budget; reader feature creep.
+Worktrees-vs-fallback fought mid-phase (decide at open, ADR-0037) · director divergence
+judgment automated with string metrics (superseded row 12 — director's call only).
 
 ## Out of scope for this phase
 
-- Approvals/inbox (Phase 3) · provider webhook integration (assumptions row 5 fallback =
-  manual entry) · dashboard (no-go) · any change to the 8 kickoff-lint trial gates.
+Intelligence library + LexOS pilot (Phase 3) · build/suggest mode polish (later cycle) ·
+retiring the old reviewer before the ADR-0042 trigger fires.
 
 ## Your-setup / pending
 
-- A real provider export sample (or confirm the manual-entry path) before phase close —
-  fixture payloads carry the tests either way.
+The spine dedup /arc-change fix (ADR-0044) — arc-core work outside this appetite.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Append-only forever; corrections supersede (ADR-0029).
-- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
-  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
-  promotion** (council v2+v3: 43-hole history).
-- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
-- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
-- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
-  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
-  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
-  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
-  bats; exit-timing-race class, `docs/retro-log.md`).
-- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
-  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
-  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
-  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
-  covered without a lint edit.
-- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
-  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
-  selective install would copy spine data into a consumer's payload — the golden bare-sync
-  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
-- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
-- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
-  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · golden
-  bare-sync byte-identical · new lints WARN in TRIAL · evidence bundle per phase-done.
-- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
-  council session 001) — this initiative does not touch them.
+- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
+- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
+- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
+- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
+- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
+- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
+- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.

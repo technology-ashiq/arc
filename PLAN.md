@@ -1,293 +1,222 @@
-# PLAN.md — Cycle 2 · Receipt Spine
+# PLAN.md — Cycle 3 · arc-design "The Designer"
 
-> Filled by `/arc-kickoff` 2026-07-22. Design source:
-> `docs/strategy/plans/PLAN-cycle2-receipt-spine-v2.1.md` (approved 2026-07-22; decisions
-> locked — 9 REQs, SPINE-A..H → ADR-0024..0031, 18-kind vocabulary, schema v1, appetites,
-> no-gos). Predecessor initiative CLOSED: `docs/archive/PLAN-2026-07-22.md` (orchestrator,
-> 6/6 phases). The parked v2 world-best initiative stays parked (ADR-0017).
+> Filled by `/arc-kickoff` 2026-07-28. Design source:
+> `docs/strategy/plans/PLAN-design.md` (FROZEN 2026-07-26; Part 4 decisions DES-A…H +
+> 12-row superseded record LOCKED → ADR-0033..0040 here; fork + auto decisions →
+> ADR-0041..0046). Predecessor initiative CLOSED: `docs/archive/PLAN-2026-07-28.md`
+> (Cycle 2 · Receipt Spine, 5/5 phases). Companion inputs: 4 LexOS design drafts
+> (LexOS repo `docs/design/`: brand.md · references.md · design-system.md ·
+> tokens-proposal.md) — the Phase-3 pilot target.
 
 ## Goal
 
-For Ashiq, arc gains a **receipt spine** — every factory action and every rupee becomes one
-append-only event stream, consumed by everything else only through one read contract,
-rendered as a one-screen daily brief and an approval inbox, and proven on real work for
-three real days (amended from five, 2026-07-28) — so the company's day is replayable from receipts and every future module
-(engine, evolve, dashboard, policy) plugs into a stable API instead of each other's internals.
+For Ashiq, arc gains **The Designer** — a `products/design/` module that turns a real
+product premise into three genuinely different, contract-verified design directions,
+critiqued by a read-only vision critic, decided by the owner with a recorded falsifiable
+prediction, and validated by two external blind evidence streams — taste made researched,
+reusable, enforceable, and improving.
 
 ## Current state
 
-Verified 2026-07-22 at kickoff (design-source block re-checked against the repo the same day):
+Verified 2026-07-28 at kickoff (codebase-surveyor + Cycle-2 close facts):
 
-- **Orchestrator initiative CLOSED** 2026-07-22: 6 products (core/plan/review/qa/git/council),
-  selective install (`--products`), per-target `arc-registry.json`, physical boundaries.
-  271/271 bats. 22 commands. ADRs through **0023** at kickoff → 0024–0031 assigned here.
-- **Scripts re-homed:** `.claude/scripts/{core,council,plan,review}/` (qa/git no-op).
-  kickoff-lint at `.claude/scripts/plan/kickoff-lint.mjs` (v4; **8 substance gates WARN**
-  in TRIAL — `docs/trial-ledger.md`; promotion blocked on a governed escape hatch that
-  doesn't exist yet — gates untouched this cycle).
-- **EVENT.d dispatcher live** (orchestrator Phase 01): `.claude/hooks/{SessionStart,SessionEnd,PostToolUse,…}.d/NN-*.sh`
-  fragments — hq drops `NN-emit` fragments without touching hooks. Advisory events always exit 0.
-- **Stack:** zero-dep Node ≥18 (`.mjs`) + bash-3.2/POSIX shell · bats tests · 3-OS GitHub
-  CI (single Node 20 today — this cycle adds 18 + 22 legs, see External dependencies).
-- **Entry points:** `sync-to-project.sh`/`.ps1` (install/sync) · `.claude/hooks/` dispatcher ·
-  per-product CLIs under `.claude/scripts/*/`.
-- **Conventions:** manifest-driven `products/` (product-lint blocking) · central `tests/`
-  (ADR-0021) · new lints WARN-first in TRIAL · evidence bundle per phase-done ·
-  conventional commits, branch + PR.
-- **Do-not-touch:** `arc_hook_field` guard chain · golden bare-sync fixtures
-  (`tests/fixtures/sync-golden/`) · the 8 trial gates · `docs/archive/` (parked/closed initiatives).
-- **Two real consumers exist:** venturemind (upgrade path — pre-Phase-02 install, 21 stale
-  files known via `--prune-report`) and Opportunity-Scout (fresh install, council).
-- **Central tests:** flat `tests/` + `tests/fixtures/` (ADR-0021) — no `products/*/tests/`.
-- **Sync has two paths** — bare/full (copies all of `.claude/` minus `settings.local.json`,
-  `state/`, `scheduled_tasks.lock`, `worktrees/`) and selective (`--products`, manifest-driven
-  via `arc-products.mjs` + `product-lint.mjs`). The golden gate compares a bare sync against
-  the committed path+sha manifest `tests/fixtures/sync-golden/tree-manifest.txt`.
-  **Kickoff correction (2026-07-22):** hq CODE under `.claude/scripts/hq/` therefore DOES
-  ride a bare sync like every other product's scripts, so the golden manifest gets
-  regenerated once (reviewed diff: only intended hq paths added) — "byte-identical" applies
-  to the rsync-vs-cp path equality and to spine DATA, not to the manifest across a cycle that
-  adds files. Spine DATA stays out for real: `.claude/state/hq/` sits under the `state`
-  exclude (ADR-0025).
-- **Attic deferred** (ADR-0023) — spine's append-only/never-delete stance aligns; nothing
-  here revives attic. No `products/hq/`, no `.claude/scripts/hq/`, no `.claude/state/hq/`
-  exist yet — all created this cycle. `products/hq/manifest.json` must exist and list every
-  hq script/hook fragment from Phase 0 ckpt A onward: `product-lint.mjs` runs as a blocking
-  CI step on all 3 OSes and exits 2 on any `.claude/` file not owned by exactly one manifest.
-  `.claude/scripts/core/arc-products.mjs`'s hardcoded `CATALOG` (6 products — the prior
-  cycle's "no 7th product" freeze, superseded by this cycle) must gain `hq`, or
-  `--status`/install hints silently never mention it.
-- **Hot zones:** `arc_hook_field` guard chain (jq→python→RAW fail-safe) — emitter must not
-  disturb it · SessionStart/End timing (emitter never blocks) · Windows CRLF/locale ·
-  golden bare-sync gate (spine data files must never enter the sync payload).
+- **Stack:** arc build system v4 · zero-dep Node ≥18 (`.mjs`) + bash-3.2/POSIX · bats
+  tests (central `tests/`, ADR-0021) · 3-OS GitHub CI.
+- **Entry points:** `sync-to-project.sh`/`.ps1` (install/sync, twins) · `.claude/hooks/`
+  EVENT.d fragment dispatcher · per-product CLIs under `.claude/scripts/*/` · `/arc-*`
+  commands in `.claude/commands/`.
+- **Conventions:** manifest-driven `products/` (core/qa/review/plan/git/council/hq;
+  resolver `arc-products.mjs`; **product-lint blocking**, hostile-fixture testbed) ·
+  central `tests/` · new lints WARN-first in TRIAL · conventional commits, branch + PR ·
+  CI byte-identity gate `tests/fixtures/sync-golden/tree-manifest.txt` — any
+  product-shipped file edit moves hashes.
+- **Design today:** `/arc-design` command + `design-reviewer` agent under **products/qa/**
+  (scores 8 dimensions 0-10, AI-slop blacklist, **fixes in code itself** — superseded by
+  ADR-0034's read-only critic; runs in parallel until retirement, ADR-0042).
+  `council-designer` = decision lens only. `.claude/rules/ui.md` · `docs/branding.md`
+  (empty stub) · `docs/ui-conventions.md` — thin. **Nothing reads a screenshot back today.**
+- **review-ledger:** kinds scan/code/security/qa/**design**/docs, stamped per commit SHA
+  under `.claude/state/reviews/`; the `design` stamp exists, wired to /arc-design PASS — unused.
+- **Event spine (Cycle 2, shipped):** `.claude/scripts/hq/` — `arc-event.sh` (dual-mode
+  emit) · reader/replay/brief/inbox; closed 18-kind vocabulary (ADR-0026); EVENT.d hook
+  fragments at 3 fire-points. **Known bug:** idem preimage collapse silently drops
+  repeat-action receipts (Cycle-2 close finding) — out of this appetite, ADR-0044.
+- **Gates:** `arc.gates.yaml` flat declarative list run by
+  `.claude/scripts/core/arc-gates.sh`; 6 gates today. Strict parser: per-gate keys
+  `name/check/mode/tier/runtime/evidence`, one `key: value` per line, no inline comments;
+  `check` = shell command from repo root, non-zero exit = gate failed.
+- **Eyes:** agent-browser CLI (screenshots; QA-only use today). `.claude/worktrees/` exists.
+- **Phase-0 target route:** `docs/strategy/arc-hq-mockup.html` (real arc-internal page,
+  renders as static file — ADR-0045).
+- **Do-not-touch:** `.claude/state/` · `arc-registry.json` (generated) · sync-golden
+  fixtures (regen only as a named step) · `.github/workflows/ci.yml` · product-lint +
+  arc-products testbeds · `docs/archive/` · the 8 kickoff-lint TRIAL gates · `arc_hook_field` guard chain.
 
 ## Success requirements
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Every factory action leaves a receipt | **DOWNGRADED validated → active 2026-07-28 (owner's call at `/arc-retro 4`).** The Phase-04 dogfood proved the acceptance below passes while the outcome is false: the idem preimage (`arc-event.mjs:99`) carries no time and no per-session identity, so repeat actions collide and are silently dropped — 100 real receipts lost across the window (`docs/evidence/phase-04/gap-audit.md`). The golden cannot catch it because every event in a scripted run is distinct. **Re-validation now additionally requires a repeat-action fixture** (the same file edited twice, the same branch entered twice, both landing distinct receipts). Original acceptance, still required: scripted dry-run session (kickoff → phase-done → review → qa → commit → ship) produces the expected event sequence; every event passes strict validation; sequence matches a golden fixture where a "step" = one flow command's own emissions (order-insensitive WITHIN that command only, never across commands) — bats green | 1 | active |
-| REQ-02 | The spine cannot be silently poisoned — in either mode | **Strict mode** (`--strict`: CI/ingest/tests): every pinned hostile fixture (missing field, bad ULID, bad ts, dup idem, oversize payload, secret pattern, CRLF/BOM, non-UTF8) exits 2. **Hook mode**: the SAME inputs never block — quarantined to `events/_quarantine/` + loud SKIP + exit 0. Both asserted per fixture | 0 | validated |
-| REQ-03 | Money reaches the spine exactly once | `arc-event ingest revenue.received --json FILE` records a real provider payload; the same payload delivered twice — **including across days** — yields ONE event (idem index, fixture-proven); amount/currency/venture validated | 2 | validated |
-| REQ-04 | State is derived, never truth — twice over | (a) `rm state.db && arc-replay && arc brief --date D` byte-identical to golden; (b) on a **no-sqlite runner** (Node 18 leg) the same brief byte-identical via the canonical JSONL-scan path — both bats cases in 3-OS CI | 0 | validated |
-| REQ-05 | The day is readable in ONE screen | `arc brief` renders from the **spine reader only**: ≤ 40 lines, grouped needs-you / money / progress / background; overflow collapses to counts (+ `--full`); golden-fixtured; <5s on the owner's Windows box | 2 | validated |
-| REQ-06 | Approvals are receipts too | `arc inbox` lists `approval.requested` via the reader; `arc approve/reject ID --reason` writes `decision.recorded`; full request→decision flow replays identically; no approval state outside the spine; approving/rejecting an unknown or already-decided ID is a pinned error fixture (non-zero exit, no duplicate `decision.recorded`) | 3 | validated |
-| REQ-07 | Proven on real work with honest money | **AMENDED 2026-07-28 (amendment #1, owner's call): ≥3 real working days, was ≥5 — and "consecutive" dropped, since the captured days (07-24, 07-25, 07-28) are not calendar-consecutive.** Not appetite-forced (~40% burnt, 50% tripwire never reached) and not an assumption failure (ledger row 4's trigger did not fire); the cut is owner reprioritization toward the Lexos venture. Bar now: ≥3 real working days (arc's own development): real events, brief read daily. **`revenue.received` = real money only**; pre-revenue → `revenue.simulated` (separate kind) and REQ-07 closes "mechanism proven, live value pending" — never fake P&L truth. Evidence bundle = the days' JSONL + briefs + the gap audit (session-log vs spine, pre-mortem #2) — the audit is NOT cut with the days. **VALIDATED 2026-07-28** on 3 working days (07-24/25/28) as **"mechanism proven, live value pending"**: zero `revenue.received`, nothing fabricated, briefs read and ≤ one screen 3/3 days, gap audit run (it found a real defect — see REQ-01) | 4 | validated |
-| REQ-08 | (stretch) Runs know their cost honestly | `run.completed` may carry `cost: null` or `{tokens_in, tokens_out, inr_estimate, source: measured / estimated / manual}`; brief shows daily spend when present. **First cut under pressure** — CUT at Phase-02 close (owner's call; cost tracking deferred to a later cycle) | 2 | dropped |
-| REQ-09 | The spine is the ONLY api | `brief`/`inbox` code contains zero direct `events/*.jsonl` or `state.db` references — all access via the `spine` reader lib/CLI (grep-lint, WARN-first per trial culture); each consumer keeps its own **cursor** (last ULID) and demonstrates catch-up-from-cursor in bats, including a same-millisecond-burst fixture proving `--since` resolves ties by append order (file order), never raw ULID string comparison | 3 | validated |
+| REQ-01 | Arc takes a real product premise (LexOS) and produces 3 distinctive, usable, production-feasible design directions | Two separate blind evidence files (ADR-0040): Stream A — ≥2 of 3 directions taken seriously by experienced designers; Stream B — target users complete the key task without intervention. BOTH pass. Stays `active` until then (ADR-0041) | 3 | active |
+| REQ-02 | One real arc route is independently inspected end-to-end by a read-only vision critic | Critic reads the rendered PNG of `docs/strategy/arc-hq-mockup.html` and reports ≥1 real finding classed VIOLATION/WEAKNESS/POLISH; separately, on a committed defect-injected CLONE of that same route the critic reports the planted defect as VIOLATION (proves detection, not just artifact existence); a critic write outside `docs/design/critique/**` is hook-blocked (test asserts non-zero exit) | 0 | validated |
+| REQ-03 | Design reviews leave receipts Ashiq can see in the daily brief | `review.completed` payload carries `"lens":"design"`, a `target` field (the repo-relative route the gate matches on) and a `result` field (PASS or FAIL), appended via `arc-event.sh` and visible through the reader; review-ledger `design` stamp written on PASS, where PASS ≡ the critique artifact contains zero VIOLATION findings (WEAKNESS/POLISH-only or zero findings = PASS) | 0 | validated |
+| REQ-04 | UI-bearing changes without design review get flagged, never blocked | `design` gate in `arc.gates.yaml` mode `warn`: check exits 1 when a reviewed route lacks a design receipt, exits 0 when the receipt exists, exits 1 with a WARN diagnostic (never blocks, never crashes) when the spine reader query itself errors or the route can't be resolved; never exits 2 this cycle | 0 | validated |
+| REQ-05 | A UI-bearing build gets a machine-checked 4-section design brief | design-lint v0 passes a complete brief (7 interaction answers · art direction · platform-contract table · content contract) and fails a brief missing any one section — both proven by committed fixtures | 1 | active |
+| REQ-06 | Design installs and syncs as a first-class arc module | `products/design/manifest.json` resolves via `arc-products.mjs`; product-lint green; sync-golden tree-manifest regenerated as a named step; old `/arc-design` + design-reviewer untouched and still green (ADR-0042) | 1 | active |
+| REQ-07 | Ashiq picks from 3 genuinely different directions and his pick records a testable claim | 3 variants from 3 distinct theses; IA-difference matrix differs on ≥3 of 7 dimensions; per-variant temp token file, no raw hex in variant code; one shared render command; blind ranking ×3 recorded; owner decision + falsifiable prediction emitted as `decision.recorded` | 2 | active |
+| REQ-08 | Critique findings get fixed without the critic ever touching code | VIOLATION → creation side fixes → critic re-verifies, ≤2 rounds on a real variant set (demo), round 3 escalates to human; critic's session diff shows zero product-code changes | 2 | active |
 
 ## Appetite
 
-**2.5 weeks part-time, hard cap.**
+**5 days** (owner, 2026-07-28). A constraint, not an estimate: blown → cut scope or kill
+a phase, never silently extend. Blind-test *evidence* is allowed to trail the build
+(ADR-0041) — the 5 days buy the build + test launch, not the waiting. Phase appetites sum
+to **4.5 days**; the remaining 0.5 day is explicit slack, spent only through the
+tripwire conversation, never absorbed silently.
+
 **Tier:** M
-**Kill criteria:** at 50% burnt (~6 days), REQ-02 + REQ-04 not green → cut to spine+replay
-only (bank; brief/inbox next cycle). Any phase at 2× appetite → stop, bank, `/arc-retro`.
-First cut REQ-08, second cut REQ-09's cursor demo (lint stays). 100% → cut or kill, never extend.
+
+**Kill criteria:** at 2.5 days burnt, if Phase 1 isn't done → mandatory scope-cut
+conversation (pre-declared cut order: jury ×3→×1 · worktrees→variant route namespace ·
+defer Phase 3 library polish). At 100% → cut or kill, never extend silently.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-    subgraph producers["Producers (factory + money)"]
-        HOOKS["EVENT.d NN-emit fragments\n(SessionStart/End, PostToolUse)"]
-        FLOWS["Command flows\n(kickoff / phase-done / review / qa / commit / ship / council)"]
-        INGEST["arc-event ingest revenue.*\n(--strict, --json FILE)"]
-    end
-
-    subgraph emitter["arc-event emitter (one validator core — ADR-0031)"]
-        VAL["validate (schema v1, 18 kinds — ADR-0026)"]
-        RED["redact (deny-patterns, fail-safe stub — ADR-0028)"]
-        CANON["canonical serialize + SHA-256\n(defined once — ADR-0024)"]
-    end
-
-    subgraph spine["Spine — instance .claude/state/hq/ (ADR-0025)"]
-        JSONL["events/YYYY-MM-DD.jsonl\nappend-only, day-close sha (ADR-0029)"]
-        QUAR["events/_quarantine/\n(hook-mode invalid input)"]
-    end
-
-    subgraph derived["Derived (never truth — REQ-04)"]
-        REPLAY["arc-replay.mjs\n(JSONL → state; idem index)"]
-        STATE["state.db / derived views\n(node:sqlite optional accelerator)"]
-    end
-
-    subgraph consumers["Consumers — reader-only, own cursors (ADR-0030)"]
-        READER["spine reader lib/CLI\n--kind --since ULID --venture"]
-        BRIEF["arc brief (one screen)"]
-        INBOX["arc inbox / approve / reject"]
-        FUTURE["future: dashboard · evolve · policy\n(same contract)"]
-    end
-
-    HOOKS -->|"hook mode: never blocks, exit 0"| VAL
-    FLOWS -->|"explicit emissions"| VAL
-    INGEST -->|"strict mode: exit 2 on invalid"| VAL
-    VAL --> RED --> CANON -->|append| JSONL
-    VAL -->|"invalid (hook mode)"| QUAR
-    JSONL --> REPLAY --> STATE
-    JSONL --> READER
-    STATE -.->|"equivalence-gated accelerator"| READER
-    READER --> BRIEF
-    READER --> INBOX
-    INBOX -->|"decision.recorded via emitter"| VAL
-    READER --> FUTURE
+  owner(["Person: Ashiq — decides, predicts"])
+  subgraph design ["System: products/design — The Designer"]
+    director["Container: design-director — brief, thesis assignment, divergence rejection"]
+    composers["Container: ui-composer ×3 — one variant each, isolated worktrees, own temp tokens"]
+    critic["Container: design-critic — READ-ONLY, vision mandatory, defect classes"]
+    jury["Container: design-jury ×3 — blind comparative ranking"]
+    dlint["Container: design-lint.mjs — deterministic brief + variant checks"]
+    brieff["Container: design brief — 4 contracts"]
+  end
+  subgraph arc ["System: arc (existing)"]
+    browser["Container: agent-browser — deterministic render + PNG"]
+    gates["Container: arc-gates.sh + arc.gates.yaml — design gate, warn"]
+    spine[("Container: event spine — review.completed / decision.recorded / note.logged")]
+    ledger[("Container: review-ledger — design stamp")]
+  end
+  lexos["External system: LexOS repo — Phase-3 pilot"]
+  streams["External: blind evidence — Stream A designers · Stream B users"]
+  owner --> brieff
+  director --> brieff
+  brieff --> composers
+  composers --> browser
+  browser --> critic
+  critic -- "findings (never fixes)" --> composers
+  critic --> spine
+  critic --> ledger
+  composers --> jury
+  jury --> owner
+  owner -- "pick + prediction" --> spine
+  dlint --> gates
+  lexos -.-> composers
+  streams -.-> owner
 ```
-
-Boundary rule: nothing right of the spine touches `events/*.jsonl` or `state.db` except
-`arc-replay` and the reader (grep-lint, REQ-09). Module CODE ships as product `hq`
-(`products/hq/manifest.json` + `.claude/scripts/hq/`); spine DATA never enters the sync
-payload. Derived state lives at `.claude/state/hq/derived/state.db` — instance-only, same
-sync exclusion as the spine, deletable at will (REQ-04).
 
 ## Key decisions (ADR index)
 
-| ADR | Decision (SPINE ID) | Reversibility |
+| # | Decision | Status |
 |---|---|---|
-| [0024](docs/adr/0024-spine-a-append-only-canonical-jsonl-is-truth.md) | SPINE-A — append-only canonical JSONL is truth; sha over canonical form; sqlite optional accelerator, equivalence-gated | one-way |
-| [0025](docs/adr/0025-spine-b-spine-lives-in-instance-state.md) | SPINE-B — spine data in instance `.claude/state/hq/`, never in the sync payload | two-way |
-| [0026](docs/adr/0026-spine-c-closed-event-kind-vocabulary-v1.md) | SPINE-C — closed event-kind vocabulary v1 (18 kinds), extensions only via ADR | two-way |
-| [0027](docs/adr/0027-spine-d-brief-inbox-cli-first.md) | SPINE-D — brief + inbox CLI-first under `.claude/scripts/hq/`; dashboard is a later consumer | two-way |
-| [0028](docs/adr/0028-spine-e-secret-redaction-at-emit-fail-safe.md) | SPINE-E — secret redaction at emit, fail-safe: scanner failure → payload dropped, stub-only marker | one-way |
-| [0029](docs/adr/0029-spine-f-immutability-windows-supersedes.md) | SPINE-F — active day append-only; closed day immutable forever; corrections via `supersedes` | one-way |
-| [0030](docs/adr/0030-spine-g-spine-is-the-only-public-api.md) | SPINE-G — the spine is arc's only public API: one reader + per-consumer cursors; no pub/sub | two-way |
-| [0031](docs/adr/0031-spine-h-emitter-dual-mode.md) | SPINE-H — emitter dual-mode: hook mode never blocks, strict mode exits 2; one validator core | two-way |
-| [0032](docs/adr/0032-spine-i-hook-mode-rejections-must-surface.md) | SPINE-I — hook-mode rejections must surface in the brief (needs-you), not just stderr + a gitignored quarantine file. **Amends 0031's surfacing half only; "never block a session" untouched.** Written 2026-07-28 because 0031's own revisit trigger fired: the Phase-04 gap audit found 100 receipts silently lost over 4 days | two-way |
-
-Inherited and still binding: [0017](docs/adr/0017-park-v2-initiative.md) (v2 stays parked) ·
-[0021](docs/adr/0021-tests-stay-centralised.md) (central `tests/`) ·
-[0023](docs/adr/0023-defer-attic-registry-is-not-ownership.md) (attic deferred).
+| 0033 | DES-A: `products/design/` module in-repo, never a separate repo | accepted |
+| 0034 | DES-B: read-only verification, mechanical enforcement; creation fixes, critic re-verifies; critic = NEW agent | accepted |
+| 0035 | DES-C: design rides the closed spine vocabulary (`review.completed {"lens":"design"}` / `decision.recorded` / `note.logged`) | accepted |
+| 0036 | DES-D: brief carries 4 contracts; coverage contract-driven, tier = effort only | accepted |
+| 0037 | DES-E: thesis-based exploration + IA matrix ≥3/7 + worktree isolation + per-variant temp tokens | accepted |
+| 0038 | DES-F: prediction-based learning; preference ledger ≠ quality ledger | accepted |
+| 0039 | DES-G: external design tools deferred to W3+ | accepted |
+| 0040 | DES-H: REQ-01 requires two external blind evidence streams, both passing | accepted |
+| 0041 | All 4 phases in-cycle; blind-test evidence may trail; REQ-01 active until both streams pass | accepted |
+| 0042 | Old /arc-design + design-reviewer parallel until critique proven, then retire | accepted |
+| 0043 | Standalone this cycle; kickoff step-4.5 hook via later /arc-change | accepted |
+| 0044 | Spine dedup fix out-of-appetite; hard gate before Phase-2 close | accepted |
+| 0045 | Phase-0 target = `docs/strategy/arc-hq-mockup.html` (arc-internal) | accepted |
+| 0046 | design-lint rides the existing gate-runner + lint conventions | accepted |
+| 0047 | Runner owns the verdict + `review.completed`; critic emits evidence only | accepted |
+| 0048 | Agents judge, scripts measure — the critic never cites a measured value | accepted |
 
 ## Non-negotiables
 
-- Append-only forever; corrections supersede (ADR-0029).
-- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
-  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
-  promotion** (council v2+v3: 43-hole history).
-- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
-- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
-- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
-  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
-  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
-  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
-  bats; exit-timing-race class, `docs/retro-log.md`).
-- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
-  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
-  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
-  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
-  covered without a lint edit.
-- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
-  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
-  selective install would copy spine data into a consumer's payload — the golden bare-sync
-  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
-- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
-- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
-  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · bare sync
-  byte-identical across the rsync and cp paths, and the golden tree-manifest regenerated
-  only with a reviewed diff · new lints WARN in TRIAL · evidence bundle per phase-done.
-- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
-  council session 001) — this initiative does not touch them.
+- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
+- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
+- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
+- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
+- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
+- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
+- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.
 
 ## No-gos (explicitly out of scope)
 
-- No pub/sub daemon/bus/file-watcher — cursors + polling only.
-- No dashboard UI · no scheduler/cron (every run human-started) · no policy ENGINE.
-- No engine module (Claude Code is the implicit driver) · no `processes/` canonicalization.
-- No discover/growth/leads/ops modules · no ledger MODULE (revenue events only).
-- No new slash commands (CLIs only) · no Postgres · no HTTP listener · no MCP endpoint.
-- No hash chaining beyond per-event sha + day-close file sha.
-- No native-dependency sqlite. No attic revival (ADR-0023 stands).
+- External design tools/MCPs — Figma, Magic/21st.dev, shadcn MCP, galleries (W3+, ADR-0039).
+- Editing `arc-kickoff.md` / auto-wiring step 4.5 (ADR-0043).
+- Fixing the spine idem-preimage dedup bug inside this appetite (ADR-0044).
+- Touching or retiring `products/qa` design-reviewer / `/arc-design` before the critique-mode dogfood pass (ADR-0042).
+- The design evals suite (§2.9 of the frozen plan) — later cycle.
+- Promoting the design gate warn→block — needs retro + owner OK.
+- New spine event kinds — vocabulary closed (ADR-0035).
+- The kickoff itself running councils/extra workflows — this is a build, not a decision.
 
 ## Rabbit holes
 
-Event-taxonomy bikeshedding (18 kinds, full stop) · reader feature creep (kind/since/venture,
-nothing more — sqlite3 CLI answers ad-hoc questions) · bus temptation (re-read ADR-0030) ·
-dashboard temptation · perfect cost accounting (nullable + `source`) · Windows Unicode chase
-(canonical form + pinned CRLF/BOM fixtures only).
+- **Vision ≠ pixel-perfection:** the critic judges structure, hierarchy, and contract
+  compliance from the PNG — not subpixel rendering. Deterministic render command + the
+  screenshot's hash recorded in the critique artifact; blank/duplicate-hash detection
+  fails the run instead of critiquing a stale image.
+- **Windows worktree friction:** decide worktrees vs the pre-approved fallback (variant
+  route namespace, ADR-0037) at Phase-2 open — never fight it mid-phase.
+- **"Materially differ" cleverness:** the director judges it; lint only checks the IA
+  matrix exists. No string-distance metrics (superseded row 12).
+- **Brief-parsing regexes:** markdown-contract checklist from retro-log applies —
+  tolerant detection, strict value grammar, last-of repeated sections, anchored line
+  regexes, real calendar-date validation.
+- **Two design surfaces during migration:** the new module's modes get distinct naming
+  until retirement (ADR-0042); retirement is a tracked task, never ad-hoc.
 
 ## Assumptions ledger
 
-| Assumption | Trigger it's wrong | Phase |
+| Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| Hook fragments capture enough factory actions | dry-run golden shows a gap → add command-level emission | 1 |
-| JSONL-scan brief <5s at realistic volume | ≥5s on owner's box with 90-day synthetic spine → promote sqlite accelerator to recommended (equivalence-gated) | 0 |
-| Emitter overhead negligible | >1s added per session event → async append | 1 |
-| Real work available for the dogfood window | none mid-build at Phase 4 → dogfood arc's own development (mold factory actions are events too) | 4 |
-| File-drop/manual ingest sufficient for revenue | provider is webhook-push-only → manual entry from dashboard export until a later cycle | 2 |
-| Lock-file + single-write append via one shared Node helper is atomic on NTFS/ext4/APFS | a torn or interleaved line ever observed in fixtures/CI or dogfood → switch to per-writer segment files merged at day-close | 0 |
-
-**Fired at Phase 01 — both resolved exactly as the row pre-specified (implemented + CI-green, no untracked scope, so recorded here rather than re-routed through `/arc-change`):**
-- *Hook fragments capture enough factory actions* → the dry-run golden landed RED with hook fragments alone, so command-level emission was added to all 7 flows (`4936371`, `13e6ddb`).
-- *Emitter overhead negligible* → measured **~2s/emit** on the owner's Windows box (>1s), so PostToolUse + SessionStart emit **async** (`dc94dd1`; 0.565s return, event still lands); SessionEnd stays synchronous for durability.
-
-**Strained but NOT fired at Phase 04 — *Real work available for the dogfood window* (2026-07-28):**
-the trigger as written is "none mid-build" and work was never none — the arc-self branch held and
-captured 3 days. But the row assumed arc-self work would be *dense enough* to fill the window;
-in practice the owner's real work moved to the Lexos venture (a separate repo with no spine
-installed), leaving arc-self days thin (Day 2 = 1 receipt) and 2026-07-27 empty of arc work
-entirely. Recorded as strain, not a FIRED trigger — no downstream REQ or ADR is premised on the
-row beyond REQ-07's day count, which was amended openly instead. If a future cycle wants a dense
-dogfood, the lesson is to install the spine where the real work actually happens.
+| Blind-test recruits (designers + users) reachable at ₹0 | 14 days after Phase-3 build-complete with no Stream A/B evidence → ADR-0041 revisit fires, owner decision forced | 3 |
+| agent-browser screenshots are deterministic enough to critique | 2 flaky/stale-screenshot runs in Phase 0 → harden the fixed-viewport render script before proceeding | 0 |
+| The spine dedup fix (separate /arc-change) lands before Phase 2 opens | Phase 2 opens without it → Phase 2 re-scopes to single-round critique; gate moves to Phase-2 close (ADR-0044) | 2 |
+| 5 days covers the Phase 0–3 build + test launch | Kill tripwire: 2.5 days burnt and Phase 1 not done → scope-cut conversation | all |
+| LexOS repo + its 4 design drafts are available and current at Phase-3 start | Drafts missing/stale at the Phase-3 re-read → re-pilot on a venturemind route or re-draft first | 3 |
+| The arc-hq-mockup page is rich enough to exercise the critique protocol | Fewer than 3 distinct findings possible on it → ADR-0045 revisit: swap target route, same phase | 0 |
+| A real Stream-B contact (LexOS lawyer) is identified and reachable before Phase-3 opens — needed to answer the pilot-brief case-vs-client question, not only to receive evidence later | No named contact at Phase-2 close → Phase-3's appetite opens with its own first exit criterion (pilot-brief upgrade) already blocked | 3 |
 
 ## External dependencies
 
-None new (zero-dep initiative). The rows below are the cycle's only external touchpoints:
-
-| Dependency | Interface | Fake | Real | Contract test |
+| Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| Revenue provider payloads | `arc-event ingest revenue.received --json FILE` (file-drop / manual CLI) | Pinned fixture payloads incl. same-day AND cross-day duplicate pairs (`tests/fixtures/spine/`) | Provider dashboard export or manual CLI entry (Phase 4) | Ingest bats: fixtures validate, duplicates dedupe to ONE event (REQ-03) |
-| Phase-4 real-work host | arc install on the host repo (spine via `--products hq`) | Dry-run scripted session (REQ-01 golden) | arc's own development (confirmed at Phase 4 entry; venturemind / Opportunity-Scout deferred — no spine installed) | 3-day evidence bundle: days' JSONL + briefs + gap audit (REQ-07, amended 2026-07-28) |
-| CI matrix — sqlite/no-sqlite legs | `.github/workflows/ci.yml` Node matrix (today: single `node-version: '20'` on all 3 OSes) | n/a — CI infra, not a fake/real split | Node 18 leg added (no `node:sqlite` — REQ-04(b)) + one Node 22+ leg (accelerator + sqlite-vs-scan equivalence gate, ADR-0024) | REQ-04 twin determinism + the equivalence gate have no legs to run on without both — added at Phase 0 ckpt B |
+| agent-browser (render + screenshot) | CLI: open URL at fixed viewport → PNG on disk | Committed fixture PNGs: one clean render + one planted-defect variant of the same page | agent-browser CLI on `docs/strategy/arc-hq-mockup.html` | Critic run on the planted-defect PNG reports the defect; run on the clean PNG reports no planted defect (Phase 0: fakes; real render before Phase-0 close) |
+| LexOS repo (Phase-3 pilot surface) | Local filesystem path to the LexOS checkout, confirmed and recorded in phase-03's Your-setup/pending BEFORE Phase-3 opens — `docs/design/` drafts + app routes on the real stack | The arc-internal Phase-0 route + committed draft copies | LexOS repo checked out locally | Pilot brief passes design-lint against the real drafts before any variant starts |
+| Spine idem-preimage dedup fix (separate `/arc-change`, ADR-0044) | Fix to `.claude/scripts/hq/arc-event.sh` re-emit/dedup path | none — absence forces Phase-2 re-scope to single-round critique | Real fix shipped via its own `/arc-change` track before Phase-2 close | Phase-2 close blocked (phase-02-spec's Dependency gate) until landed; no owner or start date assigned anywhere in this plan |
+| Real lawyer input (LexOS primary-object decision + Stream B recruiting) | One written answer: case-vs-client primary object, from an actual LexOS lawyer contact | A placeholder answer (case-primary, marked PROVISIONAL) unblocks brief-writing and variant-build if the real lawyer isn't reachable inside Phase-3's appetite | Real LexOS lawyer contact, scheduled BEFORE Phase-3 opens, not during it | Pilot brief's interaction-model Q2 is either the real lawyer's answer or explicitly marked PROVISIONAL with a revisit trigger before any variant starts |
 
 ## Pre-mortem (Klein)
 
-| # | Failure cause | Mitigation |
+*It's 6 months later. The Designer shipped and failed.* Top 5 causes:
+
+| # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | Parser holes in emitter/validator/reader (43-hole class, `docs/retro-log.md` council v2+v3) | Adversarial pass + pinned corpus at Phase 0 ckpt A, before anything consumes the spine |
-| 2 | Silent wiring gaps — "replayable day" is a lie | Dry-run golden sequence (REQ-01) + weekly gap audit (session-log vs spine) at Phase 4 exit |
-| 3 | Golden fixtures (REQ-01/04/05) rot silently across Phases 1-4 as emitter/reader/schema changes move hashes — broke across 10 commits last cycle, surfacing as surprise mid-task failures (`docs/retro-log.md`, arc-orchestrator) | Fixture regen is a named step in every phase-done for Phases 0-4: diff the delta first, confirm only intended paths moved, re-record and name the change in the commit |
-| 4 | Windows breaks determinism | Canonical serialization + pinned CRLF/BOM/non-UTF8 fixtures + twin determinism CI from Phase 0 ckpt B |
-| 5 | Redaction scanner passes clean but misses a cosmetic-variant secret (split-line, encoded, whitespace-varied) — the cosmetic-variant-attack class (`docs/retro-log.md`, council v3) — landing on a day that becomes immutable forever (ADR-0029) | Pinned obfuscated-secret fixtures (split-line, base64, whitespace-varied) in the Phase 0 ckpt A hostile corpus alongside the plain-secret fixture (ADR-0028) |
-| 6 | Consumers couple to internals | ADR-0030 reader-only rule + grep-lint + REQ-09 cursor demo |
+| 1 | design-lint + the brief contract (REQ-05, Phase 1) "looked correct and passed its own fixtures" but had holes — doctored briefs display legitimacy while dodging the gate (council v2+v3 pattern: 43 real holes) | Adversarial construct-a-breaking-input pass before Phase-1 close (non-negotiable); tolerant detection + strict grammar checklist; every found hole pinned as a fixture |
+| 2 | Critique theatre — receipts flow, stamps land, but the critic never actually catches anything, OR the REQ-04 gate check script itself errors and the crash is silently read as a receipt-present PASS (Cycle-2 pattern: golden passed while the outcome was false) | The planted-defect fixture IS REQ-02's acceptance; anomalies (zero findings, identical findings across routes, or an uninspected non-zero exit) are tested against the mechanism before being recorded as fine; a fixture proves the REQ-04 check script's crash path never resolves to exit 0 |
+| 3 | The vision step (REQ-02, Phase 0, agent-browser dep) silently judges a stale, blank, or wrong-viewport screenshot → confident nonsense critique | One shared deterministic render command; critique artifact records screenshot hash + viewport; blank/duplicate-hash detection fails the run |
+| 4 | Explore (REQ-07, Phase 2, ADR-0037) produces 3 skins of one app; thesis reassignment loops burn the appetite | Director rejects weak thesis lines BEFORE composing; IA matrix filled at thesis-assignment time, not after build; one reassignment round max, then owner call |
+| 5 | A new Windows-run Node script (design-lint.mjs, ADR-0046; the render/critique command; the design gate check script) calls process.exit() while agent-browser/socket teardown is in flight → libuv assertion crash or a garbage exit code silently misread as gate PASS/FAIL (council v3 pattern, recurs on Windows) | Every new script in products/design/ and .claude/scripts/design/ sets process.exitCode + returns naturally (unref'd backstop timer if needed), never abrupt process.exit() on a fetch/socket-touching path — proven green on Windows CI specifically, not just Linux/macOS |
 
 ## Phases (risk-ordered)
 
-Sequenced so the riskiest, most load-bearing code (parser-class spine core) lands first and
-everything else consumes it. Effort appetites sum to 14.5 part-time days ≈ the 2.5-week cap.
+Phase 0 is the steel thread (frozen plan §3.2, built EXACTLY): the thinnest end-to-end
+slice proving the verification spine before any generation exists.
 
-| Phase | Capability | Appetite | Depends on | Spec |
-|---|---|---|---|---|
-| 0 | Spine core: emitter (dual-mode) + canonical serializer + hostile corpus + adversarial pass (ckpt A) → replay + reader + minimal `arc brief` renderer (JSONL-scan `--date` render only, no grouping polish — REQ-04's acceptance invokes `arc brief --date D` before Phase 2 exists) + twin determinism CI (ckpt B) | 5 days | none | `phases/phase-00-spec.md` |
-| 1 | Factory wiring: EVENT.d `NN-emit` fragments + explicit flow emissions + dry-run golden + overhead measured | 2.5 days | Phase 00 | `phases/phase-01-spec.md` |
-| 2 | Money + brief: strict revenue ingest (cross-day idem) + `arc brief` one-screen + nullable cost (stretch) | 2.5 days | Phase 00 | `phases/phase-02-spec.md` |
-| 3 | Inbox + API seal: approval/decision flow + cursor catch-up + reader-only grep-lint (TRIAL) | 1.5 days | Phase 01 | `phases/phase-03-spec.md` |
-| 4 | Live dogfood: 3 real working days (amended from 5, 2026-07-28), honest revenue rules, gap audit, evidence bundle, retro | 3 days effort (≥5 elapsed) | Phase 02, Phase 03 | `phases/phase-04-spec.md` |
+| Phase | Capability | Appetite | Depends on |
+|---|---|---|---|
+| 00 | Steel thread: critic vision + mechanical read-only enforcement + spine receipt + warn gate + minimal brief template → one real route inspected end-to-end | 1.25 days | none |
+| 01 | Brief mode (4 contracts) + design-lint v0 (adversarially passed) + `products/design/` manifest module | 1 day | phase-00 |
+| 02 | Explore mode: theses → 3 isolated variants → critique loop → blind ranking → pick + prediction receipt | 1.5 days | phase-01 |
+| 03 | Intelligence library (tagged schema) + LexOS pilot end-to-end + blind-test launch (evidence may trail, ADR-0041) | 0.75 days | phase-02 |
 
-**North-star:** 100% of factory actions + revenue with receipts during dogfood · briefs
-read 3/3 days and ≤ one screen (amended from 5/5, 2026-07-28) · twin replay determinism green in
-CI from Phase 0 ckpt B onward.
-
-## Appendix A — event kinds v1 (18, closed — ADR-0026)
-
-`idea.captured` · `council.verdict` · `approval.requested` · `decision.recorded` ·
-`kickoff.done` · `phase.closed` · `review.completed` · `qa.completed` · `commit.done` ·
-`ship.done` · `revenue.received` *(real only)* · `revenue.simulated` *(never in P&L)* ·
-`cost.incurred` · `run.completed` · `incident.raised` · `redaction.applied` ·
-`day.closed` · `note.logged`
-
-## Appendix B — event schema v1 (normative)
-
-```json
-{ "id": "ULID", "v": 1, "ts": "RFC3339+05:30", "idem": "sha256(source:natural-key)",
-  "actor": "arc-phase-done | human:ashiq | ingest:revenue", "process": "phase-done@x.y.z",
-  "model": "driver:model-id | null", "venture": "slug | arc", "run_id": "r-…",
-  "kind": "Appendix A", "payload": { "no secrets — redacted at emit" },
-  "outcome": "ok | fail | partial",
-  "cost": null,
-  "cost_alt": { "tokens_in": 0, "tokens_out": 0, "inr_estimate": 0, "source": "measured|estimated|manual" },
-  "evidence": "path | null", "supersedes": "id | null",
-  "sha": "SHA-256 over canonical form, sha field excluded" }
-```
-
-Kickoff clarifications:
-- (REQ-08) `cost` is ONE field — a union of `null` and the object shape documented on the
-  `cost_alt` line above; a real event carries a single `cost` key. `cost_alt` appears in
-  the block only to show the non-null shape.
-- (REQ-02) Size cap: a canonical event (sha included) is ≤ 64 KiB; anything larger is
-  invalid input — the "oversize payload" hostile fixture pins this number.
+Specs: `phases/phase-00-spec.md` … `phase-03-spec.md`.

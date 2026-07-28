@@ -3,14 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ARC HQ — second brain for business (concept mock)</title>
+<!-- FIXTURE -- defect-injected clone of docs/strategy/arc-hq-mockup.html.
+     Regenerate: node tests/fixtures/design/make-defect-fixture.mjs
+     Planted defects:
+       1. lorem ipsum in the 06:02 event  (content contract -> VIOLATION)
+       2. KPI labels below AA contrast     (a11y floor      -> VIOLATION)
+       3. inconsistent radii on KPI 2 + 4  (shape system    -> WEAKNESS or VIOLATION)
+     Never edit this file by hand and never point a live surface at it. -->
+<title>DEFECT FIXTURE — ARC HQ — second brain for business (concept mock)</title>
 <style>
   :root{
     --page:#0d0d0d; --surface:#1a1a19; --surface-2:#212120;
-    /* --muted was #898781: 4.85:1 on --surface but 4.49:1 on --surface-2, so the same
-       token passed AA on one card and failed it on another. #918f88 clears 4.5:1 on both
-       (5.38 / 4.98) and is a barely-perceptible shift, so the dim-label intent survives. */
-    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#918f88;
+    --ink:#ffffff; --ink-2:#c3c2b7; --muted:#898781;
     --grid:#2c2c2a; --baseline:#383835; --ring:rgba(255,255,255,0.10);
     --blue:#3987e5; --green:#008300; --magenta:#d55181; --yellow:#c98500;
     --aqua:#199e70; --orange:#d95926; --violet:#9085e9; --red:#e66767;
@@ -79,12 +83,8 @@
   .kind{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
   .card p{color:var(--ink-2);font-size:13px;margin:4px 0 10px}
   .btns{display:flex;gap:8px}
-  /* min-height 44px, not padding alone: these were 32px, under the a11y floor this project
-     declares (>=44px targets). inline-flex keeps the label optically centred once the box is
-     taller than its text. */
   button{font:inherit;font-size:12.5px;border-radius:8px;border:1px solid var(--ring);
-         background:transparent;color:var(--ink-2);padding:6px 14px;cursor:pointer;
-         min-height:44px;display:inline-flex;align-items:center;justify-content:center}
+         background:transparent;color:var(--ink-2);padding:6px 14px;cursor:pointer}
   button.primary{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
   button:hover{border-color:var(--ink-2)}
   button.primary:hover{filter:brightness(1.1)}
@@ -139,6 +139,11 @@
   .rule b{color:var(--ink);font-weight:600}
 
   footer{margin-top:18px;color:var(--muted);font-size:12px;text-align:center}
+  /* planted defect: KPI labels at ~1.4:1, far below the declared AA floor */
+  .kpi .label{color:#232320 !important}
+  /* planted defect: random radii breaking the shape system */
+  .kpi:nth-child(2){border-radius:22px !important}
+  .kpi:nth-child(4){border-radius:2px !important}
 </style>
 </head>
 <body>
@@ -177,7 +182,7 @@
   <div>
     <div class="panel">
       <h2>Today — everything the company did <span class="hint">every line = an event on the spine · click 🧾 for evidence</span></h2>
-      <div class="event"><span class="t num">06:02</span><span class="ptag"><span class="dot" style="background:var(--aqua)"></span>discover</span><span class="etext">Nightly hunt: 214 posts scanned (r/smallbusiness, r/IndiaTax) → clustered → <b>5 candidates scored</b></span><a class="ev" href="#" onclick="return false">🧾 run</a><span class="lvl">L2</span></div>
+      <div class="event"><span class="t num">06:02</span><span class="ptag"><span class="dot" style="background:var(--aqua)"></span>discover</span><span class="etext">Lorem ipsum dolor sit amet, consectetur adipiscing elit sed do <b>eiusmod tempor</b></span><a class="ev" href="#" onclick="return false">🧾 run</a><span class="lvl">L2</span></div>
       <div class="event"><span class="t num">07:00</span><span class="ptag"><span class="dot" style="background:var(--violet)"></span>council</span><span class="etext">Judged “GST reconciliation for CAs” → <b>PROCEED 8.1/10</b> (market juror 9, risk juror 6) → kickoff drafted, sent to your inbox</span><a class="ev" href="#" onclick="return false">🧾 verdict</a><span class="lvl">L1</span></div>
       <div class="event"><span class="t num">08:04</span><span class="ptag"><span class="dot" style="background:var(--yellow)"></span>growth</span><span class="etext">2 SEO articles published (invoice-late-fees, e-invoice-rules) · Monday batch drafted → inbox</span><a class="ev" href="#" onclick="return false">🧾 diff</a><span class="lvl">L2</span></div>
       <div class="event"><span class="t num">08:31</span><span class="ptag"><span class="dot" style="background:var(--magenta)"></span>finflicks</span><span class="etext">Video published: “5 invoicing mistakes killing your cash flow” · 1.2k views in 13h</span><a class="ev" href="#" onclick="return false">🧾 link</a><span class="lvl">L2</span></div>

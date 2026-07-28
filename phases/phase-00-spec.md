@@ -1,148 +1,99 @@
-# Phase 00 — Spine core (emitter · canonical serializer · replay · reader)
+# Phase 00 — Steel thread: read-only vision critique with a receipt
 
-**Goal (one line):** The spine exists and cannot be poisoned — dual-mode emitter + canonical
-serializer + hostile corpus survive an adversarial pass (ckpt A), then replay + reader +
-twin determinism enter CI (ckpt B).
-**Appetite:** 5 days (ckpt A ~3d · ckpt B ~2d; **ckpt B starts only after ckpt A's
-adversarial pass**)
+**Goal (one line):** One real arc-internal route (`docs/strategy/arc-hq-mockup.html`, ADR-0045) independently inspected end-to-end by a read-only vision critic, leaving a `review.completed {"lens":"design"}` receipt on the spine, behind a warn-mode design gate.
+**Appetite:** 1.25 days
 **Depends on:** none
 
 ## Exit criteria (Definition of Done)
 
-Checkpoint A — emitter + corpus:
-- [ ] `.claude/scripts/hq/arc-event.sh` — `emit` in hook mode (validate → redact → append;
-      invalid input → `events/_quarantine/` + loud SKIP + exit 0) and `--strict` (exit 2 on
-      the same inputs) — one validator core (ADR-0031). Secret handling per ADR-0028: HIT →
-      refused, stub-only quarantine record (secret bytes never persisted anywhere); scanner
-      FAILURE → payload dropped + stub-only `redaction.applied`. Append path: ALL writes go
-      through one shared Node helper — acquire `events/.lock` (bounded retry), write the
-      full canonical line in a single append call, fsync, release; no direct shell appends
-      (assumptions ledger row 6 names the fallback).
-- [ ] Canonical serializer defined ONCE (UTF-8, LF, sorted keys, no insignificant
-      whitespace) + SHA-256 (`sha` field excluded) + ULID gen — zero-dep, shared by
-      emitter/hasher/reader (ADR-0024).
-- [ ] Hostile corpus pinned in `tests/fixtures/spine/` — ≥15 fixtures: missing field ·
-      bad ULID · bad ts · dup idem · oversize payload (canonical event > 64 KiB — the
-      schema-level cap, PLAN Appendix B) · plain secret · obfuscated secrets
-      (split-line, base64, whitespace-varied — pre-mortem #5) · CRLF/BOM · non-UTF8 ·
-      nested quotes · evidence path traversal · unknown kind · schema-version mismatch ·
-      duplicate-key object · case-varied enum value · embedded-newline-mid-value ·
-      torn/partial-line (kill mid-append) · concurrent-append interleave. **Each fixture
-      asserted in BOTH modes** (REQ-02).
-- [ ] Idem uniqueness has a source at ckpt A (blocker fix, 2026-07-22): the emitter checks
-      `idem` against `.claude/state/hq/derived/idem.index` — an append-only sidecar of
-      `idem<TAB>event-id` lines, DERIVED not truth (`arc-replay` rebuilds it whole from the
-      spine at ckpt B). A missing index on a fresh instance is an empty set, never an error;
-      a duplicate within one run AND a duplicate across days both reject (strict) /
-      quarantine (hook). Index writes happen under the same lock as the append.
-- [ ] Adversarial construct-a-breaking-input pass run against emitter/validator/serializer;
-      every hole fixed + pinned as a red fixture; report committed (43-hole rule).
-
-Checkpoint B — replay + reader + CI:
-- [ ] `.claude/scripts/hq/arc-replay.mjs` — JSONL → derived state at
-      `.claude/state/hq/derived/state.db`; whole-spine idem index rebuilt every replay;
-      `node:sqlite` accelerator behind the sqlite-vs-scan equivalence gate; JSONL scan
-      stays the canonical path (ADR-0024).
-- [ ] `spine` reader v1 at `.claude/scripts/hq/spine.mjs` (lib + CLI in one file) —
-      `--kind` `--since <ulid>` `--venture` + cursor helpers, nothing more (ADR-0030).
-- [ ] Minimal `arc brief --date D` renderer at `.claude/scripts/hq/arc-brief.mjs`
-      (JSONL-scan render only — REQ-04's acceptance invokes it before Phase 2 exists;
-      grouping/noise budget stay Phase 2).
-- [ ] Twin determinism bats in CI (REQ-04 a+b): (a) `rm state.db && arc-replay &&
-      arc brief --date D` byte-identical to golden; (b) no-sqlite leg byte-identical via
-      the JSONL-scan path. CI matrix gains the Node 18 leg + a Node 22+ leg (PLAN external
-      dependencies).
-- [ ] sqlite-vs-scan equivalence gate defined and green (blocker fix, 2026-07-22):
-      `tests/spine-equivalence.bats` runs `arc-replay` + `arc brief --date D` twice over the
-      SAME spine — once with the `node:sqlite` accelerator (`ARC_SPINE_ENGINE=sqlite`), once
-      forced onto the canonical JSONL-scan path (`ARC_SPINE_ENGINE=scan`) — across both the
-      golden fixture spine and the 90-day synthetic spine. Pass = byte-identical stdout AND
-      identical derived-state dumps; the (empty) diff is the committed evidence artifact.
-- [ ] Volume check operationalized (blocker fix, 2026-07-22 — assumptions ledger row 2):
-      `tests/fixtures/spine/gen-synthetic.mjs` generates a deterministic 90-day synthetic
-      spine (seeded PRNG, timestamps passed in — no wall-clock, no `Math.random`);
-      `arc brief` is timed against it on the owner's Windows box. <5s → assumption holds,
-      the measured number goes in the evidence bundle; ≥5s → the trigger fires, the sqlite
-      accelerator is promoted to recommended (equivalence-gated) and the ledger row updated.
-- [ ] Module registered: `products/hq/manifest.json` lists every hq file
-      (`node .claude/scripts/core/product-lint.mjs` green — blocking CI step);
-      `.claude/scripts/core/arc-products.mjs` `CATALOG` gains `hq`; manifest declares
-      NO `.claude/state/**` path (bats-asserted). Golden `tests/fixtures/sync-golden/
-      tree-manifest.txt` regenerated ONCE with a reviewed diff — every added line must be a
-      `.claude/scripts/hq/**` path and nothing else; rsync-path vs cp-path output stays
-      byte-identical; no `.claude/state/**` line ever appears (it is under the `state`
-      exclude — the real SPINE-B gate).
-- [ ] All fixtures green on 3-OS CI · tracker updated · evidence bundle written.
+- [ ] `design-critic` agent exists (`.claude/agents/design-critic.md`) — NEW agent (ADR-0034), frontmatter tools: Read, Glob, Grep, Write, and the scoped entry `Bash(bash .claude/scripts/hq/arc-event.sh:*)` (the exact /arc-qa allowed-tools pattern — no general Bash); **no Edit**; protocol requires reading the rendered PNG back before judging (vision mandatory)
+- [ ] PreToolUse edit-hook fragment `.claude/hooks/PreToolUse-edit.d/10-design-critic.sh` (same fragment dir + matcher pattern as the existing `.claude/hooks/PreToolUse-edit.d/00-freeze.sh`) scopes critic writes to `docs/design/critique/**` — bound to the critic context via a critic-session marker file under `.claude/state/design/` that the critique runner sets for the critic run's duration (freeze-hook state-file pattern — never a global always-on rule); while the marker exists, a write anywhere else blocks; bats test proves the block (non-zero exit)
+- [ ] Critique runner exists: `.claude/scripts/design/design-critique.sh` — the orchestration piece. Responsibility split (mirrors the frozen plan §2.3): the RUNNER sets/clears the marker file, runs the deterministic render, invokes the design-critic agent, computes PASS/FAIL from the critique artifact (PASS ≡ zero VIOLATION), and writes the review-ledger `design` stamp via `review-ledger.sh` on PASS; the CRITIC writes only the critique artifact and emits the spine receipt via its scoped `arc-event.sh` Bash — the critic structurally cannot touch the ledger
+- [ ] Minimal brief template exists (`docs/templates/design-brief-template.md`): the 4 contract section headers + the 7 interaction-model questions — just enough to critique against (full brief mode is Phase 1)
+- [ ] Deterministic render: one command opens the target page at a fixed viewport via agent-browser and writes a PNG; the critique artifact records the screenshot's hash + viewport
+- [ ] Critic run on the committed planted-defect fixture PNG (defect-injected clone of the target route) reports the planted defect as `VIOLATION`; run on the real route's clean render produces a critique artifact with ≥1 real finding classed VIOLATION / WEAKNESS / POLISH — no absolute scores (REQ-02)
+- [ ] Receipt: `review.completed` payload `{"lens":"design","target":"<repo-relative route path>","result":"PASS|FAIL","screenshot_sha256":"<hash>"}` emitted via `bash .claude/scripts/hq/arc-event.sh emit` — `target` is the route-identification key the gate script matches on; visible through the reader; review-ledger `design` stamp (`.claude/state/reviews/`, via `review-ledger.sh`) written on PASS (PASS ≡ zero VIOLATION findings, REQ-03)
+- [ ] `design` gate row in `arc.gates.yaml` — exact row (the file's strict flat parser: keys `name/check/mode/tier/runtime/evidence`, one `key: value` per line, no inline comments): `name: design` · `check: bash .claude/scripts/design/design-gate.sh` · `mode: warn` · `tier: hook` · `runtime: native` · `evidence: .claude/state/design/gate.txt`; the check script exits 1 when a critiqued route lacks a design receipt (matched on the payload `target` field), 0 when present, 1 with a WARN diagnostic on reader error — never 2 this cycle (REQ-04)
+- [ ] tests added & green (one bats file, run foreground/serially)
+- [ ] live demo run + output checked
+- [ ] tracker updated — `PROGRESS.md` at repo root: this phase's row in `## Phase table` flipped ✅ with date + an entry appended to `## Done log` (format = the file's own existing rows; build playbook §8)
 
 ## Verification plan
 
-- **Test command:** `bats tests/spine-emit.bats` then `tests/spine-replay.bats` then
-  `tests/spine-reader.bats` then `tests/spine-equivalence.bats` (one file at a time,
-  foreground — the globally installed `bats`, which is what CI runs; `npx bats` mis-resolves
-  the loader path on Windows) + `node .claude/scripts/core/product-lint.mjs` + `node
-  .claude/scripts/plan/kickoff-lint.mjs`.
-- **Expected failure first:** every hostile fixture lands RED before its guard exists
-  (write fixture → watch strict mode wrongly accept / hook mode wrongly append → fix →
-  green); the twin-determinism case lands RED before canonical serialization is wired into
-  the reader path.
-- **Live demo scenario:** on the owner's Windows box — `arc-event emit note.logged …`
-  appends one valid event to `.claude/state/hq/events/<today>.jsonl`; feed the plain-secret
-  fixture in hook mode → loud SKIP, exit 0, stub-only quarantine record, nothing on the
-  spine; same input with `--strict` → exit 2; `rm state.db && arc-replay && arc brief
-  --date <today>` reproduces the byte-identical brief.
-- **Real-system check:** a real Claude Code session on this repo with the emitter installed
-  but NOT yet wired (wiring is Phase 1) — session behaves normally; `arc_hook_field`
-  guard-chain bats still green; bare `sync-to-project.sh` output still matches the golden.
-- **Expected evidence:** `docs/evidence/phase-00/` — adversarial report · fixture list ·
-  3-OS CI run link · equivalence-gate output (empty diff) · measured brief time against the
-  90-day synthetic spine · bare-sync golden diff (empty).
+- **Test command:** `bats tests/design-steel-thread.bats`
+- **Expected failure first:** the test asserts (a) a critique artifact exists under
+  `docs/design/critique/` for the target route, (b) the spine (via the reader) contains a
+  `review.completed` event whose payload has `"lens":"design"` and the expected `target`,
+  (c) a critic-context write outside the critique dir exits non-zero, (d) after a PASS
+  run, the review-ledger records a `design` stamp for the current commit
+  (`review-ledger.sh` output / `.claude/state/reviews/` stamp file contains `design`).
+  Before the phase is built, (a) fails with "no critique artifact found for
+  arc-hq-mockup" — red proven, then built to green.
+- **Live demo scenario:** run the critique command against
+  `docs/strategy/arc-hq-mockup.html` → watch the critic read the PNG back and write the
+  critique artifact → run the reader/brief → the design receipt line is visible → check
+  the review-ledger shows the `design` stamp for HEAD → attempt a write to `README.md`
+  from the critic context → hook blocks it. Then run the gate with and without the
+  receipt present → warn fires only when absent.
+- **Real-system check:** the real agent-browser render of the real page (the fixture PNGs
+  cover only the planted-defect contract test).
+- **Expected evidence:** critique artifact (with screenshot hash line) · reader output
+  showing the receipt · bats green output · blocked-write transcript · gate warn/pass output.
 
 ## Rabbit holes in this phase
 
-- ULID library shopping — zero-dep rule: implement Crockford base32 inline (one-page spec);
-  no npm package, ever.
-- Perfect redaction pattern set — start from gitleaks-class basics + the pinned fixtures;
-  the corpus grows via the adversarial pass and dogfood, not speculation.
-- Windows Unicode chase — canonical form + pinned CRLF/BOM/non-UTF8 fixtures only.
-- Reader features beyond `kind`/`since`/`venture` — the sqlite3 CLI answers ad-hoc questions.
+- Building brief mode here — NO: minimal template only, brief mode is Phase 1.
+- Touching the spine dedup bug — NO (ADR-0044): Phase 0 emits once per run.
+- Windows path matching in the edit-hook scope — reuse the matcher from
+  `.claude/hooks/PreToolUse-edit.d/00-freeze.sh` verbatim; do not write a new path
+  normalizer.
+- Critiquing interactivity on a static page — the platform contract for this route is
+  desktop-only static; state-matrix depth waits for Phase 2 surfaces.
+- Cross-OS render drift: the render command is authored/tested on the owner's Windows
+  box, but CI is 3-OS — font/antialiasing/DPI differences can change the PNG hash between
+  Windows dev and Linux/macOS CI with no code change; pin explicit font + disable AA in
+  the render command before trusting the hash check, don't assume Windows-tested parity.
 
 ## Out of scope for this phase
 
-- Factory wiring (EVENT.d fragments, flow emissions) — Phase 1.
-- Revenue ingest, one-screen brief polish, cost — Phase 2. Inbox/approvals — Phase 3.
-- Promoting the sqlite accelerator to recommended (only if the <5s assumption fires).
-- Any spine data in the sync payload; any change to the 8 kickoff-lint trial gates.
+Full 4-contract brief mode + design-lint (Phase 1) · manifest module (Phase 1) · explore/
+theses/worktrees (Phase 2) · library + LexOS pilot (Phase 3) · gate promotion warn→block.
+
+## Build notes — read criteria 3 and 7 through these
+
+- **Who emits the receipt → ADR-0047.** Criteria 3 and 7 as written contradict each other
+  (the critic emits a receipt whose `result` only the runner computes). Resolved: the runner
+  computes PASS/FAIL, emits `review.completed`, and stamps the ledger; the critic writes its
+  artifact and emits `note.logged`. Owner-confirmed 2026-07-28. An agent produces evidence;
+  only a deterministic script records a verdict.
+- **The runner is `begin` + `finish`, not one call.** Criterion 3 says the runner "invokes the
+  design-critic agent". No shell script in arc can do that — arc has no headless-claude path,
+  agents are spawned by the session. So the runner is the deterministic pair of bookends
+  (`begin` = arm boundary + render; `finish` = judge + receipt + stamp + release) and
+  `/arc-design-critique` spawns the critic between them. Every responsibility criterion 3
+  assigns to the runner still lives in the runner.
+- **Tracked follow-up, NOT this phase: `freeze-check.sh` traversal hole.** The critic's own
+  guard refuses `..` segments, so the critic is safe. The pre-existing
+  `.claude/scripts/core/freeze-check.sh` shares the hole it was modelled on: with a boundary
+  of `docs/design`, a target of `docs/design/../../etc/passwd` satisfies its `"$allowed"/*`
+  prefix match and is allowed. Fixing it is a core change (product-shipped file → sync-golden
+  regen), deliberately out of a 1.25-day design appetite. Owner call 2026-07-28: track, don't
+  touch. Route via `/arc-change` before Phase 1 closes.
+- **Cross-OS hash drift is handled by scope, not by pinning alone.** The render pins viewport,
+  font stack, animations and AA — and no test asserts a hash value. The hash is provenance
+  (what pixels were judged) plus same-machine stale/blank detection. Nothing compares hashes
+  across OS, so the 3-OS CI legs cannot fail on font rendering.
 
 ## Your-setup / pending
 
-- None — all decisions locked (ADR-0024..0031). Node ≥18 confirmed on the owner's box;
-  a local Node 22+ is optional (only to exercise the sqlite accelerator locally).
+None — agent-browser installed, spine live, all local.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Append-only forever; corrections supersede (ADR-0029).
-- Emitter/validator/replayer/reader are parser-class code → **mandatory adversarial
-  construct-a-breaking-input pass, holes fixed + pinned as red fixtures, BEFORE FAIL-mode
-  promotion** (council v2+v3: 43-hole history).
-- Twin determinism cases (REQ-04 a+b) enter CI at Phase 0-B and never leave.
-- No secrets on the spine — redaction fail-safe, stub-only, never fail-open (ADR-0028).
-- Hook-mode emitter can never block or fail a session; `arc_hook_field` guard chain
-  untouched. Appends are durable and atomic: an emitter killed mid-append (SIGKILL/hard-exit)
-  leaves zero torn lines and zero silently-lost acknowledged events, and two concurrent
-  emitters never interleave a torn/partial line — pinned fixtures (Phase 0 corpus + Phase 1
-  bats; exit-timing-race class, `docs/retro-log.md`).
-- No module reads `events/*.jsonl` or `state.db` directly except the spine reader —
-  grep-lint WARN-first (ADR-0030), wired as a `mode: warn` row in `arc.gates.yaml` (same
-  schema as the existing gate rows — unregistered, it never runs), scanning by glob over
-  tracked source paths (not a hardcoded file list) so consumers added after this cycle are
-  covered without a lint edit.
-- `products/hq/manifest.json` never declares a `.claude/state/**` path in `files`/`scripts`/
-  `docs`: `arc-products.mjs`'s `assertSafe` has no state-tree rule, so a `--products hq`
-  selective install would copy spine data into a consumer's payload — the golden bare-sync
-  gate only covers the full-sync path (ADR-0025). Asserted by a Phase 0 bats case.
-- Canonical serialization defined ONCE, shared by emitter/hasher/reader (ADR-0024).
-- Inherited whole: zero-dep Node · bash-3.2/POSIX · no GNU-only constructs (macOS BSD leg)
-  · every script ships bats (central `tests/`, ADR-0021) · CI red = no merge · golden
-  bare-sync byte-identical · new lints WARN in TRIAL · evidence bundle per phase-done.
-- The 8 existing kickoff-lint trial gates stay WARN this cycle (escape-hatch precondition,
-  council session 001) — this initiative does not touch them.
+- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
+- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
+- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
+- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
+- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
+- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
+- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.

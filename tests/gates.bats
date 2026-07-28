@@ -8,10 +8,12 @@ RUNNER() { echo "$ARC_ROOT/.claude/scripts/core/arc-gates.sh"; }
 # Write a gates.yaml, echo its path.
 _gates() { local p; p="$(mktemp)"; printf '%s\n' "$1" > "$p"; echo "$p"; }
 
-@test "parser: real arc.gates.yaml parses to 6 valid-JSON gates" {
+@test "parser: real arc.gates.yaml parses to 7 valid-JSON gates" {
   run bash "$(RUNNER)" --list --gates-file "$ARC_ROOT/arc.gates.yaml"
   [ "$status" -eq 0 ]
-  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 6 ]
+  # Count is pinned on purpose: it catches a row silently lost or duplicated by an edit.
+  # Bumped 6 -> 7 in Cycle 3 Phase 00 when the `design` warn gate was registered (REQ-04).
+  [ "$(printf '%s\n' "$output" | grep -c .)" -eq 7 ]
   # every line is valid JSON with a name + check
   printf '%s\n' "$output" | while IFS= read -r g; do
     echo "$g" | jq -e '.name != "" and .check != ""' >/dev/null
