@@ -9,15 +9,36 @@
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread: read-only vision critic + edit-hook scope + spine receipt + warn gate + minimal brief template → one real route inspected e2e | 1.25 days | ✅ 2026-07-28 |
-| 01 | Brief mode (4 contracts) + design-lint v0 (adversarially passed) + `products/design/` manifest module | 1 day | pending |
+| 01 | Brief mode (4 contracts) + design-lint v0 (adversarially passed) + `products/design/` manifest module | 1 day | ✅ 2026-07-29 |
 | 02 | Explore: theses → 3 isolated variants → critique loop → blind ranking → pick + prediction receipt (GATE: spine dedup fix landed, ADR-0044) | 1.5 days | pending |
 | 03 | Intelligence library + LexOS pilot e2e + blind-test launch (evidence may trail, ADR-0041) | 0.75 days | pending |
 
-**Appetite burn:** ~1.1 of 5 days used (Phase 00 closed). Kill tripwire is 2.5 days with
-Phase 01 not done — checked at this close, not fired, 1.4 days of headroom before it is.
+**Appetite burn:** ~1.6 of 5 days used (Phases 00 + 01 closed). The kill tripwire (2.5 days
+with Phase 01 not done) is now PERMANENTLY CLEARED — Phase 01 is done with 0.9 days of
+tripwire headroom to spare. Remaining: 2.25 days of declared appetite for Phases 02+03
+against 3.4 days of wall clock.
 
 ## Done log
 
+- 2026-07-29 — **Phase 01 CLOSED** (`/arc-phase-done 1`). Shipped: `design-lint.mjs` v0
+  (4-section strict grammar, fence-stripped structural parsing, live drift gate vs the
+  template, real-calendar dates, strict platform values, lorem in briefs + critiqued
+  product routes, contrast computed from declared pairs vs the BRIEF-declared floor,
+  `--floors` JSON export as the number authority — ADR-0048) · first real brief
+  (`docs/design/briefs/docs--strategy--arc-hq-mockup-html/`, closes Phase 00's
+  "none declared" gap) · template upgraded to strict grammar · one `design` gate row runs
+  both halves (ADR-0046) · module proof (scratch install 9/9, resolver reads registry, old
+  surface byte-untouched — ADR-0042). **Adversarial pass: 10 attacks, 4 real holes fixed +
+  all 10 pinned** (fenced-heading bypass the worst: delete a section, quote its heading in
+  a fence, pass). **Tests: 417 full-suite green on 3 OS, CI run `30390662479`, FIRST
+  attempt** — Phase 00's cross-OS lessons (no path-string compares, `-text` fixture
+  exemption) paid for themselves. **Time: ~0.5 days vs 1 day appetite.** Evidence bundle
+  verified at `c855aee`. REQ-05/06 → validated.
+  `amendments: 2` (ADR-0048 contrast-deferral reversal · build-time scoping note: lint owns
+  computed contrast + exported floors, browser-measured pixels wait for Phase 2) ·
+  `reopened: n`.
+  Follow-ups routed at close: freeze-check traversal hole → issue #54 · spine dedup
+  (ADR-0044 Phase-2 gate) → issue #55.
 - 2026-07-28 — **Phase 00 CLOSED** (`/arc-phase-done 0`). Shipped: `design-critic` agent
   (no Edit, scoped receipt Bash) · write boundary (`10-design-critic.sh` +
   `critic-scope-check.sh`, marker-scoped) · deterministic full-page render
@@ -43,73 +64,28 @@ Phase 01 not done — checked at this close, not fired, 1.4 days of headroom bef
 
 ## Now
 
-**Phase 01 BUILD COMPLETE (2026-07-29) — awaiting `/arc-phase-done 1`.** Built on branch
-`feat/design-phase-01`:
+**Phase 01 is CLOSED (2026-07-29).** Next: **Phase 02 — explore mode** (`phases/phase-02-spec.md`,
+1.5 days): theses → 3 isolated variants → critique loop → blind ranking → pick + prediction
+receipt. Phase records are in the Done log above.
 
-- **`design-lint.mjs` v0** — 4-section presence (strict level-2 exact-case headings, repeats
-  and empty bodies rejected, fences stripped before structural parsing) · answer-count drift
-  gate against the template's LIVE question count (`--template` proven non-hardcoded) ·
-  real-calendar date · platform table strict yes/no (boilerplate rejected) · lorem-ipsum in
-  briefs and critiqued product routes (fixture routes under `tests/` excluded by location) ·
-  **contrast computed from declared pairs against the BRIEF-declared floor** (ADR-0048), with
-  `--floors` JSON export as the single authority for Phase 2's browser-driven measurement.
-- **Adversarial pass ran: 10 constructed attacks, 4 real holes found, fixed, all pinned** —
-  fenced-heading full bypass (worst: delete a section, quote its heading in a fence, pass) ·
-  twin a11y-floor lines (1:1 for the machine above 4.5:1 for the reader — first-match-wins
-  enforced nothing) · empty-section dodge · malformed-pair silent drop. 6 attacks HELD
-  (case-fold, level-3 heading, bold-line heading, repeated section, answer inflation, CRLF —
-  the last held by ECMAScript LineTerminator semantics and is pinned against regression).
-- **First real brief** through brief mode: `docs/design/briefs/docs--strategy--arc-hq-mockup-html/brief.md`
-  — closes Phase 00's "none declared" gap for the HQ surface; 5 declared pairs all computed
-  green; lints clean.
-- **Gate wiring (ADR-0046):** the one `design` gate row now runs BOTH halves — design-lint
-  (briefs + critiqued routes) and the receipt check; evidence combined, still warn-only,
-  still never exits 2.
-- **Module proof:** `--products core,hq,design` scratch install lands 9/9 files, resolver
-  reads `design yes ok 9/9` from the registry; product-lint green; old `/arc-design` +
-  `design-reviewer` byte-untouched vs main (ADR-0042).
-- Template upgraded to strict grammar (date line, parseable a11y-floor, contrast-pairs
-  table); sync-golden regenerated (3 intended hashes).
-- **Suites:** design-lint 28 · design-steel-thread 29 · sync 23 · products 34 · gates 15 ·
-  portability 3 — all green, serial. Live demo ran per spec (brief green → section deleted →
-  fails naming it → restored → scratch sync lands the module).
+### OWNER DECISION REQUIRED before Phase 02 opens (ADR-0044)
 
-Next: `/arc-phase-done 1` (needs the 3-OS CI run → push + PR).
+The spine dedup fix (issue #55) has NOT landed, and Phase 02's critique loop needs the
+re-emit path (round 1 FAIL → fix → round 2 PASS on the same target). ADR-0044's trigger
+fires the moment Phase 02 opens without it. Two legal moves:
 
-Phase 00's own record — what shipped, the 389-test 3-OS CI proof, the metrics and the two
-cross-OS bugs it cost — is in the Done log above, not repeated here.
+1. **Fix first** — land #55 as arc-core work (outside this cycle's appetite), then open
+   Phase 02 at full scope.
+2. **Open re-scoped** — Phase 02 runs single-round critique (no re-emit), and the dedup
+   gate moves to Phase-02 close.
 
-### What Phase 01 inherits, and what it now owes
+### Open follow-ups (tracked, not blocking)
 
-- **Part of REQ-06 already landed.** `products/design/manifest.json` and the
-  `arc-products.mjs` CATALOG entry had to exist the moment Phase 00 put a file under
-  `.claude/` — `sync.bats`'s manifests-vs-reality invariant refuses any payload file no
-  manifest owns. Phase 01 owns what remains: install/resolve proof, product-lint in CI, and
-  the old-`/arc-design`-untouched check (ADR-0042).
-- **ADR-0048 added work here.** `design-lint` v0 must own contrast and target size for real —
-  computed from declared tokens, checked against the floor **the brief declares**, never a
-  hardcoded constant. The earlier "contrast-AA deferred" line in the Phase 01 spec is
-  reversed. Until that lint ships, contrast defects are suspicions with no authoritative
-  number, because the critic is now forbidden from producing one.
-- **The critic's blind spot is Phase 01's problem.** It caught 2 of 3 planted defects and
-  missed the mismatched corner radii — shape-system inconsistency. The brief's art-direction
-  slop kill-list has to carry that weight, not the critic's eye.
-
-### Open follow-ups (neither blocks Phase 01)
-
-1. **`freeze-check.sh` traversal hole.** With a boundary of `docs/design`, a target of
-   `docs/design/../../etc/passwd` satisfies its prefix match. The critic's own guard refuses
-   `..`; the pre-existing core guard does not. Owner call 2026-07-28: track, do not touch —
-   it is a core change with a sync-golden regen. Route via `/arc-change` before Phase 01 closes.
-2. **`docs/evidence/phase-00..04` still hold Cycle 2's evidence.** Cycle 2's close archived
-   its PLAN/PROGRESS/phase specs but left its evidence in place, so Cycle 3's phase numbering
-   now collides with it. Phase 00's bundle manifest is honest (it lists only the artifacts it
-   verified, hashed, at `fa794ea`), but the directory reads as mixed. Archiving it the way
-   `docs/archive/evidence-orchestrator-2026-07-22/` was archived also means updating three
-   live comment references in `.claude/scripts/hq/lib/*.mjs` plus two ADRs, so it is its own
-   small change, not a phase-close side effect.
+- Issue #54 — freeze-check.sh traversal hole (core; fix modelled in critic-scope-check.sh).
+- `docs/evidence/phase-00..04` still hold Cycle 2's evidence alongside Cycle 3's bundles;
+  archiving needs 3 live comment references + 2 ADRs updated — its own small change.
 
 ### Awaiting owner sign-off
 
-`approval.requested` is on the spine for moving past Phase 00. Record the decision with
-`arc-inbox approve <id> --reason ...` (or `reject`).
+`approval.requested` for moving past Phase 01 is on the spine — record with
+`arc-inbox approve <id> --reason ...`.
