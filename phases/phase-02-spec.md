@@ -21,15 +21,46 @@ re-scope is MANDATORY, not a fallback to attempt.
 - [ ] REQ-08 acceptance captured from the SAME run as REQ-07 above (no separate demo run): the critique loop inside that one explore run shows VIOLATION → creation fixes → critic re-verifies, ≤2 rounds; critic session diff shows zero product-code changes
 - [ ] tests added & green · live demo · tracker updated
 
-## Verification plan
+## Phase-open decisions (2026-07-29, recorded at open as the spec requires)
 
-- One coarse line (refined via `/arc-change` when the phase starts): bats + live demo of
-  one full explore run — IA matrix present (lint-checked existence only) and the
-  ≥3/7-differ judgment recorded as the director's explicit written call in the brief dir —
-  not machine-diffed (Rabbit hole: no string-distance metrics; lint only checks the matrix
-  exists) — three critique artifacts with receipts visible via the reader, one
-  `decision.recorded` with a prediction sentence; plus a `git diff` scoped to the critic's
-  session worktree/branch attached as evidence of zero product-file changes (REQ-08).
+1. **Dependency gate (ADR-0044): SATISFIED at open — full scope.** The dedup fix merged to
+   main in PR #56 (`0733c07`), owned and landed before this phase opened, so the
+   single-round re-scope clause does not trigger. The close still requires the
+   mechanism-proof evidence below (2 distinct receipts, distinct idems, same route), from
+   the real explore run — a merged-PR attestation alone stays insufficient per the retro.
+2. **Isolation = the pre-approved route-namespace fallback (ADR-0037), not worktrees.**
+   Variants live at `docs/design/explore/<explore-id>/variant-{a,b,c}/` on this phase
+   branch, each with its own `tokens.css`; the base SHA is recorded in the explore dir.
+   Why not worktrees: real blindness comes from fresh-context composers scoped by prompt —
+   a worktree does not stop an agent reading an absolute path any more than a directory
+   does, so it buys no isolation the namespace lacks; what it DOES buy is three more copies
+   of the MSYS/native path-spelling minefield that cost Phase 00 three CI rounds. Recorded
+   trade: namespace isolation is branch-level (nothing merges to main until the pick), not
+   FS-level. Revisit: variants needing a running dev server each (a real app surface, not a
+   static route) → worktrees per ADR-0037's main line.
+3. **Verification plan refined** (was the coarse line; routed as this phase-open spec edit):
+
+- **Test command:** `bats tests/design-explore.bats`
+- **Expected failure first:** the suite asserts the explore runner scaffolds
+  `docs/design/explore/<id>/` (variant dirs + per-variant `tokens.css` + recorded base
+  SHA), checks the IA matrix EXISTS (existence only — the ≥3/7 judgment is the director's
+  written call in `matrix.md`, never machine-diffed), refuses a variant whose page carries
+  raw hex where a token exists, and proves the ADR-0044 mechanism: two `review.completed`
+  receipts for the SAME route from two rounds carry DISTINCT idem keys. Before the runner
+  exists the first test fails at "design-explore.sh: no such file" — red proven, then green.
+- **Live demo scenario (REQ-07 + REQ-08 in ONE run):** explore run on the ARC HQ surface
+  (the Phase-01 brief is the input) — director assigns 3 theses + writes the divergence
+  call → 3 fresh-context composers each build their variant (own dir, own tokens, no raw
+  hex) → shared render (`design-render.sh`, one command, all variants) → critic round 1
+  (expected: real VIOLATIONs on ≥1 variant) → creation side fixes → critic round 2
+  re-verifies → blind jury ×3, independent, rankings + reasons as artifacts → owner pick +
+  falsifiable prediction recorded via the REQ-06 pattern (`approval.requested` →
+  `arc-inbox approve --reason "<pick> — prediction: <measurable effect> because
+  <mechanism>"` → `decision.recorded`, closed vocabulary, no new kinds).
+- **Expected evidence:** explore dir committed (matrix + thesis lines + 3 variants + 3
+  critique artifacts + 3 ranking artifacts) · reader output showing ≥2 same-route
+  `review.completed` with distinct idems · the `decision.recorded` payload · `git log`/
+  `git diff` proof that critic sessions changed zero product files (REQ-08).
 
 ## Rabbit holes in this phase
 

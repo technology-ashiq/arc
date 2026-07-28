@@ -6,11 +6,15 @@
     ".claude/commands/arc-design-critique.md"
   ],
   "agents": [
-    ".claude/agents/design-critic.md"
+    ".claude/agents/design-critic.md",
+    ".claude/agents/design-director.md",
+    ".claude/agents/design-jury.md",
+    ".claude/agents/ui-composer.md"
   ],
   "scripts": [
     ".claude/scripts/design/critic-scope-check.sh",
     ".claude/scripts/design/design-critique.sh",
+    ".claude/scripts/design/design-explore.sh",
     ".claude/scripts/design/design-gate.sh",
     ".claude/scripts/design/design-lint.mjs",
     ".claude/scripts/design/design-render.sh"
