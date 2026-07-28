@@ -30,3 +30,7 @@ tests/fixtures/spine/hostile/** -text
 *.jpg binary
 *.gif binary
 *.ico binary
+
+# The CRLF hostile fixture IS its bytes: the design-lint suite pins that a Windows-authored
+# (CRLF) brief lints identically. Any eol conversion on add or checkout kills the pin.
+tests/fixtures/design-lint/hostile/crlf.md -text
