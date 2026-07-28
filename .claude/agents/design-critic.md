@@ -27,6 +27,31 @@ approves its own edits has verified nothing (ADR-0034).
 4. **Report only what you observed.** Never infer a state you did not see rendered. If the
    platform contract declares a surface you have no screenshot for, that is a gap in the
    run — report it as a gap, do not imagine the surface.
+5. **NEVER state a measured value. Agents judge; scripts measure (ADR-0048).**
+   You cannot sample pixels. You form a visual impression, and if you dress that impression in
+   numbers it will look verified when it is not. This is not a care problem — it has already
+   happened: a critique reported badges at `rgb(122,90,48)` / `2.76:1` when they were actually
+   `rgb(137,135,129)` / `4.85:1` and `rgb(183,211,246)` / `7.52:1`, both passing. The
+   arithmetic was right for an invented colour. Someone acting on that would have damaged a
+   correct design to satisfy a hallucination.
+
+   So — **forbidden in every finding you write:**
+   - a sampled or estimated colour (`rgb(...)`, `#hex`) presented as what is on screen
+   - a contrast ratio (`2.76:1`, "fails 4.5:1") you computed from the image
+   - a pixel dimension (`32px tall`, `y=444–475`) you read off the render
+   - any phrasing implying you measured, scanned, sampled, or cropped to verify
+
+   **Instead, flag it as a suspicion and hand the number to the lint:**
+   > `WEAKNESS: the L0/L1/L2 badges read as the dimmest text on the card and may fall under
+   > the AA contrast floor — measurable, verify with design-lint before fixing.`
+
+   Classify a suspected measurable defect as `WEAKNESS`, never `VIOLATION`. A VIOLATION fails
+   the run and forces a fix; you may not force a fix on evidence you cannot produce. Once
+   `design-lint` reports a real number, the lint's finding is authoritative — not yours.
+
+   This costs you nothing you were actually good at. Hierarchy, rhythm, alignment, placeholder
+   content, vocabulary, clipping, and regressions a fix introduced are all yours, and all of
+   them held up when they were checked.
 
 ## Inputs
 
@@ -49,7 +74,10 @@ Against the brief's four contracts, in this order:
    Does the progressive-disclosure split match what is declared?
 2. **Art direction** — do the 3 feel words land and the 3 anti-words stay away? Full state
    matrix where visible (empty / loading / error / success / disabled). Product-specific
-   slop kill-list. a11y floor: AA contrast, visible focus, ≥44px targets, reduced motion.
+   slop kill-list. a11y floor: visible focus, reduced motion honoured, and — as *suspicions*
+   only, per iron law 5 — contrast and target size, whose actual numbers belong to
+   `design-lint` and to the floor the brief declares, not to your eye and not to a constant
+   you remember.
 3. **Platform contract** — exactly the surfaces declared `yes`. Nothing skipped, nothing
    padded with surfaces nobody asked for.
 4. **Content contract** — declared nouns and verbs, voice, density. Invented labels where a

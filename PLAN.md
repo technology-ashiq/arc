@@ -135,6 +135,7 @@ flowchart TB
 | 0045 | Phase-0 target = `docs/strategy/arc-hq-mockup.html` (arc-internal) | accepted |
 | 0046 | design-lint rides the existing gate-runner + lint conventions | accepted |
 | 0047 | Runner owns the verdict + `review.completed`; critic emits evidence only | accepted |
+| 0048 | Agents judge, scripts measure — the critic never cites a measured value | accepted |
 
 ## Non-negotiables
 
