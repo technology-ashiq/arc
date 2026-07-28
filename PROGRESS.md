@@ -64,28 +64,33 @@ against 3.4 days of wall clock.
 
 ## Now
 
-**Phase 01 is CLOSED (2026-07-29).** Next: **Phase 02 — explore mode** (`phases/phase-02-spec.md`,
-1.5 days): theses → 3 isolated variants → critique loop → blind ranking → pick + prediction
-receipt. Phase records are in the Done log above.
+**Phase 02 OPEN, mid-run — BLOCKED on a session restart** (2026-07-29). Everything up to
+the first agent spawn is done and committed on `feat/design-phase-02`:
 
-### OWNER DECISION REQUIRED before Phase 02 opens (ADR-0044)
+- ADR-0044 resolved **fix-first** (owner): dedup fix merged (PR #56), mechanism proven
+  live twice (scratch spine + bats pin: same-route receipts, distinct idems). Phase 01
+  signed off (`01KYN8MYRYM93BZDG4PB9MA2Q2`); PRs #53 + #56 merged; merged-main golden
+  verified EXACT against a real sync.
+- Phase-open decisions recorded in the spec: full 2-round scope · isolation =
+  route-namespace fallback (ADR-0037) · verification plan refined.
+- Infra (`7d42c2d`, inside the 0.5-day timebox): `design-explore.sh`
+  (init/check/render/status; adversarial pass found + fixed 4 real holes — rgb()/hsl()/
+  named-colour smuggles past the hex-only check, `..` in --brief; all pinned) · agents
+  `design-director` / `ui-composer` / `design-jury` · manifest + golden regenerated ·
+  design-explore 12 · sync 23 · products 34 green.
+- The real run `hq-dashboard-v1` is scaffolded (base `7d42c2d`, brief = the Phase-01 ARC HQ
+  brief).
 
-The spine dedup fix (issue #55) has NOT landed, and Phase 02's critique loop needs the
-re-emit path (round 1 FAIL → fix → round 2 PASS on the same target). ADR-0044's trigger
-fires the moment Phase 02 opens without it. Two legal moves:
+**WHY BLOCKED:** the agent registry loads new agent TYPES only at session start (Phase-0
+evidence, reconfirmed). The three explore agents were created this session, so spawning
+them fails; the classifier correctly refused the inline-role workaround (it would sidestep
+the registry's per-agent tool restrictions).
 
-1. **Fix first** — land #55 as arc-core work (outside this cycle's appetite), then open
-   Phase 02 at full scope.
-2. **Open re-scoped** — Phase 02 runs single-round critique (no re-emit), and the dedup
-   gate moves to Phase-02 close.
-
-### Open follow-ups (tracked, not blocking)
-
-- Issue #54 — freeze-check.sh traversal hole (core; fix modelled in critic-scope-check.sh).
-- `docs/evidence/phase-00..04` still hold Cycle 2's evidence alongside Cycle 3's bundles;
-  archiving needs 3 live comment references + 2 ADRs updated — its own small change.
-
-### Awaiting owner sign-off
-
-`approval.requested` for moving past Phase 01 is on the spine — record with
-`arc-inbox approve <id> --reason ...`.
+**Resume (fresh session):** `design-director` / `ui-composer` / `design-jury` will be
+registered. Continue the run: (1) director assignment on `hq-dashboard-v1` (theses +
+matrix at assignment time + rejected-theses notes), (2) composers ×3 fresh-context, one
+variant dir each, (3) `design-explore.sh check` + `render`, (4) critic round 1 per variant
+via `design-critique.sh` — expect real VIOLATIONs, (5) creation fixes → critic round 2
+(same routes → the distinct-idem close evidence), (6) director divergence call, (7) jury
+×3 blind, (8) owner pick + falsifiable prediction via the REQ-06 pattern. REQ-07 + REQ-08
+from this ONE run.
