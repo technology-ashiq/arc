@@ -41,16 +41,31 @@ enforcement and the gate reported OK); a target inside a fenced code block was e
 real; an absolute declared target never matched its repo-relative receipt. 5 further attacks
 held (case-varied lens, path-prefix target, non-string target, README, FAIL-counts-as-reviewed).
 
-**BLOCKED on one step — needs a session restart.** `.claude/agents/design-critic.md` was
-created this session, so the agent registry (loaded at session start) does not know it yet:
-`Agent type 'design-critic' not found`. The live demo cannot run until a fresh session
-registers it. Everything else that does not need the agent is already proven live — the real
-hook blocked a real out-of-boundary Write, and the allow-path write succeeded.
+**LIVE DEMO DONE — 26/26 green (`78c6f6f`).** The registry picked the new agent up without a
+restart, so the demo ran in-session with the real `design-critic`.
 
-**Next action (fresh session):** run `/arc-design-critique tests/fixtures/design/arc-hq-mockup-defect.html`
-→ the critic must class the planted lorem ipsum as VIOLATION (→ FAIL, no stamp); then
-`/arc-design-critique docs/strategy/arc-hq-mockup.html` for the real route. Committing the
-resulting artifact turns test 1 green, which is the last red. Then `/arc-phase-done 0`.
+- Defect fixture → the critic classed the planted **lorem ipsum** and the planted **KPI-label
+  contrast failure** as VIOLATION, measuring contrast from sampled pixels (1.34:1 vs the 4.5:1
+  AA floor) rather than eyeballing. FAIL, ledger correctly unstamped.
+- Real route → 2 VIOLATION, also pixel-measured (badge contrast ~2.76:1; inbox buttons
+  ~31–32px against the ≥44px floor). It flagged the un-rendered state matrix as a **reporting
+  gap** instead of inventing findings — its iron law holding under real conditions.
+- Boundary proven live in both directions: a real out-of-boundary `Write` was blocked by the
+  actual hook; the critique-dir write succeeded; the marker was released after each run.
+- Gate demonstrated both ways: WARN with receipts absent, exit 0 with both present.
+- Both receipts readable through the reader: the runner's verdict + the critic's separate
+  `note.logged` evidence — the ADR-0047 split working.
+
+**Two honest gaps, neither blocking the DoD:**
+1. **The live PASS path was never exercised.** Both real surfaces genuinely FAILed, so
+   stamp-on-PASS is proven only by bats (tests 8, 13), not by a live run. First clean surface
+   in Phase 1/2 exercises it for real.
+2. **The critic missed the third planted defect** — mismatched corner radii on KPI cards 2 and
+   4. It caught 2 of 3. Real signal about critique sensitivity on shape-system defects; worth a
+   Phase-1 brief/kill-list line or a retro item, not a silent pass.
+
+**Next action:** `/arc-phase-done 0` — every exit criterion is met except the tracker row
+itself, which is that command's job.
 
 **Two spec amendments this session, both recorded:** ADR-0047 (runner owns the verdict + the
 `review.completed` receipt; the critic emits evidence only — criteria 3 and 7 contradicted each
