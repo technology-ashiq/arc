@@ -421,6 +421,48 @@ JSON
   [ "$(_event_lines)" = "2" ]
 }
 
+# ---------- repeat actions vs retries (issue #55, ADR-0044) ----------
+
+@test "a repeat of the same action at a later time lands as its own receipt (issue #55)" {
+  _fresh_spine "repeat-lands"
+  # Cycle-2 close: the idem preimage carried no time, so the SAME kind+payload was a
+  # permanent duplicate -- 100+ real receipts silently lost, and Phase 2's critique loop
+  # (round 1 FAIL -> fix -> round 2 on the same target) cannot exist under that rule.
+  # A minute later is a second occurrence of the action, not a retry of the first.
+  run bash "$EVENT" emit note.logged --payload '{"what":"design critique written","target":"docs/x.html"}' --strict
+  [ "$status" -eq 0 ]
+  ARC_SPINE_NOW="1784736060000" run bash "$EVENT" emit note.logged --payload '{"what":"design critique written","target":"docs/x.html"}' --strict
+  [ "$status" -eq 0 ]
+  [ "$(_event_lines)" = "2" ]
+  [ "$(_quarantine_lines)" = "0" ]
+}
+
+@test "a same-instant double emit is still a duplicate (the retry guard survives the fix)" {
+  _fresh_spine "same-ms-dup"
+  # Under the frozen clock both derivations see the same millisecond -- identical preimage,
+  # identical idem. That is the accidental-double-fire case dedup exists for, and widening
+  # the preimage with time must not have widened it away.
+  run bash "$EVENT" emit note.logged --payload '{"what":"double-fire"}' --strict
+  [ "$status" -eq 0 ]
+  run bash "$EVENT" emit note.logged --payload '{"what":"double-fire"}' --strict
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"DUP_IDEM"* ]]
+  [ "$(_event_lines)" = "1" ]
+}
+
+@test "a caller-supplied idem still gives exactly-once across time (arc-inbox pattern)" {
+  _fresh_spine "caller-idem"
+  # Callers that KNOW an event's logical identity (a decision deciding one approval) keep
+  # exactly-once by declaring it -- time in the derived preimage must not break --idem.
+  local IDEM; IDEM="$(printf 'b%.0s' $(seq 64))"
+  run bash "$EVENT" emit note.logged --payload '{"what":"once"}' --idem "$IDEM" --strict
+  [ "$status" -eq 0 ]
+  ARC_SPINE_NOW="1784736060000" run bash "$EVENT" emit note.logged --payload '{"what":"once"}' --idem "$IDEM" --strict
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"DUP_IDEM"* ]]
+  [ "$(_event_lines)" = "1" ]
+}
+
 @test "the spine refuses to guess a location when there is no repo above cwd" {
   mkdir -p "$BATS_TEST_TMPDIR/orphan"
   # No .git/.claude pair anywhere above: the emitter must say so, not silently adopt the

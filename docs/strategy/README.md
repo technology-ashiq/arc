@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-07-26, arc-design plan added)
+## File map & status (updated 2026-07-28, arc-develop plan added)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (19 files) | **ACTIVE — the operational layer** | Kickoff-ready: 5 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (20 files) | **ACTIVE — the operational layer** | Kickoff-ready: 6 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
 | `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -46,6 +46,11 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
    capability module; decisions DES-A…H locked, ADR numbers at kickoff). Slotted 1.5 in
    the plans ordering: after Cycle-2 close, before/alongside Cycle-3 (it serves Cycle-3's
    UI phases).
+6. **2026-07-28:** `plans/PLAN-develop.md` added (arc-develop "The Developer" — the
+   execution harness owning the build loop between plan approval and `/arc-phase-done`;
+   decisions DEV-A…K locked over 4 review rounds, ADR numbers at kickoff; post-v1 growth
+   gated by its Feature Admission Rule). Slotted 1.6 in the plans ordering: after
+   Cycle-2 close, alongside arc-design; serves every subsequent build incl. Cycle 3.
 
 ## Provenance
 
