@@ -81,12 +81,11 @@ the first agent spawn is done and committed on `feat/design-phase-02`:
 - The real run `hq-dashboard-v1` is scaffolded (base `7d42c2d`, brief = the Phase-01 ARC HQ
   brief).
 
-**WHY BLOCKED:** the agent registry loads new agent TYPES only at session start (Phase-0
-evidence, reconfirmed). The three explore agents were created this session, so spawning
-them fails; the classifier correctly refused the inline-role workaround (it would sidestep
-the registry's per-agent tool restrictions).
+**UNBLOCKED (2026-07-29, late):** the registry picked the three agents up mid-session
+after a delay — no restart needed after all (correcting the earlier note: registration is
+delayed, not restart-only). Owner called it a night; the run resumes on his signal.
 
-**Resume (fresh session):** `design-director` / `ui-composer` / `design-jury` will be
+**Resume (this or any session):** `design-director` / `ui-composer` / `design-jury` are
 registered. Continue the run: (1) director assignment on `hq-dashboard-v1` (theses +
 matrix at assignment time + rejected-theses notes), (2) composers ×3 fresh-context, one
 variant dir each, (3) `design-explore.sh check` + `render`, (4) critic round 1 per variant
