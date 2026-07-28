@@ -87,12 +87,35 @@ could never converge, because the defect was in the camera, not the page. Fixed 
 recipe now records `full-page`. The critic then **retracted its own finding** as a capture
 artifact, unprompted — good behaviour worth keeping.
 
-**Consequences to route before Phase 1 builds design-lint (owner decision pending):**
-1. The critic must stop stating measured RGB values and computed ratios as evidence — report
-   the visual suspicion, defer the number to the lint.
-2. `design-lint` v0 must own contrast and target-size for real (reads tokens, computes WCAG).
-   The frozen plan already lists "declared contrast pairs pass AA" — this finding says that
-   line is load-bearing, not optional.
+**RESOLVED — ADR-0048 written, critic instruction changed, and the change VERIFIED live.**
+Iron law 5 now forbids sampled colours, computed ratios, pixel dimensions and
+measurement-implying phrasing, and requires a suspected measurable defect to be filed as
+WEAKNESS (never VIOLATION — a VIOLATION forces a fix, and the critic may not force one on
+evidence it cannot produce).
+
+Verification, same defect fixture, before vs after:
+
+| | before | after |
+|---|---|---|
+| contrast finding class | `VIOLATION` | `WEAKNESS` |
+| its evidence | "Pixel sampling found RGB(49,49,48) … 1.34:1" | "reads as the dimmest text anywhere on the page — visibly fainter than every other secondary label" |
+| accuracy of that number | wrong (the planted value is 1.11:1) | no number stated |
+| closing instruction | — | "measurable, verify with design-lint before fixing" |
+| lorem ipsum | `VIOLATION` | `VIOLATION` (vision judgment intact) |
+
+**The judgment survived the ban — only the fabricated precision died.** That was the risk worth
+checking: banning numbers could have flattened the critic's real findings, and it did not.
+
+**Process note worth keeping:** the first verification run appeared to FAIL the new rule. It was
+run in a session started before the agent file changed, so the registry served the OLD agent.
+Re-run in a genuinely fresh session, it passed. Concluding "prompting cannot fix this" from that
+first run would have inflated Phase 01's scope on a false signal — **agent-file changes need a
+fresh session to take effect, and any agent-behaviour verification must confirm that first.**
+
+**Still owed to Phase 01:** `design-lint` v0 must own contrast and target size for real (read
+tokens, compute WCAG), checked against the floor the BRIEF declares, not a hardcoded constant.
+The frozen plan already lists "declared contrast pairs pass AA" — ADR-0048 makes that
+load-bearing. Until the lint ships, these defects are suspicions with no authoritative number.
 
 **Still open (unchanged):** the critic caught only 2 of 3 planted defects — it missed the
 mismatched corner radii on KPI cards 2 and 4. Shape-system defects need the brief's slop
