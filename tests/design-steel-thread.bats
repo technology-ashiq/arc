@@ -265,7 +265,15 @@ teardown() { _arc_teardown; }
 @test "gate HOLE: an absolute declared target still matches its repo-relative receipt" {
   _arc_design_sandbox
   # Two spellings of one path. Compared raw, this warned forever about a route that WAS
-  # reviewed -- and on Windows the root has two non-comparable spellings, so both are tested.
+  # reviewed.
+  #
+  # This is the case that survived one CI round and needed a second fix, so the mechanism is
+  # written down. On Git Bash, $SANDBOX is the MSYS spelling (/tmp/x) while `git rev-parse`
+  # reports the native one (C:/Users/.../Temp/x). The artifact holds the MSYS spelling,
+  # read off disk and never rewritten. The gate cannot hand node the MSYS spelling of the
+  # root to strip with, because MSYS rewrites absolute-looking paths on their way into a
+  # native child process -- through argv AND through the environment, both verified. So the
+  # gate falls back to a slash-anchored tail match; see design-gate.sh for the trade.
   _arc_plant_critique "docs--d-html" "$SANDBOX/docs/d.html" "abc123" "WEAKNESS: x"
   bash "$(_arc_design design-critique.sh)" finish "docs/d.html"
   run bash "$(_arc_design design-gate.sh)"

@@ -47,7 +47,15 @@ fi
 
 # Every spelling of the repo root, so an absolute declared target can be made repo-relative
 # whichever form it was written in (Git Bash reports two; Linux/macOS collapse to one).
+# The shell must hand node every spelling of the repo root, because node cannot work them out
+# for itself on Windows: to node, an MSYS path like /tmp/x means C:\tmp\x, which does not
+# exist, so realpath fails and the strip misses. Only the shell resolves /tmp correctly.
+# `cd + pwd -P` is the important one -- it yields the MSYS spelling AND resolves symlinks
+# (macOS /var -> /private/var). cygpath adds the native and drive-letter forms.
 ROOT_SPELLINGS="$ROOT"
+ROOT_PHYS="$(cd "$ROOT" 2>/dev/null && pwd -P)" || ROOT_PHYS=""
+[ -n "$ROOT_PHYS" ] && ROOT_SPELLINGS="$ROOT_SPELLINGS
+$ROOT_PHYS"
 if command -v cygpath >/dev/null 2>&1; then
   ROOT_WIN="$(cygpath -m "$ROOT" 2>/dev/null || true)"
   ROOT_MSYS="$(cygpath -u "$ROOT" 2>/dev/null || true)"
@@ -55,6 +63,11 @@ if command -v cygpath >/dev/null 2>&1; then
 $ROOT_WIN"
   [ -n "$ROOT_MSYS" ] && ROOT_SPELLINGS="$ROOT_SPELLINGS
 $ROOT_MSYS"
+  # ...and the native spelling of the physical path, so a symlinked-then-shortened root is
+  # covered too.
+  [ -n "$ROOT_PHYS" ] && ROOT_PHYS_WIN="$(cygpath -m "$ROOT_PHYS" 2>/dev/null || true)"
+  [ -n "${ROOT_PHYS_WIN:-}" ] && ROOT_SPELLINGS="$ROOT_SPELLINGS
+$ROOT_PHYS_WIN"
 fi
 
 RECEIPTS="$(node "$READER" read --kind review.completed 2>/dev/null)"
@@ -141,6 +154,29 @@ REPORT="$(printf '%s' "$RECEIPTS" | node -e '
     return fwd(p);
   };
 
+  // Does this declared target have a design receipt? Tries exact, resolved, and
+  // root-stripped forms first.
+  //
+  // The last resort is a tail match, and it exists because on Git Bash there is NO way to
+  // hand node the MSYS spelling of the repo root: MSYS rewrites absolute-looking paths on
+  // their way into a native child process, through argv AND through the environment, both
+  // verified. Meanwhile the artifact holds whatever spelling was written into it, read
+  // straight off disk and never rewritten. So node can hold a target the root spellings it
+  // can see will never prefix.
+  //
+  // Anchored on a leading slash, so docs/a.html still cannot satisfy docs/a.html.bak -- the
+  // hole the adversarial pass closed stays closed. The trade it does accept: an artifact
+  // declaring some OTHER repo path ending in the same route would match. Artifacts live in
+  // this repo and name this repo routes, the gate is warn-only, and the alternative is a
+  // gate that permanently warns about routes that were genuinely reviewed.
+  const matched = (declared) => {
+    const forms = [fwd(declared), canon(declared), rel(declared)];
+    if (forms.some((f) => covered.has(f))) return true;
+    const d = fwd(declared);
+    for (const c of covered) if (d.endsWith("/" + c)) return true;
+    return false;
+  };
+
   let missing = [], undeclared = [], checked = 0;
   for (const f of fs.readdirSync(critiqueDir)) {
     if (!ARTIFACT_RE.test(f)) continue;
@@ -152,7 +188,7 @@ REPORT="$(printf '%s' "$RECEIPTS" | node -e '
     if (!m) { undeclared.push(f); continue; }
     checked++;
     const raw = m[1].trim();
-    if (!covered.has(raw) && !covered.has(rel(raw))) missing.push({ target: raw, artifact: f });
+    if (!matched(raw)) missing.push({ target: raw, artifact: f });
   }
 
   for (const x of missing)   console.log(`MISSING\t${x.target}\t${x.artifact}`);
