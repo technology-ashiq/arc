@@ -88,6 +88,35 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 2 ]
 }
 
+@test "critic scope: a path spelled through a symlink still resolves inside the repo" {
+  _arc_design_sandbox
+  # The cross-OS trap, made reproducible. One directory has more than one spelling: macOS
+  # calls it both /var/folders/x and /private/var/folders/x, Windows calls it both
+  # C:/Users/RUNNER~1 and C:/Users/runneradmin. Compare the spellings as strings and the
+  # prefix strip misses, the path stays absolute, and the guard BLOCKS the critic's own
+  # legitimate write. On the development box both spellings coincided, so nothing failed
+  # until 3-OS CI. A symlink reproduces that divergence on every platform, which is what
+  # turns an invisible CI-only bug into one this suite can catch locally.
+  local link="$BATS_TEST_TMPDIR/repo-link"
+  ln -s "$SANDBOX" "$link" 2>/dev/null || skip "symlinks unavailable on this runner"
+  [ -L "$link" ] || skip "symlinks unavailable on this runner"
+  bash "$(_arc_design critic-scope-check.sh)" --begin "$TARGET"
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh" \
+      "$link/docs/design/critique/2026-07-28-$SLUG.md"
+  [ "$status" -eq 0 ]
+}
+
+@test "critic scope: a symlinked path OUTSIDE the critique dir still blocks" {
+  _arc_design_sandbox
+  # The other half: resolving spellings must not become a way through the boundary.
+  local link="$BATS_TEST_TMPDIR/repo-link2"
+  ln -s "$SANDBOX" "$link" 2>/dev/null || skip "symlinks unavailable on this runner"
+  [ -L "$link" ] || skip "symlinks unavailable on this runner"
+  bash "$(_arc_design critic-scope-check.sh)" --begin "$TARGET"
+  run bash "$SANDBOX/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh" "$link/README.md"
+  [ "$status" -eq 2 ]
+}
+
 # ---------- 3. PASS/FAIL from the artifact, receipt, ledger stamp (REQ-03) ----------
 
 @test "finish: zero VIOLATION findings is PASS -> receipt result PASS + design stamp" {
@@ -238,6 +267,20 @@ teardown() { _arc_teardown; }
   # Two spellings of one path. Compared raw, this warned forever about a route that WAS
   # reviewed -- and on Windows the root has two non-comparable spellings, so both are tested.
   _arc_plant_critique "docs--d-html" "$SANDBOX/docs/d.html" "abc123" "WEAKNESS: x"
+  bash "$(_arc_design design-critique.sh)" finish "docs/d.html"
+  run bash "$(_arc_design design-gate.sh)"
+  [ "$status" -eq 0 ]
+}
+
+@test "gate HOLE: a target declared through a symlink still matches its receipt" {
+  _arc_design_sandbox
+  # Same divergent-spelling trap as the scope guard, on the gate side: the artifact declares
+  # one spelling of the route, the receipt carries another, and a string compare warns forever
+  # about a route that WAS reviewed. Caught by 3-OS CI, pinned here so it cannot return.
+  local link="$BATS_TEST_TMPDIR/repo-link3"
+  ln -s "$SANDBOX" "$link" 2>/dev/null || skip "symlinks unavailable on this runner"
+  [ -L "$link" ] || skip "symlinks unavailable on this runner"
+  _arc_plant_critique "docs--d-html" "$link/docs/d.html" "abc123" "WEAKNESS: x"
   bash "$(_arc_design design-critique.sh)" finish "docs/d.html"
   run bash "$(_arc_design design-gate.sh)"
   [ "$status" -eq 0 ]

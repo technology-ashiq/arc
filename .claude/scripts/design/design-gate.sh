@@ -112,17 +112,33 @@ REPORT="$(printf '%s' "$RECEIPTS" | node -e '
   // A declared target may be absolute while the receipt is repo-relative. Same route, two
   // spellings -- compared raw it warns forever about a route that WAS reviewed.
   //
-  // `root` arrives as a newline-separated list of spellings, because on Windows the repo root
-  // has two that are not string-comparable: the native C:/Users/.../Temp/x that git reports
-  // and the MSYS /tmp/x the shell uses. Stripping only one of them leaves the other absolute
-  // and permanently unmatched.
+  // Path STRINGS are not comparable across machines: macOS symlinks /var to /private/var,
+  // Windows gives the same directory both an 8.3 name (C:/Users/RUNNER~1) and a long one,
+  // and Git Bash disagrees with git about /tmp. Both sides therefore go through one
+  // resolver -- realpath on the deepest part that exists, with the rest re-attached, since a
+  // declared route need not exist on this checkout. (3-OS CI caught this; it passed on the
+  // development box only because that machine spelled both sides identically.)
+  // NOTE: this whole script lives inside a single-quoted shell string -- an apostrophe here
+  // ends that string and bash then eats the template-literal backticks below. Keep it out.
+  const path = require("path");
   const fwd = (p) => p.replace(/\\/g, "/");
-  const roots = root.split("\n").map(fwd).filter(Boolean)
+  const canon = (p) => {
+    let head = p, tail = "";
+    for (;;) {
+      try { return fwd(path.join(fs.realpathSync(head), tail)); } catch { /* keep walking up */ }
+      const parent = path.dirname(head);
+      if (parent === head) return fwd(p);
+      tail = tail ? path.join(path.basename(head), tail) : path.basename(head);
+      head = parent;
+    }
+  };
+  const roots = [...new Set(root.split("\n").filter(Boolean).flatMap((r) => [fwd(r), canon(r)]))]
     .sort((a, b) => b.length - a.length);   // longest first: never strip a parent of the root
   const rel = (p) => {
-    const t = fwd(p);
-    for (const r of roots) if (t.startsWith(r + "/")) return t.slice(r.length + 1);
-    return t;
+    for (const t of [fwd(p), canon(p)]) {
+      for (const r of roots) if (t.startsWith(r + "/")) return t.slice(r.length + 1);
+    }
+    return fwd(p);
   };
 
   let missing = [], undeclared = [], checked = 0;

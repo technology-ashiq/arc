@@ -80,21 +80,45 @@ case "$TARGET" in
     ;;
 esac
 
-# Normalise to repo-relative. Two absolute path FORMS reach this guard on Windows and they
-# are not string-comparable: the hook payload carries a native path (E:/... or E:\...) while
-# `git rev-parse` and the shell disagree about /tmp (MSYS /tmp vs C:/Users/.../Temp). A plain
-# prefix strip misses, the path stays absolute, and the critic's own legitimate write blocks
-# -- read-only enforcement that also blocks the one write it must allow is just broken.
-# cygpath (always present in Git Bash, absent on Linux/macOS where the forms never diverge)
-# is the platform's own answer, so both sides go through it rather than through a second
-# hand-rolled normaliser (phase-00-spec rabbit hole).
-ROOT_N="$ROOT"
-if command -v cygpath >/dev/null 2>&1; then
-  TARGET="$(cygpath -m "$TARGET" 2>/dev/null || printf '%s' "$TARGET")"
-  ROOT_N="$(cygpath -m "$ROOT" 2>/dev/null || printf '%s' "$ROOT")"
-fi
-ROOT_N="$(printf '%s' "$ROOT_N" | tr '\\' '/')"
-case "$TARGET" in "$ROOT_N"/*) TARGET="${TARGET#"$ROOT_N"/}";; esac
+# Normalise to repo-relative.
+#
+# NEVER compare path strings here. One machine calls a directory /var/folders/x and another
+# calls the same directory /private/var/folders/x (macOS symlinks /var); Windows calls one
+# path both C:/Users/RUNNER~1 and C:/Users/runneradmin (8.3 short names), and Git Bash
+# disagrees with git itself about /tmp (MSYS vs native). Every one of those is the same
+# directory under a different spelling, and a prefix strip that misses leaves the path
+# absolute, matches no allowed prefix, and BLOCKS the critic's own legitimate write --
+# read-only enforcement that also blocks the one write it must allow is just broken.
+# Caught by 3-OS CI: this passed on the author's Windows box only because a short username
+# meant the two spellings happened to be identical there.
+#
+# So both sides go through one resolver instead: cd into the deepest part of the path that
+# exists and ask the shell for the physical path, then re-attach whatever did not exist yet
+# (the critique file is normally about to be created, so the tail often does not exist).
+_canon() {
+  _cp="$1"; _cs=""
+  while [ -n "$_cp" ] && [ "$_cp" != "/" ] && [ ! -d "$_cp" ]; do
+    _cs="$(basename "$_cp")${_cs:+/$_cs}"
+    _cparent="$(dirname "$_cp")"
+    [ "$_cparent" = "$_cp" ] && break
+    _cp="$_cparent"
+  done
+  if [ -d "$_cp" ]; then
+    _cbase="$(cd "$_cp" 2>/dev/null && pwd -P)" || _cbase="$_cp"
+    printf '%s' "$_cbase${_cs:+/$_cs}"
+  else
+    printf '%s' "$1"
+  fi
+}
+
+# Only absolute targets need resolving; a relative one is already repo-relative.
+case "$TARGET" in
+  /*|[A-Za-z]:/*)
+    TARGET="$(_canon "$TARGET" | tr '\\' '/')"
+    ROOT_N="$(_canon "$ROOT" | tr '\\' '/')"
+    case "$TARGET" in "$ROOT_N"/*) TARGET="${TARGET#"$ROOT_N"/}";; esac
+    ;;
+esac
 
 case "$TARGET" in
   "$ALLOWED"|"$ALLOWED"/*) exit 0;;
