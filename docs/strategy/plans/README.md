@@ -26,6 +26,7 @@
 |---|---|---|---|
 | 1 | **Cycle 2 · Receipt Spine** | `PLAN-cycle2-receipt-spine-v2.1.md` | **READY NOW** — this is the next kickoff |
 | 1.5 | **arc-design · "The Designer"** | `PLAN-design.md` | **After Cycle-2 close** — owner-scheduled next kickoff (2026-07-26); serves every UI-bearing build incl. Cycle 3 |
+| 1.6 | **arc-develop · "The Developer"** | `PLAN-develop.md` | **After Cycle-2 close** — owner-scheduled (2026-07-28); the execution harness owning the build loop (plan-approval → phase-done) for every subsequent build incl. Cycle 3 |
 | 2 | **Cycle 3 · First Money ([VENTURE] launch)** | `PLAN-cycle3-venture-launch.md` | After Cycle 2 · needs the venture decision (candidates + 10-min test inside) |
 | 3 | Model-agnostic foundation (engine + processes) | `PLAN-engine-process-layer.md` | Pull: public-prep / 2nd runtime need |
 | 4 | discover v1 | `PLAN-discover.md` | Pull: next venture needed |
@@ -43,7 +44,7 @@
 | — | scheduler | `BRIEF-scheduler.md` | Pull: first L3 process · policy engine is a hard prereq |
 | — | trader sandbox | `BRIEF-trader.md` | Pull: monthly revenue + Ashiq's written opening — **last** |
 
-**Full PLANs** (the 5 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
+**Full PLANs** (the 6 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
 decision records), appetites, ADR-ready decisions, phases, pre-mortems. **BRIEFs** are
 deliberately lighter — real REQs and locked non-negotiables, but current-state gets
 filled at their kickoff (writing 400-line plans for far-future modules today would be

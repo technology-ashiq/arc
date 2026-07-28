@@ -96,11 +96,28 @@ function synthesize(kind, flags, { deriveIdem }) {
   // The preimage must contain every field that makes two events genuinely different.
   // Leaving `venture` out meant a second venture emitting the same kind and payload was
   // silently swallowed as a duplicate of the first venture's receipt.
-  const derived = sha256Hex(`${actor}|${venture}|${kind}|${runId}|${outcome}|${canonicalize(payload)}`);
-  // On the ingest path the idem is ALWAYS content-derived: accepting a caller-supplied one
-  // lets anybody pre-claim an idem and permanently suppress the real receipt that follows.
-  const idem = deriveIdem ? derived : (flags.idem ?? derived);
+  //
+  // Identity is decided BY PATH (issue #55, ADR-0044), because the two paths record
+  // different kinds of truth:
+  //
+  //   ingest -- an EXTERNAL FACT. Its identity IS its content: the same webhook delivered
+  //   twice, even days apart, is one payment and must stay one receipt (REQ-03: money
+  //   never double-counts). No time in the preimage, and caller idems stay refused
+  //   (anti-preclaim) -- both exactly as before.
+  //
+  //   emit -- a FIRST-PARTY ACTION. Its identity includes WHEN it happened: without time,
+  //   the second edit of the same file and the second critique round on the same route
+  //   were permanent duplicates (100+ real receipts silently lost by Cycle-2's close, and
+  //   Phase 2's fix->re-verify loop impossible). Only a same-millisecond double -- a
+  //   genuine double-fire -- still collides. The asymmetry is deliberate: a doubled
+  //   receipt is visible on an append-only spine and harmless; a dropped one is invisible
+  //   and lying. Callers that KNOW a logical identity (arc-inbox: one decision per
+  //   approval) keep strict exactly-once by supplying --idem.
   const ms = nowMs();
+  const contentPre = `${actor}|${venture}|${kind}|${runId}|${outcome}|${canonicalize(payload)}`;
+  const idem = deriveIdem
+    ? sha256Hex(contentPre)
+    : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
 
   return {
     id: newUlid(ms, idem),
