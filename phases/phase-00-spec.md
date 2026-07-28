@@ -59,6 +59,31 @@
 Full 4-contract brief mode + design-lint (Phase 1) · manifest module (Phase 1) · explore/
 theses/worktrees (Phase 2) · library + LexOS pilot (Phase 3) · gate promotion warn→block.
 
+## Build notes — read criteria 3 and 7 through these
+
+- **Who emits the receipt → ADR-0047.** Criteria 3 and 7 as written contradict each other
+  (the critic emits a receipt whose `result` only the runner computes). Resolved: the runner
+  computes PASS/FAIL, emits `review.completed`, and stamps the ledger; the critic writes its
+  artifact and emits `note.logged`. Owner-confirmed 2026-07-28. An agent produces evidence;
+  only a deterministic script records a verdict.
+- **The runner is `begin` + `finish`, not one call.** Criterion 3 says the runner "invokes the
+  design-critic agent". No shell script in arc can do that — arc has no headless-claude path,
+  agents are spawned by the session. So the runner is the deterministic pair of bookends
+  (`begin` = arm boundary + render; `finish` = judge + receipt + stamp + release) and
+  `/arc-design-critique` spawns the critic between them. Every responsibility criterion 3
+  assigns to the runner still lives in the runner.
+- **Tracked follow-up, NOT this phase: `freeze-check.sh` traversal hole.** The critic's own
+  guard refuses `..` segments, so the critic is safe. The pre-existing
+  `.claude/scripts/core/freeze-check.sh` shares the hole it was modelled on: with a boundary
+  of `docs/design`, a target of `docs/design/../../etc/passwd` satisfies its `"$allowed"/*`
+  prefix match and is allowed. Fixing it is a core change (product-shipped file → sync-golden
+  regen), deliberately out of a 1.25-day design appetite. Owner call 2026-07-28: track, don't
+  touch. Route via `/arc-change` before Phase 1 closes.
+- **Cross-OS hash drift is handled by scope, not by pinning alone.** The render pins viewport,
+  font stack, animations and AA — and no test asserts a hash value. The hash is provenance
+  (what pixels were judged) plus same-machine stale/blank detection. Nothing compares hashes
+  across OS, so the 3-OS CI legs cannot fail on font rendering.
+
 ## Your-setup / pending
 
 None — agent-browser installed, spine live, all local.

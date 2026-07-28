@@ -43,6 +43,86 @@ _arc_sandbox() {
 
 _arc_teardown() { [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX" 2>/dev/null || true; }
 
+# Sandbox for the design steel thread (Cycle 3 Phase 00). Mirrors the REAL layout for the
+# design scripts plus everything they call out to -- the spine emitter + reader, the review
+# ledger, and the PreToolUse-edit fragment. Same lesson as _arc_sandbox: a flattened copy
+# can pass while the real tree is broken, so the layout is mirrored, never approximated.
+# The spine root is the sandbox, so no test ever appends to the real spine.
+_arc_design_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-design.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts/core" \
+           "$SANDBOX/.claude/scripts/design" \
+           "$SANDBOX/.claude/scripts/hq/lib" \
+           "$SANDBOX/.claude/hooks/PreToolUse-edit.d"
+  cp "$ARC_ROOT"/.claude/scripts/design/*.sh      "$SANDBOX/.claude/scripts/design/" 2>/dev/null
+  cp "$ARC_CORE_SRC/review-ledger.sh"             "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/arc-profile.sh"               "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_ROOT"/.claude/scripts/hq/arc-event.sh  "$SANDBOX/.claude/scripts/hq/"
+  cp "$ARC_ROOT"/.claude/scripts/hq/arc-event.mjs "$SANDBOX/.claude/scripts/hq/"
+  cp "$ARC_ROOT"/.claude/scripts/hq/spine.mjs     "$SANDBOX/.claude/scripts/hq/"
+  cp "$ARC_ROOT"/.claude/scripts/hq/lib/*.mjs     "$SANDBOX/.claude/scripts/hq/lib/"
+  cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh \
+     "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
+  cd "$SANDBOX" || return 1
+  git init -q
+  # Repo-local identity, not GIT_AUTHOR_* env: the design scripts shell out to git in
+  # their own subprocesses, and a clean CI runner with no global identity fails 128 there
+  # even when the bats process has the env set (green local, red CI -- learned the hard way).
+  git config user.name  arc-test
+  git config user.email test@arc.local
+  echo "seed" > seed.txt
+  git add -A && git commit -qm seed
+  export ARC_SPINE_ROOT="$SANDBOX"
+  export CLAUDE_PROJECT_DIR="$SANDBOX"
+}
+
+# The design critique/render/gate scripts inside the current sandbox.
+_arc_design() { echo "$SANDBOX/.claude/scripts/design/$1"; }
+
+# Append a raw review.completed line to the sandbox spine. Hand-written on purpose: these are
+# the ADVERSARIAL receipts (case-varied lens, non-string target, wrong route) that the real
+# emitter would refuse to produce, and the gate must survive every one of them.
+# Usage: _arc_plant_receipt <n> <payload-json>
+_arc_plant_receipt() {
+  local n="$1" payload="$2" day="$SANDBOX/events/2026-07-28.jsonl"
+  mkdir -p "$SANDBOX/events"
+  printf '{"id":"01K00000000000000000%02d","v":1,"ts":"2026-07-28T10:00:%02d+05:30","kind":"review.completed","payload":%s}\n' \
+    "$n" "$n" "$payload" >> "$day"
+}
+
+# Write a critique artifact verbatim -- for malformed shapes _arc_plant_critique cannot express
+# (no target line, a target inside a fenced block, a non-artifact filename).
+# Usage: _arc_plant_raw_critique <filename> <body>
+_arc_plant_raw_critique() {
+  mkdir -p "$SANDBOX/docs/design/critique"
+  printf '%s\n' "$2" > "$SANDBOX/docs/design/critique/$1"
+}
+
+# Plant a critique artifact the way the critic would write one. Usage:
+#   _arc_plant_critique <slug> <target-path> <sha256> <finding-line>...
+_arc_plant_critique() {
+  local slug="$1" target="$2" sha="$3"; shift 3
+  local dir="$SANDBOX/docs/design/critique" out
+  mkdir -p "$dir"
+  out="$dir/2026-07-28-$slug.md"
+  {
+    # Every line goes through a '%s\n' format: a format string STARTING with '-' is read by
+    # bash printf as a flag ("printf: - : invalid option"), and every line of this artifact
+    # is a markdown list item.
+    printf '# Design critique — %s\n\n' "$target"
+    printf '%s\n' "- target: \`$target\`"
+    printf '%s\n' "- screenshot_sha256: \`$sha\`"
+    printf '%s\n\n' "- viewport: \`1440x900@1\`"
+    printf '## Findings\n\n'
+    if [ "$#" -eq 0 ]; then
+      printf '%s\n' "- none"
+    else
+      for _f in "$@"; do printf '%s\n' "- $_f"; done
+    fi
+  } > "$out"
+  echo "$out"
+}
+
 # Path to arc-scan in the current sandbox.
 _arc_scan() { echo "$SANDBOX/.claude/scripts/review/arc-scan/arc-scan.sh"; }
 _arc_ledger_file() {

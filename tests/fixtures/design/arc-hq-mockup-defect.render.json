@@ -1,0 +1,8 @@
+{
+  "route": "tests/fixtures/design/arc-hq-mockup-defect.html",
+  "url": "file:///E:/Work_Hub/01_Automemory/arc/tests/fixtures/design/arc-hq-mockup-defect.html",
+  "png": ".claude/state/design/renders/tests--fixtures--design--arc-hq-mockup-defect-html.png",
+  "screenshot_sha256": "e14d5caa9655e5126559fb661e57cce008c9b6f4e0e34ea40642765a83f07f8f",
+  "viewport": "1440x900@1",
+  "recipe": "viewport-fixed;media-light;animations-off;font-pinned;aa-off"
+}

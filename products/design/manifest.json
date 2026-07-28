@@ -1,0 +1,26 @@
+{
+  "name": "design",
+  "version": "0.1.0",
+  "requires": ["core", "hq"],
+  "commands": [
+    ".claude/commands/arc-design-critique.md"
+  ],
+  "agents": [
+    ".claude/agents/design-critic.md"
+  ],
+  "scripts": [
+    ".claude/scripts/design/critic-scope-check.sh",
+    ".claude/scripts/design/design-critique.sh",
+    ".claude/scripts/design/design-gate.sh",
+    ".claude/scripts/design/design-render.sh"
+  ],
+  "files": [
+    ".claude/hooks/PreToolUse-edit.d/10-design-critic.sh"
+  ],
+  "docs": [
+    {
+      "src": "docs/templates/design-brief-template.md",
+      "dest": "docs/templates/design-brief-template.md"
+    }
+  ]
+}

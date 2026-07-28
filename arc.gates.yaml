@@ -50,3 +50,9 @@ gates:
     tier: hook
     runtime: native
     evidence: .claude/state/spine-lint/violations.txt
+  - name: design
+    check: bash .claude/scripts/design/design-gate.sh
+    mode: warn
+    tier: hook
+    runtime: native
+    evidence: .claude/state/design/gate.txt
