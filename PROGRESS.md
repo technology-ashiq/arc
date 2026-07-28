@@ -43,9 +43,38 @@ Phase 01 not done — checked at this close, not fired, 1.4 days of headroom bef
 
 ## Now
 
-**Phase 00 is CLOSED (2026-07-28).** Next: **Phase 01 — brief mode, design-lint v0, module
-manifest** (`phases/phase-01-spec.md`, 1 day). Nothing needed from the owner to start
-("Your-setup / pending: None").
+**Phase 01 BUILD COMPLETE (2026-07-29) — awaiting `/arc-phase-done 1`.** Built on branch
+`feat/design-phase-01`:
+
+- **`design-lint.mjs` v0** — 4-section presence (strict level-2 exact-case headings, repeats
+  and empty bodies rejected, fences stripped before structural parsing) · answer-count drift
+  gate against the template's LIVE question count (`--template` proven non-hardcoded) ·
+  real-calendar date · platform table strict yes/no (boilerplate rejected) · lorem-ipsum in
+  briefs and critiqued product routes (fixture routes under `tests/` excluded by location) ·
+  **contrast computed from declared pairs against the BRIEF-declared floor** (ADR-0048), with
+  `--floors` JSON export as the single authority for Phase 2's browser-driven measurement.
+- **Adversarial pass ran: 10 constructed attacks, 4 real holes found, fixed, all pinned** —
+  fenced-heading full bypass (worst: delete a section, quote its heading in a fence, pass) ·
+  twin a11y-floor lines (1:1 for the machine above 4.5:1 for the reader — first-match-wins
+  enforced nothing) · empty-section dodge · malformed-pair silent drop. 6 attacks HELD
+  (case-fold, level-3 heading, bold-line heading, repeated section, answer inflation, CRLF —
+  the last held by ECMAScript LineTerminator semantics and is pinned against regression).
+- **First real brief** through brief mode: `docs/design/briefs/docs--strategy--arc-hq-mockup-html/brief.md`
+  — closes Phase 00's "none declared" gap for the HQ surface; 5 declared pairs all computed
+  green; lints clean.
+- **Gate wiring (ADR-0046):** the one `design` gate row now runs BOTH halves — design-lint
+  (briefs + critiqued routes) and the receipt check; evidence combined, still warn-only,
+  still never exits 2.
+- **Module proof:** `--products core,hq,design` scratch install lands 9/9 files, resolver
+  reads `design yes ok 9/9` from the registry; product-lint green; old `/arc-design` +
+  `design-reviewer` byte-untouched vs main (ADR-0042).
+- Template upgraded to strict grammar (date line, parseable a11y-floor, contrast-pairs
+  table); sync-golden regenerated (3 intended hashes).
+- **Suites:** design-lint 28 · design-steel-thread 29 · sync 23 · products 34 · gates 15 ·
+  portability 3 — all green, serial. Live demo ran per spec (brief green → section deleted →
+  fails naming it → restored → scratch sync lands the module).
+
+Next: `/arc-phase-done 1` (needs the 3-OS CI run → push + PR).
 
 Phase 00's own record — what shipped, the 389-test 3-OS CI proof, the metrics and the two
 cross-OS bugs it cost — is in the Done log above, not repeated here.

@@ -12,6 +12,7 @@
     ".claude/scripts/design/critic-scope-check.sh",
     ".claude/scripts/design/design-critique.sh",
     ".claude/scripts/design/design-gate.sh",
+    ".claude/scripts/design/design-lint.mjs",
     ".claude/scripts/design/design-render.sh"
   ],
   "files": [
