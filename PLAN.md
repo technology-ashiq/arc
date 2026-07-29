@@ -179,7 +179,7 @@ flowchart TB
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
 | Blind-test recruits (designers + users) reachable at ₹0 | 14 days after Phase-3 build-complete with no Stream A/B evidence → ADR-0041 revisit fires, owner decision forced | 3 |
-| agent-browser screenshots are deterministic enough to critique | 2 flaky/stale-screenshot runs in Phase 0 → harden the fixed-viewport render script before proceeding | 0 |
+| agent-browser screenshots are deterministic enough to critique | 2 flaky/stale-screenshot runs in Phase 0 → harden the fixed-viewport render script before proceeding — **FIRED 2026-07-29**, in Phase 2 rather than Phase 0: variant-b rendered two distinct hashes from unchanged static bytes, once mid-critique into a sealed `review.completed`. Routed → issue #57. Load-bearing for the `screenshot_sha256` on every design receipt and for any future did-this-route-regress check; NOT for REQ-02 (planted-defect detection is unaffected). Remedy due before Phase 3, which runs the same renderer for its pilot evidence | 0 |
 | The spine dedup fix (separate /arc-change) lands before Phase 2 opens | Phase 2 opens without it → Phase 2 re-scopes to single-round critique; gate moves to Phase-2 close (ADR-0044) | 2 |
 | 5 days covers the Phase 0–3 build + test launch | Kill tripwire: 2.5 days burnt and Phase 1 not done → scope-cut conversation | all |
 | LexOS repo + its 4 design drafts are available and current at Phase-3 start | Drafts missing/stale at the Phase-3 re-read → re-pilot on a venturemind route or re-draft first | 3 |

@@ -64,32 +64,44 @@ against 3.4 days of wall clock.
 
 ## Now
 
-**Phase 02 OPEN, mid-run — BLOCKED on a session restart** (2026-07-29). Everything up to
-the first agent spawn is done and committed on `feat/design-phase-02`:
+**Phase 02 RUN COMPLETE — awaiting `/arc-phase-done 2`** (2026-07-29). The explore run
+`hq-dashboard-v1` went all eight steps on `feat/design-phase-02`; 12 commits, tree clean,
+`design-explore check` green.
 
-- ADR-0044 resolved **fix-first** (owner): dedup fix merged (PR #56), mechanism proven
-  live twice (scratch spine + bats pin: same-route receipts, distinct idems). Phase 01
-  signed off (`01KYN8MYRYM93BZDG4PB9MA2Q2`); PRs #53 + #56 merged; merged-main golden
-  verified EXACT against a real sync.
-- Phase-open decisions recorded in the spec: full 2-round scope · isolation =
-  route-namespace fallback (ADR-0037) · verification plan refined.
-- Infra (`7d42c2d`, inside the 0.5-day timebox): `design-explore.sh`
-  (init/check/render/status; adversarial pass found + fixed 4 real holes — rgb()/hsl()/
-  named-colour smuggles past the hex-only check, `..` in --brief; all pinned) · agents
-  `design-director` / `ui-composer` / `design-jury` · manifest + golden regenerated ·
-  design-explore 12 · sync 23 · products 34 green.
-- The real run `hq-dashboard-v1` is scaffolded (base `7d42c2d`, brief = the Phase-01 ARC HQ
-  brief).
+- **Steps 1–8 done.** Director assigned 3 theses + the IA matrix at assignment time
+  (canvas + ambient assistant rejected as structurally absurd / vocabulary-breaking;
+  guided workflow held as the named reserve) → 3 blind composers, one variant dir each →
+  shared render → critic round 1 (all three FAIL, 7 VIOLATIONs) → creation-side fixes →
+  round 2 (c PASS; a and b each carrying one NEW violation) → owner authorised one
+  surgical round 3 for b (PASS) → director call **5 of 7** → 3 blind jurors, unanimous
+  **a > c > b** → owner pick sealed as `decision.recorded`
+  (`01KYPJ91H7TX0GTKW0J3HA4E53`, decides `01KYPJ8QRYKMRJQB5TP16A43E4`): variant-a, with
+  the prediction that the daily clear drops from ~10 minutes to under 4 because all seven
+  decisions carry their three facts as columns on one screen.
+- **ADR-0044 gate satisfied live, not attested.** Spine holds 7 `review.completed` across
+  3 routes, every idem distinct — b alone carries three rounds. The merged-PR attestation
+  the retro called insufficient is no longer what this rests on.
+- **REQ-08 proven in both directions.** c ran FAIL → PASS inside 2 rounds (the contract);
+  b exhausted 2 and escalated to the owner, who authorised the third (the escape hatch).
+  Critic sessions changed zero product files, verified each round.
+- **Two real defects found by the run itself.** (1) `design-explore check` matched
+  "director call" as a substring, so the matrix's own prose saying the call was
+  *deliberately absent* satisfied the gate — the gate certified its own absence. Fixed,
+  anchored, 4 fixtures pinned, sync-golden regenerated; both directions now proven live.
+  (2) Render non-determinism → **ledger assumption FIRED**, routed to issue #57.
+- **Instruments disagree, and that is the finding.** b holds a design PASS and finished
+  last on every ballot; a carries one open VIOLATION and won every ballot. Two jurors
+  independently caught a `k`-bound-twice keyboard-legend conflict that three critique
+  rounds missed.
 
-**UNBLOCKED (2026-07-29, late):** the registry picked the three agents up mid-session
-after a delay — no restart needed after all (correcting the earlier note: registration is
-delayed, not restart-only). Owner called it a night; the run resumes on his signal.
+**Routed before close (`/arc-change`):** issue **#57** — `design-render.sh` renders the
+same static bytes to two different hashes, which falsifies PLAN's "screenshots are
+deterministic enough to critique" assumption (marked FIRED 2026-07-29 in the ledger);
+remedy due before Phase 3, which runs the same renderer for its pilot evidence. Issue
+**#58** — the brief declares "revenue chart tooltips" on a chart it never declares as a
+surface, so no variant built one and only one of three critics noticed; candidate
+`design-lint` rule plus an open product question for the Phase-3 brief.
 
-**Resume (this or any session):** `design-director` / `ui-composer` / `design-jury` are
-registered. Continue the run: (1) director assignment on `hq-dashboard-v1` (theses +
-matrix at assignment time + rejected-theses notes), (2) composers ×3 fresh-context, one
-variant dir each, (3) `design-explore.sh check` + `render`, (4) critic round 1 per variant
-via `design-critique.sh` — expect real VIOLATIONs, (5) creation fixes → critic round 2
-(same routes → the distinct-idem close evidence), (6) director divergence call, (7) jury
-×3 blind, (8) owner pick + falsifiable prediction via the REQ-06 pattern. REQ-07 + REQ-08
-from this ONE run.
+**Next:** `/arc-phase-done 2` — it runs the spec's verification plan, writes the evidence
+bundle, flips the phase row and REQ-07/REQ-08 to validated, and updates the appetite-burn
+line. Neither routed issue blocks this close; both are due before Phase 03 opens.
