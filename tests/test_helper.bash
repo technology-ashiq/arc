@@ -61,6 +61,11 @@ _arc_design_sandbox() {
   cp "$ARC_ROOT"/.claude/scripts/design/*.mjs     "$SANDBOX/.claude/scripts/design/" 2>/dev/null
   cp "$ARC_CORE_SRC/review-ledger.sh"             "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/arc-profile.sh"               "$SANDBOX/.claude/scripts/core/"
+  # common.sh carries arc_hash_file (GNU sha256sum / BSD-macOS shasum / cksum fallback).
+  # Without it design-render.sh silently drops to raw `sha256sum`, which stock macOS does not
+  # ship -- so the macOS leg would exercise a hasher production never uses, and the
+  # two-captures-disagree case would pass for the wrong reason (both hashes empty).
+  cp "$ARC_CORE_SRC/common.sh"                    "$SANDBOX/.claude/scripts/core/" 2>/dev/null
   cp "$ARC_ROOT"/.claude/scripts/hq/arc-event.sh  "$SANDBOX/.claude/scripts/hq/"
   cp "$ARC_ROOT"/.claude/scripts/hq/arc-event.mjs "$SANDBOX/.claude/scripts/hq/"
   cp "$ARC_ROOT"/.claude/scripts/hq/spine.mjs     "$SANDBOX/.claude/scripts/hq/"
