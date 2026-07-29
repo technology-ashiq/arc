@@ -5,6 +5,12 @@
 **Reversibility:** two-way
 **Revisit trigger:** the module completes one clean end-to-end run (brief → critique with receipt) → wiring the router hook into arc-kickoff.md becomes due via /arc-change.
 
+> **FIRED 2026-07-29** — the Phase 02 explore run `hq-dashboard-v1` went brief → render →
+> critique → receipt with nothing hand-carried, and the design ledger stamped twice. Routed
+> → issue **#60**. The condition for *considering* the wiring is met; the shape of the
+> wiring is still open — a hook that fires on every kickoff, including ones with no UI
+> surface, would be worse than no hook. Owner's call.
+
 ## Context
 
 Owner fork at kickoff. The original build-order sketch had Phase 1 editing the shared
