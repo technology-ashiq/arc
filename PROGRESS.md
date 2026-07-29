@@ -100,16 +100,18 @@ has real slack it did not have at Phase 01 close.
 
 ## Now
 
-**Phase 02 CLOSED 2026-07-29, PR #61 merged (`5106d5e`). Phase 03 is NEXT and still NOT
-OPEN** — it opens with two of its own preconditions unmet, and opening it before they are
-settled would burn its 0.75-day appetite against a blocked first exit criterion.
+**Phase 02 CLOSED 2026-07-29, PR #61 merged (`5106d5e`). #57 CLOSED, PR #62 merged
+(`d2d8a85`). Phase 03 is NEXT and still NOT OPEN — but it is now down to ONE unmet
+precondition, not two.** The renderer its pilot evidence depends on is fixed; the Stream-B
+contact is not. Opening before that is settled burns its 0.75-day appetite against a blocked
+first exit criterion.
 
 REQ-07 and REQ-08 are `validated`; 3 of 4 phases done; 2.0 of 5 days burnt with 0.75 days
 of appetite left against 3.0 days of wall clock.
 
-**IN FLIGHT — issue #57 (render determinism), branch `feat/render-determinism`, routed via
-`/arc-change` and classed a BUG (no new REQ: it restores a guarantee the script already
-claims, it does not add capability).** Root cause found and reproduced, not guessed:
+**LANDED — issue #57 (render determinism), `b3a961e` → merged `d2d8a85`, CI 6/6 on 3 OS.**
+Routed via `/arc-change` and classed a BUG (no new REQ: it restores a guarantee the script
+already claimed, it does not add capability). Root cause found and reproduced, not guessed:
 `design-render.sh` injects its determinism CSS *after* `_ab open` returns and then captures
 **without ever waiting for that CSS to be applied and painted**, so the screenshot can catch
 either the pre-injection or the post-injection paint of the same bytes.
@@ -123,9 +125,10 @@ either the pre-injection or the post-injection paint of the same bytes.
   `font-family: Arial…` itself, so the injection moved its pixels without moving its
   document height. Variants a and c gained height (1387→1402, 1428→1453) and settled.
 - **The settle step alone did NOT close it, and that is the useful part.** With settle-only,
-  variant-b still drifted once in four runs to a third value (`95e5805d`) that no probe since
-  has reproduced or explained. Shipping on "6/6 green in a probe" would have re-sealed the
-  same class of unreproducible hash with more confidence behind it.
+  variant-b still drifted once in four runs to a third value (`95e5805d`). Shipping on
+  "6/6 green in a probe" would have re-sealed the same class of unreproducible hash with more
+  confidence behind it. (That value is since accounted for: it is the injection applied with
+  the paint unfinished — an intermediate state, not a fourth cause.)
 - **So the fix is layered, and only the last layer is the guarantee:**
   1. *rules applied* — **fail-closed**. A silently failed injection used to leave the render
      running with no determinism rules at all and nothing said so.
@@ -139,19 +142,35 @@ either the pre-injection or the post-injection paint of the same bytes.
      "this number is reproducible" is exactly what the receipt needs.
 - **Rejected, not untried:** `agent-browser open --init-script` (inject before first paint) is
   the cleaner shape; the style never appeared on this transport across 12 runs.
+- **Rejected, not untried:** `agent-browser open --init-script` (inject before first paint) is
+  the cleaner shape; the style never appeared on this transport across 12 runs.
 - **Evidence:** 24 consecutive renders across 5 routes (3 variants, the mockup, the defect
-  fixture) — one hash each, zero refusals. 8 new cases in `design-steel-thread.bats` §7 drive
+  fixture) — one hash each, zero refusals. 10 new cases in `design-steel-thread.bats` §7 drive
   a **fake agent-browser** (`tests/fixtures/design/fake-agent-browser.sh`) because CI installs
   no browser at all, so a browser-only test would skip on every leg and guard nothing.
-  **Red-first: 5 of the 8 fail against the pre-fix script.** The real-browser case is the
-  weakest of them — it *passed* once against the buggy script, which is the intermittency that
-  made #57 hard to see and the reason the faked cases carry the guard.
-- **Landed:** settle + stable-shutter, `recipe` now ends `;settle-paint`, sync-golden
-  regenerated (delta was exactly the one intended path). Old recorded hashes are
-  non-comparable across the recipe change — the designed meaning of a recipe bump.
+  **Red-first: 5 fail against the pre-fix script.** The real-browser render case is the
+  weakest — it *passed* against the buggy script more than once, which is the intermittency
+  that made #57 hard to see and the reason the faked cases carry the guard.
+- **The committed reproducer needed two attempts, and that is the lesson worth keeping.** The
+  first `57-repro.html` was measured byte-identical under the pin — a page on which #57 cannot
+  happen, behind a case that therefore could not fail while reading as a passing guard. The
+  property is two-sided: layout-neutral pin AND at least one element whose font the pin still
+  changes (`button`/`kbd`/`code`/`input`, none of which inherit the body font). A case now
+  asserts the fixture still moves pixels, proven by stripping its controls and watching it go
+  red. A fixture nobody checks is a fixture that decays.
+- **Landed:** settle + measured-applied + stable-shutter + refusal cleanup + signal traps +
+  SHA-256 shape guard; `recipe` now ends `;settle-paint`; sync-golden regenerated (delta was
+  exactly the one intended path). Old recorded hashes are non-comparable across the recipe
+  change — the designed meaning of a recipe bump.
+- **Reviewed over 4 rounds** (`docs/reviews/2026-07-29-2024-feat-render-determinism.md`).
+  Three rounds found a defect in the previous round's fix, and **two of those were in the
+  verification method rather than the code** — a gate that measured the wrong thing, and a
+  reproducer that reproduced nothing. Worth remembering next time "I verified it" is the claim.
+  Standing gap: **`shellcheck` is not installed** and was skipped in all four rounds; for a
+  shell-only diff it is the scanner most likely to catch what reading did not.
 
-**#57 is now IN FLIGHT (above). Two FIRED ADR triggers remain routed but NOT actioned —
-both are owner decisions, neither is a code task I can take unilaterally:**
+**#57 is CLOSED (above). Two FIRED ADR triggers remain routed but NOT actioned — both are
+owner decisions, neither is a code task I can take unilaterally:**
 
 - **#59 — ADR-0042 retirement due.** Two clean explore-critique runs fired it. Whether
   "retire the old `/arc-design` + design-reviewer" means retire or repoint-and-keep is
@@ -183,7 +202,9 @@ bad receipt and its correction live only in local spine state, and the Phase-02 
 attests only the scan files. The durable, in-git record of this is issue #57, the ledger row,
 and this tracker.
 
-**Recommended next action:** land #57 (fix + pinned regression fixture + recipe string) and
-merge it before Phase 03 opens — Phase 03's pilot evidence comes out of this same renderer.
-#59 and #60 can wait for `/arc-retro`; the Stream-B contact cannot, because Phase 03's first
-exit criterion is blocked without it.
+**Recommended next action — there is exactly ONE thing left before Phase 03 can open, and it
+is not a code task.** #57 is landed and merged, so the renderer Phase 03's pilot evidence
+comes out of is no longer in question. What remains is the **Stream-B contact**: either a
+named, reachable LexOS lawyer, or the pre-designed fallback (case-primary marked PROVISIONAL)
+taken deliberately and on the record. Phase 03's first exit criterion is blocked either way
+until that call is made. #59 and #60 can wait for `/arc-retro`.
