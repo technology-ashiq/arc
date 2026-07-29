@@ -360,3 +360,206 @@ teardown() { _arc_teardown; }
   ' "$ARC_ROOT/arc.gates.yaml"
   [ "$status" -eq 0 ]
 }
+
+# ---------- 7. render determinism: the hash a receipt seals must be reproducible (#57) ----------
+#
+# The defect: design-render.sh injected its determinism CSS after `open` and captured without
+# waiting, so the SAME bytes hashed two ways and one flip was sealed into a review.completed.
+# Found live in the Phase-02 explore run, not by a test.
+#
+# These cases drive a fake agent-browser because CI installs no browser at all (ci.yml) -- a
+# determinism test that required one would skip on every leg and guard nothing. The fake
+# controls the only thing that matters here: what two consecutive captures return. The real
+# browser gets its own case at the end, which skips when absent and says so.
+
+# Sandbox with design-render.sh, a real route to render, and the fake browser first on PATH.
+_render_sandbox() {
+  _arc_design_sandbox
+  mkdir -p "$SANDBOX/bin" "$SANDBOX/fakestate" "$SANDBOX/docs"
+  cp "$ARC_ROOT/tests/fixtures/design/fake-agent-browser.sh" "$SANDBOX/bin/agent-browser"
+  chmod +x "$SANDBOX/bin/agent-browser"
+  PATH="$SANDBOX/bin:$PATH"; export PATH
+  FAKE_AB_STATE="$SANDBOX/fakestate"; export FAKE_AB_STATE
+  printf '<!doctype html><title>route</title><p>content</p>\n' > "$SANDBOX/docs/route.html"
+  git -C "$SANDBOX" add -A >/dev/null 2>&1
+  git -C "$SANDBOX" commit -qm route >/dev/null 2>&1
+  R_META="$SANDBOX/.claude/state/design/renders/docs--route-html.json"
+  R_PNG="$SANDBOX/.claude/state/design/renders/docs--route-html.png"
+}
+
+_render() { run bash "$SANDBOX/.claude/scripts/design/design-render.sh" docs/route.html; }
+
+# The hash the script SHOULD publish for a given fake capture payload. Computed with
+# arc_hash_file -- the same hasher design-render.sh resolves -- so this never asserts sha256
+# on a box whose production path is shasum or cksum.
+# Sourced in a subshell: common.sh is only pulled in by _arc_load_libs(), and this file's
+# other cases must not inherit its function set as a side effect of one assertion.
+_want_hash() {
+  printf '%s' "$1" > "$BATS_TEST_TMPDIR/want.bin"
+  ( . "$ARC_CORE_SRC/common.sh" >/dev/null 2>&1; arc_hash_file "$BATS_TEST_TMPDIR/want.bin" )
+}
+
+@test "render REFUSES when two consecutive captures disagree -- the #57 regression" {
+  _render_sandbox
+  # Every capture different: the unstable shutter that produced the unreproducible hash.
+  FAKE_AB_SHOTS="A B C D E F G H" _render
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q "does not render to a stable image"
+  # The point of refusing is that nothing is published.
+  [ ! -f "$R_META" ]
+}
+
+@test "a refusal leaves no PNG still claiming the old meta's hash" {
+  _render_sandbox
+  # First render succeeds and records sha(A). Second render is unstable and refuses -- if the
+  # refusal walked away, the dir would hold the last unstable capture next to a meta still
+  # naming sha(A): a silently disagreeing pair, in the directory where #57 was found.
+  FAKE_AB_SHOTS="A A" _render
+  [ "$status" -eq 0 ]
+  [ -f "$R_META" ]
+  rm -f "$SANDBOX/fakestate/count"
+  FAKE_AB_SHOTS="P Q R S T U" _render
+  [ "$status" -eq 1 ]
+  [ ! -f "$R_PNG" ]
+  [ ! -f "$R_META" ]
+}
+
+@test "render publishes only a hash both captures agreed on" {
+  _render_sandbox
+  FAKE_AB_SHOTS="A A" _render
+  [ "$status" -eq 0 ]
+  [ -f "$R_META" ]
+  # The recorded number must be the hash of the agreed pixels, not of some third capture.
+  want="$(_want_hash A)"
+  [ -n "$want" ]
+  grep -qF "\"screenshot_sha256\": \"$want\"" "$R_META"
+}
+
+@test "render retries a flaky shutter instead of refusing it outright" {
+  _render_sandbox
+  # attempt 1 disagrees (A vs B), attempt 2 agrees (C vs C).
+  FAKE_AB_SHOTS="A B C C" _render
+  [ "$status" -eq 0 ]
+  want="$(_want_hash C)"
+  [ -n "$want" ]
+  grep -qF "\"screenshot_sha256\": \"$want\"" "$R_META"
+}
+
+@test "render REFUSES when the determinism rules never applied" {
+  _render_sandbox
+  # An injection that silently failed used to leave the render running with no rules at all.
+  FAKE_AB_SETTLE="" FAKE_AB_SHOTS="A A" _render
+  [ "$status" -eq 1 ]
+  echo "$output" | grep -q "determinism rules did not apply"
+  [ ! -f "$R_META" ]
+}
+
+@test "a throttled paint is not a refusal -- rAF is throttled in real headless runs" {
+  _render_sandbox
+  # Observed ~1 run in 10 locally, and those runs still produced the correct identical hash.
+  # Refusing them would trade a wrong number for a command that randomly does not work.
+  FAKE_AB_SETTLE="arc-determinism:applied=1:painted=0:h=1200" FAKE_AB_SHOTS="A A" _render
+  [ "$status" -eq 0 ]
+  [ -f "$R_META" ]
+}
+
+@test "the recipe recorded in the meta names the settle step" {
+  _render_sandbox
+  FAKE_AB_SHOTS="A A" _render
+  [ "$status" -eq 0 ]
+  # A recipe that does not name the wait cannot tell a future run whether a hash moved
+  # because the PAGE changed or because the RECIPE did -- the script's own stated guarantee.
+  grep -q "settle-paint" "$R_META"
+}
+
+@test "the stability probe leaves no second image behind" {
+  _render_sandbox
+  FAKE_AB_SHOTS="A A" _render
+  [ "$status" -eq 0 ]
+  # A stray probe PNG would be a second unexplained artifact in the renders dir, and the
+  # stale-duplicate guard reads that directory.
+  run find "$SANDBOX/.claude/state/design/renders" -name "*.probe.png"
+  [ -z "$output" ]
+}
+
+@test "real browser: the #57 fixture is actually a reproducer (the pin still moves pixels)" {
+  command -v agent-browser >/dev/null 2>&1 || skip "agent-browser not installed on this runner"
+  local repro="$ARC_ROOT/tests/fixtures/design/57-repro.html"
+  [ -f "$repro" ] || skip "the #57 reproducer fixture is not present in this checkout"
+
+  # This case exists because the fixture already decayed once. Its first cut declared the
+  # pinned Arial stack and nothing else, so `html, body, * { font-family: Arial !important }`
+  # was a true no-op -- measured byte-identical before and after injection. A page where the
+  # injection moves NOTHING cannot express the race, so the render case below was structurally
+  # incapable of failing, while reading as a passing guard.
+  # The reproducer property is two-sided: layout-neutral pin (no reflow to wait on) AND at
+  # least one element the pin still restyles (buttons, kbd, code, inputs -- none of which
+  # inherit the body font). This asserts the second half, which is the fragile one.
+  local url ses="steelthread-repro"
+  url="file:///$(printf '%s' "$repro" | sed 's#^/##')"
+  if command -v cygpath >/dev/null 2>&1; then
+    url="file:///$(cygpath -m "$repro" 2>/dev/null | sed 's#^/##')"
+  fi
+
+  agent-browser --session "$ses" set viewport 1440 900 >/dev/null 2>&1
+  agent-browser --session "$ses" set media light >/dev/null 2>&1
+  # `false`, not `skip`: agent-browser is present (checked above) and the fixture is committed,
+  # so a failed open here is a real breakage. Skipping it would report the last vacuity channel
+  # in this case as a pass.
+  agent-browser --session "$ses" open "$url" --max-output 200 >/dev/null 2>&1 \
+    || { agent-browser --session "$ses" close >/dev/null 2>&1
+         echo "could not open the committed fixture at $url" >&2; false; }
+
+  agent-browser --session "$ses" screenshot "$BATS_TEST_TMPDIR/before.png" --full >/dev/null 2>&1
+  agent-browser --session "$ses" eval '(() => { const s = document.createElement("style");
+    s.textContent = "html, body, * { font-family: Arial, Helvetica, sans-serif !important; }";
+    document.head.appendChild(s); void document.documentElement.offsetHeight; return "ok"; })()' >/dev/null 2>&1
+  agent-browser --session "$ses" screenshot "$BATS_TEST_TMPDIR/after.png" --full >/dev/null 2>&1
+  agent-browser --session "$ses" close >/dev/null 2>&1
+
+  [ -s "$BATS_TEST_TMPDIR/before.png" ]
+  [ -s "$BATS_TEST_TMPDIR/after.png" ]
+  local a b
+  a="$( . "$ARC_CORE_SRC/common.sh" >/dev/null 2>&1; arc_hash_file "$BATS_TEST_TMPDIR/before.png" )"
+  b="$( . "$ARC_CORE_SRC/common.sh" >/dev/null 2>&1; arc_hash_file "$BATS_TEST_TMPDIR/after.png" )"
+  [ -n "$a" ] && [ -n "$b" ]
+  if [ "$a" = "$b" ]; then
+    echo "57-repro.html has decayed into a no-op: the font pin moves zero pixels on it," >&2
+    echo "so the render case below cannot fail and proves nothing. Restore the controls" >&2
+    echo "(button / kbd / code / input / select) that the pin restyles." >&2
+    false
+  fi
+}
+
+@test "real browser: N consecutive renders of the #57 reproducer produce ONE hash" {
+  command -v agent-browser >/dev/null 2>&1 \
+    || skip "agent-browser not installed on this runner -- the fake-browser cases above carry the guard here"
+  # Deliberately NOT $TARGET. arc-hq-mockup.html declares system-ui, so the injection changes
+  # its font, forces a reflow, and the capture rides along behind it -- precisely the condition
+  # under which the race does NOT manifest. Aimed there, this case passed against the broken
+  # script.
+  #
+  # It is also NOT the live variant-b route, even though that is where #57 was found: the
+  # refusal cleanup added for this same issue deletes the PNG and meta it refused on, so an
+  # intermittent refusal here would destroy Phase-02's explore render artifacts as a side
+  # effect of running the suite. Gitignored and regenerable, but a suite that eats a closed
+  # phase's state is not one anyone should have to think about. The committed fixture carries
+  # the same reproducer property, and the case above asserts that it still does.
+  #
+  # Do not read a green here as proof. Measured, this case still passes against the pre-fix
+  # script sometimes: the flip was roughly 1 render in 4 to 1 in 10, so four renders is a coin
+  # toss, not a gate. It is a smoke check on the real transport, it skips on all three CI legs
+  # (none install a browser), and the faked cases above are the guard. Raising N would buy
+  # detection probability at minutes per run and still never be deterministic.
+  local repro="tests/fixtures/design/57-repro.html"
+  [ -f "$ARC_ROOT/$repro" ] || skip "the #57 reproducer fixture is not present in this checkout"
+  local first="" sha=""
+  for i in 1 2 3 4; do
+    run bash "$ARC_ROOT/.claude/scripts/design/design-render.sh" "$repro"
+    [ "$status" -eq 0 ] || { echo "render $i failed: $output"; false; }
+    sha="$(echo "$output" | sed -n 's/.*screenshot_sha256: //p' | tr -d '\r')"
+    [ -n "$sha" ]
+    if [ -z "$first" ]; then first="$sha"; fi
+    [ "$sha" = "$first" ] || { echo "render $i drifted: $first -> $sha (issue #57)"; false; }
+  done
+}

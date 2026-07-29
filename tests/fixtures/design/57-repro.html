@@ -1,0 +1,177 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>#57 reproducer — layout-neutral pin that still moves pixels</title>
+<!--
+  The render-determinism reproducer, committed so the real-browser case in
+  design-steel-thread.bats never renders (and, on an intermittent refusal, never DELETES) the
+  live Phase-02 explore artifacts under .claude/state/design/renders/.
+
+  WHAT MAKES A PAGE REPRODUCE #57 -- both halves are required:
+
+    1. The pin must barely move LAYOUT. This page declares `font-family: Arial, Helvetica,
+       sans-serif` on html/body itself, the same stack design-render.sh pins, so the injection
+       has almost nothing to reflow: measured 1275 -> 1274 at 1440x900, one pixel out of 1275,
+       from the controls in item 2. Nearly no height change means nearly no reflow, and that
+       is what leaves the capture pipeline with nothing to wait on.
+       Do not read 1275 -> 1274 as decay -- it is the measured resting state, recorded here so
+       the next person to check does not conclude the fixture has rotted. Fixed heights on the
+       controls plus inline-block on kbd/code were tried and did not close it (1279 -> 1278);
+       chasing a true zero is not worth the time. variant-b is a true 1528 -> 1528, which is
+       why the live route remains the stricter case even though it is not the one rendered.
+
+    2. The pin must still move PIXELS somewhere. This is the half that is easy to get wrong.
+       An earlier cut of this fixture had only inheriting text, so `html, body, * { font-family:
+       Arial !important }` was a true no-op: measured byte-identical before and after
+       injection, on which #57 cannot happen at all. The elements below -- <button>, <kbd>,
+       <code>, <input>, <select> -- carry a UA-stylesheet font-family that does NOT inherit
+       from body, so the pin genuinely restyles them while the document height stays put.
+
+  Do NOT "tidy up" the controls below. They are the mechanism, not decoration. A guard case in
+  design-steel-thread.bats captures this page, injects the recipe, captures again and asserts
+  the two hashes DIFFER -- if someone strips the controls, that case goes red rather than this
+  file silently decaying back into a no-op, which is exactly what happened once already.
+
+  Do not add a script, an image, a web font or a remote asset either: any difference between
+  two consecutive captures must come from the capture, never from the page.
+
+  Not the mechanism, despite looking like it: `-webkit-font-smoothing: none` is macOS-only in
+  Blink and a no-op on the Windows and Linux legs, so it cannot be what supplies the pixel
+  movement anywhere but macOS. The font pin on the controls is what carries this everywhere.
+
+  Height is deliberately past a single 900px viewport (measured 1275 at 1440x900) so a
+  full-page capture stitches more than one screen, and the text clears the 200-character
+  blank-render guard.
+-->
+<style>
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    color: #1a1a1a;
+    background: #ffffff;
+  }
+  .wrap { padding: 24px 32px; max-width: 960px; }
+  h1 { font-size: 20px; margin: 0 0 12px; }
+  h2 { font-size: 15px; margin: 26px 0 8px; }
+  p  { margin: 0 0 12px; line-height: 1.55; }
+  .row { display: flex; gap: 16px; margin: 10px 0; }
+  .cell { flex: 1; border: 1px solid #d8d8d8; padding: 12px; }
+  .k { font-weight: bold; }
+  table { border-collapse: collapse; margin: 8px 0 16px; }
+  td, th { border: 1px solid #d8d8d8; padding: 6px 10px; text-align: left; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 18px; }
+  .controls button { padding: 6px 14px; border: 1px solid #bbb; background: #f4f4f4; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; margin: 10px 0 18px; }
+  .legend span { border: 1px solid #d8d8d8; padding: 4px 8px; }
+</style>
+<div class="wrap">
+  <h1>Render determinism reproducer</h1>
+  <p>
+    This page exists to be photographed twice. It declares the same font stack the render
+    recipe pins, so pinning it cannot change the document height. Nothing is forced to reflow,
+    and so nothing makes the shutter wait for the injection to finish painting. The controls
+    further down are what still change under the pin, which is the other half of the defect.
+  </p>
+
+  <h2>Why the height must not move</h2>
+  <p>
+    A page that gains or loses height when the font is pinned forces a layout pass, and the
+    capture rides along behind it. That page looks deterministic while the underlying race is
+    untouched. The bug only shows itself where the injection changes pixels without changing
+    the box model.
+  </p>
+
+  <h2>Why something must still move</h2>
+  <p>
+    A page where the pin changes nothing at all is equally useless as a control: both captures
+    are identical whichever side of the injection they land on, so the race has nothing to
+    express itself through. Form controls and monospace elements do not inherit the body font,
+    so they are restyled by the pin while occupying the same space.
+  </p>
+
+  <div class="controls">
+    <button type="button">Open brief</button>
+    <button type="button">Run critique</button>
+    <button type="button">Record pick</button>
+    <button type="button">Emit receipt</button>
+    <button type="button">Close phase</button>
+    <button type="button">Archive evidence</button>
+  </div>
+
+  <div class="legend">
+    <span><kbd>g</kbd> then <kbd>b</kbd> — go to brief</span>
+    <span><kbd>r</kbd> — re-render</span>
+    <span><kbd>c</kbd> — critique</span>
+    <span><kbd>/</kbd> — search</span>
+    <span><kbd>Esc</kbd> — dismiss</span>
+  </div>
+
+  <p>
+    Inline monospace behaves the same way: <code>design-render.sh</code> writes
+    <code>screenshot_sha256</code> into <code>renders/&lt;slug&gt;.json</code>, and every one of
+    those <code>code</code> runs is restyled by the pin without moving the paragraph.
+  </p>
+
+  <div class="row">
+    <div class="cell"><span class="k">Declared stack</span><br>Arial, Helvetica, sans-serif</div>
+    <div class="cell"><span class="k">Injected stack</span><br>Arial, Helvetica, sans-serif</div>
+    <div class="cell"><span class="k">Layout delta</span><br>none</div>
+  </div>
+
+  <div class="row">
+    <div class="cell">
+      <span class="k">Filter</span><br>
+      <input type="text" value="hq-dashboard-v1" size="24">
+    </div>
+    <div class="cell">
+      <span class="k">Lens</span><br>
+      <select><option>design</option><option>code</option><option>security</option></select>
+    </div>
+    <div class="cell">
+      <span class="k">Viewport</span><br>
+      <input type="text" value="1440x900" size="12">
+    </div>
+  </div>
+
+  <h2>What the pin actually touches here</h2>
+  <table>
+    <tr><th>Element</th><th>Inherits body font?</th><th>Pin moves pixels?</th></tr>
+    <tr><td>paragraph text</td><td>yes — already Arial</td><td>no</td></tr>
+    <tr><td>&lt;button&gt;</td><td>no — UA stylesheet</td><td>yes</td></tr>
+    <tr><td>&lt;kbd&gt; / &lt;code&gt;</td><td>no — UA monospace</td><td>yes</td></tr>
+    <tr><td>&lt;input&gt; / &lt;select&gt;</td><td>no — UA stylesheet</td><td>yes</td></tr>
+    <tr><td>animation / transition off</td><td>n/a</td><td>no</td></tr>
+    <tr><td>caret-color</td><td>n/a</td><td>no</td></tr>
+  </table>
+
+  <h2>Content below the fold</h2>
+  <p>
+    The remaining paragraphs push the document past a single viewport so a full-page capture
+    has to stitch more than one screen. Judging what sits above the fold is a separate question
+    that belongs to a declared platform contract, not to a side effect of how the screenshot
+    was taken.
+  </p>
+  <p>
+    Every line here is static. There is no script on this page, no date, no random source, no
+    remote asset and no web font. Any difference between two consecutive captures comes from
+    the capture, never from the page — which is the whole reason it is committed rather than
+    generated.
+  </p>
+  <p>
+    Keep this file boring. If it grows a script, an image or a font link it stops being a
+    control and starts being another variable, and the case that renders it stops proving
+    anything about the renderer.
+  </p>
+  <p>
+    A green result on this page is still weak evidence on its own. The flip it reproduces was
+    intermittent — roughly one render in four to one in ten — so a handful of agreeing captures
+    is a smoke check, not a gate. The faked-transport cases carry the guard; this page exists
+    so that the one real-browser case is at least pointed at a page where the defect can occur.
+  </p>
+  <p>
+    The last thing worth recording: the reason a page like this is hard to write is that the
+    two requirements pull against each other. Anything that changes enough to move pixels
+    usually also changes enough to move layout, and layout movement is precisely what hides the
+    race. Controls are the narrow case where the first happens without the second.
+  </p>
+</div>
