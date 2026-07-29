@@ -64,6 +64,16 @@ tooling beyond the documented `note.logged` path.
   that repo.
 - **Primary object — ANSWERED, not provisional.** Real LexOS lawyer, 2026-07-29: **case**, not
   client. Receipt `01KYQ9B2BXMXWWADZZYVWXEGRT`.
+- **AMENDMENT (owner, 2026-07-30) — what "full loop run on the real LexOS stack" means here.**
+  Variants are static HTML mockups inside arc (`docs/design/explore/lexos-case-workspace-v1/`)
+  built on LexOS's real token set, real premise, real vocabulary and real-shaped content. They
+  are **not** built as routes inside the LexOS app. Reason: that repo carries the owner's
+  uncommitted Phase-04 work, and branching + running a dev server and a Docker Postgres in it to
+  host three throwaway variants risks live work to gain fidelity the explore does not need — the
+  pick is a judgment about structure, not about integration. Recorded rather than absorbed: this
+  narrows the criterion, and the owner chose it knowing that. What is genuinely NOT proven by this
+  run: that a chosen direction survives contact with the real data layer and the real routing.
+  That belongs to whoever implements the pick, and it is not evidence this phase can claim.
 
 **Still owed by the owner — due before the blind-test launch criterion, NOT before the phase
 opens:**
