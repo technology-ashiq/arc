@@ -7,16 +7,37 @@
 ## Exit criteria (Definition of Done)
 
 - [ ] Library schema + first entries: every entry typed (Pattern/Craft/Brand/Anti) + tagged (domain · user type · platform · interaction problem · confidence · outcome) — untagged observations rejected; principle recorded, never just the screenshot
-- [ ] LexOS pilot: the 4 companion drafts re-read fresh; pilot brief upgraded (primary object case-vs-client answered with real lawyer input — doubles as Stream B's first data point; platform contract: desktop Y · mobile Y · tablet N · keyboard-first Y · reduced-motion Y); full loop run on the real LexOS stack
+- [ ] LexOS pilot: the **2** companion drafts re-read fresh (`docs/design/2026-07-26-dashboard-clients.md`, `docs/design/2026-07-27-case-workspace.md` — the plan said 4; that count came from this cycle's kickoff and never from the frozen design source, see the corrected ledger row); pilot brief upgraded (primary object **answered: case, not client**, by a real LexOS lawyer 2026-07-29, receipt `01KYQ9B2BXMXWWADZZYVWXEGRT` — NOT the PROVISIONAL fallback; platform contract: desktop Y · mobile Y · tablet N · keyboard-first Y · reduced-motion Y); full loop run on the real LexOS stack
 - [ ] Blind test launched: 3 directions packaged blind (arc origin undisclosed); Stream A + Stream B requests actually sent; two evidence files created to receive results
 - [ ] Pick + prediction receipts on the spine; outcome-evidence path (`note.logged`) documented
 - [ ] tests green · live demo · tracker updated — the phase-done call on trailing evidence is the OWNER's (ADR-0041)
 
 ## Verification plan
 
-- One coarse line (refined via `/arc-change` when the phase starts): live demo = the
-  LexOS explore-critique-pick run end-to-end + both stream requests sent + library
-  entries lint-valid (tag completeness).
+**Refined at phase open, 2026-07-29 (the coarse line above was written at kickoff).** Live
+demo, in order — each step's evidence is named so none of it can be asserted at close:
+
+1. **Library** — schema + first entries committed; every entry typed and fully tagged.
+   *Evidence:* the tag-completeness lint runs and rejects a deliberately untagged entry
+   (adversarial pass — a gate is not done until a construct-a-breaking-input round has run).
+2. **Pilot brief** — upgraded from the 2 LexOS drafts, primary object recorded as **case** with
+   the lawyer receipt cited, platform contract filled.
+   *Evidence:* `design-lint` passes it against the real drafts before any variant starts.
+3. **Explore run on the real LexOS stack** — theses → variants → critique → blind ranking →
+   owner pick.
+   *Evidence:* `decision.recorded` carrying the pick and a falsifiable prediction, plus every
+   round's `review.completed`. Renders now come from the hardened renderer (#57), so each
+   `screenshot_sha256` is reproducible — the first phase where that is true.
+4. **Blind test LAUNCHED** — 3 directions packaged with arc's authorship undisclosed; Stream A
+   and Stream B requests actually SENT; two evidence files created to receive results.
+   *Evidence:* the sent requests, not drafts of them. **Launch ≠ wait (ADR-0041)** — the phase
+   does not hold its appetite open waiting for replies.
+   *Blocked on:* a Stream-B recruit (see Your-setup) and a Stream-A channel.
+5. **Close** — tests green, tracker updated. The call on trailing evidence is the OWNER's
+   (ADR-0041); REQ-01 stays `active` until both streams pass.
+
+**Explicitly NOT verification:** that the directions are good. Three blind jurors rank them,
+the owner picks, and the two streams judge — no absolute score anywhere (a non-negotiable).
 
 ## Rabbit holes in this phase
 
@@ -32,8 +53,24 @@ tooling beyond the documented `note.logged` path.
 
 ## Your-setup / pending
 
-LexOS repo checked out locally + its `docs/design/` drafts current · recruiting channels
-for Stream A (design communities/peers) and Stream B (LexOS lawyer contacts) at ₹0.
+**Settled at phase open (2026-07-29):**
+- **LexOS checkout — CONFIRMED** at `E:/Work_Hub/01_Automemory/Lexos` (branch
+  `feat/phase-04-reminders`, last commit `4784ac9` 2026-07-28). Two sibling dirs are decoys and
+  are NOT the pilot surface: `Lexos-gsd` (last commit 2026-07-10, no `docs/design/`) and
+  `Lexos-old` (not a git repo at all).
+  ⚠️ **That repo has uncommitted work in flight** (`lib/db.ts`, `lib/notifier.ts`, its own
+  `PROGRESS.md` — the owner's LexOS Phase-04 reminders). This phase reads its drafts and
+  renders its routes; it does not edit them, and nothing here may stage, stash or commit in
+  that repo.
+- **Primary object — ANSWERED, not provisional.** Real LexOS lawyer, 2026-07-29: **case**, not
+  client. Receipt `01KYQ9B2BXMXWWADZZYVWXEGRT`.
+
+**Still owed by the owner — due before the blind-test launch criterion, NOT before the phase
+opens:**
+- Whether the lawyer who answered the brief question will also **sit the Stream-B blind test**.
+  Answering one question is not agreeing to be a test subject; the phase can build without it
+  and cannot launch Stream B without it.
+- ₹0 recruiting channel for **Stream A** (design communities/peers).
 
 ## Non-negotiables (verbatim from PLAN)
 

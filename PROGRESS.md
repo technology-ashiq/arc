@@ -11,7 +11,7 @@
 | 00 | Steel thread: read-only vision critic + edit-hook scope + spine receipt + warn gate + minimal brief template → one real route inspected e2e | 1.25 days | ✅ 2026-07-28 |
 | 01 | Brief mode (4 contracts) + design-lint v0 (adversarially passed) + `products/design/` manifest module | 1 day | ✅ 2026-07-29 |
 | 02 | Explore: theses → 3 isolated variants → critique loop → blind ranking → pick + prediction receipt (GATE: spine dedup fix landed, ADR-0044) | 1.5 days | ✅ 2026-07-29 |
-| 03 | Intelligence library + LexOS pilot e2e + blind-test launch (evidence may trail, ADR-0041) | 0.75 days | pending |
+| 03 | Intelligence library + LexOS pilot e2e + blind-test launch (evidence may trail, ADR-0041) | 0.75 days | 🟡 OPEN 2026-07-29 |
 
 **Appetite burn:** ~2.0 of 5 days used (Phases 00 + 01 + 02 closed). The kill tripwire
 (2.5 days with Phase 01 not done) is PERMANENTLY CLEARED. Phase 02 came in at **~0.4 days
@@ -100,11 +100,15 @@ has real slack it did not have at Phase 01 close.
 
 ## Now
 
-**Phase 02 CLOSED 2026-07-29, PR #61 merged (`5106d5e`). #57 CLOSED, PR #62 merged
-(`d2d8a85`). Phase 03 is NEXT and still NOT OPEN — but it is now down to ONE unmet
-precondition, not two.** The renderer its pilot evidence depends on is fixed; the Stream-B
-contact is not. Opening before that is settled burns its 0.75-day appetite against a blocked
-first exit criterion.
+**PHASE 03 IS OPEN — 2026-07-29.** Both preconditions cleared on the same day: #57 landed and
+merged (`d2d8a85`), so the renderer its pilot evidence comes out of is no longer in question;
+and a real LexOS lawyer answered the primary-object question — **case, not client** (receipt
+`01KYQ9B2BXMXWWADZZYVWXEGRT`). The pre-designed PROVISIONAL fallback was **not** taken; the
+brief carries a real answer.
+
+Entry gate done: exit criteria corrected (2 LexOS drafts, not 4 — a kickoff miscount, see the
+ledger), Your-setup settled with the confirmed checkout path, and the coarse Verification plan
+refined into 5 named steps with per-step evidence. Predecessor phases: 00, 01, 02 all CLOSED.
 
 REQ-07 and REQ-08 are `validated`; 3 of 4 phases done; 2.0 of 5 days burnt with 0.75 days
 of appetite left against 3.0 days of wall clock.
@@ -202,9 +206,14 @@ bad receipt and its correction live only in local spine state, and the Phase-02 
 attests only the scan files. The durable, in-git record of this is issue #57, the ledger row,
 and this tracker.
 
-**Recommended next action — there is exactly ONE thing left before Phase 03 can open, and it
-is not a code task.** #57 is landed and merged, so the renderer Phase 03's pilot evidence
-comes out of is no longer in question. What remains is the **Stream-B contact**: either a
-named, reachable LexOS lawyer, or the pre-designed fallback (case-primary marked PROVISIONAL)
-taken deliberately and on the record. Phase 03's first exit criterion is blocked either way
-until that call is made. #59 and #60 can wait for `/arc-retro`.
+**Recommended next action: build Phase 03 step 1 — the intelligence library** (schema + first
+entries + the tag-completeness lint, adversarially passed). It is the only exit criterion with
+no external dependency at all, so it converts appetite into finished work while the two owner
+items below are still open.
+
+**Owner items — neither blocks starting, both block finishing:**
+- **Stream-B recruit.** The lawyer answered the brief question; whether they will also *sit the
+  blind test* is a different ask and is not yet established. Needed at step 4 (launch), not now.
+- **Stream-A channel** — ₹0 route to design peers. Also step 4.
+
+#59 and #60 stay routed for `/arc-retro`.
