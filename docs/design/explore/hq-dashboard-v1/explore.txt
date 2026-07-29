@@ -1,0 +1,4 @@
+id=hq-dashboard-v1
+brief=docs/design/briefs/docs--strategy--arc-hq-mockup-html/brief.md
+base=7d42c2d
+isolation=route-namespace (ADR-0037 fallback, phase-open decision 2026-07-29)

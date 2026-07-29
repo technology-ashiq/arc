@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ARC HQ — Review workspace</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--color-bg);color:var(--color-text);font-family:Arial,Helvetica,sans-serif;font-size:14px;}
+  a{color:inherit;}
+  .skip-link{position:absolute;left:8px;top:-40px;background:var(--color-bg-raised);color:var(--color-text-bright);padding:8px 12px;border-radius:6px;border:1px solid var(--color-border-strong);z-index:10;}
+  .skip-link:focus{top:8px;}
+  :focus-visible{outline:3px solid var(--focus-ring);outline-offset:2px;}
+
+  /* ---------- chrome ---------- */
+  .chrome{display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 24px;background:var(--color-bg-raised);border-bottom:1px solid var(--color-border);}
+  .chrome-left{display:flex;align-items:baseline;gap:10px;}
+  .wordmark{font-weight:700;font-size:16px;color:var(--color-text-bright);letter-spacing:.02em;}
+  .chrome-sub{font-size:12px;color:var(--color-text-dim);}
+  .chrome-right{display:flex;align-items:center;gap:22px;}
+  .sync-status{font-size:12px;color:var(--color-text-dim);}
+  .sync-value{font-variant-numeric:tabular-nums;color:var(--color-text-dim);}
+  .kbd-hints{font-size:12px;color:var(--color-text-dim);display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  kbd{background:var(--color-bg-sunken);border:1px solid var(--color-border-strong);border-radius:4px;padding:2px 6px;font-size:11px;color:var(--color-text);}
+
+  /* ---------- KPI strip: compact, company-wide, NOT co-equal with the evidence pane ---------- */
+  .kpi-strip{display:flex;gap:30px;align-items:flex-end;padding:9px 24px;background:var(--color-bg-raised);border-bottom:1px solid var(--color-border);flex-wrap:wrap;}
+  .kpi{display:flex;flex-direction:column;gap:2px;}
+  .kpi-label{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-dim);}
+  .kpi-value{font-size:16px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-text-bright);}
+  .kpi-note{font-size:10px;color:var(--color-text-dim);}
+  .kpi.is-stale .kpi-value,
+  .kpi.is-empty .kpi-value{color:var(--color-text-dim);}
+
+  /* ---------- workspace grid ---------- */
+  .workspace{display:grid;grid-template-columns:300px minmax(0,1fr);}
+
+  /* ---------- rail ---------- */
+  .rail{background:var(--color-bg-sunken);border-right:1px solid var(--color-border);padding:16px;}
+  .rail-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;}
+  .rail-head h2{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-dim);margin:0;}
+  .rail-count{font-size:11px;color:var(--color-text-dim);font-variant-numeric:tabular-nums;}
+
+  .rail-list{list-style:none;margin:0 0 18px;padding:0;display:flex;flex-direction:column;gap:6px;}
+  .rail-item{display:flex;flex-direction:column;gap:4px;min-height:44px;padding:9px 12px;border-radius:6px;border:1px solid var(--color-border);background:var(--color-bg-raised);}
+  .rail-venture{font-size:13px;font-weight:700;color:var(--color-text-bright);}
+  .rail-meta{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--color-text-dim);}
+  .rail-id{font-variant-numeric:tabular-nums;}
+  .rail-amount{font-variant-numeric:tabular-nums;text-align:right;color:var(--color-text);}
+  .rail-status-label{font-size:11px;}
+
+  .rail-item.is-open{border-color:var(--color-accent-bg);background:var(--color-bg-inset);}
+  .rail-item.is-focused{outline:3px solid var(--focus-ring);outline-offset:2px;}
+
+  .rail-item.is-loading .rail-amount,
+  .rail-item.is-loading .rail-id{color:var(--color-text-dim);}
+  .rail-skeleton{display:inline-block;width:64px;height:10px;border-radius:3px;background:var(--color-skeleton);vertical-align:middle;}
+  .is-loading .rail-status-label{color:var(--color-text-dim);}
+
+  .is-error{border-color:var(--color-border-error);background:var(--color-error-panel-bg);}
+  .is-error .rail-status-label{display:inline-block;background:var(--color-breach-bg);color:var(--color-text-bright);padding:2px 7px;border-radius:4px;}
+
+  .is-disabled{background:var(--color-disabled-bg);border-style:dashed;}
+  .is-disabled .rail-venture,
+  .is-disabled .rail-amount,
+  .is-disabled .rail-id{color:var(--color-disabled-text);}
+  .is-disabled .rail-status-label{color:var(--color-text-dim);}
+
+  .rail-done,.rail-today{padding-top:12px;border-top:1px solid var(--color-border);margin-bottom:18px;}
+  .rail-done h3,.rail-today h3,.rail-empty-demo h3{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-dim);margin:0 0 8px;}
+  .done-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+  .done-list li{display:flex;justify-content:space-between;align-items:center;gap:6px;font-size:12px;padding:8px 10px;background:var(--color-done-panel-bg);border:1px solid var(--color-border-done);border-radius:6px;min-height:44px;}
+  .done-venture{color:var(--color-text-bright);font-weight:700;}
+  .done-action{font-size:10px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;}
+  .done-action.approve{color:var(--color-good-text);}
+  .done-action.kill{color:var(--color-danger-text);}
+  .done-receipt{font-variant-numeric:tabular-nums;color:var(--color-text-dim);text-align:right;white-space:nowrap;}
+
+  .today-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;}
+  .today-list li{display:flex;gap:8px;font-size:11px;padding:2px 0;}
+  .today-time{font-variant-numeric:tabular-nums;color:var(--color-text-dim);flex-shrink:0;}
+  .today-desc{color:var(--color-text);line-height:1.4;}
+
+  .rail-empty-demo{padding-top:12px;border-top:1px solid var(--color-border);}
+  .empty-illustration{border:1px dashed var(--color-border-strong);border-radius:6px;padding:12px;font-size:12px;color:var(--color-text-dim);}
+
+  /* ---------- evidence pane ---------- */
+  .evidence-pane{padding:24px 32px 40px;max-width:1120px;}
+  .eyebrow{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-dim);margin:0 0 4px;}
+  .evidence-title{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .evidence-title h1{font-size:24px;margin:0;color:var(--color-text-bright);}
+  .tag{font-size:11px;padding:3px 9px;border-radius:4px;border:1px solid var(--color-border-strong);color:var(--color-text-dim);text-transform:uppercase;letter-spacing:.03em;}
+  .tag.autonomy{color:var(--color-warn-text);border-color:var(--color-warn-text);}
+  .evidence-sub{margin-top:6px;font-size:13px;color:var(--color-text-dim);}
+
+  .evidence-blocks{display:flex;flex-direction:column;gap:16px;margin:20px 0 24px;}
+  .block{background:var(--color-bg-raised);border:1px solid var(--color-border);border-radius:8px;padding:16px 20px;}
+  .block-label{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-text-dim);margin-bottom:10px;}
+  .block-note{margin:10px 0 0;font-size:13px;color:var(--color-text);line-height:1.5;}
+
+  .verdict-row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .verdict-word{font-size:20px;font-weight:700;color:var(--color-text-bright);}
+  .verdict-score{font-size:28px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-text-bright);}
+  .score-max{font-size:14px;font-weight:400;color:var(--color-text-dim);}
+
+  .amount-row{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+  .amount-value{font-size:26px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--color-text-bright);text-align:right;}
+  .amount-label{font-size:13px;color:var(--color-text);max-width:56%;}
+
+  .criteria-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;}
+  .criterion{display:grid;grid-template-columns:1.2fr auto auto auto;gap:14px;align-items:center;padding:9px 12px;border-radius:6px;background:var(--color-bg-inset);border-left:3px solid var(--color-border-strong);}
+  .criterion-name{font-size:13px;font-weight:700;color:var(--color-text-bright);}
+  .criterion-value{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;color:var(--color-text);}
+  .criterion-threshold{font-size:12px;font-variant-numeric:tabular-nums;text-align:right;color:var(--color-text-dim);}
+  .criterion-flag{font-size:11px;font-weight:700;text-align:right;letter-spacing:.03em;padding:3px 8px;border-radius:4px;}
+  .criterion.ok{border-left-color:var(--color-good-text);}
+  .criterion.ok .criterion-flag{color:var(--color-good-text);}
+  .criterion.near{border-left-color:var(--color-warn-text);}
+  .criterion.near .criterion-flag{background:var(--color-near-bg);color:var(--color-text-bright);}
+  .criterion.breach{border-left-color:var(--color-danger-text);}
+  .criterion.breach .criterion-flag{background:var(--color-breach-bg);color:var(--color-text-bright);}
+
+  .compare{background:var(--color-bg-raised);border:1px solid var(--color-border-strong);border-radius:8px;padding:16px 20px;margin-bottom:24px;}
+  .compare-head{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:6px 16px;margin-bottom:12px;}
+  .compare-head h2{font-size:14px;margin:0;color:var(--color-text-bright);}
+  .compare-summary{font-size:11px;color:var(--color-text-dim);}
+  .compare-note{font-size:12px;color:var(--color-text-dim);width:100%;}
+  .compare-table{width:100%;border-collapse:collapse;font-size:13px;}
+  .compare-table th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--color-text-dim);padding:6px 8px;border-bottom:1px solid var(--color-border);}
+  .compare-table td{padding:9px 8px;border-bottom:1px solid var(--color-border);color:var(--color-text);}
+  .compare-table th.num,.compare-table td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .compare-table tr:last-child td{border-bottom:none;}
+
+  .decision{display:flex;flex-direction:column;gap:16px;padding:18px 20px;background:var(--color-bg-raised);border:1px solid var(--color-border-strong);border-radius:8px;margin-bottom:26px;}
+  .decision-actions{display:flex;gap:10px;flex-wrap:wrap;}
+  .btn{display:inline-flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-radius:6px;font-size:13px;font-weight:700;border:1px solid var(--color-border-strong);background:var(--color-bg-inset);color:var(--color-text-bright);}
+  .btn kbd{background:none;border-color:var(--color-text-bright);}
+  .btn-approve{background:var(--color-accent-bg);color:var(--color-accent-text);border-color:var(--color-accent-bg);}
+  .btn-promote{background:var(--color-promote-bg);color:var(--color-promote-text);border-color:var(--color-promote-bg);}
+  .btn-kill{background:var(--color-kill-bg);color:var(--color-kill-text);border-color:var(--color-kill-bg);max-width:340px;}
+  .btn-reject{background:none;color:var(--color-text-bright);border-color:var(--color-border-strong);}
+  .btn-retry{background:var(--color-accent-bg);color:var(--color-accent-text);border-color:var(--color-accent-bg);margin-top:10px;}
+
+  .decision-reasons{display:flex;flex-direction:column;gap:8px;}
+  .reasons-label{font-size:12px;color:var(--color-text-dim);}
+  .reason-chips{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{min-height:44px;padding:8px 16px;border-radius:22px;border:1px solid var(--color-border-strong);background:var(--color-chip-bg);color:var(--color-text);font-size:12px;}
+  .chip.is-selected{background:var(--color-chip-selected-bg);color:var(--color-chip-selected-text);border-color:var(--color-chip-selected-bg);}
+  .chip.is-focused{outline:3px solid var(--focus-ring);outline-offset:2px;}
+
+  .pane-states h2{font-size:14px;margin:0 0 12px;color:var(--color-text-bright);}
+  .pane-state-grid{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto auto;gap:14px;}
+  .pane-state{background:var(--color-bg-raised);border:1px solid var(--color-border);border-radius:8px;padding:14px 16px;font-size:12px;color:var(--color-text-dim);}
+  .pane-state h3{font-size:12px;margin:0 0 8px;color:var(--color-text-bright);}
+  .pane-state p{margin:0;line-height:1.5;}
+  .pane-empty{border-style:dashed;}
+  .skeleton-block{height:12px;border-radius:4px;background:var(--color-skeleton);margin-bottom:6px;}
+  .skeleton-block.short{width:55%;}
+  .pane-error{border-color:var(--color-border-error);background:var(--color-error-panel-bg);}
+  .pane-error p{color:var(--color-text);}
+  .pane-disabled{background:var(--color-disabled-bg);}
+  .pane-disabled p{color:var(--color-disabled-text);}
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation:none !important;transition:none !important;scroll-behavior:auto !important;}
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#evidence-pane">Skip to evidence pane</a>
+
+<header class="chrome">
+  <div class="chrome-left">
+    <span class="wordmark">ARC HQ</span>
+    <span class="chrome-sub">Review workspace</span>
+  </div>
+  <div class="chrome-right">
+    <span class="sync-status">Spine last synced <span class="sync-value">12:41 IST</span> · 3 min stale</span>
+    <span class="kbd-hints"><kbd>j</kbd><kbd>k</kbd> rail · <kbd>a</kbd> approve · <kbd>r</kbd> reject · <kbd>p</kbd> promote · <kbd>k</kbd> kill · <kbd>Tab</kbd> rail ↔ evidence</span>
+  </div>
+</header>
+
+<div class="kpi-strip" aria-label="Company KPIs today">
+  <div class="kpi">
+    <span class="kpi-label">MRR</span>
+    <span class="kpi-value">₹1,42,18,000</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Burn</span>
+    <span class="kpi-value">₹68,40,000</span>
+  </div>
+  <div class="kpi is-stale">
+    <span class="kpi-label">Runway</span>
+    <span class="kpi-value">5.8 mo</span>
+    <span class="kpi-note">12 min stale</span>
+  </div>
+  <div class="kpi is-empty">
+    <span class="kpi-label">Ventures live</span>
+    <span class="kpi-value">—</span>
+    <span class="kpi-note">no data yet</span>
+  </div>
+  <div class="kpi">
+    <span class="kpi-label">Cleared today</span>
+    <span class="kpi-value">2</span>
+  </div>
+</div>
+
+<main class="workspace">
+
+  <nav class="rail" aria-label="Approval queue rail">
+    <div class="rail-head">
+      <h2>Queue</h2>
+      <span class="rail-count">6 open · newest first</span>
+    </div>
+
+    <ul class="rail-list">
+      <li class="rail-item is-open" tabindex="0" aria-current="true">
+        <span class="rail-venture">Kirana Express</span>
+        <span class="rail-meta"><span class="rail-id">APR-2118</span><span class="rail-amount">₹18,40,000</span></span>
+      </li>
+      <li class="rail-item" tabindex="0">
+        <span class="rail-venture">Saathi Health</span>
+        <span class="rail-meta"><span class="rail-id">APR-2122</span><span class="rail-amount">₹9,75,000</span></span>
+      </li>
+      <li class="rail-item is-loading">
+        <span class="rail-venture">Vahaan Logistics</span>
+        <span class="rail-meta"><span class="rail-id">APR-2125</span><span class="rail-skeleton" aria-hidden="true"></span></span>
+        <span class="rail-status-label">Loading evidence…</span>
+      </li>
+      <li class="rail-item is-error">
+        <span class="rail-venture">Naaptol Foods</span>
+        <span class="rail-meta"><span class="rail-id">APR-2119</span><span class="rail-amount">₹6,10,000</span></span>
+        <span class="rail-status-label">Evidence failed to load · retry</span>
+      </li>
+      <li class="rail-item is-disabled" aria-disabled="true">
+        <span class="rail-venture">Trestle Analytics</span>
+        <span class="rail-meta"><span class="rail-id">APR-2130</span><span class="rail-amount">₹3,00,000</span></span>
+        <span class="rail-status-label">Blocked — awaiting council score</span>
+      </li>
+      <li class="rail-item is-focused" tabindex="0">
+        <span class="rail-venture">Bazaarly</span>
+        <span class="rail-meta"><span class="rail-id">APR-2133</span><span class="rail-amount">₹4,20,500</span></span>
+      </li>
+    </ul>
+
+    <div class="rail-done">
+      <h3>Done today</h3>
+      <ul class="done-list">
+        <li><span class="done-venture">Udhaar Metrics</span><span class="done-action approve">approved</span><span class="done-receipt">RCT-114820 · 09:14</span></li>
+        <li><span class="done-venture">Farmstack Direct</span><span class="done-action kill">killed</span><span class="done-receipt">RCT-114796 · 08:52</span></li>
+      </ul>
+    </div>
+
+    <div class="rail-today">
+      <h3>Today's events</h3>
+      <ul class="today-list">
+        <li><span class="today-time">08:10</span><span class="today-desc">Saathi Health — promoted to Phase 2</span></li>
+        <li><span class="today-time">07:52</span><span class="today-desc">Kirana Express — approval opened</span></li>
+        <li><span class="today-time">07:15</span><span class="today-desc">Bazaarly — queued for approval</span></li>
+      </ul>
+    </div>
+
+    <div class="rail-empty-demo">
+      <h3>Reference — queue empty state</h3>
+      <p class="empty-illustration">Queue empty. Every approval cleared — nothing waiting for review. Rail will re-order newest-first and re-open the top item when the next one lands.</p>
+    </div>
+  </nav>
+
+  <section class="evidence-pane" id="evidence-pane" aria-label="Open approval evidence">
+
+    <div class="evidence-head">
+      <p class="eyebrow">Venture</p>
+      <div class="evidence-title">
+        <h1>Kirana Express</h1>
+        <span class="tag">Phase 2 · Growth</span>
+        <span class="tag autonomy">Autonomy L2</span>
+      </div>
+      <p class="evidence-sub">Approval APR-2118 · requested 07:52 IST by Rohan Bhide, finance · fleet expansion capex release</p>
+    </div>
+
+    <div class="evidence-blocks">
+      <div class="block block-verdict">
+        <div class="block-label">Council verdict</div>
+        <div class="verdict-row">
+          <span class="verdict-word">Approve with conditions</span>
+          <span class="verdict-score">7.4<span class="score-max">/10</span></span>
+        </div>
+        <p class="block-note">Unit economics hold at current CAC. Fleet capex sits within the phase-2 ceiling. Margin trend flagged for follow-up next review.</p>
+      </div>
+
+      <div class="block block-amount">
+        <div class="block-label">₹ amount this decision touches</div>
+        <div class="amount-row">
+          <span class="amount-value">₹18,40,000</span>
+          <span class="amount-label">Fleet expansion capex — phase-2 growth budget release</span>
+        </div>
+        <p class="block-note">31% of the approved phase-2 capex ceiling of ₹59,00,000.</p>
+      </div>
+
+      <div class="block block-kill">
+        <div class="block-label">Kill-criteria state — Kirana Express</div>
+        <ul class="criteria-list">
+          <li class="criterion ok">
+            <span class="criterion-name">Runway</span>
+            <span class="criterion-value">4.3 months</span>
+            <span class="criterion-threshold">floor 4.0 months</span>
+            <span class="criterion-flag">OK</span>
+          </li>
+          <li class="criterion near">
+            <span class="criterion-name">Monthly burn</span>
+            <span class="criterion-value">₹40,95,000</span>
+            <span class="criterion-threshold">ceiling ₹42,00,000</span>
+            <span class="criterion-flag">NEAR BREACH</span>
+          </li>
+          <li class="criterion breach">
+            <span class="criterion-name">Gross margin</span>
+            <span class="criterion-value">15.6%</span>
+            <span class="criterion-threshold">floor 18%</span>
+            <span class="criterion-flag">BREACHED</span>
+          </li>
+          <li class="criterion ok">
+            <span class="criterion-name">MRR growth</span>
+            <span class="criterion-value">6.2% MoM</span>
+            <span class="criterion-threshold">floor 6% MoM</span>
+            <span class="criterion-flag">OK</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="compare">
+      <div class="compare-head">
+        <h2>Compare — Kirana Express prior receipts</h2>
+        <span class="compare-summary">4 receipts · 3 approved · 1 promoted</span>
+        <span class="compare-note">Council score, oldest to newest: 8.0 → 7.1 → 6.9 → 7.6 → 7.4 now.</span>
+      </div>
+      <table class="compare-table">
+        <thead>
+          <tr><th>Receipt</th><th>Date</th><th>Action</th><th class="num">Amount</th><th class="num">Score</th><th>Verdict</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>RCT-108820</td><td>14 Jun</td><td>Capex release</td><td class="num">₹15,00,000</td><td class="num">7.6</td><td>Approved</td></tr>
+          <tr><td>RCT-101332</td><td>02 May</td><td>Marketing spend</td><td class="num">₹6,20,000</td><td class="num">6.9</td><td>Approved</td></tr>
+          <tr><td>RCT-096140</td><td>18 Apr</td><td>Fleet lease renewal</td><td class="num">₹9,40,000</td><td class="num">7.1</td><td>Approved</td></tr>
+          <tr><td>RCT-090015</td><td>29 Mar</td><td>Phase 1 → 2</td><td class="num">—</td><td class="num">8.0</td><td>Promoted</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="decision">
+      <div class="decision-actions">
+        <button class="btn btn-approve">Approve · release ₹18,40,000 <kbd>a</kbd></button>
+        <button class="btn btn-reject">Reject <kbd>r</kbd></button>
+        <button class="btn btn-promote">Promote to Phase 3 <kbd>p</kbd></button>
+        <button class="btn btn-kill">Kill Kirana Express — ends venture, halts all receipts <kbd>k</kbd></button>
+      </div>
+      <div class="decision-reasons">
+        <span class="reasons-label">Reject or kill needs a reason, selected from presets — no free typing:</span>
+        <div class="reason-chips">
+          <button class="chip">Evidence insufficient</button>
+          <button class="chip">Amount exceeds phase ceiling</button>
+          <button class="chip is-selected">Kill-criteria breached</button>
+          <button class="chip is-focused">Runway below floor</button>
+          <button class="chip">Two consecutive breaches</button>
+          <button class="chip">Needs council re-score</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pane-states" aria-label="Evidence pane state reference">
+      <h2>Reference — evidence pane other states</h2>
+      <div class="pane-state-grid">
+        <div class="pane-state pane-empty">
+          <h3>Empty</h3>
+          <p>No approval selected. Choose an item from the queue rail to open its evidence.</p>
+        </div>
+        <div class="pane-state pane-loading">
+          <h3>Loading</h3>
+          <div class="skeleton-block"></div>
+          <div class="skeleton-block short"></div>
+          <p>Fetching verdict, ₹ amount and kill-criteria state…</p>
+        </div>
+        <div class="pane-state pane-error">
+          <h3>Error — failure stays open</h3>
+          <p>Approve did not record. Council-score service timed out at 12:41 IST. Evidence above is retained — no re-reading needed. Retry, or escalate to manual receipt entry.</p>
+          <button class="btn btn-retry">Retry approve</button>
+        </div>
+        <div class="pane-state pane-disabled">
+          <h3>Disabled</h3>
+          <p>Read-only until L2 finance sign-off lands on the spine. Decision controls unlock automatically once it does.</p>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+</body>
+</html>

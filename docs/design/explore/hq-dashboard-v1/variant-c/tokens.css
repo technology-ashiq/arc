@@ -1,0 +1,57 @@
+/* variant-c tokens — the ONLY place colour values live for this variant.
+   thesis: This product wins because the user can move through today's events in
+   order and approve or reject each decision at the event that produced it,
+   without a separate inbox that strips each decision of the day it came from.
+
+   Every colour the page uses is declared here as a custom property. The brief's
+   declared contrast pairs are respected as floors (checked against the exact
+   values below) — this is this variant's own dark operator-console system,
+   not a copy of the brief's palette.
+
+   Round 2: --color-text-dim and --color-locked raised for extra contrast
+   margin on secondary metadata (round-1 critique flagged these as suspect). */
+
+:root {
+  /* surfaces */
+  --color-bg: #17181a;              /* page background */
+  --color-bg-raised: #1f2023;       /* event rows (open/undecided) */
+  --color-bg-raised-alt: #232427;   /* skim rail panel, secondary controls */
+  --color-locked-bg: #1c1d1f;       /* locked / not-yet-disclosed rows */
+
+  /* borders / dividers */
+  --color-border: #34363a;
+  --color-border-strong: #4a4d52;
+  --color-divider: #2a2c2f;
+
+  /* text */
+  --color-text: #cfcec3;            /* body text — 11.2:1 on --color-bg */
+  --color-text-strong: #f5f4ee;     /* headings, amounts, high emphasis */
+  --color-text-dim: #a7a59b;        /* dim labels — 7.2:1 on --color-bg, 6.3:1 on raised-alt */
+  --color-locked: #9fa1a8;          /* locked/future text — 6.9:1 on --color-bg, 6.5:1 on --color-locked-bg */
+
+  /* accent / primary action */
+  --color-accent: #245b9c;
+  --color-on-accent: #ffffff;       /* 6.9:1 on --color-accent */
+
+  /* status: settled / positive */
+  --color-success: #1fae5c;
+  --color-success-bg: #16301f;      /* 4.9:1 text/bg pair */
+
+  /* status: unresolved / negative */
+  --color-error: #f0575d;
+  --color-error-bg: #3a1c1d;        /* 4.6:1 text/bg pair */
+
+  /* status: disabled / pending */
+  --color-warning: #d99a3d;
+  --color-warning-bg: #3a2f18;      /* 5.4:1 text/bg pair */
+
+  /* destructive */
+  --color-kill: #b0242c;
+  --color-on-kill: #ffffff;         /* 6.7:1 on --color-kill */
+
+  /* links inside the skim rail */
+  --color-skim-accent: #7fb2e0;     /* 6.9:1 on --color-bg-raised-alt */
+
+  /* focus ring */
+  --color-focus: #ffd166;
+}

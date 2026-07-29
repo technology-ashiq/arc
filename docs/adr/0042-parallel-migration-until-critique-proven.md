@@ -5,6 +5,13 @@
 **Reversibility:** two-way
 **Revisit trigger:** the new module's critique mode passes its own dogfood check (one clean explore-critique run) → the retirement task (retire old agent, repoint command) becomes due.
 
+> **FIRED 2026-07-29** — the Phase 02 explore run `hq-dashboard-v1` produced two clean
+> explore-critique runs, not one: `variant-c` (round 2) and `variant-b` (round 3), both
+> 0 VIOLATION with the design ledger stamped. Routed → issue **#59**. The retirement is a
+> scope decision, not a mechanical task — the old reviewer *fixes and commits* where the new
+> critic is read-only by construction (ADR-0034), so "retire" may resolve to "repoint and
+> keep". Owner's call before any code.
+
 ## Context
 
 Owner fork at kickoff. `design-reviewer` + `/arc-design` live under `products/qa/` and

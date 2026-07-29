@@ -10,15 +10,51 @@
 |---|---|---|---|
 | 00 | Steel thread: read-only vision critic + edit-hook scope + spine receipt + warn gate + minimal brief template → one real route inspected e2e | 1.25 days | ✅ 2026-07-28 |
 | 01 | Brief mode (4 contracts) + design-lint v0 (adversarially passed) + `products/design/` manifest module | 1 day | ✅ 2026-07-29 |
-| 02 | Explore: theses → 3 isolated variants → critique loop → blind ranking → pick + prediction receipt (GATE: spine dedup fix landed, ADR-0044) | 1.5 days | pending |
+| 02 | Explore: theses → 3 isolated variants → critique loop → blind ranking → pick + prediction receipt (GATE: spine dedup fix landed, ADR-0044) | 1.5 days | ✅ 2026-07-29 |
 | 03 | Intelligence library + LexOS pilot e2e + blind-test launch (evidence may trail, ADR-0041) | 0.75 days | pending |
 
-**Appetite burn:** ~1.6 of 5 days used (Phases 00 + 01 closed). The kill tripwire (2.5 days
-with Phase 01 not done) is now PERMANENTLY CLEARED — Phase 01 is done with 0.9 days of
-tripwire headroom to spare. Remaining: 2.25 days of declared appetite for Phases 02+03
-against 3.4 days of wall clock.
+**Appetite burn:** ~2.0 of 5 days used (Phases 00 + 01 + 02 closed). The kill tripwire
+(2.5 days with Phase 01 not done) is PERMANENTLY CLEARED. Phase 02 came in at **~0.4 days
+against a 1.5-day appetite** — the widest underspend of the cycle, and worth reading
+correctly: the run's own working window was 3h 17m (12:06→14:57 plus 26m of infra the night
+before); the 8-hour gap in the commit log is an owner park, not build time. Remaining:
+0.75 days of declared appetite for Phase 03 against 3.0 days of wall clock — the cycle now
+has real slack it did not have at Phase 01 close.
 
 ## Done log
+
+- 2026-07-29 — **Phase 02 CLOSED** (`/arc-phase-done 2`). Shipped: `design-explore.sh`
+  (init/check/render/status) · agents `design-director` / `ui-composer` / `design-jury` ·
+  and the first real explore run `hq-dashboard-v1` end to end: 3 theses assigned with the
+  IA matrix written **at assignment time**, 3 blind composers one variant dir each, one
+  shared render command, critique loop, director call **5 of 7**, 3 blind jurors
+  (unanimous a > c > b), owner pick sealed as `decision.recorded`
+  (`01KYPJ91H7TX0GTKW0J3HA4E53` → variant-a, prediction: daily clear ~10 min → under 4).
+  **Tests: 436 across 38 suites, green on 5 CI legs / 3 OS** (run `30440965804`, all 6 jobs
+  success incl. windows). **Time: ~0.4 days vs 1.5 appetite.** Evidence bundle written and
+  verified at `docs/evidence/phase-02`.
+  **amendments: 4** (#57 render determinism · #58 brief declares disclosure for an
+  undeclared surface · #59 ADR-0042 retirement due · #60 ADR-0043 kickoff hook due) ·
+  **reopened: n**
+  - **ADR-0044 satisfied live, not attested:** 7 `review.completed` across 3 routes, every
+    idem distinct — variant-b alone carries three rounds. The retro called a merged-PR
+    attestation insufficient; this no longer rests on one.
+  - **REQ-08 proven in both directions:** variant-c ran FAIL → PASS inside 2 rounds (the
+    contract); variant-b exhausted 2 and escalated to the owner, who authorised the third
+    (the escape hatch). Critic sessions changed zero product files, verified each round.
+  - **Two real defects found by the run itself.** `design-explore check` matched "director
+    call" as a substring, so the matrix's own prose saying the call was *deliberately
+    absent* satisfied the gate — the gate certified its own absence. Fixed, anchored, 4
+    fixtures pinned, sync-golden regenerated. And render non-determinism (same static bytes
+    → two hashes, once mid-critique into a sealed receipt) fired the ledger's
+    screenshots-are-deterministic assumption.
+  - **The instruments disagreed, and that is the keeper:** variant-b holds a design PASS and
+    finished last on every ballot; variant-a carries one open VIOLATION and won every
+    ballot. Two jurors independently caught a `k`-bound-twice keyboard legend that three
+    critique rounds missed. Contract compliance and preference measure different things.
+  - **Cost note for /arc-retro:** the Windows CI leg ran bats in ~20 min against ~90s on
+    every Linux/macOS leg — an 11× spread, all of it in test execution, not setup (Windows
+    setup was 48s). It is the whole reason a green CI takes 20 minutes rather than 3.
 
 - 2026-07-29 — **Phase 01 CLOSED** (`/arc-phase-done 1`). Shipped: `design-lint.mjs` v0
   (4-section strict grammar, fence-stripped structural parsing, live drift gate vs the
@@ -64,28 +100,43 @@ against 3.4 days of wall clock.
 
 ## Now
 
-**Phase 01 is CLOSED (2026-07-29).** Next: **Phase 02 — explore mode** (`phases/phase-02-spec.md`,
-1.5 days): theses → 3 isolated variants → critique loop → blind ranking → pick + prediction
-receipt. Phase records are in the Done log above.
+**Phase 02 CLOSED 2026-07-29. Phase 03 is NEXT but deliberately NOT YET OPEN** — it opens
+with two of its own preconditions unmet, and opening it before they are settled would burn
+its 0.75-day appetite against a blocked first exit criterion.
 
-### OWNER DECISION REQUIRED before Phase 02 opens (ADR-0044)
+REQ-07 and REQ-08 are `validated`; 3 of 4 phases done; 2.0 of 5 days burnt with 0.75 days
+of appetite left against 3.0 days of wall clock. PR #61 open on `feat/design-phase-02`,
+CI green (run `30440965804`, 6/6 jobs, 436 tests × 5 legs / 3 OS). **The branch is not
+merged yet** — merging it is the first mechanical step of whatever comes next.
 
-The spine dedup fix (issue #55) has NOT landed, and Phase 02's critique loop needs the
-re-emit path (round 1 FAIL → fix → round 2 PASS on the same target). ADR-0044's trigger
-fires the moment Phase 02 opens without it. Two legal moves:
+**Three FIRED assumption/ADR triggers are routed but NOT actioned. All three are owner
+decisions, none is a code task I can take unilaterally:**
 
-1. **Fix first** — land #55 as arc-core work (outside this cycle's appetite), then open
-   Phase 02 at full scope.
-2. **Open re-scoped** — Phase 02 runs single-round critique (no re-emit), and the dedup
-   gate moves to Phase-02 close.
+- **#57 — render non-determinism.** `design-render.sh` renders the same static bytes to two
+  different hashes; one flip landed inside a sealed `review.completed`. Fires PLAN's
+  "screenshots are deterministic enough to critique" row. The ledger's own prescribed remedy
+  is *harden the render script before proceeding* — and Phase 03 runs this same renderer for
+  its pilot evidence, so this is the one with a real claim on being fixed first.
+- **#59 — ADR-0042 retirement due.** Two clean explore-critique runs fired it. Whether
+  "retire the old `/arc-design` + design-reviewer" means retire or repoint-and-keep is
+  unresolved: the old reviewer *fixes and commits*, the new critic is read-only by
+  construction (ADR-0034). Different jobs.
+- **#60 — ADR-0043 kickoff hook due.** One clean brief→critique→receipt run fired it. The
+  condition for *considering* the wiring is met; the shape of the wiring is not designed.
 
-### Open follow-ups (tracked, not blocking)
+**Phase 03's own blocker, fired at this close:** the ledger row "a real Stream-B contact
+(LexOS lawyer) is identified and reachable before Phase-3 opens" is **FIRED 2026-07-29** —
+no contact is named anywhere in the plan, the specs or the tracker. The consequence is the
+one the trigger already wrote: Phase 03 opens with its pilot-brief upgrade blocked. The
+fallback is pre-designed and legitimate (case-primary marked PROVISIONAL, per PLAN's
+External dependencies row) but taking it is a deliberate owner decision on the record, not
+a default.
 
-- Issue #54 — freeze-check.sh traversal hole (core; fix modelled in critic-scope-check.sh).
-- `docs/evidence/phase-00..04` still hold Cycle 2's evidence alongside Cycle 3's bundles;
-  archiving needs 3 live comment references + 2 ADRs updated — its own small change.
+**Also still owed by the owner before Phase 03 (`phases/phase-03-spec.md` Your-setup):**
+LexOS repo checked out locally with its `docs/design/` drafts current, and ₹0 recruiting
+channels identified for Stream A (design peers) and Stream B (LexOS lawyer contacts).
 
-### Awaiting owner sign-off
-
-`approval.requested` for moving past Phase 01 is on the spine — record with
-`arc-inbox approve <id> --reason ...`.
+**Recommended next action:** merge PR #61, then settle #57 before Phase 03 opens — its
+evidence depends on the renderer the issue calls into question. #59 and #60 can wait for
+`/arc-retro`; the Stream-B contact cannot, because Phase 03's first exit criterion is
+blocked without it.
