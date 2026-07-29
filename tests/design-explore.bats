@@ -149,6 +149,43 @@ _smuggle_setup() {
   [ "$status" -ne 0 ]
 }
 
+# ---------- 3b. the OTHER direction: over-refusal ----------
+#
+# Every attack above asks "can a colour get past this gate?". None asked "does this gate refuse
+# work that is correct?" — and that blind spot cost a real run. The LexOS pilot brief MANDATES ₹
+# amounts, the natural HTML spelling is `&#8377;`, and `#8377` matches the hex pattern exactly,
+# so all three variants were refused for a colour none of them contained. A gate that refuses
+# correct work is not stricter, it is broken, and it trains authors to work around it.
+
+@test "false-positive HOLE: the rupee sign as an HTML entity is not a colour literal" {
+  _smuggle_setup
+  # ₹18,45,000 — the brief's own required digit grouping, spelled the way HTML spells it.
+  printf '<!doctype html><p>Claim: &#8377;18,45,000</p>\n' > "$EX_DIR/variant-b/index.html"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "false-positive HELD: the hex-form entity for the rupee sign was never refused" {
+  # HELD, not HOLE — verified against the pre-fix script, which passed this. `&#x20B9;` puts an
+  # `x` straight after the `#`, and `x` is not a hex digit, so the pattern never matched it. The
+  # decimal form was the only one broken. Pinned anyway: the fix must not regress the form that
+  # already worked, and naming it HOLE would overstate what the pass actually found.
+  _smuggle_setup
+  printf '<!doctype html><p>Claim: &#x20B9;18,45,000</p>\n' > "$EX_DIR/variant-b/index.html"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "attack HELD: excluding entities did NOT open a bypass on the same line" {
+  _smuggle_setup
+  # The mirror of the two cases above: if the fix stripped the whole line rather than just the
+  # entity, a real literal could hide behind a ₹ sign. It must still be caught.
+  printf '<!doctype html><p style="color:#ff00ff">Claim: &#8377;18,45,000</p>\n' > "$EX_DIR/variant-a/index.html"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"colour-literal"* ]]
+}
+
 @test "attack HOLE: --brief refusing '..' traversal (record must stay inside the repo)" {
   _arc_design_sandbox; _plant_brief
   run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" init trav \

@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — Case workspace</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--ink);
+    background: var(--surface);
+    font-size: 15px;
+    line-height: 1.45;
+  }
+  h1, h2, h3, h4 { font-family: inherit; }
+  button { font-family: inherit; }
+
+  /* focus */
+  a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+  a, button, summary, input, textarea { outline: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation: none !important; }
+  }
+
+  .skip-link {
+    position: absolute; left: -9999px; top: 0;
+    background: var(--surface-inverse); color: var(--ink-inverse);
+    padding: 0.75rem 1rem; z-index: 100; border-radius: var(--radius);
+  }
+  .skip-link:focus { left: 0.5rem; top: 0.5rem; }
+
+  /* sticky header + switcher stack together, as one pinned unit */
+  .sticky-stack { position: sticky; top: 0; z-index: 30; background: var(--surface); }
+
+  .case-header { border-bottom: 1px solid var(--line); padding: 0.75rem clamp(1rem, 2vw, 2rem) 0.625rem; }
+  .case-header-inner { max-width: var(--board-max); margin-inline: auto; }
+  .width-note { font-size: 0.75rem; color: var(--ink-faint); margin: 0 0 0.625rem; max-width: 68ch; }
+  .width-note code { font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+
+  .case-title-row { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 0.75rem 1.5rem; }
+  h1.case-title { font-size: 1.0625rem; font-weight: 700; margin: 0; }
+  .case-meta-line { font-size: 0.8125rem; color: var(--ink-muted); margin: 0.1875rem 0 0; }
+  .case-meta-line-secondary { font-size: 0.8125rem; color: var(--ink-muted); margin: 0.1875rem 0 0; }
+
+  .case-actions { flex: 0 0 auto; }
+
+  .quartet { display: flex; flex-wrap: wrap; gap: 0.75rem 1.75rem; margin-top: 0.75rem; align-items: flex-end; }
+  .quartet-item { display: flex; flex-direction: column; gap: 0.1875rem; }
+  .q-label { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.045em; color: var(--ink-faint); }
+  .q-value { font-variant-numeric: tabular-nums; color: var(--ink); font-weight: 600; font-size: 0.875rem; }
+  .q-empty { color: var(--ink-faint); font-weight: 400; font-style: normal; }
+  .q-overdue { color: var(--danger); font-weight: 700; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.375rem;
+    padding: 0.1875rem 0.5rem; border-radius: var(--radius);
+    font-size: 0.75rem; font-weight: 600; border: 1px solid transparent;
+  }
+  .badge-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; display: inline-block; }
+  .badge-active { background: var(--success-surface); color: var(--success-strong); border-color: var(--success-line); }
+  .badge-active .badge-dot { background: var(--success-strong); }
+  .badge-onhold { background: var(--warning-surface); color: var(--warning-strong); border-color: var(--warning-line); }
+  .badge-onhold .badge-dot { background: var(--warning-strong); }
+  .badge-intake { background: var(--surface-strong); color: var(--ink-subtle); border-color: var(--line-strong); }
+  .badge-intake .badge-dot { background: var(--ink-subtle); }
+  .badge-closed { background: var(--surface-sunken); color: var(--ink-faint); border-color: var(--line); }
+  .badge-closed .badge-dot { background: var(--ink-faint); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+    min-height: 44px; padding: 0 1rem; border-radius: var(--radius);
+    font-size: 0.8125rem; font-weight: 600; border: 1px solid var(--line-strong);
+    cursor: pointer; background: var(--surface); color: var(--ink);
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .btn-primary { background: var(--surface-inverse); color: var(--ink-inverse); border-color: var(--surface-inverse); }
+  .btn-primary:hover { background: var(--ink-deep); border-color: var(--ink-deep); }
+  .btn-ledger { background: var(--surface); color: var(--ink-subtle); }
+  .btn-ledger:hover { background: var(--surface-sunken); }
+  .btn[disabled] { background: var(--disabled); color: var(--ink-inverse); border-color: var(--disabled); cursor: not-allowed; }
+  .btn-danger-text {
+    background: transparent; border: none; color: var(--danger); padding: 0 0.5rem;
+    min-height: 44px; display: inline-flex; align-items: center; font-weight: 600;
+    font-size: 0.8125rem; cursor: pointer; transition: color 150ms ease;
+  }
+  .btn-danger-text:hover { color: var(--danger-strong); text-decoration: underline; }
+  .btn-text {
+    background: transparent; border: none; color: var(--ink-subtle); padding: 0 0.5rem;
+    min-height: 44px; display: inline-flex; align-items: center; font-weight: 600;
+    font-size: 0.8125rem; cursor: pointer; transition: color 150ms ease;
+  }
+  .btn-text:hover { color: var(--ink); text-decoration: underline; }
+  .btn-retry { align-self: flex-start; }
+
+  .ledger-switcher {
+    display: flex; gap: 0.25rem; padding: 0.5rem clamp(1rem, 2vw, 2rem);
+    border-bottom: 1px solid var(--line); background: var(--surface);
+    overflow-x: auto; max-width: var(--board-max); margin-inline: auto;
+  }
+  .ledger-switcher a {
+    flex: 0 0 auto; display: inline-flex; align-items: center; min-height: 44px;
+    padding: 0 0.875rem; border-radius: var(--radius); font-size: 0.8125rem; font-weight: 600;
+    color: var(--ink-subtle); text-decoration: none; border: 1px solid transparent;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .ledger-switcher a:hover { background: var(--surface-sunken); color: var(--ink); }
+  .ledger-switcher .key-hint {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+    color: var(--ink-faint); margin-right: 0.375rem; font-size: 0.75rem;
+  }
+
+  .next-case-wrap { max-width: var(--board-max); margin-inline: auto; padding: 0 clamp(1rem, 2vw, 2rem); }
+  #next-case-strip {
+    margin-top: 0.75rem; border: 1px solid var(--line-strong); background: var(--surface-muted);
+    border-radius: var(--radius); padding: 0.625rem 0.875rem; font-size: 0.8125rem; color: var(--ink);
+  }
+  #next-case-strip strong { font-weight: 700; }
+
+  .board {
+    display: grid; grid-template-columns: 1fr; gap: 1rem;
+    padding: 1rem clamp(1rem, 2vw, 2rem) 2rem;
+    max-width: var(--board-max); margin-inline: auto;
+  }
+  @media (min-width: 1024px) { .board { grid-template-columns: 1fr 1fr; gap: 1.25rem; } }
+  @media (min-width: 1440px) { .board { grid-template-columns: repeat(4, 1fr); } }
+
+  .ledger {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .ledger-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+    padding: 0.75rem 0.875rem; border-bottom: 1px solid var(--line);
+  }
+  .ledger-header h2 { font-size: 0.9375rem; margin: 0; font-weight: 700; }
+  .ledger-count { font-size: 0.75rem; color: var(--ink-faint); font-weight: 400; }
+
+  .ledger-rows { display: flex; flex-direction: column; }
+  .row { border-bottom: 1px solid var(--line); }
+  .row:last-child { border-bottom: none; }
+  .row summary {
+    list-style: revert;
+    min-height: 44px; display: flex; align-items: center; justify-content: space-between;
+    gap: 0.75rem; padding: 0.5rem 0.875rem; cursor: pointer;
+    font-size: 0.8125rem; color: var(--ink);
+    transition: background-color 150ms ease;
+  }
+  .row summary:hover { background: var(--surface-sunken); }
+  .row summary::marker { color: var(--ink-faint); }
+  .row[open] > summary { background: var(--surface-muted); }
+  .row-body {
+    padding: 0.625rem 0.875rem 0.875rem; background: var(--surface-muted);
+    font-size: 0.8125rem; color: var(--ink-muted); display: flex; flex-direction: column; gap: 0.625rem;
+  }
+  .row-add > summary { color: var(--ink-subtle); font-weight: 600; background: var(--surface-muted); }
+  .row-add .row-body { background: var(--surface); }
+
+  .row-main { min-width: 0; }
+  .row-line { color: var(--ink); }
+  .row-date { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .row-flag { color: var(--danger); font-weight: 700; }
+  .row-empty-note { color: var(--ink-faint); margin: 0; }
+
+  label { display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.75rem; color: var(--ink-muted); font-weight: 600; }
+  input, textarea {
+    font-family: inherit; font-size: 0.8125rem; padding: 0.5rem 0.625rem;
+    border: 1px solid var(--line-strong); border-radius: var(--radius);
+    background: var(--surface); color: var(--ink); width: 100%; box-sizing: border-box;
+  }
+  textarea { min-height: 4.5rem; resize: vertical; font-family: inherit; }
+  .field-row { display: flex; flex-direction: column; gap: 0.625rem; }
+  .row-form-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+  .destructive-note { font-size: 0.75rem; color: var(--ink-faint); margin: 0; }
+
+  /* states appendix */
+  .states-appendix { padding: 1.75rem clamp(1rem, 2vw, 2rem) 1rem; max-width: var(--board-max); margin-inline: auto; border-top: 1px solid var(--line); }
+  .states-appendix h2 { font-size: 1rem; margin: 0 0 0.375rem; }
+  .states-appendix .lede { font-size: 0.8125rem; color: var(--ink-muted); margin: 0 0 1.25rem; max-width: 72ch; }
+  .state-surface { margin-bottom: 1.5rem; }
+  .state-surface h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-faint); margin: 0 0 0.5rem; font-weight: 700; }
+  .state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; }
+  .state-card {
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 0.625rem 0.75rem;
+    display: flex; flex-direction: column; gap: 0.5rem; min-height: 7rem; background: var(--surface);
+  }
+  .state-card h4 { margin: 0; font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--ink-faint); font-weight: 700; }
+  .state-card p { margin: 0; font-size: 0.78125rem; color: var(--ink); }
+  .state-card.is-empty { background: var(--surface-muted); }
+  .state-card.is-empty p { color: var(--ink-muted); }
+  .state-card.is-error { background: var(--danger-surface); border-color: var(--danger-line); }
+  .state-card.is-error p { color: var(--danger-strong); }
+  .state-card.is-disabled p { color: var(--ink-faint); }
+  .skeleton-bar { height: 0.6875rem; border-radius: var(--radius); background: var(--surface-strong); }
+  .skeleton-bar + .skeleton-bar { width: 70%; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; }
+
+  /* keyboard legend */
+  .legend { padding: 1.5rem clamp(1rem, 2vw, 2rem) 3rem; max-width: var(--board-max); margin-inline: auto; border-top: 1px solid var(--line); }
+  .legend h2 { font-size: 1rem; margin: 0 0 0.75rem; }
+  .legend dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.5rem 1rem; margin: 0 0 1rem; align-items: center; }
+  .legend dt {
+    font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; background: var(--surface-strong);
+    color: var(--ink); border-radius: var(--radius); padding: 0.1875rem 0.5rem; font-size: 0.75rem;
+    font-weight: 700; justify-self: start;
+  }
+  .legend dd { margin: 0; font-size: 0.8125rem; color: var(--ink-muted); }
+  .legend .return-note { font-size: 0.8125rem; color: var(--ink-muted); max-width: 72ch; margin: 0; }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#board">Skip to case board</a>
+
+<div class="sticky-stack">
+  <header class="case-header" id="case-header">
+    <div class="case-header-inner">
+      <p class="width-note">This board does not use <code>max-w-shell</code> (48rem) — its width runs to a 96rem cap so hearings, documents, tasks and notes can sit side by side rather than stack inside a narrow column. No other token changes.</p>
+      <div class="case-title-row">
+        <div>
+          <h1 class="case-title">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</h1>
+          <p class="case-meta-line">O.S. No. 412 of 2024 · City Civil Court, Bengaluru · Civil suit</p>
+          <p class="case-meta-line-secondary">Client: Meera Raghunathan · Claim ₹18,45,000</p>
+        </div>
+        <div class="case-actions">
+          <button type="button" class="btn btn-primary" data-open="hearings">Add hearing</button>
+        </div>
+      </div>
+      <div class="quartet">
+        <div class="quartet-item">
+          <span class="q-label">Status</span>
+          <span class="badge badge-active"><span class="badge-dot" aria-hidden="true"></span>Active</span>
+        </div>
+        <div class="quartet-item">
+          <span class="q-label">Next hearing</span>
+          <span class="q-value q-empty">Not set</span>
+        </div>
+        <div class="quartet-item">
+          <span class="q-label">Overdue</span>
+          <span class="q-value q-overdue">2</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="ledger-switcher" aria-label="Jump to ledger">
+    <a href="#hearings"><span class="key-hint" aria-hidden="true">1</span>Hearings</a>
+    <a href="#documents"><span class="key-hint" aria-hidden="true">2</span>Documents</a>
+    <a href="#tasks"><span class="key-hint" aria-hidden="true">3</span>Tasks</a>
+    <a href="#notes"><span class="key-hint" aria-hidden="true">4</span>Notes</a>
+  </nav>
+</div>
+
+<div class="next-case-wrap">
+  <div id="next-case-strip" hidden>
+    <strong>Next case due this week</strong> — Vishnu Menon v. Ashirvad Developers · O.S. No. 118 of 2025 · Active · Next hearing 04 Aug 2026 · Overdue 0
+  </div>
+</div>
+
+<main class="board" id="board">
+
+  <section class="ledger" id="hearings" aria-labelledby="hearings-h2" tabindex="-1">
+    <div class="ledger-header">
+      <h2 id="hearings-h2">Hearings <span class="ledger-count">(2)</span></h2>
+      <button type="button" class="btn btn-ledger" data-open="hearings">Add hearing</button>
+    </div>
+    <div class="ledger-rows">
+      <details class="row row-add" data-add-row>
+        <summary><span>Next hearing</span><span class="q-empty">Not set</span></summary>
+        <div class="row-body">
+          <p class="row-empty-note">This case has no next hearing on record.</p>
+          <div class="field-row">
+            <label>Hearing date<input type="date" name="hearing-date"></label>
+            <label>Note (optional)<textarea name="hearing-note" placeholder="What this hearing is for"></textarea></label>
+          </div>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Add hearing</button>
+          </div>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line"><span class="row-date">14 Jul 2026</span> · Held · <span class="row-flag">Outcome not recorded</span></span></summary>
+        <div class="row-body">
+          <label>Outcome<textarea placeholder="What happened at this hearing"></textarea></label>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Record outcome</button>
+            <button type="button" class="btn-danger-text">Remove hearing</button>
+          </div>
+          <p class="destructive-note">Removing a hearing deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line"><span class="row-date">19 May 2026</span> · Held · Interim application disposed; matter listed for evidence.</span></summary>
+        <div class="row-body">
+          <label>Outcome<textarea>Interim application disposed; matter listed for evidence.</textarea></label>
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove hearing</button>
+          </div>
+          <p class="destructive-note">Removing a hearing deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="ledger" id="documents" aria-labelledby="documents-h2" tabindex="-1">
+    <div class="ledger-header">
+      <h2 id="documents-h2">Documents <span class="ledger-count">(4)</span></h2>
+      <button type="button" class="btn btn-ledger" data-open="documents">File document</button>
+    </div>
+    <div class="ledger-rows">
+      <details class="row row-add" data-add-row>
+        <summary><span>+ File a document</span></summary>
+        <div class="row-body">
+          <div class="field-row">
+            <label>Title<input type="text" placeholder="e.g. Rejoinder"></label>
+            <label>Filed date<input type="date"></label>
+          </div>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">File document</button>
+          </div>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">Reply affidavit · <span class="row-date">Due 24 Jul 2026</span> · <span class="row-flag">Not filed</span></span></summary>
+        <div class="row-body">
+          <p>Due 24 Jul 2026. Not yet filed.</p>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">File</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a document deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">Written statement · <span class="row-date">Filed 08 Jul 2026</span></span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a document deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">Vakalatnama · <span class="row-date">Filed 15 May 2026</span></span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a document deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">Memo of appearance · <span class="row-date">Filed 15 May 2026</span></span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a document deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="ledger" id="tasks" aria-labelledby="tasks-h2" tabindex="-1">
+    <div class="ledger-header">
+      <h2 id="tasks-h2">Tasks <span class="ledger-count">(3)</span></h2>
+      <button type="button" class="btn btn-ledger" data-open="tasks">Add task</button>
+    </div>
+    <div class="ledger-rows">
+      <details class="row row-add" data-add-row>
+        <summary><span>+ Add a task</span></summary>
+        <div class="row-body">
+          <div class="field-row">
+            <label>Task<input type="text" placeholder="e.g. File written submissions"></label>
+            <label>Due date<input type="date"></label>
+          </div>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Add task</button>
+          </div>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">File written submissions · <span class="row-date">Due 21 Jul 2026</span> · <span class="row-flag">Overdue</span></span></summary>
+        <div class="row-body">
+          <p>Written submissions in response to the reply affidavit.</p>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Save</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a task deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">Confirm client's availability for hearing · <span class="row-date">Due 30 Jul 2026</span></span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Save</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a task deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line">Prepare list of documents for evidence · <span class="row-date">Due 05 Aug 2026</span></span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Save</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a task deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="ledger" id="notes" aria-labelledby="notes-h2" tabindex="-1">
+    <div class="ledger-header">
+      <h2 id="notes-h2">Notes <span class="ledger-count">(3)</span></h2>
+      <button type="button" class="btn btn-ledger" data-open="notes">Add note</button>
+    </div>
+    <div class="ledger-rows">
+      <details class="row row-add" data-add-row>
+        <summary><span>+ Add a note</span></summary>
+        <div class="row-body">
+          <label>Note<textarea placeholder="What should the record show"></textarea></label>
+          <div class="row-form-actions">
+            <button type="button" class="btn btn-primary">Add note</button>
+          </div>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line"><span class="row-date">16 Jul 2026</span> · Client confirmed settlement discussions are ongoing with the opposite party; awaiting their written response before the next hearing.</span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a note deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line"><span class="row-date">02 Jul 2026</span> · Fee of ₹42,500 received from client.</span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a note deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+      <details class="row">
+        <summary><span class="row-main row-line"><span class="row-date">20 May 2026</span> · Discussed evidence documents with client; additional papers to be collected before the next hearing.</span></summary>
+        <div class="row-body">
+          <div class="row-form-actions">
+            <button type="button" class="btn-text">Edit</button>
+            <button type="button" class="btn-danger-text">Remove</button>
+          </div>
+          <p class="destructive-note">Removing a note deletes this record. This cannot be undone.</p>
+        </div>
+      </details>
+    </div>
+  </section>
+
+</main>
+
+<section class="states-appendix" aria-labelledby="states-h2">
+  <h2 id="states-h2">Reference — the five states</h2>
+  <p class="lede">The board above renders every surface's success state against the open case. The other four — empty, loading, error and disabled — are illustrated here rather than duplicated live on a case that does not currently need them; two are shown against the firm's other matters (an intake case with no case number yet, and a case on hold) rather than invented.</p>
+
+  <div class="state-surface">
+    <h3>Case header</h3>
+    <div class="state-grid">
+      <div class="state-card is-empty">
+        <h4>Empty</h4>
+        <p>Latha Bhaskaran — Intake</p>
+        <p>Case number — not yet assigned · Next hearing — not set · Overdue 0</p>
+      </div>
+      <div class="state-card is-loading">
+        <h4>Loading</h4>
+        <div class="skeleton-bar" style="width:60%"></div>
+        <div class="skeleton-bar" style="width:40%"></div>
+        <p class="sr-only">Loading case</p>
+      </div>
+      <div class="state-card is-error">
+        <h4>Error</h4>
+        <p>Case record could not be loaded.</p>
+        <button type="button" class="btn btn-text btn-retry">Retry</button>
+      </div>
+      <div class="state-card is-success">
+        <h4>Success</h4>
+        <p>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — Active</p>
+        <p>Next hearing — not set · Overdue 2</p>
+      </div>
+      <div class="state-card is-disabled">
+        <h4>Disabled</h4>
+        <p>Sundaram Finance Ltd. v. R. Palaniappan — On hold</p>
+        <p>Advancing this case is disabled while it is on hold.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="state-surface">
+    <h3>Hearings</h3>
+    <div class="state-grid">
+      <div class="state-card is-empty"><h4>Empty</h4><p>No hearings recorded yet.</p></div>
+      <div class="state-card is-loading"><h4>Loading</h4><div class="skeleton-bar" style="width:80%"></div><div class="skeleton-bar" style="width:55%"></div><p class="sr-only">Loading hearings</p></div>
+      <div class="state-card is-error"><h4>Error</h4><p>Hearings could not be loaded.</p><button type="button" class="btn btn-text btn-retry">Retry</button></div>
+      <div class="state-card is-success"><h4>Success</h4><p>14 Jul 2026 · Held · Outcome not recorded</p></div>
+      <div class="state-card is-disabled"><h4>Disabled</h4><p>Adding hearings is disabled while this case is on hold.</p></div>
+    </div>
+  </div>
+
+  <div class="state-surface">
+    <h3>Documents</h3>
+    <div class="state-grid">
+      <div class="state-card is-empty"><h4>Empty</h4><p>No documents filed yet.</p></div>
+      <div class="state-card is-loading"><h4>Loading</h4><div class="skeleton-bar" style="width:75%"></div><div class="skeleton-bar" style="width:50%"></div><p class="sr-only">Loading documents</p></div>
+      <div class="state-card is-error"><h4>Error</h4><p>Documents could not be loaded.</p><button type="button" class="btn btn-text btn-retry">Retry</button></div>
+      <div class="state-card is-success"><h4>Success</h4><p>Reply affidavit · Due 24 Jul 2026 · Not filed</p></div>
+      <div class="state-card is-disabled"><h4>Disabled</h4><p>Filing is disabled while this case is on hold.</p></div>
+    </div>
+  </div>
+
+  <div class="state-surface">
+    <h3>Tasks</h3>
+    <div class="state-grid">
+      <div class="state-card is-empty"><h4>Empty</h4><p>No tasks recorded yet.</p></div>
+      <div class="state-card is-loading"><h4>Loading</h4><div class="skeleton-bar" style="width:70%"></div><div class="skeleton-bar" style="width:45%"></div><p class="sr-only">Loading tasks</p></div>
+      <div class="state-card is-error">
+        <h4>Error</h4>
+        <p>File written submissions · Due 21 Jul 2026 — could not save this task.</p>
+        <button type="button" class="btn btn-text btn-retry">Retry</button>
+      </div>
+      <div class="state-card is-success"><h4>Success</h4><p>File written submissions · Due 21 Jul 2026 · Overdue</p></div>
+      <div class="state-card is-disabled"><h4>Disabled</h4><p>Adding tasks is disabled while this case is on hold.</p></div>
+    </div>
+  </div>
+
+  <div class="state-surface">
+    <h3>Notes</h3>
+    <div class="state-grid">
+      <div class="state-card is-empty"><h4>Empty</h4><p>No notes recorded yet.</p></div>
+      <div class="state-card is-loading"><h4>Loading</h4><div class="skeleton-bar" style="width:80%"></div><div class="skeleton-bar" style="width:60%"></div><p class="sr-only">Loading notes</p></div>
+      <div class="state-card is-error"><h4>Error</h4><p>Notes could not be loaded.</p><button type="button" class="btn btn-text btn-retry">Retry</button></div>
+      <div class="state-card is-success"><h4>Success</h4><p>16 Jul 2026 · Client confirmed settlement discussions are ongoing…</p></div>
+      <div class="state-card is-disabled"><h4>Disabled</h4><p>Adding notes is disabled while this case is on hold.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="legend" aria-labelledby="legend-h2">
+  <h2 id="legend-h2">Keyboard</h2>
+  <dl>
+    <dt>1</dt><dd>Jump to Hearings</dd>
+    <dt>2</dt><dd>Jump to Documents</dd>
+    <dt>3</dt><dd>Jump to Tasks</dd>
+    <dt>4</dt><dd>Jump to Notes</dd>
+    <dt>j</dt><dd>Next row in the focused ledger</dd>
+    <dt>k</dt><dd>Previous row in the focused ledger</dd>
+    <dt>Enter / Space</dt><dd>Expand or collapse the focused row</dd>
+    <dt>a</dt><dd>Add a row inline in the focused ledger, at the cursor</dd>
+    <dt>n</dt><dd>Show the next case due this week</dd>
+    <dt>Esc</dt><dd>Dismiss the open row or panel</dd>
+  </dl>
+  <p class="return-note">Returning to this case focuses the ledger carrying the overdue count — Tasks, here — rather than wherever the view was last left.</p>
+</section>
+
+<script>
+(function () {
+  "use strict";
+  var board = document.getElementById("board");
+  var ledgers = Array.prototype.slice.call(document.querySelectorAll(".ledger"));
+  var currentLedgerId = ledgers.length ? ledgers[0].id : null;
+
+  function isTypingTarget(el) {
+    if (!el) return false;
+    var tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+  }
+
+  function summariesIn(ledgerEl) {
+    return Array.prototype.slice.call(ledgerEl.querySelectorAll(".ledger-rows > details.row > summary"));
+  }
+
+  function focusLedger(id) {
+    var ledger = document.getElementById(id);
+    if (!ledger) return;
+    currentLedgerId = id;
+    var list = summariesIn(ledger);
+    if (list.length) {
+      list[0].focus();
+      list[0].scrollIntoView({ block: "nearest", behavior: "smooth" });
+    } else {
+      ledger.scrollIntoView({ block: "start", behavior: "smooth" });
+    }
+  }
+
+  function moveRow(delta) {
+    var active = document.activeElement;
+    var ledgerEl = active && active.closest ? active.closest(".ledger") : null;
+    var scopeLedger = ledgerEl || document.getElementById(currentLedgerId);
+    if (!scopeLedger) return;
+    var list = summariesIn(scopeLedger);
+    if (!list.length) return;
+    var idx = list.indexOf(active);
+    if (idx === -1) { idx = 0; } else { idx = Math.min(list.length - 1, Math.max(0, idx + delta)); }
+    list[idx].focus();
+    list[idx].scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function openAddRow(ledgerId) {
+    var ledger = document.getElementById(ledgerId);
+    if (!ledger) return;
+    var addRow = ledger.querySelector("details.row[data-add-row]");
+    if (!addRow) return;
+    addRow.open = true;
+    var firstField = addRow.querySelector("input, textarea");
+    if (firstField) { firstField.focus(); } else { addRow.querySelector("summary").focus(); }
+    addRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  function closeEverything() {
+    var open = document.querySelectorAll(".ledger-rows details[open]");
+    for (var i = 0; i < open.length; i++) { open[i].open = false; }
+    var strip = document.getElementById("next-case-strip");
+    if (strip) strip.hidden = true;
+  }
+
+  board.addEventListener("focusin", function (e) {
+    var ledgerEl = e.target.closest ? e.target.closest(".ledger") : null;
+    if (ledgerEl) currentLedgerId = ledgerEl.id;
+  });
+
+  var openButtons = document.querySelectorAll("[data-open]");
+  for (var b = 0; b < openButtons.length; b++) {
+    openButtons[b].addEventListener("click", (function (btn) {
+      return function () { openAddRow(btn.getAttribute("data-open")); };
+    })(openButtons[b]));
+  }
+
+  var switcherLinks = document.querySelectorAll(".ledger-switcher a");
+  for (var s = 0; s < switcherLinks.length; s++) {
+    switcherLinks[s].addEventListener("click", function (e) {
+      currentLedgerId = e.currentTarget.getAttribute("href").slice(1);
+    });
+  }
+
+  document.addEventListener("keydown", function (e) {
+    if (isTypingTarget(e.target)) {
+      if (e.key === "Escape") closeEverything();
+      return;
+    }
+    switch (e.key) {
+      case "1": focusLedger("hearings"); break;
+      case "2": focusLedger("documents"); break;
+      case "3": focusLedger("tasks"); break;
+      case "4": focusLedger("notes"); break;
+      case "j": moveRow(1); break;
+      case "k": moveRow(-1); break;
+      case "a":
+        e.preventDefault();
+        openAddRow(currentLedgerId);
+        break;
+      case "n": {
+        var strip = document.getElementById("next-case-strip");
+        if (strip) {
+          strip.hidden = !strip.hidden;
+          if (!strip.hidden) strip.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        }
+        break;
+      }
+      case "Escape":
+        closeEverything();
+        break;
+      default:
+        break;
+    }
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — Case record — LexOS</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ---------- reset + base ---------- */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+  h1, h2, h3 { margin: 0; font-weight: 600; }
+  p { margin: 0; }
+  a { color: var(--ink-subtle); }
+  time, .tabular { font-variant-numeric: tabular-nums; }
+  ::selection { background: var(--surface-strong); }
+
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: -2px;
+  }
+
+  /* colour-only motion, 150ms, honour reduced motion */
+  a, button, summary, .badge, .chip {
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -999px;
+    top: 0;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface-inverse);
+    color: var(--ink-inverse);
+    padding: 0 1rem;
+    border-radius: var(--radius);
+    z-index: 100;
+  }
+  .skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+  }
+
+  /* ---------- shell ---------- */
+  .page {
+    max-width: var(--record-measure);
+    margin: 0 auto;
+    padding: 0 1.25rem 4rem;
+  }
+  @media (max-width: 640px) {
+    .page { padding: 0 1rem 3rem; }
+  }
+
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.875rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar a {
+    text-decoration: none;
+    font-size: 0.875rem;
+    color: var(--ink-subtle);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .topbar .wordmark {
+    font-size: 0.8125rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* ---------- case identity (non-sticky) ---------- */
+  .identity {
+    padding: 1.5rem 0 1rem;
+  }
+  .identity h1 {
+    font-size: 1.375rem;
+    line-height: 1.35;
+  }
+  .identity .meta {
+    margin-top: 0.375rem;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+  .identity .meta .sep { color: var(--line-strong); margin: 0 0.4em; }
+  .identity .attrs {
+    margin-top: 0.375rem;
+    color: var(--ink-muted);
+    font-size: 0.9375rem;
+  }
+
+  /* ---------- sticky preamble: the mandated quartet (5 fields) ----------
+     Parties gets its own full-width row, ABOVE the other four stats, so the
+     party names wrap onto as many lines as they need and never clip. This is
+     the only persistently visible copy of the names once the reader scrolls
+     past the (non-sticky) H1, so nothing here may be recoverable only by a
+     hover or a click. */
+  .preamble {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--surface);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    padding: 0.75rem 0;
+  }
+  .stat-parties { margin-bottom: 0.625rem; }
+  .stat-parties .stat-value { font-weight: 600; }
+  .preamble-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1.25rem 2rem;
+  }
+  .stat {
+    min-width: 0;
+  }
+  .stat .stat-label {
+    display: block;
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.125rem;
+  }
+  .stat .stat-value {
+    display: block;
+    font-size: 0.9375rem;
+    color: var(--ink);
+    overflow-wrap: break-word;
+  }
+  /* only the four short stats (case number, status, next hearing, overdue) get
+     a soft cap, and it wraps -- it never clips. Parties is excluded: it is
+     outside .preamble-row on purpose. */
+  .preamble-row .stat .stat-value { max-width: 22rem; }
+  @media (max-width: 640px) {
+    .preamble-row .stat .stat-value { max-width: 11rem; }
+  }
+  .stat .stat-value.empty { color: var(--ink-faint); font-style: normal; font-weight: 400; }
+  .stat .stat-value.warn { color: var(--warning-strong); font-weight: 600; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.8125rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: var(--radius);
+    border: 1px solid;
+    line-height: 1.4;
+  }
+  .badge-active { color: var(--success-strong); background: var(--success-surface); border-color: var(--success-line); }
+  .badge-intake { color: var(--ink-muted); background: var(--surface-muted); border-color: var(--line); }
+  .badge-onhold { color: var(--warning-strong); background: var(--warning-surface); border-color: var(--warning-line); }
+  .badge-closed { color: var(--ink-inverse); background: var(--disabled); border-color: var(--disabled); }
+
+  /* ---------- measure departure note (declared on-page) ---------- */
+  .measure-note {
+    margin-top: 1rem;
+    padding: 0.75rem 1rem;
+    border-left: 3px solid var(--line-strong);
+    background: var(--surface-muted);
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+    line-height: 1.55;
+  }
+  .measure-note strong { color: var(--ink); font-weight: 600; }
+
+  /* ---------- compose: the one affordance, at the head ---------- */
+  .compose {
+    margin-top: 1.5rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+  .compose > summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.9375rem 1.125rem;
+    min-height: 44px;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .compose > summary::-webkit-details-marker { display: none; }
+  .compose > summary::before {
+    content: "+";
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: var(--radius);
+    background: var(--surface-inverse);
+    color: var(--ink-inverse);
+    font-size: 1.125rem;
+    line-height: 1;
+  }
+  .compose > summary:hover { background: var(--surface-muted); }
+  .compose[open] > summary { border-bottom: 1px solid var(--line); }
+
+  .compose-body { padding: 1.125rem; }
+  .entry-type {
+    border: 0;
+    padding: 0;
+    margin: 0 0 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  .entry-type legend {
+    width: 100%;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    margin-bottom: 0.375rem;
+    padding: 0;
+  }
+  .entry-type label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 44px;
+    padding: 0 0.875rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    font-size: 0.875rem;
+    cursor: pointer;
+    color: var(--ink-subtle);
+  }
+  .entry-type label:has(input:checked) {
+    color: var(--ink);
+    border-color: var(--ink);
+    background: var(--surface-muted);
+  }
+
+  .field-group { display: none; }
+  .compose-body:has(#type-hearing:checked) .field-group-hearing { display: grid; }
+  .compose-body:has(#type-document:checked) .field-group-document { display: grid; }
+  .compose-body:has(#type-task:checked) .field-group-task { display: grid; }
+  .compose-body:has(#type-note:checked) .field-group-note { display: grid; }
+
+  .field-group {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.875rem 1rem;
+  }
+  .field-group.one-col { grid-template-columns: 1fr; }
+  .field-group label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3125rem;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+  }
+  .field-group input[type="text"],
+  .field-group input[type="date"],
+  .field-group textarea {
+    font: inherit;
+    font-size: 0.9375rem;
+    color: var(--ink);
+    padding: 0.5rem 0.625rem;
+    border: 1px solid var(--line-strong);
+    border-radius: var(--radius);
+    background: var(--surface);
+    min-height: 44px;
+  }
+  .field-group textarea { min-height: 4.5rem; resize: vertical; }
+  .field-group .full { grid-column: 1 / -1; }
+
+  .compose-submit {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 1.125rem;
+    border: 0;
+    border-radius: var(--radius);
+    background: var(--surface-inverse);
+    color: var(--ink-inverse);
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .compose-submit:hover, .compose-submit:active { background: var(--ink-deep); }
+
+  /* ---------- in-stream filter: a lens, not a tab bar.
+     Inline text with an underline on the active term -- no pills, no boxed
+     segments, no solid fill -- so it reads as filtering the record in place,
+     not as navigating to a section. ---------- */
+  .stream-filter {
+    margin-top: 1.5rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+  }
+  .stream-filter .filter-label {
+    color: var(--ink-muted);
+    margin-right: 0.25rem;
+  }
+  .stream-filter .sep { color: var(--line-strong); }
+  .stream-filter input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .stream-filter label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 0.375rem;
+    color: var(--ink-subtle);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+  }
+  .stream-filter label:has(input:checked) {
+    color: var(--ink);
+    font-weight: 600;
+    border-bottom-color: var(--ink);
+  }
+  .stream-filter label:has(input:focus-visible) {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  /* type-filtering: hide entries not matching the checked radio */
+  #filter-hearing:checked ~ .record .entry:not([data-type="hearing"]) { display: none; }
+  #filter-document:checked ~ .record .entry:not([data-type="document"]) { display: none; }
+  #filter-task:checked ~ .record .entry:not([data-type="task"]) { display: none; }
+  #filter-note:checked ~ .record .entry:not([data-type="note"]) { display: none; }
+
+  /* ---------- the record ---------- */
+  .record { margin-top: 0.5rem; }
+
+  .future-entry {
+    margin-top: 1rem;
+    padding: 1rem 1rem 1.125rem;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface-muted);
+  }
+  .future-eyebrow {
+    font-size: 0.6875rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-bottom: 0.375rem;
+  }
+  .future-entry .future-line {
+    font-size: 0.9375rem;
+    color: var(--ink);
+  }
+  .future-entry .future-value.empty { color: var(--ink-faint); }
+  .future-entry .future-hint {
+    margin-top: 0.375rem;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+  }
+  .jump-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--ink-subtle);
+  }
+
+  .period {
+    margin-top: 1.25rem;
+    border-top: 1px solid var(--line);
+  }
+  .period > summary {
+    position: sticky;
+    top: 6.5rem;
+    z-index: 20;
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.625rem 0;
+    background: var(--surface);
+    font-size: 0.875rem;
+    color: var(--ink-muted);
+    min-height: 44px;
+  }
+  @media (max-width: 640px) {
+    .period > summary { top: 11.5rem; }
+  }
+  .period > summary::-webkit-details-marker { display: none; }
+  .period > summary .period-label { color: var(--ink); font-weight: 600; }
+  .period > summary .period-count { color: var(--ink-muted); }
+  .period > summary .period-toggle { color: var(--ink-faint); font-size: 0.8125rem; flex-shrink: 0; }
+  .period[open] > summary .period-toggle::after { content: "Collapse"; }
+  .period:not([open]) > summary .period-toggle::after { content: "Expand"; }
+  .period > summary:hover { background: var(--surface-muted); }
+
+  .since-marker {
+    margin: 0.625rem 0;
+    padding: 0.375rem 0;
+    font-size: 0.75rem;
+    color: var(--ink-faint);
+    border-top: 1px dashed var(--line-strong);
+    text-align: left;
+  }
+
+  .entry {
+    display: grid;
+    grid-template-columns: 6.5rem 1fr auto;
+    gap: 0 1rem;
+    padding: 0.875rem 0;
+    border-top: 1px solid var(--line);
+  }
+  @media (max-width: 640px) {
+    .entry { grid-template-columns: 1fr; gap: 0.25rem; }
+  }
+  .entry-when {
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+    padding-top: 0.125rem;
+  }
+  .entry-body { min-width: 0; }
+  .entry-line {
+    font-size: 0.9375rem;
+    color: var(--ink);
+  }
+  .entry-meta {
+    margin-top: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--ink-muted);
+  }
+  .entry-actions {
+    display: flex;
+    align-items: start;
+    gap: 0.75rem;
+    padding-top: 0.125rem;
+  }
+  @media (max-width: 640px) {
+    .entry-actions { margin-top: 0.375rem; }
+  }
+  .entry-actions a {
+    font-size: 0.8125rem;
+    text-decoration: none;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+  }
+  .link-edit { color: var(--ink-subtle); }
+  .link-danger { color: var(--danger); text-decoration: underline; }
+  .link-danger:hover { color: var(--danger-strong); }
+  /* the record's single most important action reads differently from a
+     routine edit/remove link -- filled, not text */
+  .link-record {
+    color: var(--ink-inverse);
+    background: var(--surface-inverse);
+    font-weight: 600;
+    padding: 0 0.75rem;
+    border-radius: var(--radius);
+  }
+  .link-record:hover { background: var(--ink-deep); }
+
+  .tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: var(--radius);
+    background: var(--surface-strong);
+    color: var(--ink-subtle);
+    margin-right: 0.4em;
+    vertical-align: middle;
+  }
+  .flag {
+    display: inline-block;
+    font-size: 0.75rem;
+    padding: 0.0625rem 0.4375rem;
+    border-radius: var(--radius);
+    margin-left: 0.4em;
+    vertical-align: middle;
+    border: 1px solid;
+  }
+  .flag-warning { color: var(--warning-strong); background: var(--warning-surface); border-color: var(--warning-line); }
+  .entry[data-flag="warning"] { background: var(--warning-surface); margin: 0 -1rem; padding: 0.875rem 1rem; border-radius: var(--radius); border-top-color: var(--warning-line); }
+  .entry[data-flag="warning"] + .entry { border-top-color: var(--line); }
+
+  /* ---------- keyboard legend ---------- */
+  .keyboard {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+  }
+  .keyboard h2 { font-size: 1rem; margin-bottom: 0.75rem; }
+  .keyboard dl {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem 1rem;
+    font-size: 0.875rem;
+    margin: 0;
+  }
+  .keyboard dt { color: var(--ink); }
+  .keyboard dd { margin: 0; color: var(--ink-muted); }
+  kbd {
+    font: inherit;
+    font-size: 0.8125rem;
+    padding: 0.0625rem 0.4375rem;
+    border: 1px solid var(--line-strong);
+    border-bottom-width: 2px;
+    border-radius: var(--radius);
+    background: var(--surface-muted);
+    color: var(--ink);
+  }
+
+  /* ---------- state reference appendix ---------- */
+  .reference {
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+  }
+  .reference h2 { font-size: 1rem; }
+  .reference > p.lede { margin-top: 0.375rem; font-size: 0.8125rem; color: var(--ink-muted); }
+  .reference h3 {
+    margin-top: 1.5rem;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+  }
+  .state-grid {
+    margin-top: 0.75rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+    gap: 0.75rem;
+  }
+  .state-card {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.875rem;
+    background: var(--surface);
+  }
+  .state-card .state-name {
+    display: block;
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--ink-faint);
+    margin-bottom: 0.5rem;
+  }
+  .state-card p { font-size: 0.8125rem; color: var(--ink-muted); }
+  .state-card.error { background: var(--danger-surface); border-color: var(--danger-line); }
+  .state-card.error .state-name { color: var(--danger-strong); }
+  .state-card.error p { color: var(--danger-strong); }
+  .state-card.disabled { background: var(--disabled); border-color: var(--disabled); }
+  .state-card.disabled .state-name,
+  .state-card.disabled p,
+  .state-card.disabled strong { color: var(--ink-inverse); }
+
+  .skel { background: var(--surface-strong); border-radius: var(--radius); }
+  .skel-line { height: 0.75rem; margin-bottom: 0.5rem; }
+  .skel-line:last-child { margin-bottom: 0; width: 60%; }
+
+  .retry-btn {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 0.875rem;
+    margin-top: 0.5rem;
+    border: 1px solid var(--danger-line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--danger-strong);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+
+  .empty-note {
+    padding: 0.75rem 0.875rem;
+    background: var(--surface-muted);
+    border-radius: var(--radius);
+    color: var(--ink-muted);
+    font-size: 0.8125rem;
+  }
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#record">Skip to record</a>
+
+<div class="page">
+
+  <header class="topbar">
+    <a href="#">&larr; All cases</a>
+    <span class="wordmark">LexOS</span>
+  </header>
+
+  <section class="identity" aria-label="Case identity">
+    <h1>Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</h1>
+    <p class="meta">
+      O.S. No. 412 of 2024 <span class="sep">&middot;</span>
+      City Civil Court, Bengaluru <span class="sep">&middot;</span>
+      Civil suit
+    </p>
+    <p class="attrs">
+      Client: Meera Raghunathan <span class="sep">&middot;</span> Claim: &#8377;18,45,000
+    </p>
+  </section>
+
+  <!-- the mandated quartet: always visible, never behind a click, sticky through the whole
+       record. Parties is its own full-width row above the other four stats so the names wrap
+       in full instead of clipping -- this is the only persistently visible copy once the reader
+       scrolls past the (non-sticky) H1 above. -->
+  <section class="preamble" aria-label="Case summary, always visible">
+    <div class="stat stat-parties">
+      <span class="stat-label">Parties</span>
+      <span class="stat-value">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</span>
+    </div>
+    <div class="preamble-row">
+      <div class="stat">
+        <span class="stat-label">Case number</span>
+        <span class="stat-value">O.S. No. 412 of 2024</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Status</span>
+        <span class="badge badge-active">Active</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Next hearing</span>
+        <span class="stat-value empty">Not set</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Overdue</span>
+        <span class="stat-value warn">2</span>
+      </div>
+    </div>
+  </section>
+
+  <p class="measure-note">
+    <strong>Measure note.</strong> This record reads at 56rem, wider than the workspace default
+    of 48rem (<code>max-w-shell</code>). The case route drops the fixed actions column; the extra
+    width is spent entirely on the record's line length &mdash; it does not open a second region.
+    This departure applies to this route only.
+  </p>
+
+  <!-- the one compose affordance, at the head of the record -->
+  <details class="compose">
+    <summary>Add entry</summary>
+    <div class="compose-body">
+      <fieldset class="entry-type">
+        <legend>Entry type</legend>
+        <label><input type="radio" name="entry-type" id="type-hearing" checked><span>Hearing</span></label>
+        <label><input type="radio" name="entry-type" id="type-document"><span>Document</span></label>
+        <label><input type="radio" name="entry-type" id="type-task"><span>Task</span></label>
+        <label><input type="radio" name="entry-type" id="type-note"><span>Note</span></label>
+      </fieldset>
+
+      <div class="field-group field-group-hearing">
+        <label>Date held <input type="date" value="2026-07-30"></label>
+        <label>Hearing outcome <input type="text" placeholder="e.g. Matter posted for written statement"></label>
+        <label class="full">Next hearing (optional) <input type="date"></label>
+        <button type="button" class="compose-submit full">Record hearing</button>
+      </div>
+
+      <div class="field-group field-group-document">
+        <label>Document title <input type="text" placeholder="e.g. Rejoinder"></label>
+        <label>Date filed <input type="date" value="2026-07-30"></label>
+        <button type="button" class="compose-submit full">File document</button>
+      </div>
+
+      <div class="field-group field-group-task">
+        <label>Task <input type="text" placeholder="e.g. Prepare list of documents"></label>
+        <label>Due date <input type="date"></label>
+        <button type="button" class="compose-submit full">Add task</button>
+      </div>
+
+      <div class="field-group field-group-note one-col">
+        <label class="full">Note <textarea placeholder="e.g. Client confirmed instructions by phone"></textarea></label>
+        <button type="button" class="compose-submit full">Add note</button>
+      </div>
+    </div>
+  </details>
+
+  <!-- in-stream filter: a lens over the record, never a section to navigate to -->
+  <div class="stream-filter" role="group" aria-label="Filter the record by entry type">
+    <span class="filter-label">Show:</span>
+    <label><input type="radio" name="stream-filter" id="filter-all" checked>All</label>
+    <span class="sep" aria-hidden="true">&middot;</span>
+    <label><input type="radio" name="stream-filter" id="filter-hearing">Hearings</label>
+    <span class="sep" aria-hidden="true">&middot;</span>
+    <label><input type="radio" name="stream-filter" id="filter-document">Documents</label>
+    <span class="sep" aria-hidden="true">&middot;</span>
+    <label><input type="radio" name="stream-filter" id="filter-task">Tasks</label>
+    <span class="sep" aria-hidden="true">&middot;</span>
+    <label><input type="radio" name="stream-filter" id="filter-note">Notes</label>
+  </div>
+
+  <!-- the future is exactly one entry -->
+  <div class="future-entry">
+    <p class="future-eyebrow">Ahead</p>
+    <p class="future-line">
+      <span class="tag">Hearing</span>
+      Next hearing &mdash; <span class="future-value empty">Not set</span>
+    </p>
+    <p class="future-hint">This is why the case needs advancing. Add a hearing entry above to add one.</p>
+  </div>
+
+  <a class="jump-link" href="#next-due">Jump to next-due entry &darr;</a>
+
+  <section id="record" class="record" aria-label="Case record">
+
+    <details class="period" open>
+      <summary>
+        <span class="period-label">Jul 2026</span>
+        <span class="period-toggle"></span>
+      </summary>
+
+      <article class="entry" data-type="document">
+        <div class="entry-when"><time datetime="2026-07-24">24 Jul 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line">
+            <span class="tag">Document</span>
+            Reply to written statement <span class="flag flag-warning">Overdue</span>
+          </p>
+          <p class="entry-meta">Due 24 Jul 2026 &middot; Not filed</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-edit" href="#">Edit</a>
+          <a class="link-danger" href="#">Remove document &mdash; cannot be undone</a>
+        </div>
+      </article>
+
+      <article class="entry" data-type="task">
+        <div class="entry-when"><time datetime="2026-07-21">21 Jul 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line">
+            <span class="tag">Task</span>
+            File rejoinder <span class="flag flag-warning">Overdue</span>
+          </p>
+          <p class="entry-meta">Due 21 Jul 2026 &middot; Not done</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-edit" href="#">Edit</a>
+          <a class="link-danger" href="#">Remove task &mdash; cannot be undone</a>
+        </div>
+      </article>
+
+      <p class="since-marker">New since last opened, above this line &mdash; entries below were already read</p>
+
+      <article class="entry" data-type="note">
+        <div class="entry-when"><time datetime="2026-07-16">16 Jul 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line"><span class="tag">Note</span> Client confirmed balance fee payable on final decree.</p>
+          <p class="entry-meta">Added 16 Jul 2026</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-edit" href="#">Edit</a>
+          <a class="link-danger" href="#">Remove note &mdash; cannot be undone</a>
+        </div>
+      </article>
+
+      <article id="next-due" class="entry" data-type="hearing" data-flag="warning">
+        <div class="entry-when"><time datetime="2026-07-14">14 Jul 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line">
+            <span class="tag">Hearing</span>
+            Held 14 Jul 2026 <span class="flag flag-warning">Unrecorded</span>
+          </p>
+          <p class="entry-meta">Outcome not recorded &middot; Next step: record the outcome to keep this case current.</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-record" href="#type-hearing">Record outcome</a>
+        </div>
+      </article>
+
+      <article class="entry" data-type="document">
+        <div class="entry-when"><time datetime="2026-07-08">08 Jul 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line"><span class="tag">Document</span> Written statement</p>
+          <p class="entry-meta">Filed 08 Jul 2026</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-edit" href="#">Edit</a>
+          <a class="link-danger" href="#">Remove document &mdash; cannot be undone</a>
+        </div>
+      </article>
+
+      <article class="entry" data-type="note">
+        <div class="entry-when"><time datetime="2026-07-02">02 Jul 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line"><span class="tag">Note</span> Fee received &mdash; &#8377;42,500.</p>
+          <p class="entry-meta">Added 02 Jul 2026</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-edit" href="#">Edit</a>
+          <a class="link-danger" href="#">Remove note &mdash; cannot be undone</a>
+        </div>
+      </article>
+    </details>
+
+    <details class="period">
+      <summary>
+        <span class="period-label">May 2026</span>
+        <span class="period-count">1 hearing</span>
+        <span class="period-toggle"></span>
+      </summary>
+
+      <article class="entry" data-type="hearing">
+        <div class="entry-when"><time datetime="2026-05-19">19 May 2026</time></div>
+        <div class="entry-body">
+          <p class="entry-line"><span class="tag">Hearing</span> Held 19 May 2026</p>
+          <p class="entry-meta">Outcome: Interim application allowed; matter posted for written statement.</p>
+        </div>
+        <div class="entry-actions">
+          <a class="link-edit" href="#">Edit</a>
+        </div>
+      </article>
+    </details>
+
+  </section>
+
+  <section class="keyboard" aria-label="Keyboard reference">
+    <h2>Keyboard</h2>
+    <dl>
+      <dt><kbd>j</kbd></dt><dd>Next entry</dd>
+      <dt><kbd>k</kbd></dt><dd>Previous entry</dd>
+      <dt><kbd>n</kbd></dt><dd>Jump to the next-due entry</dd>
+      <dt><kbd>s</kbd></dt><dd>Toggle the "since you last opened" marker</dd>
+      <dt><kbd>f</kbd></dt><dd>Cycle the in-stream filter (all &rarr; hearings &rarr; documents &rarr; tasks &rarr; notes)</dd>
+    </dl>
+  </section>
+
+  <section class="reference" aria-label="State reference for this page's regions">
+    <h2>Reference &mdash; declared states</h2>
+    <p class="lede">
+      Every state below is a real rendering of this page's two content regions &mdash; the case
+      header and a period &mdash; not a description of one. Shown here together for review; the
+      page above is always the success state.
+    </p>
+
+    <h3>Case header</h3>
+    <div class="state-grid">
+      <div class="state-card">
+        <span class="state-name">Empty</span>
+        <p>Latha Bhaskaran &middot; Case number &mdash; not yet assigned &middot; Status: Intake &middot; Next hearing &mdash; Not set.</p>
+      </div>
+      <div class="state-card">
+        <span class="state-name">Loading</span>
+        <div class="skel skel-line" style="width:70%"></div>
+        <div class="skel skel-line" style="width:45%"></div>
+        <p>Loading case&hellip;</p>
+      </div>
+      <div class="state-card error">
+        <span class="state-name">Error</span>
+        <p>This case failed to load. The server did not respond.</p>
+        <button class="retry-btn" type="button">Retry</button>
+      </div>
+      <div class="state-card">
+        <span class="state-name">Success</span>
+        <p>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. &middot; Active &middot; shown above.</p>
+      </div>
+      <div class="state-card disabled">
+        <span class="state-name">Disabled</span>
+        <p><strong>Closed &mdash; read only.</strong> Entries cannot be added to a closed case.</p>
+      </div>
+    </div>
+
+    <h3>Period</h3>
+    <div class="state-grid">
+      <div class="state-card">
+        <span class="state-name">Empty</span>
+        <p class="empty-note">No entries in this period.</p>
+      </div>
+      <div class="state-card">
+        <span class="state-name">Loading</span>
+        <div class="skel skel-line" style="width:85%"></div>
+        <div class="skel skel-line" style="width:65%"></div>
+        <div class="skel skel-line" style="width:75%"></div>
+        <p>Loading period&hellip;</p>
+      </div>
+      <div class="state-card error">
+        <span class="state-name">Error</span>
+        <p>Entries after 1 Jul 2026 could not be read.</p>
+        <button class="retry-btn" type="button">Retry</button>
+      </div>
+      <div class="state-card">
+        <span class="state-name">Success</span>
+        <p>Jul 2026 &middot; shown above, open in full.</p>
+      </div>
+      <div class="state-card disabled">
+        <span class="state-name">Disabled</span>
+        <p><strong>Before case opened.</strong> No record exists earlier than this case's filing date.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

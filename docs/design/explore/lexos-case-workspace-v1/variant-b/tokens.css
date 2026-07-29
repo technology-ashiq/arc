@@ -1,4 +1,64 @@
-/* variant-b tokens — the ONLY place colour values live for this variant.
-   thesis: <the composer writes its one-line thesis here>  */
-:root{
+/*
+  variant-b — tokens.css
+  Thesis: This product wins because the user can read a case's whole history as
+  one dated record and add the next fact at its head, without deciding which of
+  five tabs the thing he is looking for was filed under.
+
+  Every colour below is copied verbatim (hex + purpose) from
+  docs/design/explore/lexos-case-workspace-v1/tokens-reference.md -- the real
+  LexOS tailwind.config.ts token set at base revision 4784ac9. Only the tokens
+  this variant actually uses are declared. No new colour is introduced; no hex
+  appears anywhere outside this file.
+
+  Non-colour tokens (measure, radius) are declared here too, per the reference
+  doc's own "Non-colour" table. --record-measure is this variant's one
+  licensed departure (director ruling, this route only): a reading measure
+  wider than --shell-measure (48rem), spent entirely on the record's line
+  length -- never on a second region. See the on-page "Measure note" for the
+  reasoning, printed where a reviewer can see it next to the layout it explains.
+*/
+
+:root {
+  /* surface */
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --surface-sunken: #f3f4f6;
+  --surface-strong: #e5e7eb;
+  --surface-inverse: #111827;
+
+  /* ink */
+  --ink: #111827;
+  --ink-subtle: #374151;
+  --ink-muted: #4b5563;
+  --ink-faint: #6b7280;
+  --ink-deep: #030712;
+  --ink-inverse: #ffffff;
+
+  /* line */
+  --line: #e5e7eb;
+  --line-strong: #d1d5db;
+
+  /* danger */
+  --danger: #b91c1c;
+  --danger-strong: #991b1b;
+  --danger-line: #fca5a5;
+  --danger-surface: #fef2f2;
+
+  /* warning */
+  --warning-strong: #78350f;
+  --warning-line: #fde68a;
+  --warning-surface: #fffbeb;
+
+  /* success */
+  --success-strong: #166534;
+  --success-line: #bbf7d0;
+  --success-surface: #f0fdf4;
+
+  /* disabled -- earned, deliberate: 4.83:1 under white. Do not "improve". */
+  --disabled: #6b7280;
+
+  /* non-colour */
+  --radius: 0.375rem;          /* one radius token, everywhere */
+  --shell-measure: 48rem;      /* max-w-shell -- the workspace default this route departs from */
+  --record-measure: 56rem;     /* this route only -- licensed, declared on the page */
 }
