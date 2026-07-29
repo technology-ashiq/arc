@@ -206,10 +206,52 @@ bad receipt and its correction live only in local spine state, and the Phase-02 
 attests only the scan files. The durable, in-git record of this is issue #57, the ledger row,
 and this tracker.
 
-**Recommended next action: build Phase 03 step 1 — the intelligence library** (schema + first
-entries + the tag-completeness lint, adversarially passed). It is the only exit criterion with
-no external dependency at all, so it converts appetite into finished work while the two owner
-items below are still open.
+**Phase 03 step 1 — intelligence library: BUILT, not yet closed.** Schema (`--library` mode
+added to the existing `design-lint.mjs`, not a parallel script) · entry template, now a synced
+product doc · 4 first entries, all drawn from the Phase-02 explore run's own receipted
+observations rather than invented references. **Adversarial passes run THREE times — mine, then
+two reviewer rounds — and every round found something the previous round's fix had created.**
+- **Round 1 (mine), 16 attacks, 2 holes.** Both required headings inside an HTML comment
+  satisfied the section check (reader sees an entry with no principle, machine sees two met
+  contracts — the twin of the brief lint's fenced-heading hole, same root cause: structure
+  parsed on two different texts). And gate mode discovered only date-named files, so an untagged
+  `notes.md` sat in the library and passed in silence.
+- **Round 2, 15 more attacks, 6 more bypasses — three of them in MY FIX.** An *unterminated*
+  `<!--` runs to end of document, so deleting the closing delimiter restored the exact hole just
+  closed; same for an unterminated fence. The **brief lint carried the identical comment hole**
+  and nobody had looked, because its own pass had only ever attacked fences — a whole section
+  could be commented out and the brief called complete. The shipped template passed when copied
+  and given only prose (four of its eight tags ship pre-filled with valid values), so the rule
+  fell to copy-paste rather than to attack. Plus reference-style links and bare digits clearing
+  the prose floor.
+- **Round 3, and the worst one was mine again.** The unterminated-fence fix was not
+  line-anchored, so a single inline ``` mention blanked the rest of a document — and the shipped
+  template mentions it once in its own guidance. **Filling that template in correctly produced
+  TEN errors about tags and headings plainly visible on the page**, on the exact path
+  `docs/design/library/README.md` tells every author and every consumer project to walk. My
+  fixture missed it because it reproduced the template's tag block but not its comment.
+- **Round 4: the opener grammar was right and the CLOSER grammar was wrong**, which reopens the
+  same hole from the other end. CommonMark forbids an info string on a closing fence and requires
+  a closer at least as long as its opener, so ` ```md … ```js ` and ` ````md … ``` ` both run to
+  end of document for a reader while the lax matcher ended the block early and read the headings
+  below as real. Three variants, all confirmed by hand before fixing. The mirror is pinned too —
+  equal-length, longer and tilde closers must still close, or the fix would just be a stripper
+  that never closes anything.
+- **The lesson is the ratio, and it is not flattering.** Round 1 found 2. Each later round
+  attacked the *fixed* code and found more, most of them created by the previous fix. One
+  adversarial round is a first pass, not a pass. Two of my own test artifacts were also broken
+  in the same way — a fixture that quoted the closing delimiter inside backticks and so
+  terminated its own comment, and a sed-patched case that mutated one of two prose lines. Both
+  looked like guards and guarded nothing.
+- **Now pinned against recurrence:** a case reads the REAL shipped template, fills it, and
+  asserts it lints clean — closing the "fixture does not represent the path" class that caused
+  this twice. Red-first verified on every HOLE case; false-POSITIVES pinned too (prose with `<`
+  and `>` is prose; `<https://…>` in `source:` is an autolink, not an unfilled prompt), because
+  a gate that rejects correct work trains authors to pad.
+
+**Recommended next action: step 2 — the LexOS pilot brief.** Re-read the 2 drafts fresh, upgrade
+the brief with the answered primary object (case), fill the platform contract, and prove it with
+`design-lint` against the real drafts before any variant starts.
 
 **Owner items — neither blocks starting, both block finishing:**
 - **Stream-B recruit.** The lawyer answered the brief question; whether they will also *sit the
