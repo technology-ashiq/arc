@@ -249,9 +249,29 @@ two reviewer rounds — and every round found something the previous round's fix
   and `>` is prose; `<https://…>` in `source:` is an autolink, not an unfilled prompt), because
   a gate that rejects correct work trains authors to pad.
 
-**Recommended next action: step 2 — the LexOS pilot brief.** Re-read the 2 drafts fresh, upgrade
-the brief with the answered primary object (case), fill the platform contract, and prove it with
-`design-lint` against the real drafts before any variant starts.
+**Phase 03 step 2 — LexOS pilot brief: DONE.** Both drafts re-read fresh; brief written at
+`docs/design/briefs/lexos-case-workspace/brief.md`; **`design-lint` green on the first attempt**,
+and green in gate mode alongside the library. Primary object recorded as **case** with the lawyer
+receipt cited — not the PROVISIONAL fallback. Every number, quote and hex in it is read out of the
+two drafts or out of LexOS's `tailwind.config.ts`, never recalled.
+- **It also carries the two debts the shipped review escalated to the owner and refused to fix as
+  polish** — the content column stuck at 416px from 1024px to infinity ("dropping the sidebar is a
+  product decision, not polish… the biggest remaining design debt"), and an actions panel offering
+  all four actions on every tab. Both are IA calls, which makes them exactly what three variants
+  can disagree about. The brief deliberately does NOT declare how the disclosure split is arranged.
+- **Self-check caught five invented items before the brief was committed.** In the one section
+  whose rule is *never invented labels*, a first draft declared the verbs *close* / *reschedule* /
+  *reopen* and the terms *cause title* / *adjournment*. All five appear in **zero** LexOS files —
+  real Indian court vocabulary, but words this product's users have never met here. Every term and
+  verb in the committed brief was grepped in the repo first. Same failure class as the library
+  entry that stated the five states in the losing variant's vocabulary: **plausible-sounding is not
+  sourced**, and it is the failure this system exists to catch.
+
+**Recommended next action: step 3 — the explore run on the real LexOS stack.** Director assigns
+three theses that differ on ≥3 of 7 IA dimensions, three blind composers build one variant each,
+critique loop, three blind jurors, owner pick + prediction. The two escalated debts are the
+obvious axes for divergence. Owner input needed only at the pick — and at step 4, which is where
+the Stream-A channel and the lawyer's willingness to sit the blind test become blocking.
 
 **Owner items — neither blocks starting, both block finishing:**
 - **Stream-B recruit.** The lawyer answered the brief question; whether they will also *sit the
