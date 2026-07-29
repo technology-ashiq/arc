@@ -5,10 +5,11 @@
 > `docs/design/briefs/docs--strategy--arc-hq-mockup-html/brief.md` · base `7d42c2d` ·
 > isolation: route-namespace fallback (ADR-0037), all three variants side by side in this dir.
 >
-> The `Director call:` line is **deliberately absent** until Phase 2 — it is appended only
-> after all three variants exist and have been re-read against this table. `design-explore
-> check` will fail on `director-call-missing` until then; that failure is the correct state
-> of a run that has been assigned but not yet composed.
+> **Phase 2 is now complete.** The written `Director call:` line is at the foot of this file,
+> in the "Phase 2 — the divergence call" section. (An earlier revision of this note recorded
+> that the call was "deliberately absent until Phase 2" and that `design-explore check` was
+> correctly failing on `director-call-missing`; that was true when written, and is superseded
+> here so this file does not carry a stale statement about its own contents.)
 
 ## Assigned theses
 
@@ -101,3 +102,74 @@ reassignment after build burns the phase appetite (pre-mortem risk 4).
   strongest reserve: if a Phase 2 reassignment round is ever required, guided workflow is the
   first candidate to swap in for the weak line, since its distinct claim (the clear is a
   *run* with a definite end state, not a browsable list) is untaken by A, B or C.
+
+---
+
+# Phase 2 — the divergence call
+
+Read against the three built `index.html` pages **and** the three renders from the one shared
+render command at 1440×900, full-page. The renders are the evidence. Where a composer claimed
+a surface stayed "peripheral", the claim was checked against the markup rather than accepted.
+
+## The question this round actually turned on
+
+The shared floor handed to the composers omitted the brief's A.5 always-visible line, so a KPI
+row was added to **B** and **C** in round 2, and B additionally gained a compact "Today's
+events" list in its rail. A always had both. The live question was therefore whether closing
+that VIOLATION quietly collapsed three products into one — precisely the failure named above
+under *A vs C*.
+
+It did not, and the reason is structural rather than charitable:
+
+- **A KPI row is not one of the seven dimensions.** It is a floor surface the brief mandates,
+  in the same class as the declared contrast pairs. All three honouring it is compliance, not
+  convergence. Convergence would mean the KPI row began *doing* something in the product —
+  becoming a navigation target, or carrying the decision's evidence. In none of the three
+  does it do either.
+- **The markup backs the claim.** C's KPI row is a static five-item list with no focus target
+  and no key binding, under a comment reading "peripheral, read-only, always visible. Not a
+  second dashboard". B's is a compressed five-cell strip below the header. Neither is
+  reachable by its own variant's keyboard model.
+- **C did not become a three-region dashboard.** C has no approval inbox region at all — the
+  word appears once, incidentally. Its address is time ("Position in the day: event 3 of 10 —
+  09:02"), it carries settled events that hold no action because they are history rather than
+  decisions, and it renders future beats as LOCKED · "not yet disclosed". A's timeline refuses
+  that model in its own subtitle: "Read-only · newest at bottom · nothing to step through."
+- **B's "Today's events" stayed peripheral in fact.** Three static list items at the foot of
+  the rail, no evidence links, no keyboard path. It satisfies A.5 without giving B a time axis.
+
+## Per-dimension verdict
+
+| # | dimension | verdict | why, from the renders |
+|---|---|---|---|
+| 1 | primary object | **differs materially** | A's rows are all approvals; C's rows include settled history carrying no action at all, because C's unit is an event and not a decision; B's screen holds exactly one approval, named and opened. Three different things are on the screen. |
+| 2 | primary action | **converged** | The brief fixes this — approve/reject, receipt recorded. B's four verbs with mandatory reason presets, and C's event-level "Retry capture / Mark settled manually", are ceremony around the same act. This dimension was never available for divergence. |
+| 3 | info before action | **differs materially** | A shows seven decisions' evidence shallowly and at once ("Clear", "1 breached"); B shows one decision's kill criteria decomposed into four named criteria with actual-vs-floor-vs-status plus a five-point council-score trend — information A does not contain at any density; C compresses the same facts to one line per beat, ordered by time. |
+| 4 | navigation model | **differs materially** | None (selection inside a fixed grid) vs record-to-record (rail ↔ evidence pane, Tab-switched, pane reloads per record) vs chronological position with three time zones — in order · since you left · not yet disclosed. No two are the same model. |
+| 5 | progressive-disclosure rule | **differs materially** | A expands in place beneath the selected row, displacing nothing. B inverts it — rail collapsed to identifiers (the round-3 score-leak fix held; no council score in the rail), evidence always deep. C's is temporal: 14:30/16:00/18:00 exist as locked, undisclosed beats, a rule neither A nor B can express because neither has a time axis. |
+| 6 | expert path | **converged** | All three are j/k/a/r because the platform contract requires it. B's Tab-plus-presets and C's skim/jump are real gains, but they are consequences of dimensions 1 and 4 rather than independent product choices, so they are not counted as divergence in their own right. |
+| 7 | failure/recovery path | **differs materially** | A: the failed row reddens in place and holds its grid position, next step naming an L3 escalation. B: two-level failure — the rail item carries "Evidence failed to load · retry" while the pane retains evidence so the retry needs no re-reading; only a two-level product can fail that way. C: an unresolved beat *gates later beats* — 09:47 sits DISABLED, "Locked — waiting on NeoKirana (09:02) to resolve first". Neither A nor B blocks anything downstream. |
+
+Director call: A/B/C differ materially on 5 of 7 dimensions — the day surface, the single approval opened to evidence depth, and the day traversed in order are three different primary objects reached by three different navigation models, carrying three different disclosure rules and three different failure models, and the KPI rows added in round 2 are a non-interactive floor surface in all three rather than a shared product region.
+
+The call stands. The explore proceeds to blind ranking. No reassignment round is called, and
+the `guided workflow` reserve stays unspent.
+
+## Weakest link in the call
+
+**Dimension 3, info before action.** The brief mandates the same three facts on the card in
+all three variants, so the difference here is one of granularity and depth rather than of
+which facts appear — and it is the dimension a sceptical reader is most likely to dismiss as a
+rendering choice rather than a product choice. It survives because B genuinely carries
+information the other two do not (four decomposed kill criteria with their floors, the
+council-score trend across prior receipts), but it is the thinnest of the five counted. If any
+counted dimension is argued down later, this is the one; the call would then rest on 4 of 7 —
+still standing, with less room.
+
+## Note carried forward to the blind ranking
+
+Closing the A.5 VIOLATION narrowed the *visual* distance between the three without narrowing
+the structural distance: all three now open with a dark header above a horizontal KPI strip.
+Blind rankers work from renders, so that shared opening band may read as sameness at a glance.
+That is a hazard for the ranking instrument, not evidence of convergence — these products
+diverge below the fold, and the ranking should not end up scoring the floor.
