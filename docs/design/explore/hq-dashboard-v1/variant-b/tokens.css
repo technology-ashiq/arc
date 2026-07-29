@@ -5,7 +5,7 @@
 :root{
   /* surfaces */
   --color-bg:              #14171c;   /* page / evidence-pane base */
-  --color-bg-raised:       #1c2027;   /* cards, rail rows, chrome bar */
+  --color-bg-raised:       #1c2027;   /* cards, rail rows, chrome bar, kpi strip */
   --color-bg-sunken:       #101317;   /* rail column background */
   --color-bg-inset:        #191d23;   /* kill-criteria rows, deepest inset */
   --color-skeleton:        #262b33;   /* loading placeholder bars */
@@ -23,15 +23,20 @@
 
   /* text */
   --color-text:            #cdd2d9;   /* body text on --color-bg / raised */
-  --color-text-dim:        #8b929e;   /* dim labels, meta, thresholds */
-  --color-text-bright:     #f2f4f7;   /* headings, venture names, emphasis */
+  --color-text-dim:        #8b929e;   /* dim labels, meta, thresholds, stale/empty KPI values */
+  --color-text-bright:     #f2f4f7;   /* headings, venture names, emphasis, text on filled pills */
   --color-disabled-text:   #5b606a;   /* text inside a disabled control */
   --color-chip-selected-text:#eaf1ff; /* text on a selected reason chip */
 
-  /* kill-criteria + verdict signal colours */
+  /* kill-criteria + verdict signal colours (used as plain text — never on a same-hue fill) */
   --color-good-text:       #4fbf72;   /* criterion OK / approved / money-in */
-  --color-warn-text:       #e0a840;   /* NEAR BREACH, autonomy tag */
-  --color-danger-text:     #e2726d;   /* BREACHED, error copy, killed tag */
+  --color-warn-text:       #e0a840;   /* autonomy tag, near-breach left-border accent */
+  --color-danger-text:     #e2726d;   /* breach left-border accent, killed tag */
+
+  /* kill-criteria flag fills — solid colour + bright text, so flag text is never the same
+     hue as its own background (fixes the same-hue-on-same-hue contrast risk) */
+  --color-near-bg:         #5a4310;
+  --color-breach-bg:       #5c2321;
 
   /* primary action fills (white/near-white text on each, ≥4.5:1) */
   --color-accent-bg:       #205a9e;   /* approve / retry */
@@ -41,6 +46,6 @@
   --color-kill-bg:         #8f2b28;   /* kill */
   --color-kill-text:       #ffffff;
 
-  /* focus */
+  /* focus — reserved for keyboard focus only, never doubles as a selection indicator */
   --focus-ring:            #7fb2ff;
 }

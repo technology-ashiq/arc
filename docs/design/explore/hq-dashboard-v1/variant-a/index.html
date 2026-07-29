@@ -71,7 +71,7 @@
   /* ---------- workspace: inbox + timeline ---------- */
   .workspace {
     display: grid;
-    grid-template-columns: 1fr 320px;
+    grid-template-columns: 1fr 380px;
     gap: 20px;
     padding: 20px;
     align-items: start;
@@ -102,13 +102,13 @@
     font-size: 13px;
   }
   .inbox-table col.col-row       { width: 34px; }
-  .inbox-table col.col-venture   { width: 210px; }
+  .inbox-table col.col-venture   { width: 188px; }
   .inbox-table col.col-verdict   { width: 100px; }
   .inbox-table col.col-amount    { width: 110px; }
-  .inbox-table col.col-kc        { width: 148px; }
-  .inbox-table col.col-autonomy  { width: 56px; }
-  .inbox-table col.col-evidence  { width: 128px; }
-  .inbox-table col.col-actions   { width: 236px; }
+  .inbox-table col.col-kc        { width: 140px; }
+  .inbox-table col.col-autonomy  { width: 52px; }
+  .inbox-table col.col-evidence  { width: 110px; }
+  .inbox-table col.col-actions   { width: 230px; }
 
   .inbox-table th {
     text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em;
@@ -138,12 +138,20 @@
   .kc--breach{ color: var(--verdict-kill); font-weight: 600; }
 
   .autonomy-badge {
-    display: inline-block; padding: 2px 7px; border-radius: 3px;
-    background: var(--bg-badge); color: var(--text-primary); font-size: 11px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center;
+    min-height: 44px; min-width: 44px;
+    padding: 4px 12px; border-radius: 6px;
+    background: var(--bg-badge); color: var(--text-primary); font-size: 12px; font-weight: 700;
   }
 
-  .evidence-link { color: var(--text-evidence); font-size: 12px; text-decoration: underline dotted; }
-  .evidence-pending { color: var(--text-dim); font-size: 12px; font-style: italic; }
+  .evidence-link {
+    display: inline-flex; align-items: center;
+    min-height: 44px; padding: 0 6px;
+    background: var(--btn-ghost-bg); border: none;
+    color: var(--text-evidence); font-size: 12px; text-decoration: underline dotted;
+    cursor: pointer;
+  }
+  .evidence-pending { display: inline-flex; align-items: center; min-height: 44px; color: var(--text-dim); font-size: 12px; font-style: italic; }
 
   .actions-cell { display: flex; flex-wrap: wrap; gap: 6px; }
   .btn {
@@ -154,7 +162,7 @@
   }
   .btn-approve { background: var(--btn-approve-bg); color: var(--btn-approve-text); border-color: var(--btn-approve-bg); min-width: 76px; }
   .btn-reject, .btn-keep, .btn-retry { color: var(--verdict-kill); border-color: var(--border-reject); min-width: 76px; }
-  .btn-retry { color: var(--text-primary); border-color: var(--border-strong); min-width: 62px; }
+  .btn-retry { color: var(--text-primary); border-color: var(--border-strong); }
   .btn-kill {
     background: var(--btn-kill-bg); color: var(--btn-kill-text); border-color: var(--btn-kill-bg);
     max-width: 172px; min-height: 44px; padding: 6px 8px;
@@ -200,7 +208,7 @@
   .timeline ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 7px; }
   .timeline li { display: flex; gap: 8px; font-size: 12px; align-items: baseline; }
   .timeline time { color: var(--text-dim); font-variant-numeric: tabular-nums; flex-shrink: 0; width: 34px; }
-  .timeline .desc { color: var(--text-primary); }
+  .timeline .desc { color: var(--text-primary); white-space: nowrap; }
   .timeline li.is-alert .desc { color: var(--verdict-hold); }
 
   /* ---------- footer: state matrix reference ---------- */
@@ -210,12 +218,13 @@
     border-top: 1px solid var(--border-subtle);
   }
   .state-matrix h2 { font-size: 12px; margin: 0 0 4px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .state-matrix .kicker { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); margin-left: 8px; }
   .state-matrix .state-matrix-note { font-size: 11px; color: var(--text-dim); margin: 0 0 12px; }
   .state-group { margin-bottom: 14px; }
   .state-group h3 { font-size: 11px; color: var(--text-dim); margin: 0 0 8px; font-weight: 600; }
   .state-cards { display: flex; gap: 12px; flex-wrap: wrap; }
   .state-card {
-    background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 4px;
+    background: var(--bg-footer); border: 1px dashed var(--border-strong); border-radius: 4px;
     padding: 10px 12px; font-size: 11px; color: var(--text-dim); width: 220px;
   }
   .state-card h4 { margin: 0 0 6px; font-size: 11px; color: var(--text-primary); font-weight: 700; }
@@ -311,11 +320,11 @@
           <tr role="row" tabindex="-1" aria-selected="false">
             <td role="gridcell" class="cell-row">1</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">Kaveri Foods</span><span class="v-phase">Scale</span></td>
-            <td role="gridcell"><span class="verdict verdict--promote">Promote<span class="score">8.4</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--promote"><span class="visually-hidden">Council verdict: </span>Promote<span class="score">8.4</span></span></td>
             <td role="gridcell" class="cell-amount">₹6,40,000</td>
             <td role="gridcell" class="kc--clear">Clear</td>
             <td role="gridcell"><span class="autonomy-badge">L2</span></td>
-            <td role="gridcell"><span class="evidence-link">RCPT-…1187</span></td>
+            <td role="gridcell"><button type="button" class="evidence-link">RCPT-…1187</button></td>
             <td role="gridcell">
               <div class="actions-cell">
                 <button type="button" class="btn btn-approve">Approve</button>
@@ -327,11 +336,11 @@
           <tr role="row" tabindex="-1" aria-selected="false">
             <td role="gridcell" class="cell-row">2</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">Trellis Logistics</span><span class="v-phase">Build</span></td>
-            <td role="gridcell"><span class="verdict verdict--hold">Hold<span class="score">5.1</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--hold"><span class="visually-hidden">Council verdict: </span>Hold<span class="score">5.1</span></span></td>
             <td role="gridcell" class="cell-amount">₹2,15,000</td>
             <td role="gridcell" class="kc--warn">1 breached</td>
             <td role="gridcell"><span class="autonomy-badge">L1</span></td>
-            <td role="gridcell"><span class="evidence-link">RCPT-…1190</span></td>
+            <td role="gridcell"><button type="button" class="evidence-link">RCPT-…1190</button></td>
             <td role="gridcell">
               <div class="actions-cell">
                 <button type="button" class="btn btn-approve">Approve</button>
@@ -343,11 +352,11 @@
           <tr role="row" tabindex="0" aria-selected="true" class="row--selected" aria-describedby="detail-suvidha">
             <td role="gridcell" class="cell-row">3</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">Suvidha Health</span><span class="v-phase">Launch</span></td>
-            <td role="gridcell"><span class="verdict verdict--promote">Promote<span class="score">7.6</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--promote"><span class="visually-hidden">Council verdict: </span>Promote<span class="score">7.6</span></span></td>
             <td role="gridcell" class="cell-amount">₹4,80,000</td>
             <td role="gridcell" class="kc--clear">Clear</td>
             <td role="gridcell"><span class="autonomy-badge">L1</span></td>
-            <td role="gridcell"><span class="evidence-link">RCPT-…1192</span></td>
+            <td role="gridcell"><button type="button" class="evidence-link">RCPT-…1192</button></td>
             <td role="gridcell">
               <div class="actions-cell">
                 <button type="button" class="btn btn-approve is-focused">Approve</button>
@@ -366,11 +375,11 @@
           <tr role="row" tabindex="-1" aria-selected="false" class="row--error">
             <td role="gridcell" class="cell-row">4</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">NeoKirana</span><span class="v-phase">Scale</span></td>
-            <td role="gridcell"><span class="verdict verdict--kill">Kill<span class="score">3.2</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--kill"><span class="visually-hidden">Council verdict: </span>Kill<span class="score">3.2</span></span></td>
             <td role="gridcell" class="cell-amount">₹9,20,000</td>
             <td role="gridcell" class="kc--breach">Breach: burn cap</td>
             <td role="gridcell"><span class="autonomy-badge">L2</span></td>
-            <td role="gridcell"><span class="evidence-pending">RCPT-…1196 pending</span></td>
+            <td role="gridcell"><span class="evidence-pending">RCPT-…1196</span></td>
             <td role="gridcell">
               <div class="error-msg">
                 Failed: kill NeoKirana — spine write conflict.
@@ -385,7 +394,7 @@
           <tr role="row" tabindex="-1" aria-selected="false" class="row--disabled">
             <td role="gridcell" class="cell-row">5</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">Arthveda Capital</span><span class="v-phase">Build</span></td>
-            <td role="gridcell"><span class="verdict verdict--hold">Hold<span class="score">6.0</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--hold"><span class="visually-hidden">Council verdict: </span>Hold<span class="score">6.0</span></span></td>
             <td role="gridcell" class="cell-amount">₹1,64,300</td>
             <td role="gridcell" class="kc--clear">Clear</td>
             <td role="gridcell"><span class="autonomy-badge">L1</span></td>
@@ -402,11 +411,11 @@
           <tr role="row" tabindex="-1" aria-selected="false">
             <td role="gridcell" class="cell-row">6</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">Bhoomi Agritech</span><span class="v-phase">Discovery</span></td>
-            <td role="gridcell"><span class="verdict verdict--promote">Promote<span class="score">8.0</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--promote"><span class="visually-hidden">Council verdict: </span>Promote<span class="score">8.0</span></span></td>
             <td role="gridcell" class="cell-amount">₹85,000</td>
             <td role="gridcell" class="kc--clear">Clear</td>
             <td role="gridcell"><span class="autonomy-badge">L0</span></td>
-            <td role="gridcell"><span class="evidence-link">RCPT-…1195</span></td>
+            <td role="gridcell"><button type="button" class="evidence-link">RCPT-…1195</button></td>
             <td role="gridcell">
               <div class="actions-cell">
                 <button type="button" class="btn btn-approve">Approve</button>
@@ -418,11 +427,11 @@
           <tr role="row" tabindex="-1" aria-selected="false">
             <td role="gridcell" class="cell-row">7</td>
             <td role="gridcell" class="cell-venture"><span class="v-name">Vistara Mobility</span><span class="v-phase">Scale</span></td>
-            <td role="gridcell"><span class="verdict verdict--kill">Kill<span class="score">2.8</span></span></td>
+            <td role="gridcell"><span class="verdict verdict--kill"><span class="visually-hidden">Council verdict: </span>Kill<span class="score">2.8</span></span></td>
             <td role="gridcell" class="cell-amount">₹18,42,600</td>
-            <td role="gridcell" class="kc--breach">Breach: runway &lt;2mo</td>
+            <td role="gridcell" class="kc--breach">Breach: runway</td>
             <td role="gridcell"><span class="autonomy-badge">L2</span></td>
-            <td role="gridcell"><span class="evidence-link">RCPT-…1197</span></td>
+            <td role="gridcell"><button type="button" class="evidence-link">RCPT-…1197</button></td>
             <td role="gridcell">
               <div class="actions-cell">
                 <button type="button" class="btn btn-kill"><span class="l1">Kill Vistara Mobility</span><span class="l2">halts funding — unrecoverable</span></button>
@@ -448,24 +457,24 @@
       <h2>Today's event timeline</h2>
       <p class="panel-sub">Read-only · newest at bottom · nothing to step through.</p>
       <ul>
-        <li><time>07:58</time><span class="desc">Council scored Bhoomi Agritech (discovery): 8.0</span></li>
-        <li><time>08:12</time><span class="desc">Devbhoomi Organics kill-criteria breach: burn exceeded cap</span></li>
+        <li><time>07:58</time><span class="desc">Council scored Bhoomi Agritech: 8.0</span></li>
+        <li><time>08:12</time><span class="desc">Devbhoomi Organics: burn cap breached</span></li>
         <li><time>08:41</time><span class="desc">Sanchar Media approved · RCPT-…1042</span></li>
-        <li><time>08:55</time><span class="desc">Vistara Mobility flagged: runway &lt;2mo</span></li>
+        <li><time>08:55</time><span class="desc">Vistara Mobility: runway &lt;2mo</span></li>
         <li><time>09:05</time><span class="desc">Devbhoomi Organics rejected · RCPT-…1046</span></li>
-        <li><time>09:12</time><span class="desc">NeoKirana council verdict: kill, score 3.2</span></li>
+        <li><time>09:12</time><span class="desc">NeoKirana verdict: kill, 3.2</span></li>
         <li><time>09:20</time><span class="desc">Kaveri Foods approved · RCPT-…1051</span></li>
-        <li><time>09:31</time><span class="desc">Arthveda Capital locked: awaiting L2 sign-off (Meera Nair)</span></li>
-        <li class="is-alert"><time>10:03</time><span class="desc">Event sync delayed 4m — retrying automatically</span></li>
-        <li><time>10:09</time><span class="desc">Trellis Logistics moved to build phase, autonomy L1</span></li>
+        <li><time>09:31</time><span class="desc">Arthveda Capital: locked, L2 sign-off</span></li>
+        <li class="is-alert"><time>10:03</time><span class="desc">Event sync delayed 4m, retrying</span></li>
+        <li><time>10:09</time><span class="desc">Trellis Logistics: build phase, L1</span></li>
       </ul>
     </aside>
 
   </main>
 
   <footer class="state-matrix">
-    <h2>State matrix — reference</h2>
-    <p class="state-matrix-note">Inbox shows success (rows above), error (row 4) and disabled (row 5) live. Timeline shows success and an alert line live. States not otherwise reachable on this single screen:</p>
+    <h2>State matrix — reference<span class="kicker">not live data</span></h2>
+    <p class="state-matrix-note">Inbox shows success (rows above), error (row 4) and disabled (row 5) live. Timeline shows success and an alert line live. Dashed cards below are a reference only, for states not otherwise reachable on this single screen:</p>
 
     <div class="state-group">
       <h3>Inbox — loading &amp; empty</h3>

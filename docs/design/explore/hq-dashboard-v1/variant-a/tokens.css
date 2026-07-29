@@ -7,7 +7,12 @@
 
    The brief's declared contrast pairs are respected as floors (dark canvas,
    light body text, blue primary action, green money-in) but every value
-   below is this variant's own system, not a copy of the brief's hexes. */
+   below is this variant's own system, not a copy of the brief's hexes.
+
+   Round-2 pass: --text-dim, --text-dim-raised, --text-stale and
+   --text-disabled were all measured too close to the 4.5:1 contrast floor on
+   their actual render backgrounds (as low as 3.7:1 for disabled-control
+   text) and have been raised with margin — see the ratio notes inline. */
 :root{
   /* ---- surfaces ---- */
   --bg-canvas:        #17181b; /* page background */
@@ -33,12 +38,12 @@
 
   /* ---- text ---- */
   --text-primary:     #d8d6cd; /* body text — ratio ~12:1 on --bg-canvas */
-  --text-dim:         #9b9890; /* dim labels — ratio ~6.2:1 on --bg-canvas */
-  --text-dim-raised:  #a6a39b; /* dim labels on raised cards — ratio ~6.5:1 on --bg-surface-raised */
+  --text-dim:         #a5a29a; /* dim labels — ratio ~5.9:1 on --bg-canvas, ~5.2:1 on the selected-row tint (was 4.65:1, raised for margin) */
+  --text-dim-raised:  #aeaba3; /* dim labels on raised cards — ratio ~6.5:1 on --bg-surface-raised */
   --text-inverse:     #ffffff; /* on filled buttons */
-  --text-stale:       #8a8782; /* greyed KPI value once stale — ratio ~5:1 */
+  --text-stale:       #9c9791; /* greyed KPI value once stale — ratio ~5.6:1 on --bg-surface (was ~4.54:1, too close to the floor) */
   --text-evidence:    #7fb2e0; /* evidence / receipt affordance text */
-  --text-disabled:    #6c6a66; /* label on a genuinely inactive control only */
+  --text-disabled:    #a29e97; /* label on a genuinely inactive control — ratio ~5.8:1 on --btn-disabled-bg (was ~2.9:1) */
   --text-title:       #eeece4; /* top-bar product title */
 
   /* ---- semantic (verdict / kill-criteria / money) ---- */
@@ -52,7 +57,7 @@
   --btn-approve-text: #ffffff;
   --btn-kill-bg:      #7a2330; /* irreversible action — ratio ~10:1 with white text */
   --btn-kill-text:    #ffffff;
-  --btn-ghost-bg:     transparent; /* reject / retry / keep-active */
+  --btn-ghost-bg:     transparent; /* reject / retry / keep-active / evidence link */
   --btn-disabled-bg:  #232428;
 
   /* ---- keyboard-legend keycaps ---- */

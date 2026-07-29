@@ -30,7 +30,7 @@
   .skip-link:focus { left: 8px; top: 8px; }
 
   .container {
-    max-width: 1320px;
+    max-width: 1376px;
     margin: 0 auto;
     padding: 20px 32px 60px;
   }
@@ -43,7 +43,7 @@
     flex-wrap: wrap;
     padding-bottom: 14px;
     border-bottom: 1px solid var(--color-divider);
-    margin-bottom: 14px;
+    margin-bottom: 10px;
   }
   .brand { margin: 0; font-size: 16px; font-weight: 700; color: var(--color-text-strong); letter-spacing: 0.01em; }
   .brand small { display: block; font-size: 11px; font-weight: 400; color: var(--color-text-dim); margin-top: 3px; }
@@ -60,6 +60,44 @@
   }
   .keyboard-legend strong { color: var(--color-text-strong); font-weight: 700; }
 
+  /* KPI row — peripheral, read-only, always visible. Not a second dashboard
+     region: one thin strip, no actions, no per-item borders/cards. */
+  .kpi-row {
+    border-bottom: 1px solid var(--color-divider);
+    padding: 8px 0 10px;
+    margin-bottom: 12px;
+  }
+  .kpi-list { display: flex; flex-wrap: wrap; list-style: none; margin: 0; padding: 0; }
+  .kpi-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    padding: 0 18px;
+    border-right: 1px solid var(--color-divider);
+    min-width: 108px;
+  }
+  .kpi-item:first-child { padding-left: 0; }
+  .kpi-item:last-child { border-right: none; }
+  .kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-dim); }
+  .kpi-value {
+    font-variant-numeric: tabular-nums;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--color-text-strong);
+    text-align: right;
+  }
+  .kpi-item--error .kpi-value { color: var(--color-text-dim); font-weight: 400; }
+  .kpi-stale {
+    display: block;
+    font-size: 9px;
+    font-weight: 400;
+    color: var(--color-warning);
+    text-align: right;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .kpi-item--empty .kpi-value { color: var(--color-text-dim); }
+
   .resume-banner {
     background: var(--color-bg-raised);
     border: 1px solid var(--color-border);
@@ -67,20 +105,14 @@
     padding: 10px 14px;
     font-size: 13px;
     color: var(--color-text);
-    margin-bottom: 10px;
+    margin-bottom: 18px;
   }
   .resume-banner strong { color: var(--color-text-strong); }
 
-  .day-summary {
-    font-size: 13px;
-    color: var(--color-text-dim);
-    margin: 0 0 22px;
-  }
-
   .layout {
     display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: 24px;
+    grid-template-columns: 1fr 280px;
+    gap: 20px;
     align-items: start;
   }
 
@@ -89,36 +121,47 @@
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--color-text-dim);
-    margin: 0 0 10px;
+    margin: 0 0 4px;
     font-weight: 700;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
   }
+  .heading-note {
+    font-size: 10px;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: 400;
+    color: var(--color-text-dim);
+  }
+  .day-panel > p.panel-sub { font-size: 11px; color: var(--color-text-dim); margin: 0 0 10px; }
 
-  .beat-list {
+  .event-list {
     list-style: none;
     margin: 0;
     padding: 0;
     border-top: 1px solid var(--color-divider);
   }
 
-  .beat {
+  .event {
     display: grid;
-    grid-template-columns: 52px 78px minmax(260px, 1fr) 112px 252px;
+    grid-template-columns: 50px 72px minmax(380px, 1fr) 96px 230px;
     column-gap: 12px;
     align-items: center;
-    padding: 11px 10px;
+    padding: 10px 10px;
     background: var(--color-bg-raised);
     border-bottom: 1px solid var(--color-divider);
     margin-top: 3px;
   }
 
-  .beat-time {
+  .event-time {
     font-variant-numeric: tabular-nums;
     color: var(--color-text-dim);
     font-size: 12px;
     white-space: nowrap;
   }
 
-  .beat-tag {
+  .event-tag {
     justify-self: start;
     font-size: 10px;
     font-weight: 700;
@@ -135,32 +178,61 @@
   .tag-locked      { color: var(--color-locked);  background: var(--color-locked-bg); }
   .tag-undecided   { color: var(--color-on-accent); background: var(--color-accent); }
 
-  .beat-line { margin: 0; color: var(--color-text); font-size: 13px; }
-  .beat--locked .beat-line { color: var(--color-locked); font-style: italic; }
-  .beat--loading .beat-line { color: var(--color-text-dim); }
+  /* one line per timeline event — no wrap, no truncation; the line is sized
+     to fit at 1440 without cutting any of the three mandated facts */
+  .event-line {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .event--locked .event-line { color: var(--color-locked); font-style: italic; }
+  .event--loading .event-line { color: var(--color-text-dim); }
   .kw-positive { color: var(--color-success); }
   .kw-negative { color: var(--color-error); }
 
-  .beat-amount {
+  .event-amount {
     font-variant-numeric: tabular-nums;
     text-align: right;
     color: var(--color-text-strong);
     font-size: 13px;
     white-space: nowrap;
   }
-  .beat--locked .beat-amount, .beat--loading .beat-amount { color: var(--color-text-dim); }
+  .event--locked .event-amount, .event--loading .event-amount { color: var(--color-text-dim); }
   .stale-note { display: block; font-size: 10px; font-weight: 400; color: var(--color-warning); text-align: right; margin-top: 2px; }
 
-  .beat-action {
+  .event-action {
     display: flex;
     align-items: center;
     justify-content: flex-end;
     flex-wrap: wrap;
     gap: 8px;
   }
-  .beat-action .receipt { font-size: 12px; color: var(--color-text-dim); text-align: right; }
-  .beat-error { flex-basis: 100%; margin: 0 0 2px; font-size: 12px; color: var(--color-error); text-align: right; }
-  .beat-note { flex-basis: 100%; margin: 4px 0 0; font-size: 11px; color: var(--color-text-dim); text-align: right; }
+  .event-action .receipt { font-size: 12px; color: var(--color-text-dim); text-align: right; }
+  .event-failure { flex-basis: 100%; margin: 0 0 2px; font-size: 12px; color: var(--color-error); text-align: right; }
+  .event-note { flex-basis: 100%; margin: 4px 0 0; font-size: 11px; color: var(--color-text-dim); text-align: right; }
+
+  /* on-demand disclosure — evidence + autonomy-ladder detail; never the
+     three mandated facts, which stay inline on the line above, always */
+  .event-evidence { grid-column: 1 / -1; margin-top: 4px; }
+  .event-evidence summary {
+    list-style: none;
+    cursor: pointer;
+    font-size: 11px;
+    color: var(--color-text-dim);
+    width: fit-content;
+  }
+  .event-evidence summary::-webkit-details-marker { display: none; }
+  .event-evidence summary::before { content: "\25B8  "; }
+  .event-evidence[open] summary::before { content: "\25BE  "; }
+  .event-evidence p { margin: 6px 0 0; font-size: 12px; color: var(--color-text-dim); }
+
+  /* settled = done log: visually recedes so open/undecided events keep the
+     eye — background drops to page level, text drops to dim */
+  .event--settled { background: var(--color-bg); }
+  .event--settled .event-line,
+  .event--settled .event-amount,
+  .event--settled .receipt { color: var(--color-text-dim); font-weight: 400; }
 
   .btn {
     min-height: 44px;
@@ -181,12 +253,13 @@
 
   .btn:focus, .btn:focus-visible,
   a:focus, a:focus-visible,
-  input:focus-visible {
+  input:focus-visible,
+  summary:focus-visible {
     outline: 3px solid var(--color-focus);
     outline-offset: 2px;
   }
 
-  .beat--unresolved.is-current { border-left: 3px solid var(--color-warning); background: var(--color-bg-raised-alt); }
+  .event--unresolved.is-current { border-left: 3px solid var(--color-warning); background: var(--color-bg-raised-alt); }
   .current-tag {
     grid-column: 1 / -1;
     font-size: 11px;
@@ -291,133 +364,185 @@
   <header class="topbar">
     <h1 class="brand">ARC HQ<small>Today — 29 Jul 2026 · IST</small></h1>
     <div class="keyboard-legend" aria-label="Keyboard shortcuts">
-      <span><strong>j</strong> / <strong>k</strong> — next / previous beat</span>
-      <span><strong>a</strong> approve · <strong>r</strong> reject at current beat</span>
+      <span><strong>j</strong> / <strong>k</strong> — next / previous event</span>
+      <span><strong>a</strong> approve · <strong>r</strong> reject at current event</span>
       <span><strong>s</strong> toggle skim mode</span>
       <span><strong>u</strong> jump to earliest undecided</span>
     </div>
   </header>
 
-  <p class="resume-banner">
-    <strong>Position in the day: beat 3 of 10 — 09:02, NeoKirana.</strong>
-    Resuming at the earliest unresolved beat. Beats logged since then are ordered
-    newest-first below; beats after now (12:40) are not yet disclosed.
-  </p>
+  <section class="kpi-row" aria-label="Portfolio KPIs">
+    <ul class="kpi-list">
+      <li class="kpi-item">
+        <span class="kpi-label">MRR</span>
+        <span class="kpi-value">₹18,42,600</span>
+      </li>
+      <li class="kpi-item">
+        <span class="kpi-label">Burn / mo</span>
+        <span class="kpi-value">₹6,80,400</span>
+      </li>
+      <li class="kpi-item kpi-item--error">
+        <span class="kpi-label">Runway</span>
+        <span class="kpi-value">13 mo<span class="kpi-stale">sync failed — last known, stale 45 min</span></span>
+      </li>
+      <li class="kpi-item">
+        <span class="kpi-label">Ventures live</span>
+        <span class="kpi-value">7</span>
+      </li>
+      <li class="kpi-item kpi-item--empty">
+        <span class="kpi-label">Kill-list</span>
+        <span class="kpi-value">0</span>
+      </li>
+    </ul>
+  </section>
 
-  <p class="day-summary">29 Jul 2026 · IST · Now 12:40 · 10 beats today — 2 settled, 5 undecided, 3 not yet disclosed.</p>
+  <p class="resume-banner">
+    <strong>Position in the day: event 3 of 10 — 09:02, NeoKirana.</strong>
+    Resuming at the earliest unresolved event. Events logged since then are ordered
+    newest-first below; events after now (12:40) are not yet disclosed.
+  </p>
 
   <main class="layout">
 
     <section class="day-panel" id="day-timeline" aria-label="Today's events, in order">
-      <h2>Today — in order</h2>
-      <ol class="beat-list">
+      <h2>Today — in order<span class="heading-note">reorders past the resume point — see banner above</span></h2>
 
-        <li class="beat beat--settled" id="beat-kadamba">
-          <span class="beat-time">07:40</span>
-          <span class="beat-tag tag-settled">Settled</span>
-          <p class="beat-line">Kadamba Foods · phase 2&rarr;3 promotion · L2 autonomy · council verdict: promote, score 84 · kill criteria: MRR &ge; ₹40,000 &mdash; <span class="kw-positive">met</span> at ₹46,800</p>
-          <span class="beat-amount">₹86,400</span>
-          <div class="beat-action"><span class="receipt">Receipt RCT-88910 · approved 07:41</span></div>
+      <ol class="event-list">
+
+        <li class="event event--settled" id="event-kadamba">
+          <span class="event-time">07:40</span>
+          <span class="event-tag tag-settled">Settled</span>
+          <p class="event-line">Kadamba Foods · phase 2&rarr;3 · promote 84 · MRR met</p>
+          <span class="event-amount">₹86,400</span>
+          <div class="event-action"><span class="receipt">Receipt RCT-88910 · approved 07:41</span></div>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L2 autonomy · full verdict: promote — spend within phase-3 ceiling, MRR &ge; ₹40,000 floor met at ₹46,800, trend positive 6 weeks running.</p>
+          </details>
         </li>
 
-        <li class="beat beat--settled" id="beat-suvidha">
-          <span class="beat-time">08:15</span>
-          <span class="beat-tag tag-settled">Settled</span>
-          <p class="beat-line">Suvidha Grocers · L2 autonomy request · council verdict: hold, score 52 · kill criteria: burn multiple 2.8x &mdash; <span class="kw-negative">above</span> 2.5x ceiling</p>
-          <span class="beat-amount">₹64,900</span>
-          <div class="beat-action"><span class="receipt">Receipt RCT-88932 · rejected 08:16 &mdash; exceeds ceiling</span></div>
+        <li class="event event--settled" id="event-suvidha">
+          <span class="event-time">08:15</span>
+          <span class="event-tag tag-settled">Settled</span>
+          <p class="event-line">Suvidha Grocers · L2 request · hold 52 · burn breach</p>
+          <span class="event-amount">₹64,900</span>
+          <div class="event-action"><span class="receipt">Receipt RCT-88932 · rejected 08:16 &mdash; exceeds ceiling</span></div>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L2 autonomy request · full verdict: hold — burn multiple 2.8x, above the 2.5x ceiling by 0.3x, needs manual review before re-request.</p>
+          </details>
         </li>
 
-        <li class="beat beat--unresolved is-current" id="beat-neokirana">
-          <span class="beat-time">09:02</span>
-          <span class="beat-tag tag-unresolved">Unresolved</span>
-          <p class="beat-line">NeoKirana · phase 1 spend capture · L1 autonomy · council verdict: promote, score 71 · kill criteria: burn multiple 1.9x &mdash; <span class="kw-positive">within</span> 2.5x ceiling</p>
-          <span class="beat-amount">₹12,500</span>
-          <div class="beat-action">
-            <p class="beat-error">Capture failed &mdash; payment gateway timed out. Retry the capture, or mark it settled manually.</p>
+        <li class="event event--unresolved is-current" id="event-neokirana">
+          <span class="event-time">09:02</span>
+          <span class="event-tag tag-unresolved">Unresolved</span>
+          <p class="event-line">NeoKirana · phase 1 capture · promote 71 · burn ok</p>
+          <span class="event-amount">₹12,500</span>
+          <div class="event-action">
+            <p class="event-failure">Capture failed &mdash; payment gateway timed out. Retry the capture, or mark it settled manually.</p>
             <button type="button" class="btn btn-retry" autofocus>Retry capture</button>
             <button type="button" class="btn btn-reject">Mark settled manually</button>
           </div>
           <span class="current-tag">Resuming here</span>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L1 autonomy · full verdict: promote — capture blocked by gateway timeout, not a council rejection. Kill criteria: burn multiple 1.9x, within 2.5x ceiling.</p>
+          </details>
         </li>
 
-        <li class="section-divider" role="presentation">Since you left &mdash; newest first<span class="sub">Beats logged after 09:02, most recent first</span></li>
+        <li class="section-divider" role="presentation">Since you left &mdash; newest first<span class="sub">Events logged after 09:02, most recent first</span></li>
 
-        <li class="beat beat--loading" id="beat-aharam">
-          <span class="beat-time">12:00</span>
-          <span class="beat-tag tag-loading">Loading</span>
-          <p class="beat-line">Aharam Meals · phase 1 spend review · L1 autonomy · council verdict: compiling &mdash; refreshes automatically · kill criteria: pending verdict</p>
-          <span class="beat-amount">₹41,000<span class="stale-note">stale 40 min &mdash; refreshing</span></span>
-          <div class="beat-action">
+        <li class="event event--loading" id="event-aharam">
+          <span class="event-time">12:00</span>
+          <span class="event-tag tag-loading">Loading</span>
+          <p class="event-line">Aharam Meals · phase 1 · verdict pending · kill pending</p>
+          <span class="event-amount">₹41,000<span class="stale-note">stale 40 min &mdash; refreshing</span></span>
+          <div class="event-action">
             <button type="button" class="btn btn-approve" disabled>Approve</button>
             <button type="button" class="btn btn-reject" disabled>Reject</button>
-            <p class="beat-note">Verdict loading &mdash; actions unlock on refresh</p>
+            <p class="event-note">Verdict loading &mdash; actions unlock on refresh</p>
           </div>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L1 autonomy · verdict compiling — council queue position 2 of 3, ETA 12:15.</p>
+          </details>
         </li>
 
-        <li class="beat beat--undecided" id="beat-dilli">
-          <span class="beat-time">11:15</span>
-          <span class="beat-tag tag-undecided">Undecided</span>
-          <p class="beat-line">Dilli Dosa Co · kill review · L1 autonomy · council verdict: kill, score 18 · kill criteria: MRR growth -12% for 3 phases &mdash; <span class="kw-negative">breached</span></p>
-          <span class="beat-amount">₹28,900</span>
-          <div class="beat-action">
+        <li class="event event--undecided" id="event-dilli">
+          <span class="event-time">11:15</span>
+          <span class="event-tag tag-undecided">Undecided</span>
+          <p class="event-line">Dilli Dosa Co · kill review · kill 18 · MRR breach</p>
+          <span class="event-amount">₹28,900</span>
+          <div class="event-action">
             <button type="button" class="btn btn-kill">Kill Dilli Dosa Co &mdash; halts all spend and autonomy</button>
             <button type="button" class="btn btn-reject">Reject kill &mdash; keep venture live</button>
           </div>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L1 autonomy · full verdict: kill — MRR growth -12% for 3 consecutive phases, below floor for 2 already.</p>
+          </details>
         </li>
 
-        <li class="beat beat--undecided" id="beat-chaipoint">
-          <span class="beat-time">10:30</span>
-          <span class="beat-tag tag-undecided">Undecided</span>
-          <p class="beat-line">Chai Point Express · phase 2 promotion · L2 autonomy · council verdict: promote, score 78 · kill criteria: burn multiple 2.1x &mdash; <span class="kw-positive">within</span> 2.5x ceiling</p>
-          <span class="beat-amount">₹1,54,300</span>
-          <div class="beat-action">
+        <li class="event event--undecided" id="event-chaipoint">
+          <span class="event-time">10:30</span>
+          <span class="event-tag tag-undecided">Undecided</span>
+          <p class="event-line">Chai Point Express · phase 2 · promote 78 · burn ok</p>
+          <span class="event-amount">₹1,54,300</span>
+          <div class="event-action">
             <button type="button" class="btn btn-approve">Approve</button>
             <button type="button" class="btn btn-reject">Reject</button>
           </div>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L2 autonomy · full verdict: promote — ad spend efficiency up 9% phase-over-phase. Kill criteria: burn multiple 2.1x, within 2.5x ceiling.</p>
+          </details>
         </li>
 
-        <li class="beat beat--disabled" id="beat-bombay">
-          <span class="beat-time">09:47</span>
-          <span class="beat-tag tag-disabled">Disabled</span>
-          <p class="beat-line">Bombay Bites · phase 1 spend review · L1 autonomy · council verdict: hold, score 60 · kill criteria: burn multiple 2.0x &mdash; <span class="kw-positive">within</span> 2.5x ceiling</p>
-          <span class="beat-amount">₹64,200</span>
-          <div class="beat-action">
+        <li class="event event--disabled" id="event-bombay">
+          <span class="event-time">09:47</span>
+          <span class="event-tag tag-disabled">Disabled</span>
+          <p class="event-line">Bombay Bites · phase 1 review · hold 60 · burn ok</p>
+          <span class="event-amount">₹64,200</span>
+          <div class="event-action">
             <button type="button" class="btn btn-approve" disabled>Approve</button>
             <button type="button" class="btn btn-reject" disabled>Reject</button>
-            <p class="beat-note">Locked &mdash; waiting on NeoKirana (09:02) to resolve first</p>
+            <p class="event-note">Locked &mdash; waiting on NeoKirana (09:02) to resolve first</p>
           </div>
+          <details class="event-evidence">
+            <summary>Evidence</summary>
+            <p>L1 autonomy · full verdict: hold — shares a budget pool with NeoKirana, cannot clear until that capture resolves. Kill criteria: burn multiple 2.0x, within 2.5x ceiling.</p>
+          </details>
         </li>
 
         <li class="section-divider" role="presentation">Later today &mdash; not yet disclosed<span class="sub">Discloses as the day advances</span></li>
 
-        <li class="beat beat--locked" id="beat-basera">
-          <span class="beat-time">14:30</span>
-          <span class="beat-tag tag-locked">Locked</span>
-          <p class="beat-line">Basera Homestays &mdash; later today, not yet disclosed</p>
-          <span class="beat-amount">&mdash;</span>
-          <div class="beat-action"><p class="beat-note">Discloses when its beat arrives</p></div>
+        <li class="event event--locked" id="event-basera">
+          <span class="event-time">14:30</span>
+          <span class="event-tag tag-locked">Locked</span>
+          <p class="event-line">Basera Homestays &mdash; later today, not yet disclosed</p>
+          <span class="event-amount">&mdash;</span>
+          <div class="event-action"><p class="event-note">Discloses when its event arrives</p></div>
         </li>
 
-        <li class="beat beat--locked" id="beat-trithi">
-          <span class="beat-time">16:00</span>
-          <span class="beat-tag tag-locked">Locked</span>
-          <p class="beat-line">Trithi Textiles &mdash; later today, not yet disclosed</p>
-          <span class="beat-amount">&mdash;</span>
-          <div class="beat-action"><p class="beat-note">Discloses when its beat arrives</p></div>
+        <li class="event event--locked" id="event-trithi">
+          <span class="event-time">16:00</span>
+          <span class="event-tag tag-locked">Locked</span>
+          <p class="event-line">Trithi Textiles &mdash; later today, not yet disclosed</p>
+          <span class="event-amount">&mdash;</span>
+          <div class="event-action"><p class="event-note">Discloses when its event arrives</p></div>
         </li>
 
-        <li class="beat beat--locked" id="beat-eod">
-          <span class="beat-time">18:00</span>
-          <span class="beat-tag tag-locked">Locked</span>
-          <p class="beat-line">EOD summary &mdash; receipts settle for the day, not yet disclosed</p>
-          <span class="beat-amount">&mdash;</span>
-          <div class="beat-action"><p class="beat-note">Discloses when its beat arrives</p></div>
+        <li class="event event--locked" id="event-eod">
+          <span class="event-time">18:00</span>
+          <span class="event-tag tag-locked">Locked</span>
+          <p class="event-line">EOD summary &mdash; receipts settle for the day, not yet disclosed</p>
+          <span class="event-amount">&mdash;</span>
+          <div class="event-action"><p class="event-note">Discloses when its event arrives</p></div>
         </li>
 
       </ol>
 
-      <p class="state-legend">State matrix &mdash; day surface: success at 07:40 &middot; error at 09:02 &middot; loading at 12:00 &middot; disabled at 09:47 &middot; empty (not-yet-disclosed) from 14:30.</p>
+      <p class="state-legend">State matrix &mdash; day surface: success at 07:40 &middot; unresolved at 09:02 &middot; loading at 12:00 &middot; disabled at 09:47 &middot; empty (not-yet-disclosed) from 14:30.</p>
     </section>
 
     <aside class="skim-panel" id="skim-rail" aria-label="Skim mode — undecided events only">
@@ -426,23 +551,23 @@
           <input type="checkbox" id="skim-toggle" class="skim-toggle-input" checked>
           Skim mode &mdash; undecided only
         </label>
-        <a class="jump-link" href="#beat-neokirana">Jump to earliest undecided &rarr;</a>
+        <a class="jump-link" href="#event-neokirana">Jump to earliest undecided &rarr;</a>
       </div>
 
       <h2>Skim &mdash; undecided only (5)</h2>
       <ol class="skim-list">
-        <li class="is-earliest"><a href="#beat-neokirana">09:02 &middot; NeoKirana &middot; unresolved &mdash; capture failed</a></li>
-        <li><a href="#beat-bombay">09:47 &middot; Bombay Bites &middot; disabled &mdash; locked on NeoKirana</a></li>
-        <li><a href="#beat-chaipoint">10:30 &middot; Chai Point Express &middot; undecided &mdash; approval pending</a></li>
-        <li><a href="#beat-dilli">11:15 &middot; Dilli Dosa Co &middot; undecided &mdash; kill review pending</a></li>
-        <li><a href="#beat-aharam">12:00 &middot; Aharam Meals &middot; loading &mdash; verdict compiling</a></li>
+        <li class="is-earliest"><a href="#event-neokirana">09:02 &middot; NeoKirana &middot; unresolved &mdash; capture failed</a></li>
+        <li><a href="#event-bombay">09:47 &middot; Bombay Bites &middot; disabled &mdash; locked on NeoKirana</a></li>
+        <li><a href="#event-chaipoint">10:30 &middot; Chai Point Express &middot; undecided &mdash; approval pending</a></li>
+        <li><a href="#event-dilli">11:15 &middot; Dilli Dosa Co &middot; undecided &mdash; kill review pending</a></li>
+        <li><a href="#event-aharam">12:00 &middot; Aharam Meals &middot; loading &mdash; verdict compiling</a></li>
       </ol>
 
       <div class="skim-legend">
         <p class="legend-title">State matrix &mdash; skim surface</p>
         <ul>
           <li><span class="legend-tag tag-settled">Success</span> this list, populated &mdash; 5 undecided</li>
-          <li><span class="legend-tag tag-unresolved">Error</span> NeoKirana &mdash; capture failed</li>
+          <li><span class="legend-tag tag-unresolved">Unresolved</span> NeoKirana &mdash; capture failed</li>
           <li><span class="legend-tag tag-disabled">Disabled</span> Bombay Bites &mdash; locked</li>
           <li><span class="legend-tag tag-loading">Loading</span> Aharam Meals &mdash; verdict compiling</li>
           <li><span class="legend-tag tag-locked">Empty (example)</span> day clear &mdash; 0 undecided</li>
