@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARC HQ — Today</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  ::-webkit-scrollbar { display: none; }
+  body { scrollbar-width: none; }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 14px;
+    line-height: 1.45;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--color-accent);
+    color: var(--color-on-accent);
+    padding: 10px 14px;
+    z-index: 10;
+  }
+  .skip-link:focus { left: 8px; top: 8px; }
+
+  .container {
+    max-width: 1320px;
+    margin: 0 auto;
+    padding: 20px 32px 60px;
+  }
+
+  header.topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--color-divider);
+    margin-bottom: 14px;
+  }
+  .brand { margin: 0; font-size: 16px; font-weight: 700; color: var(--color-text-strong); letter-spacing: 0.01em; }
+  .brand small { display: block; font-size: 11px; font-weight: 400; color: var(--color-text-dim); margin-top: 3px; }
+
+  .keyboard-legend {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+    font-size: 11px;
+    color: var(--color-text-dim);
+    max-width: 560px;
+    justify-content: flex-end;
+    text-align: right;
+  }
+  .keyboard-legend strong { color: var(--color-text-strong); font-weight: 700; }
+
+  .resume-banner {
+    background: var(--color-bg-raised);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-warning);
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--color-text);
+    margin-bottom: 10px;
+  }
+  .resume-banner strong { color: var(--color-text-strong); }
+
+  .day-summary {
+    font-size: 13px;
+    color: var(--color-text-dim);
+    margin: 0 0 22px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .day-panel h2, .skim-panel h2 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--color-text-dim);
+    margin: 0 0 10px;
+    font-weight: 700;
+  }
+
+  .beat-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-divider);
+  }
+
+  .beat {
+    display: grid;
+    grid-template-columns: 52px 78px minmax(260px, 1fr) 112px 252px;
+    column-gap: 12px;
+    align-items: center;
+    padding: 11px 10px;
+    background: var(--color-bg-raised);
+    border-bottom: 1px solid var(--color-divider);
+    margin-top: 3px;
+  }
+
+  .beat-time {
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text-dim);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .beat-tag {
+    justify-self: start;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 3px 7px;
+    border-radius: 3px;
+    white-space: nowrap;
+  }
+  .tag-settled     { color: var(--color-success); background: var(--color-success-bg); }
+  .tag-unresolved  { color: var(--color-error);   background: var(--color-error-bg); }
+  .tag-disabled,
+  .tag-loading     { color: var(--color-warning); background: var(--color-warning-bg); }
+  .tag-locked      { color: var(--color-locked);  background: var(--color-locked-bg); }
+  .tag-undecided   { color: var(--color-on-accent); background: var(--color-accent); }
+
+  .beat-line { margin: 0; color: var(--color-text); font-size: 13px; }
+  .beat--locked .beat-line { color: var(--color-locked); font-style: italic; }
+  .beat--loading .beat-line { color: var(--color-text-dim); }
+  .kw-positive { color: var(--color-success); }
+  .kw-negative { color: var(--color-error); }
+
+  .beat-amount {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    color: var(--color-text-strong);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .beat--locked .beat-amount, .beat--loading .beat-amount { color: var(--color-text-dim); }
+  .stale-note { display: block; font-size: 10px; font-weight: 400; color: var(--color-warning); text-align: right; margin-top: 2px; }
+
+  .beat-action {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .beat-action .receipt { font-size: 12px; color: var(--color-text-dim); text-align: right; }
+  .beat-error { flex-basis: 100%; margin: 0 0 2px; font-size: 12px; color: var(--color-error); text-align: right; }
+  .beat-note { flex-basis: 100%; margin: 4px 0 0; font-size: 11px; color: var(--color-text-dim); text-align: right; }
+
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid var(--color-border-strong);
+    background: var(--color-bg-raised-alt);
+    color: var(--color-text);
+    cursor: pointer;
+    transition: background-color 120ms;
+  }
+  .btn-approve, .btn-retry { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-on-accent); }
+  .btn-kill { background: var(--color-kill); border-color: var(--color-kill); color: var(--color-on-kill); }
+  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  .btn:focus, .btn:focus-visible,
+  a:focus, a:focus-visible,
+  input:focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  .beat--unresolved.is-current { border-left: 3px solid var(--color-warning); background: var(--color-bg-raised-alt); }
+  .current-tag {
+    grid-column: 1 / -1;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--color-warning);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-top: 6px;
+  }
+
+  .section-divider {
+    list-style: none;
+    padding: 12px 10px 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-dim);
+    border-bottom: 1px solid var(--color-divider);
+    margin-top: 12px;
+  }
+  .section-divider .sub {
+    display: block;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 11px;
+    margin-top: 2px;
+    color: var(--color-text-dim);
+  }
+
+  .state-legend { font-size: 11px; color: var(--color-text-dim); margin: 14px 0 0; }
+
+  /* skim rail */
+  .skim-panel {
+    background: var(--color-bg-raised-alt);
+    border: 1px solid var(--color-border);
+    padding: 14px;
+  }
+
+  .skim-toggle-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .skim-toggle-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    font-size: 12px;
+    color: var(--color-text);
+    cursor: pointer;
+  }
+  .skim-toggle-input { width: 18px; height: 18px; }
+  .jump-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    font-size: 12px;
+    color: var(--color-skim-accent);
+    text-decoration: underline;
+  }
+
+  .skim-list { list-style: none; margin: 0 0 14px; padding: 0; border-top: 1px solid var(--color-divider); }
+  .skim-list li { border-bottom: 1px solid var(--color-divider); }
+  .skim-list a {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 6px 6px;
+    font-size: 12px;
+    color: var(--color-text);
+    text-decoration: none;
+    gap: 6px;
+  }
+  .skim-list a:hover { background: var(--color-bg-raised); }
+  .skim-list .is-earliest a { color: var(--color-on-accent); background: var(--color-accent); font-weight: 700; }
+
+  .skim-legend { border-top: 1px dashed var(--color-border); padding-top: 10px; }
+  .legend-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-dim); margin: 0 0 8px; }
+  .skim-legend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .skim-legend li { font-size: 11px; color: var(--color-text-dim); display: flex; align-items: center; gap: 7px; }
+  .legend-tag {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 2px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#day-timeline">Skip to today's events</a>
+
+<div class="container">
+
+  <header class="topbar">
+    <h1 class="brand">ARC HQ<small>Today — 29 Jul 2026 · IST</small></h1>
+    <div class="keyboard-legend" aria-label="Keyboard shortcuts">
+      <span><strong>j</strong> / <strong>k</strong> — next / previous beat</span>
+      <span><strong>a</strong> approve · <strong>r</strong> reject at current beat</span>
+      <span><strong>s</strong> toggle skim mode</span>
+      <span><strong>u</strong> jump to earliest undecided</span>
+    </div>
+  </header>
+
+  <p class="resume-banner">
+    <strong>Position in the day: beat 3 of 10 — 09:02, NeoKirana.</strong>
+    Resuming at the earliest unresolved beat. Beats logged since then are ordered
+    newest-first below; beats after now (12:40) are not yet disclosed.
+  </p>
+
+  <p class="day-summary">29 Jul 2026 · IST · Now 12:40 · 10 beats today — 2 settled, 5 undecided, 3 not yet disclosed.</p>
+
+  <main class="layout">
+
+    <section class="day-panel" id="day-timeline" aria-label="Today's events, in order">
+      <h2>Today — in order</h2>
+      <ol class="beat-list">
+
+        <li class="beat beat--settled" id="beat-kadamba">
+          <span class="beat-time">07:40</span>
+          <span class="beat-tag tag-settled">Settled</span>
+          <p class="beat-line">Kadamba Foods · phase 2&rarr;3 promotion · L2 autonomy · council verdict: promote, score 84 · kill criteria: MRR &ge; ₹40,000 &mdash; <span class="kw-positive">met</span> at ₹46,800</p>
+          <span class="beat-amount">₹86,400</span>
+          <div class="beat-action"><span class="receipt">Receipt RCT-88910 · approved 07:41</span></div>
+        </li>
+
+        <li class="beat beat--settled" id="beat-suvidha">
+          <span class="beat-time">08:15</span>
+          <span class="beat-tag tag-settled">Settled</span>
+          <p class="beat-line">Suvidha Grocers · L2 autonomy request · council verdict: hold, score 52 · kill criteria: burn multiple 2.8x &mdash; <span class="kw-negative">above</span> 2.5x ceiling</p>
+          <span class="beat-amount">₹64,900</span>
+          <div class="beat-action"><span class="receipt">Receipt RCT-88932 · rejected 08:16 &mdash; exceeds ceiling</span></div>
+        </li>
+
+        <li class="beat beat--unresolved is-current" id="beat-neokirana">
+          <span class="beat-time">09:02</span>
+          <span class="beat-tag tag-unresolved">Unresolved</span>
+          <p class="beat-line">NeoKirana · phase 1 spend capture · L1 autonomy · council verdict: promote, score 71 · kill criteria: burn multiple 1.9x &mdash; <span class="kw-positive">within</span> 2.5x ceiling</p>
+          <span class="beat-amount">₹12,500</span>
+          <div class="beat-action">
+            <p class="beat-error">Capture failed &mdash; payment gateway timed out. Retry the capture, or mark it settled manually.</p>
+            <button type="button" class="btn btn-retry" autofocus>Retry capture</button>
+            <button type="button" class="btn btn-reject">Mark settled manually</button>
+          </div>
+          <span class="current-tag">Resuming here</span>
+        </li>
+
+        <li class="section-divider" role="presentation">Since you left &mdash; newest first<span class="sub">Beats logged after 09:02, most recent first</span></li>
+
+        <li class="beat beat--loading" id="beat-aharam">
+          <span class="beat-time">12:00</span>
+          <span class="beat-tag tag-loading">Loading</span>
+          <p class="beat-line">Aharam Meals · phase 1 spend review · L1 autonomy · council verdict: compiling &mdash; refreshes automatically · kill criteria: pending verdict</p>
+          <span class="beat-amount">₹41,000<span class="stale-note">stale 40 min &mdash; refreshing</span></span>
+          <div class="beat-action">
+            <button type="button" class="btn btn-approve" disabled>Approve</button>
+            <button type="button" class="btn btn-reject" disabled>Reject</button>
+            <p class="beat-note">Verdict loading &mdash; actions unlock on refresh</p>
+          </div>
+        </li>
+
+        <li class="beat beat--undecided" id="beat-dilli">
+          <span class="beat-time">11:15</span>
+          <span class="beat-tag tag-undecided">Undecided</span>
+          <p class="beat-line">Dilli Dosa Co · kill review · L1 autonomy · council verdict: kill, score 18 · kill criteria: MRR growth -12% for 3 phases &mdash; <span class="kw-negative">breached</span></p>
+          <span class="beat-amount">₹28,900</span>
+          <div class="beat-action">
+            <button type="button" class="btn btn-kill">Kill Dilli Dosa Co &mdash; halts all spend and autonomy</button>
+            <button type="button" class="btn btn-reject">Reject kill &mdash; keep venture live</button>
+          </div>
+        </li>
+
+        <li class="beat beat--undecided" id="beat-chaipoint">
+          <span class="beat-time">10:30</span>
+          <span class="beat-tag tag-undecided">Undecided</span>
+          <p class="beat-line">Chai Point Express · phase 2 promotion · L2 autonomy · council verdict: promote, score 78 · kill criteria: burn multiple 2.1x &mdash; <span class="kw-positive">within</span> 2.5x ceiling</p>
+          <span class="beat-amount">₹1,54,300</span>
+          <div class="beat-action">
+            <button type="button" class="btn btn-approve">Approve</button>
+            <button type="button" class="btn btn-reject">Reject</button>
+          </div>
+        </li>
+
+        <li class="beat beat--disabled" id="beat-bombay">
+          <span class="beat-time">09:47</span>
+          <span class="beat-tag tag-disabled">Disabled</span>
+          <p class="beat-line">Bombay Bites · phase 1 spend review · L1 autonomy · council verdict: hold, score 60 · kill criteria: burn multiple 2.0x &mdash; <span class="kw-positive">within</span> 2.5x ceiling</p>
+          <span class="beat-amount">₹64,200</span>
+          <div class="beat-action">
+            <button type="button" class="btn btn-approve" disabled>Approve</button>
+            <button type="button" class="btn btn-reject" disabled>Reject</button>
+            <p class="beat-note">Locked &mdash; waiting on NeoKirana (09:02) to resolve first</p>
+          </div>
+        </li>
+
+        <li class="section-divider" role="presentation">Later today &mdash; not yet disclosed<span class="sub">Discloses as the day advances</span></li>
+
+        <li class="beat beat--locked" id="beat-basera">
+          <span class="beat-time">14:30</span>
+          <span class="beat-tag tag-locked">Locked</span>
+          <p class="beat-line">Basera Homestays &mdash; later today, not yet disclosed</p>
+          <span class="beat-amount">&mdash;</span>
+          <div class="beat-action"><p class="beat-note">Discloses when its beat arrives</p></div>
+        </li>
+
+        <li class="beat beat--locked" id="beat-trithi">
+          <span class="beat-time">16:00</span>
+          <span class="beat-tag tag-locked">Locked</span>
+          <p class="beat-line">Trithi Textiles &mdash; later today, not yet disclosed</p>
+          <span class="beat-amount">&mdash;</span>
+          <div class="beat-action"><p class="beat-note">Discloses when its beat arrives</p></div>
+        </li>
+
+        <li class="beat beat--locked" id="beat-eod">
+          <span class="beat-time">18:00</span>
+          <span class="beat-tag tag-locked">Locked</span>
+          <p class="beat-line">EOD summary &mdash; receipts settle for the day, not yet disclosed</p>
+          <span class="beat-amount">&mdash;</span>
+          <div class="beat-action"><p class="beat-note">Discloses when its beat arrives</p></div>
+        </li>
+
+      </ol>
+
+      <p class="state-legend">State matrix &mdash; day surface: success at 07:40 &middot; error at 09:02 &middot; loading at 12:00 &middot; disabled at 09:47 &middot; empty (not-yet-disclosed) from 14:30.</p>
+    </section>
+
+    <aside class="skim-panel" id="skim-rail" aria-label="Skim mode — undecided events only">
+      <div class="skim-toggle-row">
+        <label class="skim-toggle-label" for="skim-toggle">
+          <input type="checkbox" id="skim-toggle" class="skim-toggle-input" checked>
+          Skim mode &mdash; undecided only
+        </label>
+        <a class="jump-link" href="#beat-neokirana">Jump to earliest undecided &rarr;</a>
+      </div>
+
+      <h2>Skim &mdash; undecided only (5)</h2>
+      <ol class="skim-list">
+        <li class="is-earliest"><a href="#beat-neokirana">09:02 &middot; NeoKirana &middot; unresolved &mdash; capture failed</a></li>
+        <li><a href="#beat-bombay">09:47 &middot; Bombay Bites &middot; disabled &mdash; locked on NeoKirana</a></li>
+        <li><a href="#beat-chaipoint">10:30 &middot; Chai Point Express &middot; undecided &mdash; approval pending</a></li>
+        <li><a href="#beat-dilli">11:15 &middot; Dilli Dosa Co &middot; undecided &mdash; kill review pending</a></li>
+        <li><a href="#beat-aharam">12:00 &middot; Aharam Meals &middot; loading &mdash; verdict compiling</a></li>
+      </ol>
+
+      <div class="skim-legend">
+        <p class="legend-title">State matrix &mdash; skim surface</p>
+        <ul>
+          <li><span class="legend-tag tag-settled">Success</span> this list, populated &mdash; 5 undecided</li>
+          <li><span class="legend-tag tag-unresolved">Error</span> NeoKirana &mdash; capture failed</li>
+          <li><span class="legend-tag tag-disabled">Disabled</span> Bombay Bites &mdash; locked</li>
+          <li><span class="legend-tag tag-loading">Loading</span> Aharam Meals &mdash; verdict compiling</li>
+          <li><span class="legend-tag tag-locked">Empty (example)</span> day clear &mdash; 0 undecided</li>
+        </ul>
+      </div>
+    </aside>
+
+  </main>
+
+</div>
+</body>
+</html>

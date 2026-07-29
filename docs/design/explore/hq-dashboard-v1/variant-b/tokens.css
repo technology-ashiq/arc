@@ -1,4 +1,46 @@
 /* variant-b tokens — the ONLY place colour values live for this variant.
-   thesis: <the composer writes its one-line thesis here>  */
+   thesis: This product wins because the user can judge one approval against its council
+   verdict, its ₹ amount and its venture's kill-criteria state in a single pane, without
+   reconstructing that evidence from receipts he has to go find. */
 :root{
+  /* surfaces */
+  --color-bg:              #14171c;   /* page / evidence-pane base */
+  --color-bg-raised:       #1c2027;   /* cards, rail rows, chrome bar */
+  --color-bg-sunken:       #101317;   /* rail column background */
+  --color-bg-inset:        #191d23;   /* kill-criteria rows, deepest inset */
+  --color-skeleton:        #262b33;   /* loading placeholder bars */
+  --color-error-panel-bg:  #241417;   /* error row / error card tint */
+  --color-done-panel-bg:   #10201a;   /* done-log row tint */
+  --color-chip-bg:         #20242c;   /* reason preset, unselected */
+  --color-chip-selected-bg:#33405a;   /* reason preset, selected */
+  --color-disabled-bg:     #1a1d22;   /* blocked rail row / disabled pane */
+
+  /* borders */
+  --color-border:          #2a2f38;
+  --color-border-strong:   #3a4150;
+  --color-border-error:    #5c2a28;
+  --color-border-done:     #235c3f;
+
+  /* text */
+  --color-text:            #cdd2d9;   /* body text on --color-bg / raised */
+  --color-text-dim:        #8b929e;   /* dim labels, meta, thresholds */
+  --color-text-bright:     #f2f4f7;   /* headings, venture names, emphasis */
+  --color-disabled-text:   #5b606a;   /* text inside a disabled control */
+  --color-chip-selected-text:#eaf1ff; /* text on a selected reason chip */
+
+  /* kill-criteria + verdict signal colours */
+  --color-good-text:       #4fbf72;   /* criterion OK / approved / money-in */
+  --color-warn-text:       #e0a840;   /* NEAR BREACH, autonomy tag */
+  --color-danger-text:     #e2726d;   /* BREACHED, error copy, killed tag */
+
+  /* primary action fills (white/near-white text on each, ≥4.5:1) */
+  --color-accent-bg:       #205a9e;   /* approve / retry */
+  --color-accent-text:     #ffffff;
+  --color-promote-bg:      #1f6b4a;   /* promote */
+  --color-promote-text:    #ffffff;
+  --color-kill-bg:         #8f2b28;   /* kill */
+  --color-kill-text:       #ffffff;
+
+  /* focus */
+  --focus-ring:            #7fb2ff;
 }

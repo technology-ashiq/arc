@@ -1,4 +1,62 @@
 /* variant-a tokens — the ONLY place colour values live for this variant.
-   thesis: <the composer writes its one-line thesis here>  */
+   thesis: This product wins because the user can clear every approval with
+   j/k/a/r while the KPI row and today's event timeline stay in view, without
+   navigating to a second screen. Structure: command center — dense,
+   keyboard-first. One day surface; the approval inbox is a region of it,
+   never the whole screen.
+
+   The brief's declared contrast pairs are respected as floors (dark canvas,
+   light body text, blue primary action, green money-in) but every value
+   below is this variant's own system, not a copy of the brief's hexes. */
 :root{
+  /* ---- surfaces ---- */
+  --bg-canvas:        #17181b; /* page background */
+  --bg-header:        #101113; /* top bar — darkest surface */
+  --bg-surface:       #1f2024; /* inbox / timeline / card panels */
+  --bg-surface-raised:#26272c; /* in-place disclosure panel, raised above surface */
+  --bg-footer:        #131417; /* state-matrix reference strip */
+  --bg-skeleton:      #232428; /* loading skeleton bars */
+  --bg-badge:         #2a2b30; /* autonomy-level badge chip */
+
+  /* ---- row states (approval inbox) ---- */
+  --bg-row-selected:  #24303f; /* current selection — cool tint */
+  --bg-row-error:     #3a1f22; /* inline action failure — warm tint */
+  --bg-row-disabled:  #1c1d20; /* locked / blocked row */
+
+  /* ---- borders ---- */
+  --border-subtle:      #2c2d31;
+  --border-strong:      #46474e;
+  --border-row-error:   #6e2b34;
+  --border-row-disabled:#33343a;
+  --border-reject:      #9c4552; /* ghost-button border for reject/keep-active */
+  --border-focus:       #6fb3ff; /* visible-focus ring, selection marker accent */
+
+  /* ---- text ---- */
+  --text-primary:     #d8d6cd; /* body text — ratio ~12:1 on --bg-canvas */
+  --text-dim:         #9b9890; /* dim labels — ratio ~6.2:1 on --bg-canvas */
+  --text-dim-raised:  #a6a39b; /* dim labels on raised cards — ratio ~6.5:1 on --bg-surface-raised */
+  --text-inverse:     #ffffff; /* on filled buttons */
+  --text-stale:       #8a8782; /* greyed KPI value once stale — ratio ~5:1 */
+  --text-evidence:    #7fb2e0; /* evidence / receipt affordance text */
+  --text-disabled:    #6c6a66; /* label on a genuinely inactive control only */
+  --text-title:       #eeece4; /* top-bar product title */
+
+  /* ---- semantic (verdict / kill-criteria / money) ---- */
+  --verdict-promote:  #3aa66b; /* also used for kill-criteria "clear" */
+  --verdict-hold:     #c9a227; /* also used for kill-criteria "warn" and timeline alert */
+  --verdict-kill:     #e86c85; /* also used for kill-criteria "breach" and reject text */
+  --money-positive:   #24b24c; /* MRR figure — this variant's money-in green */
+
+  /* ---- buttons ---- */
+  --btn-approve-bg:   #2563a8; /* primary action — ratio ~6.1:1 with white text */
+  --btn-approve-text: #ffffff;
+  --btn-kill-bg:      #7a2330; /* irreversible action — ratio ~10:1 with white text */
+  --btn-kill-text:    #ffffff;
+  --btn-ghost-bg:     transparent; /* reject / retry / keep-active */
+  --btn-disabled-bg:  #232428;
+
+  /* ---- keyboard-legend keycaps ---- */
+  --key-bg:     #232428;
+  --key-text:   #cfcdc4;
+  --key-border: #3a3b41;
 }
