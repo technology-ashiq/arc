@@ -1,8 +1,8 @@
 {
   "phase": "02",
-  "commit": "6a380fc9014cd159928c22f01f0f671a3cd1e7fb",
-  "short": "6a380fc",
-  "generated": "2026-07-23T15:31:11Z",
+  "commit": "a2805d3e86b809db91441b6cc56cf1f5a513363c",
+  "short": "a2805d3",
+  "generated": "2026-07-29T10:08:40Z",
   "files": [
     {
       "name": "scan-verdict.json",
