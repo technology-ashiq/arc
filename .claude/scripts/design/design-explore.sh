@@ -100,11 +100,21 @@ case "$CMD" in
 
     # IA matrix: EXISTENCE only, plus the director's call being written down. The >=3/7
     # judgment itself is the director's and is never machine-diffed (superseded row 12:
-    # string distance proves words differ, not concepts).
+    # string distance proves words differ, not concepts). What IS machine-checked is that a
+    # line making the call exists -- the SHAPE of the evidence, never its content.
+    #
+    # HOLE found live in the first real run (hq-dashboard-v1): the first cut was
+    # `grep -qi "director call"`, an anywhere-in-file substring. The director's own matrix
+    # explained in prose that "the `Director call:` line is deliberately absent until Phase
+    # 2" -- and that sentence satisfied the gate. The gate certified its own absence. Same
+    # class as the colour-literal hole below, so the refusal covers the class:
+    #   - anchored at line start (after optional blockquote '>' and backtick markdown), so a
+    #     sentence merely MENTIONING the phrase can never satisfy it
+    #   - must carry the judgment itself (N of 7), so the bare label is not the evidence
     if [ ! -f "$EX/matrix.md" ]; then
       _fail "matrix-missing" "no matrix.md — the IA-difference matrix is the divergence evidence"
-    elif ! grep -qi "director call" "$EX/matrix.md"; then
-      _fail "director-call-missing" "matrix.md carries no written 'Director call:' line — the >=3/7 judgment must be written down, not implied"
+    elif ! grep -qiE '^[[:space:]]*>?[[:space:]]*`?Director call:.*[0-9]+[[:space:]]+of[[:space:]]+(the[[:space:]]+)?7' "$EX/matrix.md"; then
+      _fail "director-call-missing" "matrix.md carries no written verdict line — need a line that STARTS 'Director call:' and states the judgment, e.g. 'Director call: A/B/C differ materially on 4 of 7 dimensions — <why>.' A sentence mentioning the phrase does not count."
     fi
 
     for v in $VARIANTS; do

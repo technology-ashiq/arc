@@ -162,6 +162,42 @@ _smuggle_setup() {
   [ "$status" -eq 0 ]
 }
 
+# The director-call hole, found LIVE in the first real run (hq-dashboard-v1) rather than by
+# a constructed input -- the same class as the colour smuggles: a check that matched a word
+# instead of the shape of the evidence.
+
+@test "attack HOLE: prose merely MENTIONING the call does not satisfy the gate" {
+  _smuggle_setup
+  # verbatim shape from run hq-dashboard-v1: a matrix that explains the call is deliberately
+  # absent. The old substring grep read that explanation as the call itself.
+  printf '# m\n\n> The `Director call:` line is **deliberately absent** until Phase 2 — it is\n> appended only after all three variants exist.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"director-call-missing"* ]]
+}
+
+@test "attack HOLE: the label without the N-of-7 judgment is not a verdict" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: looks fine to me.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"director-call-missing"* ]]
+}
+
+@test "attack HELD: the real verdict line passes in blockquote + backtick markdown" {
+  _smuggle_setup
+  printf '# m\n\n> `Director call: A/B/C differ materially on 5 of 7 dimensions — three products.`\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -eq 0 ]
+}
+
+@test "attack HELD: 'N of the 7 dimensions' phrasing still passes" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: A/B/C differ materially on 4 of the 7 dimensions — distinct products.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -eq 0 ]
+}
+
 # ---------- 4. the ADR-0044 mechanism, pinned where Phase 2 depends on it ----------
 
 @test "two critique rounds on the SAME route leave two receipts with DISTINCT idems" {
