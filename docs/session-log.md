@@ -558,3 +558,11 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **Phase 04 (Live dogfood) — STARTED 2026-07-24. Host = arc itself (owner's call). The last phase.**
     Entry gate done via `/arc-change`: host confirmed + the coarse Verification plan refined into a
+
+## 2026-07-29 16:27 — feat/design-phase-02
+- Last commit: 597b35b chore(phase): Phase 02 CLOSED — explore mode proven end to end on a real run
+- Uncommitted files at exit: 0
+- Position (PROGRESS.md ## Now):
+    
+    **Phase 02 CLOSED 2026-07-29. Phase 03 is NEXT but deliberately NOT YET OPEN** — it opens
+    with two of its own preconditions unmet, and opening it before they are settled would burn
