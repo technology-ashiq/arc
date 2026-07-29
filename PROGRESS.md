@@ -267,11 +267,81 @@ two drafts or out of LexOS's `tailwind.config.ts`, never recalled.
   entry that stated the five states in the losing variant's vocabulary: **plausible-sounding is not
   sourced**, and it is the failure this system exists to catch.
 
-**Recommended next action: step 3 — the explore run on the real LexOS stack.** Director assigns
-three theses that differ on ≥3 of 7 IA dimensions, three blind composers build one variant each,
-critique loop, three blind jurors, owner pick + prediction. The two escalated debts are the
-obvious axes for divergence. Owner input needed only at the pick — and at step 4, which is where
-the Stream-A channel and the lawyer's willingness to sit the blind test become blocking.
+**Phase 03 step 3 — explore run `lexos-case-workspace-v1`: BUILT AND CRITIQUED, jury blocked.**
+Commit `1968a23`. Base `7f65ab0`. `design-explore check` OK; all three variants render clean.
+
+- **Director call: 7 of 7 dimensions differ.** Not the same case arranged three ways — the three
+  disagree about what the primary object *is* (a ledger row · a dated entry · a step in a run),
+  and it propagates: **40 action affordances on A's page, 13 on B's, exactly 1 on C's.** Two
+  theses were rejected BEFORE composing (canvas requires position to encode a date, i.e.
+  `reschedule` — a verb in zero LexOS files; ambient assistant contradicts the brief's own voice
+  line "a court record, not an assistant") and one held as reserve. Rejecting at assignment time
+  is what stops a post-build reassignment burning the appetite.
+- **Critique round 1: A PASS (0 violations), B and C each FAIL on 1 — and they broke the SAME
+  floor two different ways.** The brief says the always-visible quartet is "always visible, never
+  behind a click". B built a real sticky strip and truncated the party names inside it with no
+  recovery; C kept the names whole and never made the strip sticky at all, on a page 2.4× the
+  viewport. **"Always visible" is two requirements wearing one sentence** — it must stay on
+  screen AND stay complete. Worth carrying into the next brief as two lines, not one.
+- **Both fixed in round 1 of 2** (REQ-08 / ADR-0034: creation side fixes, critic re-verifies).
+  B: parties promoted to its own wrapping full-width block, `Record outcome` given a distinct
+  treatment, the five-item filter rebuilt as inline text so it reads as a lens not a rail.
+  C: a genuinely sticky status strip, its printed keys actually wired, voice drift removed, the
+  two foot disclosures de-overlapped. **Neither re-critique has run** (see BLOCKED).
+- **Renderer confirmation:** variant-a produced the identical hash across **three independent
+  render invocations**; B's and C's hashes each changed exactly when their bytes changed. The #57
+  hardening holds in real use, not only in its own fixture.
+
+**BLOCKED, and it is an environment limit rather than a build problem:** the remaining steps are
+2 round-2 critiques and 3 blind jurors — 5 subagent dispatches — and subagent dispatch is
+currently being refused by the permission classifier (two consecutive denials, so retrying was
+stopped rather than hammered). Earlier in the same run the API also returned 529 four times on
+the director before succeeding on the fifth attempt.
+**These steps cannot be done by the main session instead, by construction, and that is the point
+of the design:** a critic must have no Edit tool (ADR-0034 enforces read-only mechanically, not
+by prose) and this session has one; a blind juror must be a fresh context with no knowledge of
+the theses, and this session wrote them. Doing either here would produce an artifact that looks
+like evidence and is not. Resume by re-dispatching those five agents.
+
+**The jury already ran once and was blocked mid-write — the rankings are NOT evidence.** All
+three jurors read the renders, reached a verdict, and were refused the write by the critic scope
+marker. They reported their reasoning back, and it **split three ways** (unlike Phase 02's
+unanimous jury), which is interesting but is not on the record and must be re-derived by fresh
+jurors. Their reports are not being transcribed into ranking files: a "blind juror" artifact
+written by this session would be a fabrication.
+
+## Tooling findings from this run — all three about the critic scope marker
+
+The marker (`.claude/state/design/critic-session`) armed by `design-critique.sh begin` works
+exactly as ADR-0034 intends and was **not** bypassed. Four separate agents hit it, correctly
+diagnosed it, and refused to route around it — one wrote "that's the permission system speaking".
+The boundary is sound. Its *diagnostics* are not:
+
+1. **It is a global repo write lock, not a critic-scoped one.** While armed, nothing can write
+   outside `docs/design/critique/` — not a composer fixing its own variant, not a juror writing a
+   ranking, not the tracker. So explore mode is strictly serial end-to-end, not merely its
+   critiques. The phase's appetite arithmetic did not account for this.
+2. **Nothing distinguishes "legitimately held" from "stale".** Four agents all concluded stale
+   while the run was genuinely in flight.
+3. **The `pid` field is actively misleading.** It records the arming script's pid, and
+   `design-critique.sh begin` exits immediately — so the one field that looks like a liveness
+   check is *guaranteed* to report dead. It misled four agents and one check I ran myself.
+   Worse than having no pid at all.
+
+Finding 3 is the dangerous one: sooner or later someone will read "process gone" as licence to
+delete a marker that is doing its job, and the critic will be unbounded at exactly that moment.
+Routing to `/arc-retro`, not fixed here — changing an ADR-0034 mechanism is an owner call.
+
+**Recommended next action: re-dispatch the 5 blocked agents** (round-2 critique of B, round-2
+critique of C — serial, they need the marker — then 3 blind jurors once it is clear). Then the
+**owner's pick + falsifiable prediction**, which is REQ-07 and is not a call this session may
+make. Step 4 (blind-test launch) still needs the Stream-A channel and the lawyer's willingness to
+sit the test.
+
+**Untouched and unstaged in the working tree, deliberately:** `docs/strategy/plans/PLAN-portfolio.md`
+plus edits to `docs/strategy/README.md` and `docs/strategy/plans/README.md` — the owner's own
+frozen 431-line portfolio plan from a separate session, nothing to do with this phase. Not
+committed here rather than swept into a design commit.
 
 **Owner items — neither blocks starting, both block finishing:**
 - **Stream-B recruit.** The lawyer answered the brief question; whether they will also *sit the
