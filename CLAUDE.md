@@ -22,6 +22,11 @@
 - Work on a branch, open a PR — don't commit straight to `main`.
 - Run `git branch --show-current` immediately BEFORE every commit — the branch can change
   between turns without me saying so. If it's `main`, stop and move the work to a `feat/*` branch.
+- Publishing anything outward — a public post, an upload, a shared link, product screenshots —
+  is irreversible (indexed, cached, unrecoverable) and needs my explicit OK first, **even when a
+  plan or ADR already asks for external input**. ADR-0040 required only that arc's *authorship*
+  be hidden and said nothing about product confidentiality; that gap nearly put LexOS mockups on
+  a public subreddit.
 
 ### Code standards
 - Write **production-ready, robust** code from day one. No stubbed logic, no "// fix later".
@@ -42,6 +47,19 @@
 - A gate/lint/parser is NOT done until an adversarial construct-a-breaking-input pass has run
   against it and the found holes are fixed + pinned as fixtures (council v2+v3: 43 real holes
   in code that looked correct and passed its own tests). Mandatory verification, not review.
+- **Look at the artifact before carrying its verdict.** An agent's report about a screenshot or
+  a page is not the thing itself. Cycle 3 ran 5 critique rounds, 3 blind rankings, receipts, a
+  sealed prediction and an external package on pixels the session never opened — I looked once
+  and scored it 23/100.
+- **A gate that transforms what it measures must declare what the transform destroys.**
+  `design-render.sh` pinned `font-family: Arial !important` for hash stability, so every design
+  was judged with its typography deleted — invisible for a whole cycle to every brief, agent
+  prompt and ADR. Adding a normalisation? Write down which signal it removes, then check that
+  signal is not the one being judged.
+- **A pass condition that is only an absence cannot detect mediocrity.** `PASS = zero VIOLATION`
+  meant "broke no rule", so compliant characterless work passed five runs running. A quality
+  gate needs a class that fails for insufficiency (ADR-0049's `BELOW-BAR`), and ranking N
+  candidates against each other always yields a winner but never a bar.
 - **Change discipline (mid-build):** a new ask, idea, or suggestion is NEVER coded ad-hoc — run
   `/arc-change` to route it through the structure first (triage → phase spec / ADR / current-phase note
   → confirm → then build via the Golden Loop). Applies to MY own suggestions too. No code change

@@ -178,3 +178,36 @@ clean-because-blind are indistinguishable without a fire on code the gate did no
 more clean run plus at least one run against hq consumer code written by someone not designing to
 this lint — the natural occasion is the next cycle's first new spine consumer (dashboard, evolve,
 or policy), each of which is a genuine outside caller of the reader contract.
+
+---
+
+## Cycle 3 · arc-design (2026-07-28 → 2026-07-30) — no promotion
+
+All eight kickoff-lint substance gates were exercised repeatedly across the cycle (kickoff-lint
+ran on every `/arc-change`, every phase close and both `/arc-resume` runs).
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-07-30 | `appetite-sum` | every run, cycle-long | **yes, every run** | **arguable — see below** |
+| 2026-07-30 | `pre-mortem-cite` | every run | no | — |
+| 2026-07-30 | `adr-wired` | every run | no | — |
+| 2026-07-30 | `adr-confidence` | every run | no | — |
+| 2026-07-30 | `architecture` | every run | no | — |
+| 2026-07-30 | `current-state-structure` | every run | no | — |
+| 2026-07-30 | `nonneg-drift` | every run | no | — |
+| 2026-07-30 | `verify-red` | every run | no | — |
+
+**`appetite-sum` — the honest reading.** It warned on every run that "phase appetites sum to 4.5d
+= 90% of 5d total — zero slack is its own fiction". The cycle finished at **~60% actual burn**,
+so the slack it predicted would be missing was in fact there. That is not obviously a
+false-positive: the gate judges the *declared plan*, not the outcome, and the plan really did
+declare 90%. But it also never told anyone anything they acted on across ~15 firings, which is
+the shape of a gate that has learned to be ignored. **Logged as a fire with the false-positive
+question left open rather than silently resolved in the gate's favour.**
+
+**The other seven measure silence, not accuracy.** They ran clean on a plan written by the same
+author who designed them, in a cycle where nothing they check went wrong. Clean-because-correct
+and clean-because-blind stay indistinguishable until one fires on a plan it did not shape.
+
+**Net: no flip.** Nothing meets both criteria. `appetite-sum`'s open false-positive question
+resets its count regardless. The eight stay in `TRIAL`.
