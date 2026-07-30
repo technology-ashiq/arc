@@ -1,88 +1,79 @@
-# Design critique — variant B (narrative)
+# Design critique — variant B (narrative), round 2 (re-verification)
 
 - target: `docs/design/explore/lexos-case-workspace-v1/variant-b/index.html`
-- screenshot_sha256: `a45af2c8a218c0afb34a05532da6ff9630475e715f8ea81dbb3cabf8d343f0ea`
+- screenshot_sha256: `6e790f32b8512a1a4ccf331dbf9c44456c4f71c36158a00f91f88bfeaaec84bb`
 - viewport: `1440x900@1`
 - brief: `docs/design/briefs/lexos-case-workspace/brief.md`
 
 ## What I looked at
 
-Full-page desktop render (1440 wide, full scrolled height) of the case-record stream: topbar,
-case identity, the sticky quartet strip, the measure-departure note, the "Add entry" compose
-point, the five-item "Show:" filter, the "Ahead" future entry, the open `1–30 Jul 2026` period
-with six dated entries, the collapsed `May 2026` period, the keyboard legend, and the full
-appendix of declared states for the case header and a period.
+Full-page desktop render (1440 wide, full scrolled height) of the case-record stream, judged
+fresh against all four contracts, not spot-checked against round 1 alone: topbar, case identity,
+the quartet strip (Parties / Case number / Status / Next hearing / Overdue), the measure-departure
+note, "Add entry", the five-item "Show:" filter, the "Ahead" card, the "Jump to next-due entry"
+link, the open `Jul 2026` period with six dated entries (including the highlighted, unrecorded
+14 Jul hearing), the collapsed `May 2026` period, the keyboard legend, and the full appendix of
+declared states for the case header and a period.
 
-**Gaps in this run, not judged as pass or fail:** only a 1440×900 desktop capture exists, so the
-declared mobile reflow cannot be verified from pixels. No focus-visible state was captured
-(nothing is focused in a static render), so the a11y floor's visible-focus requirement is
-unverified here even though the stylesheet declares one. Only the default `All` state of the
-in-stream filter was rendered, so I cannot confirm from pixels whether selecting `Hearings` /
-`Documents` / `Tasks` / `Notes` truly filters in place versus repositioning the page — my read on
-that dimension leans on the static evidence available (single region, no route change visible)
-plus the fact that only one filter state exists in this capture. The collapsed `May 2026` period
-and the closed `Add entry` form body were not rendered open, so their contents (including a
-lorem-ipsum check) could not be visually verified.
+**Round-1 VIOLATION, re-checked on this render:** the brief's "always visible, never behind a
+click" for the identity quartet is two independent requirements — on screen through scroll, and
+complete without truncation. Round 1 caught the second failing (a clipped Parties value with no
+recovery). On this render the Parties field reads the case's full name
+(`Meera Raghunathan v. Sunvale Housing Pvt. Ltd.`), identical to the page H1, on its own full-width
+row above the four-column strip rather than squeezed into a narrow column — a structural change,
+not a coincidence of this fixture's name length. **Completeness: resolved, on these pixels.**
+**On-screen-through-scroll: cannot be judged from this artifact.** A flattened full-page capture
+does not simulate a mid-page scroll position, so it cannot show whether the strip actually stays
+pinned once the record is scrolled — that half of the requirement is a gap in this run, not a
+pass, and not a fail either.
+
+**Other gaps in this run, not judged as pass or fail:** only a 1440×900 desktop capture exists,
+so the declared mobile reflow is unverified. No focus-visible state was captured (nothing is
+focused in a static render). Reduced motion cannot be judged from a still image. Only the
+default `All` state of the in-stream filter was rendered, so whether selecting a filter truly
+filters in place cannot be confirmed from pixels. The collapsed `May 2026` period and the closed
+`Add entry` form body were not rendered open.
 
 ## Findings
 
-- VIOLATION: the **Parties** field in the always-visible quartet strip is rendered with a hard
-  ellipsis clipping the case name (`Meera Raghunathan v. Sunvale Housing Pvt. ...`) — the full
-  name is only spelled out in the page's H1 above it, which is not part of the sticky strip and
-  scrolls out of view. Once the reader has scrolled into the record, the only persistently-visible
-  copy of the mandated "parties" fact is the truncated one, with no way to recover the clipped
-  text — no tooltip, no expansion, no wrap. The brief's A.5 and the matrix's shared floor both
-  require the case's identity to be "on screen at all times ... never behind a click"; a fact that
-  is silently clipped with no recovery path is not on screen in full, and for a case with a longer
-  party list or a longer corporate suffix this will clip more, not less. Location: the "Parties"
-  field of the sticky quartet strip, directly under the measure note.
+- WEAKNESS: the **Overdue** field in the quartet strip — the fact the brief names directly as
+  required pre-action knowledge ("whether anything on it is overdue") — renders as plain bold
+  text with no badge or colour treatment, while the adjacent, less time-pressured **Status**
+  field gets a filled colour pill (`Active`). The one fact in the quartet most likely to change
+  what the reader does next carries the flattest visual weight of the four. Location: the
+  "OVERDUE" field of the quartet strip, right of "NEXT HEARING".
 
-- WEAKNESS: the five-item "Show:" filter (All · Hearings · Documents · Tasks · Notes) reads
-  visually as a tab bar — evenly sized rounded pills, one filled solid dark as the active state
-  among outline pills — even though the "Show:" prefix and its in-stream placement support the
-  matrix's own "lens, not address" ruling. This is the exact tension the matrix's own director
-  call flagged when it was built ("the filter's inverse-filled pills read tab-like even though the
-  IA underneath is not"), and the rendered pixels confirm that concern rather than resolve it.
-  Location: the filter row directly below "Add entry".
+- WEAKNESS: suspect several interactive elements fall under the brief's declared 44px target
+  floor — the row-action links (`Edit` / `Remove … — cannot be undone`) render as plain,
+  unpadded inline text sitting close together, and the "Show:" filter items read the same way.
+  This is a suspicion only, not a measurement — hand the real number to design-lint before
+  treating it as settled. Location: row actions on every dated entry (24 Jul, 21 Jul, 16 Jul,
+  08 Jul, 02 Jul), and the filter row under "Add entry".
 
-- WEAKNESS: the single most operationally important action on the page — "Record outcome" on the
-  14 Jul entry, which is what the interaction model's primary action (A.3, "record what just
-  happened") actually looks like in this fixture — is styled identically to a routine "Edit" link
-  elsewhere in the record (same plain, unweighted link style). The row it sits in is tinted to
-  flag it, but the action text itself carries no more visual weight than editing a filed document.
-  For the one entry the whole case is waiting on, this undersells the action the brief calls the
-  case's primary one. Location: the "14 Jul 2026 / Held 14 Jul 2026 / Unrecorded" entry's action
-  link.
+- POLISH: the active "Show:" filter item (`All`) still carries an underline beneath it — a
+  residual tab-navigation cue — even though the filled-pill treatment round 1 flagged is gone.
+  Smaller echo of the same "address, not lens" tension, not eliminated. Location: filter row
+  directly below "Add entry".
 
-- POLISH: period headers are inconsistent in form — the open period reads as a day range
-  (`1–30 Jul 2026`) while the collapsed period reads as a bare month (`May 2026`) — a small
-  rhythm break between two instances of the same component.
-
-- POLISH: the keyboard legend describes the filter cycle in lowercase singular ("all → hearing →
-  document → task → note") while the actual filter pills read capitalized and plural ("All,
-  Hearings, Documents, Tasks, Notes") — same closed vocabulary, mismatched inflection between the
-  legend and the control it describes.
-
-- POLISH: the case-header "Empty" state in the declared-states appendix reads as a list-level
-  empty state ("No case selected. Choose a case from All cases to open its record.") rather than
-  an empty state of this case's own header — a plausible interpretation for a reference appendix
-  but a slight conceptual mismatch worth a second look.
+- POLISH: the Overdue count has no direct link to the entries it counts, unlike Next hearing,
+  which is paired with an explanatory "Ahead" card immediately below it — a small missed
+  connective thread between the header metric and the content that explains it. Location:
+  OVERDUE field in the quartet strip versus the entry stream below.
 
 ## What is working
 
-The thesis is genuinely built, not merely claimed: every dated row — document, task, note,
-hearing — sits in one continuous stream carrying its type as a small inline tag, never as a
-section container, and there is exactly one compose affordance ("Add entry") at the head of the
-stream with no per-type buttons scattered anywhere else on the page. The full five-state matrix
-(empty · loading · error · success · disabled) is rendered concretely for both the case header and
-a period, not just described. Destructive language is textbook — every "Remove ... — cannot be
-undone" names the thing, states irreversibility, and is visually distinguished from a benign
-"Edit" link beside it. Every colour used on the page traces to the brief's own declared, pre-cleared
-fg/bg pairs, including the deliberately dim "Not set" / eyebrow-label ink, used as intended rather
-than "cleaned up." Dates and the ₹ amount are formatted exactly to the content contract, and the
-licensed departure from `max-w-shell` is declared on the page, in plain language, in the right
-place, and correctly spends the width on line length rather than a second region.
+The round-1 violation reads as genuinely fixed, not patched around: the Parties value now
+occupies a dedicated full-width row with room to wrap rather than a narrow clipped column, and it
+matches the H1 verbatim. Two round-1 weaknesses also look resolved on these pixels even though
+neither was mandatory — "Record outcome" is now a solid primary-styled button, clearly
+distinguished from the plain "Edit" links beside other entries, and the "Show:" filter has moved
+from filled rounded pills to an inline text list, which reads much closer to the matrix's own
+"lens" framing. The open and collapsed period headers now share one bare-month form
+(`Jul 2026` / `May 2026`), closing the rhythm break round 1 noted. The full five-state matrix
+(empty · loading · error · success · disabled) is still rendered concretely for both the case
+header and a period, destructive actions still name the thing and state irreversibility in a
+colour distinct from benign actions, every visible term traces to the content contract's closed
+vocabulary, and no lorem ipsum appears anywhere on the page.
 
-The variant's weakest moment is the truncated parties field — a real fact clipped with no recovery
-in the one place the brief most insists it must always be readable — set against an otherwise
-disciplined, well-argued build of its own thesis.
+No new defect was found elsewhere on the page as a side effect of the round-1 fix — the risk this
+round was explicitly watching for.

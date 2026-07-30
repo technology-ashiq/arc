@@ -267,7 +267,7 @@ two drafts or out of LexOS's `tailwind.config.ts`, never recalled.
   entry that stated the five states in the losing variant's vocabulary: **plausible-sounding is not
   sourced**, and it is the failure this system exists to catch.
 
-**Phase 03 step 3 — explore run `lexos-case-workspace-v1`: BUILT AND CRITIQUED, jury blocked.**
+**Phase 03 step 3 — explore run `lexos-case-workspace-v1`: COMPLETE except the owner's pick.**
 Commit `1968a23`. Base `7f65ab0`. `design-explore check` OK; all three variants render clean.
 
 - **Director call: 7 of 7 dimensions differ.** Not the same case arranged three ways — the three
@@ -292,23 +292,56 @@ Commit `1968a23`. Base `7f65ab0`. `design-explore check` OK; all three variants 
   render invocations**; B's and C's hashes each changed exactly when their bytes changed. The #57
   hardening holds in real use, not only in its own fixture.
 
-**BLOCKED, and it is an environment limit rather than a build problem:** the remaining steps are
-2 round-2 critiques and 3 blind jurors — 5 subagent dispatches — and subagent dispatch is
-currently being refused by the permission classifier (two consecutive denials, so retrying was
-stopped rather than hammered). Earlier in the same run the API also returned 529 four times on
-the director before succeeding on the fifth attempt.
-**These steps cannot be done by the main session instead, by construction, and that is the point
-of the design:** a critic must have no Edit tool (ADR-0034 enforces read-only mechanically, not
-by prose) and this session has one; a blind juror must be a fresh context with no knowledge of
-the theses, and this session wrote them. Doing either here would produce an artifact that looks
-like evidence and is not. Resume by re-dispatching those five agents.
+**UNBLOCKED AND COMPLETED 2026-07-30.** The five refused dispatches were re-issued and all five
+succeeded on the first attempt — the earlier refusal was transient classifier behaviour, not a
+permission rule (no deny entry for subagent dispatch exists in either settings file). Nothing was
+worked around and nothing was done by the main session in their place.
 
-**The jury already ran once and was blocked mid-write — the rankings are NOT evidence.** All
-three jurors read the renders, reached a verdict, and were refused the write by the critic scope
-marker. They reported their reasoning back, and it **split three ways** (unlike Phase 02's
-unanimous jury), which is interesting but is not on the record and must be re-derived by fresh
-jurors. Their reports are not being transcribed into ranking files: a "blind juror" artifact
-written by this session would be a fabrication.
+**Round-2 critiques — both PASS, 0 VIOLATION each.** Boundary armed and released by the runner
+each time; the ledger stamped `design` for `5871f9c` on both.
+- **variant-b** `a45af2c8` → `6e790f32` (pixels genuinely moved). Round-1 VIOLATION resolved: the
+  parties fact now sits on its own full-width row, matching the H1 verbatim, so the mandated
+  identity is complete rather than ellipsis-clipped. 2 WEAKNESS / 2 POLISH remain — the sharpest
+  is that the **Overdue** count, the one fact the brief names as required pre-action knowledge,
+  carries less visual weight than the less time-critical Status badge beside it.
+- **variant-c** → `68b2e14c`. 0 VIOLATION / 3 WEAKNESS / 2 POLISH. Confirmed from pixels: the
+  quartet's completeness half holds, the breadcrumb no longer duplicates the case name, and the
+  return-state line was reworded out of reviewer-facing voice into plain fact.
+- **variant-a** re-rendered unchanged for a same-session jury capture → `5e4cf063`.
+
+**The method cannot verify what C actually failed on, and that is the finding of this run.**
+C's round-1 VIOLATION was that its identity strip was **not sticky**. `design-render.sh` produces
+one flattened full-page capture and has no scrolled or viewport-clipped mode (`--viewport` resizes
+the viewport; the capture is still full-page). A sticky element in a flattened capture occupies
+exactly the position a static one would, so **no render this pipeline can produce distinguishes
+"now pinned" from "still static."** The critic was told this up front and correctly recorded it as
+a **run gap — neither a pass nor a fail** — rather than claiming a fix it could not see. The same
+applies to C's "keyboard keys now wired" claim: a static image shows a legend, not a binding.
+- Weaker, separately-labelled evidence, gathered by the runner and **not** by the critic: C's
+  `.status-strip` does declare `position: sticky; top: 0; z-index: 20`, and that selector is the
+  identity strip. **A declaration is not an observation** — it says the intent is in the source,
+  not that the behaviour survives on screen. It is recorded here at that strength and no higher.
+- Consequence to carry: **"always visible" is two requirements wearing one sentence** (on screen
+  through scroll AND complete) and this pipeline can only judge the second. Either the renderer
+  gains a scrolled frame or that half of the floor is verified some other way. Routed to
+  `/arc-retro` with the marker findings below — it is a renderer capability change, not a fix.
+
+**Blind jury — 3 fresh contexts, no cross-talk, 2–1 for variant-b.** Each juror was blocked from
+`matrix.md`, every `thesis.txt`, every other `ranking-*.md`, all variant source and all critiques.
+- juror 1 — `variant-b > variant-a > variant-c`
+- juror 2 — `variant-c > variant-b > variant-a`
+- juror 3 — `variant-b > variant-a > variant-c`
+
+**B is the only variant no juror ranked last**; A placed 2nd/2nd/3rd, C is the polarising one
+(1st once, 3rd twice). The earlier blocked jury's three-way split is *not* what this is — those
+reports were never transcribed and this panel re-derived its verdict from scratch, as intended.
+- **Caveat the owner should weigh before picking, because it inflates B's margin:** juror 1's
+  lead reason for b > a is that A opens with a grey caption explaining the `max-w-shell` width
+  departure *above* the H1. That is true — it sits inside A's sticky header, before the case name
+  — but it is a **mockup-convention artifact**: the brief required the departure be declared, and
+  the note would not exist in the shipped product. Juror 3's b > a reason is a genuine
+  product-structure one (B puts a distinct "Record outcome" action directly on the one row flagged
+  Unrecorded). So B's win survives the caveat; A's *margin of loss* is partly an artifact.
 
 ## Tooling findings from this run — all three about the critic scope marker
 
@@ -332,11 +365,14 @@ Finding 3 is the dangerous one: sooner or later someone will read "process gone"
 delete a marker that is doing its job, and the critic will be unbounded at exactly that moment.
 Routing to `/arc-retro`, not fixed here — changing an ADR-0034 mechanism is an owner call.
 
-**Recommended next action: re-dispatch the 5 blocked agents** (round-2 critique of B, round-2
-critique of C — serial, they need the marker — then 3 blind jurors once it is clear). Then the
-**owner's pick + falsifiable prediction**, which is REQ-07 and is not a call this session may
-make. Step 4 (blind-test launch) still needs the Stream-A channel and the lawyer's willingness to
-sit the test.
+**Recommended next action: the OWNER's pick + falsifiable prediction (REQ-07).** All five blocked
+dispatches are done and every artifact the pick needs is on disk — 3 renders, 2 round-2 critiques
+(both PASS), 3 blind rankings. The pick is not a call this session may make, and the prediction
+must be falsifiable: the two blind-test streams later either match it or do not, and a prediction
+that cannot be wrong makes that evidence worthless. The jury's 2–1 for variant-b is an input to
+the pick, not the pick itself — read the caveat on A's margin above before treating the gap as
+real. After the pick, step 4 (blind-test launch) still needs the Stream-A channel and the lawyer's
+willingness to sit the test; both are owner items and both gate the phase CLOSE, not the build.
 
 **Untouched and unstaged in the working tree, deliberately:** `docs/strategy/plans/PLAN-portfolio.md`
 plus edits to `docs/strategy/README.md` and `docs/strategy/plans/README.md` — the owner's own

@@ -1,105 +1,95 @@
-# Design critique — variant C (guided workflow), LexOS case workspace explore
+# Design critique — variant C (guided workflow), LexOS case workspace explore — round 2
 
 - target: `docs/design/explore/lexos-case-workspace-v1/variant-c/index.html`
-- screenshot_sha256: `76e0c8537bcfe80ca4123d120c8d2392169c15e741617980eb85b8fa778f0294`
+- screenshot_sha256: `68b2e14c0de10c77e2efcfdb320954bc16632170c76a6ed9bf8e64ce08a5ed30`
 - viewport: `1440x900@1`
 - brief: `docs/design/briefs/lexos-case-workspace/brief.md` · thesis: `docs/design/explore/lexos-case-workspace-v1/variant-c/thesis.txt` · matrix: `docs/design/explore/lexos-case-workspace-v1/matrix.md`
 
 ## What I looked at
 
-The full-page desktop render at 1440 wide (full scrolled height, well beyond the 900px viewport):
-the topbar breadcrumb, the case-header quartet card, the three-step horizontal rail, the printed
-keyboard legend, the open Step 1 card with its single button, the blocked Step 2 and Step 3 cards
-with their stated reasons, the two foot disclosures (collapsed), and the "Reference — state
-matrix" appendix (case header × 4 states, a step × 4 states, run end-state). I also read
-`index.html` and `tokens.css` to settle three things a single static capture cannot: whether the
-quartet card is pinned through scroll (it is not — see Findings), whether the printed keyboard
-legend is backed by a script (it is not — the file ships no `<script>` element at all), and what
-the two collapsed disclosures actually contain (checked for lorem ipsum, date format and the
-destructive-link styling, since none of that is visible as pixels while collapsed).
+The full-page desktop render at 1440 wide (full scrolled height, well beyond the 900px
+viewport): the topbar breadcrumb, the case-header card (name, status badge, case number, next
+hearing, overdue count, and the "Waiting on" line), the secondary court/client/claim line, the
+three-step rail, the "Return opens at Hearing outcome." line, the printed KEYS legend, the open
+Step 1 card with its single button, the blocked Step 2 and Step 3 cards with their stated
+reasons, the two foot disclosures (both collapsed), and the "Reference — state matrix" appendix
+(case header × 4 states, a step × 4 states, run end-state). This is a fresh render — the
+screenshot hash differs from round 1's — and this critique was formed against these pixels only,
+full sweep, not a diff against the round-1 text.
 
-**Gaps in this run, not judged as pass or fail:** only a 1440×900 desktop capture exists, so the
-declared mobile reflow ("Step 1 of 3" compact rail) cannot be verified from pixels — the CSS
-media query for it is present in source but that is not the same as seeing it rendered. No
-`:focus-visible` state was captured (nothing is focused in a static render) and reduced-motion
-cannot be observed from a still image either, even though both are declared in the stylesheet.
+**Two properties this run cannot rule on, by design of the tool, not by omission on my
+part.** The renderer produces one flattened full-page capture with no scroll or viewport-clipped
+frame. (1) Round 1's VIOLATION was that the case-identity card was not pinned through scroll.
+Stickiness is scroll-time behaviour; a full-page capture shows a sticky element sitting in its
+normal flow position exactly as a static one would, at whatever page height the tool renders —
+there is no evidence in this image that could distinguish "now sticky" from "still static." I am
+not reporting the fix as verified, confirmed, or resolved, and I am not reporting it as broken
+either — this run produces no evidence either way, and that is a gap in the run, not a finding.
+(2) The same applies to the printed KEYS legend: a static image shows three key-cap labels and
+their stated behaviour in prose; it cannot show whether Enter/→/← actually fire anything. Treat
+that claim as equally unverified by this run.
+
+**Other gaps, carried from round 1, still true of a single desktop capture:** the two foot
+disclosures are collapsed in this render exactly as they were in round 1, so their content (and
+any content-level overlap between them) is not pixels I can see this round either — I can only
+confirm the two collapsed rows do not collide or overlap each other as boxes on screen, which
+they don't. No `:focus-visible` state is captured (nothing is focused in a static render), no
+mobile reflow is visible (desktop-only capture), and reduced motion cannot be observed from a
+still image.
 
 ## Findings
 
-- VIOLATION: the always-visible quartet card is not pinned through scroll, so it is not "on
-  screen at all times" once a lawyer scrolls past roughly the first third of the page. This
-  render's own full-page capture shows the quartet as the very first block on a page that runs
-  to well over two screens' worth of content beneath it (step rail, keys, three step cards, two
-  disclosures, the full state appendix) — none of it visible without scrolling the quartet out of
-  view first. I checked the stylesheet because a single full-page image can't settle
-  scroll-persistence either way: there is no `position: sticky` or `fixed` anywhere on
-  `.case-header`, `.topbar`, or any ancestor — the only `position` rule in the whole file is on
-  the accessibility skip-link. This variant's own expected entry for dimension 3 in the matrix
-  promises "the quartet as a fixed status line," and the shared floor states the quartet must be
-  on screen at all times, never behind a click and never behind a step — the matrix's own words
-  are that a guided run hiding the case's status is a VIOLATION, not a thesis. Location: `.case-header`
-  (top of page) versus the page's full scrollable height.
+- WEAKNESS: several of the dimmest-reading text elements on the page — the "Not set" value in
+  the quartet, the "Case number"/"Next hearing"/"Overdue" column labels, the Step 2/Step 3
+  headings and their reason sentences, and the small caps labels throughout the reference
+  appendix (EMPTY/LOADING/ERROR/DISABLED, etc.) — read as the dimmest ink on the page and are
+  worth a design-lint pass to confirm the numbers. This is a suspicion only, not a measured
+  failure: the brief itself pre-clears this exact ink level as "earned and deliberate," so intent
+  isn't in question, only whether every instance lands on the cleared pairing. Location: quartet
+  "Not set" and column labels, Step 2/3 card text, appendix labels throughout.
 
-- WEAKNESS: the printed "KEYS" legend (Enter / → / ←) is declared but not demonstrated — the page
-  ships zero `<script>` elements, so none of the three bindings actually fires. The legend itself
-  is internally clean (three keys, no key bound twice), which is the specific defect this pass was
-  asked to check for, but the larger gap is that this variant's whole expert-path thesis (dimension
-  6: "keys move over steps") and the "keyboard-first: yes" platform surface are both asserted in
-  copy with no working implementation behind them on this page. Location: the "KEYS" block under
-  the step rail.
+- WEAKNESS: "Recent record" is a label that doesn't map cleanly to any single noun in the
+  brief's declared object list (case · hearing · document · task · note · client · firm), and the
+  brief's own on-demand list names four distinct surfaces separately (full hearing history,
+  document list, task list, notes) rather than one folded catch-all. The variant is free to
+  choose its own arrangement — the brief explicitly leaves the split's shape open — but the label
+  itself gives a lawyer no idea which of those four object types are inside it before opening it.
+  I can't re-examine the actual contents this round since the row is collapsed in this render (as
+  it was in round 1), so this is a naming-clarity observation on the visible label, not a repeat
+  of round 1's content-overlap claim. Location: the second `<details>` row at the foot of the run.
 
-- WEAKNESS: "Opens here on return — Hearing outcome, not a section." reads as commentary aimed at
-  whoever is judging the IA rather than at the lawyer using the product — it only fully parses
-  against knowledge of the shipped baseline's five-tab shape (the contrast implied by "not a
-  section"), which is not something a working lawyer needs mid-case. Against a voice contract of
-  "a court record, not an assistant," this is closer to design rationale bleeding into the
-  interface than a stated fact. Location: the line directly beneath the step rail, above the KEYS
-  legend.
+- WEAKNESS: the compact "Enter" / "→" / "←" key-cap chips in the KEYS legend read visually
+  small next to the full-size "Record hearing outcome" button directly below them — worth a
+  design-lint target-size check if any of the three is meant to be an actual clickable control
+  rather than pure legend. Flagged as a suspicion for measurement, not a counted defect.
+  Location: the KEYS row beneath the step rail.
 
-- WEAKNESS: the two foot disclosures ("Full hearing history" and "Recent record") overlap in
-  content — both carry facts about the same 19 May and 14 Jul hearings — and "Recent record" is a
-  seven-item mixed-type dated list (hearing, fee, document, note, task, task) that is a small-scale
-  version of variant B's whole record stream. The matrix's own director notes flag this exact spot
-  as the one place C comes closest to converging with B, ruled acceptable only because it is
-  collapsed by default. This render confirms both disclosures are in fact collapsed by default, so
-  the ruling holds for what's on screen — but it is the single most fragile point in the build, one
-  content edit away from becoming what the matrix warned against. Location: the two `<details>`
-  elements at the foot of the run.
+- POLISH: two of the action verbs used in explanatory copy sit outside the six-verb closed list
+  (add · edit · remove · save · record · file) — "fire" in "Enter — fire the current step's
+  action" and "advances" in "the same Enter key advances to the next case awaiting action."
+  Neither is a button label, so neither is the invented-label violation the content contract
+  exists to catch, but both are the kind of stray verb worth folding into the closed set on a
+  tidy pass. Location: the KEYS legend's Enter row, and the "RUN — END STATE (REFERENCE)" note.
 
-- WEAKNESS: several of the dimmest-reading text elements on the page — the "Not set" values in the
-  quartet, the "Step 2"/"Step 3" headings and reason text on the blocked steps, and the small
-  labels throughout the reference appendix — read as the dimmest ink on the page and are worth a
-  design-lint pass to reconfirm the numbers. I'm flagging this as a suspicion only, not a measured
-  failure: the brief itself pre-clears exactly this ink as "earned and deliberate," so the intent
-  is not in question, only whether every instance of it actually lands on the cleared pairing.
-  Location: quartet "Not set" values, Step 2/3 card text, appendix labels.
-
-- POLISH: the topbar breadcrumb carries the case name a second time
-  ("LexOS / Cases / Meera Raghunathan v. Sunvale Housing Pvt. Ltd.") styled with ellipsis
-  truncation in source, while the mandated copy of the same name in the case-header H1 directly
-  below has no such truncation risk. Nothing clipped in this 1440px render and the breadcrumb isn't
-  the mandated field, but it's the one place on the page where the case name could silently clip
-  under a narrower width. Location: `.topbar__current`.
-
-- POLISH: "advances" (in the Enter key's description) sits outside the six-verb closed list. It's
-  descriptive prose echoing the brief's own A.3 wording ("Advance the case"), not a button label,
-  so it isn't the invented-label violation the content contract exists to catch — but worth a
-  tidy pass to keep every verb on the page inside the closed set even in explanatory copy.
-  Location: the "Enter" key legend item.
+- POLISH: the header's "Overdue 2" states a bare count with no noun attached (2 what — hearings,
+  tasks, filings?), while the brief's own reference example two panels down shows the same field
+  correctly resolving to "Overdue 0" in plain ink. Not a violation of anything declared, just a
+  spot where one more word would remove an ambiguity a lawyer currently has to resolve from
+  context. Location: the case-header quartet, "Overdue" column.
 
 ## What is working
 
-Exactly one `<button>` exists on the page ("Record hearing outcome") — this variant's whole thesis
-is delivered, not merely claimed, and the two blocked steps state their reasons as plain sentences
-rather than rendering as dimmed secondary buttons standing next to the primary one. The always-
-visible quartet's data is correct against the canonical fixture and "Not set" is shown as a
-labelled, unhidden empty value; the overdue count only takes on alarm styling when it's actually
-nonzero (the reference example correctly shows "Overdue 0" in plain ink). Status badges carry both
-a tone and a human-readable label ("Active", "On hold", "Intake") — never a raw enum, never colour
-alone. The system stance holds throughout — no drop shadows, no gradients, no emoji, left-aligned
-quiet-fill empty states, a single radius token. The state-matrix appendix is an efficient, honest
-reading of the five-state requirement: it reuses what's already live above (Step 1 open = success,
-Steps 2–3 = disabled) and adds only the three states that aren't otherwise on screen, rather than
-padding out a redundant 5×2 grid. And the exact defect flagged as a VIOLATION on a sibling variant —
-a mandated name clipped with no recovery — does not recur here: every party name and case name on
-this page renders in full.
+Zero VIOLATIONs this round. The primary object (the case) and primary action (the single
+"Record hearing outcome" button) remain unambiguous, and the quartet's completeness half holds
+cleanly: the case name, case number, and the reference appendix's second case name all render in
+full with no ellipsis or clipping at this width — the thing round 1 could rule on from pixels
+still passes. Two things round 1 flagged as weaker than the rest of the page read as fixed in
+this pass: the topbar no longer repeats the full case name a second time next to the mandated H1
+(it now reads just "LexOS / Cases"), and the return-state line has been reworded from commentary
+aimed at a reviewer ("not a section") to a plain factual sentence ("Return opens at Hearing
+outcome.") that fits the court-record voice. The full five-state matrix is still an honest,
+non-padded reuse of what's already live on the page, loading states exist here where the shipped
+baseline had none, error text states what failed and what to do next rather than a bare
+"Confirm," dates and the ₹ amount follow the declared formats, and the white identity band
+sitting visually apart from the grey page canvas below it reinforces the header's intended
+persistence even where this run has no way to confirm the persistence itself.
