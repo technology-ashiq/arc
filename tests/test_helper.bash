@@ -162,6 +162,96 @@ _arc_sha256() {
   fi
 }
 
+# ---------- root-mode golden harness (Cycle 4 portfolio, REQ-01) ----------
+
+# Sandbox for the ROOT-MODE tracker surfaces (SessionStart/SessionEnd hooks,
+# arc-evidence). Mirrors the REAL layout (same lesson as _arc_sandbox: a flat
+# copy can pass while the real tree is broken). Deterministic on purpose:
+# fixed branch name, repo-local git identity (clean CI runners have no global
+# identity — env-only identity is green local, red CI), controlled PROGRESS.md.
+_arc_tracker_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-root.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/hooks/SessionStart.d" \
+           "$SANDBOX/.claude/hooks/SessionEnd.d" \
+           "$SANDBOX/.claude/scripts/core" \
+           "$SANDBOX/.claude/scripts/plan"
+  cp "$ARC_ROOT/.claude/hooks/SessionStart.d/00-context.sh"   "$SANDBOX/.claude/hooks/SessionStart.d/"
+  cp "$ARC_ROOT/.claude/hooks/SessionEnd.d/00-session-log.sh" "$SANDBOX/.claude/hooks/SessionEnd.d/"
+  cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/review-ledger.sh" "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/arc-profile.sh"   "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
+  cp "$ARC_ROOT/.claude/scripts/plan/arc-evidence.sh" "$SANDBOX/.claude/scripts/plan/"
+  cd "$SANDBOX" || return 1
+  git init -q
+  git checkout -qb fixture-main
+  git config user.name  arc-test
+  git config user.email test@arc.local
+  cat > PROGRESS.md <<'EOF'
+# PROGRESS.md — fixture tracker
+
+## Phase table
+
+| Phase | Capability | Appetite | Status |
+|---|---|---|---|
+| 00 | fixture capability | 1 day | in progress |
+
+## Now
+
+**Position:** fixture position line one.
+line two
+line three
+line four
+line five
+line six
+line seven — must NOT appear in SessionStart output (head -n 6 contract)
+
+## After
+
+after-section line — must never leak into the Now extraction
+EOF
+  git add -A && git commit -qm "seed tracker"
+  export CLAUDE_PROJECT_DIR="$SANDBOX"
+}
+
+# DECLARED normalization for root-mode goldens (the gate-transform rule: a gate
+# that transforms what it measures must declare what the transform destroys).
+# Removes ONLY machine-run identity, never behavior:
+#   CR bytes (Windows tty)          -> judged signal is text, not line endings
+#   commit hashes (Last commit/reviews@) -> hash varies per run by construction
+#   relative/absolute wall-clock    -> time varies per run by construction
+#   sandbox/git-root absolute paths -> machine-specific, replaced with SBX
+# It deliberately PRESERVES: wording, ordering, counts, branch names, tracker
+# content, truncation behavior — the signals the goldens exist to judge.
+_arc_root_norm() {
+  local groot="${1:-__nogroot__}" sbx="${SANDBOX:-__nosbx__}"
+  LC_ALL=C sed \
+    -e 's/\r$//' \
+    -e 's/^- Last commit: [0-9a-f][0-9a-f]*/- Last commit: HASH/' \
+    -e 's/(\([0-9][^)]*\) ago)/(TIME ago)/' \
+    -e 's/^## 20[0-9][0-9]-[0-9-]* [0-9:]* — /## DATE TIME — /' \
+    -e 's/reviews @ [0-9a-f][0-9a-f]*:/reviews @ HASH:/' \
+    -e "s|$groot|SBX|g" \
+    -e "s|$sbx|SBX|g"
+}
+
+# Compare normalized actual (stdin) against a pinned golden. Regen is a NAMED
+# step: ARC_ROOT_GOLDEN_RECORD=1 bats tests/root-golden.bats — reviewed diff only.
+# Per-OS override: tests/fixtures/root-golden/<name>.<linux|macos|windows>.txt
+# wins over <name>.txt when present (pin one only when an OS genuinely differs).
+_arc_root_golden_check() {
+  local name="$1" dir="$ARC_ROOT/tests/fixtures/root-golden"
+  local a="$BATS_TEST_TMPDIR/$name.actual" g="$dir/$name.txt" os
+  cat > "$a"
+  if [ "${ARC_ROOT_GOLDEN_RECORD:-0}" = "1" ]; then mkdir -p "$dir"; cp "$a" "$g"; return 0; fi
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) os=windows;;
+    Darwin)               os=macos;;
+    *)                    os=linux;;
+  esac
+  [ -f "$dir/$name.$os.txt" ] && g="$dir/$name.$os.txt"
+  diff -u "$g" "$a"
+}
+
 # Deterministic tree fingerprint for the sync golden-output gate (REQ-02):
 # every file's path + LF-normalized SHA-256, sorted (LC_ALL=C), .git excluded.
 # CR bytes are stripped before hashing so a Windows checkout and a Linux CI

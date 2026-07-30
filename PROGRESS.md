@@ -32,10 +32,16 @@
 **Position:** Plan APPROVED 2026-07-31 (decision.recorded on approval
 01KYT4YM2N9TRE9GPWDCY3VSSR). Phase 0 open on `feat/portfolio-kickoff`.
 
-**Next step:** Pin root-mode goldens for the scripted surfaces (kickoff-lint,
-arc-evidence, SessionStart/SessionEnd hook output) BEFORE touching any of them, then the
-A2 grep (manifests + sync must not ship root tracker files), then the resolver seam
-(ADR-0054).
+**Done so far (Phase 0, steps 1–2 of 4):** Root-mode goldens PINNED pre-refactor —
+`tests/root-golden.bats` (7 tests green) + `tests/fixtures/root-golden/` covering
+SessionStart/SessionEnd hooks, kickoff-lint pass+fail, arc-evidence usage+verify-missing;
+normalization declared in `_arc_root_norm` (removes CR/hashes/clock/paths only). A2
+VERIFIED HOLDING: no manifest ships root tracker files; sync never-touch list intact.
+
+**Next step:** Step 3 — the resolver seam (ADR-0054): teach kickoff-lint + arc-evidence +
+hooks dual-mode resolution against a tests-fixture lane (goldens must stay green), then
+step 4 — creation/STOP/adversarial fixtures. A1 tripwire: 0.5d inside the refactor →
+scope-cut ladder.
 
 blocked-on: —
 depends-on: — 

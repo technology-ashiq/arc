@@ -1,0 +1,6 @@
+
+kickoff-lint: 1 check(s) FAILED
+
+FAIL  [plan-exists] PLAN.md not found — run /arc-kickoff first
+
+Fix and rerun. Prose assurances don't count.

@@ -1,0 +1,12 @@
+Quick heads-up for this session:
+- Branch: fixture-main
+- Last commit: HASH seed tracker (TIME ago)
+- Working tree is clean.
+- Build status (PROGRESS.md -> ## Now):
+    
+    **Position:** fixture position line one.
+    line two
+    line three
+    line four
+    line five
+- reviews @ HASH: (none)
