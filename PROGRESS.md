@@ -32,16 +32,37 @@
 **Position:** Plan APPROVED 2026-07-31 (decision.recorded on approval
 01KYT4YM2N9TRE9GPWDCY3VSSR). Phase 0 open on `feat/portfolio-kickoff`.
 
-**Done so far (Phase 0, steps 1–2 of 4):** Root-mode goldens PINNED pre-refactor —
-`tests/root-golden.bats` (7 tests green) + `tests/fixtures/root-golden/` covering
-SessionStart/SessionEnd hooks, kickoff-lint pass+fail, arc-evidence usage+verify-missing;
-normalization declared in `_arc_root_norm` (removes CR/hashes/clock/paths only). A2
-VERIFIED HOLDING: no manifest ships root tracker files; sync never-touch list intact.
+**Done so far — Phase 0, all four steps executed; exit criteria not yet formally checked:**
 
-**Next step:** Step 3 — the resolver seam (ADR-0054): teach kickoff-lint + arc-evidence +
-hooks dual-mode resolution against a tests-fixture lane (goldens must stay green), then
-step 4 — creation/STOP/adversarial fixtures. A1 tripwire: 0.5d inside the refactor →
-scope-cut ladder.
+1. **Root-mode goldens PINNED pre-refactor** — `tests/root-golden.bats` (7) +
+   `tests/fixtures/root-golden/`: SessionStart/SessionEnd hooks, kickoff-lint pass+fail,
+   arc-evidence usage+verify-missing. Normalization DECLARED in `_arc_root_norm` (strips
+   CR/hashes/clock/paths only; per-OS override slot; named regen step).
+2. **A2 VERIFIED HOLDING** — no manifest and no sync path ships root PLAN/PROGRESS/phases.
+3. **Resolver seam landed** (ADR-0054) — `lane-resolve.sh` + `lane-resolve.mjs` twins,
+   held identical by an equivalence gate. kickoff-lint now splits company root
+   (docs/adr, retro-log) from tracker root; arc-evidence routes bundles lane-scoped.
+   Five command surfaces cite `.claude/rules/lanes.md` and call the resolver.
+   Tests: lane-resolver 44 · lane-surfaces 19 · root-golden 7, all green.
+4. **Adversarial pass RUN and its holes CLOSED** — fresh-context attacker returned 18
+   findings. Four HIGH, all in `arc-evidence.sh`'s unquoted `$lane_args`: a crafted
+   `--lane` value smuggled `--for kickoff` (a surface with no creation rights reporting
+   `create`) or `--print human` (a lane's bundle silently redirected into the FROZEN
+   `docs/evidence/`), plus an infinite loop when a value-taking flag came last, and a
+   name truncated into a *different* valid lane. Also fixed: kickoff-lint anchored on
+   cwd instead of the git toplevel (running from inside a lane silently left lane-mode
+   and produced a false `[adr]` failure); `~~~` fences ignored; empty `initiatives/`
+   was a permanent un-answerable dead end; four bash/node divergences (dot-entries,
+   word-split+glob leaking the caller's cwd into a machine field, non-ASCII sort order,
+   NUL byte flipping eligibility); phase token `phase-9-of-12` bundling as phase 912.
+   **Gate honesty fix:** the equivalence helper existed but was never called — 31
+   assertions ran ONE twin while the gate claimed both. Every case now runs both.
+   All 18 reproduced against the attacker's own commands before and after.
+
+**Next step:** close Phase 0 via `/arc-phase-done 0` — walk the spec's exit criteria and
+Verification plan, bundle evidence, and let CI prove the 3-OS leg (the one claim not yet
+evidenced locally: Windows-reserved-name and cross-OS fixtures are written but only the
+Windows leg has run here).
 
 blocked-on: —
 depends-on: — 

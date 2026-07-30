@@ -258,10 +258,29 @@ depends-on: —
 EOF
 }
 
-# Run BOTH resolver implementations with identical args.
-# _arc_lane_sh / _arc_lane_mjs echo the raw stdout; status lands in $status via `run`.
-_arc_lane_sh()  { bash "$SANDBOX/.claude/scripts/core/lane-resolve.sh"  --root "$SANDBOX" "$@"; }
-_arc_lane_mjs() { node "$SANDBOX/.claude/scripts/core/lane-resolve.mjs" --root "$SANDBOX" "$@"; }
+# Run BOTH resolver implementations with identical args, assert they agree, then
+# behave like the single command the test thinks it called.
+#
+# This is deliberately not "a bash helper plus a couple of equivalence cases at the
+# bottom of the file": that shape let 31 behavioural assertions exercise ONE twin
+# while the gate claimed to cover both, which is the same dishonesty as a gate
+# reporting success on a runner where it never ran. Routing every case through here
+# makes all of them equivalence cases for free — a divergence returns 99, so whatever
+# the test asserted about $status fails loudly with both outputs printed.
+_arc_lane_both() {
+  local out_sh out_mjs code_sh code_mjs
+  out_sh="$(bash "$SANDBOX/.claude/scripts/core/lane-resolve.sh" --root "$SANDBOX" "$@" 2>&1)"; code_sh=$?
+  out_mjs="$(node "$SANDBOX/.claude/scripts/core/lane-resolve.mjs" --root "$SANDBOX" "$@" 2>&1)"; code_mjs=$?
+  if [ "$out_sh" != "$out_mjs" ] || [ "$code_sh" != "$code_mjs" ]; then
+    echo "EQUIVALENCE FAILURE for args: $*"
+    echo "--- lane-resolve.sh (exit $code_sh)"; echo "$out_sh"
+    echo "--- lane-resolve.mjs (exit $code_mjs)"; echo "$out_mjs"
+    return 99
+  fi
+  [ -n "$out_sh" ] && printf '%s\n' "$out_sh"
+  return "$code_sh"
+}
+_arc_lane_sh() { _arc_lane_both "$@"; }
 
 # Read one KEY=value field out of resolver output held in $output.
 _arc_field() { printf '%s\n' "$output" | sed -n "s/^$1=//p" | head -n1; }

@@ -53,6 +53,20 @@ human` for stable `KEY=value` output (`mode`, `lane`, `tracker`, `lanes`, `eligi
 
 Resolution is read-only: it reports a decision and never creates, moves, or writes.
 
+**Always quote a flag's value.** `--lane "$VAR"`, never `--lane $VAR`. An unquoted empty
+value silently eats the next flag, and an unquoted multi-word value smuggles extra flags
+into the resolver — that is how a surface with no creation rights was made to report
+`create`, and how a lane's evidence was redirected into the frozen root path. Scripts pass
+flags as an array, never as a joined string. `--text <value>` exists so a caller can hand
+free text through explicitly; its value is consumed and never parsed.
+
+Two `--lane` flags with different values is an operator error (exit 5), not a last-wins
+override — silently picking one of two named lanes is precisely the "never guess" failure.
+
+An `initiatives/` directory that holds no valid lane is **root-mode**, not a dead end: git
+does not track empty directories, so a stray `mkdir` must not strand every command in an
+un-answerable "pick a lane" with nothing to pick.
+
 ## Paths, once a lane is selected
 
 | What | Root-mode | Lane-mode |

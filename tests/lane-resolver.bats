@@ -322,6 +322,149 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 5 ]
 }
 
+# ---------- adversarial pass findings (Phase 00, construct-a-breaking-input) ----------
+# Every case below is a hole a fresh-context attacker actually opened in code that
+# passed all of the tests above it. They are pinned so the hole cannot reopen.
+# All of them run through _arc_lane_both, so each is an equivalence case too.
+
+@test "adversarial: a ~~~ fenced block is a fence, exactly like a backtick fence" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio IDLE
+  printf '# PROGRESS\n\n~~~\nstatus: LIVE\n~~~\n\nstatus: IDLE\n\n## Now\n' \
+    > "$SANDBOX/initiatives/portfolio/PROGRESS.md"
+  run _arc_lane_sh
+  [ "$status" -eq 3 ]
+  [ "$(_arc_field counted)" = "0" ]
+}
+
+@test "adversarial: a fence opened with ~~~ is not closed by \`\`\`" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio IDLE
+  printf '# PROGRESS\n\n~~~\n```\nstatus: LIVE\n\n## Now\n' \
+    > "$SANDBOX/initiatives/portfolio/PROGRESS.md"
+  run _arc_lane_sh
+  [ "$status" -eq 3 ]
+  [ "$(_arc_field counted)" = "0" ]
+}
+
+@test "adversarial: a NUL byte in the status value cannot flip eligibility" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio IDLE
+  printf '# PROGRESS\n\nstatus: LIVE\000\n\n## Now\n' \
+    > "$SANDBOX/initiatives/portfolio/PROGRESS.md"
+  run _arc_lane_sh
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field lane)" = "portfolio" ]
+}
+
+@test "adversarial: dot-entries under initiatives/ are invisible to both twins" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  mkdir -p "$SANDBOX/initiatives/.git" "$SANDBOX/initiatives/.hidden"
+  run _arc_lane_sh
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field lanes)" = "portfolio" ]
+  [ "$(_arc_field skipped)" = "" ]
+}
+
+@test "adversarial: a directory name with a space or glob char never word-splits" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  mkdir -p "$SANDBOX/initiatives/My Lane" "$SANDBOX/initiatives/[a]"
+  # A cwd full of decoys: an unquoted expansion would glob-expand the directory names
+  # against the CALLER's working directory and splice its filenames into the report.
+  local decoy="$BATS_TEST_TMPDIR/decoy"; mkdir -p "$decoy"; : > "$decoy/a"; : > "$decoy/aXb"
+  cd "$decoy"
+  run _arc_lane_sh
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field lanes)" = "portfolio" ]
+  [ "$(_arc_field skipped)" = "My Lane [a]" ]
+}
+
+@test "adversarial: initiatives/ with no valid lane is ROOT-MODE, not a dead end" {
+  # git does not track empty directories, so a stray mkdir or partial checkout must
+  # not strand every surface in an un-answerable "pick a lane" with nothing to pick.
+  _arc_lane_sandbox
+  mkdir -p "$SANDBOX/initiatives"
+  run _arc_lane_sh
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field mode)" = "root" ]
+  [ "$(_arc_field tracker)" = "." ]
+}
+
+@test "adversarial: initiatives/ holding only invalid dirs is still ROOT-MODE" {
+  _arc_lane_sandbox
+  mkdir -p "$SANDBOX/initiatives/Design" "$SANDBOX/initiatives/_scratch"
+  run _arc_lane_sh
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field mode)" = "root" ]
+}
+
+@test "adversarial: two different --lane values STOP instead of silently last-winning" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  _arc_make_lane design LIVE
+  run _arc_lane_sh --lane portfolio --lane design
+  [ "$status" -eq 5 ]
+  [ "$(_arc_field reason)" = "duplicate-lane" ]
+}
+
+@test "adversarial: repeating the SAME --lane value is not an error" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  run _arc_lane_sh --lane portfolio --lane portfolio
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field lane)" = "portfolio" ]
+}
+
+@test "adversarial: a non-UTF-8 lane name echoes the same bytes from both twins" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  run _arc_lane_sh --lane "$(printf '\377\376')" --print human
+  [ "$status" -eq 5 ]
+  [[ "$output" == *"invalid lane name"* ]]
+}
+
+@test "adversarial: non-ASCII directory names sort identically in both twins" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  mkdir -p "$SANDBOX/initiatives/$(printf '\357\244\200')Zed"
+  mkdir -p "$SANDBOX/initiatives/$(printf '\360\237\230\200')Emo"
+  run _arc_lane_sh
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field lanes)" = "portfolio" ]
+}
+
+@test "adversarial: the default root is the git toplevel, not the caller's cwd" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  mkdir -p "$SANDBOX/some/deep/dir"
+  cd "$SANDBOX/some/deep/dir"
+  # no --root: both twins must find the repo above and agree
+  run bash -c '
+    a="$(bash "$1/.claude/scripts/core/lane-resolve.sh" 2>&1; echo "exit=$?")"
+    b="$(node "$1/.claude/scripts/core/lane-resolve.mjs" 2>&1; echo "exit=$?")"
+    [ "$a" = "$b" ] || { echo "--- sh"; echo "$a"; echo "--- mjs"; echo "$b"; exit 1; }
+    printf "%s\n" "$a"
+  ' _ "$SANDBOX"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"lane=portfolio"* ]]
+}
+
+@test "adversarial: resolution never creates anything, whatever it is asked" {
+  _arc_lane_sandbox
+  _arc_make_lane portfolio LIVE
+  local before after
+  before="$(find "$SANDBOX" -not -path '*/.git/*' | LC_ALL=C sort)"
+  _arc_lane_sh --lane brandnew --for kickoff || true
+  _arc_lane_sh --lane brandnew || true
+  _arc_lane_sh --lane ../escape --for kickoff || true
+  _arc_lane_sh --lane con --for kickoff || true
+  _arc_lane_sh --print human || true
+  after="$(find "$SANDBOX" -not -path '*/.git/*' | LC_ALL=C sort)"
+  [ "$before" = "$after" ] || { echo "resolution mutated the tree:"; diff <(echo "$before") <(echo "$after"); false; }
+}
+
 # ---------- equivalence gate: bash and node must agree, always ----------
 
 @test "equivalence: both resolver implementations return identical bytes and status" {

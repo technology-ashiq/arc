@@ -34,11 +34,24 @@
  */
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { resolveLane, renderHuman, parseLaneArgs } from "../core/lane-resolve.mjs";
 
 const cli = parseLaneArgs(process.argv.slice(2));
-const root = cli.root || cli.positionals[0] || ".";
-const laneRes = resolveLane({ root, lane: cli.lane, laneGiven: cli.laneGiven, surface: "lint" });
+// Anchor on the git toplevel, not the shell's cwd: run from inside a lane, a cwd
+// anchor silently drops out of lane-mode AND looks for the company ADR ledger inside
+// the lane. Which repo you are in is a property of the repo, not of where you stood.
+function gitToplevel() {
+  try {
+    return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+  } catch { return ""; }
+}
+const root = cli.root || cli.positionals[0] || gitToplevel() || ".";
+if (!existsSync(root)) {
+  console.error(`kickoff-lint: no such directory: ${root}`);
+  process.exit(1);
+}
+const laneRes = resolveLane({ root, lane: cli.lane, laneGiven: cli.laneGiven, laneDup: cli.laneDup, surface: "lint" });
 if (laneRes.code !== 0) {
   for (const line of renderHuman(laneRes)) console.error(line);
   process.exit(laneRes.code);
