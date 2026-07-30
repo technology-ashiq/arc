@@ -21,16 +21,39 @@ ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 ROUTE="${1:-}"
 VIEWPORT="1440x900"
+# Typeface and antialiasing are NOT pinned by default (owner decision 2026-07-30).
+#
+# They used to be, and it was the single most damaging rule in the design system. Pinning
+# `font-family: Arial !important` on every render meant every variant was judged -- by the
+# critic and by all three blind jurors -- with its typography deleted. Typography is the
+# strongest carrier of design character, so the loop could not see the thing it existed to
+# judge, and it duly reported three "genuinely different directions" that a human scored
+# 23/100 for looking identical. They looked identical because they were rendered identical.
+#
+# The pin was added for cross-machine hash reproducibility, not for correctness of judgment.
+# That job now belongs to the stable shutter below (shoot twice, publish only an agreed hash),
+# which holds for causes nobody enumerated -- font drift included. Reproducibility across
+# MACHINES is the thing genuinely traded away here, and `--pin-font` buys it back for the one
+# use that needs it: comparing a route against a hash recorded elsewhere.
+PIN_FONT=0
+MEDIA="light"
 shift 2>/dev/null || true
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --viewport) VIEWPORT="${2:-1440x900}"; shift 2;;
+    --pin-font) PIN_FONT=1; shift;;
+    --media) MEDIA="${2:-light}"; shift 2;;
     *) shift;;
   esac
 done
 
+case "$MEDIA" in
+  light|dark) ;;
+  *) echo "design-render: --media takes light or dark, got '$MEDIA'" >&2; exit 1;;
+esac
+
 if [ -z "$ROUTE" ]; then
-  echo "design-render: usage: design-render.sh <route> [--viewport WxH]" >&2
+  echo "design-render: usage: design-render.sh <route> [--viewport WxH] [--media light|dark] [--pin-font]" >&2
   exit 1
 fi
 
@@ -103,7 +126,22 @@ _hash_png() {
 #   ways. Isolated rule by rule, font-pin and aa-off each move pixels on their own;
 #   animations-off and caret move none. Waiting is therefore not belt-and-braces, it is the
 #   only thing that makes the other five rules mean anything.
-RECIPE='viewport-fixed;full-page;media-light;animations-off;font-pinned;aa-off;settle-paint'
+# Font and antialiasing rules are conditional (see PIN_FONT above). Everything else is
+# unconditional: animations and caret are removed because a static capture of a moving page is
+# a coin flip, and the scrollbar is hidden because its width differs per OS.
+if [ "$PIN_FONT" = "1" ]; then
+  FONT_RULE='html, body, * { font-family: Arial, Helvetica, sans-serif !important; }
+  *,*::before,*::after { -webkit-font-smoothing: none !important; font-synthesis: none !important; }'
+  # A pinned run can still check the pin landed. An UNPINNED run must not: there is no expected
+  # font to test for, and asserting one would refuse every page that chose its own typeface.
+  FONT_TEST=' && /^Arial/.test(getComputedStyle(root).fontFamily)'
+  RECIPE_FONT='font-pinned;aa-off'
+else
+  FONT_RULE='/* typeface NOT pinned -- the design is judged in the type it was designed in */'
+  FONT_TEST=''
+  RECIPE_FONT='font-true;aa-on'
+fi
+RECIPE="viewport-fixed;full-page;media-$MEDIA;animations-off;$RECIPE_FONT;settle-paint"
 # The marker is read back below: an injection that silently failed used to leave the render
 # running with NO determinism rules at all, and nothing said so.
 # `applied` is MEASURED, never asserted, and it took two goes to measure the right thing.
@@ -125,9 +163,8 @@ RECIPE='viewport-fixed;full-page;media-light;animations-off;font-pinned;aa-off;s
 DETERMINISM_CSS='(async () => { const s = document.createElement("style");
   s.id = "__arc_determinism__"; s.textContent = `
   *,*::before,*::after { animation: none !important; transition: none !important;
-    caret-color: transparent !important;
-    -webkit-font-smoothing: none !important; font-synthesis: none !important; }
-  html, body, * { font-family: Arial, Helvetica, sans-serif !important; }
+    caret-color: transparent !important; }
+  '"$FONT_RULE"'
   html { scrollbar-width: none !important; }
 `; document.head.appendChild(s);
   void document.documentElement.offsetHeight;
@@ -141,14 +178,15 @@ DETERMINISM_CSS='(async () => { const s = document.createElement("style");
   try { landed = !!el && !!el.sheet && el.sheet.cssRules.length > 0; }
   catch (e) { landed = !!el && !!el.sheet; }
   var root = document.body || document.documentElement;
-  var applied = landed && /^Arial/.test(getComputedStyle(root).fontFamily);
+  var applied = landed'"$FONT_TEST"';
+  void root;
   return "arc-determinism:applied=" + (applied ? "1" : "0")
     + ":painted=" + (painted ? "1" : "0")
     + ":h=" + document.documentElement.scrollHeight; })()'
 
 _ab set viewport "$VW" "$VH" >/dev/null 2>&1 \
   || { echo "design-render: could not set viewport ${VW}x${VH}" >&2; exit 1; }
-_ab set media light >/dev/null 2>&1 || true
+_ab set media "$MEDIA" >/dev/null 2>&1 || true
 if ! _ab open "$URL" --max-output 200 >/dev/null 2>&1; then
   echo "design-render: failed to open $URL" >&2
   _ab close >/dev/null 2>&1 || true
