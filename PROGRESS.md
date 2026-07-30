@@ -480,9 +480,39 @@ cycle already made once (`52e507ee`, corrected on the spine). The marker was rel
 each refusal — `begin` un-arms on render failure, as designed, and that path is now confirmed in
 the wild.
 
-**Owner call needed before packaging can finish** — this is a renderer defect on the critical path,
-not a design question, and fixing it is an `/arc-fix-issue` job with its own root-cause + red-first
-test, which is not a call this session may take unilaterally mid-phase.
+**Owner chose to package rather than fix the renderer (2026-07-30), and the reasoning is worth
+keeping.** The blind test does not need a *reproducible* hash — it needs the exact bytes a human
+looked at. So the three PNGs are archived at
+`docs/design/blind-test/lexos-case-workspace-v1/package/` and each is pinned by the sha256 of the
+archived file itself (`68b2e14c` · `b69d9d17` · `ad50b562`, matching their renders). **No claim of
+render reproducibility is made for variant-b anywhere.** That is the difference from the Phase-02
+mistake: `52e507ee` was sealed into a `review.completed` *as if* reproducible; this is recorded as
+explicitly not. Fixing the renderer is an `/arc-fix-issue` job the size of #57 (four review
+rounds), and 0.75 days of appetite cannot absorb it.
+
+**variant-b re-critiqued post-strip: PASS, 0 VIOLATION** (3 WEAKNESS, 3 POLISH), ledger stamped for
+`bbbf760`. The seam where the `.measure-note` sat is clean — no collapsed gap, no leftover rule,
+and "Add entry" still reads as its own region rather than running into the record. The quartet is
+still complete, so the original violation has not regressed. **All three directions now carry a
+post-strip PASS.**
+
+**One tell survives, deliberately.** The critic caught that all three pages end with a reference
+section rendering the five declared states, carrying process-facing prose ("Shown here together for
+review…") — the same category of tell the strip removed, on a section far larger than the note was.
+It is left in because **all three carry it**, so unlike the width note (2 of 3) it biases no
+comparison, and the framing now names these as mockups outright, which makes the appendix expected
+rather than a giveaway. Recorded rather than absorbed: it does mark the artifacts as mockups, and
+a respondent may weight that.
+
+**PACKAGE IS READY TO SEND** — `package/README.md` holds the internal direction→variant mapping and
+the two verbatim SEND THIS blocks (Stream A: rank + which would you take seriously; Stream B: a
+ten-minute, three-image, no-prep ask in the lawyer's own words). **Send order is deliberate:
+variant-b is the owner's pick and the jury's 2–1 winner, so it goes out LAST as `direction-3` — if
+it still wins, it won against position rather than with it.** Both evidence files now carry the
+sent-file hashes, the framing pointer, and their own PASS bars; every placeholder is gone.
+
+**What is left in criterion 3 is now exactly two owner acts and nothing else: choose the Stream-A
+channel and confirm the Stream-B recruit, then SEND.** No build work remains in this phase.
 
 **Open question that must be answered BEFORE packaging, raised 2026-07-30:** variant-a and
 variant-b each carry an on-page note declaring their `max-w-shell` departure; **variant-c carries

@@ -1,79 +1,93 @@
-# Design critique — variant B (narrative), round 2 (re-verification)
+# Design critique — variant B (narrative), post-strip re-verification
 
 - target: `docs/design/explore/lexos-case-workspace-v1/variant-b/index.html`
-- screenshot_sha256: `6e790f32b8512a1a4ccf331dbf9c44456c4f71c36158a00f91f88bfeaaec84bb`
+- screenshot_sha256: `ad50b5621daa1aa3183c22a0676281e7e9b91c7c0744c79b9b2e387cee732331`
 - viewport: `1440x900@1`
 - brief: `docs/design/briefs/lexos-case-workspace/brief.md`
 
 ## What I looked at
 
-Full-page desktop render (1440 wide, full scrolled height) of the case-record stream, judged
-fresh against all four contracts, not spot-checked against round 1 alone: topbar, case identity,
-the quartet strip (Parties / Case number / Status / Next hearing / Overdue), the measure-departure
-note, "Add entry", the five-item "Show:" filter, the "Ahead" card, the "Jump to next-due entry"
-link, the open `Jul 2026` period with six dated entries (including the highlighted, unrecorded
-14 Jul hearing), the collapsed `May 2026` period, the keyboard legend, and the full appendix of
-declared states for the case header and a period.
+Full-page desktop render (1440 wide, full scrolled height) of the current pixels, after the
+19-line removal of the `measure-note` block (and its CSS) that sat between the identity quartet
+and "Add entry". Swept fresh against all four contracts, not limited to the diff: the topbar,
+case identity (H1 + O.S./court/suit line + client/claim line), the quartet strip (Parties /
+Case number / Status / Next hearing / Overdue), the seam where the note used to sit, "Add entry",
+the five-item "Show:" filter, the "Ahead" card, the "Jump to next-due entry" link, the open
+`Jul 2026` period with six dated entries (including the highlighted, unrecorded 14 Jul hearing),
+the collapsed `May 2026` period, the keyboard legend, and the full appendix of declared states
+for the case header and a period.
 
-**Round-1 VIOLATION, re-checked on this render:** the brief's "always visible, never behind a
-click" for the identity quartet is two independent requirements — on screen through scroll, and
-complete without truncation. Round 1 caught the second failing (a clipped Parties value with no
-recovery). On this render the Parties field reads the case's full name
-(`Meera Raghunathan v. Sunvale Housing Pvt. Ltd.`), identical to the page H1, on its own full-width
-row above the four-column strip rather than squeezed into a narrow column — a structural change,
-not a coincidence of this fixture's name length. **Completeness: resolved, on these pixels.**
-**On-screen-through-scroll: cannot be judged from this artifact.** A flattened full-page capture
-does not simulate a mid-page scroll position, so it cannot show whether the strip actually stays
-pinned once the record is scrolled — that half of the requirement is a gap in this run, not a
-pass, and not a fail either.
+**The seam, specifically.** Cropped and enlarged the region spanning the quartet's closing rule
+through "Add entry" through the "Show:" filter row. The gap above "Add entry" and the gap below
+it read as the same order of spacing — neither collapsed against the quartet's rule nor doubled
+against the filter row beneath. "Add entry" still sits inside its own full-width bordered box, so
+it reads as a distinct object against the quartet above it on its own border alone; the record and
+the compose affordance do not run together. No orphaned gap, no leftover rule, no dangling
+margin from the removed block was visible anywhere in that region.
 
-**Other gaps in this run, not judged as pass or fail:** only a 1440×900 desktop capture exists,
-so the declared mobile reflow is unverified. No focus-visible state was captured (nothing is
-focused in a static render). Reduced motion cannot be judged from a still image. Only the
-default `All` state of the in-stream filter was rendered, so whether selecting a filter truly
-filters in place cannot be confirmed from pixels. The collapsed `May 2026` period and the closed
-`Add entry` form body were not rendered open.
+**The quartet, specifically.** Case number, Status, Next hearing, and Overdue all render complete
+and untruncated — `O.S. No. 412 of 2024`, `Active` (pilled), `Not set`, `2` — matching the
+full case name repeated above it verbatim. The round-1 violation this variant carried does not
+show on these pixels.
+
+**Gaps in this run, not judged pass or fail:** only a 1440×900 desktop capture exists, so mobile
+reflow, focus-visible state, reduced motion, and scroll-time stickiness of the quartet/"Add entry"
+are all unverified from a flattened, animations-off, single-viewport render — reported as gaps,
+not verdicts.
 
 ## Findings
 
-- WEAKNESS: the **Overdue** field in the quartet strip — the fact the brief names directly as
-  required pre-action knowledge ("whether anything on it is overdue") — renders as plain bold
-  text with no badge or colour treatment, while the adjacent, less time-pressured **Status**
-  field gets a filled colour pill (`Active`). The one fact in the quartet most likely to change
-  what the reader does next carries the flattest visual weight of the four. Location: the
-  "OVERDUE" field of the quartet strip, right of "NEXT HEARING".
+- WEAKNESS: the **Overdue** field in the quartet — the fact the brief names directly as required
+  pre-action knowledge — still renders as plain bold text with no badge, while the less
+  time-pressured **Status** field gets a filled pill (`Active`). Unaffected by this edit but still
+  visible on these pixels. Location: "OVERDUE" field of the quartet, right of "NEXT HEARING".
 
-- WEAKNESS: suspect several interactive elements fall under the brief's declared 44px target
-  floor — the row-action links (`Edit` / `Remove … — cannot be undone`) render as plain,
+- WEAKNESS: suspect several interactive elements still fall under the brief's declared 44px
+  target floor — the row-action links (`Edit` / `Remove … — cannot be undone`) render as plain,
   unpadded inline text sitting close together, and the "Show:" filter items read the same way.
-  This is a suspicion only, not a measurement — hand the real number to design-lint before
-  treating it as settled. Location: row actions on every dated entry (24 Jul, 21 Jul, 16 Jul,
-  08 Jul, 02 Jul), and the filter row under "Add entry".
+  Suspicion only, not a measurement — hand the real number to design-lint. Location: row actions
+  on every dated entry (24 Jul, 21 Jul, 16 Jul, 08 Jul, 02 Jul), and the filter row under
+  "Add entry".
 
-- POLISH: the active "Show:" filter item (`All`) still carries an underline beneath it — a
-  residual tab-navigation cue — even though the filled-pill treatment round 1 flagged is gone.
-  Smaller echo of the same "address, not lens" tension, not eliminated. Location: filter row
-  directly below "Add entry".
+- WEAKNESS: the "Reference — declared states" section (case header + period state matrix, lower
+  half of the page) still carries process-facing prose — "Shown here together for review; the
+  page above is always the success state" — that describes this as a review artifact rather than
+  product content. Given this render is headed to external designers and lawyers who don't know
+  arc made it, this is the same category of tell the measure-note strip was meant to remove, on a
+  section that takes up roughly a third of the page's scroll length. Not part of this edit and
+  not evaluated for blind-packaging risk in the prior round, but visible now on a full sweep with
+  that framing in mind. Location: everything under the "Reference — declared states" heading,
+  both the "CASE HEADER" and "PERIOD" panel groups.
 
-- POLISH: the Overdue count has no direct link to the entries it counts, unlike Next hearing,
-  which is paired with an explanatory "Ahead" card immediately below it — a small missed
-  connective thread between the header metric and the content that explains it. Location:
-  OVERDUE field in the quartet strip versus the entry stream below.
+- POLISH: "Add entry" — the page's own declared primary action — renders as an outlined card with
+  a small icon chip, while "Record outcome", a single-row contextual action, uses the solid
+  filled primary-button treatment. A minor hierarchy inversion between the whole-page action and
+  a row-scoped one; arguable rather than clear-cut, since "Add entry" likely opens a chooser
+  rather than committing directly. Location: "Add entry" box vs. the "Record outcome" button in
+  the highlighted 14 Jul row.
+
+- POLISH: the full case name is set twice within a few lines of each other — once as the page H1,
+  once again inside the "Parties" quartet card. Reads as pure repetition in this flattened,
+  single-viewport capture; may be justified if the quartet card is a sticky companion once the
+  header scrolls away, which this render cannot confirm. Location: page H1 vs. "Parties" line in
+  the quartet card.
+
+- POLISH: the active "Show:" filter item (`All`) still carries an underline beneath bold text —
+  a residual tab-navigation cue. Location: filter row directly below "Add entry".
 
 ## What is working
 
-The round-1 violation reads as genuinely fixed, not patched around: the Parties value now
-occupies a dedicated full-width row with room to wrap rather than a narrow clipped column, and it
-matches the H1 verbatim. Two round-1 weaknesses also look resolved on these pixels even though
-neither was mandatory — "Record outcome" is now a solid primary-styled button, clearly
-distinguished from the plain "Edit" links beside other entries, and the "Show:" filter has moved
-from filled rounded pills to an inline text list, which reads much closer to the matrix's own
-"lens" framing. The open and collapsed period headers now share one bare-month form
-(`Jul 2026` / `May 2026`), closing the rhythm break round 1 noted. The full five-state matrix
-(empty · loading · error · success · disabled) is still rendered concretely for both the case
-header and a period, destructive actions still name the thing and state irreversibility in a
-colour distinct from benign actions, every visible term traces to the content contract's closed
-vocabulary, and no lorem ipsum appears anywhere on the page.
+The edit did exactly what it was scoped to do: no collapsed or doubled gap, no leftover border or
+rule, no orphaned spacing at the seam, and the record-to-compose transition still reads as two
+distinct regions rather than running together. The always-visible quartet remains complete and
+untruncated, so the variant's original violation has not regressed. Destructive row actions still
+name the thing and state irreversibility in a colour distinct from the benign "Edit" beside them,
+every visible term still traces to the content contract's closed vocabulary, dates and amounts
+are still in the declared formats, and no lorem ipsum appears anywhere on the page. The five-state
+matrix (empty · loading · error · success · disabled) is still rendered concretely for both the
+case header and a period, each using a semantic label rather than colour alone to carry status.
 
-No new defect was found elsewhere on the page as a side effect of the round-1 fix — the risk this
-round was explicitly watching for.
+## What I could not check
+
+Scroll-time stickiness of the quartet or "Add entry" cannot be judged from a flattened full-page
+capture — reported as a run gap, not a pass or fail, per instruction.

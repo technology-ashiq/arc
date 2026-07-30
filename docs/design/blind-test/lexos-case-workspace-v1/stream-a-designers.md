@@ -12,7 +12,7 @@ not say. See `../README.md` for the receipt path.
 | Arc authorship | **Undisclosed** — respondents must not know an AI system produced these |
 | Scores prediction | `01KYRX3HYM2BYMHKEZZD1RDHN9` (`decision.recorded`, owner pick 2026-07-30) |
 | Recruiting budget | ₹0 |
-| Channel | *not yet chosen — owner item* |
+| Channel | *not yet chosen — OWNER ITEM, the last thing blocking send* |
 | Sent on | *not yet sent* |
 | Window (ADR-0040) | 14 days from Phase-3 build-complete, then the standard returns to the owner |
 
@@ -20,18 +20,19 @@ not say. See `../README.md` for the receipt path.
 
 | Item | Value |
 |---|---|
-| Directions | 3 — variant-a, variant-b, variant-c (labels shown to respondents: *not yet decided*) |
+| Directions | 3 — sent as `direction-1/2/3`. Mapping in `package/README.md` (internal). variant-b is the pick and the jury winner, so it is sent **last**, never first — if it wins it won against position, not with it |
 | Artifact form | Rendered desktop PNGs, 1440x900@1, full page |
-| Render hashes | a `5e4cf063` · b `6e790f32` · c `68b2e14c` |
-| Width-note handling | **UNRESOLVED — see below. Must be settled before packaging.** |
-| Framing given | *not yet written* |
+| Sent files (sha256 of the archived PNG) | `direction-1` c `68b2e14c` · `direction-2` a `b69d9d17` · `direction-3` b `ad50b562` |
+| Width-note handling | **RESOLVED — stripped 2026-07-30** (owner, AMENDMENT 2). All 3 re-critiqued post-strip: PASS, 0 violation each |
+| Framing given | Written — `package/README.md`, the SEND THIS block for this stream |
 
-> **Open issue blocking packaging.** variant-a and variant-b each carry an on-page note declaring
-> their `max-w-shell` departure; variant-c carries none. A's sits *above the H1* and was juror 1's
-> lead reason for ranking b over a. `max-w-shell` is meaningless jargon to any external respondent,
-> so two of three directions would carry a handicap the third does not. Either package as-is and
-> record the contamination, or strip the notes, re-render, and record the new hashes plus the exact
-> delta from the critiqued artifact. Routed through `/arc-change` — not a session call.
+> **Resolved 2026-07-30 — the notes were stripped.** variant-a and variant-b each carried an
+> on-page `max-w-shell` note and variant-c carried none, so two of three directions would have
+> gone out with a handicap the third did not. Owner decided STRIP (AMENDMENT 2). All three were
+> re-rendered and re-critiqued after the strip: **PASS, 0 violation each**, no seam left behind.
+> One tell remains and is deliberately left in — all three end with a reference section showing
+> the empty/loading/error/disabled states. **All three carry it, so it biases no comparison**, and
+> the framing names these as mockups outright, which makes it expected rather than a tell.
 
 ## The prediction this stream scores
 

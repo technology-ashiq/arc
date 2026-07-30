@@ -12,7 +12,7 @@ not do. See `../README.md` for the receipt path.
 | Arc authorship | **Undisclosed** |
 | Scores prediction | `01KYRX3HYM2BYMHKEZZD1RDHN9` (`decision.recorded`, owner pick 2026-07-30) |
 | Recruiting budget | ₹0 |
-| Recruit | *not yet confirmed — owner item* |
+| Recruit | *not yet confirmed — OWNER ITEM, the last thing blocking send* |
 | Sent on | *not yet sent* |
 | Window (ADR-0040) | 14 days from Phase-3 build-complete, then the standard returns to the owner |
 
@@ -28,7 +28,7 @@ not do. See `../README.md` for the receipt path.
 
 | Field | Value |
 |---|---|
-| Key task | *not yet written — must be one task, stated in the user's own vocabulary, not arc's* |
+| Key task | **Written** — `package/README.md`, SEND THIS Stream B: *looking at each one, can you tell what has already happened on this case and what you'd have to do next?* Stated in the lawyer's terms, no arc vocabulary, no product jargon |
 | Primary object (settled) | **case**, not client — answered by a real lawyer, receipt above |
 | Vocabulary constraint | Every noun and verb shown must appear in the real LexOS repo. Five plausible-sounding terms (*close*, *reschedule*, *reopen*, *cause title*, *adjournment*) were caught invented during brief-writing and removed — they are real Indian court words this product's users have never met here |
 | "Without intervention" means | No hints, no clarifying, no "try the thing on the left". The moment help is given, that attempt is a FAIL and must be recorded as one |
@@ -37,10 +37,10 @@ not do. See `../README.md` for the receipt path.
 
 | Item | Value |
 |---|---|
-| Directions | 3 — variant-a, variant-b, variant-c |
-| Render hashes | a `5e4cf063` · b `6e790f32` · c `68b2e14c` |
-| Width-note handling | **UNRESOLVED — same open issue as Stream A, see that file** |
-| Framing given | *not yet written* |
+| Directions | 3 — sent as `direction-1/2/3`. Mapping in `package/README.md` (internal). variant-b sent **last**, never first |
+| Sent files (sha256 of the archived PNG) | `direction-1` c `68b2e14c` · `direction-2` a `b69d9d17` · `direction-3` b `ad50b562` |
+| Width-note handling | **RESOLVED — stripped 2026-07-30** (owner, AMENDMENT 2). All 3 re-critiqued post-strip: PASS, 0 violation each |
+| Framing given | Written — `package/README.md`, the SEND THIS block for this stream |
 
 ## The prediction this stream scores
 
