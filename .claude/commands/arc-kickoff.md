@@ -3,6 +3,14 @@ description: Kick off a new build per docs/build-playbook.md — tiered depth, a
 argument-hint: [one-line project goal]
 ---
 
+**Lane first** (`.claude/rules/lanes.md`): run
+`bash .claude/scripts/core/lane-resolve.sh --for kickoff --print human` (add `--lane <name>`
+if I gave one). **`$ARGUMENTS` is the goal sentence — never a lane name.** Kickoff is the
+ONLY command that may create a lane: `status=create` means this kickoff births
+`initiatives/<lane>/` and writes its PLAN/PROGRESS/phases there. Exit 3 (ambiguous) or 5
+(invalid name) → print it and STOP. In lane-mode echo `Selected lane:` first; root-mode
+(no `initiatives/` dir) writes the root tracker exactly as before.
+
 Kick off the build for: $ARGUMENTS
 
 > **Router:** extending an EXISTING build (new feature, tweak, mid-build idea)? Use

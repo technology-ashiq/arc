@@ -1,8 +1,16 @@
 ---
 description: Close a phase per the build playbook's Definition of Done — or refuse.
 argument-hint: [phase-number]
-allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/plan/arc-evidence.sh:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/hq/arc-event.sh:*)
+allowed-tools: Bash(npm run test:*), Bash(npm run lint), Bash(npm run build), Bash(git log:*), Bash(git diff:*), Bash(graphify:*), Bash(bash .claude/scripts/plan/arc-evidence.sh:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*)
 ---
+
+**Lane first** (`.claude/rules/lanes.md`): run
+`bash .claude/scripts/core/lane-resolve.sh --for phase-done --print human` (add
+`--lane <name>` if I gave one). Non-zero exit → print it and STOP. `$1` is the PHASE
+NUMBER, never a lane. Closing a phase is destructive, so **name the selected lane in
+your confirmation before touching anything**: "Closing phase NN in lane `<lane>`."
+In lane-mode every tracker path below (`phases/`, `PROGRESS.md`, `PLAN.md`) reads
+`initiatives/<lane>/…` and `arc-evidence.sh` takes the same `--lane`; root-mode is unchanged.
 
 Verify phase $1 against its spec `phases/phase-NN-spec.md` (NN = zero-padded $1, e.g.
 `/arc-phase-done 3` → `phases/phase-03-spec.md`) and `docs/build-playbook.md` §8. Evidence

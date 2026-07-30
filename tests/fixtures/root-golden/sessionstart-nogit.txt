@@ -1,0 +1,1 @@
+Heads-up: not a git repo yet. Run 'git init' for branch/commit context.

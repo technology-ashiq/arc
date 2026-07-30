@@ -1,7 +1,13 @@
 ---
 description: Reconstruct where we left off — position, health, scoreboard, risks, next action — from the committed tracker + last snapshot. Read-only: resume never writes state.
-allowed-tools: Read, Glob, Grep, Bash(git status), Bash(git branch:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*)
+allowed-tools: Read, Glob, Grep, Bash(git status), Bash(git branch:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*)
 ---
+
+**Lane first** (`.claude/rules/lanes.md`): run
+`bash .claude/scripts/core/lane-resolve.sh --for resume --print human` (add `--lane <name>`
+if I gave one). Non-zero exit → print what it printed and STOP; never pick a lane yourself.
+In lane-mode the `Selected lane:` line is the FIRST line of your reply and every tracker
+path below reads from `initiatives/<lane>/`; in root-mode nothing changes at all.
 
 Reconstruct session state. Resume is a dashboard, not an essay — gather facts first,
 then report in EXACTLY the 5-block format below (each block 1–3 lines, no padding).

@@ -23,7 +23,9 @@
     ".claude/scripts/core/product-lint.mjs",
     ".claude/scripts/core/arc-status.sh",
     ".claude/scripts/core/common.sh",
-    ".claude/scripts/core/statusline.sh"
+    ".claude/scripts/core/statusline.sh",
+    ".claude/scripts/core/lane-resolve.sh",
+    ".claude/scripts/core/lane-resolve.mjs"
   ],
   "files": [
     ".claude/hooks/_dispatch.sh",
@@ -43,6 +45,7 @@
     ".claude/hooks/PreCompact.d/00-snapshot.sh",
     ".claude/output-styles/terse.md",
     ".claude/rules/api.md",
+    ".claude/rules/lanes.md",
     ".claude/rules/security-sensitive.md",
     ".claude/rules/stripe.md",
     ".claude/rules/supabase.md",

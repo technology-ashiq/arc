@@ -106,6 +106,7 @@
 - `/arc-resume`        — rebuild session state from PROGRESS ## Now + last snapshot
 
 ## Key files
+- Lanes / workspaces  → `.claude/rules/lanes.md` (`--lane` is the ONLY way to name a lane)
 - Auth & API security → `.claude/rules/api.md`
 - SEO / indexing      → `app/sitemap.ts`, `app/robots.ts`
 - State / core        → `lib/store/` (TODO: describe your store)

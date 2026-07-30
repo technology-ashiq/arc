@@ -1,99 +1,57 @@
-# Phase 00 — Steel thread: read-only vision critique with a receipt
+# Phase 00 — Dual-mode machinery (steel thread)
 
-**Goal (one line):** One real arc-internal route (`docs/strategy/arc-hq-mockup.html`, ADR-0045) independently inspected end-to-end by a read-only vision critic, leaving a `review.completed {"lens":"design"}` receipt on the spine, behind a warn-mode design gate.
+**Goal (one line):** Prove PORT-E routing end-to-end — root-mode goldens pinned FIRST, then the seven surfaces resolve `--lane` / auto / ask against a tests-fixture lane, with kickoff-only creation, unknown-lane hard STOP, canonical output order, and an adversarial lane-name pass — repo layout unchanged so far.
+
 **Appetite:** 1.25 days
 **Depends on:** none
 
+Work order is risk-first and fixed: (1) pin root-mode goldens for all seven surfaces
+(kickoff-lint, arc-evidence, resume/statusline/SessionStart output, phase-done, retro,
+change paths) BEFORE touching any of them — the safety net; (2) run the A2 grep
+(manifests + sync-to-project must not ship root `PLAN.md`/`PROGRESS.md`/`phases/`) —
+fires the assumption BEFORE any later move; (3) build the resolver seam (ADR-0054) and
+teach the surfaces; (4) adversarial construct-a-breaking-input pass on lane-name
+validation and flag parsing (ADR-0050 grammar), holes fixed + pinned as fixtures. A1's
+0.5d tripwire applies to step 3.
+
 ## Exit criteria (Definition of Done)
 
-- [ ] `design-critic` agent exists (`.claude/agents/design-critic.md`) — NEW agent (ADR-0034), frontmatter tools: Read, Glob, Grep, Write, and the scoped entry `Bash(bash .claude/scripts/hq/arc-event.sh:*)` (the exact /arc-qa allowed-tools pattern — no general Bash); **no Edit**; protocol requires reading the rendered PNG back before judging (vision mandatory)
-- [ ] PreToolUse edit-hook fragment `.claude/hooks/PreToolUse-edit.d/10-design-critic.sh` (same fragment dir + matcher pattern as the existing `.claude/hooks/PreToolUse-edit.d/00-freeze.sh`) scopes critic writes to `docs/design/critique/**` — bound to the critic context via a critic-session marker file under `.claude/state/design/` that the critique runner sets for the critic run's duration (freeze-hook state-file pattern — never a global always-on rule); while the marker exists, a write anywhere else blocks; bats test proves the block (non-zero exit)
-- [ ] Critique runner exists: `.claude/scripts/design/design-critique.sh` — the orchestration piece. Responsibility split (mirrors the frozen plan §2.3): the RUNNER sets/clears the marker file, runs the deterministic render, invokes the design-critic agent, computes PASS/FAIL from the critique artifact (PASS ≡ zero VIOLATION), and writes the review-ledger `design` stamp via `review-ledger.sh` on PASS; the CRITIC writes only the critique artifact and emits the spine receipt via its scoped `arc-event.sh` Bash — the critic structurally cannot touch the ledger
-- [ ] Minimal brief template exists (`docs/templates/design-brief-template.md`): the 4 contract section headers + the 7 interaction-model questions — just enough to critique against (full brief mode is Phase 1)
-- [ ] Deterministic render: one command opens the target page at a fixed viewport via agent-browser and writes a PNG; the critique artifact records the screenshot's hash + viewport
-- [ ] Critic run on the committed planted-defect fixture PNG (defect-injected clone of the target route) reports the planted defect as `VIOLATION`; run on the real route's clean render produces a critique artifact with ≥1 real finding classed VIOLATION / WEAKNESS / POLISH — no absolute scores (REQ-02)
-- [ ] Receipt: `review.completed` payload `{"lens":"design","target":"<repo-relative route path>","result":"PASS|FAIL","screenshot_sha256":"<hash>"}` emitted via `bash .claude/scripts/hq/arc-event.sh emit` — `target` is the route-identification key the gate script matches on; visible through the reader; review-ledger `design` stamp (`.claude/state/reviews/`, via `review-ledger.sh`) written on PASS (PASS ≡ zero VIOLATION findings, REQ-03)
-- [ ] `design` gate row in `arc.gates.yaml` — exact row (the file's strict flat parser: keys `name/check/mode/tier/runtime/evidence`, one `key: value` per line, no inline comments): `name: design` · `check: bash .claude/scripts/design/design-gate.sh` · `mode: warn` · `tier: hook` · `runtime: native` · `evidence: .claude/state/design/gate.txt`; the check script exits 1 when a critiqued route lacks a design receipt (matched on the payload `target` field), 0 when present, 1 with a WARN diagnostic on reader error — never 2 this cycle (REQ-04)
-- [ ] tests added & green (one bats file, run foreground/serially)
-- [ ] live demo run + output checked
-- [ ] tracker updated — `PROGRESS.md` at repo root: this phase's row in `## Phase table` flipped ✅ with date + an entry appended to `## Done log` (format = the file's own existing rows; build playbook §8)
+- [ ] Capability works end-to-end: a fixture lane resolves on all 7 surfaces (explicit `--lane`, auto-single, ask-on-ambiguity) AND a bare root behaves byte-identically to the pinned goldens (REQ-01)
+- [ ] Tests added & green: lane-resolver fixtures, adversarial lane-name fixtures (INCLUDING Windows reserved device names — `con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9` — which pass the `[a-z][a-z0-9-]*` grammar but fail or misbehave on `mkdir` under windows-git-bash), unknown-lane STOP fixtures per non-kickoff surface, kickoff-only creation fixture, canonical-order assertion, bare-token fixtures (`/arc-change design ...` stays free text) — full bats green on 3 OS
+- [ ] Live demo run + output checked (scenario below)
+- [ ] Verified against the real system: THIS repo (still root layout in Phase 0) runs kickoff-lint / statusline / SessionStart with outputs unchanged vs goldens
+- [ ] Contract tests green: not applicable — zero external dependencies (PLAN External dependencies)
+- [ ] Tracker updated (PROGRESS.md row ✅ + done-log + appetite burn)
 
 ## Verification plan
 
-- **Test command:** `bats tests/design-steel-thread.bats`
-- **Expected failure first:** the test asserts (a) a critique artifact exists under
-  `docs/design/critique/` for the target route, (b) the spine (via the reader) contains a
-  `review.completed` event whose payload has `"lens":"design"` and the expected `target`,
-  (c) a critic-context write outside the critique dir exits non-zero, (d) after a PASS
-  run, the review-ledger records a `design` stamp for the current commit
-  (`review-ledger.sh` output / `.claude/state/reviews/` stamp file contains `design`).
-  Before the phase is built, (a) fails with "no critique artifact found for
-  arc-hq-mockup" — red proven, then built to green.
-- **Live demo scenario:** run the critique command against
-  `docs/strategy/arc-hq-mockup.html` → watch the critic read the PNG back and write the
-  critique artifact → run the reader/brief → the design receipt line is visible → check
-  the review-ledger shows the `design` stamp for HEAD → attempt a write to `README.md`
-  from the critic context → hook blocks it. Then run the gate with and without the
-  receipt present → warn fires only when absent.
-- **Real-system check:** the real agent-browser render of the real page (the fixture PNGs
-  cover only the planted-defect contract test).
-- **Expected evidence:** critique artifact (with screenshot hash line) · reader output
-  showing the receipt · bats green output · blocked-write transcript · gate warn/pass output.
+- **Test command:** `bats tests/lane-resolver.bats tests/kickoff-lint.bats` locally (touched files only — CI runs the full 3-OS suite)
+- **Expected failure first:** run the new lane-resolver fixture file BEFORE the resolver exists — every `--lane` / STOP / creation case is red while the pre-pinned root-mode goldens are already green; the file flips green only when the resolver lands. Goldens themselves must be pinned from a commit with zero resolver code, so any later diff is attributable.
+- **Live demo scenario:** in a scratch copy with fixture lane `fixture-a`: `/arc-resume --lane fixture-a` prints `Selected lane: fixture-a (via arg)` → board summary → report; `/arc-resume --lane fixtur-a` (typo) hard-STOPs listing known lanes and creates 0 folders; `/arc-change --lane fixture-a something` echoes the lane and treats "something" as free text; in a bare-root copy (no `initiatives/`), output is byte-identical to the pinned golden.
+- **Real-system check:** kickoff-lint + statusline + SessionStart hook in this repo, pre-migration — byte-identical to goldens.
+- **Expected evidence:** empty bytediff vs a PER-OS golden set (ubuntu / macos / windows-git-bash each pin their own root-mode output — CRLF vs LF and `\` vs `/` in hook/CLI output are real platform differences, not refactor noise), with any normalization step the diff applies named in the evidence bundle; pinned adversarial fixture list (`../`, absolute path, empty, uppercase, leading-digit); STOP/creation fixture transcripts; phase-00 evidence bundle.
 
 ## Rabbit holes in this phase
 
-- Building brief mode here — NO: minimal template only, brief mode is Phase 1.
-- Touching the spine dedup bug — NO (ADR-0044): Phase 0 emits once per run.
-- Windows path matching in the edit-hook scope — reuse the matcher from
-  `.claude/hooks/PreToolUse-edit.d/00-freeze.sh` verbatim; do not write a new path
-  normalizer.
-- Critiquing interactivity on a static page — the platform contract for this route is
-  desktop-only static; state-matrix depth waits for Phase 2 surfaces.
-- Cross-OS render drift: the render command is authored/tested on the owner's Windows
-  box, but CI is 3-OS — font/antialiasing/DPI differences can change the PNG hash between
-  Windows dev and Linux/macOS CI with no code change; pin explicit font + disable AA in
-  the render command before trusting the hash check, don't assume Windows-tested parity.
+- Generalizing the resolver beyond the seven PORT-E surfaces "while we're in there".
+- Building board/lint machinery early — the board is Phase 1–2; Phase 0 is routing only.
+- Perfecting hook output formatting; the golden defines done.
 
 ## Out of scope for this phase
 
-Full 4-contract brief mode + design-lint (Phase 1) · manifest module (Phase 1) · explore/
-theses/worktrees (Phase 2) · library + LexOS pilot (Phase 3) · gate promotion warn→block.
-
-## Build notes — read criteria 3 and 7 through these
-
-- **Who emits the receipt → ADR-0047.** Criteria 3 and 7 as written contradict each other
-  (the critic emits a receipt whose `result` only the runner computes). Resolved: the runner
-  computes PASS/FAIL, emits `review.completed`, and stamps the ledger; the critic writes its
-  artifact and emits `note.logged`. Owner-confirmed 2026-07-28. An agent produces evidence;
-  only a deterministic script records a verdict.
-- **The runner is `begin` + `finish`, not one call.** Criterion 3 says the runner "invokes the
-  design-critic agent". No shell script in arc can do that — arc has no headless-claude path,
-  agents are spawned by the session. So the runner is the deterministic pair of bookends
-  (`begin` = arm boundary + render; `finish` = judge + receipt + stamp + release) and
-  `/arc-design-critique` spawns the critic between them. Every responsibility criterion 3
-  assigns to the runner still lives in the runner.
-- **Tracked follow-up, NOT this phase: `freeze-check.sh` traversal hole.** The critic's own
-  guard refuses `..` segments, so the critic is safe. The pre-existing
-  `.claude/scripts/core/freeze-check.sh` shares the hole it was modelled on: with a boundary
-  of `docs/design`, a target of `docs/design/../../etc/passwd` satisfies its `"$allowed"/*`
-  prefix match and is allowed. Fixing it is a core change (product-shipped file → sync-golden
-  regen), deliberately out of a 1.25-day design appetite. Owner call 2026-07-28: track, don't
-  touch. Route via `/arc-change` before Phase 1 closes.
-- **Cross-OS hash drift is handled by scope, not by pinning alone.** The render pins viewport,
-  font stack, animations and AA — and no test asserts a hash value. The hash is provenance
-  (what pixels were judged) plus same-machine stale/blank detection. Nothing compares hashes
-  across OS, so the 3-OS CI legs cannot fail on font rendering.
+- Any file move or migration (Phase 1). Any `PORTFOLIO.md` content (Phase 1). WIP info
+  line, board lint, ownership lint, spool (Phase 2). Docs rewrite (Phase 3).
 
 ## Your-setup / pending
 
-None — agent-browser installed, spine live, all local.
+- None — offline, zero new packages, no keys.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
-- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
-- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
-- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
-- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
-- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
-- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.
+- Philosophy untouched: Golden Loop, gates, receipts, change discipline — a lane is a namespace for tracker state, nothing more (ADR-0050, ADR-0053).
+- No history rewrite and no history duplication: frozen paths stay frozen as sole canonical copies; lanes link, never copy (ADR-0055, ADR-0058).
+- Root-mode green at every commit — byte-identical when no `initiatives/` dir exists; the bare-root fixture is a permanent consumer contract (ADR-0054).
+- feat/* branch + PR, never main.
+- All new lints WARN-first, and every WARN prints Expected / Found / Example (ADR-0057).
+- Spine receipts for kickoff / phase-done / retro as usual; no silently lost receipts — degrade visibly, never lose, never block (ADR-0056, REQ-04).
+- Never guess a lane: explicit `--lane` beats auto-resolve beats ask; destructive commands confirm the selected lane (ADR-0054).
