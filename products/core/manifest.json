@@ -45,6 +45,7 @@
     ".claude/hooks/PreCompact.d/00-snapshot.sh",
     ".claude/output-styles/terse.md",
     ".claude/rules/api.md",
+    ".claude/rules/lanes.md",
     ".claude/rules/security-sensitive.md",
     ".claude/rules/stripe.md",
     ".claude/rules/supabase.md",

@@ -1,7 +1,16 @@
 ---
 description: End-of-phase retro — turn repeated corrections into permanent setup upgrades.
 argument-hint: [phase-number (optional)]
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*)
 ---
+
+**Lane first** (`.claude/rules/lanes.md`): run
+`bash .claude/scripts/core/lane-resolve.sh --for retro --print human` (add `--lane <name>`
+if I gave one). Non-zero exit → print it and STOP. `$1` is the PHASE NUMBER, never a lane.
+A retro rewrites setup files, so **name the selected lane in your confirmation first**:
+"Running retro for lane `<lane>`." The retro reads that lane's tracker, but writes findings
+to the COMPANY layer — `docs/retro-log.md`, `docs/trial-ledger.md`, `CLAUDE.md` — which is
+single and never per-lane (ADR-0053). Root-mode is unchanged.
 
 Run a retro on this session/phase. The build playbook's closing rule: *the setup should
 improve with every project* — this command is how.

@@ -149,3 +149,51 @@ EV="$ARC_ROOT/.claude/scripts/plan/arc-evidence.sh"
   [ -f "$SANDBOX/docs/evidence/phase-05/manifest.json" ]
   [[ "$output" != *"Selected lane"* ]]
 }
+
+# ---------- command surfaces (prose) ----------
+# The five command surfaces are markdown, so their contract cannot be executed — but it
+# CAN rot silently, which is exactly how meta-docs drifted before (retro-log 2026-07-22:
+# name the query, not the count). These assert the wiring is present and that a command
+# which restricts its tools is actually ALLOWED to run the resolver — a command that
+# documents the call but cannot make it is worse than one that never mentions it.
+
+@test "surface/commands: all five lane-aware commands route through the resolver" {
+  for c in arc-kickoff arc-resume arc-change arc-phase-done arc-retro; do
+    f="$ARC_ROOT/.claude/commands/$c.md"
+    [ -f "$f" ] || { echo "missing $f"; false; }
+    grep -q "lane-resolve.sh" "$f" || { echo "$c does not call the resolver"; false; }
+    grep -q "rules/lanes.md" "$f" || { echo "$c does not cite the lane rules"; false; }
+    grep -q -- "--lane" "$f" || { echo "$c does not document --lane"; false; }
+  done
+}
+
+@test "surface/commands: a command that restricts tools may actually run the resolver" {
+  for c in arc-resume arc-change arc-phase-done arc-retro; do
+    f="$ARC_ROOT/.claude/commands/$c.md"
+    if grep -q "^allowed-tools:" "$f"; then
+      grep "^allowed-tools:" "$f" | grep -q "lane-resolve.sh" \
+        || { echo "$c documents the resolver but its allowed-tools forbids running it"; false; }
+    fi
+  done
+}
+
+@test "surface/commands: free-text surfaces state their argument is not a lane" {
+  grep -q "never a lane" "$ARC_ROOT/.claude/commands/arc-change.md"
+  grep -q "never a lane" "$ARC_ROOT/.claude/commands/arc-kickoff.md"
+}
+
+@test "surface/commands: destructive surfaces confirm the lane before acting" {
+  for c in arc-phase-done arc-retro; do
+    grep -qi "name the selected lane" "$ARC_ROOT/.claude/commands/$c.md" \
+      || { echo "$c does not confirm the lane"; false; }
+  done
+}
+
+@test "surface/commands: kickoff is the only command claiming lane creation" {
+  grep -q "ONLY command that may create a lane" "$ARC_ROOT/.claude/commands/arc-kickoff.md"
+  for c in arc-resume arc-change arc-phase-done arc-retro; do
+    grep -qi "may create a lane" "$ARC_ROOT/.claude/commands/$c.md" \
+      && { echo "$c claims creation rights it does not have"; false; }
+  done
+  true
+}

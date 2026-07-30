@@ -1,8 +1,15 @@
 ---
 description: Intake a mid-build change, idea, or suggestion and route it THROUGH the build structure (tracker + spec/ADR) instead of editing code ad-hoc. Then build it step-by-step via the Golden Loop.
 argument-hint: [what changed / the new idea / the suggestion]
-allowed-tools: Read, Write, Edit, Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*)
+allowed-tools: Read, Write, Edit, Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(node .claude/scripts/plan/kickoff-lint.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*)
 ---
+
+**Lane first** (`.claude/rules/lanes.md`): run
+`bash .claude/scripts/core/lane-resolve.sh --for change --print human` (add `--lane <name>`
+if I gave one). Non-zero exit → print it and STOP. **`$ARGUMENTS` is free text describing
+the change — never a lane name.** `/arc-change design the header` describes a change; it
+does not select the design lane. In lane-mode echo `Selected lane:` first and read/write
+the tracker under `initiatives/<lane>/`; root-mode is unchanged.
 
 A change came up mid-build: **$ARGUMENTS**
 
