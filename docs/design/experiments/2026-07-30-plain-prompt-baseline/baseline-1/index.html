@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024</title>
+<style>
+  /* ------------------------------------------------------------------
+     Tokens
+     Palette discipline: ink + paper carry everything; rust means
+     "needs you"; amber means "today". Nothing else is coloured.
+     ------------------------------------------------------------------ */
+  :root{
+    --sans: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", Arial, sans-serif;
+    --serif: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+
+    --paper:      #F5F4F0;
+    --surface:    #FFFFFF;
+    --ink:        #16181C;
+    --ink-70:     #43464C;
+    --ink-50:     #6F7279;
+    --ink-35:     #9A9CA3;
+    --line:       #E8E5DE;
+    --line-2:     #D7D3CA;
+
+    --rust:       #B03A22;
+    --rust-deep:  #8E2D18;
+    --rust-soft:  #F0D6CC;
+    --rust-tint:  #FCF2EE;
+    --rust-lit:   #F0906F;
+
+    --amber:      #7E5400;
+    --amber-soft: #EBDCB6;
+    --amber-tint: #FBF4E5;
+
+    --live:       #2E7D5B;
+
+    --gy: 28px;              /* glyph centre offset — the spine's anchor */
+    --nodecol: 30px;
+    --datecol: 76px;
+    --statecol: 116px;
+    --gap: 16px;
+    --bodystart: 138px;      /* datecol + gap + nodecol + gap */
+  }
+
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:14px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  ::selection{background:#E6DFCF;color:var(--ink)}
+  h1,h2,h3,p,dl,dd,dt,ol,ul,figure{margin:0}
+  ol,ul{list-style:none;padding:0}
+  button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1180px;margin:0 auto;padding:0 40px}
+  .num{font-variant-numeric:tabular-nums lining-nums}
+
+  .skip{
+    position:absolute;left:-9999px;top:0;z-index:99;
+    background:var(--ink);color:#fff;padding:10px 16px;border-radius:0 0 6px 0;font-size:13px;
+  }
+  .skip:focus{left:0}
+
+  /* ---------------------------------------------------------------- Buttons */
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;
+    height:34px;padding:0 14px;border-radius:5px;
+    border:1px solid transparent;
+    font-size:13px;font-weight:600;letter-spacing:-.004em;white-space:nowrap;
+    transition:background .13s ease,border-color .13s ease,color .13s ease,box-shadow .13s ease;
+  }
+  .btn--sm{height:29px;padding:0 11px;font-size:12.5px}
+  .btn--ink{background:var(--ink);color:#fff}
+  .btn--ink:hover{background:#2A2D33}
+  .btn--ghost{background:var(--surface);border-color:var(--line-2);color:var(--ink)}
+  .btn--ghost:hover{border-color:var(--ink-35);background:#FBFAF8}
+  .btn--light{background:#fff;color:var(--ink)}
+  .btn--light:hover{background:#EFEDE7}
+  .btn--rust{background:var(--rust);color:#fff}
+  .btn--rust:hover{background:var(--rust-deep)}
+  .btn:focus-visible,a:focus-visible,.addrow:focus-visible{outline:2px solid var(--rust);outline-offset:2px}
+
+  /* ---------------------------------------------------------------- Top bar */
+  .topbar{
+    position:sticky;top:0;z-index:20;
+    background:rgba(255,255,255,.94);
+    backdrop-filter:saturate(180%) blur(8px);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar__in{display:flex;align-items:center;justify-content:space-between;height:58px}
+  .crumbs{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-50)}
+  .crumbs a:hover{color:var(--ink)}
+  .crumbs svg{color:var(--ink-35)}
+  .crumbs [aria-current]{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums}
+  .topbar__act{display:flex;align-items:center;gap:9px}
+
+  /* --------------------------------------------------------------- Masthead */
+  .mast{background:var(--surface);border-bottom:1px solid var(--line);padding:38px 0 34px}
+  .status{
+    display:inline-flex;align-items:center;gap:7px;
+    font-size:11.5px;font-weight:600;letter-spacing:.085em;text-transform:uppercase;
+    color:var(--ink-70);margin-bottom:16px;
+  }
+  .status__dot{width:7px;height:7px;border-radius:50%;background:var(--live);box-shadow:0 0 0 3px rgba(46,125,91,.14)}
+  .mast__title{
+    font-family:var(--serif);font-weight:400;
+    font-size:41px;line-height:1.14;letter-spacing:-.012em;
+    max-width:940px;color:var(--ink);
+  }
+  .mast__title em{font-style:italic;color:var(--ink-50)}
+  .mast__meta{
+    margin-top:14px;font-size:13.5px;color:var(--ink-50);
+    font-variant-numeric:tabular-nums;
+  }
+  .mast__meta .sep{color:var(--ink-35);margin:0 9px}
+
+  /* ----------------------------------------------------------------- Canvas */
+  .canvas{
+    display:grid;grid-template-columns:minmax(0,1fr) 316px;gap:56px;
+    padding:34px 0 96px;align-items:start;
+  }
+
+  /* ------------------------------------------------------- The one blocker */
+  .alert{
+    display:grid;grid-template-columns:30px minmax(0,1fr) auto;
+    align-items:center;column-gap:24px;
+    background:var(--ink);color:#fff;
+    border-left:3px solid var(--rust);
+    border-radius:6px;
+    padding:25px 28px 25px 25px;
+    box-shadow:0 1px 2px rgba(20,18,15,.10),0 8px 24px -14px rgba(20,18,15,.45);
+  }
+  .alert__mark{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .alert__mark .seg{width:0;height:15px;border-left:1px dashed rgba(240,144,111,.55)}
+  .alert__eyebrow{
+    font-size:10.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--rust-lit);font-variant-numeric:tabular-nums;
+  }
+  .alert__title{
+    font-family:var(--serif);font-weight:400;font-size:25px;line-height:1.2;
+    letter-spacing:-.008em;margin:9px 0 7px;
+  }
+  .alert__body{font-size:14px;color:rgba(255,255,255,.66);max-width:46ch}
+
+  /* --------------------------------------------------------- Section header */
+  .sec{display:flex;align-items:baseline;gap:12px;margin:40px 0 4px}
+  .sec h2{
+    font-size:11.5px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-70);
+  }
+  .sec__count{
+    font-size:11px;font-weight:600;color:var(--ink-50);
+    background:#EAE7E0;border-radius:20px;padding:2px 8px;font-variant-numeric:tabular-nums;
+  }
+  .sec__rule{flex:1;height:1px;background:var(--line-2)}
+  .sec__note{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-35)}
+  .sec__note.is-rust{color:var(--rust);font-weight:600}
+
+  /* ------------------------------------------------------------- The record */
+  .list{margin-top:6px}
+  .row{
+    display:grid;
+    grid-template-columns:var(--datecol) var(--nodecol) minmax(0,1fr) var(--statecol);
+    column-gap:var(--gap);align-items:stretch;
+  }
+  /* hairline that starts after the spine, so the spine is never crossed */
+  .row + .row{
+    background-image:linear-gradient(to right,var(--line),var(--line));
+    background-size:calc(100% - var(--bodystart)) 1px;
+    background-position:var(--bodystart) 0;
+    background-repeat:no-repeat;
+  }
+  .now + .row,.row.now{background-image:none}
+
+  .row__date{padding:19px 0 20px;text-align:right;line-height:1.15}
+  .row__date .d{display:block;font-size:17px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .row__date .my{display:block;margin-top:3px;font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-35);font-variant-numeric:tabular-nums}
+  .is-overdue .row__date .d{color:var(--rust)}
+
+  .row__node{position:relative;display:flex;justify-content:center;padding-top:22px}
+  .row__node::before{
+    content:"";position:absolute;left:50%;top:0;bottom:0;
+    border-left:1px solid var(--line-2);transform:translateX(-.5px);
+  }
+  .list > li:first-child .row__node::before{top:var(--gy)}
+  .list > li:last-child  .row__node::before{bottom:calc(100% - var(--gy))}
+  .due .row__node::before{border-left-style:dashed}
+  .is-overdue .row__node::before{border-left-color:rgba(176,58,34,.45)}
+  .is-broken  .row__node::before{border-left-style:dashed;border-left-color:rgba(176,58,34,.6)}
+
+  /* glyph system — shape carries type, fill carries state:
+     filled = settled and on the record · hollow = still outstanding */
+  .g{position:relative;flex:none;box-shadow:0 0 0 5px var(--paper)}
+  .g--hearing{width:11px;height:11px;transform:rotate(45deg);background:var(--ink)}
+  .g--doc{width:10px;height:12px;border-radius:1.5px;background:var(--ink)}
+  .g--task{width:11px;height:11px;border-radius:50%;background:var(--paper);border:1.75px solid var(--ink-35)}
+  .g--note{width:7px;height:7px;border-radius:50%;background:var(--ink-50);margin-top:2px}
+  .g.is-open{background:transparent;border:1.75px solid var(--rust)}
+  .g--task.is-open{background:var(--paper);border-color:var(--rust)}
+  .g--task.is-today{border-color:var(--amber)}
+
+  .row__body{padding:19px 0 20px;min-width:0}
+  .row__type{
+    font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-35);
+  }
+  .row__title{font-size:15.5px;font-weight:600;letter-spacing:-.008em;margin-top:5px;line-height:1.35}
+  .is-broken .row__title{color:var(--rust-deep)}
+  .row__meta{margin-top:5px;font-size:13px;color:var(--ink-50);font-variant-numeric:tabular-nums}
+  .row__meta b{font-weight:600;color:var(--ink-70)}
+
+  .row__state{padding:21px 0 20px;text-align:right}
+  .chip{
+    display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    padding:4px 9px;border-radius:4px;border:1px solid var(--line-2);color:var(--ink-50);background:#EFEDE7;
+    white-space:nowrap;
+  }
+  .chip--overdue{color:var(--rust-deep);background:var(--rust-tint);border-color:var(--rust-soft)}
+  .chip--today{color:var(--amber);background:var(--amber-tint);border-color:var(--amber-soft)}
+  .chip--gap{color:var(--rust-deep);background:var(--rust-tint);border-color:var(--rust-soft)}
+
+  /* the outcome slot — the shape of a complete hearing, and the hole */
+  .outcome{
+    margin-top:12px;background:var(--surface);border:1px solid var(--line);
+    border-radius:5px;padding:11px 14px;
+  }
+  .outcome__label{
+    display:block;font-size:9.5px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;color:var(--ink-35);
+  }
+  .outcome p{margin-top:4px;font-size:14px;color:var(--ink-70);line-height:1.45}
+  .outcome--empty{
+    background:var(--rust-tint);border:1px dashed var(--rust-soft);
+    display:flex;align-items:center;justify-content:space-between;gap:20px;
+    padding:11px 11px 11px 14px;
+  }
+  .outcome--empty .outcome__label{color:rgba(142,45,24,.65)}
+  .outcome--empty p{color:var(--rust-deep);font-weight:600}
+
+  /* today */
+  .now .row__date{padding:0}
+  .now .row__node{padding-top:0}
+  .now__bar{grid-column:3 / -1;display:flex;align-items:center;gap:12px;padding:8px 0 9px}
+  .now__bar span{
+    font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-70);
+    font-variant-numeric:tabular-nums;
+  }
+  .now__bar::after{content:"";flex:1;height:1px;background:var(--ink-35)}
+
+  /* -------------------------------------------------------------- Side rail */
+  .rail{position:sticky;top:82px;display:flex;flex-direction:column;gap:18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px 6px}
+  .card__h{
+    font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-35);
+    padding-bottom:12px;border-bottom:1px solid var(--line);
+  }
+  .facts div{
+    display:flex;align-items:baseline;justify-content:space-between;gap:16px;
+    padding:12px 0;border-bottom:1px solid var(--line);
+  }
+  .facts div:last-child{border-bottom:0}
+  .facts dt{font-size:12.5px;color:var(--ink-50);white-space:nowrap}
+  .facts dd{font-size:13.5px;font-weight:600;text-align:right;letter-spacing:-.005em}
+  .facts .money{font-variant-numeric:tabular-nums}
+  .facts .none{color:var(--ink-35);font-weight:500;font-style:italic}
+  .facts .count{color:var(--rust);font-variant-numeric:tabular-nums}
+  .facts .inline-add{
+    font-size:12px;font-weight:600;color:var(--ink-50);border-bottom:1px solid var(--line-2);margin-left:10px;
+  }
+  .facts .inline-add:hover{color:var(--ink);border-color:var(--ink)}
+
+  .addrow{
+    width:100%;display:flex;align-items:center;gap:12px;
+    padding:11px 0;border-bottom:1px solid var(--line);text-align:left;
+  }
+  .add li:last-child .addrow{border-bottom:0}
+  .addrow__g{width:14px;display:flex;justify-content:center}
+  .addrow__g .g{box-shadow:none}
+  .addrow__t{flex:1;font-size:13.5px;font-weight:500}
+  .addrow__p{color:var(--ink-35);font-size:15px;line-height:1;transition:color .12s ease}
+  .addrow:hover .addrow__t{color:var(--ink)}
+  .addrow:hover .addrow__p{color:var(--ink)}
+
+  .railfoot{display:flex;gap:18px;padding:0 2px}
+  .railfoot button{
+    font-size:12.5px;color:var(--ink-50);border-bottom:1px solid transparent;padding-bottom:1px;
+  }
+  .railfoot button:hover{color:var(--ink);border-color:var(--line-2)}
+</style>
+</head>
+<body>
+<a class="skip" href="#record">Skip to the record</a>
+
+<div class="topbar">
+  <div class="wrap topbar__in">
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <a href="#">Cases</a>
+      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.6 2.6 8 6l-3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span aria-current="page">O.S. No. 412 of 2024</span>
+    </nav>
+    <div class="topbar__act">
+      <button class="btn btn--ghost btn--sm">Edit</button>
+      <button class="btn btn--ink btn--sm">
+        <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><path d="M5.5 1v9M1 5.5h9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Add
+      </button>
+    </div>
+  </div>
+</div>
+
+<header class="mast">
+  <div class="wrap">
+    <p class="status"><span class="status__dot"></span>Active</p>
+    <h1 class="mast__title">Meera Raghunathan <em>v.</em> Sunvale Housing Pvt.&nbsp;Ltd.</h1>
+    <p class="mast__meta">
+      O.S. No. 412 of 2024<span class="sep">·</span>City Civil Court, Bengaluru<span class="sep">·</span>Civil suit
+    </p>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="canvas">
+
+    <main>
+
+      <!-- The single thing standing between this case and its next step. -->
+      <section class="alert" aria-labelledby="alert-title">
+        <div class="alert__mark" aria-hidden="true">
+          <span class="seg"></span>
+          <span class="g g--hearing is-open"></span>
+          <span class="seg"></span>
+        </div>
+        <div>
+          <p class="alert__eyebrow">Hearing · Held 14 Jul 2026</p>
+          <h2 class="alert__title" id="alert-title">Outcome not recorded</h2>
+          <p class="alert__body">The case cannot move until this outcome is entered.</p>
+        </div>
+        <div>
+          <button class="btn btn--light">
+            Record outcome
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true"><path d="M1.5 6h8.2M6.4 2.6 9.8 6l-3.4 3.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- ------------------------------------------------------------ Due -->
+      <div class="sec">
+        <h2 id="due">Due</h2>
+        <span class="sec__count">4</span>
+        <span class="sec__rule"></span>
+        <span class="sec__note is-rust">2 overdue</span>
+      </div>
+
+      <ol class="list due" aria-labelledby="due">
+
+        <li class="row is-overdue">
+          <div class="row__date"><span class="d">21</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--task is-open" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Task</p>
+            <h3 class="row__title">File rejoinder</h3>
+            <p class="row__meta">Due <time datetime="2026-07-21">21 Jul 2026</time> · <b>not done</b></p>
+          </div>
+          <div class="row__state"><span class="chip chip--overdue">Overdue</span></div>
+        </li>
+
+        <li class="row is-overdue">
+          <div class="row__date"><span class="d">24</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--doc is-open" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Document</p>
+            <h3 class="row__title">Reply to written statement</h3>
+            <p class="row__meta">Due <time datetime="2026-07-24">24 Jul 2026</time> · <b>not filed</b></p>
+          </div>
+          <div class="row__state"><span class="chip chip--overdue">Overdue</span></div>
+        </li>
+
+        <li class="row now">
+          <div class="row__date"></div>
+          <div class="row__node"></div>
+          <div class="now__bar"><span>Today · 30 Jul 2026</span></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">30</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--task is-today" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Task</p>
+            <h3 class="row__title">Confirm client's availability for hearing</h3>
+            <p class="row__meta">Due <time datetime="2026-07-30">30 Jul 2026</time></p>
+          </div>
+          <div class="row__state"><span class="chip chip--today">Due today</span></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">05</span><span class="my">Aug 2026</span></div>
+          <div class="row__node"><span class="g g--task" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Task</p>
+            <h3 class="row__title">Prepare list of documents for evidence</h3>
+            <p class="row__meta">Due <time datetime="2026-08-05">05 Aug 2026</time></p>
+          </div>
+          <div class="row__state"><span class="chip">Due</span></div>
+        </li>
+
+      </ol>
+
+      <!-- --------------------------------------------------- On the record -->
+      <div class="sec">
+        <h2 id="record">On the record</h2>
+        <span class="sec__count">7</span>
+        <span class="sec__rule"></span>
+        <span class="sec__note">Newest first</span>
+      </div>
+
+      <ol class="list rec" aria-labelledby="record">
+
+        <li class="row">
+          <div class="row__date"><span class="d">16</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--note" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Note</p>
+            <h3 class="row__title">Client confirmed balance fee payable on final decree</h3>
+          </div>
+          <div class="row__state"></div>
+        </li>
+
+        <li class="row is-broken">
+          <div class="row__date"><span class="d">14</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--hearing is-open" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Hearing</p>
+            <h3 class="row__title">Held <time datetime="2026-07-14">14 Jul 2026</time></h3>
+            <div class="outcome outcome--empty">
+              <div>
+                <span class="outcome__label">Outcome</span>
+                <p>Not recorded</p>
+              </div>
+              <button class="btn btn--rust btn--sm">Record outcome</button>
+            </div>
+          </div>
+          <div class="row__state"><span class="chip chip--gap">Not recorded</span></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">08</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--doc" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Document</p>
+            <h3 class="row__title">Written statement</h3>
+            <p class="row__meta">Filed <time datetime="2026-07-08">08 Jul 2026</time></p>
+          </div>
+          <div class="row__state"><span class="chip">Filed</span></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">02</span><span class="my">Jul 2026</span></div>
+          <div class="row__node"><span class="g g--note" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Note</p>
+            <h3 class="row__title">Fee received — <span class="num">₹42,500</span></h3>
+          </div>
+          <div class="row__state"></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">19</span><span class="my">May 2026</span></div>
+          <div class="row__node"><span class="g g--hearing" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Hearing</p>
+            <h3 class="row__title">Held <time datetime="2026-05-19">19 May 2026</time></h3>
+            <div class="outcome">
+              <span class="outcome__label">Outcome</span>
+              <p>Interim application disposed; matter listed for evidence</p>
+            </div>
+          </div>
+          <div class="row__state"><span class="chip">Recorded</span></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">15</span><span class="my">May 2026</span></div>
+          <div class="row__node"><span class="g g--doc" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Document</p>
+            <h3 class="row__title">Vakalatnama</h3>
+            <p class="row__meta">Filed <time datetime="2026-05-15">15 May 2026</time></p>
+          </div>
+          <div class="row__state"><span class="chip">Filed</span></div>
+        </li>
+
+        <li class="row">
+          <div class="row__date"><span class="d">15</span><span class="my">May 2026</span></div>
+          <div class="row__node"><span class="g g--doc" aria-hidden="true"></span></div>
+          <div class="row__body">
+            <p class="row__type">Document</p>
+            <h3 class="row__title">Memo of appearance</h3>
+            <p class="row__meta">Filed <time datetime="2026-05-15">15 May 2026</time></p>
+          </div>
+          <div class="row__state"><span class="chip">Filed</span></div>
+        </li>
+
+      </ol>
+    </main>
+
+    <aside class="rail">
+
+      <section class="card">
+        <h3 class="card__h">Case</h3>
+        <dl class="facts">
+          <div>
+            <dt>Client</dt>
+            <dd>Meera Raghunathan</dd>
+          </div>
+          <div>
+            <dt>Claim</dt>
+            <dd class="money">₹18,45,000</dd>
+          </div>
+          <div>
+            <dt>Next hearing</dt>
+            <dd><span class="none">Not set</span><button class="inline-add">Add</button></dd>
+          </div>
+          <div>
+            <dt>Overdue</dt>
+            <dd class="count">2</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h3 class="card__h">Add</h3>
+        <ul class="add">
+          <li><button class="addrow"><span class="addrow__g"><span class="g g--hearing"></span></span><span class="addrow__t">Hearing</span><span class="addrow__p">+</span></button></li>
+          <li><button class="addrow"><span class="addrow__g"><span class="g g--doc"></span></span><span class="addrow__t">Document</span><span class="addrow__p">+</span></button></li>
+          <li><button class="addrow"><span class="addrow__g"><span class="g g--task"></span></span><span class="addrow__t">Task</span><span class="addrow__p">+</span></button></li>
+          <li><button class="addrow"><span class="addrow__g"><span class="g g--note"></span></span><span class="addrow__t">Note</span><span class="addrow__p">+</span></button></li>
+        </ul>
+      </section>
+
+      <div class="railfoot">
+        <button>Edit case</button>
+        <button>Remove case</button>
+      </div>
+
+    </aside>
+
+  </div>
+</div>
+
+</body>
+</html>

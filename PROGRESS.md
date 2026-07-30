@@ -511,8 +511,66 @@ variant-b is the owner's pick and the jury's 2–1 winner, so it goes out LAST a
 it still wins, it won against position rather than with it.** Both evidence files now carry the
 sent-file hashes, the framing pointer, and their own PASS bars; every placeholder is gone.
 
-**What is left in criterion 3 is now exactly two owner acts and nothing else: choose the Stream-A
-channel and confirm the Stream-B recruit, then SEND.** No build work remains in this phase.
+**🔴 STOP — BLIND TEST NOT LAUNCHED, AND IT SHOULD NOT BE. The owner looked at the output and
+scored it 23/100, and he is right.** This is the finding of the whole cycle and it outranks every
+receipt above it.
+
+**Two owner corrections, both of them mine to own:**
+1. **Recommending a public Reddit post was wrong.** It publishes the product concept externally and
+   irreversibly — indexed, cached, unrecoverable. ADR-0040 requires only that *arc's authorship* be
+   undisclosed and says nothing about **product confidentiality**; I followed the ADR and never
+   raised the confidentiality question, when a hard-to-reverse outward-facing act is exactly the
+   thing to put to the owner first. The streams are fine — the CHANNEL was wrong. Confidential
+   routes exist: 1:1 DMs, invite-only communities, a screen-share walkthrough.
+2. **I ran this entire evidence pipeline without ever looking at the renders.** Critiques, rankings,
+   receipts, hashes — all read as agent reports, never as pixels. Everything downstream was
+   verification of things I had not seen.
+
+**The claim was tested rather than argued about.** Owner's claim: "a plain prompt would score ~60;
+this pipeline produced 23." Three `general-purpose` agents built the same screen from the same
+content with **the arc pipeline entirely off** — no brief, no token freeze, no tokens-only-colour
+rule, no critic, no jury (`docs/design/experiments/2026-07-30-plain-prompt-baseline/`). Renders:
+`63ba6635` · `aa98c4b3` · `e9e3e69a`.
+
+**Result: the plain prompt wins, clearly, and it is not close.** Judged by looking at them, not by
+report. What the baselines have that all three pipeline variants lack:
+
+| | Pipeline output | Plain-prompt baselines |
+|---|---|---|
+| Colour | Effectively none | Used as signal — one accent, only where work is outstanding |
+| Type | One near-flat scale, bold vs regular | Real hierarchy; the case name reads as the case name |
+| Primary action | A plain link among links | One solid button, the only one on the page |
+| The blocking fact | Buried in the stream | Hoisted, with its consequence stated ("the case cannot move until…") |
+| Surface | Flat white, hairline boxes | Warm ground, depth, deliberate rhythm |
+| Page budget | 40–60% spent on an internal "declared states" grid | 100% product |
+
+**So arc's design cycle is currently NET-NEGATIVE on visual quality — the same model produces
+better design with the pipeline switched off.** That is the single most important thing this cycle
+established, and no amount of green receipts changes it.
+
+**Root cause is three rules I wrote, not a bug:**
+
+| # | Rule | What it guaranteed |
+|---|---|---|
+| 1 | Explore is constrained to the product's existing token set, tokens-only colour, no raw hex | Visual identity was **frozen**. The only axis left to vary was IA — so three "genuinely different directions" were three structures in one flat visual language. They look the same because they were built to |
+| 2 | The critic judges the brief's four contracts | "0 VIOLATION" means *did not break the brief*. **There is no axis for "is this any good"** — characterless-but-compliant passes every time, and did, five times |
+| 3 | ADR: no absolute scores, ever | Nothing in the system can say "this is 23/100". The jury ranks the three against **each other**, so it reliably finds the best of three mediocre options and can never report that all three are mediocre |
+
+The ADR-3 reasoning is still sound (agents optimising a number converge on safe-average). The fix
+is not a score — it is to **put a genuinely world-class reference screen into the blind ranking as
+a fourth item**. If all three variants rank below the reference, that is a FAIL, produced
+comparatively, with no absolute number anywhere and the ADR intact.
+
+**Consequences for this phase, decided:** REQ-01 is **NOT** validated and must not be recorded as
+though it were. The blind test does not launch on artifacts the owner rates 23/100 — the Stream-B
+lawyer can be asked exactly once, and spending that on this version would waste the only recruit.
+Phase 03 closes **honestly, on this finding**, not on its receipts. Everything above — library,
+brief, pick, prediction, outcome path, package — is real and stands; it is the *design quality* the
+cycle failed at, and the machinery that failed to notice is the thing worth fixing.
+
+**Separately, and worth keeping: LexOS itself now has two genuinely good case-workspace
+directions** (`baseline-2`, `baseline-3`). Those are usable product work today, independent of
+arc's method problem.
 
 **Open question that must be answered BEFORE packaging, raised 2026-07-30:** variant-a and
 variant-b each carry an on-page note declaring their `max-w-shell` departure; **variant-c carries

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024</title>
+<style>
+  /* ============================================================
+     Tokens
+     ============================================================ */
+  :root{
+    --paper:      #F1EDE3;
+    --paper-hi:   #F7F4EC;
+    --sheet:      #FDFCF9;
+    --sheet-hov:  #FAF7EF;
+
+    --ink:        #17150F;
+    --ink-2:      #5A5548;
+    --ink-3:      #787260;
+    --ink-4:      #A39B87;
+
+    --rule:       #E3DED0;
+    --rule-soft:  #EEEAE0;
+
+    --verm:       #AE2A1C;
+    --verm-deep:  #8E2016;
+    --verm-tint:  #FBEBE7;
+    --verm-lite:  #EE9385;
+
+    --ochre:      #8B6110;
+    --ochre-mid:  #BE8A1F;
+    --ochre-tint: #FCF4E2;
+    --ochre-lite: #E7BE6B;
+
+    --green:      #3C7A5D;
+
+    --panel:      #16140E;
+    --cream:      #F6F2E8;
+
+    --serif: ui-serif, Georgia, "Iowan Old Style", "Palatino Linotype", "Times New Roman", serif;
+    --sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono:  ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
+
+    --page: 1200px;
+    --pad:  40px;
+  }
+
+  /* ============================================================
+     Base
+     ============================================================ */
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    font-size:15px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  ::selection{ background:#DCD3BE; color:var(--ink); }
+  button{ font:inherit; color:inherit; background:none; border:0; padding:0; cursor:pointer; }
+  :focus-visible{ outline:2px solid var(--ink); outline-offset:2px; border-radius:3px; }
+
+  .wrap{ width:100%; max-width:var(--page); margin:0 auto; padding:0 var(--pad); }
+
+  .micro{
+    font-size:10.5px; font-weight:600; letter-spacing:.15em;
+    text-transform:uppercase; color:var(--ink-3);
+  }
+  .num{ font-variant-numeric:tabular-nums; }
+
+  /* ============================================================
+     Top bar
+     ============================================================ */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    height:56px;
+    background:rgba(241,237,227,.86);
+    backdrop-filter:saturate(180%) blur(14px);
+    border-bottom:1px solid var(--rule);
+  }
+  .topbar .wrap{ height:100%; display:flex; align-items:center; gap:14px; }
+
+  .mark{
+    width:24px; height:24px; border-radius:6px;
+    background:var(--ink); color:var(--cream);
+    display:grid; place-items:center;
+    font-family:var(--serif); font-size:14px; line-height:1;
+    padding-bottom:1px;
+  }
+  .crumb{ display:flex; align-items:center; gap:9px; font-size:13px; color:var(--ink-3); }
+  .crumb a{ color:var(--ink-2); text-decoration:none; border-radius:3px; }
+  .crumb a:hover{ color:var(--ink); }
+  .crumb .sep{ color:var(--ink-4); }
+  .crumb .now{ color:var(--ink); font-weight:500; font-family:var(--mono); font-size:12px; letter-spacing:.01em; }
+
+  .topbar .spacer{ flex:1; }
+  .search{
+    display:flex; align-items:center; gap:8px;
+    height:30px; padding:0 10px 0 9px;
+    border:1px solid var(--rule); border-radius:7px;
+    background:var(--sheet);
+    color:var(--ink-3); font-size:12.5px;
+  }
+  .search:hover{ border-color:var(--ink-4); color:var(--ink-2); }
+  .search kbd{
+    font-family:var(--mono); font-size:10px; letter-spacing:.04em;
+    color:var(--ink-4); border:1px solid var(--rule); border-radius:4px;
+    padding:1px 4px; margin-left:2px;
+  }
+  .icon-btn{
+    width:30px; height:30px; border-radius:7px; display:grid; place-items:center;
+    color:var(--ink-2); border:1px solid transparent;
+  }
+  .icon-btn:hover{ background:var(--paper-hi); border-color:var(--rule); }
+
+  /* ============================================================
+     Case header
+     ============================================================ */
+  .head{ padding:44px 0 0; }
+  .head-top{ display:flex; align-items:flex-start; gap:32px; }
+  .head-id{
+    font-family:var(--mono); font-size:11.5px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-3); margin:0 0 12px;
+  }
+  h1{
+    margin:0;
+    font-family:var(--serif); font-weight:400;
+    font-size:36px; line-height:1.16; letter-spacing:-.011em;
+    color:var(--ink);
+  }
+  h1 .v{ font-style:italic; color:var(--ink-3); padding:0 2px; }
+  .head-meta{
+    margin:12px 0 0; font-size:13.5px; color:var(--ink-2);
+    display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+  }
+  .head-meta .dot{ width:3px; height:3px; border-radius:50%; background:var(--ink-4); }
+
+  .head-actions{ display:flex; align-items:center; gap:10px; padding-top:4px; }
+  .pill{
+    display:inline-flex; align-items:center; gap:7px;
+    height:28px; padding:0 12px 0 10px;
+    border:1px solid var(--rule); border-radius:99px;
+    background:var(--sheet);
+    font-size:12.5px; font-weight:500; color:var(--ink);
+  }
+  .pill .led{ width:6px; height:6px; border-radius:50%; background:var(--green); box-shadow:0 0 0 3px rgba(60,122,93,.14); }
+  .ghost{
+    height:28px; padding:0 12px; border:1px solid var(--rule); border-radius:7px;
+    background:var(--sheet); font-size:12.5px; font-weight:500; color:var(--ink-2);
+  }
+  .ghost:hover{ background:var(--paper-hi); color:var(--ink); border-color:var(--ink-4); }
+
+  /* facts strip */
+  .facts{
+    margin-top:30px; border-top:1px solid var(--rule);
+    display:grid; grid-template-columns:repeat(4,1fr);
+  }
+  .fact{ padding:18px 24px 4px; border-left:1px solid var(--rule); }
+  .fact:first-child{ border-left:0; padding-left:0; }
+  .fact dt{ margin:0 0 7px; }
+  .fact dd{
+    margin:0; font-size:17px; line-height:1.25; color:var(--ink);
+    font-weight:450; letter-spacing:-.005em;
+  }
+  .fact dd.mono{ font-family:var(--mono); font-size:16px; letter-spacing:-.01em; }
+  .fact dd.muted{ color:var(--ink-3); }
+  .fact dd.alert{ color:var(--verm); font-family:var(--mono); font-size:16px; }
+  .fact dd .suffix{ font-family:var(--sans); font-size:12.5px; color:var(--ink-3); margin-left:6px; }
+
+  /* ============================================================
+     Blocking panel — the one thing that must happen
+     ============================================================ */
+  .block{
+    margin-top:36px;
+    background:linear-gradient(176deg,#1E1B13 0%,#141209 100%);
+    color:var(--cream);
+    border-radius:14px;
+    padding:34px 36px 36px;
+    display:grid; grid-template-columns:minmax(0,1fr) 336px; gap:44px;
+    box-shadow:0 1px 2px rgba(23,21,15,.16), 0 14px 34px -20px rgba(23,21,15,.55);
+  }
+  .block-main{ display:flex; flex-direction:column; min-width:0; }
+  .block-eyebrow{
+    display:flex; align-items:center; gap:9px;
+    font-size:10.5px; font-weight:700; letter-spacing:.17em;
+    text-transform:uppercase; color:var(--ochre-lite);
+    margin-bottom:16px;
+  }
+  .block-eyebrow .tick{ width:16px; height:1px; background:var(--ochre-lite); opacity:.6; }
+  .block h2{
+    margin:0; max-width:24ch;
+    font-family:var(--serif); font-weight:400;
+    font-size:29px; line-height:1.26; letter-spacing:-.012em;
+    color:#FBF8F0;
+  }
+  .block p{
+    margin:14px 0 0; max-width:46ch;
+    font-size:14.5px; line-height:1.6; color:rgba(246,242,232,.62);
+  }
+  .block-cta{ margin-top:auto; padding-top:30px; display:flex; align-items:center; gap:8px; }
+  .btn-primary{
+    height:38px; padding:0 18px; border-radius:9px;
+    background:var(--cream); color:#141209;
+    font-size:14px; font-weight:600; letter-spacing:-.005em;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset;
+    transition:transform .12s ease, background .12s ease;
+  }
+  .btn-primary:hover{ background:#FFFFFF; transform:translateY(-1px); }
+  .btn-primary:active{ transform:translateY(0); }
+  .btn-quiet{
+    height:38px; padding:0 14px; border-radius:9px;
+    color:rgba(246,242,232,.66); font-size:13.5px; font-weight:500;
+  }
+  .btn-quiet:hover{ color:var(--cream); background:rgba(246,242,232,.07); }
+
+  .block-side{ border-left:1px solid rgba(246,242,232,.14); padding-left:40px; }
+  .block-side .micro{ color:rgba(246,242,232,.52); }
+  .side-list{ list-style:none; margin:14px 0 0; padding:0; }
+  .side-list li{ padding:13px 0; border-top:1px solid rgba(246,242,232,.1); }
+  .side-list li:first-child{ border-top:0; padding-top:2px; }
+  .side-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; }
+  .side-date{
+    font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+    text-transform:uppercase; color:rgba(246,242,232,.54);
+  }
+  .side-state{ font-size:11.5px; font-weight:500; color:var(--verm-lite); white-space:nowrap; }
+  .side-title{ margin-top:5px; font-size:13.5px; font-weight:500; color:rgba(246,242,232,.92); }
+
+  /* ============================================================
+     The record
+     ============================================================ */
+  .sheet{
+    margin-top:36px; margin-bottom:72px;
+    background:var(--sheet);
+    border:1px solid var(--rule);
+    border-radius:14px;
+    box-shadow:0 1px 2px rgba(23,21,15,.04);
+  }
+  .sheet-head{
+    display:flex; align-items:center; gap:20px;
+    padding:20px 24px; border-bottom:1px solid var(--rule);
+  }
+  .sheet-head h2{
+    margin:0; font-family:var(--serif); font-weight:400;
+    font-size:20px; letter-spacing:-.008em; color:var(--ink);
+  }
+  .sheet-head .spacer{ flex:1; }
+
+  .seg{ display:flex; border:1px solid var(--rule); border-radius:9px; overflow:hidden; background:var(--paper-hi); }
+  .seg button{
+    padding:0 13px; height:30px;
+    font-size:12.5px; font-weight:500; color:var(--ink-2);
+    border-right:1px solid var(--rule);
+    display:flex; align-items:center; gap:6px;
+  }
+  .seg button:last-child{ border-right:0; }
+  .seg button:hover{ background:#fff; color:var(--ink); }
+  .seg button .c{ font-family:var(--mono); font-size:11px; color:var(--ink-4); }
+  .seg button[aria-pressed="true"]{ background:var(--ink); color:var(--cream); }
+  .seg button[aria-pressed="true"] .c{ color:rgba(246,242,232,.55); }
+
+  .btn-add{
+    height:30px; padding:0 13px 0 10px; border-radius:8px;
+    background:var(--ink); color:var(--cream);
+    font-size:12.5px; font-weight:600;
+    display:flex; align-items:center; gap:6px;
+  }
+  .btn-add:hover{ background:#0D0B07; }
+
+  /* row grid */
+  .row, .rule-row, .group{
+    display:grid;
+    grid-template-columns:84px 34px minmax(0,1fr) 226px;
+    gap:16px;
+    padding:0 24px;
+  }
+
+  .group{ padding-top:20px; padding-bottom:6px; }
+  .group .lbl{ grid-column:3 / -1; }
+
+  .row{
+    position:relative;
+    padding-top:15px; padding-bottom:16px;
+    border-top:1px solid var(--rule-soft);
+    transition:background .12s ease;
+  }
+  .row:hover{ background:var(--sheet-hov); }
+  .row.is-overdue{ box-shadow:inset 2px 0 0 var(--verm); background:#FDF7F5; }
+  .row.is-overdue:hover{ background:#FCF2EF; }
+  .row.is-open{ box-shadow:inset 2px 0 0 var(--ochre-mid); background:#FDFAF0; }
+  .row.is-open:hover{ background:#FCF8EA; }
+  .row.is-ahead .r-title{ color:var(--ink); }
+
+  .r-date{
+    padding-top:1px;
+    font-family:var(--mono); font-size:11.5px; line-height:1.45;
+    letter-spacing:.06em; text-transform:uppercase;
+    color:var(--ink-2); font-variant-numeric:tabular-nums;
+  }
+  .r-date span{ display:block; color:var(--ink-4); }
+  .row.is-overdue .r-date{ color:var(--verm); }
+
+  /* rail */
+  .r-rail{ position:relative; }
+  .r-rail::before{
+    content:""; position:absolute; left:50%; top:-16px; bottom:-17px;
+    width:1px; margin-left:-.5px; background:var(--rule);
+  }
+  .row:first-of-type .r-rail::before{ top:11px; }
+  .row:last-of-type .r-rail::before{ bottom:auto; height:12px; }
+  .marker{
+    position:relative; z-index:1;
+    width:18px; height:18px; margin:2px auto 0;
+    border-radius:50%; background:var(--sheet);
+    display:grid; place-items:center;
+  }
+  .row:hover .marker{ background:var(--sheet-hov); }
+  .row.is-overdue .marker{ background:#FDF7F5; }
+  .row.is-open .marker{ background:#FDFAF0; }
+  .m-hearing{ width:9px; height:9px; background:var(--ink); transform:rotate(45deg); }
+  .m-hearing.open{ background:var(--ochre-mid); }
+  .m-doc{ width:8px; height:8px; background:var(--ink); border-radius:1px; }
+  .m-doc.pending{ background:transparent; border:1.5px solid var(--verm); }
+  .m-task{ width:10px; height:10px; border-radius:50%; border:1.5px solid var(--ink-4); }
+  .m-task.late{ border-color:var(--verm); }
+  .m-task.soon{ border-color:var(--ink-2); }
+  .m-note{ width:5px; height:5px; border-radius:50%; background:var(--ink-4); }
+
+  /* body */
+  .r-title{
+    font-size:15.5px; font-weight:500; line-height:1.35;
+    letter-spacing:-.006em; color:var(--ink);
+  }
+  .r-meta{
+    margin-top:4px; font-size:12.5px; line-height:1.45; color:var(--ink-3);
+    display:flex; align-items:center; gap:7px; flex-wrap:wrap;
+  }
+  .r-meta .type{ color:var(--ink-2); font-weight:500; }
+  .r-meta .sep{ color:var(--ink-4); }
+  .r-meta .bad{ color:var(--verm); font-weight:500; }
+
+  .outcome{
+    margin:11px 0 2px; padding:0 0 0 14px;
+    border-left:2px solid var(--rule);
+    font-family:var(--serif); font-size:14.5px; line-height:1.5;
+    color:var(--ink-2);
+  }
+  .outcome-empty{
+    margin:12px 0 2px; padding:11px 12px 11px 14px;
+    border:1px dashed rgba(190,138,31,.55); border-radius:9px;
+    background:var(--ochre-tint);
+    display:flex; align-items:center; gap:16px;
+  }
+  .outcome-empty p{
+    margin:0; flex:1; font-size:13px; line-height:1.45; color:var(--ochre);
+  }
+  .outcome-empty p b{ font-weight:600; color:#6E4C08; }
+  .btn-ochre{
+    flex:none; height:30px; padding:0 13px; border-radius:7px;
+    background:#fff; border:1px solid rgba(190,138,31,.6);
+    color:var(--ochre); font-size:12.5px; font-weight:600;
+    box-shadow:0 1px 0 rgba(139,97,16,.06);
+  }
+  .btn-ochre:hover{ background:var(--ochre); border-color:var(--ochre); color:#FFFCF5; }
+
+  /* state column */
+  .r-state{
+    display:flex; align-items:flex-start; justify-content:flex-end; gap:12px;
+    padding-top:1px; text-align:right;
+  }
+  .state-txt{ font-size:12.5px; color:var(--ink-3); line-height:1.45; }
+  .state-txt.strong{ color:var(--ink); font-weight:500; }
+  .tag{
+    display:inline-block;
+    font-size:10px; font-weight:700; letter-spacing:.11em; text-transform:uppercase;
+    padding:4px 7px; border-radius:5px; white-space:nowrap;
+  }
+  .tag-overdue{ background:var(--verm-tint); color:var(--verm-deep); }
+  .tag-open{ background:var(--ochre-tint); color:var(--ochre); }
+  .state-sub{ margin-top:5px; font-size:11.5px; color:var(--ink-3); }
+  .state-sub.bad{ color:var(--verm); }
+
+  .r-actions{ display:flex; gap:2px; opacity:0; transition:opacity .12s ease; }
+  .row:hover .r-actions, .row:focus-within .r-actions{ opacity:1; }
+  .r-actions button{
+    height:26px; padding:0 9px; border-radius:6px;
+    font-size:12px; font-weight:500; color:var(--ink-3);
+  }
+  .r-actions button:hover{ background:var(--paper-hi); color:var(--ink); }
+
+  /* today rule */
+  .rule-row{ padding-top:18px; padding-bottom:18px; align-items:center; }
+  .rule-row .r-date{ color:var(--ink); font-weight:600; padding-top:0; }
+  .rule-row .r-rail{ height:18px; }
+  .rule-row .r-rail::before{ top:-19px; bottom:-19px; }
+  .rule-row .r-rail::after{
+    content:""; position:absolute; z-index:1; left:50%; top:50%;
+    width:13px; height:1.5px; margin-left:-6.5px; margin-top:-.75px;
+    background:var(--ink);
+  }
+  .today-line{
+    grid-column:3 / -1; display:flex; align-items:center; gap:14px;
+  }
+  .today-line .ln{ flex:1; height:1px; background:rgba(23,21,15,.42); }
+  .today-line .stamp{
+    font-family:var(--mono); font-size:11px; letter-spacing:.09em;
+    text-transform:uppercase; color:var(--ink-2); font-variant-numeric:tabular-nums;
+  }
+
+  .sheet-foot{
+    padding:16px 24px; border-top:1px solid var(--rule);
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:12.5px; color:var(--ink-3);
+  }
+  .sheet-foot .num{ font-family:var(--mono); color:var(--ink-2); }
+
+  @media (prefers-reduced-motion:reduce){
+    *{ transition:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="mark" aria-hidden="true">R</div>
+    <nav class="crumb" aria-label="Breadcrumb">
+      <a href="#">Cases</a>
+      <span class="sep">/</span>
+      <span class="now">O.S. No. 412 of 2024</span>
+    </nav>
+    <div class="spacer"></div>
+    <button class="search" type="button">
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M10.6 10.6 L14 14" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      Search cases <kbd>Ctrl K</kbd>
+    </button>
+    <button class="icon-btn" type="button" aria-label="Account">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.6" stroke="currentColor" stroke-width="1.25"/>
+        <circle cx="8" cy="6.4" r="2.1" stroke="currentColor" stroke-width="1.25"/>
+        <path d="M3.5 13.4c.9-1.9 2.5-2.9 4.5-2.9s3.6 1 4.5 2.9"
+              stroke="currentColor" stroke-width="1.25" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+
+    <!-- ===================== Case header ===================== -->
+    <section class="head">
+      <div class="head-top">
+        <div style="flex:1;min-width:0">
+          <p class="head-id">O.S. No. 412 of 2024</p>
+          <h1>Meera Raghunathan <span class="v">v.</span> Sunvale Housing Pvt.&nbsp;Ltd.</h1>
+          <p class="head-meta">
+            <span>City Civil Court, Bengaluru</span>
+            <span class="dot" aria-hidden="true"></span>
+            <span>Civil suit</span>
+          </p>
+        </div>
+        <div class="head-actions">
+          <span class="pill"><span class="led" aria-hidden="true"></span>Active</span>
+          <button class="ghost" type="button">Edit</button>
+        </div>
+      </div>
+
+      <dl class="facts">
+        <div class="fact">
+          <dt class="micro">Client</dt>
+          <dd>Meera Raghunathan</dd>
+        </div>
+        <div class="fact">
+          <dt class="micro">Claim</dt>
+          <dd class="mono num">₹18,45,000</dd>
+        </div>
+        <div class="fact">
+          <dt class="micro">Next hearing</dt>
+          <dd class="muted">Not set</dd>
+        </div>
+        <div class="fact">
+          <dt class="micro">Overdue</dt>
+          <dd class="alert num">2</dd>
+        </div>
+      </dl>
+    </section>
+
+    <!-- ===================== The blocking thing ===================== -->
+    <section class="block" aria-label="Needs you first">
+      <div class="block-main">
+        <p class="block-eyebrow"><span class="tick" aria-hidden="true"></span>Needs you first</p>
+        <h2>The hearing held on 14 Jul 2026 has no outcome.</h2>
+        <p>Nothing on this case can move until it is entered — the next hearing is not set, and two items are already overdue behind it.</p>
+        <div class="block-cta">
+          <button class="btn-primary" type="button">Record outcome</button>
+          <button class="btn-quiet" type="button">See it on the record</button>
+        </div>
+      </div>
+
+      <aside class="block-side">
+        <p class="micro">Also overdue</p>
+        <ul class="side-list">
+          <li>
+            <div class="side-head">
+              <span class="side-date num">Document · due 24 Jul 2026</span>
+              <span class="side-state">not filed</span>
+            </div>
+            <p class="side-title">Reply to written statement</p>
+          </li>
+          <li>
+            <div class="side-head">
+              <span class="side-date num">Task · due 21 Jul 2026</span>
+              <span class="side-state">not done</span>
+            </div>
+            <p class="side-title">File rejoinder</p>
+          </li>
+        </ul>
+      </aside>
+    </section>
+
+    <!-- ===================== The record ===================== -->
+    <section class="sheet" aria-label="Everything on the record">
+      <div class="sheet-head">
+        <h2>Everything on the record</h2>
+        <div class="spacer"></div>
+        <div class="seg" role="group" aria-label="Filter the record">
+          <button type="button" aria-pressed="true">All <span class="c num">11</span></button>
+          <button type="button" aria-pressed="false">Hearings <span class="c num">2</span></button>
+          <button type="button" aria-pressed="false">Documents <span class="c num">4</span></button>
+          <button type="button" aria-pressed="false">Tasks <span class="c num">3</span></button>
+          <button type="button" aria-pressed="false">Notes <span class="c num">2</span></button>
+        </div>
+        <button class="btn-add" type="button">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <path d="M6 1.6v8.8M1.6 6h8.8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+          Add
+        </button>
+      </div>
+
+      <!-- ---------- Ahead ---------- -->
+      <div class="group">
+        <p class="micro lbl">Ahead</p>
+      </div>
+
+      <article class="row is-ahead">
+        <div class="r-date">05 Aug<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-task"></span></span></div>
+        <div>
+          <h3 class="r-title">Prepare list of documents for evidence</h3>
+          <p class="r-meta">
+            <span class="type">Task</span><span class="sep">·</span><span>due 05 Aug 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div><p class="state-txt">In 6 days</p></div>
+        </div>
+      </article>
+
+      <article class="row is-ahead">
+        <div class="r-date">30 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-task soon"></span></span></div>
+        <div>
+          <h3 class="r-title">Confirm client's availability for hearing</h3>
+          <p class="r-meta">
+            <span class="type">Task</span><span class="sep">·</span><span>due 30 Jul 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div><p class="state-txt strong">Due today</p></div>
+        </div>
+      </article>
+
+      <!-- ---------- Today ---------- -->
+      <div class="rule-row">
+        <div class="r-date">Today</div>
+        <div class="r-rail"></div>
+        <div class="today-line">
+          <span class="ln" aria-hidden="true"></span>
+          <span class="stamp">30 Jul 2026</span>
+        </div>
+      </div>
+
+      <article class="row is-overdue">
+        <div class="r-date">24 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-doc pending"></span></span></div>
+        <div>
+          <h3 class="r-title">Reply to written statement</h3>
+          <p class="r-meta">
+            <span class="type">Document</span><span class="sep">·</span><span>due 24 Jul 2026</span>
+            <span class="sep">·</span><span class="bad">not filed</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div>
+            <span class="tag tag-overdue">Overdue</span>
+            <p class="state-sub bad num">6 days</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="row is-overdue">
+        <div class="r-date">21 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-task late"></span></span></div>
+        <div>
+          <h3 class="r-title">File rejoinder</h3>
+          <p class="r-meta">
+            <span class="type">Task</span><span class="sep">·</span><span>due 21 Jul 2026</span>
+            <span class="sep">·</span><span class="bad">not done</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div>
+            <span class="tag tag-overdue">Overdue</span>
+            <p class="state-sub bad num">9 days</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="r-date">16 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-note"></span></span></div>
+        <div>
+          <h3 class="r-title">Client confirmed balance fee payable on final decree</h3>
+          <p class="r-meta">
+            <span class="type">Note</span><span class="sep">·</span><span>16 Jul 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+        </div>
+      </article>
+
+      <article class="row is-open">
+        <div class="r-date">14 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-hearing open"></span></span></div>
+        <div>
+          <h3 class="r-title">Hearing</h3>
+          <p class="r-meta">
+            <span class="type">Hearing</span><span class="sep">·</span><span>held 14 Jul 2026</span>
+          </p>
+          <div class="outcome-empty">
+            <p><b>Outcome not recorded.</b> This case cannot move until it is entered.</p>
+            <button class="btn-ochre" type="button">Record outcome</button>
+          </div>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button></div>
+          <div>
+            <span class="tag tag-open">No outcome</span>
+            <p class="state-sub num">16 days</p>
+          </div>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="r-date">08 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-doc"></span></span></div>
+        <div>
+          <h3 class="r-title">Written statement</h3>
+          <p class="r-meta">
+            <span class="type">Document</span><span class="sep">·</span><span>filed 08 Jul 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div><p class="state-txt">Filed</p></div>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="r-date">02 Jul<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-note"></span></span></div>
+        <div>
+          <h3 class="r-title">Fee received — ₹42,500</h3>
+          <p class="r-meta">
+            <span class="type">Note</span><span class="sep">·</span><span>02 Jul 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="r-date">19 May<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-hearing"></span></span></div>
+        <div>
+          <h3 class="r-title">Hearing</h3>
+          <p class="r-meta">
+            <span class="type">Hearing</span><span class="sep">·</span><span>held 19 May 2026</span>
+          </p>
+          <p class="outcome">Interim application disposed; matter listed for evidence.</p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button></div>
+          <div><p class="state-txt">Outcome recorded</p></div>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="r-date">15 May<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-doc"></span></span></div>
+        <div>
+          <h3 class="r-title">Vakalatnama</h3>
+          <p class="r-meta">
+            <span class="type">Document</span><span class="sep">·</span><span>filed 15 May 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div><p class="state-txt">Filed</p></div>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="r-date">15 May<span>2026</span></div>
+        <div class="r-rail"><span class="marker"><span class="m-doc"></span></span></div>
+        <div>
+          <h3 class="r-title">Memo of appearance</h3>
+          <p class="r-meta">
+            <span class="type">Document</span><span class="sep">·</span><span>filed 15 May 2026</span>
+          </p>
+        </div>
+        <div class="r-state">
+          <div class="r-actions"><button type="button">Edit</button><button type="button">Remove</button></div>
+          <div><p class="state-txt">Filed</p></div>
+        </div>
+      </article>
+
+      <div class="sheet-foot">
+        <span><span class="num">11</span> on the record</span>
+        <span class="num">15 May 2026 — 05 Aug 2026</span>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+</body>
+</html>
