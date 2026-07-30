@@ -166,7 +166,18 @@ jobs:
             files="$(node .github/scripts/shard-tests.mjs --index ${{ matrix.shard }} --total ${{ matrix.shards }})" || exit 1
             [ -n "$files" ] || { echo "::error::shard ${{ matrix.shard }}/${{ matrix.shards }} resolved to no files"; exit 1; }
             echo "shard ${{ matrix.shard }}/${{ matrix.shards }} runs $(printf '%s\n' "$files" | wc -l | tr -d ' ') file(s)"
-            bats --print-output-on-failure $files
+            # The file list and the elapsed seconds are printed so tests/shard-timings.json can
+            # be recalibrated from REAL runs instead of a throwaway measurement job. The first
+            # measurement was taken by timing each file in its own `bats` call, and it turned
+            # out to understate a grouped shard by ~2.2x while matching a single-file shard
+            # exactly -- so the only trustworthy source for these weights is the invocation CI
+            # actually performs. Grep a run for "shard-timing:" to harvest them.
+            printf 'shard-timing: files %s\n' "$(printf '%s ' $files)"
+            _t0=$(date +%s)
+            set +e; bats --print-output-on-failure $files; _rc=$?; set -e
+            printf 'shard-timing: shard %s/%s elapsed %ss rc=%s\n' \
+              "${{ matrix.shard }}" "${{ matrix.shards }}" "$(( $(date +%s) - _t0 ))" "$_rc"
+            exit "$_rc"
           else
             bats -r --print-output-on-failure tests/
           fi
