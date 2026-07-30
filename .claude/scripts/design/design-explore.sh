@@ -116,6 +116,16 @@ case "$CMD" in
     elif ! grep -qiE '^[[:space:]]*>?[[:space:]]*`?Director call:.*[0-9]+[[:space:]]+of[[:space:]]+(the[[:space:]]+)?7' "$EX/matrix.md"; then
       _fail "director-call-missing" "matrix.md carries no written verdict line — need a line that STARTS 'Director call:' and states the judgment, e.g. 'Director call: A/B/C differ materially on 4 of 7 dimensions — <why>.' A sentence mentioning the phrase does not count."
     fi
+    # Art-direction divergence is a SECOND, independently-failing call, same grammar and same
+    # anti-mention anchoring as above. It exists because structural divergence alone certified
+    # a run whose three variants a human could not tell apart: they differed on 7 of 7 IA
+    # dimensions and shared one flat visual language, so the loop passed pages nobody could
+    # distinguish. Three layouts in one visual language is a failed explore; before this check
+    # nothing in the pipeline could say so.
+    if [ -f "$EX/matrix.md" ] && \
+       ! grep -qiE '^[[:space:]]*>?[[:space:]]*`?Art-direction call:.*[0-9]+[[:space:]]+of[[:space:]]+(the[[:space:]]+)?4' "$EX/matrix.md"; then
+      _fail "art-call-missing" "matrix.md carries no art-direction verdict — need a line that STARTS 'Art-direction call:' and states the judgment over the 4 axes (palette · typography · density & rhythm · surface & ornament), e.g. 'Art-direction call: A/B/C differ materially on 3 of 4 axes — <why>.' Structural difference alone is not divergence."
+    fi
 
     for v in $VARIANTS; do
       d="$EX/variant-$v"

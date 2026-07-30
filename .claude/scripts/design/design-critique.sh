@@ -16,8 +16,11 @@
 # spawn it. The slash command is the orchestrator; these two halves are the deterministic
 # bookends around it.
 #
-# PASS is defined once, here: zero VIOLATION findings (REQ-03). WEAKNESS and POLISH never
-# fail a run; that is what keeps the gate honest instead of theatrical.
+# PASS is defined once, here: zero VIOLATION and zero BELOW-BAR findings (REQ-03). WEAKNESS and
+# POLISH never fail a run; that is what keeps the gate honest instead of theatrical.
+# BELOW-BAR was added 2026-07-30: "broke no rule" was the entire definition of PASS for a whole
+# cycle, and it certified work the owner scored 23/100. A gate that can only detect rule-breaking
+# cannot detect mediocrity, and mediocrity was the actual failure.
 #
 # Exit: 0 judged (PASS or FAIL, both are results) | 1 refused (no artifact, bad args)
 set -uo pipefail
@@ -86,7 +89,22 @@ case "$CMD" in
     VIOLATIONS="$(grep -cE '^[[:space:]]*([-*+][[:space:]]+|#+[[:space:]]*|[0-9]+\.[[:space:]]+)?\**VIOLATION\**[[:space:]]*:' "$ART" 2>/dev/null || true)"
     case "$VIOLATIONS" in ''|*[!0-9]*) VIOLATIONS=0;; esac
 
-    if [ "$VIOLATIONS" -eq 0 ]; then RESULT="PASS"; else RESULT="FAIL"; fi
+    # BELOW-BAR: compliant, and not good enough to ship. Counted with the same declared-finding
+    # anchoring as VIOLATION, and it fails a run just as hard.
+    #
+    # This class exists because for a whole cycle PASS meant "broke no rule" and nothing else.
+    # A characterless page cleared every contract five runs running and the owner scored the
+    # result 23/100. WEAKNESS and POLISH could not carry it -- by design they never fail a run --
+    # so the critic had no way to make "this is not good enough" reach a verdict, and the loop
+    # certified work nobody would ship. An absence of violations is not quality.
+    # Case-INSENSITIVE, unlike the VIOLATION counter above, and deliberately so. A miscased
+    # quality finding that silently vanishes is precisely the failure this class was added to
+    # fix; a stray prose line starting "below-bar:" merely fails a run, which is the safe
+    # direction to be wrong in.
+    BELOW_BAR="$(grep -ciE '^[[:space:]]*([-*+][[:space:]]+|#+[[:space:]]*|[0-9]+\.[[:space:]]+)?\**BELOW-BAR\**[[:space:]]*:' "$ART" 2>/dev/null || true)"
+    case "$BELOW_BAR" in ''|*[!0-9]*) BELOW_BAR=0;; esac
+
+    if [ "$VIOLATIONS" -eq 0 ] && [ "$BELOW_BAR" -eq 0 ]; then RESULT="PASS"; else RESULT="FAIL"; fi
 
     SHA="$(sed -n 's/.*screenshot_sha256[^a-f0-9]*\([a-f0-9]\{16,64\}\).*/\1/p' "$ART" | head -1)"
     [ -n "$SHA" ] || SHA="unrecorded"
@@ -112,6 +130,7 @@ case "$CMD" in
     echo "design-critique: $RESULT -- $ROUTE"
     echo "  artifact:   ${ART#"$ROOT"/}"
     echo "  violations: $VIOLATIONS"
+    echo "  below-bar:  $BELOW_BAR"
     echo "  screenshot_sha256: $SHA"
     if [ "$RESULT" = "PASS" ]; then
       echo "  ledger:     design stamped for $(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo no-git)"

@@ -45,8 +45,20 @@ fair game for a variant to answer differently:
 coherent one: no drop shadows anywhere in the feature, separation by `line` borders, a single
 radius token, empty states left-aligned on a quiet fill rather than centred in a dashed box, and
 the dimmest ink in the system chosen as the dimmest that still passes AA. That is a records-first
-instrument, not an app that wants to be liked. This brief keeps that stance and sharpens it —
-departing from it would make the pilot a rewrite instead of an explore.
+instrument, not an app that wants to be liked.
+
+**AMENDED 2026-07-30 (ADR-0049) — that stance is CONTEXT, not a cage.** This paragraph used to
+end "this brief keeps that stance and sharpens it — departing from it would make the pilot a
+rewrite instead of an explore", and that sentence did measurable damage: three composers read it
+as an instruction not to look different, inherited a grey-on-white palette wholesale, and
+produced three pages the owner scored 23/100 for being one design. An explore that may not
+depart from what exists is not an explore.
+
+So: the existing stance is *information about what this product has been*, and a direction may
+keep it, sharpen it, or argue against it — as long as the argument is visible on the page and
+serves the record-keeping job. What stays non-negotiable is the **job**, not the look: a lawyer
+opening a case must know what happened and what is due, and nothing decorative may cost them
+that. Anything below is a fact about today's LexOS, never a floor on tomorrow's.
 
 - **3 feel words:** exact · unhurried · durable
 - **3 anti-words:** urgent · decorative · chatty

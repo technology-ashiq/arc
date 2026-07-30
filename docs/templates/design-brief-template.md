@@ -31,15 +31,32 @@ audience, and record the one-way doors (dark mode, density, brand mark, motion s
 design ADRs, each with a revisit trigger. Research receipts are required only for *factual*
 claims — user expectations, domain conventions, competitor IA — never for taste itself.
 
+**Name the bar, not just the bans.** A brief that only says what to avoid gets work that only
+avoids things. The reference bar is the craft level the critic and the blind jury judge
+against — the critic may raise `BELOW-BAR`, a FAIL, on work that breaks no rule and still
+isn't good enough, and it anchors that finding to this field. A vague bar disarms the brief's
+own quality gate.
+
+- **Reference bar** — 2-3 real, shipped products or specific screens whose craft level this
+  work has to reach, each with one sentence on what makes it good *for this job*:
+- **At its best, this is…** — one sentence on what the design achieves when it works, stated
+  as ambition, not as a constraint:
 - **3 feel words:**
 - **3 anti-words:**
 - **State matrix** (per surface): empty · loading · error · success · disabled
 - **Slop kill-list** (product-specific, beyond the generic list the critic already carries):
+  <!-- ban the UNMOTIVATED version, never the technique. A gradient that carries state is not
+       slop; a centred layout with a real focal point is not slop; a shadow that reads as
+       elevation is not slop. Write each entry as the thing it protects against, not as a
+       banned property. And timidity is its own failure mode — the safest possible page is
+       not a safe outcome. -->
 - **a11y floor:** contrast ≥4.5:1 · targets ≥44px · visible focus · reduced motion honoured
   <!-- the two numbers are THIS PRODUCT'S declared floors, and design-lint parses them from
        this exact line (strict grammar) — change them here to change what the lint enforces.
        Defaults: 4.5:1 is WCAG AA text contrast; 44px is this project's target floor (WCAG
-       AAA 2.5.5 — AA's own 2.5.8 minimum is 24px). Nothing downstream may hardcode either. -->
+       AAA 2.5.5 — AA's own 2.5.8 minimum is 24px). Nothing downstream may hardcode either.
+       A floor is a minimum to clear, never a ceiling to design down to — clearing a contrast
+       floor has never required grey-on-white. -->
 - **Declared contrast pairs** — every fg/bg pairing the direction relies on. design-lint
   computes these against the declared floor; the critic may only *suspect* contrast, never
   measure it (ADR-0048):

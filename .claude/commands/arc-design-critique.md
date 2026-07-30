@@ -40,7 +40,7 @@ read the image, the run has no result — say so rather than accepting a source-
 bash .claude/scripts/design/design-critique.sh finish <route>
 ```
 
-The script counts declared `VIOLATION` findings, so **PASS ≡ zero violations**, emits the
+The script counts declared `VIOLATION` and `BELOW-BAR` findings, so **PASS ≡ zero of both** — a page that breaks no rule and is still not good enough fails, which is the whole reason `BELOW-BAR` exists, emits the
 `review.completed` receipt carrying `{"lens":"design","target":...,"result":...}`, stamps the
 review ledger `design` on PASS only, and releases the write boundary. It also releases the
 boundary on FAIL — otherwise the creation side could not fix what was just found.

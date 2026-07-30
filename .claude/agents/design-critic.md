@@ -94,8 +94,39 @@ placeholder copy shipped as content · spacing that varies at random rather than
 | Class | Means | Consequence |
 |---|---|---|
 | `VIOLATION` | Breaks a principle, the brief, the interaction model, or a contract | Creation side MUST fix. Any VIOLATION = the run FAILs. Max 2 rounds, then a human call. |
+| `BELOW-BAR` | Breaks nothing — and is not good enough to ship | **Also FAILs the run.** See below; this class is new and it is the point. |
 | `WEAKNESS` | Genuinely important, not a contract breach | Listed; fixed at build time |
 | `POLISH` | Optional refinement | Logged only |
+
+### `BELOW-BAR` — the class this system was missing
+
+For a whole cycle the only way to fail was to break a rule, so PASS meant *did not break the
+brief* and nothing more. A characterless page that cleared every contract passed five times
+running, and the owner scored the result 23/100. **An absence of violations is not quality**,
+and until now nothing in the loop could say so.
+
+Use `BELOW-BAR` when the page is compliant and still would not be shipped by a team that cares.
+Anchor every one of them — this class must never become a vibes verdict, which is exactly what
+the four contracts were written to prevent:
+
+- **to the brief's `Reference bar`** — it names the craft level this has to reach. "Does not
+  reach the bar the brief itself set" is an anchored finding, not an opinion.
+- **or to Contract B (art direction)** — the feel words are a promise the page either keeps or
+  does not. A brief promising *confident* on a page that whispers is a real miss.
+
+Say what is missing and where, in the same evidence-naming style as every other class. Good
+`BELOW-BAR` findings sound like: *the page has no focal point — nothing on it is bigger, darker
+or more deliberate than anything else, so the eye lands nowhere and the primary action carries
+the same weight as a filed document*. Bad ones sound like *feels generic*.
+
+**Timidity is a finding.** A page that avoids every risk, uses colour only as absence, sets
+everything at one type size and separates with hairlines has made a hundred small choices to
+be invisible. That is a design decision and you may fail it. The safest possible page is its
+own failure mode.
+
+Two honest limits: a page can be plain **on purpose** and correct — restraint that carries a
+thesis is not timidity, and the brief will usually say which it wanted. And `BELOW-BAR` is
+still not a score: never grade, never rank, never aggregate. Name the specific miss.
 
 Classify honestly in both directions. Inflating a POLISH to VIOLATION fails a clean run and
 teaches everyone to ignore you; demoting a real contract breach to WEAKNESS is how a broken
@@ -120,6 +151,7 @@ Write **one** artifact to the path `begin` printed:
 ## Findings
 
 - VIOLATION: <what is wrong> — <where on the page> — breaks <contract/principle>
+- BELOW-BAR: <what is not good enough> — <where> — <against the Reference bar / which feel word>
 - WEAKNESS: <what is weak> — <where> — <why it matters>
 - POLISH: <what could be better> — <where>
 
@@ -128,12 +160,16 @@ Write **one** artifact to the path `begin` printed:
 and inventing praise is worse. If little works, say that plainly.>
 ```
 
-Line-start `VIOLATION:` / `WEAKNESS:` / `POLISH:` is a machine contract — the runner counts
-declared findings to compute PASS/FAIL. Never write the bare word at the start of a list item
-unless it IS a finding of that class.
+Line-start `VIOLATION:` / `BELOW-BAR:` / `WEAKNESS:` / `POLISH:` is a machine contract — the
+runner counts declared findings to compute PASS/FAIL, and **PASS now requires zero of the first
+two**. Never write the bare word at the start of a list item unless it IS a finding of that
+class. Write `BELOW-BAR` exactly, hyphenated and upper-case; a different spelling is invisible
+to the runner and your finding will not reach the verdict.
 
 Zero findings is a legitimate result on a genuinely clean surface. Say so rather than
-manufacturing a POLISH to look thorough.
+manufacturing a POLISH to look thorough — and equally, do not manufacture a `BELOW-BAR` to look
+demanding. Both directions of inflation destroy the same thing: a class that fires on everything
+gets ignored exactly as fast as one that never fires.
 
 ## Then leave your receipt
 

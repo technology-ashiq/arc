@@ -80,7 +80,7 @@ _plant_brief() {
   bash "$SANDBOX/.claude/scripts/design/design-explore.sh" init hq-dashboard \
     --brief docs/design/briefs/test/brief.md
   local d="$SANDBOX/docs/design/explore/hq-dashboard"
-  printf '# IA matrix\n\n| dimension | A | B | C |\n|---|---|---|---|\n| primary object | card | queue | canvas |\n\nDirector call: A/B/C differ materially on 4 of 7 dimensions.\n' > "$d/matrix.md"
+  printf '# IA matrix\n\n| dimension | A | B | C |\n|---|---|---|---|\n| primary object | card | queue | canvas |\n\nDirector call: A/B/C differ materially on 4 of 7 dimensions.\nArt-direction call: A/B/C differ materially on 3 of 4 axes - three palettes, three type voices.\n' > "$d/matrix.md"
   for v in a b c; do
     printf '/* thesis: This product wins because the user can decide without hunting. */\n:root{--v-ink:#c3c2b7;--v-bg:#1a1a19}\n' > "$d/variant-$v/tokens.css"
     printf '<!doctype html><title>V%s</title><style>body{color:var(--v-ink);background:var(--v-bg)}</style><h1>ARC HQ</h1>\n' "$v" > "$d/variant-$v/index.html"
@@ -95,7 +95,7 @@ _plant_brief() {
   bash "$SANDBOX/.claude/scripts/design/design-explore.sh" init hq-dashboard \
     --brief docs/design/briefs/test/brief.md
   local d="$SANDBOX/docs/design/explore/hq-dashboard"
-  printf '# IA matrix\n\nDirector call: differ on 4 of 7.\n' > "$d/matrix.md"
+  printf '# IA matrix\n\nDirector call: differ on 4 of 7.\nArt-direction call: A/B/C differ materially on 3 of 4 axes - three palettes, three type voices.\n' > "$d/matrix.md"
   for v in a b c; do
     printf ':root{--v-ink:#c3c2b7}\n' > "$d/variant-$v/tokens.css"
     printf 'thesis line\n' > "$d/variant-$v/thesis.txt"
@@ -119,7 +119,7 @@ _smuggle_setup() {
   bash "$SANDBOX/.claude/scripts/design/design-explore.sh" init hq-dashboard \
     --brief docs/design/briefs/test/brief.md
   EX_DIR="$SANDBOX/docs/design/explore/hq-dashboard"
-  printf '# m\n\nDirector call: differ on 4 of 7.\n' > "$EX_DIR/matrix.md"
+  printf '# m\n\nDirector call: differ on 4 of 7.\nArt-direction call: A/B/C differ materially on 3 of 4 axes - three palettes, three type voices.\n' > "$EX_DIR/matrix.md"
   for v in a b c; do
     printf 'thesis line\n' > "$EX_DIR/variant-$v/thesis.txt"
     printf ':root{--i:#c3c2b7}\n' > "$EX_DIR/variant-$v/tokens.css"
@@ -223,14 +223,66 @@ _smuggle_setup() {
 
 @test "attack HELD: the real verdict line passes in blockquote + backtick markdown" {
   _smuggle_setup
-  printf '# m\n\n> `Director call: A/B/C differ materially on 5 of 7 dimensions — three products.`\n' > "$EX_DIR/matrix.md"
+  printf '# m\n\n> `Director call: A/B/C differ materially on 5 of 7 dimensions — three products.`\nArt-direction call: A/B/C differ materially on 3 of 4 axes - three palettes, three type voices.\n' > "$EX_DIR/matrix.md"
   run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
   [ "$status" -eq 0 ]
 }
 
 @test "attack HELD: 'N of the 7 dimensions' phrasing still passes" {
   _smuggle_setup
-  printf '# m\n\nDirector call: A/B/C differ materially on 4 of the 7 dimensions — distinct products.\n' > "$EX_DIR/matrix.md"
+  printf '# m\n\nDirector call: A/B/C differ materially on 4 of the 7 dimensions — distinct products.\nArt-direction call: A/B/C differ materially on 3 of 4 axes - three palettes, three type voices.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -eq 0 ]
+}
+
+# ---------- art-direction divergence: the SECOND call, added 2026-07-30 ----------
+# Structural divergence alone certified a run whose three variants a human could not tell
+# apart: 7 of 7 IA dimensions differed and all three shared one flat visual language, so
+# the gate passed pages nobody could distinguish. Same smuggle class as the Director call,
+# so it gets the same attack battery.
+
+@test "art-direction: a matrix with ONLY the Director call is refused, naming the missing call" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: A/B/C differ materially on 5 of 7 dimensions.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"art-call-missing"* ]]
+}
+
+@test "art-direction attack HOLE: prose merely MENTIONING the call does not satisfy the gate" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: differ on 4 of 7.\nThe `Art-direction call:` line is appended only after the variants render.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"art-call-missing"* ]]
+}
+
+@test "art-direction attack HOLE: the label without the N-of-4 judgment is not a verdict" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: differ on 4 of 7.\nArt-direction call: they all look different enough.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"art-call-missing"* ]]
+}
+
+@test "art-direction attack HOLE: an N-of-7 judgment does not satisfy the N-of-4 axis gate" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: differ on 4 of 7.\nArt-direction call: A/B/C differ materially on 5 of 7 dimensions.\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"art-call-missing"* ]]
+}
+
+@test "art-direction attack HELD: the real line passes in blockquote + backtick markdown" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: differ on 4 of 7.\n> `Art-direction call: A/B/C differ materially on 3 of 4 axes - three palettes.`\n' > "$EX_DIR/matrix.md"
+  run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
+  [ "$status" -eq 0 ]
+}
+
+@test "art-direction attack HELD: 'N of the 4 axes' phrasing still passes" {
+  _smuggle_setup
+  printf '# m\n\nDirector call: differ on 4 of 7.\nArt-direction call: A/B/C differ materially on 4 of the 4 axes - nothing shared.\n' > "$EX_DIR/matrix.md"
   run bash "$SANDBOX/.claude/scripts/design/design-explore.sh" check hq-dashboard
   [ "$status" -eq 0 ]
 }

@@ -19,6 +19,20 @@ product-structure theses to assign from:
 > paced) · **review workspace** (compare, annotate, approve) · **ambient assistant** (AI
 > present, not dominant)
 
+**A structure thesis is only half an assignment.** Every variant also gets an **art
+direction**, and you assign that too, on four axes:
+
+> **palette** (which hues carry meaning, and what colour is *for* here) · **typography**
+> (typeface character and how many real steps the scale has) · **density & rhythm** (how
+> much air, how the eye is paced) · **surface & ornament** (flat or layered; depth, texture,
+> illustration, iconography — and what the page refuses)
+
+This axis exists because it was missing and its absence was expensive. A previous cycle
+assigned three structure theses, held the visual system constant, and produced three pages a
+human scored 23/100 for looking identical. They were structurally different and nobody could
+see it. **Three layouts in one visual language is the same failure as three skins of one
+layout** — and only one of those two was named before.
+
 ## Phase 1 — assignment (BEFORE any composing)
 
 1. Read the brief. The interaction model (7 answers) tells you which theses can carry this
@@ -31,6 +45,12 @@ product-structure theses to assign from:
    IA-difference table (primary object · primary action · info before action · navigation
    model · progressive-disclosure rule · expert path · failure/recovery path) with the
    EXPECTED entry per variant. This is the contract the composers build against.
+4. In the same file, write the **4-axis art-direction table** (palette · typography ·
+   density & rhythm · surface & ornament) with the EXPECTED entry per variant, and append
+   each variant's art direction to its `thesis.txt` as a second sentence. Assign real
+   difference: three variants whose palettes are all "neutral with one accent" have not been
+   given three art directions. Name hues, name typeface character, name what each one
+   refuses — vague assignment is how three composers independently choose grey.
 
 ## Phase 2 — the divergence call (AFTER the variants exist)
 
@@ -39,10 +59,23 @@ explicit written line:
 
 > `Director call: A/B/C differ materially on N of 7 dimensions — <one sentence why>.`
 
-- **N ≥ 3 and materially so** → the call stands, explore proceeds to critique.
+- **N ≥ 3 and materially so** → the call stands.
 - **Under 3, or three skins of one app** → exploration FAILED. Name which variants
   converged and why, reassign the weak thesis line(s) — **one reassignment round maximum**,
   then it is the owner's call, not another loop.
+
+Then a SECOND line, judged independently — a run must pass both:
+
+> `Art-direction call: A/B/C differ materially on N of 4 axes — <one sentence why>.`
+
+- **N ≥ 3 of 4** → the call stands, explore proceeds to critique.
+- **Under 3** → exploration FAILED for the same reason and with the same remedy. Three
+  structurally different pages in one visual language is a failed explore, and saying so here
+  is the only place that failure gets caught before three jurors are asked to rank pages that
+  a human will find indistinguishable.
+
+Judge the art-direction call by looking at the rendered variants, not by reading their token
+files. Two palettes can differ on paper and read the same on screen — the screen is the truth.
 
 "Materially" is YOUR judgment, written in words. Never a string-distance metric — words
 differing proves nothing about concepts differing (superseded row 12).
