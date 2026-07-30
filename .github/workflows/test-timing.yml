@@ -1,0 +1,77 @@
+name: test-timing
+
+# Throwaway measurement workflow. NOT part of arc-ci and never gates anything.
+#
+# Question it answers: arc-ci's windows leg takes 23 minutes while every ubuntu leg takes 2.
+# Since all five legs run in parallel, windows alone sets the wall clock. Before choosing a fix
+# (bats --jobs, matrix sharding, or a root-cause fix in one file) we need to know whether those
+# 23 minutes are spread evenly across 38 files or concentrated in a handful — because sharding
+# evenly is the wrong fix for a concentrated cost.
+#
+# Manual trigger only:  gh workflow run test-timing.yml
+# Delete this file once the measurement has been acted on.
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: Runner to measure on
+        required: false
+        default: windows-latest
+        type: choice
+        options: [windows-latest, ubuntu-latest, macos-latest]
+
+jobs:
+  timing:
+    runs-on: ${{ inputs.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install bats
+        run: npm install -g bats
+
+      - name: Install jq (Windows)
+        if: runner.os == 'Windows'
+        run: choco install jq -y --no-progress
+
+      - name: Install jq (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install jq (macOS)
+        if: runner.os == 'macOS'
+        run: command -v jq >/dev/null 2>&1 || brew install jq
+
+      # Same environment arc-ci gives the suite, minus the optional scanners: gitleaks and
+      # opengrep are best-effort there and their absence only makes tests skip, which would
+      # understate those files. Called out so the numbers are read for what they are.
+      - name: Time every bats file individually
+        run: |
+          echo "runner: ${{ inputs.os }}  cores: $(nproc 2>/dev/null || echo '?')"
+          printf '%s\n' "----"
+          total=0
+          : > /tmp/timing.txt
+          for f in tests/*.bats; do
+            n="$(grep -c '^@test ' "$f" || echo 0)"
+            start=$(date +%s)
+            # Failures must not stop the sweep -- we are measuring cost, not correctness, and a
+            # file that fails still consumed its wall clock.
+            bats "$f" >/dev/null 2>&1 || true
+            end=$(date +%s)
+            d=$(( end - start ))
+            total=$(( total + d ))
+            printf '%6ss  %4s tests  %6ss/test  %s\n' "$d" "$n" "$(awk -v d="$d" -v n="$n" 'BEGIN{printf (n>0? "%.2f" : "n/a"), (n>0? d/n : 0)}')" "$(basename "$f")" >> /tmp/timing.txt
+          done
+          echo "=== per file, slowest first ==="
+          sort -rn /tmp/timing.txt
+          echo "=== total ==="
+          echo "${total}s across $(ls tests/*.bats | wc -l | tr -d ' ') files"
+          echo "=== cumulative share of the slowest files ==="
+          sort -rn /tmp/timing.txt | awk -v t="$total" '{c+=$1; printf "%5.1f%%  after %2d file(s)  (%s)\n", 100*c/t, NR, $NF}' | head -12
