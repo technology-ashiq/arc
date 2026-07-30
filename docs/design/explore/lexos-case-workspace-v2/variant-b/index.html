@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rana Iron &amp; Steel Pvt. Ltd. v. Bhavesh Enterprises — case record</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ================================================================
+     Component CSS for this page. Every colour, size and space below
+     is a var(--...) read from tokens.css — nothing here is a bare
+     hex or a bare px. This block is layout/composition only.
+
+     OXBLOOD DISCIPLINE, enforced throughout this file: the one
+     structural hue is applied ONLY to (a) an actual date/time value
+     — folio date, glance dates, every period heading, the fold — and
+     (b) a fact that is genuinely not yet recorded — an unset judge,
+     a failed save. It is never used for hover, for "overdue", for a
+     destructive button, or for anything else that merely wants
+     emphasis; those get weight and small caps instead, never a
+     second colour.
+     ================================================================ */
+
+  .sr-only {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    background: var(--paper);
+    color: var(--ink);
+    padding: var(--space-xs) var(--space-sm);
+    z-index: 10;
+    text-decoration: underline;
+  }
+  .skip-link:focus {
+    left: var(--space-sm);
+    top: var(--space-sm);
+  }
+
+  /* ---- numeral treatment -----------------------------------------
+     .num        = the date/tabular column: lining figures, tabular
+                   width. Used on every <time>, every file size, the
+                   case number.
+     .prose-nums = running text: old-style figures, proportional
+                   width. Used on note bodies, hearing notes, the
+                   case description.
+     Both are progressive enhancement over the font's own default —
+     if the resolved font in the stack lacks the OpenType feature,
+     the property is a no-op and figures stay whatever that font
+     already draws; nothing breaks, the contrast is just quieter. */
+  .num {
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .prose-nums {
+    font-variant-numeric: oldstyle-nums proportional-nums;
+  }
+
+  .small-caps {
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+  }
+
+  /* ---------------------------------------------------------------
+     PAGE
+     --------------------------------------------------------------- */
+  .page {
+    max-width: var(--page-max);
+    margin: 0 auto;
+    padding: var(--space-md) var(--page-pad-mobile) var(--space-2xl);
+  }
+  @media (min-width: 640px) {
+    .page { padding-left: var(--page-pad); padding-right: var(--page-pad); }
+  }
+
+  /* ---------------------------------------------------------------
+     FOLIO — the running head, behaves like a printed folio line.
+     --------------------------------------------------------------- */
+  .folio {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-xs);
+    font-size: var(--step-0); /* live step 0 */
+    color: var(--ink-faint);
+    line-height: var(--leading-normal);
+  }
+  .folio a {
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .folio a:hover { font-weight: var(--weight-medium); }
+  .folio-meta .num.date { color: var(--oxblood); }
+
+  .folio-rule {
+    height: var(--rule-w);
+    background: var(--rule-sepia);
+    margin: var(--space-xs) 0 var(--space-lg);
+    border: 0;
+  }
+
+  /* ---------------------------------------------------------------
+     MASTHEAD
+     --------------------------------------------------------------- */
+  .back-link {
+    font-size: var(--step-2); /* live step 2 */
+    color: var(--ink-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .back-link:hover { font-weight: var(--weight-medium); }
+
+  .case-title {
+    font-size: clamp(1.9rem, 5vw + 1rem, var(--step-6)); /* live step 6, fluid on mobile */
+    font-weight: var(--weight-bold);
+    line-height: var(--leading-tight);
+    letter-spacing: -0.01em;
+    margin: var(--space-2xs) 0 0;
+  }
+  .case-title em { font-style: italic; font-weight: var(--weight-normal); }
+
+  .byline {
+    font-size: var(--step-2); /* live step 2 */
+    color: var(--ink-muted);
+    margin: var(--space-2xs) 0 var(--space-sm);
+  }
+  .byline a { text-decoration: underline; text-underline-offset: 2px; }
+  .byline a:hover { font-weight: var(--weight-medium); }
+  .byline .num { color: var(--ink-muted); }
+
+  .case-description {
+    font-size: var(--step-3); /* live step 3, reading size, in the masthead too */
+    color: var(--ink);
+    max-width: var(--measure-prose);
+    margin: 0 0 var(--space-md);
+  }
+
+  .glance, .entries {
+    display: grid;
+    grid-template-columns: var(--col-margin) 1fr;
+    column-gap: var(--col-gap);
+    row-gap: var(--space-sm);
+    margin: 0;
+  }
+  .glance dt, .entries dt {
+    grid-column: 1;
+    font-size: var(--step-1); /* live step 1 */
+    color: var(--ink-muted);
+    padding-top: 0.2em;
+  }
+  .glance dd, .entries dd {
+    grid-column: 2;
+    margin: 0;
+  }
+  .glance dd { font-size: var(--step-4); } /* live step 4 */
+  .glance .num.date { color: var(--oxblood); }
+  .glance-note { font-size: var(--step-2); color: var(--ink-muted); margin-top: var(--space-3xs); }
+  .unrecorded { color: var(--oxblood); font-style: italic; }
+
+  @media (max-width: 640px) {
+    .glance, .entries { grid-template-columns: 1fr; row-gap: var(--space-xs); }
+    .glance dt, .entries dt { padding-top: 0; }
+  }
+
+  /* ---------------------------------------------------------------
+     COMPOSER — "write the next fact at its head". One surface, no
+     category chosen: a date makes it a hearing, a due date a task, a
+     file a document; nothing extra makes it a note.
+     --------------------------------------------------------------- */
+  .composer {
+    margin: var(--space-xl) 0;
+    padding-top: var(--space-md);
+    border-top: var(--rule-w) solid var(--rule-sepia-soft);
+  }
+  .composer-lede {
+    font-size: var(--step-4); /* live step 4 */
+    color: var(--ink);
+    margin: 0 0 var(--space-xs);
+  }
+  .composer-input {
+    display: block;
+    width: 100%;
+    font: inherit;
+    font-size: var(--step-3);
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    border-bottom: var(--rule-w) solid var(--rule-sepia);
+    padding: var(--space-2xs) var(--space-3xs);
+    min-height: 44px;
+  }
+  .composer-input::placeholder { color: var(--ink-muted); font-style: italic; }
+  .composer-input:focus-visible {
+    outline: none;
+    border-bottom: var(--rule-w-strong) solid var(--ink);
+  }
+  .composer-input:disabled { color: var(--ink-faint); border-bottom-color: var(--ink-faint); }
+
+  .composer-attach {
+    border: 0;
+    padding: 0;
+    margin: var(--space-xs) 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+  .attach-toggle { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .composer-attach label {
+    font-size: var(--step-1); /* live step 1 */
+    color: var(--ink-muted);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 var(--space-3xs);
+    border-bottom: var(--rule-w) dotted var(--rule-sepia);
+  }
+  /* "date" and "due" both attach a DATE, so the checked state reads in
+     oxblood like every other date on the page. "file" attaches no date,
+     so it is distinguished by weight, never by borrowing the hue. */
+  #fact-date:checked + label,
+  #fact-due:checked + label {
+    color: var(--oxblood);
+    border-bottom-style: solid;
+  }
+  #fact-file:checked + label {
+    color: var(--ink);
+    font-weight: var(--weight-medium);
+    border-bottom-style: solid;
+  }
+  .attach-toggle:focus-visible + label { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+
+  .attach-field {
+    display: none;
+    flex-basis: 100%;
+    padding-top: var(--space-2xs);
+  }
+  #fact-date:checked ~ .attach-field-date,
+  #fact-due:checked ~ .attach-field-due,
+  #fact-file:checked ~ .attach-field-file {
+    display: block;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .attach-field { animation: reveal var(--motion-fast) var(--motion-ease); }
+    @keyframes reveal { from { opacity: 0; } to { opacity: 1; } }
+  }
+  .attach-field input {
+    font: inherit;
+    font-size: var(--step-3);
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    border-bottom: var(--rule-w) solid var(--rule-sepia);
+    padding: var(--space-3xs);
+    min-height: 44px;
+  }
+
+  .composer-save {
+    font: inherit;
+    font-size: var(--step-2);
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    border-bottom: var(--rule-w-strong) solid var(--ink);
+    padding: var(--space-2xs) var(--space-3xs);
+    margin-top: var(--space-sm);
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .composer-save:hover { font-weight: var(--weight-medium); }
+  .composer-save:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+    color: var(--ink-faint);
+    border-bottom-color: var(--ink-faint);
+  }
+
+  .composer-hint {
+    font-size: var(--step-1); /* live step 1 */
+    font-style: italic;
+    color: var(--ink-faint);
+    margin: var(--space-xs) 0 0;
+    max-width: var(--measure-prose);
+  }
+
+  /* ---------------------------------------------------------------
+     THE RECORD
+     --------------------------------------------------------------- */
+  .record { margin-top: var(--space-xl); }
+
+  .period + .period,
+  .period + .fold-wrap,
+  .fold-wrap + .period {
+    margin-top: var(--space-lg); /* the air between periods — the instrument */
+  }
+
+  .period-date {
+    font-size: clamp(1.6rem, 3vw + 1rem, var(--step-5)); /* live step 5 */
+    font-weight: var(--weight-medium);
+    color: var(--oxblood);
+    font-variant-numeric: lining-nums tabular-nums;
+    letter-spacing: -0.005em;
+    line-height: var(--leading-tight);
+    margin: 0 0 var(--space-sm);
+  }
+
+  .entries dt { line-height: var(--leading-normal); }
+  .entries dd p { margin: 0; }
+  .entries dd p + p { margin-top: var(--space-3xs); } /* tight — the air INSIDE an entry */
+
+  .entry-meta { font-size: var(--step-2); color: var(--ink-muted); }
+  .entry-meta .num { color: var(--ink-muted); }
+  .entry-body-prose {
+    font-size: var(--step-3);
+    color: var(--ink);
+    max-width: var(--measure-prose);
+  }
+  .entry-file { font-style: italic; }
+  .entry-done { text-decoration: line-through; color: var(--ink-muted); }
+  .entry-done-tag { font-style: italic; color: var(--ink-muted); text-decoration: none; }
+  /* not a date, not unrecorded — an open task past its date reads in
+     plain ink at full weight, distinguished from "done" by weight and
+     wording alone. */
+  .entry-flag { font-style: italic; color: var(--ink); }
+
+  .entry-actions {
+    margin-top: var(--space-3xs);
+    display: flex;
+    gap: var(--space-sm);
+  }
+  .entry-actions a, .entry-actions label {
+    font-size: var(--step-1);
+    color: var(--ink-faint);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    cursor: pointer;
+  }
+  .entry-actions a:hover, .entry-actions label:hover { font-weight: var(--weight-medium); }
+  /* the destructive control is distinguished from "edit" by small caps
+     and letter-spacing, never by colour — the same device the
+     marginalia already uses for entry kind. */
+  .entry-actions .link-remove { font-variant-caps: small-caps; letter-spacing: var(--tracking-caps); }
+
+  /* the one worked destructive confirm, on the 20 Jul document */
+  .confirm-toggle { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  #doc-remove:focus-visible ~ .entry-actions .link-remove {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+  .confirm-panel { display: none; margin-top: var(--space-2xs); }
+  #doc-remove:checked ~ .confirm-panel { display: block; }
+  #doc-remove:checked ~ .entry-actions { display: none; }
+  .confirm-panel p { color: var(--ink); font-style: italic; font-size: var(--step-2); }
+  .confirm-panel .confirm-buttons { display: flex; gap: var(--space-sm); margin-top: var(--space-3xs); }
+  .confirm-panel button, .confirm-panel label.cancel {
+    font-size: var(--step-2);
+    background: transparent;
+    border: 0;
+    border-bottom: var(--rule-w) solid var(--ink-muted);
+    padding: var(--space-3xs);
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    color: var(--ink);
+  }
+  .confirm-panel .confirm-remove {
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    font-weight: var(--weight-medium);
+    border-bottom-color: var(--ink);
+  }
+
+  /* ---------------------------------------------------------------
+     THE FOLD — the one ornament, marking today.
+     --------------------------------------------------------------- */
+  .fold-wrap { text-align: center; }
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+  .fold-rule {
+    flex: 1 1 auto;
+    height: var(--rule-w-strong);
+    background: var(--fold-rule);
+  }
+  .fold-mark {
+    font-size: var(--step-4);
+    color: var(--oxblood);
+    line-height: 1;
+  }
+  .fold-caption {
+    margin: var(--space-2xs) 0 0;
+    font-size: var(--step-1);
+    color: var(--ink-muted);
+  }
+  .fold-caption .small-caps { color: var(--ink-muted); }
+
+  /* ---------------------------------------------------------------
+     NEXT CASE — the expert path: what's done here, what's next.
+     --------------------------------------------------------------- */
+  .next-case {
+    margin-top: var(--space-xl);
+    padding-top: var(--space-md);
+    border-top: var(--rule-w) solid var(--rule-sepia);
+  }
+  .next-case-label {
+    font-size: var(--step-1);
+    color: var(--ink-muted);
+    margin: 0 0 var(--space-3xs);
+  }
+  .next-case-link {
+    font-size: var(--step-4); /* live step 4 */
+    font-style: italic;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .next-case-link:hover { font-weight: var(--weight-medium); }
+  .next-case-meta { font-size: var(--step-2); color: var(--ink-muted); margin: var(--space-3xs) 0 0; }
+
+  /* ---------------------------------------------------------------
+     APPENDIX — the states the brief asks for that cannot occur
+     naturally on a single populated case: loading, a failed save,
+     a withheld composer. (Empty and success both occur for real,
+     above, in the record itself.) Kept small and clearly separate.
+     --------------------------------------------------------------- */
+  .appendix {
+    margin-top: var(--space-2xl);
+    padding-top: var(--space-md);
+    border-top: var(--rule-w-strong) double var(--rule-sepia);
+  }
+  .appendix h2 {
+    font-size: var(--step-1);
+    font-weight: var(--weight-normal);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    color: var(--ink-muted);
+    margin: 0 0 var(--space-md);
+  }
+  .vignette + .vignette { margin-top: var(--space-md); }
+  .vignette-label {
+    font-size: var(--step-1);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    color: var(--ink-muted);
+    margin: 0 0 var(--space-3xs);
+  }
+  .vignette-body { font-size: var(--step-2); color: var(--ink); max-width: var(--measure-prose); }
+  .vignette-body .unrecorded { font-style: italic; }
+  .vignette-body .composer-save { margin-top: var(--space-2xs); }
+
+  .skel-line {
+    height: 0.85em;
+    background: var(--rule-sepia-soft);
+    margin-top: var(--space-3xs);
+    width: 70%;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .skel-line { animation: pulse 1400ms ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+  }
+
+  .disabled-row { opacity: 0.75; }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#record">Skip to the record</a>
+
+<div class="page">
+
+  <header class="folio">
+    <span class="folio-firm small-caps">Desai &amp; Associates</span>
+    <span class="folio-meta">
+      <span class="num">CS/1123/2024</span> ·
+      <time class="num date" datetime="2026-07-30">30 Jul 2026</time>
+    </span>
+  </header>
+  <hr class="folio-rule">
+
+  <main>
+    <section class="masthead" aria-labelledby="case-title">
+      <a class="back-link" href="#">
+        <span aria-hidden="true">&larr;</span>&nbsp;back to cases
+      </a>
+
+      <h1 id="case-title" class="case-title">
+        Rana Iron &amp; Steel Pvt. Ltd. <em>v.</em> Bhavesh Enterprises
+      </h1>
+
+      <p class="byline">
+        For <a href="#">Rana Iron &amp; Steel Pvt. Ltd.</a> ·
+        City Civil Court, Mumbai · Civil recovery suit ·
+        <span class="num">CS/1123/2024</span>
+      </p>
+
+      <p class="case-description prose-nums">
+        Recovery of &#8377;18,40,000 towards unpaid freight invoices, with interest,
+        against the defendant carrier.
+      </p>
+
+      <dl class="glance">
+        <dt class="small-caps">status</dt>
+        <dd>Active</dd>
+
+        <dt class="small-caps">next</dt>
+        <dd>
+          <time class="num date" datetime="2026-08-14T11:00">14 Aug 2026, 11:00 am</time>
+          <p class="glance-note">Arguments on interim injunction</p>
+        </dd>
+
+        <dt class="small-caps">overdue</dt>
+        <dd>
+          one task, since <time class="num date" datetime="2026-07-28">28 Jul 2026</time>
+          <p class="glance-note">Collect the certified copy of the injunction order</p>
+        </dd>
+      </dl>
+    </section>
+
+    <section class="composer" aria-label="Add to the record">
+      <p class="composer-lede">Record what happened, or what's due next.</p>
+      <form onsubmit="return false;">
+        <label class="sr-only" for="fact-text">What happened, or what's due</label>
+        <input class="composer-input" id="fact-text" type="text" placeholder="Write the next fact…">
+
+        <fieldset class="composer-attach">
+          <legend class="sr-only">Attach to this entry</legend>
+
+          <input class="attach-toggle" type="checkbox" id="fact-date">
+          <label for="fact-date">date</label>
+          <div class="attach-field attach-field-date">
+            <label class="sr-only" for="fact-date-value">Date and time</label>
+            <input id="fact-date-value" type="datetime-local">
+          </div>
+
+          <input class="attach-toggle" type="checkbox" id="fact-due">
+          <label for="fact-due">due</label>
+          <div class="attach-field attach-field-due">
+            <label class="sr-only" for="fact-due-value">Due</label>
+            <input id="fact-due-value" type="date">
+          </div>
+
+          <input class="attach-toggle" type="checkbox" id="fact-file">
+          <label for="fact-file">file</label>
+          <div class="attach-field attach-field-file">
+            <label class="sr-only" for="fact-file-value">File</label>
+            <input id="fact-file-value" type="file">
+          </div>
+        </fieldset>
+
+        <button class="composer-save" type="submit">Save</button>
+      </form>
+      <p class="composer-hint">
+        A date recorded makes this a hearing. A due date makes it a task.
+        A file recorded makes it a document. Left alone, it is a note.
+      </p>
+    </section>
+
+    <section id="record" class="record" aria-label="Case record">
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-08-14">14 Aug 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">hearing</dt>
+          <dd>
+            <p class="entry-meta">
+              <time class="num" datetime="2026-08-14T11:00">11:00 am</time>
+              — Arguments on interim injunction · R. Deshmukh, J.
+            </p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-08-05">5 Aug 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">task</dt>
+          <dd>
+            <p class="entry-meta">File the rejoinder to the written statement</p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-08-02">2 Aug 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">task</dt>
+          <dd>
+            <p class="entry-meta">Pay the court fee of <span class="num">&#8377;1,54,300</span></p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <div class="fold-wrap">
+        <div class="fold" role="separator" aria-label="Today">
+          <span class="fold-rule" aria-hidden="true"></span>
+          <span class="fold-mark" aria-hidden="true">&sect;</span>
+          <span class="fold-rule" aria-hidden="true"></span>
+        </div>
+        <p class="fold-caption"><span class="small-caps">today</span> —
+          <time class="num date" datetime="2026-07-30">30 Jul 2026</time>
+        </p>
+      </div>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-07-28">28 Jul 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">task</dt>
+          <dd>
+            <p class="entry-meta">
+              Collect the certified copy of the injunction order
+              — <span class="entry-flag">overdue</span>
+            </p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-07-22">22 Jul 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">hearing</dt>
+          <dd>
+            <p class="entry-meta">
+              <time class="num" datetime="2026-07-22T10:30">10:30 am</time>
+              — Framing of issues · R. Deshmukh, J.
+            </p>
+            <p class="entry-body-prose prose-nums">
+              Defendant's counsel requested more time on health grounds; next date fixed,
+              cost of &#8377;5,000 imposed.
+            </p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-07-20">20 Jul 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">document</dt>
+          <dd>
+            <p class="entry-meta">
+              <span class="entry-file">Written_Statement_Bhavesh_Enterprises.pdf</span>
+              — PDF, <span class="num">812 KB</span>
+            </p>
+            <input class="confirm-toggle" type="checkbox" id="doc-remove">
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <label class="link-remove" for="doc-remove">remove</label>
+            </div>
+            <div class="confirm-panel">
+              <p>
+                Remove <em class="entry-file">Written_Statement_Bhavesh_Enterprises.pdf</em>?
+                It cannot be undone.
+              </p>
+              <div class="confirm-buttons">
+                <button type="button" class="confirm-remove">remove document</button>
+                <label class="cancel" for="doc-remove">cancel</label>
+              </div>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-07-15">15 Jul 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">task</dt>
+          <dd>
+            <p class="entry-meta">
+              <span class="entry-done">File authorisation for the new advocate on record</span>
+              <span class="entry-done-tag"> — done</span>
+            </p>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-07-08">8 Jul 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">note</dt>
+          <dd>
+            <p class="entry-body-prose prose-nums">
+              Client confirmed the settlement offer is not acceptable. Proceed to trial.
+            </p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+        </dl>
+      </article>
+
+      <article class="period">
+        <h2 class="period-date"><time datetime="2026-06-30">30 Jun 2026</time></h2>
+        <dl class="entries">
+          <dt class="small-caps">hearing</dt>
+          <dd>
+            <p class="entry-meta">
+              <time class="num" datetime="2026-06-30T15:00">3:00 pm</time>
+              — First appearance · judge <em class="unrecorded">not yet recorded</em>
+            </p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+
+          <dt class="small-caps">document</dt>
+          <dd>
+            <p class="entry-meta">
+              <span class="entry-file">Plaint_Rana_Iron_Steel.pdf</span>
+              — PDF, <span class="num">1.4 MB</span>
+            </p>
+            <div class="entry-actions">
+              <a href="#">edit</a>
+              <a class="link-remove" href="#">remove</a>
+            </div>
+          </dd>
+
+          <dt class="small-caps">filed</dt>
+          <dd>
+            <p class="entry-meta">Case filed.</p>
+          </dd>
+        </dl>
+      </article>
+
+    </section>
+
+    <section class="next-case" aria-label="Next case due">
+      <p class="next-case-label small-caps">next case due</p>
+      <a class="next-case-link" href="#">Solanki Freight Carriers v. Meridian Textiles Pvt. Ltd.</a>
+      <p class="next-case-meta">next hearing <time class="num date" datetime="2026-08-05">5 Aug 2026</time></p>
+    </section>
+  </main>
+
+  <footer class="appendix" aria-label="Reference: the record's other states">
+    <h2>Appendix — the record's other states</h2>
+
+    <div class="vignette">
+      <p class="vignette-label">loading — recording an entry</p>
+      <div class="vignette-body">
+        <p>The composer while a save is in flight; the entry stays put until it resolves.</p>
+        <button class="composer-save" type="button" disabled>Recording&hellip;</button>
+        <div class="skel-line" aria-hidden="true"></div>
+      </div>
+    </div>
+
+    <div class="vignette">
+      <p class="vignette-label">unrecorded — a save that failed</p>
+      <div class="vignette-body">
+        <p class="unrecorded">
+          Not yet recorded — that date could not be read. Check the date and try again.
+        </p>
+      </div>
+    </div>
+
+    <div class="vignette disabled-row">
+      <p class="vignette-label">disabled — a closed case</p>
+      <div class="vignette-body">
+        <p>Recording is withheld once a case is closed.</p>
+        <input class="composer-input" type="text" placeholder="Write the next fact…" disabled>
+      </div>
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>

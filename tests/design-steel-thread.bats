@@ -155,6 +155,45 @@ teardown() { _arc_teardown; }
   [ "$status" -ne 0 ]
 }
 
+@test "finish: a BELOW-BAR finding is FAIL -- compliant is not the same as good enough" {
+  _arc_design_sandbox
+  _arc_plant_critique "$SLUG" "$TARGET" "abc123" "BELOW-BAR: no focal point -- nothing is bigger or darker than anything else"
+  run bash "$(_arc_design design-critique.sh)" finish "$TARGET"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"FAIL"* ]]
+
+  run node "$SANDBOX/.claude/scripts/hq/spine.mjs" read --kind review.completed
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"result":"FAIL"'* ]]
+
+  # A page that broke no rule and is still not shippable must not stamp the ledger.
+  run bash "$SANDBOX/.claude/scripts/core/review-ledger.sh" check design
+  [ "$status" -ne 0 ]
+}
+
+@test "finish: BELOW-BAR is counted case-insensitively (a miscased finding must not vanish)" {
+  _arc_design_sandbox
+  _arc_plant_critique "$SLUG" "$TARGET" "abc123" "below-bar: the type scale has one real step"
+  run bash "$(_arc_design design-critique.sh)" finish "$TARGET"
+  [[ "$output" == *"FAIL"* ]]
+}
+
+@test "finish HOLE: prose ABOUT below-bar mid-sentence is not a finding" {
+  _arc_design_sandbox
+  _arc_plant_critique "$SLUG" "$TARGET" "abc123" "WEAKNESS: nothing here is BELOW-BAR: the page clears its reference"
+  run bash "$(_arc_design design-critique.sh)" finish "$TARGET"
+  [[ "$output" == *"PASS"* ]]
+  run bash "$SANDBOX/.claude/scripts/core/review-ledger.sh" check design
+  [ "$status" -eq 0 ]
+}
+
+@test "finish: WEAKNESS and POLISH still never fail a run (the gate stays non-theatrical)" {
+  _arc_design_sandbox
+  _arc_plant_critique "$SLUG" "$TARGET" "abc123" "WEAKNESS: cramped footer" "POLISH: icon weight" "WEAKNESS: dim label"
+  run bash "$(_arc_design design-critique.sh)" finish "$TARGET"
+  [[ "$output" == *"PASS"* ]]
+}
+
 @test "finish: refuses when no critique artifact exists (never invents a PASS)" {
   _arc_design_sandbox
   run bash "$(_arc_design design-critique.sh)" finish "$TARGET"

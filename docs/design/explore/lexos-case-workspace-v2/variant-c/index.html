@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ramesh Iyer vs. Kaveri Textiles Pvt Ltd — Case — LexOS</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ---------------------------------------------------------------------
+     Layout / composition CSS for variant-c. Every colour, gradient and
+     shadow value below is a var(--…) declared in tokens.css — nothing is
+     written here as a literal hex, rgb() or gradient stop.
+     --------------------------------------------------------------------- */
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--field);
+    color: var(--ink);
+    color-scheme: dark;
+    font-family: var(--font);
+    font-size: var(--text-body);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  a { color: inherit; }
+  button { font: inherit; color: inherit; background: none; border: 0; }
+
+  .num { font-variant-numeric: tabular-nums; }
+
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+  }
+
+  :focus { outline: none; }
+  :focus-visible { outline: var(--focus-on-navy); outline-offset: var(--focus-offset); border-radius: 4px; }
+  .sheet :focus-visible { outline: var(--focus-on-bone); }
+
+  /* ---- page shell — left-anchored column, deliberately not centred.
+     Left padding is the composition (the desk around the lit sheet); right
+     padding is only enough for the text to breathe against its own box —
+     the two are NOT the same value, on purpose (see tokens.css §WIDTH). */
+  .content {
+    max-width: var(--content-max);
+    margin: 0;
+    padding: var(--space-2) 1.5rem var(--space-4) var(--gutter);
+  }
+
+  /* ---- chrome ----------------------------------------------------------- */
+  .chrome {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; padding-bottom: var(--space-1);
+  }
+  .firm {
+    font-size: var(--text-label); letter-spacing: var(--tracking-label);
+    text-transform: uppercase; font-weight: 700; color: var(--ink-faint);
+  }
+  .back {
+    font-size: var(--text-meta); color: var(--ink-muted); text-decoration: underline;
+    text-underline-offset: 3px; display: inline-flex; align-items: center;
+    gap: .35rem; min-height: 44px; padding: 0 .35rem; border-radius: 6px;
+    transition: color var(--motion);
+  }
+  .back:hover { color: var(--ink); }
+
+  /* ---- case header — always on the field, never a sheet ---------------- */
+  .case-header { padding-top: var(--space-1); padding-bottom: var(--space-2); }
+
+  .meta-caps {
+    font-size: var(--text-label); letter-spacing: var(--tracking-label);
+    text-transform: uppercase; font-weight: 700; color: var(--ink-muted);
+    margin: 0 0 .85rem;
+  }
+
+  .statement {
+    font-size: var(--text-statement); font-weight: 800; letter-spacing: -0.01em;
+    line-height: 1.05; margin: 0; color: var(--ink);
+  }
+
+  .identity {
+    margin: 1rem 0 0; font-size: var(--text-body); color: var(--ink-muted);
+    display: flex; flex-wrap: wrap; align-items: center; gap: .65rem .85rem;
+  }
+  .client-link {
+    color: var(--ink); text-decoration: underline; text-underline-offset: 3px;
+    font-weight: 600; min-height: 44px; display: inline-flex; align-items: center;
+  }
+  .status-pill {
+    font-size: var(--text-label); letter-spacing: var(--tracking-label);
+    text-transform: uppercase; font-weight: 700; color: var(--ink);
+    border: 1.5px solid var(--ink-faint); border-radius: 999px; padding: .3rem .7rem;
+    line-height: 1;
+  }
+
+  .stat-row {
+    display: flex; gap: var(--space-3); margin-top: var(--space-2); flex-wrap: wrap;
+  }
+  .stat .label {
+    font-size: var(--text-label); letter-spacing: var(--tracking-label);
+    text-transform: uppercase; font-weight: 700; color: var(--ink-muted); margin: 0 0 .4rem;
+  }
+  .numeral { font-size: var(--text-numeral); font-weight: 800; line-height: 1; margin: 0; color: var(--ink); }
+  .numeral.overdue { color: var(--marigold); }
+  .stat-time {
+    display: block; font-size: var(--text-meta); font-weight: 600;
+    color: var(--ink-muted); margin-top: .3rem;
+  }
+
+  /* ---- the run ------------------------------------------------------- */
+  .run { position: relative; margin-top: var(--space-2); }
+  .run::before {
+    content: ""; position: absolute; top: 1.3rem; bottom: 1.6rem; left: 1.5rem;
+    width: 3px; background: var(--spine); border-radius: 2px;
+  }
+  @media (max-width: 480px) { .run::before { left: 1.05rem; } }
+
+  .step { border: 0; margin: 0 0 var(--space-2) 0; background: none; }
+  .step:last-of-type { margin-bottom: 0; }
+
+  .step-summary {
+    list-style: none; cursor: pointer; display: flex; align-items: flex-start;
+    gap: 1rem; padding: .8rem .6rem; border-radius: var(--radius); min-height: 44px;
+    transition: background var(--motion);
+  }
+  .step-summary::-webkit-details-marker { display: none; }
+  .step-summary:hover { background: var(--field-raised); }
+
+  .step-rail {
+    position: relative; flex: 0 0 3rem; display: flex; justify-content: center;
+    padding-top: .15rem;
+  }
+  @media (max-width: 480px) { .step-rail { flex-basis: 2.1rem; } }
+
+  .spine-node {
+    position: absolute; top: .5rem; left: 50%; transform: translate(-50%, -50%);
+    width: 9px; height: 9px; border-radius: 50%; background: var(--spine);
+    transition: background var(--motion), box-shadow var(--motion);
+  }
+  .step[open] .spine-node { background: var(--spine-bright); box-shadow: 0 0 0 5px var(--field); }
+
+  .step-no { font-size: 1.5rem; font-weight: 800; color: var(--ink-faint); line-height: 1; }
+  @media (max-width: 480px) { .step-no { font-size: 1.15rem; } }
+  .step[open] .step-no { color: var(--ink); }
+
+  .step-head { flex: 1; min-width: 0; padding-top: .1rem; }
+  .step-label {
+    display: block; font-size: var(--text-label); letter-spacing: var(--tracking-label);
+    text-transform: uppercase; font-weight: 700; color: var(--ink-muted); margin: 0;
+  }
+  .step[open] .step-label { color: var(--ink); }
+  .step-meta { display: block; margin-top: .35rem; font-size: var(--text-meta); color: var(--ink-faint); }
+  .overdue-inline { color: var(--marigold); font-weight: 700; }
+
+  .chevron { flex: 0 0 auto; margin-top: .3rem; transition: transform var(--motion); }
+  .step[open] .chevron { transform: rotate(180deg); }
+  .step[open] .chevron path { stroke: var(--ink); }
+
+  /* ---- the one raised sheet -------------------------------------------- */
+  .sheet {
+    position: relative; margin-left: 4rem; margin-top: .35rem;
+    background-color: var(--bone); background-image: var(--sheet-glow);
+    border-radius: var(--radius); box-shadow: var(--sheet-shadow);
+    padding: var(--pad-4); color: var(--ink-on-bone); overflow: hidden;
+    color-scheme: light;
+  }
+  @media (max-width: 480px) { .sheet { margin-left: 2.6rem; padding: 1.1rem; } }
+
+  .sheet h3 {
+    font-size: var(--text-label); letter-spacing: var(--tracking-label);
+    text-transform: uppercase; font-weight: 700; color: var(--ink-on-bone-muted);
+    margin: 0 0 .75rem;
+  }
+
+  .primary-action {
+    display: inline-flex; align-items: center; justify-content: center; min-height: 44px;
+    padding: 0 1.35rem; border-radius: var(--radius); background: var(--marigold);
+    color: var(--marigold-ink); border: 1.5px solid var(--marigold-ink); font-weight: 700;
+    font-size: var(--text-body); cursor: pointer; transition: background var(--motion);
+  }
+  .primary-action:hover { background: var(--marigold-hover); }
+  .primary-action:active { background: var(--marigold-active); }
+
+  .actions-row { margin-bottom: var(--space-1); }
+
+  /* ---- hearings ---------------------------------------------------- */
+  .hearing-group + .hearing-group { margin-top: var(--space-1); padding-top: var(--space-1); border-top: 1px solid var(--hairline); }
+  .hearing-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem 1.25rem; padding: .9rem 0; }
+  .hearing-main { min-width: 0; }
+  .hearing-date { font-size: 1.25rem; font-weight: 800; margin: 0; color: var(--ink-on-bone); }
+  .hearing-time { font-size: var(--text-meta); font-weight: 600; color: var(--ink-on-bone-muted); margin-left: .4rem; }
+  .hearing-detail { margin: .3rem 0 0; font-size: var(--text-body); color: var(--ink-on-bone-muted); }
+  .hearing-notes { margin: .5rem 0 0; font-size: var(--text-meta); color: var(--ink-on-bone-muted); max-width: 46ch; }
+  .hearing-actions { display: flex; gap: 1.1rem; flex: 0 0 auto; align-items: flex-start; padding-top: .3rem; }
+  .link, .link-danger {
+    font-size: var(--text-meta); text-decoration: underline; text-underline-offset: 3px;
+    min-height: 44px; display: inline-flex; align-items: center; cursor: pointer;
+  }
+  .link { color: var(--ink-on-bone-muted); font-weight: 500; }
+  .link:hover { color: var(--ink-on-bone); }
+  .link-danger { color: var(--danger-muted); font-weight: 700; }
+  .link-danger:hover { color: var(--danger-muted-strong); }
+
+  /* ---- documents ------------------------------------------------------ */
+  .doc-list { list-style: none; margin: 0; padding: 0; }
+  .doc-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .35rem 1rem; padding: .8rem 0; min-height: 44px; }
+  .doc-name { font-weight: 600; color: var(--ink-on-bone); min-width: 0; word-break: break-word; }
+  .doc-meta { font-size: var(--text-meta); color: var(--ink-on-bone-muted); flex: 0 0 auto; }
+  .doc-row--error .doc-name { color: var(--ink-on-bone-muted); }
+  .doc-error { font-size: var(--text-meta); color: var(--danger-muted); font-weight: 600; flex-basis: 100%; }
+
+  /* ---- tasks: the checkbox's real hit target is the whole label, ------
+     which is >=44px tall — not the 20px visual box alone. ---------------- */
+  .task-list { list-style: none; margin: 0; padding: 0; }
+  .task-row { display: flex; align-items: center; flex-wrap: wrap; gap: .5rem 1rem; padding: .1rem 0; }
+  .task-row-label { display: flex; align-items: center; gap: .85rem; flex: 1; min-width: 0; min-height: 44px; cursor: pointer; }
+  .task-check { width: 20px; height: 20px; flex: 0 0 auto; accent-color: var(--ink-on-bone); }
+  .task-title { font-size: var(--text-body); color: var(--ink-on-bone); }
+  .task-row.is-done .task-title { color: var(--ink-on-bone-muted); text-decoration: line-through; }
+  .task-due { font-size: var(--text-meta); color: var(--ink-on-bone-muted); flex: 0 0 auto; display: flex; align-items: center; }
+  .overdue-tag {
+    font-size: 0.625rem; letter-spacing: var(--tracking-label); text-transform: uppercase;
+    font-weight: 700; color: var(--danger-muted); border: 1.5px solid var(--danger-muted);
+    border-radius: 999px; padding: .15rem .5rem; margin-right: .6rem;
+  }
+
+  /* ---- empty state ------------------------------------------------------ */
+  .empty-title { font-weight: 700; font-size: var(--text-body); margin: 0 0 .4rem; color: var(--ink-on-bone); }
+  .empty-body { margin: 0 0 1.25rem; max-width: 34ch; color: var(--ink-on-bone-muted); }
+
+  /* ---- loading skeleton (progressive enhancement, no network) ---------- */
+  .skeleton {
+    display: none; position: absolute; inset: 0; padding: var(--pad-4);
+    background: var(--bone); border-radius: var(--radius);
+  }
+  .sheet.is-loading .skeleton { display: block; }
+  .sheet.is-loading .sheet-content { visibility: hidden; }
+  .skel-bar { height: 1rem; border-radius: 6px; background: var(--bone-line); margin-bottom: .85rem; }
+  .skel-bar.w-short { width: 32%; height: 1.4rem; margin-bottom: 1.25rem; }
+  .skel-bar.w-med { width: 62%; }
+  .skel-bar.w-long { width: 88%; }
+  @media (prefers-reduced-motion: no-preference) {
+    .sheet.is-loading .skeleton { animation: skel-pulse 1.1s ease-in-out infinite; }
+  }
+  @keyframes skel-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .5; } }
+
+  /* ---- next case (expert-path affordance) ------------------------------- */
+  .next-up { margin-top: var(--space-3); }
+  .next-up .label {
+    font-size: var(--text-label); letter-spacing: var(--tracking-label); text-transform: uppercase;
+    font-weight: 700; color: var(--ink-faint); margin: 0 0 .5rem;
+  }
+  .next-up-link {
+    display: inline-flex; flex-direction: column; gap: .2rem; min-height: 44px;
+    justify-content: center; border-radius: var(--radius); padding: .25rem .1rem;
+  }
+  .next-up-title { font-size: 1.05rem; font-weight: 700; color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .next-up-meta { font-size: var(--text-meta); color: var(--ink-muted); }
+</style>
+</head>
+<body>
+  <div class="content">
+
+    <header class="chrome">
+      <span class="firm">Ramaswamy Legal</span>
+      <a class="back" href="/dashboard/cases"><span aria-hidden="true">←</span> Back to cases</a>
+    </header>
+
+    <main>
+      <section class="case-header" aria-label="Case identity">
+        <p class="meta-caps">Civil suit · City Civil Court, Bengaluru</p>
+        <h1 class="statement">Ramesh Iyer vs. Kaveri Textiles Pvt Ltd</h1>
+        <p class="identity">
+          <a class="client-link" href="#">Ramesh Iyer</a>
+          <span class="num">CS/1123/2025</span>
+          <span>· Filed 14 Feb 2025</span>
+          <span class="status-pill">Active</span>
+        </p>
+
+        <div class="stat-row">
+          <div class="stat">
+            <p class="label">Next hearing</p>
+            <p class="numeral num">12 Aug 2026<span class="stat-time">11:00 am</span></p>
+          </div>
+          <div class="stat">
+            <p class="label">Overdue</p>
+            <p class="numeral num overdue">1</p>
+          </div>
+        </div>
+      </section>
+
+      <h2 class="sr-only">Case record</h2>
+
+      <div class="run">
+
+        <!-- 01 · HEARINGS — live: a hearing was just recorded and the next is due -->
+        <details class="step" name="case-run" open id="step-hearings">
+          <summary class="step-summary">
+            <span class="step-rail"><span class="spine-node" aria-hidden="true"></span><span class="step-no num">01</span></span>
+            <span class="step-head">
+              <h2 class="step-label">Hearings</h2>
+              <span class="step-meta">Recorded 22 Jul · next 12 Aug 2026</span>
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" fill="none" stroke="var(--ink-faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+          <div class="sheet">
+            <div class="skeleton" aria-hidden="true">
+              <div class="skel-bar w-short"></div>
+              <div class="skel-bar w-med"></div>
+              <div class="skel-bar w-long"></div>
+              <div class="skel-bar w-med"></div>
+            </div>
+            <div class="sheet-content">
+              <div class="actions-row">
+                <button type="button" class="primary-action">Add hearing</button>
+              </div>
+
+              <div class="hearing-group">
+                <h3>Upcoming</h3>
+                <div class="hearing-row">
+                  <div class="hearing-main">
+                    <p class="hearing-date num">12 Aug 2026<span class="hearing-time">11:00 am</span></p>
+                    <p class="hearing-detail">Evidence framing · Judge — not yet assigned</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="hearing-group">
+                <h3>Past</h3>
+                <div class="hearing-row">
+                  <div class="hearing-main">
+                    <p class="hearing-date num">22 Jul 2026<span class="hearing-time">3:30 pm</span></p>
+                    <p class="hearing-detail">Arguments on interim injunction · Justice R. Kumar</p>
+                    <p class="hearing-notes">Interim injunction granted restraining transfer of the suit property; matter posted for evidence framing.</p>
+                  </div>
+                  <div class="hearing-actions">
+                    <button type="button" class="link">Edit</button>
+                    <button type="button" class="link-danger">Remove</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- 02 · DOCUMENTS — quiet: filed, nothing pending -->
+        <details class="step" name="case-run" id="step-documents">
+          <summary class="step-summary">
+            <span class="step-rail"><span class="spine-node" aria-hidden="true"></span><span class="step-no num">02</span></span>
+            <span class="step-head">
+              <h2 class="step-label">Documents</h2>
+              <span class="step-meta">2 filed · 1 failed · last 22 Jul 2026</span>
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" fill="none" stroke="var(--ink-faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+          <div class="sheet">
+            <div class="skeleton" aria-hidden="true">
+              <div class="skel-bar w-short"></div>
+              <div class="skel-bar w-med"></div>
+              <div class="skel-bar w-med"></div>
+              <div class="skel-bar w-long"></div>
+            </div>
+            <div class="sheet-content">
+              <div class="actions-row">
+                <button type="button" class="primary-action">Upload document</button>
+              </div>
+              <ul class="doc-list">
+                <li class="doc-row">
+                  <span class="doc-name">Iyer_Rejoinder_Affidavit.pdf</span>
+                  <span class="doc-meta num">PDF · 2.4 MB · 22 Jul 2026</span>
+                </li>
+                <li class="doc-row">
+                  <span class="doc-name">Interim_Injunction_Order.pdf</span>
+                  <span class="doc-meta num">PDF · 640 KB · 22 Jul 2026</span>
+                </li>
+                <li class="doc-row doc-row--error">
+                  <span class="doc-name">Board_Resolution_Kaveri_Textiles.pdf</span>
+                  <span class="doc-error">Could not save that. Please try again.</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <!-- 03 · TASKS — quiet, but carries the overdue count wherever it renders -->
+        <details class="step" name="case-run" id="step-tasks">
+          <summary class="step-summary">
+            <span class="step-rail"><span class="spine-node" aria-hidden="true"></span><span class="step-no num">03</span></span>
+            <span class="step-head">
+              <h2 class="step-label">Tasks</h2>
+              <span class="step-meta">2 open · <span class="overdue-inline">1 overdue</span></span>
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" fill="none" stroke="var(--ink-faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+          <div class="sheet">
+            <div class="skeleton" aria-hidden="true">
+              <div class="skel-bar w-short"></div>
+              <div class="skel-bar w-long"></div>
+              <div class="skel-bar w-med"></div>
+              <div class="skel-bar w-med"></div>
+            </div>
+            <div class="sheet-content">
+              <div class="actions-row">
+                <button type="button" class="primary-action">Add task</button>
+              </div>
+              <ul class="task-list">
+                <li class="task-row">
+                  <label class="task-row-label">
+                    <input type="checkbox" class="task-check">
+                    <span class="task-title">Pay balance court fee — ₹15,600</span>
+                  </label>
+                  <span class="task-due"><span class="overdue-tag">Overdue</span><span class="num">28 Jul 2026</span></span>
+                </li>
+                <li class="task-row">
+                  <label class="task-row-label">
+                    <input type="checkbox" class="task-check">
+                    <span class="task-title">Prepare evidence bundle for framing</span>
+                  </label>
+                  <span class="task-due num">10 Aug 2026</span>
+                </li>
+                <li class="task-row is-done">
+                  <label class="task-row-label">
+                    <input type="checkbox" class="task-check" checked>
+                    <span class="task-title">File vakalatnama for Ramesh Iyer</span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </details>
+
+        <!-- 04 · NOTES — quiet, empty: an empty field is still information -->
+        <details class="step" name="case-run" id="step-notes">
+          <summary class="step-summary">
+            <span class="step-rail"><span class="spine-node" aria-hidden="true"></span><span class="step-no num">04</span></span>
+            <span class="step-head">
+              <h2 class="step-label">Notes</h2>
+              <span class="step-meta">No notes yet</span>
+            </span>
+            <svg class="chevron" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" fill="none" stroke="var(--ink-faint)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </summary>
+          <div class="sheet">
+            <div class="skeleton" aria-hidden="true">
+              <div class="skel-bar w-short"></div>
+              <div class="skel-bar w-long"></div>
+              <div class="skel-bar w-med"></div>
+            </div>
+            <div class="sheet-content">
+              <p class="empty-title">No notes yet</p>
+              <p class="empty-body">Record what happened, what was said, or what to remember before the next date.</p>
+              <button type="button" class="primary-action">Add note</button>
+            </div>
+          </div>
+        </details>
+
+      </div>
+
+      <footer class="next-up">
+        <p class="label">Next case due</p>
+        <a class="next-up-link" href="#">
+          <span class="next-up-title">Priya Chandran vs. State Bank Housing Finance</span>
+          <span class="next-up-meta">Active · next hearing 5 Aug 2026</span>
+        </a>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    // Progressive enhancement only: native <details name="case-run"> already
+    // gives a real, no-JS, keyboard-operable, exclusive accordion — exactly
+    // one sheet can be open at a time by construction. This script adds the
+    // one thing the shipped workspace names as missing: a designed loading
+    // state on a section switch, instead of a bare wait. It never fetches
+    // anything and never blocks the content, which is already in the DOM.
+    (function () {
+      var reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      document.querySelectorAll('.step').forEach(function (step) {
+        step.addEventListener('toggle', function () {
+          if (!step.open || step.dataset.loaded) return;
+          step.dataset.loaded = 'true';
+          if (reduce) return; // reduced motion: skip the simulated delay, show content immediately
+          var sheet = step.querySelector('.sheet');
+          if (!sheet) return;
+          sheet.classList.add('is-loading');
+          window.setTimeout(function () { sheet.classList.remove('is-loading'); }, 480);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

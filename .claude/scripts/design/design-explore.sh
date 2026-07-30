@@ -116,6 +116,16 @@ case "$CMD" in
     elif ! grep -qiE '^[[:space:]]*>?[[:space:]]*`?Director call:.*[0-9]+[[:space:]]+of[[:space:]]+(the[[:space:]]+)?7' "$EX/matrix.md"; then
       _fail "director-call-missing" "matrix.md carries no written verdict line — need a line that STARTS 'Director call:' and states the judgment, e.g. 'Director call: A/B/C differ materially on 4 of 7 dimensions — <why>.' A sentence mentioning the phrase does not count."
     fi
+    # Art-direction divergence is a SECOND, independently-failing call, same grammar and same
+    # anti-mention anchoring as above. It exists because structural divergence alone certified
+    # a run whose three variants a human could not tell apart: they differed on 7 of 7 IA
+    # dimensions and shared one flat visual language, so the loop passed pages nobody could
+    # distinguish. Three layouts in one visual language is a failed explore; before this check
+    # nothing in the pipeline could say so.
+    if [ -f "$EX/matrix.md" ] && \
+       ! grep -qiE '^[[:space:]]*>?[[:space:]]*`?Art-direction call:.*[0-9]+[[:space:]]+of[[:space:]]+(the[[:space:]]+)?4' "$EX/matrix.md"; then
+      _fail "art-call-missing" "matrix.md carries no art-direction verdict — need a line that STARTS 'Art-direction call:' and states the judgment over the 4 axes (palette · typography · density & rhythm · surface & ornament), e.g. 'Art-direction call: A/B/C differ materially on 3 of 4 axes — <why>.' Structural difference alone is not divergence."
+    fi
 
     for v in $VARIANTS; do
       d="$EX/variant-$v"
@@ -132,7 +142,22 @@ case "$CMD" in
       # still see the pixels.)
       if [ -d "$d" ]; then
         NAMES='red|blue|green|yellow|orange|purple|pink|magenta|cyan|lime|teal|navy|maroon|olive|silver|gray|grey|black|white|brown|gold|coral|salmon|crimson|indigo|violet|khaki|plum|orchid|turquoise|azure|beige|ivory|lavender|tan|fuchsia|aqua|chartreuse|tomato|wheat'
-        smuggled="$(grep -rniE "#[0-9a-f]{3,8}\b|(rgb|rgba|hsl|hsla)[[:space:]]*\(|:[[:space:]]*($NAMES)[[:space:]]*[;!}\"')]" "$d" --include='*.html' --include='*.css' --include='*.js' 2>/dev/null | grep -v "/tokens.css:" || true)"
+        COLOUR_PAT="#[0-9a-f]{3,8}\b|(rgb|rgba|hsl|hsla)[[:space:]]*\(|:[[:space:]]*($NAMES)[[:space:]]*[;!}\"')]"
+        # An HTML numeric character reference is not a colour. `&#8377;` is the rupee sign, the
+        # brief MANDATES ₹ amounts, and `#8377` matches the hex pattern exactly -- so every
+        # variant that spelled ₹ as an entity was refused for a colour it does not contain.
+        # Found on a real run, not by a constructed test: this gate had been attacked three ways
+        # for BYPASSES and never once for over-refusal, which is the same blind spot the design
+        # lint had. A gate that refuses correct work is not stricter, it is broken.
+        # Candidates come from the same grep as before; each is then re-tested with entities
+        # removed, so the reported line and line number stay exactly what the author sees.
+        smuggled="$(grep -rniE "$COLOUR_PAT" "$d" --include='*.html' --include='*.css' --include='*.js' 2>/dev/null \
+          | grep -v "/tokens.css:" \
+          | while IFS= read -r hit; do
+              printf '%s\n' "$hit" \
+                | sed 's/&#x\{0,1\}[0-9A-Fa-f]\{1,\};/ /g' \
+                | grep -qiE "$COLOUR_PAT" && printf '%s\n' "$hit"
+            done || true)"
         if [ -n "$smuggled" ]; then
           _fail "colour-literal" "variant-$v carries a colour literal outside tokens.css: $(printf '%s' "$smuggled" | head -1 | cut -c1-100)"
         fi

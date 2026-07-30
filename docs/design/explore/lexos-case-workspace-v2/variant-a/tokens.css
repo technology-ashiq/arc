@@ -1,0 +1,736 @@
+/* =====================================================================
+   variant-a — "the audit desk"
+   thesis: This product wins because the user can see every obligation
+   this case carries set row-for-row against what is already on the
+   record, and close any one of them where it stands, without opening a
+   section, reading the history, or being told which one to do first.
+
+   Structure: no tabs, no drill-in. The case is read as one set of
+   matched pairs — a required item on the left, its record entry (or
+   the void where one should be) on the right — held in row-for-row
+   alignment across a single gutter. Colour's only job on this page is
+   to encode that diff: deep petrol = on the record, vermilion = not.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   WIDTH DEPARTURE (debt 1) — recorded here, never as page prose.
+   The shipped build freezes its content column at 416px from 1024px up
+   (48rem `max-w-shell` minus a 16rem always-present actions panel minus
+   the gap) — identical at 1024px and 1280px, while the same rows render
+   at 689px on the case-list route. This variant's answer is neither
+   "reclaim the debt as one wide column" (that is variant C's answer)
+   nor "keep one column and widen the measure" (variant B's answer): it
+   deletes the actions panel outright (debt 2, below) and spends the
+   freed width on debt 1 by splitting it into two comparable-weight
+   regions read across a gutter, because the primary object here is a
+   MATCHED PAIR, not a single stream. --page-max below (78rem) is a
+   composer's judgement call, not a token carried over from anywhere —
+   two ~34.5rem panes read as a legible row-for-row comparison; a single
+   column that wide would not.
+
+   ACTIONS PANEL (debt 2) — removed outright, not merely restyled. There
+   is no 16rem rail and no global action anywhere on this page. Each
+   unmatched row on the required side carries its own single verb
+   (record / add / save / file), fired from the row itself where it
+   stands. Many affordances, each scoped to exactly one obligation —
+   never a bank of secondary buttons offered on every tab.
+   --------------------------------------------------------------------- */
+
+:root {
+  /* ---- ground & structural surface — cold, never white ------------- */
+  --ground: #e7ecf2;            /* pale blue-grey paper — the page ground */
+  --surface-recessed: #dbe3ea;  /* collapsed / quiet-fill regions (empty states, "also on record") */
+  --surface-sunken: #ccd8e1;    /* the state-preview control's own recessed track */
+  --line: #b7c2cc;              /* structural hairline rule (row + column dividers) */
+  --line-soft: #cdd7df;         /* quieter hairline — inside a stat block, footer */
+
+  /* ---- ink — a blue-black, never a warm neutral --------------------- */
+  --ink: #10202b;               /* primary text — 12.9:1 on --ground */
+  --ink-secondary: #33424c;     /* headings-adjacent / secondary prose — 8.5:1 on --ground */
+  --ink-faint: #57646d;         /* dimmest ink in the system — 5.0:1 on --ground, chosen as the
+                                    dimmest value that still clears AA, never below it */
+
+  /* ---- the two meaning hues, and nothing else -----------------------
+     petrol = on the record. vermilion = not on the record. Every place
+     either is used, a word sits beside it — colour is never the sole
+     carrier of a match state. No third hue exists in this file. */
+  --petrol: #0c3b3f;            /* on-record text — 10.1:1 on --ground */
+  --petrol-strong: #0f4448;     /* on-record solid fill (status tag, matched dot, active tab) */
+  --petrol-wash: #dbe6e3;       /* on-record tag fill, quiet */
+
+  --vermilion: #a8371c;         /* not-on-record text — 5.35:1 on --ground */
+  --vermilion-wash: #f1ded4;    /* not-on-record tag fill, quiet */
+
+  --on-fill: #eef3f4;           /* text set on --petrol-strong / --vermilion solid fills */
+
+  --focus: #10202b;             /* focus ring — reuses --ink, not a third accent */
+
+  /* ---- declared contrast pairs (text only; this variant's own floor,
+     not the brief's table, per ADR-0049) ------------------------------
+     --ink            / --ground          = 12.9:1
+     --ink-secondary  / --ground          =  8.5:1
+     --ink-faint      / --ground          =  5.0:1  (dimmest ink; still clears 4.5:1)
+     --petrol         / --ground          = 10.1:1
+     --vermilion      / --ground          =  5.35:1 (the one worth actually checking — cleared)
+     --ink-secondary  / --petrol-wash     =  ~8.0:1
+     --ink-secondary  / --vermilion-wash  =  ~8.0:1
+     --vermilion      / --vermilion-wash  =  ~5.0:1
+     --on-fill        / --petrol-strong   = >10:1
+     --on-fill        / --vermilion       =  5.35:1
+     Control-contrast (hairlines, the leader rule) is a separate,
+     non-text obligation and is not read as passing 4.5:1 by this table. */
+
+  /* ---- type: two voices on purpose ----------------------------------
+     Required side: a tight mechanical grotesk, technical and squarish.
+     Bahnschrift ships with Windows 10/11 and is a variable font with a
+     real width axis — this is not a webfont bet, it is the family the
+     render target already has installed.
+     Record side: a transitional legal serif at real reading size.
+     Cambria ships with Windows and was drawn for on-screen reading. */
+  --font-grotesk: "Bahnschrift", "Segoe UI Semibold", "Segoe UI", Arial, sans-serif;
+  --font-serif: "Cambria", Georgia, "Times New Roman", serif;
+
+  /* ---- 6 live steps. every numeral sits one step above its own label.
+     the top step is spent in exactly one place: the readiness count. */
+  --step-0: 0.75rem;    /* 12px — leader micro-labels, footer hints */
+  --step-1: 0.8125rem;  /* 13px — column headers, row labels, stat labels */
+  --step-2: 0.9375rem;  /* 15px — row body content, stat values */
+  --step-3: 1.125rem;   /* 18px — row headline weight, case identity meta */
+  --step-4: 1.5rem;     /* 24px — case title, overdue count numeral */
+  --step-5: 2.25rem;    /* 36px — readiness-count numerals ONLY */
+
+  --tracking-label: 0.09em;
+
+  /* ---- rhythm — dense, grid-aligned; the gutter is the only air ---- */
+  --page-max: 78rem;
+  --page-pad: 2rem;
+  --gutter: 3rem;       /* the one generous space on the page — read across it */
+  --row-pad-y: 0.7rem;
+
+  --radius: 2px;        /* flat: a single, barely-there radius, never a card radius */
+
+  --motion-fast: 120ms;
+  --motion-ease: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+  }
+}
+
+/* =====================================================================
+   Base
+   ===================================================================== */
+
+* { box-sizing: border-box; }
+
+html { color-scheme: light; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-grotesk);
+  font-size: var(--step-2);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+a {
+  color: inherit;
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+  top: 0;
+  background: var(--ink);
+  color: var(--on-fill);
+  padding: 0.6rem 1rem;
+  z-index: 20;
+}
+.skip-link:focus {
+  left: var(--page-pad);
+  top: var(--page-pad);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+/* rows manage their own visible focus ring, drawn on the row itself
+   rather than letting the browser default draw around inner text */
+.row:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.page {
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 2.25rem var(--page-pad) 5rem;
+}
+
+/* =====================================================================
+   Masthead — the always-visible quartet
+   ===================================================================== */
+
+.masthead-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.crumb {
+  font-size: var(--step-1);
+  color: var(--ink-faint);
+}
+.crumb a {
+  text-decoration: none;
+  border-bottom: 1px solid var(--line);
+}
+.crumb a:hover { border-bottom-color: var(--ink-secondary); }
+.crumb span { margin: 0 0.4em; }
+
+.next-case {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  min-height: 44px;
+  padding: 0.4rem 0.1rem;
+  font-size: var(--step-1);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--ink-secondary);
+  border-bottom: 1px solid transparent;
+}
+.next-case:hover,
+.next-case:focus-visible {
+  border-bottom-color: var(--ink-secondary);
+}
+
+.identity {
+  margin-top: 1.1rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.identity h1 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.05rem);
+  line-height: 1.2;
+  color: var(--ink);
+}
+.identity h1 .v {
+  font-style: italic;
+  font-weight: 400;
+  color: var(--ink-faint);
+  padding: 0 0.15em;
+}
+
+.status-tag {
+  flex-shrink: 0;
+  margin-top: 0.35em;
+  display: inline-block;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius);
+  background: var(--petrol-strong);
+  color: var(--on-fill);
+}
+.status-tag[data-status="on-hold"] {
+  background: transparent;
+  color: var(--ink-secondary);
+  border: 1px solid var(--line);
+}
+
+.identity-meta {
+  margin: 0.5rem 0 0;
+  font-size: var(--step-2);
+  color: var(--ink-secondary);
+}
+.identity-meta .sep {
+  margin: 0 0.55em;
+  color: var(--line);
+}
+
+.stat-strip {
+  margin-top: 1.4rem;
+  display: flex;
+  gap: var(--gutter);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 0.85rem 0;
+}
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.stat-label {
+  font-size: var(--step-1);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.stat-value {
+  font-size: var(--step-2);
+  font-weight: 600;
+  color: var(--ink);
+}
+.stat-value.empty {
+  color: var(--vermilion);
+  font-style: italic;
+}
+.stat-value.overdue {
+  color: var(--vermilion);
+}
+
+.readiness {
+  margin: 1.25rem 0 0;
+  font-size: var(--step-3);
+  color: var(--ink-secondary);
+}
+.readiness .num {
+  font-size: var(--step-5);
+  font-weight: 600;
+  line-height: 1;
+  vertical-align: -0.06em;
+  padding: 0 0.06em;
+}
+.readiness .num.petrol { color: var(--petrol); }
+.readiness .num.vermilion { color: var(--vermilion); }
+.readiness .dot { margin: 0 0.5em; color: var(--line); }
+
+/* =====================================================================
+   State-preview control — a tiny, clearly-separate instrument, not a
+   documentation gallery. Toggles which of the five declared states the
+   compare region below is showing; the states are the real product
+   states, not a screenshot strip.
+   ===================================================================== */
+
+.state-switch {
+  margin-top: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.5rem 0.75rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius);
+}
+.state-switch > span {
+  font-size: var(--step-0);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.state-switch button {
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  letter-spacing: 0.03em;
+  background: transparent;
+  border: none;
+  color: var(--ink-secondary);
+  min-height: 44px;
+  padding: 0.3rem 0.7rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.state-switch button[aria-pressed="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--petrol-strong);
+  font-weight: 600;
+}
+.state-switch button:hover { color: var(--ink); }
+
+/* =====================================================================
+   Compare grid — the primary object
+   ===================================================================== */
+
+.compare {
+  margin-top: 1.5rem;
+}
+
+.compare-head {
+  display: grid;
+  grid-template-columns: 1fr var(--gutter) 1fr;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--line);
+}
+.col-label {
+  font-size: var(--step-1);
+}
+.required-label {
+  font-family: var(--font-grotesk);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+}
+.record-label {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-variant-caps: small-caps;
+  color: var(--ink-secondary);
+  grid-column: 3;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr var(--gutter) 1fr;
+  align-items: start;
+  border-bottom: 1px solid var(--line);
+  padding: var(--row-pad-y) 0;
+}
+.row:first-of-type { border-top: none; }
+
+.row-required,
+.row-record {
+  min-width: 0;
+  padding-right: 0.5rem;
+}
+.row-record {
+  padding-right: 0;
+  padding-left: 0.5rem;
+}
+
+.row-label {
+  display: block;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 0.15rem;
+}
+
+.row-content {
+  margin: 0;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-2);
+  color: var(--ink);
+}
+.row-content.empty {
+  color: var(--vermilion);
+  font-style: italic;
+}
+.row-meta {
+  margin: 0.2rem 0 0;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  color: var(--ink-faint);
+}
+
+.overdue-tag {
+  display: inline-block;
+  margin-left: 0.5em;
+  font-size: var(--step-0);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--vermilion);
+  background: var(--vermilion-wash);
+  padding: 0.1em 0.4em;
+  border-radius: var(--radius);
+}
+
+/* the leader — dotted where a requirement ties to the void, solid where
+   it ties to a match already on record. this + the ring/dot glyph are
+   the page's one real ornament. */
+.leader {
+  grid-column: 2;
+  align-self: center;
+  height: 0;
+  border-top-width: 2px;
+  border-top-style: dotted;
+  border-top-color: var(--vermilion);
+  opacity: 0.55;
+}
+.row.matched .leader {
+  border-top-style: solid;
+  border-top-color: var(--petrol-strong);
+  opacity: 0.9;
+}
+
+.mark {
+  display: inline-block;
+  vertical-align: -1px;
+  margin-right: 0.5em;
+  flex-shrink: 0;
+}
+
+.void-line,
+.matched-line {
+  display: flex;
+  align-items: baseline;
+  font-family: var(--font-serif);
+  font-size: var(--step-2);
+}
+.void-line { font-style: italic; color: var(--vermilion); }
+.matched-line { color: var(--petrol); font-style: normal; font-weight: 600; }
+
+.matched-meta {
+  margin: 0.2rem 0 0 1.4em;
+  font-family: var(--font-serif);
+  font-size: var(--step-1);
+  color: var(--ink-secondary);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 0.6rem;
+  padding: 0 1rem;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--on-fill);
+  background: var(--ink);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+.action:hover { background: var(--petrol-strong); }
+.action[disabled] {
+  background: transparent;
+  color: var(--ink-faint);
+  border: 1px solid var(--line);
+  cursor: not-allowed;
+}
+
+/* also on record — collapsed, quiet, at the foot */
+.also-on-record {
+  margin-top: 1.25rem;
+}
+.also-on-record summary {
+  display: flex;
+  align-items: center;
+  gap: 0.6em;
+  min-height: 44px;
+  cursor: pointer;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  font-weight: 600;
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--ink-secondary);
+  list-style: none;
+}
+.also-on-record summary::-webkit-details-marker { display: none; }
+.also-on-record summary .chev {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.also-on-record[open] summary .chev { transform: rotate(90deg); }
+.also-on-record .count {
+  font-size: var(--step-0);
+  font-weight: 600;
+  color: var(--petrol);
+  background: var(--petrol-wash);
+  padding: 0.1em 0.45em;
+  border-radius: var(--radius);
+}
+
+.also-list {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem 1rem;
+  background: var(--surface-recessed);
+  border-radius: var(--radius);
+  list-style: none;
+}
+.also-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  font-family: var(--font-serif);
+  font-size: var(--step-2);
+  color: var(--ink-secondary);
+}
+.also-list li:last-child { border-bottom: none; }
+.also-list .entry-actions {
+  flex-shrink: 0;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-0);
+  letter-spacing: 0.03em;
+}
+.also-list .entry-actions a {
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  padding: 0.2em 0;
+}
+.also-list .link-edit { color: var(--ink-secondary); }
+.also-list .link-edit:hover { border-bottom-color: var(--ink-secondary); }
+.also-list .link-remove { color: var(--vermilion); margin-left: 0.9em; }
+.also-list .link-remove:hover { border-bottom-color: var(--vermilion); }
+
+/* =====================================================================
+   State panels: loading / empty / error / disabled
+   ===================================================================== */
+
+.state-panel[hidden] { display: none; }
+
+/* loading */
+.skel-row {
+  display: grid;
+  grid-template-columns: 1fr var(--gutter) 1fr;
+  padding: var(--row-pad-y) 0;
+  border-bottom: 1px solid var(--line);
+}
+.skel-bar {
+  height: 0.85em;
+  border-radius: var(--radius);
+  background: var(--surface-recessed);
+}
+.skel-bar + .skel-bar { margin-top: 0.5rem; }
+.skel-bar.w-40 { width: 40%; }
+.skel-bar.w-60 { width: 60%; }
+.skel-bar.w-30 { width: 30%; }
+@media (prefers-reduced-motion: no-preference) {
+  .skel-bar {
+    background-image: linear-gradient(
+      90deg,
+      var(--surface-recessed) 0%,
+      var(--surface-sunken) 50%,
+      var(--surface-recessed) 100%
+    );
+    background-size: 200% 100%;
+    animation: skel-sheen 1.6s ease-in-out infinite;
+  }
+}
+@keyframes skel-sheen {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* empty — left-aligned on a quiet fill, never centred, never dashed */
+.panel-empty {
+  padding: 1.25rem 1.5rem;
+  background: var(--surface-recessed);
+  border-radius: var(--radius);
+}
+.panel-empty p {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--step-3);
+  color: var(--ink);
+}
+.panel-empty p + p {
+  margin-top: 0.35rem;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  color: var(--ink-faint);
+}
+
+/* error — reuses vermilion; no third hue is introduced for failure */
+.panel-error .row {
+  border-bottom: 1px solid var(--line);
+}
+.error-banner {
+  margin-top: 0.6rem;
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  color: var(--vermilion);
+}
+
+/* disabled — an on-hold case: content stays legible, actions go inert */
+.disabled-banner {
+  margin-bottom: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--surface-recessed);
+  border-radius: var(--radius);
+  font-family: var(--font-grotesk);
+  font-size: var(--step-1);
+  color: var(--ink-secondary);
+}
+
+/* =====================================================================
+   Footer hint bar — the expert path, stated plainly
+   ===================================================================== */
+
+.hint-bar {
+  margin-top: 2.5rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+  font-size: var(--step-0);
+  color: var(--ink-faint);
+}
+.hint-bar kbd {
+  font-family: var(--font-grotesk);
+  font-size: inherit;
+  background: var(--surface-recessed);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.05em 0.4em;
+  color: var(--ink-secondary);
+}
+
+/* =====================================================================
+   Mobile reflow — the pair stacks per ROW, never per region
+   ===================================================================== */
+
+@media (max-width: 760px) {
+  .page { padding: 1.5rem 1.25rem 4rem; }
+
+  .compare-head { display: none; } /* each row restates its own labels */
+
+  .row,
+  .skel-row {
+    grid-template-columns: 1fr;
+    row-gap: 0.5rem;
+  }
+  .row-record { padding-left: 0; margin-top: 0.25rem; }
+  .leader {
+    grid-column: 1;
+    height: 1.1rem;
+    width: 0;
+    border-top: none;
+    border-left-width: 2px;
+    border-left-style: dotted;
+    border-left-color: var(--vermilion);
+    margin-left: 0.15rem;
+    opacity: 0.55;
+  }
+  .row.matched .leader {
+    border-left-style: solid;
+    border-left-color: var(--petrol-strong);
+  }
+  .stat-strip { gap: 1.75rem; flex-wrap: wrap; }
+}

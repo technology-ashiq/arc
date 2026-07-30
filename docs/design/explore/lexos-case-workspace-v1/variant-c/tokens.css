@@ -1,0 +1,63 @@
+/*
+  variant-c — guided workflow (steps, progressive disclosure)
+
+  Thesis: This product wins because the user can advance a case by taking
+  the single action its current position demands, without choosing between
+  four identical buttons or judging for himself what the case is waiting on.
+
+  Every value below is copied verbatim from
+  docs/design/explore/lexos-case-workspace-v1/tokens-reference.md
+  (LexOS tailwind.config.ts, base revision 4784ac9). Nothing here is invented
+  and nothing is changed — including max-w-shell, held at 48rem per the
+  director ruling: the panel was deleted, the token was not touched.
+  Colour lives here and only here; index.html references var(--...) only.
+*/
+
+:root {
+  /* surface — what a thing sits on */
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --surface-sunken: #f3f4f6;
+  --surface-strong: #e5e7eb;
+  --surface-inverse: #111827;
+
+  /* ink — what a thing is written in */
+  --ink: #111827;
+  --ink-subtle: #374151;
+  --ink-muted: #4b5563;
+  --ink-deep: #030712;
+  --ink-faint: #6b7280;
+  --ink-inverse: #ffffff;
+
+  /* line — what separates things */
+  --line: #e5e7eb;
+  --line-strong: #d1d5db;
+
+  /* danger — the one tone that means wrong */
+  --danger: #b91c1c;
+  --danger-strong: #991b1b;
+  --danger-deep: #7f1d1d;
+  --danger-edge: #dc2626;
+  --danger-line: #fca5a5;
+  --danger-surface: #fef2f2;
+
+  /* warning */
+  --warning-strong: #78350f;
+  --warning-line: #fde68a;
+  --warning-surface: #fffbeb;
+
+  /* success */
+  --success-strong: #166534;
+  --success-line: #bbf7d0;
+  --success-surface: #f0fdf4;
+
+  /* disabled — the single dead surface that is still legible. 4.83:1 under
+     white, earned on purpose in the Phase-2 review. This variant uses it
+     more than most: two of three run steps are genuinely disabled until
+     the step ahead of them is done. Not a defect. Do not "improve" it. */
+  --disabled: #6b7280;
+
+  /* non-colour */
+  --radius: 0.375rem;      /* one radius token, everywhere */
+  --shell-max: 48rem;      /* max-w-shell — unchanged. The panel was the bug. */
+}

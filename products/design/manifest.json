@@ -26,6 +26,10 @@
     {
       "src": "docs/templates/design-brief-template.md",
       "dest": "docs/templates/design-brief-template.md"
+    },
+    {
+      "src": "docs/templates/design-library-entry-template.md",
+      "dest": "docs/templates/design-library-entry-template.md"
     }
   ]
 }

@@ -61,3 +61,4 @@ AGENTS.md
 
 # Planner-bench output (large, regenerable — not committed despite the evidence rule above)
 docs/evidence/planner-bench/
+.gstack/

@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — LexOS</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ---------- reset + base ---------- */
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--surface-sunken);
+    color: var(--ink);
+    line-height: 1.5;
+  }
+  a{ color: var(--ink-subtle); }
+  h1,h2,h3,p,dl,dd,dt,ol,ul{ margin:0; padding:0; }
+  .tabular{ font-variant-numeric: tabular-nums; }
+
+  .visually-hidden{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  .skip-link{
+    position:absolute; left:-999px; top:0; background:var(--ink);
+    color:var(--ink-inverse); padding:0.75rem 1rem; z-index:30; border-radius: var(--radius);
+  }
+  .skip-link:focus{ left:0.5rem; top:0.5rem; }
+
+  :focus-visible{ outline: 2px solid var(--ink); outline-offset: 2px; }
+
+  *{ transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
+  @media (prefers-reduced-motion: reduce){ *{ transition: none !important; } }
+
+  .shell{ max-width: var(--shell-max); margin: 0 auto; padding: 1.5rem 1.5rem 3rem; }
+
+  /* ---------- topbar (not sticky — scrolls away; the status strip below is what persists) ---------- */
+  .topbar{ background: var(--surface-inverse); }
+  .topbar__inner{
+    display:flex; align-items:center; gap:0.6rem;
+    padding-top:0.85rem; padding-bottom:0.85rem;
+  }
+  .topbar__brand{ color: var(--ink-inverse); font-weight:700; letter-spacing:0.02em; }
+  .topbar__sep{ color: var(--ink-faint); }
+  .topbar__crumb{ color: var(--surface-strong); text-decoration:underline; }
+
+  /* ---------- status strip — sticky. this IS the "fixed status line": parties,
+     status, case number, next hearing, overdue count and the current step's
+     precondition never scroll out of view. ---------- */
+  .status-strip{
+    position: sticky; top: 0; z-index: 20;
+    background: var(--surface); border-bottom: 1px solid var(--line);
+  }
+  .status-strip__inner{ max-width: var(--shell-max); margin:0 auto; padding: 1rem 1.5rem; }
+  .status-strip__top{
+    display:flex; justify-content:space-between; align-items:flex-start;
+    gap:1rem; flex-wrap:wrap;
+  }
+  /* parties wraps in full — never truncated, never clipped, at any width */
+  .status-strip__parties{
+    font-size:1.2rem; font-weight:700; color:var(--ink);
+    overflow-wrap:break-word; max-width: 34rem;
+  }
+
+  .badge{
+    display:inline-flex; align-items:center; padding:0.3rem 0.65rem;
+    border-radius: var(--radius); font-size:0.8rem; font-weight:600;
+    border:1px solid; white-space:nowrap; min-height:28px;
+  }
+  .badge--active{ background:var(--success-surface); color:var(--success-strong); border-color:var(--success-line); }
+  .badge--onhold{ background:var(--warning-surface); color:var(--warning-strong); border-color:var(--warning-line); }
+  .badge--intake{ background:var(--surface-muted); color:var(--ink-muted); border-color:var(--line); }
+  .badge--closed{ background:var(--surface-strong); color:var(--ink-subtle); border-color:var(--line-strong); }
+
+  .quartet{
+    display:grid; grid-template-columns: repeat(3, 1fr); gap:0.65rem 1.5rem;
+    margin:0.85rem 0 0;
+  }
+  .quartet__field{ display:flex; flex-direction:column; gap:0.2rem; }
+  .quartet__label{ font-size:0.76rem; color:var(--ink-muted); }
+  .quartet__value{ font-size:0.98rem; color:var(--ink); }
+  .is-empty{ color: var(--ink-faint); }
+  .is-alert{ color: var(--danger); font-weight:700; }
+
+  .precondition{
+    margin-top:0.75rem; padding-top:0.65rem; border-top:1px solid var(--line);
+    color: var(--ink); font-size:0.9rem;
+  }
+  .precondition__label{ color: var(--ink-muted); font-weight:600; margin-right:0.35rem; }
+
+  /* supplementary case detail — not part of the mandated always-visible
+     quartet, so it lives in normal document flow: visible on load, scrolls
+     with the page rather than pinned. */
+  .case-detail-line{
+    color: var(--ink-muted); font-size:0.9rem; margin: 0 0 1.5rem;
+    padding-bottom:1rem; border-bottom:1px solid var(--line);
+  }
+  .dot{ color: var(--ink-faint); }
+
+  /* ---------- key legend ---------- */
+  .key-legend{
+    display:flex; flex-wrap:wrap; gap:0.4rem 1.5rem; align-items:baseline;
+    padding:0 0 1rem; margin-bottom:1rem; border-bottom:1px solid var(--line);
+    font-size:0.85rem; color:var(--ink-muted);
+  }
+  .key-legend__title{
+    font-weight:700; color:var(--ink); text-transform:uppercase;
+    font-size:0.7rem; letter-spacing:0.05em; flex-basis:100%;
+  }
+  kbd{
+    background:var(--surface-sunken); border:1px solid var(--line-strong);
+    border-radius: var(--radius); padding:0.1rem 0.45rem; font-family:inherit;
+    font-size:0.8rem; color:var(--ink);
+  }
+
+  .run__return-note{ color: var(--ink-muted); font-size:0.85rem; margin-bottom:1rem; }
+
+  /* ---------- step rail ---------- */
+  .step-rail__list{
+    display:flex; list-style:none; gap:0.6rem; margin:0 0 1.5rem;
+  }
+  .step-rail__item{
+    flex:1; border-top:3px solid var(--line); padding-top:0.6rem; color:var(--ink-muted);
+  }
+  .step-rail__item.is-current{ border-top-color:var(--ink); color:var(--ink); font-weight:700; }
+  .step-rail__item.is-blocked{ color: var(--disabled); }
+  .step-rail__item.is-done{ border-top-color:var(--ink); color:var(--ink-muted); }
+  .step-rail__link{
+    display:flex; flex-direction:column; gap:0.25rem; text-decoration:none;
+    color:inherit; min-height:44px; padding:0.25rem 0;
+  }
+  .step-rail__index{ font-size:0.75rem; }
+  .step-rail__name{ font-size:0.9rem; }
+
+  .step-rail--compact{ display:none; }
+
+  /* ---------- run + steps ---------- */
+  /* scroll-margin-top keeps anchor-jumped and script-scrolled targets clear
+     of the sticky status strip above them */
+  .step, details.disclosure{ scroll-margin-top: 12rem; }
+
+  .step{
+    border:1px solid var(--line); border-radius: var(--radius);
+    padding:1.25rem; margin-bottom:0.85rem; background: var(--surface);
+  }
+  .step--open{ border-color: var(--ink); }
+  /* blocked steps stay on the plain white surface, not a muted fill — the
+     disabled token's cleared 4.83:1 ratio is measured against white, so the
+     background stays white and only the border + text carry the dimming */
+  .step--blocked{ background: var(--surface); border-color: var(--line); }
+  .step__num{
+    color: var(--ink-faint); font-weight:500; font-size:0.85rem; margin-right:0.5rem;
+  }
+  .step--blocked .step__num{ color: var(--disabled); }
+  .step__title{ font-size:1.05rem; margin-bottom:0.9rem; }
+  .step--blocked .step__title{ color: var(--disabled); margin-bottom:0.4rem; }
+  .step__reason{ color: var(--disabled); font-size:0.92rem; }
+
+  .btn-primary{
+    background: var(--surface-inverse); color: var(--ink-inverse); border:none;
+    border-radius: var(--radius); padding:0.75rem 1.35rem; font-size:1rem;
+    font-weight:600; min-height:44px; cursor:pointer;
+  }
+  .btn-primary:hover{ background: var(--ink-subtle); }
+  .btn-primary:active{ background: var(--ink-deep); }
+
+  /* ---------- disclosures ---------- */
+  details.disclosure{
+    border:1px solid var(--line); border-radius: var(--radius);
+    padding:0 1rem; margin-bottom:0.75rem; background: var(--surface);
+  }
+  details.disclosure summary{
+    padding:0.85rem 0; cursor:pointer; font-weight:600; color:var(--ink);
+    list-style:none; min-height:44px; display:flex; align-items:center;
+  }
+  details.disclosure summary::-webkit-details-marker{ display:none; }
+  details.disclosure summary::before{ content:"+"; margin-right:0.6rem; color:var(--ink-muted); width:0.7rem; display:inline-block; }
+  details.disclosure[open] summary::before{ content:"–"; }
+
+  .history-list, .record-list{ list-style:none; padding:0 0 1rem; }
+  .history-row, .record-row{
+    display:grid; grid-template-columns: 7rem 1fr; gap:0.5rem;
+    padding:0.6rem 0; border-top:1px solid var(--line); font-size:0.9rem; color:var(--ink);
+  }
+  .history-row:first-child, .record-row:first-child{ border-top:none; }
+
+  .tag-overdue{
+    display:inline-block; margin-left:0.5rem; background: var(--danger-surface);
+    color: var(--danger-strong); border:1px solid var(--danger-line);
+    border-radius: var(--radius); padding:0.05rem 0.4rem; font-size:0.72rem; font-weight:600;
+  }
+
+  .link{ color: var(--ink-subtle); text-decoration:underline; text-underline-offset:2px; margin-left:0.75rem; }
+  .link-danger{
+    color: var(--danger); text-decoration:underline; text-underline-offset:2px;
+    font-weight:700; margin-left:0.75rem;
+  }
+
+  /* ---------- appendix / state matrix ---------- */
+  .appendix{ margin-top:2.5rem; padding-top:1.5rem; border-top:2px solid var(--line-strong); }
+  .appendix__title{ font-size:1.1rem; margin-bottom:0.4rem; }
+  .appendix__intro{ color: var(--ink-muted); font-size:0.9rem; max-width:42rem; margin-bottom:1.25rem; }
+  .appendix__subtitle{
+    font-size:0.78rem; text-transform:uppercase; letter-spacing:0.05em;
+    color: var(--ink-muted); margin:1.5rem 0 0.75rem;
+  }
+  .appendix__note{ color: var(--ink-muted); font-size:0.85rem; margin-top:0.75rem; }
+  .gallery-grid{ display:grid; grid-template-columns: repeat(2, 1fr); gap:1rem; margin-bottom:0.5rem; }
+  .gallery-card{
+    background: var(--surface-muted); border:1px solid var(--line);
+    border-radius: var(--radius); padding:1rem; font-size:0.9rem; color:var(--ink);
+  }
+  .gallery-card__label{
+    font-size:0.68rem; text-transform:uppercase; letter-spacing:0.05em;
+    color: var(--ink-muted); margin-bottom:0.5rem;
+  }
+  .gallery-card__name{ font-weight:600; margin-bottom:0.2rem; }
+  .gallery-card__meta{ margin-top:0.3rem; color: var(--ink-muted); }
+  .error-panel{ background: var(--danger-surface); border-color: var(--danger-line); color: var(--danger-strong); }
+  .error-panel .gallery-card__label{ color: var(--danger-strong); }
+
+  .skeleton{ display:flex; flex-direction:column; gap:0.5rem; }
+  .skeleton__bar{ display:block; height:0.9rem; background: var(--surface-strong); border-radius: var(--radius); }
+  .skeleton__bar--a{ width:70%; } .skeleton__bar--b{ width:45%; } .skeleton__bar--c{ width:30%; }
+  .skeleton__bar--d{ width:60%; } .skeleton__bar--e{ width:35%; }
+
+  .run__end-banner{ margin-top:0.85rem; font-weight:600; color: var(--ink); }
+
+  .page-footer{
+    color: var(--ink-faint); font-size:0.8rem; padding:1rem 1.5rem 2rem;
+    border-top:1px solid var(--line); margin-top:2rem; max-width: var(--shell-max); margin-left:auto; margin-right:auto;
+  }
+
+  /* ---------- mobile: one step per screen ---------- */
+  @media (max-width: 640px){
+    .step-rail--full{ display:none; }
+    .step-rail--compact{
+      display:block; font-size:0.95rem; color:var(--ink); font-weight:600;
+      padding:0.75rem 0; border-top:3px solid var(--ink); border-bottom:1px solid var(--line);
+      margin-bottom:1.5rem;
+    }
+    .step-rail__compact-index{ color: var(--ink-muted); font-weight:400; margin-right:0.4rem; }
+    .status-strip__top{ flex-direction:column; align-items:flex-start; }
+    .status-strip__parties{ max-width: 100%; }
+    .quartet{ grid-template-columns: 1fr; }
+    .gallery-grid{ grid-template-columns: 1fr; }
+    .history-row, .record-row{ grid-template-columns: 5.5rem 1fr; }
+    .step, details.disclosure{ scroll-margin-top: 15rem; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to case</a>
+
+<div class="topbar">
+  <div class="shell topbar__inner">
+    <span class="topbar__brand">LexOS</span>
+    <span class="topbar__sep" aria-hidden="true">/</span>
+    <a class="topbar__crumb" href="#">Cases</a>
+  </div>
+</div>
+
+<header class="status-strip" aria-label="Case status — always visible">
+  <div class="status-strip__inner">
+    <div class="status-strip__top">
+      <h1 class="status-strip__parties">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</h1>
+      <span class="badge badge--active">Active</span>
+    </div>
+
+    <dl class="quartet">
+      <div class="quartet__field">
+        <dt class="quartet__label">Case number</dt>
+        <dd class="quartet__value tabular">O.S. No. 412 of 2024</dd>
+      </div>
+      <div class="quartet__field">
+        <dt class="quartet__label">Next hearing</dt>
+        <dd class="quartet__value is-empty">Not set</dd>
+      </div>
+      <div class="quartet__field">
+        <dt class="quartet__label">Overdue</dt>
+        <dd class="quartet__value is-alert tabular">2</dd>
+      </div>
+    </dl>
+
+    <p class="precondition">
+      <span class="precondition__label">Waiting on</span>
+      Hearing held <time datetime="2026-07-14" class="tabular">14 Jul 2026</time> · outcome not recorded
+    </p>
+  </div>
+</header>
+
+<main id="main" class="shell">
+
+  <p class="case-detail-line">
+    <span>City Civil Court, Bengaluru</span><span class="dot" aria-hidden="true"> · </span>
+    <span>Civil suit</span><span class="dot" aria-hidden="true"> · </span>
+    <span>Client Meera Raghunathan</span><span class="dot" aria-hidden="true"> · </span>
+    <span>Claim <span class="tabular">₹18,45,000</span></span>
+  </p>
+
+  <nav class="step-rail step-rail--full" aria-label="Case run steps">
+    <ol class="step-rail__list">
+      <li class="step-rail__item is-current">
+        <a class="step-rail__link" href="#step-1" aria-current="step">
+          <span class="step-rail__index">Step 1</span>
+          <span class="step-rail__name">Hearing outcome</span>
+        </a>
+      </li>
+      <li class="step-rail__item is-blocked">
+        <a class="step-rail__link" href="#step-2">
+          <span class="step-rail__index">Step 2</span>
+          <span class="step-rail__name">Next hearing</span>
+        </a>
+      </li>
+      <li class="step-rail__item is-blocked">
+        <a class="step-rail__link" href="#step-3">
+          <span class="step-rail__index">Step 3</span>
+          <span class="step-rail__name">Documents</span>
+        </a>
+      </li>
+    </ol>
+  </nav>
+  <p class="step-rail step-rail--compact">
+    <span class="step-rail__compact-index">Step 1 of 3</span>Hearing outcome
+  </p>
+
+  <p class="run__return-note">Return opens at Hearing outcome.</p>
+
+  <div class="key-legend">
+    <span class="key-legend__title">Keys</span>
+    <span class="key-legend__item"><kbd>Enter</kbd> — fire the current step's action</span>
+    <span class="key-legend__item"><kbd>→</kbd> — move to next step</span>
+    <span class="key-legend__item"><kbd>←</kbd> — move to previous step</span>
+  </div>
+
+  <section class="run" aria-label="Case run">
+    <h2 class="visually-hidden">Current run</h2>
+
+    <article id="step-1" class="step step--open">
+      <h3 class="step__title"><span class="step__num">Step 1</span>Hearing outcome</h3>
+      <button type="button" class="btn-primary">Record hearing outcome</button>
+    </article>
+
+    <article id="step-2" class="step step--blocked">
+      <h3 class="step__title"><span class="step__num">Step 2</span>Next hearing</h3>
+      <p class="step__reason">Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.</p>
+    </article>
+
+    <article id="step-3" class="step step--blocked">
+      <h3 class="step__title"><span class="step__num">Step 3</span>Documents</h3>
+      <p class="step__reason">Cannot determine which documents are due before the next hearing until one is added.</p>
+    </article>
+
+    <details class="disclosure" id="hearing-history">
+      <summary>Full hearing history</summary>
+      <ol class="history-list">
+        <li class="history-row"><time datetime="2026-02-10" class="tabular">10 Feb 2026</time><span>Outcome recorded</span></li>
+        <li class="history-row"><time datetime="2026-05-19" class="tabular">19 May 2026</time><span>Outcome recorded</span></li>
+        <li class="history-row"><time datetime="2026-07-14" class="tabular">14 Jul 2026</time><span>Outcome not recorded</span></li>
+      </ol>
+    </details>
+
+    <details class="disclosure">
+      <summary>Recent record</summary>
+      <ul class="record-list">
+        <li class="record-row"><time datetime="2026-07-02" class="tabular">02 Jul 2026</time><span>Fee received · <span class="tabular">₹42,500</span></span></li>
+        <li class="record-row"><time datetime="2026-07-08" class="tabular">08 Jul 2026</time><span>Document filed · Written statement</span></li>
+        <li class="record-row">
+          <time datetime="2026-07-16" class="tabular">16 Jul 2026</time>
+          <span>Note added · Client confirmed alternate address for service of notice.
+            <a href="#" class="link">Edit note</a><a href="#" class="link-danger">Remove this note — cannot be undone</a>
+          </span>
+        </li>
+        <li class="record-row"><time datetime="2026-07-21" class="tabular">21 Jul 2026</time><span>Task due · Collect certified copy of sale deed from client<span class="tag-overdue">Overdue</span></span></li>
+        <li class="record-row"><time datetime="2026-07-24" class="tabular">24 Jul 2026</time><span>Document due · Affidavit<span class="tag-overdue">Overdue</span></span></li>
+      </ul>
+    </details>
+  </section>
+
+  <section class="appendix" aria-label="State matrix reference">
+    <h2 class="appendix__title">Reference — state matrix</h2>
+    <p class="appendix__intro">
+      Five states are declared for the case header and for each step: empty, loading, error, success, disabled.
+      Success and disabled are live above — Step 1 open awaiting its action, Steps 2 and 3 disabled with a stated
+      reason. The remaining states follow, drawn from other cases in the same list.
+    </p>
+
+    <h3 class="appendix__subtitle">Case header</h3>
+    <div class="gallery-grid">
+      <div class="gallery-card">
+        <p class="gallery-card__label">Empty</p>
+        <p class="gallery-card__name">Latha Bhaskaran</p>
+        <p class="gallery-card__meta">Case number <span class="is-empty">Not set</span></p>
+        <span class="badge badge--intake">Intake</span>
+        <p class="gallery-card__meta">Next hearing <span class="is-empty">Not set</span> · Overdue <span class="tabular">0</span></p>
+      </div>
+
+      <div class="gallery-card">
+        <p class="gallery-card__label">Loading</p>
+        <div class="skeleton">
+          <span class="skeleton__bar skeleton__bar--a"></span>
+          <span class="skeleton__bar skeleton__bar--b"></span>
+          <span class="skeleton__bar skeleton__bar--c"></span>
+        </div>
+      </div>
+
+      <div class="gallery-card error-panel">
+        <p class="gallery-card__label">Error</p>
+        <p>Case could not be loaded. Reload the page, or try again.</p>
+      </div>
+
+      <div class="gallery-card">
+        <p class="gallery-card__label">Disabled</p>
+        <p class="gallery-card__name">Sundaram Finance Ltd. v. R. Palaniappan</p>
+        <p class="gallery-card__meta">E.P. No. 63 of 2026</p>
+        <span class="badge badge--onhold">On hold</span>
+        <p class="gallery-card__meta">Actions are disabled while the case is on hold.</p>
+      </div>
+    </div>
+
+    <h3 class="appendix__subtitle">A step (Hearing outcome)</h3>
+    <div class="gallery-grid">
+      <div class="gallery-card">
+        <p class="gallery-card__label">Empty</p>
+        <p>No hearing recorded yet.</p>
+      </div>
+      <div class="gallery-card">
+        <p class="gallery-card__label">Loading</p>
+        <div class="skeleton">
+          <span class="skeleton__bar skeleton__bar--d"></span>
+          <span class="skeleton__bar skeleton__bar--e"></span>
+        </div>
+      </div>
+      <div class="gallery-card error-panel">
+        <p class="gallery-card__label">Error</p>
+        <p>Could not record the hearing outcome. The next hearing stays blocked. Try again.</p>
+      </div>
+      <div class="gallery-card">
+        <p class="gallery-card__label">Success</p>
+        <p>Hearing outcome — recorded <time datetime="2026-05-19" class="tabular">19 May 2026</time></p>
+      </div>
+    </div>
+
+    <h3 class="appendix__subtitle">Run — end state (reference)</h3>
+    <div class="gallery-card">
+      <ol class="step-rail__list">
+        <li class="step-rail__item is-done"><span class="step-rail__index">Step 1</span><span class="step-rail__name">Hearing outcome</span></li>
+        <li class="step-rail__item is-done"><span class="step-rail__index">Step 2</span><span class="step-rail__name">Next hearing</span></li>
+        <li class="step-rail__item is-done"><span class="step-rail__index">Step 3</span><span class="step-rail__name">Documents</span></li>
+      </ol>
+      <p class="run__end-banner">Nothing due until <time datetime="2026-08-12" class="tabular">12 Aug 2026</time>.</p>
+      <p class="appendix__note">Reference — once a run reaches this end state, the same <kbd>Enter</kbd> key advances to the next case awaiting action: Vishnu Menon v. Ashirvad Developers, next hearing <time datetime="2026-08-04" class="tabular">04 Aug 2026</time>, 0 overdue.</p>
+    </div>
+  </section>
+
+</main>
+
+<footer class="page-footer">LexOS — case workspace</footer>
+
+<script>
+(function(){
+  var rail = Array.prototype.slice.call(document.querySelectorAll('.step-rail--full .step-rail__link'));
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var scrollBehavior = reduceMotion ? 'auto' : 'smooth';
+  var interactiveTags = ['A', 'BUTTON', 'SUMMARY', 'INPUT', 'TEXTAREA', 'SELECT'];
+
+  function focusRailStep(idx){
+    if (!rail.length) return;
+    idx = Math.max(0, Math.min(rail.length - 1, idx));
+    var target = rail[idx];
+    target.focus();
+    target.scrollIntoView({ behavior: scrollBehavior, block: 'center' });
+  }
+
+  document.addEventListener('keydown', function(e){
+    var ae = document.activeElement;
+    var tag = ae ? ae.tagName : '';
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      var current = rail.indexOf(ae);
+      if (current === -1) current = 0;
+      e.preventDefault();
+      focusRailStep(e.key === 'ArrowRight' ? current + 1 : current - 1);
+      return;
+    }
+
+    if (e.key === 'Enter') {
+      // A focused link, button or disclosure summary handles Enter natively —
+      // this binding only fires the visible primary action when nothing else
+      // is already focused to receive it (e.g. focus is still on the body).
+      if (interactiveTags.indexOf(tag) !== -1) return;
+      var btn = document.querySelector('.btn-primary');
+      if (btn) {
+        e.preventDefault();
+        btn.focus();
+        btn.click();
+      }
+    }
+  });
+
+  var primary = document.querySelector('.btn-primary');
+  if (primary) {
+    primary.addEventListener('click', function(){
+      var history = document.getElementById('hearing-history');
+      if (history) {
+        history.open = true;
+        history.scrollIntoView({ behavior: scrollBehavior, block: 'start' });
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

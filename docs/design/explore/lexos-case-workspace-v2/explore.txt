@@ -1,0 +1,4 @@
+id=lexos-case-workspace-v2
+brief=docs/design/briefs/lexos-case-workspace/brief.md
+base=ab35046
+isolation=route-namespace (ADR-0037 fallback, phase-open decision 2026-07-29)

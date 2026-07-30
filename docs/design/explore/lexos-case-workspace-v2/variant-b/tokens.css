@@ -1,0 +1,190 @@
+/**
+ * LexOS case workspace — variant B — "the printed case diary"
+ * ============================================================
+ * THESIS: the user can read the case's whole life as one dated record and
+ * write the next fact at its head, without ever choosing a category for the
+ * thing he is looking for or for the thing he is about to add.
+ *
+ * Every colour, every type step, every space and every rule the page uses is
+ * declared once here, as a custom property, and referenced with var(...) in
+ * index.html. Nothing in the page is a bare hex or a bare px.
+ * ------------------------------------------------------------------------
+ *
+ * FONT STACK — why this order, and why it is safe with no network request.
+ * "Palatino Linotype" and "Book Antiqua" ship as OS-level fonts on Windows
+ * (not an Office-only install) and were, historically, Microsoft's own demo
+ * faces for old-style figures and small caps — which only makes sense if
+ * their DEFAULT figure style is lining and `font-variant-numeric:
+ * oldstyle-nums` is a visible alternate, which is exactly the contrast this
+ * direction needs (lining in the date columns, old-style in prose). Next in
+ * the stack: Constantia and Cambria, the two book-weight serifs Windows has
+ * shipped at the OS level since Vista (the "ClearType Font Collection" —
+ * genuinely present, not merely bundled with Office). Last: Georgia and
+ * Times New Roman, universal safety nets. Every name in this stack resolves
+ * locally on Windows; none of it is fetched, so there is no failure mode
+ * where the page silently becomes Arial. If a given box's copy of Palatino
+ * Linotype turns out to lack the onum/smcp OpenType tables, the CSS below
+ * degrades to plain lining figures and browser-synthesised small caps —
+ * quieter, never broken, never a network stall.
+ */
+:root {
+  /* ---------------------------------------------------------------- *
+   * COLOUR — an oat paper, a warm ink, and exactly one structural hue.
+   * Contrast ratios below are computed against --paper (#f2e9d8, relative
+   * luminance 0.821), the WCAG 2.1 formula, text pairs only.
+   * ---------------------------------------------------------------- */
+  --paper: #f2e9d8;        /* warm oat — the page itself, full bleed, never pure white */
+  --ink: #2a2018;          /* warm near-black — primary text. 13.2:1 on paper */
+  --ink-muted: #5f5140;    /* secondary prose: byline, meta, hints. 6.4:1 on paper */
+  --ink-faint: #6b5c46;    /* the dimmest ink that still passes AA: folio, footers. 5.4:1 on paper */
+  --oxblood: #7c1f24;      /* THE one structural hue. Spent only on: every date, and
+                               anything not yet recorded (an empty field, a failed save).
+                               Never spent on status, emphasis or decoration. 8.5:1 on paper */
+  --rule-sepia: #967d55;   /* every rule on the page — the only device used to separate
+                               anything. 3.25:1 vs paper (non-text; hairlines are structural,
+                               not textual content, so the 4.5:1 text floor does not apply —
+                               same reasoning the brief gives for line-strong) */
+  --rule-sepia-soft: #c2ab82; /* the one quieter hairline, under the composer only */
+  --focus-ring: var(--ink);   /* visible focus, everywhere, at 13.2:1 — never oxblood:
+                                  a focus ring is not a date and is not unrecorded */
+
+  /* ---------------------------------------------------------------- *
+   * TYPE — one editorial serif, seven live steps. Every step below is
+   * actually used on the page at least once (see index.html comments
+   * marking each occurrence).
+   * ---------------------------------------------------------------- */
+  --font-serif: "Palatino Linotype", "Book Antiqua", Constantia, Cambria, Georgia,
+    "Times New Roman", serif;
+
+  --step-0: 0.6875rem; /* 11px — the running folio head */
+  --step-1: 0.8125rem; /* 13px — marginalia labels (hearing/document/task/note),
+                            file meta, appendix microcopy */
+  --step-2: 0.9375rem; /* 15px — secondary meta: byline, purpose · judge, due lines */
+  --step-3: 1.125rem;  /* 18px — body prose: notes, hearing notes, description.
+                            the genuine reading size */
+  --step-4: 1.375rem;  /* 22px — glance values, the composer's lede, the next-case link */
+  --step-5: 2.125rem;  /* 34px — the dated period head, large enough to pace the page */
+  --step-6: 2.75rem;   /* 44px — the case title */
+
+  --tracking-caps: 0.09em;   /* small-caps marginalia need the extra air to read as caps */
+  --leading-tight: 1.15;     /* period heads, the case title */
+  --leading-normal: 1.4;     /* meta lines, marginalia */
+  --leading-prose: 1.65;     /* body prose at reading size */
+
+  --weight-normal: 400;
+  --weight-medium: 600;
+  --weight-bold: 700;
+
+  /* ---------------------------------------------------------------- *
+   * SPACE — the air is the instrument. Small inside an entry, large
+   * between one dated period and the next; nothing in between.
+   * ---------------------------------------------------------------- */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1.1rem;   /* between entries sharing one period — stays tight */
+  --space-md: 1.75rem;
+  --space-lg: 3.25rem;  /* between one period and the next — the instrument */
+  --space-xl: 4.5rem;   /* between the page's major sections */
+  --space-2xl: 6rem;
+
+  /* ---------------------------------------------------------------- *
+   * LAYOUT
+   *
+   * WIDTH DEPARTURE (see brief, "Not fixed, and why" #1 — the 416px content
+   * column). That number was a fixed 16rem actions panel living inside a
+   * 48rem shell. This thesis removes the actions panel entirely — the four
+   * quick actions become one composer at the head of the record
+   * (index.html .composer) — so there is no second column left to compete
+   * with the record for width, and no reason to inherit the old shell's cap
+   * along with it. --page-max is sized for what THIS layout needs: an 8rem
+   * marginalia column + a ~36rem prose measure + a 1.5rem gutter = 45.5rem,
+   * plus breathing room. It is wider than the old shell on purpose, and —
+   * because nothing here is a fixed side panel — it does not regress at
+   * 1024px/1280px the way the five-tab rail did; the record simply has more
+   * air on a wider glass, the same air that is this direction's instrument.
+   * ---------------------------------------------------------------- */
+  --page-max: 50rem;
+  --page-pad: 2rem;
+  --page-pad-mobile: 1.25rem;
+  --measure-prose: 36rem;   /* prose paragraphs cap here even inside a wider column */
+  --col-margin: 8rem;       /* the marginalia column, desktop */
+  --col-gap: 1.5rem;
+
+  /* ---------------------------------------------------------------- *
+   * RULES + THE ONE ORNAMENT
+   * ---------------------------------------------------------------- */
+  --rule-w: 1px;
+  --rule-w-strong: 2px;
+  /* The fold's flanking rules fade at their outer edge — the one gradient
+     on this page, and it carries a meaning: the soft edge between the
+     record already made and the days still to come. Not a hero, not
+     decoration on its own — it dresses the SAME element the ornament
+     (the section mark, "§") already marks. */
+  --fold-rule: linear-gradient(
+    to right,
+    transparent,
+    var(--rule-sepia) 20%,
+    var(--rule-sepia) 80%,
+    transparent
+  );
+
+  /* ---------------------------------------------------------------- *
+   * MOTION — colour/opacity only, short, and gated off entirely under
+   * reduced motion (see the media query at the foot of this file).
+   * ---------------------------------------------------------------- */
+  --motion-fast: 150ms;
+  --motion-ease: ease-out;
+}
+
+/* ---------------------------------------------------------------- *
+ * BASE RESET — minimal, foundational, not a component.
+ * ---------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+}
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-serif);
+  font-size: var(--step-3);
+  line-height: var(--leading-prose);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* No sans-serif anywhere in content, by construction: every element on the
+   page inherits --font-serif and nothing overrides it to a sans stack. */
+
+a {
+  color: inherit;
+}
+
+/* Visible focus, everywhere, at full ink contrast — never suppressed. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* Reduced motion honoured by construction: every transition in the page's
+   own <style> is colour/opacity/max-height only and duration var(--motion-fast);
+   this blanket rule removes all of it, and any pulse animation, the instant
+   the user has asked for less motion — not merely slower. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

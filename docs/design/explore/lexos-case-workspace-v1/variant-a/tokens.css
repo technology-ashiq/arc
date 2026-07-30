@@ -1,0 +1,63 @@
+/*
+  variant-a tokens — the ONLY place colour values live for this variant.
+  thesis: This product wins because the user can see and record into all four
+  of a case's sections at once at full viewport width, without a tab switch or
+  an actions panel standing between him and the row he needs to write.
+
+  Every value below is copied verbatim from
+  docs/design/explore/lexos-case-workspace-v1/tokens-reference.md
+  (LexOS tailwind.config.ts @ 4784ac9). No hex is invented here, and none is
+  used anywhere in index.html except through these custom properties.
+
+  Departure on record: --max-w-shell (48rem) is kept below for the record,
+  but this route does NOT use it as its width. --board-max (96rem) governs
+  this page instead, because the thesis requires two-to-four ledgers side by
+  side at >=1024px, which 48rem cannot hold. No other token changes. The same
+  statement, in reader-facing language, is printed on the page itself.
+*/
+
+:root {
+  /* surface — what a thing sits ON */
+  --surface: #ffffff;
+  --surface-muted: #f9fafb;
+  --surface-sunken: #f3f4f6;
+  --surface-strong: #e5e7eb;
+  --surface-inverse: #111827;
+
+  /* ink — what a thing is WRITTEN in */
+  --ink: #111827;
+  --ink-subtle: #374151;
+  --ink-muted: #4b5563;
+  --ink-deep: #030712;
+  --ink-faint: #6b7280; /* dimmest ink still AA — no token below this */
+  --ink-inverse: #ffffff;
+
+  /* line — what separates things */
+  --line: #e5e7eb;
+  --line-strong: #d1d5db; /* control border, owed 3:1, not a text pair */
+
+  /* danger — the one tone that means "wrong" */
+  --danger: #b91c1c;
+  --danger-strong: #991b1b;
+  --danger-deep: #7f1d1d;
+  --danger-edge: #dc2626;
+  --danger-line: #fca5a5;
+  --danger-surface: #fef2f2;
+
+  /* warning / success — status tone; the badge always carries a label too */
+  --warning-strong: #78350f;
+  --warning-line: #fde68a;
+  --warning-surface: #fffbeb;
+  --success-strong: #166534;
+  --success-line: #bbf7d0;
+  --success-surface: #f0fdf4;
+
+  /* disabled — the single dead surface that is still legible. 4.83:1 under
+     white, earned deliberately in the Phase-2 review. Not a defect. */
+  --disabled: #6b7280;
+
+  /* non-colour: one radius, and the two widths this page reasons about */
+  --radius: 0.375rem;
+  --max-w-shell: 48rem; /* kept for the record — this route does not use it */
+  --board-max: 96rem;   /* what this route uses instead; reason is on-page */
+}
