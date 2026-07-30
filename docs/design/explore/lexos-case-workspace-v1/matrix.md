@@ -335,6 +335,15 @@ differs from B and C on the dimension, but it is the closest A comes to the base
   panel was the bug." Obeyed exactly; the whole 416px → 768px gain comes from deleting the panel.
 - No other token changes in any of the three.
 
+> **Pointer, appended 2026-07-30 — this section describes the pages AS BUILT and is left intact
+> as that record.** The `.width-note` paragraph (A) and the `.measure-note` block (B) were
+> **removed from the pages before blind-test packaging** by owner decision — see AMENDMENT 2 in
+> `phases/phase-03-spec.md`. The token declarations themselves are untouched and still carry
+> their comments in each `tokens.css`; only the on-page prose was stripped, because
+> `max-w-shell` is meaningless to an external respondent and only two of the three pages carried
+> such a note. The director's ruling above is not amended — what each variant was licensed to do,
+> and did, is unchanged.
+
 ## The composers' self-reports, judged rather than taken on trust
 
 1. **A wired its keyboard model as real DOM focus movement — verified, not accepted on trust.**

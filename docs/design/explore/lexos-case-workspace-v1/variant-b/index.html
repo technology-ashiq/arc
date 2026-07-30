@@ -171,18 +171,6 @@
   .badge-onhold { color: var(--warning-strong); background: var(--warning-surface); border-color: var(--warning-line); }
   .badge-closed { color: var(--ink-inverse); background: var(--disabled); border-color: var(--disabled); }
 
-  /* ---------- measure departure note (declared on-page) ---------- */
-  .measure-note {
-    margin-top: 1rem;
-    padding: 0.75rem 1rem;
-    border-left: 3px solid var(--line-strong);
-    background: var(--surface-muted);
-    color: var(--ink-muted);
-    font-size: 0.8125rem;
-    line-height: 1.55;
-  }
-  .measure-note strong { color: var(--ink); font-weight: 600; }
-
   /* ---------- compose: the one affordance, at the head ---------- */
   .compose {
     margin-top: 1.5rem;
@@ -652,13 +640,6 @@
       </div>
     </div>
   </section>
-
-  <p class="measure-note">
-    <strong>Measure note.</strong> This record reads at 56rem, wider than the workspace default
-    of 48rem (<code>max-w-shell</code>). The case route drops the fixed actions column; the extra
-    width is spent entirely on the record's line length &mdash; it does not open a second region.
-    This departure applies to this route only.
-  </p>
 
   <!-- the one compose affordance, at the head of the record -->
   <details class="compose">

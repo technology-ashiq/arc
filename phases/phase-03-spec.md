@@ -8,7 +8,7 @@
 
 - [ ] Library schema + first entries: every entry typed (Pattern/Craft/Brand/Anti) + tagged (domain · user type · platform · interaction problem · confidence · outcome) — untagged observations rejected; principle recorded, never just the screenshot
 - [ ] LexOS pilot: the **2** companion drafts re-read fresh (`docs/design/2026-07-26-dashboard-clients.md`, `docs/design/2026-07-27-case-workspace.md` — the plan said 4; that count came from this cycle's kickoff and never from the frozen design source, see the corrected ledger row); pilot brief upgraded (primary object **answered: case, not client**, by a real LexOS lawyer 2026-07-29, receipt `01KYQ9B2BXMXWWADZZYVWXEGRT` — NOT the PROVISIONAL fallback; platform contract: desktop Y · mobile Y · tablet N · keyboard-first Y · reduced-motion Y); full loop run on the real LexOS stack
-- [ ] Blind test launched: 3 directions packaged blind (arc origin undisclosed); Stream A + Stream B requests actually sent; two evidence files created to receive results
+- [ ] Blind test launched: 3 directions packaged blind (arc origin undisclosed) — **packaging includes stripping the `max-w-shell` width-departure notes from variant-a and variant-b (variant-c has none), owner decision 2026-07-30, see AMENDMENT 2 below**; Stream A + Stream B requests actually sent; two evidence files created to receive results ✅ (`docs/design/blind-test/lexos-case-workspace-v1/`)
 - [x] Pick + prediction receipts on the spine; outcome-evidence path (`note.logged`) documented
       — pick `variant-b` + falsifiable prediction sealed 2026-07-30 (`decision.recorded`
       `01KYRX3HYM2BYMHKEZZD1RDHN9` deciding approval `01KYRX33C27326BSZJAWVEVR3E`); outcome path
@@ -78,6 +78,23 @@ tooling beyond the documented `note.logged` path.
   narrows the criterion, and the owner chose it knowing that. What is genuinely NOT proven by this
   run: that a chosen direction survives contact with the real data layer and the real routing.
   That belongs to whoever implements the pick, and it is not evidence this phase can claim.
+
+- **AMENDMENT 2 (owner, 2026-07-30) — the width-departure notes are stripped before packaging.**
+  variant-a and variant-b each print an on-page note declaring their `max-w-shell` departure;
+  **variant-c prints none** because it stays inside 48rem. A's note sits *above the H1* — the first
+  thing on its page — and juror 1's lead reason for ranking b over a was exactly that. Routed via
+  `/arc-change` and classed **trivial & in-scope**: it adds no capability and creates no REQ, it is
+  a packaging step already implied by "3 directions packaged blind."
+  - **Why strip:** `max-w-shell` is meaningless jargon to a lawyer and internal scaffolding to a
+    designer. Leaving it in makes two of three directions carry a handicap the third does not,
+    which biases the very comparison the streams exist to make.
+  - **What this costs, stated rather than absorbed:** the artifact external judges see is **no
+    longer byte-identical to the artifact the critic passed.** The delta must be recorded exactly
+    (which lines, which files, new render hashes), and variant-a and variant-b must be
+    **re-critiqued after the strip** — a PASS on the pre-strip bytes is not a PASS on what gets
+    sent. variant-c is unchanged and is not re-critiqued.
+  - **Not proven by this run either way:** whether the notes would have changed a respondent's
+    ranking. Stripping removes a suspected bias; it does not measure one.
 
 **Still owed by the owner — due before the blind-test launch criterion, NOT before the phase
 opens:**

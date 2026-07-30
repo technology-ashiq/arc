@@ -418,10 +418,71 @@ response tables. Nothing in them may be filled by anyone but a real respondent. 
 records the distinction the ledger row already narrowed to: the lawyer answering the brief question
 is **not** the same ask as sitting the test.
 
-**Step 4 (blind-test launch) is now the only build step left, and what remains of it is owner
-items only:** the Stream-A channel, the lawyer's willingness to sit the test, and the width-note
-packaging call below. The evidence-file half of criterion 3 is done; the "requests actually SENT"
-half is not, and that is the half the criterion is really about.
+**Step 4 (blind-test launch) is the only build step left.** The evidence-file half of criterion 3
+is done; the "requests actually SENT" half is not, and that is the half the criterion is really
+about. Owner items still outstanding: the Stream-A channel and the lawyer's willingness to sit
+the test.
+
+**WIDTH-NOTE CALL — decided by the owner 2026-07-30: STRIP.** Routed via `/arc-change`, classed
+**trivial & in-scope** (no capability added, no REQ created — it is a packaging step already
+implied by criterion 3's "3 directions packaged blind"). Recorded as AMENDMENT 2 in
+`phases/phase-03-spec.md`. No assumption-ledger trigger fires: the nearest row is about
+*recruiting* the streams at ₹0, not about what gets packaged. Appetite position at the decision:
+**2.0 of 5 days = 40% burnt**, kill tripwire is 2.5 days with Phase 1 not done and Phase 1 IS
+done — so no tripwire, and this change does not move the position.
+- **What it costs, recorded rather than absorbed:** the artifact external judges see is **no
+  longer byte-identical to the artifact the critic passed.** So variant-a and variant-b get
+  **re-critiqued after the strip** — a PASS on pre-strip bytes is not a PASS on what gets sent,
+  and sending un-verified artifacts to the one external evidence stream REQ-01 depends on is
+  exactly the "looks like evidence and is not" failure this cycle exists to prevent. variant-c is
+  untouched and is not re-critiqued.
+- **Not proven either way:** whether the notes would actually have changed a respondent's ranking.
+  Stripping removes a *suspected* bias. It does not measure one, and this run must not claim it did.
+
+**STRIP DONE, and it is clean — 22 deletions, only the two intended files moved.** variant-a lost
+3 lines (the `<p class="width-note">` above its H1 plus its two now-dead CSS rules); variant-b lost
+19 (the `.measure-note` block and its CSS); variant-c untouched. `design-explore check` still OK.
+`matrix.md` describes the pages AS BUILT and was deliberately NOT rewritten — erasing the notes
+from the director's record would falsify what was built; a dated pointer to AMENDMENT 2 was
+appended instead. The token declarations are untouched and still carry their comments in each
+`tokens.css`; only on-page prose went. Remaining `max-w-shell` mentions live in `matrix.md`,
+`tokens-reference.md`, a ranking and CSS comments — none render, so none reach a respondent.
+
+**variant-a re-critiqued post-strip: PASS, 0 VIOLATION** (1 WEAKNESS, 1 POLISH), ledger stamped
+for `258533c`, hash `5e4cf063` → `b69d9d17`. The critic checked the seam specifically and found
+**no artifact** — no collapsed margin, no orphaned wrapper, no stretched gap downstream; the H1 is
+now simply the first element under the header's own padding.
+
+**🔴 BLOCKED — variant-b cannot currently be packaged, and this is a real finding, not a retry
+problem.** The picked variant does not render reproducibly after the strip. Measured, not guessed:
+
+| Variant | Renders | Result |
+|---|---|---|
+| a (stripped) | 4 | `b69d9d17` on 4/4, zero refusals |
+| c (untouched) | 2 | `68b2e14c` on 2/2 — unchanged from before the strip, which also re-confirms determinism |
+| **b (stripped)** | ~11 | `ad50b562` ×6 · **`295dd98e` ×1** · **REFUSED ×4** |
+
+So the strip did not break rendering in general — **variant-b is specifically fragile**, and it was
+already the uniquely-sensitive variant in #57 (the only one declaring its own `font-family`, so the
+injection moved its pixels without moving its document height).
+
+**The part that matters beyond this run: `295dd98e` PASSED the #57 stable shutter.** The shutter
+shoots twice and publishes only a hash both captures agree on — so it guarantees *two captures
+within one run agree*, which is **not** the same as *runs are reproducible*. A page that settles
+into a second consistent state clears the shutter and gets a receipt that no later run will
+reproduce. That is a residual hole in the #57 fix, found in real use rather than in a fixture, and
+it is the same class of defect the tracker already warned about: "shipping on 6/6 green in a probe
+would have re-sealed the same class of unreproducible hash with more confidence behind it."
+
+**Not done, deliberately:** variant-b's post-strip critique was NOT run and no receipt was sealed
+on it. Sealing a hash that a later run will not reproduce is exactly the Phase-02 mistake this
+cycle already made once (`52e507ee`, corrected on the spine). The marker was released cleanly after
+each refusal — `begin` un-arms on render failure, as designed, and that path is now confirmed in
+the wild.
+
+**Owner call needed before packaging can finish** — this is a renderer defect on the critical path,
+not a design question, and fixing it is an `/arc-fix-issue` job with its own root-cause + red-first
+test, which is not a call this session may take unilaterally mid-phase.
 
 **Open question that must be answered BEFORE packaging, raised 2026-07-30:** variant-a and
 variant-b each carry an on-page note declaring their `max-w-shell` departure; **variant-c carries

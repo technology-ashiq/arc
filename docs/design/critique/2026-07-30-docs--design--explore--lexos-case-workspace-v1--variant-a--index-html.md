@@ -1,29 +1,56 @@
 # Design critique — variant A, LexOS case workspace explore
 
 - target: `docs/design/explore/lexos-case-workspace-v1/variant-a/index.html`
-- screenshot_sha256: `5e4cf06334992fc85d8275ff2343bf82b4ce2d8ef6f7e128676a9b7fbcfc486c`
+- screenshot_sha256: `b69d9d175785bb0d26449989e4c84e81f5b39306f029a74cd9c1a212174649d3`
 - viewport: `1440x900@1`
-- brief: `docs/design/briefs/lexos-case-workspace/brief.md` · thesis: `docs/design/explore/lexos-case-workspace-v1/variant-a/thesis.txt` · matrix: `docs/design/explore/lexos-case-workspace-v1/matrix.md`
+- brief: `docs/design/briefs/lexos-case-workspace/brief.md`
 
 ## What I looked at
-The full-page desktop render at 1440×900 — case header, sticky ledger-jump nav, the four-ledger board (Hearings/Documents/Tasks/Notes), the states-appendix (5 states × 5 surfaces), and the printed keyboard legend — plus the page source and `tokens.css` to check the keyboard bindings and colour tokens against the brief's declared pairs. No mobile render was provided for this run, so the required mobile reflow is a gap I cannot judge from vision, not a pass or a fail. Interactive states (a real `:focus-visible` ring, reduced-motion in effect, sticky scroll behaviour) are likewise not observable in a single static full-page capture and are not claimed here either way.
+Full-page flattened capture at 1440×900, light mode, animations off — the sticky case header +
+ledger-jump nav, the four-up Hearings/Documents/Tasks/Notes board, the five-state reference
+block, and the printed keyboard legend, top to bottom of the rendered PNG. This is a fresh sweep
+against all four contracts, verifying the post-strip render after the `width-note` paragraph and
+its two dead CSS rules were removed from the top of the sticky header (screenshot hash moved
+`5e4cf063` → `b69d9d17`).
 
 ## Findings
 
-- WEAKNESS: the `max-w-shell` departure note is the very first line on the page, positioned above the case title — a small administrative aside about a CSS token reads before the primary object (the case) does. It doesn't overpower the title visually (it's small and muted), but it wins the reading-order race the primary object should win. Location: top of page, above `h1.case-title`.
-- WEAKNESS: the overdue count of "2" is made of a task row flagged `Overdue` (red) and a document row flagged `Not filed` (red) — only one of the two actually uses the word "overdue," so a lawyer scanning the two red flags to account for the quartet's "2" has to infer that "Not filed" past its due date is the second one, rather than reading it directly. Location: Tasks ledger row "File written submissions" vs. Documents ledger row "Reply affidavit."
-- WEAKNESS: the printed keyboard legend describes `n` as "Show the next case due this week," but the wired handler toggles the strip open and closed on repeat presses — the legend documents a one-way reveal for a two-way toggle. Location: keyboard legend `dt n` vs. the `case "n"` handler in the inline script.
-- WEAKNESS: the page states "Returning to this case focuses the ledger carrying the overdue count — Tasks, here — rather than wherever the view was last left," but I found no code path in this fixture that implements or exercises a return-to-case behaviour — there is no link away from the case and back to test it against. It reads as a documented intention rather than a demonstrated one, which is exactly the class of self-reported claim this pass is supposed to catch rather than take on trust. Location: `.return-note` paragraph under the keyboard legend.
-- WEAKNESS: three of the four ledgers' inline add-rows read "+ File a document" / "+ Add a task" / "+ Add a note," but the Hearings ledger's add-row instead re-uses the mandated "Next hearing / Not set" empty field as its entry point with no "+" prefix — a defensible choice (it's carrying the required empty-field display at the same time) but it breaks the visual pattern a reader has just learned from the other three ledgers. Location: first row of each of the four ledgers.
-- POLISH: two buttons read "Add hearing" at the same time — one in the case header (top right) and one in the Hearings ledger header — doing the identical action. Coincidental here (the case's one open need happens to be a hearing), but on a case where the case-level primary differs from a ledger verb, this pairing would look like an accidental duplicate rather than a coincidence.
-- POLISH: the ledger-jump nav (1 Hearings · 2 Documents · 3 Tasks · 4 Notes) is a horizontal row of pill-shaped links that reads like a tab bar at a glance, even though it only jump-scrolls and hides nothing — momentarily undercuts the "no tab switch" thesis before the eye reaches the four simultaneous ledgers below it.
-- POLISH: the states-appendix's On-hold and Intake reference cards describe those statuses in plain sentence text ("— Intake", "— On hold") rather than rendering the actual badge component shown for the live Active case, so this artifact never shows what an On-hold or Intake badge looks like.
+- WEAKNESS: the quiet inline "+ File a document / + Add a task / + Add a note" row-links and the
+  "Retry" links inside each error-state card read as slim single-line text controls, visually
+  shorter than the primary/secondary buttons elsewhere on the page — they may fall under the
+  brief's 44px target-size floor. Suspicion only, not a measured claim — verify with design-lint.
+- POLISH: the "Reference — the five states" block's framing prose ("illustrated here rather than
+  duplicated live… rather than invented") reads as internal design-process narration rather than
+  either the case record's court-record voice or plain documentation copy — worth a tighter,
+  less self-referential rewrite given this page is headed to a blind panel outside arc, in the
+  same spirit as the width-note removal that prompted this pass.
 
 ## What is working
 
-- The thesis is genuinely built, not just claimed: all four ledgers (Hearings, Documents, Tasks, Notes) render as simultaneous regions at full board width with no tab switch and no actions panel — confirmed on the render, matching variant A's assigned "command center" thesis.
-- I checked the keyboard model directly in the script rather than trusting the legend: the `switch (e.key)` block binds `1`/`2`/`3`/`4`/`j`/`k`/`a`/`n`/`Escape` exactly once each, with no duplicate case, and a typing-target guard correctly suppresses the global shortcuts while an input or textarea has focus. This is the highest-value check on this page and it holds clean.
-- The always-visible quartet (parties, case number, status, next hearing, overdue count) and the "Next hearing — Not set" empty field are both on screen without a click, and the `max-w-shell` departure is declared on the page with its stated reason, exactly as licensed to this variant and not exceeded further.
-- The full five-state matrix (empty · loading · error · success · disabled) is demonstrated for the case header and all four ledgers — a complete, honestly-labelled reference set rather than an implied one.
+The deletion left no visible seam. The H1 is now the literal first element under the sticky
+header's own padding; the two identity lines and the status/next-hearing/overdue trio below it
+keep the same tight, even rhythm they had before; and nothing downstream — tab rail, four-card
+board, reference block, keyboard legend — shows a stretched gap, a doubled rule, or a collapsed
+margin where the paragraph used to sit. I checked the current markup directly: `case-title-row`
+is the first child inside `case-header-inner`, with no orphaned wrapper left behind.
 
-Contrast notes: every text colour I can see maps to one of the brief's eleven declared fg/bg pairs (verified by reading `tokens.css`, not by eye) — I have no suspicion to raise beyond what the brief itself already pre-cleared as intentional (the dimmest ink and the disabled token). One combination outside the declared 11 exists in the stylesheet (`--ink-subtle` on `--surface-strong`, the unused `badge-intake`/`badge-onhold` styling), but it is not rendered as a live badge anywhere on this page, so I'm not raising it as a suspicion against pixels that were never painted.
+Case identity is complete and untruncated — full party names ("Meera Raghunathan v. Sunvale
+Housing Pvt. Ltd."), O.S. number, court, case type, client name, and claim amount all render in
+full. The always-visible quartet (identity, status, next hearing, overdue count) is intact and
+reads first, matching the interaction-model contract — status is "Active" via a labelled badge,
+next hearing shows the explicit empty value "Not set" rather than being omitted, and overdue "2"
+sits under its own "OVERDUE" text label so colour is reinforcement, not the sole carrier.
+
+Content contract holds throughout: statuses render as title-case labels (Active, Intake, On
+hold) never a raw enum; currency uses Indian digit grouping (₹18,45,000); dates match the
+declared `27 Jul 2026` format; row separators use `·` consistently, including the documents row
+the brief flagged as inconsistent in the shipped build; verbs used ("Add hearing," "File
+document," "Add task," "Add note") are all in the brief's shipped-verb list. No drop shadows, no
+gradient hero, no emoji iconography, no centred dashed empty states, no lorem ipsum, no invented
+court vocabulary — the flat, hairline-bordered, unhurried system the brief describes is intact.
+
+I did not observe a violation of the interaction model, art direction, platform contract, or
+content contract anywhere on this render. Two platform-contract surfaces — mobile, and any
+behaviour that only shows at scroll time or on focus/interaction (live stickiness,
+`:focus-visible`, reduced-motion) — are declared but not observable from this single flattened
+desktop capture. That is a run gap, not a pass or a fail, and is not counted as a finding.
