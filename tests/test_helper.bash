@@ -180,6 +180,7 @@ _arc_tracker_sandbox() {
   cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/review-ledger.sh" "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/arc-profile.sh"   "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
+  cp "$ARC_CORE_SRC/lane-resolve.sh"  "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_ROOT/.claude/scripts/plan/arc-evidence.sh" "$SANDBOX/.claude/scripts/plan/"
   cd "$SANDBOX" || return 1
   git init -q
@@ -212,6 +213,58 @@ EOF
   git add -A && git commit -qm "seed tracker"
   export CLAUDE_PROJECT_DIR="$SANDBOX"
 }
+
+# Sandbox for the LANE RESOLVER (Cycle 4 portfolio, REQ-01 / ADR-0054). Carries
+# both implementations so the equivalence gate can run them side by side.
+_arc_lane_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-lane.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts/core"
+  cp "$ARC_CORE_SRC/lane-resolve.sh"  "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
+  cp "$ARC_CORE_SRC/lane-resolve.mjs" "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
+  cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
+  cd "$SANDBOX" || return 1
+  git init -q
+  git config user.name  arc-test
+  git config user.email test@arc.local
+  echo seed > seed.txt
+  git add -A && git commit -qm seed
+}
+
+# Create initiatives/<name>/ with a machine-header PROGRESS.md.
+# Usage: _arc_make_lane <name> <status> [cycle]
+_arc_make_lane() {
+  local name="$1" st="$2" cycle="${3:-test cycle}" d="$SANDBOX/initiatives/$1"
+  mkdir -p "$d"
+  cat > "$d/PROGRESS.md" <<EOF
+# PROGRESS.md — $name
+
+status: $st
+cycle: $cycle
+phase: 00 — fixture
+appetite: 3d
+burn: 0d
+blocked-on: —
+depends-on: —
+
+## Phase table
+
+| Phase | Capability | Appetite | Status |
+|---|---|---|---|
+| 00 | fixture | 1 day | in progress |
+
+## Now
+
+**Position:** fixture.
+EOF
+}
+
+# Run BOTH resolver implementations with identical args.
+# _arc_lane_sh / _arc_lane_mjs echo the raw stdout; status lands in $status via `run`.
+_arc_lane_sh()  { bash "$SANDBOX/.claude/scripts/core/lane-resolve.sh"  --root "$SANDBOX" "$@"; }
+_arc_lane_mjs() { node "$SANDBOX/.claude/scripts/core/lane-resolve.mjs" --root "$SANDBOX" "$@"; }
+
+# Read one KEY=value field out of resolver output held in $output.
+_arc_field() { printf '%s\n' "$output" | sed -n "s/^$1=//p" | head -n1; }
 
 # DECLARED normalization for root-mode goldens (the gate-transform rule: a gate
 # that transforms what it measures must declare what the transform destroys).

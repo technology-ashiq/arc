@@ -23,12 +23,31 @@
  *
  * NOTE: the vague-acceptance gate and placeholder detection are HEURISTICS — they catch
  * common failure shapes, not all of them. A pass is structural, not a quality guarantee.
- * Usage: node .claude/scripts/plan/kickoff-lint.mjs [repo-root]
+ * Usage: node .claude/scripts/plan/kickoff-lint.mjs [repo-root] [--lane NAME]
+ *
+ * DUAL-MODE (Cycle 4, ADR-0054): the plan being linted lives at the repo root
+ * (root-mode — byte-identical to pre-portfolio arc, the permanent consumer
+ * contract) or inside initiatives/<lane>/ (lane-mode). Two roots, deliberately:
+ * `root` is the COMPANY layer (docs/adr, docs/retro-log — single, never per-lane,
+ * ADR-0053) and `troot` is the TRACKER (PLAN.md, PROGRESS.md, phases/). In
+ * root-mode they are the same directory and nothing about this script changes.
  */
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { resolveLane, renderHuman, parseLaneArgs } from "../core/lane-resolve.mjs";
 
-const root = process.argv[2] || ".";
+const cli = parseLaneArgs(process.argv.slice(2));
+const root = cli.root || cli.positionals[0] || ".";
+const laneRes = resolveLane({ root, lane: cli.lane, laneGiven: cli.laneGiven, surface: "lint" });
+if (laneRes.code !== 0) {
+  for (const line of renderHuman(laneRes)) console.error(line);
+  process.exit(laneRes.code);
+}
+// Canonical output order (ADR-0054): the lane echo comes FIRST — wrong-lane risk is
+// addressed before anything else is printed. Root-mode prints nothing at all.
+if (laneRes.mode === "lane") console.log(`Selected lane: ${laneRes.lane} (via ${laneRes.via})`);
+const troot = laneRes.mode === "root" ? root : join(root, laneRes.tracker);
+
 const failures = [];
 const warnings = [];
 const fail = (check, msg) => failures.push(`[${check}] ${msg}`);
@@ -36,7 +55,9 @@ const warn = (check, msg) => warnings.push(`[${check}] ${msg}`);
 let trialStatusLine = ""; // v4 F1: set once TRIAL/SUBSTANCE are known; printed by report()
 
 // ---------- helpers ----------
-const read = (p) => readFileSync(join(root, p), "utf8");
+const read = (p) => readFileSync(join(root, p), "utf8");     // company layer (docs/**)
+const readT = (p) => readFileSync(join(troot, p), "utf8");   // tracker (PLAN/PROGRESS/phases)
+const existsT = (p) => existsSync(join(troot, p));
 const pad = (n) => String(n).padStart(2, "0");
 const normLine = (l) => l.replace(/\s+/g, " ").trim();
 
@@ -76,11 +97,11 @@ function hasContent(body) {
 }
 
 // ---------- 1. PLAN.md exists ----------
-if (!existsSync(join(root, "PLAN.md"))) {
+if (!existsT("PLAN.md")) {
   fail("plan-exists", "PLAN.md not found — run /arc-kickoff first");
   report();
 }
-const plan = read("PLAN.md");
+const plan = readT("PLAN.md");
 const secs = sections(plan);
 
 // ---------- 2. required sections non-empty ----------
@@ -202,7 +223,7 @@ for (const r of phaseRows) {
   phaseNums.push(n);
   if (/next cycle|parked/i.test(r.join(" "))) nextCycle.add(n);
   const specPath = `phases/phase-${pad(n)}-spec.md`;
-  if (!existsSync(join(root, specPath))) fail("phases", `${specPath} missing (phase ${n})`);
+  if (!existsT(specPath)) fail("phases", `${specPath} missing (phase ${n})`);
   if (n > 0 && !reqPhases.has(n))
     fail(
       "phases",
@@ -218,8 +239,8 @@ const specTexts = new Map(); // n -> spec file text (reused by v3.5 checks)
 const depGraph = new Map();
 for (const n of phaseNums) {
   const specPath = `phases/phase-${pad(n)}-spec.md`;
-  if (!existsSync(join(root, specPath))) continue; // missing spec already failed above
-  const spec = read(specPath);
+  if (!existsT(specPath)) continue; // missing spec already failed above
+  const spec = readT(specPath);
   specTexts.set(n, spec);
   const depLine = spec.match(/\*\*Depends on:\*\*\s*(.+)/);
   if (!depLine) {
@@ -356,7 +377,7 @@ adrRows.forEach((r) => {
   const statusLine = (adr.match(/\*\*Status:\*\*.*$/m) || [""])[0];
   if (/\bDEFERRED\b/.test(statusLine)) {
     const p0Path = "phases/phase-00-spec.md";
-    const p0 = existsSync(join(root, p0Path)) ? read(p0Path) : "";
+    const p0 = existsT(p0Path) ? readT(p0Path) : "";
     if (!(/spike/i.test(p0) && p0.includes(num)))
       fail("spike", `ADR ${num} is DEFERRED but ${p0Path} has no spike task referencing ${num} — a deferred decision needs its scheduled spike (blocks Phase-0 close)`);
   }
@@ -454,8 +475,8 @@ if (!existsSync(join(root, "docs", "retro-log.md")))
   warn("retro-log", "docs/retro-log.md missing — pre-mortem has no history to seed (copy docs/templates/retro-log.md)");
 
 // ---------- 12. PROGRESS.md exists with ## Now ----------
-if (!existsSync(join(root, "PROGRESS.md"))) fail("progress", "PROGRESS.md not found");
-else if (!/##\s*Now/i.test(read("PROGRESS.md"))) fail("progress", "PROGRESS.md missing '## Now' section");
+if (!existsT("PROGRESS.md")) fail("progress", "PROGRESS.md not found");
+else if (!/##\s*Now/i.test(readT("PROGRESS.md"))) fail("progress", "PROGRESS.md missing '## Now' section");
 
 report();
 
