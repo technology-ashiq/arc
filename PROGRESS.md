@@ -365,14 +365,49 @@ Finding 3 is the dangerous one: sooner or later someone will read "process gone"
 delete a marker that is doing its job, and the critic will be unbounded at exactly that moment.
 Routing to `/arc-retro`, not fixed here — changing an ADR-0034 mechanism is an owner call.
 
-**Recommended next action: the OWNER's pick + falsifiable prediction (REQ-07).** All five blocked
-dispatches are done and every artifact the pick needs is on disk — 3 renders, 2 round-2 critiques
-(both PASS), 3 blind rankings. The pick is not a call this session may make, and the prediction
-must be falsifiable: the two blind-test streams later either match it or do not, and a prediction
-that cannot be wrong makes that evidence worthless. The jury's 2–1 for variant-b is an input to
-the pick, not the pick itself — read the caveat on A's margin above before treating the gap as
-real. After the pick, step 4 (blind-test launch) still needs the Stream-A channel and the lawyer's
-willingness to sit the test; both are owner items and both gate the phase CLOSE, not the build.
+**Phase 03 step 3 — CLOSED. Owner picked `variant-b` 2026-07-30 and the prediction is sealed.**
+`approval.requested` `01KYRX33C27326BSZJAWVEVR3E` → `decision.recorded`
+`01KYRX3HYM2BYMHKEZZD1RDHN9`, verdict `approve`, reason 850 bytes. REQ-07's last acceptance clause
+("owner decision + falsifiable prediction emitted as `decision.recorded`") is satisfied on the
+spine, not in prose.
+
+**The prediction, and why it is shaped this way.** It predicts a *disagreement between the two
+streams*, not a winner: lawyers (Stream B) rank variant-b first, design peers (Stream A) do not —
+Stream A puts variant-c first, because c's one-action restraint reads as craft to a design eye and
+as a withheld case record to someone who has to work the file. **Falsified if** Stream B ranks a
+or c first, **or** Stream A ranks b first. A secondary, non-falsifying claim names the *reason*
+lawyers will reject a — action density, not looks. Two properties were deliberate: it survives
+n=1 on Stream B (no "majority of N" clause, because the recruit may be a single lawyer), and
+**being wrong is informative rather than fatal** — if designers also pick b, the divergence claim
+dies but arc's loop looks better, not worse. A prediction whose refutation teaches nothing is not
+worth sealing.
+
+**Receipt-shape constraints discovered while sealing, worth knowing before the next one:**
+`decision.recorded` has a CLOSED payload (`decides` | `verdict` | `reason` only), `decides` must
+be the ULID of a real `approval.requested`, `reason` is capped at 2000 bytes and **rejects control
+characters — so the whole pick and prediction must be one single line**. And a second decision on
+the same approval collides as `DUP_IDEM`: **an owner decision can be recorded exactly once, and
+cannot be re-worded.** That is why the wording was confirmed with the owner before emission rather
+than after.
+
+**Found while sealing, unrelated and unactioned:** approval `01KYPNSS1DRN8E07TSPQ7QBR1R` ("approve
+moving past phase 02", phase-done) is **still OPEN on the spine** — Phase 02 was closed in the
+tracker without its approval ever being decided. Not fixed here: deciding a phase-02 gate after
+the fact is an owner call, and the same one-shot rule applies to it.
+
+**Step 4 (blind-test launch) is now the only build step left, and it is blocked on owner items
+only:** the Stream-A channel and the lawyer's willingness to sit the test.
+
+**Open question that must be answered BEFORE packaging, raised 2026-07-30:** variant-a and
+variant-b each carry an on-page note declaring their `max-w-shell` departure; **variant-c carries
+none** (it stays inside 48rem). A's note sits *above the H1* — the first thing on the page — and
+juror 1's lead reason for ranking b over a was exactly that. Human judges in both streams will see
+these same renders, and `max-w-shell` is meaningless jargon to a lawyer and internal scaffolding to
+a designer. So two of three variants carry a handicap the third does not. Either package as-is and
+accept the contamination (evidence chain stays clean: humans judge exactly what the critic judged),
+or strip the notes for the blind-test package, re-render, record the new hashes and state plainly
+that the human-judged artifact differs from the critiqued one by exactly this deletion. Route
+through `/arc-change` — it modifies a packaged artifact and is not a session call.
 
 **Untouched and unstaged in the working tree, deliberately:** `docs/strategy/plans/PLAN-portfolio.md`
 plus edits to `docs/strategy/README.md` and `docs/strategy/plans/README.md` — the owner's own
