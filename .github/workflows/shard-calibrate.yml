@@ -1,0 +1,76 @@
+name: shard-calibrate
+
+# One-shot calibration for tests/shard-timings.json. NOT part of arc-ci, gates nothing.
+#
+# The first weights were taken by timing each file in its OWN `bats` call. Measured against a
+# real sharded CI run (PR #69) that turned out to understate a five-file shard by 2.2x while
+# matching the single-file shard exactly -- so per-file timing is not what CI does, and the
+# only trustworthy weights come from the invocation CI actually performs: one `bats` call over
+# a group of files.
+#
+# So this runs the REAL shard groupings, on the REAL runner, and reports each one's elapsed
+# seconds. Those numbers get distributed back across each shard's files to produce weights that
+# predict CI instead of predicting a different experiment.
+#
+# Manual trigger only:  gh workflow run shard-calibrate.yml
+# Delete once the timings have been updated.
+
+on:
+  workflow_dispatch:
+    inputs:
+      shards:
+        description: Shard count to calibrate against (match arc-ci)
+        required: false
+        default: '9'
+        type: string
+
+jobs:
+  calibrate:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    name: calibrate shard ${{ matrix.shard }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install bats
+        run: npm install -g bats
+      - name: Install jq
+        run: choco install jq -y --no-progress
+
+      # Scanners are installed because their absence makes tests SKIP, and a skipped test is
+      # cheap in a way the real run is not -- calibrating without them would under-weight
+      # every scanner file.
+      - name: Install gitleaks (best-effort)
+        run: |
+          set -u; VER=8.30.1; mkdir -p "$HOME/bin"
+          curl -fsSL -o gl.zip "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_windows_x64.zip" \
+            && unzip -o gl.zip gitleaks.exe -d "$HOME/bin" || echo "gitleaks install skipped"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Install opengrep (best-effort)
+        run: |
+          set -u; mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/opengrep.exe" \
+            https://github.com/opengrep/opengrep/releases/latest/download/opengrep_windows_x86.exe \
+            || echo "opengrep install skipped"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Time this shard exactly as arc-ci runs it
+        run: |
+          n='${{ inputs.shards }}'
+          files="$(node .github/scripts/shard-tests.mjs --index ${{ matrix.shard }} --total "$n")" || exit 1
+          [ -n "$files" ] || { echo "::error::shard resolved to no files"; exit 1; }
+          printf 'shard-timing: files %s\n' "$(printf '%s ' $files)"
+          t0=$(date +%s)
+          # Failures do not stop calibration: a failing file still consumed its wall clock, and
+          # this workflow measures cost rather than correctness.
+          bats $files >/dev/null 2>&1 || true
+          printf 'shard-timing: shard %s/%s elapsed %ss\n' "${{ matrix.shard }}" "$n" "$(( $(date +%s) - t0 ))"
