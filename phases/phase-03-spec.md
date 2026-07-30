@@ -9,7 +9,11 @@
 - [ ] Library schema + first entries: every entry typed (Pattern/Craft/Brand/Anti) + tagged (domain · user type · platform · interaction problem · confidence · outcome) — untagged observations rejected; principle recorded, never just the screenshot
 - [ ] LexOS pilot: the **2** companion drafts re-read fresh (`docs/design/2026-07-26-dashboard-clients.md`, `docs/design/2026-07-27-case-workspace.md` — the plan said 4; that count came from this cycle's kickoff and never from the frozen design source, see the corrected ledger row); pilot brief upgraded (primary object **answered: case, not client**, by a real LexOS lawyer 2026-07-29, receipt `01KYQ9B2BXMXWWADZZYVWXEGRT` — NOT the PROVISIONAL fallback; platform contract: desktop Y · mobile Y · tablet N · keyboard-first Y · reduced-motion Y); full loop run on the real LexOS stack
 - [ ] Blind test launched: 3 directions packaged blind (arc origin undisclosed); Stream A + Stream B requests actually sent; two evidence files created to receive results
-- [ ] Pick + prediction receipts on the spine; outcome-evidence path (`note.logged`) documented
+- [x] Pick + prediction receipts on the spine; outcome-evidence path (`note.logged`) documented
+      — pick `variant-b` + falsifiable prediction sealed 2026-07-30 (`decision.recorded`
+      `01KYRX3HYM2BYMHKEZZD1RDHN9` deciding approval `01KYRX33C27326BSZJAWVEVR3E`); outcome path
+      documented at `docs/design/blind-test/README.md` and the documented command VERIFIED by
+      running it against a throwaway spine (`ARC_SPINE_ROOT`), not by reading it
 - [ ] tests green · live demo · tracker updated — the phase-done call on trailing evidence is the OWNER's (ADR-0041)
 
 ## Verification plan

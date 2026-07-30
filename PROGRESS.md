@@ -395,8 +395,33 @@ moving past phase 02", phase-done) is **still OPEN on the spine** — Phase 02 w
 tracker without its approval ever being decided. Not fixed here: deciding a phase-02 gate after
 the fact is an owner call, and the same one-shot rule applies to it.
 
-**Step 4 (blind-test launch) is now the only build step left, and it is blocked on owner items
-only:** the Stream-A channel and the lawyer's willingness to sit the test.
+**Exit criterion 4 is CLOSED (both halves).** The pick + prediction are on the spine (above), and
+the outcome-evidence path is documented at `docs/design/blind-test/README.md`. **The documented
+`note.logged` command was verified by running it, not by reading it** — executed verbatim against a
+throwaway spine via the `ARC_SPINE_ROOT` test door, exit 0, event landed with the right kind,
+evidence pointer and payload; the real spine was then checked and took zero leaked events. A
+documented path nobody walked is not documented, and this project has already shipped two fixtures
+that guarded nothing for exactly that reason.
+
+The README pins three distinctions that were easy to collapse and expensive to get wrong:
+`result` (did the stream clear ITS own bar) is a different question from `prediction` (was the
+owner's claim right) — a stream can PASS while the prediction is FALSIFIED, and collapsing them
+would make a wrong prediction look like a failed design; the two streams get **two receipts, never
+one merged receipt** (ADR-0038's two ledgers); and an outcome receipt without `scores` (the pick's
+decision ULID) leaves the prediction unsettleable forever.
+
+**Both blind-test evidence files exist and are deliberately EMPTY** —
+`docs/design/blind-test/lexos-case-workspace-v1/stream-a-designers.md` and `stream-b-users.md`.
+Each carries its own ADR-0040 PASS bar (A: ≥2 of 3 directions taken seriously · B: task completed
+without intervention), the verbatim prediction clause it scores, the three render hashes, and empty
+response tables. Nothing in them may be filled by anyone but a real respondent. Stream B's file
+records the distinction the ledger row already narrowed to: the lawyer answering the brief question
+is **not** the same ask as sitting the test.
+
+**Step 4 (blind-test launch) is now the only build step left, and what remains of it is owner
+items only:** the Stream-A channel, the lawyer's willingness to sit the test, and the width-note
+packaging call below. The evidence-file half of criterion 3 is done; the "requests actually SENT"
+half is not, and that is the half the criterion is really about.
 
 **Open question that must be answered BEFORE packaging, raised 2026-07-30:** variant-a and
 variant-b each carry an on-page note declaring their `max-w-shell` departure; **variant-c carries
