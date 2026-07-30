@@ -10,7 +10,7 @@
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Dual-mode machinery (steel thread): root goldens, resolver on 7 surfaces, creation/STOP/echo/adversarial fixtures | 1.25 days | ⬜ next |
+| 00 | Dual-mode machinery (steel thread): root goldens, resolver on 7 surfaces, creation/STOP/echo/adversarial fixtures | 1.25 days | 🔨 in progress |
 | 01 | Self-host + link history + board v1 (rehearsed rollback; close in lane-mode) | 0.75 days | ⬜ pending |
 | 02 | Parallel-safety floor: WIP info line, board lint, ownership lint, spine spool | 0.75 days | ⬜ pending |
 | 03 | Docs truth + retro | 0.25 days | ⬜ pending |
@@ -29,13 +29,13 @@
 
 ## Now
 
-**Position:** Kickoff complete on `feat/portfolio-kickoff`. PLAN + ADRs + phases +
-tracker written and lint-green; awaiting owner approval of the plan (spine
-approval.requested — decide via `arc-inbox approve|reject`).
+**Position:** Plan APPROVED 2026-07-31 (decision.recorded on approval
+01KYT4YM2N9TRE9GPWDCY3VSSR). Phase 0 open on `feat/portfolio-kickoff`.
 
-**Next step:** On approval → Phase 0, first action: pin root-mode goldens for the seven
-surfaces BEFORE touching any of them, then the A2 grep (manifests + sync must not ship
-root tracker files), then the resolver seam (ADR-0054).
+**Next step:** Pin root-mode goldens for the scripted surfaces (kickoff-lint,
+arc-evidence, SessionStart/SessionEnd hook output) BEFORE touching any of them, then the
+A2 grep (manifests + sync must not ship root tracker files), then the resolver seam
+(ADR-0054).
 
-blocked-on: owner — plan approval (kickoff gate)
+blocked-on: —
 depends-on: — 
