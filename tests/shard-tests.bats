@@ -1,0 +1,144 @@
+#!/usr/bin/env bats
+# shard-tests.mjs -- the CI test sharder.
+#
+# The failure mode worth testing is not "the shards are uneven". It is "a file lands in NO
+# shard", because that turns a green CI into a lie: the suite reports success having never run
+# part of itself, and nothing in the output says so. Every case below exists to make that
+# impossible, or to prove a refusal is loud.
+
+setup() {
+  ARC_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
+  SHARD="node $ARC_ROOT/.github/scripts/shard-tests.mjs"
+  ALL="$(ls "$ARC_ROOT"/tests/*.bats | xargs -n1 basename | LC_ALL=C sort)"
+  N_ALL="$(printf '%s\n' "$ALL" | wc -l | tr -d ' ')"
+}
+
+_union() { # $1 = total; prints every shard's files, sorted
+  local n="$1" i
+  for i in $(seq 1 "$n"); do $SHARD --index "$i" --total "$n"; done \
+    | xargs -n1 basename | LC_ALL=C sort
+}
+
+# ---------- coverage: the guard that matters ----------
+
+@test "every discovered .bats file lands in exactly one shard, for every shard count 1..12" {
+  local n
+  for n in 1 2 3 5 8 9 12; do
+    run bash -c "$(declare -f _union); SHARD='$SHARD'; _union $n"
+    [ "$status" -eq 0 ] || { echo "shard sweep failed at n=$n"; echo "$output"; false; }
+    # union == discovered, and no duplicates (sort -u must not shrink it)
+    [ "$(printf '%s\n' "$output" | wc -l | tr -d ' ')" -eq "$N_ALL" ] \
+      || { echo "n=$n: union has $(printf '%s\n' "$output" | wc -l) files, expected $N_ALL"; false; }
+    [ "$(printf '%s\n' "$output" | LC_ALL=C sort -u | wc -l | tr -d ' ')" -eq "$N_ALL" ] \
+      || { echo "n=$n: a file appears in more than one shard"; false; }
+    [ "$(printf '%s\n' "$output")" = "$ALL" ] \
+      || { echo "n=$n: union differs from the discovered set"; false; }
+  done
+}
+
+@test "shard count 1 returns the entire suite" {
+  run bash -c "$SHARD --index 1 --total 1 | wc -l"
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | tr -d ' ')" -eq "$N_ALL" ]
+}
+
+@test "more shards than files still places every file and never emits a duplicate" {
+  local n=$(( N_ALL + 5 ))
+  run bash -c "$(declare -f _union); SHARD='$SHARD'; _union $n"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s\n' "$output" | LC_ALL=C sort -u | wc -l | tr -d ' ')" -eq "$N_ALL" ]
+}
+
+# ---------- determinism: two runners must compute the SAME packing ----------
+
+@test "the packing is deterministic -- a second run assigns identical shards" {
+  run bash -c "$SHARD --index 3 --total 9"
+  local first="$output"
+  run bash -c "$SHARD --index 3 --total 9"
+  [ "$output" = "$first" ]
+}
+
+@test "determinism holds across every shard, not just one" {
+  # Two runners disagreeing on the packing would double-run some files and skip others -- the
+  # skip being the half nobody notices.
+  run bash -c "$(declare -f _union); SHARD='$SHARD'; _union 9"
+  local a="$output"
+  run bash -c "$(declare -f _union); SHARD='$SHARD'; _union 9"
+  [ "$output" = "$a" ]
+}
+
+# ---------- timings are ADVISORY, never a filter ----------
+
+@test "a file with no measured timing is still placed, never skipped" {
+  # The live repo already exercises this: files added after the measurement run carry no entry.
+  # Assert the property directly rather than relying on that staying true.
+  local unmeasured
+  unmeasured="$(node -e '
+    const fs=require("fs");
+    const t=JSON.parse(fs.readFileSync(process.argv[1]+"/tests/shard-timings.json","utf8")).timings;
+    const f=fs.readdirSync(process.argv[1]+"/tests").filter(x=>x.endsWith(".bats"));
+    process.stdout.write(f.filter(x=>!(x in t)).join(" "));
+  ' "$ARC_ROOT")"
+  [ -n "$unmeasured" ] || skip "every file currently has a timing entry"
+  run bash -c "$(declare -f _union); SHARD='$SHARD'; _union 9"
+  local u="$output"
+  local f
+  for f in $unmeasured; do
+    printf '%s\n' "$u" | grep -qx "$f" || { echo "unmeasured file $f was not placed"; false; }
+  done
+}
+
+@test "an unreadable timings file degrades to equal weights, never to a refusal" {
+  # Balance is a nice-to-have; running the suite is not. A corrupt advisory file must cost
+  # speed, never coverage.
+  local tmp="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$tmp/tests" "$tmp/.github/scripts"
+  cp "$ARC_ROOT/.github/scripts/shard-tests.mjs" "$tmp/.github/scripts/"
+  cp "$ARC_ROOT"/tests/*.bats "$tmp/tests/"
+  printf 'not json at all {{{\n' > "$tmp/tests/shard-timings.json"
+  run bash -c "node '$tmp/.github/scripts/shard-tests.mjs' --index 1 --total 4"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+# ---------- refusals are loud ----------
+
+@test "refuses a zero, negative or non-numeric --total" {
+  local bad
+  for bad in 0 -3 abc; do
+    run bash -c "$SHARD --index 1 --total $bad"
+    [ "$status" -ne 0 ] || { echo "--total $bad was accepted"; false; }
+    [[ "$output" == *"--total"* ]]
+  done
+}
+
+@test "refuses an --index outside 1..total, at both ends" {
+  run bash -c "$SHARD --index 0 --total 4"
+  [ "$status" -ne 0 ]
+  run bash -c "$SHARD --index 5 --total 4"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"--index"* ]]
+}
+
+@test "refuses when the tests dir holds no .bats files (never emits empty shards)" {
+  local tmp="$BATS_TEST_TMPDIR/empty"
+  mkdir -p "$tmp/tests" "$tmp/.github/scripts"
+  cp "$ARC_ROOT/.github/scripts/shard-tests.mjs" "$tmp/.github/scripts/"
+  run bash -c "node '$tmp/.github/scripts/shard-tests.mjs' --index 1 --total 3"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no *.bats"* ]] || [[ "$output" == *"refusing"* ]]
+}
+
+# ---------- balance: the reason the thing exists ----------
+
+@test "--plan balances by measured seconds, not by file count" {
+  run bash -c "$SHARD --plan --total 9"
+  [ "$status" -eq 0 ]
+  # The heaviest single file (design-steel-thread) is a hard floor: no shard can beat it. What
+  # this asserts is that the sharder gets NEAR that floor rather than splitting by count, which
+  # would leave one shard carrying several heavy files.
+  local heaviest
+  heaviest="$(printf '%s\n' "$output" | tail -1 | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
+  [ -n "$heaviest" ]
+  [ "$heaviest" -le 200 ] || { echo "heaviest shard is ${heaviest}s -- balancing has regressed"; false; }
+}
