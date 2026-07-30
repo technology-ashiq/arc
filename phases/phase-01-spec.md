@@ -1,59 +1,59 @@
-# Phase 01 — Brief mode, design-lint v0, and the module manifest
+# Phase 01 — Self-host + link history + board v1
 
-**Goal (one line):** A UI-bearing build can get a machine-checked 4-contract design brief, and design installs as a first-class `products/design/` module — with the old QA design surface untouched (ADR-0042).
-**Appetite:** 1 day
+**Goal (one line):** Move this cycle's own tracker into `initiatives/portfolio/` (dry-run → rehearsed rollback in a disposable scratch worktree → single-commit real move), give design its HISTORY-INDEX lane (links only), birth `PORTFOLIO.md` v1 with both tables, wire the SessionStart degraded rule — and close this very phase in lane-mode.
+
+**Appetite:** 0.75 days
 **Depends on:** phase-00
+
+Migration runs only AFTER Phase-0 routing is proven. The rollback rehearsal (REQ-02,
+round 5) happens in a DISPOSABLE scratch worktree branched from the SAME commit the real
+move will start from — if any commit lands on the branch after the rehearsal, re-run it;
+a rehearsal against a stale HEAD is not evidence for the real move — isolated from the
+working tree and any dirty state, `git revert` executed there, root-mode + lint + resume
+proven green post-revert, NO emitters run there, worktree removed after. Design lane per ADR-0058:
+folder + `HISTORY-INDEX.md` pointing at frozen `docs/archive/` + `docs/evidence/`
+locations — never copies. Lane `PROGRESS.md` opens with the machine header block
+(ADR-0051: status / cycle / phase / appetite / burn / blocked-on / depends-on) from
+birth; evidence for this phase lands lane-scoped per ADR-0055.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Brief mode produces a 4-section brief (interaction model = every question in `docs/templates/design-brief-template.md`'s interaction-model section, not a restated count · art direction with taste recorded as design ADRs · platform-contract table · content contract — ADR-0036) for a real arc surface; design-lint v0 fails the brief if its answer count != the template's live question count (drift gate, not a duplicated number in REQ-05/REQ-07)
-- [ ] `design-lint.mjs` v0 (`.claude/scripts/design/`, rides the gate-runner per ADR-0046): passes the complete fixture brief; fails fixtures each missing one section/contract; flags lorem-ipsum strings in reviewed routes
-- [ ] **Contrast + target-size checks are IN, per ADR-0048** — this reverses the earlier line here that deferred contrast-AA ("add via `/arc-change` when a REQ needs it"); Phase 00's live demo is that trigger. The critic reported a contrast VIOLATION carrying a sampled RGB and a ratio to two decimals; independent measurement showed the elements passed and the cited colour existed nowhere. Numbers must come from a script, so design-lint computes WCAG contrast from the declared tokens and measures target size — and checks both against the floor **the brief declares**, never a hardcoded constant (the ≥44px used in Phase 00 is this project's declared floor and WCAG AAA 2.5.5; WCAG AA's own minimum, 2.5.8, is 24px — a lint hardcoding either silently overrides the product's contract). Fixtures: one passing pair, one failing pair, one brief declaring a non-default floor. **Build-time scoping note (2026-07-29):** a zero-dep hook-tier lint has no DOM, so what it can honestly OWN is: contrast fully computed from the brief's declared pairs, and both floors (contrast + target px) parsed from the brief under strict grammar and exported via `design-lint.mjs --floors` as the single authority. Pixel *measurement* of rendered targets needs a browser and lands with Phase 2's task-flow verification, which must consume `--floors` instead of hardcoding — a lint that pretended to measure pixels it cannot see would be the exact ADR-0048 failure in script form.
-- [ ] Adversarial construct-a-breaking-input pass run against design-lint v0 (non-negotiable), covering at minimum one fixture per retro-log markdown-contract bug class — case-fold-before-compare, last-of/repeated-section, anchored-not-`$`-under-`/m` regex, real-calendar-date validation, and a heading-level/emphasis cosmetic-variant bypass (council v2+v3) — not only missing-section fixtures; every found hole fixed + pinned as a fixture
-- [ ] `products/design/manifest.json` exists (module in-repo per ADR-0033) and resolves via `arc-products.mjs`; product-lint green; sync-to-project installs the module; **sync-golden tree-manifest regenerated as a named step** (diff delta first, only intended paths moved) — **partly landed in Phase 00 out of necessity**: the manifest and the `arc-products.mjs` CATALOG entry had to exist the moment Phase 00 put a file under `.claude/`, because `sync.bats`'s manifests-vs-reality invariant refuses any payload file no manifest owns. What remains here is the rest: install/resolve proof, product-lint in CI, and the old-surface-untouched check
-- [ ] Old `/arc-design` + `design-reviewer` untouched and still green (ADR-0042 — parallel run)
-- [ ] tests added & green (one bats file, foreground)
-- [ ] live demo run + output checked
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [ ] Capability works end-to-end: tracker lives at `initiatives/portfolio/`, `/arc-resume` no-arg auto-resolves the single LIVE lane and prints canonical order (lane echo → board → 5-block report)
+- [ ] Tests added & green: migration guard fixtures, SessionStart degraded-rule fixtures (one eligible → canonical order; zero/multiple → board + hint, selects nothing), board-v1 presence fixtures — bats green on 3 OS
+- [ ] Live demo run + output checked (scenario below)
+- [ ] Verified against the real system: THIS repo post-move; `/arc-phase-done 1` itself executes in lane-mode and confirms the selected lane
+- [ ] Contract tests green: not applicable — zero external dependencies (PLAN External dependencies)
+- [ ] Tracker updated (lane PROGRESS.md row ✅ + done-log + machine header refreshed + board updated in the SAME commit)
 
 ## Verification plan
 
-- **Test command:** `bats tests/design-lint.bats`
-- **Expected failure first:** the test asserts design-lint exits non-zero on the
-  missing-content-contract fixture brief and zero on the complete fixture brief. Before
-  the phase is built the test fails at "design-lint.mjs: no such file" — red proven,
-  then built to green (both directions fixture-proven).
-- **Live demo scenario:** run brief mode on an arc-internal surface → lint the produced
-  brief green → delete one section → lint fails naming the missing section → run
-  `sync-to-project` against a scratch target → module lands, product-lint green.
-- **Real-system check:** manifest resolved by the real `arc-products.mjs` resolver and
-  real product-lint (their hostile-fixture testbeds stay green, untouched).
-- **Expected evidence:** lint output on pass + fail fixtures · adversarial-pass findings
-  list with pinned fixtures · product-lint output · named sync-golden regen commit.
+- **Test command:** `bats tests/lane-resolver.bats tests/portfolio-board.bats` locally (touched files only — CI runs the full 3-OS suite)
+- **Expected failure first:** in a scratch worktree with the tracker already moved, run `/arc-resume` no-arg BEFORE the auto-resolution path lands — it fails to locate the tracker (red); green only when the resolver reads `initiatives/portfolio/`. Likewise the SessionStart fixture with two eligible lanes must show board + hint and select nothing — red until the degraded rule exists.
+- **Live demo scenario:** dry-run output of the move script shown and checked; rollback rehearsal transcript from the disposable worktree (revert executed; kickoff-lint + resume + bare-root fixture green post-revert); real move as ONE commit; `/arc-resume` no-arg prints `Selected lane: portfolio (via auto)` → board → report; `PORTFOLIO.md` shows initiatives table (portfolio LIVE · design IDLE · develop QUEUED) + passports table (lexos) + `Updated:` line.
+- **Real-system check:** SessionStart hook in this repo post-move follows the degraded rule with exactly one eligible lane; pointer stubs exist at old root paths; `docs/archive/` and `docs/evidence/` untouched (git status clean on frozen paths).
+- **Expected evidence:** dry-run transcript, rehearsal transcript, single move commit hash, board v1, HISTORY-INDEX with resolving links (0 copied files), lane-scoped phase-01 evidence bundle.
 
 ## Rabbit holes in this phase
 
-- Brief-parsing regexes — apply the retro-log markdown-contract checklist (tolerant
-  detection, strict value grammar, last-of repeated sections, anchored regexes).
-- Moving/retiring anything under `products/qa` — NO (ADR-0042): the new manifest adds,
-  it does not migrate yet.
-- Gate promotion — the design gate stays `warn` (no-go).
+- Backfilling design's history INTO the lane (ADR-0058 forbids copies — links only).
+- Polishing board grammar beyond what v1 needs — the lint that enforces it is Phase 2.
+- Building a reusable migration tool; this move is a one-off script with a dry-run flag.
 
 ## Out of scope for this phase
 
-Explore mode (Phase 2) · library/pilot (Phase 3) · kickoff step-4.5 wiring (ADR-0043) ·
-retiring the old reviewer (ADR-0042 trigger not yet fired).
+- Board lint, WIP info line, ownership lint, spool (Phase 2). Docs One-Rule rewrite
+  (Phase 3). The develop lane (born at its own kickoff, next cycle).
 
 ## Your-setup / pending
 
-None.
+- None.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
-- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
-- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
-- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
-- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
-- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
-- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.
+- Philosophy untouched: Golden Loop, gates, receipts, change discipline — a lane is a namespace for tracker state, nothing more (ADR-0050, ADR-0053).
+- No history rewrite and no history duplication: frozen paths stay frozen as sole canonical copies; lanes link, never copy (ADR-0055, ADR-0058).
+- Root-mode green at every commit — byte-identical when no `initiatives/` dir exists; the bare-root fixture is a permanent consumer contract (ADR-0054).
+- feat/* branch + PR, never main.
+- All new lints WARN-first, and every WARN prints Expected / Found / Example (ADR-0057).
+- Spine receipts for kickoff / phase-done / retro as usual; no silently lost receipts — degrade visibly, never lose, never block (ADR-0056, REQ-04).
+- Never guess a lane: explicit `--lane` beats auto-resolve beats ask; destructive commands confirm the selected lane (ADR-0054).

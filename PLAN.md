@@ -1,222 +1,181 @@
-# PLAN.md — Cycle 3 · arc-design "The Designer"
+# PLAN.md — Cycle 4 · arc-portfolio "The Conductor"
 
-> Filled by `/arc-kickoff` 2026-07-28. Design source:
-> `docs/strategy/plans/PLAN-design.md` (FROZEN 2026-07-26; Part 4 decisions DES-A…H +
-> 12-row superseded record LOCKED → ADR-0033..0040 here; fork + auto decisions →
-> ADR-0041..0046). Predecessor initiative CLOSED: `docs/archive/PLAN-2026-07-28.md`
-> (Cycle 2 · Receipt Spine, 5/5 phases). Companion inputs: 4 LexOS design drafts
-> (LexOS repo `docs/design/`: brand.md · references.md · design-system.md ·
-> tokens-proposal.md) — the Phase-3 pilot target.
+> Filled by `/arc-kickoff` 2026-07-30. Design source: `docs/strategy/plans/PLAN-portfolio.md`
+> (FROZEN, review-freeze v6 — six adjudicated rounds; PORT-A…J → ADR-0050..0059; rejected
+> ideas live in the pack's §14 and are not re-litigated here). Predecessor CLOSED:
+> `docs/archive/PLAN-2026-07-30.md` (Cycle 3 · arc-design, 4/4 phases closed).
+> Attack-panel findings mutate THIS file, never the pack.
 
 ## Goal
 
-For Ashiq, arc gains **The Designer** — a `products/design/` module that turns a real
-product premise into three genuinely different, contract-verified design directions,
-critiqued by a read-only vision critic, decided by the owner with a recorded falsifiable
-prediction, and validated by two external blind evidence streams — taste made researched,
-reusable, enforceable, and improving.
+For Ashiq, arc gains **The Conductor** — multi-lane workspaces (`initiatives/{lane}/` per
+product) plus a root `PORTFOLIO.md` board and a uniform `--lane` resolver on the seven
+tracker surfaces, so multiple arc products plan and build in parallel while arc stays one
+company (one machine, one main, one CI, one spine, one owner) and consumer repos keep
+today's root layout byte-identical, forever.
 
 ## Current state
 
-Verified 2026-07-28 at kickoff (codebase-surveyor + Cycle-2 close facts):
-
-- **Stack:** arc build system v4 · zero-dep Node ≥18 (`.mjs`) + bash-3.2/POSIX · bats
-  tests (central `tests/`, ADR-0021) · 3-OS GitHub CI.
-- **Entry points:** `sync-to-project.sh`/`.ps1` (install/sync, twins) · `.claude/hooks/`
-  EVENT.d fragment dispatcher · per-product CLIs under `.claude/scripts/*/` · `/arc-*`
-  commands in `.claude/commands/`.
-- **Conventions:** manifest-driven `products/` (core/qa/review/plan/git/council/hq;
-  resolver `arc-products.mjs`; **product-lint blocking**, hostile-fixture testbed) ·
-  central `tests/` · new lints WARN-first in TRIAL · conventional commits, branch + PR ·
-  CI byte-identity gate `tests/fixtures/sync-golden/tree-manifest.txt` — any
-  product-shipped file edit moves hashes.
-- **Design today:** `/arc-design` command + `design-reviewer` agent under **products/qa/**
-  (scores 8 dimensions 0-10, AI-slop blacklist, **fixes in code itself** — superseded by
-  ADR-0034's read-only critic; runs in parallel until retirement, ADR-0042).
-  `council-designer` = decision lens only. `.claude/rules/ui.md` · `docs/branding.md`
-  (empty stub) · `docs/ui-conventions.md` — thin. **Nothing reads a screenshot back today.**
-- **review-ledger:** kinds scan/code/security/qa/**design**/docs, stamped per commit SHA
-  under `.claude/state/reviews/`; the `design` stamp exists, wired to /arc-design PASS — unused.
-- **Event spine (Cycle 2, shipped):** `.claude/scripts/hq/` — `arc-event.sh` (dual-mode
-  emit) · reader/replay/brief/inbox; closed 18-kind vocabulary (ADR-0026); EVENT.d hook
-  fragments at 3 fire-points. **Known bug:** idem preimage collapse silently drops
-  repeat-action receipts (Cycle-2 close finding) — out of this appetite, ADR-0044.
-- **Gates:** `arc.gates.yaml` flat declarative list run by
-  `.claude/scripts/core/arc-gates.sh`; 6 gates today. Strict parser: per-gate keys
-  `name/check/mode/tier/runtime/evidence`, one `key: value` per line, no inline comments;
-  `check` = shell command from repo root, non-zero exit = gate failed.
-- **Eyes:** agent-browser CLI (screenshots; QA-only use today). `.claude/worktrees/` exists.
-- **Phase-0 target route:** `docs/strategy/arc-hq-mockup.html` (real arc-internal page,
-  renders as static file — ADR-0045).
-- **Do-not-touch:** `.claude/state/` · `arc-registry.json` (generated) · sync-golden
-  fixtures (regen only as a named step) · `.github/workflows/ci.yml` · product-lint +
-  arc-products testbeds · `docs/archive/` · the 8 kickoff-lint TRIAL gates · `arc_hook_field` guard chain.
+<!-- brownfield survey, verified 2026-07-30 (codebase-surveyor) -->
+- **Stack:** arc build system v4 · zero-dep Node ≥18 (`.mjs` scripts) · bash-3.2/POSIX · bats tests · 3-OS CI matrix (ubuntu / windows-git-bash / macos).
+- **Runs via:** `/arc-kickoff`, `/arc-phase-done`, `/arc-retro`, `/arc-change` (`.claude/commands/*`); bats suite at `tests/`; CI on pull_request via `ci.yml`.
+- **Entry points:** `.claude/scripts/plan/kickoff-lint.mjs` (deterministic gate; reads PLAN/PROGRESS/phases hardcoded at root) · `.claude/scripts/plan/arc-evidence.sh` (phase close; writes `docs/evidence/`, `--out` seam exists) · `.claude/commands/arc-*.md` (command markdown; 9 of them reference tracker paths).
+- **Core modules:** `products/*/manifest.json` (ownership registry, 8 products) · `arc-products.mjs` (resolver) · event spine `arc-event.sh`/`arc-event.mjs` (hook/strict dual mode, ADR-0031) · `lib/spine-io.mjs` (wx-create lockfile, stale-break, token check; no spool yet — `_quarantine/` only).
+- **Also path-coupled:** `statusline.sh`, `SessionStart.d/00-context.sh`, `SessionEnd.d/00-session-log.sh` (all read `PROGRESS.md ## Now`).
+- **Conventions:** root PLAN/PROGRESS/phases as the sole tracker, manifest-driven products, conventional commits, feat/* branches + PR, spine receipts + review-ledger, offline-first, WARN-first trial lints, CI byte-identity gate on `tests/fixtures/sync-golden/tree-manifest.txt`.
+- **Hot / high-blast-radius:** `kickoff-lint.mjs` + `arc-evidence.sh` (hardcoded paths → lane-aware) · SessionStart/statusline hooks (must apply the degraded rule) · spine lock path (spool lands beside it).
+- **Do-not-touch:** `docs/evidence/**` + `docs/archive/**` (frozen history) · runtime output dirs (`docs/design/**`, `docs/council/**`) · `sync-to-project.{sh,ps1}` + `tests/fixtures/sync-golden/tree-manifest.txt` (byte-identity gate; regen only as a named, reviewed step) · `products/*/manifest.json` payload lists (additions only, with golden regen) · CONTENT edits to already-listed payload files this cycle rewrites (`kickoff-lint.mjs`, `arc-evidence.sh`, phase 0) — diff the sync-golden delta FIRST, confirm only intended paths moved, regen as a named step in the same commit · `.claude/state/**`.
 
 ## Success requirements
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | Arc takes a real product premise (LexOS) and produces 3 distinctive, usable, production-feasible design directions | Two separate blind evidence files (ADR-0040): Stream A — ≥2 of 3 directions taken seriously by experienced designers; Stream B — target users complete the key task without intervention. BOTH pass. Stays `active` until then (ADR-0041) | 3 | active |
-| REQ-02 | One real arc route is independently inspected end-to-end by a read-only vision critic | Critic reads the rendered PNG of `docs/strategy/arc-hq-mockup.html` and reports ≥1 real finding classed VIOLATION/WEAKNESS/POLISH; separately, on a committed defect-injected CLONE of that same route the critic reports the planted defect as VIOLATION (proves detection, not just artifact existence); a critic write outside `docs/design/critique/**` is hook-blocked (test asserts non-zero exit) | 0 | validated |
-| REQ-03 | Design reviews leave receipts Ashiq can see in the daily brief | `review.completed` payload carries `"lens":"design"`, a `target` field (the repo-relative route the gate matches on) and a `result` field (PASS or FAIL), appended via `arc-event.sh` and visible through the reader; review-ledger `design` stamp written on PASS, where PASS ≡ the critique artifact contains zero VIOLATION findings (WEAKNESS/POLISH-only or zero findings = PASS) | 0 | validated |
-| REQ-04 | UI-bearing changes without design review get flagged, never blocked | `design` gate in `arc.gates.yaml` mode `warn`: check exits 1 when a reviewed route lacks a design receipt, exits 0 when the receipt exists, exits 1 with a WARN diagnostic (never blocks, never crashes) when the spine reader query itself errors or the route can't be resolved; never exits 2 this cycle | 0 | validated |
-| REQ-05 | A UI-bearing build gets a machine-checked 4-section design brief | design-lint v0 passes a complete brief (7 interaction answers · art direction · platform-contract table · content contract) and fails a brief missing any one section — both proven by committed fixtures | 1 | validated |
-| REQ-06 | Design installs and syncs as a first-class arc module | `products/design/manifest.json` resolves via `arc-products.mjs`; product-lint green; sync-golden tree-manifest regenerated as a named step; old `/arc-design` + design-reviewer untouched and still green (ADR-0042) | 1 | validated |
-| REQ-07 | Ashiq picks from 3 genuinely different directions and his pick records a testable claim | 3 variants from 3 distinct theses; IA-difference matrix differs on ≥3 of 7 dimensions; per-variant temp token file, no raw hex in variant code; one shared render command; blind ranking ×3 recorded; owner decision + falsifiable prediction emitted as `decision.recorded` | 2 | validated |
-| REQ-08 | Critique findings get fixed without the critic ever touching code | VIOLATION → creation side fixes → critic re-verifies, ≤2 rounds on a real variant set (demo), round 3 escalates to human; critic's session diff shows zero product-code changes | 2 | validated |
+| REQ-01 | **Dual-mode machinery.** The 7 surfaces (`kickoff`, `resume`, `change`, `phase-done`, `retro`, kickoff-lint, arc-evidence) resolve lane-mode per ADR-0054 while root-mode stays byte-identical (consumer contract). | Root-mode goldens pinned BEFORE refactor and green after; bare-root consumer-sim fixture green; fixture-lane suite green; lane-name adversarial fixtures (`../`, absolute path, empty, uppercase, leading-digit) rejected + pinned; `--lane` accepted + echoed on all 7 surfaces (fixtured); bare tokens NEVER parsed as a lane (fixtured: `/arc-change design ...` treats "design" as text); free text containing the literal substring `--lane` (e.g. `/arc-kickoff Add --lane flag docs`) is fixtured on the goal/description surfaces and stays description text, never mis-consumed as the flag; unknown-lane hard-STOP fixture per non-kickoff surface (typo'd name → STOP + known-lane list, 0 folders created); kickoff-only creation fixture (birth + WIP info line); canonical output order asserted (`Selected lane:` first); ambiguity → ask, never guess (fixtured); full bats green on 3 OS. | 0 | active |
+| REQ-02 | **Self-hosted migration with rehearsed rollback.** This cycle's tracker moves into `initiatives/portfolio/`; design lane = folder + HISTORY-INDEX.md links only (ADR-0058); `PORTFOLIO.md` v1 born. | Scripted move: dry-run output shown → single commit; rollback REHEARSED first in a DISPOSABLE scratch worktree (`git revert` executed there; root-mode + kickoff-lint + resume proven green post-revert; 0 emitters run there; worktree removed); lane PROGRESS.md carries the machine header block from birth (ADR-0051); `/arc-resume` no-arg follows canonical order (lane echo → board → 5-block report); `/arc-phase-done 1` itself executes in lane-mode; pointer stubs at old root paths; board v1 has both tables + `Updated:` line. | 1 | active |
+| REQ-03 | **Board + WIP visibility.** Strict-grammar board lint over BOTH tables and a kickoff-preflight WIP info line (counted = LIVE+BLOCKED) that never stops the owner (ADR-0052). | Fixtures: preflight prints the correct counted number (BLOCKED included) and PROCEEDS at any count — one fixture asserts kickoff is NOT blocked at 2+; board values cross-checked against each lane's PROGRESS machine header (hand-edited divergence WARNs, fixtured); board drift, bad status, malformed dependency line, venture-in-initiatives-table, stale `Updated:` each WARN; every WARN prints Expected / Found / Example (asserted in fixtures). | 2 | active |
+| REQ-04 | **Parallel-safety floor.** Ownership-boundary lint (WARN-first, manifest-derived, ADR-0057) + spine emitter concurrency contract: strict = bounded lock retry → exit 2; hook = never blocks, lock timeout routes the event to a per-event `_pending/` spool, surfaced in status/brief, drained under the next lock. | Fixtures: seeded cross-lane edit WARNs with Expected/Found/Example; concurrent emits on 3 OS → main JSONL has 0 interleaved/partial lines, every event lands in main file OR spool, none lost; spool-drain fixture (drained events pass canonical serialization + idem index); spool-visibility fixture (pending count appears in status/brief output). | 2 | active |
+| REQ-05 | **Docs truth.** The One Rule rewritten to per-lane law + truth hierarchy + vocabulary; ritual docs updated; ADR template gains a one-line `Product:` field. | Docs-drift ship-gate passes with 0 findings (`/arc-docs`); rewritten One Rule quotes `PORTFOLIO.md` as the index view, not the truth (ADR-0051); `docs/HISTORY.md` entry logged with lane tag; retro run. | 3 | active |
 
 ## Appetite
 
-**5 days** (owner, 2026-07-28). A constraint, not an estimate: blown → cut scope or kill
-a phase, never silently extend. Blind-test *evidence* is allowed to trail the build
-(ADR-0041) — the 5 days buy the build + test launch, not the waiting. Phase appetites sum
-to **4.5 days**; the remaining 0.5 day is explicit slack, spent only through the
-tripwire conversation, never absorbed silently.
-
-**Tier:** M
-
-**Kill criteria:** at 2.5 days burnt, if Phase 1 isn't done → mandatory scope-cut
-conversation (pre-declared cut order: jury ×3→×1 · worktrees→variant route namespace ·
-defer Phase 3 library polish). At 100% → cut or kill, never extend silently.
+- **Appetite: 3 days** (owner-stated at kickoff; pack recommendation confirmed).
+- **Tier:** S
+- **Kill criteria (50% tripwire):** 1.5 days burnt with Phase 0 not closed → STOP. Bank
+  the pinned goldens + adversarial fixtures (they harden today's single-lane arc
+  regardless), revert layout work on the branch, retry decision at retro. No
+  half-migrated state may survive a kill — root-mode must be fully working at every
+  commit.
+- **Scope-cut ladder (pre-decided, aligned with A1):** resolver generalization is the
+  sink → ship root-mode goldens + minimal EXPLICIT `--lane` routing only (no
+  auto-resolution) and postpone migration — never a half-generalized resolver. Phase 2
+  burn reaches 1.0 day (0.25d past its 0.75d allocation — the same absolute margin as
+  Phase 0's 1.5d/1.25d tripwire) → ship the Mode-A core value (P0–P1), defer REQ-04 +
+  Mode-B certification to a follow-up slice; board carries `Mode B: not certified` and
+  concurrent emitters stay forbidden (ADR-0056).
+- **Standing tie rule:** venture outweighs OS. If LexOS or design needs the owner
+  mid-cycle, this cycle parks — parking cleanly is literally the feature.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-  owner(["Person: Ashiq — decides, predicts"])
-  subgraph design ["System: products/design — The Designer"]
-    director["Container: design-director — brief, thesis assignment, divergence rejection"]
-    composers["Container: ui-composer ×3 — one variant each, isolated worktrees, own temp tokens"]
-    critic["Container: design-critic — READ-ONLY, vision mandatory, defect classes"]
-    jury["Container: design-jury ×3 — blind comparative ranking"]
-    dlint["Container: design-lint.mjs — deterministic brief + variant checks"]
-    brieff["Container: design brief — 4 contracts"]
-  end
-  subgraph arc ["System: arc (existing)"]
-    browser["Container: agent-browser — deterministic render + PNG"]
-    gates["Container: arc-gates.sh + arc.gates.yaml — design gate, warn"]
-    spine[("Container: event spine — review.completed / decision.recorded / note.logged")]
-    ledger[("Container: review-ledger — design stamp")]
-  end
-  lexos["External system: LexOS repo — Phase-3 pilot"]
-  streams["External: blind evidence — Stream A designers · Stream B users"]
-  owner --> brieff
-  director --> brieff
-  brieff --> composers
-  composers --> browser
-  browser --> critic
-  critic -- "findings (never fixes)" --> composers
-  critic --> spine
-  critic --> ledger
-  composers --> jury
-  jury --> owner
-  owner -- "pick + prediction" --> spine
-  dlint --> gates
-  lexos -.-> composers
-  streams -.-> owner
+    owner["Person: Ashiq (owner)"]
+    subgraph arc["System: arc monorepo"]
+        subgraph company["Company layer (single, ADR-0053)"]
+            board["PORTFOLIO.md — two-table board (VIEW, ADR-0051)"]
+            spine["Event spine + inbox (.claude/state/hq)"]
+            spool["events/_pending/ spool (REQ-04)"]
+            ledger["ADR ledger · HISTORY · retro-log · trial-ledger"]
+            ci["tests/ bats + 3-OS CI + goldens"]
+        end
+        subgraph lanes["Container: initiatives/ lanes (ADR-0050)"]
+            lp["portfolio/ — PLAN · PROGRESS(header) · phases · evidence"]
+            ld["design/ — HISTORY-INDEX.md links (ADR-0058)"]
+        end
+        subgraph machine["Container: shared execution machine"]
+            cmds["commands arc-kickoff/resume/change/phase-done/retro"]
+            resolver["lane resolver — explicit --lane, auto, ask (ADR-0054)"]
+            lint["kickoff-lint + board lint + ownership lint"]
+            evid["arc-evidence.sh --out seam"]
+        end
+        registry["products/x/manifest.json — body registry (unchanged)"]
+    end
+    frozen["Frozen history: docs/archive + docs/evidence (ADR-0055)"]
+    consumer["Consumer repos (LexOS, ventures) — root-mode forever"]
+    owner --> cmds
+    cmds --> resolver
+    resolver -->|"initiatives/ present"| lanes
+    resolver -->|"absent: root-mode byte-identical"| consumer
+    cmds --> spine
+    spine -->|"lock timeout (hook mode)"| spool
+    lp -->|"machine header derives"| board
+    lint --> board
+    lint --> registry
+    ld -.->|links only| frozen
 ```
 
 ## Key decisions (ADR index)
 
 | # | Decision | Status |
 |---|---|---|
-| 0033 | DES-A: `products/design/` module in-repo, never a separate repo | accepted |
-| 0034 | DES-B: read-only verification, mechanical enforcement; creation fixes, critic re-verifies; critic = NEW agent | accepted |
-| 0035 | DES-C: design rides the closed spine vocabulary (`review.completed {"lens":"design"}` / `decision.recorded` / `note.logged`) | accepted |
-| 0036 | DES-D: brief carries 4 contracts; coverage contract-driven, tier = effort only | accepted |
-| 0037 | DES-E: thesis-based exploration + IA matrix ≥3/7 + worktree isolation + per-variant temp tokens | accepted |
-| 0038 | DES-F: prediction-based learning; preference ledger ≠ quality ledger | accepted |
-| 0039 | DES-G: external design tools deferred to W3+ | accepted |
-| 0040 | DES-H: REQ-01 requires two external blind evidence streams, both passing | accepted |
-| 0041 | All 4 phases in-cycle; blind-test evidence may trail; REQ-01 active until both streams pass | accepted |
-| 0042 | Old /arc-design + design-reviewer parallel until critique proven, then retire | accepted |
-| 0043 | Standalone this cycle; kickoff step-4.5 hook via later /arc-change | accepted |
-| 0044 | Spine dedup fix out-of-appetite; hard gate before Phase-2 close | accepted |
-| 0045 | Phase-0 target = `docs/strategy/arc-hq-mockup.html` (arc-internal) | accepted |
-| 0046 | design-lint rides the existing gate-runner + lint conventions | accepted |
-| 0047 | Runner owns the verdict + `review.completed`; critic emits evidence only | accepted |
-| 0048 | Agents judge, scripts measure — the critic never cites a measured value | accepted |
+| 0050 | PORT-A: lanes live at `initiatives/{lane}/` (owner-locked) | accepted |
+| 0051 | PORT-B: one live plan per lane; PORTFOLIO.md is a view, never the truth | accepted |
+| 0052 | PORT-C: WIP visible, never gated (owner-locked, round 4) | accepted |
+| 0053 | PORT-D: shared company organs stay single | accepted |
+| 0054 | PORT-E: uniform explicit `--lane`; dual-mode resolution; kickoff-only creation (owner-locked, round 6) | accepted |
+| 0055 | PORT-F: evidence lane-scoped forward; frozen past | accepted |
+| 0056 | PORT-G: two execution modes; Mode B certified only by REQ-04 | accepted |
+| 0057 | PORT-H: ownership boundary WARN-first, manifest-derived | accepted |
+| 0058 | PORT-I: history — link, never copy | accepted |
+| 0059 | PORT-J: ventures appear only as passport rows | accepted |
 
 ## Non-negotiables
 
-- The critic never writes product code — enforced mechanically (no Edit tool + PreToolUse edit-hook path scope + scoped receipt Bash), never by prose (ADR-0034).
-- No lorem ipsum in any reviewed artifact — realistic content from the content contract.
-- No absolute quality scores anywhere; numbers exist only as blind comparative ranking.
-- Every design review and every owner decision leaves a spine receipt in the closed vocabulary (ADR-0035).
-- Taste is a decision recorded as a design ADR, never a research finding; research receipts only for factual/pattern claims.
-- A new gate/lint/parser is not done until an adversarial construct-a-breaking-input pass has run and the found holes are fixed + pinned as fixtures.
-- Any edit to a product-shipped file treats sync-golden regen as a named step: diff the delta first, confirm only intended paths moved, then re-record.
+- Philosophy untouched: Golden Loop, gates, receipts, change discipline — a lane is a namespace for tracker state, nothing more (ADR-0050, ADR-0053).
+- No history rewrite and no history duplication: frozen paths stay frozen as sole canonical copies; lanes link, never copy (ADR-0055, ADR-0058).
+- Root-mode green at every commit — byte-identical when no `initiatives/` dir exists; the bare-root fixture is a permanent consumer contract (ADR-0054).
+- feat/* branch + PR, never main.
+- All new lints WARN-first, and every WARN prints Expected / Found / Example (ADR-0057).
+- Spine receipts for kickoff / phase-done / retro as usual; no silently lost receipts — degrade visibly, never lose, never block (ADR-0056, REQ-04).
+- Never guess a lane: explicit `--lane` beats auto-resolve beats ask; destructive commands confirm the selected lane (ADR-0054).
 
 ## No-gos (explicitly out of scope)
 
-- External design tools/MCPs — Figma, Magic/21st.dev, shadcn MCP, galleries (W3+, ADR-0039).
-- Editing `arc-kickoff.md` / auto-wiring step 4.5 (ADR-0043).
-- Fixing the spine idem-preimage dedup bug inside this appetite (ADR-0044).
-- Touching or retiring `products/qa` design-reviewer / `/arc-design` before the critique-mode dogfood pass (ADR-0042).
-- The design evals suite (§2.9 of the frozen plan) — later cycle.
-- Promoting the design gate warn→block — needs retro + owner OK.
-- New spine event kinds — vocabulary closed (ADR-0035).
-- The kickoff itself running councils/extra workflows — this is a build, not a decision.
+- HTML/dashboard board (BRIEF-dashboard's pull-trigger owns it) · companion
+  portfolio.yaml/json (a second file is a second truth) · new `/arc-status` command
+  (capability ships via `/arc-resume`; alias is a post-v1 candidate) · scheduler or
+  automation of lane switching · `products/` → `modules/` rename · consumer-repo
+  lane-mode · moving runtime output paths · worktree helper tooling (Mode B uses plain
+  git) · touching venture repos (ADR-0059).
 
 ## Rabbit holes
 
-- **Vision ≠ pixel-perfection:** the critic judges structure, hierarchy, and contract
-  compliance from the PNG — not subpixel rendering. Deterministic render command + the
-  screenshot's hash recorded in the critique artifact; blank/duplicate-hash detection
-  fails the run instead of critiquing a stale image.
-- **Windows worktree friction:** decide worktrees vs the pre-approved fallback (variant
-  route namespace, ADR-0037) at Phase-2 open — never fight it mid-phase.
-- **"Materially differ" cleverness:** the director judges it; lint only checks the IA
-  matrix exists. No string-distance metrics (superseded row 12).
-- **Brief-parsing regexes:** markdown-contract checklist from retro-log applies —
-  tolerant detection, strict value grammar, last-of repeated sections, anchored line
-  regexes, real calendar-date validation.
-- **Two design surfaces during migration:** the new module's modes get distinct naming
-  until retirement (ADR-0042); retirement is a tracked task, never ad-hoc.
+- Generalizing the board into a schema · auto-deriving the board from the spine (later,
+  dashboard-time) · per-lane ADR numbering (ADR-0053 forbids) · cross-lane dependency
+  GRAPHS (the `blocked-on:` / `depends-on:` line convention is enough at N=2) · lane
+  lifecycle state machines beyond the four statuses · a general spine queueing/daemon
+  system (the spool is a timeout fallback, not an event bus — ADR-0027's no-bus stance
+  holds).
 
 ## Assumptions ledger
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| Blind-test recruits (designers + users) reachable at ₹0 | 14 days after Phase-3 build-complete with no Stream A/B evidence → ADR-0041 revisit fires, owner decision forced | 3 |
-| agent-browser screenshots are deterministic enough to critique | 2 flaky/stale-screenshot runs in Phase 0 → harden the fixed-viewport render script before proceeding — **FIRED 2026-07-29**, in Phase 2 rather than Phase 0: variant-b rendered two distinct hashes from unchanged static bytes, once mid-critique into a sealed `review.completed`. Routed → issue #57. Load-bearing for the `screenshot_sha256` on every design receipt and for any future did-this-route-regress check; NOT for REQ-02 (planted-defect detection is unaffected). Remedy due before Phase 3, which runs the same renderer for its pilot evidence. **REMEDIED 2026-07-29** (`feat/render-determinism`): root cause was the capture racing the post-`open` CSS injection; the settle step alone left an unexplained residual, so the renderer now publishes only a hash two consecutive captures agree on and refuses otherwise. The assumption is NOT restored to true — screenshots are still not inherently deterministic; the script no longer trusts them to be | 0 |
-| The spine dedup fix (separate /arc-change) lands before Phase 2 opens | Phase 2 opens without it → Phase 2 re-scopes to single-round critique; gate moves to Phase-2 close (ADR-0044) | 2 |
-| 5 days covers the Phase 0–3 build + test launch | Kill tripwire: 2.5 days burnt and Phase 1 not done → scope-cut conversation | all |
-| LexOS repo + its 4 design drafts are available and current at Phase-3 start | Drafts missing/stale at the Phase-3 re-read → re-pilot on a venturemind route or re-draft first. **FIRED 2026-07-29 on the count, NOT on the substance — remedy deliberately not taken.** The repo is present and current at `E:/Work_Hub/01_Automemory/Lexos` (last commit 2026-07-28), but `docs/design/` holds **2** drafts, not 4: `2026-07-26-dashboard-clients.md` and `2026-07-27-case-workspace.md` (the second touched 2026-07-28). The number 4 came from this plan's own kickoff — the frozen design source `PLAN-design.md` never says it — so this is a miscount here, not drafts that went missing there. Both drafts are recent and neither is stale, which is what the trigger was actually written to catch. Re-piloting on a venturemind route over a wrong number in our own plan would trade the real premise for a bookkeeping error. Corrected to 2 in this row and in `phases/phase-03-spec.md` | 3 |
-| The arc-hq-mockup page is rich enough to exercise the critique protocol | Fewer than 3 distinct findings possible on it → ADR-0045 revisit: swap target route, same phase | 0 |
-| A real Stream-B contact (LexOS lawyer) is identified and reachable before Phase-3 opens — needed to answer the pilot-brief case-vs-client question, not only to receive evidence later | No named contact at Phase-2 close → Phase-3's appetite opens with its own first exit criterion (pilot-brief upgrade) already blocked — **FIRED 2026-07-29 at the Phase-2 close**: no contact is named anywhere in the plan, the specs or the tracker. Consequence is the one the trigger already wrote: Phase 3 opens with its pilot-brief upgrade blocked. Owner action, not a code task — either a named reachable contact before Phase 3 opens, or the pre-designed fallback (case-primary marked PROVISIONAL, External-dependencies row) is taken deliberately and on the record. **RESOLVED 2026-07-29 without the fallback:** a real LexOS lawyer answered the primary-object question — **case**, not client (owner-relayed; receipt `01KYQ9B2BXMXWWADZZYVWXEGRT`). The pilot brief carries a real answer, not a PROVISIONAL placeholder, so Phase 3 opens with exit criterion 2 unblocked. **Still open, and narrower than the original row:** whether that same contact is reachable AGAIN to sit the Stream-B blind test. Answering the brief question is not the same as agreeing to be a test subject; that is due before the blind-test launch criterion, not before the phase opens | 3 |
+| A1: kickoff-lint + command paths are parameterizable without rewrite | more than 0.5d inside the resolver/lint refactor → FIRED: ship root goldens + minimal EXPLICIT `--lane` routing only, postpone auto-resolution AND migration (scope-cut ladder) | 0 |
+| A2: no manifest / sync-to-project entry ships root `PLAN.md`/`PROGRESS.md`/`phases/` to consumers | Phase-0 grep of manifests + sync scripts says otherwise → FIRED: add exclusions + consumer note BEFORE the Phase-1 move | 0 |
+| A3: advisory lock + spool covers single-machine AND Mode-B (two worktrees, shared spine) concurrency | any interleaved/corrupt line in main JSONL in fixtures or dogfood → FIRED: strict lockfile for hook mode too; spool becomes the ONLY timeout path, same phase | 2 |
+| A4: advisory-only WIP (visible count, no gate) is enough at solo scale | retro finds rework/stall rising while counted lanes exceed 2, or two consecutive weeks with both counted lanes owner-blocked → consider promoting the info line to a WARN at retro (ADR-0052) | 2 |
+| A5: Windows (E:\ paths, `git mv` casing) behaves under the design-cycle's cross-OS lessons | any Windows-only CI failure in Phase 0 → apply the no-path-string-compare fixture pattern before proceeding | 0 |
 
 ## External dependencies
 
+None — pure repo + tooling, offline by nature, zero new packages. The
+interface / fake / real / contract-test table is intentionally empty; recorded here so
+the gate sees the section considered rather than skipped (pack §13).
+
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| agent-browser (render + screenshot) | CLI: open URL at fixed viewport → PNG on disk | Committed fixture PNGs: one clean render + one planted-defect variant of the same page | agent-browser CLI on `docs/strategy/arc-hq-mockup.html` | Critic run on the planted-defect PNG reports the defect; run on the clean PNG reports no planted defect (Phase 0: fakes; real render before Phase-0 close) |
-| LexOS repo (Phase-3 pilot surface) | Local filesystem path to the LexOS checkout, confirmed and recorded in phase-03's Your-setup/pending BEFORE Phase-3 opens — `docs/design/` drafts + app routes on the real stack | The arc-internal Phase-0 route + committed draft copies | LexOS repo checked out locally | Pilot brief passes design-lint against the real drafts before any variant starts |
-| Spine idem-preimage dedup fix (separate `/arc-change`, ADR-0044) | Fix to `.claude/scripts/hq/arc-event.sh` re-emit/dedup path | none — absence forces Phase-2 re-scope to single-round critique | Real fix shipped via its own `/arc-change` track before Phase-2 close | Phase-2 close blocked (phase-02-spec's Dependency gate) until landed; no owner or start date assigned anywhere in this plan |
-| Real lawyer input (LexOS primary-object decision + Stream B recruiting) | One written answer: case-vs-client primary object, from an actual LexOS lawyer contact | A placeholder answer (case-primary, marked PROVISIONAL) unblocks brief-writing and variant-build if the real lawyer isn't reachable inside Phase-3's appetite | Real LexOS lawyer contact, scheduled BEFORE Phase-3 opens, not during it | Pilot brief's interaction-model Q2 is either the real lawyer's answer or explicitly marked PROVISIONAL with a revisit trigger before any variant starts |
 
 ## Pre-mortem (Klein)
 
-*It's 6 months later. The Designer shipped and failed.* Top 5 causes:
-
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | design-lint + the brief contract (REQ-05, Phase 1) "looked correct and passed its own fixtures" but had holes — doctored briefs display legitimacy while dodging the gate (council v2+v3 pattern: 43 real holes) | Adversarial construct-a-breaking-input pass before Phase-1 close (non-negotiable); tolerant detection + strict grammar checklist; every found hole pinned as a fixture |
-| 2 | Critique theatre — receipts flow, stamps land, but the critic never actually catches anything, OR the REQ-04 gate check script itself errors and the crash is silently read as a receipt-present PASS (Cycle-2 pattern: golden passed while the outcome was false) | The planted-defect fixture IS REQ-02's acceptance; anomalies (zero findings, identical findings across routes, or an uninspected non-zero exit) are tested against the mechanism before being recorded as fine; a fixture proves the REQ-04 check script's crash path never resolves to exit 0 |
-| 3 | The vision step (REQ-02, Phase 0, agent-browser dep) silently judges a stale, blank, or wrong-viewport screenshot → confident nonsense critique | One shared deterministic render command; critique artifact records screenshot hash + viewport; blank/duplicate-hash detection fails the run |
-| 4 | Explore (REQ-07, Phase 2, ADR-0037) produces 3 skins of one app; thesis reassignment loops burn the appetite | Director rejects weak thesis lines BEFORE composing; IA matrix filled at thesis-assignment time, not after build; one reassignment round max, then owner call |
-| 5 | A new Windows-run Node script (design-lint.mjs, ADR-0046; the render/critique command; the design gate check script) calls process.exit() while agent-browser/socket teardown is in flight → libuv assertion crash or a garbage exit code silently misread as gate PASS/FAIL (council v3 pattern, recurs on Windows) | Every new script in products/design/ and .claude/scripts/design/ sets process.exitCode + returns naturally (unref'd backstop timer if needed), never abrupt process.exit() on a fetch/socket-touching path — proven green on Windows CI specifically, not just Linux/macOS |
+| 1 | Silent behavior change in the path refactor breaks a consumer surface nobody watches | Root-mode goldens pinned BEFORE any edit; dual-mode suite + bare-root fixture are the regression net (REQ-01) |
+| 2 | Mid-cycle self-move strands the live tracker (the cycle migrates its own state while running) | Dry-run shown → single commit → rollback REHEARSED in a disposable scratch worktree before the real move (REQ-02); root-mode fallback green throughout |
+| 3 | The same markdown-contract parsing bugs the council found keep recurring, and this cycle ships two NEW strict-grammar parsers into that exact bug class — board lint reading BOTH tables (REQ-03) and the PROGRESS machine-header block (REQ-01/REQ-03: `status:`/`cycle:`/etc.) — case-sensitive field match, first-vs-last match on a repeated section, `$` under `/m`, or a bold/heading-level cosmetic variant slipping past an exact-match regex | Board lint + kickoff-lint refactor (REQ-01, REQ-03) run the council-v2/v3 markdown-contract checklist BEFORE close: normalize case, take last-of-repeated fields, anchor line regexes, tolerant detection + strict value grammar (retro-log 2026-07-16 arc-council-v2/v3) |
+| 4 | Wrong-lane command execution mutates the wrong product's tracker | Kickoff-only creation + unknown-lane hard STOP + `Selected lane:` first-line echo + destructive-command confirm + never-guess (ADR-0054, REQ-01) |
+| 5 | Receipt loss/corruption under concurrent emitters (the C2 lesson: 100 receipts lost silently) | Spool contract (REQ-04): main JSONL zero-interleaving fixtured on 3 OS; timeout events spool visibly; drain under lock; Mode B forbidden until green (ADR-0056) |
 
 ## Phases (risk-ordered)
 
-Phase 0 is the steel thread (frozen plan §3.2, built EXACTLY): the thinnest end-to-end
-slice proving the verification spine before any generation exists.
-
 | Phase | Capability | Appetite | Depends on |
 |---|---|---|---|
-| 00 | Steel thread: critic vision + mechanical read-only enforcement + spine receipt + warn gate + minimal brief template → one real route inspected end-to-end | 1.25 days | none |
-| 01 | Brief mode (4 contracts) + design-lint v0 (adversarially passed) + `products/design/` manifest module | 1 day | phase-00 |
-| 02 | Explore mode: theses → 3 isolated variants → critique loop → blind ranking → pick + prediction receipt | 1.5 days | phase-01 |
-| 03 | Intelligence library (tagged schema) + LexOS pilot end-to-end + blind-test launch (evidence may trail, ADR-0041) | 0.75 days | phase-02 |
+| 00 | Dual-mode machinery (steel thread): root goldens pinned, resolver on 7 surfaces, creation/STOP/echo/adversarial fixtures | 1.25 days | none |
+| 01 | Self-host + link history + board v1: tracker moves to `initiatives/portfolio/`, rehearsed rollback, design HISTORY-INDEX, SessionStart degraded rule | 0.75 days | phase-00 |
+| 02 | Parallel-safety floor: WIP info line, two-table board lint, ownership lint, spine spool contract | 0.75 days | phase-01 |
+| 03 | Docs truth + retro: One-Rule rewrite, vocabulary, truth hierarchy, HISTORY entry | 0.25 days | phase-02 |
 
-Specs: `phases/phase-00-spec.md` … `phase-03-spec.md`.
+Phase 0 is the walking skeleton: routing proven against fixtures and goldens BEFORE any
+real state moves (migration only after routing is proven). Specs live at
+`phases/phase-NN-spec.md`; verification detailed for Phases 0–1, coarse for 2–3 (refined
+at phase start via `/arc-change`).
