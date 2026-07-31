@@ -1,0 +1,29 @@
+CI PROOF — Cycle 4 portfolio, Phase 01
+======================================
+
+Run:      https://github.com/technology-ashiq/arc/actions/runs/30648403346
+Commit:   399f25ef5d55c4a226e17211856b16bda4ceb714
+PR:       #79
+Result:   success — 19/19 jobs
+
+There is no local test log for this phase and that is deliberate: from 2026-07-31 the
+owner's standing rule is that CI is the only test authority. A local pass proves ONE
+leg, and every claim below is a claim about three.
+
+-- executed-vs-declared reconciliation, per leg (a test that does not run is
+   indistinguishable from one that passes) --
+   selftest (ubuntu-latest, 20)               reconcile: declared 621, executed 621
+   selftest (ubuntu-latest, 18)               reconcile: declared 621, executed 621
+   selftest (ubuntu-latest, 22)               reconcile: declared 621, executed 621
+   selftest (macos-latest, 20, shard 3/3)     reconcile: declared 240, executed 240
+   selftest (windows-latest, 20, shard 10/12) reconcile: declared 93, executed 93
+
+-- A5's untested half: the casing fixture, EXECUTED on all three legs --
+   selftest (ubuntu-latest, 20)               ok 327 migrate: refuses a target lane whose directory exists under a different case (A5)
+   selftest (macos-latest, 20, shard 3/3)     ok 173 migrate: refuses a target lane whose directory exists under a different case (A5)
+   selftest (windows-latest, 20, shard 10/12) ok 44 migrate: refuses a target lane whose directory exists under a different case (A5)
+
+-- the 46 Phase-01 tests, per leg --
+   selftest (ubuntu-latest, 20)               46 ok / 0 failed
+   selftest (macos-latest, 20, shard 3/3)     46 ok / 0 failed
+   selftest (windows-latest, 20, shard 10/12) 46 ok / 0 failed
