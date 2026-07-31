@@ -1,0 +1,7 @@
+# arc-ci run 30627445144, gating main @ c2d8fa1 — 19/19 jobs SUCCESS
+# The line that matters is declared == executed: last cycle this read 91/93 on one shard.
+ubuntu 18/20/22   569/569 each (unsharded, full suite)
+macOS  3 shards   179 + 188 + 202  = 569
+windows 12 shards 23+33+37+37+43+44+45+46+53+61+68+79 = 569
+not ok lines across all 18 legs: 0
+real "# bats warning: Executed N instead of M": 0

@@ -1,0 +1,25 @@
+# Phase 00 live-demo transcript (spec Verification plan), captured 2026-07-31T12:37:02Z
+
+## explicit --lane
+Selected lane: fixture-a (via arg)
+exit=0
+
+## typo'd lane -> hard STOP, 0 folders created
+STOP: unknown lane 'fixtur-a'.
+Known lanes: fixture-a
+Lanes are created by /arc-kickoff only — no other command creates one.
+exit=4
+folders before=1 after=1
+
+## free text stays free text
+Selected lane: fixture-a (via arg)
+exit=0
+
+## bare token is never a lane
+Selected lane: fixture-a (via auto)
+exit=0
+
+## kickoff-only creation
+status=unknown
+status=create
+on-disk lanes after both: fixture-a 
