@@ -162,6 +162,36 @@ jobs:
         # `set -o pipefail` is not enough here; the list is captured first so a sharder refusal
         # fails the step instead of running bats over an empty argument list.
         run: |
+          # ---- executed-vs-declared reconciliation (em-dash incident, 2026-07-30) ----
+          # A U+2014 in two `@test` NAMES made bats fail to encode them into shell function
+          # identifiers under the C locale, so those two tests were never executed. bats
+          # reported it as a `# bats warning:` COMMENT among 91 `ok` lines: the step was red,
+          # but the reason was invisible and reads as flake. Counting the TAP lines bats
+          # actually emitted against the `@test` lines the files declare turns ANY
+          # non-execution into an annotation -- mangled name, unparseable `@test`, or a file
+          # bats could not load -- and it does so on every leg, not just the one that broke.
+          # This subsumes bats' own validator: for a `@test` whose brace is on the next line
+          # the plan header shrinks along with the parse, so bats sees no mismatch and this
+          # still does. Skips count as executed, correctly.
+          _tap=./.bats-tap.log
+          _reconcile() {
+            local declared="$1" executed
+            executed="$(grep -cE '^(ok|not ok) ' "$_tap" || true)"
+            echo "reconcile: declared $declared, executed $executed"
+            if [ "$declared" -ne "$executed" ]; then
+              echo "::error::$(( declared - executed )) declared test(s) never executed -- a test that does not run is indistinguishable from one that passes"
+              grep -nE '^# bats warning:' "$_tap" || true
+              return 1
+            fi
+            if grep -qE '^# bats warning:' "$_tap"; then
+              echo "::error::bats emitted a warning; treating as non-execution"
+              grep -nE '^# bats warning:' "$_tap"
+              return 1
+            fi
+            return 0
+          }
+          _declared() { grep -hcE '^[[:blank:]]*@test[[:blank:]]' "$@" | awk '{s+=$1} END{print s+0}'; }
+
           if [ "${{ matrix.shards }}" -gt 1 ]; then
             files="$(node .github/scripts/shard-tests.mjs --index ${{ matrix.shard }} --total ${{ matrix.shards }})" || exit 1
             [ -n "$files" ] || { echo "::error::shard ${{ matrix.shard }}/${{ matrix.shards }} resolved to no files"; exit 1; }
@@ -174,12 +204,19 @@ jobs:
             # actually performs. Grep a run for "shard-timing:" to harvest them.
             printf 'shard-timing: files %s\n' "$(printf '%s ' $files)"
             _t0=$(date +%s)
-            set +e; bats --print-output-on-failure $files; _rc=$?; set -e
+            set +e; bats --print-output-on-failure $files 2>&1 | tee "$_tap"; _rc=${PIPESTATUS[0]}; set -e
             printf 'shard-timing: shard %s/%s elapsed %ss rc=%s\n' \
               "${{ matrix.shard }}" "${{ matrix.shards }}" "$(( $(date +%s) - _t0 ))" "$_rc"
-            exit "$_rc"
+            set +e; _reconcile "$(_declared $files)"; _rrc=$?; set -e
+            rm -f "$_tap"
+            [ "$_rc" -eq 0 ] || exit "$_rc"
+            exit "$_rrc"
           else
-            bats -r --print-output-on-failure tests/
+            set +e; bats -r --print-output-on-failure tests/ 2>&1 | tee "$_tap"; _rc=${PIPESTATUS[0]}; set -e
+            set +e; _reconcile "$(_declared $(find tests -name '*.bats'))"; _rrc=$?; set -e
+            rm -f "$_tap"
+            [ "$_rc" -eq 0 ] || exit "$_rc"
+            exit "$_rrc"
           fi
 
       - name: Test-count floor

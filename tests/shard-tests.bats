@@ -142,3 +142,38 @@ _union() { # $1 = total; prints every shard's files, sorted
   [ -n "$heaviest" ]
   [ "$heaviest" -le 200 ] || { echo "heaviest shard is ${heaviest}s -- balancing has regressed"; false; }
 }
+
+# ---------- one level down: a TEST that never runs ----------
+# Same lie as a file landing in no shard, one layer deeper. On 2026-07-30 two `@test`
+# names in lane-resolver.bats contained U+2014. bats builds a shell function identifier
+# out of a test's NAME (bats_encode_test_name); under the C locale bash walks bytes, the
+# multibyte dash mangles into an invalid identifier, the lookup misses, and the test is
+# simply absent from the TAP stream. The build went red -- but its only explanation was a
+# `# bats warning:` comment among 91 `ok` lines, which reads as flake. CI now reconciles
+# executed-vs-declared counts on every leg; this catches it at the authoring site instead,
+# with a file, a line and a codepoint. Bodies are safe: bats emits them verbatim and only
+# the name becomes an identifier.
+
+@test "every @test name is pure ASCII (a non-ASCII name silently does not run)" {
+  local hits
+  hits="$(cd "$ARC_ROOT" && grep -nE '^[[:blank:]]*@test[[:blank:]]' tests/*.bats \
+            | LC_ALL=C grep -n '[^ -~]' || true)"
+  [ -z "$hits" ] || {
+    echo "Non-ASCII in a @test NAME -- bats cannot encode it into a function identifier"
+    echo "under a C locale, and the test vanishes from the run. Use plain ASCII:"
+    echo "$hits"
+    false
+  }
+}
+
+@test "no .bats file hides in a subdirectory (invisible to every shard)" {
+  # The sharder discovers with a flat readdirSync, so a nested file is never seen -- and
+  # its own "landed in no shard" refusal cannot fire for a file it never discovered. The
+  # unsharded legs run `bats -r`, so such a file would pass on ubuntu/macOS and be absent
+  # from all nine Windows shards: green, and never executed.
+  local nested
+  nested="$(cd "$ARC_ROOT" && find tests -mindepth 2 -name '*.bats' | LC_ALL=C sort || true)"
+  [ -z "$nested" ] || {
+    echo "These run under 'bats -r' but are invisible to the sharder:"; echo "$nested"; false
+  }
+}
