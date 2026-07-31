@@ -89,25 +89,66 @@ case "$cmd" in
     when="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     fullsha="$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
 
+    # ADR-0060: never write over evidence another commit owns. The root-mode path is keyed
+    # on the phase number alone and carries no cycle identity, so every cycle's phase-NN
+    # lands in the same directory -- four different "close Phase 00" commits had already
+    # done so before this refusal existed, each silently rewriting the previous manifest's
+    # commit pointer. A same-commit re-run stays idempotent: closing a phase may re-bundle.
+    # Fail CLOSED: a manifest that exists must positively identify THIS commit, or the
+    # write is refused. An unreadable or commit-less manifest is not "unowned" -- it is the
+    # case where ownership cannot be established, which is exactly when overwriting is
+    # least safe. (Adversarial pass, 2026-07-31: the first cut read the commit with a `//
+    # ""` fallback, so corrupt JSON produced an empty owner and sailed straight through.)
+    if [ -f "$dir/manifest.json" ]; then
+      owner="$(jq -r '.commit // ""' "$dir/manifest.json" 2>/dev/null || echo "")"
+      if [ "$owner" != "$fullsha" ]; then
+        owner_short="$(jq -r '.short // ""' "$dir/manifest.json" 2>/dev/null || echo "")"
+        owner_when="$(jq -r '.generated // ""' "$dir/manifest.json" 2>/dev/null || echo "")"
+        {
+          echo "arc-evidence: REFUSING to bundle into $dir"
+          if [ -n "$owner" ]; then
+            echo "  that bundle belongs to commit ${owner_short:-$owner} (generated ${owner_when:-unknown})"
+          else
+            echo "  a manifest is already there but names no commit this run can read"
+          fi
+          echo "  this run is commit $sha — writing here would overwrite evidence that is not yours"
+          echo "  bundle somewhere this cycle owns, e.g.:"
+          echo "    arc-evidence.sh bundle $phase_arg --out docs/evidence/<cycle>"
+        } >&2
+        exit 3
+      fi
+    fi
+
     # Gather whatever artifacts exist -> copy into the bundle (degrade if absent).
-    manifest_files="$(mktemp)"; : > "$manifest_files"
+    # Copying is all this section does; the manifest is built from the directory below,
+    # so an artifact that lands here by any route is covered exactly once.
+    manifest_files="$(mktemp)"
     _grab() { # <src-rel> <dst-name>
       local src="$ROOT/$1" dst="$2"
       [ -f "$src" ] || return 0
       cp "$src" "$dir/$dst"
-      printf '{"name":"%s","sha256":"%s"}\n' "$dst" "$(arc_hash_file "$dir/$dst")" >> "$manifest_files"
     }
     _grab ".claude/state/scan/verdict.json"      "scan-verdict.json"
     _grab ".claude/state/scan/scan-result.sarif" "scan-result.sarif"
     _grab "coverage/coverage-summary.json"        "coverage-summary.json"
     # review ledger for HEAD (committed proof of which reviews passed)
-    [ -f "$ROOT/.claude/state/reviews/$sha.txt" ] && cp "$ROOT/.claude/state/reviews/$sha.txt" "$dir/reviews.txt" \
-      && printf '{"name":"reviews.txt","sha256":"%s"}\n' "$(arc_hash_file "$dir/reviews.txt")" >> "$manifest_files"
+    [ -f "$ROOT/.claude/state/reviews/$sha.txt" ] && cp "$ROOT/.claude/state/reviews/$sha.txt" "$dir/reviews.txt"
     # optional test-run log -> store its hash (proof tests ran on this commit)
     if [ -n "$test_log" ] && [ -f "$test_log" ]; then
       cp "$test_log" "$dir/test-output.log"
-      printf '{"name":"test-output.log","sha256":"%s"}\n' "$(arc_hash_file "$dir/test-output.log")" >> "$manifest_files"
     fi
+
+    # ADR-0060: the manifest describes the BUNDLE, not the writer. Hashing only what this
+    # run collected is what let `verify` report success over seven files from another cycle
+    # -- a gate that checks what it wrote cannot see contamination. Rebuild the list from
+    # the directory itself, so anything present is either covered or a verify failure.
+    # LC_ALL=C sort: byte order, so the manifest is identical on every OS.
+    : > "$manifest_files"
+    find "$dir" -type f | LC_ALL=C sort | while IFS= read -r f; do
+      rel="${f#"$dir"/}"
+      [ "$rel" = "manifest.json" ] && continue      # written after; cannot hash itself
+      printf '{"name":"%s","sha256":"%s"}\n' "$rel" "$(arc_hash_file "$f")" >> "$manifest_files"
+    done
 
     jq -n --arg phase "$nn" --arg commit "$fullsha" --arg short "$sha" --arg when "$when" \
           --slurpfile files "$manifest_files" \
@@ -127,6 +168,16 @@ case "$cmd" in
       if [ -z "$got" ]; then echo "arc-evidence: MISSING $name" >&2; bad=1
       elif [ "$got" != "$want" ]; then echo "arc-evidence: TAMPERED $name" >&2; bad=1; fi
     done < <(jq -c '.files[]' "$dir/manifest.json")
+    # ADR-0060: a file present but unlisted is the failure the old loop could not see --
+    # it only ever walked the manifest, so anything the manifest omitted was invisible.
+    # That is how a previous cycle's seven artifacts sat inside a "verified" bundle.
+    while IFS= read -r f; do
+      rel="${f#"$dir"/}"
+      [ "$rel" = "manifest.json" ] && continue
+      jq -e --arg n "$rel" 'any(.files[]; .name == $n)' "$dir/manifest.json" >/dev/null 2>&1 \
+        || { echo "arc-evidence: UNLISTED $rel (in the bundle, absent from the manifest)" >&2; bad=1; }
+    done < <(find "$dir" -type f | LC_ALL=C sort)
+
     if [ "$bad" -eq 0 ]; then echo "arc-evidence: bundle verified ($dir)"; exit 0; else exit 2; fi
     ;;
 
