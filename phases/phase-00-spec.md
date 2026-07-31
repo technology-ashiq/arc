@@ -16,12 +16,13 @@ validation and flag parsing (ADR-0050 grammar), holes fixed + pinned as fixtures
 
 ## Exit criteria (Definition of Done)
 
-- [ ] Capability works end-to-end: a fixture lane resolves on all 7 surfaces (explicit `--lane`, auto-single, ask-on-ambiguity) AND a bare root behaves byte-identically to the pinned goldens (REQ-01)
-- [ ] Tests added & green: lane-resolver fixtures, adversarial lane-name fixtures (INCLUDING Windows reserved device names — `con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9` — which pass the `[a-z][a-z0-9-]*` grammar but fail or misbehave on `mkdir` under windows-git-bash), unknown-lane STOP fixtures per non-kickoff surface, kickoff-only creation fixture, canonical-order assertion, bare-token fixtures (`/arc-change design ...` stays free text) — full bats green on 3 OS
-- [ ] Live demo run + output checked (scenario below)
-- [ ] Verified against the real system: THIS repo (still root layout in Phase 0) runs kickoff-lint / statusline / SessionStart with outputs unchanged vs goldens
-- [ ] Contract tests green: not applicable — zero external dependencies (PLAN External dependencies)
-- [ ] Tracker updated (PROGRESS.md row ✅ + done-log + appetite burn)
+- [x] Capability works end-to-end: a fixture lane resolves on all 7 surfaces (explicit `--lane`, auto-single, ask-on-ambiguity) AND a bare root behaves byte-identically to the pinned goldens (REQ-01)
+- [x] Tests added & green: lane-resolver fixtures, adversarial lane-name fixtures (INCLUDING Windows reserved device names — `con`, `prn`, `aux`, `nul`, `com1`-`com9`, `lpt1`-`lpt9` — which pass the `[a-z][a-z0-9-]*` grammar but fail or misbehave on `mkdir` under windows-git-bash), unknown-lane STOP fixtures per non-kickoff surface, kickoff-only creation fixture, canonical-order assertion, bare-token fixtures (`/arc-change design ...` stays free text) — full bats green on 3 OS
+- [x] Live demo run + output checked (scenario below)
+- [x] Verified against the real system: THIS repo (still root layout in Phase 0) runs kickoff-lint / statusline / SessionStart with outputs unchanged vs goldens
+- [x] Contract tests green: not applicable — zero external dependencies (PLAN External dependencies)
+- [x] **Evidence can be bundled without overwriting frozen history (ADR-0060).** Added 2026-07-31, during this phase's own close: `arc-evidence.sh bundle 0` wrote into `docs/evidence/phase-00/`, a FROZEN path already holding a previous cycle's artifacts, and silently rewrote its manifest commit pointer — the fourth "close Phase 00" to land in that one directory. Root-mode's default path cannot change (ADR-0054 byte-identity), so: bundling REFUSES when the destination's manifest names a different commit, the manifest hashes every file in the bundle directory rather than only the artifacts the run collected (which is why `verify` passed over seven foreign files), and this cycle bundles via `--out docs/evidence/cycle-04-portfolio/phase-NN`. Fixtures for the refusal and for a contaminated bundle failing `verify`; `docs/evidence/phase-0*` unchanged in `git status`
+- [x] Tracker updated (PROGRESS.md row ✅ + done-log + appetite burn)
 
 ## Verification plan
 

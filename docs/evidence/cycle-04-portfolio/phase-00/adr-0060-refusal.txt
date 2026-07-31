@@ -1,0 +1,8 @@
+# ADR-0060 refusal, real run against the frozen path
+
+arc-evidence: REFUSING to bundle into E:/Work_Hub/01_Automemory/arc/docs/evidence/phase-00
+  that bundle belongs to commit fa794ea (generated 2026-07-28T14:04:29Z)
+  this run is commit c2d8fa1 — writing here would overwrite evidence that is not yours
+  bundle somewhere this cycle owns, e.g.:
+    arc-evidence.sh bundle 0 --out docs/evidence/<cycle>
+exit=3 (refused)

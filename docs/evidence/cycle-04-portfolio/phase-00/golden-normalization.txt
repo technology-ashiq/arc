@@ -1,0 +1,11 @@
+# What the root-mode golden comparison normalises away, and therefore cannot judge.
+# CLAUDE.md: "a gate that transforms what it measures must declare what the transform
+# destroys" — the design-render.sh font-family lesson.
+#
+# _arc_root_norm (tests/test_helper.bash) strips, before comparing to a golden:
+#   - CR bytes            -> CRLF vs LF differences are NOT tested by these goldens
+#   - commit hashes       -> a wrong-but-well-formed sha would compare equal
+#   - clock/timestamps    -> ordering or staleness of a timestamp is NOT tested
+#   - absolute paths      -> a path pointing at the wrong root, but shaped right, compares equal
+# Per-OS override slot exists (<name>.macos.txt beats <name>.txt) so a genuine platform
+# difference is pinned rather than normalised into invisibility.

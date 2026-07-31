@@ -1,0 +1,36 @@
+{
+  "phase": "00",
+  "commit": "c2d8fa1585626937afd3f01814e05fdf49d96f6f",
+  "short": "c2d8fa1",
+  "generated": "2026-07-31T12:37:49Z",
+  "files": [
+    {
+      "name": "adr-0060-refusal.txt",
+      "sha256": "dc5a909841683fad99da965e2e0478e642a3294b618a8af73740cb83b1129867"
+    },
+    {
+      "name": "adversarial-fixtures.txt",
+      "sha256": "4a1ee773d1bebb57ea7fce3af87d056d9d130128bcd5f8a0b7320e3f26b91fb0"
+    },
+    {
+      "name": "ci-3os.txt",
+      "sha256": "ab151f8c87a0cd4d265056abecb7317eb15929653efa22354c46a3cb859e3906"
+    },
+    {
+      "name": "golden-normalization.txt",
+      "sha256": "77caa9eb9ee81d581321a5931c11e1d3cfced562ff4e4d4b4b19907d90114beb"
+    },
+    {
+      "name": "live-demo.txt",
+      "sha256": "c381a97ea6b09ab0dd827458ac1eb5e0677306ff7ffe0b325d4a52d53946dbcc"
+    },
+    {
+      "name": "scan-result.sarif",
+      "sha256": "5d95ea4b78d22cc7e5d1093889b6b0f284ef06d941f4e11d0dd2aff3afbb0f34"
+    },
+    {
+      "name": "scan-verdict.json",
+      "sha256": "6f291bad5ecdfe22b2f77ab4ba7f18f0701e29a0049154d413f3be55a8e20157"
+    }
+  ]
+}

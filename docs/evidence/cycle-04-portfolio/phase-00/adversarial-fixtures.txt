@@ -1,0 +1,7 @@
+# Adversarial lane names pinned as fixtures (source: tests/lane-resolver.bats)
+159:  for bad in "../etc" "/etc/passwd" "" "Design" "9lives" "a/b" "." ".." "my lane" "~root" "a\\b" "lane;rm" 'a$b' "-lead"; do
+167:  for bad in con prn aux nul com1 com9 lpt1 lpt9; do
+
+# The locale trap that made macOS diverge, now pinned by construction:
+84:  case "$n" in *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1;; esac
+85:  case "$n" in [!abcdefghijklmnopqrstuvwxyz]*) return 1;; esac
