@@ -31,6 +31,16 @@
 # and identical exit codes. EDIT BOTH FILES TOGETHER.
 set -uo pipefail
 
+# Byte semantics, not the operator's collation. A bracket RANGE like [a-z] is ordered
+# by the locale's collation table, not by ASCII: under macOS's default locale that
+# table interleaves case (aAbBcC...), so `[a-z]` matches `D` and the grammar below
+# accepted `Design` on exactly one of the three CI legs while the .mjs twin -- whose
+# regex is codepoint-ranged and locale-blind -- correctly refused it. This also pins
+# awk's [[:cntrl:]], filename globbing and sort order to the twin's byte order.
+# Individual `sort`/`tr` calls keep their own LC_ALL=C prefix: this line must be
+# removable-by-accident without silently changing how lane lists are ordered.
+export LC_ALL=C LANG=C
+
 LANE_ARG=""; LANE_GIVEN=0; LANE_DUP=0; ROOT=""; SURFACE="command"; PRINT="machine"
 
 while [ $# -gt 0 ]; do
@@ -61,15 +71,21 @@ done
 # [a-z][a-z0-9-]*, length-capped, and never a Windows reserved device name: `con`
 # passes the grammar but mkdir fails on exactly one of the three CI legs, so it is
 # rejected everywhere rather than becoming a one-OS surprise.
+#
+# The patterns spell every character out instead of writing a range. A range is
+# resolved through the locale's collation table; an explicit LIST is compared
+# byte-by-byte and no collation can reorder it. This is deliberate duplication with
+# the LC_ALL=C export above -- the single check that decides whether a directory is
+# a lane at all must not depend on one `export` line surviving a future refactor.
 _valid_name() {
   local n="${1-}"
   [ -n "$n" ] || return 1
   [ "${#n}" -le 64 ] || return 1
-  case "$n" in *[!a-z0-9-]*) return 1;; esac
-  case "$n" in [!a-z]*) return 1;; esac
+  case "$n" in *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) return 1;; esac
+  case "$n" in [!abcdefghijklmnopqrstuvwxyz]*) return 1;; esac
   case "$n" in
     con|prn|aux|nul) return 1;;
-    com[0-9]|lpt[0-9]) return 1;;
+    com[0123456789]|lpt[0123456789]) return 1;;
   esac
   return 0
 }

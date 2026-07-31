@@ -83,7 +83,7 @@ teardown() { _arc_teardown; }
   [ "$(_arc_field lanes)" = "design develop portfolio" ]
 }
 
-@test "lane: BLOCKED counts toward WIP — LIVE+BLOCKED means ASK, never guess" {
+@test "lane: BLOCKED counts toward WIP - LIVE+BLOCKED means ASK, never guess" {
   _arc_lane_sandbox
   _arc_make_lane portfolio LIVE
   _arc_make_lane design BLOCKED
@@ -138,7 +138,7 @@ teardown() { _arc_teardown; }
   [[ "$output" == *"kickoff"* ]]
 }
 
-@test "lane: every non-kickoff surface refuses to create — only kickoff may" {
+@test "lane: every non-kickoff surface refuses to create - only kickoff may" {
   _arc_lane_sandbox
   _arc_make_lane portfolio LIVE
   for surface in resume change phase-done retro evidence lint; do
