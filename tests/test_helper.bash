@@ -472,3 +472,343 @@ _arc_tree_manifest() {
       printf '%s\t%s\n' "${f#./}" "$(tr -d '\r' < "$f" | _arc_sha256)"
     done )
 }
+
+# ---------- WARN message shape (Cycle 4 portfolio, Phase 02 / REQ-03) ----------
+#
+# Phase 02 adds nine WARN classes. `phases/phase-02-spec.md` section A requires every
+# one of them to print a four-line block -- a WARN line, then Expected / Found / Example --
+# and to EXIT 0, because a WARN-first lint that exits non-zero is a BLOCK wearing a WARN's
+# label. This family is the single assertion all nine fixtures go through, so a WARN that
+# forgets a part fails the suite instead of shipping.
+#
+# WHY the shape is checked mechanically rather than by eyeballing a substring: ADR-0051
+# makes the lane's machine header the one source every board value derives from, so a WARN
+# that cannot cite WHERE its Expected value came from is unfalsifiable advice. The
+# `Expected:` source pointer is that citation, and it is mandatory.
+#
+# Constants are set with `printf -v` and never `$(printf ...)`: file-scope code runs once
+# per test per file, and a command substitution here was measured ~130x more expensive on
+# the leg `tests/shard-timings.json` records at 2.82 s/test.
+printf -v _ARC_WARN_DASH  '\342\200\224'   # U+2014 EM DASH   -- the WARN-line separator
+printf -v _ARC_WARN_ARROW '\342\206\220'   # U+2190 LEFTWARDS -- the derived-from pointer
+printf -v _ARC_WARN_CR    '\015'           # CR, for CRLF capture on windows-git-bash
+_ARC_WARN_ABSENT='(none)'                  # a genuinely missing artifact, byte-distinct
+                                           # from the board's U+2014 empty-cell marker
+
+# The registry: `<class> <loc-kind> <example-target>`, one row per class.
+# Data, not code, so every loosening is a visible diff (the tests/portability.bats:42-49
+# heredoc idiom -- bash 3.2 has no associative arrays).
+#   loc-kind        line = path:digits · file = a bare repo-relative path (whole-file defect)
+#   example-target  board-row = a paste-able table row
+#                   meta:<Key> = must begin `<Key>: ` (capital-U `Updated` matches the
+#                     board's own key; lowercase `status` matches a lane machine header)
+#                   free = the correction is a deletion, a move or a command, which is not
+#                     mechanically decidable -- the call-site guard makes that class's own
+#                     fixture pin the exact Example string instead.
+_ARC_WARN_CLASSES() {
+  cat <<'EOF'
+board-header-drift line board-row
+board-row-no-lane line free
+lane-no-board-row file board-row
+board-bad-status line board-row
+board-bad-dependency-line line board-row
+board-venture-in-initiatives line free
+board-stale-updated line meta:Updated
+lane-no-machine-header line meta:status
+ownership-cross-lane file free
+EOF
+}
+
+# Look up <class>. Sets _ARC_W_KIND and _ARC_W_TGT; returns 1 when unregistered.
+_arc_warn_lookup() {
+  local _want="$1" _c _k _t
+  _ARC_W_KIND=""; _ARC_W_TGT=""
+  [ -n "${_ARC_W_REG:-}" ] || _ARC_W_REG="$(_ARC_WARN_CLASSES)"
+  while read -r _c _k _t; do
+    [ "$_c" = "$_want" ] || continue
+    _ARC_W_KIND="$_k"; _ARC_W_TGT="$_t"; return 0
+  done <<< "$_ARC_W_REG"
+  return 1
+}
+
+# Is <token> a legal location of <kind>? Explicit character LISTS only, never ranges:
+# under some locales `[a-z]` matches `D`, which is how a lane called `Design` once passed
+# the bash half of the resolver and failed the .mjs twin (A5, tests/portability.bats:31-40).
+_arc_warn_loc_ok() {
+  local _t="$1" _kind="$2" _n _p
+  [ -n "$_t" ] || return 1
+  if [ "$_kind" = "line" ]; then
+    case "$_t" in *:*) ;; *) return 1;; esac
+    _n="${_t##*:}"; _p="${_t%:*}"
+    # empty, non-digit, `0`, or a leading zero (`007`) is not a line number
+    case "$_n" in ""|*[!0123456789]*|0*) return 1;; esac
+  else
+    _p="$_t"
+  fi
+  # Repo-relative only: an absolute, dot-relative, parent-escaping, home-relative or
+  # backslashed path is not a citation anyone can check out and open.
+  # The colon test lives HERE, on the PATH half, not in the file-kind branch alone: under
+  # loc-kind `line`, `E:/w/PORTFOLIO.md:16` splits into line `16` and a path still carrying
+  # the windows drive colon, and a branch-local check let exactly that through (caught by
+  # CI on all three legs, 2026-08-01, after the adversarial pass had named the case).
+  case "$_p" in
+    ""|.|..|/*|./*|../*|*/../*|*/..|~*|*\\*|*:*) return 1;;
+  esac
+  return 0
+}
+
+# Trim leading/trailing spaces and tabs into _ARC_W_TRIM. A global, not $( ), because
+# every checker here must be callable as a STATEMENT -- see the banner note on subshells.
+_arc_warn_trim() {
+  local _s="$1"
+  while :; do case "$_s" in " "*|"	"*) _s="${_s#?}";; *) break;; esac; done
+  while :; do case "$_s" in *" "|*"	") _s="${_s%?}";; *) break;; esac; done
+  _ARC_W_TRIM="$_s"
+}
+
+# Record one problem. Appends in the CURRENT shell: a checker called inside $( ) loses its
+# accumulated list to the subshell, which silently turned seven confirmed rejections into
+# ACCEPTs while this helper was being hardened.
+_arc_w_fail() { _ARC_W_PROBS="${_ARC_W_PROBS}  -> $1
+"; }
+
+# Check one labelled part at _ARC_W_LINES[<index>].
+#   <prefix>  the exact 12-byte label column        <label>  its name in a diagnosis
+#   <mode>    src = value + 3 spaces + arrow + source · example = value only, no arrow
+# Sets _ARC_W_VALUE to the trimmed value ("" when unusable).
+_arc_w_part() {
+  local _i="$1" _prefix="$2" _label="$3" _mode="$4"
+  local _l _rest _val _src _key _c _has
+  _ARC_W_VALUE=""
+  if [ "$_i" -ge "${#_ARC_W_LINES[@]}" ]; then
+    _arc_w_fail "$_label: line missing -- the four block lines must be contiguous and in order"
+    return 1
+  fi
+  _l="${_ARC_W_LINES[$_i]}"
+  case "$_l" in *"$_ARC_WARN_CR"*)
+    _arc_w_fail "$_label: carriage return inside the line -- it overwrites the label in a rendered CI log"; return 1;;
+  esac
+  case "$_l" in *" "|*"	")
+    _arc_w_fail "$_label: trailing whitespace";;
+  esac
+  # ONE equality rejects under-padding, over-padding and an all-whitespace value.
+  if [ "${_l:0:12}" != "$_prefix" ]; then
+    _arc_w_fail "$_label: label column drift -- want the 12-byte column '$_prefix', found '${_l:0:12}'"
+    return 1
+  fi
+  case "${_l:12:1}" in " "|"	")
+    _arc_w_fail "$_label: label column drift -- byte 13 is whitespace; a genuinely absent artifact is spelled $_ARC_WARN_ABSENT, never blank"
+    return 1;;
+  esac
+  _rest="${_l:12}"
+  if [ "$_mode" = "src" ]; then
+    case "$_rest" in
+      *"   $_ARC_WARN_ARROW "*) ;;
+      *) _arc_w_fail "$_label: source pointer missing -- ADR-0051 requires the derived-from citation (value + 3 spaces + arrow + path:line)"; return 1;;
+    esac
+    _val="${_rest%%"   $_ARC_WARN_ARROW "*}"
+    _src="${_rest#*"   $_ARC_WARN_ARROW "}"
+    # The source token ends at the first comma or the first double space, so the spec's own
+    # `PORTFOLIO.md:16, column ...` and `PROGRESS.md:8  \`burn: 1.9d\`` both survive.
+    _src="${_src%%,*}"; _src="${_src%%"  "*}"
+    _arc_warn_trim "$_src"; _src="$_ARC_W_TRIM"
+    if ! _arc_warn_loc_ok "$_src" line; then
+      _arc_w_fail "$_label: source not a repo-relative file:line -- found '$_src'"
+    fi
+  else
+    case "$_rest" in *"$_ARC_WARN_ARROW"*)
+      _arc_w_fail "$_label: carries a source arrow -- Example is the correction, not a citation"; return 1;;
+    esac
+    _val="$_rest"
+  fi
+  _arc_warn_trim "$_val"
+  if [ "$_ARC_W_TRIM" != "$_val" ]; then
+    _arc_w_fail "$_label: value padded with whitespace"
+  fi
+  _val="$_ARC_W_TRIM"
+  if [ -z "$_val" ]; then
+    _arc_w_fail "$_label: value empty -- an absent artifact is spelled $_ARC_WARN_ABSENT"
+    return 1
+  fi
+  if [ "$_mode" = "example" ]; then
+    case "$_ARC_W_TGT" in
+      board-row)
+        case "$_val" in
+          "|"*) ;;
+          *) _arc_w_fail "Example: not a paste-able board row -- must start with '|'"; return 1;;
+        esac
+        case "$_val" in
+          *"|") ;;
+          *) _arc_w_fail "Example: not a paste-able board row -- must end with '|'"; return 1;;
+        esac
+        _rest="$_val"; _has=0
+        while [ -n "$_rest" ]; do
+          _c="${_rest%"${_rest#?}"}"
+          case "$_c" in "|"|" ") ;; *) _has=1; break;; esac
+          _rest="${_rest#?}"
+        done
+        [ "$_has" = 1 ] || { _arc_w_fail "Example: board row has no non-blank cell"; return 1; }
+        ;;
+      meta:*)
+        _key="${_ARC_W_TGT#meta:}"
+        case "$_val" in
+          "$_key: "*)
+            _arc_warn_trim "${_val#"$_key: "}"
+            [ -n "$_ARC_W_TRIM" ] || { _arc_w_fail "Example: '$_key:' carries no value"; return 1; }
+            ;;
+          *) _arc_w_fail "Example: must begin '$_key: ' for this class -- found '$_val'"; return 1;;
+        esac
+        ;;
+    esac
+  fi
+  _ARC_W_VALUE="$_val"
+  return 0
+}
+
+# Check the four-line block whose WARN line is at <index>.
+_arc_w_block() {
+  local _class="$1" _i="$2" _l _rest _loc _sum _exp _fnd
+  _l="${_ARC_W_LINES[$_i]}"
+  case "$_l" in *"$_ARC_WARN_CR"*)
+    _arc_w_fail "[$_class] line $((_i + 1)) WARN line: carriage return inside the line";;
+  esac
+  case "$_l" in *" "|*"	")
+    _arc_w_fail "[$_class] line $((_i + 1)) WARN line: trailing whitespace";;
+  esac
+  # QUOTED strip. Unquoted, `[board-header-drift]` is a glob character class, the strip
+  # removes nothing, and the spec's own sample is rejected as a bad location.
+  _rest="${_l#"WARN [$_class] "}"
+  if [ "$_rest" = "$_l" ]; then
+    _arc_w_fail "[$_class] line $((_i + 1)) WARN line: want exactly 'WARN [$_class] ' before the location"
+    return 1
+  fi
+  # Parsed FROM the separator, never by first token: an em dash later in the summary can
+  # never satisfy the rule, and a tracked path containing a space survives intact.
+  case "$_rest" in
+    *" $_ARC_WARN_DASH "*)
+      _loc="${_rest%%" $_ARC_WARN_DASH "*}"
+      _sum="${_rest#*" $_ARC_WARN_DASH "}"
+      ;;
+    *)
+      _arc_w_fail "[$_class] line $((_i + 1)) WARN line: em dash separator missing -- want '<location> $_ARC_WARN_DASH <summary>'"
+      return 1
+      ;;
+  esac
+  if ! _arc_warn_loc_ok "$_loc" "$_ARC_W_KIND"; then
+    _arc_w_fail "[$_class] line $((_i + 1)) WARN line: location is not a repo-relative $_ARC_W_KIND -- found '$_loc'"
+  fi
+  _arc_warn_trim "$_sum"
+  [ -n "$_ARC_W_TRIM" ] || _arc_w_fail "[$_class] line $((_i + 1)) WARN line: summary empty"
+
+  _arc_w_part "$((_i + 1))" "  Expected: " "[$_class] line $((_i + 2)) Expected" src; _exp="$_ARC_W_VALUE"
+  _arc_w_part "$((_i + 2))" "  Found:    " "[$_class] line $((_i + 3)) Found"    src; _fnd="$_ARC_W_VALUE"
+  _arc_w_part "$((_i + 3))" "  Example:  " "[$_class] line $((_i + 4)) Example"  example
+
+  # A WARN that reports a difference must show two different values. Kills the all-TODO
+  # placeholder block, which satisfies every other rule.
+  if [ -n "$_exp" ] && [ "$_exp" = "$_fnd" ]; then
+    _arc_w_fail "[$_class] line $((_i + 1)) block: Expected and Found values are identical ('$_exp') -- a WARN that reports a difference must show two"
+  fi
+}
+
+# THE ASSERTION.  _arc_warn_shape <class> <exit-status> <text> [<expected-count>]
+#
+# Call it DIRECTLY. Its return code IS the assertion, so `run _arc_warn_shape ...`,
+# `if _arc_warn_shape ...`, and `_arc_warn_shape ... || true` all silently disarm it --
+# tests/warn-shape.bats has a ratchet that forbids exactly those at every other call site.
+# Reads no globals: everything it judges arrives as an argument, which is what lets the
+# self-test file drive it under `run` with literals.
+_arc_warn_shape() {
+  local _class _status _text _want _l _n _seen _i _name
+  if [ "$#" -lt 3 ] || [ "$#" -gt 4 ]; then
+    printf 'WARN-SHAPE FAILURE: bad helper call -- want <class> <exit-status> <text> [<count>], got %s argument(s)\n' "$#" >&2
+    return 66
+  fi
+  _class="$1"; _status="$2"; _text="$3"; _want="${4:-1}"
+  _ARC_W_PROBS=""
+  case "$_want" in ""|*[!0123456789]*|0)
+    printf 'WARN-SHAPE FAILURE: bad helper call -- expected-count must be a positive integer, got %s\n' "$_want" >&2
+    return 66;;
+  esac
+  if ! _arc_warn_lookup "$_class"; then
+    _arc_w_fail "class not registered: '$_class' -- add a row to _ARC_WARN_CLASSES or fix the fixture"
+  fi
+  case "$_status" in
+    0) ;;
+    *) _arc_w_fail "exit status not 0 -- a WARN-first lint never exits non-zero (found $_status)";;
+  esac
+
+  _ARC_W_LINES=()
+  if [ -n "$_text" ]; then
+    while IFS= read -r _l; do
+      _ARC_W_LINES+=("${_l%"$_ARC_WARN_CR"}")
+    done <<< "$_text"
+  fi
+
+  # WHOLE-OUTPUT sweep: a sibling class's malformed WARN in the same output fails this
+  # assertion too. A fixture blind to everything but its own class is a fixture that
+  # lets the other eight ship broken.
+  _seen=0; _i=0
+  while [ "$_i" -lt "${#_ARC_W_LINES[@]}" ]; do
+    _l="${_ARC_W_LINES[$_i]}"
+    case "$_l" in
+      "WARN ["*)
+        _name="${_l#WARN [}"; _name="${_name%%]*}"
+        if [ "$_name" = "$_class" ]; then
+          _seen=$((_seen + 1))
+          _arc_w_block "$_class" "$_i"
+        elif _arc_warn_lookup "$_name"; then
+          _arc_w_block "$_name" "$_i"
+          _arc_warn_lookup "$_class" || :
+        else
+          _arc_w_fail "line $((_i + 1)): unregistered class emitted: [$_name]"
+        fi
+        ;;
+      "WARN "*|"WARN	"*)
+        _arc_w_fail "line $((_i + 1)): header-form drift -- found a bare 'WARN ' line (the two-space kickoff-lint.mjs:497 form); this phase's shape is 'WARN [<class>] '"
+        ;;
+    esac
+    _i=$((_i + 1))
+  done
+
+  if [ "$_seen" -ne "$_want" ]; then
+    if [ "$_seen" = 0 ]; then
+      _arc_w_fail "WARN line missing -- no 'WARN [$_class] ' line at column 1"
+    else
+      _arc_w_fail "occurrence count: found $_seen 'WARN [$_class]' block(s), want $_want"
+    fi
+  fi
+
+  [ -n "$_ARC_W_PROBS" ] || return 0
+
+  {
+    printf 'WARN-SHAPE FAILURE for class [%s]\n' "$_class"
+    printf '%s' "$_ARC_W_PROBS"
+    printf -- '--- captured exit status: %s\n' "$_status"
+    if [ "${#_ARC_W_LINES[@]}" -eq 0 ]; then
+      printf '(captured output was empty)\n'
+    else
+      printf -- '--- captured output (CR-stripped, %s line(s)):\n' "${#_ARC_W_LINES[@]}"
+      _n=0
+      while [ "$_n" -lt "${#_ARC_W_LINES[@]}" ]; do
+        printf '%s\n' "${_ARC_W_LINES[$_n]}"
+        _n=$((_n + 1))
+      done
+    fi
+  } >&2
+  return 66
+}
+
+# Run a lint and PIN its streams. Class fixtures pass "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
+# to _arc_warn_shape and nothing else: that forbids `bash -c '... || true'` laundering the
+# exit code, and forbids asserting a hand-written fixture file against itself.
+# Call directly, never under `run` and never via `bash -c`.
+_arc_run_lint() {
+  local _script="$1"; shift
+  local _errf="${BATS_TEST_TMPDIR:-${TMPDIR:-/tmp}}/arc-lint-stderr.$$"
+  ARC_LINT_OUTPUT="$(bash "$_script" "$@" 2>"$_errf")"
+  ARC_LINT_STATUS=$?
+  ARC_LINT_STDERR="$(cat "$_errf" 2>/dev/null || :)"
+  rm -f "$_errf" 2>/dev/null || :
+  return 0
+}
