@@ -104,7 +104,7 @@ teardown() { _arc_teardown; }
   [ "$(_arc_oid initiatives/portfolio/phases/phase-01-spec.md)" = "$oid_p01" ]
 }
 
-@test "migrate: PROGRESS.md is amended, never rewritten — the original body survives" {
+@test "migrate: PROGRESS.md is amended, never rewritten -- the original body survives" {
   _arc_migrate_sandbox
   run _arc_migrate --lane portfolio
   [ "$status" -eq 0 ]
@@ -315,7 +315,7 @@ teardown() { _arc_teardown; }
   head -n 12 "$SANDBOX/initiatives/portfolio/PROGRESS.md" | grep -q "^depends-on: "
 }
 
-@test "migrate: refuses to run twice — the second run finds a lane, not a root tracker" {
+@test "migrate: refuses to run twice -- the second run finds a lane, not a root tracker" {
   _arc_migrate_sandbox
   run _arc_migrate --lane portfolio
   [ "$status" -eq 0 ]
@@ -379,7 +379,7 @@ teardown() { _arc_teardown; }
   [[ "$output" == *"design"* ]]
 }
 
-@test "session-start: BLOCKED counts as eligible — it is attention, not absence" {
+@test "session-start: BLOCKED counts as eligible -- it is attention, not absence" {
   _arc_tracker_sandbox
   _arc_make_lane portfolio BLOCKED
   run _arc_session_start
@@ -387,7 +387,7 @@ teardown() { _arc_teardown; }
   [[ "$output" == *"Selected lane: portfolio (via auto)"* ]]
 }
 
-@test "session-start: lanes exist but none eligible — hint, no selection, no crash" {
+@test "session-start: lanes exist but none eligible -- hint, no selection, no crash" {
   _arc_tracker_sandbox
   _arc_make_lane portfolio IDLE
   _arc_make_lane design IDLE
@@ -415,7 +415,7 @@ teardown() { _arc_teardown; }
   [[ "$output" != *"lexos"* ]]
 }
 
-@test "session-start: canonical order — lane echo, then board, then the position" {
+@test "session-start: canonical order -- lane echo, then board, then the position" {
   _arc_tracker_sandbox
   _arc_make_lane portfolio LIVE
   _arc_make_board "portfolio|LIVE|arc-portfolio|phase 01"
@@ -439,7 +439,7 @@ teardown() { _arc_teardown; }
   [[ "$output" == *"fixture position line one"* ]]
 }
 
-@test "session-start: stays advisory — exits 0 even with an unreadable lane tracker" {
+@test "session-start: stays advisory -- exits 0 even with an unreadable lane tracker" {
   _arc_tracker_sandbox
   mkdir -p initiatives/portfolio
   printf 'status: LIVE\n' > initiatives/portfolio/PROGRESS.md   # no ## Now at all
