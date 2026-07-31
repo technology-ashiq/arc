@@ -39,40 +39,61 @@ jobs:
         # proves the accelerator is byte-identical to it. A full 3x3 matrix would be nine
         # jobs to establish something two ubuntu jobs already settle.
         #
-        # WINDOWS IS SHARDED, THE OTHERS ARE NOT. Measured 2026-07-30 on a real runner
-        # (run 30569500717): windows ran the suite in 22.5 minutes against 2 on every ubuntu
-        # leg and 3 on macos. Since all legs run in parallel, windows alone set the wall clock
-        # and the other four were free.
+        # WINDOWS AND MACOS ARE SHARDED, UBUNTU IS NOT. Windows costs 1585s against ~145s on
+        # every ubuntu leg and 234s on macos, for the same 563 tests -- 2.82s per test against
+        # 0.26s, because every bats `run` spawns a process and windows process creation is
+        # dear. The cost is SPREAD, not concentrated (the ten heaviest files are 64% of it), so
+        # there is no slow file to fix and the honest response is to split.
         #
-        # The cost is SPREAD, not concentrated -- the three heaviest files are 32% of it and
-        # the ten heaviest are 64% -- so there is no slow file to fix. Per test it is 2.80s on
-        # windows against 0.25s on ubuntu, because every bats `run` spawns a process and
-        # windows process creation is an order of magnitude dearer. That is a property of bats
-        # on windows, not of this suite, so the honest fix is to split rather than to optimise.
+        # THERE IS NO WINDOWS-SIDE SAVING LEFT TO FIND. Measured 2026-07-31 (run 30611012771):
+        # excluding the workspace and bats' binaries from Microsoft Defender moved nothing --
+        # 121s vs 119s on a one-file shard and 186s vs 193s on a five-file shard, both inside
+        # the spread between repetitions of the same variant. The verification step explains
+        # why: the runner image ALREADY ships with realtime protection off and both drives
+        # excluded, so the lever had been pulled before we reached for it. `bats --jobs` was
+        # not measurable either -- it needs GNU parallel, which Git Bash does not ship and the
+        # download did not land.
         #
-        # Nine shards, not more: the heaviest single file (design-steel-thread.bats, 139s) is a
-        # hard floor no shard can beat, and nine is where every other shard reaches it. Twelve
-        # buys nothing. Setup is 25s, so sharding scales almost linearly up to that floor:
-        # 22.5 min -> ~2.7 min. Repo is public, so Actions minutes are free and the only
-        # currency being spent is wall clock.
+        # THE SHAPE OF THE ANSWER IS SET BY TWO CEILINGS, both measured, not assumed:
         #
-        # No test is dropped: all 482 still run on windows, just across nine runners.
-        # `shard-tests.mjs` refuses loudly if any file would land in no shard -- silently
+        #   The heaviest single FILE. lane-resolver.bats (122s) and design-steel-thread.bats
+        #   (120s) are each one file, and one file cannot be split across two runners. From 12
+        #   shards on, the heaviest shard IS one of those files, so a 13th shard buys nothing.
+        #
+        #   ~20 concurrent jobs on GitHub Free. Measured: a 25-job run left exactly five
+        #   queueing (150s, 85s, 71s, 55s, 43s). Past the cap the excess runs as a second wave
+        #   and the wall clock roughly doubles, so a shard count is a budget, not a free knob.
+        #
+        # 12 + 2 + 3 + ci-tier = 18 jobs, two under the cap. Every leg lands near 160s and the
+        # binding one is UBUNTU at ~163s, unsharded. Sharding ubuntu would cost three jobs (one
+        # per node version, all three run the full suite) and force windows down to 11, which
+        # comes out slower. So ~2m43 is the floor this matrix can reach on the free tier;
+        # beating it needs either fewer total tests per OS or a higher concurrency cap.
+        #
+        # Minutes are free (public repo). The only currency being spent is wall clock.
+        #
+        # No test is dropped: all 563 still run on windows and on macos, just across more
+        # runners. `shard-tests.mjs` refuses loudly if any file would land in no shard, and the
+        # run step reconciles TAP lines emitted against @test lines declared -- silently
         # skipping one would turn a green tick into a lie.
         include:
           - { os: ubuntu-latest,  node: '20', shard: 1, shards: 1 }
-          - { os: macos-latest,   node: '20', shard: 1, shards: 1 }
           - { os: ubuntu-latest,  node: '18', shard: 1, shards: 1 }
           - { os: ubuntu-latest,  node: '22', shard: 1, shards: 1 }
-          - { os: windows-latest, node: '20', shard: 1, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 2, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 3, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 4, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 5, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 6, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 7, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 8, shards: 9 }
-          - { os: windows-latest, node: '20', shard: 9, shards: 9 }
+          - { os: macos-latest,   node: '20', shard: 1, shards: 2 }
+          - { os: macos-latest,   node: '20', shard: 2, shards: 2 }
+          - { os: windows-latest, node: '20', shard: 1,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 2,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 3,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 4,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 5,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 6,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 7,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 8,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 9,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 10, shards: 12 }
+          - { os: windows-latest, node: '20', shard: 11, shards: 12 }
+          - { os: windows-latest, node: '20', shard: 12, shards: 12 }
     name: selftest (${{ matrix.os }}, ${{ matrix.node }}${{ matrix.shards > 1 && format(', shard {0}/{1}', matrix.shard, matrix.shards) || '' }})
     runs-on: ${{ matrix.os }}
     defaults:

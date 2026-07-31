@@ -1,76 +1,64 @@
 name: measure-windows-cost
 
-# THROWAWAY. Manual only, gates nothing, not part of arc-ci. Delete once its questions are
-# answered and the answers are written into ci.yml + tests/shard-timings.json.
+# THROWAWAY. Manual only, gates nothing, not part of arc-ci. Delete once its question is
+# answered and the answer is written into ci.yml.
 #
-# THE QUESTION
-# ------------
-# arc-ci's wall clock is 5m03. Sharding alone cannot reach 2 minutes, because it hits two
-# walls that more shards do not move:
+#   gh workflow run measure-windows-cost.yml
+#   gh run view <id> --log | grep -E 'par:'
 #
-#   Wall 1 -- the heaviest single FILE. 2 min = 120s wall, minus 28s of per-job setup, leaves
-#            92s for tests. sync.bats (~150s), spine-emit.bats (~140s) and
-#            design-steel-thread.bats (117s, measured exactly as shard 1/9) each exceed that
-#            ALONE, and one file cannot be split across two runners.
+# ALREADY ANSWERED, by the first version of this file (run 30611012771). Kept here because the
+# next person to ask will otherwise re-run them:
 #
-#   Wall 2 -- concurrent jobs. Reaching 92s per leg needs ~18 windows + 3 macOS + 6 ubuntu +
-#            ci-tier = 28 jobs. GitHub Free is understood to run ~20 at once; past that the
-#            rest queue into a second wave and the wall clock roughly doubles.
+#   Microsoft Defender exclusions -- NO EFFECT, and the reason is not "Defender is innocent".
+#   121s vs 119s on a one-file shard, 186s vs 193s on a five-file shard, both inside the spread
+#   between two repetitions of the SAME variant. The verification step explained it: the
+#   windows-latest image already ships with realtime protection off and both drives excluded.
+#   The lever was pulled before we reached for it. Without that check the numbers would have
+#   read as "process spawn is not Defender's fault", which is a different and wrong claim.
 #
-# Both walls dissolve if windows stops costing 11x ubuntu for the same 563 tests
-# (1585s vs ~145s; 2.82s vs 0.26s per test). Every `run` in bats spawns a process, and windows
-# process creation is dear. So the one measurement worth taking is: can that be made cheaper?
+#   The four unweighted files -- lane-resolver 122s (44 tests), shard-tests 49s, lane-surfaces
+#   40s, root-golden 19s, all of which had been packing at _default_weight 16. Written into
+#   tests/shard-timings.json.
 #
-# WHAT THIS MEASURES
-# ------------------
-#   variant=base       today's arc-ci steps, unchanged -- the control
-#   variant=defender   + Microsoft Defender exclusions for the workspace, temp and the
-#                      binaries bats spawns. Defender scans every process launch, so a
-#                      process-bound suite is the shape of workload it taxes hardest.
-#   variant=parallel   defender + `bats --jobs 4 --no-parallelize-within-file`. Files run
-#                      concurrently; tests INSIDE a file keep their order. That is the only
-#                      form of parallelism that does not reorder tests that were written to
-#                      share a fixture, and shared state across separate files is already
-#                      forbidden by them running in separate shards today.
+#   The concurrent-job cap -- 20, measured. A 25-job run left exactly five queueing (150s, 85s,
+#   71s, 55s, 43s).
 #
-# Two shards, because the answer may differ by shape: shard 1 is ONE heavy file (43 tests),
-# shard 4 is five mixed files (90 tests). Two repetitions each, because a single windows
-# runner reading is not a measurement -- with n=2 a 40% effect is still legible against
-# runner-to-runner noise, and a difference smaller than the spread between the repetitions is
-# reported as "no effect found", not as a win.
+#   `bats --jobs` -- NOT MEASURABLE. It needs GNU parallel, Git Bash does not ship it, and
+#   fetching the perl script onto the runner did not land.
 #
-# variant=parallel is not run against shard 1: --no-parallelize-within-file over a single file
-# is a no-op by construction, and a job that cannot move its number teaches nothing.
+# THE REMAINING QUESTION
+# ----------------------
+# After the rebalance, arc-ci is ~2m43 and UBUNTU sets the wall clock at ~163s unsharded.
+# Sharding ubuntu costs three jobs (all three node legs run the full suite) and, against a cap
+# of 20, forces windows from 12 shards down to 11 -- which comes out slower. The budget is the
+# binding constraint, so the only way further down is to make a windows shard do more work per
+# JOB rather than to buy more jobs.
 #
-# The exclusion is VERIFIED, not assumed: Get-MpPreference is echoed after the fact. An
-# exclusion silently refused by tamper protection would otherwise look exactly like an
-# exclusion that did not help, and those two answers point opposite ways.
+# A windows runner has 4 cores and bats uses one. `bats --jobs` is out, but nothing stops a
+# shard from running several bats processes at once with plain `&` and `wait` -- no GNU
+# parallel, no new dependency. If that scales even 2x, 12 shards become ~6 and the freed budget
+# is enough to shard ubuntu, which is what actually caps the run today.
 #
-# Elapsed is taken INSIDE the job around the bats call only, so it is immune to queue time
-# and to how long the tool installs took.
+# So: does concurrency inside one job buy time on a 4-core windows runner, or does it only
+# create contention? The cost is bats-spawns-a-process, and whether that parallelises is not
+# something to reason about from first principles.
 #
-# THE SECOND QUESTION: what do the four unweighted files actually cost?
-# ----------------------------------------------------------------------
-# `weigh` times lane-resolver / lane-surfaces / root-golden / shard-tests, the four files that
-# appear nowhere in tests/shard-timings.json and are therefore packed at _default_weight 16.
-# That default is the whole of today's imbalance, not the packer: the packer balanced every
-# shard to 132-139 predicted, and the actual spread came out 117-270.
+#   serial   one `bats` call over all four files          <- the control
+#   par2     two concurrent calls, two files each
+#   par4     four concurrent calls, one file each
 #
-# THE THIRD QUESTION: is the ~20-job cap real?
-# --------------------------------------------
-# 11 `probe` jobs hold a windows runner for 150s each. 10 measure + 4 weigh + 11 probe = 25
-# jobs against a believed cap of 20. Read the answer from queue time, NOT from the log:
+# Four files of deliberately SIMILAR measured cost (42s, 42s, 40s, 35s = 159s serial), because
+# a split into wildly uneven groups measures the split, not the parallelism. Perfect scaling
+# would be ~80s at par2 and ~42s at par4.
 #
-#   gh api repos/OWNER/REPO/actions/runs/<id>/jobs --paginate \
-#     -q '.jobs[] | [.name, ((.started_at|fromdateiso8601)-(.created_at|fromdateiso8601))] | @tsv'
+# CORRECTNESS IS PART OF THE MEASUREMENT, NOT A FOOTNOTE. Concurrency is only worth having if
+# the suite still runs correctly under it, so every job reconciles the TAP lines emitted across
+# all groups against the `@test` lines the four files declare, and reports the worst exit code
+# any group returned. A parallel variant that is fast and red, or fast and short, is a NO --
+# and short is the one that hides, which is why the count is checked rather than trusted.
 #
-# Queue seconds near zero for all 25 => no cap at 25 and the shard budget is wider than
-# assumed. A cluster of jobs waiting ~150s => the cap is real and shard counts must fit it.
-#
-# HARVEST
-#   gh run view <id> --log | grep -E 'measure:|weigh:|defender:'
-#
-# Trigger:  gh workflow run measure-windows-cost.yml
+# Two repetitions. An effect smaller than the spread between repetitions of the same variant is
+# reported as no effect, not as a win.
 
 on:
   workflow_dispatch:
@@ -79,22 +67,18 @@ permissions:
   contents: read
 
 jobs:
-  measure:
+  par:
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { variant: base,     shard: 1, rep: 1 }
-          - { variant: base,     shard: 1, rep: 2 }
-          - { variant: base,     shard: 4, rep: 1 }
-          - { variant: base,     shard: 4, rep: 2 }
-          - { variant: defender, shard: 1, rep: 1 }
-          - { variant: defender, shard: 1, rep: 2 }
-          - { variant: defender, shard: 4, rep: 1 }
-          - { variant: defender, shard: 4, rep: 2 }
-          - { variant: parallel, shard: 4, rep: 1 }
-          - { variant: parallel, shard: 4, rep: 2 }
-    name: measure ${{ matrix.variant }} shard${{ matrix.shard }} rep${{ matrix.rep }}
+          - { mode: serial, rep: 1 }
+          - { mode: serial, rep: 2 }
+          - { mode: par2,   rep: 1 }
+          - { mode: par2,   rep: 2 }
+          - { mode: par4,   rep: 1 }
+          - { mode: par4,   rep: 2 }
+    name: par ${{ matrix.mode }} rep${{ matrix.rep }}
     runs-on: windows-latest
     defaults:
       run:
@@ -104,47 +88,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-
-      # Defender is configured BEFORE the tool installs, so the installs themselves are also
-      # unscanned -- otherwise part of the effect would land in setup time, which this does
-      # not measure, and the test window would understate it.
-      - name: Defender exclusions (variant defender/parallel only)
-        if: matrix.variant != 'base'
-        shell: pwsh
-        run: |
-          $paths = @("$env:GITHUB_WORKSPACE", "$env:RUNNER_TEMP", "D:\a", "C:\Program Files\Git", "$env:TEMP")
-          foreach ($p in $paths) {
-            try { Add-MpPreference -ExclusionPath $p -ErrorAction Stop }
-            catch { Write-Host "defender: exclusion-path REFUSED for $p -- $($_.Exception.Message)" }
-          }
-          foreach ($proc in @("bash.exe","sh.exe","git.exe","node.exe","perl.exe","npm.exe")) {
-            try { Add-MpPreference -ExclusionProcess $proc -ErrorAction Stop }
-            catch { Write-Host "defender: exclusion-process REFUSED for $proc -- $($_.Exception.Message)" }
-          }
-          # Verify rather than trust. A refusal here is the difference between "the lever does
-          # not work" and "the lever was never pulled".
-          $p = Get-MpPreference
-          Write-Host "defender: applied-paths=$($p.ExclusionPath -join '|')"
-          Write-Host "defender: applied-processes=$($p.ExclusionProcess -join '|')"
-          Write-Host "defender: realtime-disabled=$($p.DisableRealtimeMonitoring)"
-
-      - name: Defender state (variant base -- the control's baseline is recorded too)
-        if: matrix.variant == 'base'
-        shell: pwsh
-        run: |
-          $p = Get-MpPreference
-          Write-Host "defender: applied-paths=$($p.ExclusionPath -join '|')"
-          Write-Host "defender: realtime-disabled=$($p.DisableRealtimeMonitoring)"
-
-      # Installs mirror arc-ci exactly. Scanner absence makes tests SKIP, and a skipped test is
-      # cheap in a way the real run is not -- measuring without them would understate the cost
-      # of every scanner file and flatter whichever variant happened to lose a download.
       - name: Install bats
         run: npm install -g bats
-
       - name: Install jq
         run: choco install jq -y --no-progress
 
+      # Scanners are installed because their absence makes tests SKIP, and a skipped test is
+      # cheap in a way the real run is not. products.bats and bytediff.bats are not scanner
+      # files, but the group must behave like a real shard rather than a lighter one.
       - name: Install gitleaks (best-effort)
         run: |
           set -u; VER=8.30.1; mkdir -p "$HOME/bin"
@@ -160,113 +111,80 @@ jobs:
             || echo "opengrep install skipped"
           echo "$HOME/bin" >> "$GITHUB_PATH"
 
-      # bats --jobs needs GNU parallel, which Git Bash does not ship. Git Bash DOES ship perl,
-      # and parallel is a perl script, so it can be fetched. Best-effort on purpose: if it does
-      # not land, the job reports parallel=unavailable and runs serially rather than dying, and
-      # "we cannot get parallel onto a windows runner" is itself a usable answer.
-      - name: Install GNU parallel (variant parallel only, best-effort)
-        if: matrix.variant == 'parallel'
+      - name: Cores
+        # Block scalar, not an inline one: `run: echo "par: cores=..."` is not valid YAML --
+        # the colon-space inside makes the parser read a nested mapping.
+        run: |
+          echo "par: cores=$(nproc 2>/dev/null || echo unknown)"
+
+      - name: Run the four files and time them
         run: |
           set -u
-          mkdir -p "$HOME/bin"
-          if ! command -v parallel >/dev/null 2>&1; then
-            curl -fsSL -o "$HOME/bin/parallel" \
-              https://git.savannah.gnu.org/cgit/parallel.git/plain/src/parallel && \
-              chmod +x "$HOME/bin/parallel" || echo "parallel download failed"
-          fi
-          echo "$HOME/bin" >> "$GITHUB_PATH"
+          A=tests/products.bats       # 42s
+          B=tests/spine-inbox.bats    # 42s
+          C=tests/lane-surfaces.bats  # 40s
+          D=tests/bytediff.bats       # 35s
+          for f in "$A" "$B" "$C" "$D"; do
+            [ -f "$f" ] || { echo "::error::$f does not exist -- the file set is stale"; exit 1; }
+          done
+          out="$RUNNER_TEMP/par"; rm -rf "$out"; mkdir -p "$out"
 
-      - name: Tool banner
-        run: |
-          echo "jq:       $(command -v jq       || echo MISSING)"
-          echo "bats:     $(command -v bats     || echo MISSING)"
-          echo "gitleaks: $(command -v gitleaks || echo MISSING)"
-          echo "opengrep: $(command -v opengrep || echo MISSING)"
-          echo "parallel: $(command -v parallel || echo MISSING)"
-          echo "cores:    $(nproc 2>/dev/null || echo unknown)"
-
-      - name: Time the bats call
-        run: |
-          set -u
-          files="$(node .github/scripts/shard-tests.mjs --index ${{ matrix.shard }} --total 9)" || exit 1
-          [ -n "$files" ] || { echo "::error::shard resolved to no files"; exit 1; }
-          echo "measure: files $(printf '%s ' $files)"
-
-          JOBS_FLAG=""
-          PAR=none
-          if [ "${{ matrix.variant }}" = "parallel" ]; then
-            if parallel --version >/dev/null 2>&1; then
-              JOBS_FLAG="--jobs 4 --no-parallelize-within-file"
-              PAR=ok
-            else
-              PAR=unavailable
-              echo "::warning::GNU parallel unavailable -- this job measures serial cost, not parallel"
-            fi
-          fi
+          # GitHub runs `shell: bash` as `bash -eo pipefail`, so every line below is written to
+          # survive that. A failing bats is DATA here, not an abort -- the whole point is to
+          # record which mode broke the suite -- so the run is wrapped in `set +e` and its
+          # status written to a file. `wait` is guarded for the same reason: it returns the
+          # failure of a background job and would otherwise kill the step before the numbers
+          # are printed.
+          #
+          # One group per bats process, each with its own TAP file and its own exit code. A
+          # group whose shell dies leaves NO rc file, which is checked below -- with a shared
+          # log and a bare `wait` that group would simply vanish and read as success.
+          group() {
+            local tag="$1"; shift
+            set +e
+            bats "$@" > "$out/tap-$tag.log" 2>&1
+            printf '%s\n' "$?" > "$out/rc-$tag"
+            set -e
+          }
 
           t0=$(date +%s)
-          # Failures do not stop the measurement: a failing test still consumed its wall clock,
-          # and this workflow measures cost, not correctness. `main` is currently red on the
-          # lane tests, which land in shard 9 -- neither shard measured here.
-          bats $JOBS_FLAG $files >/dev/null 2>&1
-          rc=$?
-          echo "measure: variant=${{ matrix.variant }} shard=${{ matrix.shard }} rep=${{ matrix.rep }} parallel=$PAR elapsed=$(( $(date +%s) - t0 ))s rc=$rc"
+          case "${{ matrix.mode }}" in
+            serial) group all "$A" "$B" "$C" "$D" ;;
+            par2)   group g1 "$A" "$B" & group g2 "$C" "$D" & wait || true ;;
+            par4)   group g1 "$A" & group g2 "$B" & group g3 "$C" & group g4 "$D" & wait || true ;;
+            *)      echo "::error::unknown mode"; exit 1 ;;
+          esac
+          elapsed=$(( $(date +%s) - t0 ))
 
-  # The four files that carry NO number in tests/shard-timings.json and are therefore packed at
-  # the _default_weight of 16. That default is why shard 9 ran 270s against a predicted 132:
-  # lane-resolver.bats is 44 tests being counted as if it were 16 seconds of work.
-  #
-  # A file timed in its own bats call is known to under-report what it costs inside a grouped
-  # shard, so these numbers are a floor rather than a truth. A floor beats 16.
-  #
-  # They also hold runner slots, so they double as probes -- same job count, more information.
-  weigh:
-    strategy:
-      fail-fast: false
-      matrix:
-        file:
-          - lane-resolver.bats
-          - lane-surfaces.bats
-          - root-golden.bats
-          - shard-tests.bats
-    name: weigh ${{ matrix.file }}
-    runs-on: windows-latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install bats
-        run: npm install -g bats
-      - name: Install jq
-        run: choco install jq -y --no-progress
-      - name: Time this file alone
-        run: |
-          set -u
-          f="tests/${{ matrix.file }}"
-          [ -f "$f" ] || { echo "::error::$f does not exist"; exit 1; }
-          t0=$(date +%s)
-          # lane-resolver.bats is red on macOS and windows today. Cost is what is being
-          # measured, so a failure is recorded and does not abort the job.
-          bats "$f" >/dev/null 2>&1
-          rc=$?
-          echo "weigh: file=${{ matrix.file }} tests=$(grep -c '^@test' "$f") elapsed=$(( $(date +%s) - t0 ))s rc=$rc"
+          # Worst exit code across the groups, and a missing rc file counts as a failure rather
+          # than as nothing -- a group whose shell died would otherwise leave no trace.
+          case "${{ matrix.mode }}" in
+            serial) expected_groups=1 ;;
+            par2)   expected_groups=2 ;;
+            par4)   expected_groups=4 ;;
+          esac
+          got_groups="$(find "$out" -name 'rc-*' | wc -l | tr -d ' ')"
+          worst=0
+          for r in "$out"/rc-*; do
+            v="$(cat "$r")"
+            if [ "$v" -gt "$worst" ]; then worst="$v"; fi
+          done
+          if [ "$got_groups" -ne "$expected_groups" ]; then worst=99; fi
 
-  # Pure slot holders, making up the rest of the 25. Their output is worthless; the answer is
-  # read from queue time via the API, not from here.
-  probe:
-    strategy:
-      fail-fast: false
-      matrix:
-        id: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
-    name: probe ${{ matrix.id }}
-    runs-on: windows-latest
-    steps:
-      - name: Hold a runner slot
-        shell: bash
-        run: |
-          echo "probe: id=${{ matrix.id }} holding a slot"
-          sleep 150
+          # grep -c exits 1 on a file with no matches, and pipefail would turn that into a dead
+          # step rather than a count of zero -- which is the number worth seeing.
+          declared="$({ grep -hcE '^[[:blank:]]*@test[[:blank:]]' "$A" "$B" "$C" "$D" || true; } | awk '{s+=$1} END{print s+0}')"
+          executed="$(cat "$out"/tap-*.log | grep -cE '^(ok|not ok) ' || true)"
+          warned="$(cat "$out"/tap-*.log | grep -cE '^# bats warning:' || true)"
+
+          echo "par: mode=${{ matrix.mode }} rep=${{ matrix.rep }} elapsed=${elapsed}s groups=$got_groups/$expected_groups worst_rc=$worst declared=$declared executed=$executed warnings=$warned"
+
+          # Speed is only a result if the run was also correct and complete. A parallel variant
+          # that finishes early because two of its tests never ran is the exact failure this
+          # whole exercise exists to avoid.
+          if [ "$worst" -ne 0 ] || [ "$declared" -ne "$executed" ] || [ "$warned" -ne 0 ]; then
+            echo "par: VERDICT=unusable -- ${{ matrix.mode }} did not run the suite correctly"
+            cat "$out"/tap-*.log | grep -E '^(not ok|# bats warning:)' | head -20 || true
+            exit 1
+          fi
+          echo "par: VERDICT=clean"
