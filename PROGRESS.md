@@ -15,7 +15,9 @@
 | 02 | Parallel-safety floor: WIP info line, board lint, ownership lint, spine spool | 0.75 days | ⬜ pending |
 | 03 | Docs truth + retro | 0.25 days | ⬜ pending |
 
-**Appetite burn:** 0 of 3 days used. Kill tripwire: 1.5 days without Phase 0 closed.
+**Appetite burn:** ~1.25 of 3 days used — Phase 00 consumed its full allocation, including
+the cross-OS fix round. Kill tripwire: 1.5 days without Phase 0 closed — **not reached**;
+Phase 0 is complete on all criteria and awaiting `/arc-phase-done 0`.
 
 ## Done log
 
@@ -59,10 +61,42 @@
    assertions ran ONE twin while the gate claimed both. Every case now runs both.
    All 18 reproduced against the attacker's own commands before and after.
 
+5. **Cross-OS defects found by CI, fixed (#71)** — the first 3-OS run came back red on two
+   legs, and PR #68 had been merged in that state. Both traced to one root: shell text
+   handling is locale-dependent where its twin is not. **macOS** — a bracket RANGE resolves
+   through the locale's collation table, which interleaves case there, so `*[!a-z0-9-]*`
+   never fired for `D` and `Design` was accepted as a lane name (`lanes=Design portfolio`);
+   the .mjs regex is codepoint-ranged and refused it, and the equivalence gate caught the
+   divergence — only because step 4's gate-honesty fix had landed first. **windows** — two
+   `@test` names carried U+2014; bats builds a function identifier from a test's NAME, and
+   under the C locale bash walks bytes, so both tests were absent from the run. The step was
+   red, but its only explanation was a `# bats warning:` comment among 91 `ok` lines.
+   Fixed twice over (`LC_ALL=C` export **and** explicit character lists — a list has no
+   collation semantics, so the check survives losing the export). An adversarial sweep found
+   the same construct live in `design-explore.sh`; also fixed. Four guards added, each proven
+   to go red against a constructed breaking input: executed-vs-declared TAP reconciliation in
+   CI (cause-agnostic, every leg), non-ASCII `@test` names, `.bats` in a subdirectory, and a
+   ratchet on new negated letter-ranges with a stale-allowlist check.
+   **Verified green on all 3 OS** (run 30610231939 + main @ #75): macOS tests 264/268/287/294
+   now `ok` with zero `lanes=Design`; windows shard 9/9 reconciles 93/93 (was 91/93); no real
+   `bats warning` on any leg.
+
+**Assumption A5: FIRED 2026-07-31**, recorded in PLAN's ledger. Its trigger detected the right
+event class but named the wrong scope (Windows-only) and the wrong remedy (path-string
+compare). Its original subject — `git mv` casing — remains unvalidated and is load-bearing for
+the Phase 1 move (REQ-02): Phase 1 must test casing explicitly rather than inherit A5's
+now-spent credibility.
+
+**Carried forward, deliberately not fixed (same bug class, out of this cycle's scope):** the
+`_slug` pair (`design-critique.sh:42`, `design-render.sh:71`) slugs the same route differently
+per box under UTF-8, and the slug is an artifact filename — changing it renames existing
+artifacts, so it needs a behaviour decision, not a quiet fix. `shard-tests.mjs:77`'s
+`localeCompare` tiebreak claims a byte determinism it does not provide (no divergence today,
+verified across 13 collations). Both are named in `tests/portability.bats`'s allowlist, and a
+companion test fails if an entry stops matching — so neither can rot into a gate that lies.
+
 **Next step:** close Phase 0 via `/arc-phase-done 0` — walk the spec's exit criteria and
-Verification plan, bundle evidence, and let CI prove the 3-OS leg (the one claim not yet
-evidenced locally: Windows-reserved-name and cross-OS fixtures are written but only the
-Windows leg has run here).
+Verification plan, bundle evidence. The 3-OS claim is now evidenced, not asserted.
 
 blocked-on: —
 depends-on: — 
