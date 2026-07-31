@@ -16,6 +16,22 @@ ownership lint catches; ventures stay passport-rows-only per ADR-0059.
 settled the two Phase-01 deviations in the same pass). Every item below is a fixture that
 either exists and passes or the phase does not close. No local runs — CI is the gate.
 
+**Test command:** `bats tests/warn-shape.bats` (section A) → then `bats tests/` on all three
+CI legs for the phase as a whole.
+
+**Expected failure first:** `warn-shape: a well-formed WARN block is accepted and prints
+nothing` — it exits 127 (`_arc_warn_shape: command not found`) until the helper exists. Every
+rejection test in that file asserts the **sentinel 66 plus a named reason**, never `status
+-ne 0`, precisely because `-ne 0` is satisfied by the function not existing: a suite can
+report a passing rejection test for a helper nobody wrote.
+
+**Section A honesty note (2026-08-01).** The helper was written from a contract that had
+already been adversarially hardened (19 confirmed holes, 5 attacks rejected on verification),
+so the tests were written *after* the helper rather than strictly red-first. What preserves
+the property red-first exists to buy — a gate provably capable of failing — is that **29 of
+the 43 tests** feed deliberately malformed WARN blocks and assert the sentinel plus a named
+reason. A no-op helper returning 0 fails all 29. The first execution of any of it is CI.
+
 ### A. The WARN message contract (REQ-03, REQ-04 — applies to every new WARN)
 
 Every new WARN prints three labelled parts and a source location. One shared assertion
@@ -133,6 +149,27 @@ and must stop sharing a destination.
 `Mode B: not certified` remains on the board until every fixture in E and F passes on all
 three legs (ADR-0056). Certification is a fixture result, not a judgement call — the phase
 may not close by asserting it.
+
+### Known gaps this phase does NOT close (stated, not discovered later)
+
+- **`tests/` is outside the portability ratchet.** `tests/portability.bats:12` scans
+  `.claude/scripts`, `.claude/hooks`, `.github/scripts` and `sync-to-project.sh` — not
+  `tests/`. So the bash-3.2/BSD safety of the new helper is held by discipline plus the fact
+  that every test using it executes on all three legs, not by a static gate. Dynamic
+  coverage, honestly labelled. Extending `ROOTS()` to `tests/` would light up 46 existing
+  files and is a `/arc-change` decision, not a smuggled-in cleanup.
+- **The helper judges SHAPE, not correctness.** It catches `Expected == Found` and the
+  all-TODO placeholder, but it cannot tell whether the cited line is where the value really
+  came from, or whether the Example would actually fix the board. A WARN citing the right
+  file and the wrong line still passes. That is closed by the per-class content assertions
+  the call-site ratchet requires, which live in sections B and D.
+- **The `free` Example target is an honest hole.** Three classes correct by deletion, move or
+  command, and paste-ability is not mechanically decidable for those. The helper checks only
+  non-empty and no-arrow; the ratchet shifts the burden to each fixture pinning its exact
+  Example string.
+- **Two WARN formats coexist.** Only the one-space `WARN [` form is shape-checked;
+  `kickoff-lint.mjs:497` emits the two-space `WARN  ` form, which is reported as a
+  header-form drift rather than migrated. Migrating kickoff-lint is out of scope here.
 
 ### Definition of Done for this phase
 
