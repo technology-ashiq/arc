@@ -1,0 +1,24 @@
+{
+  "phase": "01",
+  "commit": "399f25ef5d55c4a226e17211856b16bda4ceb714",
+  "short": "399f25e",
+  "generated": "2026-07-31T17:20:36Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "fb923c7cc4a063b0d77d05ef30bded3207ada5d64db967708aad9a3f4d0fe2ee"
+    },
+    {
+      "name": "live-demo.txt",
+      "sha256": "74c0f3b27e11ef9f247b717c32aba6d1ec9ed1606423e6d2bfd226be5fe92189"
+    },
+    {
+      "name": "rollback-rehearsal.txt",
+      "sha256": "24290e89a64cdd197bce272f1936b1c6298e7e057325637ee5bbefff1d47a988"
+    },
+    {
+      "name": "test-output.log",
+      "sha256": "3351514872d53a3283e1c56ae27a6053f95968383a6493916f92e6e9862bcb42"
+    }
+  ]
+}

@@ -15,7 +15,7 @@ Updated: 2026-07-31
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| portfolio | LIVE | arc-portfolio | 01 — Self-host + link history + board v1 | 3d / 1.4d | — | close phase 01 in lane-mode |
+| portfolio | LIVE | arc-portfolio | 02 — Parallel-safety floor | 3d / 1.9d | — | refine phase 02's coarse verification plan via `/arc-change` |
 | design | IDLE | arc-design (closed 2026-07-30) | — | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
 ## Venture passports

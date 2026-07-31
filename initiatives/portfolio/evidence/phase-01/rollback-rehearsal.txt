@@ -1,0 +1,129 @@
+=== ROLLBACK REHEARSAL — Cycle 4 Phase 01 (REQ-02) ===
+start commit (the SAME commit the real move will start from): 1e33ae87ba9b4cb88b1035a3bf3cdb901adf8c13
+Preparing worktree (detached HEAD 1e33ae8)
+HEAD is now at 1e33ae8 feat(plan): the mover, and A5's untested half closed by fixture
+rehearsal HEAD: 1e33ae87ba9b4cb88b1035a3bf3cdb901adf8c13
+
+--- [1] dry run in the rehearsal worktree ---
+DRY RUN — tracker 'C:/Users/ashiq/AppData/Local/Temp/claude/E--Work-Hub-01-Automemory-arc/00100d40-232b-49cb-8b93-648c9980e5e9/scratchpad/wt-rehearsal' -> initiatives/portfolio (nothing is written)
+  move (git mv, history preserved):
+    PLAN.md -> initiatives/portfolio/PLAN.md
+    PROGRESS.md -> initiatives/portfolio/PROGRESS.md
+    phases/phase-00-spec.md -> initiatives/portfolio/phases/phase-00-spec.md
+    phases/phase-01-spec.md -> initiatives/portfolio/phases/phase-01-spec.md
+    phases/phase-02-spec.md -> initiatives/portfolio/phases/phase-02-spec.md
+    phases/phase-03-spec.md -> initiatives/portfolio/phases/phase-03-spec.md
+  amend: initiatives/portfolio/PROGRESS.md gains the ADR-0051 machine header (status/cycle/phase/appetite/burn/blocked-on/depends-on)
+  stub:  PLAN.md · PROGRESS.md · phases/README.md — pointers at the old root paths
+  untouched: docs/archive/** · docs/evidence/** (frozen, ADR-0058) · everything outside the tracker
+dry-run exit=0
+
+--- [2] baseline BEFORE the move (what the revert must restore) ---
+resolve exit=0
+mode=root
+status=ok
+lane=
+via=none
+tracker=.
+lanes=
+eligible=
+counted=0
+skipped=
+reason=
+kickoff-lint exit=0
+WARN  [appetite-sum] phase appetites sum to 3d = 100% of 3d total — zero slack is its own fiction
+WARN  [deps] External dependencies table empty — fine only if the build truly has none
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+kickoff-lint: all checks passed ✔
+
+--- [3] the real move, in the rehearsal worktree ---
+Migrated tracker -> initiatives/portfolio (verified against git index)
+  moved:  PLAN.md -> initiatives/portfolio/PLAN.md
+  moved:  PROGRESS.md -> initiatives/portfolio/PROGRESS.md
+  moved:  phases/phase-00-spec.md -> initiatives/portfolio/phases/phase-00-spec.md
+  moved:  phases/phase-01-spec.md -> initiatives/portfolio/phases/phase-01-spec.md
+  moved:  phases/phase-02-spec.md -> initiatives/portfolio/phases/phase-02-spec.md
+  moved:  phases/phase-03-spec.md -> initiatives/portfolio/phases/phase-03-spec.md
+  amended: initiatives/portfolio/PROGRESS.md (machine header, status: LIVE)
+  stubbed: PLAN.md · PROGRESS.md · phases/README.md
+  staged, NOT committed — review 'git status' and commit as one change.
+move exit=0
+committed: 1d6a661
+
+--- [4] lane-mode proven in the rehearsal (before reverting it) ---
+Selected lane: portfolio (via auto)
+resolve(human) exit=0
+mode=lane
+status=ok
+lane=portfolio
+via=auto
+tracker=initiatives/portfolio
+Selected lane: portfolio (via auto)
+WARN  [appetite-sum] phase appetites sum to 3d = 100% of 3d total — zero slack is its own fiction
+WARN  [deps] External dependencies table empty — fine only if the build truly has none
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+kickoff-lint: all checks passed ✔
+lint exit=0
+
+machine header as written at birth:
+# PROGRESS.md — Cycle 4 · arc-portfolio "The Conductor"
+
+status: LIVE
+cycle: arc-portfolio
+phase: 01 — Self-host + link history + board v1
+appetite: 3d
+burn: 1.4d
+blocked-on: —
+depends-on: —
+
+
+--- [5] THE ROLLBACK: git revert, executed for real ---
+ rename {initiatives/portfolio/phases => phases}/phase-01-spec.md (100%)
+ rename {initiatives/portfolio/phases => phases}/phase-02-spec.md (100%)
+ rename {initiatives/portfolio/phases => phases}/phase-03-spec.md (100%)
+revert exit=0
+HEAD now: 854c95b Revert "rehearsal: move tracker into initiatives/portfolio" 1d6a661 rehearsal: move tracker into initiatives/portfolio 
+working tree after revert: 0 uncommitted line(s)
+
+--- [6] post-revert: is ROOT-MODE byte-identical to the baseline? ---
+resolve exit=0
+resolver: BYTE-IDENTICAL to pre-move baseline ✔
+kickoff-lint exit=0
+kickoff-lint: BYTE-IDENTICAL to pre-move baseline ✔
+
+tracker files restored at the root:
+C:/Users/ashiq/AppData/Local/Temp/claude/E--Work-Hub-01-Automemory-arc/00100d40-232b-49cb-8b93-648c9980e5e9/scratchpad/wt-rehearsal/PLAN.md
+C:/Users/ashiq/AppData/Local/Temp/claude/E--Work-Hub-01-Automemory-arc/00100d40-232b-49cb-8b93-648c9980e5e9/scratchpad/wt-rehearsal/PROGRESS.md
+
+C:/Users/ashiq/AppData/Local/Temp/claude/E--Work-Hub-01-Automemory-arc/00100d40-232b-49cb-8b93-648c9980e5e9/scratchpad/wt-rehearsal/phases/:
+phase-00-spec.md
+phase-01-spec.md
+phase-02-spec.md
+phase-03-spec.md
+initiatives/ present? no — gone ✔
+human output in root-mode (must be EMPTY):
+  (empty ✔)
+
+--- [7] the strongest statement: reverted tree vs the start commit ---
+git diff 1e33ae87ba9b4cb88b1035a3bf3cdb901adf8c13..HEAD is EMPTY — the tree is bit-for-bit back ✔
+
+--- [8] bare-root fixture suite, post-revert ---
+1..7
+ok 1 root-golden: SessionStart context output is byte-stable in a root-mode repo
+ok 2 root-golden: SessionStart outside a git repo prints the heads-up and exits 0
+ok 3 root-golden: SessionEnd writes a byte-stable session-log entry
+ok 4 root-golden: kickoff-lint output on the good fixture is byte-stable (exit 0)
+ok 5 root-golden: kickoff-lint failure output on an empty root is byte-stable (exit 1)
+ok 6 root-golden: arc-evidence usage error is byte-stable (exit 1)
+ok 7 root-golden: arc-evidence verify with no bundle reports the ROOT-MODE default path (exit 2)
+
+--- [9] emitter check: did anything write to a spine in here? ---
+jsonl files written in the rehearsal worktree: 4 (contract: 0)
+events/ dir: absent ✔
+  which jsonl files, and are they TRACKED (pre-existing) or emitted?
+    tracked fixture: docs/evidence/phase-04/events-2026-07-24.jsonl
+    tracked fixture: docs/evidence/phase-04/events-2026-07-25.jsonl
+    tracked fixture: docs/evidence/phase-04/events-2026-07-28.jsonl
+    tracked fixture: tests/fixtures/spine/same-ms-burst/2026-07-22.jsonl
+  untracked/modified anything at all in the rehearsal worktree:
+  (empty above == nothing was emitted or left behind ✔)

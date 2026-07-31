@@ -1,0 +1,56 @@
+=== PHASE 01 LIVE DEMO — run against THIS repo at 399f25e ===
+
+--- [1] /arc-resume no-arg: canonical order (lane echo -> board -> report) ---
+Selected lane: portfolio (via auto)
+  Board (PORTFOLIO.md):
+    | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
+    |---|---|---|---|---|---|---|
+    | portfolio | LIVE | arc-portfolio | 01 — Self-host + link history + board v1 | 3d / 1.4d | — | close phase 01 in lane-mode |
+    | design | IDLE | arc-design (closed 2026-07-30) | — | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
+  Report (initiatives/portfolio/PROGRESS.md -> ## Now), first 3 lines:
+    **Position:** Phase 01 IN PROGRESS on `feat/phase-01-self-host`. **The move has landed** —
+    you are reading this file at `initiatives/portfolio/PROGRESS.md`; the repo is in lane-mode
+    and auto-resolves to `portfolio`. Built so far: the mover (`tracker-migrate.sh`, in no
+
+--- [2] SessionStart hook in this repo, post-move (the real-system check) ---
+Quick heads-up for this session:
+- Selected lane: portfolio (via auto)
+- Branch: feat/phase-01-self-host
+- Last commit: 399f25e fix(tests): ASCII @test names -- I reintroduced the em-dash incident (81 minutes ago)
+- Working tree is clean.
+- Board (Updated: 2026-07-31): portfolio LIVE · design IDLE
+- Build status (initiatives/portfolio/PROGRESS.md -> ## Now):
+    
+    **Position:** Phase 01 IN PROGRESS on `feat/phase-01-self-host`. **The move has landed** —
+    you are reading this file at `initiatives/portfolio/PROGRESS.md`; the repo is in lane-mode
+    and auto-resolves to `portfolio`. Built so far: the mover (`tracker-migrate.sh`, in no
+    product manifest — a venture repo has nothing to migrate), A5's casing half closed by
+    fixture, the rehearsed rollback, the real move as one commit, the design lane (links only),
+- reviews @ 399f25e: (none)
+
+--- [3] pointer stubs at the old root paths ---
+  PLAN.md            -> initiatives/portfolio/PLAN.md](initiatives/portfolio/PLAN.md
+  PROGRESS.md        -> initiatives/portfolio/PROGRESS.md](initiatives/portfolio/PROGRESS.md
+  phases/README.md   -> initiatives/portfolio/phases/](initiatives/portfolio/phases/
+  root PROGRESS.md has no '## Now' for a scraper to trust: 0 occurrence(s)
+
+--- [4] frozen history untouched (ADR-0058), asked of git, not the filesystem ---
+  docs/archive   tracked files: 71
+  docs/evidence  tracked files: 186
+  changed by this branch:       0 (contract: 0)
+  copies inside any lane:       0 (contract: 0)
+
+--- [5] design lane: every path its index names actually exists ---
+  docs/archive/PLAN-2026-07-30.md               present
+  docs/archive/PROGRESS-2026-07-30.md           present
+  docs/archive/phases-design-2026-07-30         present
+  docs/evidence/phase-02                        present
+  docs/design                                   present
+
+--- [6] the move, as one commit ---
+  399f25e fix(tests): ASCII @test names -- I reintroduced the em-dash incident
+  84fae46 fix(ci): the mover leaves the shipped surface, and takes the ratchet with it
+  6c83aab feat(portfolio): board v1, the design lane, and a SessionStart rule that stops guessing
+  dcc7f7d refactor(tracker): arc self-hosts — the tracker moves into initiatives/portfolio
+  1e33ae8 feat(plan): the mover, and A5's untested half closed by fixture
+  move commit dcc7f7d touched:  9 files changed, 287 insertions(+), 264 deletions(-)
