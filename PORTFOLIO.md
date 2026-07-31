@@ -29,10 +29,10 @@ Updated: 2026-07-31
 | lexos | private, separate repo | in build outside arc | — |
 
 <!--
-Deliberately absent: a `develop` row. The source pack (§4) illustrates the v1 board with
-`develop QUEUED`, and the same section rules that every initiatives row must resolve to an
-`initiatives/<lane>/` directory while empty lanes are never pre-scaffolded — a lane is born
-only at /arc-kickoff. Those two cannot both hold for a lane that does not exist yet, so v1
-ships the reading that breaks no rule and the contradiction is the owner's to settle
-(route via /arc-change before Phase 02 writes the lint that would flag it).
+No `develop` row, and this is now a settled rule rather than an open question:
+ADR-0061 — the board indexes BORN lanes only. A row exists iff `initiatives/<lane>/` does,
+with a readable machine header to derive its values from. `QUEUED` stays in the vocabulary
+as a state a born lane holds when it is scheduled next; it is never a way to announce a
+lane that does not exist yet. "What comes after this cycle" is PLAN.md's question, not the
+board's. develop gets its row at `/arc-kickoff --lane develop`, in that same commit.
 -->

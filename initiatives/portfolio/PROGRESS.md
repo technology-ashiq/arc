@@ -110,23 +110,31 @@ floor** is next and has not started. The repo is in lane-mode: this file is the 
 truth, `PORTFOLIO.md` indexes it, and every command auto-resolves to `portfolio` because it
 is the only eligible lane.
 
-**Phase 02 opens with its Verification plan still COARSE.** The spec says so itself, and
-`/arc-phase-done` refuses to close a phase whose plan was never refined — so refining it via
-`/arc-change` is the phase's first act, before any code. It needs to name, concretely: how a
-concurrent-emit fixture proves zero interleaving on 3 OS, what the spool-drain and
-spool-visibility fixtures assert, and what Expected/Found/Example looks like for each new
-WARN class.
+**Phase 02's Verification plan is REFINED as of 2026-08-01** (`/arc-change`, branch
+`feat/phase-02-ratify-and-refine`) — sections A–G in the spec, each an existing-and-passing
+fixture or the phase does not close. The two things worth knowing without opening it: the
+zero-interleaving test ships with a **negative control** (a >8 KB `>>` append that MUST tear
+on the same harness, or the subject's pass proves nothing), and the spool work is defined
+against the real gap — today a hook-mode lock timeout lands in `_quarantine/`, the same
+bucket as a malformed payload, so "invalid" and "busy" currently share a destination.
 
 **What Phase 02 must not inherit:**
 
-- **Two unratified deviations from Phase 01.** (1) `PORTFOLIO.md` v1 ships with no `develop`
-  row: the source pack illustrates one, while the same section rules that every initiatives
-  row resolves to an `initiatives/<lane>/` directory and that lanes are born only at
-  `/arc-kickoff` — both cannot hold for a lane that does not exist. (2)
-  `initiatives/design/PROGRESS.md` exists, which ADR-0058 does not ask for, because ADR-0051
-  requires every board value to derive from a lane's machine header. **Phase 02 writes the
-  board lint that will judge exactly these two things**, so route both through `/arc-change`
-  BEFORE that lint is designed, not after it flags the repo's own board.
+- ~~Two unratified deviations from Phase 01.~~ **RATIFIED 2026-08-01, owner-decided, both
+  the option that breaks no existing rule.** (1) No `develop` row —
+  [ADR-0061](../../docs/adr/0061-board-indexes-born-lanes-only.md):
+  the board indexes **born lanes only**; a row exists iff the lane directory does, and
+  `QUEUED` is a state a born lane holds, never a way to announce one that does not exist.
+  The lint therefore gets one unconditional invariant instead of one plus an exception.
+  (2) `initiatives/design/PROGRESS.md` stays —
+  [ADR-0062](../../docs/adr/0062-port-i-amendment-a-board-row-needs-a-machine-header.md)
+  amends ADR-0058: a lane on the
+  board carries a machine header even with no live cycle, because the board's `design IDLE`
+  must derive from something (ADR-0051). REQ-02's "links only" acceptance is amended in
+  PLAN, not waived. A wrong claim in that file was corrected in the same pass: it credited
+  itself with keeping design out of the eligible set, but `lane-resolve.sh` counts any
+  validly-named directory as a lane with or without a `PROGRESS.md` — the file is
+  load-bearing for the board, not the resolver.
 - **A surplus that is not slack.** 1.1d remain against 1.0d planned. Phase 02's own tripwire
   (burn reaching 1.0d inside it → ship the Mode-A core, defer REQ-04 + Mode-B certification)
   is unchanged and pre-decided.
@@ -145,9 +153,16 @@ that fails if an entry stops matching — neither can rot into a gate that lies.
 `.github/scripts` too. Moving a file out of `.claude/` to keep it off the shipped surface
 must not also move it out of the bash-3.2/BSD ratchet — it still runs on all three legs.
 
-**Next step:** merge PR #79 (CI green at `399f25e`, 19/19), then `/arc-change` to refine
-Phase 02's verification plan. No local test runs at any point — CI is the only gate
-(owner's standing rule, 2026-07-31).
+**Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~`/arc-change` to refine Phase 02's
+verification plan~~ (done 2026-08-01, with both deviations ratified). **Now: build Phase 02
+via the Golden Loop, smallest slice first** — section A's shared WARN-shape assertion helper
+before any of the nine WARN classes that depend on it, since every later fixture asserts
+through it. No local test runs at any point — CI is the only gate (owner's standing rule,
+2026-07-31).
+
+**Assumptions status:** nothing fires from this change. A3 (lock + spool covers
+concurrency) and A4 (advisory-only WIP is enough) are Phase 02's to test — A4 cannot fire
+yet at 1 counted lane. A5 is closed and carries nothing.
 
 blocked-on: —
 depends-on: —

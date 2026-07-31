@@ -27,6 +27,11 @@ stays the single company logbook, entries gaining `[lane]` tags.
 
 ## Consequences
 
-- `initiatives/design/` is the one permitted "pre-scaffold" exception (folder +
-  HISTORY-INDEX.md in Phase 1) because its history already exists.
+- `initiatives/design/` is the one permitted "pre-scaffold" exception (~~folder +
+  HISTORY-INDEX.md in Phase 1~~) because its history already exists. — **AMENDED
+  2026-08-01** by [ADR-0062](0062-port-i-amendment-a-board-row-needs-a-machine-header.md):
+  the pre-scaffold is folder + HISTORY-INDEX.md **+ a machine-header-only `PROGRESS.md`**.
+  "Links only" collided with ADR-0051, which requires every board value to derive from the
+  lane's machine header — with no header, the board's `design IDLE` would be hand-typed and
+  recomputed by nobody. Nothing else in this ADR changes.
 - Anyone reading a lane can reach its whole past from one file without any file moves.
