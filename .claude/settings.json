@@ -17,7 +17,10 @@
       "mcp__playwright"
     ],
     "deny": [
-      "Bash(git push:*)",
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin master:*)",
       "Bash(git reset --hard:*)",
       "Bash(rm -rf:*)",
       "Read(./.env)",
