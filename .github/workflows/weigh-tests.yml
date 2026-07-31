@@ -1,0 +1,198 @@
+name: weigh-tests
+
+# Re-measures EVERY tests/*.bats file on a windows runner and prints a ready-to-paste
+# `timings` block for tests/shard-timings.json. Manual only, gates nothing.
+#
+#   gh workflow run weigh-tests.yml
+#   gh run view <id> --log | sed -n '/BEGIN timings/,/END timings/p'
+#
+# WHY THIS EXISTS RATHER THAN A HAND-PICKED LIST. The rebalance in #73 took arc-ci from 5m03
+# to 4m08 -- short of the 2m43 it was aimed at, and the `shard-timing:` lines say why. Eleven
+# of twelve windows shards landed between 0.81x and 1.23x of prediction (mean 1.05), so the
+# weights are broadly right. Shard 7 landed at 1.84x: 111s predicted, 204s actual. One of its
+# four files is roughly 87 seconds heavier than its weight claims, and none of the four has
+# changed since 2026-07-18 -- so this is not drift, it is an original measurement that was
+# simply wrong.
+#
+# The cheap fix is to re-time those four files. The reason not to: shards 5, 9 and 11 also came
+# in at 1.17-1.23x, which is either noise or three smaller versions of the same defect, and
+# hand-picking cannot tell those apart. A per-file table measured in one pass can. It also
+# stops this being a thing anyone has to notice again -- re-run this workflow, paste the block.
+#
+# THE METHOD IS THE ONE ALREADY VALIDATED. Each file is timed in its OWN bats call, which is
+# how the existing weights were produced, and the 1.05 mean ratio across eleven shards is the
+# evidence that it predicts a grouped shard well enough to balance one. This deliberately does
+# not switch to some "better" method mid-table: mixing two measurement methods in one weights
+# file would put the balance error back in a place nobody would think to look.
+#
+# Scanners are installed exactly as arc-ci installs them. Without them the scanner-dependent
+# tests SKIP, and a skipped test is cheap in a way the real run is not -- weighing without them
+# would under-report every scanner file, which is one candidate for the shard 7 gap.
+#
+# One job per file, so 42 jobs against a measured cap of 20 concurrent. They queue into roughly
+# three waves; the wall clock is a few minutes and Actions minutes are free on a public repo.
+# Nothing here is on arc-ci's critical path.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      files: ${{ steps.list.outputs.files }}
+      count: ${{ steps.list.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: List every test file
+        id: list
+        shell: bash
+        run: |
+          set -eo pipefail
+          # Same flat, sorted discovery the sharder uses. If these two ever disagree, the
+          # weights would describe a set of files that is not the set being sharded.
+          files="$(cd tests && ls *.bats | LC_ALL=C sort)"
+          [ -n "$files" ] || { echo "::error::no .bats files found"; exit 1; }
+          n="$(printf '%s\n' "$files" | wc -l | tr -d ' ')"
+          json="$(printf '%s\n' "$files" | jq -R . | jq -sc .)"
+          echo "files=$json" >> "$GITHUB_OUTPUT"
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          echo "discovered $n file(s)"
+
+  weigh:
+    needs: discover
+    strategy:
+      fail-fast: false
+      max-parallel: 18
+      matrix:
+        file: ${{ fromJSON(needs.discover.outputs.files) }}
+    name: weigh ${{ matrix.file }}
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install bats
+        run: npm install -g bats
+      - name: Install jq
+        run: choco install jq -y --no-progress
+
+      - name: Install gitleaks (best-effort)
+        run: |
+          set -u; VER=8.30.1; mkdir -p "$HOME/bin"
+          curl -fsSL -o gl.zip "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_windows_x64.zip" \
+            && unzip -o gl.zip gitleaks.exe -d "$HOME/bin" || echo "gitleaks install skipped"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Install opengrep (best-effort)
+        run: |
+          set -u; mkdir -p "$HOME/bin"
+          curl -fsSL -o "$HOME/bin/opengrep.exe" \
+            https://github.com/opengrep/opengrep/releases/latest/download/opengrep_windows_x86.exe \
+            || echo "opengrep install skipped"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Time this file
+        run: |
+          # GitHub runs `shell: bash` as `bash -eo pipefail`. `set -uo pipefail` does NOT undo
+          # the -e, and a failing bats would abort before its cost could be recorded -- which
+          # is the one number this job exists to produce. Turn it off explicitly.
+          set +e
+          set -u
+          f="tests/${{ matrix.file }}"
+          [ -f "$f" ] || { echo "::error::$f vanished between discovery and here"; exit 1; }
+          t0=$(date +%s)
+          # A failing test still consumed its wall clock. This measures COST, not correctness,
+          # so `set -e` is off for this call and the status is recorded rather than acted on.
+          bats "$f" > "$RUNNER_TEMP/tap.log" 2>&1
+          rc=$?
+          elapsed=$(( $(date +%s) - t0 ))
+          tests="$(grep -c '^@test' "$f" || true)"
+          skipped="$(grep -cE '^ok [0-9]+ .*# skip' "$RUNNER_TEMP/tap.log" || true)"
+          echo "weigh: file=${{ matrix.file }} elapsed=${elapsed}s tests=$tests skipped=$skipped rc=$rc"
+          # A file whose tests nearly all skipped is measured, but its number describes a run
+          # that did almost nothing -- flag it rather than let it quietly become a low weight.
+          if [ "$tests" -gt 0 ] && [ "$skipped" -ge "$tests" ]; then
+            echo "::warning::${{ matrix.file }} skipped every test -- its weight describes a skip, not a run"
+          fi
+          mkdir -p out
+          printf '%s\t%s\t%s\t%s\t%s\n' "${{ matrix.file }}" "$elapsed" "$tests" "$skipped" "$rc" > "out/${{ matrix.file }}.tsv"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: weight-${{ matrix.file }}
+          path: out/*.tsv
+          retention-days: 1
+
+  collate:
+    needs: [discover, weigh]
+    # `always()` so a single dead runner does not throw away 41 good measurements. The
+    # completeness check below turns a partial result into a loud, named warning instead.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: weight-*
+          merge-multiple: true
+          path: weights
+      - name: Emit a ready-to-paste timings block
+        shell: bash
+        run: |
+          set -eo pipefail
+          expected="${{ needs.discover.outputs.count }}"
+          # One file, so every later step reads the same bytes and none of them has to survive
+          # an empty glob.
+          cat weights/*.tsv 2>/dev/null > all.tsv || true
+          got="$(wc -l < all.tsv | tr -d ' ')"
+          echo "collated $got of $expected file(s)"
+          if [ "$got" -eq 0 ]; then
+            echo "::error::no measurements at all -- every weigh job failed to upload"
+            exit 1
+          fi
+          if [ "$got" -ne "$expected" ]; then
+            echo "::warning::$(( expected - got )) file(s) produced no measurement -- the block below is INCOMPLETE and must not be pasted over a complete one"
+            # LC_ALL=C on comm itself, not only on the sorts feeding it: comm collates with the
+            # AMBIENT locale, decides C-sorted input is out of order, and exits 1. Under
+            # `-eo pipefail` that killed this step -- losing all 41 good measurements at the
+            # exact moment the report existed to explain a partial run. `|| true` for the same
+            # reason: naming the missing files must never be able to discard the present ones.
+            LC_ALL=C comm -13 \
+              <(cut -f1 all.tsv | LC_ALL=C sort) \
+              <(cd tests && ls *.bats | LC_ALL=C sort) \
+              | sed 's/^/  missing: /' || true
+          fi
+
+          echo "=== per-file, heaviest first (elapsed / tests / skipped / rc) ==="
+          sort -t$'\t' -k2 -rn all.tsv | awk -F'\t' '{printf "  %-32s %5ss  %3s tests  %3s skipped  rc=%s\n",$1,$2,$3,$4,$5}'
+
+          echo "=== what changed against tests/shard-timings.json (>=5s, or new) ==="
+          node -e '
+            const fs = require("fs");
+            const cur = JSON.parse(fs.readFileSync("tests/shard-timings.json","utf8")).timings;
+            const rows = fs.readFileSync("all.tsv","utf8").trim().split("\n")
+              .map((l) => l.split("\t")).map(([f, s]) => [f, Number(s)]);
+            rows.sort((a, b) => Math.abs(b[1] - (cur[b[0]] ?? 0)) - Math.abs(a[1] - (cur[a[0]] ?? 0)));
+            let n = 0;
+            for (const [f, s] of rows) {
+              const was = cur[f];
+              if (was !== undefined && Math.abs(s - was) < 5) continue;
+              const d = was === undefined ? "NEW" : (s - was >= 0 ? "+" : "") + (s - was);
+              console.log(`  ${f.padEnd(32)} ${String(was ?? "-").padStart(5)} -> ${String(s).padStart(5)}   ${d}`);
+              n++;
+            }
+            if (n === 0) console.log("  (nothing moved by 5s or more -- the current weights stand)");
+          '
+
+          echo "BEGIN timings"
+          sort -t$'\t' -k2 -rn all.tsv \
+            | awk -F'\t' 'BEGIN{print "  \"timings\": {"} {printf "%s    \"%s\": %s", (NR>1?",\n":""), $1, $2} END{print "\n  }"}'
+          echo "END timings"
