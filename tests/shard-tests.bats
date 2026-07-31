@@ -70,8 +70,38 @@ _union() { # $1 = total; prints every shard's files, sorted
 # ---------- timings are ADVISORY, never a filter ----------
 
 @test "a file with no measured timing is still placed, never skipped" {
-  # The live repo already exercises this: files added after the measurement run carry no entry.
-  # Assert the property directly rather than relying on that staying true.
+  # This used to read the live repo and `skip` when every file happened to carry a timing --
+  # which is exactly what happened once the four unweighted files were measured, so the case
+  # silently stopped running at the moment the repo stopped demonstrating it. A test that
+  # disappears when the codebase is tidy is not a test. Build the condition instead.
+  local tmp="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$tmp/tests" "$tmp/.github/scripts"
+  cp "$ARC_ROOT/.github/scripts/shard-tests.mjs" "$tmp/.github/scripts/"
+  cp "$ARC_ROOT"/tests/*.bats "$tmp/tests/"
+  # A timings file that knows about exactly one file. Every other .bats in the sandbox is
+  # unmeasured and must still be placed, at _default_weight.
+  printf '{"_default_weight": 16, "timings": {"shard-tests.bats": 49}}\n' > "$tmp/tests/shard-timings.json"
+
+  local placed expected
+  placed="$(for i in 1 2 3 4 5; do
+    node "$tmp/.github/scripts/shard-tests.mjs" --index "$i" --total 5
+  done | xargs -n1 basename | LC_ALL=C sort)"
+  expected="$(ls "$tmp"/tests/*.bats | xargs -n1 basename | LC_ALL=C sort)"
+
+  [ "$placed" = "$expected" ] || {
+    echo "unmeasured files were dropped:"
+    diff <(printf '%s\n' "$expected") <(printf '%s\n' "$placed") || true
+    false
+  }
+  # And no duplicates: a file placed twice is a different lie from a file placed never.
+  [ "$(printf '%s\n' "$placed" | wc -l)" -eq "$(printf '%s\n' "$placed" | sort -u | wc -l)" ]
+}
+
+@test "every .bats file in the repo carries a measured timing (balance, not coverage)" {
+  # Unmeasured files are placed correctly -- the case above proves it -- but at
+  # _default_weight 16, which is how #69 shipped a shard predicted at 132s that ran 270s:
+  # lane-resolver.bats is 44 tests and was being counted as 16 seconds of work. Coverage is
+  # unaffected either way, so this is a WARNING with a name, not a failure.
   local unmeasured
   unmeasured="$(node -e '
     const fs=require("fs");
@@ -79,13 +109,13 @@ _union() { # $1 = total; prints every shard's files, sorted
     const f=fs.readdirSync(process.argv[1]+"/tests").filter(x=>x.endsWith(".bats"));
     process.stdout.write(f.filter(x=>!(x in t)).join(" "));
   ' "$ARC_ROOT")"
-  [ -n "$unmeasured" ] || skip "every file currently has a timing entry"
-  run bash -c "$(declare -f _union); SHARD='$SHARD'; _union 9"
-  local u="$output"
-  local f
-  for f in $unmeasured; do
-    printf '%s\n' "$u" | grep -qx "$f" || { echo "unmeasured file $f was not placed"; false; }
-  done
+  if [ -n "$unmeasured" ]; then
+    echo "WARN: no timing for: $unmeasured"
+    echo "WARN: these pack at _default_weight and will unbalance the matrix if they are heavy."
+    echo "WARN: harvest real numbers from any run's 'shard-timing:' lines."
+  fi
+  # Deliberately never fails: a new test file must not be blocked on a measurement run.
+  true
 }
 
 @test "an unreadable timings file degrades to equal weights, never to a refusal" {
@@ -168,9 +198,10 @@ _union() { # $1 = total; prints every shard's files, sorted
 
 @test "no .bats file hides in a subdirectory (invisible to every shard)" {
   # The sharder discovers with a flat readdirSync, so a nested file is never seen -- and
-  # its own "landed in no shard" refusal cannot fire for a file it never discovered. The
-  # unsharded legs run `bats -r`, so such a file would pass on ubuntu/macOS and be absent
-  # from all nine Windows shards: green, and never executed.
+  # its own "landed in no shard" refusal cannot fire for a file it never discovered. Only the
+  # ubuntu legs still run `bats -r`; macOS is sharded now too, so a nested file would be absent
+  # from all 12 windows shards AND both macOS shards. Ubuntu alone would run it, which makes
+  # this test the guard rather than the matrix.
   local nested
   nested="$(cd "$ARC_ROOT" && find tests -mindepth 2 -name '*.bats' | LC_ALL=C sort || true)"
   [ -z "$nested" ] || {
