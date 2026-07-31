@@ -7,6 +7,10 @@ ARC_SCAN_SRC="$ARC_ROOT/.claude/scripts/review/arc-scan"
 # common.sh is core-owned and moved OUT of arc-scan/lib in Phase 03 ckpt 2 -- the review
 # product may not own a library the whole repo sources. Every other lib/ file stays put.
 ARC_CORE_SRC="$ARC_ROOT/.claude/scripts/core"
+# Repo-local tooling, deliberately OUTSIDE the synced .claude/ surface: product-lint
+# refuses any file under .claude/ that no product manifest maps, and a one-off that
+# migrates arc's own tracker must not ship to venture repos that can never use it.
+ARC_MIGRATE_SRC="$ARC_ROOT/.github/scripts/tracker-migrate.sh"
 
 # Source the pipeline libraries for unit-level tests (no git needed).
 _arc_load_libs() {
@@ -403,12 +407,16 @@ _arc_root_golden_check() {
 # claim no fixture can make against a tree where they do not exist.
 _arc_migrate_sandbox() {
   SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-mig.$$.$RANDOM")"
-  mkdir -p "$SANDBOX/.claude/scripts/core" "$SANDBOX/.claude/scripts/plan" \
+  mkdir -p "$SANDBOX/.claude/scripts/core" "$SANDBOX/.github/scripts" \
            "$SANDBOX/phases" "$SANDBOX/docs/archive" "$SANDBOX/docs/evidence/phase-00"
   cp "$ARC_CORE_SRC/lane-resolve.sh"  "$SANDBOX/.claude/scripts/core/"
   cp "$ARC_CORE_SRC/lane-resolve.mjs" "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
   cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
-  cp "$ARC_ROOT/.claude/scripts/plan/tracker-migrate.sh" "$SANDBOX/.claude/scripts/plan/" 2>/dev/null || true
+  # The mover is repo-local tooling, not product surface, so it lives beside
+  # shard-tests.mjs in .github/scripts/ -- and it reaches the resolver at
+  # ../../.claude/scripts/core/. Mirror that, never flatten it: a flat sandbox would
+  # pass here while the real tree could not find the resolver at all.
+  cp "$ARC_MIGRATE_SRC" "$SANDBOX/.github/scripts/" 2>/dev/null || true
   cd "$SANDBOX" || return 1
   git init -q
   git checkout -qb fixture-main
@@ -431,12 +439,12 @@ _arc_migrate_sandbox() {
 # board's single source of truth lying from birth. They come FIRST so a test can
 # override any of them by passing its own; the parser is last-wins.
 _arc_migrate() {
-  bash "$SANDBOX/.claude/scripts/plan/tracker-migrate.sh" --root "$SANDBOX" \
+  bash "$SANDBOX/.github/scripts/tracker-migrate.sh" --root "$SANDBOX" \
     --cycle "test cycle" --phase "00 — fixture" --appetite 3d --burn 0d "$@"
 }
 
 # The mover with NOTHING supplied -- for the arg-validation cases themselves.
-_arc_migrate_raw() { bash "$SANDBOX/.claude/scripts/plan/tracker-migrate.sh" --root "$SANDBOX" "$@"; }
+_arc_migrate_raw() { bash "$SANDBOX/.github/scripts/tracker-migrate.sh" --root "$SANDBOX" "$@"; }
 
 # Is <path> present in GIT'S RECORD (the index), compared byte-for-byte?
 # `git ls-files -- <pathspec>` is NOT this check: pathspec matching consults

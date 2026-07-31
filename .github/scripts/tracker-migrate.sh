@@ -1,9 +1,18 @@
 #!/usr/bin/env bash
 # tracker-migrate.sh -- move a ROOT-MODE tracker into initiatives/<lane>/.
 # Cycle 4 (arc-portfolio) Phase 01, REQ-02 / ADR-0050+0051. A ONE-OFF: arc self-hosts
-# once. It is deliberately not a reusable migration tool and ships in no product
-# manifest -- a venture repo has nothing to migrate, and a general mover would be a
-# rabbit hole this phase already named.
+# once. It is deliberately not a reusable migration tool -- a venture repo has nothing
+# to migrate (root-mode is a permanent consumer contract, ADR-0054, not a shim on the
+# way to lanes), and a general mover is a rabbit hole this phase's spec already named.
+#
+# WHY IT LIVES IN .github/scripts/ AND NOT .claude/scripts/plan/: everything under
+# .claude/ is the SYNCED surface, and product-lint refuses any file there that no
+# product manifest maps -- correctly, because an unmapped file either ships to every
+# consumer by accident or is dead weight nobody owns. This script is arc's own
+# repo-local tooling, exactly like shard-tests.mjs beside it. Putting it in
+# products/plan to satisfy the lint would ship a self-migration tool to every venture
+# repo that can never use it; adding an exemption to the lint would weaken a gate to
+# fit one file. Neither is worth it -- the file simply is not part of the product.
 #
 # Usage:
 #   tracker-migrate.sh --lane NAME --cycle TEXT --phase TEXT --appetite Nd --burn Nd
@@ -38,7 +47,7 @@ set -uo pipefail
 export LC_ALL=C LANG=C
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RESOLVER="$HERE/../core/lane-resolve.sh"
+RESOLVER="$HERE/../../.claude/scripts/core/lane-resolve.sh"
 
 LANE=""; LANE_GIVEN=0; LANE_DUP=0; ROOT=""; DRY=0
 CYCLE=""; PHASE=""; APPETITE=""; BURN=""

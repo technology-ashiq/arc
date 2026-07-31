@@ -62,7 +62,7 @@
 .claude/hooks/SessionEnd.d/00-session-log.sh	eee5a7732098143bf3d781de55fad79ef382e783e4e08b4af0d7a78108a84b79
 .claude/hooks/SessionEnd.d/90-emit.sh	a43ac0afcdcf1e08f94cf26cef4b43c3c272c715e3d79ae07612c6027241de0c
 .claude/hooks/SessionEnd.sh	cc40139eeb978ea8ef3555fdb47a31bcd8633a46667665b1c1f012eda428c49e
-.claude/hooks/SessionStart.d/00-context.sh	2a94375f07b2369a50182c35a7ee82eb581b1f8336321ffa617d603a519d2eb4
+.claude/hooks/SessionStart.d/00-context.sh	748147236d4f4b468024baed362866131177fd28274e83d1429c6fb90040f2d5
 .claude/hooks/SessionStart.d/50-toolchain.sh	1bd66dedcb3d95497987aa47a04f0955e557c0c606369e7aed6036fb51c92aff
 .claude/hooks/SessionStart.d/90-emit.sh	16fe19d3dcb58f4c42046e18d8ca65378cec5261b9d92e68e8c6da8078363326
 .claude/hooks/SessionStart.sh	cb11984cb9f214af951fe27503f75ef4c98019ecb3b86e5e1a8c70e10728314d

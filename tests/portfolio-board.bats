@@ -235,7 +235,7 @@ teardown() { _arc_teardown; }
   printf 'progress\n' > "$NOTREPO/PROGRESS.md"
   printf 'spec\n'     > "$NOTREPO/phases/phase-00-spec.md"
 
-  run bash "$ARC_ROOT/.claude/scripts/plan/tracker-migrate.sh" --root "$NOTREPO" \
+  run bash "$ARC_MIGRATE_SRC" --root "$NOTREPO" \
       --lane portfolio --cycle c --phase p --appetite 1d --burn 0d
   [ "$status" -eq 2 ]
   [[ "$output" == *"not inside a git work tree"* ]]
