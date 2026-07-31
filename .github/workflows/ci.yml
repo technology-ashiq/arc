@@ -56,19 +56,26 @@ jobs:
         #
         # THE SHAPE OF THE ANSWER IS SET BY TWO CEILINGS, both measured, not assumed:
         #
-        #   The heaviest single FILE. lane-resolver.bats (122s) and design-steel-thread.bats
-        #   (120s) are each one file, and one file cannot be split across two runners. From 12
-        #   shards on, the heaviest shard IS one of those files, so a 13th shard buys nothing.
+        #   The heaviest single FILE. design-steel-thread.bats is 141s and one file cannot be
+        #   split across two runners, so from 12 shards on the heaviest shard IS that file and
+        #   a 13th buys nothing. Going below it means splitting the file itself, or making one
+        #   job run several bats processes at once (measure-windows-cost.yml asks that).
         #
         #   ~20 concurrent jobs on GitHub Free. Measured: a 25-job run left exactly five
         #   queueing (150s, 85s, 71s, 55s, 43s). Past the cap the excess runs as a second wave
         #   and the wall clock roughly doubles, so a shard count is a budget, not a free knob.
         #
-        # 12 + 2 + 3 + ci-tier = 18 jobs, two under the cap. Every leg lands near 160s and the
-        # binding one is UBUNTU at ~163s, unsharded. Sharding ubuntu would cost three jobs (one
-        # per node version, all three run the full suite) and force windows down to 11, which
-        # comes out slower. So ~2m43 is the floor this matrix can reach on the free tier;
-        # beating it needs either fewer total tests per OS or a higher concurrency cap.
+        # 12 + 3 + 3 + ci-tier = 19 jobs, one under the cap. Windows lands at ~169s and is the
+        # binding leg; ubuntu is ~160s unsharded. Sharding ubuntu would cost three jobs (one per
+        # node version, all three run the full suite) and force windows down to 11, which comes
+        # out slower -- so it stays whole.
+        #
+        # MACOS GETS A THIRD SHARD FOR A REASON WORTH WRITING DOWN. It is sharded with WINDOWS
+        # weights, which is wrong in kind: the 2-shard split was predicted at 797/796 and ran
+        # 77s/161s, because the process-spawn cost that dominates windows does not dominate
+        # macOS. A third shard makes that error small. It does not fix it. At 238s total macOS
+        # is not the binding leg, so it does not earn a weights table of its own yet -- if it
+        # ever becomes binding, weigh it on macos-latest rather than adding shards.
         #
         # Minutes are free (public repo). The only currency being spent is wall clock.
         #
@@ -80,8 +87,9 @@ jobs:
           - { os: ubuntu-latest,  node: '20', shard: 1, shards: 1 }
           - { os: ubuntu-latest,  node: '18', shard: 1, shards: 1 }
           - { os: ubuntu-latest,  node: '22', shard: 1, shards: 1 }
-          - { os: macos-latest,   node: '20', shard: 1, shards: 2 }
-          - { os: macos-latest,   node: '20', shard: 2, shards: 2 }
+          - { os: macos-latest,   node: '20', shard: 1, shards: 3 }
+          - { os: macos-latest,   node: '20', shard: 2, shards: 3 }
+          - { os: macos-latest,   node: '20', shard: 3, shards: 3 }
           - { os: windows-latest, node: '20', shard: 1,  shards: 12 }
           - { os: windows-latest, node: '20', shard: 2,  shards: 12 }
           - { os: windows-latest, node: '20', shard: 3,  shards: 12 }
