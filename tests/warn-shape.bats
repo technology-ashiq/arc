@@ -342,13 +342,17 @@ WARN [board-nonsense] PORTFOLIO.md:14 $DASH whatever"
 # ---------- H-11: hygiene is scoped to the block, never the chatter ----------
 
 @test "warn-shape: trailing whitespace on an unrelated chatter line does not fail a pristine block" {
-  run _arc_warn_shape board-header-drift 0 "board-lint: scanning PORTFOLIO.md
+  # SP makes the trailing space EXPLICIT. Typed as a literal it is invisible in review and
+  # every editor-on-save strips it, which is how the first version of this test asserted a
+  # rejection for whitespace it did not actually contain -- and CI caught that, not review.
+  local SP=" "
+  run _arc_warn_shape board-header-drift 0 "board-lint: scanning PORTFOLIO.md$SP
 $(_good_block board-header-drift)"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 
-  # the companion half: trailing space INSIDE the block is still a rejection
+  # the companion half: the same trailing space INSIDE the block is still a rejection
   run _arc_warn_shape board-header-drift 0 "WARN [board-header-drift] PORTFOLIO.md:16 $DASH drift
-  Expected: burn 1.9d   $ARROW initiatives/portfolio/PROGRESS.md:8
+  Expected: burn 1.9d   $ARROW initiatives/portfolio/PROGRESS.md:8$SP
   Found:    burn 1.4d   $ARROW PORTFOLIO.md:16
   Example:  | portfolio | LIVE |"
   [ "$status" -eq 66 ]

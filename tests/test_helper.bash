@@ -544,12 +544,15 @@ _arc_warn_loc_ok() {
     case "$_n" in ""|*[!0123456789]*|0*) return 1;; esac
   else
     _p="$_t"
-    case "$_p" in *:*) return 1;; esac   # a bare path carries no colon (and no `E:` drive)
   fi
   # Repo-relative only: an absolute, dot-relative, parent-escaping, home-relative or
   # backslashed path is not a citation anyone can check out and open.
+  # The colon test lives HERE, on the PATH half, not in the file-kind branch alone: under
+  # loc-kind `line`, `E:/w/PORTFOLIO.md:16` splits into line `16` and a path still carrying
+  # the windows drive colon, and a branch-local check let exactly that through (caught by
+  # CI on all three legs, 2026-08-01, after the adversarial pass had named the case).
   case "$_p" in
-    ""|.|..|/*|./*|../*|*/../*|*/..|~*|*\\*) return 1;;
+    ""|.|..|/*|./*|../*|*/../*|*/..|~*|*\\*|*:*) return 1;;
   esac
   return 0
 }
