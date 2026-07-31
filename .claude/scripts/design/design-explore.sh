@@ -34,8 +34,13 @@ if [ -z "$CMD" ] || [ -z "$ID" ]; then
   echo "design-explore: usage: design-explore.sh {init|check|render|status} <explore-id> [--brief <path>]" >&2
   exit 1
 fi
+# Characters spelled out, not `a-z`: a bracket range resolves through the locale's
+# collation table, which on macOS interleaves case, so `[!a-z0-9-]` did not fire for
+# `Design` and the id was accepted on one OS and refused on the others -- then collided
+# with an existing `design` explore on a case-insensitive filesystem. Same defect this
+# commit fixes in lane-resolve.sh; pinned by tests/portability.bats.
 case "$ID" in
-  *[!a-z0-9-]*) echo "design-explore: id '$ID' must be lowercase kebab (it becomes a directory)" >&2; exit 1;;
+  *[!abcdefghijklmnopqrstuvwxyz0123456789-]*) echo "design-explore: id '$ID' must be lowercase kebab (it becomes a directory)" >&2; exit 1;;
 esac
 
 EX="$ROOT/docs/design/explore/$ID"

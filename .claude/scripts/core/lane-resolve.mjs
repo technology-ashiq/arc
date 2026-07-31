@@ -26,6 +26,11 @@ import { join } from "node:path";
 // passes the grammar but mkdir fails on exactly one of the three CI legs, so it is
 // rejected everywhere rather than becoming a one-OS surprise.
 const RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/;
+// A JS character class is codepoint-ranged and locale-blind, so `[a-z]` is safe HERE
+// and is not safe in the bash twin, where the same notation goes through the locale's
+// collation table. That asymmetry is why lane-resolve.sh spells the characters out
+// instead of mirroring this line: do not "simplify" it back. (macOS CI, 2026-07-30:
+// bash accepted `Design`, this function refused it, the equivalence gate caught it.)
 export const validLaneName = (n) =>
   typeof n === "string" && n.length > 0 && n.length <= 64 &&
   /^[a-z][a-z0-9-]*$/.test(n) && !RESERVED.test(n);
