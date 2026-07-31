@@ -62,20 +62,47 @@ to the owner at Phase 01's close, not to a silent overrun.
 
 ## Now
 
-**Position:** Phase 00 CLOSED 2026-07-31 (see done log). Phase 01 is next and has not
-started. Root layout still in place — this cycle's tracker migrates itself into
-`initiatives/portfolio/` as Phase 01's first act, so every command below still runs
-root-mode until that lands.
+**Position:** Phase 01 IN PROGRESS on `feat/phase-01-self-host`. **The move has landed** —
+you are reading this file at `initiatives/portfolio/PROGRESS.md`; the repo is in lane-mode
+and auto-resolves to `portfolio`. Built so far: the mover (`tracker-migrate.sh`, in no
+product manifest — a venture repo has nothing to migrate), A5's casing half closed by
+fixture, the rehearsed rollback, the real move as one commit, the design lane (links only),
+`PORTFOLIO.md` v1, and the SessionStart degraded rule. **Not yet done:** CI green on 3 OS,
+the evidence bundle, and `/arc-phase-done 1` in lane-mode.
 
-**What Phase 01 must not inherit:**
+**The rollback rehearsal, performed 2026-07-31 before the real move** (from `1e33ae8`, the
+exact parent of the move commit — nothing landed in between): move applied and committed in
+a disposable worktree → lane-mode proven → `git revert` executed → root-mode restored and
+compared to the pre-move baseline **byte-for-byte** (resolver output and kickoff-lint output
+both identical), root-golden 7/7, `git diff 1e33ae8..HEAD` empty, zero emitters, worktree
+removed. Reverting the single move commit puts the repo back in root-mode; that is a
+recorded result, not a promise.
 
-- **A5's untested half.** A5 fired on locale, not on `git mv` casing — the half Phase 01's
-  physical move actually rests on. Its exit criteria now carry a casing fixture: a case-only
-  rename of a lane directory must behave identically on all three legs, asserted against
-  git's own record rather than a path string, because the failure being guarded is the
-  silent one — a case-folding filesystem can no-op a rename while reporting success.
-- **The appetite deficit.** 1.6 days remain against 1.75 days of planned phases. Phase 01
-  opens ~0.15d short; the scope-cut ladder is pre-decided and the call is the owner's.
+**A5's untested half is closed.** The casing fixture pins the MOVER half (Phase 00 pinned
+the resolver half): a target lane that folds onto an existing directory of different case is
+refused on every leg — refusing is the only outcome that is identical on three legs, since
+succeeding depends on the filesystem underneath. Three further holes were found by building
+breaking inputs, none by reading the code: `--lane a --lane b` collapsing to last-wins, a
+`--root` outside a work tree passing every precondition because `git status` writes an empty
+stdout on failure, and `[ -e phases ]` answering TRUE on a folding checkout whose index says
+`Phases/`. All three fixed and pinned by the input that found them.
+
+**Two decisions waiting on the owner:**
+
+- **The `develop` board row.** The source pack illustrates board v1 with `develop QUEUED`,
+  and the same section rules that every initiatives row resolves to an `initiatives/<lane>/`
+  directory while lanes are born only at `/arc-kickoff`. Both cannot hold for a lane that
+  does not exist. v1 ships without the row (the only reading that breaks no rule); settle it
+  via `/arc-change` before Phase 02 writes the lint that would flag it.
+- **The appetite deficit.** 1.6 days remained against 1.75 days of planned phases at Phase
+  01's open. The scope-cut ladder (defer REQ-04 + Mode-B certification, ship the Mode-A core)
+  is pre-decided; the call belongs at this phase's close, not to a silent overrun.
+
+**Deviation taken, flag for ratification:** `initiatives/design/PROGRESS.md` was created
+alongside the HISTORY-INDEX. ADR-0058 specifies "folder + HISTORY-INDEX.md" only, but
+ADR-0051 rules that every board value derives from a lane's machine header — a `design` row
+with no header to derive from would be the hand-written second truth that ADR forbids. The
+file holds a header and a pointer, no copied history.
 
 **Carried forward, deliberately not fixed (same bug class as Phase 00's, out of scope):**
 the `_slug` pair (`design-critique.sh:42`, `design-render.sh:71`) slugs the same route
@@ -85,10 +112,12 @@ claims a byte determinism it does not provide (no divergence today, checked acro
 collations). Both are held by `tests/portability.bats`'s allowlist, with a companion test
 that fails if an entry stops matching — neither can rot into a gate that lies.
 
-**Next step:** `/arc-kickoff` is not needed; Phase 01 starts from its spec. First move is
-the rollback rehearsal in a disposable scratch worktree, BEFORE the real move — and it must
-be re-run if any commit lands on the branch after it, because a rehearsal against a stale
-HEAD is not evidence.
+**Next step:** push `feat/phase-01-self-host` and read CI. From 2026-07-31 there are **no
+local test runs at all** (owner's standing rule, all phases) — CI is the only gate, so the
+3-OS claims this phase makes are unproven until that run is green. Then: evidence bundle
+(dry-run + rehearsal transcripts, move commit hash, board v1, casing fixture on all three
+legs) at `initiatives/portfolio/evidence/phase-01/`, then `/arc-phase-done 1` executed in
+lane-mode.
 
 blocked-on: —
 depends-on: —

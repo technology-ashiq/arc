@@ -325,3 +325,251 @@ teardown() { _arc_teardown; }
   [ "$status" -eq 2 ]
   [[ "$output" == *"already"* ]]
 }
+
+# ---------- SessionStart degraded rule (ADR-0054 · pack §4 round 5) ----------
+#
+# A passive hook cannot ask a question, so it may never guess an answer either. The
+# rule has exactly three branches and each one is pinned below:
+#   no lanes at all           -> ROOT-MODE, byte-identical to pre-portfolio arc
+#   exactly one eligible lane -> canonical order: lane echo -> board -> ## Now
+#   zero or 2+ eligible       -> board + one hint line, and NOTHING is selected
+#
+# The move itself created the need: with the tracker at initiatives/portfolio/, the
+# root PROGRESS.md is a pointer stub with no `## Now`, so a hook that keeps reading
+# the root path reports an EMPTY position and looks like it worked.
+
+@test "session-start: root-mode prints no lane line and no board line" {
+  _arc_tracker_sandbox
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Selected lane:"* ]]
+  [[ "$output" != *"Board"* ]]
+  [[ "$output" == *"fixture position line one"* ]]
+}
+
+@test "session-start: exactly one eligible lane is auto-selected and echoed first" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio LIVE
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Selected lane: portfolio (via auto)"* ]]
+}
+
+@test "session-start: the position comes from the LANE's tracker, not the root stub" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio LIVE
+  # The root file is what a post-migration repo really has: a stub with no ## Now.
+  printf '# PROGRESS.md — moved\n\nSee initiatives/portfolio/PROGRESS.md\n' > PROGRESS.md
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"initiatives/portfolio/PROGRESS.md"* ]]
+  [[ "$output" == *"**Position:** fixture."* ]]
+  [[ "$output" != *"fixture position line one"* ]]
+}
+
+@test "session-start: two eligible lanes select NOTHING and print the hint" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio LIVE
+  _arc_make_lane design BLOCKED
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Selected lane:"* ]]
+  [[ "$output" == *"/arc-resume --lane"* ]]
+  [[ "$output" == *"portfolio"* ]]
+  [[ "$output" == *"design"* ]]
+}
+
+@test "session-start: BLOCKED counts as eligible — it is attention, not absence" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio BLOCKED
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Selected lane: portfolio (via auto)"* ]]
+}
+
+@test "session-start: lanes exist but none eligible — hint, no selection, no crash" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio IDLE
+  _arc_make_lane design IDLE
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Selected lane:"* ]]
+  [[ "$output" == *"/arc-resume --lane"* ]]
+}
+
+@test "session-start: the board summary appears, and only when there is a board" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio LIVE
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Board"* ]]
+
+  _arc_make_board "portfolio|LIVE|arc-portfolio|phase 01" "design|IDLE|arc-design|closed"
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Board"* ]]
+  [[ "$output" == *"Updated: 2026-07-31"* ]]
+  [[ "$output" == *"portfolio LIVE"* ]]
+  [[ "$output" == *"design IDLE"* ]]
+  # The passports table is a different table; a venture must never read as a lane.
+  [[ "$output" != *"lexos"* ]]
+}
+
+@test "session-start: canonical order — lane echo, then board, then the position" {
+  _arc_tracker_sandbox
+  _arc_make_lane portfolio LIVE
+  _arc_make_board "portfolio|LIVE|arc-portfolio|phase 01"
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  lane_at="$(printf '%s\n' "$output" | grep -n "Selected lane:"  | head -n1 | cut -d: -f1)"
+  board_at="$(printf '%s\n' "$output" | grep -n "Board"          | head -n1 | cut -d: -f1)"
+  pos_at="$(printf '%s\n' "$output"   | grep -n "Build status"   | head -n1 | cut -d: -f1)"
+  [ -n "$lane_at" ] && [ -n "$board_at" ] && [ -n "$pos_at" ]
+  [ "$lane_at" -lt "$board_at" ]
+  [ "$board_at" -lt "$pos_at" ]
+}
+
+@test "session-start: an initiatives/ dir holding no valid lane is root-mode, not a dead end" {
+  _arc_tracker_sandbox
+  mkdir -p initiatives/.keep-me-not-a-lane
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Selected lane:"* ]]
+  [[ "$output" != *"/arc-resume --lane"* ]]
+  [[ "$output" == *"fixture position line one"* ]]
+}
+
+@test "session-start: stays advisory — exits 0 even with an unreadable lane tracker" {
+  _arc_tracker_sandbox
+  mkdir -p initiatives/portfolio
+  printf 'status: LIVE\n' > initiatives/portfolio/PROGRESS.md   # no ## Now at all
+  run _arc_session_start
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Selected lane: portfolio (via auto)"* ]]
+}
+
+# ---------- board v1 + the migrated repo, asserted against THIS repo ----------
+#
+# Sandboxes prove the machinery; these prove the actual tree the machinery now runs on.
+# They are the "verified against the real system" half of Phase 01's DoD, and they are
+# the reason a hand-edit to PORTFOLIO.md cannot quietly drift from the lanes it claims
+# to index — the board is a VIEW (ADR-0051), so every value here has a source, and each
+# test below names the source it checks against.
+
+@test "board: PORTFOLIO.md exists with both tables and a dated Updated line" {
+  [ -f "$ARC_ROOT/PORTFOLIO.md" ]
+  grep -qE '^Updated: 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]$' "$ARC_ROOT/PORTFOLIO.md"
+  grep -qE '^##[[:space:]]+Active initiatives[[:space:]]*$' "$ARC_ROOT/PORTFOLIO.md"
+  grep -qE '^##[[:space:]]+Venture passports[[:space:]]*$'  "$ARC_ROOT/PORTFOLIO.md"
+}
+
+@test "board: every initiatives row resolves to an initiatives/<lane>/ directory" {
+  run _arc_board_rows "$ARC_ROOT/PORTFOLIO.md" "active initiatives"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  while IFS="$(printf '\t')" read -r lane _st; do
+    [ -n "$lane" ] || continue
+    [ -d "$ARC_ROOT/initiatives/$lane" ] || { echo "board row '$lane' has no initiatives/$lane/"; return 1; }
+  done <<< "$output"
+}
+
+@test "board: every lane directory with a tracker has a board row (drift runs both ways)" {
+  rows="$(_arc_board_rows "$ARC_ROOT/PORTFOLIO.md" "active initiatives" | cut -f1)"
+  for d in "$ARC_ROOT"/initiatives/*/; do
+    [ -d "$d" ] || continue
+    lane="$(basename "$d")"
+    [ -f "$d/PROGRESS.md" ] || continue
+    printf '%s\n' "$rows" | grep -qx "$lane" || { echo "lane '$lane' is not on the board"; return 1; }
+  done
+}
+
+@test "board: each row's status is the one in that lane's PROGRESS machine header" {
+  # ADR-0051's single-source rule, enforced rather than asserted: the board copies
+  # nothing by hand, so a hand-edited status here must not survive.
+  run _arc_board_rows "$ARC_ROOT/PORTFOLIO.md" "active initiatives"
+  [ "$status" -eq 0 ]
+  while IFS="$(printf '\t')" read -r lane st; do
+    [ -n "$lane" ] || continue
+    prog="$ARC_ROOT/initiatives/$lane/PROGRESS.md"
+    [ -f "$prog" ] || continue
+    hdr="$(_arc_lane_header "$prog" status)"
+    [ "$st" = "$hdr" ] || { echo "board says '$lane' is $st; its header says $hdr"; return 1; }
+  done <<< "$output"
+}
+
+@test "board: statuses come from the ADR-0051 vocabulary only" {
+  run _arc_board_rows "$ARC_ROOT/PORTFOLIO.md" "active initiatives"
+  [ "$status" -eq 0 ]
+  while IFS="$(printf '\t')" read -r lane st; do
+    [ -n "$lane" ] || continue
+    case "$st" in LIVE|BLOCKED|QUEUED|IDLE) ;; *) echo "bad status '$st' for '$lane'"; return 1;; esac
+  done <<< "$output"
+}
+
+@test "board: no venture leaks into the initiatives table (the boundary stays clean)" {
+  lanes="$(_arc_board_rows "$ARC_ROOT/PORTFOLIO.md" "active initiatives" | cut -f1)"
+  vents="$(_arc_board_rows "$ARC_ROOT/PORTFOLIO.md" "venture passports" | cut -f1)"
+  [ -n "$vents" ]
+  for v in $vents; do
+    printf '%s\n' "$lanes" | grep -qx "$v" && { echo "venture '$v' also appears as a lane"; return 1; }
+    [ -d "$ARC_ROOT/initiatives/$v" ] && { echo "venture '$v' has a lane directory"; return 1; }
+  done
+  return 0
+}
+
+@test "repo: this tree is in lane-mode and auto-resolves to portfolio" {
+  run bash "$ARC_CORE_SRC/lane-resolve.sh" --root "$ARC_ROOT" --for resume
+  [ "$status" -eq 0 ]
+  [ "$(_arc_field mode)" = "lane" ]
+  [ "$(_arc_field lane)" = "portfolio" ]
+  [ "$(_arc_field via)" = "auto" ]
+  [ "$(_arc_field counted)" = "1" ]
+}
+
+@test "repo: the live tracker is at initiatives/portfolio/ and the root paths are stubs" {
+  [ -f "$ARC_ROOT/initiatives/portfolio/PLAN.md" ]
+  [ -f "$ARC_ROOT/initiatives/portfolio/PROGRESS.md" ]
+  [ -d "$ARC_ROOT/initiatives/portfolio/phases" ]
+  grep -q "initiatives/portfolio/PLAN.md"     "$ARC_ROOT/PLAN.md"
+  grep -q "initiatives/portfolio/PROGRESS.md" "$ARC_ROOT/PROGRESS.md"
+  # A stub must not read as a tracker for anything that scrapes the old path.
+  ! grep -q "^## Now" "$ARC_ROOT/PROGRESS.md"
+}
+
+@test "repo: the portfolio lane carries a complete ADR-0051 machine header" {
+  prog="$ARC_ROOT/initiatives/portfolio/PROGRESS.md"
+  for k in status cycle phase appetite burn blocked-on depends-on; do
+    v="$(_arc_lane_header "$prog" "$k")"
+    [ -n "$v" ] || { echo "machine header field '$k' is empty"; return 1; }
+  done
+  [ "$(_arc_lane_header "$prog" status)" = "LIVE" ]
+}
+
+@test "design: the lane links its history and copies none of it (ADR-0058)" {
+  idx="$ARC_ROOT/initiatives/design/HISTORY-INDEX.md"
+  [ -f "$idx" ]
+  grep -q "docs/archive/"  "$idx"
+  grep -q "docs/evidence/" "$idx"
+  # Link, never copy: no archive or evidence tree may exist inside the lane.
+  [ ! -d "$ARC_ROOT/initiatives/design/archive" ]
+  [ ! -d "$ARC_ROOT/initiatives/design/evidence" ]
+  # And every frozen path it points at must actually be there.
+  for p in docs/archive/PLAN-2026-07-30.md docs/archive/PROGRESS-2026-07-30.md \
+           docs/archive/phases-design-2026-07-30 docs/evidence/phase-02 docs/design; do
+    grep -q "$p" "$idx" || { echo "index does not mention $p"; return 1; }
+    [ -e "$ARC_ROOT/$p" ] || { echo "index points at missing $p"; return 1; }
+  done
+}
+
+@test "design: an IDLE lane is not counted, so one live cycle still auto-resolves" {
+  [ "$(_arc_lane_header "$ARC_ROOT/initiatives/design/PROGRESS.md" status)" = "IDLE" ]
+}
+
+@test "frozen: docs/archive and docs/evidence are still tracked where they always were" {
+  # ADR-0058's sole-canonical-copy rule, checked against git rather than the filesystem.
+  n_arch="$(git -C "$ARC_ROOT" ls-files -- docs/archive | wc -l | tr -d ' ')"
+  n_ev="$(git -C "$ARC_ROOT" ls-files -- docs/evidence | wc -l | tr -d ' ')"
+  [ "$n_arch" -gt 0 ]
+  [ "$n_ev" -gt 0 ]
+  [ "$(git -C "$ARC_ROOT" ls-files -- 'initiatives/*/archive' | wc -l | tr -d ' ')" -eq 0 ]
+}

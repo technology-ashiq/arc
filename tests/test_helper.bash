@@ -230,6 +230,75 @@ _arc_lane_sandbox() {
   git add -A && git commit -qm seed
 }
 
+# Emit "<col1>\t<col2>" for each data row of a named board table in a PORTFOLIO.md.
+# Tolerant DETECTION (case, bold, heading level), exact-byte VALUES -- the same split the
+# resolver uses on the PROGRESS header. Header and separator rows are dropped.
+# Usage: _arc_board_rows <file> <lowercase table heading prefix>
+_arc_board_rows() {
+  awk -v want="$2" '
+    /^[[:space:]]*#/ {
+      low = tolower($0); gsub(/[*#]/, "", low); gsub(/^[ \t]+|[ \t]+$/, "", low)
+      intbl = (index(low, want) == 1) ? 1 : 0
+      next
+    }
+    intbl && /^[[:space:]]*\|/ {
+      line = $0; sub(/\r$/, "", line)
+      split(line, c, "|")
+      a = c[2]; b = c[3]
+      gsub(/[*`]/, "", a); gsub(/[*`]/, "", b)
+      gsub(/^[ \t]+|[ \t]+$/, "", a); gsub(/^[ \t]+|[ \t]+$/, "", b)
+      if (a == "" || a ~ /^-+$/) next
+      if (tolower(a) == "lane" || tolower(a) == "venture") next
+      print a "\t" b
+    }
+  ' "$1"
+}
+
+# One field out of a lane PROGRESS.md machine header (LAST value wins, header block only).
+_arc_lane_header() {
+  awk -v key="$2" '
+    /^[[:space:]]*##/ { exit }
+    {
+      line = $0; sub(/\r$/, "", line)
+      low = tolower(line); gsub(/\*/, "", low)
+      if (index(low, key ":") == 1) {
+        p = index(line, ":"); v = substr(line, p + 1)
+        gsub(/[*`]/, "", v); gsub(/^[ \t]+|[ \t]+$/, "", v)
+        out = v
+      }
+    }
+    END { print out }
+  ' "$1"
+}
+
+# Run the SessionStart context fragment against the current sandbox.
+_arc_session_start() { CLAUDE_PROJECT_DIR="$SANDBOX" bash "$SANDBOX/.claude/hooks/SessionStart.d/00-context.sh"; }
+
+# Write a minimal PORTFOLIO.md v1 into the sandbox. Rows are given as
+# "lane|status|cycle|position"; the passports table is fixed, one venture.
+_arc_make_board() {
+  {
+    echo "# PORTFOLIO.md — company board"
+    echo ""
+    echo "Updated: 2026-07-31"
+    echo ""
+    echo "## Active initiatives"
+    echo ""
+    echo "| lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |"
+    echo "|---|---|---|---|---|---|---|"
+    for row in "$@"; do
+      IFS='|' read -r l s c p <<< "$row"
+      echo "| $l | $s | $c | $p | 3d / 0d | — | — |"
+    done
+    echo ""
+    echo "## Venture passports"
+    echo ""
+    echo "| venture | repository | current status | next |"
+    echo "|---|---|---|---|"
+    echo "| lexos | private | in build | — |"
+  } > "$SANDBOX/PORTFOLIO.md"
+}
+
 # Create initiatives/<name>/ with a machine-header PROGRESS.md.
 # Usage: _arc_make_lane <name> <status> [cycle]
 _arc_make_lane() {
