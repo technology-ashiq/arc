@@ -7,6 +7,10 @@ ARC_SCAN_SRC="$ARC_ROOT/.claude/scripts/review/arc-scan"
 # common.sh is core-owned and moved OUT of arc-scan/lib in Phase 03 ckpt 2 -- the review
 # product may not own a library the whole repo sources. Every other lib/ file stays put.
 ARC_CORE_SRC="$ARC_ROOT/.claude/scripts/core"
+# Repo-local tooling, deliberately OUTSIDE the synced .claude/ surface: product-lint
+# refuses any file under .claude/ that no product manifest maps, and a one-off that
+# migrates arc's own tracker must not ship to venture repos that can never use it.
+ARC_MIGRATE_SRC="$ARC_ROOT/.github/scripts/tracker-migrate.sh"
 
 # Source the pipeline libraries for unit-level tests (no git needed).
 _arc_load_libs() {
@@ -230,6 +234,75 @@ _arc_lane_sandbox() {
   git add -A && git commit -qm seed
 }
 
+# Emit "<col1>\t<col2>" for each data row of a named board table in a PORTFOLIO.md.
+# Tolerant DETECTION (case, bold, heading level), exact-byte VALUES -- the same split the
+# resolver uses on the PROGRESS header. Header and separator rows are dropped.
+# Usage: _arc_board_rows <file> <lowercase table heading prefix>
+_arc_board_rows() {
+  awk -v want="$2" '
+    /^[[:space:]]*#/ {
+      low = tolower($0); gsub(/[*#]/, "", low); gsub(/^[ \t]+|[ \t]+$/, "", low)
+      intbl = (index(low, want) == 1) ? 1 : 0
+      next
+    }
+    intbl && /^[[:space:]]*\|/ {
+      line = $0; sub(/\r$/, "", line)
+      split(line, c, "|")
+      a = c[2]; b = c[3]
+      gsub(/[*`]/, "", a); gsub(/[*`]/, "", b)
+      gsub(/^[ \t]+|[ \t]+$/, "", a); gsub(/^[ \t]+|[ \t]+$/, "", b)
+      if (a == "" || a ~ /^-+$/) next
+      if (tolower(a) == "lane" || tolower(a) == "venture") next
+      print a "\t" b
+    }
+  ' "$1"
+}
+
+# One field out of a lane PROGRESS.md machine header (LAST value wins, header block only).
+_arc_lane_header() {
+  awk -v key="$2" '
+    /^[[:space:]]*##/ { exit }
+    {
+      line = $0; sub(/\r$/, "", line)
+      low = tolower(line); gsub(/\*/, "", low)
+      if (index(low, key ":") == 1) {
+        p = index(line, ":"); v = substr(line, p + 1)
+        gsub(/[*`]/, "", v); gsub(/^[ \t]+|[ \t]+$/, "", v)
+        out = v
+      }
+    }
+    END { print out }
+  ' "$1"
+}
+
+# Run the SessionStart context fragment against the current sandbox.
+_arc_session_start() { CLAUDE_PROJECT_DIR="$SANDBOX" bash "$SANDBOX/.claude/hooks/SessionStart.d/00-context.sh"; }
+
+# Write a minimal PORTFOLIO.md v1 into the sandbox. Rows are given as
+# "lane|status|cycle|position"; the passports table is fixed, one venture.
+_arc_make_board() {
+  {
+    echo "# PORTFOLIO.md — company board"
+    echo ""
+    echo "Updated: 2026-07-31"
+    echo ""
+    echo "## Active initiatives"
+    echo ""
+    echo "| lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |"
+    echo "|---|---|---|---|---|---|---|"
+    for row in "$@"; do
+      IFS='|' read -r l s c p <<< "$row"
+      echo "| $l | $s | $c | $p | 3d / 0d | — | — |"
+    done
+    echo ""
+    echo "## Venture passports"
+    echo ""
+    echo "| venture | repository | current status | next |"
+    echo "|---|---|---|---|"
+    echo "| lexos | private | in build | — |"
+  } > "$SANDBOX/PORTFOLIO.md"
+}
+
 # Create initiatives/<name>/ with a machine-header PROGRESS.md.
 # Usage: _arc_make_lane <name> <status> [cycle]
 _arc_make_lane() {
@@ -323,6 +396,69 @@ _arc_root_golden_check() {
   [ -f "$dir/$name.$os.txt" ] && g="$dir/$name.$os.txt"
   diff -u "$g" "$a"
 }
+
+# ---------- tracker migration harness (Cycle 4 portfolio, Phase 01 / REQ-02) ----------
+
+# Sandbox for the SELF-HOSTING MOVE: a root-mode tracker (PLAN/PROGRESS/phases) plus
+# frozen company history, carrying the mover and the resolver it asks for its inventory.
+# Layout is mirrored, never flattened -- tracker-migrate.sh resolves the resolver at
+# $HERE/../core/, so a flat copy would pass here while the real tree is broken.
+# The frozen paths are seeded on purpose: "docs/archive + docs/evidence untouched" is a
+# claim no fixture can make against a tree where they do not exist.
+_arc_migrate_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-mig.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts/core" "$SANDBOX/.github/scripts" \
+           "$SANDBOX/phases" "$SANDBOX/docs/archive" "$SANDBOX/docs/evidence/phase-00"
+  cp "$ARC_CORE_SRC/lane-resolve.sh"  "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/lane-resolve.mjs" "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
+  cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
+  # The mover is repo-local tooling, not product surface, so it lives beside
+  # shard-tests.mjs in .github/scripts/ -- and it reaches the resolver at
+  # ../../.claude/scripts/core/. Mirror that, never flatten it: a flat sandbox would
+  # pass here while the real tree could not find the resolver at all.
+  cp "$ARC_MIGRATE_SRC" "$SANDBOX/.github/scripts/" 2>/dev/null || true
+  cd "$SANDBOX" || return 1
+  git init -q
+  git checkout -qb fixture-main
+  # Repo-local identity, not GIT_AUTHOR_* env: the mover shells out to git in its own
+  # subprocesses, and a clean CI runner with no global identity fails 128 there even
+  # when the bats process has the env set (green local, red CI -- learned the hard way).
+  git config user.name  arc-test
+  git config user.email test@arc.local
+  printf '# PLAN.md fixture\n\n## Goal\n\nfixture goal.\n'          > PLAN.md
+  printf '# PROGRESS.md fixture\n\n## Now\n\n**Position:** fixture.\n' > PROGRESS.md
+  printf '# Phase 00 fixture\n'                                     > phases/phase-00-spec.md
+  printf '# Phase 01 fixture\n'                                     > phases/phase-01-spec.md
+  printf 'frozen archive — sole canonical copy\n'                   > docs/archive/old-cycle.md
+  printf 'frozen evidence — sole canonical copy\n'                  > docs/evidence/phase-00/proof.txt
+  git add -A && git commit -qm "seed root-mode tracker"
+}
+
+# The mover inside the current sandbox. The four machine-header values are supplied
+# because the mover refuses to invent them -- a header full of placeholders is the
+# board's single source of truth lying from birth. They come FIRST so a test can
+# override any of them by passing its own; the parser is last-wins.
+_arc_migrate() {
+  bash "$SANDBOX/.github/scripts/tracker-migrate.sh" --root "$SANDBOX" \
+    --cycle "test cycle" --phase "00 — fixture" --appetite 3d --burn 0d "$@"
+}
+
+# The mover with NOTHING supplied -- for the arg-validation cases themselves.
+_arc_migrate_raw() { bash "$SANDBOX/.github/scripts/tracker-migrate.sh" --root "$SANDBOX" "$@"; }
+
+# Is <path> present in GIT'S RECORD (the index), compared byte-for-byte?
+# `git ls-files -- <pathspec>` is NOT this check: pathspec matching consults
+# core.ignorecase, so on a case-folding checkout it answers for `initiatives/Design`
+# when asked about `initiatives/design` -- the exact fold this phase exists to catch.
+# Listing the whole index and comparing bytes asks git, and only git.
+_arc_in_index() {
+  local want="$1" f
+  while IFS= read -r -d '' f; do [ "$f" = "$want" ] && return 0; done < <(git -C "$SANDBOX" ls-files -z)
+  return 1
+}
+
+# Blob oid of a path in the index -- git's own record of WHAT moved, not where.
+_arc_oid() { git -C "$SANDBOX" rev-parse ":$1" 2>/dev/null; }
 
 # Deterministic tree fingerprint for the sync golden-output gate (REQ-02):
 # every file's path + LF-normalized SHA-256, sorted (LC_ALL=C), .git excluded.

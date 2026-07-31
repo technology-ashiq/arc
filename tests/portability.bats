@@ -6,7 +6,10 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 # Scope: the runtime scripts + hooks (NOT the bats files, which run under bats' bash).
-ROOTS() { echo "$ARC_ROOT/.claude/scripts $ARC_ROOT/.claude/hooks $ARC_ROOT/sync-to-project.sh"; }
+# .github/scripts is in scope too: repo-local tooling still runs on all three legs, and
+# moving a file out of .claude/ to keep it off the shipped surface must not also move it
+# out of this ratchet. tracker-migrate.sh made that gap real in Phase 01.
+ROOTS() { echo "$ARC_ROOT/.claude/scripts $ARC_ROOT/.claude/hooks $ARC_ROOT/.github/scripts $ARC_ROOT/sync-to-project.sh"; }
 
 @test "portability: no bash-4+ syntax (mapfile/readarray, associative arrays, case-mod)" {
   run grep -rnE '\b(mapfile|readarray)\b|(declare|local|typeset)[ \t]+-A|\$\{[A-Za-z_]+(,,|\^\^)' $(ROOTS)
@@ -47,8 +50,10 @@ EOF
 
 @test "portability: no NEW negated letter-range bracket expression (locale-collation trap)" {
   local hits new
+  # Same scope as ROOTS(), spelled out because the allowlist stores repo-relative
+  # `path:lineno` keys and a $ARC_ROOT-absolute grep would never match one.
   hits="$(cd "$ARC_ROOT" && grep -rnE '\[[!^][^]]*[a-zA-Z]-[a-zA-Z]' \
-            .claude/scripts .claude/hooks sync-to-project.sh 2>/dev/null || true)"
+            .claude/scripts .claude/hooks .github/scripts sync-to-project.sh 2>/dev/null || true)"
   local line loc body
   new=""
   while IFS= read -r line; do
