@@ -324,6 +324,65 @@ _arc_root_golden_check() {
   diff -u "$g" "$a"
 }
 
+# ---------- tracker migration harness (Cycle 4 portfolio, Phase 01 / REQ-02) ----------
+
+# Sandbox for the SELF-HOSTING MOVE: a root-mode tracker (PLAN/PROGRESS/phases) plus
+# frozen company history, carrying the mover and the resolver it asks for its inventory.
+# Layout is mirrored, never flattened -- tracker-migrate.sh resolves the resolver at
+# $HERE/../core/, so a flat copy would pass here while the real tree is broken.
+# The frozen paths are seeded on purpose: "docs/archive + docs/evidence untouched" is a
+# claim no fixture can make against a tree where they do not exist.
+_arc_migrate_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-mig.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts/core" "$SANDBOX/.claude/scripts/plan" \
+           "$SANDBOX/phases" "$SANDBOX/docs/archive" "$SANDBOX/docs/evidence/phase-00"
+  cp "$ARC_CORE_SRC/lane-resolve.sh"  "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_CORE_SRC/lane-resolve.mjs" "$SANDBOX/.claude/scripts/core/" 2>/dev/null || true
+  cp "$ARC_CORE_SRC/common.sh"        "$SANDBOX/.claude/scripts/core/"
+  cp "$ARC_ROOT/.claude/scripts/plan/tracker-migrate.sh" "$SANDBOX/.claude/scripts/plan/" 2>/dev/null || true
+  cd "$SANDBOX" || return 1
+  git init -q
+  git checkout -qb fixture-main
+  # Repo-local identity, not GIT_AUTHOR_* env: the mover shells out to git in its own
+  # subprocesses, and a clean CI runner with no global identity fails 128 there even
+  # when the bats process has the env set (green local, red CI -- learned the hard way).
+  git config user.name  arc-test
+  git config user.email test@arc.local
+  printf '# PLAN.md fixture\n\n## Goal\n\nfixture goal.\n'          > PLAN.md
+  printf '# PROGRESS.md fixture\n\n## Now\n\n**Position:** fixture.\n' > PROGRESS.md
+  printf '# Phase 00 fixture\n'                                     > phases/phase-00-spec.md
+  printf '# Phase 01 fixture\n'                                     > phases/phase-01-spec.md
+  printf 'frozen archive — sole canonical copy\n'                   > docs/archive/old-cycle.md
+  printf 'frozen evidence — sole canonical copy\n'                  > docs/evidence/phase-00/proof.txt
+  git add -A && git commit -qm "seed root-mode tracker"
+}
+
+# The mover inside the current sandbox. The four machine-header values are supplied
+# because the mover refuses to invent them -- a header full of placeholders is the
+# board's single source of truth lying from birth. They come FIRST so a test can
+# override any of them by passing its own; the parser is last-wins.
+_arc_migrate() {
+  bash "$SANDBOX/.claude/scripts/plan/tracker-migrate.sh" --root "$SANDBOX" \
+    --cycle "test cycle" --phase "00 — fixture" --appetite 3d --burn 0d "$@"
+}
+
+# The mover with NOTHING supplied -- for the arg-validation cases themselves.
+_arc_migrate_raw() { bash "$SANDBOX/.claude/scripts/plan/tracker-migrate.sh" --root "$SANDBOX" "$@"; }
+
+# Is <path> present in GIT'S RECORD (the index), compared byte-for-byte?
+# `git ls-files -- <pathspec>` is NOT this check: pathspec matching consults
+# core.ignorecase, so on a case-folding checkout it answers for `initiatives/Design`
+# when asked about `initiatives/design` -- the exact fold this phase exists to catch.
+# Listing the whole index and comparing bytes asks git, and only git.
+_arc_in_index() {
+  local want="$1" f
+  while IFS= read -r -d '' f; do [ "$f" = "$want" ] && return 0; done < <(git -C "$SANDBOX" ls-files -z)
+  return 1
+}
+
+# Blob oid of a path in the index -- git's own record of WHAT moved, not where.
+_arc_oid() { git -C "$SANDBOX" rev-parse ":$1" 2>/dev/null; }
+
 # Deterministic tree fingerprint for the sync golden-output gate (REQ-02):
 # every file's path + LF-normalized SHA-256, sorted (LC_ALL=C), .git excluded.
 # CR bytes are stripped before hashing so a Windows checkout and a Linux CI
