@@ -201,12 +201,27 @@ covers the all-in-main half and F the spooled half, and no single fixture produc
 where some events go each way. The union covers the claim. A mixed run does not exist yet,
 and "certified" should not be read as more than that.
 
-**Left as an open decision rather than smuggled into G:** nothing stops the board losing
-that line again. The fix is a tenth board-lint class asserting the execution-mode line
-exists and matches the certification state — but the WARN registry is pinned at exactly
-nine and `tests/warn-shape.bats` asserts them by name, so a tenth is a real change with its
-own fixtures. That goes through `/arc-change`. **Owner's call, and it is the one open item
-this phase hands forward.**
+**~~Left as an open decision rather than smuggled into G~~ — ROUTED 2026-08-01
+(`/arc-change`, owner-decided): it becomes Phase 03 retro input RI-1**
+(`phases/phase-03-spec.md`). Nothing stops the board losing that line again; the candidate
+fix is a tenth board-lint class asserting the execution-mode section EXISTS and matches one
+of two known grammars — not "matches the certification state", because no machine-readable
+source of truth for certification exists and the failure that actually happened was silent
+absence, which a presence check catches.
+
+It is **not** built in Phase 03: that phase is docs + retro at 0.25d with any code change
+out of scope by its own spec, and the change is not one line — the WARN registry is pinned
+at exactly nine classes and `tests/warn-shape.bats` asserts them by name, so a tenth needs
+the registry, the obligation guard and its own fixtures. None of the nine can carry it
+either: all nine are about board rows, lanes and ownership, none about a required section
+being absent. The retro decides what it becomes, with the finding in front of it — which is
+the mechanism for turning a missed control into a permanent upgrade rather than a note.
+
+**The question RI-1 really asks**, and the reason it is worth a retro slot rather than a
+ticket: this is the **second** time this cycle a stated control turned out not to exist or
+not to work — the other being section E's own control, which passed six legs by luck before
+the certification run caught it. Both were found by exercising the artifact; neither by
+reading it. So: which other ADR-mandated artifacts have no gate asserting they exist?
 
 **Section F, and where the spool's edges were decided.** A hook-mode `LOCK_TIMEOUT` now
 writes its already-sealed line to `events/_pending/<ulid>.json` and exits 0; the next
