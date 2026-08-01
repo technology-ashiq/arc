@@ -9,14 +9,14 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-07-31
+Updated: 2026-08-01
 
 ## Active initiatives
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| portfolio | LIVE | arc-portfolio | 02 — Parallel-safety floor | 3d / 1.9d | — | refine phase 02's coarse verification plan via `/arc-change` |
-| design | IDLE | arc-design (closed 2026-07-30) | — | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
+| portfolio | LIVE | arc-portfolio | 02 — Parallel-safety floor | 3d / 1.9d | — | phase 02 sections E + F: spine zero-interleaving, then the `_pending/` spool |
+| design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
 ## Venture passports
 

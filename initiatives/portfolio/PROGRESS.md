@@ -106,10 +106,11 @@ calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 01 CLOSED 2026-07-31 (see done log). **Phase 02 — Parallel-safety
-floor is IN PROGRESS**, four of its seven sections built: **A** the shared WARN-shape
-assertion helper (#82) · **B** the board lint and **D** the ownership lint (#83) · **C** the
-WIP info line (this branch). **E** (zero interleaving on 3 OS), **F** (spool drain +
-visibility) and **G** (Mode B stays uncertified until E and F are green) are open. The phase
+floor is IN PROGRESS**, four of its seven sections merged and the fifth on this branch:
+**A** the shared WARN-shape assertion helper (#82) · **B** the board lint and **D** the
+ownership lint (#83) · **C** the WIP info line (#84) · **E** zero interleaving on 3 OS
+(this branch). **F** (spool drain + visibility) and **G** (Mode B stays uncertified until
+E and F are green) are open. The phase
 row stays ⬜ until `/arc-phase-done 2` — sections merging is not a phase closing. The repo is
 in lane-mode: this file is the operational truth, `PORTFOLIO.md` indexes it, and every
 command auto-resolves to `portfolio` because it is the only eligible lane.
@@ -162,17 +163,55 @@ that fails if an entry stops matching — neither can rot into a gate that lies.
 must not also move it out of the bash-3.2/BSD ratchet — it still runs on all three legs.
 
 **Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~refine Phase 02's verification
-plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · **section C is on
-`feat/phase-02-wip-line`**. **Next after it: section E** — the zero-interleaving proof on 3
-OS, which ships with its own negative control (a >8 KB `>>` append that MUST tear on the
-same harness) and is the section that actually tests A3. No local test runs at any point —
-CI is the only gate (owner's standing rule, 2026-07-31, restated 2026-08-01).
+plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · ~~section C~~
+(#84) · **section E is on `feat/phase-02-section-e`**. **Next after it: section F** — the
+`_pending/` spool, where a hook-mode lock timeout stops sharing `_quarantine/` with a
+malformed payload. No local test runs at any point — CI is the only gate (owner's standing
+rule, 2026-07-31, restated 2026-08-01).
 
-**Assumptions status:** nothing fires from this change. A3 (lock + spool covers
-concurrency) is section E and F's to test. A4 (advisory-only WIP is enough) **now has its
-instrument** — section C prints the counted number — but it still cannot FIRE: its trigger
-needs counted lanes above 2 and retro evidence of rising rework, and this repo counts 1.
-A5 is closed and carries nothing.
+**Section E found a real bug on its first CI run, and it was not the bug it was looking
+for.** arc-ci 30696565045, windows shard 11/12: `1 of 200 strict emits were refused --
+arc-event: REJECT LOCK_FAILED -- cannot take the spine lock: EPERM`. Windows keeps a
+released file in a **delete-pending** state until the last handle closes, and an `O_EXCL`
+create landing in that window fails `EPERM`, not `EEXIST`. `withLock` treated every
+non-`EEXIST` code as fatal, so under contention one emitter in ~200 exited 2 and **lost its
+receipt** — risk 5 and the C2 lesson, arriving in the shape nobody was watching for. Fixed
+in the same branch: `EPERM` and `EACCES` are contention like `EEXIST` and retry; a genuine
+permission fault now surfaces as a `LOCK_TIMEOUT` naming the code it kept seeing. This is
+the whole argument for building the fixture before certifying Mode B — no amount of reading
+that function would have produced `EPERM`, only running it on the OS that emits it.
+
+**A3's trigger was widened in the same pass** (PLAN, marked and dated). It read "any
+interleaved/corrupt line in main JSONL", which watches only for CORRUPTION — and this
+failure corrupted nothing. It refused. A trigger that cannot see a refused receipt cannot
+see half of what the assumption is about.
+
+**The control took three designs, and the two failures are worth keeping.** The spec's
+original ">8 KB, over `PIPE_BUF`" is the wrong mechanism: one `write()` to a regular file
+opened `O_APPEND` is serialised by the inode lock on Linux, so 9 KB lands whole. The second
+try — 512 KB per writer so stdio splits it into ~100 writes — is right on Linux and macOS
+and came out **CLEAN on windows-git-bash**, because a Windows append write is serialised by
+the OS and MSYS fork is slow enough that 12 writers spawned in a loop can take turns. Both
+designs were measuring the OS rather than the harness. What ships depends on nothing
+platform-specific: each writer appends one record as **two separate appends**, released
+from a barrier once all 12 have signalled ready. Any other writer's bytes can land between
+those two appends on any OS, so CLEAN now means exactly one thing — no overlap happened.
+
+**A cost this phase creates and does not pay:** `tests/spine-concurrency.bats` spawns 200
+emitter processes, and on the windows leg process creation is the entire cost of the suite.
+It enters `shard-timings.json` at the `_default_weight` of 16, which will badly under-weight
+it and make whichever shard it lands in the binding leg. The weights file states its own
+rule — re-run `weigh-tests.yml` and paste the block, never hand-edit a number — so this is
+left for a measured pass rather than guessed at here.
+
+**Assumptions status:** A3 is **not** marked FIRED, and the reason is stated rather than
+assumed: the lock held, nothing interleaved, and the row's prescribed remedy (strict
+lockfile for hook mode, spool as the only timeout path) addresses a different fault than the
+one found — a fatal error code, not a timeout. Its trigger is widened, its remedy is
+untouched, and F is still where A3 gets its real test. A4 (advisory-only WIP is enough)
+**has its instrument** — section C prints the counted number — but still cannot FIRE: its
+trigger needs counted lanes above 2 and retro evidence of rising rework, and this repo
+counts 1. A5 is closed and carries nothing.
 
 blocked-on: —
 depends-on: —

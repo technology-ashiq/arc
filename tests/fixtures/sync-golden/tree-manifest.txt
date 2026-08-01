@@ -107,7 +107,7 @@
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/lib/canonical.mjs	35d4932cfc9762256ff768a9da3d2e2442ece75a3933f469e3a6a06bb79c6abb
 .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314
-.claude/scripts/hq/lib/spine-io.mjs	0ce8138277c916aee8c5a6ecd4e437e697fb450655fb8fcc9bfea0cbeed536ff
+.claude/scripts/hq/lib/spine-io.mjs	58b48cf69899e1c174003ee2c0094c0ab9f31d78f17d035cbfe7afe6507beb52
 .claude/scripts/hq/lib/validate.mjs	ca5910499c0676fc5e49a90dc6611323c7df9060ba114643cea9ed074e73bb97
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
 .claude/scripts/plan/arc-bytediff.sh	252b971a2c8a7e2267fcdedcec34c85ecfa4a520d65590c0995c29f6d0e424f8
