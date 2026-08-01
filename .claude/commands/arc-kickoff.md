@@ -11,6 +11,12 @@ ONLY command that may create a lane: `status=create` means this kickoff births
 (invalid name) → print it and STOP. In lane-mode echo `Selected lane:` first; root-mode
 (no `initiatives/` dir) writes the root tracker exactly as before.
 
+**Then the WIP line** (ADR-0052): run `bash .claude/scripts/core/wip-line.sh` and print its
+one line verbatim, right after the lane echo and before anything else. It is
+**informational** — whatever number it shows, kickoff PROCEEDS: never stop on it, never ask
+about it, never run an override ceremony. The guideline of 2 is the owner's to weigh, not
+this command's to enforce. Root-mode prints nothing at all.
+
 Kick off the build for: $ARGUMENTS
 
 > **Router:** extending an EXISTING build (new feature, tweak, mid-build idea)? Use

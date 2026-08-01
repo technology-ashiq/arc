@@ -27,7 +27,8 @@
     ".claude/scripts/core/lane-resolve.sh",
     ".claude/scripts/core/lane-resolve.mjs",
     ".claude/scripts/core/board-lint.sh",
-    ".claude/scripts/core/ownership-lint.sh"
+    ".claude/scripts/core/ownership-lint.sh",
+    ".claude/scripts/core/wip-line.sh"
   ],
   "files": [
     ".claude/hooks/_dispatch.sh",

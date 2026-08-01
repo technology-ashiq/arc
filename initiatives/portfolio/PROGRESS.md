@@ -106,9 +106,17 @@ calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 01 CLOSED 2026-07-31 (see done log). **Phase 02 — Parallel-safety
-floor** is next and has not started. The repo is in lane-mode: this file is the operational
-truth, `PORTFOLIO.md` indexes it, and every command auto-resolves to `portfolio` because it
-is the only eligible lane.
+floor is IN PROGRESS**, four of its seven sections built: **A** the shared WARN-shape
+assertion helper (#82) · **B** the board lint and **D** the ownership lint (#83) · **C** the
+WIP info line (this branch). **E** (zero interleaving on 3 OS), **F** (spool drain +
+visibility) and **G** (Mode B stays uncertified until E and F are green) are open. The phase
+row stays ⬜ until `/arc-phase-done 2` — sections merging is not a phase closing. The repo is
+in lane-mode: this file is the operational truth, `PORTFOLIO.md` indexes it, and every
+command auto-resolves to `portfolio` because it is the only eligible lane.
+
+`burn:` is deliberately still 1.9d. It is written at phase close, not per section, so it
+does NOT yet carry Phase 02's own spend — the 1.0d tripwire inside this phase cannot be read
+off the header today, and that is a thing to measure at close rather than to guess at now.
 
 **Phase 02's Verification plan is REFINED as of 2026-08-01** (`/arc-change`, branch
 `feat/phase-02-ratify-and-refine`) — sections A–G in the spec, each an existing-and-passing
@@ -153,16 +161,18 @@ that fails if an entry stops matching — neither can rot into a gate that lies.
 `.github/scripts` too. Moving a file out of `.claude/` to keep it off the shipped surface
 must not also move it out of the bash-3.2/BSD ratchet — it still runs on all three legs.
 
-**Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~`/arc-change` to refine Phase 02's
-verification plan~~ (done 2026-08-01, with both deviations ratified). **Now: build Phase 02
-via the Golden Loop, smallest slice first** — section A's shared WARN-shape assertion helper
-before any of the nine WARN classes that depend on it, since every later fixture asserts
-through it. No local test runs at any point — CI is the only gate (owner's standing rule,
-2026-07-31).
+**Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~refine Phase 02's verification
+plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · **section C is on
+`feat/phase-02-wip-line`**. **Next after it: section E** — the zero-interleaving proof on 3
+OS, which ships with its own negative control (a >8 KB `>>` append that MUST tear on the
+same harness) and is the section that actually tests A3. No local test runs at any point —
+CI is the only gate (owner's standing rule, 2026-07-31, restated 2026-08-01).
 
 **Assumptions status:** nothing fires from this change. A3 (lock + spool covers
-concurrency) and A4 (advisory-only WIP is enough) are Phase 02's to test — A4 cannot fire
-yet at 1 counted lane. A5 is closed and carries nothing.
+concurrency) is section E and F's to test. A4 (advisory-only WIP is enough) **now has its
+instrument** — section C prints the counted number — but it still cannot FIRE: its trigger
+needs counted lanes above 2 and retro evidence of rising rework, and this repo counts 1.
+A5 is closed and carries nothing.
 
 blocked-on: —
 depends-on: —
