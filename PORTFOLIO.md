@@ -15,8 +15,28 @@ Updated: 2026-08-01
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| portfolio | LIVE | arc-portfolio | 02 — Parallel-safety floor | 3d / 1.9d | — | phase 02 sections E + F: spine zero-interleaving, then the `_pending/` spool |
+| portfolio | LIVE | arc-portfolio | 02 — Parallel-safety floor | 3d / 1.9d | — | close phase 02 via `/arc-phase-done 2` |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
+
+## Execution mode (ADR-0056 / PORT-G)
+
+**Mode A** — parked-lane switching, one working tree, one session at a time — is the
+default and has been usable since Phase 01.
+
+**Mode B** — true parallel via `git worktree` per lane — is **CERTIFIED 2026-08-01**, on
+REQ-04's fixtures passing on ubuntu, macOS and windows-git-bash in one run
+(arc-ci [30699327058](https://github.com/technology-ashiq/arc/actions/runs/30699327058),
+19/19 jobs, `declared == executed` on every leg). Certification
+is a fixture result, not a judgement call: what it does and does not cover is written out
+in `initiatives/portfolio/phases/phase-02-spec.md` section G, including the one claim that
+comes from two fixtures together rather than from either alone.
+
+> **This line did not exist until 2026-08-01, and that is the more useful half of the
+> record.** ADR-0056 required the board to carry `Mode B: not certified` from the moment
+> the board existed. It never did — not in Phase 01 when `PORTFOLIO.md` was born, not
+> through Phase 02. For the entire window in which Mode B was UNSUPPORTED, the board that
+> was supposed to say so said nothing. Section G found this while trying to remove a note
+> that was not there.
 
 ## Venture passports
 

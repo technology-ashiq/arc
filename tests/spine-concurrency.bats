@@ -8,9 +8,9 @@
 # concurrency, the subject's pass carries no information about locking, and the control
 # failing to corrupt therefore FAILS the test rather than passing quietly.
 #
-# HOW THE CONTROL TEARS, and the two designs that did not work. This matters because a
+# HOW THE CONTROL TEARS, and the THREE designs that did not work. This matters because a
 # control is only an instrument for one question -- "did these writers actually overlap on
-# this leg?" -- and both earlier designs answered a different question by accident.
+# this leg?" -- and every earlier design answered a different question by accident.
 #
 #   1. ">8 KB, over PIPE_BUF, so the append is not atomic" (the spec's original wording).
 #      Wrong mechanism: one write() to a regular file opened O_APPEND is serialised by the
@@ -20,13 +20,18 @@
 #      neither of them a spine defect: a Windows append write is serialised by the OS, and
 #      MSYS fork is slow enough that 12 writers spawned in a loop can finish one at a time.
 #      A control that depends on how an OS buffers is measuring the OS, not the harness.
+#   3. Two separate appends behind a barrier, with no gap between them. Right idea, and it
+#      passed six legs across two PRs -- then came out CLEAN on ubuntu-18 (arc-ci
+#      30698758154). It was never reliable, only lucky: writers leave the barrier up to one
+#      POLL INTERVAL apart, and a record that takes microseconds to write closes long before
+#      the next writer wakes. The barrier was serialising the writers it existed to release.
+#      A control that fails one run in several is not a gate, it is a coin.
 #
-# What ships instead depends on nothing platform-specific: each writer appends ONE logical
-# record as TWO SEPARATE appends. Between a writer's first and second append any other
-# writer's bytes can land, on every OS, and the result is visibly a line with two writers'
-# fill characters in it. All 12 writers are released from a barrier once every one of them
-# has signalled it is ready, so fork cost cannot serialise them into taking turns. CLEAN now
-# means one thing only: no overlap happened here.
+# What ships depends on nothing platform-specific and nothing lucky: each writer appends ONE
+# logical record as TWO SEPARATE appends and holds it open across a deliberate gap an order
+# of magnitude longer than the barrier's release spread. Any writer genuinely running at the
+# same time lands inside somebody else's record, on every OS. CLEAN now means one thing only:
+# these processes really did take turns.
 #
 # ASCII-only @test names, deliberately: on 2026-07-30 and again in Phase 01 an em dash in a
 # test name made bats declare tests it never ran, and the run still went green.
@@ -49,6 +54,13 @@ CONTROL_WRITERS=12
 CONTROL_HALF=8192
 CONTROL_WIDTH=$((CONTROL_HALF * 2))
 CONTROL_ALPHA="ABCDEFGHIJKL"
+# How often a parked writer looks for the go file, and how long it then holds its record
+# open between the two appends. The GAP must be well clear of the POLL: writers leave the
+# barrier up to one poll interval apart, so a record that closes faster than that can be
+# finished by the first writer out before the second has even woken. See the comment at the
+# gap itself -- getting this wrong is what made the first version flaky rather than wrong.
+CONTROL_POLL=0.02
+CONTROL_GAP=0.4
 
 setup() {
   SPINE="$BATS_TEST_TMPDIR/spine"
@@ -106,8 +118,17 @@ _emit_worker() {
       # Fill cost is paid BEFORE signalling ready, so what the writers race on is the append
       # and nothing else.
       : > "$ready/$w"
-      while [ ! -f "$go" ]; do sleep 0.02; done
+      while [ ! -f "$go" ]; do sleep "$CONTROL_POLL"; done
       printf "%s" "$half" >> "$target"
+      # THE GAP IS LOAD-BEARING, and leaving it out is what made this control flaky.
+      # Writers leave the barrier up to CONTROL_POLL apart, because that is how often they
+      # look for the go file. Two appends of a few microseconds inside that window means the
+      # first writer out can finish its whole record before the second one has even woken --
+      # so the barrier SERIALIZES the writers instead of releasing them, and the file comes
+      # out clean on a machine that is perfectly capable of interleaving. Holding each record
+      # open for an order of magnitude longer than the release spread means any writer that
+      # is genuinely running at the same time lands inside somebody else's record.
+      sleep "$CONTROL_GAP"
       printf "%s\n" "$half" >> "$target"
     ) >/dev/null 2>&1 3>&- &
     w=$((w + 1))
