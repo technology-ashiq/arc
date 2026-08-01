@@ -1,0 +1,16 @@
+{
+  "phase": "02",
+  "commit": "466e8b823e30c67433f02eca52df26d78a1238b9",
+  "short": "466e8b8",
+  "generated": "2026-08-01T16:02:18Z",
+  "files": [
+    {
+      "name": "adversarial-report.md",
+      "sha256": "fd236b1c4550bf3cf85d17740e2465723dfb272fc344eb112e8e99745713935c"
+    },
+    {
+      "name": "ci-run.txt",
+      "sha256": "04b145e93603e8897247aed63f77337f3a947ed788f7dd5251c11ca335e2a4d1"
+    }
+  ]
+}

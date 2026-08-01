@@ -15,7 +15,7 @@ Updated: 2026-08-01
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| portfolio | LIVE | arc-portfolio | 02 — Parallel-safety floor | 3d / 1.9d | — | close phase 02 via `/arc-phase-done 2` |
+| portfolio | LIVE | arc-portfolio | 03 — Docs truth + retro | 3d / 3.0d | — | phase 03: docs truth, then the retro that decides RI-1 and RI-2 |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
 ## Execution mode (ADR-0056 / PORT-G)
@@ -23,13 +23,32 @@ Updated: 2026-08-01
 **Mode A** — parked-lane switching, one working tree, one session at a time — is the
 default and has been usable since Phase 01.
 
-**Mode B** — true parallel via `git worktree` per lane — is **CERTIFIED 2026-08-01**, on
-REQ-04's fixtures passing on ubuntu, macOS and windows-git-bash in one run
-(arc-ci [30699327058](https://github.com/technology-ashiq/arc/actions/runs/30699327058),
-19/19 jobs, `declared == executed` on every leg). Certification
-is a fixture result, not a judgement call: what it does and does not cover is written out
-in `initiatives/portfolio/phases/phase-02-spec.md` section G, including the one claim that
-comes from two fixtures together rather than from either alone.
+**Mode B** — true parallel via `git worktree` per lane — is **NOT CERTIFIED**. Concurrent
+emitters stay forbidden (ADR-0056).
+
+> **It was certified for three hours on 2026-08-01, and the certification is WITHDRAWN.**
+> Not because anyone changed their mind — because the thing it was granted on stopped
+> existing. ADR-0056 makes certification a fixture result: *REQ-04's fixtures green*. REQ-04
+> is section D + E + **F**, and F, the `_pending/` spool, was reverted the same day when an
+> adversarial pass found three defects in it (a receipt written to a day file no reader can
+> see; a spool file's contents deciding a write three directories above the spine root; the
+> drain skipping the secret scan). Those fixtures are no longer in the tree, so the result
+> they produced is no longer a result. A certification is not a memory of a green run.
+>
+> There is a second reason, and it is the more uncomfortable one. The run that certified
+> Mode B was green on a spine that had a **live duplicate-writer bug** — `withLock` let a
+> waiter delete the lock of a holder that was alive and mid-write, which is precisely the
+> failure Mode B exists to be safe against. It was found by the same pass, hours after the
+> board said CERTIFIED, and it was fixed in #89. Certification was granted against a fixture
+> set that could not see it.
+>
+> Section G's own words were *"certification is a fixture result, not a judgement call"*.
+> Withdrawing it is that sentence being honoured, not contradicted.
+
+**What it will take to certify.** REQ-04 green again — which needs the spool rebuilt so that
+the drain re-runs the same validate → scan → seal path the front door runs, and the 52 still
+unconfirmed findings in `initiatives/portfolio/evidence/phase-02/adversarial-report.md`
+triaged. Carried as Phase 03 retro inputs RI-1 and RI-2.
 
 > **This line did not exist until 2026-08-01, and that is the more useful half of the
 > record.** ADR-0056 required the board to carry `Mode B: not certified` from the moment
