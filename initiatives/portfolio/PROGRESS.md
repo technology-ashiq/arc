@@ -165,10 +165,15 @@ Phase 00's 1.4d over two calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 02 CLOSED 2026-08-01 (see done log). **Phase 03 — Docs truth + retro is
-NEXT and is not yet open**, because opening it means answering a question this close is not
-allowed to answer for you: the cycle is at **100% of its 3d appetite** and Phase 03's own
-appetite is 0.25d, all of which is already spoken for by REQ-05's docs work. It now also
-carries two retro inputs it cannot absorb at that size.
+OPEN as of 2026-08-01**: the shape question the close refused to answer has been answered by
+the owner — **run it as specified**, 0.25d, docs + retro, no code, RI-1/RI-2 triaged **by**
+the retro into the next cycle — and its coarse Verification plan has been refined into
+checkable items (`/arc-change`, branch `feat/phase-03-refine-verification`). The appetite
+position is unchanged and stated rather than softened: the cycle is at **100% of its 3d
+appetite**, so Phase 03's 0.25d runs **over** it by construction, landing the cycle at
+~3.25d (~8% over). No kill criterion fires on that — the 50% tripwire was Phase-0-scoped and
+Phase 02's ladder already executed at its close — but nothing about this is free, and the
+overrun is a number to carry into the retro, not a rounding error.
 
 **The three things Phase 02 did NOT close, stated here so `/arc-resume` cannot lose them:**
 
@@ -193,19 +198,40 @@ this close: ADR-0056 makes it a fixture result, REQ-04's fixtures include sectio
 was reverted. The certifying run was also green on a spine that still carried the
 duplicate-writer bug. The board says so, with the reason next to it.
 
-**Next step:** **the owner decides Phase 03's shape before it opens.** The honest options,
-none of them free:
+**Phase 03's shape: decided 2026-08-01, owner.** ~~Three options.~~ **Run it as specified** —
+0.25d, docs + retro, no code — and let the retro triage RI-1/RI-2 into the next cycle. The
+two rejected options are kept as the record of what was traded away: widening Phase 03 to fix
+the five live `ownership-lint` findings (overruns 3d outright), and cutting the docs scope to
+spend the 0.25d on those findings instead (takes the docs debt into the next cycle). What
+this choice costs, stated plainly: **the three open items stay live in the tree for however
+long the next cycle takes to start**, and five of them are wrong answers a shipped gate will
+keep giving in the meantime.
 
-- **Run Phase 03 as specified (0.25d, docs + retro) and let the retro triage RI-1/RI-2 into
-  the NEXT cycle.** Cheapest, closes the cycle roughly on time, and leaves the three open
-  items live in the tree for however long that next cycle takes to start.
-- **Widen Phase 03** to fix what is live in shipped code (the five `ownership-lint` findings
-  are small and well understood). Overruns the 3d appetite outright.
-- **Cut Phase 03's docs scope** and spend its 0.25d on the live findings instead, taking the
-  docs debt into the next cycle.
+**Two things the refine found, which are the reason the coarse plan could not just be
+executed:**
 
-Whichever is chosen, it goes through `/arc-change` before any code, per the change
-discipline this phase spent the day proving the value of.
+1. **The coarse criterion had gone stale against a decision taken mid-cycle.** It asked the
+   board to show "develop kickoff as the queued next"; [ADR-0061](../../docs/adr/0061-board-indexes-born-lanes-only.md)
+   (accepted 2026-08-01, after the spec was written) holds a board row iff the lane
+   directory exists, and **rejected the `Queued next:` fact line for v1** in the same
+   breath. Executed as written it would have made Phase 03 violate a mid-cycle ADR, and
+   Phase 02's own board lint would have flagged arc's board. Corrected in the spec's section
+   E; the fact moves to the HISTORY entry, where no grammar has to parse it.
+2. **A docs-only phase can turn CI red six ways.** `tests/fixtures/sync-golden/tree-manifest.txt`
+   stores a sha256 per synced file, and **two of the seven doc targets are in it** —
+   `docs/usermanual.md` and `docs/templates/adr-template.md`. Editing either fails both
+   golden tests (rsync + cp-r) on all three legs. With no local runs, CI is the first sight
+   of it. The golden must be regenerated **in the same commit** as the edit — spec section
+   B2 carries the recipe and the check that the manifest moved exactly two rows.
+
+**Next step:** land this refine, then build the phase in spec order — **A** the seven doc
+surfaces (regenerating the sync golden with A4 and A6) → **B** drift gate 0 findings +
+ledger stamp → **C/D** `/arc-retro`, which appends the HISTORY entry and records verdicts for
+RI-1, RI-2 and A4 → **E** flip `status: IDLE` and show the real zero-eligible resolver
+output → `/arc-phase-done 3`. **After E the repo has no eligible lane** (portfolio IDLE,
+design IDLE), so every no-arg lane surface exits 3 and asks: `--lane portfolio` becomes
+required for ordinary work. That path is pinned by `tests/lane-resolver.bats:97`, but this
+phase is the first time the real repo enters it. No local test runs — CI is the only gate.
 
 **Assumptions status:** A3 (advisory lock + spool covers concurrency) is **not** marked
 FIRED but is now materially weaker: its trigger was widened to cover refused receipts, the
