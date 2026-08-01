@@ -169,16 +169,33 @@ plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · ~
 malformed payload. No local test runs at any point — CI is the only gate (owner's standing
 rule, 2026-07-31, restated 2026-08-01).
 
-**Section E's control had to be built bigger than the spec's floor, and the reason is worth
-keeping.** The spec asks for a `>>` append over 8 KB on the ground that it exceeds
-`PIPE_BUF`. That reasoning does not hold on Linux: one `write()` to a regular file opened
-`O_APPEND` is serialised by the inode lock, so a single 9 KB write can land intact and the
-control would report CLEAN on a machine that is perfectly capable of interleaving. What
-actually tears is one logical line **split across several `write()` calls** — bash's printf
-goes through stdio and flushes in buffer-sized chunks. The control therefore writes 512 KB
-per writer across 12 writers (~100 writes each) rather than just clearing 8 KB. Same
-contract, same fail-if-clean rule; only the number is bigger, and it is bigger for a stated
-mechanical reason instead of a mistaken one.
+**Section E found a real bug on its first CI run, and it was not the bug it was looking
+for.** arc-ci 30696565045, windows shard 11/12: `1 of 200 strict emits were refused --
+arc-event: REJECT LOCK_FAILED -- cannot take the spine lock: EPERM`. Windows keeps a
+released file in a **delete-pending** state until the last handle closes, and an `O_EXCL`
+create landing in that window fails `EPERM`, not `EEXIST`. `withLock` treated every
+non-`EEXIST` code as fatal, so under contention one emitter in ~200 exited 2 and **lost its
+receipt** — risk 5 and the C2 lesson, arriving in the shape nobody was watching for. Fixed
+in the same branch: `EPERM` and `EACCES` are contention like `EEXIST` and retry; a genuine
+permission fault now surfaces as a `LOCK_TIMEOUT` naming the code it kept seeing. This is
+the whole argument for building the fixture before certifying Mode B — no amount of reading
+that function would have produced `EPERM`, only running it on the OS that emits it.
+
+**A3's trigger was widened in the same pass** (PLAN, marked and dated). It read "any
+interleaved/corrupt line in main JSONL", which watches only for CORRUPTION — and this
+failure corrupted nothing. It refused. A trigger that cannot see a refused receipt cannot
+see half of what the assumption is about.
+
+**The control took three designs, and the two failures are worth keeping.** The spec's
+original ">8 KB, over `PIPE_BUF`" is the wrong mechanism: one `write()` to a regular file
+opened `O_APPEND` is serialised by the inode lock on Linux, so 9 KB lands whole. The second
+try — 512 KB per writer so stdio splits it into ~100 writes — is right on Linux and macOS
+and came out **CLEAN on windows-git-bash**, because a Windows append write is serialised by
+the OS and MSYS fork is slow enough that 12 writers spawned in a loop can take turns. Both
+designs were measuring the OS rather than the harness. What ships depends on nothing
+platform-specific: each writer appends one record as **two separate appends**, released
+from a barrier once all 12 have signalled ready. Any other writer's bytes can land between
+those two appends on any OS, so CLEAN now means exactly one thing — no overlap happened.
 
 **A cost this phase creates and does not pay:** `tests/spine-concurrency.bats` spawns 200
 emitter processes, and on the windows leg process creation is the entire cost of the suite.
@@ -187,11 +204,14 @@ it and make whichever shard it lands in the binding leg. The weights file states
 rule — re-run `weigh-tests.yml` and paste the block, never hand-edit a number — so this is
 left for a measured pass rather than guessed at here.
 
-**Assumptions status:** nothing fires from this change. A3 (lock + spool covers
-concurrency) is section E and F's to test. A4 (advisory-only WIP is enough) **now has its
-instrument** — section C prints the counted number — but it still cannot FIRE: its trigger
-needs counted lanes above 2 and retro evidence of rising rework, and this repo counts 1.
-A5 is closed and carries nothing.
+**Assumptions status:** A3 is **not** marked FIRED, and the reason is stated rather than
+assumed: the lock held, nothing interleaved, and the row's prescribed remedy (strict
+lockfile for hook mode, spool as the only timeout path) addresses a different fault than the
+one found — a fatal error code, not a timeout. Its trigger is widened, its remedy is
+untouched, and F is still where A3 gets its real test. A4 (advisory-only WIP is enough)
+**has its instrument** — section C prints the counted number — but still cannot FIRE: its
+trigger needs counted lanes above 2 and retro evidence of rising rework, and this repo
+counts 1. A5 is closed and carries nothing.
 
 blocked-on: —
 depends-on: —

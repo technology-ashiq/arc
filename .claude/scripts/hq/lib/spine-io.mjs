@@ -75,13 +75,24 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
   const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
   const deadline = Date.now() + timeoutMs;
   let fd = null;
+  let lastCode = "EEXIST";
 
   for (;;) {
     try {
       fd = openSync(lock, "wx"); // atomic create-or-fail
       break;
     } catch (e) {
-      if (e.code !== "EEXIST") throw new SpineError("LOCK_FAILED", `cannot take the spine lock: ${e.code || e.message}`);
+      // "Somebody else has it" is not spelled the same way on every OS, and reading only
+      // EEXIST cost a receipt. Windows keeps a released file in a DELETE-PENDING state until
+      // the last handle closes; an O_EXCL create landing in that window fails EPERM (EACCES
+      // on some filesystems), not EEXIST. Section E's fixture caught it on the first run --
+      // 1 strict emit in 200 refused LOCK_FAILED on windows-git-bash, which in strict mode is
+      // exit 2 and a LOST receipt, the exact failure REQ-04 exists to prevent (risk 5, the C2
+      // lesson). All three codes mean contention, so all three retry; a genuine permission
+      // fault still surfaces, as a LOCK_TIMEOUT naming the code it kept seeing.
+      if (e.code !== "EEXIST" && e.code !== "EPERM" && e.code !== "EACCES")
+        throw new SpineError("LOCK_FAILED", `cannot take the spine lock: ${e.code || e.message}`);
+      lastCode = e.code;
       // A killed emitter leaves its lock behind. Break it once it is provably stale, or the
       // next session inherits a wedged spine (the crash window is exactly when telemetry
       // must not block a human).
@@ -89,7 +100,7 @@ export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
         if (Date.now() - statSync(lock).mtimeMs > LOCK_STALE_MS) { unlinkSync(lock); continue; }
       } catch { /* the holder released it between our check and now -- retry */ }
       if (Date.now() > deadline)
-        throw new SpineError("LOCK_TIMEOUT", `spine lock held for more than ${timeoutMs}ms`);
+        throw new SpineError("LOCK_TIMEOUT", `spine lock held for more than ${timeoutMs}ms (last open: ${lastCode})`);
       sleepSync(15);
     }
   }

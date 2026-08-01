@@ -8,12 +8,25 @@
 # concurrency, the subject's pass carries no information about locking, and the control
 # failing to corrupt therefore FAILS the test rather than passing quietly.
 #
-# On what actually tears, since "bigger than PIPE_BUF" is not the whole story. One write()
-# to a regular file opened O_APPEND is serialised by the inode lock on Linux, so a single
-# 9 KB write may well survive intact. What tears is one logical line SPLIT ACROSS SEVERAL
-# write() calls: bash's printf goes through stdio, which flushes in buffer-sized chunks, so
-# a 512 KB line becomes on the order of a hundred writes and another writer can land between
-# any two of them. That is why the control writes far more than the 8 KB floor.
+# HOW THE CONTROL TEARS, and the two designs that did not work. This matters because a
+# control is only an instrument for one question -- "did these writers actually overlap on
+# this leg?" -- and both earlier designs answered a different question by accident.
+#
+#   1. ">8 KB, over PIPE_BUF, so the append is not atomic" (the spec's original wording).
+#      Wrong mechanism: one write() to a regular file opened O_APPEND is serialised by the
+#      inode lock on Linux, so a 9 KB write lands whole however many writers there are.
+#   2. "512 KB, so stdio splits it into ~100 write() calls." Correct on Linux and macOS, and
+#      it came out CLEAN on windows-git-bash (arc-ci 30696565045, shard 11/12). Two reasons,
+#      neither of them a spine defect: a Windows append write is serialised by the OS, and
+#      MSYS fork is slow enough that 12 writers spawned in a loop can finish one at a time.
+#      A control that depends on how an OS buffers is measuring the OS, not the harness.
+#
+# What ships instead depends on nothing platform-specific: each writer appends ONE logical
+# record as TWO SEPARATE appends. Between a writer's first and second append any other
+# writer's bytes can land, on every OS, and the result is visibly a line with two writers'
+# fill characters in it. All 12 writers are released from a barrier once every one of them
+# has signalled it is ready, so fork cost cannot serialise them into taking turns. CLEAN now
+# means one thing only: no overlap happened here.
 #
 # ASCII-only @test names, deliberately: on 2026-07-30 and again in Phase 01 an em dash in a
 # test name made bats declare tests it never ran, and the run still went green.
@@ -29,10 +42,12 @@ EMITTERS=8
 PER_EMITTER=25
 EXPECTED=$((EMITTERS * PER_EMITTER))
 
-# The control's numbers. 12 writers so contention is wide, 512 KB so each line is split
-# across enough write() calls that at least one interleaving is close to certain.
+# The control's numbers. 12 writers so contention is wide; each writes its record as two
+# 8 KB halves, so a whole record still clears the spec's 8 KB floor and the split that makes
+# interleaving detectable is explicit rather than left to a buffer size.
 CONTROL_WRITERS=12
-CONTROL_WIDTH=524288
+CONTROL_HALF=8192
+CONTROL_WIDTH=$((CONTROL_HALF * 2))
 CONTROL_ALPHA="ABCDEFGHIJKL"
 
 setup() {
@@ -74,28 +89,43 @@ _emit_worker() {
 
 # ---------- the control ----------
 
-@test "control: concurrent unlocked appends of a 512 KB line DO tear a plain file" {
+@test "control: 12 unlocked writers appending one record in two halves DO tear a file" {
   target="$BATS_TEST_TMPDIR/control.txt"
-  src="$BATS_TEST_TMPDIR/control-src"
-  mkdir -p "$src"
+  ready="$BATS_TEST_TMPDIR/control-ready"
+  go="$BATS_TEST_TMPDIR/control-go"
+  mkdir -p "$ready"
   : > "$target"
 
-  # Sources are built BEFORE any writer starts, so the fill cost is not what the writers are
-  # racing on -- they contend on the append itself.
+  # 3>&- closes bats' status descriptor in each child: a background job holding it open makes
+  # bats wait forever for a test that already finished.
   w=1
   while [ "$w" -le "$CONTROL_WRITERS" ]; do
-    ch="${CONTROL_ALPHA:$((w - 1)):1}"
-    printf "%*s" "$CONTROL_WIDTH" "" | tr " " "$ch" > "$src/$w"
+    (
+      ch="${CONTROL_ALPHA:$((w - 1)):1}"
+      half="$(printf "%*s" "$CONTROL_HALF" "" | tr " " "$ch")"
+      # Fill cost is paid BEFORE signalling ready, so what the writers race on is the append
+      # and nothing else.
+      : > "$ready/$w"
+      while [ ! -f "$go" ]; do sleep 0.02; done
+      printf "%s" "$half" >> "$target"
+      printf "%s\n" "$half" >> "$target"
+    ) >/dev/null 2>&1 3>&- &
     w=$((w + 1))
   done
 
-  # 3>&- closes bats' status descriptor in each child: a background job holding it open
-  # makes bats wait forever for a test that already finished.
-  w=1
-  while [ "$w" -le "$CONTROL_WRITERS" ]; do
-    ( line="$(cat "$src/$w")"; printf "%s\n" "$line" >> "$target" ) >/dev/null 2>&1 3>&- &
-    w=$((w + 1))
+  # Release only once every writer is parked at the barrier. A fixed sleep would be a guess,
+  # and on the leg where fork is slowest the guess would be wrong in the direction that makes
+  # the control pass for the wrong reason.
+  waited=0
+  while [ "$(ls "$ready" | wc -l | tr -d " ")" -lt "$CONTROL_WRITERS" ]; do
+    sleep 0.1
+    waited=$((waited + 1))
+    if [ "$waited" -gt 600 ]; then
+      echo "only $(ls "$ready" | wc -l) of $CONTROL_WRITERS writers reached the barrier in 60s"
+      false
+    fi
   done
+  : > "$go"
   wait
 
   run node "$VERIFY" --control "$target" --writers "$CONTROL_WRITERS" --width "$CONTROL_WIDTH"
@@ -104,10 +134,12 @@ _emit_worker() {
     TORN*) ;;
     *)
       echo "The control did NOT corrupt: $output"
-      echo "That is not good news. $CONTROL_WRITERS writers appending ${CONTROL_WIDTH}-byte"
-      echo "lines with no lock produced a clean file, which means this leg never actually"
-      echo "ran them concurrently. The subject test below therefore proves nothing about"
-      echo "the spine lock on this OS, so this fixture fails rather than passing quietly."
+      echo "That is not good news. $CONTROL_WRITERS writers were released together and each"
+      echo "appended one record as TWO separate appends with no lock between them. For the"
+      echo "file to come out clean, no writer's second append can have been overtaken by any"
+      echo "other writer -- i.e. they took turns, and this leg did not run them concurrently."
+      echo "The subject test therefore proves nothing about the spine lock here, so this"
+      echo "fixture fails rather than passing quietly."
       false
       ;;
   esac
