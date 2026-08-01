@@ -1,0 +1,47 @@
+# Phase 02 — CI evidence
+
+The run whose tree is what merged to main as 466e8b8 (PR #89).
+arc-ci run 30705654140 — https://github.com/technology-ashiq/arc/actions/runs/30705654140
+
+ci-tier                                        pass  51s
+selftest (macos-latest, 20, shard 1/3)         pass  1m49s
+selftest (macos-latest, 20, shard 2/3)         pass  1m29s
+selftest (macos-latest, 20, shard 3/3)         pass  2m20s
+selftest (ubuntu-latest, 18)                   pass  3m57s
+selftest (ubuntu-latest, 20)                   pass  3m44s
+selftest (ubuntu-latest, 22)                   pass  3m53s
+selftest (windows-latest, 20, shard 1/12)      pass  3m17s
+selftest (windows-latest, 20, shard 10/12)     pass  4m47s
+selftest (windows-latest, 20, shard 11/12)     pass  3m3s
+selftest (windows-latest, 20, shard 12/12)     pass  2m15s
+selftest (windows-latest, 20, shard 2/12)      pass  2m57s
+selftest (windows-latest, 20, shard 3/12)      pass  2m51s
+selftest (windows-latest, 20, shard 4/12)      pass  4m44s
+selftest (windows-latest, 20, shard 5/12)      pass  2m50s
+selftest (windows-latest, 20, shard 6/12)      pass  2m49s
+selftest (windows-latest, 20, shard 7/12)      pass  4m38s
+selftest (windows-latest, 20, shard 8/12)      pass  4m36s
+selftest (windows-latest, 20, shard 9/12)      pass  3m16s
+
+## declared == executed, per leg
+(the reconciliation step fails the job on any mismatch, so 19/19 green is itself the proof;
+ these are read back from the logs rather than asserted)
+
+selftest (ubuntu-latest, 18)                   reconcile: declared 762, executed 762
+selftest (windows-latest, 20, shard 8/12)      reconcile: declared 81, executed 81
+selftest (ubuntu-latest, 20)                   reconcile: declared 762, executed 762
+selftest (ubuntu-latest, 22)                   reconcile: declared 762, executed 762
+selftest (macos-latest, 20, shard 3/3)         reconcile: declared 324, executed 324
+selftest (macos-latest, 20, shard 2/3)         reconcile: declared 224, executed 224
+selftest (windows-latest, 20, shard 9/12)      reconcile: declared 82, executed 82
+selftest (windows-latest, 20, shard 6/12)      reconcile: declared 42, executed 42
+selftest (windows-latest, 20, shard 11/12)     reconcile: declared 73, executed 73
+selftest (windows-latest, 20, shard 2/12)      reconcile: declared 28, executed 28
+selftest (windows-latest, 20, shard 7/12)      reconcile: declared 91, executed 91
+selftest (macos-latest, 20, shard 1/3)         reconcile: declared 214, executed 214
+selftest (windows-latest, 20, shard 4/12)      reconcile: declared 67, executed 67
+selftest (windows-latest, 20, shard 1/12)      reconcile: declared 43, executed 43
+selftest (windows-latest, 20, shard 5/12)      reconcile: declared 71, executed 71
+selftest (windows-latest, 20, shard 3/12)      reconcile: declared 51, executed 51
+selftest (windows-latest, 20, shard 12/12)     reconcile: declared 44, executed 44
+selftest (windows-latest, 20, shard 10/12)     reconcile: declared 89, executed 89
