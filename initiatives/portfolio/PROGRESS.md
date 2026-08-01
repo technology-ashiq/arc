@@ -106,11 +106,11 @@ calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 01 CLOSED 2026-07-31 (see done log). **Phase 02 — Parallel-safety
-floor is IN PROGRESS**, four of its seven sections merged and the fifth on this branch:
+floor is IN PROGRESS**, five of its seven sections merged and the sixth on this branch:
 **A** the shared WARN-shape assertion helper (#82) · **B** the board lint and **D** the
 ownership lint (#83) · **C** the WIP info line (#84) · **E** zero interleaving on 3 OS
-(this branch). **F** (spool drain + visibility) and **G** (Mode B stays uncertified until
-E and F are green) are open. The phase
+(#85) · **F** the `_pending/` spool (this branch). **G** (Mode B stays uncertified until E
+and F are green) is the only one left, and it is a verdict rather than a build. The phase
 row stays ⬜ until `/arc-phase-done 2` — sections merging is not a phase closing. The repo is
 in lane-mode: this file is the operational truth, `PORTFOLIO.md` indexes it, and every
 command auto-resolves to `portfolio` because it is the only eligible lane.
@@ -164,10 +164,41 @@ must not also move it out of the bash-3.2/BSD ratchet — it still runs on all t
 
 **Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~refine Phase 02's verification
 plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · ~~section C~~
-(#84) · **section E is on `feat/phase-02-section-e`**. **Next after it: section F** — the
-`_pending/` spool, where a hook-mode lock timeout stops sharing `_quarantine/` with a
-malformed payload. No local test runs at any point — CI is the only gate (owner's standing
-rule, 2026-07-31, restated 2026-08-01).
+(#84) · ~~section E~~ (#85) · **section F is on `feat/phase-02-section-f`**. **Next after
+it: section G** — which builds nothing: Mode B's `not certified` comes off the board when E
+and F are green on three legs, and that is a fixture result rather than a judgement call.
+Then `/arc-phase-done 2`. No local test runs at any point — CI is the only gate (owner's
+standing rule, 2026-07-31, restated 2026-08-01).
+
+**Section F, and where the spool's edges were decided.** A hook-mode `LOCK_TIMEOUT` now
+writes its already-sealed line to `events/_pending/<ulid>.json` and exits 0; the next
+emitter to take the lock appends it, before its own event, so append order still matches
+arrival order. Four decisions worth having written down:
+
+- **Strict mode does not spool.** Strict tells CI and ingest the truth, and a caller told
+  exit 2 must never find its event on the spine afterwards — that would make the exit code
+  a lie. Only the hook path, whose whole promise is "never blocks", gets the spool.
+- **The drain rides on `appendEvent`, not on a daemon or a timer.** ADR-0027's no-bus stance
+  holds: the spool is a timeout fallback, and the only moment anything reliably holds the
+  lock is somebody else's append.
+- **Append-then-unlink, deliberately.** A crash in between leaves the event on the spine AND
+  in the spool; the next drain gets `DUP_IDEM` from the idem index, which is proof it
+  already landed, so the copy is dropped. Unlink-then-append would lose it outright in the
+  same window. Never both, never neither — and the fixture reproduces that exact window by
+  restoring the spool file after a successful drain.
+- **Two things that can never be drained get a visible destination rather than a retry
+  loop:** an unparseable spool file, and an event whose day was closed while it waited
+  (ADR-0029 makes a closed day immutable forever). Both go to `_quarantine/` with their own
+  code. Left in `_pending/` they would be re-read on every future emit for the life of the
+  repo.
+
+**`status` was ambiguous in the spec and the owner picked.** "surfaced in status/brief" —
+`brief` is `arc-brief.mjs`, but `status` could have meant the `/arc` dashboard or the
+SessionStart heads-up. Owner-decided 2026-08-01: the **`/arc` dashboard**
+(`arc-status.sh`). It is composed in the shell there rather than read by
+`arc-products.mjs`, so a core script never opens `events/` itself and the spine stays the
+only way to ask the spine (ADR-0030) — `spine-reader-lint` caught the first attempt at this
+and was right to.
 
 **Section E found a real bug on its first CI run, and it was not the bug it was looking
 for.** arc-ci 30696565045, windows shard 11/12: `1 of 200 strict emits were refused --
@@ -202,13 +233,21 @@ emitter processes, and on the windows leg process creation is the entire cost of
 It enters `shard-timings.json` at the `_default_weight` of 16, which will badly under-weight
 it and make whichever shard it lands in the binding leg. The weights file states its own
 rule — re-run `weigh-tests.yml` and paste the block, never hand-edit a number — so this is
-left for a measured pass rather than guessed at here.
+left for a measured pass rather than guessed at here. **Section F adds a second unweighed
+file** (`tests/spine-spool.bats`, 9 tests) and one of them is slow by construction: proving
+strict mode does NOT spool means waiting out the strict lock timeout, a hardcoded 15s in
+`arc-event.mjs`. Both files should be weighed in the same pass.
 
 **Assumptions status:** A3 is **not** marked FIRED, and the reason is stated rather than
 assumed: the lock held, nothing interleaved, and the row's prescribed remedy (strict
 lockfile for hook mode, spool as the only timeout path) addresses a different fault than the
 one found — a fatal error code, not a timeout. Its trigger is widened, its remedy is
-untouched, and F is still where A3 gets its real test. A4 (advisory-only WIP is enough)
+untouched. **A3 now has its full instrument and still does not fire:** section F's fixtures
+show a hook-mode timeout routing to the spool, draining exactly once across the crash
+window, and never reaching the main JSONL out of order — the lock-plus-spool pair covers
+single-machine concurrency, which is the half of A3 this repo can actually exercise. Its
+Mode-B half (two worktrees, one shared spine) stays untested by construction and is
+precisely what ADR-0056 keeps uncertified. A4 (advisory-only WIP is enough)
 **has its instrument** — section C prints the counted number — but still cannot FIRE: its
 trigger needs counted lanes above 2 and retro evidence of rising rework, and this repo
 counts 1. A5 is closed and carries nothing.

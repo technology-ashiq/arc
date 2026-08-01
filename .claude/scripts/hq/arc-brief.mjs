@@ -17,7 +17,7 @@
 
 import { SpineError, dayOf, formatIst, nowMs } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
-import { query } from "./spine.mjs";
+import { pendingLine, query } from "./spine.mjs";
 
 const VALUE_FLAGS = new Set(["date", "venture", "engine"]);
 const BOOL_FLAGS = new Set(["full"]);
@@ -119,6 +119,13 @@ async function main(argv) {
   const root = spineRoot();
   const { events, torn } = await query(root, { date: day, venture: flags.venture, engine: flags.engine });
   process.stdout.write(render(day, events, torn, { full: flags.full === true }));
+
+  // A receipt waiting on a lock is not on the spine, so no amount of reading the spine shows
+  // it. It goes AFTER the render and only when the spool is non-empty: at zero the line is
+  // absent, so an empty spool adds nothing to a brief anyone reads every day -- and the
+  // determinism the render is built for is untouched, because this is not day content.
+  const pending = pendingLine(root);
+  if (pending) process.stdout.write(`${pending}\n`);
   return 0;
 }
 

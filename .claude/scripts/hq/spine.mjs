@@ -20,11 +20,28 @@
 //   spine read [--kind K] [--since ULID] [--venture V] [--date YYYY-MM-DD] [--limit N]
 //   spine cursor                       # the id of the newest event, for a consumer to store
 //   spine days                         # the days that exist
+//   spine pending                      # one line if receipts are spooled, silence if none
 
 import { existsSync, readFileSync } from "node:fs";
 import { SpineError, ULID_RE } from "./lib/canonical.mjs";
-import { dayFile, listDays, spineRoot, derivedDir } from "./lib/spine-io.mjs";
+import { dayFile, listDays, pendingCount, spineRoot, derivedDir } from "./lib/spine-io.mjs";
 import { join } from "node:path";
+
+/**
+ * How many receipts are waiting for a lock (REQ-04).
+ *
+ * Re-exported HERE rather than imported straight from lib/ by each consumer, because the
+ * reader is the spine's only public API (ADR-0030 / REQ-09) and spine-reader-lint greps
+ * consumers for exactly that bypass.
+ */
+export { pendingCount };
+
+/** The one human line about the spool. Empty string at zero -- callers print nothing. */
+export function pendingLine(root) {
+  const n = pendingCount(root);
+  if (n === 0) return "";
+  return `spine: ${n} event(s) pending in events/_pending/ (drained on the next emit)`;
+}
 
 export const STATE_DB = (root) => join(derivedDir(root), "state.db");
 
@@ -157,6 +174,14 @@ async function main(argv) {
 
   if (command === "days") {
     for (const d of listDays(root)) process.stdout.write(`${d}\n`);
+    return 0;
+  }
+
+  // Before query(), like `days`: the spool is not on the spine yet, so asking the reader to
+  // parse every day file first would be work for an answer it does not hold.
+  if (command === "pending") {
+    const line = pendingLine(root);
+    if (line) process.stdout.write(`${line}\n`);
     return 0;
   }
 

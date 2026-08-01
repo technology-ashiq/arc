@@ -12,9 +12,9 @@
 
 import {
   closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync,
-  readSync, readdirSync, statSync, unlinkSync, writeFileSync, writeSync,
+  readSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync, writeSync,
 } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { SpineError, canonicalize, formatIst, nowMs } from "./canonical.mjs";
 
@@ -47,6 +47,10 @@ export function spineRoot() {
 
 export const eventsDir = (root) => join(root, "events");
 export const quarantineDir = (root) => join(root, "events", "_quarantine");
+// The spool. Separate from _quarantine/ on purpose: "your event was invalid" and "the
+// machine was busy" are different facts about different things, and one bucket for both
+// meant a perfectly good receipt sat in the folder reserved for rejects.
+export const pendingDir = (root) => join(root, "events", "_pending");
 export const derivedDir = (root) => join(root, "derived");
 export const dayFile = (root, day) => join(eventsDir(root), `${day}.jsonl`);
 export const closedMarker = (root, day) => join(eventsDir(root), `${day}.closed`);
@@ -188,12 +192,127 @@ export function fileSha(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
+// ---------------------------------------------------------------------------- the spool ----
+//
+// A hook that cannot take the lock in time must not block the session and must not throw the
+// receipt away. It writes the ALREADY-SEALED canonical line to its own file under _pending/,
+// and the next emitter to hold the lock appends it. Storing the sealed line verbatim is what
+// makes the drained bytes identical to a direct emit's: the drain re-appends, it never
+// re-serializes.
+
+/**
+ * Spool one sealed event. tmp + rename, because a crash mid-write would otherwise leave a
+ * half-written file that every future drain would choke on -- a spool that poisons itself.
+ *
+ * Returns a `label` as well as the path because spine paths are built HERE and nowhere else
+ * (ADR-0030, enforced by spine-reader-lint): a caller that wants to name the destination in a
+ * message must be handed the name, not left to compose one out of the spine's directory
+ * layout.
+ */
+export function spoolEvent(root, event, canonicalLine) {
+  const dir = pendingDir(root);
+  ensureDir(dir);
+  const file = join(dir, `${event.id}.json`);
+  const tmp = `${file}.tmp`;
+  writeFileSync(tmp, canonicalLine + "\n", "utf8");
+  renameSync(tmp, file);
+  return { file, label: `${basename(dir)}/${basename(file)}` };
+}
+
+/** Spooled files, oldest first. ULIDs sort lexically by time, so the name IS the order. */
+export function listPending(root) {
+  const dir = pendingDir(root);
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((n) => n.endsWith(".json"))   // never the .json.tmp of a write in flight
+    .sort()
+    .map((n) => join(dir, n));
+}
+
+export const pendingCount = (root) => listPending(root).length;
+
+/**
+ * Append every spooled event. The CALLER MUST HOLD THE LOCK -- this is the "drained under the
+ * next lock" half of the contract.
+ *
+ * Exactly-once, and the crash window is the reason for the shape. Append-then-unlink means a
+ * crash in between leaves the event BOTH on the spine and in the spool; the next drain sees
+ * DUP_IDEM from the idem index, which is proof it already landed, so the spool copy is
+ * dropped rather than appended twice. The reverse order -- unlink then append -- would lose
+ * the event outright in the same window. Never both, never neither.
+ *
+ * Nothing here is allowed to throw: a drain runs on the way to somebody else's append, and a
+ * single bad spool file must not take that caller's receipt down with it.
+ */
+export function drainPendingUnlocked(root) {
+  const report = { drained: [], deduped: [], quarantined: [], failed: [] };
+  for (const file of listPending(root)) {
+    let line, event;
+    try {
+      line = readFileSync(file, "utf8").replace(/\n+$/, "");
+      event = JSON.parse(line);
+      if (!event || typeof event.ts !== "string" || typeof event.idem !== "string")
+        throw new Error("not a sealed event");
+    } catch (e) {
+      // Unreadable means it can never be drained, so retrying it forever would wedge every
+      // future emit behind the same failure. Quarantine is the visible destination for
+      // something that cannot go on the spine -- which is exactly what that folder is for.
+      try {
+        quarantine(root, {
+          code: "SPOOL_UNREADABLE",
+          message: `pending file ${basename(file)} is not a sealed canonical event: ${e.message}`,
+          day: formatIst(nowMs()).slice(0, 10),
+          stubOnly: true,   // its contents are unparseable, so they are also unscannable
+        });
+        unlinkSync(file);
+      } catch { /* nothing here may block the caller's own append */ }
+      report.quarantined.push({ file: basename(file), code: "SPOOL_UNREADABLE" });
+      continue;
+    }
+
+    try {
+      appendEventUnlocked(root, event, line);
+      report.drained.push(event.id);
+    } catch (e) {
+      if (e.code === "DUP_IDEM") {
+        report.deduped.push(event.id);            // already landed before a crash: drop the copy
+      } else if (e.code === "DAY_CLOSED") {
+        // Its day was sealed while it waited. ADR-0029 makes that day immutable forever, so
+        // this receipt can never be appended where it belongs. Quarantined rather than left
+        // to retry on every emit until someone notices -- visible loss, never silent.
+        try {
+          quarantine(root, {
+            code: "DAY_CLOSED",
+            message: `spooled event ${event.id} outlived its day (${event.ts.slice(0, 10)} is closed, ADR-0029)`,
+            day: event.ts.slice(0, 10),
+            raw: line,   // sealed by the emitter, so already past the secret scan
+          });
+        } catch { /* see above */ }
+        report.quarantined.push({ file: basename(file), code: "DAY_CLOSED" });
+      } else {
+        // Unexpected. Leave the file alone so nothing is lost, and report it.
+        report.failed.push({ file: basename(file), code: e.code || "INTERNAL" });
+        continue;
+      }
+    }
+    try { unlinkSync(file); } catch { /* a concurrent drain got there first */ }
+  }
+  return report;
+}
+
 /**
  * Append one validated event. Caller supplies the canonical line (sha included).
  * Throws DUP_IDEM / DAY_CLOSED -- both are refusals, not crashes.
+ *
+ * The drain rides along here because this is the only place that reliably takes the lock:
+ * "drained under the next lock" needs no separate command, no daemon, and no timer
+ * (ADR-0027's no-bus stance -- the spool is a timeout fallback, not a queue).
  */
 export function appendEvent(root, event, canonicalLine, opts = {}) {
-  return withLock(root, () => appendEventUnlocked(root, event, canonicalLine), opts);
+  return withLock(root, () => {
+    const drain = drainPendingUnlocked(root);
+    return { ...appendEventUnlocked(root, event, canonicalLine), drain };
+  }, opts);
 }
 
 /** The same append, for a caller that ALREADY holds the lock (day-close). */

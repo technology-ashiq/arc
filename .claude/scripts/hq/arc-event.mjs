@@ -28,8 +28,8 @@ import {
 import { validateEvent } from "./lib/validate.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
 import {
-  appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
-  quarantine, spineRoot, withLock, writeCloseMarker,
+  appendEvent, appendEventUnlocked, dayFile, drainPendingUnlocked, fileSha, isDayClosed,
+  quarantine, spineRoot, spoolEvent, withLock, writeCloseMarker,
 } from "./lib/spine-io.mjs";
 
 const PROCESS_ID = "arc-event@1.0.0";
@@ -197,6 +197,13 @@ function closeDay(root, date, timeoutMs) {
 
   return withLock(root, () => {
     if (isDayClosed(root, day)) throw new SpineError("DAY_CLOSED", `${day} is already closed`);
+
+    // Drain BEFORE anything else in here, and specifically before shaBefore is computed. A
+    // spooled event whose day gets closed out from under it can never be appended (ADR-0029
+    // makes a closed day immutable forever), so the last lock before the seal is its last
+    // chance -- and the sha has to describe the file including it.
+    const drain = drainPendingUnlocked(root);
+
     const file = dayFile(root, day);
     if (!existsSync(file)) throw new SpineError("NO_DAY", `${day} has no events to close`);
 
@@ -225,8 +232,22 @@ function closeDay(root, date, timeoutMs) {
     const { event: sealed, line } = seal(event);
     appendEventUnlocked(root, sealed, line);
     writeCloseMarker(root, day, fileSha(file));
-    return { day, id: sealed.id };
+    return { day, id: sealed.id, drain };
   }, { timeoutMs });
+}
+
+/** One stderr line per drain that did anything. Silence when the spool was empty. */
+function reportDrain(drain) {
+  if (!drain) return;
+  const { drained, deduped, quarantined, failed } = drain;
+  if (drained.length)
+    process.stderr.write(`arc-event: drained ${drained.length} spooled event(s) under this lock\n`);
+  if (deduped.length)
+    process.stderr.write(`arc-event: ${deduped.length} spooled event(s) were already on the spine, spool copies dropped\n`);
+  for (const q of quarantined)
+    process.stderr.write(`arc-event: WARN spooled ${q.file} could not be drained (${q.code}) -- moved to _quarantine/\n`);
+  for (const f of failed)
+    process.stderr.write(`arc-event: WARN spooled ${f.file} failed to drain (${f.code}) -- left in _pending/ for the next lock\n`);
 }
 
 // ---------- main ----------
@@ -246,7 +267,8 @@ function main(parsed) {
   const root = spineRoot();
 
   if (command === "close-day") {
-    const { day, id } = closeDay(root, flags.date, timeoutMs);
+    const { day, id, drain } = closeDay(root, flags.date, timeoutMs);
+    reportDrain(drain);
     process.stdout.write(`${id}\n`);
     process.stderr.write(`arc-event: closed ${day}\n`);
     return 0;
@@ -269,7 +291,11 @@ function main(parsed) {
   }
 
   const { event: sealed, line } = seal(event);
+  // Handed to the failure path so a lock timeout can spool a receipt that is already sealed
+  // and valid, instead of throwing it in with the malformed inputs.
+  spoolCandidate = { event: sealed, line };
   const result = appendEvent(root, sealed, line, { timeoutMs });
+  reportDrain(result.drain);
   if (result.healed)
     process.stderr.write("arc-event: WARN healed a torn tail in the day file before appending\n");
   if (!result.indexed)
@@ -282,6 +308,11 @@ function main(parsed) {
 // meant a payload containing that word flipped a hook into a session-blocking exit 2.
 const parsed = walkArgs(process.argv.slice(2));
 const strictMode = isStrict(parsed);
+
+// Set the moment an event is sealed, read only by the failure handler. A sealed event has
+// already passed validation, the secret scan and the size ceiling -- so if the ONLY thing
+// that went wrong was the lock, it is a good receipt and belongs in the spool.
+let spoolCandidate = null;
 
 /** Read back the input we were handed, so a quarantine record can carry it -- if it is safe. */
 function readSourceText(flags) {
@@ -299,6 +330,30 @@ try {
 } catch (err) {
   const code = err instanceof SpineError ? err.code : "INTERNAL";
   const message = err && err.message ? err.message : String(err);
+
+  // THE SPOOL PATH, and the whole point of section F. A lock timeout in hook mode used to
+  // fall through to the catch-all below and land in _quarantine/, the same folder as a
+  // malformed payload -- so "your event was invalid" and "the machine was busy" shared a
+  // destination and a good receipt looked like a reject. It is neither invalid nor lost: it
+  // is sealed, and the next emitter to hold the lock appends it.
+  //
+  // Strict mode is deliberately NOT routed here. Strict reports the truth to CI and ingest,
+  // and a caller that was told exit 2 must not also find its event on the spine later.
+  if (!strictMode && code === "LOCK_TIMEOUT" && spoolCandidate) {
+    try {
+      const root = spineRoot();
+      const { label } = spoolEvent(root, spoolCandidate.event, spoolCandidate.line);
+      process.stderr.write(
+        `arc-event: SPOOL ${spoolCandidate.event.id} -- ${message}; ` +
+        `receipt written to ${label} and appended under the next lock (session unaffected)\n`,
+      );
+      process.exit(0);
+    } catch (spoolErr) {
+      // Spooling failed too. Fall through to quarantine rather than dropping the receipt --
+      // the wrong folder still beats no record at all.
+      process.stderr.write(`arc-event: WARN could not spool -- ${spoolErr.message}; quarantining instead\n`);
+    }
+  }
 
   try {
     const root = spineRoot();
