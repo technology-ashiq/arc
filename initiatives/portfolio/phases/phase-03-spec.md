@@ -51,6 +51,38 @@ second time this cycle that a stated control turned out not to exist or not to w
 it). Both were found by exercising the artifact, neither by review. Worth asking: **which
 other ADR-mandated artifacts have no gate asserting they exist?**
 
+### RI-2 — 52 unconfirmed adversarial findings, and the spool gap section F left open
+
+Routed here 2026-08-01, owner-decided, when `/arc-phase-done 2` refused and the missing
+adversarial pass was finally run. Full record:
+`../evidence/phase-02/adversarial-report.md`.
+
+**What is carried in.** 61 findings across `board-lint.sh`, `lane-resolve.{sh,mjs}`,
+`ownership-lint.sh` and the spool. Nine were verified by hand; one (the lock) was fixed and
+pinned, three were removed by reverting section F, and **five remain live in shipped code**:
+the `--base` typo that silently disables `ownership-lint`, its `--lane` duplicate-flag and
+empty-value bugs, and its blindness to renames and to non-ASCII filenames. The other **52
+carry an agent's verdict and not a verified one** — each needs its reproduction re-run
+before it is believed. That re-verification is itself part of what this input asks for.
+
+**The spool gap is open again.** Section F was reverted, so a hook-mode lock timeout once
+more lands in `events/_quarantine/` beside malformed payloads — the gap Phase 02 set out to
+close. The design reasoning is preserved in Phase 02's `## Now`; what it lacked was any
+re-validation of the file the drain picked up. Whatever replaces it must run the same
+validate → scan → seal path the front door runs, because "only our emitter writes to that
+directory" is a claim about provenance that no code established.
+
+**Two questions for the retro, worth more than the finding list.**
+
+1. **`board-lint.sh` has 24 reported defects and passes its own 41 fixtures.** Four are
+   silently-wrong verdicts. It is a hand-written strict-grammar markdown parser — the exact
+   bug class PLAN risk 3 names, and the class the council found 43 holes in. Is the answer
+   to fix them one by one, or is a hand-written markdown-contract parser the wrong shape?
+2. **The pass was skipped on three gates in one phase, by a process that requires it.**
+   `docs/retro-log.md:10` has mandated it since 2026-07-16, and this phase's own DoD names
+   it. Nothing stopped those sections merging without it and nothing noticed until close —
+   a rule only a phase close can enforce gets skipped for a whole phase.
+
 ## Rabbit holes in this phase
 
 - Rewriting docs beyond the sections REQ-05 names. Retro scope creep — findings route

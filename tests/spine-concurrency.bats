@@ -40,6 +40,7 @@ load 'test_helper'
 
 EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
 VERIFY="$ARC_ROOT/tests/fixtures/spine/concurrency-verify.mjs"
+HOLDER="$ARC_ROOT/tests/fixtures/spine/slow-holder.mjs"
 
 # The spec's numbers: 8 emitters, 25 events each, 200 events through one lock. EXPECTED is
 # derived rather than written down, so the three cannot drift apart.
@@ -164,6 +165,45 @@ _emit_worker() {
       false
       ;;
   esac
+}
+
+# ---------- the lock's own contract ----------
+
+@test "lock: a waiter does NOT break the lock of a holder that is alive and still working" {
+  # FOUND BY THE ADVERSARIAL PASS, at production defaults, not by reading the code.
+  #
+  # The stale threshold was a bare LOCK_STALE_MS (5000) while a strict caller waits
+  # STRICT_LOCK_TIMEOUT_MS (15000). A strict waiter therefore outlived the threshold by ten
+  # seconds and deleted the lock of a holder that was mid-write; the token is re-read once at
+  # acquire and never again during fn(), so the victim kept writing. Two writers in one
+  # critical section put DUPLICATE receipts on an append-only spine, both processes exiting 0
+  # and neither saying anything.
+  #
+  # The threshold is now max(stale, this caller's own timeout): you may only call a lock
+  # abandoned once it has outlasted your own patience. A crashed holder is still recovered,
+  # by the next caller, whose wait starts when the lock is already older than any timeout.
+  #
+  # No timing env door is set here on purpose -- the bug lived in the PRODUCTION values, and a
+  # fixture that tunes them tests a configuration nobody ships.
+  unset ARC_SPINE_LOCK_STALE_MS
+
+  ( node "$HOLDER" 8000 > "$BATS_TEST_TMPDIR/holder.out" 2>&1 ) 3>&- &
+  _holder_pid=$!
+  sleep 1                     # let the holder take the lock before the waiter starts
+
+  # A strict emit: 15s of patience against a 5s stale threshold is exactly the inversion.
+  run bash "$EVENT" emit note.logged --strict --payload '{"who":"waiter"}' --run-id r-lock
+  [ "$status" -eq 0 ] || { echo "the waiter did not land its event: $output"; false; }
+  wait "$_holder_pid"
+
+  verdict="$(cat "$BATS_TEST_TMPDIR/holder.out")"
+  [ "$verdict" = "HOLDER_KEPT_LOCK" ] || {
+    echo "The holder was alive and inside its critical section, and its lock was taken away."
+    echo "holder said: $verdict"
+    echo "That is two writers in one critical section, which is how duplicate receipts reach"
+    echo "an append-only spine with both processes reporting success."
+    false
+  }
 }
 
 # ---------- the subject ----------

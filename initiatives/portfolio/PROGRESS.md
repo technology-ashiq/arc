@@ -106,12 +106,13 @@ calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 01 CLOSED 2026-07-31 (see done log). **Phase 02 — Parallel-safety
-floor is IN PROGRESS**, six of its seven sections merged and the last on this branch:
-**A** the shared WARN-shape assertion helper (#82) · **B** the board lint and **D** the
-ownership lint (#83) · **C** the WIP info line (#84) · **E** zero interleaving on 3 OS
-(#85) · **F** the `_pending/` spool (#86) · **G** Mode B certification (this branch). After
-G merges the only thing left in this phase is `/arc-phase-done 2`. The phase
-row stays ⬜ until then — sections merging is not a phase closing. The repo is
+floor is IN PROGRESS**, and **section F is REVERTED**: **A** the shared WARN-shape
+assertion helper (#82) · **B** the board lint and **D** the ownership lint (#83) · **C** the
+WIP info line (#84) · **E** zero interleaving on 3 OS (#85) · ~~**F** the `_pending/`
+spool~~ (#86, **reverted on this branch — see below**) · **G** Mode B certification (#87).
+This branch also carries the **adversarial pass that should have run before any of them**,
+and the one fix it produced. After it merges the only thing left is `/arc-phase-done 2`.
+The phase row stays ⬜ until then — sections merging is not a phase closing. The repo is
 in lane-mode: this file is the operational truth, `PORTFOLIO.md` indexes it, and every
 command auto-resolves to `portfolio` because it is the only eligible lane.
 
@@ -164,10 +165,59 @@ must not also move it out of the bash-3.2/BSD ratchet — it still runs on all t
 
 **Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~refine Phase 02's verification
 plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · ~~section C~~
-(#84) · ~~section E~~ (#85) · ~~section F~~ (#86) · **section G is on
-`feat/phase-02-section-g`**. **Next after it: `/arc-phase-done 2`** — every section will be
-merged, so the close is a Definition-of-Done check, not more build. No local test runs at
-any point — CI is the only gate (owner's standing rule, 2026-07-31, restated 2026-08-01).
+(#84) · ~~section E~~ (#85) · ~~section F~~ (#86, **since reverted**) · ~~section G~~ (#87)
+· **the adversarial pass + the lock fix + the F revert are on `feat/phase-02-close`**.
+**Next after it: `/arc-phase-done 2`.** CI is the only gate (owner's standing rule,
+2026-07-31, restated 2026-08-01) — with one deliberate exception this time: the new `lock:`
+fixture was run locally, in both directions, because it is the fix for a data-corruption
+bug and a fixture that cannot be shown to fail is not a gate.
+
+## The adversarial pass, and what it cost
+
+**`/arc-phase-done 2` refused, and it was right to.** This phase's Definition of Done names
+"the adversarial pass in B run and its findings pinned". It had never run — for B, D or F.
+Only section A carried one. `docs/retro-log.md:10` has required it since 2026-07-16 for any
+hand-authored gate, lint or parser: *"mandatory verification, not optional review"*.
+
+**61 findings. 9 verified by hand** (re-running the reproduction, not carrying a report's
+verdict). Nothing was rejected. The full record, including the 52 that are reported but
+still unconfirmed, is at `evidence/phase-02/adversarial-report.md`.
+
+**The one that had to be fixed before anything shipped:** `LOCK_STALE_MS` (5000) is smaller
+than `STRICT_LOCK_TIMEOUT_MS` (15000), and `withLock` re-reads its token once at acquire and
+never again during `fn()`. A strict waiter therefore outlives the stale threshold and
+deletes the lock of a holder that is **alive and mid-write** — two writers in one critical
+section, which is how duplicate receipts reach an append-only spine with both processes
+exiting 0. Reproduced at production defaults. The threshold is now
+`max(stale, this caller's own timeout)`: you may only call a lock abandoned once it has
+outlasted your own patience. Pinned by a red-first fixture — it reports `HOLDER_LOST_LOCK`
+and fails when the fix is reverted.
+
+**Section F is reverted, and the reason is not squeamishness.** Three of the nine verified
+findings are defects in the spool written the same day: `ts` is never re-validated, so a
+receipt lands in a day file no reader can see (**lost**); `ts` is used as a path component,
+so a spool file's content decided a write three directories above the spine root; and the
+drain skips the secret scan, so a credential the front door refuses reaches the immutable
+spine in cleartext (ADR-0028 bypass). The drain is also **what made the lock bug reachable
+in ordinary operation** — it moved an unbounded `O(pending × idem-index)` body inside a
+critical section that had previously held a single append. Reverting removes all four at
+once. Hook-mode timeouts go back to `_quarantine/`, which is the state this phase started
+in: the gap section F was written to close is still open, and is now RI-1's to carry.
+
+**The DoD is amended, not met** (owner-decided, 2026-08-01). "The adversarial pass in B run
+and its findings pinned" becomes **run, recorded, and its findings routed** — the pass ran
+and its output is committed, but B's 24 board-lint findings are not fixed. Fixing them is
+real work against a cycle appetite that is already 100% allocated with zero slack. This is
+written as an amendment rather than a tick because the difference matters: `board-lint.sh`
+today has 24 reported defects, of which 4 are silently-wrong verdicts.
+
+**What the pass says about method, which is the part worth keeping.** All nine verified
+findings came from *running* the artifact. None came from reading it — and the code had been
+read carefully; B, D and F each ship with long comments explaining why they are correct, and
+several of those comments are the exact claims the pass falsified. `board-lint.sh` passes
+its own 41 fixtures. `spine-spool.bats` passed 9 fixtures on three operating systems. Two of
+the ownership findings are failures `.claude/rules/lanes.md` describes **by name** as past
+incidents, reintroduced in a new lint written after that file.
 
 **Section E's control was flaky, and the run taken as certification evidence is what caught
 it.** Before certifying, a `workflow_dispatch` run was fired on merged `main` so the claim
@@ -223,10 +273,12 @@ not to work — the other being section E's own control, which passed six legs b
 the certification run caught it. Both were found by exercising the artifact; neither by
 reading it. So: which other ADR-mandated artifacts have no gate asserting they exist?
 
-**Section F, and where the spool's edges were decided.** A hook-mode `LOCK_TIMEOUT` now
-writes its already-sealed line to `events/_pending/<ulid>.json` and exits 0; the next
-emitter to take the lock appends it, before its own event, so append order still matches
-arrival order. Four decisions worth having written down:
+**~~Section F, and where the spool's edges were decided.~~ REVERTED 2026-08-01 — kept below
+because the design reasoning survives the revert and RI-1 will need it.** The four decisions
+were sound; what was missing was any re-validation of the file the drain picked up. A hook
+`LOCK_TIMEOUT` wrote its already-sealed line to `events/_pending/<ulid>.json` and exited 0;
+the next emitter to take the lock appended it, before its own event, so append order still
+matched arrival order. Four decisions worth having written down:
 
 - **Strict mode does not spool.** Strict tells CI and ingest the truth, and a caller told
   exit 2 must never find its event on the spine afterwards — that would make the exit code
