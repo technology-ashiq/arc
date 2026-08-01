@@ -3,8 +3,8 @@
 > Written 2026-07-22, grounded against the repo AFTER the orchestrator initiative closed.
 > **Every future initiative has a file here with a paste-ready kickoff prompt at the
 > bottom.** No more "vera session-la proper idea varala" — open Claude Code in the right
-> repo, paste the prompt from the plan, review what it writes, approve. That's the whole
-> ritual.
+> repo, state the lane, paste the prompt from the plan, review what it writes, approve.
+> That's the whole ritual.
 
 ## Ground truth this pack is built on (verified 2026-07-22)
 
@@ -56,13 +56,21 @@ full plan when it's actually needed).
 what's missing, and why roles ≠ standing agents: `../arc-company-org-blueprint.md`
 (added 2026-07-25 with `BRIEF-legal-pack.md` + v1.1 scope notes in growth/leads/ledger).
 
-## How to start ANY initiative (the 4-step ritual)
+## How to start ANY initiative (the 5-step ritual)
 
 1. Check its **trigger** fired (the table above). No trigger → it doesn't get built
    (Constitution A8, earn before build).
 2. Open Claude Code **in the right repo** (arc for modules; the venture repo for Cycle 3).
-3. Paste the **KICKOFF PROMPT** from the bottom of its plan/brief file.
-4. Review the PLAN.md + phase specs it writes → approve → build starts. Phase closes only
+3. **State the lane.** In arc the work lives in a lane — one product's workspace at
+   `initiatives/<lane>/` — and `--lane <name>` is the only way to name one. No command
+   ever guesses. A lane is born **only** by `/arc-kickoff --lane <name>`; every other
+   command handed a lane it does not know stops, lists the lanes that exist, and creates
+   nothing. No `initiatives/` directory at all — LexOS, venturemind, any consumer repo —
+   means root-mode: `PLAN.md`, `PROGRESS.md` and `phases/` sit at the repo root exactly as
+   before, and there is no lane to state (ADR-0054). Resolution order and the lane-name
+   grammar: `../../../.claude/rules/lanes.md`.
+4. Paste the **KICKOFF PROMPT** from the bottom of its plan/brief file.
+5. Review the PLAN.md + phase specs it writes → approve → build starts. Phase closes only
    via /arc-phase-done; cycle closes with /arc-retro.
 
 ## Standing rules (apply to every kickoff from this pack)

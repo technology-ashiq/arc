@@ -5,6 +5,7 @@
 
 **Status:** proposed | accepted | superseded by NNNN | DEFERRED — spike scheduled
 **Date:** YYYY-MM-DD
+**Product:** <lane name, e.g. `portfolio` · `design`> — or `company` when the decision is arc-wide (ADR-0053)
 **Reversibility:** one-way | two-way
 <!-- two-way doors are AUTO-DECIDED at kickoff (recorded here, never user-asked).
      one-way doors (schema, auth model, payments, framework class) are the ONLY forks
