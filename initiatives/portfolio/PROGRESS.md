@@ -106,10 +106,11 @@ calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 01 CLOSED 2026-07-31 (see done log). **Phase 02 — Parallel-safety
-floor is IN PROGRESS**, four of its seven sections built: **A** the shared WARN-shape
-assertion helper (#82) · **B** the board lint and **D** the ownership lint (#83) · **C** the
-WIP info line (this branch). **E** (zero interleaving on 3 OS), **F** (spool drain +
-visibility) and **G** (Mode B stays uncertified until E and F are green) are open. The phase
+floor is IN PROGRESS**, four of its seven sections merged and the fifth on this branch:
+**A** the shared WARN-shape assertion helper (#82) · **B** the board lint and **D** the
+ownership lint (#83) · **C** the WIP info line (#84) · **E** zero interleaving on 3 OS
+(this branch). **F** (spool drain + visibility) and **G** (Mode B stays uncertified until
+E and F are green) are open. The phase
 row stays ⬜ until `/arc-phase-done 2` — sections merging is not a phase closing. The repo is
 in lane-mode: this file is the operational truth, `PORTFOLIO.md` indexes it, and every
 command auto-resolves to `portfolio` because it is the only eligible lane.
@@ -162,11 +163,29 @@ that fails if an entry stops matching — neither can rot into a gate that lies.
 must not also move it out of the bash-3.2/BSD ratchet — it still runs on all three legs.
 
 **Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~refine Phase 02's verification
-plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · **section C is on
-`feat/phase-02-wip-line`**. **Next after it: section E** — the zero-interleaving proof on 3
-OS, which ships with its own negative control (a >8 KB `>>` append that MUST tear on the
-same harness) and is the section that actually tests A3. No local test runs at any point —
-CI is the only gate (owner's standing rule, 2026-07-31, restated 2026-08-01).
+plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · ~~section C~~
+(#84) · **section E is on `feat/phase-02-section-e`**. **Next after it: section F** — the
+`_pending/` spool, where a hook-mode lock timeout stops sharing `_quarantine/` with a
+malformed payload. No local test runs at any point — CI is the only gate (owner's standing
+rule, 2026-07-31, restated 2026-08-01).
+
+**Section E's control had to be built bigger than the spec's floor, and the reason is worth
+keeping.** The spec asks for a `>>` append over 8 KB on the ground that it exceeds
+`PIPE_BUF`. That reasoning does not hold on Linux: one `write()` to a regular file opened
+`O_APPEND` is serialised by the inode lock, so a single 9 KB write can land intact and the
+control would report CLEAN on a machine that is perfectly capable of interleaving. What
+actually tears is one logical line **split across several `write()` calls** — bash's printf
+goes through stdio and flushes in buffer-sized chunks. The control therefore writes 512 KB
+per writer across 12 writers (~100 writes each) rather than just clearing 8 KB. Same
+contract, same fail-if-clean rule; only the number is bigger, and it is bigger for a stated
+mechanical reason instead of a mistaken one.
+
+**A cost this phase creates and does not pay:** `tests/spine-concurrency.bats` spawns 200
+emitter processes, and on the windows leg process creation is the entire cost of the suite.
+It enters `shard-timings.json` at the `_default_weight` of 16, which will badly under-weight
+it and make whichever shard it lands in the binding leg. The weights file states its own
+rule — re-run `weigh-tests.yml` and paste the block, never hand-edit a number — so this is
+left for a measured pass rather than guessed at here.
 
 **Assumptions status:** nothing fires from this change. A3 (lock + spool covers
 concurrency) is section E and F's to test. A4 (advisory-only WIP is enough) **now has its

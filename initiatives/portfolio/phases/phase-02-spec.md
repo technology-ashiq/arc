@@ -99,11 +99,21 @@ WARN [board-header-drift] PORTFOLIO.md:16 — initiatives row `portfolio` disagr
 
 The whole point is a test that cannot pass by accident, so it is built as control + subject:
 
-1. **Negative control, same harness, same OS.** N writers append a **>8 KB** line each to a
-   plain file with `>>` (over `PIPE_BUF`, so the append is not atomic). The control
-   **must show a torn line**. If it does not, the harness is not achieving real concurrency
-   on that leg and the subject's pass proves nothing — so the control failing to corrupt
-   **fails the test**. This is the guard against a green concurrency gate that never contended.
+1. **Negative control, same harness, same OS.** N writers append a large line each to a
+   plain file with `>>`. The control **must show a torn line**. If it does not, the harness
+   is not achieving real concurrency on that leg and the subject's pass proves nothing — so
+   the control failing to corrupt **fails the test**. This is the guard against a green
+   concurrency gate that never contended.
+
+   **AMENDED 2026-08-01, during section E's build.** This item originally said **>8 KB**
+   "over `PIPE_BUF`, so the append is not atomic". That mechanism is wrong and would have
+   produced a control that reports CLEAN on a healthy machine: a single `write()` to a
+   regular file opened `O_APPEND` is serialised by the inode lock on Linux, so one 9 KB
+   write can land intact no matter how many writers there are. What tears is one logical
+   line **split across several `write()` calls** — bash's printf goes through stdio, which
+   flushes in buffer-sized chunks. The shipped control writes **512 KB per writer across 12
+   writers** (~100 writes each) for that reason. The contract is unchanged and the number
+   still satisfies the original ">8 KB"; only the size and its justification move.
 2. **Subject.** 8 emitters × 25 events = 200, one `ARC_SPINE_ROOT`, strict mode with a
    generous timeout so nothing legitimately routes to the spool (this test is about the main
    file only). `ARC_SPINE_LOCK_STALE_MS` is set high enough that **no stale-break can occur
