@@ -190,7 +190,9 @@ silent. Nobody was misled in practice — one person, one working tree — but t
 would have caught a second person was absent, not weak.
 
 **What the certification rests on.** REQ-04's fixtures, green on ubuntu, macOS and
-windows-git-bash in one run, with `declared == executed` on every leg:
+windows-git-bash in **one run** — arc-ci **30699327058**, 19/19 jobs, `declared == executed`
+on every leg, with E's control and subject executed on ubuntu 18/20/22 + macOS shard 1/3 +
+windows shard 11/12, and F's nine on ubuntu 18/20/22 + macOS shard 3/3 + windows shard 7/12:
 
 - **D** — ownership-boundary lint (#83).
 - **E** — 8 concurrent emitter processes, 200 events, one spine: every line parses, the id

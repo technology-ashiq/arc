@@ -24,7 +24,9 @@ Updated: 2026-08-01
 default and has been usable since Phase 01.
 
 **Mode B** — true parallel via `git worktree` per lane — is **CERTIFIED 2026-08-01**, on
-REQ-04's fixtures passing on ubuntu, macOS and windows-git-bash in one run. Certification
+REQ-04's fixtures passing on ubuntu, macOS and windows-git-bash in one run
+(arc-ci [30699327058](https://github.com/technology-ashiq/arc/actions/runs/30699327058),
+19/19 jobs, `declared == executed` on every leg). Certification
 is a fixture result, not a judgement call: what it does and does not cover is written out
 in `initiatives/portfolio/phases/phase-02-spec.md` section G, including the one claim that
 comes from two fixtures together rather than from either alone.

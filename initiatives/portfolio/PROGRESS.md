@@ -179,7 +179,8 @@ microseconds to write closes before the next writer wakes, so the barrier was se
 the writers it existed to release. Fixed here by holding each record open across a
 deliberate 0.4s gap, a 20x margin over the release spread. The detector itself was then
 checked in **both** directions — a genuinely serial run still reports CLEAN — because an
-instrument that always says TORN would make the whole fixture pass vacuously. **A control
+instrument that always says TORN would make the whole fixture pass vacuously. Green
+afterwards on the certification run (arc-ci 30699327058), ubuntu-18 included. **A control
 that fails one run in several is not a gate, it is a coin**, and the only reason this was
 found before it wasted a morning is that certification was made to rest on a fresh run
 rather than on two green PRs remembered separately.
