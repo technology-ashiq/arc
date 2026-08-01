@@ -111,9 +111,28 @@ The whole point is a test that cannot pass by accident, so it is built as contro
    regular file opened `O_APPEND` is serialised by the inode lock on Linux, so one 9 KB
    write can land intact no matter how many writers there are. What tears is one logical
    line **split across several `write()` calls** — bash's printf goes through stdio, which
-   flushes in buffer-sized chunks. The shipped control writes **512 KB per writer across 12
-   writers** (~100 writes each) for that reason. The contract is unchanged and the number
-   still satisfies the original ">8 KB"; only the size and its justification move.
+   flushes in buffer-sized chunks. The contract is unchanged; only the size and its
+   justification move.
+
+   **AMENDED AGAIN 2026-08-01, during section G.** Two more designs failed before this
+   settled, and both failures are worth keeping because both LOOKED green:
+
+   - *512 KB per writer, so stdio splits it into ~100 writes.* Correct on Linux and macOS;
+     **CLEAN on windows-git-bash** (arc-ci 30696565045), where an append write is serialised
+     by the OS and MSYS fork is slow enough that 12 writers spawned in a loop finish one at
+     a time. A control that depends on how an OS buffers is measuring the OS.
+   - *Two separate appends behind a barrier, no gap between them.* Passed six legs across
+     two PRs, then came out **CLEAN on ubuntu-18** (arc-ci 30698758154, the dispatch run on
+     main taken as certification evidence). It was never reliable, only lucky: writers leave
+     the barrier up to one **poll interval** apart, and a record that takes microseconds
+     closes before the next writer wakes — the barrier was serialising the writers it
+     existed to release. A control that fails one run in several is not a gate, it is a coin.
+
+   **What ships:** two appends, held open across a deliberate gap (0.4s) an order of
+   magnitude longer than the barrier's release spread (0.02s poll). Platform-independent and
+   luck-independent. The detector was checked in **both** directions before this was
+   believed — a genuinely serial run reports CLEAN, so the fixture is not one that passes
+   vacuously.
 2. **Subject.** 8 emitters × 25 events = 200, one `ARC_SPINE_ROOT`, strict mode with a
    generous timeout so nothing legitimately routes to the spool (this test is about the main
    file only). `ARC_SPINE_LOCK_STALE_MS` is set high enough that **no stale-break can occur
@@ -159,6 +178,52 @@ and must stop sharing a destination.
 `Mode B: not certified` remains on the board until every fixture in E and F passes on all
 three legs (ADR-0056). Certification is a fixture result, not a judgement call — the phase
 may not close by asserting it.
+
+**OUTCOME 2026-08-01 — CERTIFIED, and one thing found on the way.**
+
+**The note was never on the board.** G's whole job was to take `Mode B: not certified` off
+`PORTFOLIO.md`, and it was not there to take off. A search of every branch's history for
+that string in that file returns nothing: the board was born in Phase 01 without it and ran
+through Phase 02 without it. ADR-0056 called for the note "until certification", so for the
+entire window in which Mode B was UNSUPPORTED, the artifact that was supposed to say so was
+silent. Nobody was misled in practice — one person, one working tree — but the control that
+would have caught a second person was absent, not weak.
+
+**What the certification rests on.** REQ-04's fixtures, green on ubuntu, macOS and
+windows-git-bash in one run, with `declared == executed` on every leg:
+
+- **D** — ownership-boundary lint (#83).
+- **E** — 8 concurrent emitter processes, 200 events, one spine: every line parses, the id
+  multiset matches what the emitters reported, nothing lost or duplicated (#85). The
+  control that must tear proves the leg actually contended.
+- **F** — a forced hook-mode timeout spools, drains byte-identically under the next lock,
+  converges to exactly-once across the restored-file crash window, and is visible in status
+  and brief (#86).
+
+**Why 8 processes on one spine is a fair model of Mode B.** Mode B is `git worktree` per
+lane, which gives two *directories*; the thing that makes it dangerous is two emitter
+processes reaching one shared spine at the same time. Section E produces exactly that
+contention, with a control proving it is real contention rather than turn-taking. The
+worktree layer adds no new writer to the spine, so it adds no failure mode the fixtures do
+not already exercise.
+
+**The one claim that comes from two fixtures rather than one, stated because it is the
+weakest link.** REQ-04's acceptance reads "every event lands in main file OR spool, none
+lost". E proves the all-in-main-file half (nothing spools, because nothing times out); F
+proves the spooled half (a timeout is forced, and drains exactly once). No single fixture
+produces a *mixed* run where some events land in each. The union covers the claim; a run
+that exercises both at once does not exist yet, and this sentence is here so nobody later
+reads "certified" as more than that.
+
+**Still uncertified by construction:** A3's two-worktrees-sharing-a-spine half as an
+end-to-end shape, and any multi-machine spine. Neither is in this cycle's scope.
+
+**Left as an open decision, not smuggled in:** nothing prevents the board from losing this
+line again. The obvious fix is a tenth board-lint class asserting that the execution-mode
+line exists and matches the certification state — but the WARN registry is deliberately
+pinned at exactly nine classes and `tests/warn-shape.bats` asserts them by name, so a tenth
+is a real change with its own fixtures. It goes through `/arc-change`, not through this
+section.
 
 ### Known gaps this phase does NOT close (stated, not discovered later)
 

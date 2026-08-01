@@ -106,12 +106,12 @@ calendar days puts at about a working day.
 ## Now
 
 **Position:** Phase 01 CLOSED 2026-07-31 (see done log). **Phase 02 — Parallel-safety
-floor is IN PROGRESS**, five of its seven sections merged and the sixth on this branch:
+floor is IN PROGRESS**, six of its seven sections merged and the last on this branch:
 **A** the shared WARN-shape assertion helper (#82) · **B** the board lint and **D** the
 ownership lint (#83) · **C** the WIP info line (#84) · **E** zero interleaving on 3 OS
-(#85) · **F** the `_pending/` spool (this branch). **G** (Mode B stays uncertified until E
-and F are green) is the only one left, and it is a verdict rather than a build. The phase
-row stays ⬜ until `/arc-phase-done 2` — sections merging is not a phase closing. The repo is
+(#85) · **F** the `_pending/` spool (#86) · **G** Mode B certification (this branch). After
+G merges the only thing left in this phase is `/arc-phase-done 2`. The phase
+row stays ⬜ until then — sections merging is not a phase closing. The repo is
 in lane-mode: this file is the operational truth, `PORTFOLIO.md` indexes it, and every
 command auto-resolves to `portfolio` because it is the only eligible lane.
 
@@ -164,11 +164,48 @@ must not also move it out of the bash-3.2/BSD ratchet — it still runs on all t
 
 **Next step:** ~~merge PR #79~~ (merged as `ef82e16`) · ~~refine Phase 02's verification
 plan~~ (done 2026-08-01) · ~~section A~~ (#82) · ~~sections B + D~~ (#83) · ~~section C~~
-(#84) · ~~section E~~ (#85) · **section F is on `feat/phase-02-section-f`**. **Next after
-it: section G** — which builds nothing: Mode B's `not certified` comes off the board when E
-and F are green on three legs, and that is a fixture result rather than a judgement call.
-Then `/arc-phase-done 2`. No local test runs at any point — CI is the only gate (owner's
-standing rule, 2026-07-31, restated 2026-08-01).
+(#84) · ~~section E~~ (#85) · ~~section F~~ (#86) · **section G is on
+`feat/phase-02-section-g`**. **Next after it: `/arc-phase-done 2`** — every section will be
+merged, so the close is a Definition-of-Done check, not more build. No local test runs at
+any point — CI is the only gate (owner's standing rule, 2026-07-31, restated 2026-08-01).
+
+**Section E's control was flaky, and the run taken as certification evidence is what caught
+it.** Before certifying, a `workflow_dispatch` run was fired on merged `main` so the claim
+would rest on one run containing E and F together (CI only triggers on `pull_request`, so
+merging produces no run of its own). That run came back **red on ubuntu-18**: the control
+reported CLEAN. It had passed six legs across two PRs and was never reliable, only lucky —
+writers leave the barrier up to one poll interval (0.02s) apart, and a record that takes
+microseconds to write closes before the next writer wakes, so the barrier was serialising
+the writers it existed to release. Fixed here by holding each record open across a
+deliberate 0.4s gap, a 20x margin over the release spread. The detector itself was then
+checked in **both** directions — a genuinely serial run still reports CLEAN — because an
+instrument that always says TORN would make the whole fixture pass vacuously. **A control
+that fails one run in several is not a gate, it is a coin**, and the only reason this was
+found before it wasted a morning is that certification was made to rest on a fresh run
+rather than on two green PRs remembered separately.
+
+**Section G certified Mode B, and found that the safeguard it was meant to remove had never
+existed.** G's stated job was to take `Mode B: not certified` off `PORTFOLIO.md`. It was not
+there: a search of every branch's history for that string in that file returns nothing. The
+board was born in Phase 01 without the note and ran through Phase 02 without it, so for the
+whole window in which Mode B was UNSUPPORTED, the artifact ADR-0056 appointed to say so was
+silent. Nobody was misled in practice — one person, one working tree — but that is luck
+about the circumstances, not the control working. Certification is now ON the board, with
+the absence recorded next to it rather than quietly fixed.
+
+**What the certification rests on, and its weakest link, are in the spec's section G rather
+than summarised here.** The one thing worth repeating: REQ-04's "every event lands in main
+file OR spool, none lost" is proven by **two fixtures together**, not by either alone — E
+covers the all-in-main half and F the spooled half, and no single fixture produces a run
+where some events go each way. The union covers the claim. A mixed run does not exist yet,
+and "certified" should not be read as more than that.
+
+**Left as an open decision rather than smuggled into G:** nothing stops the board losing
+that line again. The fix is a tenth board-lint class asserting the execution-mode line
+exists and matches the certification state — but the WARN registry is pinned at exactly
+nine and `tests/warn-shape.bats` asserts them by name, so a tenth is a real change with its
+own fixtures. That goes through `/arc-change`. **Owner's call, and it is the one open item
+this phase hands forward.**
 
 **Section F, and where the spool's edges were decided.** A hook-mode `LOCK_TIMEOUT` now
 writes its already-sealed line to `events/_pending/<ulid>.json` and exits 0; the next
