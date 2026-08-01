@@ -494,11 +494,18 @@ _matching() {
 @test "board: a lane name with a unicode look-alike never reaches the log raw" {
   # A lane name is ASCII by grammar, so a non-ASCII byte in one is a Cyrillic look-alike or
   # a stray control byte. lane-resolve.sh:95's renderer maps it to `?`.
+  #
+  # PER BYTE, not per character: Cyrillic small ghe is the two bytes D0 B3 under LC_ALL=C,
+  # and `tr -c` substitutes each one, so the rendered name is `desi??n`. Asserting a single
+  # `?` here is what CI caught on all three legs -- the renderer was right and the fixture
+  # was counting characters in a file that is pinned to byte semantics.
   _arc_make_lane design IDLE "test cycle"
   _arc_make_board "design|IDLE|test cycle|00 $DASH fixture" \
                   "$(printf 'desi\320\263n')|LIVE|test cycle|00 $DASH fixture"
   _bl
   [ "$ARC_LINT_STATUS" -eq 0 ]
   _arc_warn_shape board-row-no-lane "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
-  [[ "$ARC_LINT_OUTPUT" == *"desi?n"* ]]
+  [[ "$ARC_LINT_OUTPUT" == *"desi??n"* ]]
+  # and the point of the class: the raw bytes must not survive into the log at all
+  [[ "$ARC_LINT_OUTPUT" != *"$(printf 'desi\320\263n')"* ]]
 }
