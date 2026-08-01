@@ -63,8 +63,21 @@ Phase 00's 1.4d over two calendar days puts at about a working day.
   usermanual's new §9a (its own Tanglish register, inserted not renumbered so no
   cross-reference breaks), the plans ritual, the ADR template's `Product:` field, and
   `CLAUDE.md`'s command lines. Docs-drift 0 findings, ledger stamped.
-  actual ~0.35d vs 0.25d appetite (+0.1d) · amendments: 2 · reopened: n
+  actual ~0.35d vs 0.25d appetite (+0.1d) · amendments: 1 · reopened: n
   · evidence: `initiatives/portfolio/evidence/phase-03/`
+
+  **The close turned CI red, and the two tests it broke were measuring the calendar.**
+  `tests/portfolio-board.bats` pinned "this tree auto-resolves to portfolio, counted == 1"
+  and "the portfolio machine header says `status: LIVE`". Both were true only while exactly
+  one lane was live; flipping `portfolio` to IDLE falsified them on 5 of 19 legs. Neither the
+  resolver nor the board was wrong — the tests asserted a snapshot of the cycle rather than
+  the rule, so they had to be re-edited every time a cycle opens or closes, and nobody would
+  have noticed until it cost a CI run. They now assert the rule: mode is always `lane` here,
+  and resolution branches on the live count (1 → auto-resolve; 0 or 2+ → exit 3 and ask), with
+  a second test pinning that explicit `--lane portfolio` resolves whatever the cycle state.
+  The header test now accepts the whole `LIVE|BLOCKED|QUEUED|IDLE` vocabulary instead of one
+  value. This is a code change inside a phase that declared none, taken for the same reason as
+  the doc repairs: this phase's own close broke them, and a phase cannot close on red CI.
 
   **B2's trap fired exactly as the spec predicted it would, which is the point.**
   `usermanual.md` and `adr-template.md` are content-hashed in the sync golden, so editing

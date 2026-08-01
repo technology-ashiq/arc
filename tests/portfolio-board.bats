@@ -517,13 +517,35 @@ teardown() { _arc_teardown; }
   return 0
 }
 
-@test "repo: this tree is in lane-mode and auto-resolves to portfolio" {
+# These two assert the RULE, not today's cycle state. The original pinned
+# "auto-resolves to portfolio, counted == 1", which was true only while exactly one lane
+# was LIVE; closing Cycle 4 put both lanes IDLE and turned a correct resolver into a red
+# suite. A test that has to be edited every time a cycle opens or closes is measuring the
+# calendar, not the resolver -- so the count-dependent branch is now part of the assertion.
+@test "repo: this tree is in lane-mode, and resolution follows the live lane count" {
   run bash "$ARC_CORE_SRC/lane-resolve.sh" --root "$ARC_ROOT" --for resume
+  # Permanently true here: initiatives/ holds valid lanes, so this repo is never root-mode.
+  [ "$(_arc_field mode)" = "lane" ]
+  counted="$(_arc_field counted)"
+  case "$counted" in
+    1)  # exactly one eligible lane -> auto-resolve to it
+        [ "$status" -eq 0 ]
+        [ "$(_arc_field via)" = "auto" ]
+        [ -n "$(_arc_field lane)" ]
+        ;;
+    *)  # zero or 2+ eligible -> ask, never guess (ADR-0054); exit 3, no lane selected
+        [ "$status" -eq 3 ]
+        [ -z "$(_arc_field lane)" ]
+        ;;
+  esac
+}
+
+@test "repo: --lane portfolio resolves whatever the cycle state (explicit beats auto)" {
+  run bash "$ARC_CORE_SRC/lane-resolve.sh" --root "$ARC_ROOT" --for resume --lane portfolio
   [ "$status" -eq 0 ]
   [ "$(_arc_field mode)" = "lane" ]
   [ "$(_arc_field lane)" = "portfolio" ]
-  [ "$(_arc_field via)" = "auto" ]
-  [ "$(_arc_field counted)" = "1" ]
+  [ "$(_arc_field via)" = "arg" ]
 }
 
 @test "repo: the live tracker is at initiatives/portfolio/ and the root paths are stubs" {
@@ -542,7 +564,13 @@ teardown() { _arc_teardown; }
     v="$(_arc_lane_header "$prog" "$k")"
     [ -n "$v" ] || { echo "machine header field '$k' is empty"; return 1; }
   done
-  [ "$(_arc_lane_header "$prog" status)" = "LIVE" ]
+  # Valid vocabulary, not a pinned value: `status` is LIVE mid-cycle and IDLE once the
+  # cycle closes, and both are correct. What must never happen is a status outside the
+  # vocabulary the board derives from (ADR-0051).
+  case "$(_arc_lane_header "$prog" status)" in
+    LIVE|BLOCKED|QUEUED|IDLE) ;;
+    *) echo "status '$(_arc_lane_header "$prog" status)' is outside LIVE|BLOCKED|QUEUED|IDLE"; return 1;;
+  esac
 }
 
 @test "design: the lane links its history and copies none of it (ADR-0058)" {
