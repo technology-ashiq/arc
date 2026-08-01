@@ -1,0 +1,26 @@
+Phase 03 section B2 — the sync golden, and the control that proves the method
+date: 2026-08-01T19:14:12Z
+
+The trap: docs/usermanual.md and docs/templates/adr-template.md are content-hashed
+in tests/fixtures/sync-golden/tree-manifest.txt. Editing either without regenerating
+it fails BOTH golden tests in tests/sync.bats (rsync path + cp-r fallback) on all
+three legs = six red legs from a phase containing no code. No local runs, so CI
+would have been the first sight of it.
+
+--- CONTROL, run BEFORE trusting the method ---
+Regenerate the manifest from the UNEDITED main repo (E:/Work_Hub/01_Automemory/arc,
+at origin/main) and diff against the committed golden. A wrong method fails here.
+RESULT: identical, 0 differing lines. Method reproduces the committed golden byte for byte.
+
+--- SUBJECT: the regenerated manifest in this branch ---
+$ git diff --numstat tests/fixtures/sync-golden/tree-manifest.txt   (vs origin/main)
+2	2	tests/fixtures/sync-golden/tree-manifest.txt
+
+$ rows that moved:
+-docs/templates/adr-template.md
++docs/templates/adr-template.md
+-docs/usermanual.md
++docs/usermanual.md
+
+Exactly the two edited files, no others. A manifest that moved more than the edit did
+would mean the sync surface changed too.

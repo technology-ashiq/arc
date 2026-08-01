@@ -9,13 +9,13 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-01
+Updated: 2026-08-02
 
 ## Active initiatives
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| portfolio | LIVE | arc-portfolio | 03 — Docs truth + retro | 3d / 3.0d | — | phase 03: docs truth, then the retro that decides RI-1 and RI-2 |
+| portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
 ## Execution mode (ADR-0056 / PORT-G)
