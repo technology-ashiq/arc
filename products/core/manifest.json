@@ -25,7 +25,8 @@
     ".claude/scripts/core/common.sh",
     ".claude/scripts/core/statusline.sh",
     ".claude/scripts/core/lane-resolve.sh",
-    ".claude/scripts/core/lane-resolve.mjs"
+    ".claude/scripts/core/lane-resolve.mjs",
+    ".claude/scripts/core/board-lint.sh"
   ],
   "files": [
     ".claude/hooks/_dispatch.sh",
