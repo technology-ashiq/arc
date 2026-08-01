@@ -84,8 +84,15 @@ _ol() { _arc_run_lint "$OL" --root "$SANDBOX"; }
 @test "ownership-cross-lane: a directory under initiatives that is not a lane is ignored" {
   # lane-resolve.sh decides what a lane is; a name that fails its grammar is not one, and
   # this lint must not invent an owner for it.
-  mkdir -p "$SANDBOX/initiatives/Design"
-  printf 'x\n' > "$SANDBOX/initiatives/Design/NOTES.md"
+  #
+  # The invalid name must not COLLIDE BY CASE with a real lane. `initiatives/Design` was the
+  # obvious choice and it is wrong on two of three legs: macOS and Windows fold case, so
+  # mkdir resolves it to the existing `initiatives/design` and the file lands in a real
+  # lane, which the lint then correctly reports. Only case-sensitive Linux made a separate
+  # directory. A leading digit fails the grammar without involving the filesystem at all,
+  # so this fixture means the same thing on all three legs (assumption A5, again).
+  mkdir -p "$SANDBOX/initiatives/2fast"
+  printf 'x\n' > "$SANDBOX/initiatives/2fast/NOTES.md"
   _ol
   [ "$ARC_LINT_STATUS" -eq 0 ]
   [ -z "$ARC_LINT_OUTPUT" ]
