@@ -9,13 +9,14 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-02
+Updated: 2026-08-03
 
 ## Active initiatives
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
 | develop | LIVE | arc-develop (Cycle 5, opened 2026-08-02) | — all 4 closed, cycle ready to land | 5d / 1.9d | — | PR #95 ready to merge — /arc-retro then land |
+| engine | LIVE | arc-engine (Cycle 6, opened 2026-08-03) | 00 — the canonical layer, in progress | 14d / 0d | — | Phase 00: process-lint + 3 canonical pilots + hostile corpus |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
@@ -34,7 +35,8 @@ So a lane claims a **century**, and never numbers outside it:
 |---|---|
 | 0001–0099 | company / core / hq — `model-policy`'s Cycle 5 holds **0063–0071** inside this range |
 | 0100–0199 | `develop` |
-| 0200–0299 | next lane to be born |
+| 0200–0299 | `engine` — claimed at birth, 2026-08-03 (0200–0206 taken) |
+| 0300–0399 | next lane to be born |
 
 `/arc-kickoff` assigns the next free century when it creates a lane, and `kickoff-lint`'s
 `[adr-dup]` check FAILs when two files claim one number — so a forgotten band is caught by CI
