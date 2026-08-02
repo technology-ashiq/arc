@@ -128,18 +128,21 @@ _assert_neighbourhood_contract() {
   [[ "$line" == *"codegraph"* || "$line" == *"grep-fallback"* ]] || { echo "unnamed path: $line"; return 1; }
   # Items sit after the ASCII count bracket, deliberately: a U+00B7 separator would be parsed
   # here under the C locale CI uses, and this suite must not depend on that working.
-  items="$(echo "$line" | sed 's/^[^]]*] //')"
+  items="$(echo "$line" | sed 's/^[^]]*] //; s/ (+[0-9]* more)$//')"
   [ -n "$items" ] || { echo "no items: $line"; return 1; }
-  local prev="" n=0
-  for f in $(echo "$items" | tr ',' '\n' | sed 's/^ *//; s/ *$//'); do
+  local list; list="$BATS_TEST_TMPDIR/neighbourhood.txt"
+  echo "$items" | tr ',' '\n' | sed 's/^ *//; s/ *$//' | grep -v '^$' > "$list"
+  local n; n="$(wc -l < "$list" | tr -d ' ')"
+  while IFS= read -r f; do
     [ "$f" != "(none)" ] || continue
-    [ -e "$t/$f" ]            || { echo "item does not exist: $f"; return 1; }
-    [[ "$f" != /* ]]          || { echo "item is not repo-relative: $f"; return 1; }
-    [[ "$f" != *'\'* ]]       || { echo "item is not forward-slashed: $f"; return 1; }
-    [[ "$f" != "$prev" ]]     || { echo "duplicate item: $f"; return 1; }
-    [[ "$f" > "$prev" ]]      || { echo "items are not sorted: $prev then $f"; return 1; }
-    prev="$f"; n=$((n + 1))
-  done
+    [ -e "$t/$f" ]      || { echo "item does not exist: $f"; return 1; }
+    [[ "$f" != /* ]]    || { echo "item is not repo-relative: $f"; return 1; }
+    [[ "$f" != *'\'* ]] || { echo "item is not forward-slashed: $f"; return 1; }
+  done < "$list"
+  # Sorted and deduped, compared under the SAME collation the producer sorts by. Asserting
+  # order with bash `>` would compare under the runner's locale and pass or fail on the
+  # runner's locale rather than on the contract.
+  LC_ALL=C sort -cu "$list" || { echo "items are not sorted, or repeat"; cat "$list"; return 1; }
   [ "$n" -le 8 ] || { echo "neighbourhood is not capped: $n items"; return 1; }
   return 0
 }

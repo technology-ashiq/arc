@@ -14,7 +14,9 @@
  * Root-mode prints no lane line at all -- that is a permanent consumer contract for venture
  * repos, not a migration shim.
  *
- * This script NEVER invokes git and NEVER writes to the spine's exit code (ADR-0065).
+ * This script never COMMITS and never writes to the spine's exit code (ADR-0065). It does read
+ * git -- `checkpoint` asks what changed, and the Context Pack asks what churns -- because a
+ * check that cannot see the change cannot check it. Reading mutates nothing.
  *
  * Zero dependencies, Node 18+.
  */
@@ -25,7 +27,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
-import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem } from "./ledger.mjs";
+import { buildPack, renderPack, sourcesField } from "./context-pack.mjs";
+import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem, setSliceField } from "./ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
@@ -314,6 +317,31 @@ async function modeNext(ctx) {
   say(`  proof: ${next.fields.proof ?? "?"}`);
   say(`  tier:  ${next.fields.tier ?? "?"}`);
   say("");
+
+  // The Context Pack (Phase 05, ADR-0111): what past work already knows about this slice,
+  // handed over BEFORE the slice is built rather than remembered afterwards.
+  //
+  // A pack that cannot be assembled must not take `next` down with it -- the harness's job is
+  // to hand out the next slice -- but it must not be silent either, because a retrieval that
+  // quietly returns nothing is indistinguishable from a repo that knows nothing. So the
+  // failure is printed and recorded, and the slice is still handed out.
+  try {
+    const pack = buildPack({
+      root: ctx.root,
+      brief: led.parsed.brief,
+      slice: next,
+      lane: ctx.mode === "root" ? null : ctx.lane,
+    });
+    for (const line of renderPack(pack, next.id)) say(line);
+    say("");
+    const before = readFileSync(led.path, "utf8");
+    const { text, changed } = setSliceField(before, next.id, "sources", sourcesField(next.fields.sources, pack));
+    if (changed && text !== before) writeFileSync(led.path, text, "utf8");
+  } catch (e) {
+    say(`Context Pack — unavailable: ${e?.message ?? e}`);
+    say("");
+  }
+
   say(`Progress: ${p}/${total} proven.`);
   flush(0);
 }

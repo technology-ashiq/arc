@@ -259,6 +259,58 @@ export function parseLedger(text) {
   return { brief, slices, scores, errors };
 }
 
+/**
+ * Set one field on one slice, in place, touching nothing else in the file.
+ *
+ * Written as a line walker over the SAME grammar the parser uses -- the same SLICE_RE, the
+ * same FIELD_RE, the same fence and heading handling -- because a writer that recognises
+ * slices differently from the reader will eventually edit a slice the reader never saw. A
+ * regex-replace over the whole document is the version of this that corrupts a ledger: it
+ * rewrites `sources:` inside a fenced proof block, or inside the wrong slice, and the ledger
+ * still parses so nothing reports it.
+ *
+ * Returns `{ text, changed }`. An unknown id changes nothing and says so.
+ */
+export function setSliceField(text, id, key, value) {
+  // Line endings are detected and restored, never normalised. Rewriting a CRLF ledger as LF
+  // would turn a one-field edit into a whole-file diff on exactly one of the three CI legs.
+  const eol = /\r\n/.test(String(text ?? "")) ? "\r\n" : "\n";
+  const lines = String(text ?? "").replace(/\r\n?/g, "\n").split("\n");
+  const wanted = String(id);
+  let inFence = false, inTarget = false, fieldAt = -1, lastFieldAt = -1, headingAt = -1;
+
+  for (let i = 0; i < lines.length && fieldAt < 0; i++) {
+    const line = clean(lines[i]);
+    if (/^[ \t]*(```|~~~)/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+
+    const m = line.match(SLICE_RE);
+    if (m) { inTarget = m[1] === wanted; if (inTarget) headingAt = i; continue; }
+    if (HEADING_RE.test(line)) { if (inTarget) break; inTarget = false; continue; }
+    if (!inTarget) continue;
+
+    const f = line.match(FIELD_RE);
+    if (!f) continue;
+    lastFieldAt = i;
+    if (f[1].toLowerCase() === String(key).toLowerCase()) fieldAt = i;
+  }
+
+  if (fieldAt >= 0) {
+    const indent = (lines[fieldAt].match(/^[ \t]*/) || [""])[0];
+    lines[fieldAt] = `${indent}${key}: ${value}`;
+    return { text: lines.join(eol), changed: true };
+  }
+  if (lastFieldAt >= 0) {
+    lines.splice(lastFieldAt + 1, 0, `${key}: ${value}`);
+    return { text: lines.join(eol), changed: true };
+  }
+  if (headingAt >= 0) {
+    lines.splice(headingAt + 1, 0, "", `${key}: ${value}`);
+    return { text: lines.join(eol), changed: true };
+  }
+  return { text: String(text ?? ""), changed: false };
+}
+
 /** A slice is proven when BOTH its result and its commit are really filled in (ADR-0065). */
 export const isProven = (slice) =>
   isFilled(slice?.fields?.result) && isFilled(slice?.fields?.commit);

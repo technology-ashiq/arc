@@ -45,8 +45,14 @@ const CATEGORIES = ["spec-drift", "false-confidence", "missing-edge-case", "bad-
 // parse -- validate the ledger
 // ---------------------------------------------------------------------------
 
-/** Rows in a learning ledger reuse the slice-block reader: `learning: L-001` opens one. */
-function readRows(text) {
+/**
+ * Rows in a learning ledger reuse the slice-block reader: `learning: L-001` opens one.
+ *
+ * Exported so the Context Pack reads rows through THIS function rather than re-deriving the
+ * marker rewrite. A second reader would be a second grammar, and the five ways an adversarial
+ * pass hid a row from this one are pinned against this function, not against the idea of it.
+ */
+export function readRows(text) {
   // ledger.mjs keys blocks on `slice:`; the learning ledger uses `learning:`. Rewriting the
   // marker for the reader keeps ONE parser rather than forking a second grammar.
   //
