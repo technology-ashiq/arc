@@ -1,0 +1,117 @@
+/*
+  VARIANT C — guided workflow (steps, progressive disclosure)
+  THESIS: This product wins because the user can finish this case for the day in a single
+  decision and see on sight that it is finished, without holding in his head what else the
+  case owes or deciding which of four buttons applies.
+
+  ART DIRECTION: a near-white porcelain ground carrying a single solid deep-court-green
+  block that IS the live step and moves as the run advances; burnt clay reserved only for
+  what is overdue; a neo-grotesk sans in four steps with a violent jump between the step
+  statement and everything else; whole-line-height air around the live block; a strictly
+  flat surface with no shadows, no elevation, no icon sets.
+
+  This file is the whole visual system. Every colour used on the page is declared once,
+  here, as a custom property. Contrast ratios below are computed against the literal hex
+  values declared (WCAG 2.1 relative-luminance formula), not estimated.
+*/
+
+:root {
+  /* ---------- COLOUR — a quiet sheet with one solid block ---------- */
+
+  /* the ground: near-white porcelain */
+  --porcelain: #fbfbfa;
+
+  /* primary text on porcelain: near-black */
+  --ink: #14201b;                 /* --ink on --porcelain       = ~16.2:1 (AAA) */
+
+  /* secondary/quiet text on porcelain — blocked reasons, "Not set", dates in the record */
+  --ink-quiet: #5f6b64;           /* --ink-quiet on --porcelain = ~5.4:1  (AA, body text) */
+
+  /* THE one meaning hue, used only as a large solid field: deep court green */
+  --court-green: #0f3d2e;
+
+  /* text on the green block */
+  --bone: #f5f1e6;                /* --bone on --court-green     = ~10.8:1 (AAA) */
+  --bone-dim: #c7d9cf;            /* --bone-dim on --court-green = ~8.3:1  (AAA), labels/precondition on green */
+
+  /* burnt clay — reserved for what is overdue, and appears nowhere else */
+  --clay: #9a3b1e;                /* --clay on --porcelain = ~6.7:1 (AA) */
+
+  /* the one rule that runs the length of the run, and row separators in the record */
+  --line: #e4e1d9;
+
+  /* focus rings — visible on either surface this page uses */
+  --focus-ring: #0f3d2e;          /* used on porcelain */
+  --focus-ring-on-green: #f5f1e6; /* used inside the live green block */
+
+  /* ---------- TYPE — neo-grotesk at display scale, four steps, no ramp ---------- */
+
+  /* the first family here must resolve with no network fetch: a real system neo-grotesk */
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  --size-display: clamp(3rem, 2.2rem + 3vw, 4rem); /* 48px–64px — the step statement, and nothing else */
+  --size-meta: 1.375rem;    /* 22px — parties title, done-line facts, oversized tabular numerals */
+  --size-body: 1rem;        /* 16px — precondition, blocked reasons, the record */
+  --size-label: 0.6875rem;  /* 11px — wide-tracked caps labels */
+
+  --lh-display: 1.05;
+  --lh-meta: 1.25;
+  --lh-body: 1.55;
+  --lh-label: 1.2;
+
+  --tracking-label: 0.09em;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-heavy: 800; /* the one heavy step numeral */
+
+  /* ---------- RHYTHM — space measured in whole line-heights ---------- */
+
+  --lh: 1.5rem; /* one body line-height — the rhythm unit around the live block */
+  --space-1: 0.5rem;
+  --space-2: 0.75rem;
+  --space-3: 1rem;
+  --space-4: 1.5rem;
+  --space-5: 2rem;
+  --space-6: 3rem;
+  --space-7: 4rem;
+  --space-8: 6rem;
+
+  /* ---------- SURFACE — strictly flat: no shadow token exists on purpose ---------- */
+
+  --radius-block: 0px;    /* the live block, and the porcelain ground: sharp */
+  --radius-control: 3px;  /* buttons, inputs, chips: one deliberate small radius */
+}
+
+/* ---------- base reset (part of the system, not colour) ---------- */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--porcelain);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p, dl, dd, dt, ol, ul, figure { margin: 0; }
+
+button, input {
+  font-family: inherit;
+  color: inherit;
+}
+
+a { color: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}

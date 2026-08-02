@@ -1,0 +1,240 @@
+VARIANT C — guided workflow (steps, progressive disclosure)
+==========================================================
+
+THESIS
+This product wins because the user can finish this case for the day in a single decision and see
+on sight that it is finished, without holding in his head what else the case owes or deciding
+which of four buttons applies.
+
+ART DIRECTION
+Its art direction is one decision on a quiet sheet: a near-white porcelain ground carrying a
+single solid deep-court-green block that IS the live step and moves as the run advances, burnt
+clay reserved for what is overdue, a neo-grotesk sans in four steps with a violent jump between
+the step statement (48px+) and everything else, whole-line-height air around the live block with
+everything not live compressed to one line, and a strictly flat surface — it refuses shadows and
+elevation, hairline table grids, icon sets, serifs, and more than two lines of body copy
+anywhere.
+
+
+WHAT THE PAGE IS BUILT OUT OF — the structural contract for C
+-------------------------------------------------------------
+
+1. PRIMARY OBJECT — the step: the case's current position in an ordered run.
+   The case's sections are the steps' CONTENTS, not destinations. The run has a first step, a
+   current step, and a declared end.
+
+2. PRIMARY ACTION — fire the current step's single verb.
+   `Record hearing outcome` now; `Add hearing` only after that; `File document` only inside its
+   own step. EXACTLY ONE primary button is on screen at any time, and it changes as the run
+   advances. The other verbs are not secondary buttons — they live inside steps that are not
+   open, and a blocked step states its reason instead of offering a button.
+
+3. INFO BEFORE ACTION — the quartet, plus this step's precondition and nothing else.
+   The always-visible quartet as a fixed header line, then the current step's precondition:
+   "Hearing held 14 Jul 2026 · outcome not recorded". That is enough to act; the history is not
+   needed to take the step and is not shown.
+
+4. NAVIGATION MODEL — an ordered run with a declared end state.
+   A HORIZONTAL step rail, never a vertical panel. Steps are addressable and revisitable but
+   ordered. Completed steps collapse to a one-line dated done state. The run terminates in a REAL
+   SCREEN — the fixture's end sentence rendered as a state of the page, not as a label on a chip.
+
+5. PROGRESSIVE DISCLOSURE — per step.
+   Only the current step is open. Each step shows only its own slice: the documents step shows
+   the document THAT STEP is about, not the document list. The whole record is exactly ONE
+   collapsed disclosure at the foot of the run — one, not two, and it does not open by default.
+
+6. EXPERT PATH — keys over steps.
+   One key fires the current step's single verb; one key walks the run; at the end state the same
+   key opens the next case whose run is not finished. Expertise here is never having to choose
+   which action to take.
+
+7. FAILURE / RECOVERY — the run stalls at the step.
+   The step stays open with what failed and the next step stated in it, and later steps stay
+   explicitly disabled with their stated reason ("Cannot add the next hearing until the
+   14 Jul 2026 outcome is recorded"). Return opens at the stalled or current step, never at a
+   section.
+
+DEBT 1 (the shipped content column is frozen at 416px from 1024px upward) — C's answer:
+   SPEND WIDTH ON SCALE, NOT ON COLUMNS. One decision region; no measure on the step statement
+   (it is display type); body text capped at two lines. Width buys size and air around the one
+   live thing.
+
+DEBT 2 (the shipped 16rem actions panel offers all four actions on every tab) — C's answer:
+   NO PANEL; ONE BUTTON, EVER. Exactly one primary button on screen at a time — the current
+   step's single verb.
+
+MOBILE (required):
+   One step per screen, which is this run's natural shape. The horizontal rail compresses to
+   "Step 1 of 3" plus the step's own name. The green block goes full-bleed minus a margin.
+
+THE RUN, FIXED AT ASSIGNMENT TIME:
+   Three ordered steps, named ONLY with closed verbs —
+   `Record hearing outcome` -> `Add hearing` -> `File document`.
+   No step may be invented for an obligation the closed verb set cannot name: there is no verb
+   for completing a task and none is to be introduced. The two overdue items still appear in the
+   header's overdue count and in the collapsed record at the foot; they do not become steps.
+
+
+ART DIRECTION IN FULL — the four axes, all four are contract
+------------------------------------------------------------
+
+PALETTE — a quiet sheet with one solid block.
+   Ground near-white porcelain (~#fbfbfa) with near-black text. ONE MEANING HUE, USED AS A LARGE
+   SOLID FIELD: deep court green (~#0f3d2e) — the live step is a green block with bone type
+   inside it, and the block MOVES down the run as steps complete. Burnt clay (~#9a3b1e) is
+   reserved for what is overdue and appears nowhere else. Hexes are direction, not specification:
+   hit the hue and the temperature, tune the value until it passes contrast.
+   REFUSES: dark page grounds, tinted panels everywhere, a third hue, and colour used at hairline
+   sizes — this palette works in whole blocks or it does not work.
+
+TYPOGRAPHY — a neo-grotesk sans at display scale.
+   The step statement is set at 48px+ and is the loudest thing on the page. Labels are small,
+   wide-tracked caps. Dates are oversized tabular numerals. FOUR steps and nothing in the middle
+   — the rhythm is the gap between the huge and the small, not a gentle ramp. The first family in
+   the stack must be genuinely available with no network — a webfont that fails to fetch destroys
+   this direction.
+   REFUSES: serifs, italics, more than two lines of body copy anywhere, and type used to fill
+   space.
+
+DENSITY & RHYTHM — one decision per viewport.
+   Space measured in whole line-heights around the live block; everything not live compressed to
+   a single line. The page is mostly empty on purpose, and that emptiness is what makes
+   "finished" legible at a glance.
+
+SURFACE & ORNAMENT — solid blocks, strictly flat.
+   The live step is a solid green block; done steps are one flat line each; blocked steps are
+   flat with their reason in text. ELEVATION IS REFUSED OUTRIGHT — state is carried by block
+   versus line, and by colour plus word, never by depth. One heavy step numeral. One rule running
+   the length of the run.
+   REFUSES: shadows, elevation, hairline table grids, icon sets, centred layout.
+
+WHAT THIS VARIANT MUST NOT BECOME
+   This thesis is one thing at a time, ordered, ending. If the page ever opens every step at once
+   with its own button, or spreads the case across parallel ledgers, or turns the foot disclosure
+   into a full dated stream that is open by default, or ends without a real finished screen — it
+   has stopped being this thesis, however good it looks.
+
+
+--- CANONICAL CONTENT FIXTURE — IDENTICAL IN VARIANTS A, B AND C. Do not change a fact. ---
+
+Every variant in this explore renders the SAME case, so that the difference between variants is
+structure and art direction and never who invented better content. Invent no name, no date, no
+amount, no title. You may add rows OF THIS SAME CASE where your thesis needs more depth; you may
+not change or replace anything below. Where your thesis does not need a fact, leave it out — but
+never substitute a different one.
+
+TODAY, for every "overdue", "due", "since" and every relative reading on the page: 30 Jul 2026.
+
+THE CASE (the subject of this page)
+  parties        Meera Raghunathan v. Sunvale Housing Pvt. Ltd.
+  case number    O.S. No. 412 of 2024
+  court          City Civil Court, Bengaluru
+  case type      Civil suit
+  client         Meera Raghunathan
+  firm           Iyer & Ananth, Advocates   (show it or don't — if you show it, this is the value)
+  claim          Rs 18,45,000 rendered as ₹18,45,000 (Indian digit grouping, always)
+  status         ACTIVE — render as "Active", never as ACTIVE
+  overdue        2  (the task due 21 Jul 2026 and the document due 24 Jul 2026, both below)
+  next hearing   Not set — the field EXISTS and is EMPTY, and it shows. This is why the case
+                 needs advancing. Render the label and "Not set"; never hide it, never a dash.
+
+HEARINGS (one row each)
+  19 May 2026 · held · outcome recorded:
+                "Defendant's written statement taken on record."
+  14 Jul 2026 · held · OUTCOME NOT RECORDED          <- the first live gap on this case
+  next hearing · Not set                              <- the second live gap
+
+DOCUMENTS (one row each)
+  Vakalatnama                        · filed 11 Mar 2024
+  Written statement of the defendant · filed 08 Jul 2026
+  Affidavit of the plaintiff         · due 24 Jul 2026 · not filed · OVERDUE
+
+TASKS (one row each)
+  Collect the client's rent receipts for 2023-24 · due 21 Jul 2026 · OVERDUE
+  Draft the reply to the interim application     · due 06 Aug 2026
+
+NOTES (one row each)
+  21 May 2026 · "Client instructed to obtain certified copies of the 2023 municipal tax
+                receipts."
+  16 Jul 2026 · "Client confirms she holds the original sale agreement; a copy is to be
+                collected."
+
+MONEY ON THE CASE
+  claim          ₹18,45,000
+  fee received   ₹42,500 on 02 Jul 2026
+
+THE OTHER CASES (render only if your thesis has a caseload or next-case path)
+  Vishnu Menon v. Ashirvad Developers      · O.S. No. 118 of 2025 · Active  · next hearing
+                                             04 Aug 2026 · 0 overdue
+  Sundaram Finance Ltd. v. R. Palaniappan  · E.P. No. 63 of 2026  · On hold · next hearing
+                                             Not set · 0 overdue
+  Latha Bhaskaran                          · case-number field EMPTY (no number yet, and the
+                                             empty field SHOWS) · Intake · Civil suit · next
+                                             hearing Not set · 0 overdue
+
+CANONICAL COPY FOR THE STATES — use these words, do not write your own
+  loading      The case header and your page's primary region each need a designed loading state.
+               No copy: quiet placeholder shapes in your own visual system. A region that shows
+               nothing while it waits is not a loading state, and the shipped build's absence of
+               one is a named defect this explore must answer.
+  empty        "Next hearing — Not set" on this case, and Latha Bhaskaran's empty case-number
+               field, are the real empty states. An empty field still shows: in a legal record an
+               empty field is information.
+  error        "Not saved — the connection dropped. What you typed is kept here. Save again."
+  success      The recorded fact appears in place, dated — "Outcome recorded · 14 Jul 2026" — and
+               what is due next recomputes in the same view. Recording an outcome does NOT change
+               the overdue count: it stays 2, because neither the task nor the filing was
+               touched. Do not invent different arithmetic.
+  disabled     A blocked affordance states its reason: "Cannot add the next hearing until the
+               14 Jul 2026 outcome is recorded."
+  destructive  "Remove the document Affidavit of the plaintiff? A removed document cannot be
+               brought back." A destructive verb is never styled like the benign verb beside it.
+  end state    Only if your thesis renders a finished screen, verbatim: "Nothing due on this case
+               today. Next: Vishnu Menon v. Ashirvad Developers · hearing 04 Aug 2026."
+
+--- END CANONICAL CONTENT FIXTURE ---
+
+
+--- SHARED FLOOR — IDENTICAL IN A, B AND C. Not a divergence surface. ---
+
+A variant that "innovates" on anything in this block has diverged on the wrong axis.
+
+- ALWAYS VISIBLE, at all times, in every variant: parties · case number (where one exists) ·
+  status · next hearing · overdue count. Never behind a click, a period, a step, a keystroke or a
+  scroll.
+- A FIELD THAT EXISTS AND IS EMPTY STILL SHOWS. "Next hearing — Not set" is information in a
+  legal record. Never hidden, never collapsed, never a bare dash.
+- ALL FIVE STATES ARE REAL STATES — empty · loading · error · success · disabled — rendered where
+  they naturally occur. Keep the state matrix OFF the product page. If you need a reference
+  block, put it at the foot, mark it as reference, and keep it visually subordinate. A previous
+  cycle let state galleries eat 40–60% of every variant's page; that alone reads as BELOW-BAR.
+- CLOSED VOCABULARY. Nouns: case · hearing · document · task · note · client · firm · case number
+  · court · case type · filing. Verbs: add · edit · remove · save · record · file. `set`,
+  `schedule`, `reschedule`, `close`, `reopen`, `approve`, `complete` are NOT verbs in this
+  product — "set the next hearing" renders as "Add hearing". "Hearing outcome" is sanctioned.
+  A document's own TITLE is content a lawyer typed and may be real court vocabulary; an interface
+  LABEL — button, column head, step name, status, column of a table — may use only the closed set.
+- STATUSES ARE EXACTLY INTAKE · ACTIVE · ON_HOLD · CLOSED, rendered as human text ("On hold",
+  never ON_HOLD), and never carried by colour alone. No fifth status, and no status-shaped word
+  invented for a step, a period, a row state or a queue.
+- VOICE: a court record, not an assistant. State the fact and its date. No exclamation marks, no
+  encouragement, no congratulation for filing something. Anti-words: urgent · flimsy · chatty.
+  Feel words: exact · unhurried · durable.
+- DESTRUCTIVE LANGUAGE names the thing and states that it cannot be undone; errors say what
+  failed and what to do next.
+- DENSITY RULES: one row per hearing, per document, per task · dates and amounts in tabular
+  numerals so they align down a column · a row's meta separated by " · " consistently.
+- DATES as 27 Jul 2026. ₹ AMOUNTS in Indian digit grouping (₹18,45,000). Lorem ipsum is an
+  automatic VIOLATION anywhere, including inside a collapsed period, a truncated ledger or a
+  disabled step.
+- NEITHER SHIPPED SHAPE SURVIVES: no variant keeps a vertical 16rem rail of buttons, and no
+  variant keeps a five-item section tab rail. A page with either has re-skinned the baseline
+  instead of answering the two debts this explore exists to answer.
+- A11Y FLOOR: >=4.5:1 on every text pair you rely on, measured against YOUR OWN declared values
+  and commented in tokens.css · targets >=44px · visible focus · reduced motion honoured. Colour
+  is never the only carrier of a state: every coloured thing also carries a word or a mark.
+- DESKTOP AND MOBILE are both required; tablet is declared `no`. State your reflow in the page —
+  a layout that only works at 1280px is not a thesis.
+
+--- END SHARED FLOOR ---
