@@ -32,7 +32,7 @@ So a lane claims a **century**, and never numbers outside it:
 
 | Band | Owner |
 |---|---|
-| 0001–0099 | company / core / hq — `model-policy` holds 0063–0069 inside this range |
+| 0001–0099 | company / core / hq — `model-policy`'s Cycle 5 holds **0063–0071** inside this range |
 | 0100–0199 | `develop` |
 | 0200–0299 | next lane to be born |
 
