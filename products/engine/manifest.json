@@ -6,7 +6,10 @@
   "scripts": [
     ".claude/scripts/engine/yaml-subset.mjs",
     ".claude/scripts/engine/schema-subset.mjs",
-    ".claude/scripts/engine/process-lint.mjs"
+    ".claude/scripts/engine/process-lint.mjs",
+    ".claude/scripts/engine/arc-compile.mjs",
+    ".claude/scripts/engine/adapters/claude-code.mjs",
+    ".claude/scripts/engine/adapters/codex.mjs"
   ],
   "files": [],
   "docs": []

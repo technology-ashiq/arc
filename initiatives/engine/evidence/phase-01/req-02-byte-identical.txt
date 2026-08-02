@@ -1,0 +1,15 @@
+Phase 01 — REQ-02: the byte-identical proof
+
+Run:     arc-compile --check --all --target claude-code --migration
+Commit:  5d6d924b7f222ef1030cfd1428cba34a37854f5f
+Pinned:  7abeda1
+
+
+arc-compile: 3/3 byte-identical for target `claude-code`
+
+--- provable-to-fail, not merely green ---
+NC1  mutate one word of a canonical body -> [byte-diff] byte 317, 2/3, exit 1
+NC2  drop one git.op scope               -> [byte-diff] byte 132 (allowed-tools line)
+
+--- adapter purity (ADR-0201) ---
+render() twice on one doc: identical; no clock/randomness/env/filesystem in source
