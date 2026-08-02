@@ -15,7 +15,7 @@
 |---|---|---|---|---|---|
 | C4 | arc-portfolio "The Conductor" | 2026-07-30 → 2026-08-02 | **CLOSED — 4/4 phases** | ~112% of 3d | lanes + resolver on 7 surfaces · `PORTFOLIO.md` board + board lint · ownership lint · WIP info line · per-lane One Rule (ADR-0050..0062) |
 | C3 | arc-design "The Designer" | → 2026-07-30 | **CLOSED — 4/4 phases** | ~60% | vision-based design review: read-only critic · four-contract brief · thesis-driven exploration + blind ranking |
-| C2 | Receipt Spine | 2026-07-22 → live | **LIVE — Phase 04 dogfood** | ~40% of 12.5d (P00–03) | spine core · 7 flows emit · daily brief · approval inbox · reader-only API (ADR-0024..0031) |
+| C2 | Receipt Spine | 2026-07-22 → 2026-07-28 | **CLOSED — 5/5 phases** (REQ-01 `active`, honestly downgraded) | ~40% of 12.5d | spine core · 7 flows emit · daily brief · approval inbox · reader-only API (ADR-0024..0031, ADR-0032) |
 | C1 | Orchestrator (product monorepo) | → 2026-07-22 | **CLOSED — 6/6 phases** | ~22% | 6 installable products · selective install + per-target registry · scripts re-homed · EVENT.d dispatcher · 22 commands · bats 271→334+ |
 | — | v2 "world-best" quality engine | → 2026-07-17 | **PARKED (ADR-0017)** | — | arc-scan steel thread (semgrep+gitleaks → SARIF) · strictness profiles · block-by-default gates — banked, not killed |
 
@@ -49,13 +49,31 @@
 - **Shipped:** vision-based design review that judges rendered pixels rather than reports about them — read-only critic, four-contract brief, thesis-driven exploration with blind ranking
 - Full record: `docs/archive/PLAN-2026-07-30.md` · `docs/archive/PROGRESS-2026-07-30.md` · `docs/archive/phases-design-2026-07-30/` · index at `initiatives/design/HISTORY-INDEX.md`
 
-### C2 · Receipt Spine — LIVE (entry finalizes at retro)
+### C2 · Receipt Spine — CLOSED 2026-07-28
 
 - **Kickoff:** 2026-07-22 · design source `docs/strategy/plans/PLAN-cycle2-receipt-spine-v2.1.md` · appetite 2.5w Tier M
 - **Phases 00–03 CLOSED** well under appetite (~40% burn): 00 spine core (25 adversarial holes fixed) · 01 factory wiring (7 flows emit, ~2s overhead → async) · 02 money+brief (REQ-08 cost CUT — owner's call) · 03 inbox + API seal (W8 cursor-store cut)
-- **Phase 04 live dogfood** started 2026-07-24, host = arc itself · day 1: brief 10 lines / 306 ms, 22 real receipts
-- **Decisions:** ADR-0024..0031 (SPINE-A..H) · revenue stays `revenue.simulated` until a venture ships
-- Full record: root `PLAN.md` + `PROGRESS.md` + `docs/evidence/phase-0*` (moves to archive at close)
+- **Phase 04 live dogfood** ran 2026-07-24 → 2026-07-28, host = arc itself · 3 real working days, every brief inside one screen and under the 5s budget (day 1: 10 lines / 306 ms)
+- **Closed 2026-07-28 via `/arc-phase-done 4`** (`7e89a3a`), tracker archived the same day (`38b84e0`), retro recorded and its end-of-cycle scoreboard row written to `docs/retro-log.md`
+- **REQ-01 closes `active`, not validated — the honest outcome, kept honest.** The dogfood proved *"every factory action leaves a receipt"* false in real use: the idem preimage carries no timestamp, so repeat hook emissions collided and **100 real receipts were silently discarded**. Rather than let a green tracker outrank a red instrument, REQ-01 was **downgraded `validated` → `active` at the retro**. Carried forward: the idem fix, and the still-unexplained 2026-07-26 silence (a second cause, recorded as a known unknown in `gap-audit.md` §5).
+- **Decisions:** ADR-0024..0031 (SPINE-A..H) · ADR-0032 · revenue stays `revenue.simulated` until a venture ships
+- Full record: `docs/archive/PLAN-2026-07-28.md` · `docs/archive/PROGRESS-2026-07-28.md` · `docs/archive/phases-spine-2026-07-28/` · `docs/evidence/phase-0*`
+
+> **Correction (2026-08-03).** This row read **"LIVE — Phase 04 dogfood"** for five days after
+> the cycle had closed. The work finished 2026-07-28 and three independent records said so —
+> the archived tracker (*"Phase 04 CLOSED ✅ via `/arc-phase-done 4` — and with it Cycle 2"*),
+> two git commits, and the retro-log's end-of-cycle scoreboard row, which is written only at
+> close. Only this file, the company log, was never updated.
+>
+> **It cost a real decision.** `PLAN-cycle3-venture-launch.md` triggers on *"Cycle 2 closed …
+> first money must not wait past ~2 weeks after it"*, and [ADR-0071](adr/0071-a-cycle-is-closed-when-history-says-closed.md)
+> makes **this row** the thing that says whether a cycle is closed. So for five days the log
+> reported the venture trigger as unfired when it had already fired on 2026-07-28 — the
+> two-week clock runs to **2026-08-11**. Council session 002 debated the sequencing question
+> against that wrong state, and this session repeated it to the owner twice before checking.
+>
+> Recorded here rather than quietly fixed, because the lesson is the point: *a trigger that
+> reads a document is only as live as the document.*
 
 ### C1 · Orchestrator — CLOSED 2026-07-22
 
