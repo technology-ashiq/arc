@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+
+  /* ==========================================================================
+     BASE
+     ========================================================================== */
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: var(--fs-4);
+    line-height: var(--lh-body);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--selection-bg);
+    color: var(--selection-fg);
+  }
+
+  a, button, input {
+    font-family: inherit;
+    color: inherit;
+  }
+
+  :focus {
+    outline: none;
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .small-caps {
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* ==========================================================================
+     LAYOUT SHELL
+     ========================================================================== */
+
+  .page {
+    max-width: 68rem;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 5vw, 4rem);
+    padding-bottom: var(--space-8);
+  }
+
+  /* ==========================================================================
+     FOLIO — a static running head, printed-book style. Not sticky: only
+     period heads carry that job on this page.
+     ========================================================================== */
+
+  .folio {
+    border-bottom: 1px solid var(--rule);
+    padding: var(--space-4) clamp(1.25rem, 5vw, 4rem);
+  }
+  .folio-row {
+    max-width: 68rem;
+    margin-inline: auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+    font-size: var(--fs-0);
+    color: var(--ink-faint);
+    letter-spacing: var(--tracking-caps);
+  }
+  .folio-row span { font-variant-caps: small-caps; }
+
+  /* ==========================================================================
+     MASTHEAD — the case title. Roman, never italic: italics are spent
+     entirely on entry type further down the page.
+     ========================================================================== */
+
+  .masthead {
+    padding-top: var(--space-7);
+    padding-bottom: var(--space-6);
+  }
+  .case-title {
+    margin: 0;
+    font-size: var(--fs-6);
+    line-height: var(--lh-tight);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .case-meta {
+    margin: var(--space-3) 0 0;
+    font-size: var(--fs-3);
+    color: var(--ink-muted);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+  }
+  .case-meta .sep { color: var(--rule); padding: 0 0.4em; font-variant-caps: normal; }
+
+  /* ==========================================================================
+     COVER SHEET — the standing cover sheet: always visible, precedes the
+     record's first entry, the way a case file's cover sheet precedes its
+     pages.
+     ========================================================================== */
+
+  .cover-sheet {
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    padding-block: var(--space-6);
+    margin-bottom: var(--space-6);
+  }
+  .cover-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-7);
+    row-gap: var(--space-3);
+    max-width: 56rem;
+  }
+  .cover-field {
+    display: grid;
+    grid-template-columns: 9.5rem 1fr;
+    column-gap: var(--space-3);
+    align-items: baseline;
+  }
+  .cover-field dt {
+    font-size: var(--fs-1);
+    color: var(--ink-muted);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    margin: 0;
+  }
+  .cover-field dd {
+    margin: 0;
+    font-size: var(--fs-3);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .cover-field.-empty dd { color: var(--ink-muted); font-style: italic; }
+
+  /* ==========================================================================
+     KEYS LEGEND + TYPE LENS — the expert path. Small, quiet, discoverable,
+     never the loudest thing on the page.
+     ========================================================================== */
+
+  .keys-legend {
+    margin: 0 0 var(--space-5);
+    font-size: var(--fs-0);
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+  }
+  .keys-legend kbd {
+    font-family: inherit;
+    font-variant-caps: small-caps;
+    color: var(--ink-blue);
+    border: none;
+    background: none;
+    padding: 0;
+  }
+
+  .lens {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-4);
+    margin-bottom: var(--space-7);
+    font-size: var(--fs-2);
+  }
+  .lens-label {
+    color: var(--ink-muted);
+    font-size: var(--fs-1);
+  }
+  .lens-btn {
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 0.5rem 0.15rem;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    color: var(--ink-muted);
+    cursor: pointer;
+    border-bottom: 1px solid transparent;
+  }
+  .lens-btn:hover { color: var(--ink); }
+  .lens-btn[aria-pressed="true"] {
+    color: var(--ink);
+    border-bottom-color: var(--ink-blue);
+  }
+
+  /* ==========================================================================
+     THE RECORD — one continuous column. Marginalia gutter (date + type)
+     against a reading measure of ~65ch.
+     ========================================================================== */
+
+  .record { position: relative; }
+
+  /* the type lens: narrows WITHIN the stream, never leaves it */
+  .record[data-lens="hearing"]  .row:not([data-type="hearing"])  { display: none; }
+  .record[data-lens="document"] .row:not([data-type="document"]) { display: none; }
+  .record[data-lens="task"]     .row:not([data-type="task"])     { display: none; }
+  .record[data-lens="note"]     .row:not([data-type="note"])     { display: none; }
+
+  .row {
+    display: grid;
+    grid-template-columns: var(--gutter) minmax(0, var(--measure));
+    column-gap: var(--space-6);
+    align-items: start;
+  }
+  .row + .row { margin-top: var(--space-5); }
+
+  .marginalia {
+    text-align: right;
+    padding-top: 0.15rem;
+  }
+  .marginalia .date {
+    display: block;
+    color: var(--ink-blue);
+    font-variant-numeric: lining-nums tabular-nums;
+    font-size: var(--fs-2);
+    white-space: nowrap;
+  }
+  .marginalia .date.-unset {
+    color: var(--ink-muted);
+    font-style: italic;
+    font-variant-numeric: normal;
+  }
+  .marginalia .type {
+    display: block;
+    font-style: italic;
+    color: var(--ink-muted);
+    font-size: var(--fs-1);
+    margin-top: 0.2rem;
+  }
+
+  .content {
+    border-left: 1px solid var(--rule);
+    padding-left: var(--space-6);
+    padding-bottom: 0.1rem;
+  }
+  .content .title {
+    margin: 0;
+    font-size: var(--fs-4);
+    font-variant-numeric: oldstyle-nums;
+  }
+  .content .meta {
+    margin: var(--space-1) 0 0;
+    font-size: var(--fs-2);
+    color: var(--ink-muted);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    font-variant-numeric: lining-nums tabular-nums;
+  }
+  .content .meta .flag {
+    font-variant-caps: small-caps;
+  }
+  .content .quote {
+    margin: var(--space-1) 0 0;
+    font-size: var(--fs-4);
+    font-variant-numeric: oldstyle-nums;
+  }
+  .content .note {
+    margin: var(--space-1) 0 0;
+    font-size: var(--fs-1);
+    color: var(--ink-muted);
+    font-style: italic;
+    max-width: 52ch;
+  }
+
+  /* ------------------------------------------------------------------
+     Pending — "what the case still owes." No section box: a single
+     quiet caption set above the first row, not a category container.
+     ------------------------------------------------------------------ */
+
+  .pending { margin-bottom: var(--space-7); }
+  .pending-caption {
+    margin: 0 0 var(--space-4);
+    font-size: var(--fs-1);
+    font-style: italic;
+    color: var(--ink-muted);
+  }
+
+  /* ------------------------------------------------------------------
+     Today's rule — the origin of the page. The ONE structural hue,
+     spent here, and the ONE compose affordance.
+     ------------------------------------------------------------------ */
+
+  .today-rule {
+    border-top: 2px solid var(--ink-blue);
+    padding-top: var(--space-5);
+    margin-block: var(--space-8) var(--space-8);
+    display: grid;
+    grid-template-columns: var(--gutter) minmax(0, var(--measure));
+    column-gap: var(--space-6);
+    scroll-margin-top: 2rem;
+  }
+  .today-marginalia { text-align: right; }
+  .today-marginalia .today-word {
+    display: block;
+    font-size: var(--fs-3);
+    color: var(--ink-blue);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+  }
+  .today-marginalia .today-date {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--ink-blue);
+    font-variant-numeric: lining-nums tabular-nums;
+    font-size: var(--fs-2);
+  }
+
+  .compose { padding-left: var(--space-6); }
+  .compose-label {
+    display: block;
+    font-size: var(--fs-1);
+    color: var(--ink-muted);
+    margin-bottom: var(--space-2);
+  }
+  .compose-input {
+    display: block;
+    width: 100%;
+    max-width: var(--measure);
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--rule);
+    padding: 0.6rem 0.1rem;
+    min-height: 44px;
+    font-size: var(--fs-4);
+    color: var(--ink);
+    font-style: italic;
+  }
+  .compose-input::placeholder { color: var(--ink-muted); opacity: 0.85; }
+  .compose-input:focus { border-bottom-color: var(--ink-blue); }
+
+  .compose-type {
+    border: none;
+    margin: var(--space-4) 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-5);
+  }
+  .compose-type legend {
+    font-size: var(--fs-1);
+    color: var(--ink-muted);
+    padding: 0;
+    margin-bottom: var(--space-2);
+    width: 100%;
+  }
+  .compose-type label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-height: 44px;
+    font-style: italic;
+    font-size: var(--fs-3);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .compose-type input[type="radio"] {
+    width: 1.05em;
+    height: 1.05em;
+    accent-color: var(--ink-blue);
+    margin: 0;
+  }
+  .compose-type input[disabled] + span { color: var(--ink-muted); }
+  .compose-type label:has(input:disabled) { cursor: not-allowed; }
+
+  .compose-disabled-note {
+    margin: var(--space-2) 0 0;
+    font-size: var(--fs-1);
+    color: var(--ink-muted);
+    font-style: italic;
+    max-width: var(--measure);
+  }
+
+  .compose-actions {
+    margin-top: var(--space-4);
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+  .compose-save {
+    appearance: none;
+    background: none;
+    border: 1px solid var(--ink);
+    padding: 0.55rem 1.4rem;
+    min-height: 44px;
+    font-family: inherit;
+    font-size: var(--fs-3);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .compose-save:hover { background: var(--rule-soft); }
+
+  .compose-error {
+    margin: 0;
+    font-size: var(--fs-2);
+    color: var(--ink);
+    font-style: italic;
+    max-width: var(--measure);
+  }
+  .compose-error[hidden] { display: none; }
+
+  /* ------------------------------------------------------------------
+     Past — the record of what happened. Sticky dated period heads;
+     tight inside an entry, very generous between periods.
+     ------------------------------------------------------------------ */
+
+  .marker-new {
+    margin-bottom: var(--space-5);
+    padding-left: calc(var(--gutter) + var(--space-6));
+    font-size: var(--fs-1);
+    color: var(--ink-blue);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+  }
+
+  .period { margin: 0; }
+
+  .period > summary {
+    position: sticky;
+    top: 0;
+    background: var(--paper);
+    padding-block: var(--space-3);
+    cursor: pointer;
+  }
+  .period > summary::marker { color: var(--ink-muted); }
+
+  .period.is-open > summary {
+    font-size: var(--fs-6);
+    line-height: var(--lh-head);
+    color: var(--ink);
+  }
+  .period.is-collapsed > summary {
+    font-size: var(--fs-4);
+    color: var(--ink);
+  }
+  .period.is-collapsed > summary .summary-meta {
+    font-size: var(--fs-2);
+    color: var(--ink-muted);
+    font-variant-caps: small-caps;
+    letter-spacing: var(--tracking-caps);
+  }
+
+  .period-body {
+    padding-top: var(--space-6);
+  }
+
+  .ornament {
+    text-align: center;
+    margin-block: var(--space-8);
+    color: var(--ink-faint);
+    font-size: 1.5rem;
+  }
+
+  /* ==========================================================================
+     STATE REFERENCE — subordinate, marked, at the foot. Not part of the
+     case record. Carries the states that cannot be shown live without
+     opening a second affordance or misstating a fact that hasn't
+     happened yet on this frozen date.
+     ========================================================================== */
+
+  .state-reference {
+    margin-top: var(--space-8);
+    padding-top: var(--space-5);
+    border-top: 1px solid var(--rule);
+    max-width: 46rem;
+  }
+  .ref-title {
+    margin: 0 0 var(--space-5);
+    font-size: var(--fs-0);
+    color: var(--ink-faint);
+    letter-spacing: var(--tracking-caps);
+  }
+  .ref-grid {
+    display: grid;
+    gap: var(--space-5);
+  }
+  .ref-label {
+    margin: 0 0 var(--space-2);
+    font-size: var(--fs-0);
+    color: var(--ink-muted);
+    letter-spacing: var(--tracking-caps);
+  }
+  .ref-copy {
+    margin: 0;
+    font-size: var(--fs-1);
+    color: var(--ink-muted);
+    font-style: italic;
+    max-width: 56ch;
+  }
+  .destructive-verb {
+    color: var(--oxblood);
+    font-style: normal;
+    font-variant-caps: small-caps;
+  }
+  .ref-skel { display: flex; gap: var(--space-6); flex-wrap: wrap; }
+  .ref-skel-group { display: grid; gap: var(--space-2); width: 12rem; }
+  .ref-skel-group span:first-child { display: block; font-size: var(--fs-0); color: var(--ink-faint); margin-bottom: 0.2rem; }
+  .skel-bar { display: block; height: 0.55rem; background: var(--rule-soft); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .skel-bar { animation: skel-pulse 1.3s ease-in-out infinite; }
+  }
+  @keyframes skel-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* ==========================================================================
+     MOBILE — natively one column. Marginalia moves above its entry;
+     period heads stay sticky; the compose point stays on today's rule.
+     Tablet is not a declared breakpoint; this is the one reflow.
+     ========================================================================== */
+
+  @media (max-width: 640px) {
+    .cover-grid { grid-template-columns: 1fr; }
+    .cover-field { grid-template-columns: 8rem 1fr; }
+
+    .row,
+    .today-rule {
+      grid-template-columns: 1fr;
+      row-gap: var(--space-2);
+    }
+    .marginalia,
+    .today-marginalia {
+      text-align: left;
+      display: flex;
+      align-items: baseline;
+      gap: var(--space-4);
+    }
+    .marginalia .type { margin-top: 0; }
+    .today-marginalia .today-date { margin-top: 0; }
+
+    .content {
+      border-left: none;
+      border-top: 1px solid var(--rule);
+      padding-left: 0;
+      padding-top: var(--space-3);
+    }
+    .compose { padding-left: 0; padding-top: var(--space-3); border-top: 1px solid var(--rule); }
+
+    .marker-new { padding-left: 0; }
+
+    .period.is-open > summary { font-size: clamp(2rem, 9vw, 2.75rem); }
+  }
+
+  /* ==========================================================================
+     REDUCED MOTION
+     ========================================================================== */
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+</style>
+</head>
+<body>
+
+<header class="folio">
+  <div class="folio-row">
+    <span>Iyer &amp; Ananth, Advocates</span>
+    <span>O.S. No. 412 of 2024 · City Civil Court, Bengaluru</span>
+  </div>
+</header>
+
+<main class="page">
+
+  <div class="masthead">
+    <h1 class="case-title">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</h1>
+    <p class="case-meta">Civil suit<span class="sep">·</span>City Civil Court, Bengaluru</p>
+  </div>
+
+  <section class="cover-sheet" id="cover" aria-label="Case cover sheet">
+    <dl class="cover-grid">
+      <div class="cover-field">
+        <dt>Parties</dt>
+        <dd>Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</dd>
+      </div>
+      <div class="cover-field">
+        <dt>Client</dt>
+        <dd>Meera Raghunathan</dd>
+      </div>
+
+      <div class="cover-field">
+        <dt>Case number</dt>
+        <dd>O.S. No. 412 of 2024</dd>
+      </div>
+      <div class="cover-field">
+        <dt>Firm</dt>
+        <dd>Iyer &amp; Ananth, Advocates</dd>
+      </div>
+
+      <div class="cover-field">
+        <dt>Court</dt>
+        <dd>City Civil Court, Bengaluru</dd>
+      </div>
+      <div class="cover-field">
+        <dt>Case type</dt>
+        <dd>Civil suit</dd>
+      </div>
+
+      <div class="cover-field">
+        <dt>Status</dt>
+        <dd>Active</dd>
+      </div>
+      <div class="cover-field">
+        <dt>Overdue</dt>
+        <dd>2</dd>
+      </div>
+
+      <div class="cover-field -empty">
+        <dt>Next hearing</dt>
+        <dd>Not set</dd>
+      </div>
+      <div class="cover-field">
+        <dt>Claim</dt>
+        <dd>₹18,45,000</dd>
+      </div>
+
+      <div class="cover-field">
+        <dt>Fee received</dt>
+        <dd>₹42,500 · 02 Jul 2026</dd>
+      </div>
+    </dl>
+  </section>
+
+  <p class="keys-legend">
+    <span class="small-caps">Keys</span> —
+    <kbd>t</kbd> today's rule ·
+    <kbd>p</kbd> pending ·
+    <kbd>n</kbd> new since opened ·
+    <kbd>0</kbd> all ·
+    <kbd>1</kbd> hearings ·
+    <kbd>2</kbd> documents ·
+    <kbd>3</kbd> tasks ·
+    <kbd>4</kbd> notes
+  </p>
+
+  <nav class="lens" aria-label="Narrow the record by entry type" id="lens">
+    <span class="lens-label small-caps">Show</span>
+    <button type="button" class="lens-btn" data-lens="all" aria-pressed="true">All</button>
+    <button type="button" class="lens-btn" data-lens="hearing" aria-pressed="false">Hearings</button>
+    <button type="button" class="lens-btn" data-lens="document" aria-pressed="false">Documents</button>
+    <button type="button" class="lens-btn" data-lens="task" aria-pressed="false">Tasks</button>
+    <button type="button" class="lens-btn" data-lens="note" aria-pressed="false">Notes</button>
+  </nav>
+
+  <div class="record" id="record" data-lens="all">
+
+    <div class="pending" id="pending">
+      <p class="pending-caption">What the case still owes</p>
+
+      <div class="row" data-type="task">
+        <div class="marginalia">
+          <span class="date">21 Jul 2026</span>
+          <span class="type">Task</span>
+        </div>
+        <div class="content">
+          <p class="title">Collect the client's rent receipts for 2023-24</p>
+          <p class="meta">Due 21 Jul 2026 · <span class="flag">Overdue</span></p>
+        </div>
+      </div>
+
+      <div class="row" data-type="document">
+        <div class="marginalia">
+          <span class="date">24 Jul 2026</span>
+          <span class="type">Document</span>
+        </div>
+        <div class="content">
+          <p class="title">Affidavit of the plaintiff</p>
+          <p class="meta">Due 24 Jul 2026 · Not filed · <span class="flag">Overdue</span></p>
+        </div>
+      </div>
+
+      <div class="row" data-type="task">
+        <div class="marginalia">
+          <span class="date">06 Aug 2026</span>
+          <span class="type">Task</span>
+        </div>
+        <div class="content">
+          <p class="title">Draft the reply to the interim application</p>
+          <p class="meta">Due 06 Aug 2026</p>
+        </div>
+      </div>
+
+      <div class="row" data-type="hearing">
+        <div class="marginalia">
+          <span class="date -unset">Not set</span>
+          <span class="type">Hearing</span>
+        </div>
+        <div class="content">
+          <p class="title">Next hearing</p>
+          <p class="meta">Not set</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="today-rule" id="today">
+      <div class="today-marginalia">
+        <span class="today-word">Today</span>
+        <span class="today-date">30 Jul 2026</span>
+      </div>
+      <form class="compose" id="compose">
+        <label class="compose-label small-caps" for="compose-input">Record</label>
+        <input
+          class="compose-input"
+          id="compose-input"
+          name="entry"
+          type="text"
+          placeholder="What happened, or what is due next…"
+          autocomplete="off"
+        >
+
+        <fieldset class="compose-type">
+          <legend class="small-caps">Type</legend>
+          <label>
+            <input type="radio" name="entry-type" value="hearing" disabled aria-describedby="hearing-disabled-note">
+            <span>Hearing</span>
+          </label>
+          <label>
+            <input type="radio" name="entry-type" value="document">
+            <span>Document</span>
+          </label>
+          <label>
+            <input type="radio" name="entry-type" value="task">
+            <span>Task</span>
+          </label>
+          <label>
+            <input type="radio" name="entry-type" value="note">
+            <span>Note</span>
+          </label>
+        </fieldset>
+        <p class="compose-disabled-note" id="hearing-disabled-note">Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.</p>
+
+        <div class="compose-actions">
+          <button type="submit" class="compose-save">Save</button>
+        </div>
+        <p class="compose-error" role="alert" hidden>Not saved — the connection dropped. What you typed is kept here. Save again.</p>
+      </form>
+    </div>
+
+    <div class="past">
+
+      <details class="period is-open" open>
+        <summary><span class="small-caps">Jul 2026</span></summary>
+        <div class="period-body">
+
+          <div class="marker-new" id="marker-new">New since you last opened</div>
+
+          <div class="row" data-type="note">
+            <div class="marginalia">
+              <span class="date">16 Jul 2026</span>
+              <span class="type">Note</span>
+            </div>
+            <div class="content">
+              <p class="quote">Client confirms she holds the original sale agreement; a copy is to be collected.</p>
+            </div>
+          </div>
+
+          <div class="row" data-type="hearing">
+            <div class="marginalia">
+              <span class="date">14 Jul 2026</span>
+              <span class="type">Hearing</span>
+            </div>
+            <div class="content">
+              <p class="title">Held.</p>
+              <p class="meta"><span class="flag">Outcome not recorded</span></p>
+              <p class="note">Record the outcome at today's rule to add the next hearing.</p>
+            </div>
+          </div>
+
+          <div class="row" data-type="document">
+            <div class="marginalia">
+              <span class="date">08 Jul 2026</span>
+              <span class="type">Document</span>
+            </div>
+            <div class="content">
+              <p class="title">Written statement of the defendant</p>
+              <p class="meta">Filed 08 Jul 2026</p>
+            </div>
+          </div>
+
+        </div>
+      </details>
+
+      <div class="ornament" aria-hidden="true">❧</div>
+
+      <details class="period is-collapsed">
+        <summary>
+          <span class="small-caps">Mar 2024 – May 2026</span>
+          <span class="summary-meta">· 1 hearing · 1 document · 1 note</span>
+        </summary>
+        <div class="period-body">
+
+          <div class="row" data-type="note">
+            <div class="marginalia">
+              <span class="date">21 May 2026</span>
+              <span class="type">Note</span>
+            </div>
+            <div class="content">
+              <p class="quote">Client instructed to obtain certified copies of the 2023 municipal tax receipts.</p>
+            </div>
+          </div>
+
+          <div class="row" data-type="hearing">
+            <div class="marginalia">
+              <span class="date">19 May 2026</span>
+              <span class="type">Hearing</span>
+            </div>
+            <div class="content">
+              <p class="title">Held.</p>
+              <p class="meta">Outcome recorded:</p>
+              <p class="quote">“Defendant's written statement taken on record.”</p>
+            </div>
+          </div>
+
+          <div class="row" data-type="document">
+            <div class="marginalia">
+              <span class="date">11 Mar 2024</span>
+              <span class="type">Document</span>
+            </div>
+            <div class="content">
+              <p class="title">Vakalatnama</p>
+              <p class="meta">Filed 11 Mar 2024</p>
+            </div>
+          </div>
+
+        </div>
+      </details>
+
+    </div>
+  </div>
+
+  <footer class="state-reference" aria-label="State reference for design review">
+    <p class="ref-title small-caps">State reference — for design review, not part of the case record</p>
+    <div class="ref-grid">
+
+      <div class="ref-item">
+        <p class="ref-label small-caps">Loading — case header &amp; primary region</p>
+        <div class="ref-skel" aria-hidden="true">
+          <div class="ref-skel-group">
+            <span>Case header</span>
+            <span class="skel-bar" style="width:80%"></span>
+            <span class="skel-bar" style="width:55%"></span>
+          </div>
+          <div class="ref-skel-group">
+            <span>Primary region</span>
+            <span class="skel-bar" style="width:70%"></span>
+            <span class="skel-bar" style="width:90%"></span>
+            <span class="skel-bar" style="width:40%"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="ref-item">
+        <p class="ref-label small-caps">Success</p>
+        <p class="ref-copy">The recorded fact appears in place, dated — “Outcome recorded · 14 Jul 2026” — and what is due next recomputes in the same view. Overdue stays 2.</p>
+      </div>
+
+      <div class="ref-item">
+        <p class="ref-label small-caps">Destructive</p>
+        <p class="ref-copy">“<span class="destructive-verb">Remove</span> the document Affidavit of the plaintiff? A removed document cannot be brought back.”</p>
+      </div>
+
+    </div>
+  </footer>
+
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var record = document.getElementById("record");
+  var lens = document.getElementById("lens");
+
+  // ---- type lens: narrows within the stream, never leaves it ----
+  function setLens(value) {
+    record.dataset.lens = value;
+    var buttons = lens.querySelectorAll(".lens-btn");
+    buttons.forEach(function (btn) {
+      var active = btn.dataset.lens === value;
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+  }
+  lens.addEventListener("click", function (e) {
+    var btn = e.target.closest(".lens-btn");
+    if (!btn) return;
+    setLens(btn.dataset.lens);
+  });
+
+  var LENS_TYPES = { "1": "hearing", "2": "document", "3": "task", "4": "note", "0": "all" };
+
+  // ---- keyboard expert path ----
+  document.addEventListener("keydown", function (e) {
+    var tag = (e.target && e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (e.key === "t") {
+      document.getElementById("today").scrollIntoView({ block: "start" });
+    } else if (e.key === "p") {
+      document.getElementById("pending").scrollIntoView({ block: "start" });
+    } else if (e.key === "n") {
+      document.getElementById("marker-new").scrollIntoView({ block: "start" });
+    } else if (LENS_TYPES[e.key]) {
+      setLens(LENS_TYPES[e.key]);
+    }
+  });
+
+  // ---- the one compose point: its own failure mode, shown honestly ----
+  var compose = document.getElementById("compose");
+  var error = compose.querySelector(".compose-error");
+  compose.addEventListener("submit", function (e) {
+    e.preventDefault();
+    error.hidden = false;
+  });
+})();
+</script>
+
+</body>
+</html>

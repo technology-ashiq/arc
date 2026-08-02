@@ -77,7 +77,24 @@ perfect one. In order:
    in parallel (focus A: edge cases + feasibility vs ADR evidence · focus B: scope/YAGNI +
    hidden dependencies · focus C: pre-mortem, seeded from `docs/retro-log.md`) · S: one
    merged run (A+C). Reconcile each finding: accept → apply its exact mutation · reject →
-   drop silently, no log. Caps hold — attackers compete for slots (pre-mortem stays 5
+   **record ONE line, then move on**:
+
+   ```
+   REJECTED: <the finding, one clause> — <reason>
+   ```
+
+   `<reason>` comes from this **fixed six-word taxonomy and nothing else** (ADR-0067):
+   `duplicate` · `out-of-appetite` · `unsupported` · `violates-no-go` · `already-covered` ·
+   `non-actionable`. **No rebuttal, no debate, no reply to the attacker** — this is a
+   trace, not a process, and the attacker is not there to read a reply. Print the lines
+   with the step-5 summary so the rejections are visible in the same place the accepted
+   mutations are. Reject-lines were dropped silently until Cycle 5; the log exists so a
+   retro can see the pattern in what a session keeps waving off, which a silent drop made
+   unrecoverable. Pick the word that is TRUE — a rejection filed under the nearest
+   available word makes the log look like data, which is worse than no log (that is
+   ADR-0067's own revisit trigger).
+
+   Caps hold — attackers compete for slots (pre-mortem stays 5
    rows: replace the weakest, never grow). If a finding invalidates the plan, fix the
    plan first.
 6. **Define phases risk-first.** Phase 0 = steel thread / walking skeleton: the thinnest

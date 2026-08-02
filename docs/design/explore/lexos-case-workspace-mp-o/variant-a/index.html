@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ============================================================================
+   VARIANT A — COMMAND CENTER
+   Every colour value used here is a var() from tokens.css. Nothing in this file
+   declares a hue, a shadow or a gradient of its own.
+
+   PALETTE SEMANTICS, applied:
+   · amber = the record does not yet contain this — overdue / outcome not
+             recorded / not set / not saved. Always set beside a word.
+   · in the CASES column amber is spent on exactly two things: a non-zero
+             overdue count, and Latha Bhaskaran's empty case-number field.
+             That column is scanned for what a case owes; lighting every empty
+             field there would flatten the only signal it exists to carry.
+   · rust  = a destructive verb, and nothing else anywhere on the page.
+   ========================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  background: var(--ink-ground);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--ink-ground);
+  color: var(--bone);
+  font-family: var(--font-text);
+  font-size: var(--fs-3);
+  line-height: var(--lh-row);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--select-bg); color: var(--select-fg); }
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+.r-cursor :focus-visible,
+.ref-panel--destructive :focus-visible { outline-color: var(--focus-on-bone); }
+
+/* --- primitives ---------------------------------------------------------- */
+
+.mono {
+  font-family: var(--font-data);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  letter-spacing: 0;
+}
+
+.lbl {
+  font-family: var(--font-label);
+  font-size: var(--fs-1);
+  font-weight: var(--w-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--bone-label);
+  white-space: nowrap;
+}
+
+.gap { color: var(--amber); }
+
+kbd {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  line-height: 1;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+  padding: 2px 4px 3px;
+  opacity: .8;
+}
+
+/* --- the console grid ---------------------------------------------------- */
+
+.console {
+  max-width: var(--console-cap);
+  margin: 0 auto;
+  padding: 0 20px 20px;
+  display: grid;
+  grid-template-columns: var(--col-cases) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-areas:
+    "mast  mast      mast"
+    "head  head      head"
+    "cases hearings  documents"
+    "cases tasks     notes"
+    "ref   ref       ref";
+  column-gap: var(--gutter);
+  row-gap: 18px;
+  align-content: start;
+}
+
+/* --- masthead ------------------------------------------------------------ */
+
+.masthead {
+  grid-area: mast;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 38px;
+  border-bottom: 1px solid var(--hairline);
+}
+.masthead .firm { font-size: var(--fs-3); color: var(--bone); }
+.masthead .spacer { flex: 1 1 auto; }
+.masthead .today {
+  font-family: var(--font-data);
+  font-size: var(--fs-2);
+  color: var(--bone-meta);
+}
+
+/* --- case header --------------------------------------------------------- */
+
+.casehead {
+  grid-area: head;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 246px;
+  column-gap: 30px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.case-title {
+  margin: 0;
+  font-family: var(--font-text);
+  font-size: var(--fs-4);
+  font-weight: 700;
+  line-height: 22px;
+  letter-spacing: 0.005em;
+  color: var(--bone);
+}
+
+.fields {
+  display: grid;
+  grid-template-columns: 172px 216px minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 20px;
+  row-gap: 11px;
+  margin-top: 14px;
+}
+.f { min-width: 0; }
+.f .lbl { display: block; margin-bottom: 3px; }
+.f .v {
+  display: block;
+  font-size: var(--fs-3);
+  line-height: 16px;
+  color: var(--bone);
+  overflow-wrap: break-word;
+}
+.f .v.mono { font-size: var(--fs-2); line-height: 16px; }
+
+/* the one violent step in the scale */
+.overdue {
+  border-left: 2px solid var(--amber);
+  padding-left: 20px;
+  align-self: start;
+}
+.overdue .lbl { color: var(--amber); }
+.od-num {
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--fs-vast);
+  line-height: 0.86;
+  letter-spacing: -0.03em;
+  color: var(--amber);
+  margin: 6px 0 0 -4px;
+}
+.od-break {
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--fs-2);
+  color: var(--bone-meta);
+  margin-top: 10px;
+}
+
+/* --- cases column: content carrying its own counts, never a rail of buttons */
+
+.cases {
+  grid-area: cases;
+  min-width: 0;
+  border-right: 1px solid var(--hairline-strong);
+  padding-right: 20px;
+}
+.case-list { list-style: none; margin: 0; padding: 0; }
+
+.case-row {
+  display: block;
+  width: 100%;
+  min-height: 62px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--hairline);
+  border-radius: 0;
+  padding: 10px 8px 11px 14px;
+  position: relative;
+  cursor: pointer;
+  transition: background-color var(--motion-cursor);
+}
+.case-row:hover { background: var(--ink-rail-hi); }
+.case-row[aria-current="true"] { background: var(--ink-rail); }
+.case-row[aria-current="true"]::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: var(--tick-w);
+  background: var(--bone);
+}
+.c-parties { display: block; font-size: var(--fs-3); line-height: 16px; color: var(--bone); }
+.case-row[aria-current="true"] .c-parties { font-weight: 700; }
+.c-num, .c-meta {
+  display: block;
+  font-family: var(--font-data);
+  font-size: var(--fs-2);
+  line-height: 15px;
+  color: var(--bone-meta);
+  margin-top: 3px;
+}
+.c-num .lbl { display: inline; margin-right: 7px; }
+
+/* --- ledger columns ------------------------------------------------------ */
+
+.ledger { min-width: 0; display: flex; flex-direction: column; }
+#hearings  { grid-area: hearings; }
+#documents { grid-area: documents; }
+#tasks     { grid-area: tasks; }
+#notes     { grid-area: notes; }
+
+.ledger-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+.ledger-head .n { font-family: var(--font-data); font-size: var(--fs-2); color: var(--bone-meta); }
+.ledger-head .n b { color: var(--bone); font-weight: 400; }
+
+.colhead {
+  display: grid;
+  column-gap: 12px;
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.colhead .r { text-align: right; }
+.colhead--cases { display: block; padding: 5px 0 5px 14px; }
+.colhead--cases .lbl { display: block; letter-spacing: 0.10em; line-height: 13px; }
+.colhead--cases .lbl + .lbl { margin-top: 2px; }
+
+.rows { list-style: none; margin: 0; padding: 0; }
+
+.row {
+  display: grid;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-height: var(--row-h);
+  padding: 7px 10px 7px 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: background-color var(--motion-cursor);
+}
+.row:hover { background: var(--ink-rail-hi); }
+
+/* the gap spine: every row carries a tick, and the lit ones read down the
+   column as a bar-code of where this case is incomplete */
+.tick {
+  grid-area: tick;
+  align-self: stretch;
+  background: var(--hairline-strong);
+  border-radius: 1px;
+}
+.tick--gap { background: var(--amber); }
+
+.t   { font-size: var(--fs-3); line-height: 16px; color: var(--bone); min-width: 0; }
+.m   { font-family: var(--font-data); font-size: var(--fs-2); line-height: 16px;
+       color: var(--bone-meta); white-space: nowrap; }
+.m.r { text-align: right; justify-self: end; }
+.q   { font-size: var(--fs-3); line-height: 16px; color: var(--bone-meta); }
+
+/* the cursor: the page's only ornament of light */
+.r-cursor {
+  background: var(--invert-ground);
+  color: var(--invert-ink);
+  min-height: var(--row-h-cursor);
+  align-content: center;
+  border-bottom-color: var(--invert-rule);
+}
+.r-cursor:hover { background: var(--invert-ground); }
+.r-cursor .t, .r-cursor .q { color: var(--invert-ink); }
+.r-cursor .m { color: var(--invert-meta); }
+.r-cursor .tick { background: var(--amber-ink); }
+
+/* ledger-specific column locks */
+.l-hearing {
+  grid-template-columns: var(--tick-w) 96px minmax(0, 1fr);
+  grid-template-areas:
+    "tick date state"
+    "tick .    l2";
+}
+.l-hearing .d     { grid-area: date; }
+.l-hearing .state { grid-area: state; }
+.l-hearing .l2    { grid-area: l2; }
+
+.l-doc, .l-task {
+  grid-template-columns: var(--tick-w) minmax(0, 1fr) auto;
+  grid-template-areas:
+    "tick title meta"
+    "tick l2    l2";
+  align-items: baseline;
+}
+.l-doc .t, .l-task .t { grid-area: title; }
+.l-doc .m, .l-task .m { grid-area: meta; }
+.l-task .l2 { grid-area: l2; }
+
+.l-note {
+  grid-template-columns: var(--tick-w) 96px minmax(0, 1fr);
+  grid-template-areas: "tick date text";
+}
+.l-note .d { grid-area: date; }
+.l-note .q { grid-area: text; }
+
+/* --- inline verbs: the cursor row only ----------------------------------- */
+
+.verbs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.verb {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 11px;
+  border: 1px solid var(--invert-meta);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--invert-ink);
+  font-family: var(--font-label);
+  font-size: var(--fs-1);
+  font-weight: var(--w-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--motion-cursor);
+}
+/* 32px of ink, 44px of target — the hit area overflows the row the cursor opened */
+.verb::after { content: ""; position: absolute; inset: -6px -2px; }
+.verb:hover { background: var(--invert-rule); }
+
+/* a destructive verb is never styled like the benign verb beside it:
+   a different hue AND a different form (a doubled edge) */
+.verb--destructive {
+  color: var(--rust-ink);
+  border-color: var(--rust-ink);
+  border-left-width: 4px;
+  padding-left: 8px;
+}
+.verb--destructive:hover { background: var(--invert-rule); }
+
+/* --- a blocked affordance states its reason and is not a button ---------- */
+
+.blocked { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.blocked .key-off {
+  font-family: var(--font-data);
+  font-size: var(--fs-1);
+  line-height: 1;
+  color: var(--bone-label);
+  border: 1px dashed var(--bone-label);
+  border-radius: 1px;
+  padding: 2px 4px 3px;
+}
+.blocked .verb-off {
+  font-family: var(--font-label);
+  font-size: var(--fs-1);
+  font-weight: var(--w-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--bone-label);
+  text-decoration: underline dotted var(--bone-label);
+  text-underline-offset: 3px;
+}
+.blocked .why { font-size: var(--fs-2); line-height: 15px; color: var(--bone-meta); }
+
+/* --- the write that failed, held in its row ------------------------------ */
+
+.statecell {
+  border-left: 2px solid var(--amber);
+  padding: 3px 0 3px 10px;
+  margin-top: 3px;
+  font-size: var(--fs-2);
+  line-height: 15px;
+  color: var(--bone-meta);
+}
+.statecell .gap { font-weight: 700; }
+
+/* --- numbered truncation, expands in place -------------------------------- */
+
+.trunc {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 10px 0 15px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px dashed var(--hairline-strong);
+  border-radius: 0;
+  color: var(--bone-label);
+  font-family: var(--font-label);
+  font-size: var(--fs-1);
+  font-weight: var(--w-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color var(--motion-cursor);
+}
+.trunc:hover { background: var(--ink-rail-hi); color: var(--bone); }
+.trunc .n {
+  font-family: var(--font-data);
+  font-size: var(--fs-2);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--bone-meta);
+}
+
+/* --- reference strip: subordinate, marked, at the foot -------------------- */
+
+.reference {
+  grid-area: ref;
+  background: var(--ink-well);
+  border-top: 1px solid var(--hairline-strong);
+  padding: 13px 18px 16px;
+  margin-top: 4px;
+}
+.ref-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ref-head .note { font-size: var(--fs-2); line-height: 15px; color: var(--bone-label); }
+
+.ref-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 12px; }
+.ref-panel { padding: 0 24px; border-left: 1px solid var(--hairline); min-width: 0; }
+.ref-panel:first-child { padding-left: 0; border-left: 0; }
+.ref-panel > .lbl { display: block; margin-bottom: 9px; white-space: normal; }
+.ref-body { font-size: var(--fs-2); line-height: 15px; color: var(--bone-meta); }
+.ref-body p { margin: 8px 0 0; }
+
+.ref-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+.ref-line:last-of-type { border-bottom: 0; }
+.ref-line .k { color: var(--bone-label); }
+.ref-line .v { color: var(--bone); }
+
+.ref-panel--destructive .confirm {
+  background: var(--invert-ground);
+  color: var(--invert-ink);
+  padding: 9px 11px 11px;
+  border-radius: var(--radius);
+  font-size: var(--fs-2);
+  line-height: 16px;
+}
+.ref-panel--destructive .verbs { margin-top: 9px; }
+
+/* loading: quiet placeholder shapes in this system, and no copy */
+.skel { background: var(--skeleton); border-radius: 1px; display: block; }
+.skel-title { height: 13px; width: 74%; margin-bottom: 11px; background: var(--skeleton-hi); }
+.skel-pair { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 9px; margin-bottom: 8px; }
+.skel-pair .a { height: 7px; }
+.skel-pair .b { height: 7px; width: 78%; }
+.skel-pair:nth-of-type(2) .b { width: 54%; }
+.skel-pair:nth-of-type(3) .b { width: 88%; }
+.skel-group { animation: breathe var(--motion-pulse) ease-in-out infinite; }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+
+.reflow {
+  margin-top: 14px;
+  padding-top: 11px;
+  border-top: 1px solid var(--hairline);
+  font-size: var(--fs-2);
+  line-height: 17px;
+  color: var(--bone-label);
+  max-width: 112ch;
+}
+.reflow b { color: var(--bone-meta); font-weight: 400; font-family: var(--font-data); }
+.reflow .lbl { color: var(--bone-meta); }
+
+/* --- permanent key-hint bar ---------------------------------------------- */
+
+.keybar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--ink-rail);
+  border-top: 1px solid var(--hairline-strong);
+}
+.keybar-inner {
+  max-width: var(--console-cap);
+  margin: 0 auto;
+  padding: 0 12px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 13px;
+  height: 22px;
+  border-right: 1px solid var(--hairline);
+  font-family: var(--font-label);
+  font-size: var(--fs-1);
+  font-weight: var(--w-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--bone-label);
+  white-space: nowrap;
+}
+.hint:last-child { border-right: 0; }
+.hint kbd { color: var(--bone-meta); opacity: 1; }
+.hint--verb { color: var(--bone); }
+.hint--verb kbd { color: var(--bone); }
+.hint--destructive { color: var(--rust); }
+.hint--destructive kbd { color: var(--rust); border-left-width: 3px; }
+.hint--wide { flex: 1 1 auto; border-right: 0; justify-content: flex-end; color: var(--bone-label); }
+
+/* --- amber is the last word: it must survive every column rule above ----- */
+
+.f .v.gap,
+.m.gap,
+.t.gap,
+.q.gap { color: var(--amber); }
+
+.r-cursor .gap,
+.r-cursor .m.gap,
+.r-cursor .t.gap,
+.r-cursor .q.gap { color: var(--amber-ink); }
+
+/* --- reflow: no tablet. one break, from console to column. --------------- */
+
+@media (max-width: 1099px) {
+  :root { --fs-vast: 58px; --gutter: 14px; }
+
+  .console {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "mast" "head" "cases" "hearings" "tasks" "documents" "notes" "ref";
+    column-gap: 0;
+    row-gap: 14px;
+    padding: 0 12px 20px;
+  }
+
+  .casehead { grid-template-columns: minmax(0, 1fr) 150px; column-gap: 16px; }
+  .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+  .overdue { padding-left: 14px; }
+
+  .cases {
+    border-right: 0;
+    padding-right: 0;
+    border-bottom: 1px solid var(--hairline-strong);
+    padding-bottom: 10px;
+  }
+  .case-list {
+    display: flex;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+  .case-list > li { flex: 0 0 auto; }
+  .case-row {
+    min-width: 246px;
+    height: 100%;
+    border-bottom: 0;
+    border-right: 1px solid var(--hairline);
+  }
+
+  .l-hearing, .l-note { grid-template-columns: var(--tick-w) 92px minmax(0, 1fr); }
+  .m { white-space: normal; }
+  .ref-grid { grid-template-columns: minmax(0, 1fr); }
+  .ref-panel { padding: 14px 0; border-left: 0; border-top: 1px solid var(--hairline); }
+  .ref-panel:first-child { padding-top: 0; border-top: 0; }
+  .keybar-inner { padding: 5px 6px; }
+  .hint { padding: 0 10px; }
+  .hint--wide { justify-content: flex-start; }
+}
+
+@media (max-width: 620px) {
+  .casehead { grid-template-columns: minmax(0, 1fr); row-gap: 14px; }
+  .overdue { border-left: 0; border-top: 2px solid var(--amber); padding: 10px 0 0; }
+  .od-num { margin-left: -3px; }
+  .l-doc, .l-task {
+    grid-template-columns: var(--tick-w) minmax(0, 1fr);
+    grid-template-areas: "tick title" "tick meta" "tick l2";
+  }
+  .l-doc .m, .l-task .m { text-align: left; justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skel-group { animation: none; opacity: .82; }
+  .row, .case-row, .verb, .trunc { transition: none; }
+}
+</style>
+</head>
+
+<body>
+
+<div class="console">
+
+  <!-- ===================== masthead ===================================== -->
+  <header class="masthead">
+    <span class="lbl">Firm</span>
+    <span class="firm">Iyer &amp; Ananth, Advocates</span>
+    <span class="spacer"></span>
+    <span class="lbl">Today</span>
+    <span class="today">30 Jul 2026</span>
+  </header>
+
+  <!-- ===================== case header — everything, before any keystroke -->
+  <section class="casehead" aria-label="Case">
+    <div>
+      <h1 class="case-title">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</h1>
+
+      <div class="fields">
+        <div class="f">
+          <span class="lbl">Case number</span>
+          <span class="v mono">O.S. No. 412 of 2024</span>
+        </div>
+        <div class="f">
+          <span class="lbl">Court</span>
+          <span class="v">City Civil Court, Bengaluru</span>
+        </div>
+        <div class="f">
+          <span class="lbl">Case type</span>
+          <span class="v">Civil suit</span>
+        </div>
+        <div class="f">
+          <span class="lbl">Client</span>
+          <span class="v">Meera Raghunathan</span>
+        </div>
+
+        <div class="f">
+          <span class="lbl">Status</span>
+          <span class="v">Active</span>
+        </div>
+        <div class="f">
+          <span class="lbl">Next hearing</span>
+          <span class="v mono gap">Not set</span>
+        </div>
+        <div class="f">
+          <span class="lbl">Claim</span>
+          <span class="v mono">&#8377;18,45,000</span>
+        </div>
+        <div class="f">
+          <span class="lbl">Fee received</span>
+          <span class="v mono">&#8377;42,500 &middot; 02 Jul 2026</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- the one violent step in the type scale, and nothing else comes near it -->
+    <div class="overdue">
+      <span class="lbl">Overdue</span>
+      <span class="od-num mono">2</span>
+      <span class="od-break">1 task &middot; 1 document</span>
+    </div>
+  </section>
+
+  <!-- ===================== cases ======================================== -->
+  <section class="cases" aria-label="Cases">
+    <div class="ledger-head">
+      <span class="lbl">Cases</span>
+      <span class="n"><b>4</b></span>
+    </div>
+    <div class="colhead colhead--cases">
+      <span class="lbl">Case number</span>
+      <span class="lbl">Status &middot; next hearing &middot; overdue</span>
+    </div>
+
+    <ul class="case-list">
+      <li>
+        <button type="button" class="case-row" aria-current="true">
+          <span class="c-parties">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</span>
+          <span class="c-num">O.S. No. 412 of 2024</span>
+          <span class="c-meta">Active &middot; Not set &middot; <span class="gap">2 overdue</span></span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="case-row">
+          <span class="c-parties">Vishnu Menon v. Ashirvad Developers</span>
+          <span class="c-num">O.S. No. 118 of 2025</span>
+          <span class="c-meta">Active &middot; 04 Aug 2026 &middot; 0 overdue</span>
+        </button>
+      </li>
+      <li>
+        <button type="button" class="case-row">
+          <span class="c-parties">Sundaram Finance Ltd. v. R. Palaniappan</span>
+          <span class="c-num">E.P. No. 63 of 2026</span>
+          <span class="c-meta">On hold &middot; Not set &middot; 0 overdue</span>
+        </button>
+      </li>
+      <li>
+        <!-- a field that exists and is empty still shows, and it shows labelled -->
+        <button type="button" class="case-row">
+          <span class="c-parties">Latha Bhaskaran</span>
+          <span class="c-num"><span class="lbl">Case number</span><span class="gap">Not set</span></span>
+          <span class="c-meta">Intake &middot; Not set &middot; 0 overdue</span>
+        </button>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ===================== hearings ===================================== -->
+  <section class="ledger" id="hearings" aria-label="Hearings">
+    <div class="ledger-head">
+      <span class="lbl">Hearings</span>
+      <span class="n"><b>3</b></span>
+    </div>
+    <div class="colhead" style="grid-template-columns: var(--tick-w) 96px minmax(0,1fr);">
+      <span></span><span class="lbl">Date</span><span class="lbl r">Hearing outcome</span>
+    </div>
+
+    <ul class="rows">
+      <li class="row l-hearing">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="d m">19 May 2026</span>
+        <span class="state m r">Held &middot; Outcome recorded</span>
+        <span class="l2 q">Defendant's written statement taken on record.</span>
+      </li>
+
+      <!-- THE CURSOR. One row on the whole page is actionable, and this is it. -->
+      <li class="row l-hearing r-cursor" aria-current="true">
+        <span class="tick tick--gap" aria-hidden="true"></span>
+        <span class="d m">14 Jul 2026</span>
+        <span class="state m r">Held &middot; <span class="gap">Outcome not recorded</span></span>
+        <span class="l2 verbs">
+          <button type="button" class="verb"><kbd>R</kbd>Record</button>
+          <button type="button" class="verb"><kbd>E</kbd>Edit</button>
+          <button type="button" class="verb verb--destructive"><kbd>X</kbd>Remove</button>
+        </span>
+      </li>
+
+      <li class="row l-hearing">
+        <span class="tick tick--gap" aria-hidden="true"></span>
+        <span class="d m">Next hearing</span>
+        <span class="state m r gap">Not set</span>
+        <span class="l2 blocked">
+          <span class="key-off" aria-hidden="true">A</span>
+          <span class="verb-off" aria-disabled="true">Add hearing</span>
+          <span class="why">Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.</span>
+        </span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ===================== documents ==================================== -->
+  <section class="ledger" id="documents" aria-label="Documents">
+    <div class="ledger-head">
+      <span class="lbl">Documents</span>
+      <span class="n"><b>3</b> &middot; <span class="gap">1 overdue</span></span>
+    </div>
+    <div class="colhead" style="grid-template-columns: var(--tick-w) minmax(0,1fr) auto;">
+      <span></span><span class="lbl">Document</span><span class="lbl r">Filing</span>
+    </div>
+
+    <ul class="rows">
+      <li class="row l-doc">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="t">Vakalatnama</span>
+        <span class="m r">Filed &middot; 11 Mar 2024</span>
+      </li>
+      <li class="row l-doc">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="t">Written statement of the defendant</span>
+        <span class="m r">Filed &middot; 08 Jul 2026</span>
+      </li>
+      <li class="row l-doc">
+        <span class="tick tick--gap" aria-hidden="true"></span>
+        <span class="t">Affidavit of the plaintiff</span>
+        <span class="m r">Not filed &middot; due 24 Jul 2026 &middot; <span class="gap">Overdue 6 days</span></span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ===================== tasks ======================================== -->
+  <section class="ledger" id="tasks" aria-label="Tasks">
+    <div class="ledger-head">
+      <span class="lbl">Tasks</span>
+      <span class="n"><b>2</b> &middot; <span class="gap">1 overdue</span></span>
+    </div>
+    <div class="colhead" style="grid-template-columns: var(--tick-w) minmax(0,1fr) auto;">
+      <span></span><span class="lbl">Task</span><span class="lbl r">Due</span>
+    </div>
+
+    <ul class="rows">
+      <!-- the write failed in the row: the row holds its position and gains a
+           state cell. The count above still reads 2, because the counts are the
+           truth about the record and the record did not change. -->
+      <li class="row l-task">
+        <span class="tick tick--gap" aria-hidden="true"></span>
+        <span class="t">Collect the client's rent receipts for 2023-24</span>
+        <span class="m r">due 21 Jul 2026 &middot; <span class="gap">Overdue 9 days</span></span>
+        <span class="l2 statecell"><span class="gap">Not saved</span> &mdash; the connection dropped. What you typed is kept here. Save again.</span>
+      </li>
+      <li class="row l-task">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="t">Draft the reply to the interim application</span>
+        <span class="m r">due 06 Aug 2026</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ===================== notes ======================================== -->
+  <section class="ledger" id="notes" aria-label="Notes">
+    <div class="ledger-head">
+      <span class="lbl">Notes</span>
+      <span class="n"><b>5</b></span>
+    </div>
+    <div class="colhead" style="grid-template-columns: var(--tick-w) 96px minmax(0,1fr);">
+      <span></span><span class="lbl">Date</span><span class="lbl">Note</span>
+    </div>
+
+    <ul class="rows">
+      <!-- depth is truncated, never a type. It is numbered, and it opens here. -->
+      <li>
+        <button type="button" class="trunc"><span class="n">+3</span> earlier notes</button>
+      </li>
+      <li class="row l-note">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="d m">21 May 2026</span>
+        <span class="q">Client instructed to obtain certified copies of the 2023 municipal tax receipts.</span>
+      </li>
+      <li class="row l-note">
+        <span class="tick" aria-hidden="true"></span>
+        <span class="d m">16 Jul 2026</span>
+        <span class="q">Client confirms she holds the original sale agreement; a copy is to be collected.</span>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ===================== reference — subordinate, off the case ======== -->
+  <section class="reference" aria-label="Reference">
+    <div class="ref-head">
+      <span class="lbl">Reference</span>
+      <span class="note">States that cannot be true at the same moment as the case above. Not live on this case.</span>
+    </div>
+
+    <div class="ref-grid">
+
+      <div class="ref-panel">
+        <span class="lbl">Loading &middot; case header and hearings</span>
+        <div class="skel-group" aria-hidden="true">
+          <span class="skel skel-title"></span>
+          <span class="skel-pair"><span class="skel a"></span><span class="skel b"></span></span>
+          <span class="skel-pair"><span class="skel a"></span><span class="skel b"></span></span>
+          <span class="skel-pair"><span class="skel a"></span><span class="skel b"></span></span>
+        </div>
+      </div>
+
+      <div class="ref-panel">
+        <span class="lbl">Recorded</span>
+        <div class="ref-body">
+          <div class="ref-line">
+            <span class="k mono">14 Jul 2026</span>
+            <span class="v mono">Held &middot; Outcome recorded &middot; 14 Jul 2026</span>
+          </div>
+          <div class="ref-line">
+            <span class="k lbl">Overdue</span>
+            <span class="v mono">2</span>
+          </div>
+          <p>Neither the task nor the filing was touched, so the count does not move. What is due next recomputes in the same view.</p>
+        </div>
+      </div>
+
+      <div class="ref-panel ref-panel--destructive">
+        <span class="lbl">Remove</span>
+        <div class="confirm">
+          Remove the document Affidavit of the plaintiff? A removed document cannot be brought back.
+          <span class="verbs">
+            <button type="button" class="verb verb--destructive"><kbd>X</kbd>Remove</button>
+            <button type="button" class="verb"><kbd>E</kbd>Edit</button>
+          </span>
+        </div>
+      </div>
+
+    </div>
+
+    <p class="reflow">
+      <span class="lbl">Reflow</span> &nbsp; Above <b>1100px</b> the console fills the viewport to a
+      <b>1760px</b> cap and spends every pixel on co-presence: the cases and all four columns of this
+      case, live at once. Width buys more of the case on screen, never longer lines. Below 1100px the
+      cases become a one-line strip above the case and the columns stack in the order the case owes
+      them &mdash; hearings <b>14 Jul</b>, tasks <b>21 Jul</b>, documents <b>24 Jul</b>, then notes.
+      Row height and the key bar do not change. Where there is no keyboard, a row is selected and its
+      verbs appear in that row. Tablet is not a target.
+    </p>
+  </section>
+
+</div>
+
+<!-- ===================== permanent key-hint bar ========================== -->
+<footer class="keybar">
+  <div class="keybar-inner">
+    <span class="hint"><kbd>J</kbd><kbd>K</kbd> Move</span>
+    <span class="hint"><kbd>H</kbd><kbd>L</kbd> Across</span>
+    <span class="hint"><kbd>N</kbd> Next case with overdue</span>
+    <span class="hint hint--verb"><kbd>R</kbd> Record</span>
+    <span class="hint hint--verb"><kbd>F</kbd> File</span>
+    <span class="hint hint--verb"><kbd>A</kbd> Add</span>
+    <span class="hint hint--verb"><kbd>E</kbd> Edit</span>
+    <span class="hint hint--verb"><kbd>S</kbd> Save</span>
+    <span class="hint hint--destructive"><kbd>X</kbd> Remove</span>
+    <span class="hint hint--wide">Verbs act on the row under the cursor</span>
+  </div>
+</footer>
+
+</body>
+</html>

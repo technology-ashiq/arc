@@ -1,0 +1,139 @@
+/* ============================================================================
+   VARIANT A — COMMAND CENTER  ·  the ONLY place colour values live
+   ----------------------------------------------------------------------------
+   THESIS
+   This product wins because the user can hold the whole case — every dated fact
+   and every open obligation — in one viewport and act on any of it from the
+   keyboard, without opening a section, aiming at a button, or leaving the case
+   to find the next one that needs him.
+
+   THE ONE SEMANTIC RULE OF THE PALETTE
+   Signal amber means exactly one thing everywhere it appears on this page:
+   THE RECORD DOES NOT YET CONTAIN THIS.
+     · a date that has passed with nothing filed or done   (Overdue)
+     · a hearing held whose outcome is not recorded        (Outcome not recorded)
+     · a field that exists and is empty                    (Not set)
+     · a write that did not reach the record               (Not saved)
+   One deliberate restraint on that rule: inside the CASES column, amber is spent
+   only on a non-zero overdue count and on Latha Bhaskaran's empty case-number
+   field. That column is scanned for what a case owes; lighting every empty field
+   in it would flatten the one signal it exists to carry.
+
+   Nothing that is fine is ever coloured. Rust is spent on one thing only: a
+   destructive verb. There is no third hue, no glow, no decorative gradient, no
+   shadow, no card, no icon set, no white ground.
+   ========================================================================== */
+
+:root {
+
+  /* --- GROUND · graphite, never paper ------------------------------------ */
+  --ink-ground:      #16191d;  /* the field                                  */
+  --ink-rail:        #1d2126;  /* one step up: heads, masthead, key bar      */
+  --ink-rail-hi:     #23282e;  /* two steps up: hover, key chips             */
+  --ink-well:        #101316;  /* sunken: the subordinate reference strip    */
+
+  /* --- RULES · hairline only, radius <= 2px ------------------------------ */
+  --hairline:        #2b3138;
+  --hairline-strong: #3a424b;
+  --radius:          2px;
+  --tick-w:          3px;      /* the state tick in every row's left gutter  */
+
+  /* --- TYPE COLOUR · warm bone --------------------------------------------
+     Measured against --ink-ground #16191d (relative luminance 0.00953):
+       --bone       #ece7de  L 0.8028   14.3 : 1   AAA
+       --bone-meta  #b4ada1  L 0.4215    7.9 : 1   AAA
+       --bone-label #9a9184  L 0.2881    5.7 : 1   AA   (10px caps labels)
+       --bone-mute  #6f6a62  L 0.1458    3.3 : 1   NON-TEXT ONLY
+     On --ink-rail #1d2126 (L 0.01571), the key bar's ground:
+       --bone 13.0 : 1 · --bone-meta 7.2 : 1 · --bone-label 5.1 : 1 · --rust 5.1 : 1
+     On --ink-well #101316 (L 0.00634), the reference strip:
+       --bone-meta 8.4 : 1 · --bone-label 6.0 : 1
+     --bone-mute draws skeleton shapes and rules. It never carries a word.
+     ---------------------------------------------------------------------- */
+  --bone:            #ece7de;
+  --bone-meta:       #b4ada1;
+  --bone-label:      #9a9184;
+  --bone-mute:       #6f6a62;
+
+  /* --- THE ONE MEANING HUE · signal amber ---------------------------------
+       --amber      #e8a33d  on --ink-ground   8.2 : 1   AAA
+       --amber      #e8a33d  on --ink-well     8.6 : 1   AAA
+       --amber-ink  #8a5000  on --bone         5.3 : 1   AA
+     --amber-ink is the same hue driven dark so the meaning survives on the
+     inverted cursor row. Every amber thing on this page also carries a word
+     ("Overdue", "Not set", "Outcome not recorded", "Not saved") or a tick set
+     directly beside a word — colour is never the only carrier of a state.
+     ---------------------------------------------------------------------- */
+  --amber:           #e8a33d;
+  --amber-ink:       #8a5000;
+  --amber-bed:       #3a2c15;  /* non-text: unlit bed behind an amber mark   */
+
+  /* --- THE RESERVED HUE · rust, destructive verbs and nothing else --------
+       --rust       #e0705c  on --ink-ground   5.6 : 1   AA
+       --rust-ink   #9a2f1c  on --bone         6.1 : 1   AA
+     A destructive verb also differs in FORM from the benign verb beside it
+     (a doubled left edge), so the warning does not depend on hue alone.
+     ---------------------------------------------------------------------- */
+  --rust:            #e0705c;
+  --rust-ink:        #9a2f1c;
+
+  /* --- INVERSION · the cursor, the page's only ornament of light ----------
+       --invert-ink   #16191d  on --invert-ground  14.3 : 1
+       --invert-meta  #4a463f  on --invert-ground   7.6 : 1
+     ---------------------------------------------------------------------- */
+  --invert-ground:   #ece7de;  /* = --bone                                   */
+  --invert-ink:      #16191d;
+  --invert-meta:     #4a463f;
+  --invert-rule:     #c8c1b4;
+
+  /* --- LOADING · quiet placeholder shapes, no copy ------------------------ */
+  --skeleton:        #262b31;
+  --skeleton-hi:     #313840;
+
+  /* --- FOCUS · visible, amber, never removed ------------------------------ */
+  --focus:           #e8a33d;
+  --focus-on-bone:   #8a5000;
+
+  /* --- SELECTION -------------------------------------------------------- */
+  --select-bg:       #3a2c15;
+  --select-fg:       #ece7de;
+
+  /* --- TYPE STACKS · both first families ship with the OS. No webfont, no
+     network request of any kind — a fetch that failed would destroy this
+     direction, so nothing is fetched. Labels: squarish grotesk, all-caps,
+     wide-tracked. Data: a genuine monospace, so every date, amount, count and
+     case number locks down a column. ------------------------------------- */
+  --font-label: Tahoma, "Franklin Gothic Medium", "Segoe UI", Arial, sans-serif;
+  --font-text:  Tahoma, "Segoe UI", Arial, Helvetica, sans-serif;
+  --font-data:  Consolas, "Lucida Console", "DejaVu Sans Mono", "Courier New", monospace;
+
+  /* --- SCALE · four tight steps, one violent exception -------------------- */
+  --fs-1:       10px;   /* caps labels, column heads, key hints              */
+  --fs-2:     11.5px;   /* mono meta, counts, dates in meta position         */
+  --fs-3:       13px;   /* every body row — nothing in a row goes above this */
+  --fs-4:       17px;   /* the case title, once                              */
+  --fs-vast:    82px;   /* THE OVERDUE COUNT. Nothing else comes near it.    */
+
+  --track-caps: 0.14em; /* wide tracking is what makes caps read as a label  */
+  --lh-row:     16px;
+  --w-label:    700;
+
+  /* --- DENSITY · a strict grid; air lives only in the gutters ------------- */
+  --row-h:        30px;  /* every ledger row                                 */
+  --row-h-cursor: 48px;  /* the cursor row opens so its verbs are legal 44px
+                            targets. Height is the affordance.               */
+  --gutter:       22px;
+  --col-cases:   302px;
+  --console-cap: 1760px;
+
+  /* --- MOTION · the cursor is the only moving thing on the board ---------- */
+  --motion-cursor: 90ms cubic-bezier(0.2, 0, 0, 1);
+  --motion-pulse:  2600ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-cursor: 0ms;
+    --motion-pulse:  0ms;
+  }
+}

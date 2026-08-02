@@ -8,6 +8,13 @@ keep-or-revert in a one-page ADR by a formula fixed **before** the results are s
 > strongest tier by principle, but a *creative* seat earns its tier through a receipted
 > A/B rather than through default frugality. Whatever this experiment returns is binding
 > for the composer seat — including "workhorse stays", which is a result, not a failure.
+>
+> **CLOSED 2026-08-02 → [ADR-0070](../../../docs/adr/0070-composer-seat-stays-balanced-workhorse.md).**
+> It returned exactly that result: the owner's blind ranking put workhorse above
+> high-judgment 3–0 on same-thesis pairs, both rankings interleaved, assumption A-01 is dead,
+> and the composer seat stays balanced-workhorse. MP-B survived its first real test *in the
+> case where the test contradicted the intuition behind it* — which is the only way such a
+> rule means anything.
 **Appetite:** 1.25 days — blown appetite = cut scope or kill, never extend silently.
 **Depends on:** phase-00
 

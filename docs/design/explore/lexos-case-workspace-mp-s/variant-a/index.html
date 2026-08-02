@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024 — LexOS</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="tokens.css">
+<style>
+  *,*::before,*::after{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    background:var(--ground);
+    color:var(--text);
+    font-family:var(--font-ui);
+    font-size:var(--text-2);
+    line-height:1.4;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sr-only{
+    position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+    overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+  }
+  .skip-link{
+    position:absolute; left:var(--space-3); top:-48px;
+    background:var(--cursor-bg); color:var(--cursor-fg);
+    padding:8px 14px; border-radius:var(--radius); z-index:100;
+    font-family:var(--font-label); font-size:var(--text-1);
+    text-decoration:none; transition:top var(--dur-fast) var(--ease);
+  }
+  .skip-link:focus{ top:var(--space-3); }
+
+  .app{ max-width:var(--shell-max); margin:0 auto; display:flex; flex-direction:column; min-height:100vh; }
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    display:flex; align-items:center; justify-content:space-between;
+    height:36px; padding:0 var(--space-5);
+    background:var(--surface-rail); border-bottom:1px solid var(--rule);
+    flex:0 0 auto;
+  }
+  .wordmark{
+    font-family:var(--font-label); font-size:var(--text-1); font-weight:700;
+    letter-spacing:var(--tracking-wide); text-transform:uppercase; color:var(--text);
+  }
+  .masthead-sub{
+    font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--text-dim);
+  }
+
+  /* ---------- case identity strip (always-visible quartet, and more) ---------- */
+  .case-strip{
+    display:flex; align-items:stretch; justify-content:space-between; gap:var(--space-5);
+    padding:var(--space-4) var(--space-5);
+    border-bottom:1px solid var(--rule);
+    flex:0 0 auto;
+  }
+  .case-strip__main{ display:flex; flex-direction:column; gap:7px; min-width:0; }
+  .case-strip__row1{ display:flex; align-items:baseline; gap:var(--space-3); flex-wrap:wrap; }
+  .parties{ margin:0; font-family:var(--font-ui); font-weight:700; font-size:20px; color:var(--text); }
+  .v{
+    font-family:var(--font-label); font-size:var(--text-1); font-weight:500;
+    color:var(--text-dim); text-transform:uppercase; margin:0 5px;
+  }
+  .case-strip__row2{
+    display:flex; flex-wrap:wrap; align-items:center; gap:7px;
+    font-size:var(--text-2); color:var(--text-dim);
+  }
+  .meta-label{
+    font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase;
+    color:var(--text-dim); margin-right:4px;
+  }
+  .meta-item{ color:var(--text); }
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; color:var(--text); }
+  .dot{ color:var(--rule); }
+
+  /* status tag: the ONE tag explicitly exempted from the caps-label treatment —
+     "render as Active, never as ACTIVE" applies to the visual read, not just the source text. */
+  .tag{
+    display:inline-flex; align-items:center;
+    border:1px solid var(--rule); border-radius:var(--radius);
+    padding:1px 7px; font-size:var(--text-1);
+  }
+  .tag--status{ font-family:var(--font-ui); color:var(--text); }
+  /* state tags (Held / Filed / Not filed / Overdue / Not recorded / Current) are our own UI
+     chrome, not the case-status enum — these carry the label-caps treatment. */
+  .tag--state{
+    font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase;
+    color:var(--text-dim); border-color:var(--rule-soft);
+  }
+  .tag--overdue{ color:var(--amber); border-color:var(--amber-deep); }
+
+  .empty-mark{
+    display:inline-block; width:2px; height:11px; background:var(--amber);
+    margin:0 6px 0 2px; vertical-align:-1px;
+  }
+
+  .case-strip__overdue{
+    flex:0 0 auto; display:flex; flex-direction:column; align-items:flex-end; justify-content:center;
+    padding-left:var(--space-5); border-left:1px solid var(--rule); text-align:right;
+  }
+  .overdue-num{
+    font-family:var(--font-mono); font-weight:700; font-size:var(--text-giant);
+    line-height:1; letter-spacing:-0.02em; color:var(--amber);
+  }
+  .overdue-label{
+    margin-top:2px; font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--text-dim);
+  }
+
+  /* ---------- the board: five co-present ledgers, one viewport ---------- */
+  .board{
+    flex:1 1 auto;
+    display:grid; grid-template-columns:repeat(4,1fr) 1.3fr; gap:var(--space-4);
+    padding:var(--space-4) var(--space-5);
+    align-items:start;
+  }
+  .ledger{ display:flex; flex-direction:column; min-width:0; }
+  .ledger__head{
+    display:flex; align-items:center; justify-content:space-between;
+    height:26px; padding:0 var(--space-2);
+    background:var(--surface-rail); border:1px solid var(--rule); border-bottom:none;
+  }
+  .ledger__head h2{
+    margin:0; font-family:var(--font-label); font-weight:500; font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--text-dim);
+  }
+  .ledger__head .count{ font-family:var(--font-mono); font-size:var(--text-1); color:var(--text); }
+  .rows{ list-style:none; margin:0; padding:0; border:1px solid var(--rule); border-top:none; }
+
+  .ledger--caseload{
+    border-left:1px solid var(--rule); padding-left:var(--space-3); margin-left:var(--space-1);
+  }
+  .ledger--caseload .rows{ background:var(--surface-rail-2); }
+
+  /* ---------- the addressable row ---------- */
+  .row{
+    position:relative; display:flex; align-items:center; gap:var(--space-2);
+    min-height:var(--row-h); padding:5px var(--space-2) 5px 14px;
+    border-bottom:1px solid var(--rule-soft);
+    cursor:pointer; outline:none;
+  }
+  .rows > .row:last-child{ border-bottom:none; }
+  .row::before{
+    content:""; position:absolute; left:0; top:6px; bottom:6px; width:2px; background:transparent;
+  }
+  .row.has-state::before{ background:var(--amber); }
+
+  .row__main{ display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 auto; }
+  .row__primary{
+    display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+    font-size:var(--text-2); color:var(--text);
+  }
+  .row__label{
+    font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--text-dim);
+  }
+  .row__value{ color:var(--text); }
+  .row__meta, .row__state{
+    display:flex; align-items:center; flex-wrap:wrap; gap:6px;
+    font-size:var(--text-1); color:var(--text-dim);
+  }
+  .row__note{ font-size:var(--text-1); color:var(--text-dim); }
+  .row__note--disabled{ padding-top:1px; }
+
+  .row-actions{ display:none; align-items:center; gap:5px; flex:0 0 auto; }
+  .row.is-cursor .row-actions{ display:flex; }
+  .verb{
+    display:inline-flex; align-items:center; gap:5px;
+    font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase;
+    color:var(--cursor-fg); background:transparent;
+    border:1px solid var(--cursor-fg-dim); border-radius:var(--radius);
+    padding:3px 8px; cursor:pointer;
+  }
+  .verb:hover{ background:rgba(25,28,32,0.06); }
+  .verb kbd{
+    font-family:var(--font-mono); font-size:10px; font-style:normal;
+    background:var(--cursor-fg); color:var(--cursor-bg); border-radius:2px; padding:0 4px;
+  }
+  .verb--remove{ color:var(--rust-deep); border-color:var(--rust-deep); }
+  .verb[disabled]{ opacity:.45; cursor:not-allowed; }
+
+  /* ---------- the one selection ornament: cursor row inversion ---------- */
+  .row.is-cursor{
+    background:var(--cursor-bg); color:var(--cursor-fg); border-radius:var(--radius);
+  }
+  .row.is-cursor .row__primary,
+  .row.is-cursor .row__value,
+  .row.is-cursor .tag--status{ color:var(--cursor-fg); }
+  .row.is-cursor .tag--status{ border-color:var(--cursor-fg-dim); }
+  .row.is-cursor .row__meta,
+  .row.is-cursor .row__state,
+  .row.is-cursor .row__note,
+  .row.is-cursor .row__label,
+  .row.is-cursor .v,
+  .row.is-cursor .dot,
+  .row.is-cursor .row__overdue-badge{ color:var(--cursor-fg-dim); }
+  .row.is-cursor .mono{ color:var(--cursor-fg); }
+  .row.is-cursor .tag--state{ color:var(--cursor-fg-dim); border-color:rgba(25,28,32,.3); }
+  .row.is-cursor .tag--overdue,
+  .row.is-cursor .row__overdue-badge--active{ color:var(--amber-deep); border-color:var(--amber-deep); }
+  .row.is-cursor.has-state::before{ background:var(--amber-deep); }
+  .row.is-cursor .empty-mark{ background:var(--amber-deep); }
+
+  .row:focus-visible{ outline:2px solid var(--focus-ring); outline-offset:2px; border-radius:var(--radius); }
+  .verb:focus-visible{ outline:2px solid var(--rust-deep); outline-offset:2px; }
+  a:focus-visible, button:focus-visible{ outline:2px solid var(--focus-ring); outline-offset:2px; }
+
+  .row-confirm{ display:none; flex-direction:column; gap:6px; flex:1 1 auto; }
+  .row-confirm.is-open{ display:flex; }
+  .row-confirm p{ margin:0; font-size:var(--text-1); }
+  .row-confirm .confirm-actions{ display:flex; gap:6px; }
+  .confirm-hint{
+    font-family:var(--font-mono); font-size:10px; border:1px solid var(--rust-deep);
+    color:var(--rust-deep); border-radius:2px; padding:2px 6px;
+  }
+  .confirm-hint--keep{ border-color:var(--cursor-fg-dim); color:var(--cursor-fg-dim); }
+
+  /* state cell: base assumes the ordinary (graphite) row context; the is-cursor override
+     re-points every variant to the bone-context colours so nothing ever prints low-contrast
+     text on its own inverted background. */
+  .row-state-cell{ font-size:var(--text-1); padding:3px 7px; border-left:2px solid var(--rule); margin-top:2px; color:var(--text-dim); }
+  .row-state-cell.state-cell--error{ color:var(--rust); border-left-color:var(--rust); }
+  .row.is-cursor .row-state-cell{ color:var(--cursor-fg-dim); }
+  .row.is-cursor .row-state-cell.state-cell--error{ color:var(--rust-deep); border-left-color:var(--rust-deep); }
+
+  /* row currently being flashed as an interaction acknowledgement (no persisted change) */
+  .row.verb-flash{ box-shadow:inset 0 0 0 1px var(--cursor-fg-dim); }
+  .row.remove-armed::before{ background:var(--rust); }
+
+  /* ---------- caseload rows ---------- */
+  .row--current .row__primary{ font-weight:700; }
+  .row__overdue-badge{
+    flex:0 0 auto; font-family:var(--font-mono); font-size:var(--text-2);
+    min-width:22px; text-align:center; color:var(--text-dim);
+  }
+  .row__overdue-badge--active{ color:var(--amber); font-weight:700; }
+
+  /* ---------- reference block: subordinate, small, clearly labelled ---------- */
+  .reference{
+    margin:0 var(--space-5) var(--space-4);
+    padding:var(--space-3) var(--space-4);
+    border:1px dashed var(--rule);
+    border-radius:var(--radius);
+    background:var(--surface-rail);
+    flex:0 0 auto;
+  }
+  .reference__title{
+    margin:0 0 var(--space-2); font-family:var(--font-label); font-weight:500;
+    font-size:var(--text-0); letter-spacing:var(--tracking-label);
+    text-transform:uppercase; color:var(--text-dim);
+  }
+  .reference__grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:var(--space-3); align-items:start; }
+  .reference__label{
+    margin:0 0 5px; font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--text-dim);
+  }
+  .state-cell{ margin:0; font-size:var(--text-1); padding:4px 7px; border-left:2px solid var(--rule); }
+  .state-cell--error{ color:var(--rust); border-left-color:var(--rust); }
+  .state-cell--success{ color:var(--text-dim); border-left-color:var(--rule); }
+  .state-cell--destructive{ color:var(--rust); border-left-color:var(--rust); }
+
+  .skeleton{ display:flex; flex-direction:column; gap:5px; margin-bottom:5px; }
+  .skeleton__bar{ display:block; height:8px; border-radius:var(--radius); background:var(--rule); flex:1 1 auto; }
+  .skeleton--header{ flex-direction:row; align-items:center; }
+  .skeleton--header .skeleton__bar--lg{ flex:0 0 55%; height:12px; }
+  .skeleton--header .skeleton__bar--sm{ flex:0 0 20%; height:12px; background:var(--rule-soft); }
+  .skeleton--row{ flex-direction:row; }
+  @media (prefers-reduced-motion:no-preference){
+    .skeleton__bar{ animation:skeleton-pulse 1.6s ease-in-out infinite; }
+  }
+  @keyframes skeleton-pulse{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+
+  /* ---------- permanent key-hint bar ---------- */
+  .hint-bar{
+    position:sticky; bottom:0; z-index:10;
+    display:flex; flex-wrap:wrap; align-items:center; gap:var(--space-4);
+    padding:var(--space-2) var(--space-5);
+    background:var(--surface-rail); border-top:1px solid var(--rule);
+    flex:0 0 auto;
+  }
+  .hint{ display:inline-flex; align-items:center; gap:6px; }
+  .hint kbd{
+    font-family:var(--font-mono); font-size:10px; font-style:normal;
+    background:var(--ground); border:1px solid var(--rule); color:var(--text);
+    border-radius:2px; padding:2px 5px;
+  }
+  .hint-word{
+    font-family:var(--font-label); font-size:var(--text-0);
+    letter-spacing:var(--tracking-label); text-transform:uppercase; color:var(--text-dim);
+  }
+  .hint--destructive kbd{ border-color:var(--rust); color:var(--rust); }
+  .hint--destructive .hint-word{ color:var(--rust); }
+
+  /* ---------- mobile reflow ----------
+     Desktop's primary path is the KEYBOARD, so the ≥44px pointer-target floor is spent where
+     the primary input is actually a pointer: mobile. Rows stay visually dense on desktop
+     (28–32px, keyboard-addressed) and grow to real touch targets under 720px, where tap
+     becomes the way you move the cursor. Ledgers reflow to a fixed "what the case owes first"
+     order via CSS `order` (source/reading order stays Hearings→Documents→Tasks→Notes→Caseload
+     for assistive tech; only the sighted visual scan order changes). */
+  @media (max-width:720px){
+    .case-strip{ flex-direction:column; gap:var(--space-3); }
+    .case-strip__overdue{ border-left:none; border-top:1px solid var(--rule); padding-left:0; padding-top:var(--space-3); align-items:flex-start; }
+    .overdue-num{ font-size:44px; }
+
+    .board{ grid-template-columns:1fr; padding:var(--space-3); gap:var(--space-3); }
+    .ledger--caseload{ order:-1; border-left:none; padding-left:0; margin-left:0; }
+    .ledger[data-ledger="2"]{ order:1; }
+    .ledger[data-ledger="1"]{ order:2; }
+    .ledger[data-ledger="0"]{ order:3; }
+    .ledger[data-ledger="3"]{ order:4; }
+
+    .ledger--caseload .rows{
+      display:flex; overflow-x:auto; border:1px solid var(--rule);
+      -webkit-overflow-scrolling:touch;
+    }
+    .ledger--caseload .row{
+      flex:0 0 auto; min-width:240px; border-bottom:none; border-right:1px solid var(--rule-soft);
+    }
+
+    .row{ min-height:44px; padding-top:8px; padding-bottom:8px; }
+    .row-actions .verb{ min-height:40px; padding:6px 12px; }
+
+    .hint-bar{ overflow-x:auto; flex-wrap:nowrap; }
+    .reference__grid{ grid-template-columns:1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#board">Skip to ledgers</a>
+
+<div class="app">
+
+  <header class="masthead">
+    <span class="wordmark">LexOS</span>
+    <span class="masthead-sub">Case workspace</span>
+  </header>
+
+  <section class="case-strip" aria-label="Case identity">
+    <div class="case-strip__main">
+      <div class="case-strip__row1">
+        <h1 class="parties">Meera Raghunathan <span class="v">v.</span> Sunvale Housing Pvt. Ltd.</h1>
+        <span class="tag tag--status">Active</span>
+      </div>
+      <div class="case-strip__row2">
+        <span class="meta-item"><span class="meta-label">Case no.</span><span class="mono">O.S. No. 412 of 2024</span></span>
+        <span class="dot">·</span>
+        <span class="meta-item">City Civil Court, Bengaluru</span>
+        <span class="dot">·</span>
+        <span class="meta-item">Civil suit</span>
+        <span class="dot">·</span>
+        <span class="meta-item"><span class="meta-label">Client</span>Meera Raghunathan</span>
+        <span class="dot">·</span>
+        <span class="meta-item"><span class="meta-label">Firm</span>Iyer &amp; Ananth, Advocates</span>
+        <span class="dot">·</span>
+        <span class="meta-item"><span class="meta-label">Claim</span><span class="mono">₹18,45,000</span></span>
+        <span class="dot">·</span>
+        <span class="meta-item"><span class="meta-label">Fee received</span><span class="mono">₹42,500</span> <span class="mono">02 Jul 2026</span></span>
+        <span class="dot">·</span>
+        <span class="meta-item"><span class="meta-label">Next hearing</span><span class="empty-mark" aria-hidden="true"></span>Not set</span>
+      </div>
+    </div>
+    <div class="case-strip__overdue" role="status" aria-label="Overdue on this case: 2">
+      <span class="overdue-num">2</span>
+      <span class="overdue-label">Overdue</span>
+    </div>
+  </section>
+
+  <main class="board" id="board" aria-label="Case ledgers">
+
+    <section class="ledger" data-ledger="0" aria-label="Hearings">
+      <div class="ledger__head"><h2>Hearings</h2><span class="count mono">3</span></div>
+      <ul class="rows">
+        <li class="row" tabindex="-1" data-verbs="edit"
+            data-announce="Hearings. 19 May 2026. Held. Outcome recorded.">
+          <span class="row__main">
+            <span class="row__primary"><span class="mono">19 May 2026</span><span class="tag tag--state">Held</span></span>
+            <span class="row__meta">"Defendant's written statement taken on record."</span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+          </span>
+        </li>
+        <li class="row has-state" tabindex="-1" id="hearing-14jul" data-verbs="record"
+            data-announce="Hearings. 14 Jul 2026. Held. Outcome not recorded.">
+          <span class="row__main">
+            <span class="row__primary"><span class="mono">14 Jul 2026</span><span class="tag tag--state">Held</span></span>
+            <span class="row__state"><span class="tag tag--state">Not recorded</span></span>
+            <span class="row-state-cell" hidden></span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="record"><kbd>R</kbd>Record</button>
+          </span>
+        </li>
+        <li class="row has-state" tabindex="-1" id="hearing-next" data-verbs="add" data-disabled="true"
+            data-announce="Hearings. Next hearing. Not set. Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.">
+          <span class="row__main">
+            <span class="row__primary"><span class="row__label">Next hearing</span><span class="empty-mark" aria-hidden="true"></span><span class="row__value">Not set</span></span>
+            <span class="row__note row__note--disabled">Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.</span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="add" disabled><kbd>A</kbd>Add</button>
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="ledger" data-ledger="1" aria-label="Documents">
+      <div class="ledger__head"><h2>Documents</h2><span class="count mono">3</span></div>
+      <ul class="rows">
+        <li class="row" tabindex="-1" data-verbs="edit remove"
+            data-announce="Documents. Vakalatnama. Filed 11 Mar 2024.">
+          <span class="row__main">
+            <span class="row__primary">Vakalatnama</span>
+            <span class="row__meta"><span class="tag tag--state">Filed</span><span class="mono">11 Mar 2024</span></span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+        </li>
+        <li class="row" tabindex="-1" data-verbs="edit remove"
+            data-announce="Documents. Written statement of the defendant. Filed 08 Jul 2026.">
+          <span class="row__main">
+            <span class="row__primary">Written statement of the defendant</span>
+            <span class="row__meta"><span class="tag tag--state">Filed</span><span class="mono">08 Jul 2026</span></span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+        </li>
+        <li class="row has-state is-cursor" tabindex="0" id="doc-affidavit" data-overdue="true"
+            data-verbs="file edit remove"
+            data-destructive-copy="Remove the document Affidavit of the plaintiff? A removed document cannot be brought back."
+            data-announce="Documents. Affidavit of the plaintiff. Due 24 Jul 2026. Not filed. Overdue.">
+          <span class="row__main">
+            <span class="row__primary">Affidavit of the plaintiff</span>
+            <span class="row__meta"><span class="tag tag--state">Due</span><span class="mono">24 Jul 2026</span><span class="dot">·</span><span class="tag tag--state">Not filed</span></span>
+            <span class="row__state"><span class="tag tag--state tag--overdue">Overdue</span></span>
+            <span class="row-state-cell" hidden></span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="file"><kbd>F</kbd>File</button>
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+          <span class="row-confirm"></span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="ledger" data-ledger="2" aria-label="Tasks">
+      <div class="ledger__head"><h2>Tasks</h2><span class="count mono">2</span></div>
+      <ul class="rows">
+        <li class="row has-state" tabindex="-1" data-overdue="true" data-verbs="edit remove"
+            data-announce="Tasks. Collect the client's rent receipts for 2023-24. Due 21 Jul 2026. Overdue.">
+          <span class="row__main">
+            <span class="row__primary">Collect the client's rent receipts for 2023-24</span>
+            <span class="row__meta"><span class="tag tag--state">Due</span><span class="mono">21 Jul 2026</span></span>
+            <span class="row__state"><span class="tag tag--state tag--overdue">Overdue</span></span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+        </li>
+        <li class="row" tabindex="-1" data-verbs="edit remove"
+            data-announce="Tasks. Draft the reply to the interim application. Due 06 Aug 2026.">
+          <span class="row__main">
+            <span class="row__primary">Draft the reply to the interim application</span>
+            <span class="row__meta"><span class="tag tag--state">Due</span><span class="mono">06 Aug 2026</span></span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="ledger" data-ledger="3" aria-label="Notes">
+      <div class="ledger__head"><h2>Notes</h2><span class="count mono">2</span></div>
+      <ul class="rows">
+        <li class="row" tabindex="-1" data-verbs="edit remove"
+            data-announce="Notes. 21 May 2026.">
+          <span class="row__main">
+            <span class="row__primary"><span class="mono">21 May 2026</span></span>
+            <span class="row__meta">"Client instructed to obtain certified copies of the 2023 municipal tax receipts."</span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+        </li>
+        <li class="row" tabindex="-1" data-verbs="edit remove"
+            data-announce="Notes. 16 Jul 2026.">
+          <span class="row__main">
+            <span class="row__primary"><span class="mono">16 Jul 2026</span></span>
+            <span class="row__meta">"Client confirms she holds the original sale agreement; a copy is to be collected."</span>
+          </span>
+          <span class="row-actions">
+            <button type="button" class="verb" data-verb="edit"><kbd>E</kbd>Edit</button>
+            <button type="button" class="verb verb--remove" data-verb="remove"><kbd>D</kbd>Remove</button>
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="ledger ledger--caseload" data-ledger="4" aria-label="Caseload">
+      <div class="ledger__head"><h2>Caseload</h2><span class="count mono">4</span></div>
+      <ul class="rows">
+        <li class="row row--current has-state" tabindex="-1" data-overdue="true"
+            data-announce="Caseload. Current case. Meera Raghunathan v. Sunvale Housing Pvt. Ltd. O.S. No. 412 of 2024. Active. Next hearing not set. 2 overdue.">
+          <span class="row__main">
+            <span class="row__primary"><span class="tag tag--state">Current</span>Meera Raghunathan <span class="v">v.</span> Sunvale Housing Pvt. Ltd.</span>
+            <span class="row__meta">
+              <span class="mono">O.S. No. 412 of 2024</span><span class="dot">·</span>
+              <span class="tag tag--status">Active</span><span class="dot">·</span>
+              <span class="row__label">Next hearing</span><span class="empty-mark" aria-hidden="true"></span>Not set
+            </span>
+          </span>
+          <span class="row__overdue-badge row__overdue-badge--active mono">2</span>
+        </li>
+        <li class="row" tabindex="-1" data-overdue="false"
+            data-announce="Caseload. Vishnu Menon v. Ashirvad Developers. O.S. No. 118 of 2025. Active. Next hearing 04 Aug 2026. 0 overdue.">
+          <span class="row__main">
+            <span class="row__primary">Vishnu Menon <span class="v">v.</span> Ashirvad Developers</span>
+            <span class="row__meta">
+              <span class="mono">O.S. No. 118 of 2025</span><span class="dot">·</span>
+              <span class="tag tag--status">Active</span><span class="dot">·</span>
+              <span class="row__label">Next hearing</span><span class="mono">04 Aug 2026</span>
+            </span>
+          </span>
+          <span class="row__overdue-badge mono">0</span>
+        </li>
+        <li class="row" tabindex="-1" data-overdue="false"
+            data-announce="Caseload. Sundaram Finance Ltd. v. R. Palaniappan. E.P. No. 63 of 2026. On hold. Next hearing not set. 0 overdue.">
+          <span class="row__main">
+            <span class="row__primary">Sundaram Finance Ltd. <span class="v">v.</span> R. Palaniappan</span>
+            <span class="row__meta">
+              <span class="mono">E.P. No. 63 of 2026</span><span class="dot">·</span>
+              <span class="tag tag--status">On hold</span><span class="dot">·</span>
+              <span class="row__label">Next hearing</span><span class="empty-mark" aria-hidden="true"></span>Not set
+            </span>
+          </span>
+          <span class="row__overdue-badge mono">0</span>
+        </li>
+        <li class="row" tabindex="-1" data-overdue="false"
+            data-announce="Caseload. Latha Bhaskaran. Case number not set. Intake. Civil suit. Next hearing not set. 0 overdue.">
+          <span class="row__main">
+            <span class="row__primary">Latha Bhaskaran</span>
+            <span class="row__meta">
+              <span class="row__label">Case no.</span><span class="empty-mark" aria-hidden="true"></span>Not set<span class="dot">·</span>
+              <span class="tag tag--status">Intake</span><span class="dot">·</span>
+              Civil suit<span class="dot">·</span>
+              <span class="row__label">Next hearing</span><span class="empty-mark" aria-hidden="true"></span>Not set
+            </span>
+          </span>
+          <span class="row__overdue-badge mono">0</span>
+        </li>
+      </ul>
+    </section>
+
+  </main>
+
+  <section class="reference" aria-label="Reference: states shown on interaction, not this case's current fact">
+    <h2 class="reference__title">Reference — states shown on interaction (not the case's current truth)</h2>
+    <div class="reference__grid">
+      <div class="reference__item">
+        <p class="reference__label">Loading</p>
+        <div class="skeleton skeleton--header" aria-hidden="true">
+          <span class="skeleton__bar skeleton__bar--lg"></span>
+          <span class="skeleton__bar skeleton__bar--sm"></span>
+        </div>
+        <div class="skeleton skeleton--row" aria-hidden="true">
+          <span class="skeleton__bar"></span><span class="skeleton__bar"></span><span class="skeleton__bar"></span>
+        </div>
+      </div>
+      <div class="reference__item">
+        <p class="reference__label">Error</p>
+        <p class="state-cell state-cell--error">Not saved — the connection dropped. What you typed is kept here. Save again.</p>
+      </div>
+      <div class="reference__item">
+        <p class="reference__label">Success</p>
+        <p class="state-cell state-cell--success">Outcome recorded · 14 Jul 2026</p>
+      </div>
+      <div class="reference__item">
+        <p class="reference__label">Destructive</p>
+        <p class="state-cell state-cell--destructive">Remove the document Affidavit of the plaintiff? A removed document cannot be brought back.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="hint-bar" aria-label="Keyboard commands">
+    <span class="hint"><kbd>↑</kbd><kbd>↓</kbd><span class="hint-word">Row</span></span>
+    <span class="hint"><kbd>←</kbd><kbd>→</kbd><span class="hint-word">Ledger</span></span>
+    <span class="hint"><kbd>R</kbd><span class="hint-word">Record</span></span>
+    <span class="hint"><kbd>F</kbd><span class="hint-word">File</span></span>
+    <span class="hint"><kbd>A</kbd><span class="hint-word">Add</span></span>
+    <span class="hint"><kbd>E</kbd><span class="hint-word">Edit</span></span>
+    <span class="hint hint--destructive"><kbd>D</kbd><span class="hint-word">Remove</span></span>
+    <span class="hint"><kbd>S</kbd><span class="hint-word">Save</span></span>
+    <span class="hint"><kbd>Enter</kbd><span class="hint-word">First overdue</span></span>
+    <span class="hint"><kbd>N</kbd><span class="hint-word">Next case</span></span>
+  </footer>
+
+</div>
+
+<div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+  "use strict";
+  var board = document.getElementById('board');
+  var ledgers = Array.prototype.slice.call(board.querySelectorAll('.ledger'));
+  var live = document.getElementById('live');
+
+  function rowsOf(ledgerIdx){
+    return Array.prototype.slice.call(ledgers[ledgerIdx].querySelectorAll('.row'));
+  }
+
+  var cursorLedger = 0, cursorRow = 0;
+  ledgers.forEach(function(l, li){
+    var rs = rowsOf(li);
+    rs.forEach(function(r, ri){
+      if (r.classList.contains('is-cursor')){ cursorLedger = li; cursorRow = ri; }
+      r.addEventListener('click', function(){ setCursor(li, ri, true); r.focus(); });
+    });
+  });
+
+  function announce(text){ live.textContent = text; }
+
+  function setCursor(ledgerIdx, rowIdx, userInitiated){
+    var oldRows = rowsOf(cursorLedger);
+    var old = oldRows[cursorRow];
+    if (old){ old.classList.remove('is-cursor'); old.setAttribute('tabindex','-1'); }
+
+    var newRows = rowsOf(ledgerIdx);
+    if (newRows.length === 0) return;
+    if (rowIdx < 0) rowIdx = 0;
+    if (rowIdx > newRows.length - 1) rowIdx = newRows.length - 1;
+
+    cursorLedger = ledgerIdx; cursorRow = rowIdx;
+    var next = newRows[rowIdx];
+    next.classList.add('is-cursor');
+    next.setAttribute('tabindex','0');
+    if (userInitiated !== false) next.focus({preventScroll:false});
+    announce(next.getAttribute('data-announce') || '');
+  }
+
+  function moveRow(delta){
+    var rs = rowsOf(cursorLedger);
+    var next = cursorRow + delta;
+    if (next < 0) next = 0;
+    if (next > rs.length - 1) next = rs.length - 1;
+    setCursor(cursorLedger, next);
+  }
+
+  function moveLedger(delta){
+    var next = (cursorLedger + delta + ledgers.length) % ledgers.length;
+    setCursor(next, cursorRow);
+  }
+
+  function currentRow(){ return rowsOf(cursorLedger)[cursorRow]; }
+
+  function findFirstOverdue(){
+    for (var li = 0; li < 4; li++){
+      var rs = rowsOf(li);
+      for (var ri = 0; ri < rs.length; ri++){
+        if (rs[ri].getAttribute('data-overdue') === 'true') return {ledger: li, row: ri};
+      }
+    }
+    return null;
+  }
+
+  function jumpNextOverdueCase(){
+    var rs = rowsOf(4);
+    var start = (cursorLedger === 4) ? cursorRow + 1 : 0;
+    for (var i = 0; i < rs.length; i++){
+      var idx = (start + i) % rs.length;
+      if (rs[idx].getAttribute('data-overdue') === 'true'){ setCursor(4, idx); return; }
+    }
+    setCursor(4, 0);
+  }
+
+  function flash(row, cls){
+    row.classList.add(cls);
+    window.setTimeout(function(){ row.classList.remove(cls); }, 550);
+  }
+
+  function recordOutcome(row){
+    row.classList.remove('has-state');
+    var stateEl = row.querySelector('.row__state');
+    if (stateEl) stateEl.hidden = true;
+    var cell = row.querySelector('.row-state-cell');
+    if (cell){
+      cell.hidden = false;
+      cell.className = 'row-state-cell state-cell--success';
+      cell.textContent = 'Outcome recorded · 14 Jul 2026';
+    }
+    row.setAttribute('data-verbs','');
+    var actions = row.querySelector('.row-actions');
+    if (actions) actions.innerHTML = '';
+    row.setAttribute('data-announce', 'Hearings. 14 Jul 2026. Held. Outcome recorded · 14 Jul 2026.');
+    announce('Outcome recorded, 14 July 2026. The overdue count is unchanged: it counts the task and the document, not this hearing.');
+
+    var nextRow = document.getElementById('hearing-next');
+    if (nextRow){
+      nextRow.setAttribute('data-disabled','false');
+      var note = nextRow.querySelector('.row__note--disabled');
+      if (note) note.hidden = true;
+      var addBtn = nextRow.querySelector('[data-verb="add"]');
+      if (addBtn) addBtn.disabled = false;
+    }
+  }
+
+  function openDestructiveConfirm(row){
+    var copy = row.getAttribute('data-destructive-copy');
+    if (!copy) { flash(row, 'remove-armed'); return; }
+    var actions = row.querySelector('.row-actions');
+    var confirm = row.querySelector('.row-confirm');
+    if (!confirm) return;
+    if (actions) actions.style.display = 'none';
+    confirm.innerHTML = '<p>' + copy + '</p><span class="confirm-actions">' +
+      '<span class="confirm-hint"><kbd>Enter</kbd> Remove</span>' +
+      '<span class="confirm-hint confirm-hint--keep"><kbd>Esc</kbd></span></span>';
+    confirm.classList.add('is-open');
+    row.setAttribute('data-confirming','true');
+    announce(copy);
+  }
+
+  function closeDestructiveConfirm(row, cancelled){
+    var actions = row.querySelector('.row-actions');
+    var confirm = row.querySelector('.row-confirm');
+    if (confirm){ confirm.classList.remove('is-open'); confirm.innerHTML=''; }
+    if (actions) actions.style.display = '';
+    row.removeAttribute('data-confirming');
+    if (cancelled) announce('Nothing removed.');
+  }
+
+  function completeRemoval(row){
+    var ledgerEl = row.closest('.ledger');
+    var countEl = ledgerEl.querySelector('.ledger__head .count');
+    var wasOverdue = row.getAttribute('data-overdue') === 'true';
+    var rs = rowsOf(ledgers.indexOf(ledgerEl));
+    var idx = rs.indexOf(row);
+    row.parentNode.removeChild(row);
+    if (countEl) countEl.textContent = String(Math.max(0, parseInt(countEl.textContent, 10) - 1));
+    if (wasOverdue){
+      var overdueNum = document.querySelector('.overdue-num');
+      if (overdueNum) overdueNum.textContent = String(Math.max(0, parseInt(overdueNum.textContent, 10) - 1));
+    }
+    announce('Removed. The document is gone from the ledger; it cannot be brought back.');
+    var remaining = rowsOf(cursorLedger);
+    setCursor(cursorLedger, Math.min(idx, remaining.length - 1));
+  }
+
+  function toggleEdit(row){
+    var editing = row.getAttribute('data-editing') === 'true';
+    if (!editing){
+      row.setAttribute('data-editing','true');
+      row.classList.add('verb-flash');
+      announce('Editing. Press S to save.');
+    } else {
+      var savedOnce = row.getAttribute('data-save-failed-once') === 'true';
+      if (!savedOnce){
+        row.setAttribute('data-save-failed-once','true');
+        var cell = row.querySelector('.row-state-cell');
+        if (cell){
+          cell.hidden = false;
+          cell.className = 'row-state-cell state-cell--error';
+          cell.textContent = 'Not saved — the connection dropped. What you typed is kept here. Save again.';
+        }
+        announce('Not saved — the connection dropped. What you typed is kept here. Save again.');
+      } else {
+        row.removeAttribute('data-editing');
+        row.removeAttribute('data-save-failed-once');
+        row.classList.remove('verb-flash');
+        var cell2 = row.querySelector('.row-state-cell');
+        if (cell2){ cell2.hidden = true; cell2.textContent=''; }
+        announce('Saved.');
+      }
+    }
+  }
+
+  var VERB_KEYS = {'r':'record','f':'file','a':'add','e':'edit','d':'remove','s':'save'};
+
+  function handleVerb(letter){
+    var row = currentRow();
+    if (!row) return;
+    var verb = VERB_KEYS[letter];
+    var verbs = (row.getAttribute('data-verbs') || '').split(/\s+/);
+    if (verbs.indexOf(verb) === -1) return;
+
+    if (verb === 'remove'){
+      if (row.getAttribute('data-confirming') === 'true') return;
+      openDestructiveConfirm(row);
+      return;
+    }
+    if (verb === 'record' && row.id === 'hearing-14jul'){ recordOutcome(row); return; }
+    if (verb === 'add'){
+      if (row.getAttribute('data-disabled') === 'true'){
+        announce('Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.');
+        flash(row, 'verb-flash');
+        return;
+      }
+      flash(row, 'verb-flash');
+      announce('Add.');
+      return;
+    }
+    if (verb === 'edit' && row.id === 'doc-affidavit'){ toggleEdit(row); return; }
+    if (verb === 'save'){
+      if (row.getAttribute('data-editing') === 'true'){ toggleEdit(row); }
+      return;
+    }
+    flash(row, 'verb-flash');
+    announce(verb.charAt(0).toUpperCase() + verb.slice(1) + '.');
+  }
+
+  document.addEventListener('keydown', function(e){
+    var tag = (document.activeElement && document.activeElement.tagName) || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+    var row = currentRow();
+    var confirming = row && row.getAttribute('data-confirming') === 'true';
+
+    if (e.key === 'Escape'){
+      if (confirming){ closeDestructiveConfirm(row, true); e.preventDefault(); }
+      else if (row && row.getAttribute('data-editing') === 'true'){
+        row.removeAttribute('data-editing');
+        row.removeAttribute('data-save-failed-once');
+        row.classList.remove('verb-flash');
+        var c = row.querySelector('.row-state-cell'); if (c){ c.hidden = true; c.textContent=''; }
+        announce('Edit cancelled.');
+      }
+      return;
+    }
+    if (e.key === 'Enter'){
+      if (confirming){ completeRemoval(row); e.preventDefault(); return; }
+      var target = findFirstOverdue();
+      if (target){ setCursor(target.ledger, target.row); }
+      e.preventDefault();
+      return;
+    }
+    if (confirming) return;
+
+    switch (e.key){
+      case 'ArrowDown': moveRow(1); e.preventDefault(); return;
+      case 'ArrowUp': moveRow(-1); e.preventDefault(); return;
+      case 'ArrowRight': moveLedger(1); e.preventDefault(); return;
+      case 'ArrowLeft': moveLedger(-1); e.preventDefault(); return;
+    }
+
+    var k = e.key.toLowerCase();
+    if (k === 'j'){ moveRow(1); return; }
+    if (k === 'k'){ moveRow(-1); return; }
+    if (k === 'n'){ jumpNextOverdueCase(); return; }
+    if (VERB_KEYS.hasOwnProperty(k)){ handleVerb(k); return; }
+  });
+
+  document.querySelectorAll('.row-actions .verb').forEach(function(btn){
+    btn.addEventListener('click', function(ev){
+      ev.stopPropagation();
+      var row = btn.closest('.row');
+      var ledgerIdx = ledgers.indexOf(row.closest('.ledger'));
+      setCursor(ledgerIdx, rowsOf(ledgerIdx).indexOf(row), false);
+      var verb = btn.getAttribute('data-verb');
+      var letter = Object.keys(VERB_KEYS).filter(function(kk){ return VERB_KEYS[kk] === verb; })[0];
+      if (letter) handleVerb(letter);
+    });
+  });
+})();
+</script>
+</body>
+</html>

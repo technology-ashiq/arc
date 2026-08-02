@@ -1,0 +1,144 @@
+/* ============================================================================
+   VARIANT B — narrative (content-led, paced)
+   The ONLY place colour values live for this variant.
+
+   THESIS
+   This product wins because the user can read the case's whole life as one dated
+   record, with what is still owed standing above today's line and what happened
+   below it, without ever choosing a category for the thing he is looking for or
+   for the thing he is about to write down.
+
+   THE COLOUR LAW OF THIS PAGE
+   Ink blue marks TIME and nothing else — dated period heads, marginalia dates,
+   today's rule. It never marks a status. Overdue is carried by the word
+   ("Overdue by 9 days"), by position (above today's rule) and by a dotted rule
+   (a blank the record is still waiting for), never by a hue. Oxblood is spent
+   EXACTLY ONCE on the page, on the destructive verb. Everything else is sepia
+   ink on parchment.
+
+   THE SURFACE
+   Type and rules only. No cards, no shadows, no radii, no status fills, no
+   icons, no sans-serif. Depth is made with hairlines, dotted rules and air.
+   ============================================================================ */
+
+:root {
+
+  /* --- GROUND & INK ------------------------------------------------------
+     Contrast measured against my own declared values (WCAG 2.1 relative
+     luminance) on --paper #f4efe6, whose L = 0.8668.                       */
+
+  --paper:        #f4efe6;   /* parchment — never pure white                */
+  --ink:          #241f1a;   /* warm sepia-black — 14.3:1 on --paper        */
+  --ink-soft:     #5c5147;   /* entry meta, running head — 6.7:1 on --paper */
+  --ink-faint:    #6f6154;   /* faintest TEXT used anywhere — 5.2:1         */
+
+  --ink-blue:     #1f3a6e;   /* THE structural hue: time — 9.7:1 on --paper */
+  --oxblood:      #7b2230;   /* spent once, on the destructive verb — 8.7:1 */
+
+  /* Non-text values. Hairlines and dotted blanks only; never carry a word. */
+  --rule:         #cbbba4;   /* 1.64:1 vs paper — decorative hairline       */
+  --rule-strong:  #a8927a;   /* 2.60:1 vs paper — dotted blanks, ornament   */
+
+  /* --- COMPOSITE COLOUR -------------------------------------------------- */
+  --sel:          rgba(31, 58, 110, 0.17);           /* ink-blue at 17%     */
+  --focus:        var(--ink);                        /* 14.3:1 focus ring   */
+  --load-fade:    linear-gradient(90deg,
+                    #a8927a 0%,
+                    #cbbba4 58%,
+                    rgba(203, 187, 164, 0) 100%);    /* a rule that has not
+                                                        arrived — LOADING   */
+  --today-wash:   linear-gradient(180deg,
+                    rgba(31, 58, 110, 0.06) 0%,
+                    rgba(31, 58, 110, 0) 100%);      /* light bleeding down
+                                                        from today's rule.
+                                                        Marks TIME, not
+                                                        status.             */
+
+  /* --- TYPEFACE -----------------------------------------------------------
+     One old-style / transitional serif, worked hard across seven steps. No
+     network: the first four are faces that ship with the platform. No
+     sans-serif anywhere on this page — not in the reference block, not in
+     the inputs, not on the buttons.                                        */
+
+  --serif: Constantia, Cambria, "Palatino Linotype", Palatino,
+           "Book Antiqua", Georgia, "Times New Roman", serif;
+
+  --figures-prose:  oldstyle-nums proportional-nums;  /* dates inside prose */
+  --figures-column: lining-nums tabular-nums;         /* the date margin,
+                                                         amounts, counts    */
+
+  /* --- SEVEN LIVE STEPS ---------------------------------------------------
+     12px → 56px. The widest interval is s5 → s6: the dated period heads
+     pace this record and nothing else does.                                */
+
+  --s1: 0.75rem;      /* small-caps labels, folio, printer's marks          */
+  --s2: 0.9375rem;    /* marginalia, entry meta, reference block            */
+  --s3: 1.0625rem;    /* reading body — notes, sentences, the compose line  */
+  --s4: 1.25rem;      /* the entry itself: its title or its outcome         */
+  --s5: 1.75rem;      /* today's date · the case number · the live gaps     */
+  --s6: 2.75rem;      /* DATED PERIOD HEADS — the pace of the page          */
+  --s7: 3.5rem;       /* the parties, once, on the cover sheet              */
+
+  --lh-tight: 1.10;
+  --lh-head:  1.24;
+  --lh-meta:  1.42;
+  --lh-body:  1.62;
+
+  --tracking-caps:  0.095em;   /* small caps need air                       */
+  --tracking-tight: -0.008em;  /* the display line only                     */
+
+  /* --- MEASURE ------------------------------------------------------------
+     DEBT 1's answer. Still one column — but a READING measure: ~65
+     characters at --s3, which is 528px, not the shipped 416px. The extra
+     width buys line length and a marginalia gutter, and nothing else. This
+     page never opens a second content region.                              */
+
+  --measure: 33rem;     /* 528px ≈ 65 characters at --s3                    */
+  --gutter:  8.5rem;    /* left marginalia: the date and the entry type     */
+  --gap:     2.25rem;
+  --page:    calc(var(--gutter) + var(--gap) + var(--measure));
+
+  /* --- RHYTHM -------------------------------------------------------------
+     Tight inside an entry. Very generous between periods: --sp-period is
+     the largest interval on the page, and that air is the instrument.      */
+
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.875rem;
+  --sp-4: 1.5rem;
+  --sp-5: 2.5rem;
+  --sp-6: 4rem;
+  --sp-today:  5.5rem;
+  --sp-period: 8.5rem;
+
+  /* --- RULES --------------------------------------------------------------
+     The entire depth system. A SOLID rule is a fact on the record. A DOTTED
+     rule is a blank the record is still waiting for.                       */
+
+  --hair:       1px solid var(--rule);
+  --hair-ink:   1px solid var(--ink);
+  --dot:        1px dotted var(--rule-strong);
+  --rule-today: 2px solid var(--ink-blue);
+  --mark-w:     2px;    /* left mark on an error / confirmation block       */
+
+  /* --- STICKY GEOMETRY & TARGETS ----------------------------------------- */
+  --head-h: 3.5rem;
+  --target: 44px;
+}
+
+@media (max-width: 46rem) {
+  :root {
+    /* Natively one column. The marginalia sets ABOVE its entry, the dated
+       period heads stay sticky, the compose point stays on today's rule.   */
+    --measure: 100%;
+    --gutter: 0rem;
+    --gap: 0rem;
+    --page: 100%;
+    --s7: 2.375rem;
+    --s6: 2rem;
+    --s5: 1.4375rem;
+    --sp-period: 4.75rem;
+    --sp-today: 3.25rem;
+    --head-h: 5.5rem;
+  }
+}
