@@ -65,6 +65,13 @@ let all = false;
 // can be run: it compares against the hand-written files, and those have no header.
 // ADR-0202 makes this a migration-window flag, not a permanent mode.
 let migration = false;
+// --against-baseline compares the migration render against the pilot AS IT WAS at the
+// commit each canonical file pins, read out of git rather than off disk. This is what makes
+// REQ-02's proof durable: the moment the flip writes a DO-NOT-EDIT header, the working-tree
+// file is no longer the thing REQ-02 claimed to reproduce, so a proof that reads the working
+// tree can only ever run once. Reading the pin gives the same answer forever, and it is the
+// pin doing the job it was recorded for.
+let againstBaseline = false;
 const files = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -72,6 +79,7 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === "--write") mode = "write";
   else if (a === "--all") all = true;
   else if (a === "--migration") migration = true;
+  else if (a === "--against-baseline") { migration = true; againstBaseline = true; }
   else if (a === "--target") target = argv[++i] ?? "";
   else if (a === "--root") root = argv[++i] ?? "";
   else if (a.startsWith("--")) { console.error(`arc-compile: unknown option ${a}`); process.exit(2); }
@@ -136,12 +144,29 @@ for (const file of files) {
     continue;
   }
 
-  if (!existsSync(dest)) {
-    out.push(`[missing] ${relative(root, dest)} — nothing to compare against (run --write to record it)`);
-    failed++;
-    continue;
+  let want;
+  if (againstBaseline) {
+    const { commit, path: p } = doc.baseline ?? {};
+    if (!commit || !p) {
+      out.push(`[byte-diff] ${rel} — no baseline commit/path to compare against`);
+      failed++;
+      continue;
+    }
+    try {
+      want = lf(execFileSync("git", ["show", `${commit}:${p}`], { encoding: "utf8", cwd: root, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }));
+    } catch (e) {
+      out.push(`[byte-diff] ${rel} — cannot read \`${p}\` at \`${commit}\` from git: ${String(e.message).split("\n")[0]}`);
+      failed++;
+      continue;
+    }
+  } else {
+    if (!existsSync(dest)) {
+      out.push(`[missing] ${relative(root, dest)} — nothing to compare against (run --write to record it)`);
+      failed++;
+      continue;
+    }
+    want = lf(readFileSync(dest, "utf8"));
   }
-  const want = lf(readFileSync(dest, "utf8"));
   const got = lf(rendered);
   if (want === got) { identical++; continue; }
 

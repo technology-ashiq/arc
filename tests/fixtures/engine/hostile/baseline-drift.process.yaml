@@ -25,7 +25,7 @@ evals:
   - tests/fixtures/engine/evals/commit-msg-draft/basic.json
 baseline:
   target: claude-code
-  path: .claude/commands/arc-commit.md
+  path: tests/fixtures/engine/baseline-sample.md
   commit: 7abeda1
   sha256: 0000000000000000000000000000000000000000000000000000000000000000
 body: |

@@ -91,14 +91,21 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
   [ "${#seen[@]}" -eq 5 ]
 }
 
-@test "the lint reads the artifact: a byte-level edit to the body changes the verdict" {
+@test "body-drift is wired and content-dependent, and inert only because the flip closed its window" {
+  # body-drift compares the canonical body against the live command's prose. It is a
+  # MIGRATION-window check (ADR-0202): once `migrated:` is set it stops, deliberately,
+  # because the generated file now carries a header the pin predates and a permanent
+  # body-lock would freeze the pilots against improvement -- the exact outcome ADR-0202
+  # rejects. So the assertion is that the mechanism WORKS when its window is open.
   local d; d="$(mktemp -d)"
   cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$d/p.process.yaml"
+
+  # Window shut (migrated): body-drift does not fire, and that is correct.
   run node "$(LINT)" "$d/p.process.yaml" --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
-  # Rewrite one sentence of the prose. The pin still matches the live file, so only a lint
-  # that actually compares the BODY can notice -- this is the doctored-artifact case.
-  _sed_i 's/Do NOT push/Do push/' "$d/p.process.yaml"
+
+  # Window open (migrated removed): it fires, proving it is wired to the body at all.
+  _sed_i '/^  migrated: /d' "$d/p.process.yaml"
   run node "$(LINT)" "$d/p.process.yaml" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"[body-drift]"* ]]
@@ -180,6 +187,7 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
     (async () => {
       const root = process.argv[1].replace(/\\/g, "/");
       const { parseYamlSubset } = await import("file:///" + root + "/.claude/scripts/engine/yaml-subset.mjs");
+      const { execFileSync } = require("node:child_process");
       const norm = (s) => s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
       const cases = [
         ["commit-msg-draft", ".claude/commands/arc-commit.md", []],
@@ -188,7 +196,13 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
       ];
       let bad = 0;
       for (const [proc, src, subs] of cases) {
-        let want = norm(readFileSync(root + "/" + src, "utf8")).match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/)[1];
+        // Read the pilot AS IT WAS at the pinned commit, not off disk: the flip added a
+        // DO-NOT-EDIT header, so the working-tree body is no longer the body this round-trip
+        // was written to prove. The pin makes the assertion durable instead of one-shot.
+        const canon = readFileSync(root + "/processes/" + proc + ".process.yaml", "utf8");
+        const commit = canon.match(/^  commit: (\S+)$/m)[1];
+        const at = execFileSync("git", ["show", commit + ":" + src], { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+        let want = norm(at).match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/)[1];
         for (const [re, to] of subs) want = want.replace(re, to);
         const p = parseYamlSubset(readFileSync(root + "/processes/" + proc + ".process.yaml", "utf8"));
         if (!p.ok) { console.error(proc + ": parse failed: " + p.error.what); bad++; continue; }

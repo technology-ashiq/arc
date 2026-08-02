@@ -2,10 +2,17 @@
 # Phase 01 -- the proof. arc-compile reaches 3/3 byte-identical against the hand-written
 # pilots, then the source of truth flips.
 #
-# The byte-diff is a MIGRATION gate (ADR-0202) and this file treats it as one: `--migration`
-# renders without the DO-NOT-EDIT header, because REQ-02 compares against the hand-written
-# files and those have no header. Emitting one during the proof would make the proof
-# unreachable by construction.
+# The byte-diff is a MIGRATION gate (ADR-0202) and this file treats it as one.
+#
+# REQ-02 is asserted with `--against-baseline`, which renders without the DO-NOT-EDIT header
+# and compares against the pilot AS IT WAS at the commit each canonical file pins, read out
+# of git. That is what makes the proof DURABLE. Comparing against the working tree could only
+# ever run once: the flip writes a header, and from that moment the working-tree file is no
+# longer the thing REQ-02 claimed to reproduce. Reading the pin gives the same answer forever,
+# and it is the pin doing the job it was recorded for.
+#
+# The post-flip gate is the separate `--check` (no flag), which compares the render WITH its
+# header against the generated file — and that is also ADR-0201's hand-edit detection.
 #
 # Every green assertion here is paired with a negative control. A 3/3 that cannot be made to
 # fail is a coin, not a proof.
@@ -31,7 +38,7 @@ _procs() {
 # ---------------------------------------------------------------------------
 
 @test "REQ-02: all 3 pilots compile byte-identical to their hand-written baselines" {
-  run node "$(CC)" --check --all --target claude-code --migration --root "$ARC_ROOT"
+  run node "$(CC)" --check --all --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
   [[ "$output" == *"3/3 byte-identical"* ]]
 }
@@ -40,7 +47,7 @@ _procs() {
   local d; d="$(_procs)"
   _sed_i 's/Never commit blind/Never commit blindly/' "$d/processes/commit-msg-draft.process.yaml"
   # --root stays the real repo so the baseline path resolves; only processes/ is the copy.
-  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --migration --root "$ARC_ROOT"
+  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"[byte-diff]"* ]]
   [[ "$output" =~ differs\ at\ byte\ [0-9]+ ]]
@@ -51,7 +58,7 @@ _procs() {
 @test "negative control: dropping one tool scope changes the allowed-tools line" {
   local d; d="$(_procs)"
   _sed_i 's/^      - "log:\*"$//' "$d/processes/commit-msg-draft.process.yaml"
-  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --migration --root "$ARC_ROOT"
+  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"[byte-diff]"* ]]
 }
@@ -98,7 +105,7 @@ _procs() {
   run grep -c 'intent: "Stage related\\rchanges"' "$d/processes/commit-msg-draft.process.yaml"
   [ "$output" = "1" ]   # the mutation actually applied; a silent no-op would fake this test
 
-  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --migration --root "$ARC_ROOT"
+  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"[lf-only]"* ]]
   [[ "$output" != *"[byte-diff]"* ]]   # the two instruments stay distinct
@@ -152,4 +159,24 @@ _procs() {
 @test "arc-compile refuses to run with neither --check nor --write" {
   run node "$(CC)" --all --root "$ARC_ROOT"
   [ "$status" -eq 2 ]
+}
+
+@test "the post-flip gate is a DIFFERENT comparison, and it is the hand-edit detector" {
+  run node "$(CC)" --check --all --target claude-code --root "$ARC_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"3/3 byte-identical"* ]]
+}
+
+@test "hand-edit detection: a line appended to a generated file is caught" {
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/.claude/commands" "$d/processes"
+  cp "$ARC_ROOT"/processes/commit-msg-draft.process.yaml "$d/processes/"
+  cp "$ARC_ROOT"/.claude/commands/arc-commit.md "$d/.claude/commands/"
+  # clean copy first: the tree must be green before the tamper means anything
+  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --root "$d"
+  [ "$status" -eq 0 ]
+  printf '\nSNEAKY HAND EDIT\n' >> "$d/.claude/commands/arc-commit.md"
+  run node "$(CC)" --check "$d/processes/commit-msg-draft.process.yaml" --target claude-code --root "$d"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[byte-diff]"* ]]
 }

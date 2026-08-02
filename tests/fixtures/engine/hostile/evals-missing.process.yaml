@@ -25,8 +25,8 @@ evals:
   - tests/fixtures/engine/evals/nope/absent.json
 baseline:
   target: claude-code
-  path: .claude/commands/arc-commit.md
+  path: tests/fixtures/engine/baseline-sample.md
   commit: 7abeda1
-  sha256: 4eb87547ca4353e9802db22c7b558b3e7af0d70cdd94565753a956f133e66d77
+  sha256: dd50585854ef21e7292666472c11a1189e863a49db9313351fa478014d4b3e9e
 body: |
   Do the thing with {{input.base|default:main}}.
