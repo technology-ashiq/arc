@@ -113,8 +113,11 @@ forward-verified: no")"
 replay: caught 3 of 8, false-blocked 0 of 4
 evaluated-by: fresh agent, verdict real
 approved-by: ashiq 2026-08-02
-forward-verified: no")"
+forward-verified: no
+check: .claude/scripts/develop/candidates/L-002.mjs")"
   run node "$(LEARN)" parse "$f"
+  # A promoted type:rule row must point at the code that runs -- CI caught this test
+  # asserting a "complete" row that was in fact missing check:. The rule was right.
   [ "$status" -eq 0 ]
 }
 
@@ -228,6 +231,8 @@ fixture: tests/fixtures/develop-evals/withheld/${wid}.md")"
 
 @test "every fixture's expect: is one of the two legal values" {
   local bad
-  bad="$(grep -h '^expect: ' $(find "$(EV)" -name '*.md' -not -path '*_candidates*') | grep -vcE '^expect: (flagged|clean)$')"
+  # `|| true` because grep exits 1 when it selects nothing -- which is the PASSING case here,
+  # so without it the assignment fails the test exactly when the corpus is correct.
+  bad="$(grep -h '^expect: ' $(find "$(EV)" -name '*.md' -not -path '*_candidates*') | grep -vcE '^expect: (flagged|clean)$' || true)"
   [ "$bad" -eq 0 ]
 }

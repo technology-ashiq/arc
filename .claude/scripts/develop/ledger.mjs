@@ -47,8 +47,15 @@ export const VERDICTS = ["hit", "miss", "unforeseen"];
  * `hit — 95% confidence it was the parser` printed a self-declared number straight out of
  * the command whose whole purpose is that confidence is earned rather than claimed.
  */
-export const SELF_DECLARED =
-  /\b(confidence|certainty|confident|score|scored|rating|rated|likelihood|probability|success[- ]rate|accuracy)\b[^.\n]{0,24}?\b\d{1,3}(?:\.\d+)?\s*%?/i;
+// Both orders, because "95% confidence" is the more natural phrasing and the keyword-first
+// version missed it entirely -- the detector would have passed the exact sentence it exists
+// to catch. Found by its own test on the first CI run.
+const _CLAIM = "(?:confidence|certainty|confident|score|scored|rating|rated|likelihood|probability|success[- ]rate|accuracy)";
+const _NUM = "\\d{1,3}(?:\\.\\d+)?\\s*%?";
+export const SELF_DECLARED = new RegExp(
+  `\\b${_CLAIM}\\b[^.\\n]{0,24}?\\b${_NUM}|\\b${_NUM}[^.\\n]{0,24}?\\b${_CLAIM}\\b`,
+  "i",
+);
 
 /**
  * A score must carry a verdict AND the thing that settles it. `hit` alone is an assertion;

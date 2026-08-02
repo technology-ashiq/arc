@@ -282,8 +282,10 @@ if (process.argv[1] && /learning\.mjs$/.test(process.argv[1].replace(/\\/g, "/")
     // The holdout reports TOTALS ONLY -- never an id, a category or a body (ADR-0109).
     console.log(`withheld: caught ${r.withheld.caught} of ${r.withheld.flaggedTotal} · false-blocked ${r.withheld.falseBlocked} of ${r.withheld.cleanTotal}`);
     console.log("");
-    console.log("Two numbers, reported separately and never combined. A single score would hide");
-    console.log("the trade the two of them exist to show.");
+    // Deliberately avoids the word its own test forbids in this output: a report that talks
+    // about a single number is one edit away from printing one.
+    console.log("Two numbers, reported separately and never combined into one. Collapsing them");
+    console.log("would hide the trade that both of them exist to show.");
     process.exit(0);
   }
 
