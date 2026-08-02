@@ -10,7 +10,14 @@
 > kept stable across the review rounds) and get real ADR numbers at kickoff from the
 > next free slot (pack convention — see `../README.md` correction #2).
 > Recommended appetite: **M-tier** (final number = owner's call at kickoff step 1).
-> Built via `/arc-kickoff` using the paste-ready prompt in Appendix B.
+> Built via `/arc-kickoff --lane develop` using the paste-ready prompt in Appendix B.
+>
+> **Lane amendment (2026-08-02):** re-grounded against the post-Cycle-4 repo — the
+> portfolio/lanes system is LIVE (`initiatives/<lane>/`, `PORTFOLIO.md`, lane resolver;
+> ADR-0050…0062; existing lanes: `design`, `portfolio`). Per the plans queue, develop is
+> born as the **first native lane** (`--lane develop`), after the model-policy cycle
+> (1.57). §3's lane-awareness block, the durable-truth table, and Appendix B are updated
+> accordingly; the DEV-A…K decision record is otherwise unchanged.
 
 **Product promise:** `/arc-develop` turns an approved phase into small, spec-anchored,
 independently **proven** increments, with visible progress and controlled escalation.
@@ -68,7 +75,30 @@ the engineering operating system that owns the middle.
 - **Runtime state:** `.claude/state/develop/` (stuck counters, fingerprints, capability cache)
 - **Non-goals:** no coder subagent · never closes phases (`/arc-phase-done` owns that) ·
   never intakes scope (`/arc-change` owns that) · never re-implements review/design logic
-  (develop scripts may CALL them) · no autonomous capability installs.
+  (develop scripts may CALL them) · no autonomous capability installs · **never creates a
+  lane** (`/arc-kickoff` is the only birth ceremony — an unknown lane hard-STOPs).
+
+### Lane awareness (Cycle-4 portfolio — `.claude/rules/lanes.md` contract)
+
+`/arc-develop` is a **lane surface**, same contract as resume/change/phase-done/retro:
+
+- **`--lane <name>` is the only way to name a lane** — the command's own arguments
+  (mode, phase number) are never read as lanes. Resolution via
+  `bash .claude/scripts/core/lane-resolve.sh --for develop [--lane <name>]`: explicit
+  flag → validate · omitted + no `initiatives/` → **root-mode, byte-identical** (the
+  permanent consumer contract — venture repos like LexOS run develop root-mode) ·
+  omitted + exactly one eligible lane → auto-resolve · anything else → ask, never guess.
+  Unknown lane → hard-STOP, list lanes, create nothing. Non-zero resolver exit → print
+  it and stop; flag values always quoted; duplicate `--lane` flags = operator error.
+- **Output order (lane-mode):** `Selected lane: <lane> (via arg|auto)` first →
+  PORTFOLIO board summary → develop's own report. Root-mode prints no lane line.
+  Statusline in lane-mode: `develop · <lane> · phase 02 · slice 4/9`.
+- **Scripts:** `develop-lint.mjs` and friends import `resolveLane` from
+  `.claude/scripts/core/lane-resolve.mjs` (like kickoff-lint) — never a re-implementation,
+  anchored on the git toplevel, lane echo first in canonical output order.
+- **Execution mode:** Mode A (parked-lane switching, one session at a time) is the
+  certified default; develop never assumes parallel lanes — concurrent emitters stay
+  forbidden (ADR-0056). The WIP line (ADR-0052) is informational, never a gate.
 
 ### Runtime stance
 Arc is **Claude Code–primary today**. Durable project artifacts are host-neutral
@@ -78,18 +108,25 @@ runtime). Cross-runtime adapters = future ADR at the public/SaaS milestone.
 
 ### Durable source of truth
 
+Tracker-layer artifacts are **lane-relative** (ADR-0050/0055); company organs stay
+**single at root, never per-lane** (ADR-0053):
+
 | Artifact | Where | Nature |
 |---|---|---|
-| Build Brief (incl. predictions) | header of `phases/phase-NN-tasks.md` | committed, versioned |
-| Slice ledger (slices, proofs, tiers, evidence, micro-decisions) | `phases/phase-NN-tasks.md` | committed, machine-readable (lint-parsed) |
-| Debt ledger | `docs/develop/debt-ledger.md` | committed |
-| Learning ledger (tagged + linked) | `docs/develop/learning-ledger.md` | committed |
-| Evaluation suite fixtures | `tests/fixtures/develop-evals/` | committed |
+| Build Brief (incl. predictions) | header of the lane's `phases/phase-NN-tasks.md` (`initiatives/<lane>/phases/…` in lane-mode; root `phases/` in root-mode) | committed, versioned — lane-relative |
+| Slice ledger (slices, proofs, tiers, evidence, micro-decisions) | same file as the brief | committed, machine-readable (lint-parsed) — lane-relative |
+| Debt ledger | `initiatives/<lane>/debt-ledger.md` (root-mode: `docs/develop/debt-ledger.md`) — a shortcut belongs to the initiative that took it (ADR-0055 spirit) | committed — **lane-scoped** |
+| Learning ledger (tagged + linked) | `docs/develop/learning-ledger.md` — learnings generalize across lanes, like the retro-log (ADR-0053 spirit) | committed — **company organ, single** |
+| Evaluation suite fixtures | `tests/fixtures/develop-evals/` — tests are a root organ (ADR-0053) | committed — **company organ, single** |
 | Receipts (`develop.started`, `slice.done`, `slice.stuck`, …) | existing spine (`arc-event.sh emit`) | durable, append-only — **audit telemetry, not the sole truth** |
-| Stuck counters, capability cache | `.claude/state/develop/` | local runtime, disposable |
+| Stuck counters, capability cache | `.claude/state/develop/` (keyed by lane in lane-mode) | local runtime, disposable |
 | Chat output | — | a readable VIEW of the above, never the truth |
 
 ## 4 · Lifecycle — multi-session by design (v1)
+
+Signature: **`/arc-develop <mode> [phase] [--lane <name>]`** — every mode resolves the
+lane first (§3 lane-awareness block) and, in lane-mode, opens with the `Selected lane:`
+echo before anything else.
 
 - **`/arc-develop start <n>`** — validate inputs (plan approved, spec exists, kickoff-lint
   green; refuses on a drifted plan) → build the Build Brief → decompose the spec into the
@@ -231,7 +268,8 @@ rows → FAIL.
 
 Intentional shortcuts are debts; unrecorded debts are forgotten forever. Every deliberate
 compromise — temporary fix · known issue · accepted TODO · deferred cleanup · performance
-compromise — gets a row in `docs/develop/debt-ledger.md`: what · where · why accepted ·
+compromise — gets a row in the lane's debt ledger (`initiatives/<lane>/debt-ledger.md`;
+root-mode: `docs/develop/debt-ledger.md`): what · where · why accepted ·
 cost of leaving it · pay-down trigger. **Deterministic enforcement:** develop-lint greps
 the slice diff for TODO/FIXME/HACK/XXX markers — a new marker with no ledger row = WARN
 (trial route to BLOCK). `handoff` includes the phase's debt summary; `/arc-retro` reads
@@ -299,7 +337,9 @@ real phase outcome
 ```
 
 ### 8.3 · The learning record
-`docs/develop/learning-ledger.md`, one row per candidate: what failed/escaped · why the
+`docs/develop/learning-ledger.md` (company organ — single, never per-lane, ADR-0053
+spirit; rows may carry a `lane:` field for provenance), one row per candidate: what
+failed/escaped · why the
 existing process missed it · proposed reusable prevention · type (rule/fixture/checklist/
 template/skill/capability policy) · which historical cases it catches · cost (false
 blocks, added time) · verdict (promoted / rejected / rolled back) + evidence link.
@@ -422,7 +462,9 @@ downgraded — data decides, not vibes.
 
 ## 13 · Delivery order (risk-first; the steel thread never waits)
 
-1. **Steel thread (v1):** lifecycle command (`start/next/status/handoff`) + Build Brief
+1. **Steel thread (v1):** lifecycle command (`start/next/status/handoff`) **with lane
+   resolution wired from day one** (`lane-resolve` import; root-mode contract covered by
+   a fixture — develop is born lane-native, root-mode stays byte-identical) + Build Brief
    with prediction block + basic Context Pack (graph + ADR scan) + durable proof-first
    slice ledger with evidence tiers + spine receipts + develop-lint floor + one
    pre-handoff spec-fidelity pass (scores predictions). Runs end-to-end offline on a
@@ -484,25 +526,32 @@ Nothing above asked anyone's permission to be smart — and nothing self-certifi
 Reviewer trajectory: 9.5 → 9.8. The Developer's own verdict: design 9/10; the product's
 score is earned in dogfood, per its own doctrine.
 
-## Appendix B · Kickoff prompt (run AFTER this file lands in the repo via PR)
+## Appendix B · Kickoff prompt (lane-native — develop is the queue's first native lane)
 
 ```
-/arc-kickoff Build arc's `develop` product ("The Developer") per docs/strategy/plans/PLAN-develop.md —
-an execution harness that turns an approved phase into small, spec-anchored, independently proven
-increments with visible progress and controlled escalation. v1 = lifecycle command
-(start/next/status/checkpoint/handoff) + Build Brief with prediction block (scored at handoff —
-calibration, never self-declared confidence) + Context Pack (retrieval over existing memory owners —
-no new graph infra) + durable proof-first slice ledger in phases/phase-NN-tasks.md with evidence
-strength tiers + spine receipts + develop-lint floor + pre-handoff spec-fidelity pass. Expansion
-layers per the plan's delivery order: stuck protocol (fingerprint+hypothesis+backstops),
-risk-triggered checkpoints + deterministic health checks, debt ledger with marker lint, approach
-sketches with economics fields, eval-suite seeding with typed links, triggered capability scout +
-vet gate + lockfile, decision-triggered pattern mining, design-critic checkpoints, Learning System
-(tagged+linked ledger, unanchored evaluation, withheld + time-forward holdout, Ashiq-only promotion).
-Learning contract binds from v1: no silent self-modification of policies/gates/skills/capabilities.
-Post-v1 growth obeys the Feature Admission Rule: new harness features enter only via the promotion
-loop with evidence they reduce escaped defects or rework. All gates WARN-first, promoted via
-trial-ledger + retro. Governing rule: every number is computed or earned, never self-declared.
-Runtime stance: Claude Code-primary, host-neutral durable artifacts, future adapters.
-Appetite: [Ashiq sets — recommend M]. Phase 0 = steel thread running end-to-end offline on a fake phase.
+/arc-kickoff --lane develop Build arc's `develop` product ("The Developer") per
+docs/strategy/plans/PLAN-develop.md — an execution harness that turns an approved phase into small,
+spec-anchored, independently proven increments with visible progress and controlled escalation.
+Lane-native birth: this kickoff creates initiatives/develop/ and writes its PLAN/PROGRESS/phases
+there; company organs (docs/adr, retro-log, trial-ledger, tests/) stay at root per ADR-0053.
+/arc-develop itself ships as a lane surface per .claude/rules/lanes.md — --lane flag only, unknown
+lane hard-STOPs (kickoff alone creates lanes), lane echo + PORTFOLIO summary first in lane-mode,
+root-mode byte-identical as the permanent venture-repo contract. v1 = lifecycle command
+(start/next/status/checkpoint/handoff, lane resolution via lane-resolve from day one) + Build Brief
+with prediction block (scored at handoff — calibration, never self-declared confidence) + Context
+Pack (retrieval over existing memory owners — no new graph infra) + durable proof-first slice ledger
+in the lane's phases/phase-NN-tasks.md with evidence strength tiers + spine receipts + develop-lint
+floor (lane-aware via lane-resolve.mjs, like kickoff-lint) + pre-handoff spec-fidelity pass.
+Expansion layers per the plan's delivery order: stuck protocol (fingerprint+hypothesis+backstops),
+risk-triggered checkpoints + deterministic health checks, lane-scoped debt ledger with marker lint,
+approach sketches with economics fields, eval-suite seeding with typed links, triggered capability
+scout + vet gate + lockfile, decision-triggered pattern mining, design-critic checkpoints, Learning
+System (tagged+linked company-organ ledger, unanchored evaluation, withheld + time-forward holdout,
+Ashiq-only promotion). Learning contract binds from v1: no silent self-modification of
+policies/gates/skills/capabilities. Post-v1 growth obeys the Feature Admission Rule: new harness
+features enter only via the promotion loop with evidence they reduce escaped defects or rework.
+All gates WARN-first, promoted via trial-ledger + retro. Governing rule: every number is computed
+or earned, never self-declared. Runtime stance: Claude Code-primary, host-neutral durable artifacts,
+future adapters. Appetite: [Ashiq sets — recommend M]. Phase 0 = steel thread running end-to-end
+offline on a fake phase, lane resolution + root-mode contract fixture included.
 ```

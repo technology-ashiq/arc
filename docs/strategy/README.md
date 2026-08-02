@@ -66,6 +66,11 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
    after the arc-portfolio cycle (C4) closes, before the develop kickoff. It is the
    policy layer `plans/PLAN-engine-process-layer.md` and `plans/BRIEF-bench.md` later
    inherit — both keep their own pull-triggers, unchanged.
+9. **2026-08-02 (post-C4):** `plans/PLAN-develop.md` lane-amended in place — kickoff
+   prompt is now lane-native (`/arc-kickoff --lane develop`, the first native lane per
+   the plans queue), a lanes.md surface-contract block added, tracker artifacts marked
+   lane-relative, debt ledger lane-scoped, learning ledger + eval fixtures pinned as
+   root company organs (ADR-0053/0055). Decision record DEV-A…K unchanged.
 
 ## Provenance
 
