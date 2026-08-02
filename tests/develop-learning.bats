@@ -142,6 +142,70 @@ cost: 95% confidence this is cheap")"
 }
 
 # ---------------------------------------------------------------------------
+# The remaining negative controls -- one per check, each proving it CAN fail.
+#
+# An audit of learning.mjs found 11 distinct check classes and only 6 with a
+# proven-can-fail assertion. A check nobody has watched fail is a coin, not a gate
+# (retro-log 2026-08-02), so the five below close that gap rather than assume it.
+# ---------------------------------------------------------------------------
+
+@test "a row missing a required prose field FAILS, naming the field" {
+  local f; f="$(_ledger 'why-missed: nobody looked
+prevention: look
+type: rule
+area: build
+adr: 0108
+verdict: proposed')"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"what-failed"* ]]
+}
+
+@test "a verdict outside the closed vocabulary FAILS" {
+  local f; f="$(_ledger "$(printf '%s\n' "$_ROW_MIN" | sed 's/^verdict: proposed$/verdict: probably-fine/')")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"verdict"* ]]
+}
+
+@test "a tag outside the closed vocabulary FAILS" {
+  # Closed on purpose: the Context Pack matches on it, and a free-text tag cannot be matched.
+  local f; f="$(_ledger "$_ROW_MIN
+tag: interesting")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tag"* ]]
+}
+
+@test "a promoted executable candidate with no check: FAILS" {
+  local f; f="$(_ledger "$(printf '%s\n' "$_ROW_MIN" | sed 's/^verdict: proposed$/verdict: promoted/')
+replay: caught 1 of 11, false-blocked 0 of 6
+evaluated-by: fresh agent
+approved-by: ashiq 2026-08-03
+forward-verified: no")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"check"* ]]
+}
+
+@test "a non-executable type carrying check: FAILS" {
+  # A checklist is applied by a person; a `check:` on one is a file nothing ever executes.
+  local f; f="$(_ledger "$(printf '%s\n' "$_ROW_MIN" | sed 's/^type: rule$/type: checklist/')
+check: .claude/scripts/develop/candidates/L-002.mjs")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"applied rather than executed"* ]]
+}
+
+@test "the matched positive: a minimal well-formed row passes" {
+  # The other half of every control above. Without this, a validator that rejected
+  # everything would satisfy all five and look like a working gate.
+  local f; f="$(_ledger "$_ROW_MIN")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
 # Replay (REQ-02) -- both numbers computed, never asserted
 # ---------------------------------------------------------------------------
 
