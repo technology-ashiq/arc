@@ -61,6 +61,7 @@ baseline:
   path: .claude/commands/arc-review.md
   commit: 7abeda1
   sha256: 67322b66b2c8dfbb495cf61dadb5ad299413477afa129145a0d67a6852850bed
+  migrated: 2026-08-03
 body: |
 
   Run a code review on `git diff {{input.base|default:main}}...HEAD` (or the staged diff if the branch is clean).

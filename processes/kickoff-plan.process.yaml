@@ -38,6 +38,7 @@ baseline:
   path: .claude/commands/arc-kickoff.md
   commit: 7abeda1
   sha256: 5f31da06e12e71f953bedae69d916699a5b45594afd5f54b859d642c49f78dc3
+  migrated: 2026-08-03
 body: |
 
   **Lane first** (`.claude/rules/lanes.md`): run
