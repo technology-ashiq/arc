@@ -1,6 +1,6 @@
 name: fixture-good
 version: 1.0.0
-intent: "A minimal valid process, used as the base every hostile fixture mutates."
+intent: "A minimal valid process, used as the base every fixture below mutates."
 permissions: declared
 inputs:
   - name: base
@@ -10,7 +10,8 @@ inputs:
     description: "base-branch"
 tools:
   - git.op: []
-  - shell.run
+  - shell.run:
+      - "bash ./run.sh:*"
 output:
   type: object
   additionalProperties: false

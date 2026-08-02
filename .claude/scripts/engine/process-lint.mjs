@@ -2,26 +2,31 @@
 /**
  * process-lint.mjs -- the gate on the canonical process layer (Phase 00).
  *
- * Every check here is STRUCTURAL: a presence-or-parse question with no judgement in it, so
- * every one of them exits 1. On the WARN-first question -- which the PLAN's no-go and this
- * phase's spec could otherwise be read as contradicting -- the no-go governs promoting a
- * gate to BLOCK *in the CI pipeline*, which this phase does not do. It does not govern the
- * tool's own exit code: a lint that cannot exit non-zero on a hostile input is not a lint,
- * and its fixtures could assert nothing.
+ * Every check is STRUCTURAL: a presence-or-parse question with no judgement in it, so every
+ * one exits 1. On the WARN-first question -- which the PLAN's no-go and this phase's spec
+ * could otherwise be read as contradicting -- the no-go governs promoting a gate to BLOCK
+ * *in the CI pipeline*, which this phase does not do. It does not govern the tool's own exit
+ * code: a lint that cannot exit non-zero on a hostile input is not a lint, and its fixtures
+ * could assert nothing.
  *
- * Check ids are fixed in phases/phase-00-spec.md so fixtures and messages are written
- * against them and cannot drift apart:
- *   yaml-parse · yaml-excluded · schema-keyword · schema-shape · name-semver ·
- *   tool-unknown · permissions-invalid · placeholder-dialect · placeholder-malformed ·
- *   evals-path · target-passthrough · baseline-drift · inputs-shape
- *   (lf-only and golden-unrecorded are RESERVED here and implemented in Phase 01 -- they
- *    check GENERATED output, which does not exist yet. Listed so the vocabulary is fixed
- *    once rather than grown per phase.)
+ * REBUILT after the mandatory fresh-agent adversarial pass (phase-00-spec). Two unanchored
+ * agents that had never seen the implementation found 22 real holes in a gate whose own 36
+ * author-written fixtures all passed on the first run -- which is precisely what retro-log
+ * 2026-08-02 says a clean author result means. The classes that mattered:
  *
- * CRLF and duplicate keys in a canonical SOURCE file are yaml-parse, not lf-only: a
- * source file's encoding is the parser's business and a generated file's line endings are
- * the compiler's. Two checks on two artifacts that would otherwise share a name and hide
- * each other.
+ *   - `__proto__` as a key silently disabled THREE gates at once (see yaml-subset.mjs).
+ *   - Five keyword/type combinations linted clean and enforced nothing, making this file's
+ *     "no constraint is silently unenforced" promise false (see schema-subset.mjs).
+ *   - The passthrough check matched a NAMING CONVENTION, not passthrough: `claude-code:`,
+ *     `x_claude:` and any unknown key sailed through. Now the top-level key set is a
+ *     WHITELIST, which subsumes the convention check, and the whole document is walked.
+ *   - Dialect placeholders entered through `inputs[].default` and tool scopes, which the
+ *     body-only scan never looked at.
+ *   - `baseline` proved only "some file has this hash", never "the file this process is
+ *     canonical for" -- and the body was entirely unchecked, so a body rewritten to say
+ *     `git push --force` passed with a freshly-recomputed, fully green pin.
+ *   - The block scalar was lossy (whitespace-only lines, trailing-newline count, `|+`
+ *     accepted-and-ignored), so the round-trip was green by luck of today's content.
  *
  * Usage: process-lint.mjs [FILE...] | --all [--root PATH]
  * Zero dependencies, Node 18+.
@@ -29,10 +34,10 @@
 
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
-import { parseYamlSubset } from "./yaml-subset.mjs";
+import { encodeBlockScalar, parseYamlSubset } from "./yaml-subset.mjs";
 import { KEYWORDS, validateSchemaDoc } from "./schema-subset.mjs";
 // Imported, never copied: a regex copied out of the spine is a regex that drifts from the
 // spine (retro-log 2026-07-22, counts that rot the moment the code moves).
@@ -43,18 +48,44 @@ export const TOOLS = Object.freeze([
   "fs.read", "fs.write", "shell.run", "web.search", "git.op", "ask.human", "agent.invoke",
 ]);
 export const PERMISSIONS = Object.freeze(["declared", "unrestricted"]);
-// ADR-0206: the filter set is closed at ONE. That closure is what makes an
-// "unknown filter" hostile fixture constructible at all.
+// ADR-0206: the filter set is closed at ONE.
 export const FILTERS = Object.freeze(["default"]);
+export const TARGETS = Object.freeze(["claude-code", "codex"]);
 
-const TOOL_SET = new Set(TOOLS);
+// The whole top-level vocabulary. A WHITELIST rather than a pattern: the previous
+// `x-<target>-*` regex enforced a naming convention, so any escape hatch that simply
+// declined to use that spelling was invisible.
+export const TOP_LEVEL_KEYS = Object.freeze([
+  "name", "version", "intent", "permissions", "inputs", "tools", "output", "evals", "baseline", "body",
+]);
+const INPUT_KEYS = Object.freeze(["name", "type", "required", "default", "description"]);
+const BASELINE_KEYS = Object.freeze(["target", "path", "commit", "sha256"]);
+
+// Which live file each PILOT process is canonical for. Without this binding, `baseline`
+// proved only that SOME file in the repo carries the pinned hash -- swapping the path to a
+// different command (or to README.md) and recomputing the hash passed clean.
+export const CANONICAL_BASELINE = Object.freeze({
+  "commit-msg-draft": ".claude/commands/arc-commit.md",
+  "review-diff": ".claude/commands/arc-review.md",
+  "kickoff-plan": ".claude/commands/arc-kickoff.md",
+});
+
+// Exported so the test suite can assert every INDEX row names a REAL check id, rather than
+// trusting a free-text column that could quietly neutralise a fixture.
+export const CHECKS = Object.freeze([
+  "yaml-parse", "yaml-excluded", "schema-keyword", "schema-shape", "name-semver",
+  "tool-unknown", "permissions-invalid", "placeholder-dialect", "placeholder-malformed",
+  "evals-path", "target-passthrough", "unknown-key", "baseline-drift", "body-drift",
+  "body-unrepresentable", "inputs-shape", "intent-missing",
+]);
+
+const DIALECT_RES = [/\$\{\d+(:-[^}]*)?\}/g, /\$ARGUMENTS\b/g, /(^|[^\\$])\$\d\b/g];
 
 // ---------- output ----------
 const findings = [];
 const add = (check, where, what, expected, found, example) =>
   findings.push({ check, where, what, expected, found, example });
 
-// ---------- root ----------
 function gitToplevel() {
   try {
     return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -90,298 +121,403 @@ if (!files.length) {
 }
 
 // ---------- helpers ----------
-const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
+const sha256 = (s) => createHash("sha256").update(s).digest("hex");
+const lf = (s) => s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 const short = (s, n = 60) => (String(s).length > n ? `${String(s).slice(0, n - 3)}...` : String(s));
+const lineOf = (text, needle) => {
+  const i = text.indexOf(needle);
+  return i < 0 ? 1 : text.slice(0, i).split("\n").length;
+};
 
-/** 1-based line of the first occurrence of a needle, for pointing at real places. */
-function lineOf(text, needle) {
-  const idx = text.indexOf(needle);
-  return idx < 0 ? 1 : text.slice(0, idx).split("\n").length;
+/** Every (path, value) string pair in the document, so no check is body-only by accident. */
+function* walkStrings(node, path = "") {
+  if (typeof node === "string") { yield [path, node]; return; }
+  if (Array.isArray(node)) { for (let i = 0; i < node.length; i++) yield* walkStrings(node[i], `${path}[${i}]`); return; }
+  if (node && typeof node === "object") {
+    for (const k of Object.keys(node)) {
+      yield [`${path ? `${path}.` : ""}${k}`, k, "KEY"];
+      yield* walkStrings(node[k], `${path ? `${path}.` : ""}${k}`);
+    }
+  }
+}
+
+/** Placeholders, parsed as a real pipeline so filter 2..n cannot hide behind filter 1. */
+function checkPlaceholders(body, where, declared) {
+  for (const m of body.matchAll(/\{\{([^{}]*)\}\}/g)) {
+    const inner = m[1];
+    const whole = `{{${inner}}}`;
+    const segs = inner.split("|");
+    const pathPart = segs[0];
+    const pm = pathPart.match(/^input\.([a-z][a-z0-9_-]*)$/);
+    if (!pm) {
+      add("placeholder-malformed", where, `malformed placeholder \`${short(whole, 40)}\``,
+        "{{input.NAME}} or {{input.NAME|default:VALUE}} — root is always `input`, exactly one level deep",
+        whole, "{{input.base|default:main}}");
+      continue;
+    }
+    if (declared && !declared.has(pm[1])) {
+      add("placeholder-malformed", where, `placeholder names input \`${pm[1]}\`, which \`inputs:\` does not declare`,
+        `one of: ${[...declared].join(", ") || "(none declared)"}`, pm[1], "declare it under inputs:, or fix the name");
+    }
+    // Every segment past the path is a filter. The old regex ended in `(.*)`, which swallowed
+    // `|shellquote` into the DEFAULT VALUE -- so "the filter set is closed at one" was
+    // unenforced for every filter after the first.
+    for (let i = 1; i < segs.length; i++) {
+      const fm = segs[i].match(/^([a-z]+):(.*)$/);
+      if (!fm) {
+        add("placeholder-malformed", where, `placeholder filter \`${short(segs[i], 20)}\` is not \`name:value\``,
+          "default:VALUE", segs[i], "{{input.base|default:main}}");
+        continue;
+      }
+      if (!FILTERS.includes(fm[1])) {
+        add("placeholder-malformed", where, `unknown placeholder filter \`${fm[1]}\``,
+          `the filter set is closed at: ${FILTERS.join(", ")}`, fm[1], "{{input.base|default:main}}");
+      }
+      if (i > 1) {
+        add("placeholder-malformed", where, "chained placeholder filters are not supported",
+          "exactly one filter", inner, "{{input.base|default:main}}");
+      }
+    }
+  }
+  // After removing every WELL-FORMED placeholder, no brace pair may remain. The old
+  // balance-counter passed `{{input.nope}x}}` (1 open, 1 close, and the match regex could
+  // not see it) and `}}text{{`.
+  const residue = body.replace(/\{\{[^{}]*\}\}/g, "");
+  for (const tok of ["{{", "}}"]) {
+    if (residue.includes(tok)) {
+      const n = body.slice(0, body.indexOf(tok)).split("\n").length;
+      add("placeholder-malformed", where, `stray \`${tok}\` outside any well-formed placeholder (near body line ${n})`,
+        "every {{ closed by a matching }} with nothing odd between",
+        tok, "{{input.base}}");
+      break;
+    }
+  }
 }
 
 // ---------- per-file checks ----------
 for (const file of files) {
   const rel = relative(root, resolve(file)) || file;
-  if (!existsSync(file)) {
-    add("yaml-parse", `${rel}:1`, "file does not exist", "a readable file", file, "check the path");
-    continue;
-  }
-  const text = readFileSync(file, "utf8");
-
-  const parsed = parseYamlSubset(text);
-  if (!parsed.ok) {
-    const e = parsed.error;
-    add(e.check, `${rel}:${e.line}`, e.what, e.expected, e.found, e.example);
-    continue; // nothing downstream can be trusted once the bytes did not parse
-  }
-  const doc = parsed.value;
-  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
-    add("yaml-parse", `${rel}:1`, "root of the document is not a mapping", "a mapping", String(doc), "name: my-process");
-    continue;
-  }
-
-  // --- target-passthrough (ADR-0205): no per-target escape hatch, ever ---
-  for (const k of Object.keys(doc)) {
-    if (/^x-[a-z0-9]+(-[a-z0-9]+)*$/i.test(k)) {
-      add(
-        "target-passthrough",
-        `${rel}:${lineOf(text, k)}`,
-        `per-target passthrough key \`${k}\` is forbidden (ADR-0205)`,
-        "one shared `body:` that every adapter renders",
-        k,
-        "move the content into `body:`, or accept the residue as a named finding",
-      );
+  const at = (n) => `${rel}:${n}`;
+  try {
+    if (!existsSync(file)) {
+      add("yaml-parse", at(1), "file does not exist", "a readable file", file, "check the path");
+      continue;
     }
-  }
+    const text = readFileSync(file, "utf8");
 
-  // --- name-semver: asserted against the spine's live PROCESS_RE ---
-  const name = doc.name;
-  const version = doc.version;
-  if (typeof name !== "string" || typeof version !== "string") {
-    add("name-semver", `${rel}:1`, "`name` and `version` must both be present strings", "name: my-process / version: 1.0.0", `name=${JSON.stringify(name)} version=${JSON.stringify(version)}`, "version: 1.0.0");
-  } else if (!PROCESS_RE.test(`${name}@${version}`)) {
-    add(
-      "name-semver",
-      `${rel}:${lineOf(text, "name:")}`,
-      "`name@version` does not satisfy the spine's PROCESS_RE",
-      String(PROCESS_RE),
-      `${name}@${version}`,
-      "commit-msg-draft@1.0.0",
-    );
-  }
+    const parsed = parseYamlSubset(text);
+    if (!parsed.ok) {
+      const e = parsed.error;
+      add(e.check, at(e.line), e.what, e.expected, e.found, e.example);
+      continue;
+    }
+    const doc = parsed.value;
+    if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+      add("yaml-parse", at(1), "root of the document is not a mapping", "a mapping", String(doc), "name: my-process");
+      continue;
+    }
 
-  // --- permissions-invalid (ADR-0205) ---
-  if (!PERMISSIONS.includes(doc.permissions)) {
-    add(
-      "permissions-invalid",
-      `${rel}:${lineOf(text, "permissions:")}`,
-      "`permissions` is missing or not one of the two allowed values",
-      PERMISSIONS.join(" | "),
-      JSON.stringify(doc.permissions),
-      "permissions: declared",
-    );
-  }
+    // --- unknown-key / target-passthrough: a WHITELIST, walked at every depth ---
+    for (const k of Object.keys(doc)) {
+      if (TOP_LEVEL_KEYS.includes(k)) continue;
+      const isX = /^x[-_.]/i.test(k);
+      add(isX ? "target-passthrough" : "unknown-key", at(lineOf(text, k)),
+        isX ? `per-target passthrough key \`${k}\` is forbidden (ADR-0205)` : `unknown top-level key \`${k}\``,
+        `one of: ${TOP_LEVEL_KEYS.join(", ")}`, k,
+        "move the content into `body:`, or accept the residue as a named finding");
+    }
+    for (const [path, val, isKey] of walkStrings(doc)) {
+      if (isKey === "KEY" && /(^|\.)x[-_.]/i.test(path)) {
+        add("target-passthrough", at(lineOf(text, val)),
+          `nested per-target passthrough key \`${path}\` is forbidden (ADR-0205)`,
+          "no per-target keys at any depth", path, "move the content into `body:`");
+      }
+    }
 
-  // --- inputs-shape ---
-  const inputs = doc.inputs;
-  const inputNames = new Set();
-  if (!Array.isArray(inputs)) {
-    add("inputs-shape", `${rel}:${lineOf(text, "inputs:")}`, "`inputs` is missing or not a list", "a list (use `inputs: []` for none)", JSON.stringify(inputs), "inputs: []");
-  } else {
-    inputs.forEach((inp, idx) => {
-      const at = `${rel}:${lineOf(text, "inputs:")}`;
-      if (!inp || typeof inp !== "object" || Array.isArray(inp)) {
-        add("inputs-shape", at, `inputs[${idx}] is not a mapping`, "a mapping with name/type/required", JSON.stringify(inp), "- name: base");
-        return;
-      }
-      if (typeof inp.name !== "string" || !/^[a-z][a-z0-9_-]*$/.test(inp.name)) {
-        add("inputs-shape", at, `inputs[${idx}].name is missing or malformed`, "^[a-z][a-z0-9_-]*$", JSON.stringify(inp.name), "name: base");
-      } else inputNames.add(inp.name);
-      if (inp.type !== "string") {
-        add("inputs-shape", at, `inputs[${idx}].type must be \`string\` in v1`, "string", JSON.stringify(inp.type), "type: string");
-      }
-      if (typeof inp.required !== "boolean") {
-        add("inputs-shape", at, `inputs[${idx}].required must be a boolean`, "true or false", JSON.stringify(inp.required), "required: false");
-      }
-      if (inp.required === true && "default" in inp) {
-        add("inputs-shape", at, `inputs[${idx}] is required AND has a default`, "a default makes it not required", `${inp.name}: required + default`, "drop one of the two");
-      }
-      for (const k of Object.keys(inp)) {
-        if (!["name", "type", "required", "default", "description"].includes(k)) {
-          add("inputs-shape", at, `inputs[${idx}] has unknown key \`${k}\``, "name, type, required, default, description", k, "remove it");
+    // --- dialect placeholders ANYWHERE, not just in body ---
+    for (const [path, val, isKey] of walkStrings(doc)) {
+      if (isKey === "KEY") continue;
+      for (const re of DIALECT_RES) {
+        for (const m of String(val).matchAll(re)) {
+          add("placeholder-dialect", at(lineOf(text, path.split(".").pop()) || 1),
+            `dialect-native placeholder \`${m[0].trim()}\` in \`${path}\``,
+            "{{input.NAME}} or {{input.NAME|default:VALUE}}", m[0].trim(),
+            "a dialect placeholder anywhere makes the shared body target-specific (ADR-0205)");
         }
       }
-    });
-  }
+    }
 
-  // --- tool-unknown (ADR-0206) ---
-  // A tools entry is EITHER a bare primitive (`- git.op`) or a single-key mapping carrying
-  // that primitive's scopes (`- git.op:` then a list). Scopes are canonical, not dialect:
-  // "this process may run git status and git commit" is a fact about the process, and it is
-  // what lets an adapter regenerate a command-scoped permission line. A bare primitive list
-  // could not, which is the concrete shape ADR-0205's derived-frontmatter rule needs.
-  if (!Array.isArray(doc.tools)) {
-    add("tool-unknown", `${rel}:${lineOf(text, "tools:")}`, "`tools` is missing or not a list", "a list of abstract primitives", JSON.stringify(doc.tools), "tools:\n  - git.op");
-  } else {
-    for (const t of doc.tools) {
-      if (typeof t === "string") {
-        if (!TOOL_SET.has(t)) {
-          add("tool-unknown", `${rel}:${lineOf(text, t)}`, `unknown abstract tool \`${t}\``, TOOLS.join(", "), t, "an eighth primitive is a decision, not an edit -- route it through /arc-change");
+    // --- name-semver ---
+    const name = doc.name;
+    const version = doc.version;
+    if (typeof name !== "string" || typeof version !== "string") {
+      add("name-semver", at(1), "`name` and `version` must both be present strings",
+        "name: my-process / version: 1.0.0", `name=${JSON.stringify(name)} version=${JSON.stringify(version)}`, "version: 1.0.0");
+    } else if (!PROCESS_RE.test(`${name}@${version}`)) {
+      add("name-semver", at(lineOf(text, "name:")), "`name@version` does not satisfy the spine's PROCESS_RE",
+        String(PROCESS_RE), `${name}@${version}`, "commit-msg-draft@1.0.0");
+    }
+
+    // --- intent ---
+    if (typeof doc.intent !== "string" || !doc.intent.trim()) {
+      add("intent-missing", at(lineOf(text, "intent:")), "`intent` is missing or empty",
+        "a one-line description — it is the sole source of the generated `description:`",
+        JSON.stringify(doc.intent), 'intent: "Stage related changes and write a conventional commit."');
+    }
+
+    // --- permissions, and its SEMANTICS (not just enum membership) ---
+    const perms = doc.permissions;
+    if (!PERMISSIONS.includes(perms)) {
+      add("permissions-invalid", at(lineOf(text, "permissions:")), "`permissions` is missing or not one of the two allowed values",
+        PERMISSIONS.join(" | "), JSON.stringify(perms), "permissions: declared");
+    }
+
+    // --- inputs ---
+    const inputs = doc.inputs;
+    const inputNames = new Set();
+    if (!Array.isArray(inputs)) {
+      add("inputs-shape", at(lineOf(text, "inputs:")), "`inputs` is missing or not a list",
+        "a list (use `inputs: []` for none)", JSON.stringify(inputs), "inputs: []");
+    } else {
+      inputs.forEach((inp, idx) => {
+        const w = at(lineOf(text, "inputs:"));
+        if (!inp || typeof inp !== "object" || Array.isArray(inp)) {
+          add("inputs-shape", w, `inputs[${idx}] is not a mapping`, "a mapping with name/type/required", JSON.stringify(inp), "- name: base");
+          return;
         }
-        continue;
-      }
-      if (!t || typeof t !== "object" || Array.isArray(t)) {
-        add("tool-unknown", `${rel}:${lineOf(text, "tools:")}`, "tools entry is neither a primitive nor a scoped mapping", "`- git.op` or `- git.op:` with a scope list", JSON.stringify(t), "- git.op");
-        continue;
-      }
-      const keys = Object.keys(t);
-      if (keys.length !== 1) {
-        add("tool-unknown", `${rel}:${lineOf(text, "tools:")}`, `scoped tools entry has ${keys.length} keys`, "exactly one primitive per entry", keys.join(", "), "- git.op:\n    - status");
-        continue;
-      }
-      const prim = keys[0];
-      if (!TOOL_SET.has(prim)) {
-        add("tool-unknown", `${rel}:${lineOf(text, prim)}`, `unknown abstract tool \`${prim}\``, TOOLS.join(", "), prim, "an eighth primitive is a decision, not an edit -- route it through /arc-change");
-        continue;
-      }
-      const scopes = t[prim];
-      if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some((s) => typeof s !== "string" || !s)) {
-        add("tool-unknown", `${rel}:${lineOf(text, prim)}`, `scopes for \`${prim}\` must be a non-empty list of strings`, "a list of scope strings", JSON.stringify(scopes), "- git.op:\n    - status");
-      }
+        for (const k of Object.keys(inp)) {
+          if (/^x[-_.]/i.test(k)) {
+            add("target-passthrough", w, `per-target key \`${k}\` inside inputs[${idx}] is forbidden (ADR-0205)`,
+              `one of: ${INPUT_KEYS.join(", ")}`, k, "remove it");
+          } else if (!INPUT_KEYS.includes(k)) {
+            add("inputs-shape", w, `inputs[${idx}] has unknown key \`${k}\``, INPUT_KEYS.join(", "), k, "remove it");
+          }
+        }
+        if (typeof inp.name !== "string" || !/^[a-z][a-z0-9_-]*$/.test(inp.name)) {
+          add("inputs-shape", w, `inputs[${idx}].name is missing or malformed`, "^[a-z][a-z0-9_-]*$", JSON.stringify(inp.name), "name: base");
+        } else if (inputNames.has(inp.name)) {
+          add("inputs-shape", w, `inputs[${idx}] re-declares input \`${inp.name}\``,
+            "each input name once", inp.name, "which declaration wins would be undefined — remove one");
+        } else inputNames.add(inp.name);
+        if (inp.type !== "string") {
+          add("inputs-shape", w, `inputs[${idx}].type must be \`string\` in v1`, "string", JSON.stringify(inp.type), "type: string");
+        }
+        if (typeof inp.required !== "boolean") {
+          add("inputs-shape", w, `inputs[${idx}].required must be a boolean`, "true or false", JSON.stringify(inp.required), "required: false");
+        }
+        if (inp.required === true && "default" in inp) {
+          add("inputs-shape", w, `inputs[${idx}] is required AND has a default`, "a default makes it not required", inp.name, "drop one of the two");
+        }
+        if ("default" in inp && typeof inp.default !== "string") {
+          add("inputs-shape", w, `inputs[${idx}].default must be a string while type is capped at string`,
+            "a quoted string", JSON.stringify(inp.default), 'default: "main"');
+        }
+        if (typeof inp.description !== "string" || !inp.description.trim()) {
+          add("inputs-shape", w, `inputs[${idx}].description is missing`,
+            "a short phrase — it is the sole source of the generated `argument-hint:`",
+            JSON.stringify(inp.description), 'description: "base-branch"');
+        }
+      });
     }
-  }
 
-  // --- schema-keyword / schema-shape ---
-  if (!doc.output || typeof doc.output !== "object") {
-    add("schema-shape", `${rel}:${lineOf(text, "output:")}`, "`output` block is missing", "a JSON-Schema-subset document", JSON.stringify(doc.output), "output:\n  type: object");
-  } else {
-    for (const f of validateSchemaDoc(doc.output)) {
-      const isKeyword = /unsupported schema keyword/.test(f.what);
-      add(
-        isKeyword ? "schema-keyword" : "schema-shape",
-        `${rel}:${lineOf(text, "output:")}`,
-        `${f.path}: ${f.what}`,
-        f.expected ?? KEYWORDS.join(", "),
-        f.found,
-        f.example,
-      );
-    }
-  }
-
-  // --- evals-path ---
-  if (!Array.isArray(doc.evals) || doc.evals.length === 0) {
-    add("evals-path", `${rel}:${lineOf(text, "evals:")}`, "`evals` is missing or empty", "a non-empty list of repo-relative paths", JSON.stringify(doc.evals), "evals:\n  - tests/fixtures/engine/evals/x/basic.json");
-  } else {
-    for (const p of doc.evals) {
-      const at = `${rel}:${lineOf(text, String(p))}`;
-      if (typeof p !== "string" || !p) {
-        add("evals-path", at, "eval entry is not a string path", "a repo-relative path", JSON.stringify(p), "tests/fixtures/engine/evals/x/basic.json");
-        continue;
-      }
-      const abs = resolve(root, p);
-      // Escape check is on the RESOLVED path, not on the literal text: `a/../../etc` has
-      // no leading `..` and would pass a textual check while landing outside the repo.
-      if (abs !== root && !abs.startsWith(root + sep)) {
-        add("evals-path", at, "eval path escapes the repository root", "a path inside the repo", p, "keep fixtures under tests/fixtures/engine/evals/");
-        continue;
-      }
-      if (resolve(file) === abs) {
-        add("evals-path", at, "eval path names the process file itself", "a fixture file", p, "point it at a JSON fixture");
-        continue;
-      }
-      if (!existsSync(abs)) {
-        add("evals-path", at, "eval fixture does not exist", "an existing file", p, "create the fixture, or correct the path");
-      }
-    }
-  }
-
-  // --- body + placeholders ---
-  const body = doc.body;
-  if (typeof body !== "string" || !body.trim()) {
-    add("placeholder-malformed", `${rel}:${lineOf(text, "body:")}`, "`body` block scalar is missing or empty", "the process's target-neutral prose", JSON.stringify(short(body, 30)), "body: |");
-  } else {
-    const bodyLine = lineOf(text, "body:");
-    // Dialect-native placeholders: the body is shared by every adapter (ADR-0205), so a
-    // claude-code placeholder sitting in it makes the body target-specific through a side
-    // door -- exactly what the no-passthrough rule exists to prevent.
-    for (const re of [/\$\{\d+(:-[^}]*)?\}/g, /\$ARGUMENTS\b/g, /(^|[^\\$])\$\d\b/g]) {
-      for (const m of body.matchAll(re)) {
-        add(
-          "placeholder-dialect",
-          `${rel}:${bodyLine}`,
-          `dialect-native placeholder \`${m[0].trim()}\` inside \`body:\``,
-          "{{input.NAME}} or {{input.NAME|default:VALUE}}",
-          m[0].trim(),
-          "{{input.base|default:main}}",
-        );
-      }
-    }
-    // Neutral placeholders: closed grammar, closed filter set (ADR-0206).
-    for (const m of body.matchAll(/\{\{([^}]*)\}\}/g)) {
-      const inner = m[1];
-      const whole = `{{${inner}}}`;
-      const gm = inner.match(/^input\.([a-z][a-z0-9_-]*)(?:\|([a-z]+):(.*))?$/);
-      if (!gm) {
-        add(
-          "placeholder-malformed",
-          `${rel}:${bodyLine}`,
-          `malformed placeholder \`${short(whole, 40)}\``,
-          "{{input.NAME}} or {{input.NAME|default:VALUE}} -- root is always `input`, one level deep",
-          whole,
-          "{{input.base|default:main}}",
-        );
-        continue;
-      }
-      if (gm[2] !== undefined && !FILTERS.includes(gm[2])) {
-        add(
-          "placeholder-malformed",
-          `${rel}:${bodyLine}`,
-          `unknown placeholder filter \`${gm[2]}\``,
-          `the filter set is closed at: ${FILTERS.join(", ")}`,
-          gm[2],
-          "{{input.base|default:main}}",
-        );
-      }
-      if (Array.isArray(inputs) && !inputNames.has(gm[1])) {
-        add(
-          "placeholder-malformed",
-          `${rel}:${bodyLine}`,
-          `placeholder names input \`${gm[1]}\`, which \`inputs:\` does not declare`,
-          `one of: ${[...inputNames].join(", ") || "(none declared)"}`,
-          gm[1],
-          "declare it under inputs:, or fix the name",
-        );
-      }
-    }
-    // An unbalanced `{{` never reaches the matcher above, so it needs its own pass --
-    // otherwise the most obvious broken placeholder is the one the check cannot see.
-    const opens = (body.match(/\{\{/g) || []).length;
-    const closes = (body.match(/\}\}/g) || []).length;
-    if (opens !== closes) {
-      add(
-        "placeholder-malformed",
-        `${rel}:${bodyLine}`,
-        `unbalanced placeholder braces in \`body:\` (${opens} \`{{\` vs ${closes} \`}}\`)`,
-        "every {{ closed by a }}",
-        `${opens} open / ${closes} close`,
-        "{{input.base}}",
-      );
-    }
-  }
-
-  // --- baseline-drift (ADR-0202): the pinned hash, recomputed, never assumed ---
-  const bl = doc.baseline;
-  if (!bl || typeof bl !== "object" || Array.isArray(bl)) {
-    add("baseline-drift", `${rel}:${lineOf(text, "baseline:")}`, "`baseline` block is missing", "target, path, commit, sha256", JSON.stringify(bl), "baseline:\n  target: claude-code");
-  } else {
-    for (const k of ["target", "path", "commit", "sha256"]) {
-      if (typeof bl[k] !== "string" || !bl[k]) {
-        add("baseline-drift", `${rel}:${lineOf(text, "baseline:")}`, `baseline.${k} is missing`, "a string", JSON.stringify(bl[k]), `${k}: ...`);
-      }
-    }
-    if (typeof bl.path === "string" && typeof bl.sha256 === "string" && /^[0-9a-f]{64}$/.test(bl.sha256)) {
-      const abs = resolve(root, bl.path);
-      if (!existsSync(abs)) {
-        add("baseline-drift", `${rel}:${lineOf(text, bl.path)}`, "baseline.path does not exist", "the live pilot file", bl.path, "correct the path");
-      } else {
-        // LF-normalise before hashing so a checkout with autocrlf does not read as drift.
-        // What that destroys -- line-ending information -- is measured by Phase 01's
-        // separate `lf-only` check on GENERATED files, never folded into this one.
-        const live = sha256(readFileSync(abs, "utf8").replace(/\r\n/g, "\n").replace(/\r/g, "\n"));
-        if (live !== bl.sha256) {
-          add(
-            "baseline-drift",
-            `${rel}:${lineOf(text, bl.sha256)}`,
-            `the pinned baseline for \`${bl.path}\` has moved since ${bl.commit}`,
-            `sha256 ${bl.sha256}`,
-            `sha256 ${live}`,
-            "adjudicate the drift, then re-pin deliberately -- never absorb it silently (ADR-0202)",
-          );
+    // --- tools, including permissions semantics and duplicate primitives ---
+    const seenPrim = new Map();
+    if (!Array.isArray(doc.tools)) {
+      add("tool-unknown", at(lineOf(text, "tools:")), "`tools` is missing or not a list", "a list of abstract primitives", JSON.stringify(doc.tools), "tools:\n  - git.op");
+    } else {
+      for (const t of doc.tools) {
+        const bare = typeof t === "string";
+        const prim = bare ? t : (t && typeof t === "object" && !Array.isArray(t) && Object.keys(t).length === 1 ? Object.keys(t)[0] : null);
+        if (prim === null) {
+          add("tool-unknown", at(lineOf(text, "tools:")), "tools entry is neither a primitive nor a single-key scoped mapping",
+            "`- git.op` or `- git.op:` with a scope list", JSON.stringify(t), "- git.op");
+          continue;
+        }
+        if (!TOOLS.includes(prim)) {
+          add("tool-unknown", at(lineOf(text, prim)), `unknown abstract tool \`${prim}\``, TOOLS.join(", "), prim,
+            "an eighth primitive is a decision, not an edit — route it through /arc-change");
+          continue;
+        }
+        if (seenPrim.has(prim)) {
+          add("tool-unknown", at(lineOf(text, prim)), `\`${prim}\` is declared twice`,
+            "each primitive once", `${seenPrim.get(prim)} then ${bare ? "bare" : "scoped"}`,
+            "a bare entry beside a scoped one silently widens the scoped grant to everything");
+        }
+        seenPrim.set(prim, bare ? "bare" : "scoped");
+        if (!bare) {
+          const scopes = t[prim];
+          if (!Array.isArray(scopes) || scopes.length === 0 || scopes.some((s) => typeof s !== "string" || !s)) {
+            add("tool-unknown", at(lineOf(text, prim)), `scopes for \`${prim}\` must be a non-empty list of strings`,
+              "a list of scope strings", JSON.stringify(scopes), "- git.op:\n    - status");
+          }
+        }
+        // permissions SEMANTICS: `declared` promises an explicit permission surface, so a
+        // bare primitive under it renders an unscoped grant. `unrestricted` emits no
+        // permission line at all, so any tools detail under it is unverifiable decoration.
+        if (perms === "declared" && bare && prim !== "fs.write" && prim !== "ask.human") {
+          add("permissions-invalid", at(lineOf(text, prim)), `\`permissions: declared\` but \`${prim}\` is unscoped`,
+            "every scope-bearing primitive scoped under `declared`", `bare ${prim}`,
+            `- ${prim}:\n      - <scope>`);
+        }
+        if (perms === "unrestricted" && !bare) {
+          add("permissions-invalid", at(lineOf(text, prim)), `\`permissions: unrestricted\` emits no permission line, so scopes on \`${prim}\` are unverifiable`,
+            "bare primitives under `unrestricted`", `scoped ${prim}`, `- ${prim}`);
         }
       }
-    } else if (typeof bl.sha256 === "string" && bl.sha256 && !/^[0-9a-f]{64}$/.test(bl.sha256)) {
-      add("baseline-drift", `${rel}:${lineOf(text, "sha256")}`, "baseline.sha256 is not 64 lowercase hex", "^[0-9a-f]{64}$", short(bl.sha256, 20), "sha256: 4eb875...");
     }
+
+    // --- output schema ---
+    if (!doc.output || typeof doc.output !== "object" || Array.isArray(doc.output)) {
+      add("schema-shape", at(lineOf(text, "output:")), "`output` block is missing", "a JSON-Schema-subset document", JSON.stringify(doc.output), "output:\n  type: object");
+    } else {
+      for (const f of validateSchemaDoc(doc.output)) {
+        add(/unsupported schema keyword/.test(f.what) ? "schema-keyword" : "schema-shape",
+          at(lineOf(text, "output:")), `${f.path}: ${f.what}`, f.expected ?? KEYWORDS.join(", "), f.found, f.example);
+      }
+    }
+
+    // --- evals ---
+    if (!Array.isArray(doc.evals) || doc.evals.length === 0) {
+      add("evals-path", at(lineOf(text, "evals:")), "`evals` is missing or empty", "a non-empty list of repo-relative .json fixture paths", JSON.stringify(doc.evals), "evals:\n  - tests/fixtures/engine/evals/x/basic.json");
+    } else {
+      const seenEval = new Set();
+      for (const p of doc.evals) {
+        const w = at(lineOf(text, String(p)));
+        if (typeof p !== "string" || !p) {
+          add("evals-path", w, "eval entry is not a string path", "a repo-relative path", JSON.stringify(p), "tests/fixtures/engine/evals/x/basic.json");
+          continue;
+        }
+        if (seenEval.has(p)) add("evals-path", w, `duplicate eval path \`${p}\``, "each fixture once", p, "remove the duplicate");
+        seenEval.add(p);
+        const abs = resolve(root, p);
+        if (abs !== root && !abs.startsWith(root + sep)) {
+          add("evals-path", w, "eval path escapes the repository root", "a path inside the repo", p, "keep fixtures under tests/fixtures/engine/evals/");
+          continue;
+        }
+        // Case-insensitive compare: on Windows and default macOS, `SELFREF.process.yaml`
+        // and `selfref.process.yaml` are one file, and an exact-case compare missed it.
+        const same = (a, b) => {
+          try { return realpathSync.native(a) === realpathSync.native(b); }
+          catch { return a.toLowerCase() === b.toLowerCase(); }
+        };
+        if (same(resolve(file), abs)) {
+          add("evals-path", w, "eval path names the process file itself", "a fixture file", p, "point it at a JSON fixture");
+          continue;
+        }
+        if (!existsSync(abs)) {
+          add("evals-path", w, "eval fixture does not exist", "an existing file", p, "create the fixture, or correct the path");
+          continue;
+        }
+        if (!statSync(abs).isFile()) {
+          add("evals-path", w, `eval path \`${p}\` is a directory, not a fixture`, "a .json file", p, "name the fixture file itself");
+          continue;
+        }
+        if (!p.endsWith(".json")) {
+          add("evals-path", w, `eval path \`${p}\` is not a .json fixture`, "a .json file", p, "eval fixtures are JSON");
+        }
+      }
+    }
+
+    // --- body: representability, placeholders, and drift against the pinned baseline ---
+    const body = doc.body;
+    if (typeof body !== "string" || !body.trim()) {
+      add("body-unrepresentable", at(lineOf(text, "body:")), "`body` block scalar is missing or empty",
+        "the process's target-neutral prose", JSON.stringify(short(body, 30)), "body: |");
+    } else {
+      checkPlaceholders(body, at(lineOf(text, "body:")), Array.isArray(inputs) ? inputNames : null);
+
+      // Round-trip at the GATE. Re-encode the parsed body and re-parse it; anything this
+      // format cannot represent fails HERE rather than silently at Phase 01's byte-diff.
+      // Without this the round-trip proof was a hardcoded 3-case array in the test file,
+      // green by luck of today's content, that no future process would ever be in.
+      const rt = parseYamlSubset(encodeBlockScalar("body", body));
+      if (!rt.ok || rt.value.body !== body) {
+        add("body-unrepresentable", at(lineOf(text, "body:")),
+          "`body` does not survive a block-scalar round-trip — these bytes cannot be regenerated",
+          "content representable as a block scalar",
+          rt.ok ? `${body.length} bytes in, ${rt.value.body.length} out` : `re-parse failed: ${rt.error.what}`,
+          "check for whitespace-only lines or an unusual trailing-newline count");
+      }
+    }
+
+    // --- baseline: bound to the NAME, inside the repo, a real file, and body-checked ---
+    const bl = doc.baseline;
+    if (!bl || typeof bl !== "object" || Array.isArray(bl)) {
+      add("baseline-drift", at(lineOf(text, "baseline:")), "`baseline` block is missing", BASELINE_KEYS.join(", "), JSON.stringify(bl), "baseline:\n  target: claude-code");
+    } else {
+      for (const k of Object.keys(bl)) {
+        if (!BASELINE_KEYS.includes(k)) {
+          add(/^x[-_.]/i.test(k) ? "target-passthrough" : "unknown-key", at(lineOf(text, k)),
+            `unknown key \`${k}\` in \`baseline\``, BASELINE_KEYS.join(", "), k, "remove it — baseline is not a passthrough container");
+        }
+      }
+      for (const k of BASELINE_KEYS) {
+        if (typeof bl[k] !== "string" || !bl[k]) {
+          add("baseline-drift", at(lineOf(text, "baseline:")), `baseline.${k} is missing`, "a string", JSON.stringify(bl[k]), `${k}: ...`);
+        }
+      }
+      if (!TARGETS.includes(bl.target)) {
+        add("baseline-drift", at(lineOf(text, "target:")), `baseline.target \`${bl.target}\` is not a known adapter`, TARGETS.join(" | "), String(bl.target), "target: claude-code");
+      }
+      if (typeof bl.commit === "string" && !/^[0-9a-f]{7,40}$/.test(bl.commit)) {
+        add("baseline-drift", at(lineOf(text, "commit:")), "baseline.commit is not a git sha", "7-40 lowercase hex", String(bl.commit), "commit: 7abeda1");
+      }
+      const want = CANONICAL_BASELINE[name];
+      if (want && bl.path !== want) {
+        add("baseline-drift", at(lineOf(text, "path:")),
+          `process \`${name}\` must be canonical for \`${want}\`, not \`${bl.path}\``,
+          want, String(bl.path),
+          "a pin that only proves SOME file has this hash proves nothing about THIS process");
+      }
+      if (typeof bl.path === "string" && bl.path) {
+        const abs = resolve(root, bl.path);
+        if (abs !== root && !abs.startsWith(root + sep)) {
+          add("baseline-drift", at(lineOf(text, "path:")), "baseline.path escapes the repository root", "a path inside the repo", bl.path, "pin a file CI can actually see");
+        } else if (!existsSync(abs)) {
+          add("baseline-drift", at(lineOf(text, "path:")), "baseline.path does not exist", "the live pilot file", bl.path, "correct the path");
+        } else if (!statSync(abs).isFile()) {
+          add("baseline-drift", at(lineOf(text, "path:")), "baseline.path is a directory", "a file", bl.path, "name the command file itself");
+        } else {
+          const liveRaw = lf(readFileSync(abs, "utf8"));
+          if (/^[0-9a-f]{64}$/.test(bl.sha256 ?? "")) {
+            const live = sha256(liveRaw);
+            if (live !== bl.sha256) {
+              add("baseline-drift", at(lineOf(text, bl.sha256)),
+                `the pinned baseline for \`${bl.path}\` has moved since ${bl.commit}`,
+                `sha256 ${bl.sha256}`, `sha256 ${live}`,
+                "adjudicate the drift, then re-pin deliberately — never absorb it silently (ADR-0202)");
+            }
+          } else if (typeof bl.sha256 === "string" && bl.sha256) {
+            add("baseline-drift", at(lineOf(text, "sha256")), "baseline.sha256 is not 64 lowercase hex", "^[0-9a-f]{64}$", short(bl.sha256, 20), "sha256: 4eb875...");
+          }
+          // body-drift: the canonical body must BE the live file's body, modulo placeholders.
+          // Without this the body was entirely unchecked: rewriting `Do NOT push` into
+          // `git push --force origin main` passed with a freshly-recomputed, green pin.
+          if (typeof body === "string" && want) {
+            const m = liveRaw.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
+            if (m) {
+              const mask = (s) => s
+                .replace(/\{\{[^{}]*\}\}/g, " PH ")
+                .replace(/\$\{\d+(:-[^}]*)?\}/g, " PH ")
+                .replace(/\$ARGUMENTS\b/g, " PH ");
+              if (mask(body) !== mask(m[1])) {
+                add("body-drift", at(lineOf(text, "body:")),
+                  `\`body\` does not match the prose of \`${bl.path}\` (placeholders excepted)`,
+                  `the live file's body, ${m[1].length} bytes`, `canonical body, ${body.length} bytes`,
+                  "the canonical file is supposed to BE that command — regenerate it rather than editing it by hand");
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // A crash must not discard the findings already collected from earlier files. Before
+    // this, a readFileSync EISDIR on file N threw a raw stack trace and every finding from
+    // files 1..N-1 was lost -- turning a legible multi-file report into a traceback.
+    add("yaml-parse", at(1), `process-lint crashed on this file: ${e.message}`,
+      "a readable canonical process file", e.code || e.name || "Error",
+      "this is a lint defect as much as a file defect — report both");
   }
 }
 

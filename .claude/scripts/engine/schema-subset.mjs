@@ -44,7 +44,44 @@ export function validateSchemaDoc(schema, path = "output") {
     return out;
   }
 
-  for (const k of Object.keys(schema)) {
+  const keys = Object.keys(schema);
+
+  // An EMPTY schema constrains nothing while reading as a contract. `output: {}` passed the
+  // caller's truthiness guard and then validated every possible document.
+  if (keys.length === 0) {
+    at(path, "schema node is empty", "at least a `type`", "{}", "type: object");
+    return out;
+  }
+
+  // A keyword that can never fire for this node's `type` is a claimed constraint nobody
+  // checks -- exactly what this module's header says cannot exist. It read as a guarantee
+  // and enforced nothing: `{type: object, minLength: 5}`, `{type: number, pattern: ...}` and
+  // `{type: string, required: [x]}` all linted clean and were provable no-ops against data.
+  const APPLIES_TO = {
+    properties: ["object"], required: ["object"], additionalProperties: ["object"],
+    items: ["array"], minLength: ["string"], pattern: ["string"],
+  };
+  const t = typeof schema.type === "string" ? schema.type : null;
+  for (const k of keys) {
+    const only = APPLIES_TO[k];
+    if (!only) continue;
+    if (!t) {
+      at(`${path}.${k}`, `\`${k}\` needs an explicit \`type\` to be enforceable`, `type: ${only.join(" or ")}`, "no type declared", `type: ${only[0]}`);
+    } else if (!only.includes(t)) {
+      at(`${path}.${k}`, `\`${k}\` never applies to type \`${t}\` — it would be silently unenforced`, `type: ${only.join(" or ")}`, `type: ${t}`, `drop \`${k}\`, or correct the type`);
+    }
+  }
+
+  // `additionalProperties: false` and `required` are both no-ops without `properties`:
+  // validateData guards on `schema.properties`, so dropping it deletes the constraint AND
+  // the cross-check that `required` names real properties.
+  for (const k of ["additionalProperties", "required"]) {
+    if (k in schema && !("properties" in schema)) {
+      at(`${path}.${k}`, `\`${k}\` without \`properties\` enforces nothing`, "a properties block alongside it", `${k} declared alone`, "add properties, or drop this keyword");
+    }
+  }
+
+  for (const k of keys) {
     if (!KW.has(k)) {
       at(
         `${path}.${k}`,

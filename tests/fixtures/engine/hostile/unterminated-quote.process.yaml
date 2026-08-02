@@ -11,7 +11,8 @@ inputs:
 tools:
   - git.op:
       - "diff:*"
-  - shell.run
+  - shell.run:
+      - "bash ./run.sh:*"
 output:
   type: object
   additionalProperties: false

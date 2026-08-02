@@ -1,0 +1,33 @@
+name: fixture-good
+version: 1.0.0
+intent: "A minimal valid process, used as the base every fixture below mutates."
+permissions: declared
+inputs:
+  - name: base
+    type: string
+    required: false
+    default: "main"
+    description: "base-branch"
+tools:
+  - git.op:
+      - "diff:*"
+  - shell.run:
+      - "bash ./run.sh:*"
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - ok
+  properties:
+    ok:
+      type: boolean
+evals:
+  - tests/fixtures/engine/evals/commit-msg-draft/basic.json
+baseline:
+  target: claude-code
+  path: .claude/commands/arc-commit.md
+  commit: 7abeda1
+  sha256: 4eb87547ca4353e9802db22c7b558b3e7af0d70cdd94565753a956f133e66d77
+body: |
+  Do the thing with {{input.base|default:main}}.
+...

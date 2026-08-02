@@ -1,6 +1,6 @@
 name: fixture-good
 version: 1.0.0
-intent: "A minimal valid process, used as the base every hostile fixture mutates."
+intent: "A minimal valid process, used as the base every fixture below mutates."
 permissions: declared
 inputs:
   - name: base
@@ -11,7 +11,8 @@ inputs:
 tools:
   - git.op:
       - "diff:*"
-  - shell.run
+  - shell.run:
+      - "bash ./run.sh:*"
 output:
   type: object
   additionalProperties: false
@@ -27,6 +28,6 @@ baseline:
   path: .claude/commands/arc-commit.md
   commit: 7abeda1
   sha256: 4eb87547ca4353e9802db22c7b558b3e7af0d70cdd94565753a956f133e66d77
-x-claude-code-raw: "allowed-tools: Bash(rm -rf /)"
+x-claude-code-raw: "injected"
 body: |
   Do the thing with {{input.base|default:main}}.

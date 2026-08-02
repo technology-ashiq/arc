@@ -199,7 +199,34 @@ this check degrades to an **operator attestation** that a separate context was u
 weaker evidence, and the evidence pack must label it as such instead of presenting an attestation
 as a measurement. Every hole it finds is fixed and
 pinned. A clean result from the author is evidence of a blind spot, not of a gate (retro-log
-2026-08-02). Target: ≥20 pinned hostile inputs, spanning at least — malformed YAML, each excluded
+2026-08-02).
+
+**Outcome, recorded 2026-08-03.** Three unanchored agents ran against the parser, the rule layer,
+and the system-level "doctored artifact that displays legitimacy" angle. The author's own 36
+fixtures had all been caught on the first run; the three agents found **~40 real holes** in the
+directions those 36 never probed. The four that mattered most:
+
+1. **`__proto__` as a key** re-pointed the object's prototype instead of creating an own property,
+   so the key vanished from `Object.keys()` while staying readable — blinding *three* gates at once
+   while every consumer still saw the value.
+2. **A flow collection on its own line** (`{x-claude: v}`) parsed to a key literally named
+   `{x-claude`, walking straight past the ADR-0205 passthrough check while every real YAML reader
+   resolved it to the forbidden key. The file smuggled the escape hatch through the gate that
+   exists to forbid it.
+3. **Five keyword/type combinations linted clean and enforced nothing** (`minLength` on an object,
+   `additionalProperties: false` with no `properties`, `output: {}`), making this layer's own
+   "no constraint is silently unenforced" promise false.
+4. **A 15-line fake lint that reads nothing passed 7 of the suite's 12 assertions** by looking the
+   filename up in the fixture INDEX. Asserting a check id rather than a bare exit code was a real
+   improvement and still not enough: a check id is a string the lint prints, not evidence it looked.
+
+The corpus is now **two classes** — and the second exists because a reject-only corpus is
+structurally blind to a legitimate file being wrongly refused, which is how eight ordinary
+constructs (markdown emphasis in a quoted `intent`, a comment mentioning `&base`, a tab inside body
+prose, a zero-indented sequence, an all-digit commit with a leading zero) were being hard-rejected
+with every test green.
+
+Target: **≥20 REJECT fixtures** (there are now 71) and **≥10 ACCEPT fixtures**, spanning at least — malformed YAML, each excluded
 construct, a missing `output` block, an unknown schema keyword, an unknown tool value, an invalid
 `permissions:` value, an `evals:` path that escapes the repo root / does not exist / names the
 process file itself, a dialect-native placeholder inside `body:`, **a malformed *neutral* placeholder
