@@ -19,11 +19,13 @@ _url() {
   case "$p" in /*) echo "file://$p";; *) echo "file:///$p";; esac
 }
 
-# Run a probe with quality.mjs imported as `q`, over a ledger built from stdin.
+# Run a probe with quality.mjs imported as `q`, over a ledger the test wrote to a FILE.
+# A heredoc attached to a helper does not reliably reach its stdin under bats: every ledger
+# arrived empty, every validator saw zero slices, and the two tests asserting "no findings"
+# passed vacuously on nothing at all. The emptiness check below makes that impossible now.
 _q() {
-  local fn="$1"; shift
-  local led="$BATS_TEST_TMPDIR/ledger.md"
-  cat > "$led"
+  local fn="$1" led="$2"
+  [ -s "$led" ] || { echo "the ledger fixture is empty -- the test would prove nothing"; return 1; }
   local probe="$BATS_TEST_TMPDIR/probe.mjs"
   {
     echo "import * as q from '$(_url "$(Q)")';"
@@ -62,22 +64,24 @@ tier: unit
 # ---------------------------------------------------------------------------
 
 @test "a slice with no declared decision gets no annex and is not asked for one" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _no_fails
 }
 
 @test "a slice that declares a decision and carries no annex FAILs" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 decision-type: architecture
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "declares a architecture decision but carries no Pattern Annex"
 }
 
 @test "an annex on a slice that declared nothing FAILs: mining is triggered, never ambient" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 
 ### Pattern Annex — slice 01
@@ -86,11 +90,12 @@ $_SLICE_PLAIN
 |---|---|---|
 | others use cursors | https://docs.example/api (primary docs) | adopted — bounded memory |
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "declares no \`decision-type:\`"
 }
 
 @test "a complete annex on a declared decision passes" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 decision-type: architecture
 
@@ -101,11 +106,12 @@ decision-type: architecture
 | Stripe paginates with an opaque cursor | https://docs.stripe.com/api/pagination (primary docs) | adopted — bounded memory at any depth |
 | Linear returns hasNextPage beside it | https://linear.app/developers (primary docs) | rejected — the cursor already answers it |
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _no_fails
 }
 
 @test "an annex row missing its source FAILs, and names the row" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 decision-type: product
 
@@ -115,12 +121,13 @@ decision-type: product
 |---|---|---|
 | Stripe paginates with an opaque cursor |  | adopted — bounded memory |
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "carries no source"
   _has "Stripe paginates"
 }
 
 @test "an annex row missing its verdict FAILs: a row with no decision is research theatre" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 decision-type: product
 
@@ -130,6 +137,7 @@ decision-type: product
 |---|---|---|
 | Stripe paginates with an opaque cursor | https://docs.stripe.com/api (primary docs) | interesting |
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "no adopted-or-rejected verdict"
 }
 
@@ -140,7 +148,7 @@ EOF
     rows="$rows| pattern number $i | https://docs.example/$i (primary docs) | rejected — not applicable |
 "
   done
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 decision-type: ux
 
@@ -150,11 +158,12 @@ decision-type: ux
 |---|---|---|
 $rows
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "over the 20-line cap"
 }
 
 @test "a decision-type outside the closed vocabulary FAILs" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 decision-type: vibes
 
@@ -164,11 +173,12 @@ decision-type: vibes
 |---|---|---|
 | something | https://docs.example (primary docs) | adopted — fits |
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "outside product | ux | architecture | external-api"
 }
 
 @test "an annex heading naming no slice FAILs closed rather than being skipped" {
-  _q validateAnnex <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 
 ### Pattern Annex
@@ -177,6 +187,7 @@ $_SLICE_PLAIN
 |---|---|---|
 | something | https://docs.example | adopted — fits |
 EOF
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
   _has "names no slice"
 }
 
@@ -185,17 +196,19 @@ EOF
 # ---------------------------------------------------------------------------
 
 @test "a non-risk slice with no sketches is untouched" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   [[ "$output" == *'"warns":[]'* ]] || { echo "$output"; false; }
   _no_fails
 }
 
 @test "a risk-glob slice with no sketches WARNs, and names the class it tripped" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "touches auth"
   _has "carries no approach sketches"
 }
@@ -203,7 +216,7 @@ EOF
 @test "risk is decided by PATH, never by the slice's own risk field" {
   # `risk: high` on a slice naming no path must not summon sketches: "is this risky?" is
   # exactly the judgement a model under time pressure gets wrong, always in one direction.
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 #### slice: 01
 
 title: rewrite the introduction paragraph
@@ -212,11 +225,12 @@ risk: high
 proof: static
 tier: static
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   [[ "$output" == *'"warns":[]'* ]] || { echo "self-declared risk summoned sketches: $output"; false; }
 }
 
 @test "a risky slice with two complete sketches passes" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -242,11 +256,12 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: the failure mode is a handler nobody remembered to change
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _no_fails
 }
 
 @test "a sketch pricing itself in months is rejected" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -272,6 +287,7 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: a handler nobody remembered to change
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "costs \`maintenance\` in time"
 }
 
@@ -279,7 +295,7 @@ EOF
   # The negative control for the duration check. "touches 3 call sites" and "deps +0" are
   # exactly what a sketch is supposed to carry; a check that rejected them would push authors
   # back to prose, which is the opposite of the point.
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -305,11 +321,12 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: a handler nobody remembered to change
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _no_fails
 }
 
 @test "a rejected approach with no rejected-because FAILs" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -334,11 +351,12 @@ operational-surface: deps +0, services +0, config +0
 deletion-opportunity: none
 verdict: rejected
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "rejected with no \`rejected-because:\`"
 }
 
 @test "no picked approach, or two, FAILs" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -363,11 +381,12 @@ operational-surface: deps +0, services +0, config +0
 deletion-opportunity: none
 verdict: picked
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "2 picked approach(es)"
 }
 
 @test "one approach is a defence and four are a survey: both FAIL" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -382,11 +401,12 @@ operational-surface: deps +0, services +0, config +0
 deletion-opportunity: none
 verdict: picked
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "1 approach(es); the comparison is 2 or 3"
 }
 
 @test "an operational surface with no counts FAILs" {
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -412,13 +432,14 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: it forgets
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "operational surface with no counts"
 }
 
 @test "an approach marker the grammar will not accept FAILs closed" {
   # The same discipline the ledger's NEAR_SLICE applies: a line a person reads as an approach
   # must become one or become an error, never silently become a field.
-  _q validateSketches <<EOF
+  cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
 ### Approach sketches — slice 01
@@ -439,6 +460,7 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: it forgets
 EOF
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
   _has "read as an approach marker"
 }
 
