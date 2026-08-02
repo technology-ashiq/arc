@@ -31,86 +31,86 @@ expected-proof-failures: (empty until proven)
 #### slice: 01
 
 title: `docs/develop/learning-ledger.md` exists with ≥3 real rows drawn from Cycle 5's actual findings, each carrying typed links
-kind: logic
+kind: infra
 risk: high
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — docs/develop/learning-ledger.md, 4 rows with typed links
+tier: static
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 4 rows from arc real failures; learning.mjs parse exits 0
+commit: 9cf816d
 
 #### slice: 02
 
 title: `develop-lint` FAILs an unparseable learning row and names its id and line
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bats: unparseable row FAILS and names id + line
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: repeated-key row FAILs carrying L-001 and a line number
+commit: 9cf816d
 
 #### slice: 03
 
 title: `develop-lint` WARNs a row with zero typed links
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bats: zero-typed-link row WARNs, does not fail
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: WARN emitted, exit 0
+commit: 9cf816d
 
 #### slice: 04
 
 title: `develop-lint` FAILs a `verdict: promoted` row missing `replay:`, `evaluated-by:` or `approved-by:` — asserted once per missing field, not once in total
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bats: promoted row missing each of the 3 inputs, asserted once per field
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 3 separate FAIL tests plus the complete-row positive
+commit: 9cf816d
 
 #### slice: 05
 
 title: `tests/fixtures/develop-evals/` holds ≥12 fixtures across SIX categories — spec-drift, false-confidence, missing-edge-case, bad-gate, flailing, and **`clean/` (≥4 of them)**. Without clean controls a candidate that flags everything scores a perfect catch-count and a false-block count of zero, which is the same shape as a gate that cannot fail
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — 18 fixtures across six categories incl 6 clean controls
+tier: static
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: corpus header contract asserted per fixture in bats
+commit: 9cf816d
 
 #### slice: 06
 
 title: `withheld/` exists, a candidate citing a withheld id FAILs, and no command prints its contents
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bats: withheld citation FAILs, list --visible omits it, no id printed
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: all three asserted; withheld ids never appear in replay output
+commit: 9cf816d
 
 #### slice: 07
 
 title: replay computes catch-count (flagged among `expect: flagged`) AND false-block count (flagged among `expect: clean`), and the lint rejects a self-declared number in any learning row
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bats: catch-count and false-block-count computed separately
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: flag-everything scores false-blocked 6 of 6; flag-nothing scores 0 of both
+commit: 9cf816d
 
 #### slice: 08
 
@@ -129,57 +129,57 @@ commit: (empty until proven)
 title: every new check has a negative control proving it can fail
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bats: 5 added negative controls, one per unchecked class
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 11 check classes, all now proven able to fail, plus a matched positive
+commit: 9cf816d
 
 #### slice: 10
 
 title: the adversarial pass on this lint is run by a **fresh agent that has not seen the code**, and every hole is pinned as a fixture
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — a fresh agent ran the construct-a-breaking-input pass
+tier: integration
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 29 candidates, 8 holes, 3 critical; all fixed, 9 pinned as regression tests
+commit: 9cf816d
 
 #### slice: 11
 
 title: tests green on all 3 CI legs
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bash tests/develop-learning.bats on all 3 CI legs
+tier: unit
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: CI run 30763365970 green, 36 tests
+commit: 9cf816d
 
 #### slice: 12
 
 title: `tree-manifest.txt` regenerated as a named step
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — sync-to-project.sh + tree-manifest regen, delta diffed first
+tier: static
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: only intended paths moved
+commit: 9cf816d
 
 #### slice: 13
 
 title: tracker updated (PROGRESS.md row ✅ + done-log)
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — PROGRESS.md row + done log + board row
+tier: static
 sources: phase-04-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: tracker updated, board-lint exit 0
+commit: 9cf816d

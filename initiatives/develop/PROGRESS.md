@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-develop Cycle 6 (opened 2026-08-02)
-phase: 04 — in progress
+phase: 05 — not started
 appetite: 7d
-burn: 0d
+burn: 0.8d
 blocked-on: —
 depends-on: —
 
@@ -22,7 +22,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 5 | — | ✅ done 2026-08-02 |
-| 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, promotion loop | 1.5 days | pending |
+| 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, promotion loop | 1.5 days | ✅ done 2026-08-03 (12 of 13 slices; slice 08 carried) |
 | 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | pending |
 | 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | pending |
 | 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
@@ -124,13 +124,93 @@ the two things this phase deliberately did not build.
 `slice.stuck` needed ADR-0107 (21 → 22). ADR-0106's own revisit trigger — *"a fourth develop
 lifecycle event needs a kind"* — is what authorised it, one cycle after it was written.
 
+---
+
+**Phase 04 — the Learning System — closed 2026-08-03, ~0.8d against a 1.5d appetite.
+12 of 13 slices proven; slice 08 carried forward, deliberately.**
+CI run `30763365970` green, 36 tests across 3 legs
+(`initiatives/develop/evidence/phase-04/ci-green.txt`).
+
+Shipped: `docs/develop/learning-ledger.md` (a company organ, 4 rows drawn from arc real
+failures, each with typed links) · `learning.mjs` (parse / replay / list --visible) ·
+`develop-lint [learning-row]` as a structural BLOCK · 18 fixtures across SIX categories
+including 6 clean controls · a withheld holdout chosen and committed BEFORE any candidate
+was authored.
+
+**The loop ran end to end twice and returned "no" twice, and that is the phase result.**
+L-002 was authored from a real Cycle-5 finding and sent to a fresh agent carrying only the
+candidate and the computed counts. It rejected it on the CODE, not the counts — two bags of
+words tested against a whole document with nothing requiring the success claim and the lost
+write to concern the same operation; an optional possessive that showed the regex was
+covering two remembered sentences; one alternative that could never fire. It then
+constructed two inputs that break it, both now pinned as clean controls. L-004, the
+rewrite, stopped false-blocking and stopped firing at all.
+
+**Slice 08 — "one REAL promotion ships an enforced check" — is UNPROVEN and the criterion
+was not reworded to match what happened.** Moving a goalpost to where the ball landed would
+be a strange thing to do inside the phase that builds the machinery for refusing it. A
+first-try promotion is what a rubber stamp also produces.
+
+**The adversarial pass found 8 holes across 29 candidates, 3 critical, in a gate whose own
+tests already passed.** The worst: `replay` handed the candidate the answer key — it
+received the whole fixture including `expect`, and the parent re-read that field AFTER the
+untrusted call. A candidate returning `flagged: fixture.expect === "flagged"` scored 11 of
+11; one that MUTATED `expect` erased the clean denominator and reported
+`false-blocked 0 of 0`; one exfiltrated every withheld id and body through the runner
+itself; one printed a fabricated report at import time and exited 0. Candidates now run in
+their own process with a frozen `{ body }` and return booleans; counting happens against
+labels they never see.
+
+Two further lessons worth keeping. A false block is as damaging as a miss and easier to
+ship: the self-declared-number check FAILED on a legitimate path
+(`.../false-confidence/F-003.md`) whose directory contains "confidence" and filename
+contains a number. And a fixture must BE the artifact — mixing the artifact with commentary
+about it made a corrected matcher over-fire on the very controls written to prove the
+original over-fired.
+
 ## Now
 
-**Current position:** Cycle 6 planned, awaiting approval. Cycle 5 shipped delivery-order layers 1
-and 2 of the frozen design source; this cycle finishes layers 3, 4 and 5, plus the layer-2 items
-that were cut to fit the last appetite.
+**Phase 04 closed on green CI (run `30763365970`). Phase 05 has NOT been started** — the
+session that built 04 stopped here deliberately, so 05 begins with a fresh context.
 
-**Next step:** approve the plan. Until then: no product code.
+### Cycle 6 position
 
-**Then:** `/arc-develop start 4 --lane develop` — this cycle runs through the harness itself from
-its first phase, the way Cycle 5's phases 01 through 03 did.
+| phase | state |
+|---|---|
+| 04 Learning System | closed 2026-08-03, 12 of 13 slices, ~0.8d of 1.5d |
+| 05 Context Pack | **next** — 1.0d |
+| 06 Capability | pending — 0.75d |
+| 07 Quality intelligence | pending — 0.75d (the pre-decided cut) |
+| 08 Feedback metrics | pending — 1.5d |
+
+Burn ~0.8 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
+
+### To start Phase 05, in this order
+
+1. `node .claude/scripts/develop/develop.mjs start 5 --lane develop` — writes the brief and
+   decomposes the phase-05 spec's exit criteria into slices.
+2. Read `initiatives/develop/phases/phase-05-spec.md`. It builds
+   `.claude/scripts/develop/context-pack.mjs`: five retrieval sources — code-graph
+   neighbourhood with a STATED grep fallback, governing ADRs, learning rows, retro patterns,
+   and churn from `git log` — plus one-hop typed-link following per ADR-0111, with every
+   source recorded in the slice's `sources:` field.
+3. Write the failing bats FIRST, commit, push, and **read the red off CI. Never run tests
+   locally** — that rule has now been given three times, and the third violation was a
+   one-off script in /tmp rather than bats.
+4. The adversarial pass on anything gate-shaped must be run by a **fresh agent that has not
+   seen the code**, in the commit that ships it. On this cycle that pass found 8 holes in a
+   gate whose own tests already passed, 3 of them critical.
+
+### Two things carried into Phase 05
+
+| what | why |
+|---|---|
+| **Slice 08 of Phase 04** — one REAL promotion shipping an enforced check | Both candidates were rejected: L-002 by the unanchored evaluator on its code, L-004 on its own computed counts. L-004's ledger row already records what a third attempt must do differently — reconcile a claimed count against a persisted count, rather than start from a regex over prose |
+| **PR #100 is open and unmerged** | By instruction: nothing merges until every Cycle-6 phase is complete. Phases 05 through 08 land on `feat/develop-cycle6` |
+
+### Still owed from Cycle 5, unchanged
+
+`initiatives/develop/debt-ledger.md` — the inline risk globs, the absent public-API surface
+diff, and `spec-fidelity` never yet loaded by the runtime that will load it. That last row
+is now closable: the agent type IS registered, so the next `handoff` can invoke it for real
+and retire the row.
