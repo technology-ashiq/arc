@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-engine (Cycle 6, opened 2026-08-03)
-phase: 01 — the proof, byte-identical then flip
+phase: 02 — the engine (01 green, close held on A-01)
 appetite: 14d
-burn: 0d
+burn: 1.3d
 blocked-on: —
 depends-on: —
 
@@ -22,23 +22,28 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | The canonical layer — `processes/` format, `process-lint` with its hostile-fixture corpus and a fresh-agent adversarial pass, 3 pilots canonicalized, eval fixtures written | 4 days | ✅ done 2026-08-03 |
-| 01 | The proof — `arc-compile --target claude-code` reaches 3/3 byte-identical, source of truth flips, DO-NOT-EDIT header lands, codex target plus recorded goldens | 3 days | pending |
+| 01 | The proof — `arc-compile --target claude-code` reaches 3/3 byte-identical, source of truth flips, DO-NOT-EDIT header lands, codex target plus recorded goldens | 3 days | 🟡 work complete, close HELD on A-01 |
 | 02 | The engine — `arc-run` headless with hard budgets, schema check, proposal-receipt escalation, secret scrub, 3 drivers behind one interface, `router.yaml` and `--driver auto` | 4 days | pending |
 | 03 | Dogfood and seal — real runs on a non-Claude driver, the 4th-driver timing run, retro, lint promotion review | 2 days | pending |
 
-**Appetite burn: ~0.6 of 14 days used (~4%).** Phases allocate 13 of 14 days; the 1 day of slack is
+**Appetite burn: ~1.3 of 14 days used (~9%).** Phases allocate 13 of 14 days; the 1 day of slack is
 deliberate. The design source said "2 weeks" while its own phases sum to 13 days — that only fits a
 7-day week, so the cap is written as 14 rather than left as a word that over-commits by 30%.
 
-Basis for the 0.6, so it can be audited rather than believed: one unbroken sitting on 2026-08-03,
-from kickoff through Phase 00 green on the 3-OS matrix. The honest caveat is the same one the
-develop lane recorded — a single continuous session with no context switches is the most
-favourable possible condition, so the figure is real but it is not a throughput claim.
+Basis for the 1.3, so it can be audited rather than believed: one unbroken sitting on 2026-08-03,
+from kickoff through Phase 01 green on the 3-OS matrix. Two honest caveats. First, the same one the
+develop lane recorded — a single continuous session with no context switches is the most favourable
+possible condition, so the figure is real but it is not a throughput claim. Second, and more useful:
+a material share of Phase 01 went on REWORK of self-inflicted defects rather than on discovered
+complexity — a GNU-ism on the macOS leg, a fetch-depth assumption, fixtures pinning live state, a
+fix applied to one twin and not the other, an apostrophe inside a quoted block. Five CI cycles. The
+adversarial passes earned their cost; that churn did not, and it is a retro input rather than a
+number to be quietly averaged away.
 
 | phase | appetite | spent | closed on |
 |---|---|---|---|
 | 00 canonical layer | 4d | ~0.6d | CI run `30767018207`, 19/19 |
-| 01 the proof | 3d | — | — |
+| 01 the proof | 3d | ~0.7d | CI run `30771122029`, 19/19 — close held, see `## Now` |
 | 02 the engine | 4d | — | — |
 | 03 dogfood and seal | 2d | — | — |
 
@@ -69,15 +74,30 @@ learns to be ignored — the shape `docs/trial-ledger.md` already records for `a
 
 ## Now
 
-**Current position: Phase 00 CLOSED on CI run `30767018207` (19/19). ~0.6 of 14 days. Phase 01 next.**
+**Current position: Phase 00 CLOSED. Phase 01 work COMPLETE and green (19/19) but NOT closed —
+its close is held on assumption A-01. ~1.3 of 14 days. Phase 02 in progress.**
+
+**Why Phase 01 is 🟡 and not ✅.** Every technical exit criterion is met and evidenced: 3/3
+byte-identical (`evidence/phase-01/req-02-byte-identical.txt`), the flip, the codex goldens, CI
+19/19 (`evidence/phase-01/ci-green.txt`), and the fresh-agent adversarial pass with ~25 findings
+fixed. The one unmet criterion is the one this phase spec wrote for itself: **A-01, the ADR-0069
+block-(d) trigger, is still unstated.** The owner was asked at the kickoff STOP and twice since,
+and answered other questions; it has not been inferred (block (b)(5): absent data is never
+estimated). Waiving a criterion because the rest went well is precisely how a gate learns to be
+ignored, so the row stays amber and the phase stays open. It closes on one line.
+
+Building continues regardless — Phase 02 does not depend on A-01, and the standing instruction is
+not to stall.
 
 Standing instruction: build all four phases without stopping for per-phase sign-off, push freely,
 **merge only after Phase 03 closes** (draft PR #103 carries the cycle). The main session writes the
 code (ADR-0105); agents run the adversarial and verification passes the plan mandates.
 
-**Next step: Phase 01 — `arc-compile --target claude-code` to 3/3 byte-identical, then the flip.**
-Phase 00 leaves it the one thing it actually needs: all three pilot bodies round-trip byte-for-byte
-out of their block scalars, asserted in the suite and re-checked at HEAD.
+**Next step: Phase 02 — `arc-run` headless, 3 drivers behind one interface, hard budgets,
+proposal-receipt escalation, secret scrub, `engine/router.yaml`.** It needs no network to be
+proven: every driver has a fake, and the contract suite runs the identical assertions against
+each. The real arms need an LLM endpoint + key and the `codex` CLI, both owner-provided and both
+recorded as not-run rather than skipped silently if absent.
 
 **Open, and it blocks Phase 01's close (assumption A-01).** The ADR-0069 block-(d) trigger is still
 recorded as **unstated** — the owner was asked at the kickoff STOP and answered a different
