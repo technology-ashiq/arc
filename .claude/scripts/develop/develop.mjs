@@ -325,8 +325,13 @@ async function modeNext(ctx) {
   // to hand out the next slice -- but it must not be silent either, because a retrieval that
   // quietly returns nothing is indistinguishable from a repo that knows nothing. So the
   // failure is printed and recorded, and the slice is still handed out.
+  // Assembly and recording are separate failures and are reported separately. Wrapping both
+  // in one `try` made a read-only ledger print a full, correct pack and then announce
+  // "Context Pack — unavailable" underneath it: two contradictory statements in one run, exit
+  // 0, and a `sources:` line silently left at its previous value.
+  let pack = null;
   try {
-    const pack = buildPack({
+    pack = buildPack({
       root: ctx.root,
       brief: led.parsed.brief,
       slice: next,
@@ -334,17 +339,24 @@ async function modeNext(ctx) {
     });
     for (const line of renderPack(pack, next.id)) say(line);
     say("");
-    // `at:` binds the write to the block the READER handed out, by line. Binding by id alone
-    // is what let a duplicate id send one slice's pack into another slice's audit trail.
-    const before = readFileSync(led.path, "utf8");
-    const { text, changed, reason } = setSliceField(
-      before, next.id, "sources", sourcesField(next.fields.sources, pack), { at: next.line },
-    );
-    if (changed && text !== before) writeFileSync(led.path, text, "utf8");
-    else if (!changed) say(`WARN  [sources] not recorded — ${reason}`);
   } catch (e) {
-    say(`Context Pack — unavailable: ${e?.message ?? e}`);
+    say(`Context Pack — could not be assembled: ${e?.message ?? e}`);
     say("");
+  }
+  if (pack) {
+    try {
+      // `at:` binds the write to the block the READER handed out, by line. Binding by id alone
+      // is what let a duplicate id send one slice's pack into another slice's audit trail.
+      const before = readFileSync(led.path, "utf8");
+      const { text, changed, reason } = setSliceField(
+        before, next.id, "sources", sourcesField(next.fields.sources, pack), { at: next.line },
+      );
+      if (changed && text !== before) writeFileSync(led.path, text, "utf8");
+      else if (!changed) say(`WARN  [sources] the pack above was NOT recorded — ${reason}`);
+    } catch (e) {
+      say(`WARN  [sources] the pack above was NOT recorded — ${e?.message ?? e}`);
+      say(`      ${led.file}'s sources: line still holds its previous value.`);
+    }
   }
 
   say(`Progress: ${p}/${total} proven.`);

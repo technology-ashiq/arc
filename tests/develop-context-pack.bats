@@ -301,15 +301,27 @@ ROW
 CP() { echo "$ARC_ROOT/.claude/scripts/develop/context-pack.mjs"; }
 LG() { echo "$ARC_ROOT/.claude/scripts/develop/ledger.mjs"; }
 
+# A file:// URL node understands on all three legs. Git Bash hands out `/d/a/arc/...`, which
+# node reads as `C:\d\a\arc\...` and cannot find -- nine probes below imported nothing, threw
+# ERR_MODULE_NOT_FOUND, and three of them PASSED anyway because "output does not contain X" is
+# satisfied by a stack trace. A vacuous pass is the failure this file exists to prevent.
+_url() {
+  local p="$1"
+  command -v cygpath >/dev/null 2>&1 && p="$(cygpath -m "$p")"
+  case "$p" in /*) echo "file://$p";; *) echo "file:///$p";; esac
+}
+
 # Run a node snippet with the modules under test imported as `cp` and `lg`.
 _node() {
   local f="$BATS_TEST_TMPDIR/probe.mjs"
   {
-    echo "import * as cp from '$(CP)';"
-    echo "import * as lg from '$(LG)';"
+    echo "import * as cp from '$(_url "$(CP)")';"
+    echo "import * as lg from '$(_url "$(LG)")';"
     cat
   } > "$f"
   run node "$f"
+  # The probe must have RUN. Every assertion below is about what it printed.
+  [ "$status" -eq 0 ] || { echo "probe did not run:"; echo "$output"; return 1; }
 }
 
 @test "hole: a quoted Product line in a supersedes note does not claim the ADR" {
@@ -503,4 +515,142 @@ JS
 console.log(JSON.stringify(cp.fileSet(process.cwd(), { "blast-radius": "CLAUDE.MD, CLAUDE.md" }, { fields: {} })));
 JS
   [[ "$output" != *"CLAUDE.MD"* ]] || { echo "a wrong-case path survived: $output"; false; }
+}
+
+# ---------------------------------------------------------------------------
+# Slice 08, second pass -- holes found by a second fresh agent, on the external
+# boundary: the subprocess adapter, git, the walk, and the containment checks.
+# ---------------------------------------------------------------------------
+
+# A git history where the only interesting facts are the ones being asserted.
+_git_init() {
+  local t="$1"
+  git -C "$t" init -q
+  git -C "$t" config user.email arc-test@arc.local
+  git -C "$t" config user.name  arc-test
+}
+
+@test "hole: a non-ASCII filename is named as itself, not as its octal escapes" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  # The name is written by node from a \u escape, never as a literal in this file: a UTF-8
+  # byte here would depend on the runner's locale to survive, and the whole point is a name
+  # git will C-quote.
+  local mk='const fs=require("fs");const p=process.argv[1]+"/src/auth/caf\u00e9.js";fs.appendFileSync(p,"// x\n");'
+  _git_init "$t"
+  node -e "$mk" "$t"
+  git -C "$t" add -A >/dev/null 2>&1
+  git -C "$t" commit -qm seed >/dev/null 2>&1
+  local i
+  for i in 1 2 3; do
+    node -e "$mk" "$t"
+    git -C "$t" add -A >/dev/null 2>&1
+    git -C "$t" commit -qm "c$i" >/dev/null 2>&1
+  done
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line churn)"
+  # git C-quotes any path outside ASCII by default; the escapes used to be read as directories
+  # and the fabricated path ranked FIRST, with a computed count beside it.
+  [[ "$c" != *'/303/'* && "$c" != *'\303'* ]] || { echo "octal escapes became a path: $c"; false; }
+  [[ "$c" == *"caf"* ]] || { echo "the most-churned file vanished: $c"; false; }
+}
+
+@test "hole: churn drops paths the tree no longer holds, and says how many" {
+  local t; t="$(_tree)"; _no_codegraph "$t"; _history "$t"
+  git -C "$t" mv src/auth/alpha.js src/auth/omega.js >/dev/null 2>&1
+  git -C "$t" commit -qm rename >/dev/null 2>&1
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line churn)"
+  [[ "$c" != *"alpha.js"* ]] || { echo "a path the tree cannot open was handed on: $c"; false; }
+  [[ "$c" == *"no longer in the tree"* ]] || { echo "the drop was silent: $c"; false; }
+}
+
+@test "hole: churn's tie-break is by code point, not by the host's collator" {
+  _node <<'JS'
+const rank = (entries) =>
+  entries.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)).map(([p]) => p);
+// Under a locale collator "a.js" sorts first; by code point "B.js" does. Every other list in
+// the module sorts by code point, and a pack must not differ between a dev box and CI.
+console.log(JSON.stringify(rank([["a.js", 2], ["B.js", 2]])));
+JS
+  [ "$output" = '["B.js","a.js"]' ] || { echo "$output"; false; }
+}
+
+@test "hole: a codegraph that prints absolute paths is accepted, not called a liar" {
+  local t; t="$(_tree)"; _history "$t"
+  mkdir -p "$t/.codegraph"
+  cat > "$t/cg-abs.mjs" <<'JS'
+const root = process.cwd().split(String.fromCharCode(92)).join("/");
+process.stdout.write(root + "/src/auth/alpha.js:12  verifyToken()\n" + root + "/src/auth/beta.js:3  check()\n");
+JS
+  export ARC_CODEGRAPH_CMD="$t/cg-abs.mjs"
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line code)"
+  # These files exist and are inside the repo. Reporting "no path this repo holds" wrote a
+  # false statement about another program permanently into the audit trail.
+  [[ "$c" == *"codegraph"* && "$c" != *"grep-fallback"* ]] || { echo "$c"; false; }
+  [[ "$c" == *"src/auth/alpha.js"* ]] || { echo "$c"; false; }
+  [[ "$c" != *":/"* ]] || { echo "an absolute path reached the pack: $c"; false; }
+}
+
+@test "hole: a plain FILE named .codegraph is no index, not a missing binary" {
+  local t; t="$(_tree)"; _history "$t"; _no_codegraph "$t"
+  : > "$t/.codegraph"
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line code)"
+  [[ "$c" == *"no .codegraph/"* ]] || { echo "wrong diagnosis: $c"; false; }
+  [[ "$c" != *"not installed"* ]]  || { echo "sent to install a binary it does not need: $c"; false; }
+}
+
+@test "hole: a path containing a comma is omitted from the list and the omission is declared" {
+  local t; t="$(_tree)"; _history "$t"; _no_codegraph "$t"
+  printf 'require("./alpha.js");\n' > "$t/src/auth/a, b.js"
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line code)"
+  # The pack's own contract is that a consumer can split this line on ", ". A path holding one
+  # makes the count and the list disagree and yields two paths that do not exist.
+  [[ "$c" == *"containing a comma omitted"* ]] || { echo "the omission was silent: $c"; false; }
+  _assert_neighbourhood_contract "$t"
+}
+
+@test "hole: a git that fails for a reason other than an empty history says which" {
+  local t; t="$(_tree)"; _no_codegraph "$t"; _history "$t"
+  printf '[core\n' >> "$t/.git/config"          # any git-level failure will do
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line churn)"
+  [[ "$c" != *"no git history"* ]] || { echo "a four-commit repo reported no history: $c"; false; }
+  [[ "$c" == *"git log exited"* ]] || { echo "$c"; false; }
+}
+
+@test "hole: codegraph being asked about fewer files than the blast radius is declared" {
+  local t; t="$(_tree)"; _history "$t"; _with_codegraph "$t"
+  local i
+  for i in 1 2 3 4 5 6; do printf 'export const e%s = %s;\n' "$i" "$i" > "$t/src/auth/e$i.js"; done
+  # Name them all in the spec so the derived blast radius carries ten files.
+  printf '\nAlso `src/auth/e1.js`, `src/auth/e2.js`, `src/auth/e3.js`, `src/auth/e4.js`, `src/auth/e5.js` and `src/auth/e6.js`.\n' \
+    >> "$t/initiatives/develop/phases/phase-00-spec.md"
+  _dev "$t" start 0
+  _dev "$t" next
+  local c; c="$(_line code)"
+  [[ "$c" == *"asked about"* ]] || { echo "the narrower answer was presented as the neighbourhood: $c"; false; }
+}
+
+@test "hole: a ledger that cannot be written warns, and does not call the pack unavailable" {
+  local t; t="$(_tree)"; _history "$t"; _no_codegraph "$t"
+  _dev "$t" start 0
+  local led; led="$(_ledger_of "$t")"
+  chmod 444 "$led"
+  # Windows ignores the mode bit for an account that owns the file; only assert where it bites.
+  node -e "try{require('fs').appendFileSync(process.argv[1],'')}catch(e){process.exit(3)}" "$led" \
+    && skip "this runner can still write a 444 file"
+  _dev "$t" next
+  chmod 644 "$led"
+  [[ "$output" == *"NOT recorded"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"unavailable"* ]]  || { echo "a pack that printed in full was called unavailable"; echo "$output"; false; }
+  [[ "$output" == *"Context Pack"* ]] || { echo "$output"; false; }
 }

@@ -27,7 +27,7 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { isFilled } from "./ledger.mjs";
 import { readRows } from "./learning.mjs";
@@ -39,6 +39,8 @@ export const SOURCE_NAMES = ["code", "adrs", "learning", "retro", "churn"];
 const NEIGHBOURHOOD_CAP = 8;
 const ITEM_CAP = 5;
 const CHURN_TOP = 3;
+/** How many blast-radius files codegraph is asked about. Declared in the pack when it bites. */
+const CODEGRAPH_QUERY_FILES = 4;
 
 /** Directories never worth walking, and a ceiling so `next` cannot become slow on a big repo. */
 const SKIP_DIRS = new Set([".git", "node_modules", ".codegraph", ".venv", "dist", "build", "coverage"]);
@@ -161,6 +163,13 @@ export function parsePaths(stdout, root) {
     t = t.replace(/:\d+(?::\d+)?$/, "");                       // path:line[:col]
     t = t.replace(/\\/g, "/").replace(/^\.\//, "");
     if (!/[/.]/.test(t)) continue;
+    // An ABSOLUTE path inside the repo is a legitimate answer -- it is what a tool run with a
+    // full cwd prints -- and it was being discarded as "no path this repo holds", which then
+    // went into the audit trail as a permanent false statement about another program.
+    if (isAbsolute(t) || /^[A-Za-z]:\//.test(t)) {
+      if (!insideRoot(root, t)) continue;
+      t = relative(root, t).split(sep).join("/");
+    }
     if (!livesInRepo(root, t)) continue;
     if (isDir(resolve(root, t))) continue;
     found.push(t);
@@ -172,7 +181,7 @@ export function parsePaths(stdout, root) {
 function codegraphNeighbourhood(root, files, env) {
   const cmd = env.ARC_CODEGRAPH_CMD || "codegraph";
   const extra = String(env.ARC_CODEGRAPH_ARGS || "").split(/\s+/).filter(Boolean);
-  const query = files.slice(0, 4).join(" ") || root;
+  const query = files.slice(0, CODEGRAPH_QUERY_FILES).join(" ") || root;
   try {
     // A node script is spawned through node: `ARC_CODEGRAPH_CMD` naming a `.mjs` is the test
     // seam that lets the codegraph leg run on a machine with no index. Nothing is shell-split
@@ -191,7 +200,8 @@ function codegraphNeighbourhood(root, files, env) {
     const why = e?.status !== undefined && e.status !== null ? `exit ${e.status}`
       : e?.code === "ETIMEDOUT" ? "timed out"
       : e?.code === "ENOENT" ? "not installed"
-      : `exit ${e?.code ?? "unknown"}`;
+      : e?.code === "ENOBUFS" ? "printed more than the read buffer holds"
+      : `failed (${e?.code ?? "unknown"})`;    // "exit ENOBUFS" claimed an exit code it had not got
     return { failed: why };
   }
 }
@@ -202,17 +212,22 @@ function codegraphNeighbourhood(root, files, env) {
  * answers "who else cares".
  */
 function grepNeighbourhood(root, files) {
+  // ONE budget for every walk this call makes. It used to be per-call, so each directory in
+  // the blast radius bought a fresh WALK_CAP: two directories silently searched 8000 files of
+  // 9000 and reported no truncation at all. A ceiling that multiplies is not a ceiling.
+  const budget = { n: WALK_CAP };
   const seed = [];
   for (const f of files) {
     const abs = resolve(root, f);
-    if (isDir(abs)) seed.push(...walk(abs, root));
+    // Containment belongs HERE, in the function that produces the paths, not only in the one
+    // caller that happens to filter its input. A junction under the repo pointed outside it and
+    // this walked straight through, rendering outside files as ordinary repo-relative paths.
+    if (!insideRoot(root, f)) continue;
+    if (isDir(abs)) seed.push(...walk(abs, root, [], budget));
     else if (livesInRepo(root, f)) seed.push(f);
   }
   const names = [...new Set(seed.map((f) => f.split("/").pop()).filter((n) => n && n.length > 2))];
   const hits = [];
-  // A walk that stops early has SEARCHED LESS than it claims to have searched, and a pack
-  // that cannot say so is the silent-fallback failure one level down. The budget is reported.
-  const budget = { n: WALK_CAP };
   if (names.length) {
     for (const cand of walk(root, root, [], budget)) {
       if (seed.includes(cand)) continue;
@@ -225,8 +240,18 @@ function grepNeighbourhood(root, files) {
       if (names.some((n) => text.includes(n))) hits.push(cand);
     }
   }
-  const items = uniqSorted([...seed, ...hits]);
-  return budget.n <= 0 ? { items, truncated: WALK_CAP } : { items };
+  const all = uniqSorted([...seed, ...hits]);
+  // The pack prints one comma-separated list, and its own documented contract is that a
+  // consumer can split that line. A path containing ", " makes the count and the list
+  // disagree and hands the consumer two paths that do not exist. Dropping it is a transform,
+  // so it is declared -- which is the rule this repo already writes down about transforms.
+  const items = all.filter((p) => !p.includes(","));
+  const commas = all.length - items.length;
+  return {
+    items,
+    truncated: budget.n <= 0 ? WALK_CAP : 0,
+    commas,
+  };
 }
 
 /**
@@ -236,13 +261,30 @@ function grepNeighbourhood(root, files) {
  */
 export function neighbourhood(root, files, env = process.env) {
   const fallback = (why) => {
-    const { items, truncated } = grepNeighbourhood(root, files);
-    const note = truncated ? `${why}, search stopped at ${truncated} files` : why;
+    const { items, truncated, commas } = grepNeighbourhood(root, files);
+    const note = [why,
+      truncated ? `search stopped at ${truncated} files` : null,
+      commas ? `${commas} path(s) containing a comma omitted` : null,
+    ].filter(Boolean).join(", ");
     return { ran: "grep-fallback", note, items: items.slice(0, NEIGHBOURHOOD_CAP), total: items.length };
   };
-  if (!existsSync(join(root, ".codegraph"))) return fallback("no .codegraph/");
+  // A DIRECTORY. A plain file named `.codegraph` satisfied `existsSync` and sent the module
+  // shelling out to a binary it did not need, then reported `codegraph not installed` -- a
+  // diagnostic pointing at the wrong problem entirely.
+  if (!isDir(join(root, ".codegraph"))) return fallback("no .codegraph/");
   const got = codegraphNeighbourhood(root, files, env);
-  if (got.items) return { ran: "codegraph", items: got.items.slice(0, NEIGHBOURHOOD_CAP), total: got.items.length };
+  if (got.items) {
+    // codegraph is asked about the first few files only. The grep leg uses all of them, so
+    // without this the two implementations of one interface answer different questions and
+    // the pack presents the narrower answer as the neighbourhood.
+    const asked = Math.min(files.length, CODEGRAPH_QUERY_FILES);
+    return {
+      ran: "codegraph",
+      note: files.length > asked ? `asked about ${asked} of ${files.length} files` : undefined,
+      items: got.items.slice(0, NEIGHBOURHOOD_CAP),
+      total: got.items.length,
+    };
+  }
   return fallback(`codegraph ${got.failed}`);
 }
 
@@ -442,25 +484,54 @@ export function churn(root, files) {
   if (!files.length) return { items: [], total: 0, note: "empty blast radius" };
   let out = "";
   try {
-    out = execFileSync("git", ["log", "--format=%H", "--name-only", "--", ...files], {
+    // `core.quotePath=false`: git's default C-quotes any path outside ASCII, so
+    // `src/auth/café.js` arrives as `"src/auth/caf\303\251.js"`. The separator normalisation
+    // below then read those octal escapes as directories and the pack's TOP-RANKED churn
+    // entry was `"src/auth/caf/303/251.js"` -- a path that exists nowhere, printed with a
+    // computed count beside it. Git emits forward slashes on every platform, so there is no
+    // separator to normalise and nothing left that a backslash could legitimately mean.
+    out = execFileSync("git", ["-c", "core.quotePath=false", "log", "--format=%H", "--name-only", "--", ...files], {
       cwd: root, encoding: "utf8", timeout: 20000, maxBuffer: 8 * 1024 * 1024,
       stdio: ["ignore", "pipe", "ignore"],
     });
-  } catch {
-    return { items: [], total: 0, note: "no git history" };
+  } catch (e) {
+    // WHY it failed, never a single stock sentence. `no git history` was printed for a repo
+    // with four commits and a syntax error in .git/config, for git not being installed, for
+    // the timeout and for the buffer cap alike -- four different problems, one false answer.
+    const why = e?.code === "ENOENT" ? "git is not installed"
+      : e?.code === "ETIMEDOUT" ? "git log timed out"
+      : e?.code === "ENOBUFS" ? "git log output exceeded the read buffer"
+      : e?.status ? `git log exited ${e.status}`
+      : "no git history";
+    return { items: [], total: 0, note: why };
   }
   const counts = new Map();
   for (const line of out.split(/\r?\n/)) {
     const t = line.trim();
     if (!t || /^[0-9a-f]{40}$/i.test(t)) continue;
-    const p = t.replace(/\\/g, "/");
-    counts.set(p, (counts.get(p) ?? 0) + 1);
+    counts.set(t, (counts.get(t) ?? 0) + 1);
   }
   if (!counts.size) return { items: [], total: 0, note: "no commits touch the blast radius" };
-  // Count descending, then path ascending -- a tie must not depend on Map insertion order,
-  // or the same repo prints a different pack on two machines.
-  const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  return { items: ranked.slice(0, CHURN_TOP).map(([p, n]) => `${p} (${n})`), total: ranked.length };
+
+  // History names paths the tree no longer holds. A renamed or deleted file kept its commits
+  // and was handed to the next slice as a blast-radius file it could open -- two of three
+  // printed paths, in one attack. Renames are NOT followed: `--follow` takes a single path and
+  // this is a set, so the honest move is to drop the dead paths and say how many.
+  const live = [...counts.entries()].filter(([p]) => livesInRepo(root, p));
+  const dead = counts.size - live.length;
+  if (!live.length) {
+    return { items: [], total: 0, note: `${dead} path(s) in the history are no longer in the tree; renames are not followed` };
+  }
+  // Count descending, then path ascending BY CODE POINT. `localeCompare` returns 0 for
+  // canonically-equivalent strings, which drops the sort back to git-log order, and with no
+  // locale argument it uses the host collator -- so a Swedish dev box and an en CI runner
+  // ordered the same repo differently. Every other list here sorts by code point; so does this.
+  const ranked = live.sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return {
+    items: ranked.slice(0, CHURN_TOP).map(([p, n]) => `${p} (${n})`),
+    total: ranked.length,
+    note: dead ? `${dead} path(s) in the history are no longer in the tree; renames are not followed` : undefined,
+  };
 }
 
 // ---------------------------------------------------------------------------
