@@ -22,6 +22,24 @@ models become swappable parts and every future model is an upgrade, not a migrat
   formalize what these started.
 - Nothing exists of: `processes/`, `adapters/`, drivers, router, `arc-run`.
 
+## Queued for this cycle's kickoff — inherited from ADR-0069 (added 2026-08-02, model-policy Cycle 5)
+
+The Balanced Model Policy ([ADR-0069](../../adr/0069-balanced-model-policy.md)) landed
+before this plan woke. Two items are queued here rather than edited into the body, because
+this plan is sleeping and a note is not a rewrite:
+
+1. **Routing policy is inherited, not decided.** Tier definitions, the seat map and the
+   receipt schema come from ADR-0069 blocks (a), (b) and (e). `router.yaml` is that policy's
+   *implementation*; REQ-06 and ENG-D should be read that way. The north-star is that this
+   kickoff needs **zero** new "which model where" forks.
+2. **ENG-E conflicts with the policy and must be reconciled at kickoff.** Its draft ladder
+   is `retry-once-same → one-tier-up → flag human`, and that middle step is a component
+   changing a seat's tier at runtime — which ADR-0069 block (b)(1) forbids outright. ADR-0069
+   deliberately does **not** define an escalation default (auto-escalation is a standing
+   no-go), so it hands this cycle a *constraint*, not a ladder: whatever escalation is built,
+   the tier change at the end of it is a reviewed diff. Resolve by either dropping the
+   auto-step or amending ADR-0069 — not by ignoring one of the two.
+
 ## Success requirements
 
 | REQ | User outcome | Measurable acceptance | Phase |

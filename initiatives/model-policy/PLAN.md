@@ -142,16 +142,14 @@ flowchart TB
 | 0066 | MP-D — session-001 retrofit executes council-v2 ADR-0010; no new sanction | accepted |
 | 0067 | MP-E — attacker reject-log is a trace, not a process; fixed six-word taxonomy | accepted |
 | 0068 | MP-F — model fingerprints are forward-only and never estimated | accepted |
-
-*ADR-0069 (the Balanced Model Policy itself) is REQ-01's Phase-0 deliverable and does not
-exist yet — it is written and merged inside Phase 0, not at kickoff.*
+| 0069 | Balanced Model Policy — tiers, never-dos, metrics, engine trigger | accepted |
 
 ## Non-negotiables
 
 - **No engine code.** Nothing under `processes/`, no drivers, no `router.yaml`, no budget enforcement, no bench runner — those plans sleep until their own triggers (A8).
-- **No auto model switching anywhere.** Every production tier change is a reviewed diff citing MP-A (ADR-0063); the two MP-A carve-outs are the only exceptions and both are human-approved.
+- **No auto model switching anywhere.** Every production tier change is a reviewed diff citing the Balanced Model Policy (ADR-0069; rationale MP-A/ADR-0063); the two MP-A carve-outs are the only exceptions and both are human-approved.
 - The session-model pin stays personal (`settings.local.json`) — shared settings never gain a `model` key this cycle.
-- Council remains additive-only; ADR-0002 (deep default) and the juror contract (ADR-0015..0018) untouched; `standard` never weakens `deep`.
+- Council remains additive-only; council ADR-0002 (deep default) and the council-v3 juror contract (ADR-0015..0018) untouched; `standard` never weakens `deep`.
 - REQ-03 verdicts follow ADR-0047/0048/0049: blind ordering + owner's own eyes on the artifact; no absolute scores inside the loop; PREDICTION pre-registered before reveal.
 - Fingerprints are forward-only and never estimated (MP-F / ADR-0068).
 - Every phase close leaves its receipt on the spine (existing kinds only).

@@ -62,8 +62,15 @@ Two rules carry the weight:
    different things and only the first is allowed. An absent field is a fact about the
    instrument; an estimated one is a lie with a decimal point.
 
-The block rides existing spine kinds' payloads — the closed event vocabulary (ADR-0023) is
-**not** extended this cycle.
+The block rides existing spine kinds' payloads — the closed event vocabulary
+([ADR-0026](0026-spine-c-closed-event-kind-vocabulary-v1.md)) is **not** extended this cycle.
+
+> **Correction (2026-08-02, Phase 00).** As accepted, this line cited **ADR-0023** for the
+> closed event vocabulary. ADR-0023 is the attic registry scope-cut; the closed event-kind
+> vocabulary (18 kinds) is **ADR-0026**. Corrected here rather than superseded because the
+> decision is unchanged — only the pointer was wrong, and a pointer that resolves to an
+> unrelated document is the precise failure MP-D was written to warn about. Found by the
+> Phase-00 verification pass, not by the author.
 
 ## Consequences
 

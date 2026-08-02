@@ -47,7 +47,8 @@ Option 4. The ladder is fixed at three and does not grow:
   ≤7 model calls (the existing send-back-once-if-nothing-contested guard is the only extra
   call). No domain experts, no juror, no rebuttal round. Post-verifier `Contested` and
   `DISPUTED` IDs go straight to `## UNRESOLVED` and are never debated.
-- **`deep`** — full panel plus juror. Stays the default; ADR-0002 is untouched.
+- **`deep`** — full panel plus juror. Stays the default; **council** ADR-0002
+  (`docs/council/kickoff/docs/adr/0002-always-deep-default-quick-optout.md`) is untouched.
 
 **One-way-door decisions are always `deep`**, mandatorily. There is no automatic
 classifier: the human picks the word. A `standard` run that cannot cover its question with
@@ -60,4 +61,13 @@ running it, which is the difference between a knob and a gamble. Harder: three m
 three code paths in `arc-council.md` and three things `council-lint` must tolerate; and the
 "recommend deep" exit is a real outcome the owner will sometimes pay for and get no verdict
 from. `standard` is additive — it never weakens `deep`, and the juror contract
-(ADR-0015..0018) is untouched. Both revisit triggers above are checked at retro.
+(**council-v3** ADR-0015..0018, `docs/council/kickoff-v3/docs/adr/`) is untouched. Both
+revisit triggers above are checked at retro.
+
+> **Correction (2026-08-02, Phase 00).** As accepted, this ADR cited bare `ADR-0002` and
+> `ADR-0015..0018`, which resolve in the **root** namespace to "Noise defense is a
+> prerequisite" and to four manifest/resolver ADRs — all unrelated. Both citations meant the
+> **council** namespace. Corrected rather than superseded: the decision is unchanged, only
+> the pointers were wrong. This is exactly the cross-namespace trap
+> [MP-D](0066-mp-d-session-001-retrofit-executes-council-v2-adr-0010.md) documents, walked
+> into by the same cycle that documented it — found by the Phase-00 verification pass.

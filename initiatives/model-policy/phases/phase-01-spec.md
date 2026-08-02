@@ -101,9 +101,9 @@ the envelope covers real use (assumption A-02).
 ## Non-negotiables (verbatim from PLAN)
 
 - **No engine code.** Nothing under `processes/`, no drivers, no `router.yaml`, no budget enforcement, no bench runner — those plans sleep until their own triggers (A8).
-- **No auto model switching anywhere.** Every production tier change is a reviewed diff citing MP-A (ADR-0063); the two MP-A carve-outs are the only exceptions and both are human-approved.
+- **No auto model switching anywhere.** Every production tier change is a reviewed diff citing the Balanced Model Policy (ADR-0069; rationale MP-A/ADR-0063); the two MP-A carve-outs are the only exceptions and both are human-approved.
 - The session-model pin stays personal (`settings.local.json`) — shared settings never gain a `model` key this cycle.
-- Council remains additive-only; ADR-0002 (deep default) and the juror contract (ADR-0015..0018) untouched; `standard` never weakens `deep`.
+- Council remains additive-only; council ADR-0002 (deep default) and the council-v3 juror contract (ADR-0015..0018) untouched; `standard` never weakens `deep`.
 - REQ-03 verdicts follow ADR-0047/0048/0049: blind ordering + owner's own eyes on the artifact; no absolute scores inside the loop; PREDICTION pre-registered before reveal.
 - Fingerprints are forward-only and never estimated (MP-F / ADR-0068).
 - Every phase close leaves its receipt on the spine (existing kinds only).
