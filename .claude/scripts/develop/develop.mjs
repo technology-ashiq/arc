@@ -210,10 +210,23 @@ async function modeStart(ctx, n) {
   if (blast.dropped) brief["blast-radius-dropped"] = String(blast.dropped);
 
   // One slice per exit-criteria checkbox: the phase's own definition of done, decomposed.
-  const boxes = [...sectionOf(spec, "Exit criteria").matchAll(/^[ \t]*-[ \t]*\[[ xX]\][ \t]*(.*\S)[ \t]*$/gm)].map((m) => m[1]);
-  if (boxes.length === 0) die(`${specPath} has no Exit criteria checkboxes — nothing to decompose into slices`);
+  //
+  // A checkbox wraps across lines in every real spec, so this walks the section and joins
+  // each box's continuation lines instead of regex-matching one line at a time. The
+  // single-line version silently truncated every title at the first newline ("exits 1 on
+  // each of the three") -- found by running the harness against its own phase-01 spec.
+  const boxes = [];
+  for (const line of sectionOf(spec, "Exit criteria").split("\n")) {
+    const open = line.match(/^[ \t]*-[ \t]*\[[ xX]\][ \t]*(.*)$/);
+    if (open) { boxes.push(open[1].trim()); continue; }
+    if (!boxes.length) continue;
+    if (/^[ \t]*(-|\d+\.)[ \t]/.test(line) || !line.trim()) continue;  // next item, or a gap
+    boxes[boxes.length - 1] += " " + line.trim();                       // continuation
+  }
+  const cleaned = boxes.map((b) => b.replace(/\s+/g, " ").trim()).filter(Boolean);
+  if (cleaned.length === 0) die(`${specPath} has no Exit criteria checkboxes — nothing to decompose into slices`);
 
-  const slices = boxes.map((text, i) => ({
+  const slices = cleaned.map((text, i) => ({
     id: pad(i + 1),
     fields: {
       title: text.replace(/\s+/g, " ").trim(),
