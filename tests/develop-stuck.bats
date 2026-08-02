@@ -53,7 +53,7 @@ _rec() {
   _rec "$t" 03 "SameError happens"
   _rec "$t" 03 "SameError happens"
   [[ "$output" == *"BACKSTOP fingerprint-3x"* ]]
-  [[ "$output" == *"root-cause mode"* ]]
+  [[ "$output" == *"Root-cause mode is now forced"* ]]
 }
 
 @test "negative control: fingerprint-3x does NOT fire on two" {

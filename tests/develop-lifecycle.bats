@@ -229,11 +229,15 @@ _scratch() {
   ! grep -rq '"kind":"handoff.ready"' "$spine/events" 2>/dev/null
 }
 
-@test "checkpoint is an honest stub in this phase" {
+@test "checkpoint reports what it checked, and exits 0 with nothing to check" {
   local t; t="$(_scratch fake-phase)"
+  # Phase 03 replaced the stub with the real risk-glob scan. A fixture tree is not a git
+  # repo, so there is no diff to read -- and saying so plainly is the correct behaviour,
+  # not silence.
   _dev "$t" checkpoint
   [ "$status" -eq 0 ]
-  [[ "$output" == *"no checks wired yet"* ]]
+  [[ "$output" == *"checkpoint"* ]]
+  [[ "$output" != *"no checks wired yet"* ]]
 }
 
 # ---------------------------------------------------------------------------
