@@ -93,45 +93,45 @@ commit: 0649181
 title: tests added & green: `bash tests/develop-lint.bats` on all 3 CI legs
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bash tests/develop-lint.bats on all 3 CI legs
+tier: unit
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: CI run 30752975413 green: 20/20 jobs, ubuntu + macos + windows
+commit: 33a8d45
 
 #### slice: 07
 
 title: `.github/workflows/ci.yml`'s test-count floor raised to cover the new `@test` lines
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — grep -rhc @test over tests/ vs the ci.yml floor
+tier: static
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 793 declared tests against a floor of 318 — already satisfied, no edit needed
+commit: 33a8d45
 
 #### slice: 08
 
 title: `tree-manifest.txt` regenerated as a named step
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — sync-to-project.sh + tree manifest regen, delta diffed first
+tier: static
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: only develop-lint.mjs and ledger.mjs hashes moved, as intended
+commit: 33a8d45
 
 #### slice: 09
 
 title: tracker updated (PROGRESS.md row ✅ + done-log)
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — PROGRESS.md phase row + done log + board row
+tier: static
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: tracker updated, board-lint exit 0
+commit: 33a8d45

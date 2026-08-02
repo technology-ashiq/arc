@@ -39,4 +39,4 @@ tests/fixtures/design-lint/hostile/crlf.md -text
 # Two of them ARE their line endings, and git warned it would rewrite them on the next touch --
 # which would have left the CRLF and mixed-ending cases byte-identical to the LF ones on CI,
 # so the suite would have gone on reporting them CAUGHT while testing nothing.
-tests/fixtures/develop/lint/breaking/** -text
+tests/fixtures/develop/breaking/** -text

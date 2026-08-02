@@ -10,6 +10,7 @@ load 'test_helper'
 
 LINT()  { echo "$ARC_ROOT/.claude/scripts/develop/develop-lint.mjs"; }
 FXDIR() { echo "$ARC_ROOT/tests/fixtures/develop/lint"; }
+BREAK() { echo "$ARC_ROOT/tests/fixtures/develop/breaking"; }
 
 # A throwaway copy of the good tree, so nothing here mutates the committed fixture.
 _tree() {
@@ -21,7 +22,7 @@ _tree() {
 # Swap in a breaking-input ledger and run the lint against it.
 _run_case() {
   local tree="$1" name="$2"
-  cp "$(FXDIR)/breaking/${name}.md" "$tree/phases/phase-00-tasks.md"
+  cp "$(BREAK)/${name}.md" "$tree/phases/phase-00-tasks.md"
   run node "$(LINT)" --root "$tree"
 }
 
@@ -86,7 +87,7 @@ _run_case() {
 @test "every pinned breaking input is caught -- none walks past the gate" {
   local t; t="$(_tree)"
   local holes=0 tried=0 name
-  for f in "$(FXDIR)"/breaking/*.md; do
+  for f in "$(BREAK)"/*.md; do
     name="$(basename "$f" .md)"
     tried=$(( tried + 1 ))
     cp "$f" "$t/phases/phase-00-tasks.md"

@@ -16,7 +16,7 @@ Updated: 2026-08-02
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
 | model-policy | LIVE | model-policy (Cycle 5, opened 2026-08-02) | 02 | 3d / 0.35d | — | Phases 00+01 closed; Phase 02 (paired composer A/B) awaits owner sign-off + the design-jury 4-vs-7-item call |
-| develop | LIVE | arc-develop (Cycle 5, opened 2026-08-02) | 01 — in progress | 5d / 0.5d | — | Phase 01: develop-lint floor + adversarial parser pass |
+| develop | LIVE | arc-develop (Cycle 5, opened 2026-08-02) | 02 — in progress | 5d / 1.1d | — | Phase 02: predictions scored at handoff + spec-fidelity pass |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
