@@ -300,3 +300,127 @@ EOF
   [ -z "$ARC_LINT_OUTPUT" ]
   [ -z "$ARC_LINT_STDERR" ]
 }
+
+# ---------- the five findings the Phase 02 adversarial pass left in shipped code ----------
+#
+# `evidence/phase-02/adversarial-report.md`, verified-by-hand items 1, 5, 6, 7 and 8. Each
+# was reproduced against the SHIPPED script before the fix, so each @test below is a red
+# that the fix turns green -- not a description of code that already worked. Cycle 4 closed
+# with these known and unfixed; they are Cycle 5's first work because a gate that answers
+# confidently and wrongly is worse than no gate at all.
+#
+# Two of the five (5 and 6) are failures `.claude/rules/lanes.md` describes BY NAME as past
+# incidents, re-committed in a new script one phase later. That is the reason they are
+# pinned here rather than fixed quietly: the rule existed, was written down, and did not
+# stop the code.
+
+@test "finding-5: --lane given twice with different values NEVER picks one" {
+  # `lanes.md`: "silently picking one of two named lanes is precisely the 'never guess'
+  # failure." The resolver answers status=invalid reason=duplicate-lane (exit 5); the lint
+  # used to collapse the duplicate in its OWN parser before the resolver ever saw it.
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --root "$SANDBOX" --lane portfolio --lane design
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  [ -z "$ARC_LINT_OUTPUT" ]
+}
+
+@test "finding-5: the verdict does not invert when the two --lane flags swap order" {
+  # The sharper half of the same defect: last-wins made the OUTPUT depend on flag order, so
+  # the same command reported a violation one way round and silence the other.
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --root "$SANDBOX" --lane design --lane portfolio
+  local a_out="$ARC_LINT_OUTPUT"
+  _arc_run_lint "$OL" --root "$SANDBOX" --lane portfolio --lane design
+  [ "$a_out" = "$ARC_LINT_OUTPUT" ]
+  [ -z "$a_out" ]
+}
+
+@test "finding-5: --lane repeated with the SAME value is not a duplicate" {
+  # The rule is "two lanes named", not "the flag appeared twice". Over-rejecting here would
+  # silence the lint for a caller that merely built its argv clumsily.
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --root "$SANDBOX" --lane portfolio --lane portfolio
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  _arc_warn_shape ownership-cross-lane "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
+}
+
+@test "finding-6: a trailing valueless --lane never auto-resolves into a verdict" {
+  # `lanes.md`: "an unquoted empty value silently eats the next flag." A bare trailing
+  # `--lane` was DROPPED by the lint's parser, so it fell through to auto-resolution and
+  # delivered a confident verdict about a lane the operator never named.
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --root "$SANDBOX" --lane
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  [ -z "$ARC_LINT_OUTPUT" ]
+}
+
+@test "finding-6: an explicitly EMPTY --lane value is silence, not auto-resolution" {
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --root "$SANDBOX" --lane "" --for change
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  [ -z "$ARC_LINT_OUTPUT" ]
+}
+
+@test "finding-6: forwarding --lane never consumes the flag that follows it" {
+  # The forwarding fix must not re-create the accident it prevents: a bare `--lane` handed
+  # to the resolver as the LAST element would eat the `--for` after it. Forwarded as
+  # `--lane=VALUE` there is no adjacency to exploit -- proven positively, because silence
+  # cannot prove it: a swallowed flag also ends in silence. Here `--root` comes AFTER
+  # `--lane` and the WARN only appears if it survived to be read.
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --lane=portfolio --root "$SANDBOX"
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  _arc_warn_shape ownership-cross-lane "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
+}
+
+@test "finding-1: a --base that does not resolve says so instead of passing clean" {
+  # `git diff --name-only BAD...HEAD` failed into an EMPTY subject set, which the next line
+  # read as "nothing changed" and exited 0. A real cross-lane edit went unreported and the
+  # caller saw a clean pass. `--base origin/main` on a shallow clone reaches this.
+  # Same bug class as Phase 01's `git status` empty-stdout finding, one phase later.
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  _arc_run_lint "$OL" --root "$SANDBOX" --base no/such/ref
+  [ "$ARC_LINT_STATUS" -eq 0 ]           # WARN-first is still a contract
+  [ -z "$ARC_LINT_OUTPUT" ]              # and this is NOT a tenth WARN class (registry is pinned at nine)
+  [[ "$ARC_LINT_STDERR" == *"did NOT run"* ]]
+  [[ "$ARC_LINT_STDERR" == *"no/such/ref"* ]]
+}
+
+@test "finding-1: a --base that DOES resolve still reports normally" {
+  # The guard must not turn every --base run into a refusal. The base branch is READ rather
+  # than spelled `main` or `master`: init.defaultBranch differs across the three CI legs,
+  # and a hardcoded name would make this pass or fail on the runner's config, not the code.
+  local base_branch
+  base_branch="$(git -C "$SANDBOX" rev-parse --abbrev-ref HEAD)"
+  git -C "$SANDBOX" checkout -qb probe
+  printf '\nx\n' >> "$SANDBOX/initiatives/design/PROGRESS.md"
+  git -C "$SANDBOX" add -A
+  git -C "$SANDBOX" commit -qm "cross-lane edit"
+  _arc_run_lint "$OL" --root "$SANDBOX" --base "$base_branch"
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  [ -z "$ARC_LINT_STDERR" ]
+  _arc_warn_shape ownership-cross-lane "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
+}
+
+@test "finding-7: git mv OUT of another lane is caught, not just an edit in place" {
+  # Rename detection is git's default, and `--name-only` then prints ONLY the destination.
+  # So a plain `rm` of another lane's file was caught while STEALING it was invisible --
+  # and the theft is the stronger violation.
+  git -C "$SANDBOX" mv initiatives/design/PROGRESS.md initiatives/portfolio/STOLEN.md
+  _ol
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  _arc_warn_shape ownership-cross-lane "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
+  [[ "$ARC_LINT_OUTPUT" == *"initiatives/design/PROGRESS.md"* ]]   # the SOURCE path
+}
+
+@test "finding-8: a non-ASCII filename in another lane is visible" {
+  # core.quotePath defaults to true, so git returns `"initiatives/design/na\303\257ve.md"`
+  # -- quotes as real characters -- which matches neither `case initiatives/*` nor any
+  # manifest entry. Renaming a file to something accented hid it from the lint completely.
+  printf 'content\n' > "$SANDBOX/initiatives/design/$(printf 'na\303\257ve.md')"
+  _ol
+  [ "$ARC_LINT_STATUS" -eq 0 ]
+  _arc_warn_shape ownership-cross-lane "$ARC_LINT_STATUS" "$ARC_LINT_OUTPUT"
+  [[ "$ARC_LINT_OUTPUT" != *'\303\257'* ]]        # not the escaped form
+  [[ "$ARC_LINT_OUTPUT" != *'"initiatives/'* ]]   # and not wrapped in git's quotes
+}
