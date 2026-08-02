@@ -35,7 +35,7 @@
 
 - **Kickoff:** 2026-07-30 · design source `docs/strategy/plans/PLAN-portfolio.md` · appetite 3d Tier S
 - **4/4 phases CLOSED:** 00 dual-mode machinery · 01 self-host + link history + board v1 · 02 parallel-safety floor · 03 docs truth + retro
-- **Stat line (verbatim):** S | rework 1/4 | amendments 9 | FIRED 1/5 | burn ~112% | sim-blockers-r1 n/a-tier-S | t-to-phase0 1d
+- **Stat line (verbatim):** S | rework 1/4 | amendments 8 | FIRED 1/5 | burn ~112% | sim-blockers-r1 n/a-tier-S | t-to-phase0 1d
 - **Shipped:** `initiatives/<lane>/` lanes + resolver on 7 surfaces (root-mode byte-identical, a permanent consumer contract) · `PORTFOLIO.md` board + strict-grammar board lint · ownership lint · WIP info line · the per-lane One Rule in the five docs that teach it
 - **Mode B NOT certified** — granted for three hours on 2026-08-01 and withdrawn at Phase 02's close when section F's spool was reverted; ADR-0056 makes certification a fixture result, so removing the fixture removes the certification
 - **Decisions:** ADR-0050..0062 (PORT-A..J, plus the three mid-cycle settlements 0060, 0061, 0062)
