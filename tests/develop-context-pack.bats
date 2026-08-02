@@ -289,3 +289,218 @@ ROW
   grep -q '^title: the auth token is verified before the handler runs$' "$led"
   [ "$(grep -c '^#### slice:' "$led")" -eq 3 ]
 }
+
+# ---------------------------------------------------------------------------
+# Slice 08 -- holes found by a fresh agent that had not seen the code.
+#
+# Every one of these passed the suite above. They are pinned here because a hole
+# that is fixed and not pinned is a hole that comes back, and because the pass
+# itself is only evidence if what it found is executable.
+# ---------------------------------------------------------------------------
+
+CP() { echo "$ARC_ROOT/.claude/scripts/develop/context-pack.mjs"; }
+LG() { echo "$ARC_ROOT/.claude/scripts/develop/ledger.mjs"; }
+
+# Run a node snippet with the modules under test imported as `cp` and `lg`.
+_node() {
+  local f="$BATS_TEST_TMPDIR/probe.mjs"
+  {
+    echo "import * as cp from '$(CP)';"
+    echo "import * as lg from '$(LG)';"
+    cat
+  } > "$f"
+  run node "$f"
+}
+
+@test "hole: a quoted Product line in a supersedes note does not claim the ADR" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  printf '# ADR 0920\n\n> Supersedes the develop-lane rule, whose header read:\n> **Product:** `develop`\n\n**Product:** `design`\n' \
+    > "$t/docs/adr/0920-quoted.md"
+  printf '# ADR 0921\n\n> Replaces a design ruling, whose header read:\n> **Product:** `design`\n\n**Product:** `develop`\n' \
+    > "$t/docs/adr/0921-mine.md"
+  _dev "$t" start 0
+  _dev "$t" next
+  local a; a="$(_line adrs)"
+  [[ "$a" != *"0920"* ]] || { echo "another product's ADR claimed by a quotation: $a"; false; }
+  [[ "$a" == *"0921"* ]] || { echo "this lane's ADR lost to a quotation: $a"; false; }
+}
+
+@test "hole: a fenced Product example does not outrank the real header below it" {
+  _node <<'JS'
+const md = "# ADR\n\n```\n**Product:** `develop`\n```\n\n**Product:** `design`\n";
+console.log(JSON.stringify(cp.productOf(md)));
+JS
+  [ "$output" = '"design"' ] || { echo "$output"; false; }
+}
+
+@test "hole: a Product line that says NOT this lane does not match this lane" {
+  _node <<'JS'
+console.log(JSON.stringify(cp.productOf("**Product:** `design` - explicitly NOT `develop`\n")));
+JS
+  [ "$output" = '"design"' ] || { echo "$output"; false; }
+}
+
+@test "hole: a fenced template row in the retro log is not read as a finding" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  {
+    echo
+    echo 'To add a row, copy this:'
+    echo
+    echo '```'
+    echo '2099-01-01 | example | TEMPLATE, records nothing | do the thing | auth,token'
+    echo '```'
+  } >> "$t/docs/retro-log.md"
+  _dev "$t" start 0
+  _dev "$t" next
+  local r; r="$(_line retro)"
+  [[ "$r" != *"TEMPLATE"* ]] || { echo "a template became a pattern that must not repeat: $r"; false; }
+  [[ "$r" != *"2099"* ]]     || { echo "$r"; false; }
+}
+
+@test "hole: a scoreboard row with more than five columns is refused and counted" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  echo '2026-08-02 | fixture | M | rework 2/4 | amendments 14 | burn 38 | auth' >> "$t/docs/retro-log.md"
+  _dev "$t" start 0
+  _dev "$t" next
+  local r; r="$(_line retro)"
+  [[ "$r" != *" M ["* ]] || { echo "a tier letter was read as a pattern: $r"; false; }
+  [[ "$r" == *"5-column format"* ]] || { echo "the refusal was silent: $r"; false; }
+}
+
+@test "hole: a learning ledger that does not parse says so instead of reporting nothing" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  # One unterminated fence above the rows. readRows reports it; the pack used to drop that.
+  local led="$t/docs/develop/learning-ledger.md"
+  {
+    echo '```'
+    echo 'an example row, fence left open'
+    cat "$led"
+  } > "$led.new"
+  mv "$led.new" "$led"
+  _dev "$t" start 0
+  _dev "$t" next
+  local l; l="$(_line learning)"
+  [[ "$l" == *"parse error"* ]] || { echo "a broken ledger read as a repo with nothing to say: $l"; false; }
+}
+
+@test "hole: a duplicate slice id refuses the write rather than editing another slice" {
+  _node <<'JS'
+const src = "#### slice: 01\n\ntitle: first\nsources: a\n\n#### slice: 01\n\ntitle: second\nsources: b\n";
+const r = lg.setSliceField(src, "01", "sources", "NEW");
+console.log(JSON.stringify({ changed: r.changed, same: r.text === src, reason: r.reason || "" }));
+JS
+  [[ "$output" == *'"changed":false'* ]]   || { echo "$output"; false; }
+  [[ "$output" == *'"same":true'* ]]       || { echo "$output"; false; }
+  [[ "$output" == *"refusing to guess"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: with a line number the write lands on THAT block, not the first with the id" {
+  _node <<'JS'
+const src = "#### slice: 01\n\ntitle: first\nsources: a\n\n#### slice: 01\n\ntitle: second\nsources: b\n";
+const r = lg.setSliceField(src, "01", "sources", "NEW", { at: 6 });
+console.log(JSON.stringify({ changed: r.changed, first: /sources: a/.test(r.text), second: /sources: NEW/.test(r.text) }));
+JS
+  [[ "$output" == *'"changed":true'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'"first":true'* ]]   || { echo "the already-proven slice was overwritten"; echo "$output"; false; }
+  [[ "$output" == *'"second":true'* ]]  || { echo "$output"; false; }
+}
+
+@test "hole: one CRLF line does not rewrite the whole file to CRLF" {
+  _node <<'JS'
+const src = "#### slice: 01\r\n\ntitle: t\nsources: a\n";
+const r = lg.setSliceField(src, "01", "sources", "NEW");
+console.log(JSON.stringify({ crlf: (r.text.match(/\r\n/g) || []).length, hasNew: /sources: NEW\n/.test(r.text) }));
+JS
+  [[ "$output" == *'"crlf":1'* ]]      || { echo "line endings were rewritten wholesale: $output"; false; }
+  [[ "$output" == *'"hasNew":true'* ]] || { echo "$output"; false; }
+}
+
+@test "hole: a lone carriage return inside a value does not split the line" {
+  _node <<'JS'
+const src = "#### slice: 01\n\ntitle: a\rb\nsources: x\n";
+const r = lg.setSliceField(src, "01", "sources", "NEW");
+console.log(JSON.stringify({ lines: r.text.split("\n").length, kept: r.text.includes("title: a\rb") }));
+JS
+  [[ "$output" == *'"lines":5'* ]]   || { echo "a value was split into two lines: $output"; false; }
+  [[ "$output" == *'"kept":true'* ]] || { echo "$output"; false; }
+}
+
+@test "hole: the field line keeps its bullet and emphasis" {
+  _node <<'JS'
+const src = "#### slice: 01\n\n- **sources:** old\n";
+const r = lg.setSliceField(src, "01", "sources", "NEW");
+console.log(JSON.stringify(r.text.split("\n")[2]));
+JS
+  [ "$output" = '"- **sources:** NEW"' ] || { echo "presentation was rewritten: $output"; false; }
+}
+
+@test "hole: a human annotation on the sources line survives a rerun" {
+  _node <<'JS'
+const pack = { sources: [
+  { name: "code", ran: "grep-fallback", note: "no .codegraph/", items: [], total: 2 },
+  { name: "adrs", items: [], total: 1 }, { name: "learning", items: [], total: 0 },
+  { name: "retro", items: [], total: 0 }, { name: "churn", items: [], total: 3 }] };
+console.log(cp.sourcesField("phase-05-spec.md, learning: L-101 was applied by hand", pack));
+JS
+  [[ "$output" == *"L-101 was applied by hand"* ]] || { echo "an annotation was erased: $output"; false; }
+  [[ "$output" == *"learning(0)"* ]]               || { echo "$output"; false; }
+}
+
+@test "hole: the placeholder is not carried into the audit trail" {
+  _node <<'JS'
+const pack = { sources: [
+  { name: "code", ran: "grep-fallback", note: "no .codegraph/", items: [], total: 0 },
+  { name: "adrs", items: [], total: 0 }, { name: "learning", items: [], total: 0 },
+  { name: "retro", items: [], total: 0 }, { name: "churn", items: [], total: 0 }] };
+console.log(cp.sourcesField("(empty until proven)", pack));
+JS
+  [[ "$output" != *"empty until proven"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: sources: records WHY it fell back, not only that it did" {
+  _node <<'JS'
+const mk = (note) => ({ sources: [
+  { name: "code", ran: "grep-fallback", note, items: [], total: 2 },
+  { name: "adrs", items: [], total: 0 }, { name: "learning", items: [], total: 0 },
+  { name: "retro", items: [], total: 0 }, { name: "churn", items: [], total: 0 }] });
+const a = cp.sourcesField("s.md", mk("no .codegraph/"));
+const b = cp.sourcesField("s.md", mk("codegraph exit 1"));
+console.log(JSON.stringify({ identical: a === b, b }));
+JS
+  [[ "$output" == *'"identical":false'* ]] || { echo "a crashed index is indistinguishable from no index: $output"; false; }
+  [[ "$output" == *"exit 1"* ]]            || { echo "$output"; false; }
+}
+
+@test "hole: a blast radius of . is refused rather than silently meaning everything" {
+  _node <<'JS'
+console.log(JSON.stringify(cp.fileSet(process.cwd(), { "blast-radius": "., docs" }, { fields: {} })));
+JS
+  [[ "$output" != *'"."'* ]] || { echo "the whole repo became the blast radius: $output"; false; }
+}
+
+@test "hole: a typed link pointing outside the repo is labelled, not passed on as fact" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  {
+    echo
+    echo '#### learning: L-301'
+    echo
+    echo 'what-failed: a token was accepted after expiry'
+    echo 'why-missed: the expiry clock was stubbed in both layers'
+    echo 'prevention: assert expiry against a real clock'
+    echo 'type: rule'
+    echo 'area: auth'
+    echo 'rule: ../../../etc/passwd'
+    echo 'verdict: proposed'
+  } >> "$t/docs/develop/learning-ledger.md"
+  _dev "$t" start 0
+  _dev "$t" next
+  local l; l="$(_line learning)"
+  [[ "$l" == *"not in this repo"* ]] || { echo "an outside path was handed on unlabelled: $l"; false; }
+}
+
+@test "hole: a case-only path match is dropped on every leg, not just the case-sensitive one" {
+  _node <<'JS'
+console.log(JSON.stringify(cp.fileSet(process.cwd(), { "blast-radius": "CLAUDE.MD, CLAUDE.md" }, { fields: {} })));
+JS
+  [[ "$output" != *"CLAUDE.MD"* ]] || { echo "a wrong-case path survived: $output"; false; }
+}

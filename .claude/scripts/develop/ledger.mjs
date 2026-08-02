@@ -260,6 +260,30 @@ export function parseLedger(text) {
 }
 
 /**
+ * The part of a field line up to and including its colon: indent, bullet, blockquote marker,
+ * emphasis and the key exactly as the author wrote it. Only the VALUE is ever replaced, so
+ * `- **sources:** x` stays a bulleted, emphasised list item instead of being flattened into a
+ * bare `sources: x` — a writer that rewrites presentation is editing more than it was asked to.
+ *
+ * The closing emphasis sits AFTER the colon in `**sources:** x`, and it is consumed only when
+ * an opening marker was actually seen before the key. Consuming it unconditionally would eat
+ * the first two characters of a legitimately bold VALUE; not consuming it at all leaves
+ * `- **sources:NEW`, which is what this function did before its own probe caught it.
+ */
+function fieldPrefix(raw) {
+  const m = raw.match(
+    /^([ \t]*(?:>[ \t]*)?(?:[-*+][ \t]+)?)(\*{1,2}|_{1,2})?([ \t]*[A-Za-z][A-Za-z0-9-]*[ \t]*(?:\*{1,2}|_{1,2})?[ \t]*:)([ \t]*)/,
+  );
+  if (!m) return null;
+  let prefix = m[0];
+  if (m[2]) {
+    const close = raw.slice(prefix.length).match(new RegExp(`^${m[2].replace(/\*/g, "\\*")}[ \\t]*`));
+    if (close) prefix += close[0];
+  }
+  return prefix;
+}
+
+/**
  * Set one field on one slice, in place, touching nothing else in the file.
  *
  * Written as a line walker over the SAME grammar the parser uses -- the same SLICE_RE, the
@@ -269,46 +293,76 @@ export function parseLedger(text) {
  * rewrites `sources:` inside a fenced proof block, or inside the wrong slice, and the ledger
  * still parses so nothing reports it.
  *
- * Returns `{ text, changed }`. An unknown id changes nothing and says so.
+ * `opts.at` is the 1-based line the caller's slice block STARTS on, and it is how a caller
+ * that already parsed the ledger says which block it means. An adversarial pass found why it
+ * has to exist: with two blocks claiming id `01`, the reader hands out the first UNPROVEN one
+ * and an id-matching writer edits the first TEXTUAL one, so the pack computed for one slice
+ * was written over another slice's audit trail and the slice being built recorded nothing.
+ * Without `at`, an id claimed by more than one block is refused rather than guessed at.
+ *
+ * Returns `{ text, changed, reason }`. Anything it will not do, it says.
  */
-export function setSliceField(text, id, key, value) {
-  // Line endings are detected and restored, never normalised. Rewriting a CRLF ledger as LF
-  // would turn a one-field edit into a whole-file diff on exactly one of the three CI legs.
-  const eol = /\r\n/.test(String(text ?? "")) ? "\r\n" : "\n";
-  const lines = String(text ?? "").replace(/\r\n?/g, "\n").split("\n");
+export function setSliceField(text, id, key, value, opts = {}) {
+  const src = String(text ?? "");
+  // Split on \n ONLY. A lone \r is a character inside a value -- captured terminal output puts
+  // them there -- and treating it as a line break splits one field into two lines in a file
+  // that is about to be written back. Each line keeps its own ending, so a file with one CRLF
+  // line does not become a file with 58 of them.
+  const lines = src.split("\n");
+  const body = (l) => clean(l.replace(/\r$/, ""));
+  const cr = (l) => (/\r$/.test(l) ? "\r" : "");
   const wanted = String(id);
-  let inFence = false, inTarget = false, fieldAt = -1, lastFieldAt = -1, headingAt = -1;
+  const at = Number.isInteger(opts.at) ? opts.at - 1 : null;
 
-  for (let i = 0; i < lines.length && fieldAt < 0; i++) {
-    const line = clean(lines[i]);
-    if (/^[ \t]*(```|~~~)/.test(line)) { inFence = !inFence; continue; }
-    if (inFence) continue;
+  // Pass 1: every block claiming this id, so ambiguity is DETECTED rather than resolved.
+  const starts = [];
+  {
+    let fence = false;
+    for (let i = 0; i < lines.length; i++) {
+      const l = body(lines[i]);
+      if (/^[ \t]*(```|~~~)/.test(l)) { fence = !fence; continue; }
+      if (fence) continue;
+      const m = l.match(SLICE_RE);
+      if (m && m[1] === wanted) starts.push(i);
+    }
+  }
+  if (!starts.length) return { text: src, changed: false, reason: `no slice '${wanted}'` };
 
-    const m = line.match(SLICE_RE);
-    if (m) { inTarget = m[1] === wanted; if (inTarget) headingAt = i; continue; }
-    if (HEADING_RE.test(line)) { if (inTarget) break; inTarget = false; continue; }
-    if (!inTarget) continue;
+  let headingAt;
+  if (at !== null) {
+    if (!starts.includes(at)) return { text: src, changed: false, reason: `no slice '${wanted}' at line ${at + 1}` };
+    headingAt = at;
+  } else if (starts.length > 1) {
+    return {
+      text: src, changed: false,
+      reason: `slice '${wanted}' is claimed by ${starts.length} blocks (lines ${starts.map((n) => n + 1).join(", ")}) — refusing to guess which one`,
+    };
+  } else {
+    headingAt = starts[0];
+  }
 
-    const f = line.match(FIELD_RE);
+  // Pass 2: inside that block only, to its next slice or heading.
+  let fieldAt = -1, lastFieldAt = -1, fence = false;
+  for (let i = headingAt + 1; i < lines.length; i++) {
+    const l = body(lines[i]);
+    if (/^[ \t]*(```|~~~)/.test(l)) { fence = !fence; continue; }
+    if (fence) continue;
+    if (SLICE_RE.test(l) || HEADING_RE.test(l)) break;
+    const f = l.match(FIELD_RE);
     if (!f) continue;
     lastFieldAt = i;
-    if (f[1].toLowerCase() === String(key).toLowerCase()) fieldAt = i;
+    if (f[1].toLowerCase() === String(key).toLowerCase()) { fieldAt = i; break; }
   }
 
   if (fieldAt >= 0) {
-    const indent = (lines[fieldAt].match(/^[ \t]*/) || [""])[0];
-    lines[fieldAt] = `${indent}${key}: ${value}`;
-    return { text: lines.join(eol), changed: true };
+    const raw = lines[fieldAt];
+    lines[fieldAt] = `${fieldPrefix(raw) ?? `${key}: `}${value}${cr(raw)}`;
+    return { text: lines.join("\n"), changed: true };
   }
-  if (lastFieldAt >= 0) {
-    lines.splice(lastFieldAt + 1, 0, `${key}: ${value}`);
-    return { text: lines.join(eol), changed: true };
-  }
-  if (headingAt >= 0) {
-    lines.splice(headingAt + 1, 0, "", `${key}: ${value}`);
-    return { text: lines.join(eol), changed: true };
-  }
-  return { text: String(text ?? ""), changed: false };
+  const anchor = lastFieldAt >= 0 ? lastFieldAt : headingAt;
+  const term = cr(lines[anchor]);
+  lines.splice(anchor + 1, 0, ...(lastFieldAt >= 0 ? [] : [term]), `${key}: ${value}${term}`);
+  return { text: lines.join("\n"), changed: true };
 }
 
 /** A slice is proven when BOTH its result and its commit are really filled in (ADR-0065). */

@@ -162,15 +162,38 @@ _union() { # $1 = total; prints every shard's files, sorted
 # ---------- balance: the reason the thing exists ----------
 
 @test "--plan balances by measured seconds, not by file count" {
+  # No packing can beat max(heaviest single file, total / shards): one file cannot be split
+  # across two runners, and the work has to land somewhere. That bound is the RULE, and it is
+  # what this asserts -- derived from the plan on every run rather than pinned as a constant.
+  #
+  # It used to be pinned, at 200s, and the constant went stale the moment the weights were
+  # honest. The 2026-07-31 table measured 42 of 54 files and left 12 riding _default_weight 16,
+  # so it predicted 1785s total; re-measuring all 54 on 2026-08-03 put the real figure at
+  # 2366s. Nothing about the sharder had regressed -- 200s was simply 1785/9 rounded, a
+  # snapshot of an under-measurement, and it failed the first time the table told the truth.
+  # This is the same defect as the retro-log's 2026-08-02 entry: a test that asserts one
+  # snapshot value measures the calendar, and its red tells you nothing.
+  local heaviest total floor bound
   run bash -c "$SHARD --plan --total 9"
   [ "$status" -eq 0 ]
-  # The heaviest single file (design-steel-thread) is a hard floor: no shard can beat it. What
-  # this asserts is that the sharder gets NEAR that floor rather than splitting by count, which
-  # would leave one shard carrying several heavy files.
-  local heaviest
   heaviest="$(printf '%s\n' "$output" | tail -1 | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
-  [ -n "$heaviest" ]
-  [ "$heaviest" -le 200 ] || { echo "heaviest shard is ${heaviest}s -- balancing has regressed"; false; }
+  total="$(printf '%s\n' "$output" | tail -1 | grep -oE 'total [0-9]+s' | grep -oE '[0-9]+')"
+  [ -n "$heaviest" ] && [ -n "$total" ]
+
+  # One shard per file: the heaviest shard IS then the heaviest single file, i.e. the floor.
+  run bash -c "$SHARD --plan --total 54"
+  [ "$status" -eq 0 ]
+  floor="$(printf '%s\n' "$output" | tail -1 | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
+  [ -n "$floor" ]
+
+  bound=$(( total / 9 ))
+  [ "$bound" -ge "$floor" ] || bound="$floor"
+  bound=$(( bound * 110 / 100 ))          # 10% for the greedy packer's last file
+  [ "$heaviest" -le "$bound" ] || {
+    echo "heaviest shard is ${heaviest}s against a bound of ${bound}s (floor ${floor}s, total ${total}s over 9)"
+    echo "balancing has regressed -- this is the packer, not the weights"
+    false
+  }
 }
 
 # ---------- one level down: a TEST that never runs ----------

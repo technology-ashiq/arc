@@ -26,9 +26,10 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
 
+import { isFilled } from "./ledger.mjs";
 import { readRows } from "./learning.mjs";
 
 /** The five sources, in print order. This list is the contract; nothing may be omitted. */
@@ -60,9 +61,38 @@ const rel = (root, abs) => relative(root, abs).split(sep).join("/");
  * and record it as a source.
  */
 function insideRoot(root, candidate) {
-  const abs = resolve(root, candidate);
-  const base = resolve(root);
+  const base = real(resolve(root));
+  const abs = real(resolve(root, candidate));
   return abs === base || abs.startsWith(base + sep);
+}
+
+/**
+ * The REAL path, links resolved. Comparing resolved strings is not containment: a symlink or a
+ * Windows junction inside the repo is a string under the root that names a file outside it, and
+ * an adversarial pass walked one out of the tree and had the pack print what it found there.
+ * A path that does not exist cannot be followed, so it falls back to the lexical form -- which
+ * is still checked, and still rejected if it escapes.
+ */
+function real(p) {
+  try { return realpathSync.native(p); } catch { return p; }
+}
+
+/**
+ * Case-EXACT existence. `existsSync` is case-insensitive on Windows and macOS and case-
+ * sensitive on Linux, so a blast radius reading `SRC/A.JS` is kept on two CI legs and dropped
+ * on the third: the same ledger then produces two different packs, and the one test asserting
+ * the neighbourhood exists passes on the legs that cannot fail it.
+ */
+function existsExact(root, p) {
+  const parts = p.split("/").filter((s) => s && s !== ".");
+  let dir = resolve(root);
+  for (const part of parts) {
+    let names;
+    try { names = readdirSync(dir); } catch { return false; }
+    if (!names.includes(part)) return false;
+    dir = join(dir, part);
+  }
+  return parts.length > 0;
 }
 
 /** A safe existence test: outside the repo is treated as absent, never as a file to read. */
@@ -70,7 +100,7 @@ function livesInRepo(root, p) {
   if (!p || typeof p !== "string") return false;
   if (/^[a-z]+:\/\//i.test(p)) return false;                 // a URL is not a path
   if (!insideRoot(root, p)) return false;
-  try { return existsSync(resolve(root, p)); } catch { return false; }
+  try { return existsExact(root, p.replace(/\\/g, "/")); } catch { return false; }
 }
 
 const isDir = (p) => { try { return statSync(p).isDirectory(); } catch { return false; } };
@@ -94,9 +124,20 @@ function walk(dir, root, out = [], budget = { n: WALK_CAP }) {
 
 const uniqSorted = (xs) => [...new Set(xs)].sort();
 
-/** Word tokens, for the area and tag matching. Lowercased, punctuation split, dedup. */
+/**
+ * Word tokens, for the area and tag matching. Lowercased, punctuation split, dedup.
+ *
+ * The class is spelled out rather than written `a-z0-9`: a letter RANGE is resolved by the
+ * active collation, so the same text tokenises differently under two locales and the pack
+ * would match a learning row on one CI leg and not on another. tests/portability.bats fails
+ * any new range for exactly this reason.
+ */
 function tokens(text) {
-  return new Set(String(text ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 1));
+  return new Set(
+    String(text ?? "").toLowerCase()
+      .split(/[^abcdefghijklmnopqrstuvwxyz0123456789]+/)
+      .filter((t) => t.length > 1),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -209,21 +250,67 @@ export function neighbourhood(root, files, env = process.env) {
 // Source 2 -- governing ADRs
 // ---------------------------------------------------------------------------
 
+/**
+ * The product an ADR belongs to: the FIRST backticked token on the first `Product:` line that
+ * is neither inside a fence nor inside a blockquote, or null.
+ *
+ * Every clause of that sentence is a hole an adversarial pass walked through. The matcher used
+ * to take the first line anywhere in the head that looked like a Product line, allow a `>`
+ * marker in its lead, and then test whether the lane token appeared anywhere on it:
+ *
+ *   - `> **Product:** \`develop\`` inside a "supersedes the develop-lane rule" note claimed a
+ *     design ADR for develop, while the same trick in reverse hid a develop ADR — one input,
+ *     both errors at once, and the shipped fixture passed only because its real header
+ *     happened to come first;
+ *   - a fenced ```` **Product:** `develop` ```` EXAMPLE outranked the real header below it;
+ *   - `**Product:** \`design\` — explicitly NOT \`develop\`` matched develop, because the
+ *     sentence saying "not this one" contains the token.
+ *
+ * First-backticked-token is what makes the last case right: a Product line names one product.
+ */
+export function productOf(text) {
+  let fence = false;
+  for (const raw of String(text ?? "").split(/\r?\n/)) {
+    if (/^[ \t]*(```|~~~)/.test(raw)) { fence = !fence; continue; }
+    if (fence) continue;
+    if (/^[ \t]*>/.test(raw)) continue;                       // a quotation is not this file's header
+    if (/^[ \t]*#{1,6}[ \t]+/.test(raw)) {
+      if (/^[ \t]*#{2,6}[ \t]+/.test(raw)) return null;        // past the header block entirely
+      continue;
+    }
+    const m = raw.match(/^[ \t*_]*Product[ \t*_]*:[ \t*_]*(.*)$/i);
+    if (!m) continue;
+    const tok = m[1].match(/`([^`]+)`/);
+    return tok ? tok[1].trim() : m[1].trim().replace(/[*_]+$/, "").trim() || null;
+  }
+  return null;
+}
+
 export function adrs(root, brief, lane) {
   const dir = join(root, "docs", "adr");
-  const cited = new Set(String(brief?.adrs ?? "").match(/\d{4}/g) ?? []);
+  // A whole token that IS a four-digit number, not any four digits found in the line. Scanning
+  // loosely, a hand-edited `adrs: see 2026-08-03` pulled in ADR-2026 as a governing decision.
+  const citedNums = new Set(
+    String(brief?.adrs ?? "").split(/[,\s]+/)
+      .map((s) => (s.trim().match(/^(?:ADR-)?(\d{4})$/i) || [])[1])
+      .filter(Boolean),
+  );
   const out = new Set();
   let files = [];
-  try { files = readdirSync(dir).filter((f) => /^\d{4}.*\.md$/.test(f)); } catch { files = []; }
+  try {
+    files = readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isFile() && /^\d{4}.*\.md$/.test(e.name))
+      .map((e) => e.name);
+  } catch { files = []; }
   for (const f of files) {
     const num = f.slice(0, 4);
-    if (cited.has(num)) { out.add(num); continue; }
+    if (citedNums.has(num)) { out.add(num); continue; }
     if (!lane) continue;
-    let head = "";
-    try { head = readFileSync(join(dir, f), "utf8").slice(0, 2048); } catch { continue; }
-    // `**Product:** \`develop\`` — the lane token inside backticks on the Product line only.
-    const m = head.match(/^[ \t>*_]*\**Product:\**[ \t]*(.*)$/im);
-    if (m && new RegExp("`" + lane.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "`").test(m[1])) out.add(num);
+    let text = "";
+    // The whole file, not a byte window: an ADR whose Product line sat past a 2048-byte head
+    // was dropped from its own lane. ADRs are prose files; productOf stops at the first `##`.
+    try { text = readFileSync(join(dir, f), "utf8"); } catch { continue; }
+    if (productOf(text) === lane) out.add(num);
   }
   const all = [...out].sort();
   return { items: all.slice(0, ITEM_CAP).map((n) => `ADR-${n}`), total: all.length };
@@ -238,13 +325,29 @@ const LINK_KEYS = ["adr", "rule", "fixture", "phase"];
 /** Row fields that hold a path, used for blast-radius overlap. */
 const PATH_KEYS = ["fixture", "rule", "check"];
 
-const overlaps = (a, b) => a === b || a.startsWith(b + "/") || b.startsWith(a + "/");
+/** Path containment either way. Trailing slashes are stripped: a human writes `src/auth/` and
+ * `src/auth` to mean the same directory, and only one of them used to overlap its own files. */
+const overlaps = (a, b) => {
+  const x = a.replace(/\/+$/, ""), y = b.replace(/\/+$/, "");
+  return x === y || x.startsWith(y + "/") || y.startsWith(x + "/");
+};
 
 export function learning(root, files, corpus) {
   const path = join(root, "docs", "develop", "learning-ledger.md");
   if (!existsSync(path)) return { items: [], total: 0, note: "no learning ledger" };
-  let rows = [];
-  try { rows = readRows(readFileSync(path, "utf8")).rows; } catch { return { items: [], total: 0, note: "unreadable" }; }
+  let rows = [], errors = [];
+  try {
+    const read = readRows(readFileSync(path, "utf8"));
+    rows = read.rows; errors = read.errors ?? [];
+  } catch { return { items: [], total: 0, note: "unreadable" }; }
+
+  // readRows knows when a ledger did not parse and says so precisely -- an unterminated fence,
+  // a marker its grammar will not accept, two rows claiming one id. Discarding those errors is
+  // how a BROKEN ledger reported `learning [0] (none)`: indistinguishable from a repo with
+  // nothing to say, and worse than a MISSING ledger, which at least said it was missing.
+  const brokenNote = errors.length
+    ? `${errors.length} parse error(s) in the ledger — ${errors[0].msg}`
+    : null;
 
   const matched = [];
   for (const r of rows) {
@@ -264,16 +367,34 @@ export function learning(root, files, corpus) {
   const items = matched.map((r) => {
     const f = r.fields ?? {};
     const links = LINK_KEYS
-      .map((k) => (String(f[k] ?? "").trim() ? `${k}:${String(f[k]).trim()}` : null))
+      .map((k) => {
+        const v = String(f[k] ?? "").trim();
+        if (!v) return null;
+        // A `rule:` or `fixture:` naming something this repo does not hold is handed on as a
+        // fact unless it is labelled. `rule: ../../../etc/passwd` is an ordinary string to
+        // find in a markdown file, and it was being printed as the governing record's link.
+        const suspect = (k === "rule" || k === "fixture") && !livesInRepo(root, v);
+        return `${k}:${v}${suspect ? " (not in this repo)" : ""}`;
+      })
       .filter(Boolean);
     return links.length ? `${r.id} → ${links.join(", ")}` : `${r.id} (no typed link)`;
   });
-  return { items: items.slice(0, ITEM_CAP), total: items.length, rows: matched };
+  return { items: items.slice(0, ITEM_CAP), total: items.length, rows: matched, note: brokenNote };
 }
 
 // ---------------------------------------------------------------------------
 // Source 4 -- retro patterns, matched on tag overlap
 // ---------------------------------------------------------------------------
+
+/** A real calendar date, not a date SHAPE. `9999-99-99` is not a day (retro-log 2026-07-16). */
+function isCalendarDate(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const [y, mo, d] = m.slice(1).map(Number);
+  if (mo < 1 || mo > 12 || d < 1) return false;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
+}
 
 export function retro(root, corpus) {
   const path = join(root, "docs", "retro-log.md");
@@ -282,17 +403,35 @@ export function retro(root, corpus) {
   try { text = readFileSync(path, "utf8"); } catch { return { items: [], total: 0, note: "unreadable" }; }
 
   const hits = [];
+  let fence = false, dated = 0, malformed = 0;
   for (const line of text.split(/\r?\n/)) {
+    // Fences are content. Without this, a "copy this template" block in the log was read as a
+    // finding: a row dated 2099 whose own text said it records nothing was handed to the next
+    // slice as a pattern that must not repeat.
+    if (/^[ \t]*(```|~~~)/.test(line)) { fence = !fence; continue; }
+    if (fence) continue;
     if (/^\s*>/.test(line)) continue;                                   // the file's own preamble
+
     const cols = line.split("|").map((c) => c.trim());
-    if (cols.length < 5) continue;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(cols[0])) continue;
-    const tags = cols[cols.length - 1].split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
+    if (!isCalendarDate(cols[0])) continue;
+    dated++;
+    // EXACTLY the five columns the log's own format line declares:
+    // `YYYY-MM-DD | project | pattern | prevention | tags`. Accepting "5 or more" made the
+    // cycle-scoreboard rows in this very file parse as findings, with the tier letter read as
+    // the pattern and a metric read as the tag list — and it turned a pattern containing a
+    // pipe into a truncated half-sentence presented as the finding.
+    if (cols.length !== 5) { malformed++; continue; }
+    const tags = cols[4].split(",").map((t) => t.trim().toLowerCase()).filter(Boolean);
     if (!tags.length || !tags.some((t) => corpus.has(t))) continue;
     const pattern = cols[2].length > 72 ? cols[2].slice(0, 69) + "..." : cols[2];
     hits.push(`${cols[0]} · ${pattern} [${tags.join(",")}]`);
   }
-  return { items: hits.slice(0, ITEM_CAP), total: hits.length };
+  // A file that exists, holds dated lines, and yields no row in its own format is not a repo
+  // with nothing to say — it is a reader that did not read it. Say which.
+  const note = !dated ? "no dated row in the log's format"
+    : malformed ? `${malformed} dated line(s) are not in the log's 5-column format`
+    : undefined;
+  return { items: hits.slice(0, ITEM_CAP), total: hits.length, note };
 }
 
 // ---------------------------------------------------------------------------
@@ -335,8 +474,12 @@ export function fileSet(root, brief, slice) {
     .map((m) => m[1].trim())
     .filter((t) => /[/.]/.test(t) && !/\s/.test(t));
   const all = [...raw, ...fromTitle]
-    .map((t) => t.replace(/\\/g, "/").replace(/^\.\//, ""))
-    .filter((t) => t !== "(none)" && livesInRepo(root, t));
+    .map((t) => t.replace(/\\/g, "/").replace(/^\.\//, "").replace(/\/+$/, ""))
+    // `.` is a legal path that names the whole repository. Left in, the neighbourhood becomes
+    // every file and churn ranks the entire history, with nothing in the pack saying that the
+    // blast radius was in effect unbounded.
+    .filter((t) => t && t !== "." && t !== ".." && t !== "(none)")
+    .filter((t) => livesInRepo(root, t));
   return uniqSorted(all);
 }
 
@@ -387,7 +530,10 @@ export function renderPack(pack, sliceId) {
     const lead = s.name === "code" ? `${s.ran}${s.note ? ` (${s.note})` : ""} ` : "";
     const shown = s.items.length ? s.items.join(", ") : "(none)";
     const more = s.total > s.items.length ? ` (+${s.total - s.items.length} more)` : "";
-    const why = !s.items.length && s.note && s.name !== "code" ? ` — ${s.note}` : "";
+    // The note prints whether or not the source returned items. A ledger that half-parsed
+    // still half-parsed, and a source that says nothing about itself while returning three
+    // rows is the same silence as one that returns none.
+    const why = s.note && s.name !== "code" ? ` — ${s.note}` : "";
     lines.push(`  ${label}  ${lead}[${s.total}] ${shown}${more}${why}`);
   }
   return lines;
@@ -399,13 +545,28 @@ export function renderPack(pack, sliceId) {
  * source tokens is preserved -- the spec reference `start` wrote is the audit trail's first
  * entry and re-running `next` must not erase it.
  */
+/**
+ * A token this function itself wrote on a previous run, and therefore the only kind it may
+ * remove. The old filter dropped anything STARTING with a source name, which is a shape a
+ * person writes too: `learning: L-101 was applied by hand` vanished, and
+ * `churn: ignored, the file moved` half-vanished, leaving `the file moved` reading as an
+ * independent claim. A writer may only take back exactly what it put down.
+ */
+const MACHINE_TOKEN = /^(?:code:[a-z-]+|adrs|learning|retro|churn)\([^)]*\)$/;
+
 export function sourcesField(previous, pack) {
   const keep = String(previous ?? "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
-    .filter((t) => !SOURCE_NAMES.some((n) => t === n || t.startsWith(`${n}(`) || t.startsWith(`${n}:`)));
-  const computed = pack.sources.map((s) =>
-    s.name === "code" ? `code:${s.ran}(${s.total})` : `${s.name}(${s.total})`);
+    .filter((t) => !MACHINE_TOKEN.test(t))
+    .filter((t) => isFilled(t));            // `(empty until proven)` is not an audit trail entry
+  const computed = pack.sources.map((s) => {
+    if (s.name !== "code") return `${s.name}(${s.total})`;
+    // The REASON is persisted, not just the path name. Without it "no index" and "the index
+    // crashed" are byte-identical a week later, which is the silent-fallback failure the
+    // field exists to prevent, one level in.
+    return `code:${s.ran}(${s.total}${s.note ? `; ${s.note}` : ""})`;
+  });
   return [...keep, ...computed].join(", ");
 }

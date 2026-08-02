@@ -334,9 +334,14 @@ async function modeNext(ctx) {
     });
     for (const line of renderPack(pack, next.id)) say(line);
     say("");
+    // `at:` binds the write to the block the READER handed out, by line. Binding by id alone
+    // is what let a duplicate id send one slice's pack into another slice's audit trail.
     const before = readFileSync(led.path, "utf8");
-    const { text, changed } = setSliceField(before, next.id, "sources", sourcesField(next.fields.sources, pack));
+    const { text, changed, reason } = setSliceField(
+      before, next.id, "sources", sourcesField(next.fields.sources, pack), { at: next.line },
+    );
     if (changed && text !== before) writeFileSync(led.path, text, "utf8");
+    else if (!changed) say(`WARN  [sources] not recorded — ${reason}`);
   } catch (e) {
     say(`Context Pack — unavailable: ${e?.message ?? e}`);
     say("");
