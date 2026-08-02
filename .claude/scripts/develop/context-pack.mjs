@@ -168,7 +168,13 @@ export function parsePaths(stdout, root) {
     // went into the audit trail as a permanent false statement about another program.
     if (isAbsolute(t) || /^[A-Za-z]:\//.test(t)) {
       if (!insideRoot(root, t)) continue;
-      t = relative(root, t).split(sep).join("/");
+      // Relative to the REAL root, not the lexical one. On macOS `/tmp` is a symlink to
+      // `/private/tmp`, so a child process reports its cwd under `/private/tmp` while `root`
+      // still reads `/tmp`: containment passed and then `relative()` produced
+      // `../../private/tmp/...`, which fails the existence check. Every codegraph item was
+      // dropped on exactly one CI leg, and the pack recorded "returned no path this repo
+      // holds" — the false-reason bug this branch exists to fix, one level down.
+      t = relative(real(resolve(root)), real(resolve(root, t))).split(sep).join("/");
     }
     if (!livesInRepo(root, t)) continue;
     if (isDir(resolve(root, t))) continue;

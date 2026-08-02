@@ -531,7 +531,7 @@ _git_init() {
 }
 
 @test "hole: a non-ASCII filename is named as itself, not as its octal escapes" {
-  local t; t="$(_tree)"; _no_codegraph "$t"
+  local t; t="$(_tree)"
   # The name is written by node from a \u escape, never as a literal in this file: a UTF-8
   # byte here would depend on the runner's locale to survive, and the whole point is a name
   # git will C-quote.
@@ -546,20 +546,27 @@ _git_init() {
     git -C "$t" add -A >/dev/null 2>&1
     git -C "$t" commit -qm "c$i" >/dev/null 2>&1
   done
-  _dev "$t" start 0
-  _dev "$t" next
-  local c; c="$(_line churn)"
+  # Directly, over the directory: the fixture spec names four ASCII files, so an end-to-end
+  # run would never put this one in the blast radius and the assertion would test nothing.
+  TREE="$t" _node <<'JS'
+const c = cp.churn(process.env.TREE, ["src/auth"]);
+console.log(JSON.stringify(c.items));
+JS
   # git C-quotes any path outside ASCII by default; the escapes used to be read as directories
   # and the fabricated path ranked FIRST, with a computed count beside it.
-  [[ "$c" != *'/303/'* && "$c" != *'\303'* ]] || { echo "octal escapes became a path: $c"; false; }
-  [[ "$c" == *"caf"* ]] || { echo "the most-churned file vanished: $c"; false; }
+  [[ "$output" != *'/303/'* && "$output" != *'\\303'* ]] || { echo "octal escapes became a path: $output"; false; }
+  [[ "$output" == *"caf"* ]] || { echo "the most-churned file vanished: $output"; false; }
+  [[ "$output" != *'"'*'"src/auth/caf'* ]] || { echo "the quote characters git added survived: $output"; false; }
 }
 
 @test "hole: churn drops paths the tree no longer holds, and says how many" {
   local t; t="$(_tree)"; _no_codegraph "$t"; _history "$t"
+  # `start` BEFORE the rename, so the brief names the file the way a real brief would: written
+  # while it existed, read after it moved. Deriving the radius after the rename would drop the
+  # path silently and the assertion would pass for the wrong reason.
+  _dev "$t" start 0
   git -C "$t" mv src/auth/alpha.js src/auth/omega.js >/dev/null 2>&1
   git -C "$t" commit -qm rename >/dev/null 2>&1
-  _dev "$t" start 0
   _dev "$t" next
   local c; c="$(_line churn)"
   [[ "$c" != *"alpha.js"* ]] || { echo "a path the tree cannot open was handed on: $c"; false; }
