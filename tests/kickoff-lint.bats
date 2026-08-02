@@ -305,3 +305,81 @@ addrow() {
   run $LINT_CMD "$TMP"
   [ "$status" -eq 0 ]; [[ "$output" == *"[verify-red]"*"[trial]"* ]]
 }
+
+# ---------- [adr-dup]: two files claiming one ADR number ----------
+#
+# The collision this exists for is real and already happened (2026-08-02): two sessions on
+# two branches both read 0062 as the highest and both wrote 0063-0068. git raised nothing,
+# because the FILENAMES differ — there was no conflict to resolve and nothing to notice.
+# It was found by a human mentioning the other session.
+#
+# Structural, so it FAILs rather than warns: two files either share a four-digit prefix or
+# they do not.
+
+@test "adr-dup: two files claiming one number FAIL" {
+  cp "$TMP/docs/adr/0001-postgres-over-sqlite.md" "$TMP/docs/adr/0001-redis-over-memcached.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[adr-dup]"* ]]
+  # Names BOTH files: a duplicate you cannot locate is a duplicate you cannot fix.
+  [[ "$output" == *"0001-postgres-over-sqlite.md"* ]]
+  [[ "$output" == *"0001-redis-over-memcached.md"* ]]
+}
+
+@test "adr-dup: negative control — the good fixture has no duplicates" {
+  run $LINT_CMD "$TMP"
+  [[ "$output" != *"[adr-dup]"* ]]
+}
+
+@test "adr-dup: three files on one number are all named" {
+  cp "$TMP/docs/adr/0001-postgres-over-sqlite.md" "$TMP/docs/adr/0001-second.md"
+  cp "$TMP/docs/adr/0001-postgres-over-sqlite.md" "$TMP/docs/adr/0001-third.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"claimed by 3 files"* ]]
+}
+
+@test "adr-dup: a different number is not a duplicate" {
+  cp "$TMP/docs/adr/0001-postgres-over-sqlite.md" "$TMP/docs/adr/0002-something-else.md"
+  run $LINT_CMD "$TMP"
+  [[ "$output" != *"[adr-dup]"* ]]
+}
+
+@test "adr-dup: a case-different extension is still the same number" {
+  # An adversarial pass on this very check found 0001-x.MD invisible to a case-sensitive
+  # match -- and on Windows and macOS that file is perfectly real.
+  cp "$TMP/docs/adr/0001-postgres-over-sqlite.md" "$TMP/docs/adr/0001-shouty.MD"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[adr-dup]"* ]]
+}
+
+@test "adr-dup: a number with no title still counts" {
+  # 0001.md was invisible to a pattern that required a dash, while the [adr] check below
+  # -- which uses startsWith -- would happily resolve it. A duplicate one check can see and
+  # another cannot is worse than neither seeing it.
+  cp "$TMP/docs/adr/0001-postgres-over-sqlite.md" "$TMP/docs/adr/0001.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[adr-dup]"* ]]
+}
+
+@test "adr-dup: non-ADR files in the directory are ignored, not miscounted" {
+  # README.md, a stray .txt, or an editor backup must not be read as ADR 0001.
+  printf 'index\n' > "$TMP/docs/adr/README.md"
+  printf 'x\n'     > "$TMP/docs/adr/0001-postgres-over-sqlite.md.bak"
+  printf 'x\n'     > "$TMP/docs/adr/notes.txt"
+  run $LINT_CMD "$TMP"
+  [[ "$output" != *"[adr-dup]"* ]]
+}
+
+# THE one that makes CI the control rather than the convention: this runs against the REAL
+# docs/adr/, so a collision merged from any branch turns the suite red without anyone
+# having to remember to run kickoff-lint.
+@test "adr-dup: the repository's own docs/adr/ carries no duplicate number" {
+  run bash -c '
+    ls "$0/docs/adr" | sed -n "s/^\([0-9][0-9][0-9][0-9]\)-.*\.md$/\1/p" | sort | uniq -d
+  ' "$ARC_ROOT"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ] || { echo "duplicate ADR number(s) in docs/adr/: $output"; false; }
+}

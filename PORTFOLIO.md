@@ -36,9 +36,9 @@ So a lane claims a **century**, and never numbers outside it:
 | 0100–0199 | `develop` |
 | 0200–0299 | next lane to be born |
 
-`/arc-kickoff` assigns the next free century when it creates a lane. A duplicate-number check
-still needs to be added to an existing lint so CI catches a band being forgotten — tracked,
-not yet built.
+`/arc-kickoff` assigns the next free century when it creates a lane, and `kickoff-lint`'s
+`[adr-dup]` check FAILs when two files claim one number — so a forgotten band is caught by CI
+rather than by someone happening to mention it. The band prevents; the lint is the control.
 
 ## Execution mode (ADR-0056 / PORT-G)
 
