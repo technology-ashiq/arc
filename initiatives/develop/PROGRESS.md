@@ -1,52 +1,40 @@
-# PROGRESS.md — Cycle 5 · arc-develop "The Developer"
+# PROGRESS.md — Cycle 6 · arc-develop "The Developer" — the intelligence layers
 
 status: LIVE
-cycle: arc-develop (Cycle 5, opened 2026-08-02)
-phase: — all 4 closed, cycle ready to land
+cycle: arc-develop Cycle 6 (opened 2026-08-02)
+phase: 04 — planned, not started
 appetite: 5d
-burn: 1.9d
-blocked-on: —
+burn: 0d
+blocked-on: owner — plan approval
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
 > (tests green + live demo + exit criteria + evidence). Evidence over assertion.
-> This lane was born by `/arc-kickoff --lane develop` on 2026-08-02 — arc's first natively-born
-> lane. Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at
-> root and are never copied here (ADR-0053); evidence is lane-scoped from Phase 00 forward
-> (ADR-0055), at `initiatives/develop/evidence/phase-NN/`.
-> Design source: `docs/strategy/plans/PLAN-develop.md` (frozen — the decision record, not the cycle).
+> Cycle 5 closed 2026-08-02 at ~1.9 of 5 days, all four phases under appetite — its plan is
+> archived at `archive/PLAN-cycle5-2026-08-02.md` and its done-log is kept below unchanged.
+> Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at
+> root and are never copied here (ADR-0053); evidence is lane-scoped at
+> `initiatives/develop/evidence/phase-NN/`.
+> Design source: `docs/strategy/plans/PLAN-develop.md` (frozen). Cycle 6 finishes its layers 3-5.
 
 ## Phase table
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Steel thread — `/arc-develop` runs start → next → status → handoff end-to-end offline on the committed fake phase, lane-native, writing a durable brief + slice ledger and emitting receipts | 1.5 days | ✅ done 2026-08-02 |
-| 01 | The proof floor — `develop-lint` with structural BLOCKs, evidence tiers, and a parser that survives ≥20 adversarial breaking inputs | 1.25 days | ✅ done 2026-08-02 |
-| 02 | Earned judgment — predictions scored at handoff, and a fresh unanchored `spec-fidelity` pass over spec + diff | 0.75 days | ✅ done 2026-08-02 |
-| 03 | Controlled escalation — stuck backstops, inline risk-triggered checkpoints, debt-ledger marker lint | 0.5 days | ✅ done 2026-08-02 |
+| 00 | Steel thread — parked, shipped in Cycle 5 | — | ✅ done 2026-08-02 |
+| 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, promotion loop | 1.5 days | pending |
+| 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | pending |
+| 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | pending |
+| 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
 
-**Appetite burn: ~1.9 of 5 days used (~38%). All 4 phases closed, every one under its own
-appetite.** Phases allocated 4.0 days and spent ~1.9. The 3.0-day checkpoint never fired.
-
-| phase | appetite | spent | closed on |
-|---|---|---|---|
-| 00 steel thread | 1.5d | ~0.5d | CI `30751546128` |
-| 01 proof floor | 1.25d | ~0.6d | CI `30752975413` |
-| 02 earned judgment | 0.75d | ~0.4d | CI `30754616004` |
-| 03 controlled escalation | 0.5d | ~0.4d | CI `30754616004` |
-
-Basis, so it can be audited rather than believed: one unbroken sitting on 2026-08-02, from the
-kickoff through to all four phases green on the 3-OS matrix. The honest caveat on that number is
-that this was a single continuous session with no context switches, which is the most favourable
-possible condition and not what a normal week looks like — the figure is real but it is not a
-throughput claim.
-
-**Prediction calibration across the three scored phases: 9 hit · 5 miss · 1 unforeseen.**
-That is the record this product exists to accumulate — earned from scored outcomes, not asserted.
-The misses are the useful half: the riskiest-file call was wrong twice in a row, both times
-naming the gate rather than the parser underneath it.
+**Appetite burn: 0 of 5 days used (0%).** The four phases allocate the full 5.0 days, which leaves
+no slack — and that is a known, named risk rather than an oversight: Cycle 4 closed at 112% with
+none. It is accepted here on two conditions that Cycle 5 proved hold. Phase 07 is a pre-decided,
+independently-cuttable scope cut, and the checkpoint at 3.0 days fires before it would start.
 
 ## Done log
+
+### Cycle 5 — closed 2026-08-02, ~1.9 of 5 days, all four phases under appetite
 
 **Phase 00 — steel thread — closed 2026-08-02, ~0.5d against a 1.5d appetite.**
 CI run `30751546128` green: 20 of 20 jobs, ubuntu + macos + windows, head `8c46844`
@@ -137,26 +125,11 @@ lifecycle event needs a kind"* — is what authorised it, one cycle after it was
 
 ## Now
 
-**Current position: all four phases closed on green CI, ~1.9 of 5 days.** `/arc-develop` ships
-with five modes, a lint with three BLOCKs and two WARN-first groups, 45 pinned adversarial
-fixtures, a stuck protocol, inline risk checkpoints, a debt ledger and a fidelity agent.
-PR **#95** carries the cycle.
+**Current position:** Cycle 6 planned, awaiting approval. Cycle 5 shipped delivery-order layers 1
+and 2 of the frozen design source; this cycle finishes layers 3, 4 and 5, plus the layer-2 items
+that were cut to fit the last appetite.
 
-**Next step:** `/arc-retro` — this cycle has unusually good material for it (see below) — then
-merge #95.
+**Next step:** approve the plan. Until then: no product code.
 
-**What the retro should not lose:**
-
-1. **A gate's author cannot be its attacker.** 26 self-written breaking inputs, 26 caught, zero
-   holes — then an unanchored agent found 9. Every one of mine attacked the same direction.
-2. **A stated control is not a control.** The ADR band went into `PORTFOLIO.md` as a convention;
-   the lint that would enforce it is still not built, so the protection is a promise.
-3. **The spine failed silently.** `develop.started` quarantined while the command exited 0. Any
-   emitter should verify its first receipt actually landed rather than trust exit 0.
-4. **Two extensions of a closed vocabulary in one cycle.** ADR-0107 sets the next trigger at the
-   fifth kind, where the answer becomes one `develop.*` kind with a typed payload.
-
-**Tracked, not built** (also in `debt-ledger.md`): the duplicate-ADR-number lint; the public-API
-surface diff; the shared risk-glob rules file; and `spec-fidelity` has never been loaded by the
-runtime that will load it — it was exercised through a general-purpose agent carrying its
-contract inline, because agent types register at session start.
+**Then:** `/arc-develop start 4 --lane develop` — this cycle runs through the harness itself from
+its first phase, the way Cycle 5's phases 01 through 03 did.
