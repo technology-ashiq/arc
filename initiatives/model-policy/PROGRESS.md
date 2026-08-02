@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: model-policy (Cycle 5, opened 2026-08-02)
-phase: 01
+phase: 02
 appetite: 3d
-burn: 0.05d
+burn: 0.35d
 blocked-on: —
 depends-on: —
 
@@ -19,7 +19,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — the Balanced Model Policy ADR-0069 written (blocks a–g), linted, merged (REQ-01) | 0.5 days | ✅ done 2026-08-02 |
-| 01 | Council `standard` mode + one real run; session-001 retrofit + honest grade-or-UNRESOLVED (REQ-02, REQ-04) | 0.75 days | ⏸ not started |
+| 01 | Council `standard` mode + one real run; session-001 retrofit + honest grade-or-UNRESOLVED (REQ-02, REQ-04) | 0.75 days | ✅ done 2026-08-02 |
 | 02 | Paired composer A/B at one pinned commit; blind 7-item rankings; keep/revert ADR (REQ-03) | 1.25 days | ⏸ not started |
 | 03 | Attacker reject-log with fixed taxonomy (REQ-05) + mode-ladder dogfood + retro | 0.5 days | ⏸ not started |
 
@@ -98,13 +98,42 @@ a docs-drift sweep, not Phase 00's steel thread — carried to Phase 03 / `/arc-
 
 ## Now
 
-**Position:** **Phase 00 is CLOSED.** The Balanced Model Policy exists, is merged, and is
-cited by `CLAUDE.md` so a session actually meets it. REQ-01 → validated. The cycle's steel
-thread held: every remaining REQ is now a discipline that a written policy names, rather
-than a discipline with nothing behind it.
+**Position:** **Phases 00 and 01 are CLOSED.** REQ-01, REQ-02 and REQ-04 → validated.
+Remaining: REQ-03 (Phase 02, the paired composer A/B) and REQ-05 (Phase 03, reject-log).
 
-Plan approved by the owner 2026-08-02 (spine `01KZ0VF0ZN0PC1RXS43SZF1EMX`). Burn ~0.05 of
-3 days — see the basis and its two caveats above before reading that as slack.
+Phase 01 delivered both its REQs and turned up two things the plan had wrong:
+
+- **MP-D cited the wrong sanction.** Council-v2 ADR-0010 is the `CONFIDENCE` High→Medium cap
+  and it was already executed 2026-07-15; it never covered `Review-by:`/`Resolution:`. The
+  real authority is ADR-0012, which makes the retrofit an **append** rather than the one-way
+  edit MP-D was built to justify. Corrected in ADR-0066, PLAN and this phase's spec.
+- **A live false-positive in a shipped gate.** The retrofit note mentions `## OUTCOME` in
+  prose, and `council-lint`'s section regex was unanchored — so it failed a *correct* session
+  for documenting the contract it enforces. `council-calibrate` carried the identical regex
+  and survived only by reading the last section. Both anchored; pinned in
+  `tests/council-lint-outcome-anchor.bats` with a negative control and a `/m`-regression test.
+
+**Session 001 graded `UNRESOLVED`, scoreboard still 0 scored — and that is the pass
+condition, not a shortfall.** The verdict was CONDITIONAL and its condition was never
+exercised. `council-calibrate` excludes UNRESOLVED from scoring rather than counting it a
+miss. A forced HIT/MISS would have violated Truth-Law E3 and failed REQ-04.
+
+**The `standard` mode was proven on a real owner question, not a test string** (assumption
+A-02's whole point): *"should arc reach a self-standing good shape before any revenue
+venture starts?"* → `docs/council/sessions/002-arc-first-vs-venture-first-sequencing.md`.
+Ran inside the envelope at **6 seats / 6 model calls** (ceiling 6/7 — the send-back guard
+was not needed because the verifier contested 6 of 15 points on its own). Verdict **NO /
+Medium**; the Chair's pre-registered prediction was CONDITIONAL and **did not hold** —
+recorded in the session rather than quietly dropped.
+
+Two honesty items from that run are recorded in the session file itself: the Chair put a
+**wrong date in the Evidence Brief at [High] confidence** (anchoring the venture trigger to
+Cycle 2's *kickoff* instead of its *close*), which all three members inherited and the
+verifier caught; and the brief's own framing **leaned against** the proposition, which is why
+confidence is held at Medium.
+
+Plan approved by the owner 2026-08-02 (spine `01KZ0VF0ZN0PC1RXS43SZF1EMX`). Burn ~0.35 of
+3 days — see the basis and its caveats above before reading that as slack.
 
 **What was decided without asking:** MP-A..F were locked by the owner in the design source
 and are recorded as ADR-0063..0068. Two forks the fork-planner raised were, at the owner's
@@ -113,16 +142,23 @@ than answered now — **A-04** (the engine trigger's ₹N spend figure, which ex
 the repo) and **A-05** (REQ-05's `/arc-change` mirror, which does not exist in
 `arc-change.md` under any name).
 
-**Next step:** Phase 01 (REQ-02 + REQ-04), appetite 0.75d — **awaiting the owner's sign-off
-to move past Phase 00**, which is a human gate by design.
+**Next step:** Phase 02 (REQ-03, the paired composer A/B), appetite 1.25d — **awaiting the
+owner's sign-off to move past Phase 01**, a human gate by design.
 
-Two things Phase 01 needs from the owner before it can run honestly:
-1. **One real question** for the `/arc-council standard` run. A synthetic string would prove
-   the code path and nothing about whether a 2-researcher envelope covers real use (A-02).
-2. Nothing else — the session-001 retrofit is mechanical, but it is a **one-way** in-place
-   edit to the only historic council artifact (ADR-0066), so it gets `git diff`-checked for
-   additions-only before it is accepted.
+Phase 02 is the cycle's most expensive phase and it has **one decision that must be made
+before either arm runs**, not during: `.claude/agents/design-jury.md` is hard-coded for
+exactly FOUR items ("one line, four entries, exactly this form"), while REQ-03 asks for a
+7-item blind ranking. The spec requires choosing **(a)** a per-invocation prompt-only
+override to `item-a`…`item-g`, logged as a documented deviation, or **(b)** two separate
+4-item panels with the ADR stating plainly that no single 7-item ordering was produced.
+Left undecided it surfaces mid-run inside a phase with zero slack.
 
-Phase 01's red→green is already identified: `council-calibrate --overdue` reports nothing
-today because session 001 has no `Review-by:` line. After the retrofit it lists 001. A green
-run that was never red would prove only that the script executes.
+The owner also owns three non-delegable steps in Phase 02: writing the PREDICTION before
+seeing any output, blind-ranking the pages **with their own eyes** (retro 2026-07-30 — an
+agent's report about a screenshot is not the screenshot), and accepting or rejecting the
+recorded cost/time delta.
+
+**Carried out of Phase 01, unrelated to this cycle's REQs:** the council's `NO` verdict names
+a 5-minute action with outsized leverage — define what *"Cycle 2 closed"* means. That one
+word fixes when the venture trigger fires and settles whether four inserted cycles were
+compliant. It is the owner's call, not this lane's work.
