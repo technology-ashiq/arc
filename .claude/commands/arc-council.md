@@ -1,6 +1,6 @@
 ---
 description: Convene the arc council — deep research + independent adversarial debate + matched domain experts + verifier-graded synthesis → one decision, on any question (startup/business/finance/personal/politics/marketing/dev/design).
-argument-hint: [your question]  (prefix `quick` for a fast, unverified run)
+argument-hint: [your question]  (prefix `quick` = fast + unverified · `standard` = verified, fixed price)
 allowed-tools: Task, Read, Write, WebSearch, WebFetch, Glob, Grep, Bash(bash .claude/scripts/hq/arc-event.sh:*)
 ---
 
@@ -12,11 +12,23 @@ You **orchestrate and decide — you never argue a side yourself**. Answer in th
 
 > Build status: Phases 0–4 (feature-complete). Research → shared Evidence Brief → 3 stance members + matched
 > domain experts → verifier grading by POINT-ID → decision, with a pre-registered prediction and auto-save.
-> The `quick` opt-out is live.
+> The `quick` opt-out is live. The `standard` middle tier is live (ADR-0065).
 
 ## Mode
 If `$ARGUMENTS` begins with the word `review`, run **Review mode** (below). Else if it begins with the
-word `quick`, run **Quick mode** (below). Otherwise run the **Full council**.
+word `quick`, run **Quick mode** (below). Else if it begins with the word `standard`, run
+**Standard mode** (below). Otherwise run the **Full council**.
+
+**The ladder is fixed at three and the human picks the word (ADR-0065).** There is no automatic
+classifier: a model choosing its own budget is the auto-switching this repo forbids everywhere else
+(ADR-0069 block b1). `deep` stays the default. **One-way-door decisions are always `deep`** —
+mandatorily, whatever word was typed; say so and run deep.
+
+| Mode | What you get | Price |
+|---|---|---|
+| `quick` | 3 stances. No research, no verifier. Writes nothing. | 3 calls |
+| `standard` | ≤2 researchers + 3 stances + 1 verifier. No experts, no juror, no rebuttal. Saves + receipts. | **≤7 calls, ≤6 seats** |
+| `deep` (default) | Full panel + matched experts + rebuttal + cross-model juror. | ~12+ |
 
 ## Domain roster (Chair selects per question)
 Classify the decision's domain(s) and convene every matched expert (POINT-ID prefix in parentheses):
@@ -185,6 +197,64 @@ in intake — no separate approval gate. If no domain clearly matches, run with 
    ```bash
    bash .claude/scripts/hq/arc-event.sh emit council.verdict --payload '{"decision":"<YES|NO|CONDITIONAL|WAIT>","confidence":"<High|Medium|Low>","session":"<NNN-slug>"}'
    ```
+
+## Standard mode
+`/arc-council standard <question>` — a **verified** answer at a **fixed, predictable price**. It exists
+because the knob used to be all-or-nothing: an unverified `quick` take, or the full panel. A question
+that needs its claims checked but does not need domain experts, a rebuttal round and a cross-model
+juror had no setting (ADR-0065).
+
+**The envelope is FIXED. It does not grow.** Strip the leading `standard`, then:
+
+| Step | Standard mode |
+|---|---|
+| 1. Intake | Same as Full — decision statement, ambiguity graded, research mode, **PREDICTION recorded before anything else**. **Skip the domain roster entirely.** |
+| 2. Research | **≤2 researchers**, so decompose into **at most 2** sub-questions. Same neutral Evidence Brief, same `--brief` lint. |
+| 3. Convene | The **3 stance members only** (`council-advocate`, `council-skeptic`, `council-neutral`), one parallel batch, same brief. **No domain experts.** Persist each output verbatim. |
+| 4. POINT-IDs | Same: `A1…`, `S1…`, `N1…`. No expert prefixes exist in this mode. |
+| 5. Cross-examine | **1 verifier**, same contract. If it contested **nothing**, send it back once — that guard is the **only** call beyond the six seats, and it is what keeps the rubber-stamp check honest. |
+| 5b. Rebuttal | **SKIPPED.** Never runs. |
+| 5c. Juror | **SKIPPED.** Never runs. |
+| 6. Deliberate | Same: drop Weak / DROP THESE, weigh the survivors, commit. |
+| 7. Verdict | Below. |
+| 8–9. Save + receipt | **Yes** — a standard run is verified, so it is saved and receipted exactly like a deep run. |
+
+**Seats: 6 max (2 + 3 + 1). Model calls: 7 max.** If you are about to exceed either, you are not
+running `standard` any more — stop and say so.
+
+**Contested points are NOT debated — they are reported.** Every ID the verifier rates `Contested`,
+plus everything under its `DISPUTED` section, goes **straight to `## UNRESOLVED`**. That is the whole
+saving: `standard` buys you an honest map of what is settled and what is not, and spends nothing
+trying to settle it.
+
+**No auto-upgrade — ever.** If 2 researchers genuinely cannot cover the question, the run does **not**
+quietly become `deep`. It stops and says so:
+
+> This question needs more coverage than a `standard` envelope allows, because `<the specific gap>`.
+> Re-run as `/arc-council <question>` (deep) if you want it. I have not done that for you.
+
+The human then chooses. A `standard` run that silently grew into a `deep` one would mean the owner
+asked for a fixed price and got a variable one — which is the one thing this mode exists to prevent.
+
+**Verdict shape** — the Full-council shape (step 7) with these differences:
+
+- Add a `Mode: standard` line to the `## VERDICT` block, directly under `Research mode:`. This is
+  what makes the mode mix countable later (ADR-0065's cannibalisation trigger is checked at retro).
+- `Juror: unavailable (standard mode — no juror by design)` — the grammar requires a parenthesized
+  reason, and stating it beats silence (ADR-0016: visible, never silent).
+- **OMIT** `## FIRST-PASS RATINGS`, `## REBUTTAL LOG` and `## JUROR RATINGS` entirely. No rebuttal
+  ran, so there is no first pass to distinguish from a final one, and an empty section is a lie about
+  work that did not happen.
+- `## UNRESOLVED` carries the Contested/DISPUTED IDs, per above. Omit it only if the verifier
+  genuinely contested nothing after the send-back — and note that case is itself a rubber-stamp
+  signal the lint checks for.
+- `Review-by:` and `Resolution:` are **required**, same as deep. A verified verdict that cannot be
+  graded later is not worth saving.
+
+`node .claude/scripts/council/council-lint.mjs --verdict <file>` must pass on the saved session.
+
+**`standard` never weakens `deep`.** ADR-0002 (council namespace — deep is the default) and the
+council-v3 juror contract (ADR-0015..0018) are untouched by this mode.
 
 ## Review mode
 `/arc-council review` closes the loop on past verdicts: it records what actually happened and shows
