@@ -187,7 +187,6 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
     (async () => {
       const root = process.argv[1].replace(/\\/g, "/");
       const { parseYamlSubset } = await import("file:///" + root + "/.claude/scripts/engine/yaml-subset.mjs");
-      const { execFileSync } = require("node:child_process");
       const norm = (s) => s.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
       const cases = [
         ["commit-msg-draft", ".claude/commands/arc-commit.md", []],
@@ -196,12 +195,13 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
       ];
       let bad = 0;
       for (const [proc, src, subs] of cases) {
-        // Read the pilot AS IT WAS at the pinned commit, not off disk: the flip added a
-        // DO-NOT-EDIT header, so the working-tree body is no longer the body this round-trip
-        // was written to prove. The pin makes the assertion durable instead of one-shot.
-        const canon = readFileSync(root + "/processes/" + proc + ".process.yaml", "utf8");
-        const commit = canon.match(/^  commit: (\S+)$/m)[1];
-        const at = execFileSync("git", ["show", commit + ":" + src], { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+        // Read the pilot AS IT WAS pre-flip, from the COMMITTED FIXTURE -- not off disk (the
+        // flip added a header, so the working-tree body is no longer the body this proves)
+        // and not from git history (CI checks out at fetch-depth 1, and the pinned commit is
+        // well past that). Same fix that --against-baseline took in arc-compile; it was
+        // applied there and missed here, which is exactly how a twin defect survives.
+        void src;
+        const at = readFileSync(root + "/tests/fixtures/engine/pre-flip/" + proc + ".md", "utf8");
         let want = norm(at).match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/)[1];
         for (const [re, to] of subs) want = want.replace(re, to);
         const p = parseYamlSubset(readFileSync(root + "/processes/" + proc + ".process.yaml", "utf8"));
