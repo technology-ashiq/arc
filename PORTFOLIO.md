@@ -15,6 +15,7 @@ Updated: 2026-08-02
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
+| develop | QUEUED | arc-develop (Cycle 5, opened 2026-08-02) | 00 — planned, not started | 5d / 0d | owner — plan approval / — | approve the plan, then `/arc-develop start 0 --lane develop` |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
