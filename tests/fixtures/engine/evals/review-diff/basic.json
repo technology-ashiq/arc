@@ -1,0 +1,16 @@
+{
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. `input` is keyed by the process's inputs[].name; `expected` must satisfy the process's output schema.",
+  "input": {
+    "base": "main"
+  },
+  "expected": {
+    "verdict": "fix-first",
+    "findings": [
+      {
+        "severity": "critical",
+        "where": ".claude/scripts/engine/process-lint.mjs:1",
+        "what": "placeholder finding — the fixture asserts the SHAPE of a review result, never a real defect"
+      }
+    ]
+  }
+}

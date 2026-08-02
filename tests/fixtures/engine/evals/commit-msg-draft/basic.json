@@ -1,0 +1,12 @@
+{
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. A bench runner is a declared no-go; these exist so a later cycle has fuel rather than an archaeology project. `input` is keyed by the process's inputs[].name; `expected` must satisfy the process's output schema.",
+  "input": {},
+  "expected": {
+    "commits": [
+      {
+        "sha": "4936371",
+        "subject": "feat(phase-01): wire the six core factory flows to the spine"
+      }
+    ]
+  }
+}

@@ -1,0 +1,58 @@
+name: commit-msg-draft
+version: 1.0.0
+intent: "Stage related changes and write a conventional commit."
+permissions: declared
+inputs: []
+tools:
+  - git.op:
+      - "status"
+      - "diff:*"
+      - "log:*"
+      - "add:*"
+      - "commit:*"
+  - shell.run:
+      - "bash .claude/scripts/hq/arc-event.sh:*"
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - commits
+  properties:
+    commits:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        required:
+          - sha
+          - subject
+        properties:
+          sha:
+            type: string
+            pattern: "^[0-9a-f]{7,40}$"
+          subject:
+            type: string
+            minLength: 1
+evals:
+  - tests/fixtures/engine/evals/commit-msg-draft/basic.json
+baseline:
+  target: claude-code
+  path: .claude/commands/arc-commit.md
+  commit: 7abeda1
+  sha256: 4eb87547ca4353e9802db22c7b558b3e7af0d70cdd94565753a956f133e66d77
+body: |
+
+  Commit the current work properly:
+
+  1. `git status` + `git diff` — understand exactly what changed. Never commit blind.
+  2. If the changes are unrelated, split them into separate commits (stage per group).
+  3. Message: conventional commit (`feat:` / `fix:` / `chore:` / `docs:` / `refactor:`).
+     Subject ≤ 72 chars, imperative. Body (if needed) explains WHY, not what.
+  4. Never `git add .` when untracked junk is present — stage explicit paths.
+  5. Commit. Do NOT push (pushing always needs my explicit ask).
+  6. **Leave the receipt (spine)** — record the commit on the spine (hook-mode, never blocks the flow):
+     ```bash
+     bash .claude/scripts/hq/arc-event.sh emit commit.done --payload '{"sha":"<hash>","subject":"<subject>"}'
+     ```
+
+  Reply with the commit hash(es) and one line per commit.

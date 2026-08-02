@@ -22,9 +22,14 @@ The deterministic core is a **script**, not a prompt — the same split ADR-0047
 
 - `.claude/scripts/engine/yaml-subset.mjs` — the ADR-0200 parser. Reads block mappings, block
   sequences, plain/single/double-quoted scalars, block scalars (`|`, `|-`, `>`), comments, one
-  document per file. **Rejects, loudly and by name:** anchors/aliases (`&`/`*`), tags (`!!`), flow
-  collections (`{}`/`[]`), a second `---` document, merge keys (`<<`), and tab indentation. Every
-  rejection names the construct and the line. It extends the precedent at
+  document per file. **Rejects, loudly and by name:** anchors/aliases (`&`/`*`), tags (`!!`),
+  **non-empty** flow collections, a second `---` document, merge keys (`<<`), and tab indentation.
+  Every rejection names the construct and the line. The empty literals `[]` and `{}` are permitted
+  — ADR-0200's one amendment, taken under its own revisit trigger after this phase's first lint run
+  rejected the spec's own `inputs: []`. A second extension reopens the format decision.
+  The `---` check runs **during parsing, never by pre-splitting the text**: a `---` inside a `body:`
+  block scalar is a markdown horizontal rule, and a textual pre-split would cut the document in half
+  at it. No pilot body contains one today, which is a snapshot and not a rule. It extends the precedent at
   `.claude/scripts/council/council-lint.mjs:52`, which reads `key: value` between frontmatter
   fences, rather than replacing it.
 - `.claude/scripts/engine/schema-subset.mjs` — the ADR-0200 output-contract validator. Supports

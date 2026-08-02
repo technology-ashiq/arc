@@ -54,8 +54,18 @@ The parser reads a **frozen YAML subset**, and the subset is the decision:
 - block mappings, block sequences, plain/single/double-quoted scalars, and block scalars
   (`|`, `|-`, `>`), comments, and one document per file;
 - **excluded, and rejected loudly rather than ignored:** anchors and aliases (`&`/`*`), tags
-  (`!!`), flow collections (`{}`/`[]`), multi-document streams (`---` after the first),
-  merge keys (`<<`), and tab indentation.
+  (`!!`), **non-empty** flow collections (`{a: 1}`/`[1, 2]`), multi-document streams (`---`
+  after the first), merge keys (`<<`), and tab indentation.
+
+**Amendment, 2026-08-03 — the one this ADR's revisit trigger allows.** The empty literals
+`[]` and `{}` are **permitted**. Phase 00's first `process-lint` run rejected `inputs: []`,
+which this ADR's own worked example uses — the exclusion as first written contradicted the
+format it was defining. The exclusion exists so the parser never implements flow-style
+parsing; `[]` and `{}` require none, being terminal tokens with no nesting, separators or
+ambiguity. `inputs: []` is also how a human plainly reads "no inputs", where a bare
+`inputs:` parsing to null says the same thing far less legibly and forces the lint to treat
+absence and emptiness alike regardless. Per the revisit trigger, this is the **first**
+extension and is therefore an amendment; a **second** one reopens the format decision.
 
 An excluded construct is a **parse error naming the construct and the line**, never a silent
 skip. A subset that degrades quietly is a subset that lies about what it read.

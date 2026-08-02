@@ -1,0 +1,42 @@
+# Hostile-input corpus for process-lint (Phase 00, REQ-01).
+# Every row: the fixture FAILs process-lint with the named check id, and good.process.yaml passes clean.
+# Asserting the CHECK ID, not merely a non-zero exit: a fixture that fails for an unintended
+# reason is a false pass, and 'exit 1' alone cannot tell the two apart.
+# TSV: file\tcheck-id\tnote   (shape copied from tests/fixtures/spine/hostile/INDEX)
+good.process.yaml	ACCEPT	the base every mutation below is derived from
+not-a-mapping.process.yaml	yaml-parse	a body line that is neither `key: value` nor a sequence item
+anchor-alias.process.yaml	yaml-excluded	an anchor in value position
+alias-reference.process.yaml	yaml-excluded	an alias reference in value position
+tag.process.yaml	yaml-excluded	an explicit type tag
+flow-collection.process.yaml	yaml-excluded	a NON-empty flow collection (the empty literals are permitted)
+second-document.process.yaml	yaml-excluded	a second --- document in one file
+merge-key.process.yaml	yaml-excluded	a merge key
+tab-indent.process.yaml	yaml-parse	a tab used for indentation
+crlf.process.yaml	yaml-parse	CRLF line endings in a canonical SOURCE file (yaml-parse, not lf-only)
+mixed-line-endings.process.yaml	yaml-parse	a single stray CR among LF lines
+duplicate-key.process.yaml	yaml-parse	the same key twice in one mapping
+unterminated-quote.process.yaml	yaml-parse	a double-quoted scalar with no closing quote
+missing-output.process.yaml	schema-shape	the output contract block is absent entirely
+unknown-schema-keyword.process.yaml	schema-keyword	a draft-07 keyword outside the frozen eight
+schema-required-undefined.process.yaml	schema-shape	`required` names a property `properties` never defines
+unknown-tool.process.yaml	tool-unknown	an eighth abstract primitive
+tool-scope-empty.process.yaml	tool-unknown	a scoped tool entry whose scope list is empty
+permissions-invalid.process.yaml	permissions-invalid	a permissions value outside the two-value enum
+permissions-missing.process.yaml	permissions-invalid	no permissions key at all
+evals-escape.process.yaml	evals-path	an eval path that escapes the repo root via ..
+evals-missing.process.yaml	evals-path	an eval path that does not exist
+evals-self.process.yaml	evals-path	an eval path naming the process file itself
+placeholder-dialect-arguments.process.yaml	placeholder-dialect	a claude-code $ARGUMENTS placeholder inside the shared body
+placeholder-dialect-positional.process.yaml	placeholder-dialect	a claude-code ${1:-default} placeholder inside the shared body
+placeholder-unbalanced.process.yaml	placeholder-malformed	an unclosed {{ -- the case a match-based check cannot see
+placeholder-unknown-filter.process.yaml	placeholder-malformed	a filter outside the closed one-filter set
+placeholder-deep-path.process.yaml	placeholder-malformed	a placeholder path deeper than input.NAME
+placeholder-undeclared-input.process.yaml	placeholder-malformed	a placeholder naming an input `inputs:` never declares
+target-passthrough.process.yaml	target-passthrough	a per-target escape-hatch key (ADR-0205)
+version-not-semver.process.yaml	name-semver	a version that fails the spine's live PROCESS_RE
+name-uppercase.process.yaml	name-semver	a name with characters PROCESS_RE forbids
+baseline-drift.process.yaml	baseline-drift	a pinned sha256 that no longer matches the live pilot
+baseline-missing-path.process.yaml	baseline-drift	a baseline block with no path key
+inputs-required-and-default.process.yaml	inputs-shape	an input that is required AND carries a default
+inputs-unknown-key.process.yaml	inputs-shape	an input carrying a key outside the five allowed
+inputs-not-a-list.process.yaml	inputs-shape	inputs given as a scalar rather than a list

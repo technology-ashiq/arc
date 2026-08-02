@@ -1,0 +1,13 @@
+{
+  "name": "engine",
+  "version": "0.1.0",
+  "requires": ["core", "hq"],
+  "commands": [],
+  "scripts": [
+    ".claude/scripts/engine/yaml-subset.mjs",
+    ".claude/scripts/engine/schema-subset.mjs",
+    ".claude/scripts/engine/process-lint.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

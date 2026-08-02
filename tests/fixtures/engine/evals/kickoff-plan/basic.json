@@ -1,0 +1,11 @@
+{
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. Binds to the approval.requested payload, per ADR-0205 and phase-00-spec: kickoff.done is a fire-and-forget marker, approval.requested carries the terminal outcome. The PLAN/spec/ADR FILES this process also authors are outside any receipt payload — a recorded gap, not something the schema pretends to cover.",
+  "input": {
+    "goal": "Model-agnostic foundation — engine v1 + process-layer pilot"
+  },
+  "expected": {
+    "what": "approve the plan to start building",
+    "gate": "kickoff",
+    "lane": "engine"
+  }
+}

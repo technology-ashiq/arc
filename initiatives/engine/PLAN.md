@@ -47,7 +47,11 @@ snapshot is dated 2026-07-22 and has rotted in four places (recorded under Drift
   REQ-02, and a mandatory named regeneration step for every intended move.
 - **Do-not-touch:** the 21 non-pilot commands · `docs/adr/`, `docs/retro-log.md`,
   `docs/trial-ledger.md`, `tests/` stay root organs (ADR-0053) · `docs/evidence/**` and
-  `docs/archive/**` are frozen (ADR-0058) · `.claude/scripts/{core,hq}` are consumed, not edited.
+  `docs/archive/**` are frozen (ADR-0058) · `.claude/scripts/{core,hq}` are consumed, not edited —
+  with **one named exception, recorded rather than silent**: `validate.mjs`'s `PROCESS_RE` gains an
+  `export` keyword (value, position and behaviour unchanged) so `process-lint` can assert against
+  the spine's own regex instead of a copy that would drift. `product-lint.mjs` needs no edit at all —
+  it auto-discovers every `products/*/manifest.json` via `readdirSync`, verified before relying on it.
 - **Absent today:** `processes/`, `adapters/`, `drivers/`, `engine/`, `arc-run` — all confirmed
   absent. This lane builds every one from nothing.
 - **Drift the design source records wrongly:** it says 22 commands / 23 agents (really **24 / 28**);
