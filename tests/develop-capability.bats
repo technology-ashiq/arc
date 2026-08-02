@@ -172,13 +172,35 @@ _blocks_on() {
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
 
-@test "a BLOCK writes no lock row at all" {
+@test "a BLOCK admits nothing, and records the refusal rather than losing it" {
   _vet exfil
   [ "$status" -ne 0 ]
-  if [ -f "$LOCK" ]; then
-    run grep -c 'safe-tool' "$LOCK"
-    [ "$output" = "0" ] || { echo "a refused candidate was recorded: $(cat "$LOCK")"; false; }
-  fi
+  [ -f "$LOCK" ] || { echo "the refusal was not recorded anywhere"; false; }
+  run node -e '
+    const l = require(process.argv[1]);
+    if ((l.capabilities || []).some((c) => c.name === "safe-tool")) { console.log("a refused candidate was ADMITTED"); process.exit(1); }
+    const r = (l.refusals || []).find((c) => c.name === "safe-tool");
+    if (!r) { console.log("the refusal was not recorded"); process.exit(1); }
+    if (!r["refused-on"] || !r.why) { console.log("the refusal records no reason"); process.exit(1); }
+    console.log("refused on: " + r["refused-on"]);
+  ' "$LOCK"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"content-scan"* ]] || { echo "$output"; false; }
+}
+
+@test "a candidate admitted after an earlier refusal is not left in both lists" {
+  # The same name refused once and admitted later must not read as both at once.
+  _vet exfil
+  [ "$status" -ne 0 ]
+  _vet clean          # same name, same lock file, everything satisfied this time
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node -e '
+    const l = require(process.argv[1]);
+    const admitted = (l.capabilities || []).some((c) => c.name === "safe-tool");
+    if (!admitted) { console.log("the passing run admitted nothing"); process.exit(1); }
+    console.log("admitted, refusal history kept: " + ((l.refusals || []).length > 0));
+  ' "$LOCK"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
 
 @test "--audit reports a lock row checked more than 30 days ago" {
@@ -250,22 +272,42 @@ JSON
 # The one REAL candidate, vetted by hand and committed as an artifact
 # ---------------------------------------------------------------------------
 
-@test "the committed lock file holds a real, vetted candidate" {
-  # ADR-0110 separates vetting from installing, so arc gains a lock row and NO dependency.
-  # This asserts the artifact of that hand-run, never a live fetch: CI reaches no registry.
+@test "the committed lock file records the real candidate that was actually vetted" {
+  # ADR-0110 separates vetting from installing, so arc gains a lock entry and NO dependency.
+  # This asserts the artifact of the hand-run, never a live fetch: CI reaches no registry.
+  #
+  # The real candidate was madge, and the honest outcome is that the gate REFUSED it: its
+  # hash verified byte-for-byte against the registry, its publisher was recorded, and its
+  # source spawns `child_process`, which makes it write-capable and therefore Ashiq's call.
+  # Asserting "an admitted row exists" would have forced a fabricated approval, which is the
+  # one thing ADR-0108 and this phase's non-negotiables both exist to refuse. So this asserts
+  # the DECISION is recorded with its facts, whichever way it went.
   local lock="$ARC_ROOT/.claude/scripts/develop/capability-lock.json"
   [ -f "$lock" ] || { echo "no committed lock file"; false; }
   run node -e '
     const l = require(process.argv[1]);
-    const rows = l.capabilities || [];
-    if (!rows.length) { console.log("the lock file records nothing"); process.exit(1); }
+    const rows = [...(l.capabilities || []), ...(l.refusals || [])];
+    if (!rows.length) { console.log("the lock file records no decision at all"); process.exit(1); }
     for (const r of rows) {
-      for (const k of ["name", "registry", "version", "hash", "publisher-auth", "build-attestation", "checked", "source"]) {
+      for (const k of ["name", "registry", "version", "hash", "publisher-auth", "build-attestation", "checked"]) {
         if (!r[k]) { console.log(r.name + " is missing " + k); process.exit(1); }
       }
       if (!/^sha(256|512)-/.test(r.hash)) { console.log(r.name + " hash is not a registry integrity string"); process.exit(1); }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(r.checked)) { console.log(r.name + " checked date is not ISO"); process.exit(1); }
     }
-    console.log("real row(s): " + rows.map((r) => r.name + "@" + r.version).join(", "));
+    console.log("decisions: " + rows.map((r) => r.name + "@" + r.version).join(", "));
+  ' "$lock"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "nothing write-capable is admitted without a recorded human OK" {
+  # The committed lock file, checked against the rule rather than against today's contents.
+  local lock="$ARC_ROOT/.claude/scripts/develop/capability-lock.json"
+  run node -e '
+    const l = require(process.argv[1]);
+    const bad = (l.capabilities || []).filter((c) => /write-capable/.test(c.class || "") && !/human OK recorded/.test(c.class || ""));
+    if (bad.length) { console.log("admitted without an OK: " + bad.map((c) => c.name).join(", ")); process.exit(1); }
+    console.log("ok");
   ' "$lock"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 }

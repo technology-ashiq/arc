@@ -119,7 +119,7 @@ kind: logic
 risk: medium
 proof: (empty until proven)
 tier: (empty until proven)
-sources: phase-04-spec.md
+sources: phase-04-spec.md, code:grep-fallback(56; no .codegraph/), adrs(13), learning(3), retro(10), churn(25)
 decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)

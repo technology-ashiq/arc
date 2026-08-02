@@ -105,6 +105,7 @@
 - `/arc-kickoff <goal> [--lane <name>]` — start a build: PLAN.md, phases, PROGRESS.md (playbook §9)
 - `/arc-change <what> [--lane <name>]` — route a mid-build change/idea into the tracker (phase spec / ADR) before any code
 - `/arc-develop <mode> [phase] [--lane <name>]` — execution harness: turn an approved phase into proven slices (`start`/`next`/`status`/`checkpoint`/`handoff`)
+- `/arc-capability <need>` — scout a tool the harness lacks, then vet it (ADR-0110). Reports and refuses; **installs nothing**. `--vet <dir>` runs the gate, `--audit` reports stale pins.
 - `/arc-phase-done <n> [--lane <name>]` — close a phase against its Definition of Done (playbook §8)
 - `/arc-retro [n] [--lane <name>]` — end-of-phase retro: repeated corrections → permanent setup upgrades
 - `/arc-toolcheck`    — full toolchain status (installed/missing/stale) + one-command fixes
