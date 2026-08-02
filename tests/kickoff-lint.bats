@@ -326,7 +326,7 @@ addrow() {
   [[ "$output" == *"0001-redis-over-memcached.md"* ]]
 }
 
-@test "adr-dup: negative control — the good fixture has no duplicates" {
+@test "adr-dup: negative control, the good fixture has no duplicates" {
   run $LINT_CMD "$TMP"
   [[ "$output" != *"[adr-dup]"* ]]
 }
@@ -377,9 +377,7 @@ addrow() {
 # docs/adr/, so a collision merged from any branch turns the suite red without anyone
 # having to remember to run kickoff-lint.
 @test "adr-dup: the repository's own docs/adr/ carries no duplicate number" {
-  run bash -c '
-    ls "$0/docs/adr" | sed -n "s/^\([0-9][0-9][0-9][0-9]\)-.*\.md$/\1/p" | sort | uniq -d
-  ' "$ARC_ROOT"
+  run bash -c 'ls docs/adr | sed -n "s/^\([0-9][0-9][0-9][0-9]\)[-.].*/\1/p" | sort | uniq -d'
   [ "$status" -eq 0 ]
   [ -z "$output" ] || { echo "duplicate ADR number(s) in docs/adr/: $output"; false; }
 }
