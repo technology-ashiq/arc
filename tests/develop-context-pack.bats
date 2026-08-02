@@ -560,17 +560,29 @@ JS
 }
 
 @test "hole: churn drops paths the tree no longer holds, and says how many" {
-  local t; t="$(_tree)"; _no_codegraph "$t"; _history "$t"
-  # `start` BEFORE the rename, so the brief names the file the way a real brief would: written
-  # while it existed, read after it moved. Deriving the radius after the rename would drop the
-  # path silently and the assertion would pass for the wrong reason.
-  _dev "$t" start 0
+  local t; t="$(_tree)"; _history "$t"
   git -C "$t" mv src/auth/alpha.js src/auth/omega.js >/dev/null 2>&1
   git -C "$t" commit -qm rename >/dev/null 2>&1
-  _dev "$t" next
-  local c; c="$(_line churn)"
-  [[ "$c" != *"alpha.js"* ]] || { echo "a path the tree cannot open was handed on: $c"; false; }
-  [[ "$c" == *"no longer in the tree"* ]] || { echo "the drop was silent: $c"; false; }
+  # Two more on the new name, so the surviving file outranks the cap of three and its presence
+  # is actually asserted rather than assumed.
+  local i
+  for i in 5 6; do
+    printf '// %s\n' "$i" >> "$t/src/auth/omega.js"
+    git -C "$t" add -A >/dev/null 2>&1
+    git -C "$t" commit -qm "o$i" >/dev/null 2>&1
+  done
+  # A DIRECTORY blast radius, which is where this actually bites. A radius naming files one by
+  # one never reaches the bug: `fileSet` drops a path that no longer exists before churn is
+  # called, so git is never asked about it. Asserting it end-to-end passed while the drop it
+  # claimed to check had not happened -- the assertion was true of a run that did nothing.
+  TREE="$t" _node <<'JS'
+const c = cp.churn(process.env.TREE, ["src/auth"]);
+console.log(JSON.stringify({ items: c.items, note: c.note || "" }));
+JS
+  [[ "$output" != *"alpha.js"* ]] || { echo "a path the tree cannot open was handed on: $output"; false; }
+  [[ "$output" == *"no longer in the tree"* ]] || { echo "the drop was silent: $output"; false; }
+  # and the file that IS there, under its new name, is still counted
+  [[ "$output" == *"omega.js"* ]] || { echo "$output"; false; }
 }
 
 @test "hole: churn's tie-break is by code point, not by the host's collator" {
