@@ -202,11 +202,31 @@ _scratch() {
 # handoff / checkpoint
 # ---------------------------------------------------------------------------
 
-@test "handoff emits handoff.ready" {
+@test "handoff emits handoff.ready once its predictions are scored" {
   local t spine; t="$(_scratch fake-phase-done)"; spine="$(mktemp -d)"
+  # Phase 02 changed this contract: handoff refuses an unscored ledger, so the receipt is
+  # only emitted after calibration is recorded. CI caught this test still asserting the old
+  # behaviour, which is the gate doing its job on its own suite.
+  {
+    echo ""
+    echo "### Prediction scores"
+    echo ""
+    for f in likely-failure-mode likely-regression-site riskiest-file expected-blockers expected-proof-failures; do
+      echo "$f: hit — settled by the ledger"
+    done
+  } >> "$t/initiatives/develop/phases/phase-00-tasks.md"
   run env ARC_SPINE_ROOT="$spine" node "$(DEV_MJS)" handoff 0 --lane develop --root "$t"
   [ "$status" -eq 0 ]
   grep -rq '"kind":"handoff.ready"' "$spine/events"
+}
+
+@test "handoff.ready is NOT emitted when the handoff is refused" {
+  local t spine; t="$(_scratch fake-phase-done)"; spine="$(mktemp -d)"
+  # The negative half: a refused handoff must leave no receipt behind, or the spine would
+  # record a handoff that never happened.
+  run env ARC_SPINE_ROOT="$spine" node "$(DEV_MJS)" handoff 0 --lane develop --root "$t"
+  [ "$status" -ne 0 ]
+  ! grep -rq '"kind":"handoff.ready"' "$spine/events" 2>/dev/null
 }
 
 @test "checkpoint is an honest stub in this phase" {
