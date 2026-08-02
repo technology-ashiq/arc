@@ -1,0 +1,11 @@
+Selected lane: model-policy (via arg)
+WARN  [vague] REQ-03 acceptance "At one pinned commit, on the existing `lexos-case-" — vague word next to a verifiable token; confirm the token actually measures the claim (heuristic).
+WARN  [appetite-sum] phase appetites sum to 3d = 100% of 3d total — zero slack is its own fiction
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+
+kickoff-lint: 1 check(s) FAILED
+
+FAIL  [adr] ADR 0069 in index but docs/adr/0069-*.md not found
+
+Fix and rerun. Prose assurances don't count.
+EXIT=1

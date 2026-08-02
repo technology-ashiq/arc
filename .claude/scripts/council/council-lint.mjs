@@ -310,7 +310,12 @@ if (verdictFile) {
     fail(`${verdictFile}: a Review-by needs a real Resolution: criterion (a falsifiable HIT/MISS test, not empty or a placeholder) — a scheduled verdict with nothing to grade against is unreviewable`);
   else if (resLine && (resVal.length < 4 || resPlaceholder))
     fail(`${verdictFile}: Resolution: line is empty or a placeholder — name the falsifiable HIT/MISS criterion (calibration line)`);
-  for (const m of text.matchAll(/##\s*OUTCOME([\s\S]*?)(?=\n##\s|$)/gi))
+  // `(?:^|\n)` anchors the heading to line start: an INLINE mention of `## OUTCOME` in prose
+  // (a session that documents the contract, e.g. a retrofit note) used to create a phantom
+  // section with no RESULT line and fail this check. Do NOT add /m to fix this — the `$` in
+  // the lookahead below means end-of-STRING, and /m would silently retarget it to end-of-line
+  // and truncate every section at its first newline (recurring bug class, retro 2026-07-16).
+  for (const m of text.matchAll(/(?:^|\n)##\s*OUTCOME([\s\S]*?)(?=\n##\s|$)/gi))
     if (!/^RESULT:\s*(HIT|MISS|UNRESOLVED)\s*$/im.test(m[1]))
       fail(`${verdictFile}: a ## OUTCOME has no valid "RESULT: HIT|MISS|UNRESOLVED" line — outcomes are HIT, MISS, or UNRESOLVED, never free text (ADR-0012)`);
 

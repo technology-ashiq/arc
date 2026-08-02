@@ -39,6 +39,11 @@
   never ad-hoc `general-purpose` reviewers — that agent is where the scanners + review method live.
 - Impact questions (callers, dependents, schema-dependent queries): query the **Graphify
   knowledge graph first** — the index auto-refreshes at session start. Grep is the fallback.
+- **Model tiers are law, not taste** — `docs/adr/0069-balanced-model-policy.md`. Changing any
+  agent's frontmatter `model:` is a production tier change: it is a reviewed diff that cites
+  that ADR, never a quiet edit. Tiers are *cheap-scan · balanced-workhorse · high-judgment ·
+  independent-family-verifier*; haiku/sonnet/opus are only "implementation v1". Trials are
+  free (isolated + fingerprinted, block g); auto-switching is forbidden everywhere.
 
 ### Build process  <!-- full method → docs/build-playbook.md -->
 - **Exactly ONE plan is ever live per lane: that lane's `initiatives/<lane>/PLAN.md`.**

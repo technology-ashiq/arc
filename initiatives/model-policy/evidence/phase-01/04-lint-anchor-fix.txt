@@ -1,0 +1,13 @@
+=== council-lint --verdict 001 (after anchor fix) ===
+council-lint: all checks passed ✔
+EXIT=0
+
+=== calibrate still correct ===
+arc-council calibration — docs/council/sessions
+scored: 0 · pending: 0 · excluded (WAIT/UNRESOLVED): 1 · skipped: 0
+
+
+=== ADVERSARIAL: does /m truncation regression exist? (multi-line section must survive) ===
+sections: 1 | captured lines: "\nRESULT: HIT\nline2\nline3\n"
+phantom test — sections: 1 (must be 1)
+trailing-phantom test — sections: 1 (must be 1)

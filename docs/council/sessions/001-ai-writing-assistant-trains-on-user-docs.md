@@ -47,3 +47,43 @@ CHEAPEST TEST TO DE-RISK:
 > reasoning) is unchanged; only the confidence claim is corrected. The original text is preserved in
 > git history. This is the single sanctioned edit of a saved verdict (see the v2 append-only
 > non-negotiable).
+
+---
+> **Calibration retrofit (2026-08-02 — model-policy Cycle 5, Phase 01, REQ-04).**
+> This session predates arc-council v2's `Review-by:` / `Resolution:` contract, so
+> `council-calibrate --overdue` could never surface it and the scoreboard stayed empty from
+> the day it was written. The two lines below are **appended**, per council-v2
+> [ADR-0012](../kickoff-v2/docs/adr/0012-outcome-lives-in-session-files.md): a session may
+> carry more than one `## OUTCOME` / `Review-by:`, and the last of each is authoritative.
+> **Nothing above this line is altered** — this is an append, not an edit of a saved verdict,
+> and it is therefore not covered by (nor does it need) ADR-0010's one-off exception.
+> **The dates are assigned retroactively and are labelled as such.** They were not set at
+> intake; claiming otherwise would fabricate a record. `2026-08-01` is chosen as a horizon
+> that has already passed, because the honest fact is that this verdict *has* been sitting
+> ungraded and genuinely does need an outcome recorded.
+
+Review-by: 2026-08-01
+Resolution: HIT if, by Review-by, the conditional path the council named — ONE narrow vertical, 3-5 committed paying design partners, per-tenant RAG with opt-in consent and NO shared-model training — was attempted and proved viable. MISS if a horizontal, shared-training paid assistant was launched and proved viable anyway, or if the conditional path was attempted and failed for a reason the council explicitly ruled out. UNRESOLVED if the cheapest test was never run at all — a condition that is never exercised is unexercised, not wrong, and must not be scored as either.
+
+## OUTCOME
+RESULT: UNRESOLVED
+Review-by: 2027-02-02
+
+**Graded 2026-08-02 (model-policy Cycle 5, Phase 01, REQ-04).** The Resolution's third branch
+is the one reality took: **the cheapest test was never run.** No narrow vertical was named, no
+design partners were approached, and no writing-assistant architecture — per-tenant or
+shared — was ever built. The owner's effort went to arc and to a separate product entirely.
+
+The verdict was `CONDITIONAL`, and its condition was never exercised. That makes it neither
+confirmed nor refuted, and `council-calibrate` excludes `UNRESOLVED` from scoring rather than
+counting it as a miss — correctly, because scoring it either way would manufacture a data
+point out of an absence. **The scoreboard therefore stays at zero scored, and that is the
+honest number, not a failure of this phase** (REQ-04: the DoD is a working mechanism plus an
+honest grade, never a filled scoreboard — a forced HIT/MISS would violate Truth-Law E3).
+
+**On the fresh `Review-by: 2027-02-02`, stated plainly so it is not mistaken for a control
+that will fire:** this verdict resolves only if the owner revisits building a document-trained
+writing assistant, and there is no current intention to. If the path is still unexercised at
+that date, the correct action is to record `UNRESOLVED` again or to close the session as
+permanently unresolvable — **not** to reach for a grade because a date arrived. A review that
+cannot resolve is a reminder, not evidence.

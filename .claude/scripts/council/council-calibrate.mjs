@@ -69,7 +69,11 @@ if (files.length === 0) {
 const confOf = (t) => { const m = t.match(/^CONFIDENCE:\s*(High|Medium|Low)\b/im); return m ? titleCase(m[1]) : null; };
 const decisionOf = (t) => (t.match(/^DECISION:\s*(YES|NO|CONDITIONAL|WAIT)\b/im) || [])[1];
 const reviewByLast = (t) => { const all = [...t.matchAll(/^Review-by:\s*(.+?)\s*$/gim)]; return all.length ? all[all.length - 1][1] : null; };
-const outcomeSections = (t) => [...t.matchAll(/##\s*OUTCOME([\s\S]*?)(?=\n##\s|$)/gi)].map((m) => m[1]);
+// `(?:^|\n)` anchors the heading to line start — an inline `## OUTCOME` mention in prose is not
+// a section. This script reads only the LAST section, so the old unanchored form was survivable
+// when the phantom came first and a hard MALFORMED error when it came last. Do NOT add /m: the
+// `$` in the lookahead is end-of-STRING and /m would truncate every section (retro 2026-07-16).
+const outcomeSections = (t) => [...t.matchAll(/(?:^|\n)##\s*OUTCOME([\s\S]*?)(?=\n##\s|$)/gi)].map((m) => m[1]);
 const resultOf = (sec) => ((sec.match(/^RESULT:\s*(HIT|MISS|UNRESOLVED)\s*$/im) || [])[1] || "").toUpperCase();
 
 // ---- overdue mode ----
