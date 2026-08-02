@@ -13,6 +13,8 @@
 
 | # | Initiative | Dates | Result | Burn | Shipped |
 |---|---|---|---|---|---|
+| C4 | arc-portfolio "The Conductor" | 2026-07-30 → 2026-08-02 | **CLOSED — 4/4 phases** | ~112% of 3d | lanes + resolver on 7 surfaces · `PORTFOLIO.md` board + board lint · ownership lint · WIP info line · per-lane One Rule (ADR-0050..0062) |
+| C3 | arc-design "The Designer" | → 2026-07-30 | **CLOSED — 4/4 phases** | ~60% | vision-based design review: read-only critic · four-contract brief · thesis-driven exploration + blind ranking |
 | C2 | Receipt Spine | 2026-07-22 → live | **LIVE — Phase 04 dogfood** | ~40% of 12.5d (P00–03) | spine core · 7 flows emit · daily brief · approval inbox · reader-only API (ADR-0024..0031) |
 | C1 | Orchestrator (product monorepo) | → 2026-07-22 | **CLOSED — 6/6 phases** | ~22% | 6 installable products · selective install + per-target registry · scripts re-homed · EVENT.d dispatcher · 22 commands · bats 271→334+ |
 | — | v2 "world-best" quality engine | → 2026-07-17 | **PARKED (ADR-0017)** | — | arc-scan steel thread (semgrep+gitleaks → SARIF) · strictness profiles · block-by-default gates — banked, not killed |
@@ -28,6 +30,24 @@
 | First real ₹ (`revenue.received`) | ⏳ target Sep 2026 |
 
 ## Entries (newest first)
+
+### C4 · arc-portfolio "The Conductor" — CLOSED 2026-08-02 · lane `portfolio`
+
+- **Kickoff:** 2026-07-30 · design source `docs/strategy/plans/PLAN-portfolio.md` · appetite 3d Tier S
+- **4/4 phases CLOSED:** 00 dual-mode machinery · 01 self-host + link history + board v1 · 02 parallel-safety floor · 03 docs truth + retro
+- **Stat line (verbatim):** S | rework 1/4 | amendments 8 | FIRED 1/5 | burn ~112% | sim-blockers-r1 n/a-tier-S | t-to-phase0 1d
+- **Shipped:** `initiatives/<lane>/` lanes + resolver on 7 surfaces (root-mode byte-identical, a permanent consumer contract) · `PORTFOLIO.md` board + strict-grammar board lint · ownership lint · WIP info line · the per-lane One Rule in the five docs that teach it
+- **Mode B NOT certified** — granted for three hours on 2026-08-01 and withdrawn at Phase 02's close when section F's spool was reverted; ADR-0056 makes certification a fixture result, so removing the fixture removes the certification
+- **Decisions:** ADR-0050..0062 (PORT-A..J, plus the three mid-cycle settlements 0060, 0061, 0062)
+- **First cycle to finish over appetite:** 3d declared, ~3.35d actual. `appetite-sum` warned every run that 100% allocation left zero slack; Phase 02 overran 0.35d and there was nothing to absorb it. The gate was right, and this is the first firing on arc's own plan the outcome confirms.
+- Full record: `initiatives/portfolio/` (PLAN · PROGRESS · phases) + `initiatives/portfolio/evidence/phase-0*`
+
+### C3 · arc-design "The Designer" — CLOSED 2026-07-30 · lane `design`
+
+- **Back-filled at Cycle 4's retro (2026-08-02).** The cycle closed with a retro stat line and an archive bundle but never got its entry here — precisely the wiring gap this page's own ⚠ TODO names. Recorded late rather than left missing: a company log with a hole cannot also be the truth hierarchy's immutable log.
+- **Stat line (verbatim):** M | rework 0/4 | amendments 12 | FIRED 3/7 | burn ~60% | sim-blockers-r1 not-recorded | t-to-phase0 ~0.6d
+- **Shipped:** vision-based design review that judges rendered pixels rather than reports about them — read-only critic, four-contract brief, thesis-driven exploration with blind ranking
+- Full record: `docs/archive/PLAN-2026-07-30.md` · `docs/archive/PROGRESS-2026-07-30.md` · `docs/archive/phases-design-2026-07-30/` · index at `initiatives/design/HISTORY-INDEX.md`
 
 ### C2 · Receipt Spine — LIVE (entry finalizes at retro)
 

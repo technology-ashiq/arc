@@ -211,3 +211,50 @@ and clean-because-blind stay indistinguishable until one fires on a plan it did 
 
 **Net: no flip.** Nothing meets both criteria. `appetite-sum`'s open false-positive question
 resets its count regardless. The eight stay in `TRIAL`.
+
+---
+
+## Cycle 4 · arc-portfolio (2026-07-30 → 2026-08-02) — no promotion
+
+All eight kickoff-lint substance gates were exercised repeatedly (kickoff-lint runs on every
+`/arc-change`, every phase close and every `/arc-resume`; this cycle had four phase closes,
+three changes and several resumes).
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-08-02 | `appetite-sum` | every run, cycle-long | **yes, every run** | **no — and this one is outcome-confirmed** |
+| 2026-08-02 | `pre-mortem-cite` | every run | no | — |
+| 2026-08-02 | `adr-wired` | every run | no | — |
+| 2026-08-02 | `adr-confidence` | every run | no | — |
+| 2026-08-02 | `architecture` | every run | no | — |
+| 2026-08-02 | `current-state-structure` | every run | no | — |
+| 2026-08-02 | `nonneg-drift` | every run | no | — |
+| 2026-08-02 | `verify-red` | every run | no | — |
+
+**`appetite-sum` finally has the run Cycle 3 said it was missing.** It warned every run that
+"phase appetites sum to 3d = 100% of 3d total — zero slack is its own fiction". The cycle
+finished at **~112% actual burn**. Cycle 3's open question was whether a gate that judges the
+*declared* plan means anything when the outcome comes in under it — there, 90% declared became
+~60% actual and the missing slack turned out to be present. Here 100% declared became 112%
+actual: Phase 02 overran by 0.35d and, with no slack to absorb it, that single overrun put the
+whole cycle past its appetite. The prediction landed. This is the first firing on arc's own plan
+that the outcome confirms rather than contradicts.
+
+**It is still not promotable, and the reason is the ledger's own rule.** Cycle 3 logged the
+`appetite-sum` firing with its false-positive question left open, and "a logged false-positive
+resets that gate's count". So the count restarted at Cycle 3's close and this cycle is run **1
+of the required 3**, not run 4. Criterion 1 is satisfied — `tests/kickoff-lint.bats:248` asserts
+the gate fires on its own over-commit mutation — but criterion 2 is not, and the temptation to
+read four historical rows as four clean runs is exactly what the reset rule exists to stop.
+
+**Net: no flip.** The eight stay in `TRIAL`. What would change it for `appetite-sum`: two more
+runs with the fire either confirmed by the outcome or absent. Promotion is also a code change
+to `kickoff-lint.mjs`, and Phase 03's spec puts any code change out of scope — so even a
+promotable gate could not have been flipped in this phase. It is the next cycle's first
+candidate, recorded here rather than carried in someone's head.
+
+**The other seven measure silence, not accuracy** — unchanged from Cycle 3, and now for a second
+consecutive cycle they ran clean on a plan written by the same author who designed them.
+Clean-because-correct and clean-because-blind stay indistinguishable until one fires on a plan
+it did not shape. Two cycles of silence is not evidence of correctness; it is the same
+un-tested condition, twice.

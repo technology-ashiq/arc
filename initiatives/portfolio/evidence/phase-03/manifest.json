@@ -1,0 +1,20 @@
+{
+  "phase": "03",
+  "commit": "7b4fd697f2e9d69168718d0d7986e83e90c7d3d7",
+  "short": "7b4fd69",
+  "generated": "2026-08-01T19:17:06Z",
+  "files": [
+    {
+      "name": "README.md",
+      "sha256": "e896545b7cb480e57d900f259970c7a71d56fc65fae4c48312b09b959b75a38e"
+    },
+    {
+      "name": "close-state.txt",
+      "sha256": "fc821535c049e0ac0f726874f2ba9b0a8d9bcfaa86829df060ea5a85a614a3dd"
+    },
+    {
+      "name": "golden-regen.txt",
+      "sha256": "35671be2e0f8914ef5f82591230b1f5c42c8564728fafd99a9d0331ece0a36ec"
+    }
+  ]
+}

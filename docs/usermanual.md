@@ -108,8 +108,9 @@ arc/
 > Target-la install aana-pinnadi `.claude/arc-registry.json` varum -- adhu dhaan `/arc`-oda
 > source of truth.
 
-Build-time la innum moonu tracker files varum (root-la):
-`PLAN.md` | `phases/phase-NN-spec.md` | `PROGRESS.md` -- (Section 8 paaru).
+Build-time la innum moonu tracker files varum -- root-mode-la root-la, lane-mode-la
+`initiatives/<lane>/` keezha: `PLAN.md` | `phases/phase-NN-spec.md` | `PROGRESS.md`
+-- (Section 9 + Section 9a paaru).
 
 ---
 
@@ -407,6 +408,90 @@ Ship panna-podhu required reviews stamp aagala-na -> **BLOCK**.
 | `docs/adr/NNNN-title.md` | Oru decision oru file -- edit panna koodadhu, superseded mattum | Immutable |
 
 State git-la irukkaradhaala, `/arc-resume` epovum session-a rebuild panna mudiyum.
+
+---
+
+## 9a. Lanes -- endha workspace-la command velai seyyum
+
+Mela iruka andha moonu tracker file **enga** irukku? Adhu repo-va poruthadhu. Oru repo-la oru
+product mattum-na avai root-la -- **root-mode**, munna irundhadhu appadiye. Oru repo pala
+product-a thaangudhu-na, ovvoru product-kum thani workspace: **oru lane**
+(`initiatives/<lane>/`) -- andha product-oda work diary (`PLAN.md`, `PROGRESS.md`, `phases/`,
+`evidence/`, product docs, `archive/`).
+
+> **Exactly ONE plan is ever live per lane: that lane's `initiatives/<lane>/PLAN.md`.**
+
+| Enna | Root-mode (`initiatives/` illa) | Lane-mode |
+|------|--------------------------------|-----------|
+| Plan / progress / phases | `PLAN.md`, `PROGRESS.md`, `phases/` root-la (Section 9) | `initiatives/<lane>/` keezha |
+| Evidence bundles | `docs/evidence/phase-NN/` | `initiatives/<lane>/evidence/phase-NN/` |
+| ADR, `docs/HISTORY.md`, retro-log, trial-ledger, tests | repo root -- **eppovum**, lane-ku lane split aagaadhu (ADR-0053) | same |
+
+> **Rule:** a lane owns *tracker state*, never *code ownership*. Bodies stay manifest-owned --
+> a lane folder never replaces `products/<name>/manifest.json` as the ownership map.
+
+### `--lane` dhaan ore vazhi -- bare token oru naalum lane illa
+
+`--lane <name>` **mattum** dhaan oru lane-a name panra vazhi. Command-oda mudhal argument
+adhoda sondham -- phase number, route, goal sentence, URL -- adhu **oru naalum** lane illa.
+
+```bash
+/arc-design design                     # `design` = route. Lane illa.
+/arc-change design the header          # change description. Lane retarget illa.
+/arc-design /dashboard --lane design   # ippo dhaan lane = design
+```
+
+Flag value-a **eppovum quote pannu**: `--lane "$VAR"`, `--lane $VAR` illa. Empty value adutha
+flag-a saapdum, multi-word value extra flag-a ulla thallum. Rendu `--lane` rendu different
+value-la kuduthaa adhu operator error (exit 5) -- last-wins override illa.
+
+### Resolution order -- guess panradhe kidaiyaadhu
+
+| # | Nilamai | Enna aagum |
+|---|---------|------------|
+| 1 | `--lane <name>` kudukkapattirukku | validate panni **adhu**. Explicit eppovum jeyikkum. Therila lane peru-na **hard STOP** (exit 4) -- therinja lanes list, edhuvum create aagadhu. |
+| 2 | Kudukkala + `initiatives/` illa (illa adhukkulla valid lane onnume illa) | **root-mode** -- root `PLAN.md`/`PROGRESS.md`/`phases/`, munna madhiriye byte-for-byte (ADR-0054) |
+| 3 | Kudukkala + eligible lane **sariyaa onnu** (`PROGRESS.md` machine header-la `status:` LIVE illa BLOCKED) | adhukku **auto-resolve** |
+| 4 | Vera edhuvum -- 0 eligible, illa 2+ eligible | **ask** (exit 3): lanes list panni **stop**. Thaana onnu select panradhu kidaiyaadhu. |
+
+Naame paakkalaam:
+
+```bash
+bash .claude/scripts/core/lane-resolve.sh --for resume --print human
+# eligible lane sariyaa onnu -> Selected lane: <lane> (via auto)
+# 0 illa 2+ eligible         -> "Lane not specified and ..." + "Known lanes: ..." + "Pick one: --lane <name>"
+```
+
+Exit: `0` resolved | `3` ambiguous (ask) | `4` unknown lane (STOP) | `5` invalid name. Non-zero
+vandhaa, adhu kaattura message-a appadiye kaatti **nillu** -- lane-a improvise panna koodadhu.
+Resolution read-only: oru decision-a report pannum, edhaiyum create/move/write panradhu illa.
+
+Lane-mode command output eppovum indha order-la: (1) `Selected lane: <lane> (via arg|auto)`,
+(2) PORTFOLIO board summary, (3) command-oda sondha report. Root-mode-la lane line-e varaadhu.
+
+### Yaaru lane create pannalaam
+
+> A lane is born **only** by `/arc-kickoff --lane <name>`. Every other command handed a lane it
+> does not know stops, lists the lanes that exist, and creates nothing.
+
+`/arc-resume`, `/arc-change`, `/arc-phase-done`, `/arc-retro` -- therila lane kuduthaa ellame
+hard-STOP, therinja lanes list, edhaiyum create **panradhe illa**.
+
+### Lane vandha apram: edha nambradhu?
+
+**Truth hierarchy -- one source of truth per question** (same wording as `PORTFOLIO.md`'s own header):
+
+- `initiatives/<lane>/PROGRESS.md` = **where the work is**
+- `initiatives/<lane>/PLAN.md` = **what the cycle is**
+- `PORTFOLIO.md` = **index + priority** -- a view, never the truth
+- `docs/HISTORY.md` = **the immutable company log** (entries tagged with their `[lane]`)
+
+Every value on the board is derived from a lane's `PROGRESS.md` machine header -- nothing is
+copied from prose and nothing originates on the board. On any mismatch the lane files win and
+the board lint flags the drift (ADR-0051).
+
+> Full rules: `.claude/rules/lanes.md` (ADR-0054). Lane name grammar `[a-z][a-z0-9-]*`, 64 chars
+> max; Windows reserved names (`con`, `prn`, `aux`, `nul`, `com0`-`com9`, `lpt0`-`lpt9`) refused.
 
 ---
 

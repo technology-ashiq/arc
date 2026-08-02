@@ -1,0 +1,30 @@
+Phase 03 section E — the close state, captured from the real repo
+commit: 7b4fd697f2e9d69168718d0d7986e83e90c7d3d7   date: 2026-08-01T19:12:39Z
+
+$ bash .claude/scripts/core/board-lint.sh
+exit=0  (0 WARNs)
+
+--- the zero-eligible state, entered for the first time by this close ---
+portfolio IDLE + design IDLE => no lane is eligible (only LIVE/BLOCKED count).
+
+$ bash .claude/scripts/core/lane-resolve.sh --for resume --print human
+Lane not specified and no lane is eligible (LIVE or BLOCKED).
+Known lanes: design, portfolio
+Pick one: --lane <name>
+exit=3
+
+$ node .claude/scripts/plan/kickoff-lint.mjs        # no --lane
+Lane not specified and no lane is eligible (LIVE or BLOCKED).
+Known lanes: design, portfolio
+Pick one: --lane <name>
+exit=3
+
+$ node .claude/scripts/plan/kickoff-lint.mjs --lane portfolio
+Selected lane: portfolio (via arg)
+WARN  [appetite-sum] phase appetites sum to 3d = 100% of 3d total — zero slack is its own fiction
+WARN  [deps] External dependencies table empty — fine only if the build truly has none
+[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+kickoff-lint: all checks passed ✔
+
+Pinned by tests/lane-resolver.bats:97 'zero eligible lanes ASKs rather than picking an IDLE one'.
+The fixture proved the path; this is the repo actually in it.

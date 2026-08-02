@@ -41,6 +41,13 @@
   knowledge graph first** — the index auto-refreshes at session start. Grep is the fallback.
 
 ### Build process  <!-- full method → docs/build-playbook.md -->
+- **Exactly ONE plan is ever live per lane: that lane's `initiatives/<lane>/PLAN.md`.**
+  `--lane <name>` is the only way to name a lane — never a bare token — and a lane is born
+  only by `/arc-kickoff --lane <name>`; every other surface handed an unknown lane STOPs and
+  creates nothing. `PORTFOLIO.md` is the **index view, not the truth** (ADR-0051): every value
+  on it derives from a lane's `PROGRESS.md`, and on any mismatch the lane files win. No
+  `initiatives/` dir at all = root-mode — root `PLAN.md` is that repo's one live plan
+  (ADR-0054). Resolution order + paths → `.claude/rules/lanes.md`. Don't inline it here.
 - New build? Start with `/arc-kickoff` — PLAN.md + phases-by-risk + PROGRESS.md BEFORE any code.
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
 - Offline-first: every external dependency gets an interface + fake + real impl.
@@ -90,10 +97,10 @@
 - `/arc-pr [base]`    — open a GitHub PR with summary + test plan
 - `/arc-review [base]`— diff review via the code-reviewer subagent
 - `/arc-fix-issue <n>`— root-cause and fix a GitHub issue
-- `/arc-kickoff <goal>`— start a build: PLAN.md, phases, PROGRESS.md (build playbook §9)
-- `/arc-change <what>`— route a mid-build change/idea into the tracker (phase spec / ADR) before any code
-- `/arc-phase-done <n>`— close a phase against its Definition of Done (build playbook §8)
-- `/arc-retro [n]`    — end-of-phase retro: repeated corrections → permanent setup upgrades
+- `/arc-kickoff <goal> [--lane <name>]` — start a build: PLAN.md, phases, PROGRESS.md (playbook §9)
+- `/arc-change <what> [--lane <name>]` — route a mid-build change/idea into the tracker (phase spec / ADR) before any code
+- `/arc-phase-done <n> [--lane <name>]` — close a phase against its Definition of Done (playbook §8)
+- `/arc-retro [n] [--lane <name>]` — end-of-phase retro: repeated corrections → permanent setup upgrades
 - `/arc-toolcheck`    — full toolchain status (installed/missing/stale) + one-command fixes
 - `/arc-qa [url]`      — browser QA loop (qa-tester) + a required regression test per fix
 - `/arc-audit`         — deep OWASP+STRIDE pass (security-auditor); high-sev → tracked issue
@@ -103,9 +110,13 @@
 - `/arc-canary <url>`  — post-deploy watch loop; failure rolls back / blocks promote
 - `/arc-freeze <dir>` · `/arc-unfreeze` — deterministic edit-boundary while debugging
 - `/arc-diagram <what>`— English → committed Mermaid (into PLAN/ADR/docs)
-- `/arc-resume`        — rebuild session state from PROGRESS ## Now + last snapshot
+- `/arc-resume [--lane <name>]` — rebuild session state from PROGRESS ## Now + last snapshot
+- Only the five command lines showing `[--lane <name>]` take the flag; the rest are lane-agnostic.
+  A bare first argument is always the command's own (a phase number, a route, a URL, a goal
+  sentence) — never a lane name. Omit the flag and the lane is resolved, or you are asked.
 
 ## Key files
+- Company board       → `PORTFOLIO.md` (every lane in priority order — a view, not the truth)
 - Lanes / workspaces  → `.claude/rules/lanes.md` (`--lane` is the ONLY way to name a lane)
 - Auth & API security → `.claude/rules/api.md`
 - SEO / indexing      → `app/sitemap.ts`, `app/robots.ts`

@@ -1,10 +1,10 @@
 # PROGRESS.md — Cycle 4 · arc-portfolio "The Conductor"
 
-status: LIVE
-cycle: arc-portfolio
-phase: 03 — Docs truth + retro
+status: IDLE
+cycle: arc-portfolio (Cycle 4, closed 2026-08-02)
+phase: — (no live cycle)
 appetite: 3d
-burn: 3.0d
+burn: 3.35d
 blocked-on: —
 depends-on: —
 
@@ -21,10 +21,11 @@ depends-on: —
 | 00 | Dual-mode machinery (steel thread): root goldens, resolver on 7 surfaces, creation/STOP/echo/adversarial fixtures | 1.25 days | ✅ done 2026-07-31 |
 | 01 | Self-host + link history + board v1 (rehearsed rollback; close in lane-mode) | 0.75 days | ✅ done 2026-07-31 |
 | 02 | Parallel-safety floor: WIP info line, board lint, ownership lint, ~~spine spool~~ (reverted) | 0.75 days | ✅ done 2026-08-01 |
-| 03 | Docs truth + retro | 0.25 days | ⬜ pending |
+| 03 | Docs truth + retro | 0.25 days | ✅ done 2026-08-02 |
 
-**Appetite burn:** ~3.0 of 3 days used (100%). Phase 02 ran ~1.1d against a 0.75d appetite
-— **over by ~0.35d, and its own tripwire fired.**
+**Appetite burn: ~3.35 of 3 days used (~112%) — CYCLE CLOSED OVER APPETITE.** Phase 02 ran
+~1.1d against 0.75d (**over by ~0.35d, its own tripwire fired**) and Phase 03 ran ~0.35d
+against 0.25d. Phase 02 is where the cycle went over; Phase 03 only failed to claw it back.
 
 Basis, so it can be audited rather than believed: section A's commit landed 02:26 and the
 close landed 21:27 on 2026-08-01, but that window is not continuous — there is a 12-hour gap
@@ -39,11 +40,16 @@ other direction. REQ-04 is deferred (section F reverted) and Mode-B certificatio
 withdrawn. The pre-decided cut and the cut the evidence forced turned out to be the same
 one; it was not applied because the tripwire was read, which is worth being honest about.
 
-**The cycle is now at 100% of appetite with Phase 03 (0.25d) still to run.** There is no
-slack left to spend — the standing `[appetite-sum]` WARN said this was one bad afternoon
-away, and this was that afternoon. Phase 03 will run over unless it is cut, and it now
-carries two retro inputs it cannot absorb at 0.25d. **That is the owner's call at Phase 03
-kickoff, not a decision this close gets to make.**
+**The cycle finished over, and the warning that predicted it had been firing all along.**
+The standing `[appetite-sum]` WARN said 100% allocation was one bad afternoon away from an
+overrun; Phase 02 was that afternoon, and with no slack to absorb 0.35d the whole cycle went
+past its appetite. The owner chose at Phase 03 to run it as specified rather than cut it or
+widen it, accepting the ~0.1d overrun on top rather than taking docs debt into Cycle 5.
+
+Basis for **Phase 03's** ~0.35d: Phase 02's close landed 22:37 on 2026-08-01 and this close
+ran to ~01:15 on 2026-08-02 — one unbroken ~2.6h sitting covering the `/arc-change` refine,
+the seven doc surfaces, the golden regeneration, the retro and the close. Against the same
+unit the paragraph above uses (~4h ≈ 0.5d), that is ~0.3–0.35d against a 0.25d appetite.
 
 Basis for **Phase 01's** 0.5d, which is the unit the paragraph above measures against: Phase
 00 closed at 19:05 and Phase 01's last build commit landed at 21:25 the same day, with the
@@ -51,6 +57,96 @@ close itself running after — roughly four hours of continuous work, against a 
 Phase 00's 1.4d over two calendar days puts at about a working day.
 
 ## Done log
+
+- 2026-08-02 — **Phase 03 CLOSED. Cycle 4 is closed with it.** The per-lane One Rule now
+  reads the same in the five documents that teach arc: `how-arc-works-simple` §1/§3/§8, the
+  usermanual's new §9a (its own Tanglish register, inserted not renumbered so no
+  cross-reference breaks), the plans ritual, the ADR template's `Product:` field, and
+  `CLAUDE.md`'s command lines. Docs-drift 0 findings, ledger stamped.
+  actual ~0.35d vs 0.25d appetite (+0.1d) · amendments: 1 · reopened: n
+  · evidence: `initiatives/portfolio/evidence/phase-03/`
+
+  **The close turned CI red, and the two tests it broke were measuring the calendar.**
+  `tests/portfolio-board.bats` pinned "this tree auto-resolves to portfolio, counted == 1"
+  and "the portfolio machine header says `status: LIVE`". Both were true only while exactly
+  one lane was live; flipping `portfolio` to IDLE falsified them on 5 of 19 legs. Neither the
+  resolver nor the board was wrong — the tests asserted a snapshot of the cycle rather than
+  the rule, so they had to be re-edited every time a cycle opens or closes, and nobody would
+  have noticed until it cost a CI run. They now assert the rule: mode is always `lane` here,
+  and resolution branches on the live count (1 → auto-resolve; 0 or 2+ → exit 3 and ask), with
+  a second test pinning that explicit `--lane portfolio` resolves whatever the cycle state.
+  The header test now accepts the whole `LIVE|BLOCKED|QUEUED|IDLE` vocabulary instead of one
+  value. This is a code change inside a phase that declared none, taken for the same reason as
+  the doc repairs: this phase's own close broke them, and a phase cannot close on red CI.
+
+  **B2's trap fired exactly as the spec predicted it would, which is the point.**
+  `usermanual.md` and `adr-template.md` are content-hashed in the sync golden, so editing
+  them without regenerating it fails both golden tests on all three legs — six red legs from
+  a phase containing no code, and with no local runs CI would have been the first sight of
+  it. The regeneration method was proved on a control first: rebuilding the manifest from the
+  UNEDITED repo reproduces the committed golden byte for byte, so a wrong method could not
+  have passed unnoticed. Exactly two rows moved. A trap named in advance cost minutes; the
+  same trap unnamed cost this repo ten commits in Cycle 1 (`retro-log` 2026-07-22).
+
+  **Rewriting three sections left the file contradicting itself, and no writer could see
+  it.** §5 still routed phase-done evidence to `docs/evidence/` — the path §3 now marks
+  frozen — and still said phases "always live at root `phases/`", a flat negation of the new
+  §8 rule 2; §2 and §7 still taught the root-only law; `usermanual.md:111` still put the
+  tracker at the root behind a cross-reference pointing at the wrong section. All of it was
+  caught by three independent read-back agents and confirmed by hand before any fix. Six
+  line-level repairs beyond the sections REQ-05 names, taken deliberately: the Rabbit hole
+  forbids *rewriting* docs beyond those sections, and these are corrections to contradictions
+  this phase's own edits created. A docs-truth phase that ships a self-contradicting
+  orientation page has failed its own goal. Recorded, not done quietly.
+
+  **`docs/HISTORY.md` was missing Cycle 3 entirely** — closed 2026-07-30 with a retro stat
+  line and an archive bundle but no entry, the exact wiring gap the page's own ⚠ TODO names.
+  Back-filled here from its verbatim stat line rather than left as a hole, because the same
+  commit that declares HISTORY the truth hierarchy's immutable company log cannot also leave
+  a cycle missing from it. Same class as RI-1: a stated artifact that nothing asserts exists.
+
+  **The three verdicts section D required, decided under the owner's 2026-08-02 delegation
+  ("complete the phase, don't wait for me") and reversible at Cycle 5's kickoff:**
+
+  - **RI-1 — ACCEPTED, deferred to Cycle 5 as its first build item.** A tenth board-lint
+    class asserting the execution-mode section exists and its Mode B line matches one of two
+    known grammars. Accepted because the failure it addresses already happened and lasted two
+    phases; deferred because it is a code change and Phase 03 forbids those, and because the
+    WARN registry is pinned at nine with `tests/warn-shape.bats` asserting them by name, so a
+    tenth needs the registry, the class-obligation guard and its own fixtures. The
+    generalisable question it raised — *which other ADR-mandated artifacts have no gate
+    asserting they exist?* — is the more valuable half and goes to Cycle 5's kickoff as a
+    pre-mortem input, not as a lint.
+  - **RI-2 — SPLIT, and only one half is urgent.** The 5 findings live in shipped
+    `ownership-lint.sh` are Cycle 5's first fix, ahead of RI-1: a `--base` typo silently
+    disables the lint, `--lane a --lane b` inverts its verdict with flag order, and a
+    trailing empty `--lane` makes it judge a lane nobody named — a gate giving confidently
+    wrong answers is worse than no gate, and two of these are failures `lanes.md` describes
+    by name as past incidents. The 52 unconfirmed findings are NOT accepted as work: each
+    needs its reproduction re-run before it is believed, and re-verifying 52 agent verdicts
+    is its own sized piece of work, not a tail on a fix. `board-lint.sh`'s shape question —
+    24 reported defects in a hand-written strict-grammar markdown parser, the exact class
+    PLAN risk 3 names and the council found 43 holes in twice — is a **design question for
+    Cycle 5's kickoff**, not a bug list to grind through. The spool gap stays open and stays
+    known: a hook-mode timeout still lands in `_quarantine/` beside malformed payloads.
+  - **A4 — NOT FIRED, and it still cannot fire.** Its trigger needs counted lanes above 2 or
+    two consecutive weeks with both counted lanes owner-blocked; this repo counted 1 for the
+    whole cycle. Recorded explicitly because the ledger names *the retro* as A4's test venue
+    and this was the cycle's last retro — an assumption whose only test venue passes without
+    examining it is an assumption that expires unnoticed. It carries into Cycle 5 untested,
+    which is a fact about the evidence, not a verdict about the assumption.
+  - **A3 — not FIRED, and materially weaker than when written.** Its trigger was widened to
+    cover refused receipts, its lock half was found broken at production defaults and fixed,
+    and its spool half no longer exists to cover anything. What it still claims has shrunk.
+
+  **The one finding that outlives the rest, and it is a repeat.** Every real defect this
+  cycle surfaced came from RUNNING an artifact, never from reading one: `EPERM` on the
+  Windows lock, a negative control that had passed six legs by luck, a mandated board note
+  that was never written, and this phase's own self-contradicting doc. `retro-log` has said
+  this since 2026-07-16 — *"code that looked correct and passed its own fixtures"* — and
+  Phase 02 shipped three gates without the mandated adversarial pass anyway. The new
+  prevention logged today is narrower and therefore more likely to hold: bind the adversarial
+  pass to the section that ships a gate, not to the phase close that comes after all of them.
 
 - 2026-08-01 — **Phase 02 CLOSED.** Six of seven sections shipped: the WARN-shape assertion
   helper (#82), the two-table board lint and the manifest-derived ownership lint (#83), the
@@ -164,87 +260,49 @@ Phase 00's 1.4d over two calendar days puts at about a working day.
 
 ## Now
 
-**Position:** Phase 02 CLOSED 2026-08-01 (see done log). **Phase 03 — Docs truth + retro is
-OPEN as of 2026-08-01**: the shape question the close refused to answer has been answered by
-the owner — **run it as specified**, 0.25d, docs + retro, no code, RI-1/RI-2 triaged **by**
-the retro into the next cycle — and its coarse Verification plan has been refined into
-checkable items (`/arc-change`, branch `feat/phase-03-refine-verification`). The appetite
-position is unchanged and stated rather than softened: the cycle is at **100% of its 3d
-appetite**, so Phase 03's 0.25d runs **over** it by construction, landing the cycle at
-~3.25d (~8% over). No kill criterion fires on that — the 50% tripwire was Phase-0-scoped and
-Phase 02's ladder already executed at its close — but nothing about this is free, and the
-overrun is a number to carry into the retro, not a rounding error.
+**Position: Cycle 4 · arc-portfolio is CLOSED (2026-08-02).** All four phases done, the lane
+is `IDLE`, and there is no live plan in this repo. `PORTFOLIO.md` derives that from the
+machine header above. Nothing is in flight; nothing is blocked.
 
-**The three things Phase 02 did NOT close, stated here so `/arc-resume` cannot lose them:**
+**Read this before running anything: the repo now has ZERO eligible lanes.** `portfolio` is
+IDLE and `design` is IDLE, and only LIVE or BLOCKED counts as eligible. Every no-arg
+lane-aware surface — `/arc-resume`, `/arc-change`, `/arc-phase-done`, `/arc-retro` — will
+therefore **exit 3 and ask**, printing "Lane not specified and no lane is eligible (LIVE or
+BLOCKED)" with the known lanes. This is designed behaviour, not breakage: the resolver has a
+dedicated message for it and `tests/lane-resolver.bats:97` pins it. **Until a new cycle
+starts, pass `--lane portfolio` explicitly.** The real output is captured in this phase's
+evidence bundle — Phase 03 is the first time the repo actually entered this state, so it was
+demonstrated rather than cited.
 
-1. **The spool gap is open again.** A hook-mode lock timeout lands in `events/_quarantine/`
-   beside malformed payloads — "your event was invalid" and "the machine was busy" share a
-   destination, which is the gap section F was written to close and its revert reopened.
-2. **`board-lint.sh` has 24 reported defects**, four of them silently-wrong verdicts, and it
-   passes its own 41 fixtures. It is a hand-written strict-grammar markdown parser, which is
-   the exact bug class PLAN risk 3 names.
-3. **Five findings are live in shipped `ownership-lint.sh`**: a `--base` typo silently
-   disables it; `--lane a --lane b` is last-wins and the verdict inverts with flag order; a
-   trailing `--lane` with an empty value makes it auto-resolve and judge a lane nobody named;
-   `git mv` out of another lane is invisible; any non-ASCII filename is invisible. The middle
-   two are failures `.claude/rules/lanes.md` describes **by name** as past incidents.
+**What Cycle 5 inherits, in the order the retro put it:**
 
-All three are routed — RI-1 and RI-2 in `phases/phase-03-spec.md`, with the full evidence at
-`evidence/phase-02/adversarial-report.md` (61 findings: 9 verified by hand, 52 still
-carrying an agent's verdict rather than a confirmed one).
+1. **The 5 findings live in shipped `ownership-lint.sh`** — first fix, ahead of everything
+   else. A gate that gives confidently wrong answers is worse than no gate.
+2. **RI-1's tenth board-lint class** — accepted, needs the registry, the class-obligation
+   guard and its own fixtures.
+3. **The spool gap, still open** — a hook-mode lock timeout still lands in `_quarantine/`
+   beside malformed payloads. Whatever replaces section F must run the same
+   validate → scan → seal path the front door runs.
+4. **Two questions for kickoff, not bug rows:** is a hand-written strict-grammar markdown
+   parser the wrong shape for `board-lint.sh` (24 reported defects, the class PLAN risk 3
+   names)? And which other ADR-mandated artifacts have no gate asserting they exist?
+5. **52 adversarial findings still carrying an agent's verdict** rather than a confirmed
+   one. Re-verification is its own sized piece of work, not a tail on a fix.
 
-**Mode B is NOT certified.** It was, for three hours, and the certification was withdrawn at
-this close: ADR-0056 makes it a fixture result, REQ-04's fixtures include section F's, and F
-was reverted. The certifying run was also green on a spine that still carried the
-duplicate-writer bug. The board says so, with the reason next to it.
+**Mode B is NOT certified.** It was for three hours on 2026-08-01; the certification was
+withdrawn when section F was reverted, because ADR-0056 makes it a fixture result. Concurrent
+emitters stay forbidden. The board says so with the reason next to it.
 
-**Phase 03's shape: decided 2026-08-01, owner.** ~~Three options.~~ **Run it as specified** —
-0.25d, docs + retro, no code — and let the retro triage RI-1/RI-2 into the next cycle. The
-two rejected options are kept as the record of what was traded away: widening Phase 03 to fix
-the five live `ownership-lint` findings (overruns 3d outright), and cutting the docs scope to
-spend the 0.25d on those findings instead (takes the docs debt into the next cycle). What
-this choice costs, stated plainly: **the three open items stay live in the tree for however
-long the next cycle takes to start**, and five of them are wrong answers a shipped gate will
-keep giving in the meantime.
+**Assumptions at close:** A1, A2 validated in Phase 00. A3 not FIRED but materially weaker —
+lock half fixed, spool half gone. A4 not FIRED and **still untested**: its trigger needs
+counted lanes above 2 and this repo counted 1 all cycle, so the retro that was supposed to
+test it could only record that it could not. A5 closed, carries nothing.
 
-**Two things the refine found, which are the reason the coarse plan could not just be
-executed:**
-
-1. **The coarse criterion had gone stale against a decision taken mid-cycle.** It asked the
-   board to show "develop kickoff as the queued next"; [ADR-0061](../../docs/adr/0061-board-indexes-born-lanes-only.md)
-   (accepted 2026-08-01, after the spec was written) holds a board row iff the lane
-   directory exists, and **rejected the `Queued next:` fact line for v1** in the same
-   breath. Executed as written it would have made Phase 03 violate a mid-cycle ADR, and
-   Phase 02's own board lint would have flagged arc's board. Corrected in the spec's section
-   E; the fact moves to the HISTORY entry, where no grammar has to parse it.
-2. **A docs-only phase can turn CI red six ways.** `tests/fixtures/sync-golden/tree-manifest.txt`
-   stores a sha256 per synced file, and **two of the seven doc targets are in it** —
-   `docs/usermanual.md` and `docs/templates/adr-template.md`. Editing either fails both
-   golden tests (rsync + cp-r) on all three legs. With no local runs, CI is the first sight
-   of it. The golden must be regenerated **in the same commit** as the edit — spec section
-   B2 carries the recipe and the check that the manifest moved exactly two rows.
-
-**Next step:** land this refine, then build the phase in spec order — **A** the seven doc
-surfaces (regenerating the sync golden with A4 and A6) → **B** drift gate 0 findings +
-ledger stamp → **C/D** `/arc-retro`, which appends the HISTORY entry and records verdicts for
-RI-1, RI-2 and A4 → **E** flip `status: IDLE` and show the real zero-eligible resolver
-output → `/arc-phase-done 3`. **After E the repo has no eligible lane** (portfolio IDLE,
-design IDLE), so every no-arg lane surface exits 3 and asks: `--lane portfolio` becomes
-required for ordinary work. That path is pinned by `tests/lane-resolver.bats:97`, but this
-phase is the first time the real repo enters it. No local test runs — CI is the only gate.
-
-**Assumptions status:** A3 (advisory lock + spool covers concurrency) is **not** marked
-FIRED but is now materially weaker: its trigger was widened to cover refused receipts, the
-lock half was found broken at production defaults and fixed, and the spool half no longer
-exists to cover anything. A4 (advisory-only WIP is enough) still cannot fire — it needs
-counted lanes above 2 and this repo counts 1. A5 is closed and carries nothing.
-
-**The one methodological finding, which outlives every item above.** All nine verified
-findings came from RUNNING the artifact; none came from reading it. The code had been read
-carefully — sections B, D and F each ship with long comments explaining why they are
-correct, and several of those comments are the exact claims the pass falsified. `retro-log`
-already said this on 2026-07-16: *"code that looked correct and passed its own fixtures"*.
-This phase shipped three gates without the mandated pass and rediscovered it.
+**Next:** `/arc-kickoff --lane <name>` when the owner starts Cycle 5. The plan pack's queue is
+`docs/strategy/plans/README.md`. `develop` — the first native lane, and the dogfood tripwire
+for real parallel validation — is the standing candidate, deliberately not written onto the
+board: ADR-0061 holds a row only for a lane that exists, and this fact lives in the HISTORY
+entry instead, where no grammar has to parse it.
 
 blocked-on: —
 depends-on: —
