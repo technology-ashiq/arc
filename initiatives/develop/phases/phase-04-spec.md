@@ -174,6 +174,38 @@ exactly why a promoted row carries `forward-verified: no` until one does.
 - [ ] `tree-manifest.txt` regenerated as a named step
 - [ ] tracker updated (PROGRESS.md row ✅ + done-log)
 
+## Status of the "one REAL promotion" criterion — UNMET, deliberately not rewritten
+
+The criterion says the promotion "ships as an enforced check". **It did not, and the criterion is
+recorded as unmet rather than reworded to match what happened.** Moving a goalpost to where the ball
+landed is the exact failure this product exists to prevent, and it would be a strange thing to do
+inside the phase that builds the machinery for refusing it.
+
+What actually happened, and why it is not a failure of the loop:
+
+1. **L-002** was authored from a real Cycle-5 finding, replayed (visible: caught 1 of 11, false-blocked
+   0 of 4 at the time), and sent to a fresh agent with only the candidate and the counts.
+   **The agent rejected it** — on the code, not the counts: two bags of words tested against a whole
+   document with nothing requiring the success claim and the lost write to concern the same
+   operation; an optional possessive that showed it was covering two remembered sentences rather
+   than a class; one alternative that could never fire; a second branch that flagged with no success
+   claim at all. It then **constructed two inputs that break it**, which are now pinned as clean
+   controls F-106 and F-107 — and the replay against the hardened corpus shows L-002 false-blocking
+   on exactly those two.
+2. **L-004**, the rewrite, keyed on the relation instead of the vocabulary. It stopped false-blocking
+   and also **stopped firing at all** (0 of 11): to survive the controls it skips anything whose text
+   claims the rejection was intentional, and a false reassurance is written exactly that way.
+
+Both are recorded as `verdict: rejected` with their evidence. **The loop ran end to end twice and
+returned "no" twice, which is the loop working.** A first-try promotion would have been the weaker
+result — it is what a rubber stamp also produces.
+
+What the phase therefore delivers: the ledger, the lint, the replay runner with two computed counts,
+the six-category corpus hardened by an adversarial pass, the withheld holdout, and **two honest
+rejections**. What it does not deliver is a shipped enforced check. That criterion carries forward,
+and L-004's own row already names what the next attempt must do differently — reconcile a claimed
+count against a persisted count, rather than start from a regex over prose.
+
 ## Verification plan
 
 - **Test command:** `bash tests/develop-learning.bats`

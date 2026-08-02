@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-develop Cycle 6 (opened 2026-08-02)
-phase: 04 — planned, not started
+phase: 04 — in progress
 appetite: 7d
 burn: 0d
-blocked-on: owner — plan approval
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`

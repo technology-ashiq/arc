@@ -61,6 +61,8 @@ const render = (f, kind) => {
 // runs with zero false positives + a retro sign-off. Promotion is deleting one line here.
 const TRIAL = new Set(["self-declared-number", "tier-floor"]);
 const SUBSTANCE = new Set(["self-declared-number", "tier-floor"]);
+// [learning-row] is structural, like the other three BLOCKs: a row either carries its
+// required fields or it does not. It is NOT in TRIAL.
 
 // ---------- CLI ----------
 const cli = parseLaneArgs(process.argv.slice(2));
@@ -249,6 +251,28 @@ for (const file of ledgerFiles) {
             `at least \`${floor}\` for a ${kind} slice`, f.tier.trim(), `tier: ${floor}`);
         }
       }
+    }
+  }
+}
+
+// ---------- the learning ledger (Phase 04) ----------
+// A company organ, single and never per-lane, so it is checked from the repo root rather
+// than the tracker root -- a lane's lint still validates it, because a malformed learning
+// row is malformed for everyone.
+{
+  const ledgerPath = join(root, "docs", "develop", "learning-ledger.md");
+  if (existsSync(ledgerPath)) {
+    const { validate, withheldIds } = await import("./learning.mjs");
+    const { fails, warns } = validate(readFileSync(ledgerPath, "utf8"), { withheldIds: withheldIds(root) });
+    for (const w of warns) {
+      warn("learning-row", `docs/develop/learning-ledger.md:${w.at}`, w.msg,
+        "at least one typed link: adr / rule / fixture / phase",
+        "no links", "adr: 0108");
+    }
+    for (const f of fails) {
+      fail("learning-row", `docs/develop/learning-ledger.md:${f.at}`, f.msg,
+        "a complete, linked row; a promoted row additionally carries replay + evaluated-by + approved-by",
+        f.id ? `row ${f.id}` : "the ledger", "verdict: proposed");
     }
   }
 }

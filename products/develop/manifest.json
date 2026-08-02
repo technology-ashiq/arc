@@ -14,9 +14,13 @@
   "scripts": [
     ".claude/scripts/develop/develop-lint.mjs",
     ".claude/scripts/develop/develop.mjs",
+    ".claude/scripts/develop/learning.mjs",
     ".claude/scripts/develop/ledger.mjs",
     ".claude/scripts/develop/stuck.mjs"
   ],
-  "files": [],
+  "files": [
+    ".claude/scripts/develop/candidates/L-002.mjs",
+    ".claude/scripts/develop/candidates/L-004.mjs"
+  ],
   "docs": []
 }

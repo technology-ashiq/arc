@@ -15,7 +15,7 @@ Updated: 2026-08-02
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| develop | LIVE | arc-develop Cycle 6 (opened 2026-08-02) | 04 — planned, not started | 7d / 0d | owner — plan approval / — | approve the Cycle 6 plan, then `/arc-develop start 4 --lane develop` |
+| develop | LIVE | arc-develop Cycle 6 (opened 2026-08-02) | 04 — in progress | 7d / 0d | — | Phase 04: the Learning System |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
