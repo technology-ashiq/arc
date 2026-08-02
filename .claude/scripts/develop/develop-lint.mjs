@@ -85,13 +85,32 @@ const troot = r.mode === "root" ? root : join(root, r.tracker);
 const phasesDir = join(troot, "phases");
 
 // ---------- collect ledgers ----------
-let ledgerFiles = [];
-try {
-  ledgerFiles = readdirSync(phasesDir).filter((f) => /^phase-\d+-tasks\.md$/.test(f)).sort();
-} catch { ledgerFiles = []; }
+let entries = [];
+try { entries = readdirSync(phasesDir); } catch { entries = []; }
 
-if (ledgerFiles.length === 0) {
-  console.log("develop-lint: no slice ledger yet — nothing to check.");
+// Case-INSENSITIVE: on Windows and macOS the filesystem preserves case but matches without
+// it, so a `phase-00-tasks.MD` was skipped by a case-sensitive filter and the lint then
+// printed "no slice ledger yet" and exited 0 over a directory holding a full ledger.
+const ledgerFiles = entries.filter((f) => /^phase-\d+-tasks\.md$/i.test(f)).sort();
+
+// A file that is ledger-SHAPED but not ledger-NAMED is not "nothing to check" — it is a
+// ledger the gate cannot see, which is worse than an unparseable one.
+for (const f of entries.filter((f) => !/^phase-\d+-tasks\.md$/i.test(f) && /tasks?\.(md|markdown|txt)$/i.test(f))) {
+  fail("ledger-unparseable", `phases/${f}`, "a ledger-shaped file this lint does not read",
+    "phase-NN-tasks.md", f, "phase-01-tasks.md");
+}
+
+// A phase with a spec but no ledger is an unstarted phase, which is legal — but a phase
+// whose ledger vanished is not, and both used to print the same reassuring line.
+const specPhases = entries.filter((f) => /^phase-\d+-spec\.md$/i.test(f)).map((f) => f.match(/\d+/)[0]);
+const ledgerPhases = new Set(ledgerFiles.map((f) => f.match(/\d+/)[0]));
+
+if (ledgerFiles.length === 0 && failures.length === 0) {
+  console.log(
+    specPhases.length
+      ? `develop-lint: ${specPhases.length} phase spec(s) present, no slice ledger yet — run /arc-develop start <n>.`
+      : "develop-lint: no slice ledger yet — nothing to check.",
+  );
   process.exit(0);
 }
 
@@ -128,6 +147,17 @@ for (const file of ledgerFiles) {
   // brief was written, the brief is describing a phase that no longer exists.
   const specPath = join(phasesDir, `phase-${phase}-spec.md`);
   const recorded = (brief["spec-hash"] || "").trim();
+
+  // The brief must be bound to the spec it NAMES, not only to the one its filename implies.
+  // A brief headed "phase 01", saved as phase-00-tasks.md and carrying phase 00's hash,
+  // passed clean: a reviewer read a brief pinned to phase 01 while the gate had verified
+  // phase 00. The hash matched — it was just the hash of a different phase.
+  const titleLine = (raw.split("\n").find((l) => /^#[^#]/.test(l)) || "").trim();
+  const titlePhase = titleLine.match(/phase[ \t]+0*(\d+)/i);
+  if (titlePhase && Number(titlePhase[1]) !== Number(phase)) {
+    fail("brief-stale", `${file}:1`, "the brief names a different phase than its filename",
+      `phase ${Number(phase)}`, titleLine, `# Build Brief — phase ${Number(phase)} · …`);
+  }
   if (!recorded) {
     fail("brief-stale", `${file}:1`, "brief carries no `spec-hash:` line",
       "spec-hash: sha256:<64 hex>", "(absent)", "spec-hash: sha256:2aa8419035…");
@@ -168,6 +198,20 @@ for (const file of ledgerFiles) {
         // Structural, not heuristic: a commit reference is a hex SHA or it is not one.
         // Without this, `commit: yes` satisfies "the field is filled" and the proof-to-code
         // link the whole ledger rests on becomes a word.
+        // A proof must SAY something checkable. `proof: it works` clears "the field is
+        // filled" and means nothing — so a proof names its evidence tier or carries the
+        // command that produced it. This is the positive requirement that makes
+        // proof-before-implementation enforceable rather than a field to populate.
+        if (key === "proof") {
+          const p = f.proof.trim();
+          const namesTier = TIERS.some((t) => p.toLowerCase().includes(t));
+          const hasCommand = /`[^`]+`/.test(p);
+          if (!namesTier && !hasCommand) {
+            fail("slice-unproven", at, `slice ${s.id}'s \`proof:\` names neither an evidence tier nor a command`,
+              "an evidence tier word, or the command in backticks", p,
+              "proof: contract — `npm run test -- tokens`");
+          }
+        }
         if (key === "commit" && !/^[0-9a-f]{7,40}$/i.test(f.commit.trim())) {
           fail("slice-unproven", at, `slice ${s.id}'s \`commit:\` is not a commit SHA`,
             "7-40 hex characters", f.commit.trim(), "commit: 8c46844");

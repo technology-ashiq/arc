@@ -19,7 +19,16 @@
 
 /** Values the writer emits for "not filled in yet". A slice holding one is not proven. */
 export const PLACEHOLDER = "(empty until proven)";
-const PLACEHOLDERS = new Set(["", "-", "--", "—", "tbd", "none", "n/a", PLACEHOLDER.toLowerCase()]);
+
+/**
+ * Invisible and confusable characters. Stripped before ANY matching, and their presence is
+ * itself reported: a zero-width space before `result:` made the key invisible to the field
+ * regex, so the slice was never "ticked" and every check on it was skipped silently.
+ */
+const INVISIBLE = /[​-‏⁠᠎﻿­]/g;
+
+/** Normalise a line for MATCHING only — never for storage. NFKC folds homoglyph keys. */
+const clean = (s) => s.replace(INVISIBLE, "").normalize("NFKC");
 
 export const TIERS = ["static", "unit", "contract", "integration", "e2e-visual", "verified-real"];
 export const KINDS = ["ui", "external-dep", "logic", "infra"];
@@ -32,19 +41,56 @@ export const PREDICTION_FIELDS = [
   "expected-proof-failures",
 ];
 
-/** A value counts as filled only if it is present and not one of the placeholder forms. */
-export const isFilled = (v) =>
-  typeof v === "string" && !PLACEHOLDERS.has(v.trim().toLowerCase().replace(/\s+/g, " "));
+/**
+ * A value counts as filled only if it carries content.
+ *
+ * This is a SHAPE test, not a denylist. It used to be a set of 8 known placeholder strings,
+ * which meant `–` (en dash, not the em dash in the set), `(none)`, `<tbd>`, `...`, `?`, and
+ * a one-letter typo of the writer's own placeholder all read as real values — so a slice
+ * could claim `proof: –` and be treated as proven. A denylist of the ways to say "nothing"
+ * can never be complete; a shape test does not have to be.
+ */
+export const isFilled = (v) => {
+  if (typeof v !== "string") return false;
+  const s = clean(v).trim().toLowerCase().replace(/\s+/g, " ");
+  const core = s.replace(/^[<([{]+/, "").replace(/[>)\]}]+$/, "").replace(/[.…?!]+$/, "").trim();
+  if (!core) return false;
+  if (/^[-–—―‒−_.*·•?~]+$/.test(core)) return false;                       // punctuation only
+  return !/^(tbd|todo|to-?do|n\/?a|none|nil|null|pending|wip|later|unknown|see below|empty until proven)$/.test(core);
+};
 
 /**
  * Tolerant slice-block detection. Accepts any heading level, optional emphasis around the
  * marker, and any surrounding whitespace -- `#### slice: 01`, `### *slice: 01*`, `**slice:
  * 01**` are one thing. The id grammar itself is strict: digits and dashes only.
  */
-const SLICE_RE = /^[ \t]*(?:#{1,6}[ \t]*)?(?:\*{1,2}|_{1,2})?[ \t]*slice[ \t]*:[ \t]*([0-9][0-9a-z-]*)[ \t]*(?:\*{1,2}|_{1,2})?[ \t]*$/i;
+const SLICE_RE =
+  /^[ \t]*(?:[-*+][ \t]+)?(?:#{1,6}[ \t]*)?(?:\*{1,2}|_{1,2})?[ \t]*slice[ \t]*:[ \t]*([0-9][0-9a-z-]*)[ \t]*(?:\*{1,2}|_{1,2})?[ \t]*(?:[—–:.)|-][ \t]*\S.*)?$/i;
 
-/** A `key: value` line. Keys are lowercase-with-dashes; anything else is not a field. */
-const FIELD_RE = /^[ \t]*([a-z][a-z0-9-]*)[ \t]*:[ \t]*(.*?)[ \t]*$/;
+/**
+ * A line that READS as a slice heading to a person but does not satisfy SLICE_RE. It must
+ * fail closed rather than be ignored: `#### slice: 01 — token bridge` used to fall through
+ * to the heading branch, which set `current = null` and dumped the whole block's fields
+ * into the brief with no error at all. One added character hid an entire slice.
+ */
+const NEAR_SLICE = /^[ \t>*_+-]*(?:#{1,6})?[ \t*_]*slice[ \t]*:/i;
+
+/**
+ * A `key: value` line. Tolerant of emphasis, bullets and blockquote markers, and
+ * case-insensitive — `**result:**`, `> result:` and `Result:` are all the same field.
+ * Case mattered: flipping `PROOF:` TIGHTENS the gate, but flipping `Result:`/`Commit:`
+ * unticked the slice and skipped every check on it.
+ */
+const FIELD_RE =
+  /^[ \t]*(?:>[ \t]*)?(?:[-*+][ \t]+)?(?:\*{1,2}|_{1,2})?[ \t]*([A-Za-z][A-Za-z0-9-]*)[ \t]*(?:\*{1,2}|_{1,2})?[ \t]*:[ \t]*(.*?)[ \t]*$/;
+
+/**
+ * A line shaped like a field whose KEY is not plain ASCII. NFKC does not fold across
+ * scripts, so a Cyrillic `е` in `rеsult:` survives normalisation, misses FIELD_RE, and the
+ * line is simply ignored — the slice never becomes ticked and every check on it is skipped.
+ * A key that is nearly a key must fail closed rather than disappear.
+ */
+const NEAR_FIELD = /^[ \t>*_+-]*([^\s:]{2,40})[ \t]*:[ \t]*\S/;
 
 /** Any heading, at any level -- used to close a block without consuming the next one. */
 const HEADING_RE = /^[ \t]*#{1,6}[ \t]+\S/;
@@ -64,18 +110,38 @@ export function parseLedger(text) {
   // attack -- but nothing else about the bytes is touched.
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
 
-  const brief = {};
+  // Object.create(null): a `{}` literal has Object.prototype's names already "in" it, so a
+  // legitimate `constructor:` field was reported as a repeated key — a BLOCK firing on a
+  // clean ledger, which is ADR-0101's stated revisit trigger.
+  const brief = Object.create(null);
   const nonNegotiables = [];
   const slices = [];
   let current = null;      // the slice block being filled
   let section = "brief";   // brief | non-negotiables | predictions | slices
+  let inFence = false;
   const seenIds = new Map();
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
+    const line = clean(raw);
     const lineNo = i + 1;
 
-    const sliceMatch = raw.match(SLICE_RE);
+    // Invisible characters are never innocent in a gated artifact: report, then match on
+    // the cleaned line so the attack cannot also hide the thing it was hiding.
+    if (line !== raw) {
+      errors.push({ line: lineNo, id: current?.id, msg: "line contains zero-width, bidi or non-NFKC characters" });
+    }
+
+    // Fenced blocks are content, not structure. ADR-0100 puts multi-line proof output in a
+    // fence, and a `# something` line inside one used to close the slice silently — so the
+    // sanctioned way to record proof was also the way to make a slice stop being checked.
+    if (/^[ \t]*(```|~~~)/.test(line)) { inFence = !inFence; continue; }
+    if (inFence) continue;
+
+    const sliceMatch = line.match(SLICE_RE);
+    if (!sliceMatch && NEAR_SLICE.test(line)) {
+      errors.push({ line: lineNo, msg: "line reads as a slice heading but its id is not `[0-9][0-9a-z-]*`" });
+    }
     if (sliceMatch) {
       const id = sliceMatch[1];
       if (seenIds.has(id)) {
@@ -83,35 +149,50 @@ export function parseLedger(text) {
         errors.push({ line: lineNo, id, msg: `duplicate slice id '${id}' (first seen at line ${seenIds.get(id)})` });
       }
       seenIds.set(id, lineNo);
-      current = { id, line: lineNo, fields: {} };
+      current = { id, line: lineNo, fields: Object.create(null) };
       slices.push(current);
       section = "slices";
       continue;
     }
 
-    if (HEADING_RE.test(raw)) {
-      const h = raw.replace(/^[ \t]*#+[ \t]*/, "").trim().toLowerCase();
+    if (HEADING_RE.test(line)) {
+      const h = line.replace(/^[ \t]*#+[ \t]*/, "").trim().toLowerCase();
       if (/^non-negotiables/.test(h)) section = "non-negotiables";
-      else if (/^predictions/.test(h)) section = "predictions";
-      else if (/^slices/.test(h)) section = "slices";
-      else if (/^build brief/.test(h)) section = "brief";
+      else if (/^predictions?/.test(h)) section = "predictions";
+      else if (/^slices?/.test(h)) section = "slices";
+      // An UNKNOWN heading must not preserve a swallowing section. It used to leave
+      // `section` untouched, so renaming `### Predictions` to `### Prediction block` and
+      // `### Slices` to `### Slice ledger` kept the parser inside non-negotiables — where
+      // every `key: value` line is discarded — for the rest of the file. A four-slice
+      // ledger claiming `proof: it works` / `commit: yes` then parsed to ZERO slices and
+      // ZERO errors, and the gate reported "all checks passed".
+      else section = "brief";
       current = null;
       continue;
     }
 
     if (section === "non-negotiables") {
-      const b = raw.match(/^[ \t]*-[ \t]+(.*\S)[ \t]*$/);
+      const b = line.match(/^[ \t]*-[ \t]+(.*\S)[ \t]*$/);
       if (b) nonNegotiables.push(b[1]);
       continue;
     }
 
-    const f = raw.match(FIELD_RE);
-    if (!f) continue;
+    const f = line.match(FIELD_RE);
+    if (!f) {
+      const near = line.match(NEAR_FIELD);
+      if (near && /[^\x00-\x7F]/.test(near[1])) {
+        errors.push({
+          line: lineNo, id: current?.id,
+          msg: `field key '${near[1]}' contains non-ASCII characters — a homoglyph key is invisible to the parser`,
+        });
+      }
+      continue;
+    }
     const key = f[1].toLowerCase();
     const value = f[2];
 
     if (current) {
-      if (key in current.fields) {
+      if (Object.hasOwn(current.fields, key)) {
         errors.push({ line: lineNo, id: current.id, msg: `slice '${current.id}' repeats key '${key}'` });
         continue;
       }
@@ -119,7 +200,7 @@ export function parseLedger(text) {
     } else {
       // Brief-level fields, including the prediction block. All-of, not first-of: a
       // repeated brief key is an error rather than a silent overwrite.
-      if (key in brief) errors.push({ line: lineNo, msg: `brief repeats key '${key}'` });
+      if (Object.hasOwn(brief, key)) errors.push({ line: lineNo, msg: `brief repeats key '${key}'` });
       else brief[key] = value;
     }
   }

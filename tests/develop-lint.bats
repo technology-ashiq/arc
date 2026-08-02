@@ -126,6 +126,112 @@ _run_case() {
   done
 }
 
+# ---------------------------------------------------------------------------
+# Round 2 -- the holes an UNANCHORED pass found that the author could not.
+#
+# Round 1's 26 fixtures all attacked one direction: a slice the parser SEES holding bad
+# data. Every hole below attacks the other: a slice or field the parser NEVER SEES, so
+# "ticked" never becomes true and every check on it is skipped in silence. 26 of 26 caught
+# was a true result about a blind spot, which is why the author cannot be the attacker.
+# ---------------------------------------------------------------------------
+
+@test "a slice the parser cannot see is a parse error, never a pass" {
+  local t; t="$(_tree)"
+  # The flagship forgery: rename two section headings and the parser stayed inside
+  # non-negotiables -- where key: value lines are discarded -- for the rest of the file.
+  # A four-slice ledger claiming `proof: it works` / `commit: yes` parsed to ZERO slices,
+  # ZERO errors, and the gate reported "all checks passed".
+  _run_case "$t" 27-unknown-heading-swallows-slices
+  [ "$status" -eq 1 ]
+}
+
+@test "a slice heading with a title after the id is still a slice heading" {
+  local t; t="$(_tree)"
+  # `#### slice: 01 — token bridge` is the most natural way a human writes this, and one
+  # added character used to dump the whole block's fields into the brief with no error.
+  for name in 28-slice-heading-title-suffix 29-slice-heading-trailing-dot 30-slice-heading-bullet-form; do
+    _run_case "$t" "$name"
+    [ "$status" -eq 1 ] || { echo "$name walked past"; false; }
+  done
+}
+
+@test "a line that reads as a slice heading but has no valid id fails closed" {
+  local t; t="$(_tree)"
+  _run_case "$t" 31-slice-id-not-grammar
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"reads as a slice heading"* ]]
+}
+
+@test "invisible and confusable characters cannot hide a key or a heading" {
+  local t; t="$(_tree)"
+  for name in 32-zero-width-before-heading 33-zero-width-before-result 34-nbsp-before-commit 35-homoglyph-result-key; do
+    _run_case "$t" "$name"
+    [ "$status" -eq 1 ] || { echo "$name walked past"; false; }
+  done
+}
+
+@test "emphasis, case and blockquote markers on the TICK keys change nothing" {
+  local t; t="$(_tree)"
+  # Flipping PROOF:/TIER: tightens the gate; flipping Result:/Commit: unticks the slice and
+  # skips every check. That asymmetry is why the round-1 case-flip fixture missed this.
+  for name in 36-emphasised-tick-keys 37-case-flipped-tick-keys 38-blockquote-fields; do
+    _run_case "$t" "$name"
+    [ "$status" -eq 1 ] || { echo "$name walked past"; false; }
+  done
+}
+
+@test "a heading inside the sanctioned proof fence does not close the slice" {
+  local t; t="$(_tree)"
+  # ADR-0100 puts multi-line proof output in a fence, so the documented way to record
+  # evidence was also the way to make a slice stop being checked.
+  _run_case "$t" 39-fence-heading-closes-slice
+  [ "$status" -eq 1 ]
+}
+
+@test "placeholder-shaped proofs are not proofs, whatever shape they take" {
+  local t; t="$(_tree)"
+  # The old check was a denylist of 8 strings. The en dash was not in it while the em dash
+  # was, and the writer itself emits an em dash -- so `proof: –` read as a real value.
+  for name in 40-proof-en-dash 41-proof-bracket-tbd 42-proof-parens-none 44-proof-ellipsis; do
+    _run_case "$t" "$name"
+    [ "$status" -eq 1 ] || { echo "$name walked past"; false; }
+  done
+}
+
+@test "a proof must name a tier or a command -- 'it works' is not evidence" {
+  local t; t="$(_tree)"
+  _run_case "$t" 43-proof-vacuous
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"neither an evidence tier nor a command"* ]]
+}
+
+@test "a brief pinned to a different phase than its filename FAILS" {
+  local t; t="$(_tree)"
+  # The hash matched -- it was just the hash of a different phase. A reviewer read a brief
+  # for phase 01 while the gate had verified phase 00.
+  _run_case "$t" 45-brief-names-other-phase
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"[brief-stale]"* ]]
+}
+
+@test "a ledger-shaped file the lint does not read is reported, not ignored" {
+  local t; t="$(_tree)"
+  # A case-sensitive filename filter skipped phase-00-tasks.MD on Windows and macOS, and
+  # the lint then printed "no slice ledger yet" and exited 0 over a full ledger.
+  mv "$t/phases/phase-00-tasks.md" "$t/phases/phase-00-tasks.MD"
+  run node "$(LINT)" --root "$t"
+  [[ "$output" != *"no slice ledger yet"* ]]
+}
+
+@test "no false block: a legitimate constructor: field is not a repeated key" {
+  local t; t="$(_tree)"
+  # `{}` carries Object.prototype's names, so `key in obj` reported them as already seen.
+  # A BLOCK firing on a clean ledger is ADR-0101's own revisit trigger.
+  sed -i.bak 's/^sources: phase-00-spec.md$/sources: phase-00-spec.md\nconstructor: refactored the token constructor/' "$t/phases/phase-00-tasks.md"
+  run node "$(LINT)" --root "$t"
+  [ "$status" -eq 0 ]
+}
+
 @test "commit: must be a real SHA -- 'yes' is not a proof-to-code link" {
   local t; t="$(_tree)"
   _run_case "$t" 05-commit-not-a-sha
