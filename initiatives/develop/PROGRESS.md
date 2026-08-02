@@ -28,10 +28,14 @@ depends-on: —
 | 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
 | 08 | The feedback half of layer 5 — outcome metrics, calibration record, tags, suggestion engine | 1.5 days | pending |
 
-**Appetite burn: 0 of 5 days used (0%).** The four phases allocate the full 5.0 days, which leaves
-no slack — and that is a known, named risk rather than an oversight: Cycle 4 closed at 112% with
-none. It is accepted here on two conditions that Cycle 5 proved hold. Phase 07 is a pre-decided,
-independently-cuttable scope cut, and the checkpoint at 3.0 days fires before it would start.
+**Appetite burn: 0.8 of 7 days used (11%).** The five phases allocate **5.5 days**
+(1.5 + 1.0 + 0.75 + 0.75 + 1.5); the remaining **1.5 days are unallocated buffer**, belonging to no
+phase and counted by no kill criterion — the same numbers PLAN's Appetite section states, and the
+figure to keep the two files agreeing on. The buffer's size has never been stress-tested: no cycle
+has yet run hot enough to reach a checkpoint under pressure, so the guard is the pre-decided cut,
+not the slack. Phase 07 is independently cuttable, and the kill criterion — **at 4.0 days burned,
+is Phase 06 done?** — sits above 04+05+06's 3.25 days so it can tell on-track from in-trouble
+rather than firing on every on-schedule run.
 
 ## Done log
 
