@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-develop Cycle 6 (opened 2026-08-02)
-phase: 06 — not started
+phase: 07 — not started
 appetite: 7d
-burn: 1.0d
+burn: 1.3d
 blocked-on: —
 depends-on: —
 
@@ -24,11 +24,11 @@ depends-on: —
 | 00 | Steel thread — parked, shipped in Cycle 5 | — | ✅ done 2026-08-02 |
 | 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, promotion loop | 1.5 days | ✅ done 2026-08-03 (12 of 13 slices; slice 08 carried) |
 | 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | ✅ done 2026-08-03 (9 of 9 slices) |
-| 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | pending |
+| 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | ✅ done 2026-08-03 (15 of 15 slices) |
 | 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
 | 08 | The feedback half of layer 5 — outcome metrics, calibration record, tags, suggestion engine | 1.5 days | pending |
 
-**Appetite burn: 1.0 of 7 days used (14%).** The five phases allocate **5.5 days**
+**Appetite burn: 1.3 of 7 days used (19%).** The five phases allocate **5.5 days**
 (1.5 + 1.0 + 0.75 + 0.75 + 1.5); the remaining **1.5 days are unallocated buffer**, belonging to no
 phase and counted by no kill criterion — the same numbers PLAN's Appetite section states, and the
 figure to keep the two files agreeing on. The buffer's size has never been stress-tested: no cycle
@@ -218,10 +218,65 @@ that 16. Predicted total 1785s, real 2366s. So the balance test's `<= 200` was 1
 snapshot of an under-measurement, and it now asserts the rule — max(heaviest file, total/shards) —
 derived from the plan on every run.
 
+---
+
+**Phase 06 — capability acquisition — closed 2026-08-03, ~0.3d against a 0.75d appetite.**
+CI run `30771652000` green: 19 of 19 jobs, head `6489684`
+(`initiatives/develop/evidence/phase-06/ci-green.txt`). Fifteen slices, all proven.
+
+`capability-vet.sh` refuses by default on seven conditions, reporting every failure rather
+than the first. `capability-scout` finds candidates and has no write tools. `/arc-capability`
+is the entry point, and it installs nothing.
+
+**The real candidate was refused, and that is the phase's result.** madge@8.0.0 was fetched
+with `npm pack`, its tarball hashed, and its `dist.integrity` verified byte-for-byte against
+the registry. It BLOCKed on `human-ok`, because `src/lib/graph.js:8` does
+`promisify(require('child_process').execFile)` — write-capable, computed from the source
+rather than read from anything the package claims. That is assumption-ledger row 5 going the
+way ADR-0110 said it must: **the capability is refused rather than the gate weakened.**
+Writing `human-ok: ashiq` would have satisfied the exit criterion in the same motion that made
+the promotion machinery worthless. It is one line and it is his line.
+
+**Two fresh agents defeated ALL SEVEN checks.** They got a candidate carrying `child_process`,
+`curl | sh`, `process.env` exfiltration and an `/etc/cron.d` write to `PASS — read-only`,
+exit 0. They independently found the same root cause and were right about it: untrusted,
+attacker-controlled, possibly multi-line strings fed into line-oriented `grep` and `sed`.
+
+The five worth remembering:
+
+1. **A newline in `name` walked past the allowlist.** `grep -qxF` treats each line of its
+   pattern as a separate fixed string, so `evil-package\nsafe-tool` matched — defeating the
+   one control ADR-0110 names as the anti-slopsquatting defence. The same shape defeated the
+   version pin and `human-ok`.
+2. **One NUL byte turned three BLOCKs into a PASS.** The flag string read `-raInE`; `-a` and
+   `-I` are opposites and `-I` won, so any file holding a NUL was skipped — and a NUL in a
+   comment changes nothing about how the file executes.
+3. **The hash was shape-checked and never compared.** Sixteen `A`s passed.
+4. **A `\` in the candidate path voided the entire scan.** Hits were relativised with
+   `sed "s|^$CANDIDATE/||"`, which interpolates an unsanitised path into a sed expression;
+   the ordinary native path form on Windows broke it, sed wrote nothing, every finding
+   vanished, and the operator saw only `PASS read-only`.
+5. **"Unreadable means write-capable" asked the wrong question** — whether ANY file was
+   readable — so one README beside a compiled blob cleared the whole tree.
+
+The metadata half is one node program over parsed JSON now, because substring matching cannot
+express "this field EQUALS that field". 25 fixtures, one per hole, and three legitimate
+candidates — a clean npm package, a write-capable one with a recorded OK, and a skill pinned
+by commit SHA — still PASS in the same run.
+
+**Two process deviations, recorded rather than tidied.** The Predictions block was filled in
+after the build rather than before it, which is the harness's own rule broken by the session
+that owns the harness; the values are what the red-test commit recorded before any
+implementation existed, but the field was not populated at the time. And `capability-scout`
+could only be exercised through a general-purpose agent carrying its definition inline, because
+agent types register at session start — the identical debt Cycle 5 recorded for
+`spec-fidelity` and paid down one session later. Both are in the debt ledger.
+
+
 ## Now
 
-**Phases 04 and 05 are closed on green CI (runs `30763365970` and `30768154452`). Phase 06 has
-NOT been started.**
+**Phases 04, 05 and 06 are closed on green CI. Phase 07 is next and is NOT cut — the cut was
+conditional on burn, and burn is 1.3 of 7 days.**
 
 ### Cycle 6 position
 
@@ -229,11 +284,11 @@ NOT been started.**
 |---|---|
 | 04 Learning System | closed 2026-08-03, 12 of 13 slices, ~0.8d of 1.5d |
 | 05 Context Pack | closed 2026-08-03, 9 of 9 slices, ~0.2d of 1.0d |
-| 06 Capability | **next** — 0.75d |
-| 07 Quality intelligence | pending — 0.75d (the pre-decided cut) |
+| 06 Capability | closed 2026-08-03, 15 of 15 slices, ~0.3d of 0.75d |
+| 07 Quality intelligence | **next** — 0.75d (was the pre-decided cut; burn is 19%, so it is NOT cut) |
 | 08 Feedback metrics | pending — 1.5d |
 
-Burn ~1.0 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
+Burn ~1.3 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
 
 ### To start Phase 06, in this order
 
