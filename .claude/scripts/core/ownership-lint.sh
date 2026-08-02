@@ -16,7 +16,12 @@
 #   tracked modifications plus untracked new files, because a NEW file dropped into another
 #   lane is the cross-lane edit this exists to catch and `git diff` alone cannot see it.
 #
-# Output shape (STDOUT only), one block per offending path:
+# Output shape: WARNs on STDOUT only, one block per offending path. STDERR carries exactly
+# one other thing -- a "the lint did NOT run" notice when `--base` names something this
+# clone cannot resolve. Silence on stdout means "no cross-lane edit found"; it must never
+# also mean "could not look", which is what it meant before.
+#
+# One block per offending path:
 #
 #   WARN [ownership-cross-lane] <bare repo-relative path> <U+2014> <summary>
 #     Expected: <value>   <U+2190> <path>:<line>
@@ -38,13 +43,26 @@ printf -v _ARROW '\342\206\220'   # U+2190 LEFTWARDS -- the derived-from pointer
 _T=""; _EX=""
 
 # ---------- flags ----------
-ROOT=""; LANE_ARG=""; LANE_GIVEN=0; BASE=""
+# EVERY `--lane` occurrence is FORWARDED to the resolver, never collapsed here. A local
+# parser that keeps one value is a second answer to "which lane is this", and it gets the
+# two cases `.claude/rules/lanes.md` names by name wrong: `--lane a --lane b` became
+# last-wins (the resolver answers `duplicate-lane`, exit 5) and a trailing valueless
+# `--lane` was dropped entirely, so the lint auto-resolved and delivered a verdict about a
+# lane the operator never named. Both are the "never guess" failure this cycle exists to
+# prevent, and both were shipped -- found by the Phase 02 adversarial pass, findings 5 + 6.
+#
+# Forwarded in the `--lane=VALUE` form, always, including the valueless case as `--lane=`:
+# a bare `--lane` handed on as the last element would eat the `--for` that follows it in
+# the resolver call -- the exact "an unquoted empty value silently eats the next flag"
+# accident lanes.md documents. One form, no adjacency, nothing to swallow.
+ROOT=""; BASE=""; LANE_FLAGS=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --root)    if [ $# -ge 2 ]; then ROOT="$2"; shift 2; else shift; fi;;
     --root=*)  ROOT="${1#--root=}"; shift;;
-    --lane)    if [ $# -ge 2 ]; then LANE_ARG="$2"; LANE_GIVEN=1; shift 2; else shift; fi;;
-    --lane=*)  LANE_ARG="${1#--lane=}"; LANE_GIVEN=1; shift;;
+    --lane)    if [ $# -ge 2 ]; then LANE_FLAGS+=("--lane=$2"); shift 2;
+               else LANE_FLAGS+=("--lane="); shift; fi;;
+    --lane=*)  LANE_FLAGS+=("--lane=${1#--lane=}"); shift;;
     --base)    if [ $# -ge 2 ]; then BASE="$2"; shift 2; else shift; fi;;
     --base=*)  BASE="${1#--base=}"; shift;;
     *)         shift;;
@@ -79,11 +97,9 @@ _w_ex()   { printf '  Example:  %s\n' "$1"; }
 # invalid -- is SILENCE. A lint that guesses a lane in order to have something to say is
 # the failure this whole cycle exists to prevent.
 [ -x "$RESOLVER" ] || [ -f "$RESOLVER" ] || exit 0
-if [ "$LANE_GIVEN" -eq 1 ]; then
-  _RES="$(bash "$RESOLVER" --root "$ROOT" --lane "$LANE_ARG" --for change 2>/dev/null)" || :
-else
-  _RES="$(bash "$RESOLVER" --root "$ROOT" --for change 2>/dev/null)" || :
-fi
+# `${LANE_FLAGS[@]+"${LANE_FLAGS[@]}"}`, not a plain `"${LANE_FLAGS[@]}"`: under `set -u`
+# an empty array is an unbound expansion on bash 3.2, which is the macOS CI leg.
+_RES="$(bash "$RESOLVER" --root "$ROOT" ${LANE_FLAGS[@]+"${LANE_FLAGS[@]}"} --for change 2>/dev/null)" || :
 [ -n "$_RES" ] || exit 0
 
 _field() {
@@ -98,14 +114,41 @@ MODE="$(_field mode)"; STATUS="$(_field status)"; LANE="$(_field lane)"; LANES_S
 [ -n "$LANE" ] || exit 0
 
 # ---------- what changed? ----------
-git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || exit 0
+# `-c core.quotePath=false` on every path-producing call. Git's DEFAULT quotes any path
+# holding a non-ASCII byte -- `initiatives/design/na\303\257ve.md`, with the quotes as real
+# characters -- and a quoted path matches neither `case initiatives/*` nor any manifest
+# entry, so renaming a file to something accented made it invisible to this lint (Phase 02
+# adversarial finding 8). Known remaining limit, deliberately not papered over: a path
+# containing a literal NEWLINE still splits across the read loop below. Fixing that means
+# a NUL-delimited pipeline end to end, which is a different change from these five.
+#
+# `--no-renames`: with rename detection on (git's default) `--name-only` prints ONLY the
+# destination of a `git mv`, so moving a file OUT of another lane -- a stronger violation
+# than editing it in place -- left no source path in the subject set (finding 7). Off, a
+# rename is reported as its delete and its add, and the delete is the path that belongs to
+# the other lane.
+_GIT=(git -C "$ROOT" -c core.quotePath=false)
+"${_GIT[@]}" rev-parse --git-dir >/dev/null 2>&1 || exit 0
 if [ -n "$BASE" ]; then
+  # A `--base` that does not resolve used to make `git diff` fail into an EMPTY `CHANGED`,
+  # which the next line read as "nothing changed" and exited 0 -- a typo, or `origin/main`
+  # on a shallow clone, SILENTLY DISABLED the lint and the caller saw a clean pass
+  # (finding 1). The lint cannot run here, so it says so on stderr rather than pretending.
+  # Still exit 0: WARN-first is a contract, and this is not a WARN class -- the registry is
+  # pinned at nine and a tenth needs its own guard and fixtures (RI-1), not a quiet tenth.
+  if ! "${_GIT[@]}" rev-parse --verify --quiet "$BASE^{commit}" >/dev/null 2>&1; then
+    printf 'ownership-lint: --base %s does not resolve to a commit here -- the lint did NOT run.\n' "$BASE" >&2
+    exit 0
+  fi
   # Three dots: the merge base, so commits that landed on the base after branching are not
   # attributed to this lane's diff. Two dots would blame the lane for other people's work.
-  CHANGED="$(git -C "$ROOT" diff --name-only "$BASE...HEAD" 2>/dev/null)"
+  if ! CHANGED="$("${_GIT[@]}" diff --no-renames --name-only "$BASE...HEAD" 2>/dev/null)"; then
+    printf 'ownership-lint: git diff %s...HEAD failed (no merge base?) -- the lint did NOT run.\n' "$BASE" >&2
+    exit 0
+  fi
 else
-  CHANGED="$(git -C "$ROOT" diff --name-only HEAD 2>/dev/null)
-$(git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null)"
+  CHANGED="$("${_GIT[@]}" diff --no-renames --name-only HEAD 2>/dev/null)
+$("${_GIT[@]}" ls-files --others --exclude-standard 2>/dev/null)"
 fi
 [ -n "$CHANGED" ] || exit 0
 
