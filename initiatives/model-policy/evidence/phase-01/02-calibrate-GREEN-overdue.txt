@@ -1,0 +1,8 @@
+=== council-calibrate --overdue (AFTER Review-by appended) ===
+council-calibrate: 1 session(s) overdue for review (as of 2026-08-02):
+  2026-08-01  docs\council\sessions\001-ai-writing-assistant-trains-on-user-docs.md
+EXIT=0
+
+=== git diff: additions only? ===
+17	0	docs/council/sessions/001-ai-writing-assistant-trains-on-user-docs.md
+(insertions deletions file) — deletions MUST be 0

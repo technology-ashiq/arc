@@ -50,6 +50,29 @@ that reading and the full path to the sanctioning document; **no new sanction AD
 created.** Council-v2's own PLAN already records this as the sole sanctioned exception to
 the append-only rule, and that scope is not widened here.
 
+> **Correction (2026-08-02, Phase 01) — this ADR named the wrong sanction, and the error
+> made the work look more dangerous than it is.**
+>
+> Council-v2 ADR-0010 sanctions **capping session 001's `CONFIDENCE` from High to Medium
+> plus a dated note**, because an offline `model-knowledge` run cannot carry High. It says
+> nothing about `Review-by:` or `Resolution:`. **That correction was already executed on
+> 2026-07-15** and is visible in the session file — so there was never an unexecuted
+> ADR-0010 fix waiting to be run.
+>
+> Adding `Review-by:` and `Resolution:` is a different act with a different authority:
+> **council-v2 ADR-0012** ("Calibration data lives inside session files"), which establishes
+> that a session may carry more than one `## OUTCOME` / `Review-by:` and that the last of
+> each is authoritative. That makes this an **append**, which is the documented normal
+> operation of the calibration loop — not an edit of a saved verdict, and therefore **not**
+> the one-way exception this ADR was built to justify.
+>
+> What stands: the cross-namespace warning (council ADR-0010 ≠ root ADR-0010, which is
+> Quality Passport) — the trap is real and this ADR is still where it is pinned. What
+> changes: the retrofit needs **no** special sanction, the `Reversibility: one-way` header
+> above overstates it (an append is additive and the record is preserved), and REQ-04 is
+> cheaper and safer than planned. Found in Phase 01 by reading the sanction before acting on
+> it, which is the only reason it was found at all.
+
 ## Consequences
 
 Easier: REQ-04 proceeds without inventing permission it does not need, and the

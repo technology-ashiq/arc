@@ -1,0 +1,26 @@
+=== council-calibrate (AFTER outcome recorded) ===
+arc-council calibration — docs/council/sessions
+scored: 0 · pending: 0 · excluded (WAIT/UNRESOLVED): 1 · skipped: 0
+
+bucket   prob   n   hits   hit-rate
+High    0.85  0   0     —
+Medium  0.65  0   0     —
+Low     0.50  0   0     —
+
+Brier score (lower is better): n/a (0 scored)
+EXIT=0
+
+=== --overdue (should now be clear: fresh Review-by is future) ===
+council-calibrate: no sessions are overdue for review (as of 2026-08-02).
+EXIT=0
+
+=== council-lint --verdict on session 001 ===
+council-lint: 1 check(s) FAILED
+
+FAIL  docs/council/sessions/001-ai-writing-assistant-trains-on-user-docs.md: a ## OUTCOME has no valid "RESULT: HIT|MISS|UNRESOLVED" line — outcomes are HIT, MISS, or UNRESOLVED, never free text (ADR-0012)
+
+Fix and rerun.
+EXIT=1
+
+=== additions-only check (final) ===
+40	0	docs/council/sessions/001-ai-writing-assistant-trains-on-user-docs.md

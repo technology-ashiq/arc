@@ -30,10 +30,16 @@ manufacturing any (session-001 retrofit + an honest grade).
 
 **REQ-04 — calibration unblocked**
 
-- [ ] Session 001 retrofitted **in place** exactly per council-v2 ADR-0010
-      (`docs/council/kickoff-v2/docs/adr/0010-fix-session-001-in-place.md` — **not** the
-      root-namespace `docs/adr/0010`, which is Quality Passport): `Review-by:` and
-      `Resolution:` appended, existing `OUTCOME` and all ratings preserved
+- [ ] Session 001 retrofitted by **appending** `Review-by:` and `Resolution:` per council-v2
+      **ADR-0012** (`docs/council/kickoff-v2/docs/adr/0012-outcome-lives-in-session-files.md`)
+      — a session may carry more than one `## OUTCOME`/`Review-by:`, last authoritative.
+      Every existing line preserved; nothing rewritten.
+      > **Corrected 2026-08-02 (Phase 01).** This spec originally said "in place exactly per
+      > council-v2 ADR-0010". ADR-0010 sanctions the `CONFIDENCE` High→Medium cap and **was
+      > already executed 2026-07-15**; it never covered `Review-by:`/`Resolution:`. The right
+      > authority is ADR-0012 and the act is an **append**, so this is additive and needs no
+      > special sanction. The cross-namespace warning still stands: council ADR-0010 ≠ root
+      > `docs/adr/0010` (Quality Passport). See ADR-0066's correction block.
 - [ ] `council-calibrate --overdue` surfaces session 001 — mechanism proven by its own
       output, not by assertion
 - [ ] Honesty fork resolved one way or the other, explicitly:
