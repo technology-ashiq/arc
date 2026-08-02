@@ -436,6 +436,16 @@ if (writeCapable === "1" && !okValid) {
 // ---------------------------------------------------------------------------
 let lock = { capabilities: [], refusals: [] };
 if (fs.existsSync(lockPath)) {
+  // A path that exists and is not a regular file is a different problem from a corrupt one,
+  // and saying "it does not parse" about a directory sends you to fix the wrong thing.
+  let st = null;
+  try { st = fs.statSync(lockPath); } catch { /* handled as unwritable below */ }
+  if (st && !st.isFile()) {
+    out.push("", `The lock path ${lockPath} is not a file. Nothing was recorded.`,
+      "This is a failure, not a PASS.");
+    console.log(out.join("\n"));
+    process.exit(1);
+  }
   const existing = readJson(lockPath);
   if (!existing) {
     out.push("", `The lock file at ${lockPath} exists and does not parse. Refusing to overwrite it —`,

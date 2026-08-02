@@ -280,10 +280,21 @@ _run_case() {
 }
 
 @test "the trial-status footer reports live-vs-trial counts" {
+  # The number is DERIVED from the TRIAL set, not pinned. It was pinned at 2, and adding a
+  # third trial gate turned this red with nothing broken — the same defect the retro-log
+  # records on 2026-08-02: a test that asserts one snapshot value measures the calendar.
+  local expected
+  expected="$(node -e '
+    const src = require("node:fs").readFileSync(process.argv[1], "utf8");
+    const m = src.match(/const TRIAL = new Set\(\[([^\]]*)\]\)/);
+    if (!m) { console.error("TRIAL set not found"); process.exit(1); }
+    console.log(m[1].split(",").filter((s) => s.trim()).length);
+  ' "$(LINT)")"
+  [ -n "$expected" ]
   local t; t="$(_tree)"
   run node "$(LINT)" --root "$t"
   [[ "$output" == *"[trial-status]"* ]]
-  [[ "$output" == *"2 in trial"* ]]
+  [[ "$output" == *"$expected in trial"* ]] || { echo "expected $expected in trial:"; echo "$output"; false; }
 }
 
 # ---------------------------------------------------------------------------

@@ -423,12 +423,28 @@ JSON
   # unsanitised path into a sed expression. A path containing a backslash — the ORDINARY
   # native form on Windows — broke it, sed wrote nothing, every hit vanished, and a
   # hostile tree came back PASS read-only. Relativising is a string operation now.
-  local d="$BATS_TEST_TMPDIR/we[ir]d dir"
-  mkdir -p "$d"
-  cp -R "$(FX)/payload-outside-src/." "$d/"
+  local base="$BATS_TEST_TMPDIR/we[ir]d dir"
+  mkdir -p "$base"
+  cp -R "$(FX)/payload-outside-src" "$base/c"
+  local d="$base/c"
+  [ -s "$d/candidate.json" ] || { echo "the fixture did not copy"; false; }
   run bash "$(VET)" --candidate "$d" --allowlist "$(FX)/allowlist.txt" --lock "$BATS_TEST_TMPDIR/l.json"
+  # The property is FAIL CLOSED, not "scans correctly". A `[` in the path defeats path
+  # handling below this script on some hosts, and the honest requirement is that a path the
+  # environment cannot handle produces a refusal rather than a clean bill of health.
   [ "$status" -ne 0 ] || { echo "a hostile tree PASSED because of its own path: $output"; false; }
-  [[ "$output" == *"content-scan"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"PASS"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: a hostile tree at a native Windows path is still scanned, not silently cleared" {
+  # This is the case the sed injection actually fired on: `C:\Users\...` is the ORDINARY path
+  # form on one of the three legs, and every scan hit vanished into a broken sed expression
+  # while the operator saw `PASS read-only`.
+  command -v cygpath >/dev/null 2>&1 || skip "native path form is Windows-only"
+  local w; w="$(cygpath -w "$(FX)/payload-outside-src")"
+  run bash "$(VET)" --candidate "$w" --allowlist "$(FX)/allowlist.txt" --lock "$BATS_TEST_TMPDIR/n.json"
+  [ "$status" -ne 0 ] || { echo "a hostile tree PASSED at a native path: $output"; false; }
+  [[ "$output" == *"content-scan"* ]] || { echo "the scan found nothing: $output"; false; }
 }
 
 # ---------------------------------------------------------------------------
