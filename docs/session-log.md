@@ -566,3 +566,7 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
     
     **Phase 02 CLOSED 2026-07-29. Phase 03 is NEXT but deliberately NOT YET OPEN** — it opens
     with two of its own preconditions unmet, and opening it before they are settled would burn
+
+## 2026-08-01 14:31 — main
+- Last commit: 9a00ba8 feat(tests): the WARN-shape assertion helper, hardened against 19 real holes (#82)
+- Uncommitted files at exit: 0
