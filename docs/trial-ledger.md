@@ -46,6 +46,7 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 
 | 2026-08-02 | self-declared-number (develop-lint) | registered at birth, arc-develop Phase 01 | not yet | — |
 | 2026-08-02 | tier-floor (develop-lint) | registered at birth, arc-develop Phase 01 | not yet | — |
+| 2026-08-03 | approach-sketch, the COUNT only (develop-lint) | registered at birth, arc-develop Phase 07 | not yet | — |
 
 ### develop-lint's two trial groups (ADR-0101)
 
@@ -56,6 +57,7 @@ pattern matching, never in "did the file parse".
 | group | why it is in trial | what would promote it |
 |---|---|---|
 | `self-declared-number` | a regex looking for a quality claim carrying a number. It could trip on a legitimate version string, dependency count or duration — none of which has been seen in a real ledger yet | fixture-proven both ways (it fires on `confidence 95%`, stays silent on `node 22.3.0` — both pinned in `tests/develop-lint.bats`) **plus** ≥3 clean dogfood runs on real phases with zero false positives |
+| `approach-sketch`, the COUNT only | "this slice should have had sketches" rests on a path glob deciding what is risky, and a glob is a heuristic that has never fired on a real phase. Its CONTENT checks are deliberately NOT in trial and FAIL from v1: a sketch pricing itself in months is a fact about the text, not a judgement about the path | fixture-proven both ways (it warns on a risk-glob slice with no sketches and stays silent on a non-risk slice, both pinned in `tests/develop-quality.bats`) **plus** ≥3 real phases where a warned slice genuinely wanted alternatives and an unwarned one genuinely did not |
 | `tier-floor` | the UI and external-dep evidence floors have never run against a real UI slice, because this cycle has no UI REQ. Its judgement is untested on the thing it exists to judge | the same, and specifically ≥1 real `kind: ui` slice where the floor's verdict was checked against what a human thought of the evidence |
 
 Not promotable on clean-run count alone: neither group has yet fired on a real phase, and a gate

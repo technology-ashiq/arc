@@ -8,13 +8,28 @@
 # It BLOCKs unless ALL of these hold, and it reports EVERY condition that failed rather than
 # the first, so one run tells you everything that is wrong:
 #
-#   existence     a registry lookup was RECORDED, naming this name at this version
+#   existence     a registry response is recorded, PARSES, and names this name at this version
 #   allowlist     the name was decided in advance, not discovered live
-#   version       pinned exactly -- a range is not a pin, and for a skill a pin is a git SHA
-#   hash          an integrity string read from the underlying package registry
-#   provenance    TWO fields, recorded separately: who may publish, and which CI built it
-#   content-scan  the FETCHED source, scanned for exfiltration and curl-pipe-sh
-#   human-ok      required whenever the source is write-capable, or cannot be read at all
+#   version       pinned exactly, and offered by the recorded response (a git SHA for a skill)
+#   hash          the integrity string, EQUAL to the one the registry published
+#   provenance    TWO fields, recorded separately, each real text
+#   content-scan  the whole fetched tree, scanned for exfiltration and pipe-to-interpreter
+#   human-ok      required whenever the tree is write-capable, or cannot be fully read
+#
+# WHY THE METADATA CHECKS LIVE IN NODE AND NOT IN grep.
+#
+# The first version compared claims to the registry record with `grep -q -- "$VALUE" file`. A
+# fresh adversarial pass defeated every single check through that one decision:
+#   - a `name` containing a newline made `grep -qxF` a MULTI-PATTERN match, so
+#     `evil-package\nsafe-tool` passed the allowlist — defeating the one control ADR-0110
+#     names as the anti-slopsquatting defence;
+#   - `registry-record` was an attacker-chosen path, so a candidate pointed it at its own
+#     source file and self-certified its existence;
+#   - the hash was shape-checked and never compared, so sixteen `A`s passed;
+#   - `1.2.3` matched a registry offering only `1.2.31`, and BRE `.` matched `1x2x3`.
+# Substring matching cannot express "this field EQUALS that field". Structural comparison can,
+# so the metadata half is one node program over parsed JSON, and the shell does only what the
+# shell is good at: recursive text search.
 #
 # THINGS THIS SCRIPT DELIBERATELY DOES NOT DO.
 #
@@ -25,30 +40,28 @@
 #
 # It never reads write-capability from the candidate. MCP's ToolAnnotations are hints the spec
 # says clients "should never make tool use decisions based on ... from untrusted servers", and
-# skills have no scope field at all. So write-capability is COMPUTED from the source, and
-# silence means yes: a compiled binary or an opaque layer is write-capable because it cannot be
-# shown to be anything else.
+# skills have no scope field at all. Write-capability is COMPUTED, and silence means yes.
 #
 # It never uses popularity. Stars, downloads and repo age measure adoption, and adoption is
-# what a supply-chain attack manufactures. They may be displayed by the scout as context; they
-# can never be a pass criterion, and this script does not read them.
+# what a supply-chain attack manufactures.
 #
-# Existence-verification does NOT defeat slopsquatting -- the attacker registers a real package
-# under the hallucinated name, so the check passes by design. The ALLOWLIST is that control.
+# WHAT IT STILL CANNOT DO, stated because a gate whose limits are unwritten reads as stronger
+# than it is. The content scan is a PATTERN LIST, not an analyser: `require("child"+"_process")`
+# defeats it, and ADR-0110's revisit trigger is exactly a candidate that passes it and is still
+# hostile. What compensates is the default — anything opaque, anything it cannot fully read,
+# anything shipping an install hook is write-capable and needs a human.
 #
 # Usage:
-#   capability-vet.sh --candidate <dir> --allowlist <file> --lock <file> [--name <n>]
+#   capability-vet.sh --candidate <dir> --allowlist <file> --lock <file>
 #   capability-vet.sh --audit --lock <file> [--max-age <days>]
 #
-# Exit: 0 PASS · 1 one or more BLOCKs · 2 bad arguments.
+# Exit: 0 PASS · 1 one or more BLOCKs (or stale rows under --audit) · 2 bad arguments.
 
 set -u
 
-STALE_DAYS=30
-
 die() { printf 'capability-vet: %s\n' "$1" >&2; exit 2; }
 
-CANDIDATE=""; ALLOWLIST=""; LOCK=""; AUDIT=0; MAX_AGE="$STALE_DAYS"
+CANDIDATE=""; ALLOWLIST=""; LOCK=""; AUDIT=0; MAX_AGE="30"
 while [ $# -gt 0 ]; do
   case "$1" in
     --candidate) CANDIDATE="${2:-}"; shift 2 || die "--candidate needs a value" ;;
@@ -56,349 +69,441 @@ while [ $# -gt 0 ]; do
     --lock)      LOCK="${2:-}";      shift 2 || die "--lock needs a value" ;;
     --max-age)   MAX_AGE="${2:-}";   shift 2 || die "--max-age needs a value" ;;
     --audit)     AUDIT=1; shift ;;
-    -h|--help)   sed -n '2,44p' "$0"; exit 0 ;;
+    -h|--help)   sed -n '2,60p' "$0"; exit 0 ;;
     *)           die "unknown argument '$1'" ;;
   esac
 done
 
 # ---------------------------------------------------------------------------
-# JSON is read through node, which every other arc script already requires. A shell-side JSON
-# parser would be a second grammar to attack, and this file's whole job is to be attacked.
-# ---------------------------------------------------------------------------
-jget() {  # jget <file> <key>   -- prints the value or nothing
-  node -e '
-    const fs = require("node:fs");
-    try {
-      const o = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-      const v = o[process.argv[2]];
-      if (v === undefined || v === null) process.exit(0);
-      process.stdout.write(typeof v === "string" ? v : JSON.stringify(v));
-    } catch { process.exit(0); }
-  ' "$1" "$2" 2>/dev/null
-}
-
-today() { date -u +%Y-%m-%d; }
-
-# ---------------------------------------------------------------------------
-# --audit: report lock rows nobody has re-checked
+# --audit
 # ---------------------------------------------------------------------------
 if [ "$AUDIT" -eq 1 ]; then
   [ -n "$LOCK" ] || die "--audit needs --lock"
   [ -f "$LOCK" ] || die "no lock file at $LOCK"
+  case "$MAX_AGE" in
+    ''|*[!0-9]*) die "--max-age must be a whole number of days, got '$MAX_AGE'" ;;
+  esac
   node -e '
     const fs = require("node:fs");
-    const lock = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+    let lock;
+    try { lock = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); }
+    catch (e) { console.log("the lock file does not parse: " + e.message); process.exit(1); }
     const maxAge = Number(process.argv[2]);
-    const rows = lock.capabilities || [];
+    // Both lists. A refused candidates facts age too, and a refusal nobody re-examines is a
+    // decision made on data nobody has checked since.
+    const groups = [["capability", lock.capabilities], ["refusal", lock.refusals]];
     const now = Date.now();
-    let stale = 0;
-    for (const r of rows) {
-      const t = Date.parse(r.checked + "T00:00:00Z");
-      // A row with an unreadable date is STALE, not fresh: a date nobody can parse is a date
-      // nobody has checked, and defaulting it to fresh would hide exactly the rotten rows.
-      const days = Number.isNaN(t) ? Infinity : Math.floor((now - t) / 86400000);
-      if (days > maxAge) {
-        stale++;
-        console.log(`stale  ${r.name}@${r.version} — last checked ${r.checked} (${days === Infinity ? "unparseable date" : days + " days ago"}, limit ${maxAge})`);
+    let stale = 0, total = 0;
+    for (const [kind, rows] of groups) {
+      if (rows === undefined || rows === null) continue;
+      if (!Array.isArray(rows)) { console.log(`stale  the \`${kind}\` list is not an array — the lock file is malformed`); stale++; continue; }
+      for (const r of rows) {
+        total++;
+        const t = Date.parse(String(r && r.checked) + "T00:00:00Z");
+        // Unparseable is stale: a date nobody can read is a date nobody has checked.
+        // In the FUTURE is stale too — it is not a fresh check, it is a wrong one, and
+        // treating it as fresh means one typo exempts a row forever.
+        let why = null;
+        if (Number.isNaN(t)) why = "unparseable date";
+        else if (t > now) why = "checked date is in the future";
+        else {
+          const days = Math.floor((now - t) / 86400000);
+          if (days > maxAge) why = `${days} days ago, limit ${maxAge}`;
+        }
+        if (why) { stale++; console.log(`stale  ${kind} ${r && r.name}@${r && r.version} — last checked ${r && r.checked} (${why})`); }
       }
     }
-    console.log(`${rows.length} capability row(s), ${stale} stale.`);
+    console.log(`${total} row(s), ${stale} stale.`);
+    process.exit(stale ? 1 : 0);
   ' "$LOCK" "$MAX_AGE"
-  exit 0
+  exit $?
 fi
 
 [ -n "$CANDIDATE" ] || die "need --candidate <dir>"
 [ -n "$LOCK" ]      || die "need --lock <file>"
 [ -d "$CANDIDATE" ] || die "no candidate directory at $CANDIDATE"
+[ -f "$CANDIDATE/candidate.json" ] || die "no candidate.json in $CANDIDATE"
 
-MANIFEST="$CANDIDATE/candidate.json"
-[ -f "$MANIFEST" ] || die "no candidate.json in $CANDIDATE"
+# ---------------------------------------------------------------------------
+# The content scan and the write-capability computation.
+#
+# Over the WHOLE fetched tree, not just `src/`. Scanning one subdirectory meant a payload in
+# `lib/` was invisible while the identical file under `src/` was refused, and the lock recorded
+# the whole directory as the source either way.
+#
+# `-a`, never `-I`. `-I` skips any file holding a NUL byte, and a NUL inside a JavaScript
+# comment changes nothing about how the file executes — one NUL turned three BLOCKs into a
+# PASS. Binary is now searched as text AND counted as opaque.
+# ---------------------------------------------------------------------------
+SCAN_ROOT="$CANDIDATE"
 
-NAME="$(jget "$MANIFEST" name)"
-REGISTRY="$(jget "$MANIFEST" registry)"
-VERSION="$(jget "$MANIFEST" version)"
-HASH="$(jget "$MANIFEST" hash)"
-PUB="$(jget "$MANIFEST" 'publisher-auth')"
-BUILD="$(jget "$MANIFEST" 'build-attestation')"
-RECORD="$(jget "$MANIFEST" 'registry-record')"
-HUMAN_OK="$(jget "$MANIFEST" 'human-ok')"
-
-BLOCKS=0
-REFUSED_ON=""
-WHY=""
-block() {  # block <check> <what> <expected> <found>
-  BLOCKS=$((BLOCKS + 1))
-  REFUSED_ON="${REFUSED_ON:+$REFUSED_ON, }$1"
-  [ -n "$WHY" ] || WHY="$2"
-  printf 'BLOCK [%s] %s\n' "$1" "$2"
-  printf '  Expected: %s\n' "$3"
-  printf '  Found:    %s\n' "$4"
+# The hit is returned RAW. It used to be relativised here with `sed "s|^$CANDIDATE/||"`, which
+# interpolates an unsanitised path into a sed expression: a candidate directory containing `\`,
+# `[` or `|` broke the expression, sed wrote nothing, and every hit vanished — so a tree with
+# `child_process`, `curl | sh` and env exfiltration came back `PASS … read-only`. On Windows
+# that fired for the ORDINARY native path form. Relativising is a plain string operation and
+# now happens in node, where a path is data rather than syntax.
+scan() {  # scan <regex> -- the first matching path:line, or nothing
+  # -a and NOT -I. They are opposites, and `-raInE` carried both: `-I` won, binary files were
+  # skipped, and one NUL byte in a comment hid a payload from every pattern here. The flag
+  # string looked like it said "treat binary as text" and said the reverse.
+  LC_ALL=C grep -ranE --exclude=candidate.json --exclude=registry.json -- "$1" "$SCAN_ROOT" 2>/dev/null | head -1
 }
 
-# ---------------------------------------------------------------------------
-# 1. existence -- FIRST, and on its own. A name that resolves to nothing must be refused
-#    before five other opinions are printed, or the report reads as though the thing exists
-#    and merely fails a policy.
-# ---------------------------------------------------------------------------
-REC_PATH=""
-[ -n "$RECORD" ] && REC_PATH="$CANDIDATE/$RECORD"
-if [ -z "$RECORD" ] || [ ! -s "$REC_PATH" ]; then
-  block existence \
-    "no recorded registry lookup for '${NAME:-(unnamed)}'" \
-    "a non-empty registry response saved beside the candidate, named by \`registry-record\`" \
-    "${RECORD:-(no registry-record field)}"
-  printf '\n%s\n' "Refused at the existence check. Nothing else was evaluated."
-  printf '%s\n' "Note: existence does NOT defeat slopsquatting — an attacker registers a real"
-  printf '%s\n' "package under the hallucinated name. The allowlist is that control."
-  exit 1
-fi
-if ! grep -q -- "$NAME" "$REC_PATH" 2>/dev/null; then
-  block existence \
-    "the recorded registry response does not name '$NAME'" \
-    "a registry record naming the candidate" \
-    "$(head -c 120 "$REC_PATH" 2>/dev/null)"
-  printf '\n%s\n' "Refused at the existence check. Nothing else was evaluated."
-  exit 1
-fi
-# Whether the record OFFERS the pinned version is a question about the pin, not about
-# existence — a range fails it, and reporting that as "this does not exist" would send you
-# looking for the wrong problem. It is checked with the version below.
-
-# ---------------------------------------------------------------------------
-# 2. allowlist -- decided in advance. This is the control that defeats slopsquatting.
-# ---------------------------------------------------------------------------
-if [ -z "$ALLOWLIST" ] || [ ! -f "$ALLOWLIST" ]; then
-  block allowlist \
-    "no allowlist file to check '$NAME' against" \
-    "a readable allowlist naming what may be admitted" \
-    "${ALLOWLIST:-(none given)}"
-elif ! grep -qxF -- "$NAME" "$ALLOWLIST"; then
-  # An EMPTY allowlist refuses everything, and that is the correct default rather than a
-  # misconfiguration: nothing may be admitted until someone names what may be.
-  block allowlist \
-    "'$NAME' is not on the allowlist" \
-    "a name decided in advance, one per line in $ALLOWLIST" \
-    "$(wc -l < "$ALLOWLIST" | tr -d ' ') allowed name(s), none of them '$NAME'"
-fi
-
-# ---------------------------------------------------------------------------
-# 3. version -- pinned exactly. A skill publishes no version, so its pin is a git commit SHA.
-# ---------------------------------------------------------------------------
-case "$REGISTRY" in
-  skill|git)
-    if ! printf '%s' "$VERSION" | grep -qE '^[0-9a-f]{40}$'; then
-      block version \
-        "a $REGISTRY candidate is pinned by commit SHA, and '$VERSION' is not one" \
-        "40 hex characters — skills publish no version or hash in their format" \
-        "${VERSION:-(absent)}"
-    fi
-    ;;
-  *)
-    if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$'; then
-      block version \
-        "version '${VERSION:-(absent)}' is not an exact pin" \
-        "an exact version such as 1.2.3 — a range, a tag or \`latest\` moves under you" \
-        "${VERSION:-(absent)}"
-    elif ! grep -q -- "$VERSION" "$REC_PATH" 2>/dev/null; then
-      block version \
-        "the recorded registry response does not offer version '$VERSION'" \
-        "the pinned version present in the registry record" \
-        "$(head -c 120 "$REC_PATH" 2>/dev/null)"
-    fi
-    ;;
-esac
-
-# ---------------------------------------------------------------------------
-# 4. hash -- an integrity string from the UNDERLYING package registry. server.json carries a
-#    hash only for MCPB packages, so a gate trusting it alone would pass unhashed code.
-# ---------------------------------------------------------------------------
-if ! printf '%s' "$HASH" | grep -qE '^sha(256|512)-[A-Za-z0-9+/=]{16,}$'; then
-  block hash \
-    "no usable integrity hash for $NAME@$VERSION" \
-    "npm dist.integrity, PyPI digests.sha256 or an OCI digest — \`sha512-…\` or \`sha256-…\`" \
-    "${HASH:-(absent)}"
-fi
-
-# ---------------------------------------------------------------------------
-# 5. provenance -- TWO fields, never collapsed. They answer different questions: who may
-#    publish under this name, and which CI built this artifact. Most packages have only the
-#    first, so `build-attestation: none published` is a legitimate RECORDED answer; its
-#    ABSENCE is not.
-# ---------------------------------------------------------------------------
-if [ -z "$PUB" ]; then
-  block provenance \
-    "no \`publisher-auth\` recorded" \
-    "who may publish under this name — registry namespace authentication, and when it was checked" \
-    "(absent)"
-fi
-if [ -z "$BUILD" ]; then
-  block provenance \
-    "no \`build-attestation\` recorded" \
-    "which CI built this artifact — or the words \`none published\`, recorded as its own field" \
-    "(absent)"
-fi
-
-# ---------------------------------------------------------------------------
-# 6. content scan -- over the FETCHED source. A pattern list is a floor, not an analyser;
-#    ADR-0110's revisit trigger is a candidate that passes it and is still hostile.
-# ---------------------------------------------------------------------------
-SRC="$CANDIDATE/src"
-
-# ONE recursive grep per pattern, never a grep per file.
+# A file holding a NUL is opaque: a scanner reading it as text is guessing, and "we could not
+# read all of it" is the condition that means write-capable. ANY opaque file counts — asking
+# "are there zero readable files" let one README beside a compiled blob reclassify the whole
+# candidate as read-only.
 #
-# Two bugs live in the history of these six lines and both are worth keeping written down.
-# The list of readable files was first a newline-joined STRING read back with `while read`,
-# and a string with no trailing newline drops its last line — with one source file that is
-# every file, so the scan found nothing and `exfil`, `curl-pipe-sh` and `self-report-lies` all
-# came back PASS: a gate reporting a clean scan it had never performed.
-#
-# The fix after that was correct and unusably slow. A real candidate is ~140 files, and a
-# `grep` per file per pattern is ~560 process spawns; on Windows, where spawn cost dominates
-# everything, the first REAL vetting run exceeded two minutes and was killed. A gate nobody
-# will wait for is a gate that gets skipped.
-#
-# `-I` skips binaries, which is what makes "nothing readable here" a real signal rather than
-# an empty result: a compiled artifact produces no matches and no file list, and the verdict
-# below treats that as write-capable rather than clean.
-# Hits are reported relative to the candidate, never as the absolute path they were scanned
-# at. The lock file is committed, and a record naming `/tmp/tmp.G1CRiWGxrK/...` is a record of
-# one machine's afternoon rather than of the candidate.
-scan() {  # scan <regex> -- prints the first matching path:line, or nothing
-  [ -d "$SRC" ] || return 0
-  LC_ALL=C grep -rInE -- "$1" "$SRC" 2>/dev/null | head -1 | sed "s|^$CANDIDATE/||"
-}
+# Done in node, not grep. `grep -P` is GNU-only, and the obvious portable fallback —
+# `grep -rl "$(printf '\000')"` — is worse than useless: command substitution strips NUL, so
+# the pattern becomes empty, every file matches, and everything is write-capable for a reason
+# that has nothing to do with the candidate.
+OPAQUE="$(node -e '
+  const fs = require("node:fs"), path = require("node:path");
+  const walk = (d) => {
+    let e = [];
+    try { e = fs.readdirSync(d, { withFileTypes: true }); } catch { return null; }
+    for (const x of e) {
+      const p = path.join(d, x.name);
+      if (x.isDirectory()) { const r = walk(p); if (r) return r; continue; }
+      if (!x.isFile()) continue;
+      let b; try { b = fs.readFileSync(p); } catch { return p; }   // unreadable is opaque too
+      if (b.includes(0)) return p;
+    }
+    return null;
+  };
+  const hit = walk(process.argv[1]);
+  if (hit) process.stdout.write(path.relative(process.argv[1], hit).split(path.sep).join("/"));
+' "$SCAN_ROOT" 2>/dev/null)"
 
-READABLE=""
-[ -d "$SRC" ] && READABLE="$(LC_ALL=C grep -rIl . "$SRC" 2>/dev/null | head -1)"
+READABLE="$(LC_ALL=C grep -ral . "$SCAN_ROOT" 2>/dev/null | head -1)"
 
-# `(ba|z|da)?sh`, never `(ba|z|d|)sh`. An EMPTY alternation branch is undefined in POSIX ERE:
-# GNU grep accepts it, BSD grep on the macOS leg does not, and the pattern silently stopped
-# matching there. `curl … | sh` sailed through the content scan on one of three legs while the
-# other two refused it — a gate that is only a gate on some machines.
-PIPE_SH='(curl|wget|iwr|Invoke-WebRequest)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh|iex[[:space:]]*\('
-EXFIL='(process\.env|os\.environ|ENV\[)[^;]*(fetch|axios|request|urlopen|requests\.(post|put)|http\.request|net\.connect)|(fetch|axios\.post|requests\.post|urlopen)[^;]*(process\.env|os\.environ|SECRET|TOKEN|API_?KEY|PASSWORD)'
+# Pipe-to-anything-that-executes, with an absolute path allowed. `| /bin/sh`, `| node`,
+# `| python3` and a URL containing `&` all sailed past the first version.
+PIPE_SH='(curl|wget|iwr|Invoke-WebRequest)[^|]*\|[[:space:]]*(sudo[[:space:]]+)?(/[A-Za-z0-9_./-]*/)?(ba|z|da|k|c)?(sh|node|python[0-9.]*|perl|ruby|pwsh|powershell)\b|iex[[:space:]]*\(|\$SHELL'
+EXFIL='(process\.env|os\.environ|ENV\[)[^;]*(fetch|axios|request|urlopen|requests\.(post|put)|http\.request|net\.connect|dns\.)|(fetch|axios\.post|requests\.post|urlopen|net\.connect|dns\.resolve)[^;]*(process\.env|os\.environ|SECRET|TOKEN|API_?KEY|PASSWORD)'
+WRITES='(writeFile|appendFile|createWriteStream|mkdir|rmdir|unlink|rimraf|fs\.rm|copyFile|renameSync|open\([^)]*["'"'"']w)|child_process|spawn\(|execSync|execFile|\bexec\(|subprocess\.|os\.system|shutil\.|Popen\(|>[[:space:]]*/'
+# A require/import whose argument is not a plain literal cannot be reasoned about at all.
+# `require("child"+"_process")` defeated the write detector with one `+`, so a computed module
+# specifier is now itself the finding: not "this writes", but "this cannot be shown not to".
+DYNAMIC='(require|import)[[:space:]]*\([[:space:]]*[^"'"'"')][^)]*\)|(require|import)[[:space:]]*\([[:space:]]*["'"'"'][^"'"'"']*["'"'"'][[:space:]]*\+'
 
 HIT_PIPE="$(scan "$PIPE_SH")"
 HIT_EXFIL="$(scan "$EXFIL")"
-if [ -n "$HIT_PIPE" ]; then
-  block content-scan \
-    "the fetched source pipes a download into a shell" \
-    "no \`curl … | sh\` — code fetched at run time is code nothing vetted" \
-    "$HIT_PIPE"
-fi
-if [ -n "$HIT_EXFIL" ]; then
-  block content-scan \
-    "the fetched source sends environment or secret material outbound" \
-    "no exfiltration pattern" \
-    "$HIT_EXFIL"
-fi
-
-# ---------------------------------------------------------------------------
-# 7. write-capability -- COMPUTED, and silence means yes.
-# ---------------------------------------------------------------------------
-WRITES='(writeFile|appendFile|createWriteStream|mkdir|rmdir|unlink|rimraf|fs\.rm|copyFile|renameSync|open\([^)]*["'"'"']w)|child_process|spawn\(|execSync|execFile|\bexec\(|subprocess\.|os\.system|shutil\.|Popen\(|>[[:space:]]*/'
 HIT_WRITE="$(scan "$WRITES")"
+HIT_DYNAMIC="$(scan "$DYNAMIC")"
 
-# An install-time lifecycle hook is arbitrary code that runs on install, before anything has
-# looked at it. THIS script never runs it — but classing a package that ships one as read-only
-# would be describing the tarball and not the thing that happens when someone uses it.
+# Install-time lifecycle hooks, found ANYWHERE in the tree. An npm tarball extracted into
+# `src/` puts its manifest at `src/package.json`, and only the candidate root was checked.
 HOOK=""
-if [ -f "$CANDIDATE/package.json" ]; then
-  HOOK="$(node -e '
+while IFS= read -r pj; do
+  [ -n "$pj" ] || continue
+  found="$(node -e '
     const fs = require("node:fs");
     try {
       const s = (JSON.parse(fs.readFileSync(process.argv[1], "utf8")).scripts) || {};
-      const hooks = ["preinstall", "install", "postinstall", "prepare", "prepublish"];
-      const found = hooks.filter((h) => s[h]);
-      if (found.length) process.stdout.write(found.join(", "));
-    } catch { /* an unreadable manifest is handled by the scan verdict below */ }
-  ' "$CANDIDATE/package.json" 2>/dev/null)"
-fi
+      const hooks = ["preinstall", "install", "postinstall", "prepare", "prepublish", "prepublishOnly"];
+      const f = hooks.filter((h) => s[h]);
+      if (f.length) process.stdout.write(f.join(", "));
+    } catch { /* an unreadable manifest is covered by the opaque check */ }
+  ' "$pj" 2>/dev/null)"
+  if [ -n "$found" ]; then
+    HOOK="${pj#"$CANDIDATE"/}: $found"
+    break
+  fi
+done <<EOF
+$(find "$SCAN_ROOT" -name package.json -type f 2>/dev/null)
+EOF
 
-# WCAP_WHY, not WHY. `WHY=""` here reset the refusal reason that `block()` had already
-# recorded for an EARLIER check, so a candidate refused on `content-scan` was written to the
-# lock file with `"why": ""` — a recorded decision with the reason erased, which is most of
-# the value of recording it. Caught by CI, not by reading.
 WRITE_CAPABLE=0; WCAP_WHY=""
-if [ -z "$READABLE" ]; then
+if [ -n "$OPAQUE" ]; then
   WRITE_CAPABLE=1
-  WCAP_WHY="its source could not be read — an inconclusive scan is write-capable, never clean"
+  WCAP_WHY="$OPAQUE cannot be read as text — an inconclusive scan is write-capable, never clean"
+elif [ -z "$READABLE" ]; then
+  WRITE_CAPABLE=1
+  WCAP_WHY="nothing in the tree could be read"
 elif [ -n "$HIT_WRITE" ]; then
   WRITE_CAPABLE=1
   WCAP_WHY="its source writes, spawns or deletes: $HIT_WRITE"
+elif [ -n "$HIT_DYNAMIC" ]; then
+  WRITE_CAPABLE=1
+  WCAP_WHY="it builds a module specifier at run time, so what it loads cannot be determined by reading it: $HIT_DYNAMIC"
 fi
 if [ -n "$HOOK" ]; then
   WRITE_CAPABLE=1
-  WCAP_WHY="${WCAP_WHY:+$WCAP_WHY; }it ships install-time lifecycle script(s): $HOOK"
-fi
-
-# The candidate's own claim is REPORTED and never believed. MCP's spec: ToolAnnotations are
-# hints, "not guaranteed to provide a faithful description of tool behavior".
-DECLARED_RO="$(jget "$MANIFEST" 'declared-read-only')"
-if [ "$DECLARED_RO" = "true" ] && [ "$WRITE_CAPABLE" -eq 1 ]; then
-  printf 'NOTE  the candidate declares itself read-only; the scan disagrees and the scan wins.\n'
-fi
-
-if [ "$WRITE_CAPABLE" -eq 1 ]; then
-  if ! printf '%s' "$HUMAN_OK" | grep -qE '^[A-Za-z][A-Za-z0-9_-]*[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}'; then
-    WHY="$WCAP_WHY"
-    block human-ok \
-      "$NAME is write-capable and carries no recorded human OK — $WCAP_WHY" \
-      "\`human-ok: <name> <YYYY-MM-DD>\` in candidate.json, recorded by the person who agreed" \
-      "${HUMAN_OK:-(absent)}"
-  fi
+  WCAP_WHY="${WCAP_WHY:+$WCAP_WHY; }it ships install-time lifecycle script(s) — $HOOK"
 fi
 
 # ---------------------------------------------------------------------------
-# Verdict
+# Everything else is structural, and runs in one node program over parsed JSON.
 # ---------------------------------------------------------------------------
-if [ "$BLOCKS" -gt 0 ]; then
-  # A refusal is a DECISION, and a decision that only ever existed on a terminal is the
-  # failure mode this whole repository keeps rediscovering. So the lock file records it —
-  # under `refusals`, never under `capabilities`. Nothing is admitted by this branch: the
-  # record exists so the same candidate is not proposed again blind, and so the facts that
-  # WERE established (a verified hash, a recorded publisher) are not thrown away with it.
-  node -e '
-    const fs = require("node:fs");
-    const [lockPath, name, registry, version, hash, pub, build, checked, refusedOn, why] = process.argv.slice(1);
-    let lock = { capabilities: [] };
-    try { lock = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch { /* a new lock file */ }
-    if (!Array.isArray(lock.capabilities)) lock.capabilities = [];
-    if (!Array.isArray(lock.refusals)) lock.refusals = [];
-    lock.capabilities = lock.capabilities.filter((c) => c.name !== name);   // never admitted
-    const row = { name, registry, version, hash: hash || null, "publisher-auth": pub || null,
-                  "build-attestation": build || null, checked, "refused-on": refusedOn, why };
-    const i = lock.refusals.findIndex((c) => c.name === name);
-    if (i >= 0) lock.refusals[i] = row; else lock.refusals.push(row);
-    lock.refusals.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-    fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
-  ' "$LOCK" "$NAME" "$REGISTRY" "$VERSION" "$HASH" "$PUB" "$BUILD" "$(today)" "$REFUSED_ON" "$WHY" 2>/dev/null
-
-  printf '\n%s\n' "$BLOCKS condition(s) refused $NAME@$VERSION. It was NOT admitted."
-  printf '%s\n' "The refusal is recorded in $LOCK so the same candidate is not proposed again blind."
-  exit 1
-fi
-
-CLASS="read-only"
-[ "$WRITE_CAPABLE" -eq 1 ] && CLASS="write-capable (human OK recorded: $HUMAN_OK)"
-
 node -e '
-  const fs = require("node:fs");
-  const [lockPath, name, registry, version, hash, pub, build, checked, src, cls] = process.argv.slice(1);
-  let lock = { capabilities: [] };
-  try { lock = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch { /* a new lock file */ }
-  if (!Array.isArray(lock.capabilities)) lock.capabilities = [];
-  const row = { name, registry, version, hash, "publisher-auth": pub, "build-attestation": build, checked, source: src, class: cls };
-  const i = lock.capabilities.findIndex((c) => c.name === name);
-  if (i >= 0) lock.capabilities[i] = row; else lock.capabilities.push(row);
-  lock.capabilities.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-  fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
-' "$LOCK" "$NAME" "$REGISTRY" "$VERSION" "$HASH" "$PUB" "$BUILD" "$(today)" "$CANDIDATE" "$CLASS"
+const fs = require("node:fs");
+const path = require("node:path");
+const [candidateDir, allowlistPath, lockPath, hitPipeRaw, hitExfilRaw, writeCapable, wcapWhyRaw] = process.argv.slice(1);
 
-printf 'PASS  %s@%s — %s\n' "$NAME" "$VERSION" "$CLASS"
-printf '  hash:        %s\n' "$HASH"
-printf '  publisher:   %s\n' "$PUB"
-printf '  build:       %s\n' "$BUILD"
-printf '  recorded in: %s\n' "$LOCK"
-printf '\n%s\n' "Vetted is not installed. This wrote a lock row and no dependency (ADR-0110)."
-exit 0
+// Relativise here, as data. A scan hit names an absolute path on the machine that ran it, and
+// that path goes into a COMMITTED lock file; doing it with `sed` in the shell is what let a
+// backslash in the path silently void the whole scan.
+const rel = (s) => {
+  if (!s) return s;
+  const abs = candidateDir.replace(/[\\/]+$/, "");
+  return s.split(abs + "/").join("").split(abs + "\\").join("");
+};
+const hitPipe = rel(hitPipeRaw), hitExfil = rel(hitExfilRaw), wcapWhy = rel(wcapWhyRaw);
+
+const out = [];
+const blocks = [];
+const block = (check, what, expected, found) => {
+  blocks.push(check);
+  out.push(`BLOCK [${check}] ${what}`, `  Expected: ${expected}`, `  Found:    ${found}`);
+};
+
+const readJson = (p) => { try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; } };
+// A field counts only as real TEXT. `false`, `0`, `{}` and `[]` all satisfied "not empty" and
+// were recorded as provenance.
+const text = (v) => (typeof v === "string" && v.trim().length >= 3 ? v.trim() : null);
+
+const manifest = readJson(path.join(candidateDir, "candidate.json"));
+if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
+  console.log("BLOCK [existence] candidate.json is not a JSON object");
+  console.log("  Expected: an object carrying name, registry, version, hash and provenance");
+  console.log("  Found:    " + (manifest === null ? "unparseable" : Array.isArray(manifest) ? "an array" : typeof manifest));
+  process.exit(1);
+}
+
+const name = manifest.name;
+const version = String(manifest.version ?? "");
+const registry = String(manifest.registry ?? "");
+
+// --- name shape, FIRST. Everything downstream uses it as a search key, and a name carrying a
+// newline turned the allowlist check into a multi-pattern match that any one line could pass.
+const NAME_OK = /^@?[A-Za-z0-9][A-Za-z0-9._-]*(\/[A-Za-z0-9][A-Za-z0-9._-]*)?$/;
+if (typeof name !== "string" || !NAME_OK.test(name)) {
+  block("existence", `candidate name ${JSON.stringify(name)} is not a package name`,
+    "one line, registry-legal characters — a newline in a name defeats every check that searches for it",
+    JSON.stringify(name));
+  console.log(out.join("\n"));
+  process.exit(1);
+}
+
+// --- existence: the recorded registry response, at a FIXED path, parsed rather than grepped.
+const RECORD = "registry.json";
+if (manifest["registry-record"] !== undefined && manifest["registry-record"] !== RECORD) {
+  block("existence", "the registry record is read from a fixed filename and this candidate names another",
+    "`registry-record: registry.json`, beside candidate.json — an attacker-chosen path let a candidate cite its own source file as proof it exists",
+    String(manifest["registry-record"]));
+}
+const record = readJson(path.join(candidateDir, RECORD));
+if (!record) {
+  block("existence", `no parseable registry response recorded for ${name}`,
+    `${RECORD} beside candidate.json, holding the response the registry actually returned`,
+    fs.existsSync(path.join(candidateDir, RECORD)) ? "present but does not parse" : "absent");
+}
+
+// Versions, read STRUCTURALLY. `1.2.3` used to match a registry offering only `1.2.31`.
+const offered = new Set();
+const collect = (v) => { if (typeof v === "string") offered.add(v); };
+if (record) {
+  if (Array.isArray(record.versions)) record.versions.forEach(collect);
+  else if (record.versions && typeof record.versions === "object") Object.keys(record.versions).forEach(collect);
+  collect(record.version);
+  if (record["dist-tags"] && typeof record["dist-tags"] === "object") Object.values(record["dist-tags"]).forEach(collect);
+  if (Array.isArray(record.commits)) record.commits.forEach(collect);
+  collect(record.commit);
+}
+
+// --- allowlist. Read as LINES and compared as strings; entries trimmed, BOM stripped,
+// blanks and `#` comments ignored. A blank line used to admit a candidate with no name.
+let allowed = [];
+if (allowlistPath && fs.existsSync(allowlistPath)) {
+  allowed = fs.readFileSync(allowlistPath, "utf8")
+    .replace(/^﻿/, "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith("#"));
+} else {
+  block("allowlist", `no allowlist file to check "${name}" against`,
+    "a readable allowlist naming what may be admitted", allowlistPath || "(none given)");
+}
+if (allowlistPath && fs.existsSync(allowlistPath) && !allowed.includes(name)) {
+  // An EMPTY allowlist refuses everything, and that is the correct default rather than a
+  // misconfiguration: nothing may be admitted until someone names what may be.
+  block("allowlist", `"${name}" is not on the allowlist`,
+    "a name decided in advance, one per line — this is the control that defeats slopsquatting, not the existence check",
+    `${allowed.length} allowed name(s), none of them "${name}"`);
+}
+
+// --- version
+const isSkill = registry === "skill" || registry === "git";
+if (isSkill) {
+  if (!/^[0-9a-f]{40}$/.test(version)) {
+    block("version", `a ${registry} candidate is pinned by commit SHA, and "${version}" is not one`,
+      "40 hex characters — skills publish no version or hash in their format", version || "(absent)");
+  } else if (record && offered.size && !offered.has(version)) {
+    block("version", `the recorded response does not name commit ${version}`,
+      "the pinned commit present in the recorded response", [...offered].slice(0, 3).join(", ") || "(none)");
+  }
+} else {
+  if (!/^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$/.test(version)) {
+    block("version", `version "${version || "(absent)"}" is not an exact pin`,
+      "an exact version such as 1.2.3 — a range, a tag or `latest` moves under you", version || "(absent)");
+  } else if (record && !offered.has(version)) {
+    block("version", `the recorded response does not offer version ${version}`,
+      "the pinned version present in the recorded response",
+      offered.size ? [...offered].slice(0, 4).join(", ") + (offered.size > 4 ? ", …" : "") : "(the response lists no versions)");
+  }
+}
+
+// --- hash. Compared to what the registry published, never merely shape-checked.
+// A skill publishes no hash; its commit SHA IS the pin, and demanding one anyway made every
+// real skill unpassable except by fabricating a value nothing verified.
+const hash = text(manifest.hash);
+if (!isSkill) {
+  if (!hash || !/^sha(256|512)-[A-Za-z0-9+/=]{16,}$/.test(hash)) {
+    block("hash", `no usable integrity hash for ${name}@${version}`,
+      "npm dist.integrity, PyPI digests.sha256 or an OCI digest — `sha512-…` or `sha256-…`",
+      hash || "(absent)");
+  } else if (record) {
+    const published = [];
+    const walk = (o, depth) => {
+      if (!o || depth > 4) return;
+      if (typeof o === "string") { if (/^sha(256|512)-/.test(o)) published.push(o); return; }
+      if (Array.isArray(o)) return o.forEach((x) => walk(x, depth + 1));
+      if (typeof o === "object") return Object.values(o).forEach((x) => walk(x, depth + 1));
+    };
+    walk(record, 0);
+    if (!published.length) {
+      block("hash", `${name}@${version} claims an integrity hash the recorded response does not publish`,
+        "the same integrity string the registry returned",
+        "the recorded response publishes no sha256/sha512 value at all");
+    } else if (!published.includes(hash)) {
+      block("hash", `the claimed hash for ${name}@${version} is not the one the registry published`,
+        published[0],
+        hash);
+    }
+  }
+}
+
+// --- provenance: TWO fields, each real text, never collapsed.
+if (!text(manifest["publisher-auth"])) {
+  block("provenance", "no `publisher-auth` recorded",
+    "who may publish under this name — registry namespace authentication, and when it was checked",
+    JSON.stringify(manifest["publisher-auth"] ?? null));
+}
+if (!text(manifest["build-attestation"])) {
+  block("provenance", "no `build-attestation` recorded",
+    "which CI built this artifact — or the words `none published`, recorded as its own field",
+    JSON.stringify(manifest["build-attestation"] ?? null));
+}
+
+// --- content scan (the shell did the searching; the verdicts are recorded here)
+if (hitPipe) {
+  block("content-scan", "the fetched tree pipes a download into something that executes",
+    "no `curl … | sh` — code fetched at run time is code nothing vetted", hitPipe);
+}
+if (hitExfil) {
+  block("content-scan", "the fetched tree sends environment or secret material outbound",
+    "no exfiltration pattern", hitExfil);
+}
+
+// --- human-ok
+const HUMAN_OK = /^[A-Za-z][A-Za-z0-9_-]*[ \t]+(\d{4})-(\d{2})-(\d{2})\b/;
+const okRaw = typeof manifest["human-ok"] === "string" ? manifest["human-ok"].trim() : "";
+let okValid = false;
+const m = HUMAN_OK.exec(okRaw);
+if (m) {
+  const [, y, mo, d] = m.map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  // A real calendar date, not a shape: `0000-00-00` satisfied the old regex. One day of
+  // slack, because an approval recorded in a timezone ahead of UTC is today for the person
+  // who gave it and tomorrow here — and refusing a genuine same-day OK teaches people that
+  // the gate is broken rather than strict.
+  okValid = dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d
+    && dt.getTime() <= Date.now() + 86400000;
+}
+if (writeCapable === "1" && !okValid) {
+  block("human-ok", `${name} is write-capable and carries no recorded human OK — ${wcapWhy}`,
+    "`human-ok: <name> <YYYY-MM-DD>` in candidate.json, a real past date, recorded by the person who agreed",
+    okRaw || "(absent)");
+}
+
+// ---------------------------------------------------------------------------
+// Write the decision. A lock file that exists and does not parse is NEVER overwritten: doing
+// so silently erased every previously-approved row and every previously-refused hostile
+// package, on one hand-edit or one merge conflict marker.
+// ---------------------------------------------------------------------------
+let lock = { capabilities: [], refusals: [] };
+if (fs.existsSync(lockPath)) {
+  const existing = readJson(lockPath);
+  if (!existing) {
+    out.push("", `The lock file at ${lockPath} exists and does not parse. Refusing to overwrite it —`,
+      "it may hold approvals and refusals that would be silently erased. Fix or remove it.");
+    console.log(out.join("\n"));
+    process.exit(1);
+  }
+  lock = existing;
+}
+if (!Array.isArray(lock.capabilities)) lock.capabilities = [];
+if (!Array.isArray(lock.refusals)) lock.refusals = [];
+
+const today = new Date().toISOString().slice(0, 10);
+const cls = writeCapable === "1" ? `write-capable (human OK recorded: ${okRaw})` : "read-only";
+const facts = {
+  name, registry, version,
+  hash: hash || (isSkill ? `git ${version}` : null),
+  "publisher-auth": text(manifest["publisher-auth"]),
+  "build-attestation": text(manifest["build-attestation"]),
+  checked: today,
+};
+
+if (blocks.length) {
+  const priorApproval = lock.capabilities.find((c) => c && c.name === name);
+  lock.capabilities = lock.capabilities.filter((c) => !c || c.name !== name);
+  const row = { ...facts, "refused-on": [...new Set(blocks)].join(", "),
+                why: out.find((l) => l.startsWith("BLOCK")).replace(/^BLOCK \[[^\]]+\] /, "") };
+  if (priorApproval) row["superseded-approval-of"] = priorApproval.version;
+  const i = lock.refusals.findIndex((c) => c && c.name === name);
+  if (i >= 0) lock.refusals[i] = row; else lock.refusals.push(row);
+} else {
+  // A name that was refused and is now admitted must not read as both at once.
+  const priorRefusal = lock.refusals.find((c) => c && c.name === name);
+  lock.refusals = lock.refusals.filter((c) => !c || c.name !== name);
+  const row = { ...facts, source: candidateDir, class: cls };
+  if (priorRefusal) row["previously-refused-on"] = priorRefusal["refused-on"];
+  const i = lock.capabilities.findIndex((c) => c && c.name === name);
+  if (i >= 0) lock.capabilities[i] = row; else lock.capabilities.push(row);
+}
+const byName = (a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+lock.capabilities.sort(byName);
+lock.refusals.sort(byName);
+
+// The write is checked. A failed write used to print PASS, exit 0, and name a file it had
+// never written — `--lock <a directory>` reported success and recorded nothing.
+try {
+  fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
+} catch (e) {
+  out.push("", `Could not write the lock file at ${lockPath}: ${e.message}`,
+    "Nothing was recorded. This is a failure, not a PASS.");
+  console.log(out.join("\n"));
+  process.exit(1);
+}
+
+if (blocks.length) {
+  out.push("", `${blocks.length} condition(s) refused ${name}@${version}. It was NOT admitted.`,
+    `The refusal is recorded in ${lockPath} so the same candidate is not proposed again blind.`);
+  console.log(out.join("\n"));
+  process.exit(1);
+}
+
+out.push(`PASS  ${name}@${version} — ${cls}`,
+  `  hash:        ${facts.hash}`,
+  `  publisher:   ${facts["publisher-auth"]}`,
+  `  build:       ${facts["build-attestation"]}`,
+  `  recorded in: ${lockPath}`,
+  "",
+  "Vetted is not installed. This wrote a lock row and no dependency (ADR-0110).");
+console.log(out.join("\n"));
+process.exit(0);
+' "$CANDIDATE" "$ALLOWLIST" "$LOCK" "$HIT_PIPE" "$HIT_EXFIL" "$WRITE_CAPABLE" "$WCAP_WHY"

@@ -1,0 +1,9 @@
+{
+  "name": "safe-tool",
+  "registry": "npm",
+  "version": "1.2.3",
+  "hash": "sha512-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "publisher-auth": "npm org safe-tools, 2FA enforced, verified 2026-08-03",
+  "build-attestation": "none published",
+  "registry-record": "registry.json"
+}

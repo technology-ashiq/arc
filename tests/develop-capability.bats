@@ -326,3 +326,223 @@ JSON
     [ "$status" -ne 0 ] || { echo "arc gained dependencies: $output"; false; }
   fi
 }
+
+# ---------------------------------------------------------------------------
+# Holes two fresh agents found, neither having seen the code.
+#
+# Between them they defeated ALL SEVEN checks and got a candidate carrying
+# child_process, `curl | sh`, env exfiltration and an /etc/cron.d write to
+# `PASS — read-only`, exit 0. Every one is pinned here.
+#
+# The single root cause was one design decision: untrusted multi-line strings
+# fed into line-oriented grep and sed. The metadata half is structural now.
+# ---------------------------------------------------------------------------
+
+@test "hole: a newline in the name does not smuggle a candidate past the allowlist" {
+  # `grep -qxF` treats each line of the pattern as its own fixed string, so
+  # `evil-package\nsafe-tool` matched — defeating the ONE control ADR-0110 names
+  # as the anti-slopsquatting defence.
+  _vet name-newline
+  [ "$status" -ne 0 ] || { echo "an unallowlisted name PASSED: $output"; false; }
+  [[ "$output" == *"not a package name"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: the claimed hash must EQUAL the one the registry published" {
+  # Shape-checking meant sixteen As satisfied "an integrity hash from the registry".
+  _vet hash-mismatch
+  _blocks_on hash
+  [[ "$output" == *"not the one the registry published"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: a payload outside src/ is scanned" {
+  # A real npm tarball puts code in lib/ or dist/. Only src/ used to be read, and the
+  # identical file one directory over came back read-only.
+  _vet payload-outside-src
+  _blocks_on content-scan
+}
+
+@test "hole: one NUL byte does not hide a payload from the scan" {
+  # `grep -I` skips any file holding a NUL, and a NUL inside a JS comment changes nothing
+  # about how the file executes. The flag string said -a AND -I; -I won.
+  _vet nul-byte
+  _blocks_on content-scan
+  [ -n "$(echo "$output" | grep 'BLOCK \[human-ok\]')" ] || { echo "opaque should also mean write-capable"; echo "$output"; false; }
+}
+
+@test "hole: one readable file does not clear an opaque one" {
+  # `grep -rIl . | head -1` asked "is ANY file readable", so a README beside a compiled
+  # blob reclassified the whole candidate as read-only.
+  _vet decoy-readable
+  _blocks_on human-ok
+  [[ "$output" == *"cannot be read as text"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: a candidate cannot certify its own existence" {
+  # `registry-record` was an attacker-chosen path; one candidate pointed it at its own
+  # source file, which contained its name, and passed.
+  _vet self-certified
+  _blocks_on existence
+}
+
+@test "hole: a pinned version must be OFFERED, not merely a substring" {
+  # `1.2.3` matched a registry offering only `1.2.31` and `1.2.32`.
+  _vet version-substring
+  _blocks_on version
+  [[ "$output" == *"does not offer version"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: false and 0 are not provenance records" {
+  # jget stringified non-strings, so `false` satisfied "not empty" and was recorded
+  # as `\"publisher-auth\": \"false\"`.
+  _vet provenance-false
+  _blocks_on provenance
+}
+
+@test "hole: a lifecycle hook is found anywhere in the tree, not only at the root" {
+  # An npm tarball extracted into src/ puts its manifest at src/package.json.
+  _vet hook-in-src
+  _blocks_on human-ok
+  [[ "$output" == *"lifecycle script"* ]] || { echo "$output"; false; }
+}
+
+@test "hole: a module specifier built at run time is write-capable" {
+  # `require(\"child\" + \"_process\")` defeated the write detector with one +. What a
+  # candidate loads at run time cannot be determined by reading it, and cannot-determine
+  # is the condition that means write-capable.
+  _vet dynamic-require
+  _blocks_on human-ok
+}
+
+@test "hole: a human OK dated 0000-00-00 is not an approval" {
+  _vet human-ok-fake-date
+  _blocks_on human-ok
+}
+
+@test "hole: a candidate path a shell would mangle still gets scanned" {
+  # The scan relativised its hits with `sed \"s|^\$CANDIDATE/||\"`, injecting an
+  # unsanitised path into a sed expression. A path containing a backslash — the ORDINARY
+  # native form on Windows — broke it, sed wrote nothing, every hit vanished, and a
+  # hostile tree came back PASS read-only. Relativising is a string operation now.
+  local d="$BATS_TEST_TMPDIR/we[ir]d dir"
+  mkdir -p "$d"
+  cp -R "$(FX)/payload-outside-src/." "$d/"
+  run bash "$(VET)" --candidate "$d" --allowlist "$(FX)/allowlist.txt" --lock "$BATS_TEST_TMPDIR/l.json"
+  [ "$status" -ne 0 ] || { echo "a hostile tree PASSED because of its own path: $output"; false; }
+  [[ "$output" == *"content-scan"* ]] || { echo "$output"; false; }
+}
+
+# ---------------------------------------------------------------------------
+# Skills: pinned by commit, publishing no hash
+# ---------------------------------------------------------------------------
+
+@test "a skill pinned by commit SHA can PASS without an integrity hash" {
+  # The hash check was unconditional while the script's own text said skills publish
+  # none, so a real skill could only pass by fabricating a value nothing verified.
+  _vet skill-clean
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "a skill pinned to a commit the record does not name BLOCKs" {
+  # The skill branch checked the SHA's SHAPE and never compared it to anything.
+  _vet skill-wrong-commit
+  _blocks_on version
+}
+
+# ---------------------------------------------------------------------------
+# The lock file is the durable record, so a failure to write it is a failure
+# ---------------------------------------------------------------------------
+
+@test "a lock file that does not parse is never silently overwritten" {
+  LOCK="$BATS_TEST_TMPDIR/corrupt.json"
+  printf '{ "capabilities": [ {"name":"previously-approved"} ], <<<<<<< HEAD\n' > "$LOCK"
+  run bash "$(VET)" --candidate "$(FX)/clean" --allowlist "$(FX)/allowlist.txt" --lock "$LOCK"
+  [ "$status" -ne 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"does not parse"* ]] || { echo "$output"; false; }
+  grep -q 'previously-approved' "$LOCK" || { echo "prior approvals were erased"; false; }
+}
+
+@test "a lock write that fails is reported as a failure, not as a PASS" {
+  LOCK="$BATS_TEST_TMPDIR/a-directory"
+  mkdir -p "$LOCK"
+  run bash "$(VET)" --candidate "$(FX)/clean" --allowlist "$(FX)/allowlist.txt" --lock "$LOCK"
+  [ "$status" -ne 0 ] || { echo "PASS with nothing recorded: $output"; false; }
+  [[ "$output" == *"Nothing was recorded"* ]] || { echo "$output"; false; }
+}
+
+@test "an admitted candidate is removed from the refusal list, and its history kept" {
+  LOCK="$BATS_TEST_TMPDIR/hist.json"
+  run bash "$(VET)" --candidate "$(FX)/exfil" --allowlist "$(FX)/allowlist.txt" --lock "$LOCK"
+  [ "$status" -ne 0 ]
+  run bash "$(VET)" --candidate "$(FX)/clean" --allowlist "$(FX)/allowlist.txt" --lock "$LOCK"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node -e '
+    const l = require(process.argv[1]);
+    const inCaps = (l.capabilities || []).filter((c) => c.name === "safe-tool");
+    const inRef  = (l.refusals || []).filter((c) => c.name === "safe-tool");
+    if (inCaps.length !== 1 || inRef.length !== 0) { console.log("it reads as both at once"); process.exit(1); }
+    if (!inCaps[0]["previously-refused-on"]) { console.log("the refusal history was thrown away"); process.exit(1); }
+    console.log("ok, history: " + inCaps[0]["previously-refused-on"]);
+  ' "$LOCK"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+# ---------------------------------------------------------------------------
+# --audit
+# ---------------------------------------------------------------------------
+
+@test "--audit refuses a non-numeric max-age instead of disabling itself" {
+  # `Number(\"abc\")` is NaN and `days > NaN` is always false, so one typo turned the
+  # whole staleness report off and still exited 0.
+  LOCK="$BATS_TEST_TMPDIR/old.json"
+  printf '{ "capabilities": [ {"name":"t","version":"1.0.0","checked":"2020-01-01"} ] }\n' > "$LOCK"
+  run bash "$(VET)" --audit --lock "$LOCK" --max-age abc
+  [ "$status" -eq 2 ] || { echo "$output"; false; }
+  [[ "$output" == *"whole number"* ]] || { echo "$output"; false; }
+}
+
+@test "--audit treats a future checked date as stale" {
+  LOCK="$BATS_TEST_TMPDIR/future.json"
+  printf '{ "capabilities": [ {"name":"t","version":"1.0.0","checked":"2999-01-01"} ] }\n' > "$LOCK"
+  run bash "$(VET)" --audit --lock "$LOCK"
+  [[ "$output" == *"stale"* ]] || { echo "a date nobody can have checked read as fresh: $output"; false; }
+}
+
+@test "--audit exits non-zero when something is stale, so CI can gate on it" {
+  LOCK="$BATS_TEST_TMPDIR/stale.json"
+  printf '{ "capabilities": [ {"name":"t","version":"1.0.0","checked":"2020-01-01"} ] }\n' > "$LOCK"
+  run bash "$(VET)" --audit --lock "$LOCK"
+  [ "$status" -ne 0 ] || { echo "stale rows reported with exit 0: $output"; false; }
+}
+
+@test "--audit survives a malformed capabilities list instead of exiting 0 on a crash" {
+  LOCK="$BATS_TEST_TMPDIR/malformed.json"
+  printf '{ "capabilities": {} }\n' > "$LOCK"
+  run bash "$(VET)" --audit --lock "$LOCK"
+  [[ "$output" == *"malformed"* || "$output" == *"stale"* ]] || { echo "$output"; false; }
+}
+
+@test "--audit examines refusals too, not only admitted rows" {
+  # A refused candidate's facts age as well, and a refusal nobody re-examines is a
+  # decision resting on data nobody has checked since.
+  LOCK="$BATS_TEST_TMPDIR/ref.json"
+  printf '{ "capabilities": [], "refusals": [ {"name":"r","version":"1.0.0","checked":"2020-01-01"} ] }\n' > "$LOCK"
+  run bash "$(VET)" --audit --lock "$LOCK"
+  [[ "$output" == *"r@1.0.0"* ]] || { echo "refusals age unexamined: $output"; false; }
+}
+
+@test "an allowlist entry with a BOM, indent or trailing space still matches" {
+  # A legitimate candidate was refused by cosmetic formatting, with a message blaming
+  # the candidate.
+  local a="$BATS_TEST_TMPDIR/allow.txt"
+  printf '\xef\xbb\xbf  safe-tool  \n# a comment\n\nwriter-tool\n' > "$a"
+  run bash "$(VET)" --candidate "$(FX)/clean" --allowlist "$a" --lock "$BATS_TEST_TMPDIR/l2.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+}
+
+@test "an empty allowlist still refuses everything" {
+  local a="$BATS_TEST_TMPDIR/empty.txt"
+  : > "$a"
+  run bash "$(VET)" --candidate "$(FX)/clean" --allowlist "$a" --lock "$BATS_TEST_TMPDIR/l3.json"
+  [ "$status" -ne 0 ] || { echo "an empty allowlist admitted something: $output"; false; }
+  _blocks_on allowlist
+}

@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
 import { buildPack, renderPack, sourcesField } from "./context-pack.mjs";
 import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem, setSliceField } from "./ledger.mjs";
+import { RISK_GLOBS } from "./quality.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
@@ -498,14 +499,10 @@ async function modeHandoff(ctx, n) {
 // question the script asks is which paths the change touched.
 // ---------------------------------------------------------------------------
 
-/** The risk classes. Declared inline: Phase 03 has no budget to refactor a shared rules file. */
-const RISK_GLOBS = [
-  { name: "auth", re: /(^|\/)(auth|session|token|login|permission|rbac)([./_-]|$)/i },
-  { name: "migrations", re: /(^|\/)(migrations?|schema)([./_-]|$)|\.sql$/i },
-  { name: "public-api", re: /(^|\/)(api|routes?|handlers?|controllers?)([./_-]|$)/i },
-  { name: "security-sensitive", re: /(^|\/)(secrets?|crypto|webhook|payment|stripe|billing)([./_-]|$)/i },
-  { name: "the gate itself", re: /(^|\/)(develop-lint|kickoff-lint|validate|lane-resolve)\.(mjs|sh)$/i },
-];
+// The risk classes now live in quality.mjs, which is the ONE place they are declared. Phase 07
+// needs the identical list to decide which slices owe approach sketches, and the debt ledger
+// already records what two copies of "risky paths" do: a glob added to one never reaches the
+// other. Imported at the top of this file.
 
 /** Debt markers. A new one with no ledger row is a shortcut nobody will remember taking. */
 const MARKER_RE = /\b(TODO|FIXME|HACK|XXX)\b/;

@@ -59,10 +59,16 @@ const render = (f, kind) => {
 // ---------- WARN-first trial set (ADR-0101) ----------
 // A group leaves TRIAL only via docs/trial-ledger.md: fixture-proven + >=3 clean dogfood
 // runs with zero false positives + a retro sign-off. Promotion is deleting one line here.
-const TRIAL = new Set(["self-declared-number", "tier-floor"]);
-const SUBSTANCE = new Set(["self-declared-number", "tier-floor"]);
-// [learning-row] is structural, like the other three BLOCKs: a row either carries its
-// required fields or it does not. It is NOT in TRIAL.
+const TRIAL = new Set(["self-declared-number", "tier-floor", "approach-sketch"]);
+const SUBSTANCE = new Set(["self-declared-number", "tier-floor", "approach-sketch"]);
+// [learning-row] and [pattern-annex] are structural, like the other three BLOCKs: a row
+// either carries its required fields or it does not. Neither is in TRIAL.
+//
+// [approach-sketch]'s COUNT is in trial and its CONTENT is not, which is the split the phase
+// spec asks for and is not a compromise. "This slice should have had sketches" is a judgement
+// about whether a path is risky, and a path glob is a heuristic; "this sketch prices itself in
+// months" is a fact about the text. A malformed sketch is worse than an absent one — it reads
+// as a weighed decision and is not — so it FAILs from v1 while the nudge stays a WARN.
 
 // ---------- CLI ----------
 const cli = parseLaneArgs(process.argv.slice(2));
@@ -251,6 +257,38 @@ for (const file of ledgerFiles) {
             `at least \`${floor}\` for a ${kind} slice`, f.tier.trim(), `tier: ${floor}`);
         }
       }
+    }
+  }
+}
+
+// ---------- quality intelligence (Phase 07) ----------
+// Both checks are TRIGGERED, never ambient: an annex is owed only by a slice that declares a
+// decision, and sketches only by a slice whose own paths trip a risk glob. A gate that fires
+// on every slice costs on every slice and pays on few, which is the process tax this cycle's
+// plan ranks as its first risk.
+{
+  const { validateAnnex, validateSketches } = await import("./quality.mjs");
+  for (const file of ledgerFiles) {
+    const raw = readFileSync(join(phasesDir, file), "utf8");
+
+    for (const f of validateAnnex(raw).fails) {
+      fail("pattern-annex", `${file}:${f.at}`, f.msg,
+        "every row carries a source and an adopted-or-rejected verdict, within 20 lines",
+        f.id ? `slice ${f.id}` : "the annex",
+        "| server-side cursors | https://… (primary docs) | adopted — bounded memory |");
+    }
+
+    const { fails, warns } = validateSketches(raw);
+    for (const w of warns) {
+      warn("approach-sketch", `${file}:${w.at}`, w.msg,
+        "2 or 3 sketches on a slice whose paths trip a risk glob",
+        `slice ${w.id}`, "#### approach: 1");
+    }
+    for (const f of fails) {
+      fail("approach-sketch", `${file}:${f.at}`, f.msg,
+        "approach · trade-offs · blast radius · economics in words and computed counts, one picked, `rejected-because` on the rest",
+        f.id ? `slice ${f.id}` : "the sketches",
+        "operational-surface: deps +0, services +0, config +1");
     }
   }
 }

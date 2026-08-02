@@ -11,6 +11,7 @@
   ],
   "agents": [
     ".claude/agents/capability-scout.md",
+    ".claude/agents/pattern-miner.md",
     ".claude/agents/spec-fidelity.md"
   ],
   "scripts": [
@@ -20,6 +21,7 @@
     ".claude/scripts/develop/develop.mjs",
     ".claude/scripts/develop/learning.mjs",
     ".claude/scripts/develop/ledger.mjs",
+    ".claude/scripts/develop/quality.mjs",
     ".claude/scripts/develop/replay-child.mjs",
     ".claude/scripts/develop/stuck.mjs"
   ],
