@@ -40,3 +40,11 @@ tests/fixtures/design-lint/hostile/crlf.md -text
 # which would have left the CRLF and mixed-ending cases byte-identical to the LF ones on CI,
 # so the suite would have gone on reporting them CAUGHT while testing nothing.
 tests/fixtures/develop/breaking/** -text
+
+# Cycle 6, engine: process-lint's hostile corpus, same class again. `crlf.process.yaml` and
+# `mixed-line-endings.process.yaml` ARE their line endings -- git warned it would rewrite them
+# on the next touch, and it had already stored both with LF, so the two fixtures were green
+# and testing nothing. Fifth occurrence of this shape in this file; the rule is now: any
+# fixture directory whose cases attack at the byte level gets `-text` in the same commit that
+# creates it. OVERRIDES `* text=auto eol=lf`.
+tests/fixtures/engine/hostile/** -text
