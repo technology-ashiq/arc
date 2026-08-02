@@ -15,6 +15,7 @@ Updated: 2026-08-02
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
+| model-policy | LIVE | model-policy (Cycle 5, opened 2026-08-02) | 00 | 3d / 0d | — | Phase 00 — add the ADR-0069 index row (lint goes red), then write the policy ADR |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
