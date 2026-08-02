@@ -1,4 +1,93 @@
 /* variant-a tokens — the ONLY place colour values live for this variant.
-   thesis: <the composer writes its one-line thesis here>  */
+
+   thesis: This product wins because the user can hold the whole case — every dated fact and
+   every open obligation — in one viewport and act on any of it from the keyboard, without
+   opening a section, aiming at a button, or leaving the case to find the next one that needs
+   him. A dark instrument: graphite field, warm bone type, exactly one meaning hue (signal
+   amber — overdue / not-yet-recorded only) plus rust reserved for destructive verbs. Flat,
+   hairline-ruled, radius <=2px, zero shadow. The only two ornaments are the inverted cursor
+   row and the permanent key-hint bar.
+
+   Contrast pairs below are computed against the WCAG relative-luminance formula for the exact
+   hex values declared — re-check if you change a value.
+*/
 :root{
+  /* ---- ground plane ---------------------------------------------------- */
+  --ground:         #191c20;   /* page ground, deep graphite */
+  --surface-rail:   #22262b;   /* one step up: masthead, ledger headers, hint bar, ref block */
+  --surface-rail-2: #262b31;   /* nested surface: caseload column wash */
+
+  /* ---- rules -------------------------------------------------------------
+     hairlines only; no shadow token exists in this system by design. */
+  --rule:      #33383f;
+  --rule-soft: #282d33;
+
+  /* ---- type colour -------------------------------------------------------
+     text/ground = 13.61:1 · text-dim/ground = 6.78:1 · text-dim/rail = 6.03:1 ·
+     text-dim/rail-2 = 5.66:1  (all clear AA, most clear it at small-text size too) */
+  --text:      #e9e5dd;   /* warm bone */
+  --text-dim:  #a9a29b;   /* dimmer bone, meta */
+
+  /* ---- the one meaning hue: signal amber ----------------------------------
+     spent ONLY on "overdue" or "not yet recorded" — never on anything healthy.
+     amber/ground = 7.93:1 (AA, graphite context). amber-deep/cursor-bg = 4.60:1 (AA, used for
+     the tick + non-text marks on the inverted/bone row only — state WORDS on that row read in
+     --cursor-fg-dim instead, so colour is never the sole text carrier of a state). */
+  --amber:      #e8a33d;
+  --amber-deep: #8a5c1f;
+
+  /* ---- the one reserved hue: rust, destructive verbs only -----------------
+     rust/ground = 5.41:1 · rust/rail = 4.81:1 · rust-deep/cursor-bg = 5.28:1 (bone context) */
+  --rust:       #e0705c;
+  --rust-deep:  #9c3f2e;
+
+  /* ---- the cursor inversion: the one selection ornament -------------------
+     cursor-fg/cursor-bg = 13.61:1 · cursor-fg-dim/cursor-bg = 7.55:1 */
+  --cursor-bg:      #e9e5dd;
+  --cursor-fg:      #191c20;
+  --cursor-fg-dim:  #4a453f;
+
+  /* visible focus: a bone ring at 2px offset reads at 13.61:1 against the graphite ground;
+     the cursor row's own inversion (background swap) is itself a second, always-legible focus
+     signal per WCAG 2.4.7 (any clear visible change qualifies, not only an outline). */
+  --focus-ring: #e9e5dd;
+
+  /* ---- type: a console voice ---------------------------------------------
+     labels = squarish grotesk, wide-tracked caps. data = true monospace. body = a plain
+     grotesk for sentence-case prose (outcomes, note text, titles). every family below ships
+     with Windows/macOS — no network fetch, no fallback-to-Arial risk. */
+  --font-label: "Franklin Gothic Medium", "Arial Narrow", Tahoma, Arial, sans-serif;
+  --font-ui:    Tahoma, "Segoe UI", Arial, sans-serif;
+  --font-mono:  Consolas, "Lucida Console", "Courier New", monospace;
+
+  /* four tight steps + one violent exception (nothing else on the page approaches it) */
+  --text-0: 11px;
+  --text-1: 12px;
+  --text-2: 13px;
+  --text-3: 15px;
+  --text-giant: clamp(40px, 7vw, 64px);
+
+  --tracking-label: 0.09em;
+  --tracking-wide:  0.14em;
+
+  /* ---- rhythm --------------------------------------------------------- */
+  --row-h:        32px;
+  --row-h-tight:  28px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius: 2px;
+  --shell-max: 1760px;
+
+  --dur-fast: 120ms;
+  --dur-med:  200ms;
+  --ease: cubic-bezier(.2,.6,.2,1);
+}
+
+@media (prefers-reduced-motion: reduce){
+  :root{ --dur-fast: 0ms; --dur-med: 0ms; }
 }

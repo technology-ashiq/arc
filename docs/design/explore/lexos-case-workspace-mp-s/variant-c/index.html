@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /*
+    REFLOW: one breakpoint at 720px.
+    >=720px  — desktop: horizontal step rail with three numbered nodes; the live block
+               runs wide and spends its width on the display numeral and the statement.
+    <720px   — mobile: the rail compresses to "Step N of 3" + the live step's own name;
+               the live block goes near-full-bleed (a small fixed margin only); the
+               decorative heavy numeral is dropped so the statement keeps the width.
+    No tablet-specific rules exist on purpose (tablet is declared "no" by the brief) —
+    720–1024px inherits the desktop rules unmodified.
+  */
+
+  .page {
+    max-width: 74rem;
+    margin: 0 auto;
+    padding: var(--space-6) var(--space-4) var(--space-8);
+  }
+
+  /* ---------------- header : always visible ---------------- */
+
+  .case-header { margin-bottom: var(--space-6); }
+
+  .firm-strip {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-3);
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    line-height: var(--lh-label);
+    margin-bottom: var(--space-4);
+  }
+
+  .parties {
+    font-size: var(--size-meta);
+    line-height: var(--lh-meta);
+    font-weight: var(--weight-semibold);
+    color: var(--ink);
+    max-width: 48rem;
+    margin-bottom: var(--space-4);
+  }
+
+  .quartet {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6) var(--space-7);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line);
+  }
+
+  .quartet-item dt {
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    margin-bottom: var(--space-1);
+  }
+
+  .quartet-item dd {
+    font-size: var(--size-meta);
+    line-height: var(--lh-meta);
+    font-weight: var(--weight-semibold);
+    color: var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 0.4em;
+  }
+
+  .quartet-item dd.is-empty { color: var(--ink-quiet); font-weight: var(--weight-regular); }
+  .quartet-item dd.is-overdue { color: var(--clay); }
+
+  .status-dot {
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--court-green);
+    display: inline-block;
+  }
+
+  /* ---------------- rail : horizontal, never vertical ---------------- */
+
+  .rail { margin-bottom: var(--space-6); }
+
+  .rail-list {
+    list-style: none;
+    display: flex;
+    position: relative;
+    padding-top: var(--space-2);
+  }
+
+  .rail-list::before {
+    content: "";
+    position: absolute;
+    left: 1.1rem;
+    right: 1.1rem;
+    top: calc(var(--space-2) + 1.1rem);
+    height: 1px;
+    background: var(--line);
+  }
+
+  .rail-node {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+    background: none;
+    border: 0;
+    padding: 0 var(--space-3) 0 0;
+    text-align: left;
+    cursor: pointer;
+    min-height: 44px;
+  }
+
+  .rail-node:last-child { padding-right: 0; }
+
+  .rail-circle {
+    position: relative;
+    z-index: 1;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--size-label);
+    font-weight: var(--weight-bold);
+    background: var(--porcelain);
+    border: 1.5px solid var(--ink-quiet);
+    color: var(--ink-quiet);
+  }
+
+  .rail-node[data-state="live"] .rail-circle {
+    background: var(--court-green);
+    border-color: var(--court-green);
+    color: var(--bone);
+  }
+
+  .rail-node[data-state="done"] .rail-circle {
+    background: var(--court-green);
+    border-color: var(--court-green);
+    color: var(--bone);
+  }
+
+  .rail-node-label {
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    line-height: var(--lh-label);
+    color: var(--ink-quiet);
+  }
+
+  .rail-node[data-state="live"] .rail-node-label,
+  .rail-node[data-state="done"] .rail-node-label { color: var(--ink); }
+
+  .rail-mobile { display: none; }
+
+  /* ---------------- the run ---------------- */
+
+  .run { border-top: 2px solid var(--court-green); }
+
+  .step { border-bottom: 1px solid var(--line); }
+
+  .step .view-done,
+  .step .view-live,
+  .step .view-blocked { display: block; }
+
+  .step .view-done[hidden],
+  .step .view-live[hidden],
+  .step .view-blocked[hidden] { display: none; }
+
+  /* -- done: one collapsed line -- */
+
+  .done-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+  }
+
+  .done-numeral {
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    background: var(--court-green);
+    color: var(--bone);
+    font-size: 0.7rem;
+    font-weight: var(--weight-bold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(0.15em);
+  }
+
+  .done-text {
+    font-size: var(--size-body);
+    line-height: var(--lh-body);
+    color: var(--ink);
+  }
+
+  .done-fact { font-weight: var(--weight-semibold); }
+
+  /* -- blocked: one quiet line, with its reason -- */
+
+  .blocked-line {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+  }
+
+  .blocked-numeral {
+    flex-shrink: 0;
+    width: 1.6rem;
+    height: 1.6rem;
+    border-radius: 50%;
+    border: 1.5px solid var(--ink-quiet);
+    color: var(--ink-quiet);
+    font-size: 0.7rem;
+    font-weight: var(--weight-bold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(0.15em);
+  }
+
+  .blocked-text {
+    font-size: var(--size-body);
+    line-height: var(--lh-body);
+    color: var(--ink-quiet);
+  }
+
+  .blocked-text strong { color: var(--ink); font-weight: var(--weight-semibold); }
+
+  /* -- live: the solid block, the whole thesis -- */
+
+  .view-live {
+    background: var(--court-green);
+    border-radius: var(--radius-block);
+    padding: var(--space-6) var(--space-6);
+  }
+
+  .step-body {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--space-6);
+  }
+
+  .step-copy { flex: 1; min-width: 0; max-width: 40rem; }
+
+  .step-label {
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--bone-dim);
+    margin-bottom: var(--space-3);
+  }
+
+  .step-statement {
+    font-size: var(--size-display);
+    line-height: var(--lh-display);
+    font-weight: var(--weight-bold);
+    color: var(--bone);
+    letter-spacing: -0.01em;
+    margin-bottom: var(--space-4);
+  }
+
+  .step-precondition {
+    font-size: var(--size-body);
+    line-height: var(--lh-body);
+    color: var(--bone-dim);
+    margin-bottom: var(--space-5);
+    max-width: 34rem;
+  }
+
+  .overdue-word { color: var(--bone); font-weight: var(--weight-bold); }
+  .overdue-word.on-porcelain { color: var(--clay); }
+
+  .step-numeral {
+    flex-shrink: 0;
+    font-size: 7rem;
+    line-height: 1;
+    font-weight: var(--weight-heavy);
+    color: var(--bone-dim);
+    opacity: 0.55;
+    user-select: none;
+  }
+
+  /* -- primary action : exactly one -- */
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    background: var(--bone);
+    color: var(--court-green);
+    border: 0;
+    border-radius: var(--radius-control);
+    font-size: var(--size-body);
+    font-weight: var(--weight-semibold);
+    padding: 0.9rem 1.5rem;
+    min-height: 48px;
+    cursor: pointer;
+  }
+
+  .btn-primary:hover { filter: brightness(0.95); }
+  .btn-primary:active { filter: brightness(0.9); }
+
+  .btn-primary:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    filter: none;
+  }
+
+  .btn-primary .key-hint {
+    font-size: 0.75em;
+    font-weight: var(--weight-regular);
+    opacity: 0.7;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    padding: 0.05em 0.4em;
+  }
+
+  .inline-form { max-width: 26rem; }
+
+  .field-label {
+    display: block;
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--bone-dim);
+    margin-bottom: var(--space-2);
+  }
+
+  .field-input {
+    display: block;
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1.5px solid var(--bone-dim);
+    color: var(--bone);
+    font-size: var(--size-meta);
+    line-height: var(--lh-meta);
+    padding: var(--space-2) 0;
+    margin-bottom: var(--space-4);
+  }
+
+  .field-input::placeholder { color: var(--bone-dim); opacity: 0.7; }
+
+  .field-input:focus { outline: none; border-bottom-color: var(--bone); }
+
+  .field-error {
+    border: 1px solid var(--bone-dim);
+    border-radius: var(--radius-control);
+    padding: var(--space-3);
+    color: var(--bone);
+    font-size: var(--size-body);
+    line-height: var(--lh-body);
+    margin-bottom: var(--space-4);
+    max-width: 30rem;
+  }
+
+  .form-actions { display: flex; align-items: center; gap: var(--space-4); }
+
+  .form-note { font-size: var(--size-label); color: var(--bone-dim); }
+
+  /* ---------------- end screen : a real screen ---------------- */
+
+  .end-screen { padding: var(--space-7) 0 var(--space-6); border-top: 3px solid var(--court-green); }
+
+  .end-statement {
+    font-size: var(--size-display);
+    line-height: var(--lh-display);
+    font-weight: var(--weight-bold);
+    color: var(--ink);
+    letter-spacing: -0.01em;
+    max-width: 40rem;
+    margin-bottom: var(--space-5);
+  }
+
+  .end-next { font-size: var(--size-body); color: var(--ink-quiet); margin-bottom: var(--space-2); }
+
+  .next-case-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6em;
+    font-size: var(--size-meta);
+    font-weight: var(--weight-semibold);
+    color: var(--ink);
+    text-decoration: none;
+    border-bottom: 1.5px solid var(--court-green);
+    padding-bottom: 0.15em;
+  }
+
+  .next-case-link:hover { color: var(--court-green); }
+
+  .next-case-note {
+    margin-top: var(--space-3);
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+  }
+
+  /* ---------------- foot : one collapsed disclosure ---------------- */
+
+  .foot { margin-top: var(--space-7); }
+
+  .disclosure { border-top: 1px solid var(--line); padding-top: var(--space-2); }
+
+  .disclosure summary {
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    padding: var(--space-2) 0;
+  }
+
+  .disclosure summary::-webkit-details-marker { display: none; }
+
+  .disclosure summary .caret { font-size: 0.9em; transition: transform 0.15s ease; }
+  .disclosure[open] summary .caret { transform: rotate(90deg); }
+
+  .disclosure-content {
+    padding: var(--space-4) 0 var(--space-2);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-6) var(--space-7);
+  }
+
+  .record-group--wide { grid-column: 1 / -1; }
+
+  .record-group h3 {
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    margin-bottom: var(--space-3);
+  }
+
+  .record-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--line);
+    font-size: var(--size-body);
+    line-height: var(--lh-body);
+  }
+
+  .record-row:last-child { border-bottom: 0; }
+
+  .record-row--hearing { display: block; }
+
+  .row-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-4);
+  }
+
+  .row-detail { color: var(--ink-quiet); margin-top: var(--space-1); }
+
+  .row-title { color: var(--ink); flex: 1; min-width: 0; }
+  .row-meta { color: var(--ink-quiet); text-align: right; white-space: nowrap; flex-shrink: 0; }
+
+  /* ---------------- keyboard hint + reference (subordinate) ---------------- */
+
+  .keyboard-hint {
+    margin-top: var(--space-6);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line);
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+  }
+
+  .keyboard-hint kbd {
+    font-family: inherit;
+    border: 1px solid var(--ink-quiet);
+    border-radius: 3px;
+    padding: 0.05em 0.4em;
+    font-size: 0.95em;
+  }
+
+  .reference { margin-top: var(--space-4); }
+
+  .reference-toggle {
+    background: none;
+    border: 0;
+    padding: var(--space-1) 0;
+    min-height: 44px;
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .reference-preview {
+    margin-top: var(--space-3);
+    padding: var(--space-4);
+    border: 1px dashed var(--line);
+    max-width: 32rem;
+  }
+
+  .reference-preview-label {
+    font-size: var(--size-label);
+    letter-spacing: var(--tracking-label);
+    text-transform: uppercase;
+    color: var(--ink-quiet);
+    margin-bottom: var(--space-3);
+  }
+
+  .skeleton-row { height: 0.9rem; background: var(--line); border-radius: 2px; margin-bottom: var(--space-3); width: 60%; }
+  .skeleton-row.w-100 { width: 100%; }
+  .skeleton-row.w-40 { width: 40%; }
+  .skeleton-block { height: 6rem; background: var(--line); border-radius: 2px; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton-row, .skeleton-block { animation: skeleton-pulse 1.6s ease-in-out infinite; }
+  }
+
+  @keyframes skeleton-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  /* ---------------- a11y utility ---------------- */
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0,0,0,0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
+  .view-live :focus-visible { outline-color: var(--focus-ring-on-green); }
+
+  /* ---------------- mobile reflow (<720px) ---------------- */
+
+  @media (max-width: 719px) {
+    .page { padding: var(--space-4) var(--space-3) var(--space-6); }
+
+    .firm-strip { flex-direction: column; gap: var(--space-1); }
+
+    .quartet { gap: var(--space-4) var(--space-6); }
+    .quartet-item { flex-basis: 40%; }
+
+    .rail { display: none; }
+    .rail-mobile {
+      display: block;
+      margin-bottom: var(--space-5);
+      padding-top: var(--space-2);
+      border-top: 2px solid var(--court-green);
+    }
+    .rail-mobile .rail-mobile-count {
+      font-size: var(--size-label);
+      letter-spacing: var(--tracking-label);
+      text-transform: uppercase;
+      color: var(--ink-quiet);
+      margin-bottom: var(--space-1);
+    }
+    .rail-mobile .rail-mobile-name {
+      font-size: var(--size-body);
+      font-weight: var(--weight-semibold);
+      color: var(--ink);
+    }
+
+    .view-live {
+      margin: 0 calc(-1 * var(--space-3));
+      padding: var(--space-5) var(--space-4);
+    }
+
+    .step-body { flex-direction: column; gap: var(--space-4); }
+    .step-numeral { display: none; }
+    .step-copy { max-width: none; }
+
+    .disclosure-content { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div aria-live="polite" class="visually-hidden" id="live-announcer"></div>
+
+  <header class="case-header">
+    <div class="firm-strip">
+      <span>Iyer &amp; Ananth, Advocates</span>
+      <span>City Civil Court, Bengaluru</span>
+    </div>
+
+    <h1 class="parties">Meera Raghunathan v. Sunvale Housing Pvt. Ltd.</h1>
+
+    <dl class="quartet" aria-label="Case summary">
+      <div class="quartet-item">
+        <dt>Case number</dt>
+        <dd>O.S. No. 412 of 2024</dd>
+      </div>
+      <div class="quartet-item">
+        <dt>Status</dt>
+        <dd><span class="status-dot" aria-hidden="true"></span>Active</dd>
+      </div>
+      <div class="quartet-item">
+        <dt>Next hearing</dt>
+        <dd class="is-empty" id="quartet-next-hearing">Not set</dd>
+      </div>
+      <div class="quartet-item">
+        <dt>Overdue</dt>
+        <dd class="is-overdue" id="quartet-overdue">2</dd>
+      </div>
+    </dl>
+  </header>
+
+  <nav class="rail" aria-label="Case run">
+    <ol class="rail-list" id="rail-list">
+      <li><button type="button" class="rail-node" data-step="1" data-state="live" aria-current="step">
+        <span class="rail-circle" aria-hidden="true">1</span>
+        <span class="rail-node-label">Record hearing outcome</span>
+      </button></li>
+      <li><button type="button" class="rail-node" data-step="2" data-state="blocked" aria-disabled="true">
+        <span class="rail-circle" aria-hidden="true">2</span>
+        <span class="rail-node-label">Add hearing</span>
+      </button></li>
+      <li><button type="button" class="rail-node" data-step="3" data-state="blocked" aria-disabled="true">
+        <span class="rail-circle" aria-hidden="true">3</span>
+        <span class="rail-node-label">File document</span>
+      </button></li>
+    </ol>
+  </nav>
+
+  <div class="rail-mobile" id="rail-mobile">
+    <p class="rail-mobile-count" id="rail-mobile-count">Step 1 of 3</p>
+    <p class="rail-mobile-name" id="rail-mobile-name">Record hearing outcome</p>
+  </div>
+
+  <main class="run" aria-label="Case run" id="run">
+
+    <!-- STEP 1 — Record hearing outcome -->
+    <section class="step" id="step-1" data-step="1">
+      <div class="view-done" id="step1-done" hidden>
+        <div class="done-line">
+          <span class="done-numeral" aria-hidden="true">1</span>
+          <p class="done-text">Record hearing outcome — <span class="done-fact">Outcome recorded · 14 Jul 2026</span></p>
+        </div>
+      </div>
+
+      <div class="view-live" id="step1-live">
+        <div class="step-body">
+          <div class="step-copy">
+            <p class="step-label">Step 1 of 3</p>
+            <h2 class="step-statement">Record hearing outcome</h2>
+            <p class="step-precondition">Hearing held 14 Jul 2026 · outcome not recorded</p>
+
+            <div class="step-action">
+              <button type="button" class="btn-primary" id="step1-start-btn">
+                Record hearing outcome
+                <span class="key-hint" aria-hidden="true">↵</span>
+              </button>
+
+              <form class="inline-form" id="step1-form" hidden>
+                <label class="field-label" for="outcome-input">Outcome</label>
+                <input class="field-input" type="text" id="outcome-input" name="outcome" autocomplete="off" required>
+
+                <p class="field-error" id="step1-error" hidden>Not saved — the connection dropped. What you typed is kept here. Save again.</p>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn-primary" id="step1-save-btn">Save outcome</button>
+                  <span class="form-note">Enter also saves</span>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="step-numeral" aria-hidden="true">01</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 2 — Add hearing -->
+    <section class="step" id="step-2" data-step="2">
+      <div class="view-blocked" id="step2-blocked">
+        <div class="blocked-line">
+          <span class="blocked-numeral" aria-hidden="true">2</span>
+          <p class="blocked-text"><strong>Add hearing</strong> — Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.</p>
+        </div>
+      </div>
+
+      <div class="view-live" id="step2-live" hidden>
+        <div class="step-body">
+          <div class="step-copy">
+            <p class="step-label">Step 2 of 3</p>
+            <h2 class="step-statement">Add hearing</h2>
+            <p class="step-precondition">Next hearing — Not set</p>
+
+            <div class="step-action">
+              <button type="button" class="btn-primary" id="step2-start-btn">
+                Add hearing
+                <span class="key-hint" aria-hidden="true">↵</span>
+              </button>
+
+              <form class="inline-form" id="step2-form" hidden>
+                <label class="field-label" for="hearing-date-input">Next hearing</label>
+                <input class="field-input" type="date" id="hearing-date-input" name="hearing-date" required>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn-primary" id="step2-save-btn" disabled>Add hearing</button>
+                  <span class="form-note">Choose a date to continue</span>
+                </div>
+              </form>
+            </div>
+          </div>
+          <div class="step-numeral" aria-hidden="true">02</div>
+        </div>
+      </div>
+
+      <div class="view-done" id="step2-done" hidden>
+        <div class="done-line">
+          <span class="done-numeral" aria-hidden="true">2</span>
+          <p class="done-text">Add hearing — <span class="done-fact">Hearing added · <span id="added-date-text"></span></span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- STEP 3 — File document -->
+    <section class="step" id="step-3" data-step="3">
+      <div class="view-blocked" id="step3-blocked">
+        <div class="blocked-line">
+          <span class="blocked-numeral" aria-hidden="true">3</span>
+          <p class="blocked-text"><strong>File document</strong> — Cannot file a document until the next hearing is added.</p>
+        </div>
+      </div>
+
+      <div class="view-live" id="step3-live" hidden>
+        <div class="step-body">
+          <div class="step-copy">
+            <p class="step-label">Step 3 of 3</p>
+            <h2 class="step-statement">File document</h2>
+            <p class="step-precondition">Affidavit of the plaintiff · due 24 Jul 2026 · not filed · <span class="overdue-word">Overdue</span></p>
+
+            <div class="step-action">
+              <button type="button" class="btn-primary" id="step3-file-btn">
+                File document
+                <span class="key-hint" aria-hidden="true">↵</span>
+              </button>
+            </div>
+          </div>
+          <div class="step-numeral" aria-hidden="true">03</div>
+        </div>
+      </div>
+
+      <div class="view-done" id="step3-done" hidden>
+        <div class="done-line">
+          <span class="done-numeral" aria-hidden="true">3</span>
+          <p class="done-text">File document — <span class="done-fact">Filed · 30 Jul 2026</span></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- END STATE — a real screen -->
+    <section class="end-screen" id="end-screen" hidden>
+      <h2 class="end-statement">Nothing due on this case today.</h2>
+      <p class="end-next">Next</p>
+      <a class="next-case-link" href="#" id="next-case-link">
+        Vishnu Menon v. Ashirvad Developers · hearing 04 Aug 2026
+        <span aria-hidden="true">→</span>
+      </a>
+      <p class="next-case-note" id="next-case-note" hidden>Opening Vishnu Menon v. Ashirvad Developers…</p>
+    </section>
+
+  </main>
+
+  <footer class="foot">
+    <details class="disclosure">
+      <summary>
+        <span class="caret" aria-hidden="true">▸</span>
+        Hearings · Documents · Tasks · Notes
+      </summary>
+
+      <div class="disclosure-content">
+        <div class="record-group">
+          <h3>Hearings</h3>
+          <div class="record-row record-row--hearing">
+            <div class="row-main">
+              <span class="row-title">19 May 2026</span>
+              <span class="row-meta">Held · outcome recorded</span>
+            </div>
+            <p class="row-detail">"Defendant's written statement taken on record."</p>
+          </div>
+          <div class="record-row record-row--hearing" id="disc-hearing-14jul">
+            <div class="row-main">
+              <span class="row-title">14 Jul 2026</span>
+              <span class="row-meta">Held · outcome not recorded</span>
+            </div>
+          </div>
+          <div class="record-row" id="disc-hearing-next">
+            <span class="row-title">Next hearing</span>
+            <span class="row-meta is-empty">Not set</span>
+          </div>
+        </div>
+
+        <div class="record-group">
+          <h3>Documents</h3>
+          <div class="record-row">
+            <span class="row-title">Vakalatnama</span>
+            <span class="row-meta">Filed 11 Mar 2024</span>
+          </div>
+          <div class="record-row">
+            <span class="row-title">Written statement of the defendant</span>
+            <span class="row-meta">Filed 08 Jul 2026</span>
+          </div>
+          <div class="record-row" id="disc-doc-affidavit">
+            <span class="row-title">Affidavit of the plaintiff</span>
+            <span class="row-meta">Due 24 Jul 2026 · not filed · <span class="overdue-word on-porcelain">Overdue</span></span>
+          </div>
+        </div>
+
+        <div class="record-group">
+          <h3>Tasks</h3>
+          <div class="record-row">
+            <span class="row-title">Collect the client's rent receipts for 2023-24</span>
+            <span class="row-meta">Due 21 Jul 2026 · <span class="overdue-word on-porcelain">Overdue</span></span>
+          </div>
+          <div class="record-row">
+            <span class="row-title">Draft the reply to the interim application</span>
+            <span class="row-meta">Due 06 Aug 2026</span>
+          </div>
+        </div>
+
+        <div class="record-group record-group--wide">
+          <h3>Notes</h3>
+          <div class="record-row">
+            <span class="row-title">"Client instructed to obtain certified copies of the 2023 municipal tax receipts."</span>
+            <span class="row-meta">21 May 2026</span>
+          </div>
+          <div class="record-row">
+            <span class="row-title">"Client confirms she holds the original sale agreement; a copy is to be collected."</span>
+            <span class="row-meta">16 Jul 2026</span>
+          </div>
+        </div>
+
+        <div class="record-group">
+          <h3>Money on the case</h3>
+          <div class="record-row">
+            <span class="row-title">Claim</span>
+            <span class="row-meta">₹18,45,000</span>
+          </div>
+          <div class="record-row">
+            <span class="row-title">Fee received</span>
+            <span class="row-meta">₹42,500 on 02 Jul 2026</span>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <p class="keyboard-hint">
+      <kbd>↵</kbd> fires the live step &nbsp;·&nbsp; <kbd>←</kbd> <kbd>→</kbd> move between steps
+    </p>
+
+    <div class="reference">
+      <button type="button" class="reference-toggle" id="loading-toggle" aria-expanded="false" aria-controls="loading-preview">
+        Reference — loading state
+      </button>
+      <div class="reference-preview" id="loading-preview" hidden>
+        <p class="reference-preview-label">Case header and primary region, while loading</p>
+        <div class="skeleton-row w-40"></div>
+        <div class="skeleton-row w-100"></div>
+        <div class="skeleton-block"></div>
+      </div>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var announcer = document.getElementById("live-announcer");
+  function announce(text) { announcer.textContent = text; }
+
+  var railNodes = Array.prototype.slice.call(document.querySelectorAll(".rail-node"));
+  var railFocusIndex = 0;
+
+  var mobileCount = document.getElementById("rail-mobile-count");
+  var mobileName = document.getElementById("rail-mobile-name");
+
+  var currentPrimaryBtn = document.getElementById("step1-start-btn");
+  var finished = false;
+
+  function setRailState(step, state) {
+    var node = railNodes[step - 1];
+    node.setAttribute("data-state", state);
+    if (state === "live") {
+      node.setAttribute("aria-current", "step");
+      node.removeAttribute("aria-disabled");
+    } else {
+      node.removeAttribute("aria-current");
+      if (state === "blocked") node.setAttribute("aria-disabled", "true");
+      else node.removeAttribute("aria-disabled");
+    }
+  }
+
+  function updateMobileRail(step, name) {
+    mobileCount.textContent = "Step " + step + " of 3";
+    mobileName.textContent = name;
+  }
+
+  railNodes.forEach(function (node, i) {
+    node.addEventListener("click", function () {
+      var target = document.getElementById("step-" + (i + 1));
+      if (target) target.scrollIntoView({ block: "center", behavior: "smooth" });
+    });
+  });
+
+  function moveRailFocus(delta) {
+    railFocusIndex = Math.max(0, Math.min(2, railFocusIndex + delta));
+    railNodes[railFocusIndex].focus();
+  }
+
+  /* ---------------- STEP 1 : Record hearing outcome ---------------- */
+
+  var step1Live = document.getElementById("step1-live");
+  var step1Done = document.getElementById("step1-done");
+  var step1StartBtn = document.getElementById("step1-start-btn");
+  var step1Form = document.getElementById("step1-form");
+  var step1SaveBtn = document.getElementById("step1-save-btn");
+  var step1Error = document.getElementById("step1-error");
+  var outcomeInput = document.getElementById("outcome-input");
+  var step1SaveAttempted = false;
+
+  step1StartBtn.addEventListener("click", function () {
+    step1StartBtn.hidden = true;
+    step1Form.hidden = false;
+    currentPrimaryBtn = step1SaveBtn;
+    outcomeInput.focus();
+  });
+
+  step1Form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!outcomeInput.value.trim()) { outcomeInput.focus(); return; }
+
+    if (!step1SaveAttempted) {
+      step1SaveAttempted = true;
+      step1Error.hidden = false;
+      step1SaveBtn.textContent = "Save again";
+      announce("Not saved. The connection dropped. What you typed is kept.");
+      return;
+    }
+
+    completeStep1();
+  });
+
+  function completeStep1() {
+    step1Live.hidden = true;
+    step1Done.hidden = false;
+    setRailState(1, "done");
+
+    step2Live.hidden = false;
+    step2Blocked.hidden = true;
+    setRailState(2, "live");
+    currentPrimaryBtn = step2StartBtn;
+
+    document.getElementById("disc-hearing-14jul").querySelector(".row-meta").textContent = "Held · outcome recorded";
+
+    updateMobileRail(2, "Add hearing");
+    announce("Outcome recorded, 14 Jul 2026. Step 2 of 3, Add hearing, is now live.");
+    step2StartBtn.focus();
+  }
+
+  /* ---------------- STEP 2 : Add hearing ---------------- */
+
+  var step2Blocked = document.getElementById("step2-blocked");
+  var step2Live = document.getElementById("step2-live");
+  var step2Done = document.getElementById("step2-done");
+  var step2StartBtn = document.getElementById("step2-start-btn");
+  var step2Form = document.getElementById("step2-form");
+  var step2SaveBtn = document.getElementById("step2-save-btn");
+  var hearingDateInput = document.getElementById("hearing-date-input");
+
+  step2StartBtn.addEventListener("click", function () {
+    step2StartBtn.hidden = true;
+    step2Form.hidden = false;
+    currentPrimaryBtn = step2SaveBtn;
+    hearingDateInput.focus();
+  });
+
+  hearingDateInput.addEventListener("change", function () {
+    step2SaveBtn.disabled = !hearingDateInput.value;
+  });
+
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  function formatDate(iso) {
+    var parts = iso.split("-");
+    var y = parts[0], m = parseInt(parts[1], 10) - 1, d = parts[2];
+    return d + " " + MONTHS[m] + " " + y;
+  }
+
+  step2Form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!hearingDateInput.value) return;
+    completeStep2(formatDate(hearingDateInput.value));
+  });
+
+  function completeStep2(dateText) {
+    document.getElementById("added-date-text").textContent = dateText;
+    step2Live.hidden = true;
+    step2Done.hidden = false;
+    setRailState(2, "done");
+
+    step3Live.hidden = false;
+    step3Blocked.hidden = true;
+    setRailState(3, "live");
+    currentPrimaryBtn = step3FileBtn;
+
+    document.getElementById("quartet-next-hearing").textContent = dateText;
+    document.getElementById("quartet-next-hearing").classList.remove("is-empty");
+
+    var nextRow = document.getElementById("disc-hearing-next").querySelector(".row-meta");
+    nextRow.textContent = dateText;
+    nextRow.classList.remove("is-empty");
+
+    updateMobileRail(3, "File document");
+    announce("Hearing added, " + dateText + ". Step 3 of 3, File document, is now live.");
+    step3FileBtn.focus();
+  }
+
+  /* ---------------- STEP 3 : File document ---------------- */
+
+  var step3Blocked = document.getElementById("step3-blocked");
+  var step3Live = document.getElementById("step3-live");
+  var step3Done = document.getElementById("step3-done");
+  var step3FileBtn = document.getElementById("step3-file-btn");
+
+  step3FileBtn.addEventListener("click", function () {
+    step3FileBtn.disabled = true;
+    step3FileBtn.textContent = "Filing…";
+    window.setTimeout(completeStep3, 250);
+  });
+
+  function completeStep3() {
+    step3Live.hidden = true;
+    step3Done.hidden = false;
+    setRailState(3, "done");
+
+    var docRow = document.getElementById("disc-doc-affidavit").querySelector(".row-meta");
+    docRow.innerHTML = "Filed · 30 Jul 2026";
+
+    var overdueEl = document.getElementById("quartet-overdue");
+    overdueEl.textContent = "1";
+
+    announce("Filed, 30 Jul 2026. This case's run is finished.");
+    showEndScreen();
+  }
+
+  function showEndScreen() {
+    finished = true;
+    document.getElementById("run").querySelectorAll(".step").forEach(function (s) { s.hidden = true; });
+    document.getElementById("end-screen").hidden = false;
+    var link = document.getElementById("next-case-link");
+    currentPrimaryBtn = link;
+    link.focus();
+  }
+
+  document.getElementById("next-case-link").addEventListener("click", function (e) {
+    e.preventDefault();
+    document.getElementById("next-case-note").hidden = false;
+  });
+
+  /* ---------------- expert path : keyboard ---------------- */
+
+  document.addEventListener("keydown", function (e) {
+    var tag = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    var isTextInput = tag === "input" || tag === "textarea";
+
+    if (e.key === "Enter" && !isTextInput && document.activeElement !== currentPrimaryBtn) {
+      var active = document.activeElement;
+      var isAnotherButton = active && active.tagName === "BUTTON" && active !== currentPrimaryBtn;
+      if (!isAnotherButton && currentPrimaryBtn) {
+        e.preventDefault();
+        currentPrimaryBtn.click();
+      }
+    } else if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && !isTextInput) {
+      e.preventDefault();
+      moveRailFocus(e.key === "ArrowRight" ? 1 : -1);
+    }
+  });
+
+  /* ---------------- reference : loading (subordinate) ---------------- */
+
+  var loadingToggle = document.getElementById("loading-toggle");
+  var loadingPreview = document.getElementById("loading-preview");
+  loadingToggle.addEventListener("click", function () {
+    var isHidden = loadingPreview.hidden;
+    loadingPreview.hidden = !isHidden;
+    loadingToggle.setAttribute("aria-expanded", String(isHidden));
+  });
+})();
+</script>
+</body>
+</html>

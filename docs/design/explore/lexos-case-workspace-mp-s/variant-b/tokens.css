@@ -1,4 +1,109 @@
-/* variant-b tokens — the ONLY place colour values live for this variant.
-   thesis: <the composer writes its one-line thesis here>  */
-:root{
+/* ==========================================================================
+   VARIANT B — "the case diary"
+   Thesis: the user reads the case's whole life as one dated record, with
+   what is still owed standing above today's line and what happened below
+   it, without ever choosing a category for the thing he is looking for or
+   for the thing he is about to write down.
+
+   Art direction: a printed case diary. Warm parchment, sepia ink, sepia
+   hairline rules. One structural hue — ink blue — spent ONLY on dates and
+   on today's rule, because here colour marks TIME, never status. One
+   reserved hue — oxblood — appears exactly once on the page, on the
+   destructive verb. One old-style serif, worked hard across seven live
+   type steps. No cards, no shadows, no rounded corners, no chips, no
+   icons: this record is type and rules only.
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------
+     COLOUR — invented for this variant. Every value below is the whole
+     palette; nothing else appears anywhere in index.html.
+
+     Contrast measured with the WCAG relative-luminance formula, against
+     the declared value, by hand, at build time:
+       --ink        on --paper : 14.25 : 1
+       --ink-muted  on --paper :  8.44 : 1
+       --ink-faint  on --paper :  5.20 : 1   (used only for the folio line)
+       --ink-blue   on --paper :  9.70 : 1
+       --oxblood    on --paper :  8.67 : 1
+     All five clear the 4.5:1 floor with margin; none is diluted to grey
+     to do it.
+     ------------------------------------------------------------------ */
+
+  --paper:        #f4efe6; /* ground parchment — the only background on the page */
+  --ink:          #241f1a; /* sepia-black — body text, entry titles, case title */
+  --ink-muted:    #4a4436; /* secondary ink — small-caps labels, meta lines */
+  --ink-faint:    #6b6350; /* tertiary ink — folio running head only */
+  --rule:         #cbbba4; /* hairline sepia — every rule, every divider */
+  --rule-soft:    #e2d5bd; /* the faintest hairline, and the loading skeleton's bars */
+
+  --ink-blue:     #1f3a6e; /* the ONE structural hue: every date, today's rule.
+                               Colour marks time here. Never status. */
+  --oxblood:      #7b2230; /* the ONE reserved hue: the destructive verb.
+                               Appears exactly once on the whole page. */
+
+  --focus-ring:   var(--ink-blue);
+  --selection-bg: var(--ink-blue);
+  --selection-fg: var(--paper);
+
+  /* ------------------------------------------------------------------
+     TYPE — one old-style / transitional serif, no network dependency.
+     Seven live steps, deliberately the widest scale in this explore:
+     11px running head → 48px period heads. Old-style figures in prose,
+     lining tabular figures in the date margin, so dates align down the
+     column.
+     ------------------------------------------------------------------ */
+
+  --serif: Constantia, Cambria, "Palatino Linotype", Palatino, Georgia,
+           "Times New Roman", serif;
+
+  --fs-0: 0.6875rem;  /* 11px — folio, keys legend, state-reference labels */
+  --fs-1: 0.8125rem;  /* 13px — small-caps field labels, entry-type italic */
+  --fs-2: 0.9375rem;  /* 15px — marginalia dates, meta lines */
+  --fs-3: 1.0625rem;  /* 17px — UI text: lens, compose input, cover-sheet values */
+  --fs-4: 1.1875rem;  /* 19px — body prose: entry titles, notes, quotes */
+  --fs-5: 1.75rem;    /* 28px — the Today label, case title's second line */
+  --fs-6: 3rem;       /* 48px — case title, open period heads: paces the page */
+
+  --lh-tight: 1.15;
+  --lh-head:  1.2;
+  --lh-body:  1.7;    /* generous reading leading */
+
+  --tracking-caps: 0.05em;
+
+  /* ------------------------------------------------------------------
+     SPACE & RHYTHM — tight inside an entry, very generous between
+     periods. The gap between periods is deliberately the single largest
+     interval used anywhere on the page.
+     ------------------------------------------------------------------ */
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2.25rem;
+  --space-7: 3.5rem;
+  --space-8: 6rem;    /* the air between periods — the instrument of this page */
+
+  /* ------------------------------------------------------------------
+     MEASURE — the answer to Debt 1. Not the shipped 416px column: a
+     reading measure, ~65ch, plus a fixed marginalia gutter for date and
+     entry type. Width buys line length and margin, nothing else.
+     ------------------------------------------------------------------ */
+
+  --measure: 65ch;
+  --gutter: 8rem;
+
+  /* ------------------------------------------------------------------
+     SURFACE — no cards, no shadow, no rounded corners, no fills beyond
+     the parchment ground itself. Declared at 0 so the refusal is legible
+     in one place, not merely an absence.
+     ------------------------------------------------------------------ */
+
+  --radius: 0px;
+  --shadow: none;
+
+  --motion-fast: 120ms;
+  --motion-slow: 600ms;
 }

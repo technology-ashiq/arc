@@ -20,8 +20,8 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — the Balanced Model Policy ADR-0069 written (blocks a–g), linted, merged (REQ-01) | 0.5 days | ✅ done 2026-08-02 |
 | 01 | Council `standard` mode + one real run; session-001 retrofit + honest grade-or-UNRESOLVED (REQ-02, REQ-04) | 0.75 days | ✅ done 2026-08-02 |
-| 02 | Paired composer A/B at one pinned commit; blind 7-item rankings; keep/revert ADR (REQ-03) | 1.25 days | ⏸ not started |
-| 03 | Attacker reject-log with fixed taxonomy (REQ-05) + mode-ladder dogfood + retro | 0.5 days | ⏸ not started |
+| 02 | Paired composer A/B at one pinned commit; blind 7-item rankings; keep/revert ADR (REQ-03) | 1.25 days | 🔨 in progress — both arms building |
+| 03 | Attacker reject-log with fixed taxonomy (REQ-05) + mode-ladder dogfood + retro | 0.5 days | 🔨 REQ-05 done; dogfood + retro pending cycle close |
 
 **Appetite burn: ~0.05 of 3 days used (~2%).** Basis, so it can be audited rather than
 believed: Phase 00 ran 15:32→15:52 IST on 2026-08-02 (kickoff commit `61995eb` → final green

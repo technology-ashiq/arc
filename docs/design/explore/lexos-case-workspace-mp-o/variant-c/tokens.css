@@ -1,4 +1,602 @@
-/* variant-c tokens — the ONLY place colour values live for this variant.
-   thesis: <the composer writes its one-line thesis here>  */
-:root{
+/* =============================================================================
+   VARIANT C — THE RUN.  variant-c tokens: the ONLY place colour values live.
+
+   thesis: the user can finish this case for the day in a single decision and see
+   on sight that it is finished — one solid deep-court-green block on a porcelain
+   sheet IS the live step, and it moves down the run as the run advances.
+
+   Art direction, in full: near-white porcelain ground, near-black text, ONE
+   meaning hue used only as a large solid field (deep court green), burnt clay
+   reserved for what is overdue and appearing nowhere else, a neo-grotesk sans in
+   four steps with a violent jump between the step statement and everything else,
+   whole-line-height air around the live block with everything not live pressed
+   to one line, and a strictly flat surface — no shadow token exists in this
+   file, no radius but zero, no icon set, no serif.
+   ========================================================================== */
+
+:root {
+
+  /* --- GROUND -------------------------------------------------------------
+     A sheet, not a stack of surfaces. One ground for the whole page; separation
+     is space and 2px structural ink, never tint and never depth. */
+  --porcelain:        #fbfaf7;   /* page ground                                  */
+  --porcelain-sunk:   #f2f0e9;   /* the ONE subordinate ground: reference foot   */
+
+  /* --- INK ----------------------------------------------------------------
+     Ratios computed against --porcelain #fbfaf7 (relative luminance 0.9560). */
+  --ink:              #101512;   /* 17.9:1 — statements, values, titles          */
+  --ink-2:            #4a534d;   /*  7.6:1 — row meta, body                      */
+  --ink-3:            #6b746d;   /*  4.7:1 — tracked caps labels, key chips      */
+
+  /* --- THE ONE MEANING HUE: DEEP COURT GREEN ------------------------------
+     Only ever a large solid field. The live step IS this block; it moves. */
+  --court:            #0f3d2e;   /* the block (relative luminance 0.0365)        */
+  --court-lift:       #17513d;   /* the block, hovered                           */
+  --bone:             #f4f1e8;   /* 10.7:1 on court — type inside the block      */
+  --bone-hot:         #fffdf6;   /* 11.6:1 on court — button hover fill          */
+  --bone-dim:         #b9c6bb;   /*  6.8:1 on court — labels inside the block    */
+  --numeral:          rgba(244,241,232,.50);
+                                 /*  3.9:1 on court at 56-132px / weight 800 —
+                                    clears large-text AA; the step number is also
+                                    written in the rail and in "OF 3", so no
+                                    information rests on this alone.             */
+  --court-skeleton:   #1b4d3b;   /* placeholder shapes inside the block          */
+
+  /* --- BURNT CLAY — OVERDUE, AND NOTHING ELSE -----------------------------
+     Never at hairline size: a solid block or a whole word, and always beside a
+     word, so colour is never the only carrier of the state. */
+  --clay:             #9a3b1e;   /*  6.6:1 on porcelain — the word "Overdue"     */
+  --clay-deep:        #7d2f17;   /*  9.0:1 on porcelain — pressed                */
+  --clay-bone:        #f4f1e8;   /*  6.1:1 on clay — the count inside the block  */
+
+  /* --- STRUCTURE — two line weights, and one of them is the run's rule ----- */
+  --line-ink:         #101512;   /* 2px header foot, 2px preview edge            */
+  --rule:             #cfcabd;   /* the run rule, ahead of the current position  */
+  --rule-run:         #0f3d2e;   /* the run rule, up to the current position     */
+  --skeleton:         #e9e5d9;   /* placeholder shapes on porcelain              */
+  --field-line:       #6b746d;   /* 4.7:1 — input underline on porcelain         */
+  --field-line-bone:  #b9c6bb;   /* 6.8:1 — input underline inside the block     */
+
+  /* --- FOCUS — no third hue is introduced to carry it ---------------------- */
+  --focus-ink:        #101512;   /* 17.9:1 on porcelain                          */
+  --focus-bone:       #f4f1e8;   /* 10.7:1 on court                              */
+
+  /* --- TYPE ---------------------------------------------------------------
+     A neo-grotesk that is genuinely on the machine: the first families ship
+     with Windows 11 and macOS, the tail is a grotesque everywhere else. No
+     webfont is fetched, so none can fail to arrive and take the direction with
+     it. No serif and no italic exist anywhere in this system. */
+  --font-display: "Segoe UI Variable Display", "Inter Tight", Inter,
+                  "Helvetica Neue", "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-text:    "Segoe UI Variable Text", Inter, "Helvetica Neue",
+                  "Segoe UI", Helvetica, Arial, sans-serif;
+
+  /* FOUR STEPS AND NOTHING IN THE MIDDLE.
+     The rhythm is the gap between the huge and the small, not a gentle ramp. */
+  --t-display: clamp(2.5rem, 5.4vw, 4.25rem);  /* 40 -> 68px  the step statement */
+  --t-figure:  1.6875rem;                      /* 27px  parties, counts, amounts */
+  --t-body:    1.0625rem;                      /* 17px  every row, every button  */
+  --t-label:   0.6875rem;                      /* 11px  tracked caps             */
+  --t-numeral: clamp(3.5rem, 8.5vw, 8.25rem);  /* 56 -> 132px  the one numeral   */
+
+  /* --- SPACE — measured in whole line-heights ----------------------------- */
+  --lh:    1.5rem;
+  --air-1: 1.5rem;
+  --air-2: 3rem;
+  --air-3: 4.5rem;
+
+  /* --- GEOMETRY — flat means flat. One radius in the system, and it is 0. --- */
+  --radius: 0px;
+  --page-left: clamp(1.25rem, 6vw, 6rem);
+  --measure: 46rem;
+}
+
+/* =========================================================================
+   RESET
+   ========================================================================= */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--porcelain);
+  color: var(--ink);
+  font-family: var(--font-text);
+  font-size: var(--t-body);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, p, ul, ol, figure { margin: 0; padding: 0; }
+ul, ol { list-style: none; }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+input { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+:focus-visible { outline: 3px solid var(--focus-ink); outline-offset: 3px; }
+.block :focus-visible,
+.strip :focus-visible,
+.end__next:focus-visible { outline: 3px solid var(--focus-bone); outline-offset: 3px; }
+
+.sr {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* =========================================================================
+   ATOMS
+   ========================================================================= */
+.label {
+  font-family: var(--font-text);
+  font-size: var(--t-label);
+  font-weight: 700;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.label--bone { color: var(--bone-dim); }
+.label--clay { color: var(--clay); }
+
+.key {
+  display: inline-block;
+  font-family: var(--font-text);
+  font-size: var(--t-label);
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: 5px 8px 4px;
+  border: 1px solid var(--ink-3);
+  color: var(--ink-3);
+  border-radius: var(--radius);
+  white-space: nowrap;
+}
+.key--bone { border-color: var(--bone-dim); color: var(--bone-dim); }
+/* when a key chip is the affordance itself it carries the 44px target */
+button.key { display: inline-flex; align-items: center; min-height: 44px; padding: 0 .875rem; }
+
+.od { color: var(--clay); font-weight: 700; }
+
+/* =========================================================================
+   HEADER — the quartet, fixed. Never behind a click, a step or a scroll.
+   ========================================================================= */
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--porcelain);
+  border-bottom: 2px solid var(--line-ink);
+  padding: 1.125rem var(--page-left) 1rem;
+}
+.head__firm { display: block; margin-bottom: .5rem; }
+.head__parties {
+  font-family: var(--font-display);
+  font-size: var(--t-figure);
+  font-weight: 650;
+  letter-spacing: -.018em;
+  line-height: 1.14;
+  color: var(--ink);
+  max-width: 42ch;
+}
+.head__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem 2.5rem;
+  margin-top: 1rem;
+}
+.field { min-width: 0; }
+.field__v {
+  display: block;
+  margin-top: .25rem;
+  font-size: var(--t-body);
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.25;
+}
+.field__v--quiet { color: var(--ink-2); font-weight: 500; }
+
+/* the overdue count is a SOLID clay block. The label beside it says the word,
+   so colour never carries the state on its own. */
+.overdue { margin-left: auto; display: flex; align-items: flex-end; gap: .75rem; }
+.overdue__label { text-align: right; }
+.overdue__count {
+  display: grid;
+  place-items: center;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0 .5rem;
+  background: var(--clay);
+  color: var(--clay-bone);
+  font-family: var(--font-display);
+  font-size: var(--t-figure);
+  font-weight: 700;
+  line-height: 1;
+  border-radius: var(--radius);
+}
+.overdue[data-count="0"] .overdue__count {
+  background: none; color: var(--ink-2); border: 2px solid var(--rule);
+}
+.overdue[data-count="0"] .overdue__label { color: var(--ink-3); }
+
+/* =========================================================================
+   THE RUN
+   ========================================================================= */
+.run { padding: var(--air-2) var(--page-left); max-width: 80rem; }
+
+/* --- the horizontal rail. ONE rule runs its whole length: court green up to
+       the current position, --rule ahead of it. --------------------------- */
+.rail { display: flex; align-items: stretch; margin-bottom: var(--air-2); }
+.rail__seg {
+  flex: 1 1 auto;
+  min-height: 56px;
+  padding: 0 1.5rem .75rem 0;
+  text-align: left;
+  border-bottom: 3px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: .3rem;
+  color: var(--ink-3);
+  border-radius: var(--radius);
+}
+.rail__seg[data-reached="1"] { border-bottom-color: var(--rule-run); }
+.rail__n { font-size: var(--t-label); font-weight: 700; letter-spacing: .14em; }
+.rail__name { font-size: var(--t-body); font-weight: 500; letter-spacing: -.005em; line-height: 1.2; }
+.rail__seg[data-state="done"] { color: var(--ink-2); }
+.rail__seg[data-state="current"] { color: var(--ink); }
+.rail__seg[data-state="current"] .rail__name { font-weight: 700; }
+.rail__seg[data-open="1"] .rail__name {
+  text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px;
+}
+.rail__seg[aria-disabled="true"] { cursor: default; }
+.rail__date { font-size: var(--t-label); letter-spacing: .06em; color: var(--ink-3); }
+.rail__seg--end { flex: 0 1 10rem; }
+
+.rail-compact { display: none; }
+
+/* --- THE LIVE BLOCK: the one solid field of colour on the sheet ---------- */
+.block {
+  background: var(--court);
+  color: var(--bone);
+  border-radius: var(--radius);
+  padding: var(--air-2) clamp(1.5rem, 4vw, 4rem);
+  display: grid;
+  grid-template-columns: minmax(5rem, 10rem) minmax(0, 1fr);
+  gap: 0 clamp(1.5rem, 3vw, 3.5rem);
+  align-items: start;
+}
+.block__numeral {
+  font-family: var(--font-display);
+  font-size: var(--t-numeral);
+  font-weight: 800;
+  line-height: .78;
+  letter-spacing: -.05em;
+  color: var(--numeral);
+}
+.block__of { display: block; margin-top: .625rem; }
+.block__body { max-width: var(--measure); }
+.block__statement {
+  font-family: var(--font-display);
+  font-size: var(--t-display);
+  font-weight: 700;
+  line-height: .97;
+  letter-spacing: -.028em;
+  color: var(--bone);
+}
+.block__pre {
+  margin-top: var(--air-1);
+  font-size: var(--t-body);
+  color: var(--bone-dim);
+  line-height: 1.45;
+  max-width: 44ch;
+}
+.block__field { margin-top: var(--air-2); max-width: 34rem; }
+.block__field .label { display: block; }
+.block__hint { display: block; margin-top: .35rem; }
+.input {
+  display: block;
+  width: 100%;
+  margin-top: .5rem;
+  padding: .5rem 0 .55rem;
+  min-height: 48px;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid var(--field-line-bone);
+  color: var(--bone);
+  font-size: var(--t-figure);
+  font-weight: 500;
+  letter-spacing: -.01em;
+  border-radius: var(--radius);
+}
+.input:focus { outline: none; border-bottom-color: var(--bone); }
+.input:focus-visible { outline: 3px solid var(--focus-bone); outline-offset: 4px; }
+
+.act-row { margin-top: var(--air-2); display: flex; align-items: center; flex-wrap: wrap; gap: 1rem; }
+.act {
+  min-height: 56px;
+  padding: 0 1.75rem;
+  background: var(--bone);
+  color: var(--court);
+  font-size: var(--t-body);
+  font-weight: 700;
+  letter-spacing: -.005em;
+  border-radius: var(--radius);
+  display: inline-flex;
+  align-items: center;
+}
+.act:hover { background: var(--bone-hot); }
+.act:active { background: var(--bone-dim); }
+.act[aria-disabled="true"] {
+  background: none; border: 2px solid var(--bone-dim); color: var(--bone-dim); cursor: default;
+}
+.act--clay { background: var(--clay); color: var(--clay-bone); min-height: 48px; }
+.act--clay:hover, .act--clay:active { background: var(--clay-deep); }
+
+/* a step that cannot be taken states its reason instead of offering a button */
+.reason { margin-top: var(--air-1); font-size: var(--t-body); color: var(--bone-dim); max-width: 50ch; }
+
+/* error: the run stalls AT the step. The step stays open, and what is next
+   stays stated inside it. */
+.stall {
+  margin-top: var(--air-1);
+  padding-left: .875rem;
+  border-left: 4px solid var(--bone);
+  color: var(--bone);
+  font-size: var(--t-body);
+  max-width: 48ch;
+}
+
+/* --- the live step, pressed to one line while another step is open ------- */
+.strip {
+  background: var(--court);
+  color: var(--bone);
+  border-radius: var(--radius);
+  padding: .875rem clamp(1.25rem, 3vw, 2rem);
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+.strip__n { color: var(--bone-dim); font-size: var(--t-label); font-weight: 700; letter-spacing: .14em; }
+.strip__name { font-size: var(--t-body); font-weight: 700; }
+.strip__pre { color: var(--bone-dim); font-size: var(--t-body); }
+
+/* --- a step that is not live: exactly one line --------------------------- */
+.line {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: baseline;
+  gap: 1.25rem;
+  padding: 1.125rem 0;
+  min-height: 56px;
+  border-radius: var(--radius);
+}
+.line__n { font-size: var(--t-label); font-weight: 700; letter-spacing: .14em; color: var(--ink-3); flex: 0 0 2rem; }
+.line__name { font-size: var(--t-body); font-weight: 600; color: var(--ink); flex: 0 0 auto; }
+.line__fact { font-size: var(--t-body); color: var(--ink-2); }
+.line[data-state="done"] .line__name { color: var(--ink-2); font-weight: 500; }
+.line:hover .line__name { text-decoration: underline; text-underline-offset: 4px; }
+.mark { display: inline-block; width: 10px; height: 10px; background: var(--rule-run); margin-right: .5rem; }
+
+/* --- a step addressed but not live: flat, outlined, and button-less ------ */
+.preview {
+  border: 2px solid var(--line-ink);
+  border-radius: var(--radius);
+  padding: var(--air-2) clamp(1.5rem, 4vw, 4rem);
+  display: grid;
+  grid-template-columns: minmax(5rem, 10rem) minmax(0, 1fr);
+  gap: 0 clamp(1.5rem, 3vw, 3.5rem);
+  align-items: start;
+}
+.preview .block__numeral { color: var(--rule); }
+.preview .block__statement { color: var(--ink); }
+.preview .block__pre { color: var(--ink-2); }
+.preview .reason { color: var(--ink-2); }
+.preview .label--bone { color: var(--ink-3); }
+
+/* whole line-heights around what is live; single lines everywhere else */
+.steps > * + * { margin-top: var(--air-1); }
+.steps > .block, .steps > .preview { margin-top: var(--air-2); margin-bottom: var(--air-2); }
+.steps > .block:first-child, .steps > .preview:first-child { margin-top: 0; }
+
+/* =========================================================================
+   THE END OF THE RUN — a real screen, not a label on a chip
+   ========================================================================= */
+.end { padding: var(--air-3) 0 var(--air-2); }
+.end__statement {
+  font-family: var(--font-display);
+  font-size: var(--t-display);
+  font-weight: 700;
+  line-height: .97;
+  letter-spacing: -.028em;
+  color: var(--ink);
+  max-width: 15ch;
+}
+.end__next {
+  margin-top: var(--air-2);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background: var(--court);
+  color: var(--bone);
+  padding: 1.25rem clamp(1.25rem, 3vw, 2rem);
+  min-height: 64px;
+  width: 100%;
+  text-align: left;
+  border-radius: var(--radius);
+  font-size: var(--t-body);
+  font-weight: 600;
+}
+.end__next:hover { background: var(--court-lift); }
+.end__next .key--bone { margin-left: auto; }
+.end__cases { margin-top: var(--air-2); }
+.end__list { margin-top: .5rem; }
+.case-line {
+  display: flex;
+  align-items: baseline;
+  gap: .875rem;
+  padding: .75rem 0;
+  font-size: var(--t-body);
+  color: var(--ink-2);
+  flex-wrap: wrap;
+}
+.case-line b { color: var(--ink); font-weight: 650; }
+.case-line[data-next="1"] b {
+  text-decoration: underline; text-underline-offset: 5px; text-decoration-thickness: 2px;
+}
+
+/* =========================================================================
+   THE WHOLE RECORD — ONE disclosure, at the foot of the run, closed by default
+   ========================================================================= */
+.record {
+  margin: var(--air-2) var(--page-left) var(--air-3);
+  max-width: 80rem;
+  border-top: 2px solid var(--line-ink);
+}
+.record > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 60px;
+  padding: 1rem 0;
+  font-size: var(--t-body);
+  font-weight: 600;
+  border-radius: var(--radius);
+}
+.record > summary::-webkit-details-marker { display: none; }
+.record__marker { width: 12px; height: 12px; background: var(--ink); flex: none; }
+.record[open] .record__marker { background: none; border: 2px solid var(--ink); }
+.record__counts { margin-left: auto; color: var(--ink-3); }
+
+.record__body { padding: 0 0 var(--air-2); }
+.group { display: grid; grid-template-columns: 9rem minmax(0, 1fr); gap: 0 2rem; padding: var(--air-1) 0; }
+.group__rows > * + * { margin-top: .75rem; }
+
+.row { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 0 1.5rem; align-items: baseline; }
+.row__date { color: var(--ink); font-weight: 600; }
+.row__text { color: var(--ink-2); }
+.row__text b { color: var(--ink); font-weight: 600; }
+
+.drow { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; }
+.drow__title { color: var(--ink); font-weight: 600; flex: 1 1 17rem; }
+.drow__meta { color: var(--ink-2); flex: 0 1 auto; }
+.drow__acts { display: flex; gap: .25rem; flex: none; margin-left: auto; }
+
+/* a destructive verb is never styled like the benign verb beside it */
+.tact { min-height: 44px; padding: 0 .75rem; font-size: var(--t-body); color: var(--ink-2); border-radius: var(--radius); }
+.tact:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+.tact--danger {
+  color: var(--clay);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 2px;
+}
+.tact--danger:hover { color: var(--clay-deep); }
+
+.confirm {
+  display: flex; align-items: center; gap: 1.25rem; flex-wrap: wrap;
+  padding: .875rem 1.125rem;
+  border-left: 4px solid var(--clay);
+}
+.confirm__text { color: var(--ink); max-width: 54ch; }
+.confirm__text b { font-weight: 650; }
+
+.money { display: flex; flex-wrap: wrap; gap: 1rem 3rem; }
+.money .field__v { font-size: var(--t-figure); font-weight: 650; letter-spacing: -.015em; }
+
+/* =========================================================================
+   LOADING — quiet placeholder shapes in this system, and no copy
+   ========================================================================= */
+.sk { background: var(--skeleton); border-radius: var(--radius); animation: breathe 1.5s ease-in-out infinite; }
+.sk--court { background: var(--court-skeleton); }
+.sk-stack > * + * { margin-top: .75rem; }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .48; } }
+
+/* =========================================================================
+   REFERENCE FOOT — subordinate on purpose. Not the case page.
+   ========================================================================= */
+.ref {
+  background: var(--porcelain-sunk);
+  border-top: 2px solid var(--line-ink);
+  padding: var(--air-2) var(--page-left) var(--air-3);
+  color: var(--ink-2);
+}
+.ref__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 21rem) minmax(0, 36rem);
+  gap: var(--air-2) var(--air-3);
+  max-width: 70rem;
+}
+.ref__h { display: block; margin-bottom: .875rem; }
+.ref__frame { padding: 1rem 1.125rem; background: var(--porcelain); }
+.ref__frame--court { background: var(--court); margin-top: .75rem; }
+.ref__notes > * + * { margin-top: .75rem; }
+.ref__note { font-size: var(--t-body); line-height: 1.5; }
+.ref__note b { color: var(--ink); font-weight: 600; }
+
+/* =========================================================================
+   MOBILE — one step per screen, which is this run's natural shape
+   ========================================================================= */
+@media (max-width: 720px) {
+  :root { --page-left: 1rem; }
+
+  .head { padding: .875rem var(--page-left); }
+  .head__parties { font-size: 1.3125rem; }
+  .head__meta { gap: .875rem 1.75rem; margin-top: .875rem; }
+  .overdue { margin-left: 0; }
+  .overdue__count { min-width: 44px; min-height: 44px; font-size: 1.375rem; }
+
+  /* the rail compresses to "Step 1 of 3" plus the step's own name */
+  .rail { display: none; }
+  .rail-compact {
+    display: flex;
+    align-items: baseline;
+    gap: .625rem;
+    flex-wrap: wrap;
+    padding-bottom: .75rem;
+    border-bottom: 3px solid var(--rule-run);
+    margin: 0 var(--page-left) var(--air-1);
+  }
+  .rail-compact__name { font-size: var(--t-body); font-weight: 700; color: var(--ink); }
+
+  /* the green block goes full-bleed minus a margin */
+  .run { padding: var(--air-1) 0 var(--air-2); }
+  .steps > .line, .end { margin-left: var(--page-left); margin-right: var(--page-left); }
+  .block, .preview, .strip {
+    margin-left: .5rem; margin-right: .5rem;
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--air-2) 1.25rem;
+  }
+  .block__numeral { font-size: 3.25rem; line-height: 1; }
+  .block__of { margin-top: .25rem; margin-bottom: 1.25rem; }
+  .strip { flex-direction: column; align-items: flex-start; gap: .75rem; }
+  .strip .act-row { margin: 0 !important; width: 100%; }
+  .act { width: 100%; justify-content: center; }
+  .line { flex-wrap: wrap; gap: .25rem 1rem; }
+  .line__n { flex: 0 0 100%; }
+  .end__next { flex-direction: column; align-items: flex-start; }
+  .end__next .key--bone { margin-left: 0; }
+
+  .record { margin-left: var(--page-left); margin-right: var(--page-left); }
+  .group { grid-template-columns: minmax(0, 1fr); gap: .625rem; }
+  .row { grid-template-columns: minmax(0, 1fr); gap: .125rem; }
+  .drow__acts { margin-left: 0; width: 100%; }
+  .confirm .act--clay { width: auto; }
+  .ref__grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .sk { opacity: .85; }
 }

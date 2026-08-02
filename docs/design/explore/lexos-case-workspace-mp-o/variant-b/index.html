@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Meera Raghunathan v. Sunvale Housing Pvt. Ltd. — O.S. No. 412 of 2024</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* ---------------------------------------------------------------------------
+   VARIANT B — one continuous dated record, read down.
+   Every colour on this page comes from tokens.css. Nothing here is a card, a
+   chip, a pill, a shadow, a radius or an icon: the surface is type and rules.
+   --------------------------------------------------------------------------- */
+
+*, *::before, *::after { box-sizing: border-box; border-radius: 0; }
+[hidden] { display: none !important; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: var(--s3);
+  line-height: var(--lh-body);
+  font-variant-numeric: var(--figures-prose);
+  caret-color: var(--ink);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  overflow-wrap: break-word;
+}
+
+::selection { background: var(--sel); }
+
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+
+/* --- the one grid: marginalia gutter + reading measure -------------------- */
+
+.page { width: min(100% - 3rem, var(--page)); margin-inline: auto; }
+
+.grid {
+  display: grid;
+  grid-template-columns: var(--gutter) minmax(0, var(--measure));
+  column-gap: var(--gap);
+}
+
+.marg { text-align: right; }
+
+/* --- typographic utilities ------------------------------------------------ */
+
+.caps {
+  font-variant-caps: all-small-caps;
+  font-size: var(--s2);
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink-faint);
+}
+.tab { font-variant-numeric: var(--figures-column); }
+.sep { color: var(--ink-faint); padding: 0 .12rem; }
+.skip {
+  position: absolute; left: -9999px; top: 0; z-index: 20;
+  background: var(--paper); color: var(--ink);
+  padding: .85rem 1.1rem; border-bottom: var(--hair-ink);
+}
+.skip:focus { left: 0; }
+
+/* --- running head: a printed folio, always carrying the quartet ----------- */
+
+.folio {
+  position: sticky; top: 0; z-index: 6;
+  background: var(--paper);
+  border-bottom: var(--hair);
+}
+.folio-in {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 0 .55rem; min-height: var(--head-h); padding: .72rem 0;
+  font-size: var(--s2); color: var(--ink-soft); line-height: var(--lh-meta);
+}
+.folio-case { color: var(--ink); }
+.folio-right {
+  margin-left: auto; display: flex; flex-wrap: wrap;
+  gap: 0 .55rem; align-items: baseline;
+}
+.folio-right .lead { color: var(--ink); }
+
+/* --- the cover sheet: the same grid as every entry ------------------------ */
+
+.cover { padding-top: var(--sp-6); }
+
+.letterhead {
+  margin: 0;
+  font-variant-caps: all-small-caps;
+  font-size: var(--s2);
+  letter-spacing: .19em;
+  color: var(--ink-faint);
+}
+
+.parties {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--s7); font-weight: 400;
+  line-height: var(--lh-tight); letter-spacing: var(--tracking-tight);
+  max-width: 22ch;
+}
+.parties .v { font-style: italic; }
+
+.casenum {
+  margin: var(--sp-3) 0 0;
+  font-size: var(--s5); color: var(--ink);
+  font-variant-numeric: var(--figures-column);
+}
+
+.facts { margin: var(--sp-5) 0 0; border-top: var(--hair); }
+.fact { padding: .58rem 0; border-bottom: var(--hair); align-items: baseline; }
+.fact dt { padding-top: .18rem; }
+.fact dd { margin: 0; }
+
+.fact--gap dd {
+  display: flex; align-items: flex-end; gap: .7rem;
+  font-size: var(--s5); line-height: 1.2;
+}
+.fact--gap .blank { flex: 1 1 auto; height: .55em; border-bottom: var(--dot); }
+.fact--count dd { font-size: var(--s5); font-variant-numeric: var(--figures-column); }
+
+/* --- expert path: a type lens on the stream, and keys --------------------- */
+
+.lens {
+  margin-top: var(--sp-5);
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: flex-end;
+}
+.lens button {
+  font: inherit; font-style: italic; font-size: var(--s2);
+  color: var(--ink-soft); background: none;
+  border: 0; border-bottom: 1px solid var(--paper);
+  padding: .72rem .5rem; min-height: var(--target); cursor: pointer;
+}
+.lens button:hover { color: var(--ink); border-bottom-color: var(--rule-strong); }
+.lens button[aria-pressed="true"] { color: var(--ink); border-bottom-color: var(--ink); }
+.lens sup {
+  font-size: .62em; margin-left: .16em; font-style: normal;
+  color: var(--ink-faint); font-variant-numeric: var(--figures-column);
+}
+.keys {
+  margin: -.15rem 0 0; text-align: right;
+  font-variant-caps: all-small-caps; font-size: var(--s2);
+  letter-spacing: .1em; color: var(--ink-faint);
+}
+
+/* --- the record ----------------------------------------------------------- */
+
+.record { position: relative; margin-top: var(--sp-6); }
+.record::before {                        /* the spine of the page */
+  content: ""; position: absolute; top: 0; bottom: 0;
+  left: calc(var(--gutter) + (var(--gap) / 2));
+  width: 1px; background: var(--rule);
+}
+
+.entry { position: relative; padding: var(--sp-4) 0; align-items: start; }
+.entry + .entry::before {
+  content: ""; position: absolute; top: 0; right: 0;
+  left: calc(var(--gutter) + var(--gap));
+  border-top: var(--hair);
+}
+/* dotted above today's rule: these facts are not written yet */
+.entry--owed + .entry--owed::before { border-top: var(--dot); }
+
+.marg-date {
+  display: block; font-size: var(--s2); color: var(--ink-blue);
+  line-height: 1.5; font-variant-numeric: var(--figures-column);
+}
+.marg-date--none { color: var(--ink-soft); font-style: italic; }
+.marg-type {
+  display: block; font-style: italic; font-size: var(--s2);
+  color: var(--ink-soft); line-height: 1.4;
+}
+.marg-due {
+  display: block; font-variant-caps: all-small-caps; font-size: var(--s2);
+  letter-spacing: .13em; color: var(--ink-faint); line-height: 1.4;
+}
+
+.e-title {
+  margin: 0; font-weight: 400; font-size: var(--s4);
+  line-height: var(--lh-head); color: var(--ink);
+}
+.e-note { margin: 0; font-size: var(--s3); color: var(--ink); }
+.e-meta {
+  margin: .34rem 0 0; font-size: var(--s2);
+  color: var(--ink-soft); line-height: var(--lh-meta);
+}
+.e-meta .word {
+  font-variant-caps: all-small-caps; letter-spacing: .1em;
+  font-weight: 600; color: var(--ink);
+}
+
+.gapline { display: flex; align-items: flex-end; gap: .75rem; }
+.gapline .blank { flex: 1 1 auto; height: .5em; border-bottom: var(--dot); }
+
+/* --- verbs ---------------------------------------------------------------- */
+
+.verbs {
+  margin: var(--sp-2) 0 0 -.55rem;
+  display: flex; flex-wrap: wrap; gap: 0 .3rem;
+}
+.verb {
+  font: inherit; font-size: var(--s2); background: none; border: 0;
+  cursor: pointer; min-height: var(--target); padding: .62rem .55rem;
+  color: var(--ink);
+  font-variant-caps: all-small-caps; letter-spacing: .12em;
+  text-decoration: underline; text-underline-offset: .3em;
+  text-decoration-thickness: 1px; text-decoration-color: var(--rule-strong);
+}
+.verb:hover { text-decoration-color: var(--ink); }
+.verb--destructive {                     /* the only oxblood on this page */
+  color: var(--oxblood); font-style: italic;
+  text-decoration-color: var(--oxblood); text-decoration-thickness: 2px;
+}
+
+/* --- an entry the record cannot read as current --------------------------- */
+
+.block {
+  margin: var(--sp-3) 0 0; padding-left: var(--sp-3);
+  border-left: var(--mark-w) solid var(--ink);
+}
+.block p { margin: 0; font-size: var(--s3); font-style: italic; color: var(--ink); }
+
+/* --- today's rule: the origin of the page, and the only compose point ----- */
+
+.today { position: relative; margin-top: var(--sp-today); border-top: var(--rule-today); }
+.today::after {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 12px;
+  background: var(--today-wash); pointer-events: none;
+}
+.today .marg { transform: translateY(-1.05em); }
+.today-date {
+  display: inline-block; background: var(--paper); padding-left: .6rem;
+  color: var(--ink-blue); font-size: var(--s5); line-height: 1;
+  font-variant-numeric: var(--figures-column);
+}
+.today-label {
+  display: block; margin-top: .42rem; color: var(--ink-blue);
+  font-variant-caps: all-small-caps; font-size: var(--s2); letter-spacing: .17em;
+}
+
+.compose { position: relative; padding-top: var(--sp-4); }
+.compose-line { display: flex; flex-wrap: wrap; align-items: baseline; margin-left: -.5rem; }
+.compose-add {
+  padding: 0 .3rem 0 .5rem; color: var(--ink); font-size: var(--s3);
+  font-variant-caps: all-small-caps; letter-spacing: .15em;
+}
+.type {
+  font: inherit; font-style: italic; font-size: var(--s3); color: var(--ink);
+  background: none; border: 0; border-bottom: 1px solid var(--paper);
+  padding: .68rem .5rem; min-height: var(--target); cursor: pointer;
+}
+.type:hover { border-bottom-color: var(--rule-strong); }
+.type[aria-pressed="true"] { border-bottom-color: var(--ink); }
+.type[aria-disabled="true"] {
+  color: var(--ink-faint); cursor: default;
+  text-decoration: line-through; text-decoration-color: var(--rule-strong);
+}
+.type[aria-disabled="true"]:hover { border-bottom-color: var(--paper); }
+.reason {
+  margin: .3rem 0 0 .5rem; font-style: italic;
+  font-size: var(--s2); color: var(--ink-soft);
+}
+
+.write { margin-top: var(--sp-3); }
+.write-line {
+  display: block; width: 100%; font: inherit; font-size: var(--s3);
+  color: var(--ink); background: var(--paper);
+  border: 0; border-bottom: var(--dot);
+  min-height: var(--target); padding: .5rem .1rem;
+}
+.write-line:focus { border-bottom: var(--hair-ink); }
+.write-due {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: 0 .55rem; margin-top: var(--sp-2);
+}
+.write-date {
+  font: inherit; font-size: var(--s3); color: var(--ink); background: var(--paper);
+  border: 0; border-bottom: var(--dot); width: 9.5rem;
+  min-height: var(--target); padding: .5rem .1rem;
+  font-variant-numeric: var(--figures-column);
+}
+.write-date:focus { border-bottom: var(--hair-ink); }
+.write-due .verbs { margin: 0 0 0 auto; }
+
+/* --- "since you last opened" ---------------------------------------------- */
+
+.since { margin-top: var(--sp-4); }
+.since-in { display: flex; align-items: center; gap: .8rem; }
+.since-in .line { flex: 1 1 auto; border-top: var(--dot); }
+
+/* --- dated period heads: the only navigation control ---------------------- */
+
+.period { margin-top: var(--sp-5); }
+.period--first { margin-top: var(--sp-6); }
+.period > summary {
+  position: sticky; top: var(--head-h); z-index: 4;
+  background: var(--paper); cursor: pointer; list-style: none;
+  padding: .55rem 0 .6rem; border-bottom: var(--hair);
+  align-items: baseline;
+}
+.period > summary::-webkit-details-marker { display: none; }
+.p-head {
+  margin: 0; font-weight: 400; font-size: var(--s6);
+  line-height: var(--lh-tight); color: var(--ink-blue);
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: var(--figures-column);
+}
+.p-mark { font-size: var(--s4); color: var(--ink-faint); line-height: 1; }
+.period[open] .p-mark::before { content: "\2013"; }
+.period:not([open]) .p-mark::before { content: "+"; }
+.p-summary { margin: .4rem 0 0; font-style: italic; font-size: var(--s2); color: var(--ink-soft); }
+.period[open] .p-summary { display: none; }
+
+.ornament {
+  margin: var(--sp-period) 0 0; text-align: center; line-height: 1;
+  color: var(--rule-strong); font-size: var(--s4);
+  letter-spacing: 1.7em; text-indent: 1.7em;
+}
+
+/* --- the type lens, applied ------------------------------------------------ */
+
+.record[data-lens="hearing"]  .entry:not([data-type="hearing"]),
+.record[data-lens="document"] .entry:not([data-type="document"]),
+.record[data-lens="task"]     .entry:not([data-type="task"]),
+.record[data-lens="note"]     .entry:not([data-type="note"]) { display: none; }
+
+/* --- reference block: subordinate, at the foot, off the record ------------ */
+
+.reference {
+  margin-top: calc(var(--sp-period) + var(--sp-5));
+  border-top: var(--hair-ink); padding-top: var(--sp-4);
+  font-size: var(--s2); color: var(--ink-soft); line-height: var(--lh-meta);
+}
+.reference h2 {
+  margin: 0; font-weight: 400; font-size: var(--s2); color: var(--ink);
+  font-variant-caps: all-small-caps; letter-spacing: .15em;
+}
+.ref-index { margin: var(--sp-2) 0 0; }
+.ref-index b { font-weight: 400; font-style: italic; color: var(--ink); }
+.ref-case { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: var(--hair); }
+.ref-case > .caps { display: block; margin-bottom: var(--sp-2); }
+.ref-sub { display: block; margin-top: 1.7rem; }
+.ref-note { margin: var(--sp-2) 0 0; font-style: italic; color: var(--ink-faint); }
+.ref-entry { margin-top: .8rem; }
+.ref-entry .e-title { font-size: var(--s3); }
+
+.ld {
+  display: block; height: 1px; background: var(--load-fade);
+  margin: 1.15rem 0; animation: breathe 2.8s ease-in-out infinite;
+}
+.ld--b { animation-delay: .35s; }
+.ld--c { animation-delay: .7s; }
+.w-26 { width: 26%; } .w-38 { width: 38%; } .w-58 { width: 58%; }
+.w-64 { width: 64%; } .w-72 { width: 72%; } .w-84 { width: 84%; }
+@keyframes breathe { 0%, 100% { opacity: 1; } 50% { opacity: .38; } }
+
+.colophon {
+  margin-top: var(--sp-5); padding: var(--sp-4) 0 var(--sp-6);
+  border-top: var(--hair); font-size: var(--s2); color: var(--ink-faint);
+  display: flex; flex-wrap: wrap; gap: .4rem 2rem; justify-content: space-between;
+}
+.colophon span { max-width: 40ch; }
+
+/* --- mobile: natively one column ------------------------------------------ */
+
+@media (max-width: 46rem) {
+  .page { width: calc(100% - 2rem); }
+  .grid { grid-template-columns: 1fr; row-gap: .3rem; }
+  .marg { text-align: left; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 .6rem; }
+  .marg-date, .marg-type, .marg-due { display: inline; }
+  .record::before { display: none; }
+  .entry + .entry::before { left: 0; }
+  .today .marg { transform: translateY(-.9em); }
+  .today-date { padding: 0 .6rem 0 0; }
+  .today-label { display: inline; margin: 0; }
+  .parties { max-width: none; }
+  .fact { padding: .7rem 0; }
+  .fact dt { padding-top: 0; }
+  .lens { justify-content: flex-start; margin-left: -.5rem; }
+  .keys { text-align: left; }
+  .period > summary { padding-top: .7rem; }
+  .colophon { flex-direction: column; }
+  .colophon span { max-width: none; }
+}
+</style>
+</head>
+<body>
+
+<a class="skip" href="#today">Today&rsquo;s rule</a>
+
+<!-- ===================================================================== -->
+<!-- RUNNING HEAD — a printed folio. Parties, case number, status, next     -->
+<!-- hearing and the overdue count never leave the screen.                  -->
+<!-- ===================================================================== -->
+<header class="folio">
+  <div class="page">
+    <div class="folio-in">
+      <span class="folio-case">Meera Raghunathan <i>v.</i> Sunvale Housing Pvt. Ltd.</span>
+      <span class="sep" aria-hidden="true">&middot;</span>
+      <span class="tab">O.S. No. 412 of 2024</span>
+      <span class="folio-right">
+        <span class="lead">Active</span>
+        <span class="sep" aria-hidden="true">&middot;</span>
+        <span>Next hearing &mdash; <span class="lead">Not set</span></span>
+        <span class="sep" aria-hidden="true">&middot;</span>
+        <span><span class="tab lead">2</span> overdue</span>
+      </span>
+    </div>
+  </div>
+</header>
+
+<main class="page">
+
+  <!-- =================================================================== -->
+  <!-- THE COVER SHEET — it precedes the record's first entry, the way a    -->
+  <!-- case file's cover sheet precedes its pages.                          -->
+  <!-- =================================================================== -->
+  <section class="cover" aria-label="case">
+    <p class="letterhead">Iyer &amp; Ananth, Advocates</p>
+
+    <h1 class="parties">Meera Raghunathan<br><span class="v">v.</span> Sunvale Housing Pvt.&nbsp;Ltd.</h1>
+    <p class="casenum">O.S. No. 412 of 2024</p>
+
+    <dl class="facts">
+      <div class="fact grid">
+        <dt class="caps marg">status</dt>
+        <dd>Active</dd>
+      </div>
+      <div class="fact grid">
+        <dt class="caps marg">court</dt>
+        <dd>City Civil Court, Bengaluru</dd>
+      </div>
+      <div class="fact grid">
+        <dt class="caps marg">case type</dt>
+        <dd>Civil suit</dd>
+      </div>
+      <div class="fact grid">
+        <dt class="caps marg">client</dt>
+        <dd>Meera Raghunathan</dd>
+      </div>
+      <div class="fact grid">
+        <dt class="caps marg">claim</dt>
+        <dd><span class="tab">&#8377;18,45,000</span></dd>
+      </div>
+      <div class="fact grid">
+        <dt class="caps marg">fee received</dt>
+        <dd><span class="tab">&#8377;42,500</span> <span class="sep" aria-hidden="true">&middot;</span> <span class="tab">02 Jul 2026</span></dd>
+      </div>
+      <div class="fact fact--gap grid">
+        <dt class="caps marg">next hearing</dt>
+        <dd>Not set<span class="blank" aria-hidden="true"></span></dd>
+      </div>
+      <div class="fact fact--count grid">
+        <dt class="caps marg">overdue</dt>
+        <dd>2</dd>
+      </div>
+    </dl>
+
+    <!-- expert path: a lens that narrows WITHIN the stream, never leaves it -->
+    <div class="lens" role="group" aria-label="type">
+      <button type="button" data-lens="all" aria-pressed="true">all<sup>0</sup></button>
+      <button type="button" data-lens="hearing" aria-pressed="false">hearing<sup>1</sup></button>
+      <button type="button" data-lens="document" aria-pressed="false">document<sup>2</sup></button>
+      <button type="button" data-lens="task" aria-pressed="false">task<sup>3</sup></button>
+      <button type="button" data-lens="note" aria-pressed="false">note<sup>4</sup></button>
+    </div>
+    <p class="keys">keys &middot; t today &middot; d what is due &middot; s since you last opened</p>
+  </section>
+
+  <!-- =================================================================== -->
+  <!-- THE RECORD — one continuous stream. Above today's rule: what this    -->
+  <!-- case still owes. Below it: what happened, newest first.              -->
+  <!-- =================================================================== -->
+  <div class="record" id="record" data-lens="all">
+
+    <div id="owed">
+
+      <!-- a field that exists and is empty: it shows -->
+      <article class="entry entry--owed grid" data-type="hearing">
+        <div class="marg">
+          <span class="marg-date marg-date--none">Not set</span>
+          <span class="marg-type">hearing</span>
+        </div>
+        <div class="body">
+          <h2 class="e-title gapline">
+            <span>Next hearing &mdash; Not set</span>
+            <span class="blank" aria-hidden="true"></span>
+          </h2>
+        </div>
+      </article>
+
+      <article class="entry entry--owed grid" data-type="task">
+        <div class="marg">
+          <span class="marg-due">due</span>
+          <span class="marg-date">06 Aug 2026</span>
+          <span class="marg-type">task</span>
+        </div>
+        <div class="body">
+          <h2 class="e-title">Draft the reply to the interim application</h2>
+          <p class="e-meta">Due in <span class="tab">7</span> days</p>
+        </div>
+      </article>
+
+      <!-- overdue is carried by the word and by weight, never by a hue -->
+      <article class="entry entry--owed grid" data-type="document">
+        <div class="marg">
+          <span class="marg-due">due</span>
+          <span class="marg-date">24 Jul 2026</span>
+          <span class="marg-type">document</span>
+        </div>
+        <div class="body">
+          <h2 class="e-title">Affidavit of the plaintiff</h2>
+          <p class="e-meta">Not filed <span class="sep" aria-hidden="true">&middot;</span> <span class="word">Overdue</span> by <span class="tab">6</span> days</p>
+
+          <!-- destructive, open in place. The only oxblood on this page. -->
+          <div class="block" id="confirm">
+            <p>Remove the document Affidavit of the plaintiff? A removed document cannot be brought back.</p>
+            <p class="verbs">
+              <button type="button" class="verb verb--destructive">Remove</button>
+              <button type="button" class="verb" id="confirm-edit">Edit</button>
+            </p>
+          </div>
+          <p class="verbs" id="doc-verbs" hidden>
+            <button type="button" class="verb">Edit</button>
+            <button type="button" class="verb" id="doc-remove">Remove</button>
+          </p>
+        </div>
+      </article>
+
+      <article class="entry entry--owed grid" data-type="task">
+        <div class="marg">
+          <span class="marg-due">due</span>
+          <span class="marg-date">21 Jul 2026</span>
+          <span class="marg-type">task</span>
+        </div>
+        <div class="body">
+          <h2 class="e-title">Collect the client&rsquo;s rent receipts for 2023-24</h2>
+          <p class="e-meta"><span class="word">Overdue</span> by <span class="tab">9</span> days</p>
+        </div>
+      </article>
+
+    </div><!-- /owed -->
+
+    <!-- ================================================================= -->
+    <!-- TODAY'S RULE — the origin of the page, and the one compose point.  -->
+    <!-- Recording what happened and adding what is due next are the same   -->
+    <!-- act; the entry's type is chosen inside it.                         -->
+    <!-- ================================================================= -->
+    <section class="today grid" id="today" aria-label="Today">
+      <div class="marg">
+        <span class="today-date tab">30 Jul 2026</span>
+        <span class="today-label">today</span>
+      </div>
+      <div class="compose" role="group" aria-label="add">
+        <div class="compose-line">
+          <span class="compose-add">add</span>
+          <button type="button" class="type" data-type="hearing" aria-disabled="true" aria-describedby="reason">hearing</button>
+          <button type="button" class="type" data-type="document" aria-pressed="false">document</button>
+          <button type="button" class="type" data-type="task" aria-pressed="false">task</button>
+          <button type="button" class="type" data-type="note" aria-pressed="false">note</button>
+        </div>
+        <p class="reason" id="reason">Cannot add the next hearing until the 14 Jul 2026 outcome is recorded.</p>
+
+        <div class="write">
+          <input class="write-line" id="write-line" type="text" aria-label="add" autocomplete="off">
+          <div class="write-due">
+            <span class="caps">due</span>
+            <input class="write-date" type="text" aria-label="due" autocomplete="off">
+            <span class="verbs"><button type="button" class="verb">Save</button></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================= -->
+    <!-- BELOW TODAY'S RULE — what happened, in dated periods.              -->
+    <!-- ================================================================= -->
+
+    <details class="period period--first" id="p-jul-2026" open>
+      <summary class="grid">
+        <span class="marg p-mark" aria-hidden="true"></span>
+        <div>
+          <h2 class="p-head">July 2026</h2>
+          <p class="p-summary">1 hearing <span class="sep" aria-hidden="true">&middot;</span> 1 document <span class="sep" aria-hidden="true">&middot;</span> 1 note</p>
+        </div>
+      </summary>
+
+      <article class="entry grid" data-type="note">
+        <div class="marg">
+          <span class="marg-date">16 Jul 2026</span>
+          <span class="marg-type">note</span>
+        </div>
+        <div class="body">
+          <p class="e-note">&ldquo;Client confirms she holds the original sale agreement; a copy is to be collected.&rdquo;</p>
+        </div>
+      </article>
+
+      <!-- the live gap and the failed save, both kept at their own date -->
+      <article class="entry grid" data-type="hearing">
+        <div class="marg">
+          <span class="marg-date">14 Jul 2026</span>
+          <span class="marg-type">hearing</span>
+        </div>
+        <div class="body">
+          <h3 class="e-title">Hearing outcome &mdash; not recorded</h3>
+          <p class="e-meta">Held</p>
+          <div class="block">
+            <p>Not saved &mdash; the connection dropped. What you typed is kept here. Save again.</p>
+            <p class="verbs"><button type="button" class="verb">Save</button></p>
+          </div>
+        </div>
+      </article>
+
+      <div class="since grid">
+        <span class="marg" aria-hidden="true"></span>
+        <span class="since-in">
+          <span class="caps">since you last opened</span>
+          <span class="line" aria-hidden="true"></span>
+        </span>
+      </div>
+
+      <article class="entry grid" data-type="document">
+        <div class="marg">
+          <span class="marg-date">08 Jul 2026</span>
+          <span class="marg-type">document</span>
+        </div>
+        <div class="body">
+          <h3 class="e-title">Written statement of the defendant</h3>
+          <p class="e-meta">Filed</p>
+        </div>
+      </article>
+    </details>
+
+    <p class="ornament" aria-hidden="true">***</p>
+
+    <details class="period" id="p-may-2026" open>
+      <summary class="grid">
+        <span class="marg p-mark" aria-hidden="true"></span>
+        <div>
+          <h2 class="p-head">May 2026</h2>
+          <p class="p-summary">1 hearing <span class="sep" aria-hidden="true">&middot;</span> 1 note</p>
+        </div>
+      </summary>
+
+      <article class="entry grid" data-type="note">
+        <div class="marg">
+          <span class="marg-date">21 May 2026</span>
+          <span class="marg-type">note</span>
+        </div>
+        <div class="body">
+          <p class="e-note">&ldquo;Client instructed to obtain certified copies of the 2023 municipal tax receipts.&rdquo;</p>
+        </div>
+      </article>
+
+      <article class="entry grid" data-type="hearing">
+        <div class="marg">
+          <span class="marg-date">19 May 2026</span>
+          <span class="marg-type">hearing</span>
+        </div>
+        <div class="body">
+          <p class="e-note">&ldquo;Defendant&rsquo;s written statement taken on record.&rdquo;</p>
+          <p class="e-meta">Held <span class="sep" aria-hidden="true">&middot;</span> Hearing outcome recorded</p>
+        </div>
+      </article>
+    </details>
+
+    <p class="ornament" aria-hidden="true">***</p>
+
+    <!-- an older period, collapsed to one dated summary line -->
+    <details class="period" id="p-mar-2024">
+      <summary class="grid">
+        <span class="marg p-mark" aria-hidden="true"></span>
+        <div>
+          <h2 class="p-head">March 2024</h2>
+          <p class="p-summary">1 document</p>
+        </div>
+      </summary>
+
+      <article class="entry grid" data-type="document">
+        <div class="marg">
+          <span class="marg-date">11 Mar 2024</span>
+          <span class="marg-type">document</span>
+        </div>
+        <div class="body">
+          <h3 class="e-title">Vakalatnama</h3>
+          <p class="e-meta">Filed</p>
+        </div>
+      </article>
+    </details>
+
+  </div><!-- /record -->
+
+  <!-- =================================================================== -->
+  <!-- REFERENCE — not part of the record. Subordinate, at the foot.        -->
+  <!-- =================================================================== -->
+  <section class="reference" aria-label="reference">
+    <div class="grid">
+      <span class="marg caps">reference</span>
+      <div>
+        <h2>Not part of the record</h2>
+        <p class="ref-index">
+          <b>empty</b> &mdash; next hearing, Not set: on the cover sheet, and as the first entry above today&rsquo;s rule.
+          <b>disabled</b> &mdash; on today&rsquo;s rule, where hearing cannot be added yet.
+          <b>error</b> &mdash; in the record at 14 Jul 2026.
+          <b>destructive</b> &mdash; on the document due 24 Jul 2026.
+          The two below cannot stand in the record at the same time as those, so they are drawn here.
+        </p>
+
+        <div class="ref-case">
+          <span class="caps">loading &mdash; the cover sheet</span>
+          <span class="ld w-38"></span>
+          <span class="ld ld--b w-72"></span>
+          <span class="ld ld--c w-58"></span>
+          <span class="caps ref-sub">loading &mdash; the record</span>
+          <span class="ld w-26"></span>
+          <span class="ld ld--b w-84"></span>
+          <span class="ld ld--c w-64"></span>
+          <p class="ref-note">The rules arrive before the words do: the page is ruled, then it is written.</p>
+        </div>
+
+        <div class="ref-case">
+          <span class="caps">success &mdash; the 14 Jul 2026 outcome, once recorded</span>
+          <article class="ref-entry grid">
+            <div class="marg">
+              <span class="marg-date">14 Jul 2026</span>
+              <span class="marg-type">hearing</span>
+            </div>
+            <div>
+              <h3 class="e-title">Hearing outcome recorded</h3>
+              <p class="e-meta">Held <span class="sep" aria-hidden="true">&middot;</span> Outcome recorded <span class="sep" aria-hidden="true">&middot;</span> <span class="tab">14 Jul 2026</span></p>
+            </div>
+          </article>
+          <p class="ref-note">The fact appears in place, at its own date. Overdue on this case stays <span class="tab">2</span> &mdash; neither the task nor the filing was touched &mdash; and hearing can then be added on today&rsquo;s rule.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="colophon">
+    <span>Iyer &amp; Ananth, Advocates <span class="sep" aria-hidden="true">&middot;</span> <span class="tab">O.S. No. 412 of 2024</span> <span class="sep" aria-hidden="true">&middot;</span> <span class="tab">30 Jul 2026</span></span>
+    <span>Desktop and mobile. Below 46rem the record stays one column: the margin&rsquo;s date and type set above their entry, the dated period heads stay sticky, and the compose point stays on today&rsquo;s rule. Tablet: no.</span>
+  </footer>
+
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  var record = document.getElementById('record');
+  var lensButtons = Array.prototype.slice.call(document.querySelectorAll('.lens button'));
+
+  function setLens(name) {
+    record.setAttribute('data-lens', name);
+    lensButtons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-lens') === name));
+    });
+  }
+  lensButtons.forEach(function (b) {
+    b.addEventListener('click', function () { setLens(b.getAttribute('data-lens')); });
+  });
+
+  /* the one compose act: the type is chosen inside it */
+  var writeLine = document.getElementById('write-line');
+  var typeButtons = Array.prototype.slice.call(document.querySelectorAll('.type'));
+
+  typeButtons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.getAttribute('aria-disabled') === 'true') { return; }
+      typeButtons.forEach(function (o) {
+        if (o.getAttribute('aria-disabled') !== 'true') {
+          o.setAttribute('aria-pressed', String(o === b));
+        }
+      });
+      writeLine.setAttribute('aria-label', b.getAttribute('data-type'));
+      writeLine.focus();
+    });
+  });
+
+  /* the destructive confirmation, open in place on the entry it names */
+  var confirmBlock = document.getElementById('confirm');
+  var docVerbs = document.getElementById('doc-verbs');
+  document.getElementById('confirm-edit').addEventListener('click', function () {
+    confirmBlock.hidden = true;
+    docVerbs.hidden = false;
+    document.getElementById('doc-remove').focus();
+  });
+  document.getElementById('doc-remove').addEventListener('click', function () {
+    docVerbs.hidden = true;
+    confirmBlock.hidden = false;
+    confirmBlock.querySelector('.verb--destructive').focus();
+  });
+
+  /* expert path: keys over dates and entries */
+  var jumps = { t: '#today', d: '#owed', s: '.since' };
+  var digits = { '0': 'all', '1': 'hearing', '2': 'document', '3': 'task', '4': 'note' };
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) { return; }
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) { return; }
+    var k = String(e.key).toLowerCase();
+    if (jumps[k]) {
+      var el = document.querySelector(jumps[k]);
+      if (el) { el.scrollIntoView({ block: 'start' }); e.preventDefault(); }
+    } else if (digits[k]) {
+      setLens(digits[k]);
+      e.preventDefault();
+    }
+  });
+}());
+</script>
+
+</body>
+</html>
