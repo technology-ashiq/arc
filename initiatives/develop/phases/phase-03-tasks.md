@@ -33,81 +33,89 @@ expected-proof-failures: (empty until proven)
 title: the 4 backstops fire on fixtures: fingerprint 3× · 5 attempts · risk-glob diff · unregistered marker
 kind: logic
 risk: high
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bash tests/develop-stuck.bats, backstop firing tests
+tier: unit
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: fingerprint-3x and attempts-5 both fire; risk globs and marker scan both report
+commit: 1b2d9ab
 
 #### slice: 02
 
 title: each backstop has a negative control — a fixture where it must *not* fire
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — a negative control per backstop
+tier: unit
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: none fires short of its trigger, and three DIFFERENT failures do not trip fingerprint-3x
+commit: 1b2d9ab
 
 #### slice: 03
 
 title: `slice.stuck` receipts land on the spine
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — slice.stuck receipt assertions
+tier: unit
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: receipt lands on a fired backstop, and none lands when no backstop fires
+commit: 1b2d9ab
 
 #### slice: 04
 
 title: `checkpoint` runs inline from `next` and states plainly which trigger tripped
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — checkpoint invoked inline from next
+tier: unit
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: runs at the slice boundary and names which trigger tripped
+commit: 1b2d9ab
 
 #### slice: 05
 
 title: tests added & green on all 3 CI legs
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — all 3 CI legs
+tier: unit
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: CI run 30754616004 green
+commit: 1b2d9ab
 
 #### slice: 06
 
 title: `tree-manifest.txt` regenerated as a named step, and `ci.yml`'s test-count floor raised — this phase ships product files under time pressure, which is exactly where retro-log 2026-07-22's "surprise mid-task golden failure" lands
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — tree-manifest regen + CI floor check
+tier: static
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: delta diffed first; floor 318 already satisfied at 800+ tests
+commit: 1b2d9ab
 
 #### slice: 07
 
 title: tracker updated (PROGRESS.md row ✅ + done-log)
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — PROGRESS.md + board
+tier: static
 sources: phase-03-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: tracker updated, board-lint 0
+commit: 1b2d9ab
+
+### Prediction scores
+
+likely-failure-mode: hit — the fingerprint normalisation was the delicate part exactly as predicted: too specific and the same failure never repeats, so the backstop never fires
+likely-regression-site: hit — the stuck counters and their receipt path, as called
+riskiest-file: hit — stuck.mjs held the judgement-sensitive logic, as predicted
+expected-blockers: miss — predicted none, but slice.stuck was outside the closed spine vocabulary and needed ADR-0107; ADR-0106's own revisit trigger caught it
+expected-proof-failures: hit — predicted a case or wording mismatch on a CI leg, and that is exactly what both failures were

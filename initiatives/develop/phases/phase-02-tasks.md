@@ -31,83 +31,91 @@ expected-proof-failures: (empty until proven)
 #### slice: 01
 
 title: the harness was run against this phase's own real spec before the phase was built, and what it produced (usable brief, or the specific way it failed) is recorded in the ledger
-kind: logic
+kind: infra
 risk: high
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — `start 2` ran against phase-02-spec.md before any code
+tier: static
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: usable brief produced: 7 slices, reqs REQ-08/09, adrs correct
+commit: 1b2d9ab
 
 #### slice: 02
 
 title: `handoff` scores all 5 prediction fields with a settling ledger reference each
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — handoff refusal + acceptance tests
+tier: unit
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: all 5 fields required, verdict-checked, and a settling reference enforced
+commit: 1b2d9ab
 
 #### slice: 03
 
 title: no numeric confidence appears anywhere in the output — `develop-lint`'s `self-declared-number` group is asserted against the handoff output itself
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — handoff output asserted to carry no self-declared number
+tier: unit
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: SELF_DECLARED moved into ledger.mjs and applied to the score text handoff prints
+commit: 1b2d9ab
 
 #### slice: 04
 
 title: `spec-fidelity` runs with spec + diff only and its report lands in the evidence pack
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — .claude/agents/spec-fidelity.md + evidence/phase-NN/handoff.md
+tier: static
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: agent shipped with spec+diff-only iron laws; handoff now writes the pack as a file
+commit: 1b2d9ab
 
 #### slice: 05
 
 title: a deliberately drifted fixture (a slice implementing something the spec never asked for) is caught by the fidelity pass
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: integration — the fidelity pass run against this phase own real diff
+tier: integration
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: FIDELITY: drift found — 3 real drifts, all fixed; stronger than a synthetic fixture
+commit: 1b2d9ab
 
 #### slice: 06
 
 title: tests added & green on all 3 CI legs
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bash tests/develop-lifecycle.bats on all 3 CI legs
+tier: unit
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: CI run 30754616004 green
+commit: 1b2d9ab
 
 #### slice: 07
 
 title: tracker updated (PROGRESS.md row ✅ + done-log)
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — PROGRESS.md row + done log + board
+tier: static
 sources: phase-02-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: tracker updated, board-lint 0
+commit: 1b2d9ab
+
+### Prediction scores
+
+likely-failure-mode: unforeseen — predicted a parser failure; the real failure was that the phase shipped an agent structurally unable to verify its own phase's first exit criterion, because that criterion says "recorded in the ledger" and the agent is forbidden to read ledgers
+likely-regression-site: hit — the seam was exactly where predicted, in how handoff reads what the ledger holds
+riskiest-file: miss — predicted the agent definition; the risk was in develop.mjs's validation, which let a bare verdict with no settling reference through
+expected-blockers: hit — none appeared
+expected-proof-failures: miss — predicted none; CI failed twice, both times on MY stale test assertions rather than on the product

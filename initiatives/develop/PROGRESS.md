@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-develop (Cycle 5, opened 2026-08-02)
-phase: 02 — in progress
+phase: — all 4 closed, cycle ready to land
 appetite: 5d
-burn: 1.1d
+burn: 1.9d
 blocked-on: —
 depends-on: —
 
@@ -22,20 +22,29 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — `/arc-develop` runs start → next → status → handoff end-to-end offline on the committed fake phase, lane-native, writing a durable brief + slice ledger and emitting receipts | 1.5 days | ✅ done 2026-08-02 |
 | 01 | The proof floor — `develop-lint` with structural BLOCKs, evidence tiers, and a parser that survives ≥20 adversarial breaking inputs | 1.25 days | ✅ done 2026-08-02 |
-| 02 | Earned judgment — predictions scored at handoff, and a fresh unanchored `spec-fidelity` pass over spec + diff | 0.75 days | pending |
-| 03 | Controlled escalation — stuck backstops, inline risk-triggered checkpoints, debt-ledger marker lint | 0.5 days | pending |
+| 02 | Earned judgment — predictions scored at handoff, and a fresh unanchored `spec-fidelity` pass over spec + diff | 0.75 days | ✅ done 2026-08-02 |
+| 03 | Controlled escalation — stuck backstops, inline risk-triggered checkpoints, debt-ledger marker lint | 0.5 days | ✅ done 2026-08-02 |
 
-**Appetite burn: ~1.1 of 5 days used (~22%), with 2 of 4 phases closed.** Phases allocate 4.0 days;
-the remaining 1.0 day is deliberate slack, because Cycle 4 closed at 112% with none. The checkpoint
-was 3.0 days with Phase 01 done — **it did not fire**: Phase 01 closed at ~1.1d, well inside it.
-(A literal 50% mark would have been a broken instrument — Phase 00 + 01 already sum to 2.75d, so it
-would have fired on every on-schedule run.)
+**Appetite burn: ~1.9 of 5 days used (~38%). All 4 phases closed, every one under its own
+appetite.** Phases allocated 4.0 days and spent ~1.9. The 3.0-day checkpoint never fired.
 
-Basis, so it can be audited rather than believed: one unbroken sitting on 2026-08-02. Phase 00
-(~0.5d) covered the kickoff — plan, 4 specs, 6 ADRs, 3 attack rounds, 3 simulation rounds — plus the
-ADR-band repair and the steel thread. Phase 01 (~0.6d) covered develop-lint, 45 adversarial fixtures
-across two rounds, and closing the 9 holes the second round found. Both came in under their
-appetites (1.5d and 1.25d), which is the cycle's whole slack margin holding so far.
+| phase | appetite | spent | closed on |
+|---|---|---|---|
+| 00 steel thread | 1.5d | ~0.5d | CI `30751546128` |
+| 01 proof floor | 1.25d | ~0.6d | CI `30752975413` |
+| 02 earned judgment | 0.75d | ~0.4d | CI `30754616004` |
+| 03 controlled escalation | 0.5d | ~0.4d | CI `30754616004` |
+
+Basis, so it can be audited rather than believed: one unbroken sitting on 2026-08-02, from the
+kickoff through to all four phases green on the 3-OS matrix. The honest caveat on that number is
+that this was a single continuous session with no context switches, which is the most favourable
+possible condition and not what a normal week looks like — the figure is real but it is not a
+throughput claim.
+
+**Prediction calibration across the three scored phases: 9 hit · 5 miss · 1 unforeseen.**
+That is the record this product exists to accumulate — earned from scored outcomes, not asserted.
+The misses are the useful half: the riskiest-file call was wrong twice in a row, both times
+naming the gate rather than the parser underneath it.
 
 ## Done log
 
@@ -89,17 +98,65 @@ en dash, while the writer itself emits an em dash — so `proof: –` read as a 
 cosmetic-only, with no violation riding along — a fixture that passes by parsing correctly pins
 nothing, so they were rebuilt.
 
+---
+
+**Phase 02 — earned judgment — closed 2026-08-02, ~0.4d against a 0.75d appetite.**
+`handoff` now refuses a ledger whose predictions are unscored, and emits no receipt when it
+refuses. Verdicts are `hit | miss | unforeseen`, each requiring the reference that settles it.
+`spec-fidelity` ships as an agent whose whole information set is the spec and the diff.
+
+**It was proven by running the fidelity pass on this phase's own diff, and the pass found real
+drift** — which is a stronger result than the synthetic drifted fixture the spec asked for.
+Three findings, all fixed: a bare `hit` with no settling reference passed the gate; the
+self-declared-number detector was only ever applied to slice fields, so a score reading
+`hit — 95% confidence` would have printed straight out of `handoff`; and "its report lands in the
+evidence pack" was simply absent — handoff printed a pack and assembled nothing.
+
+**One finding no fix closes, kept as the lesson.** This phase shipped an agent structurally
+incapable of verifying its own phase's first exit criterion: the criterion says "recorded in the
+ledger", and the agent is forbidden to read ledgers. Any criterion phrased that way is
+unverifiable by the fidelity pass by construction. Future exit criteria must be diff-verifiable
+or be marked as something else's job.
+
+---
+
+**Phase 03 — controlled escalation — closed 2026-08-02, ~0.4d against a 0.5d appetite.**
+Deterministic counters under a judgement call: same fingerprint 3× forces root-cause mode, five
+attempts on one slice escalates with a one-screen diagnosis. Hypothesis novelty is *claimable* —
+a model under pressure always feels like it has a new idea — so the counters are the floor
+beneath the judgement, and a claimed new hypothesis does not reset them. Every firing emits
+`slice.stuck`, because `.claude/state/` is disposable and a retro asking where the time went
+must have something to read.
+
+`checkpoint` became real and runs inline at the slice boundary (ADR-0103). Risk is path-matched
+by a glob table, never self-assessed. The debt ledger opens with four honest rows — including
+the two things this phase deliberately did not build.
+
+`slice.stuck` needed ADR-0107 (21 → 22). ADR-0106's own revisit trigger — *"a fourth develop
+lifecycle event needs a kind"* — is what authorised it, one cycle after it was written.
+
 ## Now
 
-**Current position:** Phases 00 and 01 closed on green CI. Phase 02 — earned judgment — is open:
-predictions scored at handoff against what actually happened, and a fresh unanchored
-`spec-fidelity` pass reading only the spec and the diff.
+**Current position: all four phases closed on green CI, ~1.9 of 5 days.** `/arc-develop` ships
+with five modes, a lint with three BLOCKs and two WARN-first groups, 45 pinned adversarial
+fixtures, a stuck protocol, inline risk checkpoints, a debt ledger and a fidelity agent.
+PR **#95** carries the cycle.
 
-Phase 02's spec requires it to **open by self-hosting** — run the shipped harness against its own
-real `phase-02-spec.md` before building anything, because real-phase dogfooding is otherwise a
-declared no-go and this is the only non-fixture proof the cycle buys.
+**Next step:** `/arc-retro` — this cycle has unusually good material for it (see below) — then
+merge #95.
 
-**Next step:** `/arc-develop start 2 --lane develop`, then work the ledger slice by slice.
+**What the retro should not lose:**
 
-**Tracked, not built:** a duplicate-ADR-number check inside an existing lint, so CI catches a
-forgotten century band instead of trusting the convention. Route via `/arc-change`.
+1. **A gate's author cannot be its attacker.** 26 self-written breaking inputs, 26 caught, zero
+   holes — then an unanchored agent found 9. Every one of mine attacked the same direction.
+2. **A stated control is not a control.** The ADR band went into `PORTFOLIO.md` as a convention;
+   the lint that would enforce it is still not built, so the protection is a promise.
+3. **The spine failed silently.** `develop.started` quarantined while the command exited 0. Any
+   emitter should verify its first receipt actually landed rather than trust exit 0.
+4. **Two extensions of a closed vocabulary in one cycle.** ADR-0107 sets the next trigger at the
+   fifth kind, where the answer becomes one `develop.*` kind with a typed payload.
+
+**Tracked, not built** (also in `debt-ledger.md`): the duplicate-ADR-number lint; the public-API
+surface diff; the shared risk-glob rules file; and `spec-fidelity` has never been loaded by the
+runtime that will load it — it was exercised through a general-purpose agent carrying its
+contract inline, because agent types register at session start.
