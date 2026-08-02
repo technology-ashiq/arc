@@ -24,6 +24,11 @@ load 'test_helper'
 LINT()  { echo "$ARC_ROOT/.claude/scripts/engine/process-lint.mjs"; }
 HOST()  { echo "$ARC_ROOT/tests/fixtures/engine/hostile"; }
 
+# In-place sed, portably. `sed -i` is a GNU-ism: BSD sed (the macOS leg) reads the NEXT
+# argument as a backup suffix, so `sed -i 's/a/b/' f` silently consumes the script as the
+# suffix and fails. CLAUDE.md flags this leg for exactly this class of difference.
+_sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
+
 # ---------------------------------------------------------------------------
 # Positive half
 # ---------------------------------------------------------------------------
@@ -61,23 +66,23 @@ HOST()  { echo "$ARC_ROOT/tests/fixtures/engine/hostile"; }
   # Each mutation of the SAME path must produce its own distinct check id. Written out one
   # by one rather than in a loop: the sed delimiter differs per case, and a silently-failing
   # sed would make this test pass by producing no mutation at all.
-  cp "$(HOST)/good.process.yaml" "$f"; sed -i 's/^version: 1.0.0$/version: v1/' "$f"
+  cp "$(HOST)/good.process.yaml" "$f"; _sed_i 's/^version: 1.0.0$/version: v1/' "$f"
   run node "$(LINT)" "$f" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]; [[ "$output" == *"[name-semver]"* ]]; seen+=("name-semver")
 
-  cp "$(HOST)/good.process.yaml" "$f"; sed -i 's/^permissions: declared$/permissions: partial/' "$f"
+  cp "$(HOST)/good.process.yaml" "$f"; _sed_i 's/^permissions: declared$/permissions: partial/' "$f"
   run node "$(LINT)" "$f" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]; [[ "$output" == *"[permissions-invalid]"* ]]; seen+=("permissions-invalid")
 
-  cp "$(HOST)/good.process.yaml" "$f"; sed -i 's#basic.json#absent.json#' "$f"
+  cp "$(HOST)/good.process.yaml" "$f"; _sed_i 's#basic.json#absent.json#' "$f"
   run node "$(LINT)" "$f" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]; [[ "$output" == *"[evals-path]"* ]]; seen+=("evals-path")
 
-  cp "$(HOST)/good.process.yaml" "$f"; sed -i 's#{{input.base|default:main}}#{{input.nosuch}}#' "$f"
+  cp "$(HOST)/good.process.yaml" "$f"; _sed_i 's#{{input.base|default:main}}#{{input.nosuch}}#' "$f"
   run node "$(LINT)" "$f" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]; [[ "$output" == *"[placeholder-malformed]"* ]]; seen+=("placeholder-malformed")
 
-  cp "$(HOST)/good.process.yaml" "$f"; sed -i 's/^  - git.op:$/  - net.connect:/' "$f"
+  cp "$(HOST)/good.process.yaml" "$f"; _sed_i 's/^  - git.op:$/  - net.connect:/' "$f"
   run node "$(LINT)" "$f" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]; [[ "$output" == *"[tool-unknown]"* ]]; seen+=("tool-unknown")
 
@@ -93,7 +98,7 @@ HOST()  { echo "$ARC_ROOT/tests/fixtures/engine/hostile"; }
   [ "$status" -eq 0 ]
   # Rewrite one sentence of the prose. The pin still matches the live file, so only a lint
   # that actually compares the BODY can notice -- this is the doctored-artifact case.
-  sed -i 's/Do NOT push/Do push/' "$d/p.process.yaml"
+  _sed_i 's/Do NOT push/Do push/' "$d/p.process.yaml"
   run node "$(LINT)" "$d/p.process.yaml" --root "$ARC_ROOT"
   [ "$status" -eq 1 ]
   [[ "$output" == *"[body-drift]"* ]]
@@ -142,10 +147,9 @@ HOST()  { echo "$ARC_ROOT/tests/fixtures/engine/hostile"; }
 }
 
 @test "every INDEX code is a real check id or ACCEPT" {
-  local ids; ids="$(node -e '
-    import("file:///" + process.argv[1].replace(/\\/g,"/") + "/.claude/scripts/engine/process-lint.mjs")
-      .catch(() => {});' "$ARC_ROOT" 2>/dev/null || true)"
-  # process-lint exits during import, so read the exported list textually from the source.
+  # process-lint calls process.exit() during module evaluation, so it cannot be imported for
+  # its exports -- read the exported list textually from the source instead.
+  local ids
   ids="$(sed -n '/^export const CHECKS = Object.freeze(\[/,/\]);/p' "$(LINT)" | grep -oE '"[a-z-]+"' | tr -d '"')"
   [ -n "$ids" ]
   local bad=0
