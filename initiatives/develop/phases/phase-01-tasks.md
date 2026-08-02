@@ -33,60 +33,60 @@ expected-proof-failures: CRLF and duplicate-slice-id fixtures failing on the Win
 title: `node .claude/scripts/develop/develop-lint.mjs --lane develop` exits 1 on each of the three BLOCK mutations and exits 0 on the good fixture
 kind: logic
 risk: high
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — bash tests/develop-lint.bats (3 negative-control tests)
+tier: unit
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 3 BLOCKs exit 1 on their named mutation, exit 0 on the good fixture
+commit: 0649181
 
 #### slice: 02
 
 title: each BLOCK has a **negative-control fixture** that proves the check can fail — a control that has never been seen to fail is a coin, not a gate (retro-log 2026-08-02)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — the negative-control trio
+tier: unit
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: one control per BLOCK, each proven able to fail
+commit: 0649181
 
 #### slice: 03
 
 title: ≥20 breaking inputs pinned under `tests/fixtures/develop/breaking/`, each FAILing the lint, with the good fixture still passing
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — the pinned-breaking-input test, 26 cases
+tier: unit
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: 26 of 26 caught, each failing for its intended check group
+commit: 7fb07e8
 
 #### slice: 04
 
 title: every proof carries a tier from `static|unit|contract|integration|e2e-visual|verified-real` and its slice a `kind:`; the fake-phase fixture carries one `ui` slice and one `external-dep` slice so both tier floors are actually exercised, plus one slice with no `kind:` to prove the missing-classification WARN fires instead of a silent skip
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: unit — tier-floor tests (ui + missing-kind)
+tier: unit
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: tier vocabulary enforced; ui floor and absent kind both WARN
+commit: 0649181
 
 #### slice: 05
 
 title: WARN groups registered in `docs/trial-ledger.md` with their promotion criteria
-kind: logic
+kind: infra
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — docs/trial-ledger.md entry with promotion criteria
+tier: static
 sources: phase-01-spec.md
 decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+result: both WARN groups registered with what would promote them
+commit: 0649181
 
 #### slice: 06
 
