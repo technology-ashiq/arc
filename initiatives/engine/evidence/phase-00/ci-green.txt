@@ -1,0 +1,27 @@
+Phase 00 — CI green
+
+PR:      https://github.com/technology-ashiq/arc/pull/103
+Commit:  c8bb6173bf9a1273705780578c8ae76cf3c87082
+Subject: fix(engine): portable in-place sed — the macOS leg caught a GNU-ism
+
+ci-tier                                              pass  34s
+selftest (macos-latest, 20, shard 1/3)               pass  1m33s
+selftest (macos-latest, 20, shard 2/3)               pass  2m15s
+selftest (macos-latest, 20, shard 3/3)               pass  2m12s
+selftest (ubuntu-latest, 18)                         pass  3m29s
+selftest (ubuntu-latest, 20)                         pass  4m0s
+selftest (ubuntu-latest, 22)                         pass  3m59s
+selftest (windows-latest, 20, shard 1/12)            pass  2m47s
+selftest (windows-latest, 20, shard 10/12)           pass  4m35s
+selftest (windows-latest, 20, shard 11/12)           pass  3m32s
+selftest (windows-latest, 20, shard 12/12)           pass  3m6s
+selftest (windows-latest, 20, shard 2/12)            pass  2m57s
+selftest (windows-latest, 20, shard 3/12)            pass  4m2s
+selftest (windows-latest, 20, shard 4/12)            pass  4m13s
+selftest (windows-latest, 20, shard 5/12)            pass  4m53s
+selftest (windows-latest, 20, shard 6/12)            pass  2m52s
+selftest (windows-latest, 20, shard 7/12)            pass  4m14s
+selftest (windows-latest, 20, shard 8/12)            pass  3m24s
+selftest (windows-latest, 20, shard 9/12)            pass  3m52s
+
+19/19 jobs pass — ubuntu 18/20/22, macos x3 shards, windows x12 shards, ci-tier.

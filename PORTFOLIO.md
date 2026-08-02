@@ -16,7 +16,7 @@ Updated: 2026-08-03
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
 | develop | LIVE | arc-develop (Cycle 5, opened 2026-08-02) | — all 4 closed, cycle ready to land | 5d / 1.9d | — | PR #95 ready to merge — /arc-retro then land |
-| engine | LIVE | arc-engine (Cycle 6, opened 2026-08-03) | 00 — the canonical layer, in progress | 14d / 0d | — | Phase 00: process-lint + 3 canonical pilots + hostile corpus |
+| engine | LIVE | arc-engine (Cycle 6, opened 2026-08-03) | 01 — the proof, byte-identical then flip | 14d / 0.6d | — | Phase 01: arc-compile to 3/3 byte-identical, then flip source of truth |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
