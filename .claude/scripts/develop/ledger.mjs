@@ -33,6 +33,13 @@ const clean = (s) => s.replace(INVISIBLE, "").normalize("NFKC");
 export const TIERS = ["static", "unit", "contract", "integration", "e2e-visual", "verified-real"];
 export const KINDS = ["ui", "external-dep", "logic", "infra"];
 
+/**
+ * The only verdicts a prediction may carry. `unforeseen` is not a synonym for `miss`: a miss
+ * is a prediction that was made and was wrong; unforeseen is what happened that nobody
+ * predicted at all. Collapsing them would hide the more useful half — the blind spots.
+ */
+export const VERDICTS = ["hit", "miss", "unforeseen"];
+
 export const PREDICTION_FIELDS = [
   "likely-failure-mode",
   "likely-regression-site",
@@ -104,7 +111,7 @@ const HEADING_RE = /^[ \t]*#{1,6}[ \t]+\S/;
 export function parseLedger(text) {
   const errors = [];
   if (typeof text !== "string" || text.trim() === "") {
-    return { brief: {}, slices: [], errors: [{ line: 1, msg: "ledger is empty" }] };
+    return { brief: {}, slices: [], scores: {}, errors: [{ line: 1, msg: "ledger is empty" }] };
   }
   // Normalise line endings only. CRLF and mixed endings are a real 3-OS input, not an
   // attack -- but nothing else about the bytes is touched.
@@ -115,6 +122,7 @@ export function parseLedger(text) {
   // clean ledger, which is ADR-0101's stated revisit trigger.
   const brief = Object.create(null);
   const nonNegotiables = [];
+  const scores = Object.create(null);
   const slices = [];
   let current = null;      // the slice block being filled
   let section = "brief";   // brief | non-negotiables | predictions | slices
@@ -158,6 +166,7 @@ export function parseLedger(text) {
     if (HEADING_RE.test(line)) {
       const h = line.replace(/^[ \t]*#+[ \t]*/, "").trim().toLowerCase();
       if (/^non-negotiables/.test(h)) section = "non-negotiables";
+      else if (/^prediction scores?/.test(h)) section = "scores";
       else if (/^predictions?/.test(h)) section = "predictions";
       else if (/^slices?/.test(h)) section = "slices";
       // An UNKNOWN heading must not preserve a swallowing section. It used to leave
@@ -191,6 +200,14 @@ export function parseLedger(text) {
     const key = f[1].toLowerCase();
     const value = f[2];
 
+    // Prediction scores live in their own namespace so a verdict can never be confused
+    // with the prediction it grades, and so `handoff` can tell scored from unscored.
+    if (section === "scores" && !current) {
+      if (Object.hasOwn(scores, key)) errors.push({ line: lineNo, msg: `prediction '${key}' scored twice` });
+      else scores[key] = value;
+      continue;
+    }
+
     if (current) {
       if (Object.hasOwn(current.fields, key)) {
         errors.push({ line: lineNo, id: current.id, msg: `slice '${current.id}' repeats key '${key}'` });
@@ -206,7 +223,7 @@ export function parseLedger(text) {
   }
 
   brief["non-negotiables"] = nonNegotiables;
-  return { brief, slices, errors };
+  return { brief, slices, scores, errors };
 }
 
 /** A slice is proven when BOTH its result and its commit are really filled in (ADR-0065). */

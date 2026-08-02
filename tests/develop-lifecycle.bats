@@ -215,3 +215,67 @@ _scratch() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"no checks wired yet"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# Phase 02 -- prediction calibration at handoff (REQ-08)
+# ---------------------------------------------------------------------------
+
+@test "handoff REFUSES while any prediction is unscored, and prints the template" {
+  local t; t="$(_scratch fake-phase-done)"
+  _dev "$t" handoff 0
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"predictions are not scored"* ]]
+  [[ "$output" == *"### Prediction scores"* ]]
+  [[ "$output" == *"hit|miss|unforeseen"* ]]
+}
+
+@test "handoff accepts a scored ledger and tallies the verdicts" {
+  local t; t="$(_scratch fake-phase-done)"
+  {
+    echo ""
+    echo "### Prediction scores"
+    echo ""
+    echo "likely-failure-mode: hit — the parser broke exactly there"
+    echo "likely-regression-site: miss — it was elsewhere"
+    echo "riskiest-file: hit — as predicted"
+    echo "expected-blockers: unforeseen — a closed vocabulary nobody knew about"
+    echo "expected-proof-failures: hit — the Windows leg, as called"
+  } >> "$t/initiatives/develop/phases/phase-00-tasks.md"
+  _dev "$t" handoff 0
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"3 hit · 1 miss · 1 unforeseen"* ]]
+}
+
+@test "an invalid verdict word is refused, not counted" {
+  local t; t="$(_scratch fake-phase-done)"
+  {
+    echo ""
+    echo "### Prediction scores"
+    echo ""
+    echo "likely-failure-mode: probably-ish — sort of right"
+    echo "likely-regression-site: hit — x"
+    echo "riskiest-file: hit — x"
+    echo "expected-blockers: hit — x"
+    echo "expected-proof-failures: hit — x"
+  } >> "$t/initiatives/develop/phases/phase-00-tasks.md"
+  _dev "$t" handoff 0
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not scored"* ]]
+}
+
+@test "handoff emits no self-declared number anywhere in its output" {
+  local t; t="$(_scratch fake-phase-done)"
+  {
+    echo ""
+    echo "### Prediction scores"
+    echo ""
+    for f in likely-failure-mode likely-regression-site riskiest-file expected-blockers expected-proof-failures; do
+      echo "$f: hit — settled by the ledger"
+    done
+  } >> "$t/initiatives/develop/phases/phase-00-tasks.md"
+  _dev "$t" handoff 0
+  [ "$status" -eq 0 ]
+  # The governing rule: confidence is earned from scored outcomes, never asserted.
+  [[ "$output" != *"confidence"* ]]
+  [[ "$output" != *"%"* ]]
+}

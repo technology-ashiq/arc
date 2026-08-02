@@ -25,7 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
-import { PLACEHOLDER, PREDICTION_FIELDS, isProven, parseLedger, progress, renderLedger } from "./ledger.mjs";
+import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger } from "./ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
@@ -341,11 +341,45 @@ async function modeHandoff(ctx, n) {
   })();
   if (!led) die("no slice ledger found — nothing to hand off");
 
-  const { slices } = led.parsed;
+  const { slices, brief, scores } = led.parsed;
   const { proven, total } = progress(slices);
+
+  // Predictions are scored HERE or the handoff does not happen. This is where confidence
+  // comes from in this product: a record of what was predicted and what actually occurred,
+  // accumulated over phases -- never a number the model asserts about itself. A prediction
+  // block that is written and never scored is decoration, and decoration is how "we had a
+  // retro" became a substitute for a record.
+  const unscored = PREDICTION_FIELDS.filter((k) => !isFilled(scores[k]));
+  const badVerdict = PREDICTION_FIELDS
+    .filter((k) => isFilled(scores[k]))
+    .filter((k) => !VERDICTS.includes(scores[k].trim().split(/[\s—–-]/)[0].toLowerCase()));
+
+  if (unscored.length || badVerdict.length) {
+    say(`Handoff refused — ${unscored.length + badVerdict.length} of ${PREDICTION_FIELDS.length} predictions are not scored.`);
+    say("");
+    say("Score each one against what actually happened, then rerun. Add to the ledger:");
+    say("");
+    say("### Prediction scores");
+    say("");
+    for (const k of PREDICTION_FIELDS) {
+      const predicted = brief[k] ? ` (predicted: ${brief[k]})` : "";
+      say(isFilled(scores[k]) && !badVerdict.includes(k)
+        ? `${k}: ${scores[k]}`
+        : `${k}: hit|miss|unforeseen — <the ledger line or commit that settles it>${predicted}`);
+    }
+    say("");
+    say(`A verdict is one of: ${VERDICTS.join(" | ")}. \`unforeseen\` is not a synonym for \`miss\` —`);
+    say("a miss is a prediction that was wrong; unforeseen is what nobody predicted at all.");
+    flush(4);
+  }
+
   await emit("handoff.ready", { lane: ctx.mode === "root" ? null : ctx.lane, proven, total });
 
+  const tally = VERDICTS.map((v) => `${PREDICTION_FIELDS.filter((k) => scores[k].trim().toLowerCase().startsWith(v)).length} ${v}`).join(" · ");
   say(`Handoff pack — ${proven}/${total} slices proven`);
+  say(`Prediction calibration — ${tally}`);
+  for (const k of PREDICTION_FIELDS) say(`  ${k}: ${scores[k]}`);
+  say("");
   for (const s of slices) {
     say(`  ${isProven(s) ? "✓" : "·"} slice ${s.id}  tier=${s.fields.tier ?? "?"}  ${s.fields.title ?? ""}`);
   }

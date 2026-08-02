@@ -135,3 +135,11 @@ sources: phase-01-spec.md
 decision: (empty until proven)
 result: tracker updated, board-lint exit 0
 commit: 33a8d45
+
+### Prediction scores
+
+likely-failure-mode: hit — the 9 holes were exactly the cosmetic/invisibility class: unknown heading swallowing slices, title suffix on a heading, zero-width and homoglyph keys
+likely-regression-site: hit — 7 of the 9 holes were in ledger.mjs parseLedger, at the tolerant-detection/strict-grammar seam
+riskiest-file: miss — predicted develop-lint.mjs; the risk was in ledger.mjs, which held 7 of 9 holes while develop-lint.mjs held 2
+expected-blockers: hit — none appeared; the adversarial pass found holes, not blockers, as predicted
+expected-proof-failures: miss — predicted CRLF and duplicate-slice-id failing on Windows; both passed everywhere. The real proof failure was 5 round-2 fixtures passing because they carried no violation, which was not predicted at all
