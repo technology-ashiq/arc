@@ -118,7 +118,7 @@
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
 .claude/scripts/plan/arc-bytediff.sh	252b971a2c8a7e2267fcdedcec34c85ecfa4a520d65590c0995c29f6d0e424f8
 .claude/scripts/plan/arc-evidence.sh	ddbc49a3da693499d34d2e7e904db017a045e6fb4558f5b0c867c432b9f013e0
-.claude/scripts/plan/kickoff-lint.mjs	63ffbac48a3675ee03441305cca5c8ebb1514f060af0954b798bd28786b55ba4
+.claude/scripts/plan/kickoff-lint.mjs	ce4f84fc5bb4c47e7c2422695975e65919a7d4fad74029ca7324bef9702cde4f
 .claude/scripts/review/arc-scan/adapters/codeql.sh	2096a51e1440b321f5ca1a2b7f1cb6870c661c10d82e64f8dc60b170ad80b7a2
 .claude/scripts/review/arc-scan/adapters/gitleaks.sh	efac63b8cf026d05eaafabbec934bb287b2bb67c6f72d0cee7806c088631ff9d
 .claude/scripts/review/arc-scan/adapters/semgrep.sh	24fb3a8beaac5cc9cb8ef3fe175e8e268bd5540264269b8dba26831164f34e2a

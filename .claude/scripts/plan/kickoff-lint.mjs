@@ -365,6 +365,44 @@ const adrRows = tableRows(section(secs, "key decisions"));
 const adrDir = join(root, "docs", "adr");
 const adrFiles = existsSync(adrDir) ? readdirSync(adrDir) : [];
 const nonnegBody = section(secs, "non-negotiables") || "";
+
+// ---------- 8a. [adr-dup]: two files claiming one number ----------
+// ADRs are a single pool at repo root (ADR-0053), but "highest + 1" only ever sees the
+// branch you are standing on. Two lanes numbering in parallel both read the same highest
+// and both write the next one, and git does not object -- the FILENAMES differ, so there is
+// no conflict to resolve and nothing to notice. It happened on 2026-08-02: model-policy and
+// develop each took 0063-0068 in separate sessions, and it was found by a human mentioning
+// the other session, not by any check.
+//
+// Structural, so it FAILs rather than warns: two files either share a four-digit prefix or
+// they do not. There is no judgement in it and no false-positive to protect against.
+{
+  const byNum = new Map();
+  for (const f of adrFiles) {
+    // Case-INSENSITIVE extension, and the separator after the number may be `-` or `.`:
+    // an adversarial pass on this check found `0001-x.MD` invisible to a case-sensitive
+    // match (and on Windows and macOS that file is perfectly real), and `0001.md` invisible
+    // to a pattern that required a dash — while the [adr] check below, which uses
+    // startsWith, would happily resolve BOTH. A duplicate one check can see and another
+    // cannot is worse than neither seeing it.
+    const m = f.match(/^(\d{4})[-.].*\.(?:md|markdown)$/i) || f.match(/^(\d{4})\.(?:md|markdown)$/i);
+    if (!m) continue;
+    if (!byNum.has(m[1])) byNum.set(m[1], []);
+    byNum.get(m[1]).push(f);
+  }
+  for (const [num, files] of [...byNum].sort()) {
+    if (files.length > 1) {
+      fail(
+        "adr-dup",
+        `ADR ${num} is claimed by ${files.length} files — ${files.join(" · ")}. ` +
+        "Every reference to this number is now ambiguous. Renumber all but one into its lane's " +
+        "band (PORTFOLIO.md records which century each lane owns) and rewrite the citations; " +
+        "renumbering is cheap while the loser lives on one branch, and expensive after it merges.",
+      );
+    }
+  }
+}
+
 const adrNums = [];
 adrRows.forEach((r) => {
   const num = (r[0] || "").match(/\d{4}/)?.[0];
