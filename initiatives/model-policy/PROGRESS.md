@@ -1,10 +1,10 @@
 # PROGRESS.md — Cycle 5 · model-policy "Balanced Model Policy"
 
-status: LIVE
-cycle: model-policy (Cycle 5, opened 2026-08-02)
-phase: 02
+status: IDLE
+cycle: model-policy (Cycle 5, closed 2026-08-02)
+phase: — (cycle closed)
 appetite: 3d
-burn: 0.35d
+burn: 0.7d
 blocked-on: —
 depends-on: —
 
@@ -20,24 +20,26 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — the Balanced Model Policy ADR-0069 written (blocks a–g), linted, merged (REQ-01) | 0.5 days | ✅ done 2026-08-02 |
 | 01 | Council `standard` mode + one real run; session-001 retrofit + honest grade-or-UNRESOLVED (REQ-02, REQ-04) | 0.75 days | ✅ done 2026-08-02 |
-| 02 | Paired composer A/B at one pinned commit; blind 7-item rankings; keep/revert ADR (REQ-03) | 1.25 days | 🔨 in progress — both arms building |
-| 03 | Attacker reject-log with fixed taxonomy (REQ-05) + mode-ladder dogfood + retro | 0.5 days | 🔨 REQ-05 done; dogfood + retro pending cycle close |
+| 02 | Paired composer A/B at one pinned commit; blind 7-item rankings; keep/revert ADR (REQ-03) | 1.25 days | ✅ done 2026-08-02 |
+| 03 | Attacker reject-log with fixed taxonomy (REQ-05) + mode-ladder dogfood + retro | 0.5 days | ✅ done 2026-08-02 |
 
-**Appetite burn: ~0.05 of 3 days used (~2%).** Basis, so it can be audited rather than
-believed: Phase 00 ran 15:32→15:52 IST on 2026-08-02 (kickoff commit `61995eb` → final green
-lint), ~20 minutes wall clock against a 0.5d appetite. Two honest caveats: this is *agent*
-wall-clock, not owner-hours, and Phase 00 was pure document authoring — the cheapest phase
-this cycle has. Phases 01–02 need real council runs, real explore runs and the owner's own
-eyes on 7 pages; none of that will scale like this. Do not read 2% as "on track for 6x under".
+**Appetite burn: ~0.7 of 3 days used (~23%) — CYCLE CLOSED UNDER APPETITE.**
 
-Kill criteria are live from the first hour: at **1.25d** if Phase 01 has not closed →
-re-forecast Phase 02 explicitly. At
-**1.5d** REQ-01 unmerged → STOP, take the contested article to `/arc-council standard`,
-bank nothing, retro. At **2.5d** if both REQ-03 arms cannot finish → bank the finished arm
-to `BRIEF-composer-ab.md` with its receipts and drop the REQ. Never extend.
+Basis, so it can be audited rather than believed: kickoff commit `61995eb` landed 15:32 IST
+2026-08-02 and the cycle closed at 21:08 — **~5.6 hours wall clock**, counted at an 8-hour
+day. Not one of the four kill-criteria tripwires fired (1.25d Phase-01, 1.5d REQ-01, 2.5d
+REQ-03, 100%).
 
-Phase appetites sum to exactly 3.0 of 3.0 days — there is no slack, by design. The two
-tripwires above are the release valves.
+**Read that number with its caveat, which is large.** This is *agent* wall-clock, not
+owner-hours, and it is the first cycle in arc's history where most of the execution was
+agent-parallel: six composers built simultaneously, two researchers and three council stances
+ran in single batches. The owner's own time in this cycle was roughly one approval, one
+council question, and one 6-item blind ranking. Comparing 0.7d here against Cycle 4's 3.35d
+is comparing two different units, and the retro should say so rather than celebrate a 4×.
+
+The one thing the number genuinely shows: **zero-slack planning did not blow up.** Phase
+appetites summed to exactly 3.0 of 3.0, which `kickoff-lint` warned was "its own fiction" —
+and the fiction never had to be tested, because nothing overran.
 
 ## Done-log
 
@@ -89,17 +91,44 @@ a docs-drift sweep, not Phase 00's steel thread — carried to Phase 03 / `/arc-
 
 | ID | Assumption | State |
 |---|---|---|
-| A-01 | Workhorse composer seat is a live quality bottleneck | open — tested Phase 02 |
-| A-02 | A 2-researcher envelope covers a real slice of council use | open — tested Phase 01 |
-| A-03 | Owner sustains ~30 min/week for calibration dogfood | open — tested Phase 03 |
+| A-01 | Workhorse composer seat is a live quality bottleneck | **DEAD** — its own falsification trigger fired. Both blind rankings interleaved perfectly (owner `S O S O S O`, jury `O S O S O S`); neither arm dominates. Owner ranked workhorse above high-judgment 3–0 on same-thesis pairs. Recorded in [ADR-0070](../../docs/adr/0070-composer-seat-stays-balanced-workhorse.md) |
+| A-02 | A 2-researcher envelope covers a real slice of council use | **open — supported by ONE data point, not validated.** Session 002 fitted a real, consequential question inside the envelope at 6 calls of a 7 ceiling. Its trigger (3 consecutive runs ending "recommend deep") cannot fire on one run |
+| A-03 | Owner sustains ~30 min/week for calibration dogfood | **open — untestable this cycle.** The cycle ran in one day; "2 consecutive skipped weeks" needs two weeks to elapse. Carried forward unchanged |
 | A-04 | No rupee spend threshold needed; the two event triggers suffice | **open — honoured** in ADR-0069 block (d), which names both event triggers with their check location and states plainly that no spend figure is set. Trigger unfired |
-| A-05 | `arc-kickoff.md` is the only surface where a finding is rejected | open — ledgered at owner's instruction, tested Phase 03 |
-| A-06 | A real kickoff will run within 14 days of close to exercise the REQ-05 reject line | open — added by the attack panel; carries Phase 03's "implemented, unproven" fallback |
+| A-05 | `arc-kickoff.md` is the only surface where a finding is rejected | **open — HELD, re-verified at phase time.** `/arc-change.md` still contains zero occurrences of reject/attacker/panel. No mirror was invented to satisfy the parenthetical |
+| A-06 | A real kickoff will run within 14 days of close to exercise the REQ-05 reject line | **open — LIVE and now load-bearing.** REQ-05 closes "implemented, unproven": the reject line exists but no kickoff has produced one yet. Trigger: 14 days with no `REJECTED:` line recorded anywhere → re-validate or re-scope |
 
 ## Now
 
-**Position:** **Phases 00 and 01 are CLOSED.** REQ-01, REQ-02 and REQ-04 → validated.
-Remaining: REQ-03 (Phase 02, the paired composer A/B) and REQ-05 (Phase 03, reject-log).
+**Position: CYCLE 5 CLOSED.** All four phases done, all five REQs validated, burn ~0.7 of
+3 days, no tripwire fired. Nine ADRs landed: 0063–0068 (MP-A..F), 0069 (the policy itself),
+0070 (the composer verdict).
+
+arc's model usage is no longer taste encoded in 27 frontmatter lines. There is one written
+policy that an agent actually **meets** — `CLAUDE.md` points at it, which a drift sweep found
+nothing else did. All four discipline fixes landed: council `standard` tier, the calibration
+loop unblocked and honestly graded, the composer tier answered by a paired A/B, and a trace
+on rejected attacker findings.
+
+**What this cycle did NOT establish — recorded so nobody claims otherwise later:**
+
+- **No absolute design quality bar.** No reference screen existed, so ADR-0070 compares the
+  two arms and nothing more. Ranking N candidates always yields a winner and never a bar.
+- **No cost figure.** `statusline cost: absent` on both arms, deliberately not estimated.
+  "Cheaper" rests on public list prices, not on anything arc recorded.
+- **No mode mix.** One `standard` run, zero `quick`, zero `deep`. ADR-0065's cannibalisation
+  trigger cannot be read on one run and stays armed and unfired.
+- **REQ-05 is implemented but UNPROVEN.** A-06 is live: no kickoff has yet produced a real
+  `REJECTED:` line.
+
+**Next:** lane is IDLE. `/arc-kickoff --lane model-policy` when a new cycle pulls it. The
+engine cycle inherits ADR-0069 instead of deciding it — and inherits one flagged conflict:
+`PLAN-engine-process-layer.md`'s ENG-E ladder has an auto-switching middle step that block
+(b)(1) forbids, queued there for its own kickoff.
+
+---
+
+## Cycle record
 
 Phase 01 delivered both its REQs and turned up two things the plan had wrong:
 
@@ -142,21 +171,34 @@ than answered now — **A-04** (the engine trigger's ₹N spend figure, which ex
 the repo) and **A-05** (REQ-05's `/arc-change` mirror, which does not exist in
 `arc-change.md` under any name).
 
-**Next step:** Phase 02 (REQ-03, the paired composer A/B), appetite 1.25d — **awaiting the
-owner's sign-off to move past Phase 01**, a human gate by design.
+**Phase 02 — the paired composer A/B (REQ-03).** The `design-jury` 4-vs-7 fork was resolved
+as option **(a)**: a per-invocation prompt override, agent file untouched, logged as a
+documented deviation. It became a **6**-item ranking, not 7, because no reference screen
+existed and fabricating one was refused.
 
-Phase 02 is the cycle's most expensive phase and it has **one decision that must be made
-before either arm runs**, not during: `.claude/agents/design-jury.md` is hard-coded for
-exactly FOUR items ("one line, four entries, exactly this form"), while REQ-03 asks for a
-7-item blind ranking. The spec requires choosing **(a)** a per-invocation prompt-only
-override to `item-a`…`item-g`, logged as a documented deviation, or **(b)** two separate
-4-item panels with the ADR stating plainly that no single 7-item ordering was produced.
-Left undecided it surfaces mid-run inside a phase with zero slack.
+Every fairness condition was asserted **before** either arm ran: same pinned commit
+`e46bbda` · one director assignment · `thesis.txt` SHA-256 equality per variant · identical
+prompts differing only in tier · one render command, identical recipe on all six ·
+`PIN_FONT=0` so typography survived into the judgement.
 
-The owner also owns three non-delegable steps in Phase 02: writing the PREDICTION before
-seeing any output, blind-ranking the pages **with their own eyes** (retro 2026-07-30 — an
-agent's report about a screenshot is not the screenshot), and accepting or rejecting the
-recorded cost/time delta.
+**The result went against the intuition that motivated the experiment.** The owner's blind
+ranking put workhorse above high-judgment in **all three** same-thesis pairs (3–0); the jury,
+ranking the same six blind and independently, came out 2–1 the other way. Both rankings
+alternate perfectly — neither arm dominates, which is A-01's own death condition. The owner
+was shown the unsealed result, told plainly his ranking had gone 3–0 against the premium
+tier, offered a documented override, and **chose to follow the pre-registered formula**.
+→ [ADR-0070](../../docs/adr/0070-composer-seat-stays-balanced-workhorse.md).
+
+Recorded honestly in that ADR: **no owner PREDICTION was pre-registered** (REQ-03 required
+one; the ranking was submitted directly, so the prediction-vs-result comparison does not
+exist and cannot be reconstructed), high-judgment was **not slower** (58.0 min vs 80.5 min
+total), and the **rupee delta is unmeasured**.
+
+**Phase 03 — reject-log (REQ-05).** `arc-kickoff.md` step 5 now records one line per rejected
+attacker finding against the fixed six-word taxonomy. A-05 re-verified at phase time:
+`/arc-change` still has no mirror, and none was invented. The mode-ladder dogfood is recorded
+as **partially met and not padded** — running a `quick` and a `deep` purely to tick the row
+would be manufacturing usage, the same thing REQ-04 refused.
 
 **Carried out of Phase 01, unrelated to this cycle's REQs:** the council's `NO` verdict names
 a 5-minute action with outsized leverage — define what *"Cycle 2 closed"* means. That one
