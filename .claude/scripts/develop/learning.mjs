@@ -20,7 +20,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { SELF_DECLARED, isFilled, parseLedger } from "./ledger.mjs";
@@ -38,6 +38,7 @@ const LINK_KEYS = ["adr", "rule", "fixture", "phase"];
 const PROMOTION_INPUTS = ["replay", "evaluated-by", "approved-by"];
 
 const EVALS = (root) => join(root, "tests", "fixtures", "develop-evals");
+const EXPECTS = new Set(["flagged", "clean"]);
 const CATEGORIES = ["spec-drift", "false-confidence", "missing-edge-case", "bad-gate", "flailing", "clean"];
 
 // ---------------------------------------------------------------------------
@@ -53,19 +54,44 @@ function readRows(text) {
   // ids read `L-001`. Rather than widen the slice grammar — which is hardened and pinned by
   // 45 adversarial fixtures — the prefix is stripped for the reader and restored for every
   // message, so an operator only ever sees the id they actually wrote.
+  // The lead MIRRORS SLICE_RE's own tolerance — bullet, heading, emphasis — because a
+  // rewrite stricter than the grammar it feeds is a hole, not a safeguard. An adversarial
+  // pass hid a row five ways through exactly that gap: `- **learning: L-203**` was not
+  // rewritten, so it became an ordinary field, landed in the brief, and every violation it
+  // carried went unchecked. That row broke all six rules and the gate said "all rows valid".
+  const LEAD = "[ \\t]*(?:[-*+][ \\t]+)?(?:#{1,6}[ \\t]*)?(?:\\*{1,2}|_{1,2})?[ \\t]*";
   const rewritten = text.replace(
-    /^([ \t]*#{0,6}[ \t]*)learning[ \t]*:[ \t]*([A-Za-z]+-)?([0-9][0-9a-z-]*)/gim,
-    (_m, lead, _prefix, id) => `${lead}slice: ${id}`,
+    new RegExp(`^(${LEAD})learning[ \\t]*:[ \\t]*(?:[A-Za-z][A-Za-z0-9]*-)?([0-9][0-9a-z-]*)`, "gim"),
+    (_m, lead, id) => `${lead}slice: ${id}`,
   );
+
   const { slices, errors } = parseLedger(rewritten);
   const label = (id) => (id === undefined ? id : `L-${id}`);
-  return {
+  const out = {
     rows: slices.map((s) => ({ ...s, id: label(s.id) })),
     errors: errors.map((e) => ({ ...e, id: label(e.id), msg: e.msg.replace(/slice '(\d[0-9a-z-]*)'/g, "row 'L-$1'") })),
   };
+
+  // FAIL CLOSED on the whole class rather than on the five forms already known. Anything
+  // that reads as a row marker to a person must become a row or become an error — never
+  // silently become a field. This is the same discipline NEAR_SLICE already applies in
+  // ledger.mjs, and it covers the forms nobody has thought of yet.
+  const markers = (text.match(/^[\s>*_+#-]*learning[ \t]*:/gim) || []).length;
+  if (markers !== out.rows.length) {
+    out.errors.push({
+      line: 1,
+      msg: `${markers} line(s) read as a learning-row marker but ${out.rows.length} row(s) parsed — a row that is not parsed is a row whose violations are never checked`,
+    });
+  }
+  // A ledger with no rows at all is not "valid", it is unread. An unterminated fence above
+  // the rows produced exactly that, and the gate reported success.
+  if (out.rows.length === 0 && /learning[ \t]*:/i.test(text)) {
+    out.errors.push({ line: 1, msg: "the file mentions learning rows but none parsed — check for an unterminated fence or a marker the grammar does not accept" });
+  }
+  return out;
 }
 
-export function validate(text, { withheldIds = new Set() } = {}) {
+export function validate(text, { withheldIds = new Set(), checkExists = null } = {}) {
   const fails = [], warns = [];
   const { rows, errors } = readRows(text);
 
@@ -97,8 +123,6 @@ export function validate(text, { withheldIds = new Set() } = {}) {
     const type = (f.type || "").trim();
     if (EXECUTABLE.has(type) && isFilled(f.check) === false && (f.verdict || "").trim() === "promoted")
       fails.push({ at, id, msg: `row ${id} is type ${type} and promoted but carries no \`check:\`` });
-    if (!EXECUTABLE.has(type) && isFilled(f.check))
-      fails.push({ at, id, msg: `row ${id} is type ${type}, which is applied rather than executed — remove \`check:\`` });
 
     // A number the row asserts about its own quality (the governing rule) — checked ONLY in
     // the prose fields, never in a path or a link.
@@ -108,10 +132,15 @@ export function validate(text, { withheldIds = new Set() } = {}) {
     // whose directory name contains "confidence" and whose filename contains a number. That
     // is a textbook false block: the gate firing on correct work, which teaches people to
     // ignore it. A path is a reference; only prose can make a claim.
-    const PROSE = ["what-failed", "why-missed", "prevention", "cost", "replay", "evaluated-by"];
-    for (const k of PROSE) {
-      const v = f[k];
-      if (typeof v === "string" && SELF_DECLARED.test(v))
+    // DENY BY DEFAULT: every field except the typed links and `check:`, which are paths.
+    // The previous allowlist of six prose fields was the bug — `approved-by: ashiq — 97%
+    // confidence this one generalises` and `catches: a 92% success-rate` both sailed through,
+    // and those are precisely where a promoting author writes a score. An allowlist cannot
+    // cover a field nobody has invented yet; a denylist of two path keys can.
+    const NOT_PROSE = new Set([...LINK_KEYS, "check"]);
+    for (const [k, v] of Object.entries(f)) {
+      if (NOT_PROSE.has(k) || typeof v !== "string") continue;
+      if (SELF_DECLARED.test(v))
         fails.push({ at, id, msg: `row ${id} field \`${k}\` asserts a number about its own quality` });
     }
 
@@ -120,27 +149,52 @@ export function validate(text, { withheldIds = new Set() } = {}) {
     if (links.length === 0)
       warns.push({ at, id, msg: `row ${id} carries no typed link — it records a fact but joins nothing` });
 
-    // The holdout: a candidate written against a withheld fixture was written against the
-    // thing meant to test it (REQ-04, ADR-0109).
-    for (const k of ["fixture", "catches", "replay"]) {
-      const v = f[k];
+    // The holdout: EVERY field, case-insensitively. Scanning three named keys let a citation
+    // hide in `prevention:`, in `note:`, or behind a lowercased filename (REQ-04, ADR-0109).
+    for (const [k, v] of Object.entries(f)) {
       if (typeof v !== "string") continue;
+      const hay = v.toLowerCase();
       for (const wid of withheldIds) {
-        if (v.includes(wid))
+        if (hay.includes(wid.toLowerCase()))
           fails.push({ at, id, msg: `row ${id} cites withheld fixture ${wid} in \`${k}:\` — the holdout is not evidence for the candidate it withheld` });
       }
     }
 
-    // Promotion needs all three inputs, each reported separately (REQ-03).
+    // Promotion needs all three inputs, and each must SAY something (REQ-03). Testing only
+    // for non-emptiness let `replay: not run yet`, `evaluated-by: the same session that wrote
+    // the candidate` and `approved-by: pending Ashiq's review` all satisfy a promotion.
     if ((f.verdict || "").trim() === "promoted") {
-      for (const k of PROMOTION_INPUTS)
-        if (!isFilled(f[k])) fails.push({ at, id, msg: `row ${id} is promoted but carries no \`${k}:\`` });
-      // ADR-0109: time-forward measurement pays out in a LATER cycle. A row cannot claim it
-      // on the day it is promoted, or it reads identical to one that survived a real test.
+      const rp = (f.replay || "").trim();
+      if (!isFilled(rp)) fails.push({ at, id, msg: `row ${id} is promoted but carries no \`replay:\`` });
+      else if (!/caught\s+\d+\s+of\s+\d+/i.test(rp) || !/false-blocked\s+\d+\s+of\s+\d+/i.test(rp))
+        fails.push({ at, id, msg: `row ${id}'s \`replay:\` must carry BOTH computed counts — "caught N of M" and "false-blocked N of M"` });
+
+      if (!isFilled(f["evaluated-by"])) fails.push({ at, id, msg: `row ${id} is promoted but carries no \`evaluated-by:\`` });
+
+      const ap = (f["approved-by"] || "").trim();
+      if (!isFilled(ap)) fails.push({ at, id, msg: `row ${id} is promoted but carries no \`approved-by:\`` });
+      else if (!/^ashiq\b/i.test(ap) || !/\b\d{4}-\d{2}-\d{2}\b/.test(ap))
+        fails.push({ at, id, msg: `row ${id}'s \`approved-by:\` must name the approver and an ISO date — "pending review" is not an approval` });
+
+      // ADR-0109: time-forward measurement pays out in a LATER cycle. `phase 04` on a row
+      // promoted IN phase 04 is the one thing the field must not be allowed to say, and a
+      // loose /phase \d+/ accepted it — along with an earlier phase, and a sentence asserting
+      // the opposite of the field's meaning.
       const fv = (f["forward-verified"] || "").trim().toLowerCase();
-      if (fv !== "no" && !/phase[ -]?\d+/i.test(fv))
-        fails.push({ at, id, msg: `row ${id} must carry \`forward-verified: no\` until a later phase measures it, then name that phase` });
+      const own = Number((f.phase || "").trim().match(/\d+/)?.[0] ?? NaN);
+      const named = fv.match(/^phase[ -]?(\d+)$/);
+      if (fv !== "no" && !named)
+        fails.push({ at, id, msg: `row ${id} must carry \`forward-verified: no\`, or exactly \`phase NN\` naming the later phase that measured it` });
+      else if (named && Number.isFinite(own) && Number(named[1]) <= own)
+        fails.push({ at, id, msg: `row ${id} claims forward-verification by phase ${named[1]}, which is not later than the phase ${own} that promoted it — time-forward means later` });
     }
+
+    // `check:` must resolve, and "must not carry" is about the KEY, not its value: `(none)`
+    // reads as empty to isFilled, so a checklist could carry a check: line and never trip.
+    if (Object.hasOwn(f, "check") && !EXECUTABLE.has(type))
+      fails.push({ at, id, msg: `row ${id} is type ${type}, which is applied rather than executed — remove \`check:\`` });
+    if (EXECUTABLE.has(type) && isFilled(f.check) && checkExists && !checkExists(f.check.trim()))
+      fails.push({ at, id, msg: `row ${id}'s \`check:\` points at ${f.check.trim()}, which does not exist` });
   }
 
   return { rows, fails, warns };
@@ -162,11 +216,21 @@ function readFixture(path) {
   // why the fixture exists. A fixture that mixes the artifact with commentary about it makes
   // the commentary part of what a candidate matches -- which is how two clean controls,
   // written to prove a matcher over-fires, made a corrected matcher over-fire on them.
-  const artifact = raw
-    .split("\n")
-    .filter((l) => !/^[a-z][a-z0-9-]*[ \t]*:/i.test(l))
-    .join("\n")
-    .trim();
+  // Strip ONLY the leading contiguous header block. Filtering every `key:`-looking line from
+  // the whole file deleted the artifact itself whenever the artifact was one of this
+  // product's own records — a ledger fragment, a PROGRESS header, a receipt — handing the
+  // candidate an EMPTY body while the fixture still counted in the denominator. A permanent,
+  // silent, uncatchable miss.
+  const lines = raw.split("\n");
+  let i = 0;
+  while (i < lines.length && /^[a-z][a-z0-9-]*[ \t]*:/i.test(lines[i])) i++;
+  const artifact = lines.slice(i).join("\n").trim();
+
+  if (!EXPECTS.has(head.expect))
+    throw new Error(`${path}: expect: must be exactly "flagged" or "clean" — found "${head.expect ?? "(absent)"}". A fixture in neither class shrinks a denominator silently.`);
+  if (!artifact)
+    throw new Error(`${path}: the artifact is empty. A fixture with no body counts in a denominator and can never be caught.`);
+
   return {
     id: head.id || basename(path, ".md"),
     category: head.category || "?",
@@ -182,18 +246,46 @@ export function corpus(root, { includeWithheld = false } = {}) {
   const base = EVALS(root);
   const dirs = [...CATEGORIES, ...(includeWithheld ? ["withheld"] : [])];
   const out = [];
+  const seen = new Map();
   for (const c of dirs) {
     const d = join(base, c);
     if (!existsSync(d)) continue;
-    for (const f of readdirSync(d).filter((f) => f.endsWith(".md")).sort()) out.push(readFixture(join(d, f)));
+    for (const f of readdirSync(d).filter((f) => f.endsWith(".md")).sort()) {
+      const fx = readFixture(join(d, f));
+      // A duplicate id makes the withheld set vanish: `held` is computed by subtracting ids,
+      // so a withheld fixture sharing an id with a visible one is dropped entirely, and the
+      // holdout reports `0 of 0` — an empty holdout that reads like a passing one.
+      if (seen.has(fx.id))
+        throw new Error(`duplicate fixture id ${fx.id}: ${seen.get(fx.id)} and ${fx.path}`);
+      seen.set(fx.id, fx.path);
+      out.push(fx);
+    }
   }
   return out;
 }
 
-export function withheldIds(root) {
+/**
+ * The withheld ids, keyed by BOTH filename and declared header id. Keying on the filename
+ * alone let a withheld fixture declaring a different `id:` be cited by its real id — the
+ * citation check would look for the filename and never see it.
+ *
+ * A missing `withheld/` is a hard STOP, not a quiet skip. The identical ledger that produced
+ * three FAILs inside the repo printed "all rows valid" when run from a directory without one,
+ * with no statement of which corpus had been consulted.
+ */
+export function withheldIds(root, { required = true } = {}) {
   const d = join(EVALS(root), "withheld");
-  if (!existsSync(d)) return new Set();
-  return new Set(readdirSync(d).filter((f) => f.endsWith(".md")).map((f) => basename(f, ".md")));
+  if (!existsSync(d)) {
+    if (required) throw new Error(`no withheld holdout at ${d} — refusing to validate against a corpus with no holdout rather than reporting success over one`);
+    return new Set();
+  }
+  const ids = new Set();
+  for (const f of readdirSync(d).filter((f) => f.endsWith(".md"))) {
+    ids.add(basename(f, ".md"));
+    const declared = readFileSync(join(d, f), "utf8").match(/^id[ \t]*:[ \t]*(\S+)/im);
+    if (declared) ids.add(declared[1]);
+  }
+  return ids;
 }
 
 /**
@@ -207,27 +299,52 @@ export function withheldIds(root) {
  * indistinguishable from a gate that works.
  */
 export async function replay(root, candidatePath) {
-  const mod = await import(pathToFileURL(resolve(candidatePath)).href);
-  if (typeof mod.check !== "function") throw new Error(`${candidatePath} exports no check(fixture) function`);
+  // The candidate is untrusted code and runs in its own process (replay-child.mjs). It
+  // receives frozen BODIES only and returns booleans only; every label stays here. An
+  // adversarial pass walked past the in-process version four separate ways — an oracle
+  // reading `fixture.expect`, a mutation of `expect` that erased the clean denominator, an
+  // exfiltration of the withheld ids through the runner, and a fabricated report printed at
+  // import time before `check` was ever called.
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtempSync, writeFileSync, readFileSync: rf, existsSync: ex } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
 
-  // The withheld set is REPLAYED (it is the holdout, it must be measured) but never
-  // identified: only its two totals leave this function.
   const visible = corpus(root);
   const held = corpus(root, { includeWithheld: true }).filter((f) => !visible.some((v) => v.id === f.id));
+  const all = [...visible, ...held];
 
-  const tally = (list) => {
+  const dir = mkdtempSync(join(tmpdir(), "arc-replay-"));
+  const bodiesPath = join(dir, "bodies.json");
+  const outPath = join(dir, "flags.json");
+  writeFileSync(bodiesPath, JSON.stringify(all.map((f) => f.body)), "utf8");
+
+  const child = join(dirname(new URL(import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "$1")), "replay-child.mjs");
+  try {
+    // stdio ignored on purpose: nothing the candidate prints is evidence of anything.
+    execFileSync(process.execPath, [child, resolve(candidatePath), bodiesPath, outPath], { stdio: "ignore" });
+  } catch {
+    throw new Error(`replay failed: the candidate process exited early or crashed — a replay that did not complete is not a result`);
+  }
+  if (!ex(outPath)) throw new Error("replay failed: the candidate process wrote no results");
+  const parsed = JSON.parse(rf(outPath, "utf8"));
+  if (parsed.error) throw new Error(`replay failed: ${parsed.error}`);
+  if (!Array.isArray(parsed.flags) || parsed.flags.length !== all.length)
+    throw new Error(`replay failed: expected ${all.length} verdicts, got ${Array.isArray(parsed.flags) ? parsed.flags.length : "none"}`);
+
+  // Counting happens HERE, against labels the candidate never saw.
+  const tally = (list, offset) => {
     let caught = 0, flaggedTotal = 0, falseBlocked = 0, cleanTotal = 0;
     const detail = [];
-    for (const fx of list) {
-      const { flagged, why } = mod.check(fx) || {};
+    list.forEach((fx, i) => {
+      const flagged = parsed.flags[offset + i] === true;
       if (fx.expect === "flagged") { flaggedTotal++; if (flagged) caught++; }
       else if (fx.expect === "clean") { cleanTotal++; if (flagged) falseBlocked++; }
-      detail.push({ id: fx.id, category: fx.category, expect: fx.expect, flagged: !!flagged, why: why || "" });
-    }
+      detail.push({ id: fx.id, category: fx.category, expect: fx.expect, flagged });
+    });
     return { caught, flaggedTotal, falseBlocked, cleanTotal, detail };
   };
 
-  return { visible: tally(visible), withheld: tally(held) };
+  return { visible: tally(visible, 0), withheld: tally(held, visible.length) };
 }
 
 // ---------------------------------------------------------------------------

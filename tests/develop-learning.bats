@@ -238,6 +238,101 @@ check: .claude/scripts/develop/candidates/L-002.mjs")"
 }
 
 # ---------------------------------------------------------------------------
+# The adversarial pass, pinned. A fresh agent found 8 holes in this gate across 29
+# candidates; the three CRITICAL ones are below. Every one of them exited 0 before.
+# ---------------------------------------------------------------------------
+
+@test "a candidate cannot read the answer key it is being graded against" {
+  # It returned `flagged: fixture.expect === "flagged"` and scored 11 of 11. The candidate
+  # now receives a frozen { body } only, and the labels never leave the parent.
+  local c; c="$(mktemp -d)/oracle.mjs"
+  printf 'export function check(f) { return { flagged: f.expect === "flagged" }; }\n' > "$c"
+  run node "$(LEARN)" replay --candidate "$c" --root "$ARC_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"caught 0 "* ]]
+}
+
+@test "a candidate cannot erase the clean denominator by mutating what it is handed" {
+  # It set `fixture.expect = "flagged"` and the report came back `false-blocked 0 of 0` --
+  # a flag-everything candidate with the cost of flagging everything deleted.
+  local c; c="$(mktemp -d)/mutate.mjs"
+  printf 'export function check(f) { try { f.expect = "flagged"; } catch {} return { flagged: true }; }\n' > "$c"
+  run node "$(LEARN)" replay --candidate "$c" --root "$ARC_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"false-blocked 0 of 0"* ]]
+}
+
+@test "a candidate cannot fabricate the report and exit 0" {
+  # It printed a byte-plausible replay report at import time and called process.exit(0), so
+  # the evidence a human would paste was entirely candidate-authored.
+  local c; c="$(mktemp -d)/fake.mjs"
+  { echo 'console.log("visible:  caught 11 of 11 · false-blocked 0 of 6");'
+    echo 'process.exit(0);'
+    echo 'export function check() { return { flagged: true }; }'; } > "$c"
+  run node "$(LEARN)" replay --candidate "$c" --root "$ARC_ROOT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"replay failed"* ]]
+}
+
+@test "a row hidden behind a bullet or emphasis marker is an error, not a field" {
+  # `- **learning: L-203**` was not rewritten, so it became an ordinary field in the brief and
+  # every violation it carried went unchecked. That row broke all six rules; the gate passed.
+  local d; d="$(mktemp -d)"
+  { echo '# Learning ledger'
+    echo ''
+    echo '- **learning: L-203**'
+    echo ''
+    echo 'what-failed: hidden'
+    echo 'verdict: promoted'; } > "$d/l.md"
+  run node "$(LEARN)" parse "$d/l.md"
+  [ "$status" -ne 0 ]
+}
+
+@test "a ledger that mentions rows but parses none FAILS rather than passing empty" {
+  local d; d="$(mktemp -d)"
+  { echo '# Learning ledger'
+    echo ''
+    echo '```'
+    echo '#### learning: L-301'
+    echo 'what-failed: swallowed by an unterminated fence'; } > "$d/l.md"
+  run node "$(LEARN)" parse "$d/l.md"
+  [ "$status" -ne 0 ]
+}
+
+@test "a promoted row cannot satisfy its three inputs with words that say nothing" {
+  local f; f="$(_ledger "$(printf '%s\n' "$_ROW_MIN" | sed 's/^verdict: proposed$/verdict: promoted/')
+replay: not run yet, will be filled in once the corpus settles
+evaluated-by: the same session that wrote the candidate, reviewing its own work
+approved-by: pending Ashiq's review
+forward-verified: no
+check: .claude/scripts/develop/candidates/L-002.mjs")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+}
+
+@test "forward-verified cannot name the phase that promoted the row" {
+  # ADR-0109: time-forward means LATER. `phase 04` on a row promoted in phase 04 is the one
+  # thing the field must never be allowed to say, and a loose /phase \d+/ accepted it.
+  local f; f="$(_ledger "$(printf '%s\n' "$_ROW_MIN" | sed 's/^verdict: proposed$/verdict: promoted/')
+phase: 04
+replay: caught 1 of 11, false-blocked 0 of 6
+evaluated-by: a fresh agent
+approved-by: ashiq 2026-08-03
+forward-verified: phase 04
+check: .claude/scripts/develop/candidates/L-002.mjs")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"later"* ]]
+}
+
+@test "a self-declared number is caught in ANY field, not just six named ones" {
+  local f; f="$(_ledger "$_ROW_MIN
+catches: 11 of 12 fixtures, a 92% success-rate against the corpus")"
+  run node "$(LEARN)" parse "$f"
+  [ "$status" -ne 0 ]
+}
+
+# ---------------------------------------------------------------------------
 # The holdout (REQ-04, ADR-0109) -- process-enforced, and honest about it
 # ---------------------------------------------------------------------------
 

@@ -1,6 +1,6 @@
 # Build Brief — phase 04 · The Learning System: a record that compounds, and a promotion no machine can complete
 
-spec-hash: sha256:a9a193e376f9fbbacb15b95ef1b20354deaea8bad9a4c21b6cd96abbd076e449
+spec-hash: sha256:4a9cc69cc8b7e6dfb12ceb516b5528f4aa0fa345180eb2b46cf141decdd9daa5
 lane: develop
 reqs: REQ-01, REQ-02, REQ-03
 adrs: 0053, 0108, 0109
