@@ -19,6 +19,25 @@ Updated: 2026-08-02
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
 
+## ADR number bands — one century per lane
+
+ADRs are a single company organ at root (ADR-0053), but "highest + 1" only sees the branch
+you are standing on. Two lanes numbering in parallel both read 0062 and both write 0063, and
+git will not complain, because the filenames differ. It already happened on 2026-08-02:
+model-policy and develop each took 0063–0068 in separate sessions.
+
+So a lane claims a **century**, and never numbers outside it:
+
+| Band | Owner |
+|---|---|
+| 0001–0099 | company / core / hq — including the model-policy work holding 0063 onward |
+| 0100–0199 | `develop` |
+| 0200–0299 | next lane to be born |
+
+`/arc-kickoff` assigns the next free century when it creates a lane. A duplicate-number check
+still needs to be added to an existing lint so CI catches a band being forgotten — tracked,
+not yet built.
+
 ## Execution mode (ADR-0056 / PORT-G)
 
 **Mode A** — parked-lane switching, one working tree, one session at a time — is the

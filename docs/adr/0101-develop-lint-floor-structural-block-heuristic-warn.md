@@ -1,4 +1,4 @@
-# ADR 0064 — develop-lint's floor: structural checks BLOCK, heuristic checks WARN-first
+# ADR 0101 — develop-lint's floor: structural checks BLOCK, heuristic checks WARN-first
 
 **Status:** accepted
 **Date:** 2026-08-02
@@ -41,7 +41,7 @@ Option 3. The split is drawn on a principle, not on picking a side: **false-bloc
 pattern matching, never in "did the file parse".**
 
 BLOCK from v1 (exit 1):
-- `ledger-unparseable` — the file either satisfies the ADR-0063 grammar or it does not.
+- `ledger-unparseable` — the file either satisfies the ADR-0100 grammar or it does not.
 - `brief-stale` — the brief's recorded spec hash either matches `phase-NN-spec.md` or it does not.
 - `slice-unproven` — a ticked slice either carries `proof:` and `tier:` fields or it does not.
 

@@ -18,15 +18,15 @@ owns the verdict and the receipt).
 
 - `.claude/scripts/develop/develop.mjs` — subcommands `start | next | status | handoff`. Imports
   `resolveLane` from `.claude/scripts/core/lane-resolve.mjs`; never re-implements resolution; never
-  invokes git (ADR-0065).
+  invokes git (ADR-0102).
 - `.claude/commands/arc-develop.md` — the prompt wrapper: calls the script, prints the
   `Selected lane:` echo first in lane-mode, then the PORTFOLIO summary, then the script's report.
-- `.claude/scripts/develop/ledger.mjs` — the ADR-0063 grammar: writer + tolerant-detection parser.
+- `.claude/scripts/develop/ledger.mjs` — the ADR-0100 grammar: writer + tolerant-detection parser.
   Phase 00 ships the writer and a parser that reads what it wrote; Phase 01 makes the parser survive
   attack.
 - `products/develop/manifest.json` — `requires: ["core", "hq"]`, listing the command, the scripts and
-  the fake-phase fixture (ADR-0068).
-- **Three committed fixtures** (ADR-0067), because one tree cannot hold two ledger states at once:
+  the fake-phase fixture (ADR-0105).
+- **Three committed fixtures** (ADR-0104), because one tree cannot hold two ledger states at once:
   - `tests/fixtures/develop/fake-phase/` — a phase spec and **no** `tasks.md`. This is what `start`
     writes into; its ledger comes out with **5 slices, 0 proven**, so `status` prints `slice 0/5`.
   - `tests/fixtures/develop/fake-phase-midway/` — the same spec plus a committed `tasks.md` holding
@@ -46,7 +46,7 @@ owns the verdict and the receipt).
   it is proven — emit `slice.done` for it; (3) select the next slice with no `result:`, print its id,
   title, declared `proof:` and the brief's blast radius; (4) if none remain, print
   `all slices proven — run handoff` and exit 0. `next` never writes code, never runs git, and never
-  fills `result:` itself — the session does both, which is ADR-0065's whole point. It only reads what
+  fills `result:` itself — the session does both, which is ADR-0102's whole point. It only reads what
   the session left behind and moves the marker.
 - **`status`** — read-only reconstruction from committed files, no session memory. Prints the
   statusline, the next unproven slice id, and the last 3 receipt kinds.
@@ -72,7 +72,7 @@ may appear. It exists so the bats tests can drive the whole lifecycle against
 can be exercised without a second checkout. Lane resolution is anchored on `--root` when given, which
 is what makes the root-mode golden reproducible.
 
-## The grammar this phase writes (ADR-0063), by example
+## The grammar this phase writes (ADR-0100), by example
 
 This is the contract the writer emits and the Phase-01 parser must accept. Detection is tolerant
 (heading level, emphasis, surrounding whitespace); the value grammar is strict.
@@ -80,7 +80,7 @@ This is the contract the writer emits and the Phase-01 parser must accept. Detec
 > The example's headings are shown **one level down** from what the real file uses, so that this
 > example cannot masquerade as a section of this spec — a line-based reader splitting on `##` does
 > not respect code fences, which is retro-log 2026-07-16's exact defect class. Heading *level* is
-> noise to this grammar by design (ADR-0063 tolerant detection), so nothing depends on the shift.
+> noise to this grammar by design (ADR-0100 tolerant detection), so nothing depends on the shift.
 
 ```markdown
 # Build Brief — phase 00 · Steel thread
@@ -94,7 +94,7 @@ no-gos: Delivery-order layers 3-5, Full Context Pack retrieval, Evaluation-suite
 
 ### Non-negotiables
 
-- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0068).
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
 - (…the remaining 6 bullets, copied byte-for-byte from this spec's own closing block…)
 
 ### Predictions
@@ -114,7 +114,7 @@ kind: infra
 risk: high
 proof: unit — `bash tests/develop-lifecycle.bats -f "brief header"`
 tier: unit
-sources: phase-00-spec.md, ADR-0063
+sources: phase-00-spec.md, ADR-0100
 decision: —
 result: (empty until proven)
 commit: (empty until proven)
@@ -222,7 +222,7 @@ already accepts. Run the lint after writing it rather than trusting this example
 - [ ] **the writer never destroys committed truth:** `start` against a ledger holding ≥1 proven slice
       exits non-zero and writes nothing, and any write that finds the ledger changed underneath it
       since it was read exits non-zero instead of overwriting. Two sessions in one working tree is a
-      real condition here, not a hypothetical, and ADR-0065 puts proof-to-commit SHAs in that file
+      real condition here, not a hypothetical, and ADR-0102 puts proof-to-commit SHAs in that file
 - [ ] tests added & green: `bash tests/develop-lifecycle.bats` on all 3 CI legs
 - [ ] `tests/fixtures/sync-golden/tree-manifest.txt` regenerated as a named step — delta diffed
       first, only intended paths confirmed moved (retro-log 2026-07-22)
@@ -268,7 +268,7 @@ already accepts. Run the lint after writing it rather than trusting this example
   budget. Phase 00's parser only needs to read what Phase 00's writer wrote.
 - **A pretty statusline.** One line, the format the design source names (`develop · <lane> · phase 02
   · slice 4/9`), nothing more.
-- **Teaching `lane-resolve` about the `develop` surface** — ADR-0068 says ride the generic `--for`
+- **Teaching `lane-resolve` about the `develop` surface** — ADR-0105 says ride the generic `--for`
   path. If a test seems to need a resolver edit, that is assumption #1 failing: stop and say so.
 - **Designing the prediction taxonomy.** 5 fixed fields from the design source §5.1, written as a
   template. No scoring logic here — that is Phase 02.
@@ -290,10 +290,10 @@ after it (Cycle 4's tripwire fired and was never applied).
 
 ## Non-negotiables (verbatim from PLAN)
 
-- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0068).
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
 - develop never closes a phase, never intakes scope and never creates a lane — `/arc-phase-done`, `/arc-change` and `/arc-kickoff` keep those jobs.
-- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0063).
-- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0064).
+- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0100).
+- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0101).
 - Any gate, lint or parser this build ships gets an adversarial construct-a-breaking-input pass in the same section that ships it, with every hole pinned as a fixture.
 - develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion.
-- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0067).
+- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0104).

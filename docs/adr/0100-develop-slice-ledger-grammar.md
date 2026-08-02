@@ -1,4 +1,4 @@
-# ADR 0063 — The slice ledger is a `key: value` block per slice, not a table
+# ADR 0100 — The slice ledger is a `key: value` block per slice, not a table
 
 **Status:** accepted
 **Date:** 2026-08-02

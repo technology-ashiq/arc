@@ -1,4 +1,4 @@
-# ADR 0067 — The Phase-0 fake phase is a committed fixture, not a throwaway demo
+# ADR 0104 — The Phase-0 fake phase is a committed fixture, not a throwaway demo
 
 **Status:** accepted
 **Date:** 2026-08-02

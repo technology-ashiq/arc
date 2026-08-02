@@ -1,4 +1,4 @@
-# ADR 0066 — Risk-triggered checkpoints run inline at the slice boundary
+# ADR 0103 — Risk-triggered checkpoints run inline at the slice boundary
 
 **Status:** accepted
 **Date:** 2026-08-02

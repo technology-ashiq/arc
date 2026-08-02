@@ -19,7 +19,7 @@ droppability below, so a partial cut is also possible without a conversation.
    repro, then fix). 5 attempts on one slice → escalate to Ashiq with a one-screen diagnosis: tried ·
    current hypothesis · options. Every stuck event emits a `slice.stuck` receipt. Hypothesis novelty
    is claimable by a model, which is exactly why the count is the floor.
-2. **Inline risk-triggered checkpoints** (ADR-0066) — `checkpoint` stops being Phase 00's stub. The
+2. **Inline risk-triggered checkpoints** (ADR-0103) — `checkpoint` stops being Phase 00's stub. The
    trigger is path-matched by script, never self-assessed: the glob set is
    `.claude/rules/security-sensitive.md`'s paths, plus migrations, auth and public-API surface files.
    Ceiling backstop: 5 slices since the last checkpoint forces one (M tier); always before handoff.
@@ -80,10 +80,10 @@ appetite left, ship item 1 only and record items 2 and 3 as debt in the lane's d
 
 ## Non-negotiables (verbatim from PLAN)
 
-- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0068).
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
 - develop never closes a phase, never intakes scope and never creates a lane — `/arc-phase-done`, `/arc-change` and `/arc-kickoff` keep those jobs.
-- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0063).
-- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0064).
+- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0100).
+- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0101).
 - Any gate, lint or parser this build ships gets an adversarial construct-a-breaking-input pass in the same section that ships it, with every hole pinned as a fixture.
 - develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion.
-- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0067).
+- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0104).

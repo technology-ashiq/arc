@@ -1,4 +1,4 @@
-# ADR 0065 — One local commit per proven slice; the session commits, never the harness
+# ADR 0102 — One local commit per proven slice; the session commits, never the harness
 
 **Status:** accepted
 **Date:** 2026-08-02

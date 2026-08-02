@@ -12,12 +12,12 @@ Serves **REQ-05** (floor blocks), **REQ-06** (adversarial-proof parser), **REQ-0
 
 - `.claude/scripts/develop/develop-lint.mjs` — lane-aware via `resolveLane` (never re-implemented),
   `[check-name] FILE:LINE — Expected/Found/Example` output, lane echo first.
-- **BLOCK from v1** (exit 1), per ADR-0064: `ledger-unparseable` · `brief-stale` (recorded spec hash
+- **BLOCK from v1** (exit 1), per ADR-0101: `ledger-unparseable` · `brief-stale` (recorded spec hash
   vs `phase-NN-spec.md`) · `slice-unproven` (a ticked slice missing `proof:`, `tier:` or `commit:`).
 - **WARN-first** (exit 0, `[trial]` suffix, promotes only via `docs/trial-ledger.md`):
   `self-declared-number` · `tier-floor` (a UI REQ below `e2e-visual`, an external-dep REQ below
   `contract`).
-- The ADR-0063 parser hardened: tolerant detection (bullet, emphasis, whitespace and heading-level
+- The ADR-0100 parser hardened: tolerant detection (bullet, emphasis, whitespace and heading-level
   variants treated as one), strict value grammar (near-misses fail closed), all-of for repeated
   sections, anchored line regexes with no `$` under `/m`.
 - `tests/fixtures/develop/breaking/` — ≥20 pinned breaking inputs.
@@ -74,7 +74,7 @@ tier name · an empty ledger with a valid brief · a brief with no ledger.
 
 ## Rabbit holes in this phase
 
-- **Building a general markdown parser.** It parses one grammar (ADR-0063) and rejects everything
+- **Building a general markdown parser.** It parses one grammar (ADR-0100) and rejects everything
   else. Fail closed.
 - **Chasing the `self-declared-number` regex to perfection.** It is WARN-first precisely because it
   will be wrong sometimes; log false positives rather than tuning it into a BLOCK.
@@ -97,10 +97,10 @@ cut the two WARN groups to Phase 02 — the floor matters more than the advisori
 
 ## Non-negotiables (verbatim from PLAN)
 
-- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0068).
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
 - develop never closes a phase, never intakes scope and never creates a lane — `/arc-phase-done`, `/arc-change` and `/arc-kickoff` keep those jobs.
-- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0063).
-- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0064).
+- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0100).
+- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0101).
 - Any gate, lint or parser this build ships gets an adversarial construct-a-breaking-input pass in the same section that ships it, with every hole pinned as a fixture.
 - develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion.
-- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0067).
+- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0104).

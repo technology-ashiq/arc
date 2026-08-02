@@ -1,4 +1,4 @@
-# ADR 0068 — `develop` ships as its own product and rides `--for develop` with no resolver edit
+# ADR 0105 — `develop` ships as its own product and rides `--for develop` with no resolver edit
 
 **Status:** accepted
 **Date:** 2026-08-02

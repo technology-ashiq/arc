@@ -22,7 +22,7 @@ remembering to be careful.
   a per-product `manifest.json` (e.g. `products/design/manifest.json`) and validated by `product-lint.mjs`.
 - **Conventions:** every lane surface calls `lane-resolve.sh --for` with its surface name first and echoes
   `Selected lane:` before anything else; `--for` is a free-form string and only `kickoff` is
-  special-cased (→ `status=create`), so a new surface needs **no resolver edit** (ADR-0068). Node
+  special-cased (→ `status=create`), so a new surface needs **no resolver edit** (ADR-0105). Node
   callers import `resolveLane` from `lane-resolve.mjs`. Exit codes: `0` resolved · `3` ambiguous ·
   `4` unknown lane · `5` invalid name. WARN format `[check-name] FILE:LINE — Expected/Found/Example`,
   exit 0. Gates ship WARN-first and promote to BLOCK only via `docs/trial-ledger.md` (fixture-proven +
@@ -112,22 +112,22 @@ flowchart TB
 
 | # | Decision | Status |
 |---|---|---|
-| 0063 | Slice ledger is a `key: value` block per slice, not a table | accepted |
-| 0064 | develop-lint floor: structural checks BLOCK, heuristic checks WARN-first | accepted |
-| 0065 | One local commit per proven slice; the session commits, never the harness | accepted |
-| 0066 | Risk-triggered checkpoints run inline at the slice boundary | accepted |
-| 0067 | The Phase-0 fake phase is a committed fixture, not a throwaway demo | accepted |
-| 0068 | `develop` ships as its own product and rides `--for develop` with no resolver edit | accepted |
+| 0100 | Slice ledger is a `key: value` block per slice, not a table | accepted |
+| 0101 | develop-lint floor: structural checks BLOCK, heuristic checks WARN-first | accepted |
+| 0102 | One local commit per proven slice; the session commits, never the harness | accepted |
+| 0103 | Risk-triggered checkpoints run inline at the slice boundary | accepted |
+| 0104 | The Phase-0 fake phase is a committed fixture, not a throwaway demo | accepted |
+| 0105 | `develop` ships as its own product and rides `--for develop` with no resolver edit | accepted |
 
 ## Non-negotiables
 
-- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0068).
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
 - develop never closes a phase, never intakes scope and never creates a lane — `/arc-phase-done`, `/arc-change` and `/arc-kickoff` keep those jobs.
-- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0063).
-- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0064).
+- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0100).
+- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0101).
 - Any gate, lint or parser this build ships gets an adversarial construct-a-breaking-input pass in the same section that ships it, with every hole pinned as a fixture.
 - develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion.
-- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0067).
+- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0104).
 
 ## No-gos (explicitly out of scope)
 
@@ -149,7 +149,7 @@ flowchart TB
   understanding at all: risk-glob trigger and marker scan.
 - **Dogfooding on real phases.** The design source's 2–3 real-phase tripwire is the next cycle's job;
   this cycle's proof is the committed fixture.
-- **Promoting any gate to BLOCK** beyond ADR-0064's three structural checks. Everything else is
+- **Promoting any gate to BLOCK** beyond ADR-0101's three structural checks. Everything else is
   WARN-first and needs the trial ledger.
 
 ## Rabbit holes
@@ -161,7 +161,7 @@ flowchart TB
   cross-phase rollups, no dependencies between slices, no priorities beyond the risk ordering.
 - **Perfecting the prediction taxonomy** before any data exists → 5 fixed fields, scored
   hit/miss/unforeseen, revisited after the first real phase has scored them.
-- **Teaching `lane-resolve` about surfaces** (ADR-0068) → ride the generic `--for` path; the twins
+- **Teaching `lane-resolve` about surfaces** (ADR-0105) → ride the generic `--for` path; the twins
   stay untouched and the sync-golden manifest does not move for the resolver.
 - **Making the fake-phase fixture realistic** enough to be a second product → it is a miniature with
   one slice per lint state, and it asserts the rule while branching on state, never a snapshot of
@@ -191,11 +191,11 @@ flowchart TB
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | The ledger parser ships with a hole a doctored artifact walks straight through — the cosmetic-variant class that recurred across council v2 and v3, and that was skipped on three gates in one portfolio phase until the close found 61 issues, 5 live in shipped code | **Mitigated:** REQ-06 binds the adversarial breaking-input pass to the section that ships the parser, never to the phase close (retro-log 2026-08-02); ≥20 inputs pinned as fixtures before Phase 01 closes; ADR-0063 mandates tolerant detection + strict grammar from the first line, not after the first bug |
-| 2 | develop-lint passes because it can only detect absence — the 2026-07-30 failure where `PASS = zero VIOLATION` let characterless work through five consecutive runs, and the 2026-08-02 negative control that passed six CI legs by luck | **Mitigated:** each of ADR-0064's three structural BLOCKs ships with a negative-control fixture proving the check *can* fail; REQ-05 asserts exit 1 on named mutations, not only exit 0 on the good fixture |
+| 1 | The ledger parser ships with a hole a doctored artifact walks straight through — the cosmetic-variant class that recurred across council v2 and v3, and that was skipped on three gates in one portfolio phase until the close found 61 issues, 5 live in shipped code | **Mitigated:** REQ-06 binds the adversarial breaking-input pass to the section that ships the parser, never to the phase close (retro-log 2026-08-02); ≥20 inputs pinned as fixtures before Phase 01 closes; ADR-0100 mandates tolerant detection + strict grammar from the first line, not after the first bug |
+| 2 | develop-lint passes because it can only detect absence — the 2026-07-30 failure where `PASS = zero VIOLATION` let characterless work through five consecutive runs, and the 2026-08-02 negative control that passed six CI legs by luck | **Mitigated:** each of ADR-0101's three structural BLOCKs ships with a negative-control fixture proving the check *can* fail; REQ-05 asserts exit 1 on named mutations, not only exit 0 on the good fixture |
 | 3 | The harness ships proven only against its own committed fixture and is never run on a real phase — the shape that let council v2/v3's gates pass their own fixtures while hiding 43 real holes (retro-log 2026-07-16), and that let a blind panel compare three invented fixtures instead of the real thing (2026-07-30). Real-phase dogfooding is a declared no-go this cycle, so first real use would also be first discovery | **Mitigated by self-hosting:** once Phase 01 is green, Phase 02 opens by running the shipped harness against its own real `phase-02-spec.md`, and the brief it produces is read against this plan — the same move portfolio Phase 01 made. If it cannot produce a usable brief, that is Phase 02's first finding and gets recorded, not routed around |
 | 4 | Phase 00 over-runs and eats the whole appetite — Cycle 4 closed at 112% because one phase ran 1.1d against 0.75d with no slack anywhere to absorb it | **Mitigated:** only 4.0 of 5 days are allocated; phase-00's own tripwire at 2.0 days cuts the Build Brief to the grep fallback and defers `checkpoint` mode to Phase 03 |
-| 5 | The fake-phase fixture asserts a snapshot of repo state instead of a rule, so opening or closing any cycle turns CI red with nothing broken — exactly what cost 5 of 19 legs on 2026-08-02 | **Mitigated:** ADR-0067 requires the fixture to assert the rule and branch on state; REQ-02's root-mode golden is a tree with no `initiatives/` directory, never a claim about which lanes exist today |
+| 5 | The fake-phase fixture asserts a snapshot of repo state instead of a rule, so opening or closing any cycle turns CI red with nothing broken — exactly what cost 5 of 19 legs on 2026-08-02 | **Mitigated:** ADR-0104 requires the fixture to assert the rule and branch on state; REQ-02's root-mode golden is a tree with no `initiatives/` directory, never a claim about which lanes exist today |
 
 ## Phases (risk-ordered)
 
