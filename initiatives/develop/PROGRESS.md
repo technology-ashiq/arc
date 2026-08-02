@@ -3,7 +3,7 @@
 status: LIVE
 cycle: arc-develop Cycle 6 (opened 2026-08-02)
 phase: 04 — planned, not started
-appetite: 5d
+appetite: 7d
 burn: 0d
 blocked-on: owner — plan approval
 depends-on: —
@@ -26,6 +26,7 @@ depends-on: —
 | 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | pending |
 | 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | pending |
 | 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
+| 08 | The feedback half of layer 5 — outcome metrics, calibration record, tags, suggestion engine | 1.5 days | pending |
 
 **Appetite burn: 0 of 5 days used (0%).** The four phases allocate the full 5.0 days, which leaves
 no slack — and that is a known, named risk rather than an oversight: Cycle 4 closed at 112% with

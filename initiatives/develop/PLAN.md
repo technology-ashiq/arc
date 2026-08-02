@@ -3,19 +3,21 @@
 > Cycle 5 shipped delivery-order layers 1 and 2 of `docs/strategy/plans/PLAN-develop.md` and is
 > archived at `archive/PLAN-cycle5-2026-08-02.md`.
 >
-> **This cycle does NOT finish the design source, and the first draft of this line claimed it did.**
-> An attack pass found the claim false. What this cycle finishes: **layer 3 in full, layer 4 except
-> design-critic checkpoints, and the promotion-loop half of layer 5.** What remains open, with no
-> REQ and no phase here: layer 5's **suggestion engine**, **calibration record**, **outcome metrics**
-> (escaped spec misses · rework/stuck time · time to first proven slice · false-block rate · evidence
-> completeness · ceremony cost per validated slice) and the **tag vocabulary**
-> (`pattern`/`anti-pattern`/`library-verdict`/`fix-recipe`/`common-mistake`), plus layer 4's
-> **design-critic checkpoints**. Phase 04 deferred them to Phase 07 and Phase 07 deferred them back
-> — nobody owned them, which is how a gap becomes invisible.
+> **This cycle finishes the design source, with exactly one carve-out, and the route here is worth
+> recording.** The first draft claimed completion while five things had no REQ and no phase —
+> Phase 04 deferred them to Phase 07 and Phase 07 deferred them back, so nobody owned them. An
+> attack pass caught the claim. The owner then funded the remainder rather than accept the gap:
+> appetite raised 5 → 7 days, Phase 08 added.
 >
-> **That remainder is a Cycle 7, and it is the owner's call whether to fund it now or after this
-> cycle proves itself.** Stating it here is the point: a plan that quietly ships 80% while claiming
-> 100% is the failure this product exists to prevent.
+> **Ships here:** layer 3 in full · layer 4 except design-critic checkpoints · layer 5 in full —
+> the promotion loop (Phase 04) and the feedback half (Phase 08: outcome metrics, calibration
+> record, tags, suggestion engine).
+>
+> **The one carve-out:** layer 4's **design-critic checkpoints**. Not deferred for time — they gate
+> new routes, component families and changed interaction models, and this cycle has no UI REQ to
+> exercise them against. Building a gate with nothing to gate would produce a control nobody has
+> ever seen fire, which is the precise thing this product refuses. It carries a debt-ledger row with
+> a real trigger: the first phase whose target has a UI surface.
 >
 > Owner decision, 2026-08-02: build the plan out rather than wait for dogfood evidence to select
 > the next layer. The design source's Feature Admission Rule (§2 rule 5) says post-v1 features
@@ -67,23 +69,26 @@ run than the last, from a record rather than from memory.
 | REQ-06 | Retrieval follows the trail one step, so an auth slice pulls what past auth failures produced | a learning row's typed links are followed exactly one hop and the resulting ADRs, rules and fixtures appear in the pack; every retrieval source is recorded in the slice's `sources:` field | 05 | active |
 | REQ-07 | The harness can find a tool it lacks without me hunting for it | `/arc-capability` given a stated need returns a proposal table — need · candidate · source · quality evidence · verdict — and refuses to install anything | 06 | active |
 | REQ-08 | Nothing enters this repo from the internet without being pinned and inspected | `capability-vet.sh` BLOCKs unless the candidate is allowlisted, version-pinned with a hash and provenance in `capability-lock.json`, and passes a content scan for exfil patterns, curl-pipe-sh and undeclared tool scopes; a write-capable MCP additionally requires my recorded OK | 06 | active |
-| REQ-09 | A real product decision gets prior art, not the model's first instinct | `pattern-miner` runs only on a declared decision, max 3 in parallel, and returns a ≤20-line Pattern Annex where every row carries a source and an adopted-or-rejected verdict; a row without a verdict is lint-invalid | 07 | active |
-| REQ-10 | A risky slice gets alternatives weighed before code, not after | a risk-glob slice requires 2–3 approach sketches with approach · trade-offs · blast radius · economics (maintenance in words, deps/services/config as computed counts, deletion opportunity); invented durations are lint-rejected | 07 | active |
+| REQ-09 | A decision gets evidence before code rather than a defence after it | two triggers, one outcome. On a declared product/architecture decision, `pattern-miner` returns a ≤20-line Pattern Annex where every row carries a source and an adopted-or-rejected verdict, and a verdict-less row is lint-invalid. On a risk-glob slice, 2–3 approach sketches are required carrying approach · trade-offs · blast radius · economics (maintenance in words, deps/services/config as computed counts, deletion opportunity), with the pick recorded and `rejected-because` per losing option; an invented duration is lint-rejected in either | 07 | active |
+| REQ-10 | I can see whether the harness is actually making things better, from numbers it computed rather than claims it made | `develop-lint --metrics` computes all 6 outcome metrics from committed records — escaped spec misses · rework/stuck time · time to first proven slice · false-block rate · evidence completeness · ceremony cost per validated slice — and refuses to print any it cannot derive rather than estimating it; the calibration record aggregates every scored prediction across all phases to date; suggestions batch at slice boundaries carrying evidence, economics and a default so declining costs one word; learning rows carry a tag from `pattern` / `anti-pattern` / `library-verdict` / `fix-recipe` / `common-mistake` that the Context Pack matches on | 08 | active |
 
 ## Appetite
 
-**5 days total** (owner-set, 2026-08-02), of which the phase table allocates **4.0**
-(1.5 + 1.0 + 0.75 + 0.75). The remaining **1.0 day is unallocated buffer** — it belongs to no phase
-and no kill criterion counts it, which also means the 3.0-day checkpoint sits at 75% of the real
-phase budget rather than the 60% the "5 days" framing suggests. A constraint, not an estimate.
-Cycle 5 spent 1.9 of 5 on layers 1-2; this cycle is larger in surface but builds on a working spine.
+**7 days total** — owner-set 2026-08-02, raised from 5 when an attack pass showed 5 days could not
+actually finish the design source and the owner chose to fund the remainder rather than accept the
+gap. The phase table allocates **5.5 days** (1.5 + 1.0 + 0.75 + 0.75 + 1.5); the remaining
+**1.5 days are unallocated buffer**, belonging to no phase and counted by no kill criterion.
+A constraint, not an estimate. Cycle 5 spent 1.9 of 5 on layers 1-2; this cycle is larger in surface
+but builds on a working spine.
 
 **Tier:** M
 
-**Kill criteria:** at 3.0 days burned, if Phase 05 is not done → mandatory scope-cut conversation,
-and the pre-decided cut is Phase 07 in full (pattern mining and approach sketches are the most
-deferrable — they improve decisions, while 04 and 05 are what make the harness learn and retrieve).
-At 100% → cut or kill, never extend. Per-phase tripwires live in each phase spec.
+**Kill criteria:** at **4.0 days burned**, if Phase 06 is not done → mandatory scope-cut
+conversation, and the pre-decided cut is **Phase 07 in full**. Phase 07 improves decisions; 04, 05
+and 08 are what make the harness learn, retrieve and report on itself, and 06 is the security gate.
+The checkpoint sits above 04+05+06 (3.25d) so it can distinguish on-track from in-trouble rather
+than firing on every on-schedule run — the defect an attack pass found in Cycle 5's version of this
+line. At 100% → cut or kill, never extend. Per-phase tripwires live in each phase spec.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
@@ -205,6 +210,7 @@ flowchart TB
 | 05 | Context Pack — code-graph neighbourhood with a stated grep fallback, churn, tagged hits, one-hop link following | 1.0 days | pending |
 | 06 | Capability acquisition — scout, vet gate that BLOCKs on provenance, and a pinned lockfile | 0.75 days | pending |
 | 07 | Quality intelligence — decision-triggered pattern mining and risk-triggered approach sketches with economics | 0.75 days | pending |
+| 08 | The feedback half of layer 5 — outcome metrics, the calibration record, tags, and the suggestion engine | 1.5 days | pending |
 
 Phase 04 comes first because everything downstream reads what it defines: the Context Pack
 retrieves learning rows (05), and the promotion loop is what any later safeguard must pass through.
