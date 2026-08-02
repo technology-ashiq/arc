@@ -22,7 +22,8 @@ before there is anything worth retrieving would be building the pipe first.
 - **`.claude/scripts/develop/learning.mjs`** — parse, validate and replay. Reuses `ledger.mjs`'s
   hardened `key: value` reader rather than inventing a second markdown contract; that parser
   survived 45 adversarial inputs and a second grammar would start at zero.
-- **`tests/fixtures/develop-evals/`** — replay fixtures, five categories, plus `withheld/`.
+- **`tests/fixtures/develop-evals/`** — replay fixtures in SIX categories (five failure classes
+  plus `clean/` controls), plus `withheld/`.
 - **develop-lint additions** — the row-shape checks below.
 
 ### The row shape
@@ -51,6 +52,59 @@ verdict: proposed
 - **Typed links** (`adr:` `rule:` `fixture:` `phase:`) are what make the record compound rather than
   accumulate. A row with zero links WARNs — it is a note, not a link in a chain.
 
+### What a candidate IS, as a file
+
+A row is the *record*; for an executable candidate the row also points at the thing that runs:
+
+```
+check: .claude/scripts/develop/candidates/L-001.mjs
+```
+
+That module exports one function — `check(fixture) -> { flagged: boolean, why: string }` — and
+nothing else. It is pure: it reads the fixture it is handed and returns a verdict. `type: rule` and
+`type: fixture` candidates MUST carry `check:`; the other four types must NOT, because they are
+procedures a person or an agent applies, not code.
+
+### What a fixture IS, as a file
+
+`tests/fixtures/develop-evals/<category>/<id>.md`, and every one carries a header before its body:
+
+```
+id: F-007
+category: false-confidence
+expect: flagged
+area: build
+adr: 0108
+```
+
+The body is the artifact under test — the ledger fragment, the diff, the gate output — whatever the
+past failure actually looked like.
+
+**`expect:` is what makes both numbers computable, and it is why there are SIX categories, not five.**
+The five failure categories all carry `expect: flagged`. A sixth — **`clean/`** — carries
+`expect: clean`: cases a correct candidate must NOT flag. Without them, false-block count has no
+basis at all; a candidate that flags everything would score a perfect catch-count. Of the ≥12
+fixtures, **at least 4 are `clean/`**.
+
+- **catch-count** = `expect: flagged` fixtures the candidate flagged.
+- **false-block count** = `expect: clean` fixtures the candidate flagged.
+
+Both are counted by the runner. Neither is written by hand.
+
+### How a fresh agent is actually invoked
+
+Not a figure of speech — a concrete step, twice in this phase:
+
+1. **The candidate verdict** (`evaluated-by:`): spawn an agent whose entire prompt is the candidate
+   file plus the replay output JSON. It receives no failure narrative, no reasoning, no ledger. Its
+   returned verdict is written into `evaluated-by:` and its full report is saved to
+   `initiatives/develop/evidence/phase-04/candidate-<id>-eval.md`.
+2. **The adversarial pass on this phase's own lint**: a separate agent given the lint source, the
+   rules it claims to enforce, and the existing fixtures — told to walk past it.
+
+Both are separate invocations with fresh context. Neither may be performed by the session that wrote
+the thing being judged; that is the non-negotiable, and it is the whole reason both exist.
+
 ### The three inputs a promotion needs (REQ-03)
 
 `verdict: promoted` is a FAIL unless the row also carries all three:
@@ -64,15 +118,29 @@ verdict: proposed
 ### The holdout (REQ-04, ADR-0109)
 
 **Which fixtures are withheld is decided and committed BEFORE any of them is authored** — at
-least 3 of the 12, spanning at least 2 of the 5 categories. This ordering is the whole claim: a
+least 3 of the 12, spanning at least 2 of the 6 categories — and at least one of them a
+`clean/` control, so the holdout can measure false blocks and not only catches. This ordering is the whole claim: a
 fixture the authoring session has already seen cannot be moved into the holdout afterwards, and
 choosing after the fact would leave a holdout that looks like one and is not. Cheap to get right
 now, unrecoverable later.
 
-`tests/fixtures/develop-evals/withheld/` is excluded from candidate-authoring context, and a lint
-FAILs a candidate row citing a withheld fixture id. **It is process-enforced, not blind, and every
-place it is reported says so** — the authoring session can read this repo, and a holdout that claims
-a blindness it does not have converts a soft signal into a hard-looking one.
+**"Excluded from candidate-authoring context" is an operational step, not an aspiration** — the
+first draft of this section left it undefined, which meant it had no meaning beyond the citation
+lint. Concretely, three things:
+
+1. **The runner never shows it.** `learning.mjs replay` prints per-fixture results for the five
+   visible categories and, for `withheld/`, only the two totals. A withheld fixture's id, category
+   and body are never printed by any command, so they cannot arrive in context by accident.
+2. **Authoring reads a filtered list.** The candidate-authoring step is handed the fixture inventory
+   produced by `learning.mjs list --visible`, which omits `withheld/` entirely. That is the list a
+   candidate is written against.
+3. **The lint FAILs a candidate row citing a withheld id** — the backstop for when 1 and 2 fail.
+
+**It is process-enforced, not blind, and every place it is reported says so.** The authoring session
+can `cat` that directory; nothing here prevents it. What these three steps buy is that it will not
+happen *by accident*, which is the honest claim. Deliberate contamination is caught only by
+mechanism 3 of ADR-0109 — time-forward measurement — and that pays out in a later cycle, which is
+exactly why a promoted row carries `forward-verified: no` until one does.
 
 ## Exit criteria (Definition of Done)
 
@@ -82,10 +150,13 @@ a blindness it does not have converts a soft signal into a hard-looking one.
 - [ ] `develop-lint` WARNs a row with zero typed links
 - [ ] `develop-lint` FAILs a `verdict: promoted` row missing `replay:`, `evaluated-by:` or
       `approved-by:` — asserted once per missing field, not once in total
-- [ ] `tests/fixtures/develop-evals/` holds ≥12 fixtures across all five categories: spec-drift,
-      false-confidence, missing-edge-case, bad-gate, flailing
+- [ ] `tests/fixtures/develop-evals/` holds ≥12 fixtures across SIX categories — spec-drift,
+      false-confidence, missing-edge-case, bad-gate, flailing, and **`clean/` (≥4 of them)**. Without
+      clean controls a candidate that flags everything scores a perfect catch-count and a
+      false-block count of zero, which is the same shape as a gate that cannot fail
 - [ ] `withheld/` exists, a candidate citing a withheld id FAILs, and no command prints its contents
-- [ ] replay computes catch-count AND false-block count, and the lint rejects a self-declared number
+- [ ] replay computes catch-count (flagged among `expect: flagged`) AND false-block count
+      (flagged among `expect: clean`), and the lint rejects a self-declared number
       in any learning row
 - [ ] **one REAL promotion runs end to end** — a genuine Cycle-5 finding ("verify a receipt
       actually landed rather than trusting exit 0") goes candidate -> replay -> fresh-agent verdict
@@ -115,13 +186,16 @@ a blindness it does not have converts a soft signal into a hard-looking one.
   candidate row, run the replay against the seeded fixtures, and show the computed catch/false-block
   counts. Then mark it `promoted` without `approved-by:` and watch the lint refuse it.
 - **Real-system check:** run the lint against the real `docs/develop/learning-ledger.md` this phase
-  writes, not only against fixtures.
+  writes, not only against fixtures — and assert **the rule, never a snapshot**: that rows parse,
+  that links resolve, that WARN and FAIL fire on the shapes they should. Never an exact row count or
+  a literal row id. This is the one place Cycle 6 tests against a live file that later cycles will
+  grow, and a snapshot assertion there turns CI red on nothing broken (retro-log 2026-08-02).
 - **Expected evidence:** bats output on 3 legs, the ledger file, the replay output pasted with its
   two computed numbers, and the fresh agent's adversarial report.
 
 ## Rabbit holes in this phase
 
-- **Converting all 43 council holes.** ≥12 across five categories is the bar. The design source says
+- **Converting all 43 council holes.** ≥12 across the six categories is the bar. The design source says
   the first batch covers what the records preserve in reproducible detail — the rest is archaeology.
 - **A quality score for candidates.** Catch-count and false-block count, both computed, both shown.
   No weighted index. That is the invented-number trap this product bans.
