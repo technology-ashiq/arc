@@ -176,7 +176,10 @@ function registrySourceCommit(dir) {
 // from file presence (REQ-05). The orchestrator cycle froze this at six ("no 7th product");
 // Cycle 2 adds `hq` (the receipt spine) -- a product missing here is invisible to --status
 // and to the install hint, however complete its manifest is.
-const CATALOG = ["core", "council", "design", "git", "hq", "plan", "qa", "review"];
+// Must stay sorted and must match products/ on disk exactly — tests/products.bats derives
+// the expected list from the directory, so a manifest that lands without its CATALOG entry
+// is invisible to --status and fails there rather than shipping unnoticed.
+const CATALOG = ["core", "council", "design", "develop", "git", "hq", "plan", "qa", "review"];
 
 // --status rendered from the registry (REQ-05): the registry is the ground truth for
 // INSTALLED; HEALTH is a live integrity check (are the files it claims still on disk?).

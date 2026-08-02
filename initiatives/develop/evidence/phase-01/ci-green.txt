@@ -1,0 +1,7 @@
+CI run 30752975413
+conclusion: success
+head: 33a8d45fe6935f8b9284a73648ad146ad597d17a
+
+45 adversarial breaking inputs, all caught.
+Round 1 (26, author-written): 26/26 caught on first run — a true result about a blind spot.
+Round 2 (19, unanchored agent): 9 real holes found, every one closed and pinned.

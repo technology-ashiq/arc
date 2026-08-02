@@ -1,0 +1,22 @@
+{
+  "name": "develop",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [
+    ".claude/commands/arc-develop.md"
+  ],
+  "agents": [
+    ".claude/agents/spec-fidelity.md"
+  ],
+  "scripts": [
+    ".claude/scripts/develop/develop-lint.mjs",
+    ".claude/scripts/develop/develop.mjs",
+    ".claude/scripts/develop/ledger.mjs",
+    ".claude/scripts/develop/stuck.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

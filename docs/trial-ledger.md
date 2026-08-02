@@ -44,6 +44,23 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-07-28 | appetite-sum | arc's own PLAN (Cycle 2 receipt spine, Phase-04 retro) | **YES** — over-commit branch: phases sum 14.5d > 12.5d total | **unadjudicated, leaning false** — the arithmetic is correct (5+2.5+2.5+1.5+3), but the build reached Phase-04 close at **~40% burn (~5 of 12.5 days)** with every closed phase coming in *under* its own appetite (5d→~2d, 2.5d→~1d, 2.5d→~1d, 1.5d→~1d). The over-commit the branch warns about did not materialise; it inverted — the **second** logged inversion of this gate, after 2026-07-22. This one hits the over-commit branch, the same branch venturemind scored a true positive on, so that branch now has 1 true positive and 1 inverted fire |
 | 2026-07-28 | (7 other substance gates) | arc's own PLAN (Cycle 2 receipt spine) | no — silent across the whole build | **n/a — not counted as a clean run.** Same-author silence on a plan written against these checks, which the "First real fire" note above says this file must stop scoring as accuracy. Recorded for completeness only |
 
+| 2026-08-02 | self-declared-number (develop-lint) | registered at birth, arc-develop Phase 01 | not yet | — |
+| 2026-08-02 | tier-floor (develop-lint) | registered at birth, arc-develop Phase 01 | not yet | — |
+
+### develop-lint's two trial groups (ADR-0101)
+
+`develop-lint` ships its **structural** checks as real BLOCKs from v1 and only its **heuristic**
+checks WARN-first. The line is drawn on a principle, not a preference: false-block risk lives in
+pattern matching, never in "did the file parse".
+
+| group | why it is in trial | what would promote it |
+|---|---|---|
+| `self-declared-number` | a regex looking for a quality claim carrying a number. It could trip on a legitimate version string, dependency count or duration — none of which has been seen in a real ledger yet | fixture-proven both ways (it fires on `confidence 95%`, stays silent on `node 22.3.0` — both pinned in `tests/develop-lint.bats`) **plus** ≥3 clean dogfood runs on real phases with zero false positives |
+| `tier-floor` | the UI and external-dep evidence floors have never run against a real UI slice, because this cycle has no UI REQ. Its judgement is untested on the thing it exists to judge | the same, and specifically ≥1 real `kind: ui` slice where the floor's verdict was checked against what a human thought of the evidence |
+
+Not promotable on clean-run count alone: neither group has yet fired on a real phase, and a gate
+that has never fired has not been observed to be right — only to be quiet.
+
 <!-- Append one row per (gate × kickoff run). run-ref = a PLAN commit SHA, a dry-run id, or a
      fixture name. fired? = did the gate WARN on that run. false-positive? = did it WARN on a plan
      that was actually fine. Delete the (example) row once real runs exist. -->

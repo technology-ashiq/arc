@@ -14,12 +14,15 @@ const MAX_FUTURE_MS = Number(process.env.ARC_SPINE_MAX_FUTURE_MS || 2 * 24 * 60 
 // aggregate downstream: 1e308 + anything is still 1e308, and two of them are Infinity.
 const MAX_COST_MAGNITUDE = 1e12;
 
-// ADR-0026: the vocabulary is CLOSED at 18. Extensions only via a new ADR.
+// ADR-0026: the vocabulary is CLOSED. Extensions only via a new ADR.
+// Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready),
+// then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read).
 export const KINDS = Object.freeze([
   "idea.captured", "council.verdict", "approval.requested", "decision.recorded",
   "kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
   "ship.done", "revenue.received", "revenue.simulated", "cost.incurred", "run.completed",
   "incident.raised", "redaction.applied", "day.closed", "note.logged",
+  "develop.started", "slice.done", "handoff.ready", "slice.stuck",
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -206,7 +209,9 @@ export function validateEvent(event) {
   if (typeof event.run_id !== "string" || !RUN_ID_RE.test(event.run_id))
     throw new SpineError("BAD_RUN_ID", `run_id ${JSON.stringify(event.run_id)} must look like r-...`);
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed 18 (ADR-0026)`);
+    // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
+    // extended the set, and a gate that misreports its own size teaches the wrong rule.
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);

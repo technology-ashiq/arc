@@ -15,9 +15,30 @@ Updated: 2026-08-02
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
+| develop | LIVE | arc-develop (Cycle 5, opened 2026-08-02) | — all 4 closed, cycle ready to land | 5d / 1.9d | — | PR #95 ready to merge — /arc-retro then land |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
+
+## ADR number bands — one century per lane
+
+ADRs are a single company organ at root (ADR-0053), but "highest + 1" only sees the branch
+you are standing on. Two lanes numbering in parallel both read 0062 and both write 0063, and
+git will not complain, because the filenames differ. It already happened on 2026-08-02:
+model-policy and develop each took 0063–0068 in separate sessions. develop renumbered into a
+century; model-policy's numbers had already merged to `main` and were left alone.
+
+So a lane claims a **century**, and never numbers outside it:
+
+| Band | Owner |
+|---|---|
+| 0001–0099 | company / core / hq — `model-policy` holds 0063–0069 inside this range |
+| 0100–0199 | `develop` |
+| 0200–0299 | next lane to be born |
+
+`/arc-kickoff` assigns the next free century when it creates a lane. A duplicate-number check
+still needs to be added to an existing lint so CI catches a band being forgotten — tracked,
+not yet built.
 
 ## Execution mode (ADR-0056 / PORT-G)
 
@@ -69,10 +90,13 @@ triaged. Carried as Phase 03 retro inputs RI-1 and RI-2.
 | lexos | private, separate repo | in build outside arc | — |
 
 <!--
-No `develop` row, and this is now a settled rule rather than an open question:
-ADR-0061 — the board indexes BORN lanes only. A row exists iff `initiatives/<lane>/` does,
-with a readable machine header to derive its values from. `QUEUED` stays in the vocabulary
-as a state a born lane holds when it is scheduled next; it is never a way to announce a
-lane that does not exist yet. "What comes after this cycle" is PLAN.md's question, not the
-board's. develop gets its row at `/arc-kickoff --lane develop`, in that same commit.
+The rule this note exists to hold: ADR-0061 — the board indexes BORN lanes only. A row
+exists iff `initiatives/<lane>/` does, with a readable machine header to derive its values
+from. `QUEUED` stays in the vocabulary as a state a born lane holds when it is scheduled
+next; it is never a way to announce a lane that does not exist yet.
+
+This note used to open "No `develop` row" and close "develop gets its row at
+`/arc-kickoff --lane develop`, in that same commit." That happened on 2026-08-02 — the lane
+was born and took its row in the kickoff commit, exactly as predicted. Kept as the record
+that the rule was followed rather than deleted as if it never applied.
 -->

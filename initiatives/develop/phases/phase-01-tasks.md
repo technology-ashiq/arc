@@ -1,0 +1,145 @@
+# Build Brief — phase 01 · The proof floor: a gate that can fail, and a parser that survives attack
+
+spec-hash: sha256:2aa841903553b16601f59ac9e970dac0e3ea72004bf5b7779763e934e8712bf4
+lane: develop
+reqs: REQ-05, REQ-06, REQ-07
+adrs: 0100, 0101, 0104, 0105
+blast-radius: .claude/scripts/develop/develop-lint.mjs, .github/workflows/ci.yml, docs/trial-ledger.md, tests/fixtures/develop/breaking/, tests/fixtures/develop/negative-control/
+no-gos: Delivery-order layers 3–5, Full Context Pack retrieval, Evaluation-suite seeding, Approach sketches with economics fields, Every checkpoint health check that needs to understand code, Dogfooding on real phases, Promoting any gate to BLOCK
+blast-radius-dropped: 9
+
+### Non-negotiables
+
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
+- develop never closes a phase, never intakes scope and never creates a lane — `/arc-phase-done`, `/arc-change` and `/arc-kickoff` keep those jobs.
+- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0100).
+- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0101).
+- Any gate, lint or parser this build ships gets an adversarial construct-a-breaking-input pass in the same section that ships it, with every hole pinned as a fixture.
+- develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion.
+- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0104).
+
+### Predictions
+
+likely-failure-mode: the ledger parser accepts a doctored artifact that only looks legitimate — the cosmetic-variant class from retro-log 2026-07-16
+likely-regression-site: ledger.mjs parseLedger, where tolerant detection and strict grammar meet
+riskiest-file: .claude/scripts/develop/develop-lint.mjs
+expected-blockers: none known; the adversarial pass is expected to find holes rather than blockers
+expected-proof-failures: CRLF and duplicate-slice-id fixtures failing on the Windows leg only
+
+### Slices
+
+#### slice: 01
+
+title: `node .claude/scripts/develop/develop-lint.mjs --lane develop` exits 1 on each of the three BLOCK mutations and exits 0 on the good fixture
+kind: logic
+risk: high
+proof: unit — bash tests/develop-lint.bats (3 negative-control tests)
+tier: unit
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: 3 BLOCKs exit 1 on their named mutation, exit 0 on the good fixture
+commit: 0649181
+
+#### slice: 02
+
+title: each BLOCK has a **negative-control fixture** that proves the check can fail — a control that has never been seen to fail is a coin, not a gate (retro-log 2026-08-02)
+kind: logic
+risk: medium
+proof: unit — the negative-control trio
+tier: unit
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: one control per BLOCK, each proven able to fail
+commit: 0649181
+
+#### slice: 03
+
+title: ≥20 breaking inputs pinned under `tests/fixtures/develop/breaking/`, each FAILing the lint, with the good fixture still passing
+kind: logic
+risk: medium
+proof: unit — the pinned-breaking-input test, 26 cases
+tier: unit
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: 26 of 26 caught, each failing for its intended check group
+commit: 7fb07e8
+
+#### slice: 04
+
+title: every proof carries a tier from `static|unit|contract|integration|e2e-visual|verified-real` and its slice a `kind:`; the fake-phase fixture carries one `ui` slice and one `external-dep` slice so both tier floors are actually exercised, plus one slice with no `kind:` to prove the missing-classification WARN fires instead of a silent skip
+kind: logic
+risk: medium
+proof: unit — tier-floor tests (ui + missing-kind)
+tier: unit
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: tier vocabulary enforced; ui floor and absent kind both WARN
+commit: 0649181
+
+#### slice: 05
+
+title: WARN groups registered in `docs/trial-ledger.md` with their promotion criteria
+kind: infra
+risk: medium
+proof: static — docs/trial-ledger.md entry with promotion criteria
+tier: static
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: both WARN groups registered with what would promote them
+commit: 0649181
+
+#### slice: 06
+
+title: tests added & green: `bash tests/develop-lint.bats` on all 3 CI legs
+kind: logic
+risk: medium
+proof: unit — bash tests/develop-lint.bats on all 3 CI legs
+tier: unit
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: CI run 30752975413 green: 20/20 jobs, ubuntu + macos + windows
+commit: 33a8d45
+
+#### slice: 07
+
+title: `.github/workflows/ci.yml`'s test-count floor raised to cover the new `@test` lines
+kind: infra
+risk: medium
+proof: static — grep -rhc @test over tests/ vs the ci.yml floor
+tier: static
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: 793 declared tests against a floor of 318 — already satisfied, no edit needed
+commit: 33a8d45
+
+#### slice: 08
+
+title: `tree-manifest.txt` regenerated as a named step
+kind: infra
+risk: medium
+proof: static — sync-to-project.sh + tree manifest regen, delta diffed first
+tier: static
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: only develop-lint.mjs and ledger.mjs hashes moved, as intended
+commit: 33a8d45
+
+#### slice: 09
+
+title: tracker updated (PROGRESS.md row ✅ + done-log)
+kind: infra
+risk: medium
+proof: static — PROGRESS.md phase row + done log + board row
+tier: static
+sources: phase-01-spec.md
+decision: (empty until proven)
+result: tracker updated, board-lint exit 0
+commit: 33a8d45
+
+### Prediction scores
+
+likely-failure-mode: hit — the 9 holes were exactly the cosmetic/invisibility class: unknown heading swallowing slices, title suffix on a heading, zero-width and homoglyph keys
+likely-regression-site: hit — 7 of the 9 holes were in ledger.mjs parseLedger, at the tolerant-detection/strict-grammar seam
+riskiest-file: miss — predicted develop-lint.mjs; the risk was in ledger.mjs, which held 7 of 9 holes while develop-lint.mjs held 2
+expected-blockers: hit — none appeared; the adversarial pass found holes, not blockers, as predicted
+expected-proof-failures: miss — predicted CRLF and duplicate-slice-id failing on Windows; both passed everywhere. The real proof failure was 5 round-2 fixtures passing because they carried no violation, which was not predicted at all
