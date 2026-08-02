@@ -380,6 +380,15 @@ const overlaps = (a, b) => {
   return x === y || x.startsWith(y + "/") || y.startsWith(x + "/");
 };
 
+/** Does `docs/adr/NNNN-*.md` exist? A link is a claim, and a claim can be checked. */
+function adrExists(root, num) {
+  const n = String(num).trim();
+  if (!/^\d{4}$/.test(n)) return false;
+  try {
+    return readdirSync(join(root, "docs", "adr")).some((f) => f.startsWith(`${n}-`) && f.endsWith(".md"));
+  } catch { return false; }
+}
+
 export function learning(root, files, corpus) {
   const path = join(root, "docs", "develop", "learning-ledger.md");
   if (!existsSync(path)) return { items: [], total: 0, note: "no learning ledger" };
@@ -418,10 +427,17 @@ export function learning(root, files, corpus) {
       .map((k) => {
         const v = String(f[k] ?? "").trim();
         if (!v) return null;
-        // A `rule:` or `fixture:` naming something this repo does not hold is handed on as a
-        // fact unless it is labelled. `rule: ../../../etc/passwd` is an ordinary string to
-        // find in a markdown file, and it was being printed as the governing record's link.
-        const suspect = (k === "rule" || k === "fixture") && !livesInRepo(root, v);
+        // A link naming something this repo does not hold is handed on as a fact unless it is
+        // labelled. `rule: ../../../etc/passwd` is an ordinary string to find in a markdown
+        // file, and it was being printed as the governing record's link.
+        //
+        // `adr:` is checked the same way as the path links. A fidelity pass found the
+        // asymmetry: `adr: 9999` printed as a governing decision with nothing saying it does
+        // not exist, which is the one place "appears in the pack" and "is a real thing" could
+        // still diverge in silence. `phase:` names a phase, not a file, and is left alone.
+        const suspect = (k === "rule" || k === "fixture") ? !livesInRepo(root, v)
+          : k === "adr" ? !adrExists(root, v)
+          : false;
         return `${k}:${v}${suspect ? " (not in this repo)" : ""}`;
       })
       .filter(Boolean);

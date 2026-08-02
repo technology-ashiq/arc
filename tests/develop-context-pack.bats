@@ -673,3 +673,28 @@ JS
   [[ "$output" != *"unavailable"* ]]  || { echo "a pack that printed in full was called unavailable"; echo "$output"; false; }
   [[ "$output" == *"Context Pack"* ]] || { echo "$output"; false; }
 }
+
+@test "hole: an adr link naming a decision that does not exist is labelled too" {
+  local t; t="$(_tree)"; _no_codegraph "$t"
+  {
+    echo
+    echo '#### learning: L-401'
+    echo
+    echo 'what-failed: a session cited a decision number that was never written'
+    echo 'why-missed: a bare number reads as a citation and nothing resolved it'
+    echo 'prevention: cite the path, not the number'
+    echo 'type: rule'
+    echo 'area: auth'
+    echo 'adr: 9999'
+    echo 'verdict: proposed'
+  } >> "$t/docs/develop/learning-ledger.md"
+  _dev "$t" start 0
+  _dev "$t" next
+  local l; l="$(_line learning)"
+  # `rule:` and `fixture:` were checked and `adr:` was not, so a number nobody had written
+  # printed as a governing decision -- the one place "appears in the pack" and "is a real
+  # thing" could still diverge without saying so.
+  [[ "$l" == *"adr:9999 (not in this repo)"* ]] || { echo "an unwritten ADR printed as governing: $l"; false; }
+  # and the real one is NOT labelled
+  [[ "$l" == *"adr:0900,"* || "$l" == *"adr:0900 "* ]] || { echo "a real ADR was labelled as missing: $l"; false; }
+}

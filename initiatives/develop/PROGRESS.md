@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-develop Cycle 6 (opened 2026-08-02)
-phase: 05 — not started
+phase: 06 — not started
 appetite: 7d
-burn: 0.8d
+burn: 1.0d
 blocked-on: —
 depends-on: —
 
@@ -23,12 +23,12 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — parked, shipped in Cycle 5 | — | ✅ done 2026-08-02 |
 | 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, promotion loop | 1.5 days | ✅ done 2026-08-03 (12 of 13 slices; slice 08 carried) |
-| 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | pending |
+| 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | ✅ done 2026-08-03 (9 of 9 slices) |
 | 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | pending |
 | 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
 | 08 | The feedback half of layer 5 — outcome metrics, calibration record, tags, suggestion engine | 1.5 days | pending |
 
-**Appetite burn: 0.8 of 7 days used (11%).** The five phases allocate **5.5 days**
+**Appetite burn: 1.0 of 7 days used (14%).** The five phases allocate **5.5 days**
 (1.5 + 1.0 + 0.75 + 0.75 + 1.5); the remaining **1.5 days are unallocated buffer**, belonging to no
 phase and counted by no kill criterion — the same numbers PLAN's Appetite section states, and the
 figure to keep the two files agreeing on. The buffer's size has never been stress-tested: no cycle
@@ -172,45 +172,95 @@ contains a number. And a fixture must BE the artifact — mixing the artifact wi
 about it made a corrected matcher over-fire on the very controls written to prove the
 original over-fired.
 
+---
+
+**Phase 05 — the Context Pack — closed 2026-08-03, ~0.2d against a 1.0d appetite.**
+CI run `30768154452` green: 19 of 19 jobs, ubuntu + macos + windows, head `777b49e`
+(`initiatives/develop/evidence/phase-05/ci-green.txt`). Nine slices, all proven.
+
+`next` hands over five sources before a slice is built — code neighbourhood, governing ADRs,
+learning rows, retro patterns, churn — and writes every one into the slice's `sources:`,
+including the ones that returned nothing and including which retrieval path ran and why.
+
+**The one-hop boundary is structural rather than checked.** Links are read from the matched row
+and the target is never opened, so there is no code path that could cross it. A fresh agent tried
+to make it leak and reported back that it could not: the boundary "is structural, not enforced by
+a check that could be bypassed."
+
+**Two fresh agents found 23 holes, 8 of them wrong answers reported as right ones**, in code whose
+own 14-test suite passed. The four worst are all one shape — a reader answering confidently about
+something it had misread:
+
+1. `adrs()` took the first Product-looking line anywhere in an ADR's head and allowed a `>` in its
+   lead, so a "supersedes the develop-lane rule" QUOTATION claimed a design ADR for develop while
+   the same trick in reverse hid a develop ADR. The shipped fixture passed only because its real
+   header happened to come first — ordering was doing the work, not the rule.
+2. git C-quotes non-ASCII paths, and the Windows separator normalisation then read the octal
+   escapes as directories: the top-ranked churn entry was a path that exists nowhere,
+   `"src/auth/caf/303/251.js"`, printed with a computed count beside it.
+3. `setSliceField` bound to the first block with a matching id while the reader hands out the first
+   UNPROVEN one, so with a duplicate id one slice's pack overwrote another slice's audit trail and
+   the slice being built recorded nothing, on that run or any later one.
+4. `learning()` discarded the parser's own errors, so a ledger with one unterminated fence reported
+   `learning [0] (none)` — strictly less informative than a MISSING ledger, which at least said it
+   was missing.
+
+**And the pinning commit shipped three vacuous passes.** Nine probes imported a Git Bash path node
+cannot resolve. Six went red, which is how it was found; three PASSED, because "output does not
+contain X" is satisfied by a stack trace. That is the exact failure this phase is about, shipped
+inside the commit that fixed thirteen instances of it. Probes now assert they ran. Two further
+tests were true of runs that did nothing: one checked a drop that had already happened for an
+unrelated reason, one checked a file the blast radius never contained.
+
+**`tests/shard-timings.json` was re-measured — all 54 files in one pass** (run 30765982979). The
+old table covered 42 and left 12 riding `_default_weight` 16; the new file measured 49s against
+that 16. Predicted total 1785s, real 2366s. So the balance test's `<= 200` was 1785/9 rounded, a
+snapshot of an under-measurement, and it now asserts the rule — max(heaviest file, total/shards) —
+derived from the plan on every run.
+
 ## Now
 
-**Phase 04 closed on green CI (run `30763365970`). Phase 05 has NOT been started** — the
-session that built 04 stopped here deliberately, so 05 begins with a fresh context.
+**Phases 04 and 05 are closed on green CI (runs `30763365970` and `30768154452`). Phase 06 has
+NOT been started.**
 
 ### Cycle 6 position
 
 | phase | state |
 |---|---|
 | 04 Learning System | closed 2026-08-03, 12 of 13 slices, ~0.8d of 1.5d |
-| 05 Context Pack | **next** — 1.0d |
-| 06 Capability | pending — 0.75d |
+| 05 Context Pack | closed 2026-08-03, 9 of 9 slices, ~0.2d of 1.0d |
+| 06 Capability | **next** — 0.75d |
 | 07 Quality intelligence | pending — 0.75d (the pre-decided cut) |
 | 08 Feedback metrics | pending — 1.5d |
 
-Burn ~0.8 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
+Burn ~1.0 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
 
-### To start Phase 05, in this order
+### To start Phase 06, in this order
 
-1. `node .claude/scripts/develop/develop.mjs start 5 --lane develop` — writes the brief and
-   decomposes the phase-05 spec's exit criteria into slices.
-2. Read `initiatives/develop/phases/phase-05-spec.md`. It builds
-   `.claude/scripts/develop/context-pack.mjs`: five retrieval sources — code-graph
-   neighbourhood with a STATED grep fallback, governing ADRs, learning rows, retro patterns,
-   and churn from `git log` — plus one-hop typed-link following per ADR-0111, with every
-   source recorded in the slice's `sources:` field.
-3. Write the failing bats FIRST, commit, push, and **read the red off CI. Never run tests
-   locally** — that rule has now been given three times, and the third violation was a
-   one-off script in /tmp rather than bats.
-4. The adversarial pass on anything gate-shaped must be run by a **fresh agent that has not
-   seen the code**, in the commit that ships it. On this cycle that pass found 8 holes in a
-   gate whose own tests already passed, 3 of them critical.
+1. `node .claude/scripts/develop/develop.mjs start 6 --lane develop`.
+2. Read `initiatives/develop/phases/phase-06-spec.md`. It builds `capability-vet.sh` (the BLOCK
+   gate, ADR-0110), `capability-lock.json`, the `capability-scout` agent and `/arc-capability`.
+3. Failing bats FIRST, commit, push, read the red off CI. Never run the suite locally.
+4. The adversarial pass runs by a FRESH agent, in the commit that ships the gate. On Phase 05
+   two of them found 23 holes in code whose own suite passed — and the commit that pinned the
+   first thirteen shipped three tests that passed while executing nothing.
 
-### Two things carried into Phase 05
+### One thing Phase 06 needs from Ashiq
+
+**The initial allowlist.** An empty allowlist means the gate refuses everything, which is the
+correct default, and it also means the exit criterion "a REAL candidate is vetted" cannot be
+met without naming something admissible. The plan is to vet **madge** — the dependency-analysis
+tool Cycle 5 recorded as debt — because vetting is not installing (ADR-0110 separates them):
+arc gains a `capability-lock.json` row and **no dependency**. Flagged rather than blocking,
+since nothing is admitted by it.
+
+### Three things carried forward
 
 | what | why |
 |---|---|
-| **Slice 08 of Phase 04** — one REAL promotion shipping an enforced check | Both candidates were rejected: L-002 by the unanchored evaluator on its code, L-004 on its own computed counts. L-004's ledger row already records what a third attempt must do differently — reconcile a claimed count against a persisted count, rather than start from a regex over prose |
-| **PR #100 is open and unmerged** | By instruction: nothing merges until every Cycle-6 phase is complete. Phases 05 through 08 land on `feat/develop-cycle6` |
+| **Slice 08 of Phase 04** — one REAL promotion shipping an enforced check | Both candidates were rejected: L-002 by the unanchored evaluator on its code, L-004 on its own computed counts. L-004's ledger row records what a third attempt must do differently — reconcile a claimed count against a persisted count, rather than start from a regex over prose |
+| **Renames are not followed by churn** | `--follow` takes a single path and the blast radius is a set. Dead paths are dropped and the count is stated, which is honest but is not the same as knowing a file's real history. Revisit if a slice repeatedly wants it |
+| **PR #100 is open and unmerged** | By instruction: nothing merges until every Cycle-6 phase is complete. Phases 06 through 08 land on `feat/develop-cycle6` |
 
 ### Still owed from Cycle 5, unchanged
 
