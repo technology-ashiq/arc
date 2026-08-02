@@ -34,3 +34,9 @@ tests/fixtures/spine/hostile/** -text
 # The CRLF hostile fixture IS its bytes: the design-lint suite pins that a Windows-authored
 # (CRLF) brief lints identically. Any eol conversion on add or checkout kills the pin.
 tests/fixtures/design-lint/hostile/crlf.md -text
+
+# Same reasoning, whole directory: develop-lint's adversarial fixtures are byte-level attacks.
+# Two of them ARE their line endings, and git warned it would rewrite them on the next touch --
+# which would have left the CRLF and mixed-ending cases byte-identical to the LF ones on CI,
+# so the suite would have gone on reporting them CAUGHT while testing nothing.
+tests/fixtures/develop/lint/breaking/** -text
