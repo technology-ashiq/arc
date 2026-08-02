@@ -2,10 +2,6 @@
 description: Stage related changes and write a conventional commit.
 allowed-tools: Bash(git status), Bash(git diff:*), Bash(git log:*), Bash(git add:*), Bash(git commit:*), Bash(bash .claude/scripts/hq/arc-event.sh:*)
 ---
-<!-- GENERATED FILE — DO NOT EDIT.
-     Source of truth: processes/commit-msg-draft.process.yaml (v1.0.0) in the arc-engine repo.
-     A hand-edit here is deleted by the next regeneration. Change the process file
-     instead, routed through /arc-change, then recompile. -->
 
 Commit the current work properly:
 

@@ -44,6 +44,30 @@ After the flip it is retired from CI as a regression check.
 **Post-flip regression is three things instead:** output schema validation (ADR 0200), the eval
 fixtures written in Phase 0, and reviewed goldens for the codex target (REQ-03).
 
+**Correction, 2026-08-03 — that sentence overstated what exists.** Phase 01's adversarial pass
+checked each of the three and none of them gates the generated commands today:
+
+- **Eval fixtures are written and never executed** — a bench runner is a declared no-go this
+  cycle, so the only test touching them asserts they parse as JSON.
+- **Schema validation** checks the shape of the `output:` *document*. Nothing produces a real run
+  output to validate against it until `arc-run` exists in Phase 02.
+- **Codex goldens** are real, but they gate `tests/fixtures/engine/goldens/codex/*`, not the three
+  `.claude/commands/*.md` a human actually invokes.
+
+What actually gates them post-flip is `arc-compile --check`, which this ADR did not name: it
+proves the `.md` matches the `.yaml`, and it is also ADR-0201's hand-edit detector. That is a
+STRUCTURAL guarantee, not a semantic one. A demonstrated consequence, run end to end: editing the
+canonical body to invert its own safety instruction passes `arc-compile --check` and
+`process-lint` clean. During the migration window that same change was caught twice — by
+`baseline-drift` on the pinned hash and by `body-drift` on the prose.
+
+So, plainly: **until Phase 02 provides a runner, human review of `processes/*.process.yaml` is the
+sole semantic control on what these three commands instruct.** That is not weaker than the
+pre-cycle state — they were hand-written, and review was the only control then too — but it is
+weaker than the migration window, and it is the honest statement rather than an unmet promise.
+The three named controls become real when Phase 02 lands `arc-run`; that is when this block gets
+its follow-up, and the revisit trigger below is what carries it.
+
 **Comparison is LF-normalised, and the normalisation is declared.** Both sides have `\r\n` and a
 lone trailing `\r` collapsed to `\n` before comparison. **What this destroys is line-ending
 information** — which is exactly what a Windows CI leg would differ on. So line endings do not go

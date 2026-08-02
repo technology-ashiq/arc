@@ -25,8 +25,9 @@
  * Zero dependencies, Node 18+.
  */
 
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { execFileSync } from "node:child_process";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
@@ -133,9 +134,28 @@ for (const file of files) {
     continue;
   }
 
-  const dest = target === "claude-code"
+  // A placeholder the adapter could not match is emitted VERBATIM into the command file --
+  // `{{input.Base}}`, `{{ input.base }}`, `{{input.base|default:a}b}}` all rendered as
+  // literal text. process-lint catches them, but arc-compile never invokes it and nothing
+  // orders the two, so the compiler must refuse its own bad output.
+  if (/\{\{|\}\}/.test(rendered)) {
+    out.push(`[unsupported] ${rel} — an unrendered placeholder survived into the output`);
+    failed++;
+    continue;
+  }
+
+  const destRaw = target === "claude-code"
     ? join(root, doc.baseline?.path ?? "")
     : join(root, "tests/fixtures/engine/goldens", target, `${doc.name}.md`);
+  const dest = resolve(destRaw);
+  // `--write` had no containment check while process-lint did, so a canonical file naming
+  // `path: ../../VICTIM.md` wrote OUTSIDE the repo root -- and `--write --all` is the exact
+  // command the DO-NOT-EDIT header tells every reader to run.
+  if (dest !== root && !dest.startsWith(root + sep)) {
+    out.push(`[byte-diff] ${rel} — destination \`${doc.baseline?.path}\` resolves outside the repository root; refusing`);
+    failed++;
+    continue;
+  }
 
   if (mode === "write") {
     mkdirSync(dirname(dest), { recursive: true });
@@ -146,16 +166,31 @@ for (const file of files) {
 
   let want;
   if (againstBaseline) {
-    const { commit, path: p } = doc.baseline ?? {};
-    if (!commit || !p) {
-      out.push(`[byte-diff] ${rel} — no baseline commit/path to compare against`);
+    // Read the pre-flip pilot from a COMMITTED FIXTURE, not from git history.
+    //
+    // The first version of this shelled out to `git show <commit>:<path>`, which is green on
+    // a full clone and RED in CI: actions/checkout@v4 defaults to `fetch-depth: 1` and the
+    // pinned commit is ten back. It would also die on a squash-merge of this cycle's PR,
+    // taking the "durable" proof with it -- a proof that depends on history is only as
+    // durable as the history.
+    //
+    // The fixture's sha256 is cross-checked against `baseline.sha256` FIRST. That is what
+    // stops this being a self-certifying pin: before, `commit`, `path` and `sha256` never
+    // constrained each other, so `commit: main` satisfied the field whose whole
+    // justification is "the same answer forever".
+    const fx = join(root, "tests/fixtures/engine/pre-flip", `${doc.name}.md`);
+    if (!existsSync(fx)) {
+      out.push(`[byte-diff] ${rel} — no pre-flip fixture at tests/fixtures/engine/pre-flip/${doc.name}.md`);
       failed++;
       continue;
     }
-    try {
-      want = lf(execFileSync("git", ["show", `${commit}:${p}`], { encoding: "utf8", cwd: root, stdio: ["ignore", "pipe", "pipe"], maxBuffer: 32 * 1024 * 1024 }));
-    } catch (e) {
-      out.push(`[byte-diff] ${rel} — cannot read \`${p}\` at \`${commit}\` from git: ${String(e.message).split("\n")[0]}`);
+    want = lf(readFileSync(fx, "utf8"));
+    const pinned = doc.baseline?.sha256;
+    const actual = createHash("sha256").update(want).digest("hex");
+    if (actual !== pinned) {
+      out.push(`[baseline-drift] ${rel} — the pre-flip fixture does not match this file's pinned sha256`);
+      out.push(`  Expected: ${pinned}`);
+      out.push(`  Found:    ${actual}  (tests/fixtures/engine/pre-flip/${doc.name}.md)`);
       failed++;
       continue;
     }
@@ -165,7 +200,20 @@ for (const file of files) {
       failed++;
       continue;
     }
-    want = lf(readFileSync(dest, "utf8"));
+    const disk = readFileSync(dest, "utf8");
+    // The CR check must run on the DISK side too, before lf() erases the evidence. It only
+    // ever inspected the in-process render, whose sole CR source is a \r escape -- so a
+    // whole generated file converted to CRLF (an autocrlf checkout, a Windows editor) was
+    // reported byte-identical and [lf-only] never fired. That is precisely the blind spot
+    // this check exists to cover.
+    if (/\r/.test(disk)) {
+      const i = disk.indexOf("\r");
+      out.push(`[lf-only] ${relative(root, dest)} — the file on disk contains a CR byte at offset ${i}`);
+      out.push(`  Context:  ${context(disk, i)}`);
+      failed++;
+      continue;
+    }
+    want = lf(disk);
   }
   const got = lf(rendered);
   if (want === got) { identical++; continue; }

@@ -258,13 +258,13 @@ jobs:
         run: |
           n="$(grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}')"
           echo "discovered $n test(s)"
-          # Raised 318 -> 884 (engine Cycle 6, Phase 00). The floor had rotted by 550: it was
+          # Raised 318 -> 891 (engine Cycle 6, Phase 00). The floor had rotted by 550: it was
           # last touched when the suite held 318 tests and nothing failed as the suite tripled,
           # because a floor only catches SHRINKAGE. That is the counts-rot shape of retro-log
           # 2026-07-22 -- a hardcoded number nobody recomputes. Derive it, never retype it:
           #   grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}'
           # Raise it to match reality; never lower it to make a red build green.
-          [ "$n" -ge 884 ] || { echo "::error::test count $n fell below the floor of 884"; exit 1; }
+          [ "$n" -ge 891 ] || { echo "::error::test count $n fell below the floor of 891"; exit 1; }
 
   # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
   # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker

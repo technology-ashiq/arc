@@ -3,10 +3,6 @@ description: Review the current branch's diff with the code-reviewer subagent; f
 argument-hint: [base-branch (default main)]
 allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Task, Write
 ---
-<!-- GENERATED FILE — DO NOT EDIT.
-     Source of truth: processes/review-diff.process.yaml (v1.0.0) in the arc-engine repo.
-     A hand-edit here is deleted by the next regeneration. Change the process file
-     instead, routed through /arc-change, then recompile. -->
 
 Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the branch is clean).
 

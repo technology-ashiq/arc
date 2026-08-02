@@ -38,6 +38,8 @@ unknown-top-level-key.process.yaml	unknown-key	an unknown top-level key that nev
 version-not-semver.process.yaml	name-semver	a version failing the spine's live PROCESS_RE
 name-uppercase.process.yaml	name-semver	a name with characters PROCESS_RE forbids
 intent-missing.process.yaml	intent-missing	no intent -- the sole source of the generated `description:` line
+frontmatter-injection-intent.process.yaml	frontmatter-injection	a newline inside intent -- rendered a FORGED allowed-tools line ABOVE the real one, and both the lint and the compiler returned clean
+frontmatter-injection-input-description.process.yaml	frontmatter-injection	the same hole through inputs[].description, which lands inside the generated argument-hint:
 inputs-required-and-default.process.yaml	inputs-shape	an input that is required AND carries a default
 inputs-unknown-key.process.yaml	inputs-shape	an input carrying a key outside the five allowed
 inputs-not-a-list.process.yaml	inputs-shape	inputs given as a scalar rather than a list
