@@ -25,7 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
-import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger } from "./ledger.mjs";
+import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem } from "./ledger.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
@@ -293,6 +293,15 @@ async function modeNext(ctx) {
     });
   }
 
+  // ADR-0103: the checkpoint runs INLINE at the slice boundary, not as a separate command a
+  // human has to remember. The identical script runs either way, so a forced extra invocation
+  // would buy ritual, not rigor — and ceremony cost per validated slice is one of this
+  // product's own outcome metrics. `checkpoint` stays callable standalone.
+  if (proven.length) {
+    const cp = await modeCheckpoint(ctx, { inline: true });
+    if (cp.tripped.length || cp.markers.length) say("");
+  }
+
   const { proven: p, total, next } = progress(slices);
   if (!next) {
     // Wording is fixed by phase-00-spec.md and asserted by bats -- keep the literal
@@ -349,13 +358,21 @@ async function modeHandoff(ctx, n) {
   // accumulated over phases -- never a number the model asserts about itself. A prediction
   // block that is written and never scored is decoration, and decoration is how "we had a
   // retro" became a substitute for a record.
-  const unscored = PREDICTION_FIELDS.filter((k) => !isFilled(scores[k]));
-  const badVerdict = PREDICTION_FIELDS
-    .filter((k) => isFilled(scores[k]))
-    .filter((k) => !VERDICTS.includes(scores[k].trim().split(/[\s—–-]/)[0].toLowerCase()));
+  const problems = new Map();
+  for (const k of PREDICTION_FIELDS) {
+    const p = scoreProblem(scores[k]);
+    if (p) problems.set(k, p);
+  }
+  const REASON = {
+    missing: "not scored",
+    "bad-verdict": `verdict must be one of ${VERDICTS.join(" | ")}`,
+    "no-reference": "verdict with no settling reference — say what settles it",
+    "self-declared-number": "carries a number asserted about its own quality",
+  };
 
-  if (unscored.length || badVerdict.length) {
-    say(`Handoff refused — ${unscored.length + badVerdict.length} of ${PREDICTION_FIELDS.length} predictions are not scored.`);
+  if (problems.size) {
+    say(`Handoff refused — ${problems.size} of ${PREDICTION_FIELDS.length} predictions are not scored.`);
+    for (const [k, p] of problems) say(`  ${k}: ${REASON[p]}`);
     say("");
     say("Score each one against what actually happened, then rerun. Add to the ledger:");
     say("");
@@ -363,7 +380,7 @@ async function modeHandoff(ctx, n) {
     say("");
     for (const k of PREDICTION_FIELDS) {
       const predicted = brief[k] ? ` (predicted: ${brief[k]})` : "";
-      say(isFilled(scores[k]) && !badVerdict.includes(k)
+      say(!problems.has(k)
         ? `${k}: ${scores[k]}`
         : `${k}: hit|miss|unforeseen — <the ledger line or commit that settles it>${predicted}`);
     }
@@ -384,10 +401,127 @@ async function modeHandoff(ctx, n) {
     say(`  ${isProven(s) ? "✓" : "·"} slice ${s.id}  tier=${s.fields.tier ?? "?"}  ${s.fields.title ?? ""}`);
   }
   say("");
+  // The evidence pack is a FILE, not a printout. A fidelity pass found this half of the
+  // exit criterion absent: handoff printed a pack and assembled nothing, so there was
+  // nothing for /arc-phase-done to read and nothing left behind after the terminal scrolled.
+  const phaseNo = (led.file.match(/phase-(\d+)-tasks/) || [, pad(n ?? 0)])[1];
+  const evDir = ctx.mode === "root"
+    ? join(ctx.root, "docs", "evidence", `phase-${phaseNo}`)
+    : join(ctx.tracker, "evidence", `phase-${phaseNo}`);
+  const pack = [
+    `# Handoff pack — phase ${phaseNo}${ctx.mode === "root" ? "" : ` · lane ${ctx.lane}`}`,
+    "",
+    `${proven}/${total} slices proven.`,
+    "",
+    "## Prediction calibration",
+    "",
+    `${tally}`,
+    "",
+    ...PREDICTION_FIELDS.map((k) => `- **${k}** — ${scores[k]}`),
+    "",
+    "## Proofs",
+    "",
+    "| slice | tier | proof | commit |",
+    "|---|---|---|---|",
+    ...slices.map((s) => `| ${s.id} | ${s.fields.tier ?? "?"} | ${(s.fields.proof ?? "?").replace(/\|/g, "\\|")} | ${s.fields.commit ?? "?"} |`),
+    "",
+    "## Spec-fidelity",
+    "",
+    "Run the `spec-fidelity` agent over this phase's spec and diff, and paste its report",
+    "below. It reads ONLY those two files — never this pack, never the ledger — because the",
+    "session that wrote the code cannot see its own blind spots.",
+    "",
+    "<!-- paste the fidelity report here; the verdict line is the last line of its output -->",
+    "",
+  ].join("\n");
+  mkdirSync(evDir, { recursive: true });
+  writeFileSync(join(evDir, "handoff.md"), pack, "utf8");
+  say(`Evidence pack written: ${join(evDir, "handoff.md").replace(ctx.root, "").replace(/^[\\/]/, "")}`);
+  say("");
+
   say(proven === total
     ? "Ready for /arc-phase-done — develop never closes a phase."
     : `NOT ready: ${total - proven} slice(s) still unproven.`);
   flush(0);
+}
+
+// ---------------------------------------------------------------------------
+// Checkpoint (Phase 03) -- risk is PATH-MATCHED by script, never self-assessed.
+//
+// The judgement "is this slice risky?" is exactly the judgement a model under time pressure
+// gets wrong, and always in the same direction. So the trigger is a glob list, and the only
+// question the script asks is which paths the change touched.
+// ---------------------------------------------------------------------------
+
+/** The risk classes. Declared inline: Phase 03 has no budget to refactor a shared rules file. */
+const RISK_GLOBS = [
+  { name: "auth", re: /(^|\/)(auth|session|token|login|permission|rbac)([./_-]|$)/i },
+  { name: "migrations", re: /(^|\/)(migrations?|schema)([./_-]|$)|\.sql$/i },
+  { name: "public-api", re: /(^|\/)(api|routes?|handlers?|controllers?)([./_-]|$)/i },
+  { name: "security-sensitive", re: /(^|\/)(secrets?|crypto|webhook|payment|stripe|billing)([./_-]|$)/i },
+  { name: "the gate itself", re: /(^|\/)(develop-lint|kickoff-lint|validate|lane-resolve)\.(mjs|sh)$/i },
+];
+
+/** Debt markers. A new one with no ledger row is a shortcut nobody will remember taking. */
+const MARKER_RE = /\b(TODO|FIXME|HACK|XXX)\b/;
+
+/**
+ * Files changed since a reference. This READS git; it never writes through it. ADR-0102's
+ * rule is that the harness does not COMMIT on your behalf — asking git what changed is the
+ * only way a checkpoint can know what to check, and it mutates nothing.
+ */
+async function changedFiles(root, since) {
+  try {
+    const { execFileSync } = await import("node:child_process");
+    const args = since ? ["diff", "--name-only", since] : ["diff", "--name-only", "HEAD"];
+    return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })
+      .split("\n").map((s) => s.trim()).filter(Boolean);
+  } catch { return []; }
+}
+
+async function modeCheckpoint(ctx, opts = {}) {
+  const files = opts.files ?? await changedFiles(ctx.root, opts.since);
+  if (!files.length) {
+    say("checkpoint: no changed files to check.");
+    if (!opts.inline) flush(0);
+    return { tripped: [], markers: [] };
+  }
+
+  const tripped = RISK_GLOBS
+    .map((g) => ({ name: g.name, hits: files.filter((f) => g.re.test(f)) }))
+    .filter((g) => g.hits.length);
+
+  // Marker scan: a new TODO/FIXME/HACK/XXX must have a debt-ledger row, or the shortcut is
+  // forgotten forever. WARN-only — the ledger is Phase 03's newest artifact and blocking on
+  // it before it has been used once would be a gate promoted on nothing.
+  const debtPath = ctx.mode === "root" ? join(ctx.root, "docs", "develop", "debt-ledger.md")
+                                       : join(ctx.tracker, "debt-ledger.md");
+  const debt = existsSync(debtPath) ? readFileSync(debtPath, "utf8") : "";
+  const markers = [];
+  for (const f of files) {
+    const abs = join(ctx.root, f);
+    if (!existsSync(abs)) continue;
+    let text = "";
+    try { text = readFileSync(abs, "utf8"); } catch { continue; }
+    text.split("\n").forEach((l, i) => {
+      if (MARKER_RE.test(l) && !debt.includes(f)) markers.push({ file: f, line: i + 1 });
+    });
+  }
+
+  say(`checkpoint: ${files.length} changed file(s)`);
+  if (tripped.length) {
+    for (const g of tripped) say(`  RISK  ${g.name} — ${g.hits.slice(0, 4).join(", ")}${g.hits.length > 4 ? ` (+${g.hits.length - 4})` : ""}`);
+    say("");
+    say("  Risk-triggered checkpoint. Before the next slice: is the change confined to what the");
+    say("  slice declared, and does its proof actually exercise the risky path?");
+  } else {
+    say("  no risk globs tripped");
+  }
+  for (const m of markers.slice(0, 8)) {
+    say(`  WARN  [debt-marker] ${m.file}:${m.line} — new marker with no row in ${debtPath.replace(ctx.root, "").replace(/^[\\/]/, "")} [trial]`);
+  }
+  if (!opts.inline) flush(0);
+  return { tripped, markers };
 }
 
 // ---------------------------------------------------------------------------
@@ -438,6 +572,5 @@ if (mode === "start") {
 } else if (mode === "handoff") {
   await modeHandoff(ctx, phaseNum);
 } else {
-  say("no checks wired yet — checkpoint becomes real in Phase 03.");
-  flush(0);
+  await modeCheckpoint(ctx);
 }

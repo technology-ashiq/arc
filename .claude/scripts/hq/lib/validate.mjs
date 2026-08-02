@@ -15,13 +15,14 @@ const MAX_FUTURE_MS = Number(process.env.ARC_SPINE_MAX_FUTURE_MS || 2 * 24 * 60 
 const MAX_COST_MAGNITUDE = 1e12;
 
 // ADR-0026: the vocabulary is CLOSED. Extensions only via a new ADR.
-// Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready).
+// Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready),
+// then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read).
 export const KINDS = Object.freeze([
   "idea.captured", "council.verdict", "approval.requested", "decision.recorded",
   "kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
   "ship.done", "revenue.received", "revenue.simulated", "cost.incurred", "run.completed",
   "incident.raised", "redaction.applied", "day.closed", "note.logged",
-  "develop.started", "slice.done", "handoff.ready",
+  "develop.started", "slice.done", "handoff.ready", "slice.stuck",
 ]);
 const KIND_SET = new Set(KINDS);
 

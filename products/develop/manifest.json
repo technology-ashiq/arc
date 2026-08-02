@@ -14,7 +14,8 @@
   "scripts": [
     ".claude/scripts/develop/develop-lint.mjs",
     ".claude/scripts/develop/develop.mjs",
-    ".claude/scripts/develop/ledger.mjs"
+    ".claude/scripts/develop/ledger.mjs",
+    ".claude/scripts/develop/stuck.mjs"
   ],
   "files": [],
   "docs": []

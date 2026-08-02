@@ -40,6 +40,32 @@ export const KINDS = ["ui", "external-dep", "logic", "infra"];
  */
 export const VERDICTS = ["hit", "miss", "unforeseen"];
 
+/**
+ * A number asserted about one's own quality. Lives here, not in develop-lint, so that
+ * `handoff` can run it over the score text it is about to PRINT — a fidelity pass found the
+ * detector was only ever applied to slice fields, so a score line reading
+ * `hit — 95% confidence it was the parser` printed a self-declared number straight out of
+ * the command whose whole purpose is that confidence is earned rather than claimed.
+ */
+export const SELF_DECLARED =
+  /\b(confidence|certainty|confident|score|scored|rating|rated|likelihood|probability|success[- ]rate|accuracy)\b[^.\n]{0,24}?\b\d{1,3}(?:\.\d+)?\s*%?/i;
+
+/**
+ * A score must carry a verdict AND the thing that settles it. `hit` alone is an assertion;
+ * `hit — 7 of the 9 holes were in ledger.mjs` is a record. The spec's words are "with a
+ * settling ledger reference each", and validating only the leading token let the bare
+ * verdict through.
+ */
+export function scoreProblem(value) {
+  const v = String(value ?? "").trim();
+  if (!v) return "missing";
+  const [verdict, ...rest] = v.split(/[\s—–-]+/);
+  if (!VERDICTS.includes(verdict.toLowerCase())) return "bad-verdict";
+  if (rest.join(" ").trim().length < 8) return "no-reference";
+  if (SELF_DECLARED.test(v)) return "self-declared-number";
+  return null;
+}
+
 export const PREDICTION_FIELDS = [
   "likely-failure-mode",
   "likely-regression-site",
