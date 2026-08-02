@@ -47,7 +47,17 @@ _scratch() {
   grep -q '^adrs: 0063, 0065$'                 "$brief"
   # first bold span of each PLAN ## No-gos bullet, trailing punctuation stripped
   grep -q '^no-gos: Real network calls, A second lane, Anything Phase 01 owns$' "$brief"
-  grep -q '^blast-radius: .*develop\.mjs'      "$brief"
+}
+
+# The blast radius is a FILTER, never a transformation: survivors are emitted verbatim,
+# never collapsed to a parent directory. The fixture spec cites one existing file, one
+# not-yet-existing file under a known directory, and one path with no ancestor at all.
+@test "blast radius keeps known and about-to-exist paths verbatim, drops the rest" {
+  local t; t="$(_scratch fake-phase)"
+  _dev "$t" start 0
+  local brief="$t/initiatives/develop/phases/phase-00-tasks.md"
+  grep -q '^blast-radius: initiatives/develop/PLAN\.md, initiatives/develop/phases/phase-00-tasks\.md$' "$brief"
+  grep -q '^blast-radius-dropped: 1$' "$brief"
 }
 
 @test "start writes 5 slice blocks, each with proof, tier and kind" {

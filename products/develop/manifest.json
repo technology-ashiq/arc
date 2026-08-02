@@ -1,0 +1,15 @@
+{
+  "name": "develop",
+  "version": "0.1.0",
+  "requires": ["core", "hq"],
+  "commands": [
+    ".claude/commands/arc-develop.md"
+  ],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/develop/develop.mjs",
+    ".claude/scripts/develop/ledger.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

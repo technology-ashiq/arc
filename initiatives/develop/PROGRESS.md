@@ -1,11 +1,11 @@
 # PROGRESS.md — Cycle 5 · arc-develop "The Developer"
 
-status: QUEUED
+status: LIVE
 cycle: arc-develop (Cycle 5, opened 2026-08-02)
-phase: 00 — planned, not started
+phase: 00 — in progress
 appetite: 5d
-burn: 0d
-blocked-on: owner — plan approval
+burn: 0.5d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -25,22 +25,36 @@ depends-on: —
 | 02 | Earned judgment — predictions scored at handoff, and a fresh unanchored `spec-fidelity` pass over spec + diff | 0.75 days | pending |
 | 03 | Controlled escalation — stuck backstops, inline risk-triggered checkpoints, debt-ledger marker lint | 0.5 days | pending |
 
-**Appetite burn: 0 of 5 days used (0%).** Phases allocate 4.0 days; the remaining 1.0 day is
-deliberate slack, because Cycle 4 closed at 112% with none. The 50% tripwire is 2.5 days: if Phase 01
-is not done by then, the pre-decided cut is Phase 03 in full.
+**Appetite burn: ~0.5 of 5 days used (~10%).** Phases allocate 4.0 days; the remaining 1.0 day is
+deliberate slack, because Cycle 4 closed at 112% with none. The checkpoint is 3.0 days: if Phase 01
+is not done by then, the pre-decided cut is Phase 03 in full. (A literal 50% mark would have been a
+broken instrument — Phase 00 + 01 already sum to 2.75d, so it would fire on every on-schedule run.)
+
+Basis for the ~0.5d, so it can be audited rather than believed: one unbroken sitting on 2026-08-02
+covering the kickoff (plan, 4 specs, 6 ADRs, 3 attack rounds, 3 simulation rounds), the ADR-band
+repair, and Phase 00's implementation through to 18 of 20 tests passing locally.
 
 ## Done log
 
-*(empty — no phase closed yet)*
+*(empty — no phase closed yet; Phase 00 closes only via `/arc-phase-done` on green CI)*
 
 ## Now
 
-**Current position:** the plan is written and awaits Ashiq's approval. `initiatives/develop/` holds
-`PLAN.md`, `PROGRESS.md` and four phase specs; ADRs 0063–0068 are at root. No product code exists —
-there is no `.claude/scripts/develop/`, no `.claude/commands/arc-develop.md`, no
-`products/develop/manifest.json`.
+**Current position:** Phase 00 is built and unproven-in-CI. Shipped: `.claude/scripts/develop/`
+(`develop.mjs` + `ledger.mjs`), `.claude/commands/arc-develop.md`, `products/develop/manifest.json`,
+`tests/develop-lifecycle.bats` (20 tests) and four fixtures. ADRs 0100–0106 are at root — develop
+took the 0100 century after colliding with the model-policy session on 0063–0068.
 
-**Next step:** approve the plan (the kickoff STOP gate — the approval request is on the spine as an
-`approval.requested` receipt). Once approved, Phase 00 starts with its red-first test:
-`bash tests/develop-lifecycle.bats` must fail with `Cannot find module
-'.claude/scripts/develop/develop.mjs'` before a line of it is written.
+Two findings the steel thread paid for itself with: the spine rejected develop's receipt kinds
+(closed vocabulary, ADR-0026) and quarantined them **while the command still exited 0** — fixed by
+ADR-0106 extending 18 → 21. And `sectionOf` shipped the exact `$`-under-`/m` bug the retro-log warns
+about, caught on its first run.
+
+**Next step:** push and let CI judge — local runs are not the gate. Last local run was 18/20; the two
+failures were a missing root-mode golden (now written) and a wording mismatch on the
+`all slices proven` line (now aligned to the spec). Neither has been re-run locally by design.
+
+**Then, to close Phase 00:** CI green on all 3 legs → `/arc-develop handoff 0` → `/arc-phase-done 0`.
+
+**Tracked, not built:** a duplicate-ADR-number check inside an existing lint, so CI catches a
+forgotten century band instead of trusting the convention. Route via `/arc-change`.

@@ -99,6 +99,7 @@
 - `/arc-fix-issue <n>`— root-cause and fix a GitHub issue
 - `/arc-kickoff <goal> [--lane <name>]` — start a build: PLAN.md, phases, PROGRESS.md (playbook §9)
 - `/arc-change <what> [--lane <name>]` — route a mid-build change/idea into the tracker (phase spec / ADR) before any code
+- `/arc-develop <mode> [phase] [--lane <name>]` — execution harness: turn an approved phase into proven slices (`start`/`next`/`status`/`checkpoint`/`handoff`)
 - `/arc-phase-done <n> [--lane <name>]` — close a phase against its Definition of Done (playbook §8)
 - `/arc-retro [n] [--lane <name>]` — end-of-phase retro: repeated corrections → permanent setup upgrades
 - `/arc-toolcheck`    — full toolchain status (installed/missing/stale) + one-command fixes
@@ -111,7 +112,7 @@
 - `/arc-freeze <dir>` · `/arc-unfreeze` — deterministic edit-boundary while debugging
 - `/arc-diagram <what>`— English → committed Mermaid (into PLAN/ADR/docs)
 - `/arc-resume [--lane <name>]` — rebuild session state from PROGRESS ## Now + last snapshot
-- Only the five command lines showing `[--lane <name>]` take the flag; the rest are lane-agnostic.
+- Only the six command lines showing `[--lane <name>]` take the flag; the rest are lane-agnostic.
   A bare first argument is always the command's own (a phase number, a route, a URL, a goal
   sentence) — never a lane name. Omit the flag and the lane is resolved, or you are asked.
 
