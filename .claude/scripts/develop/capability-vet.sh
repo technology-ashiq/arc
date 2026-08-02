@@ -271,7 +271,11 @@ scan() {  # scan <regex> -- prints the first matching path:line, or nothing
 READABLE=""
 [ -d "$SRC" ] && READABLE="$(LC_ALL=C grep -rIl . "$SRC" 2>/dev/null | head -1)"
 
-PIPE_SH='(curl|wget|iwr|Invoke-WebRequest)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|d|)sh|iex[[:space:]]*\('
+# `(ba|z|da)?sh`, never `(ba|z|d|)sh`. An EMPTY alternation branch is undefined in POSIX ERE:
+# GNU grep accepts it, BSD grep on the macOS leg does not, and the pattern silently stopped
+# matching there. `curl … | sh` sailed through the content scan on one of three legs while the
+# other two refused it — a gate that is only a gate on some machines.
+PIPE_SH='(curl|wget|iwr|Invoke-WebRequest)[^|;&]*\|[[:space:]]*(sudo[[:space:]]+)?(ba|z|da)?sh|iex[[:space:]]*\('
 EXFIL='(process\.env|os\.environ|ENV\[)[^;]*(fetch|axios|request|urlopen|requests\.(post|put)|http\.request|net\.connect)|(fetch|axios\.post|requests\.post|urlopen)[^;]*(process\.env|os\.environ|SECRET|TOKEN|API_?KEY|PASSWORD)'
 
 HIT_PIPE="$(scan "$PIPE_SH")"
@@ -311,17 +315,21 @@ if [ -f "$CANDIDATE/package.json" ]; then
   ' "$CANDIDATE/package.json" 2>/dev/null)"
 fi
 
-WRITE_CAPABLE=0; WHY=""
+# WCAP_WHY, not WHY. `WHY=""` here reset the refusal reason that `block()` had already
+# recorded for an EARLIER check, so a candidate refused on `content-scan` was written to the
+# lock file with `"why": ""` — a recorded decision with the reason erased, which is most of
+# the value of recording it. Caught by CI, not by reading.
+WRITE_CAPABLE=0; WCAP_WHY=""
 if [ -z "$READABLE" ]; then
   WRITE_CAPABLE=1
-  WHY="its source could not be read — an inconclusive scan is write-capable, never clean"
+  WCAP_WHY="its source could not be read — an inconclusive scan is write-capable, never clean"
 elif [ -n "$HIT_WRITE" ]; then
   WRITE_CAPABLE=1
-  WHY="its source writes, spawns or deletes: $HIT_WRITE"
+  WCAP_WHY="its source writes, spawns or deletes: $HIT_WRITE"
 fi
 if [ -n "$HOOK" ]; then
   WRITE_CAPABLE=1
-  WHY="${WHY:+$WHY; }it ships install-time lifecycle script(s): $HOOK"
+  WCAP_WHY="${WCAP_WHY:+$WCAP_WHY; }it ships install-time lifecycle script(s): $HOOK"
 fi
 
 # The candidate's own claim is REPORTED and never believed. MCP's spec: ToolAnnotations are
@@ -333,8 +341,9 @@ fi
 
 if [ "$WRITE_CAPABLE" -eq 1 ]; then
   if ! printf '%s' "$HUMAN_OK" | grep -qE '^[A-Za-z][A-Za-z0-9_-]*[[:space:]]+[0-9]{4}-[0-9]{2}-[0-9]{2}'; then
+    WHY="$WCAP_WHY"
     block human-ok \
-      "$NAME is write-capable and carries no recorded human OK — $WHY" \
+      "$NAME is write-capable and carries no recorded human OK — $WCAP_WHY" \
       "\`human-ok: <name> <YYYY-MM-DD>\` in candidate.json, recorded by the person who agreed" \
       "${HUMAN_OK:-(absent)}"
   fi

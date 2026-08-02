@@ -225,7 +225,10 @@ JSON
 JSON
   run bash "$(VET)" --audit --lock "$LOCK"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" != *"stale"* ]] || { echo "a fresh row was called stale: $output"; false; }
+  # The per-row form is a line STARTING with `stale`. The summary always contains the word
+  # ("0 stale."), so a bare substring test called every clean audit a failure.
+  run bash -c "bash '$(VET)' --audit --lock '$LOCK' | grep -c '^stale'"
+  [ "$output" = "0" ] || { echo "a fresh row was reported stale"; false; }
 }
 
 # ---------------------------------------------------------------------------
