@@ -33,9 +33,20 @@ _open() {
 }
 
 # _measure <unit> <arm> <window_start> <window_end>
+#
+# source_id VARIES BY ARM on purpose. `arm` is not part of the measured idem, so measuring
+# one unit for two arms in one window with a shared source_id is a genuine DUP_IDEM -- the
+# emitter is right to refuse it. Deriving the source per arm keeps each emit a distinct
+# fact, which is what lets the FOLD (not the emitter) be the thing under test.
 _measure() {
+  local src
+  case "$2" in
+    +champion)     src="h-00000000000000c1" ;;
+    +challenger-a) src="h-00000000000000d1" ;;
+    *)             src="h-00000000000000ff" ;;
+  esac
   bash "$EVENT" emit experiment.measured --strict --payload \
-    "$(printf '{"experiment_id":"x-b-1","unit_id":"%s","arm":"%s","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"%s","window_end":"%s","source_id":"h-fedcba9876543210"}' "$1" "$2" "$3" "$4")"
+    "$(printf '{"experiment_id":"x-b-1","unit_id":"%s","arm":"%s","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"%s","window_end":"%s","source_id":"%s"}' "$1" "$2" "$3" "$4" "$src")"
 }
 
 _board() { node "$EVOLVE" board --root "$SPINE" --repo "$FIXREPO" --now "$NOW"; }
@@ -226,7 +237,7 @@ _ev() { # _ev <id> <ts> <kind> <payload> [supersedes]
   for w in "2026-08-01 2026-08-07" "2026-08-08 2026-08-14" "2026-08-15 2026-08-21"; do
     set -- $w
     _measure u1 +champion     "$1" "$2"
-    _measure u1 +challenger-a "$1" "$2"
+    _measure u2 +challenger-a "$1" "$2"
   done
   run _board
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -281,9 +292,9 @@ _ev() { # _ev <id> <ts> <kind> <payload> [supersedes]
   _open
   for u in u1 u2; do
     bash "$EVENT" emit experiment.measured --strict --payload \
-      "$(printf '{"experiment_id":"x-b-1","unit_id":"%s","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":0,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' "$u")"
+      "$(printf '{"experiment_id":"x-b-1","unit_id":"c%s","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":0,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-00000000000000c1"}' "$u")"
     bash "$EVENT" emit experiment.measured --strict --payload \
-      "$(printf '{"experiment_id":"x-b-1","unit_id":"%s","arm":"+challenger-a","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":0,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' "$u")"
+      "$(printf '{"experiment_id":"x-b-1","unit_id":"d%s","arm":"+challenger-a","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":0,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-00000000000000d1"}' "$u")"
   done
   run _board
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -299,7 +310,7 @@ _ev() { # _ev <id> <ts> <kind> <payload> [supersedes]
   _measure u2 +challenger-a 2026-08-01 2026-08-07
   for a in +champion +challenger-a; do
     bash "$EVENT" emit experiment.measured --strict --payload \
-      "$(printf '{"experiment_id":"x-b-1","unit_id":"g1","arm":"%s","cohort":"verdict","metric":"support_tickets","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' "$a")"
+      "$(printf '{"experiment_id":"x-b-1","unit_id":"g%s","arm":"%s","cohort":"verdict","metric":"support_tickets","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-00000000000000ff"}' "${a#+}" "$a")"
   done
   run _board
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -374,7 +385,11 @@ _ev() { # _ev <id> <ts> <kind> <payload> [supersedes]
   run node "$EVOLVE" board --root "$SPINE" --repo "$evil" --now "$NOW"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"REJECTED MANIFEST"* ]]
-  [[ "$output" != *"412 observation(s)"* ]]
+  [[ "$output" == *"(no module declares a valid evolve section)"* ]]
+  # The forged text may appear inside the clearly-labelled rejection line; what must never
+  # happen is it rendering as a BASELINE row, which is what would read as real evidence.
+  run bash -c "node '$EVOLVE' board --root '$SPINE' --repo '$evil' --now '$NOW' | grep -c '^    .*412 observation'"
+  [ "$output" = "0" ]
 }
 
 @test "BREAK 15: CLI refuses a repeated flag, an empty value, and a non-integer --now" {
