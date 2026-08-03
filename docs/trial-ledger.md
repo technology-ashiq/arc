@@ -47,6 +47,9 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-02 | self-declared-number (develop-lint) | registered at birth, arc-develop Phase 01 | not yet | — |
 | 2026-08-02 | tier-floor (develop-lint) | registered at birth, arc-develop Phase 01 | not yet | — |
 | 2026-08-03 | approach-sketch, the COUNT only (develop-lint) | registered at birth, arc-develop Phase 07 | not yet | — |
+| 2026-08-03 | approach-sketch COUNT (develop-lint) | arc-develop Cycle 6, phases 05-08 | **YES** — fired on phase-01 slice 01, whose title names `develop-lint.mjs` | **unadjudicated** — the slice predates the check by four phases, so the firing is retroactive: neither a clean fire nor a false one. It has never yet fired on a slice written while the check existed |
+| 2026-08-03 | self-declared-number (develop-lint) | arc-develop Cycle 6, phases 05-08 | no — silent across 55 slices | **n/a — not counted as a clean run.** Same-author silence on ledgers written against the check, which this file already says must not be scored as accuracy |
+| 2026-08-03 | tier-floor (develop-lint) | arc-develop Cycle 6, phases 05-08 | no — silent; no `kind: ui` slice exists to test it | **n/a — not counted.** The floor it exists to enforce was never reachable |
 
 ### develop-lint's two trial groups (ADR-0101)
 
