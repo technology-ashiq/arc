@@ -30,14 +30,14 @@
 | 1.57 | **Balanced Model Policy · pre-engine model discipline** | `PLAN-model-policy.md` | **After the arc-portfolio cycle (C4) closes + retro, BEFORE the develop kickoff** — owner-approved (2026-08-02); the policy ADR (decisions MP-A…F: provider-neutral seat tiers, model-fingerprint discipline, emergency fallback + exploratory-trial carve-outs) + council `standard` fixed envelope + paired composer A/B + calibration unblock + attacker reject trace. The policy layer the engine (#3) and `BRIEF-bench.md` later inherit — zero engine code |
 | 1.6 | **arc-develop · "The Developer"** | `PLAN-develop.md` | **After Cycle-2 close** — owner-scheduled (2026-07-28); the execution harness owning the build loop (plan-approval → phase-done) for every subsequent build incl. Cycle 3. **Kickoff runs AFTER arc-portfolio (1.55) — develop = first native lane** |
 | 2 | **Cycle 3 · First Money ([VENTURE] launch)** | `PLAN-cycle3-venture-launch.md` | After Cycle 2 · needs the venture decision (candidates + 10-min test inside) |
-| 3 | Model-agnostic foundation (engine + processes) | `PLAN-engine-process-layer.md` | Pull (plan v2 2026-08-02 — lane-era, ADR-0069-inherited): public-prep / provider event / 2nd-runtime need (third fires → amend 0069(d) first) |
+| 3 | Model-agnostic foundation (engine + processes) | `PLAN-engine-process-layer.md` | Pull: public-prep / 2nd runtime need |
 | 4 | discover v1 | `PLAN-discover.md` | Pull: next venture needed |
 | — | growth v1 | `BRIEF-growth.md` | Pull: live venture needs traffic |
 | — | leads v1 | `BRIEF-leads.md` | Pull: an offer needs outbound |
 | — | ops v1 | `BRIEF-ops.md` | Pull: ≥2 live ventures / support volume |
 | — | legal pack | `BRIEF-legal-pack.md` | Pull: first venture reaches launch prep (policies before real payments) |
 | — | ledger module | `BRIEF-ledger.md` | Pull: ≥2 revenue sources |
-| — | evolve v1 | `BRIEF-evolve.md` | Pull: 4+ weeks of real metrics |
+| — | evolve v1 | `PLAN-evolve.md` | Pull: 4+ weeks of real `metric.observed` receipts on the spine — **full plan ready, SLEEPING** (owner-approved 2026-08-02; decisions EVO-A…H1 locked over 4 review rounds). Pre-kickoff gate inside: the metric vocabulary + feed (EVO-H0) land in the FIRST CLIENT's cycle (growth inherits that obligation); rollback is propose-only BOTH directions — deviation from the old brief, on the record in the file |
 | — | memory v1 | `BRIEF-memory.md` | Pull: recall pain (>2 min to find a lesson) |
 | — | bench runner | `BRIEF-bench.md` | Pull: drivers disagree / new model |
 | — | dashboard | `BRIEF-dashboard.md` | Pull: brief overflows / ≥3 earning ventures |
@@ -46,7 +46,7 @@
 | — | scheduler | `BRIEF-scheduler.md` | Pull: first L3 process · policy engine is a hard prereq |
 | — | trader sandbox | `BRIEF-trader.md` | Pull: monthly revenue + Ashiq's written opening — **last** |
 
-**Full PLANs** (the 8 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
+**Full PLANs** (the 9 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
 decision records), appetites, ADR-ready decisions, phases, pre-mortems. **BRIEFs** are
 deliberately lighter — real REQs and locked non-negotiables, but current-state gets
 filled at their kickoff (writing 400-line plans for far-future modules today would be

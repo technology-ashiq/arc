@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-02, model-policy plan added)
+## File map & status (updated 2026-08-02, evolve plan added)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (22 files) | **ACTIVE — the operational layer** | Kickoff-ready: 8 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (22 files) | **ACTIVE — the operational layer** | Kickoff-ready: 9 full PLANs + 12 BRIEFs + ordering/triggers in `plans/README.md` |
 | `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -26,6 +26,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | `records/arc-hq-blueprint.md` | Record | HQ concept: autonomy ladder, learning-as-calibration, moat analysis. Absorbed into Cycle-2 plan + policy/evolve/dashboard/chat briefs |
 | `records/arc-money-engine-plan.md` | Record | Original idea scoring (pain-mining 9 · leads-service 8.5 · SaaS factory 8 · video 6/8 · trading 2) and monetization logic. Sequencing superseded by the master plan |
 | ~~`arc-cycle2-receipt-spine-PLAN-v2.md`~~ | **MOVED → `docs/archive/`** | Superseded by `plans/PLAN-cycle2-receipt-spine-v2.1.md`; kept in archive for history — never feed the v2 to a kickoff |
+| ~~`plans/BRIEF-evolve.md`~~ | **MOVED → `docs/archive/`** (2026-08-02) | Superseded by `plans/PLAN-evolve.md`; kept in archive for history — never feed the brief to a kickoff (its auto-revert rule was owner-overturned; the plan is the design source) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -71,6 +72,18 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
    the plans queue), a lanes.md surface-contract block added, tracker artifacts marked
    lane-relative, debt ledger lane-scoped, learning ledger + eval fixtures pinned as
    root company organs (ADR-0053/0055). Decision record DEV-A…K unchanged.
+10. **2026-08-02:** `plans/PLAN-evolve.md` added (evolve v1 — the self-improvement
+    engine: `metric.observed` scoreboards from the spine, bounded champion/challenger
+    experiments, ONE pinned fixed-horizon verdict test [newcombe-wilson-difference-v1,
+    config-hashed α + effect_floor], SHA-bound promotion lineage end-to-end, and
+    **propose-only in BOTH directions — the old brief's auto-revert was owner-overturned;
+    every merge incl. rollback is human-only**; decisions EVO-A…H1 locked over 4
+    owner-review rounds, ADR numbers at kickoff). Keeps its pull slot (trigger: 4+ weeks
+    of real `metric.observed` receipts). **Cross-plan obligation: EVO-H0 (the
+    `metric.observed` vocabulary ADR + validator + ingestion) lands in the FIRST
+    CLIENT's cycle — growth's future plan inherits it; without EVO-H0 the trigger is
+    technically impossible (closed KINDS, ADR-0026).** `BRIEF-evolve.md` superseded →
+    moved to `docs/archive/`.
 
 ## Provenance
 
