@@ -1,0 +1,13 @@
+{
+  "name": "evolve",
+  "version": "1.0.0",
+  "requires": ["core", "hq"],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/evolve/arc-evolve.mjs",
+    ".claude/scripts/evolve/board.mjs"
+  ],
+  "files": [],
+  "docs": []
+}
