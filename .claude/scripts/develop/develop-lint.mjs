@@ -50,7 +50,11 @@ const warn = (group, where, what, expected, found, example) => {
   warnings.push({ group, where, what, expected, found, example });
 };
 const render = (f, kind) => {
-  say(`${kind} [${f.group}] ${f.where} — ${f.what}`);
+  // ADR-0101: a trial gate always says so. develop-lint declared a TRIAL set from v1 and never
+  // marked its output, so a WARN-first check was indistinguishable from a promoted one — and
+  // the trial ledger's whole premise is that a reader can tell which is which.
+  const trial = kind.trim() === "WARN" && TRIAL.has(f.group) ? " [trial]" : "";
+  say(`${kind} [${f.group}] ${f.where} — ${f.what}${trial}`);
   if (f.expected !== undefined) say(`  Expected: ${f.expected}`);
   if (f.found !== undefined) say(`  Found:    ${f.found}`);
   if (f.example !== undefined) say(`  Example:  ${f.example}`);
@@ -267,18 +271,23 @@ for (const file of ledgerFiles) {
 // on every slice costs on every slice and pays on few, which is the process tax this cycle's
 // plan ranks as its first risk.
 {
-  const { validateAnnex, validateSketches } = await import("./quality.mjs");
+  const { validateAnnex, validateSketches, qualityFileFor } = await import("./quality.mjs");
   for (const file of ledgerFiles) {
     const raw = readFileSync(join(phasesDir, file), "utf8");
+    // The annex and the sketches live in their OWN file. Inside the ledger, an approach block
+    // closed the slice it belonged to and dropped its fields into the brief namespace, so a
+    // perfectly valid pair of sketches produced seven `brief repeats key` BLOCKs.
+    const qPath = join(phasesDir, qualityFileFor(file));
+    const q = existsSync(qPath) ? readFileSync(qPath, "utf8") : "";
 
-    for (const f of validateAnnex(raw).fails) {
+    for (const f of validateAnnex(raw, q).fails) {
       fail("pattern-annex", `${file}:${f.at}`, f.msg,
         "every row carries a source and an adopted-or-rejected verdict, within 20 lines",
         f.id ? `slice ${f.id}` : "the annex",
         "| server-side cursors | https://… (primary docs) | adopted — bounded memory |");
     }
 
-    const { fails, warns } = validateSketches(raw);
+    const { fails, warns } = validateSketches(raw, q);
     for (const w of warns) {
       warn("approach-sketch", `${file}:${w.at}`, w.msg,
         "2 or 3 sketches on a slice whose paths trip a risk glob",

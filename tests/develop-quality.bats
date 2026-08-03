@@ -24,16 +24,22 @@ _url() {
 # arrived empty, every validator saw zero slices, and the two tests asserting "no findings"
 # passed vacuously on nothing at all. The emptiness check below makes that impossible now.
 _q() {
-  local fn="$1" led="$2"
+  local fn="$1" led="$2" qf="$3"
+  # An EMPTY FILE, never /dev/null: node cannot read /dev/null as a path on the Windows leg,
+  # and the probe then died before it validated anything.
+  if [ -z "$qf" ]; then qf="$BATS_TEST_TMPDIR/empty-quality.md"; : > "$qf"; fi
   [ -s "$led" ] || { echo "the ledger fixture is empty -- the test would prove nothing"; return 1; }
   local probe="$BATS_TEST_TMPDIR/probe.mjs"
   {
     echo "import * as q from '$(_url "$(Q)")';"
     echo "import { readFileSync } from 'node:fs';"
-    echo "const r = q.$fn(readFileSync(process.argv[1], 'utf8'));"
+    # argv[2], not argv[1]. For a node SCRIPT, argv[1] is the script itself -- the probe was
+    # parsing its own JavaScript, which holds no slices, so every validator returned nothing
+    # and the two tests asserting "no findings" passed on the wrong file entirely.
+    echo "const r = q.$fn(readFileSync(process.argv[2], 'utf8'), readFileSync(process.argv[3], 'utf8'));"
     echo "console.log(JSON.stringify({ fails: (r.fails||[]).map(f => f.msg), warns: (r.warns||[]).map(f => f.msg) }));"
   } > "$probe"
-  run node "$probe" "$led"
+  run node "$probe" "$led" "$qf"
   [ "$status" -eq 0 ] || { echo "probe did not run:"; echo "$output"; return 1; }
 }
 
@@ -84,13 +90,15 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex — slice 01
 
 | pattern | source | verdict |
 |---|---|---|
 | others use cursors | https://docs.example/api (primary docs) | adopted — bounded memory |
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "declares no \`decision-type:\`"
 }
 
@@ -99,6 +107,8 @@ EOF
 $_SLICE_PLAIN
 decision-type: architecture
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex — slice 01
 
 | pattern | source | verdict |
@@ -106,7 +116,7 @@ decision-type: architecture
 | Stripe paginates with an opaque cursor | https://docs.stripe.com/api/pagination (primary docs) | adopted — bounded memory at any depth |
 | Linear returns hasNextPage beside it | https://linear.app/developers (primary docs) | rejected — the cursor already answers it |
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _no_fails
 }
 
@@ -115,13 +125,15 @@ EOF
 $_SLICE_PLAIN
 decision-type: product
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex — slice 01
 
 | pattern | source | verdict |
 |---|---|---|
 | Stripe paginates with an opaque cursor |  | adopted — bounded memory |
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "carries no source"
   _has "Stripe paginates"
 }
@@ -131,13 +143,15 @@ EOF
 $_SLICE_PLAIN
 decision-type: product
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex — slice 01
 
 | pattern | source | verdict |
 |---|---|---|
 | Stripe paginates with an opaque cursor | https://docs.stripe.com/api (primary docs) | interesting |
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "no adopted-or-rejected verdict"
 }
 
@@ -152,13 +166,15 @@ EOF
 $_SLICE_PLAIN
 decision-type: ux
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex — slice 01
 
 | pattern | source | verdict |
 |---|---|---|
 $rows
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "over the 20-line cap"
 }
 
@@ -167,13 +183,15 @@ EOF
 $_SLICE_PLAIN
 decision-type: vibes
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex — slice 01
 
 | pattern | source | verdict |
 |---|---|---|
 | something | https://docs.example (primary docs) | adopted — fits |
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "outside product | ux | architecture | external-api"
 }
 
@@ -181,13 +199,15 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_PLAIN
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Pattern Annex
 
 | pattern | source | verdict |
 |---|---|---|
 | something | https://docs.example | adopted — fits |
 EOF
-  _q validateAnnex "$BATS_TEST_TMPDIR/l.md"
+  _q validateAnnex "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "names no slice"
 }
 
@@ -233,6 +253,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -256,7 +278,7 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: the failure mode is a handler nobody remembered to change
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _no_fails
 }
 
@@ -264,6 +286,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -287,8 +311,8 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: a handler nobody remembered to change
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
-  _has "costs \`maintenance\` in time"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
+  _has "prices the work in time"
 }
 
 @test "computed counts are NOT mistaken for invented durations" {
@@ -298,6 +322,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -321,7 +347,7 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: a handler nobody remembered to change
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _no_fails
 }
 
@@ -329,6 +355,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -351,7 +379,7 @@ operational-surface: deps +0, services +0, config +0
 deletion-opportunity: none
 verdict: rejected
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "rejected with no \`rejected-because:\`"
 }
 
@@ -359,6 +387,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -381,7 +411,7 @@ operational-surface: deps +0, services +0, config +0
 deletion-opportunity: none
 verdict: picked
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "2 picked approach(es)"
 }
 
@@ -389,6 +419,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -401,7 +433,7 @@ operational-surface: deps +0, services +0, config +0
 deletion-opportunity: none
 verdict: picked
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "1 approach(es); the comparison is 2 or 3"
 }
 
@@ -409,6 +441,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: 1
@@ -432,7 +466,7 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: it forgets
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "operational surface with no counts"
 }
 
@@ -442,6 +476,8 @@ EOF
   cat > "$BATS_TEST_TMPDIR/l.md" <<EOF
 $_SLICE_RISKY
 
+EOF
+  cat > "$BATS_TEST_TMPDIR/q.md" <<EOF
 ### Approach sketches — slice 01
 
 #### approach: A
@@ -460,7 +496,7 @@ deletion-opportunity: none
 verdict: rejected
 rejected-because: it forgets
 EOF
-  _q validateSketches "$BATS_TEST_TMPDIR/l.md"
+  _q validateSketches "$BATS_TEST_TMPDIR/l.md" "$BATS_TEST_TMPDIR/q.md"
   _has "read as an approach marker"
 }
 
@@ -471,9 +507,15 @@ EOF
 @test "develop-lint FAILs a bad annex and WARNs a missing sketch" {
   local t; t="$(mktemp -d)/tree"
   mkdir -p "$t/initiatives/develop/phases"
-  cp "$ARC_ROOT/tests/fixtures/develop/fake-phase/initiatives/develop/PLAN.md" "$t/initiatives/develop/" 2>/dev/null || true
+  # a spec must exist, or [brief-stale] fires and this test measures that instead
+  printf "# Phase 00
+
+## Exit criteria
+
+- [ ] a thing
+" > "$t/initiatives/develop/phases/phase-00-spec.md"
   cat > "$t/initiatives/develop/phases/phase-00-tasks.md" <<'LEDGER'
-# Build Brief — phase 00 · fixture
+# Build Brief - phase 00 - fixture
 
 spec-hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
 lane: develop
@@ -485,23 +527,91 @@ lane: develop
 title: verify the token in `src/auth/session.js`
 kind: logic
 risk: medium
-proof: unit — `bats x`
+proof: unit - `bats x`
 tier: unit
 decision-type: architecture
 result: done
 commit: abc1234
+LEDGER
+  cat > "$t/initiatives/develop/phases/phase-00-quality.md" <<'QUALITY'
+# Quality annex - phase 00
 
-### Pattern Annex — slice 01
+### Pattern Annex - slice 01
 
 | pattern | source | verdict |
 |---|---|---|
 | someone does this | https://docs.example (primary docs) | maybe |
-LEDGER
-  run node "$(LINTQ)" --root "$t"
+QUALITY
+  run node "$(LINTQ)" --root "$t" --lane develop
   [ "$status" -ne 0 ] || { echo "a verdict-less annex row did not FAIL: $output"; false; }
   [[ "$output" == *"pattern-annex"* ]] || { echo "$output"; false; }
   [[ "$output" == *"approach-sketch"* ]] || { echo "the sketch WARN did not fire: $output"; false; }
   [[ "$output" == *"[trial]"* ]] || { echo "the sketch count must be WARN-first: $output"; false; }
+}
+
+@test "develop-lint accepts a ledger whose slices carry two complete sketches" {
+  # The whole feature was unusable: approach blocks lived in the ledger, and `#### approach: 2`
+  # closed the slice and dropped its seven fields into the brief namespace, where they collided
+  # with approach 1's. A valid pair of sketches produced seven `brief repeats key` BLOCKs.
+  local t; t="$(mktemp -d)/tree"
+  mkdir -p "$t/initiatives/develop/phases"
+  # a spec must exist, or [brief-stale] fires and this test measures that instead
+  printf "# Phase 00
+
+## Exit criteria
+
+- [ ] a thing
+" > "$t/initiatives/develop/phases/phase-00-spec.md"
+  cat > "$t/initiatives/develop/phases/phase-00-tasks.md" <<'LEDGER'
+# Build Brief - phase 00 - fixture
+
+spec-hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+lane: develop
+
+### Slices
+
+#### slice: 01
+
+title: verify the token in `src/auth/session.js`
+kind: logic
+risk: medium
+proof: unit - `bats x`
+tier: unit
+result: done
+commit: abc1234
+LEDGER
+  cat > "$t/initiatives/develop/phases/phase-00-quality.md" <<'QUALITY'
+# Quality annex - phase 00
+
+### Approach sketches - slice 01
+
+#### approach: 1
+
+summary: verify in middleware, before the route handler is reached
+trade-offs: one place to change, but every route pays the check
+blast-radius: the router and every handler under it
+maintenance: touches 3 call sites, no new pattern
+operational-surface: deps +0, services +0, config +1
+deletion-opportunity: the per-handler token checks
+verdict: picked - one place to change beats fourteen
+
+#### approach: 2
+
+summary: verify inside each handler
+trade-offs: precise, and forgettable
+blast-radius: every handler, individually
+maintenance: touches 14 call sites
+operational-surface: deps +0, services +0, config +0
+deletion-opportunity: none
+verdict: rejected
+rejected-because: the failure mode is a handler nobody remembered to change
+QUALITY
+  run node "$(LINTQ)" --root "$t" --lane develop
+  # The sketches themselves must produce nothing. The fixture brief is deliberately minimal and
+  # trips [brief-stale], which is a different check and not what this test is about.
+  [[ "$output" != *"repeats key"* ]] || { echo "approach fields collided with the brief: $output"; false; }
+  [[ "$output" != *"FAIL  [approach-sketch]"* ]] || { echo "a valid pair of sketches was rejected: $output"; false; }
+  [[ "$output" != *"FAIL  [pattern-annex]"* ]] || { echo "$output"; false; }
 }
 
 @test "the pattern-miner agent is decision-triggered and has no write tools" {
