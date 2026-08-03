@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-evolve (Cycle 7, opened 2026-08-03)
-phase: 03 — promotion safety (Phases 00-02 CLOSED)
+phase: — all five CLOSED; cycle ready for retro and merge
 appetite: 7d
-burn: 4.0d
+burn: 7.0d
 blocked-on: —
 depends-on: —
 
@@ -24,10 +24,10 @@ depends-on: —
 | 00 | Contract + steel thread — manifest schema, `product-lint` extension, 8 kinds + validators, grammar, one receipt end-to-end | 1.5 days | ✅ closed 2026-08-04 |
 | 01 | Board — reader-only reducer; `PENDING` / staleness / `MISSING` / `insufficient evidence`; stream separation | 1.0 days | ✅ closed 2026-08-04 |
 | 02 | Runner + verdict math — assignment, seal, floors, TTL, the pinned test + reference vectors | 1.5 days | ✅ closed 2026-08-04 |
-| 03 | Promotion safety — four-hop SHA lineage, evidence table, inbox, watch, freeze, revert path | 1.5 days | ⬜ pending |
-| 04 | Council bridge — **THE DESIGNATED CUT** | 1.5 days | ⬜ pending |
+| 03 | Promotion safety — four-hop SHA lineage, evidence table, inbox, watch, freeze, revert path | 1.5 days | ✅ closed 2026-08-04 |
+| 04 | Council bridge — the designated cut, BUILT rather than cut | 1.5 days | ✅ closed 2026-08-04 |
 
-**Appetite burn: 4.0 of 7 days used (57%).** Phases 00–03 (the core engine) allocate **5.5 days**.
+**Appetite burn: 7.0 of 7 days used (100%).** Phases 00–03 (the core engine) allocate **5.5 days**.
 Phase 04 allocates the remaining 1.5d and is the designated cut — it is simultaneously the only
 slack in the cycle. That is deliberate and it is the lesson `arc-portfolio` paid for: Cycle 4
 allocated 100% with zero slack, `appetite-sum` warned on every run, Phase 02 overran 0.35d with
@@ -65,29 +65,43 @@ bank the contract, lint and vocabulary ADRs as documentation, stop, retro.
   the independent derivation. A third fresh agent found **15 more breaks**, all fixed and pinned.
   Prediction calibration: 4 hit, 0 miss, 1 unforeseen.
 
+- **2026-08-04 - Phase 03 CLOSED.** 11/11 slices, CI green. The four-hop SHA chain, every hop
+  with a negative control. A fourth fresh agent found **13 breaks**, three of them on things this
+  lane had already claimed were fixed - including the propose-only GUARD itself, which was a grep
+  a mutant module walked straight past. Prediction calibration: 2 hit, 2 miss, 1 unforeseen.
+- **2026-08-04 - Phase 04 CLOSED.** 8/8 slices, CI green. The designated cut was BUILT, not cut:
+  `council.outcome` (KINDS 30 -> 31), both council payloads closed, calibration from receipts with
+  `unresolved` excluded rather than scored as a miss, and `insufficient evidence` below floor.
+  Prediction calibration: 4 hit, 1 miss, 0 unforeseen.
+
 ## Now
 
-**Current position: Phases 00, 01 and 02 closed. Phase 03 (promotion safety) is next.**
+**Current position: all five phases CLOSED. The cycle is ready for `/arc-retro` and merge.**
+Burn 7.0d of 7.0d - exactly the appetite, with zero slack, which the `appetite-sum` warning
+flagged at kickoff and which stayed true.
 
-**Three phases, three fresh-agent passes, 45 real breaks.** 15 in the contract and receipts, 15
-in the board, 15 in the assignment layer and the verdict gate. Every one of them was in code that
-had already passed every test its author wrote, and in two phases one of those tests was itself
-wrong in a way that hid a severe defect. This is not a formality in this lane.
+**Phase 04 was the designated cut and was built anyway.** ADR-0307 named it as the thing to drop
+under burn pressure. It was not dropped, so the cut was never spent - and that is worth stating
+plainly rather than quietly banking as good news, because it means this cycle carried no slack at
+all and finished only because nothing went badly wrong for long.
 
-**Four failure classes now recur often enough to check for by name, before the agent has to
-find them again:**
+**Five phases, five fresh-agent passes, 58 real breaks.** 15 in the contract and receipts, 15 in
+the board, 15 in the assignment layer and verdict gate, 13 in the lineage chain. Every one was in
+code that had already passed every test its author wrote. In three of the five phases one of
+those tests was itself wrong in a way that hid a severe defect, and in Phase 03 the wrong test
+was the one guarding the lane's single most important rule.
 
-1. **In-band separators in a hash preimage.** `configHash` gave the SAME hash to `floor: 1000`
-   and `floor: "1000"` - opposite verdicts. Everything hashed now goes through `canon.mjs`.
-2. **A refusal sharing a channel with an answer.** `ttlExpired` returned `null` for "cannot
-   evaluate", and `null` is falsy, so the experiment never expired.
-3. **A gate that throws instead of refusing.** An exception has no outcome and no reasons, so a
-   caller looping inside try/catch skips the item rather than recording a refusal.
-4. **The read path is not the write path.** The reader replays what was written and does not
-   re-validate, so every consumer must re-assert the grammars on read.
+**The four recurring failure classes, now with a fifth:**
 
-Phase 03's lineage checks read the same spine and hash the same kinds of thing, so all four
-apply directly.
+1. **In-band separators in a hash preimage.** Fixed by `canon.mjs`... and then `canon.mjs` itself
+   turned out to be non-total: JSON.stringify folds NaN and -Infinity to null, so a DISABLED
+   effect floor hashed identically to an unset one.
+2. **A refusal sharing a channel with an answer** (`null` read as "not expired").
+3. **A gate that throws instead of refusing.**
+4. **The read path is not the write path** - consumers must re-assert grammars on read.
+5. **VALIDATE ONE READ, COMPARE ANOTHER.** Fixed in `verdict.mjs` in Phase 02, and not applied in
+   `lineage.mjs` until Phase 03's agent walked three hops with an accessor. A fix recorded in one
+   file is not a fix applied in the lane.
 
 **This cycle is built ahead of its trigger, and that is on the record (ADR-0300).** The
 pre-kickoff gate was verified in-tree at kickoff and **all five rows are unevidenced**: no client
