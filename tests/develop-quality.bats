@@ -626,6 +626,8 @@ QUALITY
 @test "the risk globs have exactly one definition in the tree" {
   # They were declared inline in develop.mjs and needed again here; two copies drift, and the
   # debt ledger records what that costs. This asserts the copy did not come back.
-  run bash -c "grep -rln 'name: \"security-sensitive\", re:' '$ARC_ROOT/.claude/scripts' | wc -l"
+  # `wc -l` pads its count on macOS and BSD userland, so a correct count of 1 compared
+  # unequal to "1" and the assertion measured the platform rather than the tree.
+  run bash -c "grep -rln 'name: \"security-sensitive\", re:' '$ARC_ROOT/.claude/scripts' | wc -l | tr -d ' '"
   [ "$output" = "1" ] || { echo "RISK_GLOBS is declared in $output places"; false; }
 }
