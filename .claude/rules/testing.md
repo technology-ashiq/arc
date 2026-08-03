@@ -20,3 +20,27 @@ paths:
 - Never pipe a test runner into `tail`/`head`/`grep` — the pipeline's exit code comes from the
   LAST stage, so a failing suite reports success. Redirect to a file and read it, or check
   `${PIPESTATUS[0]}`. A masked red suite is worse than no suite.
+
+## The vacuous pass — a test that passes while executing nothing
+
+A green test proves the assertion held. It does not prove the code ran. Cycle 6 shipped this
+failure **three separate times**, twice inside suites written to prevent exactly it:
+
+- nine bats probes imported a path Git Bash resolves and node does not — three of them PASSED,
+  on the stack trace
+- a heredoc never reached a helper's stdin, so every fixture it built was empty and two
+  "no findings" tests passed on nothing at all
+- a probe read `process.argv[1]`, which for a node SCRIPT is the script itself, so a validator
+  spent the entire suite parsing its own source
+
+Three rules, and they are cheap:
+
+- **Assert it RAN before asserting what it printed.** Any probe that shells out checks the exit
+  status, or asserts on a marker the code emits only when it reaches the end.
+- **A fixture builder asserts its own fixture is non-empty.** An empty fixture is a silent pass
+  generator, and it looks identical to a clean run.
+- **An assertion shaped "output does not contain X" never stands alone.** A crash satisfies it.
+  Pair it with a positive assertion that the run produced its expected output.
+
+The general form: **prefer an assertion that fails when the code is deleted.** If ripping out the
+implementation would leave the test green, the test is measuring nothing.

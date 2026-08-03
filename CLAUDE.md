@@ -35,6 +35,11 @@
 - Brand assets live in `public/brand/`. Design tokens in `styles/tokens.css`.
 - Comments explain *why*, not *what*, and stay short.
 - Reuse an existing component before creating a new one.
+- **A program embedded in a shell string carries no apostrophes and no single quotes — in code
+  OR in comments.** One apostrophe closes the single-quoted string and the shell expands the
+  rest. This landed twice in one file in Cycle 6, the second time inside the comment explaining
+  the first, and again in the engine lane. The moment the embedded program wants an apostrophe,
+  it belongs in its own file.
 - Code review ALWAYS runs through the `code-reviewer` agent (Task `subagent_type: code-reviewer`),
   never ad-hoc `general-purpose` reviewers — that agent is where the scanners + review method live.
 - Impact questions (callers, dependents, schema-dependent queries): query the **Graphify
@@ -59,6 +64,15 @@
 - A gate/lint/parser is NOT done until an adversarial construct-a-breaking-input pass has run
   against it and the found holes are fixed + pinned as fixtures (council v2+v3: 43 real holes
   in code that looked correct and passed its own tests). Mandatory verification, not review.
+- **That pass is TWO fresh agents with different surfaces, not one generalist** — one on the
+  decision logic, one on the shell/OS boundary. Cycle 6 ran 7 passes for 77 real holes, and
+  where two attacked one gate they shared the root cause and almost none of the findings. A
+  single agent's blind spot is structural, not a matter of effort. Fresh = has not seen the
+  implementation (`gate-author-cannot-be-its-attacker`: the author's own 26 breaking inputs
+  found 0 holes; an unanchored agent found 9).
+- **A test that passes proves the assertion held, not that the code ran.** Assert it RAN before
+  asserting what it printed → `.claude/rules/testing.md` § the vacuous pass. Cycle 6 shipped
+  this three times, twice inside the suites written to prevent it.
 - **Look at the artifact before carrying its verdict.** An agent's report about a screenshot or
   a page is not the thing itself. Cycle 3 ran 5 critique rounds, 3 blind rankings, receipts, a
   sealed prediction and an external package on pixels the session never opened — I looked once
@@ -160,4 +174,5 @@
 - UI conventions      → `docs/ui-conventions.md`
 - Branding / social / contact → `docs/branding.md`
 - API route rules     → `.claude/rules/api.md`
+- Testing rules       → `.claude/rules/testing.md` (incl. the vacuous-pass rule)
 - Plugins we rely on  → `docs/plugins.md`
