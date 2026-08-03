@@ -480,7 +480,18 @@ if (blocks.length) {
   // A name that was refused and is now admitted must not read as both at once.
   const priorRefusal = lock.refusals.find((c) => c && c.name === name);
   lock.refusals = lock.refusals.filter((c) => !c || c.name !== name);
-  const row = { ...facts, source: candidateDir, class: cls };
+  // The candidate is usually fetched to a temp directory, and this file is COMMITTED — an
+  // absolute path here records one machine and one afternoon rather than the candidate.
+  // Repo-relative when it lives here, otherwise the fact that it was fetched and not retained.
+  // (No apostrophes in this block: the whole program is a single-quoted shell string, and one
+  // closes it. That is the third time this file has taught me that.)
+  const abs = path.resolve(candidateDir);
+  const inRepo = abs.startsWith(path.resolve(".") + path.sep);
+  const row = {
+    ...facts,
+    source: inRepo ? path.relative(".", abs).split(path.sep).join("/") : `${registry}:${name}@${version}, fetched and not retained`,
+    class: cls,
+  };
   if (priorRefusal) row["previously-refused-on"] = priorRefusal["refused-on"];
   const i = lock.capabilities.findIndex((c) => c && c.name === name);
   if (i >= 0) lock.capabilities[i] = row; else lock.capabilities.push(row);

@@ -54,3 +54,30 @@ lock file already holds every fact needed to decide — pinned version, verified
 auth, no build attestation, and the exact line that classes it write-capable. Admitting it means
 adding `human-ok: ashiq <YYYY-MM-DD>` to the candidate and re-running the gate. **Vetted is still
 not installed either way**: admitting it records a decision, not a dependency.
+
+---
+
+## Admitted 2026-08-03, on Ashiq's recorded OK
+
+He gave it in writing ("madge approve pannu"), and it is recorded as
+`human-ok: ashiq 2026-08-03` on the candidate. The gate was re-run against the
+same fetched tree and now PASSes:
+
+```
+PASS  madge@8.0.0 — write-capable (human OK recorded: ashiq 2026-08-03)
+```
+
+`capability-lock.json` moves madge from `refusals` to `capabilities` and keeps
+`previously-refused-on: human-ok`, so the record still says the gate refused it
+first and what changed. `--audit` reports 1 row, 0 stale.
+
+**arc still has no dependency.** No `node_modules`, no `package.json`, nothing
+installed — the lock row is a decision, not an install. That separation is
+ADR-0110's whole point, and this is the first time it has been exercised all the
+way through: refused on a computed fact, admitted on a human line, and neither
+step touched the dependency tree.
+
+The `source` field records `npm:madge@8.0.0, fetched and not retained` rather
+than the temp directory it was fetched to. This file is committed, and an
+absolute path in it would record one machine and one afternoon rather than the
+candidate.
