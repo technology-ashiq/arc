@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "note": "Denylist of money-touching surfaces. `evolve` refuses to experiment on, or promote into, any path matching one of these — permanently, at the contract layer (initiatives/evolve/PLAN.md non-negotiables). Entries are PATH GLOBS matched over whole path segments, never a substring search: lib/stripe/webhook-handler.ts names no money keyword and is still refused, by the **/stripe*/** vendor glob. Adding an entry is a normal edit. REMOVING an entry is not permitted by Phase 00 — the refusal is the point. `**/K*/**` subsumes the literal `**/K/**` forms kept below for traceability against phase-00-spec.md.",
+  "deny": [
+    "**/stripe/**",
+    "**/billing/**",
+    "**/payments/**",
+    "**/pricing/**",
+    "**/checkout/**",
+    "**/subscription*/**",
+    "**/invoice*/**",
+    "**/paddle/**",
+    "**/lemonsqueezy/**",
+    "**/entitlement*/**",
+
+    "**/stripe*/**", "**/stripe*",
+    "**/paddle*/**", "**/paddle*",
+    "**/lemonsqueezy*/**", "**/lemonsqueezy*",
+    "**/razorpay*/**", "**/razorpay*",
+    "**/braintree*/**", "**/braintree*",
+    "**/paypal*/**", "**/paypal*",
+    "**/adyen*/**", "**/adyen*",
+    "**/chargebee*/**", "**/chargebee*",
+    "**/recurly*/**", "**/recurly*",
+    "**/gumroad*/**", "**/gumroad*",
+
+    "**/billing*/**", "**/billing*",
+    "**/payment*/**", "**/payment*",
+    "**/pricing*/**", "**/pricing*",
+    "**/price*/**", "**/price*",
+    "**/checkout*/**", "**/checkout*",
+    "**/subscription*", "**/subscribe*/**", "**/subscribe*",
+    "**/invoice*",
+    "**/entitlement*",
+    "**/revenue*/**", "**/revenue*",
+    "**/refund*/**", "**/refund*",
+    "**/coupon*/**", "**/coupon*",
+    "**/discount*/**", "**/discount*",
+    "**/paywall*/**", "**/paywall*",
+    "**/payout*/**", "**/payout*",
+    "**/plan-picker*/**", "**/plan-picker*"
+  ]
+}

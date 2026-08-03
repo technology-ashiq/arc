@@ -1,0 +1,33 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "files": ["products/core/manifest.json"],
+  "evolve": {
+    "metrics": [
+      {
+        "name": "signup_conversion",
+        "source_event": "metric.observed",
+        "aggregation": "rate",
+        "direction": "higher-is-better",
+        "role": "primary"
+      }
+    ],
+    "experiments": [
+      {
+        "surface_file": "products/core/manifest.json",
+        "variant_grammar": "hero-copy@1.0.0",
+        "split": [50, 50],
+        "excluded_categories": []
+      }
+    ],
+    "evals": {
+      "holdout_rule": "cohort-50-50",
+      "per_arm_floor": 1800,
+      "minimum_effect_rule": "mde-at-80-power",
+      "test_id": "newcombe-wilson-difference-v1",
+      "alpha": 0.05,
+      "effect_floor": 0
+    },
+    "promote_via": ["lib/stripe/webhook-handler.ts"]
+  }
+}

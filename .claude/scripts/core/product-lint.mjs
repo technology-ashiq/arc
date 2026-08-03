@@ -14,6 +14,7 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkEvolveSection } from "./evolve-manifest.mjs";
 
 const errors = [];
 const err = (m) => errors.push(m);
@@ -35,9 +36,11 @@ if (!root) {
   root = d;
 }
 
+// Extended 12 -> 13 by ADR-0301: `evolve` declares what a module may optimize. Absent is the
+// silent, valid state — the field is opt-in and no existing manifest declares it.
 const KNOWN_FIELDS = new Set([
   "name", "version", "requires", "commands", "agents", "scripts", "files",
-  "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks",
+  "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks", "evolve",
 ]);
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const NAME_RE = /^[a-z][a-z-]*$/;
@@ -152,6 +155,11 @@ for (const dir of readdirSync(productsDir)) {
   }
   if (obj.envSentinel !== undefined && (typeof obj.envSentinel !== "string" || !ENV_SENTINEL_RE.test(obj.envSentinel)))
     err(`products/${dir}: envSentinel must be a simple anchored token (^?[A-Za-z0-9_=-]+$?), got ${JSON.stringify(obj.envSentinel)}`);
+
+  // evolve (ADR-0301). Presence is tested with `in`, not truthiness: `"evolve": null` and
+  // `"evolve": 0` are malformed declarations, not absences, and must reach the validator.
+  if ("evolve" in obj)
+    for (const m of checkEvolveSection(obj.evolve, `products/${dir}`, { root })) err(m);
 
   // case-collide across this manifest's declared paths
   const declared = [...payload, ...docPaths];
