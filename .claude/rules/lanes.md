@@ -78,6 +78,29 @@ un-answerable "pick a lane" with nothing to pick.
 `docs/evidence/**` and `docs/archive/**` are frozen: the sole canonical copy of
 pre-portfolio history. Lanes link to history, never copy it (ADR-0058).
 
+## Shared files, when two lanes are live
+
+The root organs in the table above — plus `tests/**` and everything under `.github/` — belong
+to no lane and are edited by all of them. Two live lanes will collide there, and twice now they
+have: ADR numbers on 2026-08-02 (fixed by the century bands), and a stale CI constant on
+2026-08-03 that two lanes found and fixed independently, four hours apart.
+
+Before editing a shared CI or company file mid-cycle:
+
+```bash
+git log origin/main --oneline -5 -- <path>
+```
+
+If another lane has touched it since your branch point, you are already in a merge conflict —
+handle it now, in one place, rather than at merge time in two.
+
+**At the merge, take the STRONGER version, not the earlier one.** The 2026-08-03 collision was
+resolved by taking the other lane's assertion because it checked more, not because it landed
+first. And when both branches regenerated a *measured* table, the merge invalidates **both** —
+re-measure on the merged tree. Six files came out of that merge with no entry at all, riding a
+16s default against real costs up to 123s, because a missing entry is a default rather than an
+error. Make unmeasured entries visible as a count.
+
 ## Lane names
 
 `[a-z][a-z0-9-]*`, 64 chars max, and never a Windows reserved device name (`con`, `prn`,
