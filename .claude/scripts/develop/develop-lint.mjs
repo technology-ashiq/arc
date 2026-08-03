@@ -117,13 +117,17 @@ for (const f of entries.filter((f) => !/^phase-\d+-tasks\.md$/i.test(f) && /task
 const specPhases = entries.filter((f) => /^phase-\d+-spec\.md$/i.test(f)).map((f) => f.match(/\d+/)[0]);
 const ledgerPhases = new Set(ledgerFiles.map((f) => f.match(/\d+/)[0]));
 
+// No slice ledger is a legitimate state, and it used to EXIT here — which silently skipped
+// every check that is not about slice ledgers. The learning ledger is a company organ: a
+// malformed row is malformed whether or not this lane has started a phase, and it was going
+// unchecked in exactly the repos most likely to have one and no phases. The message still
+// prints; the loops below simply have nothing to iterate.
 if (ledgerFiles.length === 0 && failures.length === 0) {
-  console.log(
+  say(
     specPhases.length
       ? `develop-lint: ${specPhases.length} phase spec(s) present, no slice ledger yet — run /arc-develop start <n>.`
       : "develop-lint: no slice ledger yet — nothing to check.",
   );
-  process.exit(0);
 }
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -319,7 +323,18 @@ for (const file of ledgerFiles) {
   const ledgerPath = join(root, "docs", "develop", "learning-ledger.md");
   if (existsSync(ledgerPath)) {
     const { validate, withheldIds } = await import("./learning.mjs");
-    const { fails, warns } = validate(readFileSync(ledgerPath, "utf8"), { withheldIds: withheldIds(root) });
+    // `withheldIds` refuses a corpus with no holdout, and rightly — but it threw, so the lint
+    // died with a stack trace instead of a finding. A gate that crashes has not failed the
+    // artifact, it has failed to run, and the two look nothing alike to whoever reads the log.
+    let withheld;
+    try { withheld = withheldIds(root); }
+    catch (e) {
+      fail("learning-row", "tests/fixtures/develop-evals/withheld", e?.message ?? String(e),
+        "a withheld holdout directory beside the eval corpus (REQ-04, ADR-0109)",
+        "(absent)", "tests/fixtures/develop-evals/withheld/F-201.md");
+      withheld = new Set();
+    }
+    const { fails, warns } = validate(readFileSync(ledgerPath, "utf8"), { withheldIds: withheld });
     for (const w of warns) {
       warn("learning-row", `docs/develop/learning-ledger.md:${w.at}`, w.msg,
         "at least one typed link: adr / rule / fixture / phase",

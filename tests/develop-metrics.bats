@@ -176,7 +176,12 @@ METRICS="escaped-spec-misses rework-stuck time-to-first-proven-slice false-block
 
 @test "develop-lint FAILs a learning tag outside the closed vocabulary" {
   local t="$BATS_TEST_TMPDIR/tagtree"
-  mkdir -p "$t/docs/develop"
+  mkdir -p "$t/docs/develop" "$t/tests/fixtures/develop-evals/withheld"
+  printf "expect: flagged
+
+A withheld fixture, so the corpus guard is satisfied and the TAG is what is
+being checked here.
+" > "$t/tests/fixtures/develop-evals/withheld/F-901.md"
   cat > "$t/docs/develop/learning-ledger.md" <<'LED'
 # Learning ledger — fixture
 
@@ -225,7 +230,12 @@ LED
 
 @test "the Context Pack matches a learning row on its tag" {
   local t="$BATS_TEST_TMPDIR/packtree"
-  mkdir -p "$t/docs/develop"
+  mkdir -p "$t/docs/develop" "$t/tests/fixtures/develop-evals/withheld"
+  printf "expect: flagged
+
+A withheld fixture, so the corpus guard is satisfied and the TAG is what is
+being checked here.
+" > "$t/tests/fixtures/develop-evals/withheld/F-901.md"
   cat > "$t/docs/develop/learning-ledger.md" <<'LED'
 # Learning ledger — fixture
 
@@ -254,7 +264,12 @@ LED
 
 @test "the Context Pack does NOT pull a row whose tag is not in the corpus" {
   local t="$BATS_TEST_TMPDIR/packtree2"
-  mkdir -p "$t/docs/develop"
+  mkdir -p "$t/docs/develop" "$t/tests/fixtures/develop-evals/withheld"
+  printf "expect: flagged
+
+A withheld fixture, so the corpus guard is satisfied and the TAG is what is
+being checked here.
+" > "$t/tests/fixtures/develop-evals/withheld/F-901.md"
   cat > "$t/docs/develop/learning-ledger.md" <<'LED'
 # Learning ledger — fixture
 
