@@ -62,6 +62,23 @@ const COMMIT_REF_RE = /^[0-9a-f]{40}$/;
 // Measurement windows are whole days, the same unit the spine's day files use.
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+// Exported so a READER can re-assert the same grammars the emitter enforced. The spine reader
+// does not re-validate (by design — it replays what was written), so a line that arrived by
+// replay, merge, or another emitter reaches a consumer unchecked. The board's adversarial pass
+// forged a whole experiment panel through a crafted `experiment_id` carrying newlines: the emit
+// path refused it, and nothing on the read path did. One definition, both directions.
+export const GRAMMAR = Object.freeze({
+  experiment_id: EXPERIMENT_ID_RE,
+  proposal_id: PROPOSAL_ID_RE,
+  arm: ARM_RE,
+  metric: METRIC_NAME_RE,
+  slug: SLUG_RE,
+  module: MODULE_RE,
+  sha: HEX64,
+  day: DAY_RE,
+  commit_ref: COMMIT_REF_RE,
+});
+
 const COHORTS = new Set(["generation", "verdict"]);
 const VERDICT_OUTCOMES = new Set(["verdict", "no-verdict"]);
 const CLOSE_OUTCOMES = new Set(["winner", "no-verdict", "killed"]);

@@ -186,6 +186,209 @@ _board() { node "$EVOLVE" board --root "$SPINE" --repo "$FIXREPO" --now "$NOW"; 
   [[ "$output" == *"+champion 1/1800"* ]]
 }
 
+# ---------- breaks found by the fresh-agent adversarial pass (slice: board) ----------
+#
+# The read path is NOT the write path: the reader replays what was written and does not
+# re-validate, so every line below is one that arrived by replay, merge, or another emitter.
+# All of them rendered a confident, wrong board before the fold grew a quarantine boundary.
+
+# _raw <json-line> -- append a line the emitter would never produce
+_raw() { mkdir -p "$SPINE/events"; printf '%s\n' "$1" >> "$SPINE/events/2026-08-02.jsonl"; }
+_ev() { # _ev <id> <ts> <kind> <payload> [supersedes]
+  printf '{"id":"%s","v":1,"ts":"%s","idem":"%s","actor":"foreign","process":"p@1.0.0","model":null,"venture":"arc","run_id":"r-x","kind":"%s","payload":%s,"outcome":"ok","cost":null,"evidence":null,"supersedes":%s}' \
+    "$1" "$2" "$1" "$3" "$4" "${5:-null}"
+}
+
+@test "BREAK 1: an unrelated receipt cannot supersede a measurement and erase a MISSING window" {
+  _spine b1
+  _open
+  _measure u1 +champion     2026-08-01 2026-08-07
+  _measure u2 +challenger-a 2026-08-01 2026-08-07
+  _measure u3 +champion     2026-08-08 2026-08-14
+  local victim
+  victim="$(node -e '
+    const fs=require("fs"); const d=process.argv[1]+"/events";
+    console.log(fs.readdirSync(d).flatMap(f=>fs.readFileSync(d+"/"+f,"utf8").trim().split("\n")).map(JSON.parse)
+      .find(e=>e.kind==="experiment.measured"&&e.payload.unit_id==="u3").id);' "$SPINE")"
+  [ -n "$victim" ]
+  # A close for a DIFFERENT experiment, naming the measurement's id in supersedes.
+  _raw "$(_ev 01KZ00000000000000000000X1 2026-08-02T10:00:00+05:30 experiment.closed '{"experiment_id":"x-other","outcome":"killed","reason":"unrelated cleanup"}' "\"$victim\"")"
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2026-08-08..2026-08-14"* ]]
+  [[ "$output" == *"no data for +challenger-a"* ]]
+  [[ "$output" == *"supersedes refused"* ]]
+}
+
+@test "BREAK 2: one unit measured in three windows counts ONCE toward the floor" {
+  _spine b2
+  _open
+  for w in "2026-08-01 2026-08-07" "2026-08-08 2026-08-14" "2026-08-15 2026-08-21"; do
+    set -- $w
+    _measure u1 +champion     "$1" "$2"
+    _measure u1 +challenger-a "$1" "$2"
+  done
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"+champion 1/1800"* ]]
+  [[ "$output" != *"+champion 3/1800"* ]]
+}
+
+@test "BREAK 3: a unit measured under two arms is credited to its ASSIGNED arm only" {
+  _spine b3
+  _open
+  bash "$EVENT" emit experiment.assigned --strict --payload \
+    '{"experiment_id":"x-b-1","unit_id":"u1","arm":"+champion","cohort":"verdict"}'
+  _measure u1 +champion     2026-08-01 2026-08-07
+  # Same unit, other arm -- a different source_id makes this a distinct receipt at emit time.
+  bash "$EVENT" emit experiment.measured --strict --payload \
+    '{"experiment_id":"x-b-1","unit_id":"u1","arm":"+challenger-a","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-0000000000000001"}'
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"conflicts"* ]]
+  [[ "$output" != *"+challenger-a 1/1800"* ]]
+}
+
+@test "BREAK 4: measurements with no experiment.opened render MISSING, never complete" {
+  _spine b4
+  _measure u1 +champion 2026-08-01 2026-08-07
+  _measure u2 +champion 2026-08-08 2026-08-14
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"arms unknown (no experiment.opened)"* ]]
+  [[ "$output" != *"   complete"* ]]
+  [[ "$output" == *"2 total, 2 MISSING"* ]]
+}
+
+@test "BREAK 5: redeclaring arms cannot turn a MISSING window complete" {
+  _spine b5
+  bash "$EVENT" emit experiment.opened --strict --payload \
+    "$(printf '{"experiment_id":"x-b-1","module":"core","surface":"home-hero","target_path":"app/home/hero.tsx","base_sha":"%s","split":[34,33,33],"ttl_days":28,"arms":["+champion","+challenger-a","+quiet"]}' "$SHA_BASE")"
+  _measure u1 +champion     2026-08-01 2026-08-07
+  _measure u2 +challenger-a 2026-08-01 2026-08-07
+  # A second opened dropping +quiet (different base_sha so the idem differs and it lands).
+  bash "$EVENT" emit experiment.opened --strict --payload \
+    '{"experiment_id":"x-b-1","module":"core","surface":"home-hero","target_path":"app/home/hero.tsx","base_sha":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","split":[50,50],"ttl_days":28,"arms":["+champion","+challenger-a"]}'
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"ARMS REDECLARED"* ]]
+  [[ "$output" == *"no data for +quiet"* ]]
+  [[ "$output" == *"1 total, 1 MISSING"* ]]
+}
+
+@test "BREAK 6: receipts declaring unit_count 0 never reach the floor" {
+  _spine b6
+  _open
+  for u in u1 u2; do
+    bash "$EVENT" emit experiment.measured --strict --payload \
+      "$(printf '{"experiment_id":"x-b-1","unit_id":"%s","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":0,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' "$u")"
+    bash "$EVENT" emit experiment.measured --strict --payload \
+      "$(printf '{"experiment_id":"x-b-1","unit_id":"%s","arm":"+challenger-a","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":0,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' "$u")"
+  done
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Every receipt says it observed nothing, so the window has no contributing unit at all.
+  [[ "$output" == *"+champion 0/1800 (0 obs)"* ]]
+  [[ "$output" == *"MISSING"* ]]
+}
+
+@test "BREAK 7: guardrail units are NOT summed into the primary metric's n" {
+  _spine b7
+  _open
+  _measure u1 +champion     2026-08-01 2026-08-07
+  _measure u2 +challenger-a 2026-08-01 2026-08-07
+  for a in +champion +challenger-a; do
+    bash "$EVENT" emit experiment.measured --strict --payload \
+      "$(printf '{"experiment_id":"x-b-1","unit_id":"g1","arm":"%s","cohort":"verdict","metric":"support_tickets","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' "$a")"
+  done
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"primary       signup_conversion"* ]]
+  [[ "$output" == *"+champion 1/1800"* ]]
+  [[ "$output" != *"+champion 2/1800"* ]]
+  # ...and the guardrail window is still SHOWN, just counted separately.
+  [[ "$output" == *"support_tickets"* ]]
+}
+
+@test "BREAK 8/10: damaged lines are counted, and a null line does not kill the board" {
+  _spine b810
+  _open
+  _measure u1 +champion     2026-08-01 2026-08-07
+  _measure u2 +challenger-a 2026-08-01 2026-08-07
+  _raw 'null'
+  _raw '123'
+  _raw '"hello"'
+  _raw '[]'
+  _raw '{}'
+  # A numeric ts made the sort comparator inconsistent, so V8 returned different orders for
+  # different inputs and the board stopped being replayable.
+  _raw '{"id":"01KZ00000000000000000000Y1","v":1,"ts":1785000000000,"idem":"z","actor":"f","process":"p@1.0.0","model":null,"venture":"arc","run_id":"r-x","kind":"experiment.measured","payload":{"experiment_id":"x-b-1","unit_id":"u9","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"},"outcome":"ok","cost":null,"evidence":null,"supersedes":null}'
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"INTEGRITY"* ]]
+  [[ "$output" == *"refused on read"* ]]
+  [[ "$output" == *"+champion 1/1800"* ]]
+}
+
+@test "BREAK 13: a crafted experiment_id cannot forge an experiment panel" {
+  _spine b13
+  _open
+  _raw '{"id":"01KZ00000000000000000000Z1","v":1,"ts":"2026-08-02T10:00:00+05:30","idem":"z","actor":"f","process":"p@1.0.0","model":null,"venture":"arc","run_id":"r-x","kind":"experiment.measured","payload":{"experiment_id":"x-zz\n    window        2026-09-01..2026-09-30   complete\n    windows       9 total, 0 MISSING\n  experiment x-hero2","unit_id":"u1","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"},"outcome":"ok","cost":null,"evidence":null,"supersedes":null}'
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" != *"9 total, 0 MISSING"* ]]
+  [[ "$output" != *"x-hero2"* ]]
+  [[ "$output" == *"refused on read"* ]]
+}
+
+@test "BREAK 14: a self-supersede and a supersedes cycle cannot erase real receipts" {
+  _spine b14
+  _open
+  _measure u1 +champion     2026-08-01 2026-08-07
+  _measure u2 +challenger-a 2026-08-01 2026-08-07
+  # A line that supersedes ITSELF used to delete itself silently.
+  _raw "$(_ev 01KZ00000000000000000000W1 2026-08-02T10:00:00+05:30 experiment.measured '{"experiment_id":"x-b-1","unit_id":"u5","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-0000000000000005"}' '"01KZ00000000000000000000W1"')"
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"supersedes refused"* ]]
+  # u1 and u5 both survive -- the self-supersede took no effect.
+  [[ "$output" == *"+champion 2/1800"* ]]
+}
+
+@test "BREAK 11: a receipt ahead of the clock renders MISSING, never a negative age" {
+  _spine b11
+  _open
+  _raw "$(_ev 01KZ00000000000000000000V1 2026-09-21T19:43:20+05:30 experiment.measured '{"experiment_id":"x-b-1","unit_id":"u1","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":1,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}')"
+  run _board
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"post-dates this clock"* ]]
+  [[ "$output" != *"-"*"d ago"* ]]
+}
+
+@test "BREAK 12: a manifest the linter rejects is REPORTED, never rendered" {
+  _spine b12
+  local evil="$BATS_TEST_TMPDIR/evilrepo"
+  mkdir -p "$evil/products/core"
+  printf '%s' '{"name":"core","version":"1.0.0","files":["products/core/manifest.json"],"evolve":{"metrics":[{"name":"zz_inject\n    signup_conversion        primary    412 observation(s)","source_event":"metric.observed","aggregation":"rate","direction":"higher-is-better","role":"primary"}],"experiments":[],"evals":{},"promote_via":[]}}' \
+    > "$evil/products/core/manifest.json"
+  run node "$EVOLVE" board --root "$SPINE" --repo "$evil" --now "$NOW"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"REJECTED MANIFEST"* ]]
+  [[ "$output" != *"412 observation(s)"* ]]
+}
+
+@test "BREAK 15: CLI refuses a repeated flag, an empty value, and a non-integer --now" {
+  _spine b15
+  run node "$EVOLVE" board --root "$SPINE" --repo "$FIXREPO" --now "$NOW" --now 0
+  [ "$status" -eq 2 ]; [[ "$output" == *"given twice"* ]]
+  run node "$EVOLVE" board --root "" --repo "$FIXREPO"
+  [ "$status" -eq 2 ]; [[ "$output" == *"cannot be empty"* ]]
+  for bad in 0x10 1e3 " 12 " -1; do
+    run node "$EVOLVE" board --root "$SPINE" --repo "$FIXREPO" --now "$bad"
+    [ "$status" -eq 2 ] || { echo "--now $bad was accepted"; false; }
+  done
+}
+
 # ---------- reader-only ----------
 
 @test "the board reaches the spine ONLY through the reader" {
