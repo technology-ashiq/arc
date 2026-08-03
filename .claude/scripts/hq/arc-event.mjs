@@ -26,6 +26,7 @@ import {
   parseStrictJson, readJsonFile, sha256Hex,
 } from "./lib/canonical.mjs";
 import { validateEvent } from "./lib/validate.mjs";
+import { experimentIdem, isExperimentKind } from "./lib/validate-experiment.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
@@ -80,6 +81,13 @@ const envOr = (name, fallback) => {
   return v === undefined || v === "" ? fallback : v;
 };
 
+// An experiment idem over a payload that is not yet known to be valid. Returns null rather than
+// throwing, so the caller falls through to validateEvent and the operator sees "missing base_sha"
+// instead of a stack trace from the hashing helper.
+function safeExperimentIdem(kind, payload) {
+  try { return experimentIdem(kind, payload); } catch { return null; }
+}
+
 // ---------- event construction ----------
 function synthesize(kind, flags, { deriveIdem }) {
   const payload = flags["payload-file"]
@@ -113,11 +121,26 @@ function synthesize(kind, flags, { deriveIdem }) {
   //   receipt is visible on an append-only spine and harmless; a dropped one is invisible
   //   and lying. Callers that KNOW a logical identity (arc-inbox: one decision per
   //   approval) keep strict exactly-once by supplying --idem.
+  //
+  //   experiment kinds (ADR-0304) -- a LIFECYCLE FACT with a declared identity. One unit is
+  //   assigned to one arm once; one experiment is opened once against one seal. The idem is the
+  //   total preimage over that kind's identity-bearing fields, derived here from the SAME
+  //   formula the validator re-derives, and a caller-supplied --idem is refused outright
+  //   (anti-preclaim, exactly as on the ingest path). Time is deliberately NOT in the preimage:
+  //   a doubled `experiment.assigned` for one unit is a real double-assignment and must collide,
+  //   not land twice and quietly double that arm's n.
   const ms = nowMs();
   const contentPre = `${actor}|${venture}|${kind}|${runId}|${outcome}|${canonicalize(payload)}`;
-  const idem = deriveIdem
-    ? sha256Hex(contentPre)
-    : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
+  let idem;
+  if (isExperimentKind(kind)) {
+    if (flags.idem !== undefined)
+      throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
+    // A malformed payload cannot produce an idem at all; let validateEvent report the real
+    // field error rather than dying here on a missing key.
+    idem = safeExperimentIdem(kind, payload) ?? sha256Hex(`${contentPre}|${ms}`);
+  } else {
+    idem = deriveIdem ? sha256Hex(contentPre) : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
+  }
 
   return {
     id: newUlid(ms, idem),

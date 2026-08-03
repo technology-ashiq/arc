@@ -5,6 +5,7 @@
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
 import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex } from "./canonical.mjs";
+import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -16,13 +17,16 @@ const MAX_COST_MAGNITUDE = 1e12;
 
 // ADR-0026: the vocabulary is CLOSED. Extensions only via a new ADR.
 // Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready),
-// then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read).
+// then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read),
+// then 22 -> 30 by ADR-0309 (evolve's eight experiment receipts, frozen by ADR-0304).
+// `metric.observed` is deliberately NOT here: it is the client module's kind (ADR-0308).
 export const KINDS = Object.freeze([
   "idea.captured", "council.verdict", "approval.requested", "decision.recorded",
   "kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
   "ship.done", "revenue.received", "revenue.simulated", "cost.incurred", "run.completed",
   "incident.raised", "redaction.applied", "day.closed", "note.logged",
   "develop.started", "slice.done", "handoff.ready", "slice.stuck",
+  ...EXPERIMENT_KINDS,
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -40,9 +44,16 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const ACTOR_RE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
 // Exported (engine Cycle 6, ADR-0200) so process-lint can assert a canonical process's
 // `name@version` against the SAME regex the spine enforces, rather than against a copy.
-// A copied regex is a regex that drifts (retro-log 2026-07-22). Export only -- the value,
-// its position and every behaviour here are unchanged.
-export const PROCESS_RE = /^[a-z0-9][a-z0-9._-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/;
+// A copied regex is a regex that drifts (retro-log 2026-07-22).
+//
+// ADR-0303 extends it to `name@x.y.z(+slug)?` so an experiment arm is addressable without a
+// second identifier scheme. The definition moved to core/variant-grammar.mjs — three products
+// need it now (hq, engine, and core's `evolve` section validator), and core is the one product
+// every other already requires. RE-EXPORTED here, not re-declared: process-lint imports it from
+// this module, and an alias keeps that import working while there stays exactly one regex.
+// A legacy `name@x.y.z` is unchanged by construction — the suffix group is optional.
+export { PROCESS_RE } from "../../core/variant-grammar.mjs";
+import { PROCESS_RE } from "../../core/variant-grammar.mjs";
 const VENTURE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RUN_ID_RE = /^r-[A-Za-z0-9._-]{1,64}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/;
@@ -215,11 +226,12 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106/0107/0309)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
   if (event.kind === "decision.recorded") assertDecision(event);
+  if (isExperimentKind(event.kind)) assertExperiment(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);
