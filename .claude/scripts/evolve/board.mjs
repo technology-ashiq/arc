@@ -188,6 +188,15 @@ export function foldExperiments(rawEvents) {
     return byId.get(id);
   };
 
+  // TWO PASSES, deliberately.
+  //
+  // Pass 1 establishes the FACTS ABOUT THE EXPERIMENT — its arm set, and which arm each unit was
+  // assigned to. Pass 2 folds observations against them. A single pass made the result depend on
+  // whether `experiment.assigned` happened to sort before the measurement it governs: with a
+  // frozen clock every receipt shares a ts, ULID order decides, and a unit measured under two
+  // arms was silently counted in both because the assignment had not been read yet. An order
+  // dependency inside a fold that claims to be replay-identical is a contradiction, whether or
+  // not a given fixture happens to trip it.
   for (const e of kept) {
     const p = e.payload;
     switch (e.kind) {
@@ -211,6 +220,14 @@ export function foldExperiments(rawEvents) {
         x.assigned.set(p.unit_id, p.arm);
         break;
       }
+      default: break;
+    }
+  }
+
+  // Pass 2 -- observations, judged against the facts pass 1 established.
+  for (const e of kept) {
+    const p = e.payload;
+    switch (e.kind) {
       case "experiment.measured": {
         const x = ensure(p.experiment_id);
         const k = windowKey(p);
