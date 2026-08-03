@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-evolve (Cycle 7, opened 2026-08-03)
-phase: 02 — runner + verdict math (Phases 00-01 CLOSED)
+phase: 03 — promotion safety (Phases 00-02 CLOSED)
 appetite: 7d
-burn: 2.5d
+burn: 4.0d
 blocked-on: —
 depends-on: —
 
@@ -23,11 +23,11 @@ depends-on: —
 |---|---|---|---|
 | 00 | Contract + steel thread — manifest schema, `product-lint` extension, 8 kinds + validators, grammar, one receipt end-to-end | 1.5 days | ✅ closed 2026-08-04 |
 | 01 | Board — reader-only reducer; `PENDING` / staleness / `MISSING` / `insufficient evidence`; stream separation | 1.0 days | ✅ closed 2026-08-04 |
-| 02 | Runner + verdict math — assignment, seal, floors, TTL, the pinned test + reference vectors | 1.5 days | ⬜ pending |
+| 02 | Runner + verdict math — assignment, seal, floors, TTL, the pinned test + reference vectors | 1.5 days | ✅ closed 2026-08-04 |
 | 03 | Promotion safety — four-hop SHA lineage, evidence table, inbox, watch, freeze, revert path | 1.5 days | ⬜ pending |
 | 04 | Council bridge — **THE DESIGNATED CUT** | 1.5 days | ⬜ pending |
 
-**Appetite burn: 2.5 of 7 days used (36%).** Phases 00–03 (the core engine) allocate **5.5 days**.
+**Appetite burn: 4.0 of 7 days used (57%).** Phases 00–03 (the core engine) allocate **5.5 days**.
 Phase 04 allocates the remaining 1.5d and is the designated cut — it is simultaneously the only
 slack in the cycle. That is deliberate and it is the lesson `arc-portfolio` paid for: Cycle 4
 allocated 100% with zero slack, `appetite-sum` warned on every run, Phase 02 overran 0.35d with
@@ -56,22 +56,38 @@ bank the contract, lint and vocabulary ADRs as documentation, stop, retro.
   found a 16th the agent missed - an order dependency in the fold itself.
   Prediction calibration: 2 hit, 2 miss, 1 unforeseen.
 
+- **2026-08-04 - Phase 02 CLOSED.** 9/9 slices, CI run 30856255831 green. Deterministic
+  assignment, the canonical seal, TTL, the concurrency cap, and `newcombe-wilson-difference-v1`
+  with reference vectors derived by TWO independent agents and committed BEFORE any
+  implementation existed. Those derivations disagreed on 6 of 8 cases, which is what ADR-0311
+  records: bit-for-bit as REQ-04 words it is unachievable across independent implementations,
+  so acceptance is bit-for-bit against ONE pinned expression tree PLUS absolute agreement with
+  the independent derivation. A third fresh agent found **15 more breaks**, all fixed and pinned.
+  Prediction calibration: 4 hit, 0 miss, 1 unforeseen.
+
 ## Now
 
-**Current position: Phases 00 and 01 closed. Phase 02 (runner + verdict math) is next.**
+**Current position: Phases 00, 01 and 02 closed. Phase 03 (promotion safety) is next.**
 
-**The pattern across both phases is the same, and it is worth stating plainly.** Each phase's
-code passed every test I wrote, then a fresh unanchored agent broke it 15 times. Phase 00: the
-idem was a subset so corrections could never land, and one unit could be assigned to both arms.
-Phase 01: an uncollected window counted toward the floor, guardrail units were summed into the
-primary metric, and any receipt could supersede any other. In BOTH phases one of MY OWN tests was
-wrong in a way that hid a severe bug. The adversarial pass is not a formality in this lane; it is
-where the defects are found.
+**Three phases, three fresh-agent passes, 45 real breaks.** 15 in the contract and receipts, 15
+in the board, 15 in the assignment layer and the verdict gate. Every one of them was in code that
+had already passed every test its author wrote, and in two phases one of those tests was itself
+wrong in a way that hid a severe defect. This is not a formality in this lane.
 
-**A rule that came out of Phase 01 and now applies everywhere:** THE READ PATH IS NOT THE WRITE
-PATH. The reader replays what was written and does not re-validate, so any consumer must
-re-assert the grammars on read. Phase 02's runner and Phase 03's lineage checks read the same
-spine and inherit the same exposure.
+**Four failure classes now recur often enough to check for by name, before the agent has to
+find them again:**
+
+1. **In-band separators in a hash preimage.** `configHash` gave the SAME hash to `floor: 1000`
+   and `floor: "1000"` - opposite verdicts. Everything hashed now goes through `canon.mjs`.
+2. **A refusal sharing a channel with an answer.** `ttlExpired` returned `null` for "cannot
+   evaluate", and `null` is falsy, so the experiment never expired.
+3. **A gate that throws instead of refusing.** An exception has no outcome and no reasons, so a
+   caller looping inside try/catch skips the item rather than recording a refusal.
+4. **The read path is not the write path.** The reader replays what was written and does not
+   re-validate, so every consumer must re-assert the grammars on read.
+
+Phase 03's lineage checks read the same spine and hash the same kinds of thing, so all four
+apply directly.
 
 **This cycle is built ahead of its trigger, and that is on the record (ADR-0300).** The
 pre-kickoff gate was verified in-tree at kickoff and **all five rows are unevidenced**: no client
