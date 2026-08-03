@@ -402,3 +402,271 @@ EOF
   run node "$(LNT)" --root "$(FXM)/have" --lane develop
   [[ "$output" != *"evidence-completeness"* ]] || { echo "metrics printed without being asked: $output"; false; }
 }
+
+# ---------------------------------------------------------------------------
+# Holes a fresh agent found, none of which the suite above could see.
+# Thirteen were wrong numbers reported as real ones. One was live on this repo.
+# ---------------------------------------------------------------------------
+
+# Copy the `have` fixture somewhere writable, mutate one file, derive.
+_mutate() {
+  MTREE="$BATS_TEST_TMPDIR/t"
+  rm -rf "$MTREE"
+  cp -R "$(FXM)/have" "$MTREE"
+}
+_derive() {
+  local probe="$BATS_TEST_TMPDIR/d.mjs"
+  {
+    echo "import * as m from '$(_url "$(M)")';"
+    echo "const r = m.metrics(process.argv[2], process.argv[2] + '/initiatives/develop', 'develop');"
+    echo "console.log(JSON.stringify(r));"
+  } > "$probe"
+  run node "$probe" "$MTREE"
+  [ "$status" -eq 0 ] || { echo "probe did not run:"; echo "$output"; return 1; }
+}
+
+@test "hole: an unadjudicated trial row is not counted as a clean record" {
+  # LIVE on this repo: five rows reading `unadjudicated - ...` went into the denominator and
+  # a rate of 0 came out, presented as measured.
+  _mutate
+  cat > "$MTREE/docs/trial-ledger.md" <<'MD'
+| date | gate | run | fired? | adjudication |
+|---|---|---|---|---|
+| 2026-08-01 | alpha-gate | a real phase | YES | **unadjudicated, leaning false** — the arithmetic is correct |
+| 2026-08-01 | beta-gate | a real phase | YES | unadjudicated — nobody has looked yet |
+| 2026-08-01 | gamma-gate | a real phase | YES | false positive — the work was fine |
+MD
+  _derive
+  [ "$(_val false-block-rate)" = "1" ] || { echo "got $(_val false-block-rate)"; echo "$output"; false; }
+  [[ "$(_reason false-block-rate)" == *"unadjudicated"* ]] || { echo "$(_reason false-block-rate)"; false; }
+}
+
+@test "hole: false positive in prose is not read as the verdict" {
+  _mutate
+  cat > "$MTREE/docs/trial-ledger.md" <<'MD'
+| date | gate | run | fired? | adjudication |
+|---|---|---|---|---|
+| 2026-08-01 | alpha-gate | a real phase | YES | false positives were ruled out; this is a TRUE positive |
+| 2026-08-01 | beta-gate | a real phase | YES | true positive — it caught a real defect |
+MD
+  _derive
+  [ "$(_val false-block-rate)" = "0" ] || { echo "got $(_val false-block-rate)"; false; }
+}
+
+@test "hole: adding a column does not zero the false-block rate" {
+  _mutate
+  cat > "$MTREE/docs/trial-ledger.md" <<'MD'
+| date | gate | run | fired? | adjudication | notes |
+|---|---|---|---|---|---|
+| 2026-08-01 | alpha-gate | a real phase | YES | false positive — the work was fine | reported by Ashiq |
+| 2026-08-01 | beta-gate | a real phase | YES | false positive — the glob was wrong | reported by Ashiq |
+MD
+  _derive
+  [ "$(_val false-block-rate)" = "1" ] || { echo "got $(_val false-block-rate)"; false; }
+}
+
+@test "hole: a fenced example row in the trial ledger is not a logged run" {
+  _mutate
+  { printf '%s\n' '```'
+    printf '%s\n' '| 2026-01-01 | example-gate | how to fill this in | YES | false positive — example only |'
+    printf '%s\n' '```'
+    cat "$(FXM)/have/docs/trial-ledger.md"; } > "$MTREE/docs/trial-ledger.md"
+  _derive
+  [ "$(_val false-block-rate)" = "0.25" ] || { echo "got $(_val false-block-rate)"; false; }
+}
+
+@test "hole: a fenced FIDELITY line is not a verdict" {
+  _mutate
+  { printf '%s\n' "A drifted report ends with the line:" '' '```' 'FIDELITY: drift found' '```' ''
+    printf '%s\n' 'FIDELITY: clean'; } > "$MTREE/initiatives/develop/evidence/phase-01/spec-fidelity.md"
+  _derive
+  [ "$(_val escaped-spec-misses)" = "1" ] || { echo "got $(_val escaped-spec-misses)"; false; }
+}
+
+@test "hole: a negated mention of drift is not drift" {
+  _mutate
+  printf '%s\n' 'No FIDELITY: drift found anywhere in this diff.' '' 'FIDELITY: clean' \
+    > "$MTREE/initiatives/develop/evidence/phase-01/spec-fidelity.md"
+  _derive
+  [ "$(_val escaped-spec-misses)" = "1" ] || { echo "got $(_val escaped-spec-misses)"; false; }
+}
+
+@test "hole: an archived evidence directory is not a phase" {
+  _mutate
+  mkdir -p "$MTREE/initiatives/develop/evidence/archive-2026-07"
+  cp "$MTREE/initiatives/develop/evidence/phase-00/spec-fidelity.md" \
+     "$MTREE/initiatives/develop/evidence/archive-2026-07/spec-fidelity.md"
+  _derive
+  [ "$(_val escaped-spec-misses)" = "1" ] || { echo "got $(_val escaped-spec-misses)"; false; }
+}
+
+@test "hole: receipts are paired by time, not by the order they were written" {
+  _mutate
+  cat > "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" <<'JL'
+{"kind":"slice.done","ts":"2026-08-01T18:00:00Z","payload":{"lane":"develop","slice":"09","phase":"00"}}
+{"kind":"develop.started","ts":"2026-08-01T10:00:00Z","payload":{"lane":"develop","phase":"00"}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00Z","payload":{"lane":"develop","slice":"01","phase":"00"}}
+JL
+  _derive
+  [ "$(_val time-to-first-proven-slice)" = "90" ] || { echo "got $(_val time-to-first-proven-slice)"; false; }
+}
+
+@test "hole: another lane's receipts are not this lane's" {
+  # Every lane numbers its phases 00, 01, ..., so this fires the moment a second lane exists.
+  _mutate
+  cat > "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" <<'JL'
+{"kind":"develop.started","ts":"2026-08-01T10:00:00Z","payload":{"lane":"develop","phase":"00"}}
+{"kind":"slice.done","ts":"2026-08-01T10:02:00Z","payload":{"lane":"lexos","slice":"01","phase":"00"}}
+{"kind":"slice.stuck","ts":"2026-08-01T10:40:00Z","payload":{"lane":"lexos","slice":"01","backstop":"fingerprint"}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00Z","payload":{"lane":"develop","slice":"01","phase":"00"}}
+JL
+  _derive
+  [ "$(_val time-to-first-proven-slice)" = "90" ] || { echo "got $(_val time-to-first-proven-slice)"; false; }
+  [ "$(_val rework-stuck)" = "0" ] || { echo "another lane's backstop counted: $(_val rework-stuck)"; false; }
+}
+
+@test "hole: a numeric or unpadded phase still pairs" {
+  _mutate
+  cat > "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" <<'JL'
+{"kind":"develop.started","ts":"2026-08-01T10:00:00Z","payload":{"lane":"develop","phase":0}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00Z","payload":{"lane":"develop","slice":"01","phase":0}}
+{"kind":"develop.started","ts":"2026-08-01T14:00:00Z","payload":{"lane":"develop","phase":"1"}}
+{"kind":"slice.done","ts":"2026-08-01T14:30:00Z","payload":{"lane":"develop","slice":"01","phase":"01"}}
+JL
+  _derive
+  [ "$(_val time-to-first-proven-slice)" = "60" ] || { echo "got $(_val time-to-first-proven-slice)"; false; }
+}
+
+@test "hole: a timestamp with no timezone is refused, not read in the local zone" {
+  _mutate
+  cat > "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" <<'JL'
+{"kind":"develop.started","ts":"2026-08-01T10:00:00Z","payload":{"lane":"develop","phase":"00"}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00","payload":{"lane":"develop","slice":"01","phase":"00"}}
+JL
+  _derive
+  [ "$(_val time-to-first-proven-slice)" = "null" ] || { echo "a machine-dependent number: $(_val time-to-first-proven-slice)"; false; }
+  [[ "$(_reason time-to-first-proven-slice)" == *"timezone"* ]] || { echo "$(_reason time-to-first-proven-slice)"; false; }
+}
+
+@test "hole: a restarted phase is measured from the run that finished it" {
+  _mutate
+  cat > "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" <<'JL'
+{"kind":"develop.started","ts":"2026-08-01T08:00:00Z","payload":{"lane":"develop","phase":"00"}}
+{"kind":"develop.started","ts":"2026-08-01T11:00:00Z","payload":{"lane":"develop","phase":"00"}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00Z","payload":{"lane":"develop","slice":"01","phase":"00"}}
+JL
+  _derive
+  [ "$(_val time-to-first-proven-slice)" = "30" ] || { echo "got $(_val time-to-first-proven-slice)"; false; }
+}
+
+@test "hole: one receipt with a wrong year does not become the headline" {
+  _mutate
+  cat > "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" <<'JL'
+{"kind":"develop.started","ts":"2026-08-01T10:00:00Z","payload":{"lane":"develop","phase":"00"}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00Z","payload":{"lane":"develop","slice":"01","phase":"00"}}
+{"kind":"develop.started","ts":"2026-08-01T14:00:00Z","payload":{"lane":"develop","phase":"01"}}
+{"kind":"slice.done","ts":"2126-08-01T14:30:00Z","payload":{"lane":"develop","slice":"01","phase":"01"}}
+JL
+  _derive
+  # The median survives one bad record; the mean was 26,297,340 minutes.
+  local v; v="$(_val time-to-first-proven-slice)"
+  [ "$v" -lt 100000 ] 2>/dev/null || { echo "an outlier became the figure: $v"; false; }
+}
+
+@test "hole: a duplicated events file does not double every count" {
+  _mutate
+  cp "$MTREE/.claude/state/hq/events/2026-08-01.jsonl" "$MTREE/.claude/state/hq/events/2026-08-01.bak.jsonl"
+  _derive
+  [ "$(_val rework-stuck)" = "2" ] || { echo "a restored backup doubled it: $(_val rework-stuck)"; false; }
+}
+
+@test "hole: a ledger that does not parse is refused, not counted around" {
+  # A malformed slice id, a duplicate id and an unterminated fence each dropped slices, and
+  # every one of them moved the number in the flattering direction.
+  _mutate
+  cat >> "$MTREE/initiatives/develop/phases/phase-01-tasks.md" <<'LED'
+
+#### slice: 01
+
+title: a duplicate id
+result: done
+commit: eee5555
+LED
+  _derive
+  [ "$(_val evidence-completeness)" = "null" ] || { echo "counted over a broken ledger: $(_val evidence-completeness)"; false; }
+  [[ "$(_reason evidence-completeness)" == *"do not parse"* ]] || { echo "$(_reason evidence-completeness)"; false; }
+}
+
+@test "hole: calibration does not count a note left in the scores section" {
+  _mutate
+  printf '%s\n' 'summary: hit — this line is a note, not a scored prediction' \
+    >> "$MTREE/initiatives/develop/phases/phase-01-tasks.md"
+  local probe="$BATS_TEST_TMPDIR/c.mjs"
+  { echo "import * as m from '$(_url "$(M)")';"
+    echo "console.log(JSON.stringify(m.calibration(process.argv[2] + '/initiatives/develop')));"; } > "$probe"
+  run node "$probe" "$MTREE"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q '"total":5' || { echo "a note became calibration data: $output"; false; }
+}
+
+@test "hole: a score keyed constructor neither inflates the total nor pollutes Object" {
+  _mutate
+  printf '%s\n' 'constructor: hit — the object was built as predicted' \
+    >> "$MTREE/initiatives/develop/phases/phase-01-tasks.md"
+  local probe="$BATS_TEST_TMPDIR/c2.mjs"
+  { echo "import * as m from '$(_url "$(M)")';"
+    echo "const c = m.calibration(process.argv[2] + '/initiatives/develop');"
+    echo "console.log(JSON.stringify({ total: c.total, poisoned: String(Object.hit) }));"; } > "$probe"
+  run node "$probe" "$MTREE"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q '"total":5' || { echo "$output"; false; }
+  echo "$output" | grep -q '"poisoned":"undefined"' || { echo "the global Object was written to: $output"; false; }
+}
+
+@test "hole: a hedged verdict is not a clean hit" {
+  _mutate
+  printf '%s\n' 'riskiest-file: hit-and-miss — it was both, honestly' \
+    >> "$MTREE/initiatives/develop/phases/phase-01-tasks.md"
+  local probe="$BATS_TEST_TMPDIR/c3.mjs"
+  { echo "import * as m from '$(_url "$(M)")';"
+    echo "const c = m.calibration(process.argv[2] + '/initiatives/develop');"
+    echo "console.log(JSON.stringify({ hit: c.hit, unreadable: c.unreadable.length }));"; } > "$probe"
+  run node "$probe" "$MTREE"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q '"hit":2' || { echo "a hedge was scored as a hit: $output"; false; }
+  echo "$output" | grep -q '"unreadable":1' || { echo "it was dropped in silence: $output"; false; }
+}
+
+@test "hole: deletion-opportunity none is an answer, not an empty field" {
+  # quality.mjs had already learned this; metrics.mjs used the other isFilled and made the
+  # same value a false BLOCK in one file and legal in the other.
+  _sugg <<'EOF'
+### Suggestions — slice 02 boundary
+
+#### suggestion: 1
+
+what: read the risk globs from the shared rules file
+evidence: the debt ledger records two copies and one already drifted
+maintenance: touches 2 files
+operational-surface: deps +0, services +0, config +0
+deletion-opportunity: none
+default: skip
+EOF
+  [ "$output" = "[]" ] || { echo "the honest answer was rejected: $output"; false; }
+}
+
+@test "hole: the word boundary anywhere in the heading is not a boundary" {
+  _sugg <<'EOF'
+### Suggestions — raised mid-slice, nowhere near a boundary
+
+#### suggestion: 1
+
+what: do a thing
+evidence: some evidence
+maintenance: touches 2 files
+operational-surface: deps +0, services +0, config +0
+deletion-opportunity: none
+default: skip
+EOF
+  [[ "$output" == *"boundary"* ]] || { echo "a mid-slice section passed: $output"; false; }
+}
