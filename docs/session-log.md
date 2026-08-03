@@ -570,3 +570,7 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-08-01 14:31 — main
 - Last commit: 9a00ba8 feat(tests): the WARN-shape assertion helper, hardened against 19 real holes (#82)
 - Uncommitted files at exit: 0
+
+## 2026-08-03 09:03 — technology-ashiq/arc-engine
+- Last commit: 9b64ae9 feat(engine): Phase 03 north-star timing — 37s, and what it does NOT prove
+- Uncommitted files at exit: 0
