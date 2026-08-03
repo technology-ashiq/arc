@@ -9,7 +9,13 @@
 # The two derivations DISAGREED on 6 of 8 cases by up to 24 ULP, writing the same formula two
 # algebraically identical ways -- so acceptance is two assertions, not one:
 #   bit-for-bit against the pinned tree   -> catches a refactor silently changing the math
-#   within 64 ULP of the independent one  -> catches the pinned tree being WRONG, not different
+#   agreeing with the independent one     -> catches the pinned tree being WRONG, not different
+#
+# The agreement band is ABSOLUTE first (1e-15), because the decision-relevant question is
+# whether the bound crosses effect_floor -- not how many ULP it sits from another
+# implementation. ULP is a tighter secondary check, relaxed per-case where a near-0 or
+# near-1 cancellation makes the measure misleading: case D disagrees by 512 ULP and by
+# 2.2e-19, which is the same number to nineteen decimal places.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
@@ -33,7 +39,7 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
   [[ "$output" == *"BIT-FOR-BIT 8/8"* ]]
 }
 
-@test "every case agrees with the INDEPENDENT derivation within 64 ULP" {
+@test "every case agrees with the INDEPENDENT derivation, absolute then ULP" {
   run _node "$VIMPORT
     const ulpDiff = (a, b) => {
       const ba = new BigInt64Array(Float64Array.of(a).buffer)[0];
@@ -43,8 +49,14 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
     const bad = [];
     for (const c of V.cases) {
       const r = newcombeWilsonDifference(c.x1, c.n1, c.x2, c.n2, V.alpha);
+      // ABSOLUTE first: it is the decision-relevant measure. What matters is whether the bound
+      // crosses effect_floor, not how many ULP it sits from another implementation.
+      const abs = Math.abs(r.lower - c.independent_lower);
+      if (abs > V.assertions.independent_absolute_tolerance) bad.push(c.id + ' is ' + abs + ' absolute from the independent derivation');
+      // ULP second, tighter, and per-case where a cancellation makes the measure misleading.
+      const cap = c.max_ulp ?? V.assertions.independent_tolerance_ulp;
       const u = ulpDiff(r.lower, c.independent_lower);
-      if (u > V.assertions.independent_tolerance_ulp) bad.push(c.id + ' is ' + u + ' ULP from the independent derivation');
+      if (u > cap) bad.push(c.id + ' is ' + u + ' ULP from the independent derivation (cap ' + cap + ')');
       if (c.strict && !Object.is(r.lower, c.independent_lower)) bad.push(c.id + ' is marked strict but is not bit-identical to the independent derivation');
     }
     if (bad.length) { console.log(bad.join('\n')); process.exit(1); }
