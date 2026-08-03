@@ -125,6 +125,13 @@ function decideInner(input) {
 
   if (!Array.isArray(arms) || arms.length !== 2) reasons.push("a difference is computed between exactly two arms");
   if (!Number.isSafeInteger(floor) || floor < 1) reasons.push("no per-arm floor is declared");
+  // FINITE, explicitly. `effect_floor: -Infinity` makes every bound clear the floor — ADR-0310's
+  // gate is simply off — and `NaN` is what `Number(manifest.effect_floor)` yields on a missing or
+  // malformed field. Both used to hash identically to an unset floor, so the config hash could
+  // not tell a disabled gate from an absent one. canon.mjs now refuses to encode them; this
+  // refuses them here too, with a reason an operator can act on.
+  if (typeof effectFloor !== "number" || !Number.isFinite(effectFloor)) reasons.push(`effect_floor ${JSON.stringify(effectFloor)} is not a finite number - a non-finite floor is a floor that is not applied`);
+  if (typeof mde !== "number" || !Number.isFinite(mde)) reasons.push(`mde ${JSON.stringify(mde)} is not a finite number`);
 
   let stats = null;
   if (reasons.length === 0) {
@@ -197,7 +204,13 @@ function decideInner(input) {
 
 // ---------- the config hash ----------
 
-import { digest } from "./canon.mjs";
+import { digest, tryDigest } from "./canon.mjs";
+
+/** `configHash`, but returning a refusal instead of throwing — canon.mjs refuses non-total values. */
+export function tryConfigHash(cfg) {
+  try { return { hash: configHash(cfg), reason: null }; }
+  catch (e) { return { hash: null, reason: e?.message ?? String(e) }; }
+}
 
 /**
  * The hash a verdict carries so a replay re-derives the SAME decision.
@@ -218,12 +231,19 @@ import { digest } from "./canon.mjs";
 export function configHash(cfg) {
   const guardrails = [...(cfg.guardrails || [])]
     .map((g) => [g?.name ?? null, g?.threshold ?? null, g?.direction ?? null])
-    .sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
+    // Encoded, not JSON.stringify'd, so the sort key is the same total encoding the digest uses.
+    .map((g) => ({ key: encodeSortKey(g), g }))
+    .sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+    .map((x) => x.g);
   return digest("evolve/config/v1", [
-    TEST_ID, cfg.alpha, cfg.effectFloor, cfg.floor, cfg.mde,
+    TEST_ID, cfg.alpha ?? null, cfg.effectFloor ?? null, cfg.floor ?? null, cfg.mde ?? null,
     cfg.arms ?? null, cfg.split ?? null, guardrails,
   ]);
 }
+
+// A stable sort key that cannot throw on a value the digest would refuse — the ordering must not
+// decide whether hashing is possible.
+function encodeSortKey(v) { try { return JSON.stringify(v) ?? "null"; } catch { return "￿"; } }
 
 /**
  * The hash of the MEASUREMENT SET a verdict was computed from. Two verdicts with the same config
