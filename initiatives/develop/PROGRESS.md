@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-develop Cycle 6 (opened 2026-08-02)
-phase: 07 — not started
+phase: 08 — not started
 appetite: 7d
-burn: 1.3d
+burn: 1.6d
 blocked-on: —
 depends-on: —
 
@@ -25,10 +25,10 @@ depends-on: —
 | 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, promotion loop | 1.5 days | ✅ done 2026-08-03 (12 of 13 slices; slice 08 carried) |
 | 05 | Context Pack — code-graph neighbourhood with stated grep fallback, churn, tagged hits, one-hop links | 1.0 days | ✅ done 2026-08-03 (9 of 9 slices) |
 | 06 | Capability — scout, vet gate that BLOCKs on provenance, pinned lockfile | 0.75 days | ✅ done 2026-08-03 (15 of 15 slices) |
-| 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | pending |
+| 07 | Quality intelligence — decision-triggered pattern mining, risk-triggered approach sketches | 0.75 days | ✅ done 2026-08-03 (9 of 9 slices) |
 | 08 | The feedback half of layer 5 — outcome metrics, calibration record, tags, suggestion engine | 1.5 days | pending |
 
-**Appetite burn: 1.3 of 7 days used (19%).** The five phases allocate **5.5 days**
+**Appetite burn: 1.6 of 7 days used (23%).** The five phases allocate **5.5 days**
 (1.5 + 1.0 + 0.75 + 0.75 + 1.5); the remaining **1.5 days are unallocated buffer**, belonging to no
 phase and counted by no kill criterion — the same numbers PLAN's Appetite section states, and the
 figure to keep the two files agreeing on. The buffer's size has never been stress-tested: no cycle
@@ -275,8 +275,8 @@ agent types register at session start — the identical debt Cycle 5 recorded fo
 
 ## Now
 
-**Phases 04, 05 and 06 are closed on green CI. Phase 07 is next and is NOT cut — the cut was
-conditional on burn, and burn is 1.3 of 7 days.**
+**Phases 04, 05, 06 and 07 are closed on green CI. Phase 08 is the last one, and it has NOT
+been started.**
 
 ### Cycle 6 position
 
@@ -285,10 +285,10 @@ conditional on burn, and burn is 1.3 of 7 days.**
 | 04 Learning System | closed 2026-08-03, 12 of 13 slices, ~0.8d of 1.5d |
 | 05 Context Pack | closed 2026-08-03, 9 of 9 slices, ~0.2d of 1.0d |
 | 06 Capability | closed 2026-08-03, 15 of 15 slices, ~0.3d of 0.75d |
-| 07 Quality intelligence | **next** — 0.75d (was the pre-decided cut; burn is 19%, so it is NOT cut) |
-| 08 Feedback metrics | pending — 1.5d |
+| 07 Quality intelligence | closed 2026-08-03, 9 of 9 slices, ~0.3d of 0.75d (NOT cut — burn never reached the checkpoint) |
+| 08 Feedback metrics | **next** — 1.5d, the last phase of the cycle |
 
-Burn ~1.3 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
+Burn ~1.6 of 7 days. The 4.0-day checkpoint — is Phase 06 done? — is a long way off.
 
 ### To start Phase 06, in this order
 
