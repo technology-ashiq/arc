@@ -411,11 +411,15 @@ export function learning(root, files, corpus) {
     const f = r.fields ?? {};
     const area = String(f.area ?? "").trim().toLowerCase();
     const byArea = area && corpus.has(area);
+    // Phase 08: `tag:` is a closed vocabulary precisely so retrieval can match on it. A
+    // free-text tag cannot be matched, which is why the set is closed rather than convenient.
+    const tag = String(f.tag ?? "").trim().toLowerCase();
+    const byTag = tag && corpus.has(tag);
     const byPath = PATH_KEYS.some((k) => {
       const v = String(f[k] ?? "").trim().replace(/\\/g, "/").replace(/^\.\//, "");
       return v && files.some((file) => overlaps(file, v));
     });
-    if (byArea || byPath) matched.push(r);
+    if (byArea || byTag || byPath) matched.push(r);
   }
 
   // ONE HOP. The links of a matched row are read from the ROW, never from the target: the

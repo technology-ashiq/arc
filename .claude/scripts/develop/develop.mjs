@@ -289,8 +289,15 @@ async function modeNext(ctx) {
   const proven = slices.filter(isProven);
   if (proven.length) {
     const last = proven[proven.length - 1];
+    // `phase` is carried because Phase 08's time-to-first-proven-slice pairs a
+    // `develop.started` with the first `slice.done` OF THE SAME PHASE, and without it the
+    // metric is not derivable at all — which is exactly what it reported on this repo the
+    // first time it ran. The kind vocabulary is closed (ADR-0026); a payload field is not.
+    // Receipts already on the spine lack it, so the metric becomes derivable forward and says
+    // so rather than pretending to cover history it cannot see.
     await emit("slice.done", {
       lane: ctx.mode === "root" ? null : ctx.lane,
+      phase: (led.file.match(/phase-(\d+)-tasks/) || [, null])[1],
       slice: last.id,
       tier: last.fields.tier ?? null,
       commit: last.fields.commit ?? null,

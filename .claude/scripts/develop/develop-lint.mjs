@@ -287,6 +287,15 @@ for (const file of ledgerFiles) {
         "| server-side cursors | https://… (primary docs) | adopted — bounded memory |");
     }
 
+    // Suggestions live in the same quality file, for the same reason the sketches do.
+    const { validateSuggestions } = await import("./metrics.mjs");
+    for (const f of validateSuggestions(q).fails) {
+      fail("suggestion", `${qualityFileFor(file)}:${f.at}`, f.msg,
+        "evidence, economics in words and computed counts, and a default — at a slice boundary",
+        f.id ? `suggestion ${f.id}` : "the section",
+        "default: skip");
+    }
+
     const { fails, warns } = validateSketches(raw, q);
     for (const w of warns) {
       warn("approach-sketch", `${file}:${w.at}`, w.msg,
@@ -322,6 +331,15 @@ for (const file of ledgerFiles) {
         f.id ? `row ${f.id}` : "the ledger", "verdict: proposed");
     }
   }
+}
+
+// ---------- outcome metrics (Phase 08), on request only ----------
+// Behind a flag because a metrics report on every lint run is noise, and noise is how a number
+// stops being read. Asking for it is the point at which someone is going to act on it.
+if (process.argv.includes("--metrics")) {
+  const { renderMetrics } = await import("./metrics.mjs");
+  for (const line of renderMetrics(root, troot)) say(line);
+  say("");
 }
 
 // ---------- report ----------

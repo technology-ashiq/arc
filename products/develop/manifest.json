@@ -21,6 +21,7 @@
     ".claude/scripts/develop/develop.mjs",
     ".claude/scripts/develop/learning.mjs",
     ".claude/scripts/develop/ledger.mjs",
+    ".claude/scripts/develop/metrics.mjs",
     ".claude/scripts/develop/quality.mjs",
     ".claude/scripts/develop/replay-child.mjs",
     ".claude/scripts/develop/stuck.mjs"
