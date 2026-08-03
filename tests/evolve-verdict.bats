@@ -96,7 +96,7 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
 
 @test "a verdict is refused when EITHER arm is below floor, and the arm is named" {
   run _node "$VIMPORT
-    const r = decide({arms:['+champion','+challenger-a'], floor:1800, alpha:0.05, effectFloor:0, mde:0,
+    const r = decide({arms:['+champion','+challenger-a'], floor:1800, alpha:0.05, effectFloor:0, mde:0, guardrails:[],
       counts:{'+champion':{units:1900,successes:190},'+challenger-a':{units:1000,successes:120}}});
     if (r.outcome !== 'no-verdict') { console.log('a below-floor arm produced a verdict'); process.exit(1); }
     if (!r.reasons.some(x => x.includes('+challenger-a') && x.includes('below floor'))) { console.log('arm not named: ' + r.reasons.join(' / ')); process.exit(1); }
@@ -123,7 +123,7 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
 @test "a second verdict compute is refused: fixed-horizon, compute once" {
   run _node "$VIMPORT
     const r = decide({arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, mde:0,
-      counts:{'+champion':{units:1900,successes:190},'+challenger-a':{units:1874,successes:225}}, computedBefore:true});
+      counts:{'+champion':{units:1900,successes:190},'+challenger-a':{units:1874,successes:225}}, guardrails:[], computedBefore:true});
     if (r.outcome !== 'no-verdict' || !r.reasons.some(x => x.includes('compute once'))) { console.log('a re-compute was allowed'); process.exit(1); }
     console.log('COMPUTE-ONCE OK');"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -133,7 +133,7 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
 @test "a cohort violation refuses the verdict" {
   run _node "$VIMPORT
     const r = decide({arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, mde:0,
-      counts:{'+champion':{units:1900,successes:190},'+challenger-a':{units:1874,successes:225}}, cohortViolations:1});
+      counts:{'+champion':{units:1900,successes:190},'+challenger-a':{units:1874,successes:225}}, guardrails:[], cohortViolations:1});
     if (r.outcome !== 'no-verdict') { console.log('a cohort violation was ignored'); process.exit(1); }
     console.log('COHORT OK');"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -143,10 +143,10 @@ VIMPORT='const {newcombeWilsonDifference, decide, configHash, metricHash, zFor} 
 @test "a bound below effect_floor, or a delta below MDE, refuses the verdict" {
   run _node "$VIMPORT
     // Case H from the vectors: a tiny effect at large n, LOWER is negative.
-    const r = decide({arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, mde:0,
+    const r = decide({arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, mde:0, guardrails:[],
       counts:{'+champion':{units:2000,successes:100},'+challenger-a':{units:2000,successes:101}}});
     if (r.outcome !== 'no-verdict' || !r.reasons.some(x => x.includes('effect_floor'))) { console.log('a negative bound produced a verdict'); process.exit(1); }
-    const m = decide({arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, mde:0.5,
+    const m = decide({arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, mde:0.5, guardrails:[],
       counts:{'+champion':{units:1900,successes:190},'+challenger-a':{units:1874,successes:225}}});
     if (m.outcome !== 'no-verdict' || !m.reasons.some(x => x.includes('MDE'))) { console.log('a sub-MDE delta produced a verdict'); process.exit(1); }
     console.log('THRESHOLDS OK');"

@@ -25,10 +25,12 @@ export const TEST_ID = "newcombe-wilson-difference-v1";
 const Z_BY_ALPHA = Object.freeze({ 0.05: 1.6448536269514722 });
 
 export function zFor(alpha) {
-  const z = Z_BY_ALPHA[alpha];
-  if (z === undefined)
-    throw new Error(`${TEST_ID}: alpha ${alpha} has no pinned quantile (supported: ${Object.keys(Z_BY_ALPHA).join(", ")})`);
-  return z;
+  // `Object.hasOwn` and a type check, not a bare lookup: `zFor("constructor")` used to return
+  // Object itself, the stats then went NaN, and the operator was told "the bound was too small"
+  // when the truth was "that alpha was never supported". `"0.05"` as a string was accepted too.
+  if (typeof alpha !== "number" || !Object.hasOwn(Z_BY_ALPHA, alpha))
+    throw new Error(`${TEST_ID}: alpha ${JSON.stringify(alpha)} has no pinned quantile (supported: ${Object.keys(Z_BY_ALPHA).join(", ")})`);
+  return Z_BY_ALPHA[alpha];
 }
 
 /**
@@ -91,9 +93,28 @@ export function newcombeWilsonDifference(x1, n1, x2, n2, alpha = 0.05) {
  *   computedBefore  true if a verdict was already computed for this experiment
  */
 export function decide(input) {
+  // A GATE MUST NEVER THROW. The first version threw on ten realistic input shapes — `units` as
+  // a string, a float, NaN, Infinity, a bigint; `successes > units`; `counts` absent; a
+  // non-iterable `guardrails`; an unpinned alpha; a null input. An exception is not a refusal:
+  // it carries no outcome and no reasons, and a caller looping over experiments inside a
+  // try/catch SKIPS the experiment rather than recording `no-verdict`. Everything below returns.
+  try {
+    return decideInner(input);
+  } catch (e) {
+    return { outcome: "no-verdict", reasons: [`the verdict gate could not evaluate this input: ${e?.message ?? e}`], stats: null, missing_windows: null };
+  }
+}
+
+// A number that is genuinely a count. `NaN` and `Infinity` both PASSED the old `c.units < floor`
+// check — every comparison against NaN is false — and only died later inside `wilson`, so the
+// floor gate never rejected them at all.
+const isCount = (v) => Number.isSafeInteger(v) && v >= 0;
+
+function decideInner(input) {
+  if (input === null || typeof input !== "object") throw new TypeError("input must be an object");
   const {
     arms, counts, floor, alpha = 0.05, effectFloor = 0, mde = 0,
-    guardrails = [], cohortViolations = 0, missingWindows = 0, computedBefore = false,
+    guardrails, cohortViolations = 0, missingWindows = 0, computedBefore = false,
   } = input;
   const reasons = [];
 
@@ -108,31 +129,63 @@ export function decide(input) {
   let stats = null;
   if (reasons.length === 0) {
     const [champion, challenger] = arms;
-    const c1 = counts[champion], c2 = counts[challenger];
-    if (!c1 || !c2) {
-      reasons.push(`counts are missing for ${!c1 ? champion : challenger}`);
+    if (counts === null || typeof counts !== "object") {
+      reasons.push("counts is not an object");
+    } else if (!Object.hasOwn(counts, champion) || !Object.hasOwn(counts, challenger)) {
+      // OWN properties only. A `!c1 || !c2` check reads through the PROTOTYPE CHAIN, so a
+      // polluted `Object.prototype["+challenger-a"]` supplied a full set of counts for an arm
+      // that was not in `counts` at all — and the gate declared a verdict on it.
+      reasons.push(`counts are missing for ${!Object.hasOwn(counts, champion) ? champion : challenger}`);
     } else {
-      // BOTH arms. Not the mean, not the total: an arm below floor has not been measured enough
-      // to be compared, and the other arm's abundance does not fix that.
-      for (const [tag, c] of [[champion, c1], [challenger, c2]])
-        if (c.units < floor) reasons.push(`${tag} is below floor (${c.units} < ${floor})`);
+      // Read ONCE and validate the captured value. The old code read `c.units` for the floor
+      // check and then `c1.units` again inside the math; with an accessor property (a Proxy, an
+      // ORM row, a lazy view) the two reads returned different numbers, and a verdict was
+      // declared on an arm holding ONE unit against a floor of 1000.
+      const u1 = counts[champion]?.units, s1 = counts[champion]?.successes;
+      const u2 = counts[challenger]?.units, s2 = counts[challenger]?.successes;
+      for (const [tag, u, s] of [[champion, u1, s1], [challenger, u2, s2]]) {
+        if (!isCount(u) || u < 1) reasons.push(`${tag} units ${JSON.stringify(u)} is not a positive integer count`);
+        else if (!isCount(s)) reasons.push(`${tag} successes ${JSON.stringify(s)} is not a non-negative integer count`);
+        else if (s > u) reasons.push(`${tag} reports ${s} successes out of ${u} units`);
+        // BOTH arms. Not the mean, not the total: an arm below floor has not been measured
+        // enough to be compared, and the other arm's abundance does not fix that.
+        else if (u < floor) reasons.push(`${tag} is below floor (${u} < ${floor})`);
+      }
 
       if (reasons.length === 0) {
-        stats = newcombeWilsonDifference(c1.successes, c1.units, c2.successes, c2.units, alpha);
+        stats = newcombeWilsonDifference(s1, u1, s2, u2, alpha);
         if (!(stats.lower >= effectFloor)) reasons.push(`bound ${stats.lower} does not clear effect_floor ${effectFloor}`);
         if (!(stats.d >= mde)) reasons.push(`point delta ${stats.d} does not reach the MDE ${mde}`);
       }
     }
   }
 
-  // A guardrail whose own window is MISSING is UNRESOLVED, never "no breach found". Absence of
-  // evidence read as evidence of absence is the whole failure this engine is built to refuse.
-  for (const g of guardrails) {
-    if (g.status === "breached") reasons.push(`guardrail ${g.name} breached`);
-    else if (g.status !== "ok") reasons.push(`guardrail ${g.name} is unresolved (${g.status}) - not scored as "no breach found"`);
+  // Guardrails must be PRESENT, even if empty. Defaulting to `[]` made "I forgot to pass them"
+  // indistinguishable from "this surface has none" — the unresolved-guardrail discipline could
+  // be skipped by omission rather than by lying.
+  if (!Array.isArray(guardrails)) {
+    reasons.push("guardrails must be an array (an absent guardrail set is not an empty one)");
+  } else {
+    // A guardrail whose own window is MISSING is UNRESOLVED, never "no breach found". Absence of
+    // evidence read as evidence of absence is the whole failure this engine is built to refuse.
+    for (const g of guardrails) {
+      if (g === null || typeof g !== "object") { reasons.push(`a guardrail entry is ${JSON.stringify(g)}`); continue; }
+      if (g.status === "breached") reasons.push(`guardrail ${g.name} breached`);
+      else if (g.status !== "ok") reasons.push(`guardrail ${g.name} is unresolved (${JSON.stringify(g.status)}) - not scored as "no breach found"`);
+    }
   }
 
-  if (cohortViolations > 0) reasons.push(`${cohortViolations} cohort violation(s)`);
+  // The SAME rule the guardrails get, which the first version applied to them and not to this.
+  // `cohortViolations` of null / NaN / {} / "abc" / -1 all coerced to a false `> 0` comparison,
+  // so a violation counter that FAILED TO COMPUTE read as clean and a verdict was issued.
+  if (!isCount(cohortViolations)) reasons.push(`the cohort violation count is unresolved (${JSON.stringify(cohortViolations)}) - not scored as zero`);
+  else if (cohortViolations > 0) reasons.push(`${cohortViolations} cohort violation(s)`);
+
+  // MISSING windows GATE, they do not merely decorate the receipt. The first version copied the
+  // count into the output and never consulted it, so a verdict could be declared over data the
+  // board itself had already reported as incomplete.
+  if (!isCount(missingWindows)) reasons.push(`the missing-window count is unresolved (${JSON.stringify(missingWindows)})`);
+  else if (missingWindows > 0) reasons.push(`${missingWindows} window(s) are MISSING - a verdict is not computed over known-incomplete data`);
 
   return {
     outcome: reasons.length === 0 ? "verdict" : "no-verdict",
@@ -144,37 +197,50 @@ export function decide(input) {
 
 // ---------- the config hash ----------
 
-import { createHash } from "node:crypto";
+import { digest } from "./canon.mjs";
 
 /**
  * The hash a verdict carries so a replay re-derives the SAME decision.
  *
  * Every input that can change what a verdict MEANS is in the preimage — alpha and effect_floor
- * above all (ADR-0310), plus the test id, the floor, the MDE, the arm order and the guardrail
- * names. Anything omitted here is a knob that can be turned after the fact without the verdict
- * looking different, which is the same class of failure as a free-form payload.
+ * above all (ADR-0310), plus the test id, the floor, the MDE, the arm order, the split, and each
+ * guardrail's FULL definition. Anything omitted is a knob that can be turned after the fact
+ * without the verdict looking different, which is the same class of failure as a free-form
+ * payload.
+ *
+ * Encoded through canon.mjs rather than joined by hand. The hand-joined version collided six
+ * ways, and one pair was fatal: `floor: 1000` and `floor: "1000"` produced the SAME HASH and
+ * OPPOSITE VERDICTS. Joining array members with `,` inside a `,`-delimited field also made
+ * `arms: ["+a","+b"]` (two arms) hash identically to `arms: ["+a,+b"]` (one), and binding
+ * guardrails by NAME ALONE let a latency budget move from 200 to 9999 with a byte-identical
+ * hash.
  */
 export function configHash(cfg) {
-  const canon = [
-    `test_id=${TEST_ID}`,
-    `alpha=${cfg.alpha}`,
-    `effect_floor=${cfg.effectFloor}`,
-    `per_arm_floor=${cfg.floor}`,
-    `mde=${cfg.mde}`,
-    `arms=${(cfg.arms || []).join(",")}`,
-    `split=${(cfg.split || []).join(",")}`,
-    `guardrails=${[...(cfg.guardrails || []).map((g) => g.name)].sort().join(",")}`,
-  ].join("\n");
-  return createHash("sha256").update(canon).digest("hex");
+  const guardrails = [...(cfg.guardrails || [])]
+    .map((g) => [g?.name ?? null, g?.threshold ?? null, g?.direction ?? null])
+    .sort((a, b) => (JSON.stringify(a) < JSON.stringify(b) ? -1 : 1));
+  return digest("evolve/config/v1", [
+    TEST_ID, cfg.alpha, cfg.effectFloor, cfg.floor, cfg.mde,
+    cfg.arms ?? null, cfg.split ?? null, guardrails,
+  ]);
 }
 
 /**
- * The hash of the MEASUREMENT SET a verdict was computed from — every (arm, unit, window) that
- * contributed, sorted. Two verdicts with the same config hash but different metric hashes were
- * computed from different data, which is exactly what a reader needs to know before comparing
- * them.
+ * The hash of the MEASUREMENT SET a verdict was computed from. Two verdicts with the same config
+ * hash but different metric hashes were computed from different data — which is what a reader
+ * needs before comparing them.
+ *
+ * Binds the VALUES, not only which windows contributed. The first version hashed six identity
+ * fields and omitted the numbers, so two runs over identical windows with completely different
+ * outcomes produced the same hash — "same config, different metric hash implies different data"
+ * had no coverage of the data at all. It also joined with `|`, so a unit id containing `|`
+ * merged two fields.
  */
 export function metricHash(contributions) {
-  const rows = [...contributions].map((c) => `${c.arm}|${c.unit_id}|${c.metric}|${c.window_start}|${c.window_end}|${c.unit_count}`).sort();
-  return createHash("sha256").update(rows.join("\n")).digest("hex");
+  if (!Array.isArray(contributions)) throw new TypeError("metricHash: contributions must be an array");
+  const rows = contributions
+    .map((c) => [c?.arm ?? null, c?.unit_id ?? null, c?.metric ?? null, c?.window_start ?? null, c?.window_end ?? null, c?.unit_count ?? null, c?.successes ?? null])
+    .map((r) => JSON.stringify(r))
+    .sort();
+  return digest("evolve/metric/v1", [rows]);
 }
