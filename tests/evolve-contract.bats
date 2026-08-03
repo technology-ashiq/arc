@@ -96,6 +96,111 @@ LINT="$ARC_ROOT/.claude/scripts/core/product-lint.mjs"
   [[ "$output" == *"traversal"* ]]
 }
 
+# ---------- holes found by the fresh-agent adversarial pass (slice 09) ----------
+#
+# Every case below LINTED GREEN before the pass. They are pinned here so the fix cannot regress.
+
+@test "HOLE 1: a case-varied money segment is refused (NTFS/APFS resolve it to the real file)" {
+  # app/PRICING/plans.tsx opens the real app/pricing/plans.tsx on a case-insensitive filesystem.
+  # The attacker proved it by writing through the accepted path.
+  run node "$LINT" --root "$FIX/hostile/evolve-money-case"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"money-touching surface"* ]]
+  [[ "$output" == *"app/PRICING/plans.tsx"* ]]
+}
+
+@test "HOLE 3a: a bare directory in promote_via is refused" {
+  # A directory target makes the money check vacuous — it covers everything beneath it.
+  run node "$LINT" --root "$FIX/hostile/evolve-promote-dir"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"not a regular file"* ]]
+}
+
+@test "HOLE 3b: promote_via of \".\" is refused" {
+  run node "$LINT" --root "$FIX/hostile/evolve-promote-dot"
+  [ "$status" -eq 2 ]
+}
+
+@test "HOLE 4a: a Next.js route group naming the pricing route is refused" {
+  # app/(pricing)/page.tsx IS the pricing route. Prefix-only segment matching missed it.
+  run node "$LINT" --root "$FIX/hostile/evolve-route-group"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"money-touching surface"* ]]
+  [[ "$output" == *"(pricing)"* ]]
+}
+
+@test "HOLE 4b: a money keyword mid-segment is refused (lib/vendor-stripe/client.ts)" {
+  run node "$LINT" --root "$FIX/hostile/evolve-infix-money"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"money-touching surface"* ]]
+}
+
+@test "HOLE 4c: a Next.js DYNAMIC route with no money segment is still ACCEPTED" {
+  # The over-broad glob-char rule made app/[locale]/... unrepresentable, which pushed authors
+  # toward the route-group form that HOLE 4a let through. Fixing one without the other would
+  # have traded a false negative for a false positive.
+  run node "$LINT" --root "$FIX/good-evolve"
+  [ "$status" -eq 0 ]
+}
+
+@test "HOLE 5: a duplicate JSON key cannot hide a money path" {
+  # JSON.parse is last-wins: the money promote_via sits in the file's BYTES and was overwritten
+  # by a clean duplicate. Any first-wins reader downstream sees the money path.
+  run node "$LINT" --root "$FIX/hostile/evolve-dup-key"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"duplicate object key"* ]]
+}
+
+@test "HOLE 6a: non-canonical aliases of one file are refused" {
+  run node "$LINT" --root "$FIX/hostile/evolve-noncanonical"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"canonical path"* ]]
+}
+
+@test "HOLE 6b: two case-variant spellings of one file are refused as duplicates" {
+  run node "$LINT" --root "$FIX/hostile/evolve-dup-case"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"same file twice"* ]]
+}
+
+@test "HOLE 2: path aliases (symlink / junction / hardlink) cannot reach a money surface" {
+  # Driven through the injectable probe rather than a real junction: git does not carry a
+  # Windows junction across all three CI legs, so a filesystem fixture would silently stop
+  # testing anything on two of them. The probe is the exact seam the fix hangs on.
+  cat > "$BATS_TEST_TMPDIR/alias.mjs" <<'NODE'
+// Run via `node --input-type=module -e` from the repo root, so this relative specifier resolves
+// against cwd. Written to a file only to keep the JSON readable; a file:// URL is not an option
+// because ARC_ROOT is an MSYS path (/c/...) that Node cannot parse.
+const { checkEvolveSection } = await import("./.claude/scripts/core/evolve-manifest.mjs");
+const base = {
+  metrics: [{ name: "m", source_event: "metric.observed", aggregation: "rate", direction: "higher-is-better", role: "primary" }],
+  experiments: [{ surface_file: "app/promo/plans.tsx", variant_grammar: "h@1.0.0", split: [50, 50], excluded_categories: [] }],
+  evals: { holdout_rule: "cohort-50-50", per_arm_floor: 1800, minimum_effect_rule: "mde-at-80-power", test_id: "newcombe-wilson-difference-v1", alpha: 0.05, effect_floor: 0 },
+  promote_via: ["app/promo/plans.tsx"],
+};
+const run = (probe) => checkEvolveSection(base, "t", { probe }).join(" ;; ");
+// a symlink / junction: refused outright, never followed
+const link = run(() => ({ kind: "link" }));
+// a HARDLINK has no link bit — it is a regular file whose realpath is the money surface
+const hard = run(() => ({ kind: "file", realRel: "app/pricing/plans.tsx" }));
+// a path resolving outside the repo root
+const esc  = run(() => ({ kind: "escapes", realRel: "../../etc/passwd" }));
+const fail = [];
+if (!/symlink, junction or reparse point/.test(link)) fail.push("symlink not refused: " + link);
+if (!/resolves to app\/pricing\/plans\.tsx/.test(hard)) fail.push("hardlink not refused: " + hard);
+if (!/resolves outside the repository root/.test(esc)) fail.push("escape not refused: " + esc);
+// control: a clean regular file inside the root must still PASS, or the rule refuses everything
+const ok = run(() => ({ kind: "file", realRel: "app/promo/plans.tsx" }));
+if (ok !== "") fail.push("clean path wrongly refused: " + ok);
+if (fail.length) { console.log(fail.join("\n")); process.exit(1); }
+console.log("ALIASES_REFUSED");
+NODE
+  cd "$ARC_ROOT"
+  run node --input-type=module -e "$(cat "$BATS_TEST_TMPDIR/alias.mjs")"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"ALIASES_REFUSED"* ]]
+}
+
 # ---------- coverage-invariant walk: the negative control ----------
 
 @test "coverage walk: an unmapped .claude file is rejected (proves the walk can FAIL)" {

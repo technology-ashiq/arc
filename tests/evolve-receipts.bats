@@ -47,9 +47,9 @@ _payload() {
     promotion.proposed)
       printf '{"proposal_id":"p-hero-001","experiment_id":"x-hero-001","kind":"promote","patch_sha":"%s","base_sha":"%s","candidate_sha":"%s"}' "$SHA_PATCH" "$SHA_BASE" "$SHA_CAND" ;;
     experiment.promoted)
-      printf '{"proposal_id":"p-hero-001","commit_ref":"1d4cf27","observed_candidate_sha":"%s"}' "$SHA_CAND" ;;
+      printf '{"proposal_id":"p-hero-001","commit_ref":"1d4cf2770000000000000000000000000000abcd","observed_candidate_sha":"%s"}' "$SHA_CAND" ;;
     experiment.rolled_back)
-      printf '{"proposal_id":"p-hero-002","commit_ref":"3973b5c"}' ;;
+      printf '{"proposal_id":"p-hero-002","commit_ref":"3973b5c00000000000000000000000000000ef01"}' ;;
     experiment.closed)
       printf '{"experiment_id":"x-hero-001","outcome":"winner","reason":"bound 0.011 clears effect_floor 0 with both arms above the per-arm floor"}' ;;
   esac
@@ -177,7 +177,7 @@ _kinds() {
 @test "experiment.promoted without an observed_candidate_sha is refused" {
   _fresh_spine noobserved
   run bash "$EVENT" emit experiment.promoted --payload \
-    '{"proposal_id":"p-hero-001","commit_ref":"1d4cf27"}' --strict
+    '{"proposal_id":"p-hero-001","commit_ref":"1d4cf2770000000000000000000000000000abcd"}' --strict
   [ "$status" -eq 2 ]
   [[ "$output" == *"observed_candidate_sha"* ]]
 }
@@ -227,6 +227,9 @@ _kinds() {
 # ---------- idem: total preimage, derived not supplied ----------
 
 @test "two receipts differing in one identity field get DIFFERENT idems" {
+  # Differ by unit_id, NOT by arm. The first version of this test varied `arm` — which was in
+  # the assigned idem then, and is deliberately not now: a unit's identity is (experiment, unit),
+  # so re-assigning it to another arm must COLLIDE rather than land as a second unit.
   _fresh_spine idem-a
   run bash "$EVENT" emit experiment.assigned --payload \
     '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+champion","cohort":"verdict"}' --strict
@@ -235,7 +238,7 @@ _kinds() {
 
   _fresh_spine idem-b
   run bash "$EVENT" emit experiment.assigned --payload \
-    '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+challenger-a","cohort":"verdict"}' --strict
+    '{"experiment_id":"x-hero-001","unit_id":"h-fedcba9876543210","arm":"+champion","cohort":"verdict"}' --strict
   [ "$status" -eq 0 ]
   local b; b="$(sed -n 's/.*"idem":"\([0-9a-f]*\)".*/\1/p' "$SPINE"/events/*.jsonl)"
 
@@ -310,19 +313,127 @@ _kinds() {
 
 # ---------- corrections ride supersedes, never overwrite ----------
 
-@test "a correction supersedes rather than overwriting, and BOTH lines stay on the spine" {
+@test "a correction to the SAME fact supersedes and lands — both lines stay on the spine" {
+  # The first version of this test changed window_end as well as the value, so it corrected a
+  # DIFFERENT window and proved nothing. The fresh-agent pass showed a true correction — same
+  # unit, same window, new value — was refused DUP_IDEM and could never land, while this test
+  # stayed green. `supersedes` is now part of the preimage; this is the case that matters.
   _fresh_spine supersede
   run bash "$EVENT" emit experiment.measured --payload "$(_payload experiment.measured)" --strict
   [ "$status" -eq 0 ]
   local first; first="$(sed -n 's/.*"id":"\([0-9A-HJKMNP-TV-Z]*\)".*/\1/p' "$SPINE"/events/*.jsonl | head -1)"
   [ -n "$first" ]
-  # Same unit + window, corrected value: a different measurement of the same fact. It rides
-  # supersedes; the append-only spine keeps both lines.
   run bash "$EVENT" emit experiment.measured --supersedes "$first" --payload \
-    '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-08","source_id":"h-fedcba9876543210"}' --strict
+    '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+champion","cohort":"verdict","metric":"signup_conversion","value":0,"unit_count":1,"window_start":"2026-08-01","window_end":"2026-08-07","source_id":"h-fedcba9876543210"}' --strict
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$(_event_lines)" -eq 2 ]
   [ "$(_quarantine_lines)" -eq 0 ]
+}
+
+# ---------- holes found by the fresh-agent adversarial pass (slice 09) ----------
+
+@test "HOLE 1a: a junk verdict cannot PRE-CLAIM the key and lock out the real one" {
+  # bound/delta/n_per_arm sit outside the identity fields, so a n=0 verdict used to own the key
+  # forever and the real verdict was refused DUP_IDEM.
+  _fresh_spine preclaim-verdict
+  run bash "$EVENT" emit experiment.verdict --payload \
+    "$(printf '{"experiment_id":"x-hero-001","outcome":"verdict","bound":0.0001,"delta":0.0001,"n_per_arm":{"+champion":0,"+challenger-a":0},"config_hash":"%s","metric_hash":"%s"}' "$SHA_CFG" "$SHA_MET")" --strict
+  [ "$status" -eq 0 ]
+  # The real verdict still collides (same identity, no supersedes) — that part is correct...
+  run bash "$EVENT" emit experiment.verdict --payload "$(_payload experiment.verdict)" --strict
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"DUP_IDEM"* ]]
+  # ...but it now HAS a way in: riding supersedes, which is what ADR-0304 prescribes.
+  local first; first="$(sed -n 's/.*"id":"\([0-9A-HJKMNP-TV-Z]*\)".*/\1/p' "$SPINE"/events/*.jsonl | head -1)"
+  run bash "$EVENT" emit experiment.verdict --supersedes "$first" --payload "$(_payload experiment.verdict)" --strict
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_event_lines)" -eq 2 ]
+}
+
+@test "HOLE 2: one unit cannot be assigned to BOTH arms" {
+  # `arm` and `cohort` were in the assigned idem, so u1 -> +champion and u1 -> +challenger-a
+  # both landed, doubling that unit into the n the verdict is computed from.
+  _fresh_spine bootharms
+  run bash "$EVENT" emit experiment.assigned --payload \
+    '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+champion","cohort":"verdict"}' --strict
+  [ "$status" -eq 0 ]
+  run bash "$EVENT" emit experiment.assigned --payload \
+    '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+challenger-a","cohort":"verdict"}' --strict
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"DUP_IDEM"* ]]
+  run bash "$EVENT" emit experiment.assigned --payload \
+    '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+champion","cohort":"generation"}' --strict
+  [ "$status" -eq 2 ]
+  [ "$(_event_lines)" -eq 1 ]
+}
+
+@test "HOLE 3: two ventures running the same experiment id do NOT erase each other" {
+  # `venture` was dropped from the preimage — the exact regression arc-event.mjs documents as
+  # already fixed, which cost 100 real receipts in Cycle 2.
+  _fresh_spine crossventure
+  run bash "$EVENT" emit experiment.closed --venture arc --payload "$(_payload experiment.closed)" --strict
+  [ "$status" -eq 0 ]
+  run bash "$EVENT" emit experiment.closed --venture lexos --payload "$(_payload experiment.closed)" --strict
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_event_lines)" -eq 2 ]
+}
+
+@test "HOLE 4: an experiment cannot be OPENED on a money-touching surface" {
+  # The non-negotiable was enforced in the manifest lint but not at the receipt layer, which is
+  # what actually decides what reaches the append-only spine.
+  local fails="" p
+  for p in "lib/stripe/webhook-handler.ts" "app/billing/plan.tsx" "app/pricing/plans.tsx"; do
+    _fresh_spine "money-$(printf '%s' "$p" | tr -c 'a-z' '-')"
+    run bash "$EVENT" emit experiment.opened --payload \
+      "$(printf '{"experiment_id":"x-hero-001","module":"core","surface":"home-hero","target_path":"%s","base_sha":"%s","split":[50,50],"ttl_days":28,"arms":["+champion","+challenger-a"]}' "$p" "$SHA_BASE")" --strict
+    [ "$status" -eq 2 ] || { fails="$fails|$p: expected exit 2, got $status"; continue; }
+    [[ "$output" == *"money-touching surface"* ]] || fails="$fails|$p: wrong message"
+    [ "$(_event_lines)" -eq 0 ] || fails="$fails|$p: it LANDED"
+  done
+  [ -z "$fails" ] || { echo "MONEY FAILURES:"; echo "$fails" | tr '|' '\n'; false; }
+}
+
+@test "HOLE 5: target_path refuses URLs, addresses, devices and separator characters" {
+  local fails="" p
+  for p in "mailto:ashiq@example.com" "https://evil.example.com/a.tsx" "dir|x/h.tsx" "src/nul" "src/h.tsx." "app/hero .tsx"; do
+    _fresh_spine "badpath-$(printf '%s' "$p" | tr -c 'a-z' '-')"
+    run bash "$EVENT" emit experiment.opened --payload \
+      "$(printf '{"experiment_id":"x-hero-001","module":"core","surface":"home-hero","target_path":"%s","base_sha":"%s","split":[50,50],"ttl_days":28,"arms":["+champion","+challenger-a"]}' "$p" "$SHA_BASE")" --strict
+    [ "$status" -eq 2 ] || { fails="$fails|$p: expected exit 2, got $status"; continue; }
+    [ "$(_event_lines)" -eq 0 ] || fails="$fails|$p: it LANDED"
+  done
+  [ -z "$fails" ] || { echo "TARGET_PATH FAILURES:"; echo "$fails" | tr '|' '\n'; false; }
+}
+
+@test "HOLE 8: module is bounded — a 63KB product name is refused" {
+  _fresh_spine bigmodule
+  local big; big="$(printf 'a%.0s' $(seq 1 300))"
+  run bash "$EVENT" emit experiment.opened --payload \
+    "$(printf '{"experiment_id":"x-hero-001","module":"%s","surface":"home-hero","target_path":"app/home/hero.tsx","base_sha":"%s","split":[50,50],"ttl_days":28,"arms":["+champion","+challenger-a"]}' "$big" "$SHA_BASE")" --strict
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"module"* ]]
+}
+
+@test "HOLE 9: a bidi override in a close reason is refused" {
+  # "PROMOTED: <U+202E>detomorp ton" renders on every board as its own opposite.
+  _fresh_spine rlo
+  printf '{"experiment_id":"x-hero-001","outcome":"killed","reason":"PROMOTED: ‮detomorp ton"}' > "$BATS_TEST_TMPDIR/rlo.json"
+  run bash "$EVENT" emit experiment.closed --payload-file "$BATS_TEST_TMPDIR/rlo.json" --strict
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"format character"* ]]
+  [ "$(_event_lines)" -eq 0 ]
+}
+
+@test "HOLE 7: a misspelled --strict does NOT silently downgrade to hook mode" {
+  # `--strct=1` took the `=` fast path before the flag-name check, so a CI script with a
+  # one-character typo reported exit 0 on every receipt it meant to refuse.
+  _fresh_spine strcttypo
+  local BAD='{"experiment_id":"x-hero-001","outcome":"killed","reason":"x","evil":1}'
+  run bash "$EVENT" emit experiment.closed --payload "$BAD" --strct=1
+  [[ "$output" == *"unknown flag --strct"* ]]
+  run bash "$EVENT" emit experiment.closed --payload "$BAD" --strict=0
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"BAD_EXPERIMENT"* ]]
 }
 
 # ---------- ADR-0303: the variant grammar, name@x.y.z(+slug)? ----------

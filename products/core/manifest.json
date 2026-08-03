@@ -30,7 +30,8 @@
     ".claude/scripts/core/ownership-lint.sh",
     ".claude/scripts/core/wip-line.sh",
     ".claude/scripts/core/evolve-manifest.mjs",
-    ".claude/scripts/core/variant-grammar.mjs"
+    ".claude/scripts/core/variant-grammar.mjs",
+    ".claude/scripts/core/json-strict.mjs"
   ],
   "files": [
     ".claude/scripts/core/money-surfaces.json",

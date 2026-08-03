@@ -35,6 +35,6 @@
       "alpha": 0.05,
       "effect_floor": 0
     },
-    "promote_via": ["app/home/hero.tsx"]
+    "promote_via": ["app/home/hero.tsx", "app/[locale]/home/hero.tsx"]
   }
 }

@@ -17,7 +17,7 @@
 // in this lane is a no-go.
 
 import { SpineError, sha256Hex } from "./canonical.mjs";
-import { checkTargetPath } from "../../core/evolve-manifest.mjs";
+import { checkTargetPath, moneySurfaceMatch } from "../../core/evolve-manifest.mjs";
 
 export const EXPERIMENT_KINDS = Object.freeze([
   "experiment.opened",
@@ -48,11 +48,17 @@ const HASHED_ID_RE = /^h-[0-9a-f]{16}$/;
 const ARM_RE = /^\+[a-z0-9][a-z0-9-]{0,31}$/;
 const METRIC_NAME_RE = /^[a-z][a-z0-9_]{0,63}$/;
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const MODULE_RE = /^[a-z][a-z-]*$/;
+// Bounded, unlike the first version: `module` was the one unbounded field among the eight, and a
+// 63 KB product name was sealed onto the spine (and into an idem preimage) with only
+// MAX_EVENT_BYTES stopping it. Every sibling id here carries a ceiling; this one was the gap.
+const MODULE_RE = /^[a-z][a-z-]{0,63}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 // A git object name: abbreviated (7) through full (40). Lower-case hex only — git prints lower
 // case, and accepting both would make two spellings of one commit two different receipts.
-const COMMIT_REF_RE = /^[0-9a-f]{7,40}$/;
+// The FULL object name, not an abbreviation. Accepting 7..40 meant two spellings of one commit
+// produced two `experiment.promoted` receipts for one proposal — the same "two spellings, two
+// receipts" this file already refuses for letter case.
+const COMMIT_REF_RE = /^[0-9a-f]{40}$/;
 // Measurement windows are whole days, the same unit the spine's day files use.
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -79,6 +85,13 @@ function hasControlChar(s) {
   return false;
 }
 
+// Unicode FORMAT characters (category Cf): the bidi overrides U+202A-U+202E, the zero-width
+// joiners and U+200B, the invisible-separator family. None of them is a control character by
+// charCode, so hasControlChar misses every one. The adversarial pass sealed the reason
+// "PROMOTED: <U+202E>detomorp ton", which every board and log renders as "PROMOTED: not
+// promoted" reversed into its opposite. Same class as the C1/NEL fix validate.mjs already cites.
+const HAS_FORMAT_CHAR = /\p{Cf}/u;
+
 // ---------- closed payload shape ----------
 
 // Required keys per kind, in preimage order. `promotion.proposed`'s last two are conditional:
@@ -95,14 +108,31 @@ const PAYLOAD_KEYS = Object.freeze({
 });
 const REVERT_ONLY_KEYS = Object.freeze(["applies_to", "restores"]);
 
-// The identity-bearing subset, in a FIXED order. Deliberately not "all payload keys": a measured
-// value and a verdict's bound are observations, not identity — two corrected readings of the same
-// unit/window must collide so the correction rides `supersedes` instead of landing as a second
-// independent fact.
+// The identity-bearing subset, in a FIXED order.
+//
+// REWRITTEN after the fresh-agent adversarial pass, which broke the first version three ways:
+//
+//  * `experiment.assigned` listed `arm` and `cohort`. That made one unit assignable to BOTH arms
+//    without colliding — three landed receipts for unit u1 — corrupting the per-arm n that the
+//    verdict is computed from. The emitter's own comment already asserted the opposite invariant.
+//    Identity is (experiment, unit); a re-assignment must collide.
+//
+//  * The observation fields (`value`, `bound`, `delta`, `n_per_arm`, `reason`) were left out as
+//    "not identity", on the theory that a correction would collide and therefore ride
+//    `supersedes`. But `supersedes` was not in the preimage either, so the correction collided
+//    too and could NEVER LAND. Worse, it made first-writer pre-claim possible: a junk verdict
+//    with n=0 permanently owned the key and the real verdict was refused DUP_IDEM. `supersedes`
+//    is now part of every preimage, which is what makes a correction a distinct, lineage-bound
+//    receipt instead of an impossible one.
+//
+//  * `venture` was dropped entirely, because the experiment branch bypasses the emitter's
+//    `contentPre`. That is the exact regression arc-event.mjs documents as already fixed — a
+//    second venture emitting the same kind and payload swallowed as a duplicate of the first.
+//    It is now the first component of every preimage.
 const IDEM_FIELDS = Object.freeze({
   "experiment.opened": ["experiment_id", "module", "surface", "target_path", "base_sha"],
-  "experiment.assigned": ["experiment_id", "unit_id", "arm", "cohort"],
-  "experiment.measured": ["experiment_id", "unit_id", "arm", "cohort", "metric", "window_start", "window_end", "source_id"],
+  "experiment.assigned": ["experiment_id", "unit_id"],
+  "experiment.measured": ["experiment_id", "unit_id", "metric", "window_start", "window_end", "source_id"],
   "experiment.verdict": ["experiment_id", "outcome", "config_hash", "metric_hash"],
   "promotion.proposed": ["proposal_id", "experiment_id", "kind", "patch_sha", "base_sha", "candidate_sha", "applies_to", "restores"],
   "experiment.promoted": ["proposal_id", "commit_ref", "observed_candidate_sha"],
@@ -111,18 +141,20 @@ const IDEM_FIELDS = Object.freeze({
 });
 
 /**
- * The total-preimage idem for an experiment receipt. Absent optionals are written as a literal
- * `-`, so a revert proposal and a promote proposal that agree on every other field still differ.
- * Exported because the emitter derives it and the validator re-derives it — one formula, one file.
+ * The total-preimage idem for an experiment receipt.
+ *
+ * preimage = kind | venture | <identity fields, in order> | supersedes
+ *
+ * Absent optionals are written as a literal `-`, so a revert proposal and a promote proposal that
+ * agree on every other field still differ. Exported because the emitter derives it and the
+ * validator re-derives it — one formula, one file, never two.
  */
-export function experimentIdem(kind, payload) {
+export function experimentIdem(kind, payload, venture, supersedes) {
   const fields = IDEM_FIELDS[kind];
   if (!fields) throw new SpineError("UNKNOWN_KIND", `no idem formula for kind ${JSON.stringify(kind)}`);
-  const parts = fields.map((f) => {
-    const v = payload?.[f];
-    return v === undefined || v === null ? "-" : String(v);
-  });
-  return sha256Hex([kind, ...parts].join("|"));
+  const cell = (v) => (v === undefined || v === null ? "-" : String(v));
+  const parts = fields.map((f) => cell(payload?.[f]));
+  return sha256Hex([kind, cell(venture), ...parts, cell(supersedes)].join("|"));
 }
 
 // ---------- field assertions ----------
@@ -175,11 +207,20 @@ function assertReason(v, name) {
   const bytes = Buffer.byteLength(v, "utf8");
   if (bytes > MAX_REASON_BYTES) bad("BAD_REASON", `${name} is ${bytes} bytes, ceiling is ${MAX_REASON_BYTES}`);
   if (hasControlChar(v)) bad("BAD_REASON", `${name} contains a control character`);
+  if (HAS_FORMAT_CHAR.test(v)) bad("BAD_REASON", `${name} contains a Unicode format character (bidi override or zero-width) — it would render as text nobody wrote`);
 }
 
 function assertRepoPath(v, name) {
   const out = [];
   if (!checkTargetPath(v, name, out)) bad("BAD_TARGET_PATH", out.join("; "));
+  // The money refusal belongs HERE too, not only in the manifest lint. The receipt layer is what
+  // actually decides what goes on the append-only spine, and the adversarial pass opened
+  // experiments on `lib/stripe/webhook-handler.ts` and `app/billing/plan.tsx` that the manifest
+  // gate would have refused — because nothing made them pass through it. "Permanently refused at
+  // the contract layer" has to mean every layer that can admit one.
+  const hit = moneySurfaceMatch(v);
+  if (hit)
+    bad("BAD_TARGET_PATH", `${name} ${v} is a money-touching surface (matched deny rule ${hit}) — permanently refused (initiatives/evolve/PLAN.md, non-negotiable)`);
 }
 
 // Splits are integer percentages summing to exactly 100: floats do not sum exactly, and a split
@@ -348,7 +389,7 @@ export function assertExperiment(event) {
   // Idem LAST, so a malformed field reports its own error before the derived-key mismatch it
   // would also cause. Welding the mechanical key to the semantic payload is what stops a caller
   // pre-claiming the stable key of a receipt it does not own (the desync assertDecision closes).
-  const expected = experimentIdem(kind, p);
+  const expected = experimentIdem(kind, p, event.venture, event.supersedes);
   if (event.idem !== expected)
-    bad("BAD_IDEM", `${kind} idem must be the total preimage over ${IDEM_FIELDS[kind].join("|")} — supplied ${event.idem}, derived ${expected}`);
+    bad("BAD_IDEM", `${kind} idem must be the total preimage over kind|venture|${IDEM_FIELDS[kind].join("|")}|supersedes — supplied ${event.idem}, derived ${expected}`);
 }

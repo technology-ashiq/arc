@@ -129,11 +129,11 @@ commit: (empty until proven)
 title: Adversarial breaking-input pass run by a FRESH agent (not the author, not this session) on the manifest validator, all eight receipt validators, and the grammar change; every hole found is fixed and pinned as a fixture
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract - TWO fresh unanchored agents (not the author, not this session), one on the manifest validator + money classifier, one on the eight receipt validators + grammar; each told to CONSTRUCT AND RUN breaking inputs and that a finding it did not execute is not a finding
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
+decision: neither attacker was shown this Build Brief or the git log - the memory `gate-author-cannot-be-its-attacker` records an author pass finding 0 holes where a fresh agent found 9, and anchoring on the author's reasoning is exactly what causes that
+result: 15 REAL HOLES, all fixed and pinned. Manifest (6): case-varied money segment resolving to the real file on NTFS/APFS - PROVED by writing through the accepted path; symlink/junction/hardlink aliases; `promote_via: ["."]` and bare directories; prefix-only matching missing `app/(pricing)/page.tsx`; duplicate JSON keys hiding a money path; non-canonical aliases defeating dedup. Receipts (9): the idem was a SUBSET not a total preimage, so corrections could NEVER LAND and a junk verdict pre-claimed the key forever; `arm` in the assigned idem let ONE UNIT land in BOTH arms, corrupting the n the verdict is computed from; `venture` dropped from the preimage - the exact 100-receipt regression arc-event.mjs documents as already fixed; experiment.opened accepted money surfaces because the non-negotiable was only enforced in the manifest lint; target_path accepted `mailto:`, `|` (the idem separator) and `src/nul`; target_path aliasing gave one file 5 idems; `--strct=1` silently downgraded strict to hook mode (pre-existing arc-event bug); `module` unbounded at 63KB; U+202E bidi override in a close reason rendering "not promoted" as its opposite. My own correction test was ALSO wrong - it varied window_end, so it corrected a different window and proved nothing while the real correction path was broken
 commit: (empty until proven)
 
 #### slice: 10

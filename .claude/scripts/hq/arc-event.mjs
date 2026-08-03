@@ -56,7 +56,19 @@ function walkArgs(argv) {
     if (a === "--strict") { flags.strict = true; continue; }
     if (a.startsWith("--")) {
       const eq = a.indexOf("=");
-      if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
+      if (eq !== -1) {
+        // The membership check belongs on BOTH forms. It used to run only on the space form, so
+        // `--strct=1` was accepted and silently discarded while `--strct 1` errored: a CI or gate
+        // script with a one-character typo in `--strict` ran in hook mode and reported exit 0 on
+        // every receipt it was supposed to refuse. `--strict=0` is still strict (the flag was
+        // given, the value ignored) — that stays true; what changes is that a MISSPELLED flag can
+        // no longer reach this fast path unchecked.
+        const eqName = a.slice(2, eq);
+        if (eqName === "strict") { flags.strict = a.slice(eq + 1); continue; }
+        if (!VALUE_FLAGS.has(eqName)) { errors.push(`unknown flag --${eqName}`); continue; }
+        flags[eqName] = a.slice(eq + 1);
+        continue;
+      }
       const name = a.slice(2);
       if (!VALUE_FLAGS.has(name)) { errors.push(`unknown flag --${name}`); continue; }
       const next = argv[i + 1];
@@ -84,8 +96,8 @@ const envOr = (name, fallback) => {
 // An experiment idem over a payload that is not yet known to be valid. Returns null rather than
 // throwing, so the caller falls through to validateEvent and the operator sees "missing base_sha"
 // instead of a stack trace from the hashing helper.
-function safeExperimentIdem(kind, payload) {
-  try { return experimentIdem(kind, payload); } catch { return null; }
+function safeExperimentIdem(kind, payload, venture, supersedes) {
+  try { return experimentIdem(kind, payload, venture, supersedes); } catch { return null; }
 }
 
 // ---------- event construction ----------
@@ -137,7 +149,7 @@ function synthesize(kind, flags, { deriveIdem }) {
       throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
     // A malformed payload cannot produce an idem at all; let validateEvent report the real
     // field error rather than dying here on a missing key.
-    idem = safeExperimentIdem(kind, payload) ?? sha256Hex(`${contentPre}|${ms}`);
+    idem = safeExperimentIdem(kind, payload, venture, flags.supersedes ?? null) ?? sha256Hex(`${contentPre}|${ms}`);
   } else {
     idem = deriveIdem ? sha256Hex(contentPre) : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
   }

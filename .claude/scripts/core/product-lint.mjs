@@ -15,6 +15,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkEvolveSection } from "./evolve-manifest.mjs";
+import { assertNoDuplicateKeys } from "./json-strict.mjs";
 
 const errors = [];
 const err = (m) => errors.push(m);
@@ -85,8 +86,16 @@ for (const dir of readdirSync(productsDir)) {
   if (raw.includes(0x0d))
     err(`products/${dir}/manifest.json: CR byte (CRLF) not allowed — LF only`);
 
+  // Duplicate keys BEFORE parse. JSON.parse is last-wins, so a manifest whose bytes carry a
+  // forbidden value lints clean when a later duplicate of the same key overwrites it — the
+  // adversarial pass got a money `promote_via` through exactly that way, and the refusal
+  // depended on which duplicate came last. Any first-wins reader downstream sees the other one.
+  const text = raw.toString("utf8");
+  try { assertNoDuplicateKeys(text, `products/${dir}/manifest.json`); }
+  catch (e) { err(`${e.message}`); continue; }
+
   let obj;
-  try { obj = JSON.parse(raw.toString("utf8")); }
+  try { obj = JSON.parse(text); }
   catch (e) { err(`products/${dir}/manifest.json: invalid JSON (${e.message})`); continue; }
 
   for (const k of Object.keys(obj))
