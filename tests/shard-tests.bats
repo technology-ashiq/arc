@@ -164,13 +164,33 @@ _union() { # $1 = total; prints every shard's files, sorted
 @test "--plan balances by measured seconds, not by file count" {
   run bash -c "$SHARD --plan --total 9"
   [ "$status" -eq 0 ]
-  # The heaviest single file (design-steel-thread) is a hard floor: no shard can beat it. What
-  # this asserts is that the sharder gets NEAR that floor rather than splitting by count, which
-  # would leave one shard carrying several heavy files.
-  local heaviest
-  heaviest="$(printf '%s\n' "$output" | tail -1 | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
-  [ -n "$heaviest" ]
-  [ "$heaviest" -le 200 ] || { echo "heaviest shard is ${heaviest}s -- balancing has regressed"; false; }
+  # WAS `heaviest <= 200`, an absolute number. It rotted, and the way it rotted is the point:
+  # the 2026-08-03 re-measurement (run 30769261466) took the suite's measured total from 1785s
+  # to 2355s -- not because anything got slower, but because 12 files had NO entry and were
+  # being counted at the 16s fallback. The threshold had been calibrated against a total that
+  # understated reality by 570s, so it was going to fail the moment the numbers got honest.
+  #
+  # A hardcoded number nobody recomputes is a number that starts lying (retro-log 2026-07-22),
+  # and a test over live state must assert the RULE and derive from the state, never pin one
+  # snapshot value (retro-log 2026-08-02). So this now asserts BALANCE, derived from the run's
+  # own output:
+  #   - the heaviest shard is within 20% of the arithmetic ideal (total/N), and
+  #   - the spread between heaviest and lightest is small.
+  # Both hold however large the suite grows, and both still fail loudly if the sharder ever
+  # reverts to splitting by file count -- which would pile heavy files onto one shard and blow
+  # the spread wide open.
+  local last total heaviest lightest ideal
+  last="$(printf '%s\n' "$output" | tail -1)"
+  total="$(printf '%s' "$last"    | grep -oE 'total [0-9]+s'          | grep -oE '[0-9]+')"
+  heaviest="$(printf '%s' "$last" | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
+  lightest="$(printf '%s' "$last" | grep -oE 'lightest [0-9]+s'       | grep -oE '[0-9]+')"
+  [ -n "$total" ] && [ -n "$heaviest" ] && [ -n "$lightest" ]
+
+  ideal=$(( total / 9 ))
+  [ "$heaviest" -le $(( ideal * 12 / 10 )) ] \
+    || { echo "heaviest shard ${heaviest}s vs ideal ${ideal}s -- balancing has regressed"; false; }
+  [ $(( heaviest - lightest )) -le $(( ideal / 4 )) ] \
+    || { echo "spread $(( heaviest - lightest ))s across shards (ideal ${ideal}s) -- not balancing by seconds"; false; }
 }
 
 # ---------- one level down: a TEST that never runs ----------

@@ -38,7 +38,11 @@ const ALLOWED_KEYS = new Set([...REQUIRED_KEYS, "sha"]);
 
 const HEX64 = /^[0-9a-f]{64}$/;
 const ACTOR_RE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
-const PROCESS_RE = /^[a-z0-9][a-z0-9._-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/;
+// Exported (engine Cycle 6, ADR-0200) so process-lint can assert a canonical process's
+// `name@version` against the SAME regex the spine enforces, rather than against a copy.
+// A copied regex is a regex that drifts (retro-log 2026-07-22). Export only -- the value,
+// its position and every behaviour here are unchanged.
+export const PROCESS_RE = /^[a-z0-9][a-z0-9._-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/;
 const VENTURE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RUN_ID_RE = /^r-[A-Za-z0-9._-]{1,64}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/;

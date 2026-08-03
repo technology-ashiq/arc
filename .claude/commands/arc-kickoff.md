@@ -2,6 +2,10 @@
 description: Kick off a new build per docs/build-playbook.md — tiered depth, agent panel, evidence-based plan, ADRs, risk-ordered phases, tracker, lint- and simulation-gated.
 argument-hint: [one-line project goal]
 ---
+<!-- GENERATED FILE — DO NOT EDIT.
+     Source of truth: processes/kickoff-plan.process.yaml (v1.0.0) in the arc-engine repo.
+     A hand-edit here is deleted by the next regeneration. Change the process file
+     instead, routed through /arc-change, then recompile. -->
 
 **Lane first** (`.claude/rules/lanes.md`): run
 `bash .claude/scripts/core/lane-resolve.sh --for kickoff --print human` (add `--lane <name>`

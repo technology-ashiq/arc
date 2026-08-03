@@ -13,6 +13,7 @@
 
 | # | Initiative | Dates | Result | Burn | Shipped |
 |---|---|---|---|---|---|
+| C6 | arc-engine "The Model-Agnostic Foundation" | 2026-08-03 | **CLOSED — 4/4 phases, one REQ partial** | ~14% of 14d | `processes/*.process.yaml` canonical layer + `process-lint` · `arc-compile` proving **3/3 byte-identical** then the flip · `arc-run` + 3 drivers behind one interface, hard budgets, proposal-receipt escalation, secret scrub, `router.yaml` (ADR-0200..0206) |
 | C4 | arc-portfolio "The Conductor" | 2026-07-30 → 2026-08-02 | **CLOSED — 4/4 phases** | ~112% of 3d | lanes + resolver on 7 surfaces · `PORTFOLIO.md` board + board lint · ownership lint · WIP info line · per-lane One Rule (ADR-0050..0062) |
 | C3 | arc-design "The Designer" | → 2026-07-30 | **CLOSED — 4/4 phases** | ~60% | vision-based design review: read-only critic · four-contract brief · thesis-driven exploration + blind ranking |
 | C2 | Receipt Spine | 2026-07-22 → 2026-07-28 | **CLOSED — 5/5 phases** (REQ-01 `active`, honestly downgraded) | ~40% of 12.5d | spine core · 7 flows emit · daily brief · approval inbox · reader-only API (ADR-0024..0031, ADR-0032) |
@@ -30,6 +31,16 @@
 | First real ₹ (`revenue.received`) | ⏳ target Sep 2026 |
 
 ## Entries (newest first)
+
+### C6 · arc-engine "The Model-Agnostic Foundation" — CLOSED 2026-08-03 · lane `engine`
+
+- **Goal:** arc's processes stop being Claude-Code-dialect prisoners — a canonical model-neutral process layer plus an engine that runs any process on any driver
+- **Result:** 4/4 phases · ~14% burn (~2.0 of 14d) · **REQ-08 PARTIAL** · ADRs 0200–0206
+- **Shipped:** `processes/` format + `process-lint` (19 checks, 84-row two-class fixture corpus) · `arc-compile` **3/3 byte-identical**, source-of-truth flipped for 3 pilots · codex target + goldens · `arc-run` headless, 3 drivers, budgets, ADR-0204 escalation, 4-class secret scrub · `engine/router.yaml` mapping tier→model
+- **The claim that is NOT proven:** no non-Claude driver was runnable here (`codex` absent, no endpoint), so REQ-08's ≥3 real runs on a second model family **did not happen**. Model-agnosticism remains untested end-to-end. Reported as a blocking finding, not waived — `initiatives/engine/evidence/phase-03/real-runs.md`
+- **What the adversarial passes cost and bought:** 6 fresh agents, ~90 real holes. Four criticals in one pass alone, including that the routed tier reached NOTHING (`high-judgment` and `balanced-workhorse` invoked identically), making "escalation never changes a tier" vacuously true. Frontmatter injection could forge an `allowed-tools:` grant. `permissions: declared` with only `ask.human` silently meant unrestricted
+- **The one only a real run could find:** the first live run failed on a ` ```json ` fence against 20 green fixture tests. Every fake returned bare JSON
+- Full record: `initiatives/engine/` · evidence at `initiatives/engine/evidence/phase-0{0,1,3}/` · patterns in `docs/retro-log.md`
 
 ### C4 · arc-portfolio "The Conductor" — CLOSED 2026-08-02 · lane `portfolio`
 
