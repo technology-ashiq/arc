@@ -95,3 +95,22 @@ LINT="$ARC_ROOT/.claude/scripts/core/product-lint.mjs"
   [[ "$output" == *"promote_via"* ]]
   [[ "$output" == *"traversal"* ]]
 }
+
+# ---------- coverage-invariant walk: the negative control ----------
+
+@test "coverage walk: an unmapped .claude file is rejected (proves the walk can FAIL)" {
+  # The walk is a company-wide gate that this phase relies on to catch every new file it adds.
+  # A gate only ever observed passing has not been shown to work — this is its failing case.
+  run node "$LINT" --root "$FIX/hostile/unmapped-file"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"unmapped file (synced but in no product): .claude/rules/orphan.md"* ]]
+  # ...and the file that IS mapped is not also reported, or the walk would be flagging
+  # everything rather than discriminating.
+  [[ "$output" != *"rules/mapped.md"* ]]
+}
+
+@test "coverage walk: the real repo root is green (every file this phase adds is owned)" {
+  run node "$LINT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"all manifests valid"* ]]
+}

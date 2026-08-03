@@ -118,7 +118,10 @@ export function moneySurfaceMatch(path, deny) {
 // An `evolve` target path is a repo-relative, forward-slash, exact file path. Mirrors
 // product-lint's checkPath rules (backslash, dot-space traversal, absolute) and adds the two
 // this contract needs: no glob, and no `~`.
-function checkTargetPath(p, ctx, out) {
+// Exported so the spine's `experiment.opened` validator holds `target_path` to the SAME rule the
+// manifest was linted against — hq requires core, so this is the legal import direction, and a
+// second copy of these rules is a second copy that drifts.
+export function checkTargetPath(p, ctx, out) {
   if (typeof p !== "string" || p.length === 0) { out.push(`${ctx}: empty path entry`); return false; }
   let ok = true;
   if (hasControlChar(p)) { out.push(`${ctx}: control character in path: ${JSON.stringify(p)}`); ok = false; }
