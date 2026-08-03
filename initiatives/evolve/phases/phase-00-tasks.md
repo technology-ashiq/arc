@@ -20,11 +20,11 @@ blast-radius-dropped: 28
 
 ### Predictions
 
-likely-failure-mode: (empty until proven)
-likely-regression-site: (empty until proven)
-riskiest-file: (empty until proven)
-expected-blockers: (empty until proven)
-expected-proof-failures: (empty until proven)
+likely-failure-mode: SCORED WRONG - I predicted new kinds silently quarantined while the emitter exits 0. That did happen (1 receipt, INTERNAL), but it was not the phase's real failure mode. The real one was a validator that looked correct, passed 54 of my own tests, and had 15 holes
+likely-regression-site: SCORED RIGHT - hq/lib/validate.mjs and the spine emitter, exactly as predicted; the miss was that the regression landed in the DESIGN suite via a load-time import, not in the spine suites
+riskiest-file: SCORED RIGHT - .claude/scripts/hq/lib/validate-experiment.mjs. 9 of the 15 holes were in it, including all three severe ones
+expected-blockers: SCORED WRONG - I expected none. Four CI failures, three of them classes I had not considered at all: bats silently dropping non-ASCII test names, a test sandbox being an incomplete product install, and a lint message that differed by filesystem case-sensitivity
+expected-proof-failures: SCORED WRONG in the most useful way - I predicted red-before-green and got it, but did NOT predict that one of my own tests would be wrong in a way that hid a severe bug (the correction test varied window_end, so it corrected a different window and stayed green while corrections could never land)
 
 ### Slices
 
@@ -122,7 +122,7 @@ tier: verified-real
 sources: phase-00-spec.md, code:grep-fallback(611; no .codegraph/), adrs(11), learning(2), retro(12), churn(187)
 decision: base_sha is a REAL sha256 of a real in-tree file, not a fabricated 64-hex literal - a steel thread whose seal was invented proves the plumbing but never that the seal means anything
 result: x-evolve-steel-thread-01 landed as 01KZ49NVNHAAWNJKKX0HNXNQQR; quarantine 1 line before and 1 after (the pre-existing INTERNAL entry, unchanged); reader returned it with base_sha e652a15c..73e5, which re-derives bit-identical from the live file. Negative controls: the reader returns 0 rows for a kind never emitted, and one appended byte moves the seal to a5b708ad..d27b
-commit: (empty until proven)
+commit: 509164f
 
 #### slice: 09
 
@@ -134,52 +134,78 @@ tier: contract
 sources: phase-00-spec.md
 decision: neither attacker was shown this Build Brief or the git log - the memory `gate-author-cannot-be-its-attacker` records an author pass finding 0 holes where a fresh agent found 9, and anchoring on the author's reasoning is exactly what causes that
 result: 15 REAL HOLES, all fixed and pinned. Manifest (6): case-varied money segment resolving to the real file on NTFS/APFS - PROVED by writing through the accepted path; symlink/junction/hardlink aliases; `promote_via: ["."]` and bare directories; prefix-only matching missing `app/(pricing)/page.tsx`; duplicate JSON keys hiding a money path; non-canonical aliases defeating dedup. Receipts (9): the idem was a SUBSET not a total preimage, so corrections could NEVER LAND and a junk verdict pre-claimed the key forever; `arm` in the assigned idem let ONE UNIT land in BOTH arms, corrupting the n the verdict is computed from; `venture` dropped from the preimage - the exact 100-receipt regression arc-event.mjs documents as already fixed; experiment.opened accepted money surfaces because the non-negotiable was only enforced in the manifest lint; target_path accepted `mailto:`, `|` (the idem separator) and `src/nul`; target_path aliasing gave one file 5 idems; `--strct=1` silently downgraded strict to hook mode (pre-existing arc-event bug); `module` unbounded at 63KB; U+202E bidi override in a close reason rendering "not promoted" as its opposite. My own correction test was ALSO wrong - it varied window_end, so it corrected a different window and proved nothing while the real correction path was broken
-commit: (empty until proven)
+commit: 9f3e296
 
 #### slice: 10
 
 title: tests added & green in CI
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract - the full arc CI matrix on PR #108: 19 jobs across ubuntu 18/20/22, macos (3 shards) and windows (12 shards)
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: a green run is NOT accepted on its own - the ASCII-name bug makes a test VANISH silently, so green could have meant my tests never ran; the CI log is grepped to confirm both evolve suites executed and all 18 HOLE assertions reported ok
+result: run 30843031092 conclusion=success, 0 failed jobs. First run (30842054669) FAILED 9 of 19 and `gh run watch --exit-status` still returned 0 - four real causes: hq's new load-time dependency on core .mjs missing from the design sandbox, 5 non-ASCII @test names, a platform-dependent dedup message, and a missing PORTFOLIO board row
+commit: a69cbda
 
 #### slice: 11
 
 title: live demo run + output checked
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: verified-real - the spec's live-demo scenario run end to end against the real repo and the real spine, output read
+tier: verified-real
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: run against the REAL spine rather than a sandbox, because the scenario's whole point is where a receipt physically lands
+result: money-path manifest -> product-lint exit 2 naming the refusal and the path; clean manifest -> one experiment.opened emitted through arc-event.sh, landed in events/, quarantine unchanged at 1 line (the pre-existing INTERNAL entry), read back through spine.mjs, seal re-derived bit-identical from the live file
+commit: 509164f
 
 #### slice: 12
 
 title: contract tests green against fakes (fixture spine; no real client feed exists)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: contract - both evolve suites run entirely against fixtures and a sandboxed spine (ARC_SPINE_ROOT); no client feed is touched because none exists
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the fixture spine IS the fake - there is no external service to stub, so the offline-first requirement is met by construction rather than by an adapter
+result: evolve-contract 23/23 and evolve-receipts 39/39 in CI on all three OS legs; every case uses in-repo fixtures or a throwaway spine root
+commit: a69cbda
 
 #### slice: 13
 
 title: tracker updated (PROGRESS.md row ✅ + done-log)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static - PROGRESS.md machine header, phase table and done-log updated; PORTFOLIO.md gains the evolve row; the board-drift check enforces both directions in CI
+tier: static
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: the phase row stays pending until /arc-phase-done runs - a row flipped by hand is the assertion this tracker exists to refuse
+result: PROGRESS burn 0d -> 1.5d, phase 00 recorded as built with 13 of 13 slices proven; PORTFOLIO evolve row added and the 0300-0399 ADR band recorded as claimed; board-drift green in CI
+commit: a69cbda
+
+### Prediction scores
+
+**Read this first: the Predictions block above was left `(empty until proven)` at slice start and
+written at handoff, with hindsight. That is a process failure, not a forecast — the block exists
+to be filled BEFORE the work so it can be wrong. Scored below anyway, but no line here should be
+read as foresight; `unforeseen` is the honest verdict wherever I only learned it by being shown.**
+
+likely-failure-mode: unforeseen — 9f3e296. I would have said "new kinds silently quarantined while the emitter exits 0", and one receipt was lost exactly that way. But the phase's real failure mode was a validator that looked correct, passed 54 of my own tests, and had 15 holes in it
+likely-regression-site: unforeseen — a69cbda. hq/lib/validate.mjs and the emitter were the obvious guess and did carry most of the defects, but the regression that actually broke CI landed in the DESIGN suite, through a load-time import into a test sandbox that was an incomplete product install
+riskiest-file: hit — 9f3e296. .claude/scripts/hq/lib/validate-experiment.mjs took 9 of the 15 holes, including all three severe ones. This is the one line I would have gotten right in advance, and it is also the least useful, because knowing which file is risky did not stop me writing the bugs
+expected-blockers: unforeseen — a69cbda. Four CI failures, three of classes I had not considered at all: bats silently DROPPING a test whose name is non-ASCII, a test sandbox being an incomplete install of a product, and a lint message that differs by filesystem case-sensitivity so one manifest gets two verdicts
+expected-proof-failures: miss — 9f3e296. Red-before-green held everywhere. What I did not predict is that one of MY OWN tests would be wrong in a way that hid a severe bug: the correction test varied window_end, so it "corrected" a different window and stayed green while corrections could never land at all
+
+### Debt ledger
+
+- **what:** two duplicate-key JSON scanners — `.claude/scripts/core/json-strict.mjs` and the richer walk inside `hq/lib/canonical.mjs`.
+  **where:** both files.
+  **why accepted:** canonical.mjs is the spine's hot path and is pinned by byte-golden tests; moving its scanner into core mid-slice would have put the spine's canonical form at risk to fix a manifest hole.
+  **cost of leaving it:** one attack class with two implementations that can drift.
+  **pay-down trigger:** the next change that touches canonical.mjs's scanner for any reason.
+- **what:** `target_path` case-aliasing gives one file two identities on a case-insensitive filesystem (`SRC/H.tsx` vs `src/h.tsx` are two `experiment.opened` receipts).
+  **where:** `hq/lib/validate-experiment.mjs`.
+  **why accepted:** lower-casing the identity would WRONGLY collide two genuinely different files on Linux, and the emitter's own doctrine is that a doubled receipt is visible and harmless while a dropped one is invisible and lying.
+  **cost of leaving it:** two live experiments can be opened on one file under two spellings.
+  **pay-down trigger:** Phase 03, whose "two experiments sealed against the same base_sha on the same target" fixture is the downstream control — confirm it catches this case, or fix it there.
