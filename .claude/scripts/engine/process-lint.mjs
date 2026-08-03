@@ -91,7 +91,7 @@ export const CHECKS = Object.freeze([
   "yaml-parse", "yaml-excluded", "schema-keyword", "schema-shape", "name-semver",
   "tool-unknown", "permissions-invalid", "placeholder-dialect", "placeholder-malformed",
   "evals-path", "target-passthrough", "unknown-key", "baseline-drift", "body-drift", "frontmatter-injection",
-  "body-unrepresentable", "inputs-shape", "intent-missing",
+  "body-unrepresentable", "inputs-shape", "intent-missing", "router-tier",
 ]);
 
 const DIALECT_RES = [/\$\{\d+(:-[^}]*)?\}/g, /\$ARGUMENTS\b/g, /(^|[^\\$])\$\d\b/g];
@@ -567,6 +567,49 @@ for (const file of files) {
     add("yaml-parse", at(1), `process-lint crashed on this file: ${e.message}`,
       "a readable canonical process file", e.code || e.name || "Error",
       "this is a lint defect as much as a file defect — report both");
+  }
+}
+
+// ---------- engine/router.yaml (REQ-06) ----------
+// The router is the IMPLEMENTATION of ADR-0069 blocks (a) and (b), not a policy of its own.
+// Checking its tier names against the ADR is what stops the table drifting away from the
+// policy it implements -- the drift would be silent otherwise, because a made-up tier name
+// routes perfectly well right up until someone tries to reconcile it with the seat map.
+if (all) {
+  const rp = join(root, "engine", "router.yaml");
+  if (existsSync(rp)) {
+    const rel = relative(root, rp);
+    const rt = parseYamlSubset(readFileSync(rp, "utf8"));
+    if (!rt.ok) {
+      add(rt.error.check, `${rel}:${rt.error.line}`, rt.error.what, rt.error.expected, rt.error.found, rt.error.example);
+    } else {
+      const r = rt.value;
+      const declared = Array.isArray(r.tiers) ? r.tiers : [];
+      // ADR-0069 block (a) names exactly these four. Imported as data would be better; the
+      // ADR is prose, so the list is asserted against the ADR file itself rather than a copy.
+      const adrPath = join(root, "docs/adr/0069-balanced-model-policy.md");
+      const adrText = existsSync(adrPath) ? readFileSync(adrPath, "utf8") : "";
+      for (const t of declared) {
+        if (adrText && !adrText.includes(`**${t}**`)) {
+          add("router-tier", `${rel}:1`, `tier \`${t}\` is not named in ADR-0069 block (a)`,
+            "a tier the policy defines", String(t),
+            "either use a policy tier, or amend ADR-0069 first — the router implements the policy, it does not extend it");
+        }
+      }
+      for (const [cls, row] of Object.entries(r.classes ?? {})) {
+        if (row?.tier && !declared.includes(row.tier)) {
+          add("router-tier", `${rel}:1`, `class \`${cls}\` names tier \`${row.tier}\`, which this file does not declare`,
+            declared.join(" | "), String(row.tier), "add it to `tiers:` — after checking ADR-0069 block (a) names it");
+        }
+        const chain = [row?.driver, ...(Array.isArray(row?.fallback) ? row.fallback : [])].filter(Boolean);
+        for (const d of chain) {
+          if (!TARGETS.includes(d) && d !== "generic-api") {
+            add("router-tier", `${rel}:1`, `class \`${cls}\` routes to unknown driver \`${d}\``,
+              [...TARGETS, "generic-api"].join(" | "), String(d), "drivers are claude-code, codex, generic-api");
+          }
+        }
+      }
+    }
   }
 }
 

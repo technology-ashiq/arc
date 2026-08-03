@@ -1,0 +1,58 @@
+# engine/router.yaml -- task-class -> driver, hand-edited, forever in v1.
+#
+# THIS FILE IS THE IMPLEMENTATION OF A POLICY, NOT A POLICY.
+# Tier definitions, the seat map and the prohibitions come from ADR-0069 (the Balanced Model
+# Policy). This cycle decided ZERO new "which model where" questions -- ADR-0069 block (d)'s
+# north-star is that the engine INHERITS them. If a routing question arises that ADR-0069
+# does not already answer, that gap is the signal to amend the ADR, not to invent an answer
+# here.
+#
+# NO AUTO-UPDATING (a declared no-go). Nothing writes to this file at run time. Every change
+# is a reviewed diff citing ADR-0069, which is also block (b)(1)'s rule: no component may
+# change a tier at run time, under any condition.
+#
+# Read by `arc-run --driver auto`. An unknown class exits non-zero naming the class AND this
+# file, because the fix is always "edit this file", never "guess harder".
+
+version: 1
+
+# Tiers are provider-neutral by construction (Constitution A7). These names are the ones
+# ADR-0069 block (a) defines; process-lint FAILs if a tier appears here that block (a) does
+# not name, so this table cannot drift away from the policy it implements.
+tiers:
+  - cheap-scan
+  - balanced-workhorse
+  - high-judgment
+  - independent-family-verifier
+
+# A task class is a property of the WORK, not of a vendor. `fallback` is tried in order when
+# the primary driver reports a driver-fault (never when it reports a process-fault -- falling
+# back on a broken schema would just fail three times instead of once).
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - codex
+      - generic-api
+
+  review-diff:
+    # ADR-0069 block (a): grading other work is high-judgment -- it fails SILENTLY when
+    # under-powered, which is exactly the condition worth paying for.
+    tier: high-judgment
+    driver: claude-code
+    fallback:
+      - codex
+
+  kickoff-plan:
+    tier: high-judgment
+    driver: claude-code
+    fallback: []
+
+# The default for a process with no class row. Deliberately NOT a catch-all that silently
+# works: `arc-run --driver auto` on an unknown class is an error, and this row only supplies
+# the tier for one that is known but unrouted.
+default:
+  tier: balanced-workhorse
+  driver: claude-code
+  fallback: []

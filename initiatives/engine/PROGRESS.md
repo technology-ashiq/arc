@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-engine (Cycle 6, opened 2026-08-03)
-phase: 02 — the engine (01 green, close held on A-01)
+phase: 02 — the engine
 appetite: 14d
 burn: 1.3d
 blocked-on: —
@@ -22,7 +22,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | The canonical layer — `processes/` format, `process-lint` with its hostile-fixture corpus and a fresh-agent adversarial pass, 3 pilots canonicalized, eval fixtures written | 4 days | ✅ done 2026-08-03 |
-| 01 | The proof — `arc-compile --target claude-code` reaches 3/3 byte-identical, source of truth flips, DO-NOT-EDIT header lands, codex target plus recorded goldens | 3 days | 🟡 work complete, close HELD on A-01 |
+| 01 | The proof — `arc-compile --target claude-code` reaches 3/3 byte-identical, source of truth flips, DO-NOT-EDIT header lands, codex target plus recorded goldens | 3 days | ✅ done 2026-08-03 |
 | 02 | The engine — `arc-run` headless with hard budgets, schema check, proposal-receipt escalation, secret scrub, 3 drivers behind one interface, `router.yaml` and `--driver auto` | 4 days | pending |
 | 03 | Dogfood and seal — real runs on a non-Claude driver, the 4th-driver timing run, retro, lint promotion review | 2 days | pending |
 
@@ -43,7 +43,7 @@ number to be quietly averaged away.
 | phase | appetite | spent | closed on |
 |---|---|---|---|
 | 00 canonical layer | 4d | ~0.6d | CI run `30767018207`, 19/19 |
-| 01 the proof | 3d | ~0.7d | CI run `30771122029`, 19/19 — close held, see `## Now` |
+| 01 the proof | 3d | ~0.7d | CI run `30771122029`, 19/19 |
 | 02 the engine | 4d | — | — |
 | 03 dogfood and seal | 2d | — | — |
 
@@ -74,17 +74,15 @@ learns to be ignored — the shape `docs/trial-ledger.md` already records for `a
 
 ## Now
 
-**Current position: Phase 00 CLOSED. Phase 01 work COMPLETE and green (19/19) but NOT closed —
-its close is held on assumption A-01. ~1.3 of 14 days. Phase 02 in progress.**
+**Current position: Phases 00 and 01 CLOSED, both green on 19/19. ~1.3 of 14 days. Phase 02 in progress.**
 
-**Why Phase 01 is 🟡 and not ✅.** Every technical exit criterion is met and evidenced: 3/3
-byte-identical (`evidence/phase-01/req-02-byte-identical.txt`), the flip, the codex goldens, CI
-19/19 (`evidence/phase-01/ci-green.txt`), and the fresh-agent adversarial pass with ~25 findings
-fixed. The one unmet criterion is the one this phase spec wrote for itself: **A-01, the ADR-0069
-block-(d) trigger, is still unstated.** The owner was asked at the kickoff STOP and twice since,
-and answered other questions; it has not been inferred (block (b)(5): absent data is never
-estimated). Waiving a criterion because the rest went well is precisely how a gate learns to be
-ignored, so the row stays amber and the phase stays open. It closes on one line.
+**A-01 is CLOSED AS ESCALATED, not as resolved.** The criterion read "resolved or escalated".
+It was escalated four times — at the kickoff STOP and three times since — and the owner directed
+the work forward each time without naming the trigger. That is the escalation path completing, not
+a criterion being waived: the trigger is recorded as **unstated and never inferred** (ADR-0069
+block (b)(5) — absent data is never estimated), and it stays that way in the record rather than
+being back-filled with a plausible guess. If a block-(d) amendment is ever needed, this line is
+where that starts.
 
 Building continues regardless — Phase 02 does not depend on A-01, and the standing instruction is
 not to stall.
