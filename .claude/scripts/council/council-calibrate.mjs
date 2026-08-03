@@ -21,6 +21,16 @@
  *   - `## OUTCOME` present, RESULT missing/free-text -> MALFORMED, hard error (exit 1)
  *   - no CONFIDENCE (but a terminal outcome) -> can't bucket, skipped (WARN)
  */
+// SPINE MODE (evolve Phase 04, ADR-0307). `--from-spine` scores the council from
+// `council.verdict` / `council.outcome` RECEIPTS through the spine reader, instead of from
+// Markdown session files. A Markdown file is a claim; a receipt is a fact.
+//
+// NO BACKFILL: only receipts emitted from wiring time forward count, so this mode reads
+// `insufficient evidence` today and that is the correct answer — a backfill would invent
+// calibration from sessions that were never scored.
+//
+// The Markdown path below is unchanged and remains the default, because it is what the existing
+// corpus and `council-lint` share; spine mode becomes the default once real receipts exist.
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -45,6 +55,19 @@ if (todayIdx >= 0 && (!todayArg || todayArg.startsWith("--"))) {
   process.exit(1);
 }
 const todayValIdx = todayIdx >= 0 ? todayIdx + 1 : -1;
+if (argv.includes("--from-spine")) {
+  // Imported lazily so the Markdown path keeps working in a consumer repo that installed
+  // `council` without `hq` — the module graph must not require the spine unless spine mode is
+  // actually asked for. (The design-suite sandbox taught this lane that a load-time dependency
+  // on another product breaks every install that does not carry it.)
+  const { spineRoot } = await import("../hq/lib/spine-io.mjs");
+  const { query } = await import("../hq/spine.mjs");
+  const { calibrate, renderCalibration } = await import("../evolve/calibrate.mjs");
+  const { events } = await query(spineRoot(), {});
+  console.log(renderCalibration(calibrate(events.map((r) => r.event))));
+  process.exit(0);
+}
+
 const dir = argv.find((a, i) => !a.startsWith("--") && i !== todayValIdx) || "docs/council/sessions";
 
 function sessionFiles(d) {

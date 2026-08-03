@@ -27,6 +27,10 @@ export const KINDS = Object.freeze([
   "incident.raised", "redaction.applied", "day.closed", "note.logged",
   "develop.started", "slice.done", "handoff.ready", "slice.stuck",
   ...EXPERIMENT_KINDS,
+  // 30 -> 31 by ADR-0310: the council's terminal outcome. `council.verdict` records the CALL and
+  // already existed (0 emitted); this records what actually happened, which is a distinct later
+  // fact and therefore its own kind per ADR-0304's one-kind-per-lifecycle-step rule.
+  "council.outcome",
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -190,6 +194,47 @@ function assertDecision(event) {
     throw new SpineError("BAD_DECISION", `decision.idem must be sha256("decision.recorded|"+decides) -- a decision's idem is bound to the approval it decides`);
 }
 
+// The council measuring ITSELF (ADR-0307/0310). Two kinds, both closed:
+//
+//   council.verdict  -- the CALL, with the confidence bucket it was made at
+//   council.outcome  -- what actually happened, recorded later
+//
+// Both payloads are closed for the reason ADR-0304 gives: calibration is computed from these
+// fields, so if the Brier score reads it, a validator asserts it. `unresolved` is a first-class
+// outcome and NOT a miss — a session nobody followed up on is not a session the council got
+// wrong, and scoring it as 0 would manufacture a calibration number out of an absence.
+const COUNCIL_CONFIDENCE = new Set(["High", "Medium", "Low"]);
+const COUNCIL_CALLS = new Set(["proceed", "hold"]);
+const COUNCIL_OUTCOMES = new Set(["happened", "did-not-happen", "unresolved"]);
+const SESSION_ID_RE = /^c-[A-Za-z0-9._-]{1,64}$/;
+
+function assertCouncil(event) {
+  const p = event.payload;
+  const allowed = event.kind === "council.verdict"
+    ? ["session_id", "question_hash", "call", "confidence"]
+    : ["session_id", "outcome", "observed_at", "source_id"];
+  for (const k of Object.keys(p))
+    if (!allowed.includes(k)) throw new SpineError("BAD_COUNCIL", `${event.kind} payload has unknown key "${k}" (closed to ${allowed.join("|")})`);
+  for (const k of allowed)
+    if (!(k in p)) throw new SpineError("BAD_COUNCIL", `${event.kind} payload is missing "${k}"`);
+  if (typeof p.session_id !== "string" || !SESSION_ID_RE.test(p.session_id))
+    throw new SpineError("BAD_COUNCIL", `session_id ${JSON.stringify(p.session_id)} must be c-<token>`);
+  if (event.kind === "council.verdict") {
+    if (typeof p.question_hash !== "string" || !HEX64.test(p.question_hash))
+      throw new SpineError("BAD_COUNCIL", "question_hash must be a lowercase sha256 hex");
+    if (!COUNCIL_CALLS.has(p.call)) throw new SpineError("BAD_COUNCIL", `call ${JSON.stringify(p.call)} is outside ${[...COUNCIL_CALLS].join("|")} (exact case)`);
+    // Case-EXACT, matching ADR-0009's buckets. "high" is not "High": a normalised bucket is a
+    // bucket whose probability was chosen by the normaliser rather than by the juror.
+    if (!COUNCIL_CONFIDENCE.has(p.confidence)) throw new SpineError("BAD_COUNCIL", `confidence ${JSON.stringify(p.confidence)} is outside ${[...COUNCIL_CONFIDENCE].join("|")} (exact case)`);
+  } else {
+    if (!COUNCIL_OUTCOMES.has(p.outcome)) throw new SpineError("BAD_COUNCIL", `outcome ${JSON.stringify(p.outcome)} is outside ${[...COUNCIL_OUTCOMES].join("|")} (exact case)`);
+    if (typeof p.observed_at !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.observed_at))
+      throw new SpineError("BAD_COUNCIL", "observed_at must be YYYY-MM-DD");
+    if (typeof p.source_id !== "string" || !/^([A-Za-z0-9][A-Za-z0-9._-]{0,63}|h-[0-9a-f]{16})$/.test(p.source_id))
+      throw new SpineError("BAD_COUNCIL", "source_id must be an opaque token or the h-<16 hex> hashed form");
+  }
+}
+
 // Throws SpineError on the first violation. The caller decides what a violation MEANS
 // (exit 2 vs quarantine) -- this function never knows which mode it is running in.
 export function validateEvent(event) {
@@ -232,6 +277,7 @@ export function validateEvent(event) {
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);
+  if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

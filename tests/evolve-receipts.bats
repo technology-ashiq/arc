@@ -99,13 +99,18 @@ _kinds() {
   [ "$(_event_lines)" -eq 0 ]
 }
 
-@test "the closed vocabulary reports its own size, and it is 30" {
+@test "the closed vocabulary reports its OWN size, whatever that size currently is" {
   _fresh_spine kindcount
+  # ADR-0309 predicted this drift by name: "anything that hardcodes 22 will drift". The first
+  # version of this test hardcoded 30 and went stale the moment ADR-0310 added council.outcome.
+  # So the expected number is READ FROM KINDS rather than typed -- the assertion is that the
+  # message reports the real size, which is what it was always meant to be.
+  local n
+  n="$(cd "$ARC_ROOT" && node --input-type=module -e 'const {KINDS} = await import("./.claude/scripts/hq/lib/validate.mjs"); console.log(KINDS.length);')"
+  [ -n "$n" ]
   run bash "$EVENT" emit not.akind --payload '{}' --strict
   [ "$status" -eq 2 ]
-  # The count in the message is derived from KINDS.length, never typed — a gate that
-  # misreports its own size teaches the wrong rule (ADR-0107).
-  [[ "$output" == *"outside the closed 30"* ]]
+  [[ "$output" == *"outside the closed $n"* ]]
 }
 
 # ---------- closed payloads ----------

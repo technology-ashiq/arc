@@ -11,6 +11,7 @@
     ".claude/scripts/evolve/arc-evolve.mjs",
     ".claude/scripts/evolve/assign.mjs",
     ".claude/scripts/evolve/board.mjs",
+    ".claude/scripts/evolve/calibrate.mjs",
     ".claude/scripts/evolve/canon.mjs",
     ".claude/scripts/evolve/lineage.mjs",
     ".claude/scripts/evolve/verdict.mjs"
