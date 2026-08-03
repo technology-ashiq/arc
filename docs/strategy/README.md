@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-02, evolve plan added)
+## File map & status (updated 2026-08-03, leads plan added)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (22 files) | **ACTIVE — the operational layer** | Kickoff-ready: 9 full PLANs + 12 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (22 files) | **ACTIVE — the operational layer** | Kickoff-ready: 10 full PLANs + 11 BRIEFs + ordering/triggers in `plans/README.md` |
 | `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -27,6 +27,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | `records/arc-money-engine-plan.md` | Record | Original idea scoring (pain-mining 9 · leads-service 8.5 · SaaS factory 8 · video 6/8 · trading 2) and monetization logic. Sequencing superseded by the master plan |
 | ~~`arc-cycle2-receipt-spine-PLAN-v2.md`~~ | **MOVED → `docs/archive/`** | Superseded by `plans/PLAN-cycle2-receipt-spine-v2.1.md`; kept in archive for history — never feed the v2 to a kickoff |
 | ~~`plans/BRIEF-evolve.md`~~ | **MOVED → `docs/archive/`** (2026-08-02) | Superseded by `plans/PLAN-evolve.md`; kept in archive for history — never feed the brief to a kickoff (its auto-revert rule was owner-overturned; the plan is the design source) |
+| ~~`plans/BRIEF-leads.md`~~ | **MOVED → `docs/archive/`** (2026-08-03) | Superseded by `plans/PLAN-leads.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: PII/store/HMAC/journal rules exist only in the plan) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -84,6 +85,23 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     CLIENT's cycle — growth's future plan inherits it; without EVO-H0 the trigger is
     technically impossible (closed KINDS, ADR-0026).** `BRIEF-evolve.md` superseded →
     moved to `docs/archive/`.
+11. **2026-08-03:** `plans/PLAN-leads.md` added (leads v1 — the outbound engine:
+    ICP → 25 evidence-dossiered leads, personalization lint with a BELOW-BAR class +
+    cross-draft similarity guard, hard caps + suppression ledger enforced in code with
+    send-moment re-checks, crash-safe two-phase send journal with SPINE-FIRST recovery,
+    provider idempotency keys, L1 inbox approval SHA-bound to the exact draft, one real
+    campaign ≥25 sends/≥3 days; decisions LEA-A…M locked over 3 same-day owner-review
+    rounds — 27 rulings recorded in the file; ADR numbers at kickoff from the lane's
+    century band). Keeps its pull slot (trigger: a real, named offer needs outbound —
+    NOT fired at freeze; LexOS is pre-billing). **Hard rules that override any older
+    outbound text: lead PII never enters the repo (private store outside the tree +
+    keyed `lead_hmac_v1` ids — the repo goes public later) · every send human-approved
+    until the trial ledger earns more · no background scheduler (sequence advancement
+    is a human-started daily command; the scheduler module stays policy-engine-gated).
+    Cross-plan note on correction #10: EVO-H0 is pinned to the FIRST client's cycle —
+    if leads kicks off before growth, PLAN-leads' LEA-I ruling may take that obligation
+    (deviation to be recorded at that kickoff).** `BRIEF-leads.md` superseded → moved
+    to `docs/archive/`.
 
 ## Provenance
 
