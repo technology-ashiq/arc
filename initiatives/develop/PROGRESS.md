@@ -1,8 +1,8 @@
 # PROGRESS.md — Cycle 6 · arc-develop "The Developer" — the intelligence layers
 
-status: LIVE
-cycle: arc-develop Cycle 6 (opened 2026-08-02)
-phase: — all phases closed; cycle ready to merge
+status: IDLE
+cycle: arc-develop (Cycle 6, closed 2026-08-03)
+phase: — (cycle closed, merged as 17473e7 / PR #100)
 appetite: 7d
 burn: 2.1d
 blocked-on: —
