@@ -111,7 +111,7 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$status" -eq 0 ]
 }
 
-@test "REQ-05: an unavailable cost stays ABSENT — never zero, never estimated" {
+@test "REQ-05: an unavailable cost stays ABSENT - never zero, never estimated" {
   ARC_DRIVER_FAKE="$(FAKE good)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
   # No driver returns a rupee figure, so the spine's cost block (which REQUIRES inr_estimate)
@@ -190,7 +190,7 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$output" = "0" ]
 }
 
-@test "REQ-07: a clean run passes the scrub — the check is not simply always-on" {
+@test "REQ-07: a clean run passes the scrub - the check is not simply always-on" {
   ARC_DRIVER_FAKE="$(FAKE good)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
   [[ "$output" != *"secret"* ]]
