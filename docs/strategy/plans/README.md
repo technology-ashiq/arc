@@ -30,7 +30,7 @@
 | 1.57 | **Balanced Model Policy · pre-engine model discipline** | `PLAN-model-policy.md` | **After the arc-portfolio cycle (C4) closes + retro, BEFORE the develop kickoff** — owner-approved (2026-08-02); the policy ADR (decisions MP-A…F: provider-neutral seat tiers, model-fingerprint discipline, emergency fallback + exploratory-trial carve-outs) + council `standard` fixed envelope + paired composer A/B + calibration unblock + attacker reject trace. The policy layer the engine (#3) and `BRIEF-bench.md` later inherit — zero engine code |
 | 1.6 | **arc-develop · "The Developer"** | `PLAN-develop.md` | **After Cycle-2 close** — owner-scheduled (2026-07-28); the execution harness owning the build loop (plan-approval → phase-done) for every subsequent build incl. Cycle 3. **Kickoff runs AFTER arc-portfolio (1.55) — develop = first native lane** |
 | 2 | **Cycle 3 · First Money ([VENTURE] launch)** | `PLAN-cycle3-venture-launch.md` | After Cycle 2 · needs the venture decision (candidates + 10-min test inside) |
-| 3 | Model-agnostic foundation (engine + processes) | `PLAN-engine-process-layer.md` | Pull: public-prep / 2nd runtime need |
+| 3 | Model-agnostic foundation (engine + processes) | `PLAN-engine-process-layer.md` | Pull (plan v2 2026-08-02 — lane-era, ADR-0069-inherited): public-prep / provider event / 2nd-runtime need (third fires → amend 0069(d) first) |
 | 4 | discover v1 | `PLAN-discover.md` | Pull: next venture needed |
 | — | growth v1 | `BRIEF-growth.md` | Pull: live venture needs traffic |
 | — | leads v1 | `BRIEF-leads.md` | Pull: an offer needs outbound |
