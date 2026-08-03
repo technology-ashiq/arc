@@ -60,6 +60,36 @@ export function writeCost({ tokensIn, tokensOut, inr, source }) {
   writeFileSync(path, `${JSON.stringify(cost)}\n`, "utf8");
 }
 
+/**
+ * Parse a model's JSON answer, tolerating a fenced code block.
+ *
+ * FOUND BY THE FIRST REAL RUN, not by any of the 20 fixture tests: a live model answered
+ * with ```json ... ``` and JSON.parse died on the backtick. Every fake returned bare JSON,
+ * so the entire suite was green against an input shape real models do not reliably produce.
+ * Detection is tolerant, the value grammar stays strict -- the same rule the ledger parsers
+ * already follow (retro-log 2026-07-16).
+ */
+export function parseModelJson(text, what = "model output") {
+  let s = String(text).trim();
+  const fence = s.match(/^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/);
+  if (fence) s = fence[1].trim();
+  try {
+    return JSON.parse(s);
+  } catch (e) {
+    throw new Error(`${what} is not JSON: ${e.message}`);
+  }
+}
+
+/**
+ * The model this run is pinned to, supplied by arc-run from engine/router.yaml. When it is
+ * absent the driver runs UNPINNED and must say so: letting an environment variable choose
+ * the model is precisely the un-reviewed tier change ADR-0069 block (b)(1) forbids, and a
+ * receipt claiming a tier that nothing applied is a false claim in an append-only ledger.
+ */
+export function pinnedModel() {
+  return process.env.ARC_DRIVER_MODEL || null;
+}
+
 /** Load a recorded response for the fake path, or null when running for real. */
 export function fakeResponse(processName) {
   const dir = process.env.ARC_DRIVER_FAKE;

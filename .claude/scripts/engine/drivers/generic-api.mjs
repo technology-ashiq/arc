@@ -13,11 +13,13 @@
  * second kill criterion anticipates.
  */
 
-import { runDriver, settle } from "./common.mjs";
+import { parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 
 const ENDPOINT = process.env.ARC_LLM_ENDPOINT || "";
 const API_KEY = process.env.ARC_LLM_API_KEY || "";
-const MODEL = process.env.ARC_LLM_MODEL || "";
+// The router pins the model; ARC_LLM_MODEL is only a fallback for an UNROUTED run, and
+// an unrouted run is recorded as unpinned rather than quietly using whatever env says.
+const MODEL = pinnedModel() || process.env.ARC_LLM_MODEL || "";
 const TIMEOUT_MS = Number(process.env.ARC_LLM_TIMEOUT_MS || 60_000);
 const MAX_TRANSPORT_RETRIES = 2;
 
@@ -73,13 +75,13 @@ await runDriver("generic-api", async ({ processName, input }) => {
     throw new Error(`transport failed after ${MAX_TRANSPORT_RETRIES + 1} attempt(s): status ${last?.status ?? "none"}`);
   }
 
-  const envelope = JSON.parse(last.text);
+  const envelope = parseModelJson(last.text, "the endpoint envelope");
   const content = envelope?.choices?.[0]?.message?.content;
   if (typeof content !== "string") throw new Error("response envelope carried no message content");
 
   // The OUTPUT is returned unvalidated on purpose: judging it against the process schema is
   // arc-run's job, and a driver that pre-judges hides a process fault as a driver fault.
-  const output = JSON.parse(content);
+  const output = parseModelJson(content, "the model answer");
 
   const u = envelope.usage || {};
   return {
@@ -91,6 +93,7 @@ await runDriver("generic-api", async ({ processName, input }) => {
       // nobody maintains would be an estimate wearing a measurement's clothes (ADR-0069 b5).
       source: "measured",
     },
+    model: pinnedModel() ?? "unpinned",
   };
 });
 

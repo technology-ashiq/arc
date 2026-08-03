@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { runDriver, settle } from "./common.mjs";
+import { parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 import { parseYamlSubset } from "../yaml-subset.mjs";
 import { renderAllowedTools } from "../adapters/claude-code.mjs";
 
@@ -45,6 +45,9 @@ await runDriver("claude-code", async ({ processName, input }) => {
 
   const args = ["-p", prompt, "--output-format", "json"];
   if (allowed) args.push("--allowedTools", allowed);
+  // The tier reaches the model here, or the run is unpinned and the receipt says so.
+  const model = pinnedModel();
+  if (model) args.push("--model", model);
 
   let raw;
   try {
@@ -53,9 +56,9 @@ await runDriver("claude-code", async ({ processName, input }) => {
     throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
   }
 
-  const envelope = JSON.parse(raw);
+  const envelope = parseModelJson(raw, "the claude CLI envelope");
   const text = typeof envelope.result === "string" ? envelope.result : raw;
-  const output = JSON.parse(text);
+  const output = parseModelJson(text, "the claude CLI result");
 
   const u = envelope.usage || {};
   return {
@@ -65,6 +68,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
       tokensOut: Number.isFinite(u.output_tokens) ? u.output_tokens : undefined,
       source: "measured",
     },
+    model: pinnedModel() ?? "unpinned",
   };
 });
 

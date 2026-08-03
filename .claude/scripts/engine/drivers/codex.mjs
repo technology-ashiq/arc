@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { runDriver, settle } from "./common.mjs";
+import { parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 import { parseYamlSubset } from "../yaml-subset.mjs";
 import { render as renderCodex } from "../adapters/codex.mjs";
 
@@ -47,9 +47,9 @@ await runDriver("codex", async ({ processName, input }) => {
   // release and read as a model failure.
   const line = raw.trim().split("\n").filter(Boolean).pop() ?? "";
   let output;
-  try { output = JSON.parse(line); } catch { output = JSON.parse(raw); }
+  try { output = parseModelJson(line, "the codex last line"); } catch { output = parseModelJson(raw, "the codex output"); }
 
-  return { output, cost: { source: "measured" } };
+  return { output, cost: { source: "measured" }, model: pinnedModel() ?? "unpinned" };
 });
 
 settle();

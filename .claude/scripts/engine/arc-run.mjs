@@ -111,18 +111,45 @@ if (driverArg === "auto") {
 }
 if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
 
+// THE TIER MUST REACH THE DRIVER OR IT IS A LABEL. Without this the routed tier changed
+// nothing: `high-judgment` and `balanced-workhorse` produced byte-identical invocations, the
+// receipt asserted `model: tier:X` that nothing had applied, and the real model knob was a
+// run-time env var -- an un-reviewed tier change of exactly the kind ADR-0069 b1 forbids.
+// A driver with no router entry runs UNPINNED and the receipt says so, rather than quietly
+// inheriting whatever the environment holds.
+let pinnedModel = null;
+if (tier) {
+  const router = loadRouter();
+  pinnedModel = router?.models?.[tier]?.[driver] ?? null;
+}
+
 // ---------- budget ----------
+const BUDGET_KEYS = ["inr", "min"];
 function parseBudget(s) {
   const out = {};
   for (const part of String(s || "").split(",")) {
     if (!part.trim()) continue;
     const m = part.match(/^([a-z]+)=(\d+(?:\.\d+)?)$/);
     if (!m) { console.error(`arc-run: unparseable budget segment \`${part}\` (want inr=N or min=M)`); process.exit(2); }
-    out[m[1]] = Number(m[2]);
+    // An unknown key was silently accepted, so `--budget foo=99` ran unbounded with no
+    // warning; and a repeated key was silent last-wins, which `.claude/rules/lanes.md`
+    // calls an operator error rather than an override -- applied here to money.
+    if (!BUDGET_KEYS.includes(m[1])) { console.error(`arc-run: unknown budget key \`${m[1]}\` (known: ${BUDGET_KEYS.join(", ")})`); process.exit(2); }
+    if (m[1] in out) { console.error(`arc-run: budget key \`${m[1]}\` given twice — that is an operator error, not a last-wins override`); process.exit(2); }
+    const v = Number(m[2]);
+    if (!Number.isFinite(v) || v > 1e9) { console.error(`arc-run: budget ${m[1]}=${m[2]} is out of range`); process.exit(2); }
+    out[m[1]] = v;
   }
   return out;
 }
 const budget = parseBudget(budgetStr);
+// THE BUDGET IS A PROPERTY OF THE RUN, NOT OF AN ATTEMPT. Previously every fallback hop and
+// the retry each received a fresh FULL budget, so a `min=6s` run could legitimately take 4x
+// that (3 chain hops + 1 retry) while every individual attempt stayed "inside" its bound.
+const runStartedAt = Date.now();
+let inrSpent = 0;
+let attemptsMade = 0;
+const msRemaining = () => ("min" in budget ? Math.max(0, budget.min * 60_000 - (Date.now() - runStartedAt)) : undefined);
 // A zero (or negative) bound is a HARD stop before any spend, not a no-op. REQ-05 is that a
 // run which would exceed its budget is stopped and says so -- never silently continues.
 for (const k of ["inr", "min"]) {
@@ -166,10 +193,16 @@ function processIsSelfConsistent() {
  * sidecar, and the spine payload. Uses the SPINE'S OWN scanner, imported -- a second copy of
  * the deny-rules would be a copy that drifts from the rules the spine actually enforces.
  */
-function scrub(label, text) {
+function scrub(label, text, parsed) {
   if (!text) return;
   let verdict;
-  try { verdict = scanSecrets(String(text), { text: String(text) }); }
+  try {
+    // Pass the REAL parsed object. Handing scanSecrets a synthetic `{ text }` wrapper meant
+    // its structural layer only ever saw one key called "text" -- and that layer exists
+    // precisely because no textual rule ever matched `{"password":"..."}`. A short or
+    // space-bearing credential value evaded the only layer that was running.
+    verdict = scanSecrets(String(text), parsed !== undefined ? parsed : { text: String(text) });
+  }
   catch (e) { fail("secret-scan", `secret scan could not run over ${label}: ${e.message}`, { driver }); return; }
   if (verdict.hit) {
     fail("secret", `a secret matching rule \`${verdict.rule}\` appeared in ${label} — the artifact was NOT written and the run is stopped`, { driver, rule: verdict.rule });
@@ -221,7 +254,11 @@ function emitRun(payload) {
     "--process", `${doc.name}@${doc.version}`,
     "--outcome", payload.outcome === "ok" ? "ok" : "fail"];
   if (flag) args.push("--cost", flag);
-  if (tier) args.push("--model", `tier:${tier}`);
+  // The receipt records the model that was ACTUALLY used, never the tier label. A label
+  // here asserted a routing decision nothing had applied -- a false claim in an append-only
+  // ledger, which is worse than an absent one (ADR-0069 b5 / Constitution E3).
+  if (pinnedModel) args.push("--model", pinnedModel);
+  else if (tier) args.push("--model", "unpinned");
   let id = "";
   try {
     id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), ...args], { encoding: "utf8", cwd: root }).trim();
@@ -244,8 +281,12 @@ function verifyLanded(id) {
     return;
   }
   const day = new Date().toISOString().slice(0, 10);
-  const events = join(root, ".claude/state/hq/events", `${day}.jsonl`);
-  const quarantine = join(root, ".claude/state/hq/events/_quarantine");
+  // The emitter resolves ARC_SPINE_ROOT first (spine-io.mjs); hardcoding the repo path made
+  // every isolated run print a false "NOT in events/" alarm while the receipt sat sealed and
+  // correct elsewhere. A verifier that cries wolf on every green run is a verifier people mute.
+  const spineRoot = process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq");
+  const events = join(spineRoot, "events", `${day}.jsonl`);
+  const quarantine = join(spineRoot, "events/_quarantine");
   const inEvents = existsSync(events) && readFileSync(events, "utf8").includes(id);
   if (inEvents) return;
   let q = "";
@@ -260,10 +301,18 @@ function invoke(name) {
   if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null };
   const tmp = mkdtempSync(join(tmpdir(), "arc-run-"));
   const costFile = join(tmp, "cost.json");
-  const timeoutMs = "min" in budget ? budget.min * 60_000 : undefined;
+  const rem = msRemaining();
+  // Math.floor: a float `min` produced a non-integer timeout and spawnSync threw a raw
+  // RangeError before any scrub or receipt could run.
+  const timeoutMs = rem === undefined ? undefined : Math.max(1, Math.floor(rem));
   const res = spawnSync("bash", [sh, "run", processName, JSON.stringify(input), budgetStr], {
     encoding: "utf8", cwd: root, timeout: timeoutMs,
-    env: { ...process.env, ARC_DRIVER_COST_FILE: costFile, ARC_ROOT: root },
+    // arc-run defaulted to Node's 1 MiB while claude-code.mjs deliberately sets 64 MiB for
+    // the CLI it wraps -- so a large but perfectly valid answer was truncated and then
+    // blamed on the driver.
+    maxBuffer: 64 * 1024 * 1024,
+    killSignal: "SIGKILL",
+    env: { ...process.env, ARC_DRIVER_COST_FILE: costFile, ARC_ROOT: root, ARC_DRIVER_MODEL: pinnedModel ?? "" },
   });
   let cost = null;
   if (existsSync(costFile)) {
@@ -275,12 +324,18 @@ function invoke(name) {
 }
 
 function attempt(name) {
+  attemptsMade += 1;
   const r = invoke(name);
+  if (r.cost && Number.isFinite(r.cost.inr)) inrSpent += r.cost.inr;
   scrub(`the ${name} driver's stdout`, r.stdout);
   scrub(`the ${name} driver's transcript`, r.stderr);
-  if (r.cost) scrub(`the ${name} driver's cost sidecar`, JSON.stringify(r.cost));
+  if (r.cost) scrub(`the ${name} driver's cost sidecar`, JSON.stringify(r.cost), r.cost);
 
-  if (r.timedOut) return { ...r, verdict: "driver", why: `exceeded the ${budget.min}-minute budget` };
+  // A timeout is the BUDGET being spent, not the driver misbehaving. Classifying it as a
+  // driver fault made budget exhaustion trigger the fallback chain -- which then spent the
+  // budget again, per driver -- and made the receipt read `reason: driver`, so the promise
+  // that an over-budget run "reports a budget outcome" was false.
+  if (r.timedOut) return { ...r, verdict: "budget", why: `exceeded the ${budget.min}-minute budget for the RUN` };
   if (r.code === 2) return { ...r, verdict: "budget", why: r.stderr.trim() || "driver declined for budget" };
   if (r.code !== 0) return { ...r, verdict: "driver", why: r.stderr.trim() || `driver exited ${r.code}` };
 
@@ -298,12 +353,28 @@ if (dryRun) {
   process.exit(0);
 }
 
+// H2: the SEND path. All four scanned classes were on the RETURN path, so the one direction
+// that actually exfiltrates -- arc to a third-party endpoint -- had no scan at all. A secret
+// in --input (or in an @file that resolves outside the repo) was transmitted to the vendor
+// and the run then reported success.
+if (inputArg) scrub("--input (before anything is sent to a driver)", JSON.stringify(input), input);
+
 const selfCheck = processIsSelfConsistent();
 let a = attempt(driver);
 
 // Driver-fault fallback: try the next driver in the chain. NOT for a schema fault -- falling
 // back on a broken schema just fails three times instead of once, slower.
-while (a.verdict === "driver" && fallbacks.length) {
+// C3: the money bound is enforced AFTER each attempt, because no driver reports spend in
+// advance. Previously `inr` was read only by the <=0 pre-check and then handed to drivers
+// that discard it -- so `inr=1` and `inr=100000` were the same run.
+const overBudget = () => "inr" in budget && inrSpent > budget.inr;
+if (overBudget()) {
+  console.error(`arc-run: spent ${inrSpent} against an inr budget of ${budget.inr} — stopping, and NOT falling back`);
+  emitRun({ outcome: "fail", reason: "budget", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
+  process.exit(1);
+}
+
+while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbacks.length) {
   const next = fallbacks.shift();
   console.error(`arc-run: ${driver} reported a driver fault (${a.why}); falling back to ${next}`);
   driver = next;
@@ -321,9 +392,11 @@ if (a.verdict === "schema") {
   console.error(`arc-run: output failed the contract (${a.why}); retrying once on the same tier`);
   const retry = attempt(driver);
   if (retry.verdict === "ok") {
-    console.log(JSON.stringify(retry.output));
-    emitRun({ outcome: "ok", driver, attempts: 2, cost: retry.cost ?? undefined, fault_hint: "unknown" });
-    process.exit(0);
+    // Goes through the SAME path as a first-attempt success. Printing and emitting inline
+    // here is how the payload scrub got skipped on one of the two success paths -- a secret
+    // that only appears after JSON.parse (a \u-escaped key, invisible to a raw-text scan)
+    // reached stdout with exit 0.
+    succeed(retry);
   }
   // Rung 2: a PROPOSAL receipt, and then stop. No tier is changed here or anywhere.
   const faultHint = selfCheck.ok ? "driver" : "process";
@@ -354,8 +427,13 @@ if (a.verdict !== "ok") {
   fail("driver", a.why, { driver, fault_hint: "driver", cost: a.cost ?? undefined });
 }
 
-const payload = JSON.stringify(a.output);
-scrub("the spine payload", payload);
-console.log(payload);
-emitRun({ outcome: "ok", driver, attempts: 1, cost: a.cost ?? undefined, fault_hint: "unknown" });
-process.exit(0);
+succeed(a);
+
+/** The ONE way a run succeeds. Scrub, then print, then emit -- in that order, once. */
+function succeed(r) {
+  const payload = JSON.stringify(r.output);
+  scrub("the spine payload", payload, r.output);
+  console.log(payload);
+  emitRun({ outcome: "ok", driver, attempts: attemptsMade, cost: r.cost ?? undefined, fault_hint: "unknown", model: pinnedModel ?? "unpinned" });
+  process.exit(0);
+}

@@ -16,6 +16,31 @@
 
 version: 1
 
+# TIER -> CONCRETE MODEL, per driver. Without this block the tier was a LABEL: every class
+# invoked its driver byte-identically, `high-judgment` and `balanced-workhorse` produced the
+# same call, and the receipt's `model: tier:X` asserted something nothing had applied. That
+# also made "escalation never changes a tier at run time" vacuously true -- editing this file
+# did not change a tier either. Worse, the real knob was run-time env (ARC_LLM_MODEL), which
+# is exactly the un-reviewed tier change ADR-0069 block (b)(1) forbids.
+#
+# These values are ADR-0069 block (a)'s "Implementation v1 (claude, 2026-08-02)" table, which
+# already decided them. Encoding them here implements that policy; it decides nothing new,
+# which is block (d)'s north-star for this cycle.
+#
+# A driver whose model does NOT come from this file records `model: unpinned` on its receipt
+# rather than letting an environment variable escalate a run silently.
+models:
+  cheap-scan:
+    claude-code: haiku
+  balanced-workhorse:
+    claude-code: sonnet
+  high-judgment:
+    claude-code: opus
+  # codex and generic-api have no entry on purpose: ADR-0069's implementation v1 is a CLAUDE
+  # mapping, and inventing model ids for other vendors here would be exactly the new
+  # "which model where" fork this cycle is required not to make. Until a policy amendment
+  # names them, those drivers run unpinned and say so.
+
 # Tiers are provider-neutral by construction (Constitution A7). These names are the ones
 # ADR-0069 block (a) defines; process-lint FAILs if a tier appears here that block (a) does
 # not name, so this table cannot drift away from the policy it implements.
