@@ -91,7 +91,7 @@ _kinds() {
 
 # ---------- the vocabulary boundary ----------
 
-@test "metric.observed is STILL refused — it belongs to the client's cycle (ADR-0308)" {
+@test "metric.observed is STILL refused -- it belongs to the client's cycle (ADR-0308)" {
   _fresh_spine metric-observed
   run bash "$EVENT" emit metric.observed --payload '{"metric":"signup_conversion","value":1}' --strict
   [ "$status" -eq 2 ]
@@ -208,7 +208,7 @@ _kinds() {
   [[ "$output" == *"ttl_days"* ]]
 }
 
-@test "n_per_arm as a scalar is refused — it cannot express 'both arms above floor'" {
+@test "n_per_arm as a scalar is refused -- it cannot express 'both arms above floor'" {
   _fresh_spine scalarn
   run bash "$EVENT" emit experiment.verdict --payload \
     "$(printf '{"experiment_id":"x-hero-001","outcome":"verdict","bound":0.011,"delta":0.024,"n_per_arm":1900,"config_hash":"%s","metric_hash":"%s"}' "$SHA_CFG" "$SHA_MET")" --strict
@@ -246,7 +246,7 @@ _kinds() {
   [ "$a" != "$b" ]
 }
 
-@test "the same receipt emitted twice collides — one fact, one receipt" {
+@test "the same receipt emitted twice collides -- one fact, one receipt" {
   _fresh_spine idem-dup
   run bash "$EVENT" emit experiment.assigned --payload \
     '{"experiment_id":"x-hero-001","unit_id":"h-0123456789abcdef","arm":"+champion","cohort":"verdict"}' --strict
@@ -313,7 +313,7 @@ _kinds() {
 
 # ---------- corrections ride supersedes, never overwrite ----------
 
-@test "a correction to the SAME fact supersedes and lands — both lines stay on the spine" {
+@test "a correction to the SAME fact supersedes and lands -- both lines stay on the spine" {
   # The first version of this test changed window_end as well as the value, so it corrected a
   # DIFFERENT window and proved nothing. The fresh-agent pass showed a true correction — same
   # unit, same window, new value — was refused DUP_IDEM and could never land, while this test
@@ -405,7 +405,7 @@ _kinds() {
   [ -z "$fails" ] || { echo "TARGET_PATH FAILURES:"; echo "$fails" | tr '|' '\n'; false; }
 }
 
-@test "HOLE 8: module is bounded — a 63KB product name is refused" {
+@test "HOLE 8: module is bounded -- a 63KB product name is refused" {
   _fresh_spine bigmodule
   local big; big="$(printf 'a%.0s' $(seq 1 300))"
   run bash "$EVENT" emit experiment.opened --payload \

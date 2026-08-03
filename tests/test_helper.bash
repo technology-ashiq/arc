@@ -74,6 +74,15 @@ _arc_design_sandbox() {
   cp "$ARC_ROOT"/.claude/scripts/hq/arc-event.mjs "$SANDBOX/.claude/scripts/hq/"
   cp "$ARC_ROOT"/.claude/scripts/hq/spine.mjs     "$SANDBOX/.claude/scripts/hq/"
   cp "$ARC_ROOT"/.claude/scripts/hq/lib/*.mjs     "$SANDBOX/.claude/scripts/hq/lib/"
+  # hq has a LOAD-TIME dependency on core's ES modules (products/hq/manifest.json already
+  # declares `requires: ["core"]`): validate.mjs re-exports the variant grammar from
+  # core/variant-grammar.mjs, and validate-experiment.mjs imports the path and money-surface
+  # rules from core/evolve-manifest.mjs, so there is exactly one copy of each rather than a
+  # copy per product. A sandbox with core's .sh files but not its .mjs files is an INCOMPLETE
+  # install of hq: arc-event.mjs dies on import, emits nothing, and every downstream assertion
+  # fails for a reason that has nothing to do with the behaviour under test.
+  cp "$ARC_CORE_SRC"/*.mjs                        "$SANDBOX/.claude/scripts/core/" 2>/dev/null
+  cp "$ARC_CORE_SRC"/*.json                       "$SANDBOX/.claude/scripts/core/" 2>/dev/null
   cp "$ARC_ROOT"/.claude/hooks/PreToolUse-edit.d/10-design-critic.sh \
      "$SANDBOX/.claude/hooks/PreToolUse-edit.d/" 2>/dev/null
   cd "$SANDBOX" || return 1

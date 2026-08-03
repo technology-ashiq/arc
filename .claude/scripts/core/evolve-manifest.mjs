@@ -357,11 +357,19 @@ function checkPromoteVia(promoteVia, ctx, out, probe) {
   const seen = new Map(); // lower-cased path -> the spelling first seen
   for (const p of promoteVia) {
     if (!checkTargetPath(p, ctx, out)) continue;
-    if (!resolveAndRefuse(p, ctx, out, probe)) continue;
-    // Dedup case-INSENSITIVELY: on NTFS and APFS `hero.tsx` and `HERO.tsx` are one file, and an
-    // allowlist that counts them as two entries has already lost track of what it allows.
+    // Dedup BEFORE resolving, and case-INSENSITIVELY. Both halves are deliberate:
+    //  * before — otherwise the message depends on the filesystem. On NTFS/APFS `HERO.tsx`
+    //    resolves to `hero.tsx` and the duplicate is reported; on Linux it simply does not
+    //    exist and the operator is told "target does not exist", which is a different and much
+    //    less useful thing to be told about the same mistake. One manifest, one verdict, on all
+    //    three CI legs.
+    //  * case-insensitively — on NTFS and APFS the two spellings are one file, and an allowlist
+    //    that counts them as two entries has already lost track of what it allows. On Linux they
+    //    could legitimately be two files; refusing that pair anyway costs a vanishingly rare
+    //    spelling and buys a manifest that means the same thing everywhere.
     const key = p.toLowerCase();
     if (seen.has(key)) { out.push(`${ctx} lists the same file twice: ${seen.get(key)} and ${p}`); continue; }
     seen.set(key, p);
+    resolveAndRefuse(p, ctx, out, probe);
   }
 }
