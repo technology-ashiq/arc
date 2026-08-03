@@ -53,3 +53,7 @@ revert and re-do it properly.
 **5. Churn is narrower than the criterion read literally** — a renamed file's commits split
 across two names and may miss the top 3. The pass noted the omission is printed and pinned,
 "which is the right way to narrow something". Carried forward in `## Now`.
+
+The agent's verdict, as its last line, recorded verbatim so the metrics deriver reads what it emitted rather than a paraphrase of it:
+
+FIDELITY: drift found

@@ -23,6 +23,14 @@ import { join } from "node:path";
 import { PREDICTION_FIELDS, VERDICTS, isFilled, parseLedger } from "./ledger.mjs";
 import { INVENTED_DURATION } from "./quality.mjs";
 
+/**
+ * Filled, for a SUGGESTION field. Deliberately not `isFilled`, whose denylist treats "none"
+ * as empty -- and `deletion-opportunity: none` is the honest answer to "what does this let us
+ * delete?". quality.mjs already learned this; using the other one here made the same field a
+ * false BLOCK in one file and legal in the other.
+ */
+const said = (v) => String(v ?? "").trim().replace(/^[*_`]+/, "").replace(/[*_`]+$/, "").length > 0;
+
 /** Round to at most 2 decimals without inventing precision: 0.75 stays 0.75, 1.0 becomes 1. */
 const num = (n) => Math.round(n * 100) / 100;
 
@@ -48,17 +56,47 @@ function ledgers(tracker) {
 }
 
 /** Every spine event, oldest first. The spine is flat: `.claude/state/hq/events/<date>.jsonl`. */
-function spine(root) {
+function spine(root, lane) {
   const dir = join(root, ".claude", "state", "hq", "events");
   if (!isDir(dir)) return null;
   const out = [];
+  const seen = new Set();
+  let torn = 0, dupes = 0;
   for (const f of listSafe(dir).filter((f) => f.endsWith(".jsonl")).sort()) {
     for (const line of (readSafe(join(dir, f)) ?? "").split("\n")) {
       if (!line.trim()) continue;
-      try { out.push(JSON.parse(line)); } catch { /* a torn line is not a crash */ }
+      let e;
+      // A torn line is not a crash -- but it IS a missing receipt, and silently dropping it
+      // moved every outcome number in the flattering direction with no marker anywhere.
+      try { e = JSON.parse(line); } catch { torn++; continue; }
+      // One restored backup, export or merge-conflict copy of an events file doubled every
+      // count. The spine already writes an id; dedup on it, and on the whole line otherwise.
+      const key = e && (e.id ?? e.idem) ? String(e.id ?? e.idem) : line.trim();
+      if (seen.has(key)) { dupes++; continue; }
+      seen.add(key);
+      out.push(e);
     }
   }
-  return out;
+  // Lane, because every lane numbers its phases 00, 01, ... A repo-global read paired one
+  // lane's start with another lane's first done, and counted another lane's backstop firings.
+  const events = lane ? out.filter((e) => !e?.payload?.lane || e.payload.lane === lane) : out;
+  // FILE order is not time order. "first slice.done" meant first written, so a receipt
+  // appended out of order made the elapsed time whatever the append order happened to be.
+  events.sort((a, b) => (Date.parse(a?.ts ?? "") || 0) - (Date.parse(b?.ts ?? "") || 0));
+  events.torn = torn;
+  events.dupes = dupes;
+  return events;
+}
+
+/** A phase id, normalised. `0` is falsy and `"1"` is not `"01"`; both lost a real pair. */
+const phaseKey = (v) => (v === undefined || v === null || v === "" ? null : String(v).padStart(2, "0"));
+
+/** An ISO instant with an explicit zone. A naive timestamp is read in the MACHINE's zone, so
+ *  the same committed records gave three answers on three machines -- one of them a number. */
+function instant(ts) {
+  const s = String(ts ?? "");
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(s)) return NaN;
+  return Date.parse(s);
 }
 
 // ---------------------------------------------------------------------------
@@ -78,10 +116,23 @@ function escapedSpecMisses(tracker) {
   if (!isDir(evDir)) return absent("escaped-spec-misses", "no evidence directory — nothing has been handed off yet");
   let reports = 0, drifted = 0;
   for (const phase of listSafe(evDir)) {
+    // Only phase packs. Any child of evidence/ was scanned, so an archive copy of a report
+    // counted as a second escaped miss.
+    if (!/^phase-\d+$/i.test(phase)) continue;
     const text = readSafe(join(evDir, phase, "spec-fidelity.md"));
     if (text === null) continue;
     reports++;
-    if (/FIDELITY:\s*drift found/i.test(text)) drifted++;
+    // The VERDICT LINE, unfenced, anchored, and the LAST one -- a bare search over the whole
+    // file counted a fenced example of a drifted report, and counted the sentence
+    // "No FIDELITY: drift found anywhere in this diff" as drift.
+    let fence = false, verdict = null;
+    for (const line of text.split(/\r?\n/)) {
+      if (/^[ \t]*(```|~~~)/.test(line)) { fence = !fence; continue; }
+      if (fence) continue;
+      const m = line.match(/^[ \t>*_]*FIDELITY:[ \t]*(drift found|clean)\b/i);
+      if (m) verdict = m[1].toLowerCase();
+    }
+    if (verdict === "drift found") drifted++;
   }
   if (!reports) return absent("escaped-spec-misses", "no spec-fidelity report has been filed in any evidence pack");
   return derived("escaped-spec-misses", drifted, "phases", `${drifted} of ${reports} filed fidelity report(s) found drift`);
@@ -91,7 +142,9 @@ function escapedSpecMisses(tracker) {
 function reworkStuck(events) {
   if (events === null) return absent("rework-stuck", "no spine at .claude/state/hq/events — receipts are where this is recorded");
   const stuck = events.filter((e) => e && e.kind === "slice.stuck");
-  const byBackstop = {};
+  // Object.create(null): a backstop named `constructor` or `toString` printed JS source into
+  // the report and vanished from the breakdown while still counting in the total.
+  const byBackstop = Object.create(null);
   for (const e of stuck) {
     const b = e.payload?.backstop ?? "unnamed";
     byBackstop[b] = (byBackstop[b] ?? 0) + 1;
@@ -110,13 +163,17 @@ function timeToFirstProven(events) {
   if (events === null) return absent("time-to-first-proven-slice", "no spine at .claude/state/hq/events — receipts carry the timestamps");
   const started = new Map();
   const firstDone = new Map();
+  let unreadableTs = 0;
   for (const e of events) {
-    if (!e || !e.ts) continue;
-    const t = Date.parse(e.ts);
-    if (Number.isNaN(t)) continue;
-    const phase = e.payload?.phase;
-    if (e.kind === "develop.started" && phase && !started.has(phase)) started.set(phase, t);
-    if (e.kind === "slice.done" && phase && !firstDone.has(phase)) firstDone.set(phase, t);
+    if (!e) continue;
+    const t = instant(e.ts);
+    if (Number.isNaN(t)) { if (e.kind === "develop.started" || e.kind === "slice.done") unreadableTs++; continue; }
+    const phase = phaseKey(e.payload?.phase);
+    if (!phase) continue;
+    // The LAST start, not the first: a restarted phase was measured from the abandoned run.
+    if (e.kind === "develop.started") started.set(phase, t);
+    // Events are time-sorted, so the first done seen is the earliest done.
+    if (e.kind === "slice.done" && !firstDone.has(phase)) firstDone.set(phase, t);
   }
   const spans = [];
   for (const [phase, t0] of started) {
@@ -125,14 +182,26 @@ function timeToFirstProven(events) {
     spans.push([phase, Math.round((t1 - t0) / 60000)]);
   }
   if (!spans.length) {
+    // The reason must describe what is actually wrong. "No develop.started has landed" was
+    // printed when one had landed with an unreadable timestamp, which blames a missing record
+    // for a malformed one and sends the reader to the wrong place.
+    if (unreadableTs) {
+      return absent("time-to-first-proven-slice",
+        `${unreadableTs} receipt(s) carry a timestamp with no explicit timezone — a naive instant is read in the reading machine's zone, so it is refused rather than guessed`);
+    }
     return absent("time-to-first-proven-slice",
       started.size
         ? "a develop.started receipt exists but no slice.done carries the same phase — the pair is what makes this measurable"
         : "no develop.started receipt has landed");
   }
-  const mean = spans.reduce((a, [, m]) => a + m, 0) / spans.length;
-  return derived("time-to-first-proven-slice", mean, "minutes",
-    `mean of ${spans.length} phase(s): ${spans.map(([p, m]) => `phase ${p} ${m}m`).join(", ")}`);
+  // The MEDIAN, not the mean. One receipt with a wrong year produced 26,297,340 minutes and
+  // presented it in the same shape as a real figure; a median survives a single bad record,
+  // and every per-phase number is printed beside it so an outlier is visible rather than baked in.
+  const sorted = spans.map(([, m]) => m).sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  return derived("time-to-first-proven-slice", median, "minutes",
+    `median of ${spans.length} phase(s): ${spans.map(([p, m]) => `phase ${p} ${m}m`).join(", ")}`);
 }
 
 /**
@@ -145,23 +214,40 @@ function timeToFirstProven(events) {
 function falseBlockRate(root) {
   const text = readSafe(join(root, "docs", "trial-ledger.md"));
   if (text === null) return absent("false-block-rate", "no docs/trial-ledger.md — adjudicated firings are recorded there");
-  let logged = 0, falsePositives = 0;
+  let logged = 0, falsePositives = 0, unadjudicated = 0, fence = false, adjCol = -1;
   for (const line of text.split(/\r?\n/)) {
-    // Outer pipes dropped first. Leaving them made the last cell the empty string after the
-    // trailing `|`, so the adjudication was never read and every rate came back 0 — a metric
-    // reporting a clean record it had not looked at.
+    // Fenced rows are a how-to block, not a record. Everything else in this file tracks
+    // fences; this did not, and a two-row example in a fence became two logged runs.
+    if (/^[ \t]*(```|~~~)/.test(line)) { fence = !fence; continue; }
+    if (fence) continue;
     const cells = line.split("|").map((c) => c.trim())
       .filter((c, i, a) => !(c === "" && (i === 0 || i === a.length - 1)));
-    if (cells.length < 5) continue;
+    if (cells.length < 2) continue;
+    // The adjudication column is found by HEADER NAME, not assumed last. Adding a `notes`
+    // column silently zeroed the metric — a perfect gate record derived from a ledger saying
+    // the gate was wrong every time.
+    const named = cells.findIndex((c) => /^adjudicat/i.test(c));
+    if (named >= 0) { adjCol = named; continue; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(cells[0])) continue;      // a dated run row
+    const verdict = (adjCol >= 0 && adjCol < cells.length ? cells[adjCol] : cells[cells.length - 1])
+      .replace(/^[*_`]+/, "");
+    // A row nobody has adjudicated is not evidence of a clean record. Counting it in the
+    // denominator is how a ledger holding "unadjudicated, leaning false" produced a rate of 0.
+    if (/^(unadjudicated|n\/a|—|-)\b/i.test(verdict) || verdict === "") { unadjudicated++; continue; }
     logged++;
-    // "false positive" as the adjudication's verdict, not merely the words appearing in prose:
-    // the ledger's own entries discuss false positives at length while recording true ones.
-    if (/^\**false[- ]positive/i.test(cells[cells.length - 1])) falsePositives++;
+    // The verdict TOKEN, so "false positives were ruled out; this is a TRUE positive" is not
+    // read as a false positive. A prefix match on a sentence is not a verdict.
+    if (/^false[- ]positive\b/i.test(verdict)) falsePositives++;
   }
-  if (!logged) return absent("false-block-rate", "the trial ledger logs no dated gate run yet");
+  const note = unadjudicated ? `; ${unadjudicated} row(s) are unadjudicated and are in neither number` : "";
+  if (!logged) {
+    return absent("false-block-rate",
+      unadjudicated
+        ? `every logged row is unadjudicated (${unadjudicated}) — an unadjudicated firing is not evidence of a clean record`
+        : "the trial ledger logs no dated gate run yet");
+  }
   return derived("false-block-rate", falsePositives / logged, "ratio",
-    `${falsePositives} adjudicated false positive(s) in ${logged} logged run(s)`);
+    `${falsePositives} adjudicated false positive(s) in ${logged} adjudicated run(s)${note}`);
 }
 
 /**
@@ -172,6 +258,14 @@ function falseBlockRate(root) {
  * slices it was pointed at.
  */
 function evidenceCompleteness(all) {
+  // A ledger with parse errors is a ledger this cannot count. A malformed slice id, a
+  // duplicate id and an unterminated fence each dropped slices, and every one of them moved
+  // the number in the flattering direction.
+  const broken = all.filter((l) => (l.errors ?? []).length);
+  if (broken.length) {
+    return absent("evidence-completeness",
+      `${broken.length} ledger(s) do not parse cleanly (${broken.map((l) => l.file).join(", ")}) — slices they dropped would count as if they did not exist`);
+  }
   let ticked = 0, complete = 0;
   for (const led of all) {
     for (const s of led.slices ?? []) {
@@ -195,6 +289,11 @@ function evidenceCompleteness(all) {
  * new receipt kind and therefore a new ADR.
  */
 function ceremonyCost(tracker, all, events) {
+  const broken = all.filter((l) => (l.errors ?? []).length);
+  if (broken.length) {
+    return absent("ceremony-cost",
+      `${broken.length} ledger(s) do not parse cleanly (${broken.map((l) => l.file).join(", ")}) — the denominator would be wrong`);
+  }
   const proven = all.reduce((n, led) =>
     n + (led.slices ?? []).filter((s) => isFilled(s.fields?.result) && isFilled(s.fields?.commit)).length, 0);
   if (!proven) return absent("ceremony-cost", "no slice is proven yet — the denominator is zero");
@@ -217,9 +316,13 @@ function ceremonyCost(tracker, all, events) {
 }
 
 /** All six, in a fixed order, computed or absent. */
-export function metrics(root, tracker) {
+export function metrics(root, tracker, lane = null) {
   const all = ledgers(tracker);
-  const events = spine(root);
+  const events = spine(root, lane);
+  if (events && (events.torn || events.dupes)) {
+    // Surfaced, never swallowed: a dropped receipt improves every outcome number.
+    events.note = `${events.torn} torn and ${events.dupes} duplicate line(s) in the spine were skipped`;
+  }
   return [
     escapedSpecMisses(tracker),
     reworkStuck(events),
@@ -242,14 +345,24 @@ export function metrics(root, tracker) {
  * than the parser underneath it" is actionable, and "70%" is not.
  */
 export function calibration(tracker) {
-  const byField = {};
+  // Object.create(null): a score keyed `constructor` did not create a bucket (the key already
+  // existed on Object.prototype), so the total counted it and the breakdown did not — and the
+  // increment wrote NaN onto the global Object function.
+  const byField = Object.create(null);
   const totals = Object.fromEntries(VERDICTS.map((v) => [v, 0]));
+  const unreadable = [];
   const phases = [];
   for (const led of ledgers(tracker)) {
     let scored = 0;
     for (const [field, value] of Object.entries(led.scores ?? {})) {
-      const verdict = String(value).trim().split(/[\s—–-]+/)[0]?.toLowerCase();
-      if (!VERDICTS.includes(verdict)) continue;
+      // Only the known prediction fields. A note left in the scores section became calibration
+      // data, and the returned `fields` list still advertised the five real ones.
+      if (!PREDICTION_FIELDS.includes(field)) continue;
+      // The whole first token, anchored. `hit-and-miss` split to `hit` and was counted as a
+      // clean hit; `hits` and `missed` were dropped in silence.
+      const m = String(value).trim().match(/^([A-Za-z]+)\b/);
+      const verdict = m ? m[1].toLowerCase() : "";
+      if (!VERDICTS.includes(verdict)) { unreadable.push(`${led.file}:${field}`); continue; }
       byField[field] ??= Object.fromEntries(VERDICTS.map((v) => [v, 0]));
       byField[field][verdict]++;
       totals[verdict]++;
@@ -258,7 +371,9 @@ export function calibration(tracker) {
     if (scored) phases.push({ phase: led.phase, scored });
   }
   const total = VERDICTS.reduce((n, v) => n + totals[v], 0);
-  return { ...totals, total, phases, byField, fields: PREDICTION_FIELDS };
+  // A score nobody could read is reported, not dropped: a calibration record that silently
+  // omits what it could not parse is a record of the scores that happened to be well-formed.
+  return { ...totals, total, phases, byField, fields: PREDICTION_FIELDS, unreadable };
 }
 
 // ---------------------------------------------------------------------------
@@ -297,7 +412,9 @@ export function validateSuggestions(text) {
   }
 
   for (const sec of sections.filter((s) => !s.closed)) {
-    if (!/\bboundary\b/i.test(sec.rest)) {
+    // The heading must NAME a slice and END at its boundary. Testing for the word anywhere
+    // let `### Suggestions — raised mid-slice, nowhere near a boundary` through.
+    if (!/\bslice[ \t]*:?[ \t]*[0-9][0-9a-z-]*[ \t]+boundary[ \t]*$/i.test(sec.rest.trim())) {
       fails.push({ at: sec.at, msg: `a Suggestions section that is not at a slice boundary — suggestions batch at boundaries only, because an interruption mid-slice is a cost paid on every slice for a benefit that lands on few` });
     }
     const body = sec.body.join("\n");
@@ -313,7 +430,7 @@ export function validateSuggestions(text) {
     for (const it of items) {
       const f = it.fields ?? {};
       for (const k of SUGGESTION_FIELDS) {
-        if (!isFilled(f[k])) {
+        if (!said(f[k])) {
           fails.push({ at: sec.at, id: it.id, msg: `suggestion ${it.id} has no \`${k}:\`` + (k === "default" ? " — a default is what makes declining cost one word" : "") });
         }
       }
@@ -329,9 +446,9 @@ export function validateSuggestions(text) {
 }
 
 /** The report `develop-lint --metrics` prints. */
-export function renderMetrics(root, tracker) {
+export function renderMetrics(root, tracker, lane = null) {
   const out = ["Outcome metrics — computed from committed records, or not at all", ""];
-  for (const m of metrics(root, tracker)) {
+  for (const m of metrics(root, tracker, lane)) {
     out.push(m.value === null
       ? `  ${m.name}: not derivable — ${m.reason}`
       : `  ${m.name}: ${m.value}${m.unit && m.unit !== "ratio" ? " " + m.unit : ""} — ${m.reason}`);

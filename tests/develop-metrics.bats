@@ -204,7 +204,11 @@ LED
 @test "each of the five tags in the vocabulary passes" {
   local t="$BATS_TEST_TMPDIR/tagok" tag
   for tag in pattern anti-pattern library-verdict fix-recipe common-mistake; do
-    rm -rf "$t"; mkdir -p "$t/docs/develop"
+    rm -rf "$t"; mkdir -p "$t/docs/develop" "$t/tests/fixtures/develop-evals/withheld"
+    printf "expect: flagged
+
+held out
+" > "$t/tests/fixtures/develop-evals/withheld/F-901.md"
     cat > "$t/docs/develop/learning-ledger.md" <<LED
 # Learning ledger — fixture
 

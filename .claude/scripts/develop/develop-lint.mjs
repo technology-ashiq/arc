@@ -353,7 +353,7 @@ for (const file of ledgerFiles) {
 // stops being read. Asking for it is the point at which someone is going to act on it.
 if (process.argv.includes("--metrics")) {
   const { renderMetrics } = await import("./metrics.mjs");
-  for (const line of renderMetrics(root, troot)) say(line);
+  for (const line of renderMetrics(root, troot, r.mode === "root" ? null : r.lane)) say(line);
   say("");
 }
 
