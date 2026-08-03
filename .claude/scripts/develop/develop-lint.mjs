@@ -50,7 +50,11 @@ const warn = (group, where, what, expected, found, example) => {
   warnings.push({ group, where, what, expected, found, example });
 };
 const render = (f, kind) => {
-  say(`${kind} [${f.group}] ${f.where} — ${f.what}`);
+  // ADR-0101: a trial gate always says so. develop-lint declared a TRIAL set from v1 and never
+  // marked its output, so a WARN-first check was indistinguishable from a promoted one — and
+  // the trial ledger's whole premise is that a reader can tell which is which.
+  const trial = kind.trim() === "WARN" && TRIAL.has(f.group) ? " [trial]" : "";
+  say(`${kind} [${f.group}] ${f.where} — ${f.what}${trial}`);
   if (f.expected !== undefined) say(`  Expected: ${f.expected}`);
   if (f.found !== undefined) say(`  Found:    ${f.found}`);
   if (f.example !== undefined) say(`  Example:  ${f.example}`);
@@ -59,8 +63,16 @@ const render = (f, kind) => {
 // ---------- WARN-first trial set (ADR-0101) ----------
 // A group leaves TRIAL only via docs/trial-ledger.md: fixture-proven + >=3 clean dogfood
 // runs with zero false positives + a retro sign-off. Promotion is deleting one line here.
-const TRIAL = new Set(["self-declared-number", "tier-floor"]);
-const SUBSTANCE = new Set(["self-declared-number", "tier-floor"]);
+const TRIAL = new Set(["self-declared-number", "tier-floor", "approach-sketch"]);
+const SUBSTANCE = new Set(["self-declared-number", "tier-floor", "approach-sketch"]);
+// [learning-row] and [pattern-annex] are structural, like the other three BLOCKs: a row
+// either carries its required fields or it does not. Neither is in TRIAL.
+//
+// [approach-sketch]'s COUNT is in trial and its CONTENT is not, which is the split the phase
+// spec asks for and is not a compromise. "This slice should have had sketches" is a judgement
+// about whether a path is risky, and a path glob is a heuristic; "this sketch prices itself in
+// months" is a fact about the text. A malformed sketch is worse than an absent one — it reads
+// as a weighed decision and is not — so it FAILs from v1 while the nudge stays a WARN.
 
 // ---------- CLI ----------
 const cli = parseLaneArgs(process.argv.slice(2));
@@ -105,13 +117,17 @@ for (const f of entries.filter((f) => !/^phase-\d+-tasks\.md$/i.test(f) && /task
 const specPhases = entries.filter((f) => /^phase-\d+-spec\.md$/i.test(f)).map((f) => f.match(/\d+/)[0]);
 const ledgerPhases = new Set(ledgerFiles.map((f) => f.match(/\d+/)[0]));
 
+// No slice ledger is a legitimate state, and it used to EXIT here — which silently skipped
+// every check that is not about slice ledgers. The learning ledger is a company organ: a
+// malformed row is malformed whether or not this lane has started a phase, and it was going
+// unchecked in exactly the repos most likely to have one and no phases. The message still
+// prints; the loops below simply have nothing to iterate.
 if (ledgerFiles.length === 0 && failures.length === 0) {
-  console.log(
+  say(
     specPhases.length
       ? `develop-lint: ${specPhases.length} phase spec(s) present, no slice ledger yet — run /arc-develop start <n>.`
       : "develop-lint: no slice ledger yet — nothing to check.",
   );
-  process.exit(0);
 }
 
 const sha256 = (buf) => createHash("sha256").update(buf).digest("hex");
@@ -251,6 +267,94 @@ for (const file of ledgerFiles) {
       }
     }
   }
+}
+
+// ---------- quality intelligence (Phase 07) ----------
+// Both checks are TRIGGERED, never ambient: an annex is owed only by a slice that declares a
+// decision, and sketches only by a slice whose own paths trip a risk glob. A gate that fires
+// on every slice costs on every slice and pays on few, which is the process tax this cycle's
+// plan ranks as its first risk.
+{
+  const { validateAnnex, validateSketches, qualityFileFor } = await import("./quality.mjs");
+  for (const file of ledgerFiles) {
+    const raw = readFileSync(join(phasesDir, file), "utf8");
+    // The annex and the sketches live in their OWN file. Inside the ledger, an approach block
+    // closed the slice it belonged to and dropped its fields into the brief namespace, so a
+    // perfectly valid pair of sketches produced seven `brief repeats key` BLOCKs.
+    const qPath = join(phasesDir, qualityFileFor(file));
+    const q = existsSync(qPath) ? readFileSync(qPath, "utf8") : "";
+
+    for (const f of validateAnnex(raw, q).fails) {
+      fail("pattern-annex", `${file}:${f.at}`, f.msg,
+        "every row carries a source and an adopted-or-rejected verdict, within 20 lines",
+        f.id ? `slice ${f.id}` : "the annex",
+        "| server-side cursors | https://… (primary docs) | adopted — bounded memory |");
+    }
+
+    // Suggestions live in the same quality file, for the same reason the sketches do.
+    const { validateSuggestions } = await import("./metrics.mjs");
+    for (const f of validateSuggestions(q).fails) {
+      fail("suggestion", `${qualityFileFor(file)}:${f.at}`, f.msg,
+        "evidence, economics in words and computed counts, and a default — at a slice boundary",
+        f.id ? `suggestion ${f.id}` : "the section",
+        "default: skip");
+    }
+
+    const { fails, warns } = validateSketches(raw, q);
+    for (const w of warns) {
+      warn("approach-sketch", `${file}:${w.at}`, w.msg,
+        "2 or 3 sketches on a slice whose paths trip a risk glob",
+        `slice ${w.id}`, "#### approach: 1");
+    }
+    for (const f of fails) {
+      fail("approach-sketch", `${file}:${f.at}`, f.msg,
+        "approach · trade-offs · blast radius · economics in words and computed counts, one picked, `rejected-because` on the rest",
+        f.id ? `slice ${f.id}` : "the sketches",
+        "operational-surface: deps +0, services +0, config +1");
+    }
+  }
+}
+
+// ---------- the learning ledger (Phase 04) ----------
+// A company organ, single and never per-lane, so it is checked from the repo root rather
+// than the tracker root -- a lane's lint still validates it, because a malformed learning
+// row is malformed for everyone.
+{
+  const ledgerPath = join(root, "docs", "develop", "learning-ledger.md");
+  if (existsSync(ledgerPath)) {
+    const { validate, withheldIds } = await import("./learning.mjs");
+    // `withheldIds` refuses a corpus with no holdout, and rightly — but it threw, so the lint
+    // died with a stack trace instead of a finding. A gate that crashes has not failed the
+    // artifact, it has failed to run, and the two look nothing alike to whoever reads the log.
+    let withheld;
+    try { withheld = withheldIds(root); }
+    catch (e) {
+      fail("learning-row", "tests/fixtures/develop-evals/withheld", e?.message ?? String(e),
+        "a withheld holdout directory beside the eval corpus (REQ-04, ADR-0109)",
+        "(absent)", "tests/fixtures/develop-evals/withheld/F-201.md");
+      withheld = new Set();
+    }
+    const { fails, warns } = validate(readFileSync(ledgerPath, "utf8"), { withheldIds: withheld });
+    for (const w of warns) {
+      warn("learning-row", `docs/develop/learning-ledger.md:${w.at}`, w.msg,
+        "at least one typed link: adr / rule / fixture / phase",
+        "no links", "adr: 0108");
+    }
+    for (const f of fails) {
+      fail("learning-row", `docs/develop/learning-ledger.md:${f.at}`, f.msg,
+        "a complete, linked row; a promoted row additionally carries replay + evaluated-by + approved-by",
+        f.id ? `row ${f.id}` : "the ledger", "verdict: proposed");
+    }
+  }
+}
+
+// ---------- outcome metrics (Phase 08), on request only ----------
+// Behind a flag because a metrics report on every lint run is noise, and noise is how a number
+// stops being read. Asking for it is the point at which someone is going to act on it.
+if (process.argv.includes("--metrics")) {
+  const { renderMetrics } = await import("./metrics.mjs");
+  for (const line of renderMetrics(root, troot, r.mode === "root" ? null : r.lane)) say(line);
+  say("");
 }
 
 // ---------- report ----------

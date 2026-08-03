@@ -1,0 +1,7 @@
+{
+  "name": "safe-tool",
+  "registry": "skill",
+  "version": "0123456789abcdef0123456789abcdef01234567",
+  "publisher-auth": "github org arc-skills, verified 2026-08-03",
+  "build-attestation": "none published"
+}

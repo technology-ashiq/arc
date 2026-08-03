@@ -14,7 +14,9 @@
  * Root-mode prints no lane line at all -- that is a permanent consumer contract for venture
  * repos, not a migration shim.
  *
- * This script NEVER invokes git and NEVER writes to the spine's exit code (ADR-0065).
+ * This script never COMMITS and never writes to the spine's exit code (ADR-0065). It does read
+ * git -- `checkpoint` asks what changed, and the Context Pack asks what churns -- because a
+ * check that cannot see the change cannot check it. Reading mutates nothing.
  *
  * Zero dependencies, Node 18+.
  */
@@ -25,7 +27,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { parseLaneArgs, renderHuman, resolveLane } from "../core/lane-resolve.mjs";
-import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem } from "./ledger.mjs";
+import { buildPack, renderPack, sourcesField } from "./context-pack.mjs";
+import { PLACEHOLDER, PREDICTION_FIELDS, VERDICTS, isFilled, isProven, parseLedger, progress, renderLedger, scoreProblem, setSliceField } from "./ledger.mjs";
+import { RISK_GLOBS } from "./quality.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_ROOT = resolve(HERE, "..", "..", "..");
@@ -285,8 +289,15 @@ async function modeNext(ctx) {
   const proven = slices.filter(isProven);
   if (proven.length) {
     const last = proven[proven.length - 1];
+    // `phase` is carried because Phase 08's time-to-first-proven-slice pairs a
+    // `develop.started` with the first `slice.done` OF THE SAME PHASE, and without it the
+    // metric is not derivable at all — which is exactly what it reported on this repo the
+    // first time it ran. The kind vocabulary is closed (ADR-0026); a payload field is not.
+    // Receipts already on the spine lack it, so the metric becomes derivable forward and says
+    // so rather than pretending to cover history it cannot see.
     await emit("slice.done", {
       lane: ctx.mode === "root" ? null : ctx.lane,
+      phase: (led.file.match(/phase-(\d+)-tasks/) || [, null])[1],
       slice: last.id,
       tier: last.fields.tier ?? null,
       commit: last.fields.commit ?? null,
@@ -314,6 +325,48 @@ async function modeNext(ctx) {
   say(`  proof: ${next.fields.proof ?? "?"}`);
   say(`  tier:  ${next.fields.tier ?? "?"}`);
   say("");
+
+  // The Context Pack (Phase 05, ADR-0111): what past work already knows about this slice,
+  // handed over BEFORE the slice is built rather than remembered afterwards.
+  //
+  // A pack that cannot be assembled must not take `next` down with it -- the harness's job is
+  // to hand out the next slice -- but it must not be silent either, because a retrieval that
+  // quietly returns nothing is indistinguishable from a repo that knows nothing. So the
+  // failure is printed and recorded, and the slice is still handed out.
+  // Assembly and recording are separate failures and are reported separately. Wrapping both
+  // in one `try` made a read-only ledger print a full, correct pack and then announce
+  // "Context Pack — unavailable" underneath it: two contradictory statements in one run, exit
+  // 0, and a `sources:` line silently left at its previous value.
+  let pack = null;
+  try {
+    pack = buildPack({
+      root: ctx.root,
+      brief: led.parsed.brief,
+      slice: next,
+      lane: ctx.mode === "root" ? null : ctx.lane,
+    });
+    for (const line of renderPack(pack, next.id)) say(line);
+    say("");
+  } catch (e) {
+    say(`Context Pack — could not be assembled: ${e?.message ?? e}`);
+    say("");
+  }
+  if (pack) {
+    try {
+      // `at:` binds the write to the block the READER handed out, by line. Binding by id alone
+      // is what let a duplicate id send one slice's pack into another slice's audit trail.
+      const before = readFileSync(led.path, "utf8");
+      const { text, changed, reason } = setSliceField(
+        before, next.id, "sources", sourcesField(next.fields.sources, pack), { at: next.line },
+      );
+      if (changed && text !== before) writeFileSync(led.path, text, "utf8");
+      else if (!changed) say(`WARN  [sources] the pack above was NOT recorded — ${reason}`);
+    } catch (e) {
+      say(`WARN  [sources] the pack above was NOT recorded — ${e?.message ?? e}`);
+      say(`      ${led.file}'s sources: line still holds its previous value.`);
+    }
+  }
+
   say(`Progress: ${p}/${total} proven.`);
   flush(0);
 }
@@ -453,14 +506,10 @@ async function modeHandoff(ctx, n) {
 // question the script asks is which paths the change touched.
 // ---------------------------------------------------------------------------
 
-/** The risk classes. Declared inline: Phase 03 has no budget to refactor a shared rules file. */
-const RISK_GLOBS = [
-  { name: "auth", re: /(^|\/)(auth|session|token|login|permission|rbac)([./_-]|$)/i },
-  { name: "migrations", re: /(^|\/)(migrations?|schema)([./_-]|$)|\.sql$/i },
-  { name: "public-api", re: /(^|\/)(api|routes?|handlers?|controllers?)([./_-]|$)/i },
-  { name: "security-sensitive", re: /(^|\/)(secrets?|crypto|webhook|payment|stripe|billing)([./_-]|$)/i },
-  { name: "the gate itself", re: /(^|\/)(develop-lint|kickoff-lint|validate|lane-resolve)\.(mjs|sh)$/i },
-];
+// The risk classes now live in quality.mjs, which is the ONE place they are declared. Phase 07
+// needs the identical list to decide which slices owe approach sketches, and the debt ledger
+// already records what two copies of "risky paths" do: a glob added to one never reaches the
+// other. Imported at the top of this file.
 
 /** Debt markers. A new one with no ledger row is a shortcut nobody will remember taking. */
 const MARKER_RE = /\b(TODO|FIXME|HACK|XXX)\b/;
