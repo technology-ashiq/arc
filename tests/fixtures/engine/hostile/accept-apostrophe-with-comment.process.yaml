@@ -1,0 +1,32 @@
+name: fixture-good
+version: 1.0.0
+intent: "A minimal valid process, used as the base every fixture below mutates."
+permissions: declared
+inputs:
+  - name: base
+    type: string
+    required: false
+    default: "main"
+    description: "base-branch"
+tools:
+  - git.op:
+      - "diff:*"
+  - shell.run:
+      - "bash ./run.sh:*"
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - ok
+  properties:
+    ok:
+      type: boolean
+evals:
+  - tests/fixtures/engine/evals/commit-msg-draft/basic.json
+baseline:
+  target: claude-code
+  path: tests/fixtures/engine/baseline-sample.md
+  commit: 7abeda1 # the user's pinned baseline
+  sha256: dd50585854ef21e7292666472c11a1189e863a49db9313351fa478014d4b3e9e
+body: |
+  Do the thing with {{input.base|default:main}}.

@@ -1,0 +1,91 @@
+# Hostile-input corpus for process-lint (Phase 00, REQ-01).
+# TWO classes, because a reject-only corpus cannot see a legitimate file being wrongly refused:
+#   <check-id>  the fixture MUST fail with exactly that check id
+#   ACCEPT      the fixture MUST pass clean
+# Asserting the CHECK ID, not merely a non-zero exit: a fixture that fails for an
+# unintended reason is a false pass, and 'exit 1' alone cannot tell the two apart.
+# TSV: file\tcheck-id\tnote   (shape copied from tests/fixtures/spine/hostile/INDEX)
+good.process.yaml	ACCEPT	the base every fixture below mutates
+not-a-mapping.process.yaml	yaml-parse	a line that is neither `key: value` nor a sequence item
+anchor-alias.process.yaml	yaml-excluded	an anchor in value position
+alias-reference.process.yaml	yaml-excluded	an alias reference in value position
+anchor-nonalnum-name.process.yaml	yaml-excluded	an anchor whose name starts with a non-alphanumeric -- js-yaml resolves these to a DIFFERENT document
+tag.process.yaml	yaml-excluded	an explicit type tag
+tag-verbatim.process.yaml	yaml-excluded	a verbatim tag, the spelling the old regex missed
+flow-collection.process.yaml	yaml-excluded	a NON-empty flow collection in value position
+flow-collection-key-position.process.yaml	yaml-excluded	a flow collection on its OWN line -- used to parse to a key literally named `{x-claude`, smuggling the ADR-0205 escape hatch past the passthrough gate while every real YAML reader saw the forbidden key
+second-document.process.yaml	yaml-excluded	a second --- document in one file
+document-end-marker.process.yaml	yaml-excluded	a `...` document-end marker
+directive.process.yaml	yaml-excluded	a %YAML directive
+explicit-key.process.yaml	yaml-excluded	an explicit `?` key
+merge-key.process.yaml	yaml-excluded	a merge key
+blockscalar-keep-chomp.process.yaml	yaml-excluded	`|+` keep-chomping -- previously MATCHED and then ignored, so it silently behaved as clip
+blockscalar-indent-indicator.process.yaml	yaml-excluded	an explicit block-scalar indentation indicator
+tab-indent.process.yaml	yaml-parse	a tab used for structural indentation
+nbsp-indent.process.yaml	yaml-parse	a NON-BREAKING SPACE used for indentation -- invisible, and what a copy-paste actually produces
+crlf.process.yaml	yaml-parse	CRLF line endings in a canonical SOURCE file (yaml-parse, never lf-only)
+mixed-line-endings.process.yaml	yaml-parse	a single stray CR among LF lines
+duplicate-key.process.yaml	yaml-parse	the same key twice in one mapping
+proto-key.process.yaml	yaml-parse	`__proto__` as a key -- set the prototype instead of an own property, blinding EVERY key-enumerating gate at once while consumers still read it
+unterminated-quote.process.yaml	yaml-parse	a double-quoted scalar with no closing quote
+unterminated-quote-escaped.process.yaml	yaml-parse	a double-quoted scalar closed only by an ESCAPED quote
+bad-escape.process.yaml	yaml-parse	an unsupported escape -- these used to lose the backslash, turning \u00e9 into u00e9
+deep-nesting.process.yaml	yaml-parse	nesting past the depth cap (a stack overflow, reported as a depth limit)
+target-passthrough.process.yaml	target-passthrough	a per-target escape-hatch key (ADR-0205)
+target-passthrough-underscore.process.yaml	target-passthrough	the same hatch spelled with an underscore -- the old convention regex missed it
+target-passthrough-nested.process.yaml	target-passthrough	a per-target key nested inside baseline, where the root-only loop never looked
+unknown-top-level-key.process.yaml	unknown-key	an unknown top-level key that never names itself `x-` -- the whitelist catches what the convention check could not
+version-not-semver.process.yaml	name-semver	a version failing the spine's live PROCESS_RE
+name-uppercase.process.yaml	name-semver	a name with characters PROCESS_RE forbids
+intent-missing.process.yaml	intent-missing	no intent -- the sole source of the generated `description:` line
+frontmatter-injection-intent.process.yaml	frontmatter-injection	a newline inside intent -- rendered a FORGED allowed-tools line ABOVE the real one, and both the lint and the compiler returned clean
+frontmatter-injection-input-description.process.yaml	frontmatter-injection	the same hole through inputs[].description, which lands inside the generated argument-hint:
+inputs-required-and-default.process.yaml	inputs-shape	an input that is required AND carries a default
+inputs-unknown-key.process.yaml	inputs-shape	an input carrying a key outside the five allowed
+inputs-not-a-list.process.yaml	inputs-shape	inputs given as a scalar rather than a list
+inputs-duplicate-name.process.yaml	inputs-shape	the same input declared twice -- which one wins was undefined and unreported
+inputs-default-not-string.process.yaml	inputs-shape	a non-string default while type is capped at string
+inputs-description-missing.process.yaml	inputs-shape	no description -- the sole source of the generated `argument-hint:`
+unknown-tool.process.yaml	tool-unknown	an eighth abstract primitive
+tool-scope-empty.process.yaml	tool-unknown	a scoped tool entry whose scope list is empty
+tool-duplicate-primitive.process.yaml	tool-unknown	one primitive declared bare AND scoped -- the bare entry silently widens the scoped grant
+permissions-invalid.process.yaml	permissions-invalid	a permissions value outside the two-value enum
+permissions-missing.process.yaml	permissions-invalid	no permissions key at all
+permissions-declared-bare-tool.process.yaml	permissions-invalid	`declared` with an unscoped tool -- renders an UNSCOPED grant; no fixture tested either value's semantics before
+permissions-unrestricted-scoped.process.yaml	permissions-invalid	`unrestricted` emits no permission line, so scopes on it are unverifiable decoration
+missing-output.process.yaml	schema-shape	the output contract block is absent entirely
+schema-empty.process.yaml	schema-shape	`output: {}` -- constrains nothing while reading as a contract
+unknown-schema-keyword.process.yaml	schema-keyword	a draft-07 keyword outside the frozen eight
+schema-required-undefined.process.yaml	schema-shape	`required` names a property `properties` never defines
+schema-unreachable-keyword.process.yaml	schema-shape	`minLength` on an object -- lints clean, enforces nothing, reads as a guarantee
+schema-addprops-without-properties.process.yaml	schema-shape	`additionalProperties: false` with no `properties` -- a pure no-op
+evals-escape.process.yaml	evals-path	an eval path escaping the repo root via ..
+evals-missing.process.yaml	evals-path	an eval path that does not exist
+evals-self.process.yaml	evals-path	an eval path naming the process file itself
+evals-directory.process.yaml	evals-path	a DIRECTORY as the eval suite -- existsSync is true for directories, so the repo root itself passed
+evals-duplicate.process.yaml	evals-path	the same fixture listed twice
+placeholder-dialect-arguments.process.yaml	placeholder-dialect	a claude-code $ARGUMENTS placeholder inside the shared body
+placeholder-dialect-positional.process.yaml	placeholder-dialect	a claude-code ${1:-default} placeholder inside the shared body
+placeholder-dialect-in-input-default.process.yaml	placeholder-dialect	a dialect placeholder entering through inputs[].default -- the body-only scan never looked here
+placeholder-unbalanced.process.yaml	placeholder-malformed	an unclosed {{
+placeholder-stray-brace.process.yaml	placeholder-malformed	a `}` inside the placeholder -- escaped BOTH the match regex and the balance counter
+placeholder-unknown-filter.process.yaml	placeholder-malformed	a filter outside the closed one-filter set
+placeholder-chained-filters.process.yaml	placeholder-malformed	a SECOND filter -- the old `(.*)` swallowed it into the default value, so the closed set was unenforced past filter 1
+placeholder-deep-path.process.yaml	placeholder-malformed	a placeholder path deeper than input.NAME
+placeholder-undeclared-input.process.yaml	placeholder-malformed	a placeholder naming an input `inputs:` never declares
+baseline-drift.process.yaml	baseline-drift	a pinned sha256 no longer matching the live pilot
+baseline-missing-path.process.yaml	baseline-drift	a baseline block with no path key
+baseline-escape.process.yaml	baseline-drift	a baseline path outside the repo -- evals had an escape guard, baseline had none
+baseline-bad-target.process.yaml	baseline-drift	a target that is not a known adapter
+baseline-bad-commit.process.yaml	baseline-drift	a commit that is not a git sha
+baseline-directory.process.yaml	baseline-drift	a directory as baseline.path -- used to throw EISDIR as a raw stack trace, discarding every finding collected from earlier files
+accept-emphasis-in-intent.process.yaml	ACCEPT	markdown *emphasis* in a quoted intent -- was rejected as an anchor because exclusions ran on raw, still-quoted text
+accept-comment-mentions-anchor.process.yaml	ACCEPT	a # comment merely mentioning &base -- exclusions used to run before comment-stripping
+accept-comment-on-block-key.process.yaml	ACCEPT	a comment on a key line that opens a nested block -- used to break the file outright
+accept-comment-after-empty-flow.process.yaml	ACCEPT	`[] # comment` -- the emptiness test ran on the un-stripped value
+accept-zero-indented-sequence.process.yaml	ACCEPT	a block sequence at its key's indent -- the canonical output of yq, js-yaml.dump and every k8s manifest
+accept-tab-inside-body.process.yaml	ACCEPT	a TAB inside body CONTENT -- bodies are markdown, where a fenced Makefile snippet is ordinary
+accept-apostrophe-with-comment.process.yaml	ACCEPT	an apostrophe in a plain scalar followed by a comment -- quote state used to open on the apostrophe and swallow the comment
+accept-leading-zero-commit.process.yaml	ACCEPT	an all-digit short SHA with a leading zero -- numeric coercion turned 0123456 into 123456 and the lint then reported it MISSING on a correct file
+accept-unicode-prose.process.yaml	ACCEPT	non-ASCII prose in the body (em dash, middot, checkmark)
+accept-whitespace-only-body-line.process.yaml	ACCEPT	a markdown hard line break (two trailing spaces on an otherwise blank line)

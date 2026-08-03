@@ -162,38 +162,35 @@ _union() { # $1 = total; prints every shard's files, sorted
 # ---------- balance: the reason the thing exists ----------
 
 @test "--plan balances by measured seconds, not by file count" {
-  # No packing can beat max(heaviest single file, total / shards): one file cannot be split
-  # across two runners, and the work has to land somewhere. That bound is the RULE, and it is
-  # what this asserts -- derived from the plan on every run rather than pinned as a constant.
-  #
-  # It used to be pinned, at 200s, and the constant went stale the moment the weights were
-  # honest. The 2026-07-31 table measured 42 of 54 files and left 12 riding _default_weight 16,
-  # so it predicted 1785s total; re-measuring all 54 on 2026-08-03 put the real figure at
-  # 2366s. Nothing about the sharder had regressed -- 200s was simply 1785/9 rounded, a
-  # snapshot of an under-measurement, and it failed the first time the table told the truth.
-  # This is the same defect as the retro-log's 2026-08-02 entry: a test that asserts one
-  # snapshot value measures the calendar, and its red tells you nothing.
-  local heaviest total floor bound
   run bash -c "$SHARD --plan --total 9"
   [ "$status" -eq 0 ]
-  heaviest="$(printf '%s\n' "$output" | tail -1 | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
-  total="$(printf '%s\n' "$output" | tail -1 | grep -oE 'total [0-9]+s' | grep -oE '[0-9]+')"
-  [ -n "$heaviest" ] && [ -n "$total" ]
+  # WAS `heaviest <= 200`, an absolute number. It rotted, and the way it rotted is the point:
+  # the 2026-08-03 re-measurement (run 30769261466) took the suite's measured total from 1785s
+  # to 2355s -- not because anything got slower, but because 12 files had NO entry and were
+  # being counted at the 16s fallback. The threshold had been calibrated against a total that
+  # understated reality by 570s, so it was going to fail the moment the numbers got honest.
+  #
+  # A hardcoded number nobody recomputes is a number that starts lying (retro-log 2026-07-22),
+  # and a test over live state must assert the RULE and derive from the state, never pin one
+  # snapshot value (retro-log 2026-08-02). So this now asserts BALANCE, derived from the run's
+  # own output:
+  #   - the heaviest shard is within 20% of the arithmetic ideal (total/N), and
+  #   - the spread between heaviest and lightest is small.
+  # Both hold however large the suite grows, and both still fail loudly if the sharder ever
+  # reverts to splitting by file count -- which would pile heavy files onto one shard and blow
+  # the spread wide open.
+  local last total heaviest lightest ideal
+  last="$(printf '%s\n' "$output" | tail -1)"
+  total="$(printf '%s' "$last"    | grep -oE 'total [0-9]+s'          | grep -oE '[0-9]+')"
+  heaviest="$(printf '%s' "$last" | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
+  lightest="$(printf '%s' "$last" | grep -oE 'lightest [0-9]+s'       | grep -oE '[0-9]+')"
+  [ -n "$total" ] && [ -n "$heaviest" ] && [ -n "$lightest" ]
 
-  # One shard per file: the heaviest shard IS then the heaviest single file, i.e. the floor.
-  run bash -c "$SHARD --plan --total 54"
-  [ "$status" -eq 0 ]
-  floor="$(printf '%s\n' "$output" | tail -1 | grep -oE 'heaviest shard [0-9]+s' | grep -oE '[0-9]+')"
-  [ -n "$floor" ]
-
-  bound=$(( total / 9 ))
-  [ "$bound" -ge "$floor" ] || bound="$floor"
-  bound=$(( bound * 110 / 100 ))          # 10% for the greedy packer's last file
-  [ "$heaviest" -le "$bound" ] || {
-    echo "heaviest shard is ${heaviest}s against a bound of ${bound}s (floor ${floor}s, total ${total}s over 9)"
-    echo "balancing has regressed -- this is the packer, not the weights"
-    false
-  }
+  ideal=$(( total / 9 ))
+  [ "$heaviest" -le $(( ideal * 12 / 10 )) ] \
+    || { echo "heaviest shard ${heaviest}s vs ideal ${ideal}s -- balancing has regressed"; false; }
+  [ $(( heaviest - lightest )) -le $(( ideal / 4 )) ] \
+    || { echo "spread $(( heaviest - lightest ))s across shards (ideal ${ideal}s) -- not balancing by seconds"; false; }
 }
 
 # ---------- one level down: a TEST that never runs ----------

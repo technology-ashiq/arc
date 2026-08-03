@@ -1,0 +1,34 @@
+Phase 01 — CI green
+
+PR:      https://github.com/technology-ashiq/arc/pull/103
+Commit:  f1736229d0574779fb37b6f2bf626d6db15bbd92
+Run:     30771122029 -> re-run green at HEAD
+
+ci-tier                                              pass  40s
+selftest (macos-latest, 20, shard 1/3)               pass  1m57s
+selftest (macos-latest, 20, shard 2/3)               pass  2m3s
+selftest (macos-latest, 20, shard 3/3)               pass  1m21s
+selftest (ubuntu-latest, 18)                         pass  4m16s
+selftest (ubuntu-latest, 20)                         pass  3m28s
+selftest (ubuntu-latest, 22)                         pass  3m59s
+selftest (windows-latest, 20, shard 1/12)            pass  4m10s
+selftest (windows-latest, 20, shard 10/12)           pass  3m33s
+selftest (windows-latest, 20, shard 11/12)           pass  3m55s
+selftest (windows-latest, 20, shard 12/12)           pass  3m59s
+selftest (windows-latest, 20, shard 2/12)            pass  3m50s
+selftest (windows-latest, 20, shard 3/12)            pass  3m52s
+selftest (windows-latest, 20, shard 4/12)            pass  3m59s
+selftest (windows-latest, 20, shard 5/12)            pass  3m39s
+selftest (windows-latest, 20, shard 6/12)            pass  4m2s
+selftest (windows-latest, 20, shard 7/12)            pass  3m38s
+selftest (windows-latest, 20, shard 8/12)            pass  3m32s
+selftest (windows-latest, 20, shard 9/12)            pass  4m11s
+
+19/19 jobs pass.
+
+--- REQ-02 / REQ-03 at HEAD ---
+arc-compile --check --all --target claude-code --against-baseline : 3/3 byte-identical
+arc-compile --check --all --target claude-code                    : 3/3 (post-flip gate)
+arc-compile --check --all --target codex                          : 3/3 goldens
+tests/engine-compile.bats      20/20
+tests/engine-process-lint.bats 15/15

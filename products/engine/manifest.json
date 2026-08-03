@@ -1,0 +1,27 @@
+{
+  "name": "engine",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "scripts": [
+    ".claude/scripts/engine/yaml-subset.mjs",
+    ".claude/scripts/engine/schema-subset.mjs",
+    ".claude/scripts/engine/process-lint.mjs",
+    ".claude/scripts/engine/arc-compile.mjs",
+    ".claude/scripts/engine/arc-run.mjs",
+    ".claude/scripts/engine/adapters/claude-code.mjs",
+    ".claude/scripts/engine/adapters/codex.mjs",
+    ".claude/scripts/engine/drivers/common.mjs",
+    ".claude/scripts/engine/drivers/claude-code.mjs",
+    ".claude/scripts/engine/drivers/claude-code.sh",
+    ".claude/scripts/engine/drivers/codex.mjs",
+    ".claude/scripts/engine/drivers/codex.sh",
+    ".claude/scripts/engine/drivers/generic-api.mjs",
+    ".claude/scripts/engine/drivers/generic-api.sh"
+  ],
+  "files": [],
+  "docs": []
+}
