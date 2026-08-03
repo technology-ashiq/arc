@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-engine (Cycle 6, opened 2026-08-03)
-phase: 02 — the engine
+phase: — all 4 closed, cycle ready to land
 appetite: 14d
-burn: 1.3d
+burn: 2.0d
 blocked-on: —
 depends-on: —
 
@@ -23,14 +23,14 @@ depends-on: —
 |---|---|---|---|
 | 00 | The canonical layer — `processes/` format, `process-lint` with its hostile-fixture corpus and a fresh-agent adversarial pass, 3 pilots canonicalized, eval fixtures written | 4 days | ✅ done 2026-08-03 |
 | 01 | The proof — `arc-compile --target claude-code` reaches 3/3 byte-identical, source of truth flips, DO-NOT-EDIT header lands, codex target plus recorded goldens | 3 days | ✅ done 2026-08-03 |
-| 02 | The engine — `arc-run` headless with hard budgets, schema check, proposal-receipt escalation, secret scrub, 3 drivers behind one interface, `router.yaml` and `--driver auto` | 4 days | pending |
-| 03 | Dogfood and seal — real runs on a non-Claude driver, the 4th-driver timing run, retro, lint promotion review | 2 days | pending |
+| 02 | The engine — `arc-run` headless with hard budgets, schema check, proposal-receipt escalation, secret scrub, 3 drivers behind one interface, `router.yaml` and `--driver auto` | 4 days | ✅ done 2026-08-03 |
+| 03 | Dogfood and seal — real runs on a non-Claude driver, the 4th-driver timing run, retro, lint promotion review | 2 days | ✅ done 2026-08-03 (REQ-08 **partial** — see Now) |
 
-**Appetite burn: ~1.3 of 14 days used (~9%).** Phases allocate 13 of 14 days; the 1 day of slack is
+**Appetite burn: ~2.0 of 14 days used (~14%).** Phases allocate 13 of 14 days; the 1 day of slack is
 deliberate. The design source said "2 weeks" while its own phases sum to 13 days — that only fits a
 7-day week, so the cap is written as 14 rather than left as a word that over-commits by 30%.
 
-Basis for the 1.3, so it can be audited rather than believed: one unbroken sitting on 2026-08-03,
+Basis for the 2.0, so it can be audited rather than believed: one unbroken sitting on 2026-08-03,
 from kickoff through Phase 01 green on the 3-OS matrix. Two honest caveats. First, the same one the
 develop lane recorded — a single continuous session with no context switches is the most favourable
 possible condition, so the figure is real but it is not a throughput claim. Second, and more useful:
@@ -44,8 +44,8 @@ number to be quietly averaged away.
 |---|---|---|---|
 | 00 canonical layer | 4d | ~0.6d | CI run `30767018207`, 19/19 |
 | 01 the proof | 3d | ~0.7d | CI run `30771122029`, 19/19 |
-| 02 the engine | 4d | — | — |
-| 03 dogfood and seal | 2d | — | — |
+| 02 the engine | 4d | ~0.5d | CI run `30786...`, 19/19 |
+| 03 dogfood and seal | 2d | ~0.2d | 19/19; REQ-08 partial |
 
 **Kill checkpoint: at 8 days burned, is REQ-02 proven?** Not at 7 (50%), because Phase 00 plus
 Phase 01 sum to exactly 7 and a tripwire that fires on every on-schedule run is a tripwire that
@@ -74,7 +74,25 @@ learns to be ignored — the shape `docs/trial-ledger.md` already records for `a
 
 ## Now
 
-**Current position: Phases 00 and 01 CLOSED, both green on 19/19. ~1.3 of 14 days. Phase 02 in progress.**
+**Current position: ALL FOUR PHASES CLOSED on green CI (19/19). ~2.0 of 14 days (~14%). Cycle
+ready to land.**
+
+**REQ-08 is PARTIAL and the cycle's central claim is UNPROVEN.** No non-Claude driver was
+runnable here — `codex` is not installed and no LLM endpoint or key is configured — so the
+required 3 real runs on a second model family did not happen. Two real runs were done on
+`claude-code` instead: one succeeded, one failed on a fenced-JSON bug that twenty green
+fixture tests had missed. That failure is the single best argument for this phase existing,
+and it does not substitute for the missing proof. Reported as a blocking finding per the
+phase spec's own instruction rather than waived: `evidence/phase-03/real-runs.md`.
+
+**Nothing was promoted.** Every gate is fixture-proven; none has the ≥3 clean dogfood runs
+`docs/trial-ledger.md` requires, so no ledger rows were written either —
+`evidence/phase-03/promotion-review.md`.
+
+**Retro inputs carried:** RI-1 the missing non-Claude runs · RI-2 wiring `process-lint` and
+`arc-compile --check` into CI as named steps (today only a bats file checks the three
+generated commands) · RI-3 the spine's `cost` block cannot express tokens-without-money, so
+ADR-0069 metric 1 stays uncomputable.
 
 **A-01 is CLOSED AS ESCALATED, not as resolved.** The criterion read "resolved or escalated".
 It was escalated four times — at the kickoff STOP and three times since — and the owner directed

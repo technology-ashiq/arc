@@ -16,7 +16,7 @@ Updated: 2026-08-03
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
 | develop | LIVE | arc-develop (Cycle 5, opened 2026-08-02) | — all 4 closed, cycle ready to land | 5d / 1.9d | — | PR #95 ready to merge — /arc-retro then land |
-| engine | LIVE | arc-engine (Cycle 6, opened 2026-08-03) | 02 — the engine | 14d / 1.3d | — | Phase 02: arc-run + 3 drivers + budgets + router |
+| engine | LIVE | arc-engine (Cycle 6, opened 2026-08-03) | — all 4 closed, cycle ready to land | 14d / 2.0d | — | PR #103 — merge |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
