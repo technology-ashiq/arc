@@ -164,6 +164,7 @@ function timeToFirstProven(events) {
   const started = new Map();
   const firstDone = new Map();
   let unreadableTs = 0;
+  const implausible = [];
   for (const e of events) {
     if (!e) continue;
     const t = instant(e.ts);
@@ -179,7 +180,14 @@ function timeToFirstProven(events) {
   for (const [phase, t0] of started) {
     const t1 = firstDone.get(phase);
     if (t1 === undefined || t1 < t0) continue;
-    spans.push([phase, Math.round((t1 - t0) / 60000)]);
+    const minutes = Math.round((t1 - t0) / 60000);
+    // A plausibility ceiling, declared. A median only defends against an outlier when there
+    // are at least three values -- with two, the median IS the mean, and one receipt with a
+    // wrong year still produced 26,297,340 minutes. A span longer than 90 days is not a
+    // time-to-first-slice, it is a malformed record, and it is excluded and reported rather
+    // than averaged into a figure.
+    if (minutes > 90 * 24 * 60) { implausible.push([phase, minutes]); continue; }
+    spans.push([phase, minutes]);
   }
   if (!spans.length) {
     // The reason must describe what is actually wrong. "No develop.started has landed" was
@@ -200,8 +208,11 @@ function timeToFirstProven(events) {
   const sorted = spans.map(([, m]) => m).sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   const median = sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  const note = implausible.length
+    ? `; ${implausible.length} span(s) over 90 days excluded as malformed records (${implausible.map(([p]) => `phase ${p}`).join(", ")})`
+    : "";
   return derived("time-to-first-proven-slice", median, "minutes",
-    `median of ${spans.length} phase(s): ${spans.map(([p, m]) => `phase ${p} ${m}m`).join(", ")}`);
+    `median of ${spans.length} phase(s): ${spans.map(([p, m]) => `phase ${p} ${m}m`).join(", ")}${note}`);
 }
 
 /**
@@ -360,7 +371,9 @@ export function calibration(tracker) {
       if (!PREDICTION_FIELDS.includes(field)) continue;
       // The whole first token, anchored. `hit-and-miss` split to `hit` and was counted as a
       // clean hit; `hits` and `missed` were dropped in silence.
-      const m = String(value).trim().match(/^([A-Za-z]+)\b/);
+      // Not `\b`: on `hit-and-miss` a word boundary sits right after `hit`, so a hedge was
+      // scored as a clean hit. The token must not be followed by another letter or a hyphen.
+      const m = String(value).trim().match(/^([A-Za-z]+)(?![A-Za-z-])/);
       const verdict = m ? m[1].toLowerCase() : "";
       if (!VERDICTS.includes(verdict)) { unreadable.push(`${led.file}:${field}`); continue; }
       byField[field] ??= Object.fromEntries(VERDICTS.map((v) => [v, 0]));
