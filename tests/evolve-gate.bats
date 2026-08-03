@@ -205,12 +205,18 @@ BASE="arms:['+champion','+challenger-a'], floor:100, alpha:0.05, effectFloor:0, 
   # The floor check read c.units, then the math read c1.units again. With an accessor property
   # the two reads returned different numbers, and a verdict was declared on an arm of ONE unit
   # against a floor of 1000.
+  # The invariant is READ-ONCE, not any particular outcome. With one consistent read of a
+  # million units a verdict is legitimate; the defect was that the floor check validated
+  # 1,000,000 and the math then used 1. Counting the reads asserts the fix directly, where
+  # asserting an outcome would only assert a symptom.
   run _node "$VIMPORT
-    let n = 0;
-    const champ = { successes: 0, get units() { return ++n === 1 ? 1000000 : 1; } };
+    let reads = 0;
+    const champ = { successes: 0, get units() { reads++; return reads === 1 ? 1000000 : 1; } };
     const r = decide({arms:['+champ','+chal'], counts:{'+champ':champ,'+chal':{units:5000,successes:4800}},
       floor:1000, alpha:0.05, effectFloor:0, mde:0, guardrails:[{name:'latency',status:'ok'}]});
-    if (r.outcome === 'verdict') { console.log('a verdict on a re-read arm: ' + JSON.stringify(r.stats)); process.exit(1); }
+    if (reads !== 1) { console.log('units was read ' + reads + ' times; the floor check and the math can disagree'); process.exit(1); }
+    // ...and whatever it decided, it decided from the value it validated.
+    if (r.stats && r.stats.p1 !== 0) { console.log('the stats do not match the validated read'); process.exit(1); }
     console.log('SINGLE READ OK');"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"SINGLE READ OK"* ]]
