@@ -33,7 +33,7 @@
 | 3 | Model-agnostic foundation (engine + processes) | `PLAN-engine-process-layer.md` | Pull: public-prep / 2nd runtime need |
 | 4 | discover v1 | `PLAN-discover.md` | Pull: next venture needed |
 | — | growth v1 | `BRIEF-growth.md` | Pull: live venture needs traffic |
-| — | leads v1 | `BRIEF-leads.md` | Pull: an offer needs outbound |
+| — | leads v1 | `PLAN-leads.md` | Pull: an offer needs outbound — **full plan ready, SLEEPING** (owner-approved 2026-08-03; decisions LEA-A…M locked over 3 same-day review rounds, 27 rulings in-file). Pre-kickoff gate inside: named offer · dedicated sending domain warmed ≥14d (calendar-gated — start weeks before kickoff) · ICP v0 · calendar link · capability scout · EVO-H0/LEA-I ruling. Hard lines: L1 every send, caps/suppression in code, PII never in the repo (private store + keyed HMAC ids), no background scheduler. **If leads fires before growth, its LEA-I ruling may take the EVO-H0 obligation — check at kickoff** |
 | — | ops v1 | `BRIEF-ops.md` | Pull: ≥2 live ventures / support volume |
 | — | legal pack | `BRIEF-legal-pack.md` | Pull: first venture reaches launch prep (policies before real payments) |
 | — | ledger module | `BRIEF-ledger.md` | Pull: ≥2 revenue sources |
@@ -46,7 +46,7 @@
 | — | scheduler | `BRIEF-scheduler.md` | Pull: first L3 process · policy engine is a hard prereq |
 | — | trader sandbox | `BRIEF-trader.md` | Pull: monthly revenue + Ashiq's written opening — **last** |
 
-**Full PLANs** (the 9 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
+**Full PLANs** (the 10 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
 decision records), appetites, ADR-ready decisions, phases, pre-mortems. **BRIEFs** are
 deliberately lighter — real REQs and locked non-negotiables, but current-state gets
 filled at their kickoff (writing 400-line plans for far-future modules today would be

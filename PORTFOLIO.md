@@ -9,14 +9,14 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-03
+Updated: 2026-08-04
 
 ## Active initiatives
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
-| develop | LIVE | arc-develop Cycle 6 (opened 2026-08-02) | — all phases closed; cycle ready to merge | 7d / 2.1d | — | PR #100 — merge |
-| engine | LIVE | arc-engine (Cycle 6, opened 2026-08-03) | — all 4 closed, cycle ready to land | 14d / 2.0d | — | PR #103 — merge |
+| develop | IDLE | arc-develop (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as 17473e7 / PR #100) | 7d / 2.1d | — | `/arc-kickoff --lane develop` when a new cycle pulls it |
+| engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
 | evolve | LIVE | arc-evolve (Cycle 7, opened 2026-08-03) | ALL 5 phases CLOSED; fixture-proven, unexercised | 7d / 7.0d | — | `/arc-retro --lane evolve`, then merge PR #108 |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |

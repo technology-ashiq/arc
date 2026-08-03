@@ -1,8 +1,8 @@
 # PROGRESS.md — Cycle 6 · arc-engine "The Model-Agnostic Foundation"
 
-status: LIVE
-cycle: arc-engine (Cycle 6, opened 2026-08-03)
-phase: — all 4 closed, cycle ready to land
+status: IDLE
+cycle: arc-engine (Cycle 6, closed 2026-08-03)
+phase: — (cycle closed, merged as b9a9e9f / PR #103)
 appetite: 14d
 burn: 2.0d
 blocked-on: —
@@ -74,8 +74,15 @@ learns to be ignored — the shape `docs/trial-ledger.md` already records for `a
 
 ## Now
 
-**Current position: ALL FOUR PHASES CLOSED on green CI (19/19). ~2.0 of 14 days (~14%). Cycle
-ready to land.**
+**Current position: CYCLE CLOSED 2026-08-03. All four phases closed on green CI (19/19), merged as
+`b9a9e9f` / PR #103. ~2.0 of 14 days (~14%). Lane is IDLE and pulls a new cycle or nothing.**
+
+**Closed late, and that is the first retro input.** PR #103 merged at 06:31; this header still read
+`LIVE` with `next: PR #103 — merge` for the rest of the day, so the company board was telling any
+reader to go merge a PR that was already in. `docs/HISTORY.md` said CLOSED the whole time — the
+lane files disagreed with the company log, which is precisely the drift PR #101 was written about
+and the direction ADR-0051 says must never happen. The merge is the event; the bookkeeping is a
+separate act, and nothing fires it.
 
 **REQ-08 is PARTIAL and the cycle's central claim is UNPROVEN.** No non-Claude driver was
 runnable here — `codex` is not installed and no LLM endpoint or key is configured — so the
@@ -102,25 +109,16 @@ block (b)(5) — absent data is never estimated), and it stays that way in the r
 being back-filled with a plausible guess. If a block-(d) amendment is ever needed, this line is
 where that starts.
 
-Building continues regardless — Phase 02 does not depend on A-01, and the standing instruction is
-not to stall.
+**REQ status at close: REQ-01 through REQ-07 `validated`, REQ-08 stays `active` and is carried.**
+The seven are marked from the phase closes that proved them, not re-verified at bookkeeping time —
+each was an exit criterion of a phase that closed on evidence. REQ-08 is not marked partial and
+filed away, because its own text says the ≥3-real-runs clause **is never cut**: a REQ whose central
+clause is unmet is open, and the honest record of this cycle is that it shipped the machinery and
+did not prove the claim. Whoever pulls the next engine cycle inherits that, not a green row.
 
-Standing instruction: build all four phases without stopping for per-phase sign-off, push freely,
-**merge only after Phase 03 closes** (draft PR #103 carries the cycle). The main session writes the
-code (ADR-0105); agents run the adversarial and verification passes the plan mandates.
-
-**Next step: Phase 02 — `arc-run` headless, 3 drivers behind one interface, hard budgets,
-proposal-receipt escalation, secret scrub, `engine/router.yaml`.** It needs no network to be
-proven: every driver has a fake, and the contract suite runs the identical assertions against
-each. The real arms need an LLM endpoint + key and the `codex` CLI, both owner-provided and both
-recorded as not-run rather than skipped silently if absent.
-
-**Open, and it blocks Phase 01's close (assumption A-01).** The ADR-0069 block-(d) trigger is still
-recorded as **unstated** — the owner was asked at the kickoff STOP and answered a different
-question, and it has not been inferred (block (b)(5): absent data is never estimated). The one
-mechanically checkable trigger does not fire against any of the four lanes. If the answer is "a
-second runtime is genuinely needed", that trigger is absent from block (d)'s list and needs its
-amending ADR before Phase 01 can close.
+**Next step: `/arc-kickoff --lane engine` when a new cycle pulls it.** The obvious candidate is
+REQ-08's missing proof, which needs an owner-provided LLM endpoint + key or the `codex` CLI before
+it is worth opening — the constraint is access, not appetite.
 
 <details><summary>Pre-approval position (kept as the record)</summary>
 
