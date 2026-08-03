@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-evolve (Cycle 7, opened 2026-08-03)
-phase: 00 — awaiting owner approval before any code
+phase: 00 — built, 9 of 13 slices proven, awaiting CI
 appetite: 7d
-burn: 0d
-blocked-on: —
+burn: 1.5d
+blocked-on: CI green on the phase-00 PR
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -40,13 +40,30 @@ bank the contract, lint and vocabulary ADRs as documentation, stop, retro.
 
 ## Done log
 
-Nothing closed yet — the cycle has not started. Kickoff produced `PLAN.md`, 11 ADRs (0300–0310)
-and 5 phase specs on 2026-08-03, and STOPPED for owner approval per the kickoff contract.
+- **2026-08-03 — kickoff.** `PLAN.md`, 11 ADRs (0300–0310), 5 phase specs. STOPPED for owner
+  approval per the kickoff contract; approved as `01KZ3NAV2BVM7REMZFDAZGW9W1`
+  (`decision.recorded`, verdict approve).
+- **2026-08-03/04 — Phase 00 built, 9 of 13 slices proven.** The `evolve` manifest section
+  (ADR-0301), the eight experiment receipts (ADR-0304/0309, `KINDS` 22 → 30), the variant
+  grammar (ADR-0303), and the steel thread — one `experiment.opened` emitted, landed and read
+  back through the reader on the REAL spine, sealed with a real file's sha256.
+  Phase row stays ⬜ until CI is green and `/arc-phase-done 0 --lane evolve` runs.
 
 ## Now
 
-**Current position: kickoff complete, awaiting explicit owner approval. No product code exists
-and none may be written until that approval lands.**
+**Current position: Phase 00 is built and pushed; CI is the gate.** The remaining slices are
+10 (CI green), 11 (live demo — run, output checked, in the slice-08 record), 12 (contract tests
+against the fixture spine) and 13 (this file). None of them can close before CI reports.
+
+**The fresh-agent adversarial pass is the story of this phase.** Two unanchored attackers found
+**15 real holes** in code that had passed 54 of my own tests. Three were severe: corrections
+could never land (the idem omitted `supersedes`, so a correction collided with what it
+corrected); one unit could be assigned to **both** arms, corrupting the per-arm n that the
+verdict is computed from; and `venture` was dropped from the preimage, which is the exact
+regression that cost 100 real receipts in Cycle 2. One of my own tests was wrong in a way that
+hid the first of those — it varied `window_end`, so it "corrected" a different window and stayed
+green. All 15 are fixed and pinned as fixtures. `gate-author-cannot-be-its-attacker` is now
+evidenced twice.
 
 **This cycle is built ahead of its trigger, and that is on the record (ADR-0300).** The
 pre-kickoff gate was verified in-tree at kickoff and **all five rows are unevidenced**: no client
