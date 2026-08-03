@@ -14,8 +14,8 @@
 | # | Initiative | Dates | Result | Burn | Shipped |
 |---|---|---|---|---|---|
 | C6 | arc-engine "The Model-Agnostic Foundation" | 2026-08-03 | **CLOSED — 4/4 phases, one REQ partial** | ~14% of 14d | `processes/*.process.yaml` canonical layer + `process-lint` · `arc-compile` proving **3/3 byte-identical** then the flip · `arc-run` + 3 drivers behind one interface, hard budgets, proposal-receipt escalation, secret scrub, `router.yaml` (ADR-0200..0206) |
-| C6 | arc-develop "The Developer — the intelligence layers" | 2026-08-02 → 2026-08-03 | **CLOSED — 5/5 phases, REQ-03 carried** | ~30% of 7d | learning ledger + replay corpus + holdout · Context Pack (5 sources, one hop) · capability scout + vet gate + lockfile · pattern annex + approach sketches · six outcome metrics + calibration record (ADR-0106..0111) |
-| C5 | arc-develop "The Developer — the execution harness" | → 2026-08-02 | **CLOSED — 4/4 phases** (back-filled 2026-08-03) | ~38% of 5d | `/arc-develop` five lifecycle modes over the ADR-0100 slice ledger · `develop-lint` 3 BLOCKs + 2 trial groups · handoff refusing unscored predictions · `spec-fidelity` agent · stuck backstops (ADR-0100..0105) |
+| C6 | arc-develop "The Developer — the intelligence layers" | 2026-08-02 → 2026-08-03 | **CLOSED — 5/5 phases, REQ-03 carried** | ~30% of 7d | learning ledger + replay corpus + holdout · Context Pack (5 sources, one hop) · capability scout + vet gate + lockfile · pattern annex + approach sketches · six outcome metrics + calibration record (ADR-0108..0111) |
+| C5 | arc-develop "The Developer — the execution harness" | → 2026-08-02 | **CLOSED — 4/4 phases** (back-filled 2026-08-03) | ~38% of 5d | `/arc-develop` five lifecycle modes over the ADR-0100 slice ledger · `develop-lint` 3 BLOCKs + 2 trial groups · handoff refusing unscored predictions · `spec-fidelity` agent · stuck backstops (ADR-0100..0107) |
 | C4 | arc-portfolio "The Conductor" | 2026-07-30 → 2026-08-02 | **CLOSED — 4/4 phases** | ~112% of 3d | lanes + resolver on 7 surfaces · `PORTFOLIO.md` board + board lint · ownership lint · WIP info line · per-lane One Rule (ADR-0050..0062) |
 | C3 | arc-design "The Designer" | → 2026-07-30 | **CLOSED — 4/4 phases** | ~60% | vision-based design review: read-only critic · four-contract brief · thesis-driven exploration + blind ranking |
 | C2 | Receipt Spine | 2026-07-22 → 2026-07-28 | **CLOSED — 5/5 phases** (REQ-01 `active`, honestly downgraded) | ~40% of 12.5d | spine core · 7 flows emit · daily brief · approval inbox · reader-only API (ADR-0024..0031, ADR-0032) |
@@ -37,7 +37,16 @@
 ### C6 · arc-develop "The Developer — the intelligence layers" — CLOSED 2026-08-03 · lane `develop`
 
 - **Goal:** finish the design source — the harness stops merely running a phase with discipline and starts retrieving what past work knows, acquiring capabilities it lacks, mining decisions for prior art, and measuring whether any of it helped
-- **Result:** 5/5 phases · ~30% burn (2.1 of 7d) · 54 of 55 slices proven · **REQ-03 still `active`** · ADRs 0106–0111
+- **Result:** 5/5 phases · ~30% burn (2.1 of 7d) · 54 of 55 slices proven · **REQ-03 still `active`** · ADRs 0108–0111
+- **Corrected 2026-08-03:** this line first read "ADRs 0106–0111". It was wrong, and the way it
+  went wrong is worth more than the fix. C5's plan indexed 0100–0105, so at C6's close the gap was
+  filled by assuming ADR numbers run contiguously between cycles. `git log --diff-filter=A` says
+  0106 and 0107 were created on 2026-08-02 in PR #95 — **C5's own kickoff commit**, a day before
+  C6 opened. Both are cited in C6's PLAN prose and indexed in **neither** plan's Key decisions
+  table, which is how they were free to be mis-credited: `kickoff-lint`'s `[adr]` check walks the
+  plan's index and confirms each row has a file, never the ADR directory confirming each file has
+  a row. Five phase closes passed clean over it. Making that check bidirectional is a tracked
+  change, not part of this correction.
 - **Stat line (verbatim):** M | rework 0/5 | amendments 11 | FIRED 0/5 | burn ~30% | sim-blockers-r1 n/a-prior-session | t-to-phase0 ~0.8d
 - **Shipped:** learning ledger with typed links + 18 replay fixtures + a withheld holdout · Context Pack (five sources, one hop per ADR-0111, every source recorded) · `capability-vet.sh` refusing on seven conditions + `capability-scout` + `capability-lock.json` · decision-triggered Pattern Annex and risk-triggered approach sketches · `develop-lint --metrics` deriving six outcome metrics and a calibration record
 - **The claim that is NOT proven:** REQ-03's promotion loop ships and is lint-enforced, but **no real promotion has ever run through it**. Two candidates were authored and both were rejected — L-002 by an unanchored evaluator on its code, L-004 on its own computed counts. The exit criterion was deliberately not reworded to match where the ball landed, because moving a goalpost inside the phase that builds the machinery for refusing moved goalposts would be a strange thing to do
@@ -54,7 +63,11 @@
 - **4/4 phases CLOSED:** 00 steel thread · 01 the proof floor · 02 earned judgment · 03 controlled escalation
 - **Shipped:** `/arc-develop`'s five lifecycle modes over the ADR-0100 slice-ledger grammar · `develop-lint` with three structural BLOCKs and two WARN-first groups (ADR-0101) · handoff that refuses an unscored prediction block · `spec-fidelity` as an agent whose whole information set is the spec and the diff · fingerprint and attempt backstops emitting `slice.stuck`
 - **The lesson it is remembered for:** the author of a gate wrote 26 breaking inputs for it and all 26 were caught — then an unanchored agent that had never seen the parser found **9 real holes**, including a four-slice ledger claiming `proof: it works` that parsed to zero slices, zero errors, and got "all checks passed ✔". Every adversarial rule in Cycle 6 descends from that
-- **Decisions:** ADR-0100..0105 · archived plan at `initiatives/develop/archive/PLAN-cycle5-2026-08-02.md`
+- **Decisions:** ADR-0100..0107 · archived plan at `initiatives/develop/archive/PLAN-cycle5-2026-08-02.md`
+  — **0106 and 0107 corrected onto this cycle 2026-08-03** (created in PR #95, this cycle's kickoff
+  commit; they extend the spine's receipt vocabulary to 21 then 22). The archived plan indexes only
+  0100–0105 and is left exactly as it was: it is the record of what that cycle wrote down, not a
+  place to retrofit what it should have.
 - Full record: `initiatives/develop/` · evidence at `initiatives/develop/evidence/phase-0{0,1,2,3}/`
 
 ### C6 · arc-engine "The Model-Agnostic Foundation" — CLOSED 2026-08-03 · lane `engine`
