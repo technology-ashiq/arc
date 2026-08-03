@@ -1,0 +1,12 @@
+{
+  "phase": "00",
+  "commit": "a474a76d9468a6d7a4552e3e52b46f942ad02816",
+  "short": "a474a76",
+  "generated": "2026-08-03T19:07:33Z",
+  "files": [
+    {
+      "name": "handoff.md",
+      "sha256": "c3b9a6e8339c3fa676a3063ed2412dc3c9926296aa098939596b64ead88909fc"
+    }
+  ]
+}

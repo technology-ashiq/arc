@@ -14,6 +14,8 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { checkEvolveSection } from "./evolve-manifest.mjs";
+import { assertNoDuplicateKeys } from "./json-strict.mjs";
 
 const errors = [];
 const err = (m) => errors.push(m);
@@ -35,9 +37,11 @@ if (!root) {
   root = d;
 }
 
+// Extended 12 -> 13 by ADR-0301: `evolve` declares what a module may optimize. Absent is the
+// silent, valid state — the field is opt-in and no existing manifest declares it.
 const KNOWN_FIELDS = new Set([
   "name", "version", "requires", "commands", "agents", "scripts", "files",
-  "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks",
+  "docs", "skeletonDirs", "envBlock", "envSentinel", "hooks", "evolve",
 ]);
 const SEMVER = /^\d+\.\d+\.\d+$/;
 const NAME_RE = /^[a-z][a-z-]*$/;
@@ -82,8 +86,16 @@ for (const dir of readdirSync(productsDir)) {
   if (raw.includes(0x0d))
     err(`products/${dir}/manifest.json: CR byte (CRLF) not allowed — LF only`);
 
+  // Duplicate keys BEFORE parse. JSON.parse is last-wins, so a manifest whose bytes carry a
+  // forbidden value lints clean when a later duplicate of the same key overwrites it — the
+  // adversarial pass got a money `promote_via` through exactly that way, and the refusal
+  // depended on which duplicate came last. Any first-wins reader downstream sees the other one.
+  const text = raw.toString("utf8");
+  try { assertNoDuplicateKeys(text, `products/${dir}/manifest.json`); }
+  catch (e) { err(`${e.message}`); continue; }
+
   let obj;
-  try { obj = JSON.parse(raw.toString("utf8")); }
+  try { obj = JSON.parse(text); }
   catch (e) { err(`products/${dir}/manifest.json: invalid JSON (${e.message})`); continue; }
 
   for (const k of Object.keys(obj))
@@ -152,6 +164,11 @@ for (const dir of readdirSync(productsDir)) {
   }
   if (obj.envSentinel !== undefined && (typeof obj.envSentinel !== "string" || !ENV_SENTINEL_RE.test(obj.envSentinel)))
     err(`products/${dir}: envSentinel must be a simple anchored token (^?[A-Za-z0-9_=-]+$?), got ${JSON.stringify(obj.envSentinel)}`);
+
+  // evolve (ADR-0301). Presence is tested with `in`, not truthiness: `"evolve": null` and
+  // `"evolve": 0` are malformed declarations, not absences, and must reach the validator.
+  if ("evolve" in obj)
+    for (const m of checkEvolveSection(obj.evolve, `products/${dir}`, { root })) err(m);
 
   // case-collide across this manifest's declared paths
   const declared = [...payload, ...docPaths];

@@ -28,9 +28,13 @@
     ".claude/scripts/core/lane-resolve.mjs",
     ".claude/scripts/core/board-lint.sh",
     ".claude/scripts/core/ownership-lint.sh",
-    ".claude/scripts/core/wip-line.sh"
+    ".claude/scripts/core/wip-line.sh",
+    ".claude/scripts/core/evolve-manifest.mjs",
+    ".claude/scripts/core/variant-grammar.mjs",
+    ".claude/scripts/core/json-strict.mjs"
   ],
   "files": [
+    ".claude/scripts/core/money-surfaces.json",
     ".claude/hooks/_dispatch.sh",
     ".claude/hooks/SessionStart.sh",
     ".claude/hooks/SessionStart.d/00-context.sh",

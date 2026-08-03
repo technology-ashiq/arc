@@ -5,6 +5,7 @@
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
 import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex } from "./canonical.mjs";
+import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -16,13 +17,20 @@ const MAX_COST_MAGNITUDE = 1e12;
 
 // ADR-0026: the vocabulary is CLOSED. Extensions only via a new ADR.
 // Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready),
-// then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read).
+// then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read),
+// then 22 -> 30 by ADR-0309 (evolve's eight experiment receipts, frozen by ADR-0304).
+// `metric.observed` is deliberately NOT here: it is the client module's kind (ADR-0308).
 export const KINDS = Object.freeze([
   "idea.captured", "council.verdict", "approval.requested", "decision.recorded",
   "kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
   "ship.done", "revenue.received", "revenue.simulated", "cost.incurred", "run.completed",
   "incident.raised", "redaction.applied", "day.closed", "note.logged",
   "develop.started", "slice.done", "handoff.ready", "slice.stuck",
+  ...EXPERIMENT_KINDS,
+  // 30 -> 31 by ADR-0310: the council's terminal outcome. `council.verdict` records the CALL and
+  // already existed (0 emitted); this records what actually happened, which is a distinct later
+  // fact and therefore its own kind per ADR-0304's one-kind-per-lifecycle-step rule.
+  "council.outcome",
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -40,9 +48,16 @@ const HEX64 = /^[0-9a-f]{64}$/;
 const ACTOR_RE = /^[A-Za-z0-9][A-Za-z0-9:._-]{0,127}$/;
 // Exported (engine Cycle 6, ADR-0200) so process-lint can assert a canonical process's
 // `name@version` against the SAME regex the spine enforces, rather than against a copy.
-// A copied regex is a regex that drifts (retro-log 2026-07-22). Export only -- the value,
-// its position and every behaviour here are unchanged.
-export const PROCESS_RE = /^[a-z0-9][a-z0-9._-]{0,63}@[0-9]+\.[0-9]+\.[0-9]+$/;
+// A copied regex is a regex that drifts (retro-log 2026-07-22).
+//
+// ADR-0303 extends it to `name@x.y.z(+slug)?` so an experiment arm is addressable without a
+// second identifier scheme. The definition moved to core/variant-grammar.mjs — three products
+// need it now (hq, engine, and core's `evolve` section validator), and core is the one product
+// every other already requires. RE-EXPORTED here, not re-declared: process-lint imports it from
+// this module, and an alias keeps that import working while there stays exactly one regex.
+// A legacy `name@x.y.z` is unchanged by construction — the suffix group is optional.
+export { PROCESS_RE } from "../../core/variant-grammar.mjs";
+import { PROCESS_RE } from "../../core/variant-grammar.mjs";
 const VENTURE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RUN_ID_RE = /^r-[A-Za-z0-9._-]{1,64}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/;
@@ -179,6 +194,47 @@ function assertDecision(event) {
     throw new SpineError("BAD_DECISION", `decision.idem must be sha256("decision.recorded|"+decides) -- a decision's idem is bound to the approval it decides`);
 }
 
+// The council measuring ITSELF (ADR-0307/0310). Two kinds, both closed:
+//
+//   council.verdict  -- the CALL, with the confidence bucket it was made at
+//   council.outcome  -- what actually happened, recorded later
+//
+// Both payloads are closed for the reason ADR-0304 gives: calibration is computed from these
+// fields, so if the Brier score reads it, a validator asserts it. `unresolved` is a first-class
+// outcome and NOT a miss — a session nobody followed up on is not a session the council got
+// wrong, and scoring it as 0 would manufacture a calibration number out of an absence.
+const COUNCIL_CONFIDENCE = new Set(["High", "Medium", "Low"]);
+const COUNCIL_CALLS = new Set(["proceed", "hold"]);
+const COUNCIL_OUTCOMES = new Set(["happened", "did-not-happen", "unresolved"]);
+const SESSION_ID_RE = /^c-[A-Za-z0-9._-]{1,64}$/;
+
+function assertCouncil(event) {
+  const p = event.payload;
+  const allowed = event.kind === "council.verdict"
+    ? ["session_id", "question_hash", "call", "confidence"]
+    : ["session_id", "outcome", "observed_at", "source_id"];
+  for (const k of Object.keys(p))
+    if (!allowed.includes(k)) throw new SpineError("BAD_COUNCIL", `${event.kind} payload has unknown key "${k}" (closed to ${allowed.join("|")})`);
+  for (const k of allowed)
+    if (!(k in p)) throw new SpineError("BAD_COUNCIL", `${event.kind} payload is missing "${k}"`);
+  if (typeof p.session_id !== "string" || !SESSION_ID_RE.test(p.session_id))
+    throw new SpineError("BAD_COUNCIL", `session_id ${JSON.stringify(p.session_id)} must be c-<token>`);
+  if (event.kind === "council.verdict") {
+    if (typeof p.question_hash !== "string" || !HEX64.test(p.question_hash))
+      throw new SpineError("BAD_COUNCIL", "question_hash must be a lowercase sha256 hex");
+    if (!COUNCIL_CALLS.has(p.call)) throw new SpineError("BAD_COUNCIL", `call ${JSON.stringify(p.call)} is outside ${[...COUNCIL_CALLS].join("|")} (exact case)`);
+    // Case-EXACT, matching ADR-0009's buckets. "high" is not "High": a normalised bucket is a
+    // bucket whose probability was chosen by the normaliser rather than by the juror.
+    if (!COUNCIL_CONFIDENCE.has(p.confidence)) throw new SpineError("BAD_COUNCIL", `confidence ${JSON.stringify(p.confidence)} is outside ${[...COUNCIL_CONFIDENCE].join("|")} (exact case)`);
+  } else {
+    if (!COUNCIL_OUTCOMES.has(p.outcome)) throw new SpineError("BAD_COUNCIL", `outcome ${JSON.stringify(p.outcome)} is outside ${[...COUNCIL_OUTCOMES].join("|")} (exact case)`);
+    if (typeof p.observed_at !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.observed_at))
+      throw new SpineError("BAD_COUNCIL", "observed_at must be YYYY-MM-DD");
+    if (typeof p.source_id !== "string" || !/^([A-Za-z0-9][A-Za-z0-9._-]{0,63}|h-[0-9a-f]{16})$/.test(p.source_id))
+      throw new SpineError("BAD_COUNCIL", "source_id must be an opaque token or the h-<16 hex> hashed form");
+  }
+}
+
 // Throws SpineError on the first violation. The caller decides what a violation MEANS
 // (exit 2 vs quarantine) -- this function never knows which mode it is running in.
 export function validateEvent(event) {
@@ -215,11 +271,13 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106/0107/0309)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
   if (event.kind === "decision.recorded") assertDecision(event);
+  if (isExperimentKind(event.kind)) assertExperiment(event);
+  if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

@@ -16,7 +16,10 @@ cd "$ROOT" || exit 0
 
 # Tracked hq .mjs only -- a glob over git-tracked paths (REQ-09: coverage without a hardcoded
 # file list). Not a git repo / nothing tracked -> advisory pass, never a false alarm.
-FILES="$(git ls-files .claude/scripts/hq 2>/dev/null | grep '\.mjs$' || true)"
+# `evolve` joined the scope in Cycle 7: its board is a spine CONSUMER (ADR-0302, reader-only),
+# and a consumer that lives outside this lint's file glob is a consumer nothing checks. Listing
+# the directory rather than the file keeps later evolve modules covered without editing this lint.
+FILES="$(git ls-files .claude/scripts/hq .claude/scripts/evolve 2>/dev/null | grep '\.mjs$' || true)"
 [ -n "$FILES" ] || exit 0
 
 # The implementation layer is ALLOWED these tokens: the reader itself, the replayer that rebuilds

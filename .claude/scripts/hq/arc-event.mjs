@@ -26,6 +26,7 @@ import {
   parseStrictJson, readJsonFile, sha256Hex,
 } from "./lib/canonical.mjs";
 import { validateEvent } from "./lib/validate.mjs";
+import { experimentIdem, isExperimentKind } from "./lib/validate-experiment.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
@@ -55,7 +56,19 @@ function walkArgs(argv) {
     if (a === "--strict") { flags.strict = true; continue; }
     if (a.startsWith("--")) {
       const eq = a.indexOf("=");
-      if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
+      if (eq !== -1) {
+        // The membership check belongs on BOTH forms. It used to run only on the space form, so
+        // `--strct=1` was accepted and silently discarded while `--strct 1` errored: a CI or gate
+        // script with a one-character typo in `--strict` ran in hook mode and reported exit 0 on
+        // every receipt it was supposed to refuse. `--strict=0` is still strict (the flag was
+        // given, the value ignored) — that stays true; what changes is that a MISSPELLED flag can
+        // no longer reach this fast path unchecked.
+        const eqName = a.slice(2, eq);
+        if (eqName === "strict") { flags.strict = a.slice(eq + 1); continue; }
+        if (!VALUE_FLAGS.has(eqName)) { errors.push(`unknown flag --${eqName}`); continue; }
+        flags[eqName] = a.slice(eq + 1);
+        continue;
+      }
       const name = a.slice(2);
       if (!VALUE_FLAGS.has(name)) { errors.push(`unknown flag --${name}`); continue; }
       const next = argv[i + 1];
@@ -79,6 +92,13 @@ const envOr = (name, fallback) => {
   const v = process.env[name];
   return v === undefined || v === "" ? fallback : v;
 };
+
+// An experiment idem over a payload that is not yet known to be valid. Returns null rather than
+// throwing, so the caller falls through to validateEvent and the operator sees "missing base_sha"
+// instead of a stack trace from the hashing helper.
+function safeExperimentIdem(kind, payload, venture, supersedes) {
+  try { return experimentIdem(kind, payload, venture, supersedes); } catch { return null; }
+}
 
 // ---------- event construction ----------
 function synthesize(kind, flags, { deriveIdem }) {
@@ -113,11 +133,26 @@ function synthesize(kind, flags, { deriveIdem }) {
   //   receipt is visible on an append-only spine and harmless; a dropped one is invisible
   //   and lying. Callers that KNOW a logical identity (arc-inbox: one decision per
   //   approval) keep strict exactly-once by supplying --idem.
+  //
+  //   experiment kinds (ADR-0304) -- a LIFECYCLE FACT with a declared identity. One unit is
+  //   assigned to one arm once; one experiment is opened once against one seal. The idem is the
+  //   total preimage over that kind's identity-bearing fields, derived here from the SAME
+  //   formula the validator re-derives, and a caller-supplied --idem is refused outright
+  //   (anti-preclaim, exactly as on the ingest path). Time is deliberately NOT in the preimage:
+  //   a doubled `experiment.assigned` for one unit is a real double-assignment and must collide,
+  //   not land twice and quietly double that arm's n.
   const ms = nowMs();
   const contentPre = `${actor}|${venture}|${kind}|${runId}|${outcome}|${canonicalize(payload)}`;
-  const idem = deriveIdem
-    ? sha256Hex(contentPre)
-    : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
+  let idem;
+  if (isExperimentKind(kind)) {
+    if (flags.idem !== undefined)
+      throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
+    // A malformed payload cannot produce an idem at all; let validateEvent report the real
+    // field error rather than dying here on a missing key.
+    idem = safeExperimentIdem(kind, payload, venture, flags.supersedes ?? null) ?? sha256Hex(`${contentPre}|${ms}`);
+  } else {
+    idem = deriveIdem ? sha256Hex(contentPre) : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
+  }
 
   return {
     id: newUlid(ms, idem),

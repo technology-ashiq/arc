@@ -295,7 +295,7 @@ function evidenceCompleteness(all) {
  *
  * WHAT THIS DOES NOT COUNT, stated because a measure that omits something and does not say so
  * reads as complete: **agent invocations**. Nothing records them — the spine's kind vocabulary
- * is closed (ADR-0026) and none of its 22 kinds is an agent call — so counting them would mean
+ * is closed (ADR-0026) and no kind in it is an agent call — so counting them would mean
  * inventing a number, which is the one thing this file exists to refuse. Widening it needs a
  * new receipt kind and therefore a new ADR.
  */
