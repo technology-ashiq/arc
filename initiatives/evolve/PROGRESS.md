@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-evolve (Cycle 7, opened 2026-08-03)
-phase: 00 — built, 9 of 13 slices proven, awaiting CI
+phase: 01 — board (Phase 00 CLOSED 2026-08-04)
 appetite: 7d
 burn: 1.5d
-blocked-on: CI green on the phase-00 PR
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -21,13 +21,13 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Contract + steel thread — manifest schema, `product-lint` extension, 8 kinds + validators, grammar, one receipt end-to-end | 1.5 days | ⬜ pending |
+| 00 | Contract + steel thread — manifest schema, `product-lint` extension, 8 kinds + validators, grammar, one receipt end-to-end | 1.5 days | ✅ closed 2026-08-04 |
 | 01 | Board — reader-only reducer; `PENDING` / staleness / `MISSING` / `insufficient evidence`; stream separation | 1.0 days | ⬜ pending |
 | 02 | Runner + verdict math — assignment, seal, floors, TTL, the pinned test + reference vectors | 1.5 days | ⬜ pending |
 | 03 | Promotion safety — four-hop SHA lineage, evidence table, inbox, watch, freeze, revert path | 1.5 days | ⬜ pending |
 | 04 | Council bridge — **THE DESIGNATED CUT** | 1.5 days | ⬜ pending |
 
-**Appetite burn: 0 of 7 days used (0%).** Phases 00–03 (the core engine) allocate **5.5 days**.
+**Appetite burn: 1.5 of 7 days used (21%).** Phases 00–03 (the core engine) allocate **5.5 days**.
 Phase 04 allocates the remaining 1.5d and is the designated cut — it is simultaneously the only
 slack in the cycle. That is deliberate and it is the lesson `arc-portfolio` paid for: Cycle 4
 allocated 100% with zero slack, `appetite-sum` warned on every run, Phase 02 overran 0.35d with
@@ -43,17 +43,17 @@ bank the contract, lint and vocabulary ADRs as documentation, stop, retro.
 - **2026-08-03 — kickoff.** `PLAN.md`, 11 ADRs (0300–0310), 5 phase specs. STOPPED for owner
   approval per the kickoff contract; approved as `01KZ3NAV2BVM7REMZFDAZGW9W1`
   (`decision.recorded`, verdict approve).
-- **2026-08-03/04 — Phase 00 built, 9 of 13 slices proven.** The `evolve` manifest section
-  (ADR-0301), the eight experiment receipts (ADR-0304/0309, `KINDS` 22 → 30), the variant
-  grammar (ADR-0303), and the steel thread — one `experiment.opened` emitted, landed and read
-  back through the reader on the REAL spine, sealed with a real file's sha256.
-  Phase row stays ⬜ until CI is green and `/arc-phase-done 0 --lane evolve` runs.
+- **2026-08-04 — Phase 00 CLOSED.** 13/13 slices proven, CI green (run 30843916974, 19 jobs,
+  0 failures), evidence bundled and verified at `initiatives/evolve/evidence/phase-00/`.
+  Delivered: the `evolve` manifest section (ADR-0301), the eight experiment receipts
+  (ADR-0304/0309, `KINDS` 22 -> 30), the variant grammar (ADR-0303), and the steel thread — one
+  `experiment.opened` emitted, landed and read back through the reader on the REAL spine, sealed
+  with a real file's sha256. Prediction calibration: 1 hit, 1 miss, 3 unforeseen.
 
 ## Now
 
-**Current position: Phase 00 is built and pushed; CI is the gate.** The remaining slices are
-10 (CI green), 11 (live demo — run, output checked, in the slice-08 record), 12 (contract tests
-against the fixture spine) and 13 (this file). None of them can close before CI reports.
+**Current position: Phase 00 closed. Phase 01 (the board) is next and has not started.**
+Phase 01 depends on phase-00 and is where `products/evolve/manifest.json` is born.
 
 **The fresh-agent adversarial pass is the story of this phase.** Two unanchored attackers found
 **15 real holes** in code that had passed 54 of my own tests. Three were severe: corrections
@@ -63,7 +63,12 @@ verdict is computed from; and `venture` was dropped from the preimage, which is 
 regression that cost 100 real receipts in Cycle 2. One of my own tests was wrong in a way that
 hid the first of those — it varied `window_end`, so it "corrected" a different window and stayed
 green. All 15 are fixed and pinned as fixtures. `gate-author-cannot-be-its-attacker` is now
-evidenced twice.
+evidenced twice, and the second time it was against code I believed was careful.
+
+**Two debt rows carried out of Phase 00** (full text in `phases/phase-00-tasks.md`): two
+duplicate-key JSON scanners, and `target_path` case-aliasing giving one file two identities on a
+case-insensitive filesystem. The second names Phase 03's same-`base_sha` fixture as its
+downstream control — check it there rather than re-deriving it.
 
 **This cycle is built ahead of its trigger, and that is on the record (ADR-0300).** The
 pre-kickoff gate was verified in-tree at kickoff and **all five rows are unevidenced**: no client
@@ -78,10 +83,7 @@ must close saying its north-star claim is *fixture-proven, unexercised* — the 
 REQ-08 partial is the precedent for reporting a partial claim as partial rather than waiving it,
 and this lane inherits that standard.
 
-**To start Phase 00, in this order:**
-1. Owner approves the plan (`arc-inbox approve <id>` against the `approval.requested` receipt).
-2. `/arc-develop start 0 --lane evolve` — turn the approved phase into proven slices.
-3. Phase 00's first red test is already named in its spec: `bats tests/evolve-contract.bats`
-   fails with `expected exit 2, got 0`, and `bats tests/evolve-receipts.bats` fails with the
-   receipt in `_quarantine/` carrying `UNKNOWN_KIND`. Both are the exact states verified in-tree
-   at kickoff, so red-before-green is already evidenced rather than assumed.
+**To start Phase 01:** `/arc-develop start 1 --lane evolve`. Its first red test is the board
+rendering `MISSING` for a metric with no receipts — which is the state the spine is genuinely in,
+because `metric.observed` is the client's kind and does not exist here. The absence tests the
+design instead of blocking it.
