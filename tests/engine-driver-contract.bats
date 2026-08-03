@@ -216,3 +216,30 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   run node "$(RUN)"
   [ "$status" -eq 2 ]
 }
+
+@test "REQ-04: the contract suite also exercises each driver's REAL code path" {
+  # ARC_DRIVER_FAKE returns BEFORE produce() runs, so every other test in this file proves
+  # interface conformance and nothing about a driver's own logic. Found while timing the
+  # 4th driver: a fixture pass via the fake path is not evidence the driver works.
+  #
+  # So: run each driver with NO fake and a deliberately unreachable endpoint/binary. Each
+  # must reach its own code, fail, and report the DRIVER-FAILURE exit code -- not crash,
+  # not exit 0, not hang.
+  for d in $DRIVERS; do
+    ARC_LLM_ENDPOINT="http://127.0.0.1:59999/nope" \
+    ARC_LLM_API_KEY="not-a-real-key" \
+    ARC_LLM_MODEL="none" \
+    ARC_CLAUDE_CLI="definitely-not-a-real-binary" \
+    ARC_CODEX_CLI="definitely-not-a-real-binary" \
+    run bash "$ARC_ROOT/.claude/scripts/engine/drivers/$d.sh" run commit-msg-draft '{}' 'inr=10'
+    [ "$status" -eq 1 ] || { echo "driver $d exited $status on its real path (want 1)"; echo "$output"; false; }
+    [ -n "$output" ]
+  done
+}
+
+@test "REQ-04: a driver with no recording fails loudly rather than passing silently" {
+  local empty; empty="$(mktemp -d)"
+  ARC_DRIVER_FAKE="$empty" run bash "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.sh" run commit-msg-draft '{}' 'inr=10'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not a fake, it is a silent pass"* ]]
+}
