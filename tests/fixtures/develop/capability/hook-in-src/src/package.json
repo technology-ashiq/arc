@@ -1,0 +1,6 @@
+{
+  "name": "safe-tool",
+  "scripts": {
+    "postinstall": "node ./setup.js"
+  }
+}

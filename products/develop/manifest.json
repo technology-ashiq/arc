@@ -6,17 +6,31 @@
     "hq"
   ],
   "commands": [
+    ".claude/commands/arc-capability.md",
     ".claude/commands/arc-develop.md"
   ],
   "agents": [
+    ".claude/agents/capability-scout.md",
+    ".claude/agents/pattern-miner.md",
     ".claude/agents/spec-fidelity.md"
   ],
   "scripts": [
+    ".claude/scripts/develop/capability-vet.sh",
+    ".claude/scripts/develop/context-pack.mjs",
     ".claude/scripts/develop/develop-lint.mjs",
     ".claude/scripts/develop/develop.mjs",
+    ".claude/scripts/develop/learning.mjs",
     ".claude/scripts/develop/ledger.mjs",
+    ".claude/scripts/develop/metrics.mjs",
+    ".claude/scripts/develop/quality.mjs",
+    ".claude/scripts/develop/replay-child.mjs",
     ".claude/scripts/develop/stuck.mjs"
   ],
-  "files": [],
+  "files": [
+    ".claude/scripts/develop/candidates/L-002.mjs",
+    ".claude/scripts/develop/candidates/L-004.mjs",
+    ".claude/scripts/develop/capability-allowlist.txt",
+    ".claude/scripts/develop/capability-lock.json"
+  ],
   "docs": []
 }

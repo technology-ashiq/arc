@@ -1,0 +1,24 @@
+run: 30768154452
+head: 777b49ef0919b831e180f71e808ad5046bd5cafd
+conclusion: success
+created: 2026-08-02T21:33:25Z
+jobs: 19 of 19 successful
+success	ci-tier
+success	selftest (windows-latest, 20, shard 7/12)
+success	selftest (ubuntu-latest, 22)
+success	selftest (windows-latest, 20, shard 5/12)
+success	selftest (ubuntu-latest, 20)
+success	selftest (macos-latest, 20, shard 3/3)
+success	selftest (windows-latest, 20, shard 6/12)
+success	selftest (windows-latest, 20, shard 4/12)
+success	selftest (ubuntu-latest, 18)
+success	selftest (macos-latest, 20, shard 1/3)
+success	selftest (macos-latest, 20, shard 2/3)
+success	selftest (windows-latest, 20, shard 1/12)
+success	selftest (windows-latest, 20, shard 3/12)
+success	selftest (windows-latest, 20, shard 9/12)
+success	selftest (windows-latest, 20, shard 10/12)
+success	selftest (windows-latest, 20, shard 11/12)
+success	selftest (windows-latest, 20, shard 2/12)
+success	selftest (windows-latest, 20, shard 8/12)
+success	selftest (windows-latest, 20, shard 12/12)

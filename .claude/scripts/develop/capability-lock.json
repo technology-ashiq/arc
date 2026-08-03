@@ -1,0 +1,16 @@
+{
+  "capabilities": [
+    {
+      "name": "madge",
+      "registry": "npm",
+      "version": "8.0.0",
+      "hash": "sha512-9sSsi3TBPhmkTCIpVQF0SPiChj1L7Rq9kU2KDG1o6v2XH9cCw086MopjVCD+vuoL5v8S77DTbVopTO8OUiQpIw==",
+      "publisher-auth": "npm registry, maintainers pahen and kamiazya; dist.integrity verified against the fetched tarball byte-for-byte on 2026-08-03",
+      "build-attestation": "none published — npm reports no dist.attestations for this version",
+      "checked": "2026-08-03",
+      "source": "npm:madge@8.0.0, fetched and not retained",
+      "class": "write-capable (human OK recorded: ashiq 2026-08-03)"
+    }
+  ],
+  "refusals": []
+}

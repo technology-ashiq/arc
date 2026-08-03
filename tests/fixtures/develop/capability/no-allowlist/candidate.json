@@ -1,0 +1,9 @@
+{
+  "name": "totally-unknown-tool",
+  "registry": "npm",
+  "version": "1.2.3",
+  "hash": "sha512-3a7bd3e2360a3d4f2b1c8e9f0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d",
+  "publisher-auth": "npm org safe-tools, 2FA enforced, verified 2026-08-03",
+  "build-attestation": "none published",
+  "registry-record": "registry.json"
+}

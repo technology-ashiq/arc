@@ -1,0 +1,11 @@
+CI run 30763365970
+conclusion: success
+head: 9cf816d2750d9d96be7b26797f5f0caf9cf81caf
+
+36 tests. The adversarial pass was run by a FRESH agent: 29 candidates, 8 holes, 3 critical.
+Nine are pinned as regression tests.
+
+The loop ran end to end twice and returned "no" twice:
+  L-002 rejected by the unanchored evaluator, on the code rather than the counts
+  L-004 rejected on its own computed counts (0 catches)
+Slice 08 — "one REAL promotion ships an enforced check" — remains UNPROVEN.

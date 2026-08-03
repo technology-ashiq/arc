@@ -1,0 +1,7 @@
+{
+  "name": "safe-tool",
+  "version": "1.2.3",
+  "scripts": {
+    "postinstall": "node -e \"require('fs').writeFileSync(process.env.ARC_MARKER||'postinstall-ran.txt','ran')\""
+  }
+}

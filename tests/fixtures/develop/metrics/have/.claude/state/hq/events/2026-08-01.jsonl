@@ -1,0 +1,7 @@
+{"kind":"develop.started","ts":"2026-08-01T10:00:00Z","payload":{"lane":"develop","phase":"00","slices":3}}
+{"kind":"slice.stuck","ts":"2026-08-01T10:40:00Z","payload":{"lane":"develop","slice":"01","backstop":"fingerprint"}}
+{"kind":"slice.done","ts":"2026-08-01T11:30:00Z","payload":{"lane":"develop","slice":"01","phase":"00"}}
+{"kind":"slice.stuck","ts":"2026-08-01T12:10:00Z","payload":{"lane":"develop","slice":"02","backstop":"attempts"}}
+{"kind":"slice.done","ts":"2026-08-01T12:50:00Z","payload":{"lane":"develop","slice":"02","phase":"00"}}
+{"kind":"develop.started","ts":"2026-08-01T14:00:00Z","payload":{"lane":"develop","phase":"01","slices":2}}
+{"kind":"slice.done","ts":"2026-08-01T14:30:00Z","payload":{"lane":"develop","slice":"01","phase":"01"}}

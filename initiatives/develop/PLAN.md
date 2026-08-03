@@ -1,211 +1,217 @@
-# PLAN.md — arc `develop` · "The Developer"
+# PLAN.md — arc `develop` · Cycle 6: the intelligence layers
 
-> Cycle 5 · lane `develop` — arc's first natively-born lane. Design source (frozen, not editable
-> here): `docs/strategy/plans/PLAN-develop.md`. That file is the decision record (DEV-A…K, 4 review
-> rounds, §11 rejected-ideas registry); **this** file is the buildable cycle cut from it at a 5-day
-> appetite. Attack findings mutate this plan, never the source.
+> Cycle 5 shipped delivery-order layers 1 and 2 of `docs/strategy/plans/PLAN-develop.md` and is
+> archived at `archive/PLAN-cycle5-2026-08-02.md`.
+>
+> **This cycle finishes the design source, with exactly one carve-out, and the route here is worth
+> recording.** The first draft claimed completion while five things had no REQ and no phase —
+> Phase 04 deferred them to Phase 07 and Phase 07 deferred them back, so nobody owned them. An
+> attack pass caught the claim. The owner then funded the remainder rather than accept the gap:
+> appetite raised 5 → 7 days, Phase 08 added.
+>
+> **Ships here:** layer 3 in full · layer 4 except design-critic checkpoints · layer 5 in full —
+> the promotion loop (Phase 04) and the feedback half (Phase 08: outcome metrics, calibration
+> record, tags, suggestion engine).
+>
+> **The one carve-out:** layer 4's **design-critic checkpoints**. Not deferred for time — they gate
+> new routes, component families and changed interaction models, and this cycle has no UI REQ to
+> exercise them against. Building a gate with nothing to gate would produce a control nobody has
+> ever seen fire, which is the precise thing this product refuses. It carries a debt-ledger row with
+> a real trigger: the first phase whose target has a UI surface.
+>
+> Owner decision, 2026-08-02: build the plan out rather than wait for dogfood evidence to select
+> the next layer. The design source's Feature Admission Rule (§2 rule 5) says post-v1 features
+> enter via the promotion loop with evidence; **that rule is explicitly set aside for this cycle**
+> — the plan was fully adjudicated over four review rounds and the owner has chosen to complete it.
+> It resumes once these layers are in.
 
 ## Goal
 
-An execution harness for whoever is building an approved arc phase: `/arc-develop` turns that phase
-into small, spec-anchored, independently **proven** increments with visible progress and controlled
-escalation — so the longest stretch of the build, today owned by nobody, stops relying on the model
-remembering to be careful.
+Finish The Developer: an execution harness that not only runs a phase with discipline, but
+**retrieves the right context before each slice, acquires capabilities it lacks, mines decisions
+for prior art, and learns from its own escaped defects** — so the next phase is measurably better
+run than the last, from a record rather than from memory.
 
 ## Current state
 
-- **Stack:** arc itself — an AI build harness. Node 18+, bash-3.2 safe, **zero external deps in
-  core**. Cycle 4 (portfolio) closed 2026-08-02; lanes `design` and `portfolio` are IDLE.
-- **Entry points:** `.claude/commands/arc-*.md` (commands are markdown prompt files) →
-  `.claude/scripts/core/lane-resolve.sh|.mjs` (routing) → `.claude/scripts/hq/arc-event.sh` (receipts).
-  Lints live in `.claude/scripts/plan/` and `.claude/scripts/core/`. Products are declared in
-  a per-product `manifest.json` (e.g. `products/design/manifest.json`) and validated by `product-lint.mjs`.
-- **Conventions:** every lane surface calls `lane-resolve.sh --for` with its surface name first and echoes
-  `Selected lane:` before anything else; `--for` is a free-form string and only `kickoff` is
-  special-cased (→ `status=create`), so a new surface needs **no resolver edit** (ADR-0105). Node
-  callers import `resolveLane` from `lane-resolve.mjs`. Exit codes: `0` resolved · `3` ambiguous ·
-  `4` unknown lane · `5` invalid name. WARN format `[check-name] FILE:LINE — Expected/Found/Example`,
-  exit 0. Gates ship WARN-first and promote to BLOCK only via `docs/trial-ledger.md` (fixture-proven +
-  ≥3 clean dogfood runs). `PROGRESS.md`'s `key: value` machine header is the board's only truth
-  source (ADR-0051). Tests are bats under `tests/`; CI is a 19-job ubuntu/macos/windows matrix.
-- **Hot / high blast radius:** `lane-resolve.sh` + `.mjs` are byte-identical twins — any drift blocks
-  every command. `kickoff-lint.mjs` gates every phase open and close. `arc-event.*` carries all
-  receipts.
-- **Do-not-touch:** `docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/` stay **root
-  organs, never per-lane** (ADR-0053). `docs/evidence/**` and `docs/archive/**` are frozen
-  (ADR-0058). `tests/fixtures/sync-golden/tree-manifest.txt` is a SHA256 byte-identity gate — editing
-  any product-shipped file means a named regeneration step.
-- **Absent today:** no `.claude/scripts/develop/`, no `.claude/commands/arc-develop.md`, no
-  `products/develop/`, no `.claude/agents/spec-fidelity.md`, no `.claude/state/develop/` — this lane
-  builds all five from nothing. Root `CLAUDE.md`'s `## Commands` list and its "only the five command
-  lines showing the lane flag" sentence both become false the moment `/arc-develop` ships.
+- **Stack:** arc. Node 18+, bash-3.2 safe, zero external deps in core. CI is a 19-job
+  ubuntu/macos/windows matrix; `product-lint` runs directly, everything else through bats.
+- **Entry points:** `.claude/scripts/develop/` holds `develop.mjs` (the five lifecycle modes),
+  `ledger.mjs` (ADR-0100 grammar: writer + tolerant parser), `develop-lint.mjs` (3 structural
+  BLOCKs + 2 WARN-first groups), `stuck.mjs` (fingerprint + attempt backstops).
+  `.claude/commands/arc-develop.md` is the prompt wrapper; `products/develop/manifest.json`
+  declares the product; `.claude/agents/spec-fidelity.md` is its only agent.
+- **Conventions:** lane resolution is IMPORTED from `core/lane-resolve.mjs`, never re-implemented.
+  Gates ship WARN-first and promote via `docs/trial-ledger.md`. Every gate ships a negative
+  control proving it can fail. Receipt kinds are a closed vocabulary — 22 now, ADR-0026 as
+  extended by ADR-0106 and ADR-0107; a new kind needs a new ADR. ADR numbers are banded one
+  century per lane and `kickoff-lint`'s `[adr-dup]` FAILs on a collision. Editing any
+  product-shipped file means regenerating `tests/fixtures/sync-golden/tree-manifest.txt` as a
+  named step.
+- **Hot / high blast radius:** `ledger.mjs` — 7 of Cycle 5's 9 adversarial holes were in its
+  parser, and every consumer reads through it. `lane-resolve.*` twins. `validate.mjs` (the spine's
+  closed vocabulary).
+- **Do-not-touch:** `docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/` are root
+  organs, never per-lane (ADR-0053). `docs/evidence/**` and `docs/archive/**` are frozen.
+- **Absent today:** no learning ledger, no eval fixtures, no capability scout or lockfile, no
+  pattern miner. The Context Pack is a grep-based blast radius and an ADR-number list — nothing
+  more. Those four absences are this cycle.
 
 ## Success requirements
 
 | REQ | User outcome | Measurable acceptance | Phase | Status |
 |---|---|---|---|---|
-| REQ-01 | I start a phase and get its Build Brief and slice ledger without hand-writing either | `/arc-develop start 0 --lane develop` on the committed fake phase writes `phases/phase-00-tasks.md` with a brief header (REQs · non-negotiables · no-gos · ADR list · blast radius · prediction block · the spec hash REQ-05 checks staleness against) and 5 slice blocks each carrying `proof:`, `tier:` and `kind:`; exits non-zero when the phase spec is absent; `start` against the `fake-phase-midway` ledger (which holds 2 proven slices) exits non-zero and writes nothing, rather than orphaning those slices' `commit:` SHAs | 00 | active |
-| REQ-02 | My venture repos keep today's behaviour while arc's lanes get theirs | `--lane` is the only lane input: `/arc-develop status --lane nope` exits 4, `--lane a --lane b` exits 5, `--lane CON` exits 5 on all 3 CI OS legs, and each creates nothing; the root-mode fixture (a tree with no `initiatives/`) produces output byte-identical to its recorded golden | 00 | active |
-| REQ-03 | I pick the build back up after a context reset without re-reading the session | on the `fake-phase-midway` fixture (5 slices, 2 proven), `/arc-develop status` prints the phase, `slice 2/5` where X counts proven slices, the next unproven slice id `03`, and the last 3 receipt kinds — reading only committed files | 00 | active |
-| REQ-04 | Every lifecycle transition leaves an audit trail nobody has to remember to write | `develop.started`, `slice.done` and `handoff.ready` land in `.claude/state/hq/events/` as one dated `.jsonl` per day, carrying the lane in the payload; a spine write failure never changes the command's exit code, and `status` names any expected receipt kind that is missing instead of reporting position as though it landed | 00 | active |
-| REQ-05 | A slice cannot be marked done without a declared proof and its pasted output | `node .claude/scripts/develop/develop-lint.mjs --lane develop` exits 1 on a ticked slice missing `proof:`, `tier:` or `commit:`, on an unparseable ledger, and on a brief whose recorded spec hash has moved; when one slice block among several valid ones is malformed, the exit-1 output names that slice's id and line rather than failing the whole file with no location; exits 0 on the good fixture | 01 | active |
-| REQ-06 | The gate cannot be walked past by an artifact that only looks legitimate | ≥20 hand-built breaking inputs (heading-level and emphasis variants, repeated sections, case-flipped keys, trailing-whitespace values, CRLF and mixed line endings, duplicate slice ids) are pinned under `tests/fixtures/develop/breaking/`; each one FAILs `develop-lint` and the good fixture stays green | 01 | active |
-| REQ-07 | Proof strength is recorded, so "tested" stops meaning six different things | every proof carries a tier from `static` / `unit` / `contract` / `integration` / `e2e-visual` / `verified-real`, and its slice carries `kind:` from `ui` / `external-dep` / `logic` / `infra`; a `ui` slice whose strongest tier is below `e2e-visual` and an `external-dep` slice below `contract` each raise a WARN naming the slice, and a slice with no `kind:` raises its own WARN rather than being skipped in silence | 01 | active |
-| REQ-08 | Confidence comes from a scored record instead of a number the model picked | `/arc-develop handoff 0` marks each prediction `hit`, `miss` or `unforeseen` against the ledger line that settles it, and `develop-lint` flags any self-declared numeric score in a ledger row | 02 | active |
-| REQ-09 | Something with no stake in the work checks it against the spec before handoff | the `spec-fidelity` agent reads only `phase-NN-spec.md` and the phase diff, and returns built-what-spec-says · scope creep · exit-criteria drift · non-negotiables intact · 1 user-visible-behaviour line; its report is in the handoff evidence pack | 02 | active |
-| REQ-10 | A build that is going wrong escalates on a trigger instead of grinding | 4 deterministic backstops fire on the fixture: same error fingerprint 3× forces root-cause mode · 5 attempts on one slice escalates with a 1-screen diagnosis · a diff touching a risk glob runs a checkpoint before the next slice · a new debt marker with no debt-ledger row raises a WARN naming the file (the 4-marker set is enumerated in `phase-03-spec.md`) | 03 | active |
+| REQ-01 | A failure that escaped once is written down in a form the next phase can actually find | `docs/develop/learning-ledger.md` exists with a machine-checked row shape: what failed · why the process missed it · proposed prevention · type · cost · verdict, plus typed links `area:` `adr:` `rule:` `fixture:` `phase:`; `develop-lint` FAILs an unparseable row and WARNs a row with zero links | 04 | validated |
+| REQ-02 | A proposed safeguard is judged by whether it catches real past failures, not by whether it sounds right | `tests/fixtures/develop-evals/` holds ≥12 replay fixtures across SIX categories — spec-drift / false-confidence / missing-edge-case / bad-gate / flailing, plus `clean` (≥4), the controls a correct candidate must NOT flag and without which a false-block count has no basis — each carrying typed links; for `type: rule` and `type: fixture` candidates replay EXECUTES the candidate against each fixture and computes catch-count and false-block count; for `checklist` / `template` / `skill` / `capability-policy` candidates — which are not executable — replay means the fresh agent applies the candidate's stated procedure to each fixture and records caught / missed / false-blocked per fixture, never a summary number it invents | 04 | validated |
+| REQ-03 | I decide what gets promoted, and the thing proposing it never grades its own work | promotion needs 3 recorded inputs: fixture replay results, a verdict from a fresh agent that receives only the candidate + results, and my approval; `develop-lint` FAILs a `promoted` row missing any of the three — and checks **structural presence only**. It cannot tell a real fresh-agent verdict from the same string typed by the authoring session, so authenticity is mine to check by reading the transcript before writing `approved-by:`. Stated here rather than left implied by a passing gate. **Still `active` after Phase 04 closed:** the three-input BLOCK ships and has a negative control, but slice 08's one REAL promotion never ran through it, and the criterion was deliberately not reworded to match where the ball landed | 04 | active |
+| REQ-04 | A learning cannot be graded on the cases it was written from | `tests/fixtures/develop-evals/withheld/` is excluded from candidate-authoring context and a lint FAILs if a candidate row cites a withheld fixture id; the holdout's own contents are never printed by any command | 04 | validated |
+| REQ-05 | Before I build a slice, the harness hands me what past work already knows about it | `/arc-develop next` prints a Context Pack: code-graph neighbourhood of the slice's files (grep fallback, stated which ran), matching ADRs, tagged learning-ledger and retro-log hits, and the 3 highest-churn files in the blast radius computed from `git log` | 05 | validated |
+| REQ-06 | Retrieval follows the trail one step, so an auth slice pulls what past auth failures produced | a learning row's typed links are followed exactly one hop and the resulting ADRs, rules and fixtures appear in the pack; every retrieval source is recorded in the slice's `sources:` field | 05 | validated |
+| REQ-07 | The harness can find a tool it lacks without me hunting for it | `/arc-capability` given a stated need returns a proposal table — need · candidate · source · quality evidence · verdict — and refuses to install anything | 06 | validated |
+| REQ-08 | Nothing enters this repo from the internet without being pinned and inspected | `capability-vet.sh` BLOCKs unless the candidate is allowlisted, version-pinned with a hash and provenance in `capability-lock.json`, and passes a content scan for exfil patterns, curl-pipe-sh and undeclared tool scopes; a write-capable MCP additionally requires my recorded OK | 06 | validated |
+| REQ-09 | A decision gets evidence before code rather than a defence after it | two triggers, one outcome. On a declared product/architecture decision, `pattern-miner` returns a ≤20-line Pattern Annex where every row carries a source and an adopted-or-rejected verdict, and a verdict-less row is lint-invalid. On a risk-glob slice, 2–3 approach sketches are required carrying approach · trade-offs · blast radius · economics (maintenance in words, deps/services/config as computed counts, deletion opportunity), with the pick recorded and `rejected-because` per losing option; an invented duration is lint-rejected in either | 07 | validated |
+| REQ-10 | I can see whether the harness is actually making things better, from numbers it computed rather than claims it made | `develop-lint --metrics` computes all 6 outcome metrics from committed records — escaped spec misses · rework/stuck time · time to first proven slice · false-block rate · evidence completeness · ceremony cost per validated slice — and refuses to print any it cannot derive rather than estimating it; the calibration record aggregates every scored prediction across all phases to date; suggestions batch at slice boundaries carrying evidence, economics and a default so declining costs one word; learning rows carry a tag from `pattern` / `anti-pattern` / `library-verdict` / `fix-recipe` / `common-mistake` that the Context Pack matches on | 08 | validated |
 
 ## Appetite
 
-**5 days total** (owner-set at kickoff, 2026-08-02). A constraint, not an estimate: if it is blown we
-cut scope or kill a phase, never silently extend. Phases allocate **4.0 of the 5 days** — the 1.0-day
-slack is deliberate, because Cycle 4 closed at 112% with zero slack to absorb one bad afternoon.
+**7 days total** — owner-set 2026-08-02, raised from 5 when an attack pass showed 5 days could not
+actually finish the design source and the owner chose to fund the remainder rather than accept the
+gap. The phase table allocates **5.5 days** (1.5 + 1.0 + 0.75 + 0.75 + 1.5); the remaining
+**1.5 days are unallocated buffer**, belonging to no phase and counted by no kill criterion.
+A constraint, not an estimate. Cycle 5 spent 1.9 of 5 on layers 1-2; this cycle is larger in surface
+but builds on a working spine.
 
 **Tier:** M
 
-**Kill criteria:** a literal 50% tripwire would be a broken instrument here — Phase 00 (1.5d) and
-Phase 01 (1.25d) sum to 2.75d, so "at 2.5 days, is Phase 01 done?" fires on every perfectly
-on-schedule run and cannot tell on-track from in-trouble. That is the shape the trial ledger already
-recorded for `appetite-sum`: a gate that has learned to be ignored. The checkpoint is therefore
-**at 3.0 days burned: if Phase 01 is not done → mandatory scope-cut conversation**, and the
-pre-decided cut is Phase 03 in full. At 100% → cut or kill, never extend. Per-phase tripwires are in
-each phase spec and are read at the phase's start, not admired after (Cycle 4's Phase-02 tripwire
-fired and was never applied).
+**Kill criteria:** at **4.0 days burned**, if Phase 06 is not done → mandatory scope-cut
+conversation, and the pre-decided cut is **Phase 07 in full**. Phase 07 improves decisions; 04, 05
+and 08 are what make the harness learn, retrieve and report on itself, and 06 is the security gate.
+The checkpoint sits above 04+05+06 (3.25d) so it can distinguish on-track from in-trouble rather
+than firing on every on-schedule run — the defect an attack pass found in Cycle 5's version of this
+line. At 100% → cut or kill, never extend. Per-phase tripwires live in each phase spec.
 
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
 flowchart TB
-  ashiq([Person: Ashiq — building an approved phase])
+  ashiq([Person: Ashiq — approves every promotion])
 
-  subgraph develop [System: develop · The Developer]
-    cmd[Container: /arc-develop<br/>start · next · status · checkpoint · handoff]
-    lint[Container: develop-lint.mjs<br/>structural BLOCK · heuristic WARN]
-    fidelity[Container: spec-fidelity agent<br/>fresh context, spec + diff only]
+  subgraph dev [System: develop — Cycle 6 additions]
+    pack[Container: Context Pack<br/>retrieval before each slice]
+    learn[Container: Learning loop<br/>candidate to eval to promotion]
+    cap[Container: Capability<br/>scout + vet + lockfile]
+    mine[Container: pattern-miner<br/>decision-triggered prior art]
   end
 
-  subgraph tracker [Container: the lane tracker — durable truth]
-    spec[phase-NN-spec.md]
-    ledger[phase-NN-tasks.md<br/>Build Brief + slice ledger]
+  subgraph record [Container: the record — committed, host-neutral]
+    ledger[learning-ledger.md<br/>typed links]
+    evals[develop-evals fixtures<br/>+ withheld holdout]
+    lock[capability-lock.json]
   end
 
-  subgraph core [System: arc core — reused, never re-implemented]
-    resolve[lane-resolve.sh / .mjs<br/>--for develop]
-    spine[arc-event.sh<br/>append-only receipts]
-    phasedone[/arc-phase-done — owns closing]
+  subgraph existing [System: Cycle 5, reused not rebuilt]
+    next[/arc-develop next/]
+    lint[develop-lint.mjs]
+    fresh[fresh unanchored agent]
   end
 
-  ashiq --> cmd
-  cmd --> resolve
-  cmd --> spec
-  cmd --> ledger
-  cmd --> lint
+  next --> pack
+  pack --> ledger
+  pack --> record
+  learn --> evals
+  learn --> fresh
+  fresh --> ashiq
+  ashiq -->|promotes| ledger
+  cap --> lock
   lint --> ledger
-  cmd --> spine
-  cmd -->|handoff| fidelity
-  fidelity --> ledger
-  cmd -->|evidence pack| phasedone
-  ashiq -->|commits each proven slice| ledger
+  mine --> next
 ```
 
 ## Key decisions (ADR index)
 
 | # | Decision | Status |
 |---|---|---|
-| 0100 | Slice ledger is a `key: value` block per slice, not a table | accepted |
-| 0101 | develop-lint floor: structural checks BLOCK, heuristic checks WARN-first | accepted |
-| 0102 | One local commit per proven slice; the session commits, never the harness | accepted |
-| 0103 | Risk-triggered checkpoints run inline at the slice boundary | accepted |
-| 0104 | The Phase-0 fake phase is a committed fixture, not a throwaway demo | accepted |
-| 0105 | `develop` ships as its own product and rides `--for develop` with no resolver edit | accepted |
+| 0108 | Learning candidates are evaluated by a fresh agent that never sees the author's reasoning | accepted |
+| 0109 | The holdout is process-enforced, not cryptographic — exclusion + unanchored eval + time-forward measurement | accepted |
+| 0110 | Capability vetting BLOCKs on provenance, not on popularity | accepted |
+| 0111 | The Context Pack follows typed links exactly one hop, and records every source it used | accepted |
 
 ## Non-negotiables
 
-- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever (ADR-0105).
-- develop never closes a phase, never intakes scope and never creates a lane — `/arc-phase-done`, `/arc-change` and `/arc-kickoff` keep those jobs.
-- Every slice declares its acceptance proof BEFORE implementation; `proof: none` is not a slice (ADR-0100).
-- Every number is computed by a tool or earned from a scored outcome — a self-declared score in a ledger row is a lint finding (ADR-0101).
-- Any gate, lint or parser this build ships gets an adversarial construct-a-breaking-input pass in the same section that ships it, with every hole pinned as a fixture.
-- develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion.
-- The whole lifecycle runs offline on a committed fixture; `--lane` is the only lane input and root-mode output stays byte-identical (ADR-0104).
+- The main session writes the code — develop supplies context, discipline, checkpoints and evidence; there is no coder subagent, ever.
+- develop never modifies its own policies, gates, skills or capabilities without a recorded, Ashiq-approved promotion — this cycle builds the promotion machinery and is bound by it.
+- Nothing is installed from the internet without a pinned version, a hash, recorded provenance and a content scan; a write-capable capability additionally needs Ashiq's recorded OK.
+- A learning candidate is never graded by the context that authored it.
+- Every number is computed by a tool or earned from a scored outcome — a self-declared score in any ledger row is a lint finding.
+- Any gate, lint or parser this cycle ships gets an adversarial construct-a-breaking-input pass run by a FRESH agent that has not seen the implementation, with every hole pinned as a fixture.
+- Every retrieval states which source it actually used, including when it fell back to grep.
 
 ## No-gos (explicitly out of scope)
 
-- **Delivery-order layers 3–5** of the design source: capability scout + vet gate + lockfile,
-  decision-triggered pattern mining, design-critic checkpoints, and the entire Learning System
-  (learning ledger, candidate→eval→promotion loop, withheld + time-forward holdout, calibration
-  record). Not started, not stubbed.
-- **Full Context Pack retrieval** — churn ranking, tags, one-hop typed-link following, codegraph
-  wiring. The Build Brief ships a grep-based blast radius; that is the whole retrieval story this
-  cycle.
-- **Evaluation-suite seeding** (`tests/fixtures/develop-evals/`). Converting council v2+v3's 43 holes
-  is record archaeology and belongs to the Learning System, not the steel thread.
-- **Approach sketches with economics fields.** The risk-glob machinery lands in Phase 03; the sketch
-  ritual does not.
-- **Every checkpoint health check that needs to understand code.** Circular-dependency and
-  complexity-delta checks need madge or dependency-cruiser, and arc core is zero-dep; the public-API
-  surface diff needs the same machinery to be worth anything, and does not fit Phase 03's 0.5 days
-  beside the three backstops it must also ship. Checkpoints ship the half that needs no code
-  understanding at all: risk-glob trigger and marker scan.
-- **Dogfooding on real phases.** The design source's 2–3 real-phase tripwire is the next cycle's job;
-  this cycle's proof is the committed fixture.
-- **Promoting any gate to BLOCK** beyond ADR-0101's three structural checks. Everything else is
-  WARN-first and needs the trial ledger.
+- **A graph database or any new memory store.** Typed link fields on existing committed records, followed one hop. The design source rejected a second engineering-memory store outright.
+- **Automated promotion.** The loop proposes and evaluates; a human promotes. No count, no score and no clean-run streak promotes anything on its own.
+- **Autonomous capability installation.** The scout proposes and the vet gate blocks; installing is a separate, human act.
+- **Ambient research.** `pattern-miner` runs on a declared decision or not at all — no trend scanning, no background crawling.
+- **Cross-platform dependency-version replay matrices.** The design source marks these an L-tier option; this is M.
+- **Rebuilding anything Cycle 5 shipped.** The lifecycle, ledger grammar, lint floor and stuck protocol are consumed as-is.
 
 ## Rabbit holes
 
-- **A semantic-diff engine** for the fidelity pass → the design source already rejected it (§11).
-  One prose behaviour line is the whole of it this cycle; the deterministic half it was meant to pair
-  with (the public-API surface diff) is a no-go above until something here can read code.
-- **A general-purpose task system.** The ledger holds the slices of one phase and nothing else — no
-  cross-phase rollups, no dependencies between slices, no priorities beyond the risk ordering.
-- **Perfecting the prediction taxonomy** before any data exists → 5 fixed fields, scored
-  hit/miss/unforeseen, revisited after the first real phase has scored them.
-- **Teaching `lane-resolve` about surfaces** (ADR-0105) → ride the generic `--for` path; the twins
-  stay untouched and the sync-golden manifest does not move for the resolver.
-- **Making the fake-phase fixture realistic** enough to be a second product → it is a miniature with
-  one slice per lint state, and it asserts the rule while branching on state, never a snapshot of
-  today's repo (retro-log 2026-08-02).
+- **Making the eval suite exhaustive.** 43 council holes exist; ≥12 fixtures that cover the five
+  categories is the bar. Converting all 43 is a research project, and the design source says the
+  first batch covers what the records preserve in reproducible detail.
+- **A scoring model for candidate quality.** Catch-count and false-block count, both computed.
+  No weighted index, no composite score — that is the invented-number trap this product bans.
+- **Perfecting the churn ranking.** `git log` frequency over the blast radius, top 3. Not a
+  hotspot model.
+- **Teaching `pattern-miner` to browse.** Primary documentation, then engineering blogs of the
+  products studied. A row without a source and a verdict does not enter the annex.
+- **Building a capability registry client.** The scout reads what the ecosystems publish and
+  writes a proposal table; it is not a package manager.
 
 ## Assumptions ledger
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| `--for develop` needs no change to `lane-resolve.sh`/`.mjs` — verified by reading the resolver on 2026-08-02 (only `kickoff` is special-cased) | any Phase-00 lane test needs an edit to either twin to pass | 00 |
-| 4.0 days of allocated build fits inside the 5-day appetite, leaving 1.0 day of slack | Phase 00 and Phase 01 together pass 3.0 days | 01 |
-| A grep-based blast radius is enough for a useful Build Brief, so codegraph can wait | a Phase-01 slice has to touch a file its own brief's blast radius never listed | 01 |
-| Slices are coarse enough that one commit each leaves phase history readable | a phase produces more than 15 slices | 02 |
-| `spec-fidelity` can judge fidelity from spec + diff alone, with no build context | it states a confident verdict resting on a non-negotiable or blast-radius claim whose text is nowhere in `phase-NN-spec.md` — confabulating instead of asking is the failure that looks identical to a real verdict (retro-log 2026-07-30) | 02 |
+| Council v2/v3 records preserve enough detail to rebuild ≥12 failures as replay fixtures | fewer than 12 can be reconstructed without inventing the failing input | 04 |
+| A fresh agent given only a candidate plus fixture results can judge it without the author's reasoning | its verdict asks for the reasoning, or it grades a candidate it cannot see the effect of | 04 |
+| One hop of link-following is enough to be useful without flooding the pack | a Phase-05 slice needs a fact that sits exactly two hops away, repeatedly | 05 |
+| `git log` churn over the blast radius identifies files worth naming | the top-3 churn files are the same three on every slice regardless of what it touches | 05 |
+| The skills and MCP ecosystems expose enough metadata to vet a candidate without installing it | a real candidate cannot be version-pinned or hashed from published data alone | 06 |
 
 ## External dependencies
 
-<!-- Genuinely none: the build is offline by construction and arc core is zero-dep. git, node and
-     bash are local tooling, not external services. codegraph would have been the one real dep —
-     it is a no-go this cycle, so it gets no row rather than an aspirational one. The empty-table
-     WARN is the honest outcome. -->
+<!-- TWO external dependencies this cycle acquires: the code graph, and the package registries
+     Phase 06 fetches real hashes and provenance from. The second was missing from this table
+     while a Phase 06 exit criterion demanded "actual published version, actual hash" — a live
+     network call the plan was denying it made. Everything else (git, node, bash) is local. -->
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
+| code graph (codegraph / Graphify) | `neighbourhood(files) -> related symbols + files` in `.claude/scripts/develop/context-pack.mjs` | grep + glob over the repo, always available, and the pack states it fell back | `codegraph explore` when `.codegraph/` exists | `tests/develop-context.bats` — the same neighbourhood contract from both paths on a committed fixture |
+| package registry (npm `dist.integrity` · PyPI `digests.sha256` · OCI digest) | `fetchMeta(candidate) -> {version, hash, publisherAuth, buildAttestation}` in `.claude/scripts/develop/capability-vet.sh` | committed tarball + manifest fixtures, no network — this is what CI runs on all 3 legs | `npm pack` / PyPI JSON API / OCI digest lookup, run BY HAND once, never in CI | `tests/develop-capability.bats` — the same hash + provenance contract from the fixture, and the one real fetch is committed as a `capability-lock.json` row rather than re-fetched |
 
 ## Pre-mortem (Klein)
 
 | # | Failure cause | Mitigation or accepted |
 |---|---|---|
-| 1 | The ledger parser ships with a hole a doctored artifact walks straight through — the cosmetic-variant class that recurred across council v2 and v3, and that was skipped on three gates in one portfolio phase until the close found 61 issues, 5 live in shipped code | **Mitigated:** REQ-06 binds the adversarial breaking-input pass to the section that ships the parser, never to the phase close (retro-log 2026-08-02); ≥20 inputs pinned as fixtures before Phase 01 closes; ADR-0100 mandates tolerant detection + strict grammar from the first line, not after the first bug |
-| 2 | develop-lint passes because it can only detect absence — the 2026-07-30 failure where `PASS = zero VIOLATION` let characterless work through five consecutive runs, and the 2026-08-02 negative control that passed six CI legs by luck | **Mitigated:** each of ADR-0101's three structural BLOCKs ships with a negative-control fixture proving the check *can* fail; REQ-05 asserts exit 1 on named mutations, not only exit 0 on the good fixture |
-| 3 | The harness ships proven only against its own committed fixture and is never run on a real phase — the shape that let council v2/v3's gates pass their own fixtures while hiding 43 real holes (retro-log 2026-07-16), and that let a blind panel compare three invented fixtures instead of the real thing (2026-07-30). Real-phase dogfooding is a declared no-go this cycle, so first real use would also be first discovery | **Mitigated by self-hosting:** once Phase 01 is green, Phase 02 opens by running the shipped harness against its own real `phase-02-spec.md`, and the brief it produces is read against this plan — the same move portfolio Phase 01 made. If it cannot produce a usable brief, that is Phase 02's first finding and gets recorded, not routed around |
-| 4 | Phase 00 over-runs and eats the whole appetite — Cycle 4 closed at 112% because one phase ran 1.1d against 0.75d with no slack anywhere to absorb it | **Mitigated:** only 4.0 of 5 days are allocated; phase-00's own tripwire at 2.0 days cuts the Build Brief to the grep fallback and defers `checkpoint` mode to Phase 03 |
-| 5 | The fake-phase fixture asserts a snapshot of repo state instead of a rule, so opening or closing any cycle turns CI red with nothing broken — exactly what cost 5 of 19 legs on 2026-08-02 | **Mitigated:** ADR-0104 requires the fixture to assert the rule and branch on state; REQ-02's root-mode golden is a tree with no `initiatives/` directory, never a claim about which lanes exist today |
+| 1 | The fresh-agent adversarial pass is **restated but not bound**. It sits as one Definition-of-Done bullet inside four phase specs — the same "checked only at the close" shape that let three shipped gates go unattacked on 2026-08-02 until the close refused and a fresh pass found 61 issues, 5 live in shipped code. This cycle ships four new gates, so that is four chances to skip it, not one | **Mitigated by binding, not by restating:** each gate's adversarial pass is a slice in that gate's own ledger entry and must be proven in the commit that ships the gate — not at phase close. Cycle 5's own headline still holds underneath it: 26 author-written attacks found 0 holes and a fresh agent found 9, so the pass must also be run by someone who has not seen the code |
+| 2 | The first real promotion ships against **two of the holdout's three mechanisms**. ADR-0109 states plainly that time-forward measurement "pays out over phases, not immediately" — yet Phase 04 requires a real promotion to ship inside this cycle, so REQ-04's guarantee is partial at exactly the moment it first matters, and a promoted row looks identical to one that has survived a later failure | **Mitigated:** a promoted row carries `forward-verified: no` until a later cycle measures it, and the lint FAILs a row claiming `yes` without a named later phase. ADR-0109 already requires the rollback path to work before the first promotion, not after — that is what makes shipping on 2 of 3 recoverable rather than merely optimistic |
+| 3 | The capability vet gate blocks nothing real because provenance data is thinner than assumed, and it becomes a rubber stamp that reads as safety (REQ-08) | **Mitigated:** assumption ledger row 5 tests exactly this in Phase 06; if a real candidate cannot be pinned and hashed from published data, the gate stays BLOCK and the capability is refused rather than the gate weakened |
+| 4 | Context Pack retrieval floods every slice with plausible-but-irrelevant context, and the cost lands on every slice while the benefit lands on few (REQ-05, the process-tax risk the design source ranks first) | **Mitigated:** one hop only (ADR-0111), top-3 churn, and every source recorded in `sources:` so an unused source is visible; Phase 07 is the pre-decided cut if burn runs hot |
+| 5 | The slack claim has never been stress-tested. This plan invokes Cycle 4's 112% zero-slack close as the reason to keep a buffer, and cites Cycle 5 as proof the arrangement holds — but Cycle 5 closed at ~38% burn and never came near a checkpoint under pressure. Worse, the two committed trackers disagreed by a full day about the very number the risk is about, which is how a plan can carry a risk in prose while its own arithmetic says something else | **Mitigated:** PLAN and PROGRESS now state the same 5.5-of-7 allocation and name the 1.5 days as unallocated buffer rather than phase budget; every per-phase tripwire fires BEFORE its appetite is spent, not after. Accepted: no cycle has yet run hot enough to prove the buffer is the right size |
 
 ## Phases (risk-ordered)
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Steel thread — `/arc-develop` runs start → next → status → handoff end-to-end offline on the committed fake phase, lane-native, writing a durable brief + slice ledger and emitting receipts | 1.5 days | pending |
-| 01 | The proof floor — `develop-lint` with structural BLOCKs, evidence tiers, and a parser that survives ≥20 adversarial breaking inputs | 1.25 days | pending |
-| 02 | Earned judgment — predictions scored at handoff, and a fresh unanchored `spec-fidelity` pass over spec + diff | 0.75 days | pending |
-| 03 | Controlled escalation — stuck backstops, inline risk-triggered checkpoints, debt-ledger marker lint | 0.5 days | pending |
+| 00 | Steel thread — **parked, shipped in Cycle 5.** The lifecycle, ledger grammar, lint floor and stuck protocol this cycle builds on; its appetite belongs to that cycle, not this one | — | ✅ done 2026-08-02 |
+| 04 | The Learning System — ledger with typed links, eval fixtures, withheld holdout, and a promotion loop no machine can complete alone | 1.5 days | pending |
+| 05 | Context Pack — code-graph neighbourhood with a stated grep fallback, churn, tagged hits, one-hop link following | 1.0 days | pending |
+| 06 | Capability acquisition — scout, vet gate that BLOCKs on provenance, and a pinned lockfile | 0.75 days | pending |
+| 07 | Quality intelligence — decision-triggered pattern mining and risk-triggered approach sketches with economics | 0.75 days | pending |
+| 08 | The feedback half of layer 5 — outcome metrics, the calibration record, tags, and the suggestion engine | 1.5 days | pending |
 
-Phase 0 is the steel thread: the thinnest end-to-end slice of the real lifecycle, running offline
-against a committed fixture. There are no external dependencies, so it ships the slice without
-contract tests against fakes — the fixture is the equivalent firewall.
+Phase 04 comes first because everything downstream reads what it defines: the Context Pack
+retrieves learning rows (05), and the promotion loop is what any later safeguard must pass through.
+Building retrieval before there is anything worth retrieving would be building the pipe first.
