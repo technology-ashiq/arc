@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-evolve (Cycle 7, opened 2026-08-03)
-phase: 01 — board (Phase 00 CLOSED 2026-08-04)
+phase: 02 — runner + verdict math (Phases 00-01 CLOSED)
 appetite: 7d
-burn: 1.5d
+burn: 2.5d
 blocked-on: —
 depends-on: —
 
@@ -22,12 +22,12 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Contract + steel thread — manifest schema, `product-lint` extension, 8 kinds + validators, grammar, one receipt end-to-end | 1.5 days | ✅ closed 2026-08-04 |
-| 01 | Board — reader-only reducer; `PENDING` / staleness / `MISSING` / `insufficient evidence`; stream separation | 1.0 days | ⬜ pending |
+| 01 | Board — reader-only reducer; `PENDING` / staleness / `MISSING` / `insufficient evidence`; stream separation | 1.0 days | ✅ closed 2026-08-04 |
 | 02 | Runner + verdict math — assignment, seal, floors, TTL, the pinned test + reference vectors | 1.5 days | ⬜ pending |
 | 03 | Promotion safety — four-hop SHA lineage, evidence table, inbox, watch, freeze, revert path | 1.5 days | ⬜ pending |
 | 04 | Council bridge — **THE DESIGNATED CUT** | 1.5 days | ⬜ pending |
 
-**Appetite burn: 1.5 of 7 days used (21%).** Phases 00–03 (the core engine) allocate **5.5 days**.
+**Appetite burn: 2.5 of 7 days used (36%).** Phases 00–03 (the core engine) allocate **5.5 days**.
 Phase 04 allocates the remaining 1.5d and is the designated cut — it is simultaneously the only
 slack in the cycle. That is deliberate and it is the lesson `arc-portfolio` paid for: Cycle 4
 allocated 100% with zero slack, `appetite-sum` warned on every run, Phase 02 overran 0.35d with
@@ -50,25 +50,28 @@ bank the contract, lint and vocabulary ADRs as documentation, stop, retro.
   `experiment.opened` emitted, landed and read back through the reader on the REAL spine, sealed
   with a real file's sha256. Prediction calibration: 1 hit, 1 miss, 3 unforeseen.
 
+- **2026-08-04 - Phase 01 CLOSED.** 12/12 slices, CI run 30851431809 green. `arc-evolve board`
+  folds the spine into an honest status board; `products/evolve/manifest.json` is born.
+  A fresh agent found **15 breaks** in the first version and all are pinned as fixtures; CI then
+  found a 16th the agent missed - an order dependency in the fold itself.
+  Prediction calibration: 2 hit, 2 miss, 1 unforeseen.
+
 ## Now
 
-**Current position: Phase 00 closed. Phase 01 (the board) is next and has not started.**
-Phase 01 depends on phase-00 and is where `products/evolve/manifest.json` is born.
+**Current position: Phases 00 and 01 closed. Phase 02 (runner + verdict math) is next.**
 
-**The fresh-agent adversarial pass is the story of this phase.** Two unanchored attackers found
-**15 real holes** in code that had passed 54 of my own tests. Three were severe: corrections
-could never land (the idem omitted `supersedes`, so a correction collided with what it
-corrected); one unit could be assigned to **both** arms, corrupting the per-arm n that the
-verdict is computed from; and `venture` was dropped from the preimage, which is the exact
-regression that cost 100 real receipts in Cycle 2. One of my own tests was wrong in a way that
-hid the first of those — it varied `window_end`, so it "corrected" a different window and stayed
-green. All 15 are fixed and pinned as fixtures. `gate-author-cannot-be-its-attacker` is now
-evidenced twice, and the second time it was against code I believed was careful.
+**The pattern across both phases is the same, and it is worth stating plainly.** Each phase's
+code passed every test I wrote, then a fresh unanchored agent broke it 15 times. Phase 00: the
+idem was a subset so corrections could never land, and one unit could be assigned to both arms.
+Phase 01: an uncollected window counted toward the floor, guardrail units were summed into the
+primary metric, and any receipt could supersede any other. In BOTH phases one of MY OWN tests was
+wrong in a way that hid a severe bug. The adversarial pass is not a formality in this lane; it is
+where the defects are found.
 
-**Two debt rows carried out of Phase 00** (full text in `phases/phase-00-tasks.md`): two
-duplicate-key JSON scanners, and `target_path` case-aliasing giving one file two identities on a
-case-insensitive filesystem. The second names Phase 03's same-`base_sha` fixture as its
-downstream control — check it there rather than re-deriving it.
+**A rule that came out of Phase 01 and now applies everywhere:** THE READ PATH IS NOT THE WRITE
+PATH. The reader replays what was written and does not re-validate, so any consumer must
+re-assert the grammars on read. Phase 02's runner and Phase 03's lineage checks read the same
+spine and inherit the same exposure.
 
 **This cycle is built ahead of its trigger, and that is on the record (ADR-0300).** The
 pre-kickoff gate was verified in-tree at kickoff and **all five rows are unevidenced**: no client
@@ -83,7 +86,7 @@ must close saying its north-star claim is *fixture-proven, unexercised* — the 
 REQ-08 partial is the precedent for reporting a partial claim as partial rather than waiving it,
 and this lane inherits that standard.
 
-**To start Phase 01:** `/arc-develop start 1 --lane evolve`. Its first red test is the board
-rendering `MISSING` for a metric with no receipts — which is the state the spine is genuinely in,
-because `metric.observed` is the client's kind and does not exist here. The absence tests the
-design instead of blocking it.
+**To start Phase 02:** `/arc-develop start 2 --lane evolve`. Its reference vectors for
+`newcombe-wilson-difference-v1` must be sourced INDEPENDENTLY of this lane's own implementation
+and committed BEFORE any Phase 02 code exists (REQ-04) — a test whose expected values came from
+the code under test proves only that the code agrees with itself.
