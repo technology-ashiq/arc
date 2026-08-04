@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-leads (Cycle 8, opened 2026-08-04)
-phase: 00
+phase: 01
 appetite: 7d
 burn: 1.5d
 blocked-on: —
@@ -20,7 +20,7 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | code complete, CI green — **NOT closed**: 2nd adversarial surface + evidence bundle owed |
+| 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | core modules written, **unwired and untested** |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | not started |
 | 03 | Real campaign | 1.0d | 🚫 **BLOCKED** |
@@ -63,22 +63,45 @@ plausibly ≤6 weeks away. Row 2 is the critical path and cannot be compressed.
   non-total idem preimages). Four were twin-fix recurrences of this lane's own running defect
   list — including D3 itself, and a D4 twin where both tests protecting a safety property
   matched the rejection MESSAGE TEMPLATE rather than the input.
+- **2026-08-04 — adversarial pass, shell/OS surface. 17 more holes + 3 test defects**, sharing
+  almost nothing with surface 1 — which is the argument for the two-surface rule. Headline:
+  **`pii-tripwire.sh` had NO CALLER anywhere in the repo** while the DoD claimed it was green
+  on every leg. Also: the gate reported success while scanning nothing (three ways); paths
+  with spaces, non-ASCII names or NUL bytes were silently skipped; `assertOutsideRepo` was
+  bypassable by case, symlink, UNC and extended-length spellings; `initStore` could clobber a
+  live secret on a case-insensitive filesystem; dossiers were world-readable while the secret
+  was 0600. The test-count assertion was a **tautology**, and **four mutant tripwires passed
+  the original suite** — each now has a killing test.
+- **2026-08-04 — Phase 00 CLOSED.** 39 holes across both surfaces, all closed and pinned.
+  Evidence: `initiatives/leads/evidence/phase-00/`. CI green on every leg.
 
 ## Now
 
-**Current position:** Phase 00 code is complete and CI-green. **Phase 00 is NOT closed.**
+**Current position: Phase 00 CLOSED (2026-08-04).** Both adversarial surfaces run, all 39
+holes closed and pinned, evidence bundle written, CI green on every leg.
 
-**What Phase 00 still owes before `/arc-phase-done 0`:**
+**Next step: Phase 01 — the Sequencer.** Its safety core is written but **unwired and
+untested**: `caps.mjs`, `journal.mjs` (two-phase intent + spine-first reconcile), `guard.mjs`
+(eight-step chain + single-writer lock), `personalization.mjs`. None of it has a CLI surface
+or a fixture yet.
 
-1. **The second adversarial surface — shell/OS boundary** (`pii-tripwire.sh`, path handling
-   across the three CI legs). The rule is TWO fresh agents with *different* surfaces; one has
-   run. A single agent's blind spot is structural, not a matter of effort.
-2. The evidence bundle at `initiatives/leads/evidence/phase-00/`.
+**Phase 01 carries six mandatory adversarial passes** — two fresh surfaces each on the guard
+chain, the reconciler, and the personalization lint. Given Phase 00's result (39 holes found
+while CI was green, 8 of them recurrences of a defect already fixed elsewhere in this lane),
+budget for them properly rather than treating them as a formality.
 
-**Then Phase 01.** Its safety core is written but **unwired and untested**: `caps.mjs`,
-`journal.mjs` (two-phase intent + spine-first reconcile), `guard.mjs` (eight-step chain +
-single-writer lock), `personalization.mjs`. None of it has a CLI surface or a fixture yet, and
-Phase 01 carries six mandatory adversarial passes of its own.
+**Every Phase 01 attacker prompt must carry the running defect list D1–D6** and check each
+entry in every OTHER file: a fix is not applied until it has been attacked somewhere it was
+never made.
+
+| # | Defect class, found in Phase 00 |
+|---|---|
+| D1 | a grammar/parse pinned to one form while the producer emits another |
+| D2 | an anchored match that mishandles a legitimate variant (subdomain, bare host) |
+| D3 | a rule whose threshold cannot fire on the input it ships with |
+| D4 | a test asserting on a MESSAGE TEMPLATE rather than an input, so a mutant passes |
+| D5 | validate one read, compare another — two derivations of one value that disagree |
+| D6 | a guard applied in one branch and omitted in the adjacent one |
 
 **Standing constraint:** no local test runs — CI is the only gate. Batch commits so each push
 buys a full CI cycle.
