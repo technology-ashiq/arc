@@ -50,9 +50,58 @@ export function acquireLock(store) {
         `its lock is how the same mail gets sent twice (ADR-0411).`
     );
   }
-  writeFileSync(fd, `pid=${process.pid} started=${new Date().toISOString()}\n`);
+  const token = `pid=${process.pid} started=${new Date().toISOString()}`;
+  writeFileSync(fd, token + "\n");
   closeSync(fd);
-  return () => { try { unlinkSync(p); } catch { /* already gone */ } };
+
+  // The release VERIFIES IT STILL OWNS the lock before unlinking. It used to unlink by path
+  // with no check at all, so any stale closure could destroy a different process's lock --
+  // latent today (one call site, inside a finally) but one signal handler away from live.
+  return () => {
+    try {
+      if (readFileSync(p, "utf8").trim() !== token) return; // someone else holds it now
+      unlinkSync(p);
+    } catch { /* already gone, or unreadable -- either way not ours to remove */ }
+  };
+}
+
+// Is the recorded holder still running? `kill(pid, 0)` tests existence without signalling.
+export function lockHolder(store) {
+  const p = join(store.dir, ".send.lock");
+  if (!existsSync(p)) return null;
+  const raw = readFileSync(p, "utf8").trim();
+  const m = /^pid=(\d+)/.exec(raw);
+  // A 0-byte lock is a real state: a crash between openSync and writeFileSync. The refusal
+  // used to print "holds the send lock: ." with no pid, so the operator could not even check
+  // whether the holder was alive.
+  if (!m) return { raw, pid: null, alive: null };
+  const pid = Number(m[1]);
+  let alive;
+  try { process.kill(pid, 0); alive = true; }
+  catch (e) { alive = e.code === "EPERM"; }   // EPERM: it exists and is not ours
+  return { raw, pid, alive };
+}
+
+// Clearing a stale lock is a HUMAN action with a liveness check, never an automatic one.
+//
+// The lock was correct in the safe direction -- never auto-broken -- and had NO EXIT. There is
+// no signal handler anywhere in this tree, so SIGKILL, Ctrl-C, an OOM kill or power loss all
+// skip the `finally`, and nothing documented even named the file. Every future send was then
+// refused forever.
+//
+// This refuses outright while the holder is alive, because auto-clearing is exactly how the
+// lock gets stolen from a process sitting in the ack-to-receipt window. And it tells the
+// operator to reconcile afterwards: a dead holder may have left an in-flight intent.
+export function clearStaleLock(store) {
+  const h = lockHolder(store);
+  if (!h) return { cleared: false, why: "no send lock is held" };
+  if (h.alive) return { cleared: false, why: `the holder is STILL RUNNING (${h.raw}) — refusing. Wait for it, or stop that process first.` };
+  const p = join(store.dir, ".send.lock");
+  try { unlinkSync(p); } catch (e) { if (e.code !== "ENOENT") throw e; }
+  return {
+    cleared: true,
+    why: `cleared a lock held by a dead process (${h.raw || "0-byte lock file"}). Run \`arc-leads reconcile\` NOW — that process may have left an in-flight intent, and until it is reconciled the spine does not know whether its mail went out.`,
+  };
 }
 
 // ---------- derived state ----------

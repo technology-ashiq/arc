@@ -59,16 +59,36 @@ export function writeIntent(store, intent) {
 
 export function resolveIntent(store, idempotencyKey) {
   const p = join(journalDir(store), `${idempotencyKey}.json`);
-  if (existsSync(p)) unlinkSync(p);
+  // try/unlink/catch, not existsSync-then-unlink. The check-then-act version had a TOCTOU
+  // window that the adjacent lock release (twenty lines away, in guard.mjs) already avoided
+  // by doing exactly this -- the same operation with two different race disciplines, D6.
+  try { unlinkSync(p); } catch (e) { if (e.code !== "ENOENT") throw e; }
 }
 
 export function unresolvedIntents(store) {
   const d = journalDir(store);
+  // SORTED. readdir order differs across the three legs, and this list drives both the
+  // reconcile order and (via listDrafts) which leads get the last cap slots -- that must be a
+  // property, not an artifact of the filesystem.
   return readdirSync(d)
     .filter((f) => f.endsWith(".json"))
+    .sort()
     .map((f) => {
-      try { return JSON.parse(readFileSync(join(d, f), "utf8")); }
-      catch { throw new JournalError("BAD_INTENT", `journal file ${f} is unreadable — refusing to treat a corrupt intent as absent, because absent means "safe to send"`); }
+      try {
+        const parsed = JSON.parse(readFileSync(join(d, f), "utf8"));
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+          return { corrupt: true, file: f, why: "not a JSON object" };
+        return parsed;
+      } catch (e) {
+        // NOT a throw. This used to raise out of the function -- and reconcile calls it as its
+        // FIRST statement, so one torn file made the documented recovery impossible while the
+        // guard refused every send forever, with manual file surgery as the only exit.
+        //
+        // A corrupt entry still COUNTS as unresolved, so the guard keeps refusing (absent
+        // would mean "safe to send", which is the direction that sends a duplicate). It is
+        // returned as data so reconcile can name it and still heal the healthy ones.
+        return { corrupt: true, file: f, why: e.message };
+      }
     });
 }
 
@@ -78,6 +98,14 @@ export async function reconcile(store, { events, lookup, emitReceipt }) {
   const outcome = { resolvedFromSpine: 0, emittedLate: 0, voided: 0, providerCalls: 0 };
 
   for (const intent of unresolvedIntents(store)) {
+    if (intent.corrupt) {
+      // Reported, never silently skipped and never deleted: it may describe a real in-flight
+      // send. The operator is told exactly which file and why.
+      outcome.corrupt = (outcome.corrupt || 0) + 1;
+      outcome.errors = outcome.errors || [];
+      outcome.errors.push(`${intent.file}: ${intent.why} — inspect it by hand; it may describe a send that actually happened`);
+      continue;
+    }
     // STEP 1+2 -- the spine first, ALWAYS. If the receipt is already there, this intent is
     // simply stale bookkeeping: resolve it and make no provider call and no emit. Doing the
     // provider lookup first here is what would re-emit into a dup-idem error.

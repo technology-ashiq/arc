@@ -25,7 +25,7 @@ import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
@@ -282,6 +282,16 @@ async function cmdDaily(campaign) {
   console.log(`arc-leads daily: ${sent} sent, ${out.results.length - sent} refused`);
 }
 
+function cmdUnlock() {
+  const store = openStore({ repoRoot: REPO_ROOT });
+  const h = lockHolder(store);
+  if (!h) { console.log("arc-leads: no send lock is held"); return; }
+  console.log(`arc-leads: lock holder ${h.raw || "(0-byte lock file)"} — alive: ${h.alive}`);
+  const out = clearStaleLock(store);
+  if (!out.cleared) die(3, out.why);
+  console.log(`arc-leads: ${out.why}`);
+}
+
 // ---------- preflight ----------
 async function cmdPreflight() {
   const res = await preflight({ warmupApproved: process.env.LEADS_WARMUP_APPROVED === "1" });
@@ -348,6 +358,7 @@ try {
   else if (cmd === "draft") cmdDraft(rest[0], rest[1]);
   else if (cmd === "review") cmdReview(rest[0]);
   else if (cmd === "reconcile") await cmdReconcile();
+  else if (cmd === "unlock") cmdUnlock();
   else if (cmd === "daily") await cmdDaily(rest[0]);
   else if (cmd === "preflight") await cmdPreflight();
   else if (cmd === "state") cmdState(rest.includes("--json"));
@@ -360,6 +371,7 @@ try {
     console.error("  review <draft_ref>              render the draft LOCALLY, beside its evidence");
     console.error("  daily <campaign>                the human-started send run — nothing runs in the background");
     console.error("  reconcile                       spine-first recovery of unresolved intents");
+    console.error("  unlock                          clear a send lock whose holder is DEAD (refuses if alive)");
     console.error("  preflight | state --json");
     console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
     process.exit(2);
