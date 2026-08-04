@@ -91,12 +91,29 @@ _kinds() {
 
 # ---------- the vocabulary boundary ----------
 
-@test "metric.observed is STILL refused -- it belongs to the client's cycle (ADR-0308)" {
+# UPDATED by leads Cycle 8 (ADR-0400/0408). This test used to assert that metric.observed was
+# REFUSED, and that was correct for as long as it held: ADR-0308 rules that the kind lands in
+# the FIRST CLIENT's cycle, not in evolve's, and until Cycle 8 there was no client.
+#
+# leads is that first client, so the kind now exists. The assertion flips rather than being
+# deleted, because the property worth guarding never was "metric.observed is absent" -- it was
+# "evolve does not bootstrap its own trigger". That still holds: evolve emits none of these,
+# and the 4-week window starts at leads' first REAL send, which is Phase 3 and BLOCKED
+# (ADR-0413). So the payload contract is what gets asserted here now.
+@test "metric.observed exists now that the first client shipped it (ADR-0308 -> ADR-0408)" {
   _fresh_spine metric-observed
+  # The old shape (bare metric+value) is still refused -- by its closed payload, not by
+  # UNKNOWN_KIND. A kind arriving without its validator would be the real regression.
   run bash "$EVENT" emit metric.observed --payload '{"metric":"signup_conversion","value":1}' --strict
   [ "$status" -eq 2 ]
-  [[ "$output" == *"UNKNOWN_KIND"* ]]
+  [[ "$output" != *"UNKNOWN_KIND"* ]] || { echo "metric.observed should exist as a kind now: $output"; false; }
   [ "$(_event_lines)" -eq 0 ]
+
+  # A well-formed one is accepted, to the spec frozen in PLAN-evolve.
+  run bash "$EVENT" emit metric.observed --strict --payload '{"module":"leads","surface":"campaign","metric":"reply_rate","value":0.12,"unit_count":25,"window_start":"2026-08-01T00:00:00+05:30","window_end":"2026-08-08T00:00:00+05:30","source_id":"h-0123456789abcdef"}'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_event_lines)" -eq 1 ]
+  [ "$(_quarantine_lines)" -eq 0 ]
 }
 
 @test "the closed vocabulary reports its OWN size, whatever that size currently is" {

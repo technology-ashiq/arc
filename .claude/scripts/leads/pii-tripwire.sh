@@ -28,10 +28,25 @@ FIXTURE_PREFIX="tests/fixtures/leads/"
 
 # An email-shaped string. Kept deliberately loose -- a false positive here costs a rename;
 # a false negative costs a permanent leak into public git history.
-EMAIL_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
-# Reserved domains that a fixture may use. `.test` and `.invalid` are TLDs, so they anchor
-# at end-of-token rather than needing a dot-suffix.
-RESERVED_RE='@(example\.(com|net|org)|[A-Za-z0-9.-]+\.(test|invalid))([^A-Za-z0-9.-]|$)'
+EMAIL_RE='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z][A-Za-z]*'
+
+# Whether a DOMAIN is RFC-2606 reserved. Written as a function over the extracted domain
+# rather than as one big regex, for two reasons:
+#
+#   1. `firm1.example.com` is a SUBDOMAIN of a reserved domain and must pass. An anchored
+#      `@example\.com` alternation rejects it, which is how the first version of this
+#      script failed its own fixture test.
+#   2. A negated letter-range bracket (`[^A-Za-z0-9.-]`) is a locale-collation trap this
+#      repo bans outright: under a non-C collation the range members are not what they look
+#      like. Suffix matching with `case` needs no ranges at all.
+_is_reserved_domain() {
+  case "$1" in
+    example.com|example.net|example.org) return 0 ;;
+    *.example.com|*.example.net|*.example.org) return 0 ;;
+    *.test|*.invalid) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 violations=0
 report() {
@@ -56,14 +71,17 @@ for f in $files; do
   # path, rather than skipping a pattern that would also exempt a real file later.
   [ "$f" = ".claude/scripts/leads/pii-tripwire.sh" ] && continue
 
-  while IFS=: read -r lineno line; do
+  while IFS=: read -r lineno addr; do
     [ -n "${lineno:-}" ] || continue
+    [ -n "${addr:-}" ] || continue
+    # Every ADDRESS on the line is checked, not just the line as a whole: a line carrying one
+    # reserved and one real address would otherwise pass on the strength of the reserved one.
+    domain=$(printf '%s' "$addr" | sed 's/.*@//' | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')
     case "$f" in
       "$FIXTURE_PREFIX"*)
-        # Inside a fixture path: reserved domains only.
-        if ! printf '%s' "$line" | grep -Eq "$RESERVED_RE"; then
+        if ! _is_reserved_domain "$domain"; then
           report "non-reserved address in a fixture path" "$f" "$lineno" \
-            "fixture paths may hold ONLY example.com/.net/.org, .test, .invalid (RFC 2606) -- so even a fixture cannot carry a real address"
+            "fixture paths may hold ONLY example.com/.net/.org (and their subdomains), .test, .invalid (RFC 2606) -- so even a fixture cannot carry a real address"
         fi
         ;;
       *)
@@ -71,7 +89,7 @@ for f in $files; do
           "lead addresses live in the private store outside the repo (ADR-0410); git history is forever and this repo is headed public"
         ;;
     esac
-  done < <(grep -nE "$EMAIL_RE" "$f" 2>/dev/null || true)
+  done < <(grep -noE "$EMAIL_RE" "$f" 2>/dev/null || true)
 done
 
 # ---------- rule 2: a resolved store path in a tracked file ----------

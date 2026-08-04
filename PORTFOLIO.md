@@ -18,6 +18,7 @@ Updated: 2026-08-04
 | develop | IDLE | arc-develop (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as 17473e7 / PR #100) | 7d / 2.1d | — | `/arc-kickoff --lane develop` when a new cycle pulls it |
 | engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
 | evolve | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) | — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised) | 7d / 7.0d | — | `/arc-kickoff --lane evolve` when a real client names a surface |
+| leads | LIVE | arc-leads (Cycle 8, opened 2026-08-04) | Phase 00 — foundations | 7d / 0.0d | Phase 03 blocked-on: a named offer · a warmed sending domain (2–4 calendar weeks) · ICP v0 · capability report | `/arc-develop next --lane leads` — Phases 0–2 build offline; Phase 03 cannot start (ADR-0413) |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
@@ -38,7 +39,8 @@ So a lane claims a **century**, and never numbers outside it:
 | 0100–0199 | `develop` |
 | 0200–0299 | `engine` — claimed at birth, 2026-08-03 (0200–0206 taken) |
 | 0300–0399 | `evolve` — claimed at birth, 2026-08-03 (0300–0310 taken) |
-| 0400–0499 | next lane to be born |
+| 0400–0499 | `leads` — claimed at birth, 2026-08-04 (0400–0413 taken) |
+| 0500–0599 | next lane to be born |
 
 `/arc-kickoff` assigns the next free century when it creates a lane, and `kickoff-lint`'s
 `[adr-dup]` check FAILs when two files claim one number — so a forgotten band is caught by CI

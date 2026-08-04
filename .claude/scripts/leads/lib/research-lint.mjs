@@ -32,8 +32,17 @@ const MIN_CITABLE_FACTS = 2;
 // corpus means >=7 co-citers and could never fire on a 3-row seed. The rule contradicted the
 // corpus it shipped with.
 
+// The character class is spelled out rather than written as a negated a-z range. The repo
+// bans negated letter-ranges tree-wide (locale-collation trap) and the gate greps every
+// script, JS included -- so a range that is safe in a JS regex still fails the lint. Spelling
+// it out costs one line and removes the question.
+const KEEP = "abcdefghijklmnopqrstuvwxyz0123456789 \t\n";
 const normalizeFact = (t) =>
-  String(t).toLowerCase().replace(/[^a-z0-9\s]/g, "").replace(/\s+/g, " ").trim();
+  Array.from(String(t).toLowerCase())
+    .map((ch) => (KEEP.includes(ch) ? ch : ""))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
 
 function trigrams(text) {
   const s = normalizeFact(text);

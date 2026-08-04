@@ -78,7 +78,12 @@ _run_tripwire() {
 # scanning nothing, which is worse than no check because it reports success.
 @test "store path in Windows backslash form is rejected" {
   export ARC_LEADS_STORE="C:/Users/someone/.arc/leads"
-  printf 'const p = "C:\\\\Users\\\\someone\\\\.arc\\\\leads";\n' > .claude/scripts/leads/cfg.mjs
+  # A quoted heredoc, not printf: printf eats backslash escapes, so the first version of this
+  # test wrote DOUBLE backslashes into the file while the script searched for single ones --
+  # the test failed for its own escaping rather than for the behaviour under test.
+  cat > .claude/scripts/leads/cfg.mjs <<'EOF'
+const p = "C:\Users\someone\.arc\leads";
+EOF
   git add -A && git commit -qm path
   _run_tripwire
   [ "$status" -eq 2 ]
