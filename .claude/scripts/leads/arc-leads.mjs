@@ -154,28 +154,11 @@ function nowIst() {
     `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}` +
     `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}+05:30`;
 
+  // Validated at startup (see the top-level guard); this only reads it.
   const override = process.env.ARC_LEADS_NOW;
   if (!override) return fmt(real);
-
-  // ARC_LEADS_NOW was a CAP OVERRIDE wearing a test door's clothes, and it was refused by
-  // nothing. Two confirmed exploits, neither needing a flag or a config edit:
-  //
-  //   ARC_LEADS_NOW=<tomorrow>  ran the daily command a second time and sent 20 more on the
-  //   same real day, because the cap buckets by this string
-  //
-  //   ARC_LEADS_NOW=<yesterday> emptied the rolling touch window, because every real touch
-  //   sat AFTER "now" and was read as outside it
-  //
-  // The comment said it "is never set in production". That is a hope, not a mechanism. It is
-  // now honoured ONLY alongside ARC_LEADS_FAKE=1 -- i.e. when no real provider can be reached
-  // and therefore no real mail can leave -- and even then it must be a well-formed IST stamp.
-  if (process.env.ARC_LEADS_FAKE !== "1")
-    die(2, "ARC_LEADS_NOW is a test-only clock door and is refused without ARC_LEADS_FAKE=1 — it buckets the daily cap, so accepting it against a real provider would be a cap override (ADR-0403).");
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+05:30$/.test(override))
-    die(2, `ARC_LEADS_NOW ${JSON.stringify(override)} must be YYYY-MM-DDTHH:MM:SS+05:30`);
   return override;
 }
-
 function cmdCampaignInit(name) {
   const store = openStore({ repoRoot: REPO_ROOT });
   const rec = initCampaign(store, name, { createdAt: nowIst() });
@@ -346,6 +329,17 @@ function cmdState(json) {
 }
 
 // ---------- main ----------
+// ARC_LEADS_NOW buckets the daily cap, so it is a cap override and is validated HERE --
+// before any subcommand, before any store or config is touched. It lived inside cmdDaily and
+// therefore fired only if every earlier check happened to pass, which made both its guarantee
+// and its test dependent on unrelated ordering.
+if (process.env.ARC_LEADS_NOW) {
+  if (process.env.ARC_LEADS_FAKE !== "1")
+    die(2, "ARC_LEADS_NOW is a test-only clock door and is refused without ARC_LEADS_FAKE=1 — it buckets the daily cap, so honouring it against a real provider would be a cap override (ADR-0403).");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+05:30$/.test(process.env.ARC_LEADS_NOW))
+    die(2, `ARC_LEADS_NOW ${JSON.stringify(process.env.ARC_LEADS_NOW)} must be YYYY-MM-DDTHH:MM:SS+05:30`);
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 try {
   if (cmd === "store" && rest[0] === "init") cmdStoreInit();
@@ -364,7 +358,7 @@ try {
     console.error("  research ICP.json               ICP in, dossiers + receipts out");
     console.error("  draft <campaign> <drafts.json>  lint, then queue for approval (FAIL never reaches the inbox)");
     console.error("  review <draft_ref>              render the draft LOCALLY, beside its evidence");
-    console.error("  daily <campaign>                the human-started send run (no daemon, ever)");
+    console.error("  daily <campaign>                the human-started send run — nothing runs in the background");
     console.error("  reconcile                       spine-first recovery of unresolved intents");
     console.error("  preflight | state --json");
     console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
