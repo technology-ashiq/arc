@@ -42,13 +42,13 @@
 | — | bench runner | `BRIEF-bench.md` | Pull: drivers disagree / new model |
 | — | dashboard | `BRIEF-dashboard.md` | Pull: brief overflows / ≥3 earning ventures |
 | — | chat (HQ MCP) | `BRIEF-chat-mcp.md` | Pull: dashboard live + conversational demand |
-| — | policy engine | `BRIEF-policy.md` | Pull: ≥3 kinds at L2 — **required before scheduler** |
+| — | policy engine | `PLAN-policy.md` | Pull: ≥3 action kinds at ≥L2 OR the first scheduler/headless job is **APPROVED** — **required before scheduler** · **full plan ready, SLEEPING** (owner-approved 2026-08-04; decisions POL-A…J locked over 3 review rounds; POL-K — lane/century/code home — open by design, decided at kickoff). Pre-kickoff gate inside: **Constitution ADOPTED** (`constitution.adopted` is not in today's vocabulary — micro vocab ADR + sign-off + event first; verify else STOP). Core: two-key authority (YAML ceiling + event-earned cap, L1 birth, demotion bites from the effective level), deny-by-default, fail-closed at `arc-run` + hooks (P0 hook feasibility matrix — unprovable class = static deny or L0/L1), `spend` = pre-approved provider budgets only (E2 money never above L1, Mode A only), vocab +4 kinds on live `KINDS.length`, P4 red-team 2d untouchable |
 | — | scheduler | `BRIEF-scheduler.md` | Pull: first L3 process · policy engine is a hard prereq |
 | — | absorb v1 · the technique refinery | `BRIEF-absorb.md` | Pull: a task class arc runs demonstrably **loses** to an external agent's approach (receipted A/B / PLANOFF evidence) — or a develop Capability Proposal returns "technique, not artifact" (added 2026-08-04). NEW lane at kickoff — claims the next free ADR century per `PORTFOLIO.md`. Its cycle also lands the PLAN-develop team-leader addendum (REQ-5) and the owner-judge receipt grammar (ABS-D) that bench later inherits |
 | — | executor · agent-runtime driver | `BRIEF-executor.md` | Pull: a **receipted need** for a capability no current driver has (Capability Proposal / absorb INTEGRATE verdict / pilot evidence) — added 2026-08-04. Engine-lane work under the live ENG-D contract (prereq "engine v1 shipped" MET — C6 closed 2026-08-03); kickoff's first act = one-paragraph ADR-0069 amendment; router.yaml delta is its REQ-4. L1-drafts cap until the policy engine wakes |
 | — | trader sandbox | `BRIEF-trader.md` | Pull: monthly revenue + Ashiq's written opening — **last** |
 
-**Full PLANs** (the 10 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
+**Full PLANs** (the 11 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
 decision records), appetites, ADR-ready decisions, phases, pre-mortems. **BRIEFs** are
 deliberately lighter — real REQs and locked non-negotiables, but current-state gets
 filled at their kickoff (writing 400-line plans for far-future modules today would be

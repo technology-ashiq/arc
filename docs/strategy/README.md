@@ -12,22 +12,23 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-04, absorb + executor briefs added)
+## File map & status (updated 2026-08-04 — PLAN-policy promoted; earlier same day: absorb + executor briefs)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 10 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 11 full PLANs + 12 BRIEFs + ordering/triggers in `plans/README.md` |
 | `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
 | `arc-full-architecture.md` | ACTIVE — reference | The target picture: 16 modules / kernel–workflows–ventures, model-agnostic engine, evolve contract, data layer. Briefs assume its definitions |
 | `arc-hq-mockup.html` | **ACTIVE — design spec** | The dashboard's visual target; `plans/BRIEF-dashboard.md` cites it as the spec |
-| `records/arc-architecture-v2.1-verdicts.md` | Record | Review round-1 adjudication (vocabulary, capability-lint law, policy capability-vector matrix — `BRIEF-policy` builds on it) |
+| `records/arc-architecture-v2.1-verdicts.md` | Record | Review round-1 adjudication (vocabulary, capability-lint law, policy capability-vector matrix — `plans/PLAN-policy.md` builds on it) |
 | `records/arc-hq-blueprint.md` | Record | HQ concept: autonomy ladder, learning-as-calibration, moat analysis. Absorbed into Cycle-2 plan + policy/evolve/dashboard/chat briefs |
 | `records/arc-money-engine-plan.md` | Record | Original idea scoring (pain-mining 9 · leads-service 8.5 · SaaS factory 8 · video 6/8 · trading 2) and monetization logic. Sequencing superseded by the master plan |
 | ~~`arc-cycle2-receipt-spine-PLAN-v2.md`~~ | **MOVED → `docs/archive/`** | Superseded by `plans/PLAN-cycle2-receipt-spine-v2.1.md`; kept in archive for history — never feed the v2 to a kickoff |
 | ~~`plans/BRIEF-evolve.md`~~ | **MOVED → `docs/archive/`** (2026-08-02) | Superseded by `plans/PLAN-evolve.md`; kept in archive for history — never feed the brief to a kickoff (its auto-revert rule was owner-overturned; the plan is the design source) |
 | ~~`plans/BRIEF-leads.md`~~ | **MOVED → `docs/archive/`** (2026-08-03) | Superseded by `plans/PLAN-leads.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: PII/store/HMAC/journal rules exist only in the plan) |
+| ~~`plans/BRIEF-policy.md`~~ | **MOVED → `docs/archive/`** (2026-08-04) | Superseded by `plans/PLAN-policy.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: the two-key authority state machine, spend-under-E2 definition, typed event profiles and the hook feasibility gate exist only in the plan) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -120,6 +121,28 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     Decisions ABS-A…F / EXE-A…E named as letters; real ADR numbers at kickoff from the
     owning lane's century band. Recommended order: absorb first — its A/B evidence is
     the receipt that fires executor's trigger.
+13. **2026-08-04:** `plans/PLAN-policy.md` added (policy engine — enforced capability
+    vectors: per action-kind vectors [8 capabilities × L0–L3] under a **two-key
+    authority model** — YAML ceiling + event-earned cap folded from the spine by one
+    fixture-pinned reducer; L1 birth however high the ceiling; demotion bites from the
+    EFFECTIVE level (cap-above-ceiling can never absorb it); promotion human-only via
+    `approval.requested` [strict `policy.promotion` profile] → `decision.recorded` →
+    `policy.level.changed`, no auto-recovery; deny-by-default, fail-closed at the only
+    entry points — `arc-run` wrapper + PreToolUse hooks, with a P0 hook-interception
+    feasibility matrix where an unprovable tool class = static deny or L0/L1; `spend` =
+    pre-approved provider budgets only, reserve→settle/release under the spine lock,
+    Mode A only, E2 money never above L1; vocabulary +4 kinds stated against live
+    `KINDS.length` [31 at draft — ADR-0107 derived-count rule]; decisions POL-A…J
+    locked over 3 owner-review rounds, POL-K [lane/century/code home] left open by
+    design for kickoff). Keeps its pull slot; **trigger reworded**: ≥3 kinds at ≥L2 OR
+    the first scheduler/headless job **APPROVED** — the brief's "scheduler lands" arm
+    was unreachable (scheduler hard-prereqs policy). **Hard kickoff gate inside: the
+    Constitution must be ADOPTED first** — `constitution.adopted` is not in today's
+    vocabulary, so adoption = micro vocab ADR + sign-off + event. Cross-plan: the
+    scheduler stays policy-gated (unchanged) · executor's "L1-drafts cap until the
+    policy engine wakes" is POL-G's driver-eligibility contract from the other side ·
+    `arc-full-architecture.md`'s "policy L0–L4" is superseded by L0–L3 (recorded in the
+    kickoff ADR). `BRIEF-policy.md` superseded → moved to `docs/archive/`.
 
 ## Provenance
 
