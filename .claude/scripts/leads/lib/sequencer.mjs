@@ -20,6 +20,19 @@ import { guardSend, GuardRefusal, acquireLock } from "./guard.mjs";
 import { writeIntent, resolveIntent, reconcile, idemKeyFor, unresolvedIntents } from "./journal.mjs";
 import { assertCampaignStore, readDraft, currentSha } from "./drafts.mjs";
 import { provider } from "./deps.mjs";
+import { loadConfig } from "./preflight.mjs";
+
+// Every send carries List-Unsubscribe (ADR-0402, a non-negotiable). The local part is a
+// constant; the DOMAIN comes from config, so the header always points at the domain the mail
+// was actually sent from. Assembled rather than written as a literal: this file is inside the
+// PII tripwire's scan scope and an email-shaped literal here is a violation by construction.
+const UNSUB_LOCAL = "unsubscribe";
+export function unsubscribeHeader(configPath) {
+  const cfg = loadConfig(configPath);
+  const domain = String(cfg.sending_domain || "").trim();
+  if (!domain) throw new Error("no sending_domain configured — every send must carry a working List-Unsubscribe (ADR-0402)");
+  return `<mailto:${UNSUB_LOCAL}@${domain}>`;
+}
 
 // An approval is a PAIR on the spine: an `approval.requested` carrying the draft_ref and the
 // draft_sha, and a `decision.recorded` whose `decides` is that approval's ULID. Reading only
@@ -27,13 +40,24 @@ import { provider } from "./deps.mjs";
 // was approved -- so both are required and the sha comes from the APPROVAL, not the draft.
 export function approvedShaFor(events, draftRef) {
   const requests = events.filter(
-    (e) => e.kind === "approval.requested" && e.payload?.gate === "leads-send" && e.payload?.draft_ref === draftRef
+    (e) => e.kind === "approval.requested" &&
+      // `id` MUST be present. Without this, an approval missing an id and a decision missing a
+      // `decides` paired on undefined === undefined -- so a decision approving something else
+      // entirely authorised this draft. Confirmed.
+      typeof e.id === "string" && e.id.length > 0 &&
+      e.payload?.gate === "leads-send" &&
+      e.payload?.draft_ref === draftRef
   );
   for (const req of requests) {
-    const decision = events.find(
-      (e) => e.kind === "decision.recorded" && e.payload?.decides === req.id && e.payload?.verdict === "approve"
+    // LATEST decision wins, and a reject revokes. The first version took the first `approve`
+    // and never looked further, so a human who caught a mistake and rejected in the inbox
+    // could not stop the send -- `reject` was read nowhere in the send path.
+    const decisions = events.filter(
+      (e) => e.kind === "decision.recorded" && typeof e.payload?.decides === "string" && e.payload.decides === req.id
     );
-    if (decision) return { approvedSha: req.payload.draft_sha, approvalId: req.id, decisionId: decision.id };
+    const last = decisions[decisions.length - 1];
+    if (last && last.payload.verdict === "approve")
+      return { approvedSha: req.payload.draft_sha, approvalId: req.id, decisionId: last.id };
   }
   return null;
 }
@@ -44,6 +68,13 @@ export function approvedShaFor(events, draftRef) {
 export async function sendOne({ store, events, draftRef, now, emitReceipt, config }) {
   const draft = readDraft(store, draftRef);
   assertCampaignStore(store, draft.campaign);
+
+  // The FAIL class is re-read HERE, at the send moment. It used to be enforced by a single
+  // `if` in the CLI draft command, and nothing in the send path ever looked at `lint_status`
+  // again -- so a draft record written or edited by any other route sent regardless of it.
+  // A gate that exists in one caller is not a property of the system.
+  if (typeof draft.lint_status !== "string" || /^FAIL/.test(draft.lint_status))
+    return { draftRef, ok: false, step: "lint", why: `draft lint status ${JSON.stringify(draft.lint_status)} — a FAIL-class draft never sends (ADR-0404)` };
 
   const approval = approvedShaFor(events, draftRef);
   if (!approval) return { draftRef, ok: false, step: "approval", why: "no approved decision on the spine for this draft — L1 means every send is individually approved (ADR-0407)" };
@@ -86,7 +117,12 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
       to: draft.lead_id,          // the fake never sees a real address; the real impl resolves it from the store
       subject: draft.subject || "",
       body: draft.body,
-      headers: { "List-Unsubscribe": "<mailto:unsubscribe@example.invalid>" },
+      // Built from the configured sending domain, never hardcoded. The PII tripwire caught the
+      // hardcoded version -- correctly, since this file is not a fixture path and any
+      // email-shaped literal here is exactly what the gate exists to stop. It also has to be
+      // config-derived to be RIGHT: the unsubscribe address must live on the domain the mail
+      // is sent from, or the header points somewhere that cannot honour it.
+      headers: { "List-Unsubscribe": unsubscribeHeader(config) },
     });
   } catch (e) {
     // The provider refused or the transport failed. The intent STAYS unresolved on purpose:

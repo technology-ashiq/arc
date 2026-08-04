@@ -86,7 +86,7 @@ export async function reconcile(store, { events, lookup, emitReceipt }) {
       (e) => e.kind === "outreach.sent" &&
         e.payload?.campaign === intent.campaign &&
         e.payload?.lead_id === intent.lead_hmac &&
-        e.payload?.touch_n === intent.touch_n
+        Number(e.payload?.touch_n) === Number(intent.touch_n)
     );
     if (already) {
       resolveIntent(store, intent.idempotency_key);
@@ -98,17 +98,44 @@ export async function reconcile(store, { events, lookup, emitReceipt }) {
     outcome.providerCalls++;
     const found = await lookup(intent.idempotency_key);
 
-    if (found && found.found) {
+    // An INDETERMINATE lookup is not a "no". `null`, `undefined`, `{}`, a thrown error, a
+    // string -- every one of these used to fall through to the void branch, which deletes the
+    // intent and writes no receipt. The spine then has no record of a send the provider may
+    // have accepted, so the next run cannot fire `already-sent` and submits the SAME mail
+    // again. Provider lookups are eventually consistent: a 404 on a just-accepted message is
+    // the normal case, not the exotic one.
+    const determinate = found !== null && typeof found === "object" && typeof found.found === "boolean";
+    if (!determinate) {
+      outcome.indeterminate = (outcome.indeterminate || 0) + 1;
+      continue; // intent STAYS unresolved; the guard keeps refusing until a human looks
+    }
+
+    if (found.found) {
+      if (typeof found.provider_message_id !== "string" || !found.provider_message_id) {
+        outcome.indeterminate = (outcome.indeterminate || 0) + 1;
+        continue; // "accepted" with no id is not something to write a receipt from
+      }
       // STEP 4 -- exactly one missing receipt, same preimage the validator re-derives.
-      await emitReceipt({
-        lead_id: intent.lead_hmac,
-        campaign: intent.campaign,
-        touch_n: intent.touch_n,
-        idem_key: intent.idempotency_key,
-        provider_message_id: found.provider_message_id,
-        submitted_at: intent.submitted_at,
-        draft_sha: intent.draft_sha,
-      });
+      try {
+        await emitReceipt({
+          lead_id: intent.lead_hmac,
+          campaign: intent.campaign,
+          touch_n: Number(intent.touch_n),
+          idem_key: intent.idempotency_key,
+          provider_message_id: found.provider_message_id,
+          submitted_at: intent.submitted_at,
+          draft_sha: intent.draft_sha,
+        });
+      } catch (e) {
+        // Do NOT resolve the intent. An emit failure after a confirmed ack used to throw out
+        // of reconcile with the intent still unresolved, wedging every future send AND every
+        // future reconcile with no way out. Recording it as a failure lets the run report and
+        // continue; the intent stays unresolved, which is the safe direction.
+        outcome.emitFailed = (outcome.emitFailed || 0) + 1;
+        outcome.errors = outcome.errors || [];
+        outcome.errors.push(`${intent.idempotency_key}: ${e.message}`);
+        continue;
+      }
       outcome.emittedLate++;
     } else {
       // STEP 5 -- the provider never accepted it. The cap slot is released, and no receipt

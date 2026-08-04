@@ -80,7 +80,13 @@ export function deriveState(events, { campaign }) {
       // slot on both.
       const d = istDay(p.submitted_at);
       perDay.set(d, (perDay.get(d) || 0) + 1);
-    } else if (e.kind === "incident.raised" && /spam|complaint/i.test(JSON.stringify(p))) complaints++;
+    } else if (
+      // Scoped and TYPED. The first version stringified the entire payload of every
+      // incident.raised on the spine and regexed it, so an incident from another lane whose
+      // text merely mentioned "no complaints so far" froze every leads campaign -- and the
+      // clearance hole above then un-froze it with an unrelated approval.
+      e.kind === "incident.raised" && p.module === "leads" && p.campaign === campaign && p.kind === "spam-complaint"
+    ) complaints++;
   }
   return { suppressed, replied, touches, perDay, bounces, complaints, campaign };
 }
@@ -99,12 +105,45 @@ export function breakerState(state, lifetimeSends) {
 // A campaign's HOLD/FROZEN clearance is a DECISION on the spine, never a file and never a
 // flag. `--force`, a raised config value and an env override are all refused by construction:
 // there is no code path that clears this other than an inbox approval.
-export function clearedByInbox(events, campaign, level) {
-  return events.some(
-    (e) => e.kind === "decision.recorded" &&
-      e.payload?.verdict === "approve" &&
-      new RegExp(`${level}.*${campaign}|${campaign}.*${level}`, "i").test(e.payload?.reason || "")
+// A clearance must name the INCIDENT it clears, and it must be an approval of a leads
+// clearance request. The first version matched a free-text regex over every
+// `decision.recorded` on the whole spine, which was wrong in five separate ways, each
+// confirmed by an adversarial pass:
+//
+//   * ANY approve decision counted -- one emitted by evolve or develop cleared a leads FREEZE
+//   * the match was unanchored, so "raise the bounce thres|HOLD|" cleared a HOLD, and
+//     "auto|pilot|" matched campaign "pilot" (D2, an unanchored match on a legitimate variant)
+//   * a decision whose text said HOLD IT cleared the hold
+//   * the clearance was PERMANENT -- one approval pre-cleared every future breaker forever
+//   * `campaign` was interpolated RAW into a RegExp: campaign "a|b" made any reason
+//     containing "b" a clearance, and campaign "(" threw a bare SyntaxError out of the guard
+//
+// The fix removes the regex entirely. A clearance is now a typed pairing on the spine:
+// an `approval.requested` with gate `leads-breaker` naming {campaign, level, incident_id},
+// approved by a `decision.recorded` that DECIDES it. Structure, not prose.
+export function clearedByInbox(events, campaign, level, incidentId) {
+  const requests = events.filter(
+    (e) => e.kind === "approval.requested" &&
+      e.payload?.gate === "leads-breaker" &&
+      e.payload?.campaign === campaign &&
+      e.payload?.level === level &&
+      // Bound to the SPECIFIC incident, so a clearance cannot pre-authorise a future breaker.
+      e.payload?.incident_id === incidentId
   );
+  for (const req of requests) {
+    // Latest decision wins, so a reject after an approve revokes it (see approvedShaFor).
+    const decisions = events.filter((e) => e.kind === "decision.recorded" && e.payload?.decides === req.id && req.id);
+    const last = decisions[decisions.length - 1];
+    if (last && last.payload?.verdict === "approve") return true;
+  }
+  return false;
+}
+
+// The identity of the CURRENT breaker state: what fired, and on the evidence of how many
+// bounces/complaints. A clearance is bound to this, so resolving one HOLD does not silently
+// authorise the next one.
+export function incidentIdFor(campaign, breaker, state) {
+  return `${campaign}:${breaker.level}:b${state.bounces}:c${state.complaints}`;
 }
 
 // ---------- the chain ----------
@@ -117,8 +156,9 @@ export function guardSend({ events, store, draft, now, config }) {
 
   // 1. campaign state
   const breaker = breakerState(state, lifetime);
-  if (breaker.level !== "OK" && !clearedByInbox(events, campaign, breaker.level))
-    throw new GuardRefusal("campaign-state", `campaign "${campaign}" is ${breaker.level}: ${breaker.why}. Only an arc-inbox approval naming the incident clears it — no flag, config value or env var does (ADR-0403).`);
+  const incidentId = incidentIdFor(campaign, breaker, state);
+  if (breaker.level !== "OK" && !clearedByInbox(events, campaign, breaker.level, incidentId))
+    throw new GuardRefusal("campaign-state", `campaign "${campaign}" is ${breaker.level}: ${breaker.why}. Clear it with an approved leads-breaker request naming incident "${incidentId}" — no flag, config value, env var or free-text approval does (ADR-0403).`);
 
   // 2. unresolved intent — conservative until reconciled. Blunt on purpose: at <=20 sends/day
   //    refusing everything until a crash is reconciled costs a command, and the alternative
@@ -137,11 +177,19 @@ export function guardSend({ events, store, draft, now, config }) {
   //    invisible (it is idempotent by key); on a real provider it is a second submit, and the
   //    only thing standing between it and a duplicate email is the provider honouring the
   //    idempotency key. Depending on that is exactly what ADR-0411 says not to do.
+  // Compared as NUMBERS. `touch_n` reaches here from a store JSON file that nothing
+  // re-validates, and the idem formula interpolates it -- so 1 and "1" produce the SAME idem
+  // while `===` says they are different touches. Two derivations of one value that disagree
+  // (D5): the guard let a second submit through, and the reconciler voided an intent whose
+  // receipt was sitting on the spine.
+  const tn = Number(touch_n);
+  if (!Number.isSafeInteger(tn) || tn < 1)
+    throw new GuardRefusal("bad-touch", `touch_n ${JSON.stringify(touch_n)} is not a positive integer`);
   const alreadySent = events.some(
     (e) => e.kind === "outreach.sent" &&
       e.payload?.campaign === campaign &&
       e.payload?.lead_id === lead_id &&
-      e.payload?.touch_n === touch_n
+      Number(e.payload?.touch_n) === tn
   );
   if (alreadySent)
     throw new GuardRefusal("already-sent", `touch ${touch_n} to this lead in "${campaign}" already has an outreach.sent receipt — refusing before the provider is asked, rather than relying on it to deduplicate.`);
@@ -159,6 +207,11 @@ export function guardSend({ events, store, draft, now, config }) {
   // 6. rolling touch cap — rolling, not a calendar week: a calendar week lets two touches
   //    land Sunday and Monday and calls it two weeks.
   const prior = (state.touches.get(lead_id) || []).filter((t) => withinRollingWindow(t, now, caps.rolling_window_days));
+  // A touch recorded AFTER `now` means the clock moved backwards, not that the touch does not
+  // count. Treating it as outside the window emptied the touch cap under any backward skew.
+  const future = (state.touches.get(lead_id) || []).filter((t) => Date.parse(t) > Date.parse(now));
+  if (future.length)
+    throw new GuardRefusal("clock-skew", `${future.length} touch(es) for this lead are stamped AFTER the current send time (${now}) — refusing rather than counting them as outside the rolling window.`);
   if (prior.length >= caps.touches_per_lead)
     throw new GuardRefusal("touch-cap", `lead already had ${prior.length} touch(es) in the rolling ${caps.rolling_window_days}-day window; the cap is ${caps.touches_per_lead}.`);
 

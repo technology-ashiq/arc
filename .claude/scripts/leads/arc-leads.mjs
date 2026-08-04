@@ -22,7 +22,7 @@ import { leadsIdem } from "../hq/lib/validate-leads.mjs";
 import { readAllEvents } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
-import { runDaily, approvedShaFor } from "./lib/sequencer.mjs";
+import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
 import { GuardRefusal } from "./lib/guard.mjs";
@@ -148,11 +148,32 @@ async function cmdResearch(icpPath) {
 // a send at 23:59 or 00:01 without waiting for midnight -- the same shape as the spine's own
 // test-only clock door, and it is never set in production.
 function nowIst() {
-  if (process.env.ARC_LEADS_NOW) return process.env.ARC_LEADS_NOW;
-  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
   const p = (n) => String(n).padStart(2, "0");
-  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}` +
+  const real = new Date(Date.now() + 5.5 * 3600 * 1000);
+  const fmt = (d) =>
+    `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}` +
     `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}+05:30`;
+
+  const override = process.env.ARC_LEADS_NOW;
+  if (!override) return fmt(real);
+
+  // ARC_LEADS_NOW was a CAP OVERRIDE wearing a test door's clothes, and it was refused by
+  // nothing. Two confirmed exploits, neither needing a flag or a config edit:
+  //
+  //   ARC_LEADS_NOW=<tomorrow>  ran the daily command a second time and sent 20 more on the
+  //   same real day, because the cap buckets by this string
+  //
+  //   ARC_LEADS_NOW=<yesterday> emptied the rolling touch window, because every real touch
+  //   sat AFTER "now" and was read as outside it
+  //
+  // The comment said it "is never set in production". That is a hope, not a mechanism. It is
+  // now honoured ONLY alongside ARC_LEADS_FAKE=1 -- i.e. when no real provider can be reached
+  // and therefore no real mail can leave -- and even then it must be a well-formed IST stamp.
+  if (process.env.ARC_LEADS_FAKE !== "1")
+    die(2, "ARC_LEADS_NOW is a test-only clock door and is refused without ARC_LEADS_FAKE=1 — it buckets the daily cap, so accepting it against a real provider would be a cap override (ADR-0403).");
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+05:30$/.test(override))
+    die(2, `ARC_LEADS_NOW ${JSON.stringify(override)} must be YYYY-MM-DDTHH:MM:SS+05:30`);
+  return override;
 }
 
 function cmdCampaignInit(name) {
@@ -241,6 +262,14 @@ async function cmdDaily(campaign) {
   if (!campaign) die(2, "usage: arc-leads daily <campaign>");
   const store = openStore({ repoRoot: REPO_ROOT });
   assertCampaignStore(store, campaign);
+
+  // Refuse HERE, with a sentence that says what to do, rather than throwing out of the submit
+  // call three frames down. Without a sending domain there is no valid List-Unsubscribe
+  // address, and a send without a working unsubscribe is a non-negotiable violation
+  // (ADR-0402) — not merely a missing config value.
+  try { unsubscribeHeader(); }
+  catch (e) { die(3, `${e.message}. Phase 03 gate row 2 is the dedicated warmed domain, and it is not evidenced (ADR-0413).`); }
+
   const readEvents = () => readAllEvents({ allowMissing: true });
   const approved = listDrafts(store, campaign)
     .filter((d) => approvedShaFor(readEvents(), d.draft_ref))

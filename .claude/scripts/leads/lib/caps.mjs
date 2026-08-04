@@ -30,9 +30,29 @@ export const CEILINGS = Object.freeze({
   rolling_window_days: 31,
 });
 
+// FLOORS, because "config can lower a value and never raise it" is the wrong invariant for a
+// WINDOW: lowering rolling_window_days WEAKENS the touch cap, and 0 removes it entirely
+// (confirmed: a third touch on the same day became ALLOWED). A window and a count are not the
+// same kind of number, and treating them as one left the touch cap editable to nothing.
+export const FLOORS = Object.freeze({
+  per_ist_day: 0,            // 0 is a legitimate full stop
+  touches_per_lead: 0,       // ditto
+  rolling_window_days: 7,    // never shorter than the ADR-0403 window itself
+});
+
+// The send window is a cap too, and it had NO validation beyond HH:MM shape -- so one config
+// edit bought 24/7/365 cold outbound, which is the single fastest way to burn the domain.
+const WINDOW_CEILING = Object.freeze({ days: [1, 2, 3, 4, 5], start: "06:00", end: "21:00" });
+
 export class CapError extends Error {
   constructor(code, message) { super(message); this.name = "CapError"; this.code = code; }
 }
+
+const minutesOf = (hhmm) => {
+  const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm));
+  if (!m) throw new CapError("BAD_WINDOW", `send window bound ${JSON.stringify(hhmm)} must be HH:MM`);
+  return Number(m[1]) * 60 + Number(m[2]);
+};
 
 export function loadCaps(path = process.env.LEADS_CONFIG || ".claude/config/leads.json") {
   const cfg = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
@@ -45,6 +65,12 @@ export function loadCaps(path = process.env.LEADS_CONFIG || ".claude/config/lead
     const v = Number(caps[key]);
     if (!Number.isFinite(v) || v < 0)
       throw new CapError("BAD_CAP", `caps.${key} must be a non-negative number (got ${JSON.stringify(caps[key])})`);
+    if (v < FLOORS[key])
+      throw new CapError(
+        "CAP_BELOW_FLOOR",
+        `caps.${key} = ${v} is below the floor of ${FLOORS[key]}. For a WINDOW, lowering the value weakens the cap — ` +
+          `rolling_window_days: 0 removes the touch limit altogether (ADR-0403).`
+      );
     if (v > CEILINGS[key])
       throw new CapError(
         "CAP_ABOVE_CEILING",
@@ -53,6 +79,16 @@ export function loadCaps(path = process.env.LEADS_CONFIG || ".claude/config/lead
       );
     caps[key] = v;
   }
+  // The send window may only ever NARROW the ceiling: weekdays within 06:00-21:00 IST.
+  const w = caps.send_window_ist || DEFAULTS.send_window_ist;
+  const outside = (w.days || []).filter((d) => !WINDOW_CEILING.days.includes(d));
+  if (outside.length)
+    throw new CapError("WINDOW_ABOVE_CEILING", `caps.send_window_ist.days includes ${outside.join(",")} — outbound sends weekdays only (ADR-0403)`);
+  if (minutesOf(w.start) < minutesOf(WINDOW_CEILING.start) || minutesOf(w.end) > minutesOf(WINDOW_CEILING.end))
+    throw new CapError("WINDOW_ABOVE_CEILING", `caps.send_window_ist ${w.start}-${w.end} is wider than the hard ceiling ${WINDOW_CEILING.start}-${WINDOW_CEILING.end} IST`);
+  if (minutesOf(w.start) >= minutesOf(w.end))
+    throw new CapError("BAD_WINDOW", `caps.send_window_ist start ${w.start} is not before end ${w.end}`);
+  caps.send_window_ist = w;
   return caps;
 }
 
@@ -80,11 +116,6 @@ export function istDay(ts) {
   return day;
 }
 
-const minutesOf = (hhmm) => {
-  const m = /^(\d{2}):(\d{2})$/.exec(String(hhmm));
-  if (!m) throw new CapError("BAD_WINDOW", `send window bound ${JSON.stringify(hhmm)} must be HH:MM`);
-  return Number(m[1]) * 60 + Number(m[2]);
-};
 
 export function inSendWindow(ts, window = DEFAULTS.send_window_ist) {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(ts));
