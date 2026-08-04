@@ -101,11 +101,26 @@ done < <(git -c core.quotePath=off ls-files -z -- \
 # the shell derivation only if node is unavailable, and say so.
 STORE_RESOLVED=""
 if command -v node >/dev/null 2>&1 && [ -f "$REPO_ROOT/.claude/scripts/leads/lib/store.mjs" ]; then
-  STORE_RESOLVED="$(node --input-type=module -e \
-    'const {storePath} = await import(process.argv[1]); process.stdout.write(storePath());' \
-    "$REPO_ROOT/.claude/scripts/leads/lib/store.mjs" 2>/dev/null || true)"
+  # Two traps live in this one call, and the first version hit both:
+  #
+  #   1. `process.argv[1]` under `node -e` is NOT the extra argument -- this is the same
+  #      argv[1] confusion that once had a validator parsing its own source for a whole suite.
+  #      The path comes in through the environment instead.
+  #   2. a Windows absolute path is not a valid ESM specifier; `import("C:\...")` throws, so
+  #      the resolution silently failed and fell back to the $HOME derivation -- the exact
+  #      divergence asking store.mjs was supposed to eliminate. pathToFileURL fixes it.
+  #
+  # Both failures were INVISIBLE because of `2>/dev/null || true`: the fallback looked like a
+  # working path while searching for a string nothing would ever contain.
+  STORE_RESOLVED="$(LEADS_STORE_MODULE="$REPO_ROOT/.claude/scripts/leads/lib/store.mjs" \
+    node --input-type=module -e \
+    'import {pathToFileURL} from "node:url"; const {storePath} = await import(pathToFileURL(process.env.LEADS_STORE_MODULE).href); process.stdout.write(storePath());' \
+    2>/dev/null || true)"
 fi
 if [ -z "$STORE_RESOLVED" ]; then
+  # Say so. A silent fallback to a path derived differently from the one the code uses is how
+  # this gate came to scan for a string that could never appear.
+  echo "pii-tripwire: NOTE -- could not resolve the store path via store.mjs; falling back to a shell derivation, which may differ from os.homedir() on this platform" >&2
   STORE_RESOLVED="${ARC_LEADS_STORE:-${HOME:-}/.arc/leads}"
 fi
 # Strip trailing separators: Node's resolve() drops them and the raw env value may not, which

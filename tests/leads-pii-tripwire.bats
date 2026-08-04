@@ -32,6 +32,12 @@ setup() {
   # That refusal is the point (an alarm reporting clean while measuring nothing is worse than
   # no alarm), so the sandbox has to look like a real repo instead of the rule being relaxed.
   echo 'export const PLACEHOLDER = 1;' > "$SANDBOX/.claude/scripts/leads/placeholder.mjs"
+  # store.mjs too, because the tripwire ASKS it for the store path rather than re-deriving one.
+  # That indirection is the fix for a real divergence ($HOME vs os.homedir() on the Windows
+  # leg), so a sandbox without it silently exercises the fallback instead of the real path --
+  # which is precisely the branch the default-store test exists to cover.
+  mkdir -p "$SANDBOX/.claude/scripts/leads/lib"
+  cp "$ARC_ROOT/.claude/scripts/leads/lib/store.mjs" "$SANDBOX/.claude/scripts/leads/lib/store.mjs"
   cd "$SANDBOX"
   git init -q .
   # Repo-local identity, never subshell-scoped env: a clean CI runner with no global git

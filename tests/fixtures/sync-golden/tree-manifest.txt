@@ -167,7 +167,7 @@
 .claude/scripts/leads/lib/research-lint.mjs	e609dea04777f9a49a9fe8f3f199b3d61321e1d16eee37d5e3e82c5d6ff24f7b
 .claude/scripts/leads/lib/spine-read.mjs	4bd3460d8ca72f0201c176c8187662f604ac53bafefc059c6cd5e6720c8d1a4c
 .claude/scripts/leads/lib/store.mjs	382885835fb3130bda151adbf7ec9d1b7545f2d0e9e54099e1b08fa53ad83dc5
-.claude/scripts/leads/pii-tripwire.sh	417a9a844f568cf72113a0e31ce199e1bfd1e05f27eac97a27b524bef829ac60
+.claude/scripts/leads/pii-tripwire.sh	7b61af67a2c17015dea50d156e67d574bc5584f98274c9457e2dd42a5b5d83aa
 .claude/scripts/plan/arc-bytediff.sh	252b971a2c8a7e2267fcdedcec34c85ecfa4a520d65590c0995c29f6d0e424f8
 .claude/scripts/plan/arc-evidence.sh	ddbc49a3da693499d34d2e7e904db017a045e6fb4558f5b0c867c432b9f013e0
 .claude/scripts/plan/kickoff-lint.mjs	ce4f84fc5bb4c47e7c2422695975e65919a7d4fad74029ca7324bef9702cde4f
