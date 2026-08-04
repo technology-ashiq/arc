@@ -27,6 +27,11 @@ setup() {
   SANDBOX="$BATS_TEST_TMPDIR/repo"
   mkdir -p "$SANDBOX/.claude/scripts/leads" "$SANDBOX/tests/fixtures/leads"
   cp "$ARC_ROOT/$TRIPWIRE" "$SANDBOX/.claude/scripts/leads/pii-tripwire.sh"
+  # At least one OTHER tracked leads file, because the script self-excludes: a sandbox holding
+  # only the script scans zero files, and "scanned 0" is now a REFUSAL rather than a pass.
+  # That refusal is the point (an alarm reporting clean while measuring nothing is worse than
+  # no alarm), so the sandbox has to look like a real repo instead of the rule being relaxed.
+  echo 'export const PLACEHOLDER = 1;' > "$SANDBOX/.claude/scripts/leads/placeholder.mjs"
   cd "$SANDBOX"
   git init -q .
   # Repo-local identity, never subshell-scoped env: a clean CI runner with no global git
