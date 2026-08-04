@@ -52,7 +52,8 @@ _run_tripwire() {
 }
 
 @test "email shaped string in a tracked non fixture file is rejected" {
-  echo 'const owner = "advocate@${NONRESERVED_DOMAIN}";' > .claude/scripts/leads/leak.mjs
+  printf 'const owner = "advocate@%s";
+' "$NONRESERVED_DOMAIN" > .claude/scripts/leads/leak.mjs
   git add -A && git commit -qm leak
   _run_tripwire
   [ "$status" -eq 2 ]
@@ -68,7 +69,8 @@ _run_tripwire() {
 }
 
 @test "non reserved domain address inside a fixture path is rejected" {
-  echo '{"email":"real.person@${NONRESERVED_DOMAIN}"}' > tests/fixtures/leads/bad.json
+  printf '{"email":"real.person@%s"}
+' "$NONRESERVED_DOMAIN" > tests/fixtures/leads/bad.json
   git add -A && git commit -qm fixture
   _run_tripwire
   [ "$status" -eq 2 ]
@@ -110,7 +112,8 @@ EOF
 }
 
 @test "untracked file holding an address does not fire" {
-  echo 'const owner = "advocate@${NONRESERVED_DOMAIN}";' > .claude/scripts/leads/scratch.mjs
+  printf 'const owner = "advocate@%s";
+' "$NONRESERVED_DOMAIN" > .claude/scripts/leads/scratch.mjs
   _run_tripwire
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 }
@@ -138,7 +141,7 @@ EOF
 @test "the real repository scan covers a non zero number of files" {
   run bash "$ARC_ROOT/$TRIPWIRE" "$ARC_ROOT"
   [ "$status" -eq 0 ]
-  count=$(printf '%s' "$output" | sed -n 's/.*clean (\([0-9]*\) tracked.*//p')
+  count=$(printf '%s' "$output" | sed -n 's/.*clean (\([0-9][0-9]*\) tracked.*/\1/p')
   [ -n "$count" ] && [ "$count" -ge 10 ] || { echo "scanned only '$count' files: $output"; false; }
 }
 
@@ -146,7 +149,8 @@ EOF
 # declared path now carries its own violation case, so dropping any one of them turns red.
 @test "scope covers the config file" {
   mkdir -p .claude/config
-  echo '{"owner":"advocate@${NONRESERVED_DOMAIN}"}' > .claude/config/leads.json
+  printf '{"owner":"advocate@%s"}
+' "$NONRESERVED_DOMAIN" > .claude/config/leads.json
   git add -A && git commit -qm cfg
   _run_tripwire
   [ "$status" -eq 2 ]
@@ -154,7 +158,8 @@ EOF
 
 @test "scope covers the products directory" {
   mkdir -p products/leads
-  echo '{"contact":"advocate@${NONRESERVED_DOMAIN}"}' > products/leads/manifest.json
+  printf '{"contact":"advocate@%s"}
+' "$NONRESERVED_DOMAIN" > products/leads/manifest.json
   git add -A && git commit -qm prod
   _run_tripwire
   [ "$status" -eq 2 ]
@@ -162,14 +167,16 @@ EOF
 
 @test "scope covers the initiatives directory" {
   mkdir -p initiatives/leads
-  echo 'owner advocate@${NONRESERVED_DOMAIN}' > initiatives/leads/PROGRESS.md
+  printf 'owner advocate@%s
+' "$NONRESERVED_DOMAIN" > initiatives/leads/PROGRESS.md
   git add -A && git commit -qm init
   _run_tripwire
   [ "$status" -eq 2 ]
 }
 
 @test "scope covers the leads bats files" {
-  echo 'advocate@${NONRESERVED_DOMAIN}' > tests/leads-example.bats
+  printf 'advocate@%s
+' "$NONRESERVED_DOMAIN" > tests/leads-example.bats
   git add -A && git commit -qm bats
   _run_tripwire
   [ "$status" -eq 2 ]
@@ -203,8 +210,8 @@ EOF
 # A tracked path with a space was silently skipped by unquoted $files, and the footer still
 # counted it. Same class: newlines and glob characters in paths.
 @test "a tracked path containing a space is scanned" {
-  printf '{"email":"real.person@${NONRESERVED_DOMAIN}"}
-' > "tests/fixtures/leads/two words.json"
+  printf '{"email":"real.person@%s"}
+' "$NONRESERVED_DOMAIN" > "tests/fixtures/leads/two words.json"
   git add -A && git commit -qm space
   _run_tripwire
   [ "$status" -eq 2 ]
@@ -213,8 +220,8 @@ EOF
 # git quotes non-ASCII paths by default (core.quotePath), so the file arrived as an
 # octal-escaped quoted string, failed the -f test, and was skipped.
 @test "a tracked path with a non ASCII name is scanned" {
-  printf '{"email":"real.person@${NONRESERVED_DOMAIN}"}
-' > "tests/fixtures/leads/josÃ©.json"
+  printf '{"email":"real.person@%s"}
+' "$NONRESERVED_DOMAIN" > "tests/fixtures/leads/$(printf 'jos\303\251').json"
   git add -A && git commit -qm nonascii
   _run_tripwire
   [ "$status" -eq 2 ]
