@@ -129,7 +129,12 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
   [[ "$output" == *"distinct"* ]]
 }
 
-@test "this file declares and runs 16 tests" {
+@test "this file registers the 16 tests it declares" {
+  # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
+  # this same file and compared it to a literal in this same file -- a tautology that
+  # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
+  registered=${#BATS_TEST_NAMES[@]}
   [ "$declared" -eq 16 ] || { echo "declared $declared, expected 16"; false; }
+  [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

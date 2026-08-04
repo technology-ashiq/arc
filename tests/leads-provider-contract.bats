@@ -192,7 +192,12 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"refusing to fold"* ]]
 }
 
-@test "this file declares and runs 18 tests" {
+@test "this file registers the 18 tests it declares" {
+  # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
+  # this same file and compared it to a literal in this same file -- a tautology that
+  # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
+  registered=${#BATS_TEST_NAMES[@]}
   [ "$declared" -eq 18 ] || { echo "declared $declared, expected 18"; false; }
+  [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

@@ -10,10 +10,11 @@
 //   0 ok · 2 usage/validation · 3 refused by a gate · 4 provider transport · 5 store error
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { initStore, openStore, leadId, fingerprint, StoreError, storePath } from "./lib/store.mjs";
+import { initStore, openStore, leadId, fingerprint, StoreError, storePath, STORE_FILE_MODE } from "./lib/store.mjs";
 import { lintCandidates } from "./lib/research-lint.mjs";
 import { source, verifier, ProviderError, PROVIDER_EXIT } from "./lib/deps.mjs";
 import { preflight, PREFLIGHT_REFUSED } from "./lib/preflight.mjs";
@@ -33,9 +34,24 @@ const die = (code, msg) => { console.error(`arc-leads: ${msg}`); process.exit(co
 // supplied one (anti-preclaim, ADR-0400).
 function emit(kind, payload, { evidence = null } = {}) {
   const sh = join(REPO_ROOT, ".claude/scripts/hq/arc-event.sh");
-  const args = ["emit", kind, "--payload", JSON.stringify(payload), "--actor", "arc-leads", "--strict"];
-  if (evidence) args.push("--evidence", evidence);
-  return execFileSync("bash", [sh, ...args], { encoding: "utf8" });
+  // --payload-file, NOT --payload. The payload used to travel in the argv of TWO processes
+  // (bash, then node), readable by any local process listing -- and on a non-zero exit Node
+  // builds `Command failed: bash ... --payload {...}` into err.message, which the catch below
+  // printed to stderr, i.e. into scrollback and CI logs. ADR-0412 says no PII through argv;
+  // today's payloads carry only HMACs and enums, but this is the one emitter every Phase 01-02
+  // receipt will route through, so the door is closed before it matters.
+  const tmp = join(tmpdir(), `arc-leads-${process.pid}-${Math.abs(Date.now() % 1e9)}.json`);
+  writeFileSync(tmp, JSON.stringify(payload), { mode: STORE_FILE_MODE });
+  try {
+    const args = ["emit", kind, "--payload-file", tmp, "--actor", "arc-leads", "--strict"];
+    if (evidence) args.push("--evidence", evidence);
+    return execFileSync("bash", [sh, ...args], { encoding: "utf8" });
+  } catch (e) {
+    // Re-raise WITHOUT the child command line: err.message embeds the whole invocation.
+    throw new Error(`arc-event refused a ${kind} receipt (exit ${e.status}). stderr: ${String(e.stderr || "").trim()}`);
+  } finally {
+    try { rmSync(tmp, { force: true }); } catch { /* best effort */ }
+  }
 }
 
 // ---------- store init ----------
@@ -139,7 +155,7 @@ async function cmdPreflight() {
 // fold-completeness rather than "wipe and replay", a test that would delete nothing and
 // assert nothing.
 function cmdState(json) {
-  const events = readAllEvents();
+  const events = readAllEvents({ allowMissing: true });
   const leads = new Map();
   const campaigns = {};
   const touch = (id) => leads.get(id) || leads.set(id, { last_touch_at: null, lead_id: id, suppressed: false, touches: 0 }).get(id);

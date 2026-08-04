@@ -15,9 +15,16 @@ import { spineRoot, eventsDir } from "../../hq/lib/spine-io.mjs";
 
 const DAY_RE = /^(\d{4}-\d{2}-\d{2})\.jsonl$/;
 
-export function readAllEvents({ root = spineRoot() } = {}) {
+export function readAllEvents({ root = spineRoot(), allowMissing = false } = {}) {
   const dir = eventsDir(root);
-  if (!existsSync(dir)) return [];
+  // The guard was on readFileSync and OMITTED on the adjacent directory read -- so a wrong
+  // ARC_SPINE_ROOT folded to zero events silently, which is the same "I could not read it
+  // therefore there was nothing there" this module's header argues against. Same class, one
+  // line up. Callers that genuinely expect an empty spine (a fresh store) opt in explicitly.
+  if (!existsSync(dir)) {
+    if (allowMissing) return [];
+    throw new Error(`spine events directory ${dir} does not exist — refusing to fold to zero events, because a cap derived from zero receipts never trips (set allowMissing for a genuinely fresh spine)`);
+  }
   const days = readdirSync(dir).filter((f) => DAY_RE.test(f)).sort();
 
   const out = [];

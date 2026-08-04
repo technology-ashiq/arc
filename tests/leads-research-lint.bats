@@ -271,7 +271,12 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"4 1 closed"* ]]
 }
 
-@test "this file declares and runs 30 tests" {
+@test "this file registers the 30 tests it declares" {
+  # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
+  # this same file and compared it to a literal in this same file -- a tautology that
+  # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
+  registered=${#BATS_TEST_NAMES[@]}
   [ "$declared" -eq 30 ] || { echo "declared $declared, expected 30"; false; }
+  [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

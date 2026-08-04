@@ -21,9 +21,9 @@
 //     forgotten.
 
 import { createHmac, createHash, randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve, sep } from "node:path";
+import { join, resolve, sep, dirname, basename } from "node:path";
 
 export class StoreError extends Error {
   constructor(code, message) {
@@ -44,10 +44,53 @@ export function storePath() {
 
 // The store must not sit inside the repo. Checked at every resolution rather than once at
 // init, because the env var is mutable and a later run could point it at the tree.
+// Containment is checked on the REAL path, case-folded, with Windows prefixes stripped.
+// A lexical byte-exact `startsWith` was bypassable four confirmed ways, and every one of them
+// lands the store physically inside the worktree where `git clean -xfd` deletes it:
+//
+//   case      `c:\users\...\arc-leads\leadstore`  -- accepted on the two case-insensitive legs
+//   symlink   a junction/symlink pointing INTO the repo -- resolve() is lexical only
+//   UNC       `\\localhost\C$\...\arc-leads\leadstore`  -- honoured by node:fs
+//   extended  `\\?\C:\...\arc-leads\leadstore`          -- likewise
+//
+// realpath is applied to the nearest EXISTING ancestor, because the store directory itself may
+// not exist yet on the `store init` path.
+function realOf(p) {
+  // Strip the Windows prefixes FIRST. Doing it after realpath left `\\?\C:\...` and
+  // `\\localhost\C$\...` accepted, because realpathSync preserves the spelling it was given
+  // and the comparison then had two different-looking strings for one directory. Normalise
+  // the INPUT, then resolve it.
+  let cur = resolve(stripWinPrefix(String(p)));
+  const tail = [];
+  for (;;) {
+    try { return join(realpathSync.native(cur), ...tail.reverse()); }
+    catch {
+      const parent = dirname(cur);
+      if (parent === cur) return resolve(p); // reached the root with nothing real; lexical is all there is
+      tail.push(basename(cur));
+      cur = parent;
+    }
+  }
+}
+
+// Windows accepts several spellings of one path. Normalise them to one before comparing.
+const stripWinPrefix = (s) =>
+  s.replace(/^\\\\\?\\UNC\\/i, "\\\\").replace(/^\\\\\?\\/, "").replace(/^\\\\localhost\\([A-Za-z])\$/i, "$1:");
+
+// Case-fold only where the filesystem does. Folding on ubuntu would REJECT a legitimately
+// distinct path, which is its own bug.
+const CASE_INSENSITIVE_FS = process.platform === "win32" || process.platform === "darwin";
+const cmpForm = (s) => {
+  const t = stripWinPrefix(s).replace(/[\\/]+$/, "");
+  return CASE_INSENSITIVE_FS ? t.toLowerCase() : t;
+};
+
 export function assertOutsideRepo(repoRoot, p = storePath()) {
-  const root = resolve(repoRoot);
-  const store = resolve(p);
-  if (store === root || store.startsWith(root + sep))
+  const root = realOf(repoRoot);
+  const store = realOf(p);
+  const r = cmpForm(root);
+  const s = cmpForm(store);
+  if (s === r || s.startsWith(r + sep) || s.startsWith(r + "/"))
     throw new StoreError(
       "STORE_INSIDE_REPO",
       `store resolves to ${store}, which is inside the repository at ${root} — lead PII must never live where git can track or clean it (ADR-0410)`
@@ -102,8 +145,10 @@ export function openStore({ repoRoot } = {}) {
 
 export function initStore({ repoRoot } = {}) {
   const dir = repoRoot ? assertOutsideRepo(repoRoot) : storePath();
-  mkdirSync(dir, { recursive: true });
-  mkdirSync(join(dir, "dossiers"), { recursive: true });
+  // 0700, not the 0755 default. The secret was hardened to 0600 while the dossiers it
+  // protects -- the actual names and emails -- were world-readable on ubuntu and macos.
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  mkdirSync(join(dir, "dossiers"), { recursive: true, mode: 0o700 });
   const existing = secretFiles(dir);
   if (existing.length > 0)
     throw new StoreError(
@@ -111,10 +156,21 @@ export function initStore({ repoRoot } = {}) {
       `store at ${dir} already holds secret.v${existing[existing.length - 1].version} — refusing to clobber. ` +
         `Overwriting a secret orphans every lead_id derived under it, including suppressions whose dossier was purged.`
     );
+  // flag "wx" -- rotateSecret had it and initStore did not, in the same module. Two live
+  // consequences: two concurrent inits both saw an empty keyring and both wrote (one secret
+  // silently lost), and on a case-insensitive filesystem a `Secret.v1` slipped past the
+  // case-SENSITIVE readdir scan while the case-INSENSITIVE write replaced its bytes in place.
+  // That is exactly what STORE_ALREADY_INITIALISED claims to refuse.
   const secret = randomBytes(32);
-  writeFileSync(join(dir, "secret.v1"), secret.toString("hex"), { mode: 0o600 });
+  try {
+    writeFileSync(join(dir, "secret.v1"), secret.toString("hex"), { mode: 0o600, flag: "wx" });
+  } catch (e) {
+    if (e.code === "EEXIST")
+      throw new StoreError("STORE_ALREADY_INITIALISED", `a secret already exists at ${dir} (possibly under different casing) — refusing to clobber`);
+    throw e;
+  }
   const storeId = randomBytes(8).toString("hex");
-  writeFileSync(join(dir, "store_id"), storeId, { mode: 0o600 });
+  writeFileSync(join(dir, "store_id"), storeId, { mode: 0o600, flag: "wx" });
   return { dir, storeId, version: 1 };
 }
 
@@ -172,3 +228,8 @@ export function leadIdsAllVersions(store, email) {
 export function fingerprint(store) {
   return createHash("sha256").update(store.current.secret.toString("hex"), "utf8").digest("hex").slice(0, 8);
 }
+
+// The mode every caller must use when writing anything into the store. Exported so the CLI
+// cannot forget it independently -- the dossier and rejected.jsonl writes did.
+export const STORE_FILE_MODE = 0o600;
+export const STORE_DIR_MODE = 0o700;

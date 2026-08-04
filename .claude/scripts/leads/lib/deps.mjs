@@ -100,10 +100,11 @@ const providerFake = {
     return [];
   },
   async authStatus() {
-    const p = fixture("authstatus.json");
-    return existsSync(p)
-      ? JSON.parse(readFileSync(p, "utf8"))
-      : { spf: true, dkim: true, dmarc: true, warmup_days: null };
+    // NO all-green default. The absent-file branch returned spf/dkim/dmarc all true, so three
+    // deliverability clauses PASSED because a file was missing -- directly contradicting
+    // preflight.mjs's own header ("never prints PASS for a clause it could not verify"), and
+    // unlike its three sibling fixtures which all throw ENOENT.
+    return JSON.parse(readFileSync(fixture("authstatus.json"), "utf8"));
   },
 };
 let _submits = null;
