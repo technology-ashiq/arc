@@ -83,35 +83,58 @@ _run_tripwire() {
   [[ "$output" == *"non-reserved address in a fixture path"* ]]
 }
 
-@test "store path in POSIX form is rejected" {
-  export ARC_LEADS_STORE="/c/Users/someone/.arc/leads"
-  echo 'const p = "/c/Users/someone/.arc/leads";' > .claude/scripts/leads/cfg.mjs
+# The RESOLVED store path, asked of store.mjs exactly as the tripwire asks it. Planting a raw
+# env value instead was wrong on Windows: storePath() runs resolve(), so "/c/Users/x/.arc/leads"
+# becomes "C:\c\Users\x\.arc\leads" and the planted literal is a string the scan will never
+# look for. A test that plants one spelling while the code searches another is testing nothing.
+_resolved_store() {
+  ARC_LEADS_STORE="$1" node --input-type=module -e \
+    'import {pathToFileURL} from "node:url"; const {storePath} = await import(pathToFileURL(process.env.M).href); process.stdout.write(storePath());' \
+    2>/dev/null
+}
+
+@test "the resolved store path is rejected in its native spelling" {
+  export M="$SANDBOX/.claude/scripts/leads/lib/store.mjs"
+  export ARC_LEADS_STORE="$BATS_TEST_TMPDIR/fakestore/.arc/leads"
+  local resolved
+  resolved=$(_resolved_store "$ARC_LEADS_STORE")
+  [ -n "$resolved" ] || { echo "store.mjs resolved nothing"; false; }
+  printf 'const p = "%s";\n' "$resolved" > .claude/scripts/leads/cfg.mjs
   git add -A && git commit -qm path
   _run_tripwire
   [ "$status" -eq 2 ]
   [[ "$output" == *"resolved store path"* ]]
 }
 
-# The backslash case is the one a prior cycle lost an entire capability scan to. The Windows
-# leg writes C:\Users\...\.arc\leads; a check that knows only the POSIX spelling passes while
-# scanning nothing, which is worse than no check because it reports success.
-@test "store path in Windows backslash form is rejected" {
-  export ARC_LEADS_STORE="C:/Users/someone/.arc/leads"
-  # A quoted heredoc, not printf: printf eats backslash escapes, so the first version of this
-  # test wrote DOUBLE backslashes into the file while the script searched for single ones --
-  # the test failed for its own escaping rather than for the behaviour under test.
-  cat > .claude/scripts/leads/cfg.mjs <<'EOF'
-const p = "C:\Users\someone\.arc\leads";
-EOF
+# The backslash case is the one a prior cycle lost an entire capability scan to: the Windows
+# leg writes C:\Users\...\.arc\leads while git-bash writes /c/Users/..., and a check that knows
+# only one spelling passes while scanning nothing.
+@test "the resolved store path is rejected in its opposite separator spelling" {
+  export M="$SANDBOX/.claude/scripts/leads/lib/store.mjs"
+  export ARC_LEADS_STORE="$BATS_TEST_TMPDIR/fakestore/.arc/leads"
+  local resolved flipped
+  resolved=$(_resolved_store "$ARC_LEADS_STORE")
+  [ -n "$resolved" ] || { echo "store.mjs resolved nothing"; false; }
+  # Flip every separator to the other form; the tripwire searches for both.
+  case "$resolved" in
+    *\\*) flipped=$(printf '%s' "$resolved" | tr '\\' '/') ;;
+    *)    flipped=$(printf '%s' "$resolved" | tr '/' '\\') ;;
+  esac
+  printf 'const p = "%s";\n' "$flipped" > .claude/scripts/leads/cfg.mjs
   git add -A && git commit -qm path
   _run_tripwire
   [ "$status" -eq 2 ]
   [[ "$output" == *"resolved store path"* ]]
 }
 
-@test "store path match is case insensitive" {
-  export ARC_LEADS_STORE="/c/Users/Someone/.arc/leads"
-  echo 'const p = "/C/USERS/SOMEONE/.ARC/LEADS";' > .claude/scripts/leads/cfg.mjs
+@test "the resolved store path match is case insensitive" {
+  export M="$SANDBOX/.claude/scripts/leads/lib/store.mjs"
+  export ARC_LEADS_STORE="$BATS_TEST_TMPDIR/fakestore/.arc/leads"
+  local resolved upper
+  resolved=$(_resolved_store "$ARC_LEADS_STORE")
+  [ -n "$resolved" ] || { echo "store.mjs resolved nothing"; false; }
+  upper=$(printf '%s' "$resolved" | tr 'abcdefghijklmnopqrstuvwxyz' 'ABCDEFGHIJKLMNOPQRSTUVWXYZ')
+  printf 'const p = "%s";\n' "$upper" > .claude/scripts/leads/cfg.mjs
   git add -A && git commit -qm path
   _run_tripwire
   [ "$status" -eq 2 ]
