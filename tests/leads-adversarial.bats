@@ -19,12 +19,32 @@ const {loadCaps} = await import("./.claude/scripts/leads/lib/caps.mjs");
 const {approvedShaFor} = await import("./.claude/scripts/leads/lib/sequencer.mjs");
 const {reconcile, writeIntent} = await import("./.claude/scripts/leads/lib/journal.mjs");
 const fsx = await import("node:fs"), osx = await import("node:os"), pathx = await import("node:path");
-const ID = "lead_hmac_v1_" + "a".repeat(32);
-const OTHER = "lead_hmac_v1_" + "b".repeat(32);
+// A REAL store: initStore + openStore + a dossier for the lead under test. The synthetic
+// `{dir: mkdtemp()}` these tests used has no keyring and no dossier, so the suppression check
+// -- which now resolves every key version from the store and REFUSES when it cannot -- turned
+// every one of them into a refusal. That is the correct behaviour meeting an unreal fixture:
+// a lead with no dossier cannot have its suppression checked, and "could not check" must
+// never read as "found nothing".
+const {initStore: _init, openStore: _open, leadId: _lid} = await import("./.claude/scripts/leads/lib/store.mjs");
+function realStore(email = "adv@firm.example.com") {
+  process.env.ARC_LEADS_STORE = fsx.mkdtempSync(pathx.join(osx.tmpdir(), "st"));
+  _init();
+  const st = _open();
+  fsx.mkdirSync(pathx.join(st.dir, "dossiers"), {recursive: true});
+  return st;
+}
+function withDossier(st, email) {
+  const id = _lid(st, email);
+  fsx.writeFileSync(pathx.join(st.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email}));
+  return id;
+}
 const SHA = "c".repeat(64);
 const NOW = "2026-08-04T10:00:00+05:30";
+// The JOURNAL tests only need a directory; the GUARD tests need a real store.
 const mkstore = () => ({dir: fsx.mkdtempSync(pathx.join(osx.tmpdir(), "j"))});
-const store = mkstore();
+const store = realStore();
+const ID = withDossier(store, "adv@firm.example.com");
+const OTHER = withDossier(store, "other@firm.example.com");
 const base = {campaign:"pilot", lead_id:ID, touch_n:1, draft_sha:SHA, approved_sha:SHA};
 const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k", provider_message_id:"m", draft_sha:SHA}});
 const bounce = (camp="pilot") => ({kind:"outreach.replied", payload:{lead_id:OTHER, campaign:camp, triage_class:"bounce", ingested_at:NOW}});

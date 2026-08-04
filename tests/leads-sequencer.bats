@@ -15,11 +15,31 @@ _g() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 node --input-type=module -e "$1"; }
 
 GIMPORT='const {guardSend, GuardRefusal, deriveState, breakerState, acquireLock} = await import("./.claude/scripts/leads/lib/guard.mjs");
 const {loadCaps, CEILINGS, istDay, inSendWindow, withinRollingWindow, assertNoCapOverrides, CapError} = await import("./.claude/scripts/leads/lib/caps.mjs");
-const ID = "lead_hmac_v1_" + "a".repeat(32);
-const OTHER = "lead_hmac_v1_" + "b".repeat(32);
+const fsx = await import("node:fs"), osx = await import("node:os"), pathx = await import("node:path");
+// A REAL store: initStore + openStore + a dossier for the lead under test. The synthetic
+// `{dir: mkdtemp()}` these tests used has no keyring and no dossier, so the suppression check
+// -- which now resolves every key version from the store and REFUSES when it cannot -- turned
+// every one of them into a refusal. That is the correct behaviour meeting an unreal fixture:
+// a lead with no dossier cannot have its suppression checked, and "could not check" must
+// never read as "found nothing".
+const {initStore: _init, openStore: _open, leadId: _lid} = await import("./.claude/scripts/leads/lib/store.mjs");
+function realStore(email = "adv@firm.example.com") {
+  process.env.ARC_LEADS_STORE = fsx.mkdtempSync(pathx.join(osx.tmpdir(), "st"));
+  _init();
+  const st = _open();
+  fsx.mkdirSync(pathx.join(st.dir, "dossiers"), {recursive: true});
+  return st;
+}
+function withDossier(st, email) {
+  const id = _lid(st, email);
+  fsx.writeFileSync(pathx.join(st.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email}));
+  return id;
+}
+const store = realStore();
+const ID = withDossier(store, "adv@firm.example.com");
+const OTHER = withDossier(store, "other@firm.example.com");
 const SHA = "c".repeat(64);
 const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k"+n, provider_message_id:"m"+n, draft_sha:SHA}});
-const store = {dir: (await import("node:fs")).mkdtempSync((await import("node:path")).join((await import("node:os")).tmpdir(), "g"))};
 const base = {campaign:"pilot", lead_id:ID, touch_n:1, draft_sha:SHA, approved_sha:SHA};
 const NOW = "2026-08-04T10:00:00+05:30";
 const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store, draft, now}); return "ALLOWED"; } catch (e) { return e instanceof GuardRefusal ? e.step : "ERR:" + e.message; } };'
@@ -63,14 +83,14 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 
 @test "the 21st submitted send of the IST day is refused" {
   run _g "$GIMPORT
-    const ev = Array.from({length:20}, (_,i) => sent(1, '2026-08-04T09:0' + (i%10) + ':00+05:30', 'lead_hmac_v1_' + String(i).padStart(32,'0')));
+    const ev = Array.from({length:20}, (_,i) => sent(1, '2026-08-04T09:0' + (i%10) + ':00+05:30', withDossier(store, 'bulk' + i + '@firm.example.com')));
     console.log(refuse(ev));"
   [[ "$output" == *"daily-cap"* ]]
 }
 
 @test "20 sends on the IST day still allow the 20th" {
   run _g "$GIMPORT
-    const ev = Array.from({length:19}, (_,i) => sent(1, '2026-08-04T09:0' + (i%10) + ':00+05:30', 'lead_hmac_v1_' + String(i).padStart(32,'0')));
+    const ev = Array.from({length:19}, (_,i) => sent(1, '2026-08-04T09:0' + (i%10) + ':00+05:30', withDossier(store, 'bulk' + i + '@firm.example.com')));
     console.log(refuse(ev));"
   [[ "$output" == *"ALLOWED"* ]]
 }
@@ -84,7 +104,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 
 @test "a send at 23 59 does not consume the next days quota" {
   run _g "$GIMPORT
-    const ev = Array.from({length:20}, (_,i) => sent(1, '2026-08-04T23:59:00+05:30', 'lead_hmac_v1_' + String(i).padStart(32,'0')));
+    const ev = Array.from({length:20}, (_,i) => sent(1, '2026-08-04T23:59:00+05:30', withDossier(store, 'bulk' + i + '@firm.example.com')));
     console.log(refuse(ev, base, '2026-08-05T10:00:00+05:30'));"
   [[ "$output" == *"ALLOWED"* ]]
 }
@@ -155,7 +175,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 
 @test "counts rebuild identically from receipts in a second process" {
   run _g "$GIMPORT
-    const ev = [sent(1,'2026-08-04T09:00:00+05:30'), sent(2,'2026-08-04T09:05:00+05:30','lead_hmac_v1_' + 'e'.repeat(32))];
+    const ev = [sent(1,'2026-08-04T09:00:00+05:30'), sent(2,'2026-08-04T09:05:00+05:30',withDossier(store, 'e@firm.example.com'))];
     const a = deriveState(ev, {campaign:'pilot'}).perDay.get('2026-08-04');
     const b = deriveState([...ev].reverse(), {campaign:'pilot'}).perDay.get('2026-08-04');
     console.log(a + ' ' + b);"

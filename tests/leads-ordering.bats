@@ -39,6 +39,9 @@ function freshStore() {
 }
 function draftFor(s) {
   const id = leadId(s, "adv@firm.example.com");
+  // The guard resolves every key version from the dossier, so a lead without one is refused.
+  fs.mkdirSync(path.join(s.dir, "dossiers"), {recursive: true});
+  fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email: "adv@firm.example.com"}));
   return writeDraft(s, {campaign:"pilot", lead_id:id, touch_n:1, body:"Hi there, this is the body.", cites:[], lintStatus:"PASS"});
 }
 function approvalEvents(rec) {
