@@ -85,7 +85,15 @@ export function lintDraft(draft, dossier, opts = {}) {
     // FAIL 2 -- a cited fact that is not in the dossier. THIS is what makes fake
     // personalization mechanically impossible: the model cannot invent a flattering detail,
     // because the detail must already exist in evidence gathered at research time.
-    if (!factTexts.some((t) => t.includes(cf) || cf.includes(t)))
+    // ONE direction only. The check must be "the dossier fact CONTAINS what I cited", never
+    // the reverse: `cf.includes(t)` means "my invented claim contains a real fact", which is
+    // precisely the fabrication case. Appending to a true fact ("SEBI registered" ->
+    // "SEBI registered and manages 4200 crore of client AUM") was BELOW-BAR rather than FAIL,
+    // so an invented number reached the inbox attached to a genuine one.
+    //
+    // The empty-normalisation guard matters too: `t.includes("")` is always true, so a
+    // dossier fact that normalises to nothing made every invented claim citable.
+    if (!cf || !factTexts.some((t) => t && t.includes(cf)))
       fails.push(`cited fact is not in the dossier: "${String(c.fact).slice(0, 60)}" — a draft cannot invent evidence`);
     // FAIL 3 -- cited but not actually in the body.
     else if (!norm(body).includes(cf.slice(0, Math.min(cf.length, 40))))

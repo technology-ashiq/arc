@@ -12,6 +12,15 @@
 // success for an unchecked claim teaches everyone downstream to trust the wrong thing.
 
 import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve as pathResolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// Anchored to the REPO, never to process.cwd(). A relative default meant an operator-lowered
+// cap silently evaporated the moment the command ran from another directory (falling back to
+// DEFAULTS), and a leads.json planted in a hostile cwd won outright -- including the
+// sending_domain that every List-Unsubscribe header is built from.
+const REPO_ROOT = pathResolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
+const DEFAULT_CONFIG = pathResolve(REPO_ROOT, ".claude/config/leads.json");
 import { dns, provider } from "./deps.mjs";
 
 export const PREFLIGHT_OK = 0;
@@ -19,7 +28,7 @@ export const PREFLIGHT_REFUSED = 3;
 
 const MIN_WARMUP_DAYS = 14;
 
-export function loadConfig(path = process.env.LEADS_CONFIG || ".claude/config/leads.json") {
+export function loadConfig(path = process.env.LEADS_CONFIG || DEFAULT_CONFIG) {
   if (!existsSync(path)) throw new Error(`leads config not found at ${path}`);
   return JSON.parse(readFileSync(path, "utf8"));
 }

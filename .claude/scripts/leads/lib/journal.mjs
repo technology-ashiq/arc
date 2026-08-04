@@ -69,8 +69,7 @@ export function unresolvedIntents(store) {
     .map((f) => {
       try { return JSON.parse(readFileSync(join(d, f), "utf8")); }
       catch { throw new JournalError("BAD_INTENT", `journal file ${f} is unreadable — refusing to treat a corrupt intent as absent, because absent means "safe to send"`); }
-    })
-    .filter((i) => !i.resolved);
+    });
 }
 
 // The reconciler. `emitReceipt` and `lookup` are injected so the whole thing is testable

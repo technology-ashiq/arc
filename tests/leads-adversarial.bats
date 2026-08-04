@@ -247,11 +247,21 @@ const refuse = (events, draft=base, now=NOW, st=store) => { try { guardSend({eve
 
 # ARC_LEADS_NOW was a cap override wearing a test door's clothes, refused by nothing: one
 # value sent 20 more on the same real day, another emptied the rolling touch window.
+# This test asserted a message the command never reached: it died at openStore, three frames
+# and four checks BEFORE nowIst() ran, so it passed on the wrong error. D4, in the very file
+# written to pin D4 -- which is the point about a fix not being applied until it has been
+# attacked somewhere it was never made. The store and campaign are now real, so control
+# actually reaches the clock door.
 @test "the test clock door is refused without fake mode" {
   cd "$ARC_ROOT"
-  run env -u ARC_LEADS_FAKE ARC_LEADS_NOW="2026-08-05T10:00:00+05:30" ARC_LEADS_STORE="$BATS_TEST_TMPDIR/nostore" node .claude/scripts/leads/arc-leads.mjs daily pilot
+  export ARC_LEADS_STORE="$BATS_TEST_TMPDIR/store" ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-leads.mjs store init
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-leads.mjs campaign init pilot
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run env -u ARC_LEADS_FAKE ARC_LEADS_NOW="2026-08-05T10:00:00+05:30" node .claude/scripts/leads/arc-leads.mjs daily pilot
   [ "$status" -ne 0 ]
-  [[ "$output" == *"test-only clock door"* ]]
+  [[ "$output" == *"test-only clock door"* ]] || { echo "reached the wrong error: $output"; false; }
 }
 
 @test "this file registers the 26 tests it declares" {

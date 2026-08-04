@@ -202,12 +202,16 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
   [[ "$output" == *"campaign-state"* ]]
 }
 
-@test "a fired breaker is cleared by an inbox approval naming it" {
+# A clearance is a TYPED, incident-bound pairing now, not a free-text reason. This test used to
+# pass a decision whose prose mentioned HOLD and pilot -- which is exactly the bypass an
+# adversarial pass then demonstrated five ways. The positive case lives in
+# tests/leads-adversarial.bats, which builds the incident id the same way the guard does.
+@test "a free text approval reason does not clear a breaker" {
   run _g "$GIMPORT
     const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}},
-                {kind:'decision.recorded', payload:{decides:'01J000000000000000000000AB', verdict:'approve', reason:'HOLD on pilot reviewed: the address was a typo, resuming'}}];
+                {id:'01D', kind:'decision.recorded', payload:{decides:'01J000000000000000000000AB', verdict:'approve', reason:'HOLD on pilot reviewed: the address was a typo, resuming'}}];
     console.log(refuse(ev));"
-  [[ "$output" == *"ALLOWED"* ]]
+  [[ "$output" == *"campaign-state"* ]]
 }
 
 # ---------- already sent ----------
@@ -241,9 +245,13 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 
 # ---------- no background execution ----------
 
+# CODE only. The first version matched its own documentation -- every comment saying "no
+# daemon, ever" was a hit, so the test failed for describing the rule it enforces. A
+# whole-line comment cannot execute anything; the portability lint in this repo already draws
+# exactly this distinction and this test did not.
 @test "no scheduler daemon or cron exists in the leads tree" {
-  run grep -rniE "setInterval|cron|daemon|node-schedule" "$ARC_ROOT/.claude/scripts/leads/"
-  [ "$status" -ne 0 ] || { echo "background execution appeared: $output"; false; }
+  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$ARC_ROOT/.claude/scripts/leads/' | grep -vE ':[[:space:]]*(//|#|\*)'"
+  [ "$status" -ne 0 ] || { echo "background execution appeared in CODE: $output"; false; }
 }
 
 # ADR-0407 promotion is deliberately NOT built this cycle: its only input is >=2 campaigns and

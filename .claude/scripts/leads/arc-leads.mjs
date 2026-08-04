@@ -25,7 +25,7 @@ import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
-import { GuardRefusal } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock } from "./lib/guard.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
@@ -247,6 +247,17 @@ function cmdReview(ref) {
 
 async function cmdReconcile() {
   const store = openStore({ repoRoot: REPO_ROOT });
+  // TAKES THE LOCK. It did not, and that was the sharpest hole in Phase 01: reconcile both
+  // EMITS receipts and DELETES intent files, so running it while a daily run sat in the
+  // ack-to-receipt window voided that run's live intent. The mail had left, the receipt was
+  // never written, the intent was gone -- and the next run re-authorised the identical send.
+  //
+  // The trigger was the documented remedy: the lock refusal tells the operator to run
+  // reconcile, i.e. to run the unlocked writer against the exact window the same message says
+  // must not be disturbed. Guarded in one branch (runDaily reconciles inside the lock) and
+  // unguarded in the adjacent one -- D6.
+  const release = acquireLock(store);
+  try {
   const out = await reconcile(store, {
     events: readAllEvents({ allowMissing: true }),
     lookup: (k) => provider().lookupByMessageId(k),
@@ -255,6 +266,7 @@ async function cmdReconcile() {
   console.log(`arc-leads reconcile: ${out.resolvedFromSpine} resolved from the spine (no provider call) · ${out.emittedLate} late receipt(s) · ${out.voided} voided · ${out.providerCalls} provider call(s)`);
   const left = unresolvedIntents(store);
   if (left.length) die(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
+  } finally { release(); }
 }
 
 // The human-started daily command. No cron, no daemon, no background anything (ADR-0403).
