@@ -101,15 +101,22 @@ _kinds() {
 # and the 4-week window starts at leads' first REAL send, which is Phase 3 and BLOCKED
 # (ADR-0413). So the payload contract is what gets asserted here now.
 @test "metric.observed exists now that the first client shipped it (ADR-0308 -> ADR-0408)" {
-  _fresh_spine metric-observed
-  # The old shape (bare metric+value) is still refused -- by its closed payload, not by
-  # UNKNOWN_KIND. A kind arriving without its validator would be the real regression.
+  # PHASE 1, on its own spine. The old shape (bare metric+value) is still refused -- but by
+  # its CLOSED PAYLOAD now, not by UNKNOWN_KIND. A kind arriving without its validator would
+  # be the real regression, and only the error code tells those two apart.
+  _fresh_spine metric-observed-bad
   run bash "$EVENT" emit metric.observed --payload '{"metric":"signup_conversion","value":1}' --strict
   [ "$status" -eq 2 ]
   [[ "$output" != *"UNKNOWN_KIND"* ]] || { echo "metric.observed should exist as a kind now: $output"; false; }
+  [[ "$output" == *"BAD_LEADS"* ]] || { echo "expected a closed-payload refusal: $output"; false; }
   [ "$(_event_lines)" -eq 0 ]
+  # A strict REJECT still quarantines, by design -- that is where rejects go to be inspected.
+  # Asserting 0 here (as the first version of this test did) is asserting the reject vanished.
+  [ "$(_quarantine_lines)" -eq 1 ]
 
-  # A well-formed one is accepted, to the spec frozen in PLAN-evolve.
+  # PHASE 2, on a FRESH spine, so the quarantine assertion below measures this emit and not
+  # the deliberate reject above.
+  _fresh_spine metric-observed-good
   run bash "$EVENT" emit metric.observed --strict --payload '{"module":"leads","surface":"campaign","metric":"reply_rate","value":0.12,"unit_count":25,"window_start":"2026-08-01T00:00:00+05:30","window_end":"2026-08-08T00:00:00+05:30","source_id":"h-0123456789abcdef"}'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$(_event_lines)" -eq 1 ]

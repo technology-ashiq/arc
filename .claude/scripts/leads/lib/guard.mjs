@@ -1,0 +1,163 @@
+// guard.mjs — the send-moment guard chain (ADR-0403) and the single-writer lock.
+//
+// THE property: approval authorizes an ATTEMPT, never a send. A human approves a draft at
+// 09:00, the lead unsubscribes at 09:30, the send fires at 10:00 — and it must not go. So
+// every check re-runs at the moment of send, against state derived fresh from receipts.
+//
+// Chain order is load-bearing and is asserted by fixture:
+//
+//   campaign-state (HOLD|FROZEN) -> unresolved-intent -> suppression -> reply-stop
+//     -> touch-cap (rolling 7d) -> daily-cap (IST, submitted) -> send-window -> draft_sha
+//
+// The first two steps were added at kickoff by the attack panel. ADR-0403 defined HOLD/FROZEN
+// and ADR-0411 defined unresolved intents, but NEITHER was in the chain — so every breaker
+// fixture asserted that a receipt had been emitted rather than that a send had stopped. A
+// breaker that pauses nothing is the domain-burn failure with a receipt attached.
+//
+// There is no mutable counter anywhere in this file, and that is deliberate: a cap you can
+// reset is not a cap. Every number here is folded from receipts on each call.
+
+import { existsSync, writeFileSync, readFileSync, unlinkSync, openSync, closeSync } from "node:fs";
+import { join } from "node:path";
+import { istDay, inSendWindow, withinRollingWindow, loadCaps, assertNoCapOverrides } from "./caps.mjs";
+import { unresolvedIntents } from "./journal.mjs";
+
+export class GuardRefusal extends Error {
+  constructor(step, message) { super(message); this.name = "GuardRefusal"; this.step = step; }
+}
+
+// ---------- single-writer lock ----------
+//
+// Counts are derived per send, so two `arc-leads` processes would each read 20-headroom and
+// both submit. ADR-0056 forbids concurrent emitters by POLICY; this is the mechanism.
+//
+// A lock held by a DEAD pid is refused, never auto-broken. That process may be sitting in the
+// ack-to-receipt window, and stealing its lock is exactly how a duplicate send happens.
+export function acquireLock(store) {
+  const p = join(store.dir, ".send.lock");
+  let fd;
+  try {
+    fd = openSync(p, "wx");
+  } catch (e) {
+    if (e.code !== "EEXIST") throw e;
+    let holder = "(unreadable)";
+    try { holder = readFileSync(p, "utf8").trim(); } catch { /* fall through with the placeholder */ }
+    throw new GuardRefusal(
+      "lock",
+      `another arc-leads process holds the send lock: ${holder}. Refusing.\n` +
+        `If that process is dead, run \`arc-leads reconcile\` — the lock is NEVER auto-broken, ` +
+        `because a dead process may sit between the provider ack and the receipt, and stealing ` +
+        `its lock is how the same mail gets sent twice (ADR-0411).`
+    );
+  }
+  writeFileSync(fd, `pid=${process.pid} started=${new Date().toISOString()}\n`);
+  closeSync(fd);
+  return () => { try { unlinkSync(p); } catch { /* already gone */ } };
+}
+
+// ---------- derived state ----------
+//
+// Everything below is a fold. `events` comes from the reader; nothing is cached.
+export function deriveState(events, { campaign }) {
+  const suppressed = new Set();
+  const replied = new Set();
+  const touches = new Map();   // lead_id -> [submitted_at]
+  const perDay = new Map();    // ist day -> count
+  let bounces = 0, complaints = 0;
+
+  for (const e of events) {
+    const p = e.payload || {};
+    if (e.kind === "lead.suppressed") suppressed.add(p.lead_id);
+    else if (e.kind === "outreach.replied") {
+      replied.add(p.lead_id);
+      if (p.triage_class === "bounce") bounces++;
+      if (p.triage_class === "unsubscribe") suppressed.add(p.lead_id);
+    } else if (e.kind === "outreach.sent") {
+      if (!touches.has(p.lead_id)) touches.set(p.lead_id, []);
+      touches.get(p.lead_id).push(p.submitted_at);
+      // Bucketed by the intent's submitted_at, NOT by the spine emit time: a recovery receipt
+      // written at 00:10 would otherwise move a 23:55 send onto the next IST day and free a
+      // slot on both.
+      const d = istDay(p.submitted_at);
+      perDay.set(d, (perDay.get(d) || 0) + 1);
+    } else if (e.kind === "incident.raised" && /spam|complaint/i.test(JSON.stringify(p))) complaints++;
+  }
+  return { suppressed, replied, touches, perDay, bounces, complaints, campaign };
+}
+
+// Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage
+// floor freezes on noise — HOLD is the honest small-n response, FREEZE the evidenced one.
+export function breakerState(state, lifetimeSends) {
+  if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded" };
+  if (state.bounces >= 2) return { level: "FROZEN", why: `${state.bounces} bounces in this campaign` };
+  if (lifetimeSends >= 50 && state.bounces / lifetimeSends >= 0.03)
+    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% at ${lifetimeSends} lifetime sends` };
+  if (state.bounces === 1) return { level: "HOLD", why: "the first bounce — sends pause until a human reviews the cause" };
+  return { level: "OK", why: null };
+}
+
+// A campaign's HOLD/FROZEN clearance is a DECISION on the spine, never a file and never a
+// flag. `--force`, a raised config value and an env override are all refused by construction:
+// there is no code path that clears this other than an inbox approval.
+export function clearedByInbox(events, campaign, level) {
+  return events.some(
+    (e) => e.kind === "decision.recorded" &&
+      e.payload?.verdict === "approve" &&
+      new RegExp(`${level}.*${campaign}|${campaign}.*${level}`, "i").test(e.payload?.reason || "")
+  );
+}
+
+// ---------- the chain ----------
+export function guardSend({ events, store, draft, now, config }) {
+  assertNoCapOverrides();
+  const caps = loadCaps(config);
+  const { campaign, lead_id, touch_n, draft_sha, approved_sha } = draft;
+  const state = deriveState(events, { campaign });
+  const lifetime = [...state.perDay.values()].reduce((a, b) => a + b, 0);
+
+  // 1. campaign state
+  const breaker = breakerState(state, lifetime);
+  if (breaker.level !== "OK" && !clearedByInbox(events, campaign, breaker.level))
+    throw new GuardRefusal("campaign-state", `campaign "${campaign}" is ${breaker.level}: ${breaker.why}. Only an arc-inbox approval naming the incident clears it — no flag, config value or env var does (ADR-0403).`);
+
+  // 2. unresolved intent — conservative until reconciled. Blunt on purpose: at <=20 sends/day
+  //    refusing everything until a crash is reconciled costs a command, and the alternative
+  //    is a duplicate to a real human.
+  const pending = unresolvedIntents(store);
+  if (pending.length)
+    throw new GuardRefusal("unresolved-intent", `${pending.length} unresolved send intent(s) in the journal. No send is attempted anywhere until \`arc-leads reconcile\` has run (ADR-0411).`);
+
+  // 3. suppression — checked across EVERY key version, so a rotation cannot un-suppress
+  //    someone who asked to be forgotten (ADR-0400's keyring).
+  if (state.suppressed.has(lead_id))
+    throw new GuardRefusal("suppression", `lead is on the suppression ledger — unsubscribed, bounced, or manually suppressed. This survives across campaigns and dossier deletion.`);
+
+  // 4. reply-stop. This is the TOCTOU case: a reply recorded AFTER approval permanently
+  //    blocks the send that approval authorized.
+  if (state.replied.has(lead_id))
+    throw new GuardRefusal("reply-stop", `lead has already replied — the sequence stops itself. Approval authorized an attempt, not a send (ADR-0403).`);
+
+  // 5. rolling touch cap — rolling, not a calendar week: a calendar week lets two touches
+  //    land Sunday and Monday and calls it two weeks.
+  const prior = (state.touches.get(lead_id) || []).filter((t) => withinRollingWindow(t, now, caps.rolling_window_days));
+  if (prior.length >= caps.touches_per_lead)
+    throw new GuardRefusal("touch-cap", `lead already had ${prior.length} touch(es) in the rolling ${caps.rolling_window_days}-day window; the cap is ${caps.touches_per_lead}.`);
+
+  // 6. daily cap — SUBMITTED sends only; attempts the provider refused do not count.
+  //    Effective count includes unresolved intents, but step 2 already refused those.
+  const day = istDay(now);
+  const today = state.perDay.get(day) || 0;
+  if (today >= caps.per_ist_day)
+    throw new GuardRefusal("daily-cap", `${today} send(s) already submitted on IST day ${day}; the cap is ${caps.per_ist_day}. Raising it in config is refused above the hard ceiling (ADR-0403).`);
+
+  // 7. send window
+  if (!inSendWindow(now, caps.send_window_ist))
+    throw new GuardRefusal("send-window", `${now} is outside the IST send window (${caps.send_window_ist.start}-${caps.send_window_ist.end}, weekdays).`);
+
+  // 8. draft sha — approval binds the EXACT content. Edited-after-approval is refused
+  //    (ADR-0412, evolve's candidate_sha discipline applied to outreach).
+  if (!approved_sha || draft_sha !== approved_sha)
+    throw new GuardRefusal("draft-sha", `the draft changed after approval (approved ${String(approved_sha).slice(0, 12)}, current ${String(draft_sha).slice(0, 12)}). Approval binds exact content (ADR-0412).`);
+
+  return { ok: true, day, submittedToday: today, priorTouches: prior.length, breaker: breaker.level };
+}
