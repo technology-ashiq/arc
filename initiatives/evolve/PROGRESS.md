@@ -1,8 +1,8 @@
 # PROGRESS.md — Cycle 7 · arc-evolve "The Self-Improvement Engine"
 
-status: LIVE
-cycle: arc-evolve (Cycle 7, opened 2026-08-03)
-phase: — all five CLOSED; cycle ready for retro and merge
+status: IDLE
+cycle: arc-evolve (Cycle 7, closed 2026-08-04)
+phase: — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised)
 appetite: 7d
 burn: 7.0d
 blocked-on: —
@@ -116,7 +116,23 @@ must close saying its north-star claim is *fixture-proven, unexercised* — the 
 REQ-08 partial is the precedent for reporting a partial claim as partial rather than waiving it,
 and this lane inherits that standard.
 
-**To start Phase 02:** `/arc-develop start 2 --lane evolve`. Its reference vectors for
-`newcombe-wilson-difference-v1` must be sourced INDEPENDENTLY of this lane's own implementation
-and committed BEFORE any Phase 02 code exists (REQ-04) — a test whose expected values came from
-the code under test proves only that the code agrees with itself.
+**CYCLE CLOSED 2026-08-04 at `/arc-retro`.** Merged as `8e80927` (PR #108). The company layer
+carries the findings: 7 pattern lines and the scoreboard row in `docs/retro-log.md`, the C7 entry
+in `docs/HISTORY.md`, the Cycle 7 promotion decision (no flip) in `docs/trial-ledger.md`. Two
+permanent setup upgrades landed from it — the bats non-ASCII drop and the CI-only rule in
+`.claude/rules/testing.md`, and the adversarial pass now attacking the test that protects a rule
+plus carrying the lane's already-fixed defect list, in `CLAUDE.md`.
+
+**Six debt rows** carry forward, each with a named pay-down trigger. The one that matters most:
+`lineage.mjs` has **no production caller**, so every default in it is a default the first caller
+inherits without choosing it — not hypothetical, since `requiresDeploy` defaulted fail-open and
+would have opened the deploy gate for whoever wired it first.
+
+**Next cycle's entry condition, unchanged from ADR-0300:** this engine is fixture-proven and
+unexercised. The runway starts when a real client names a surface and `metric.observed` enters
+`KINDS` — that enablement is the client cycle's REQ (ADR-0308), not evolve's.
+
+> Correction applied at close: this block previously read "**To start Phase 02:** …", four phases
+> stale. The close script that was supposed to replace it used a Python `str.replace` against an
+> anchor naming Phase 03, which did not match — and `str.replace` returns the string unchanged
+> rather than erroring, so the whole edit was a silent no-op that reported success.

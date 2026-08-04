@@ -17,7 +17,7 @@ Updated: 2026-08-04
 |---|---|---|---|---|---|---|
 | develop | IDLE | arc-develop (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as 17473e7 / PR #100) | 7d / 2.1d | — | `/arc-kickoff --lane develop` when a new cycle pulls it |
 | engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
-| evolve | LIVE | arc-evolve (Cycle 7, opened 2026-08-03) | ALL 5 phases CLOSED; fixture-proven, unexercised | 7d / 7.0d | — | `/arc-retro --lane evolve`, then merge PR #108 |
+| evolve | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) | — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised) | 7d / 7.0d | — | `/arc-kickoff --lane evolve` when a real client names a surface |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
