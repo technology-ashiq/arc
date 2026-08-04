@@ -6,17 +6,20 @@
 # lead with a doubtful address that can never be sent to; BELOW-BAR is a real dossier that
 # cannot support a personalized first touch. Neither is a rejection.
 #
-# The ICP-generic rule is asserted MECHANICALLY, never against a self-labelling fixture flag.
-# When this corpus was first written its "lead-specific" facts were templated (same sentence,
-# different year) and the rule correctly flagged all 25 as generic -- the fixture was
-# template-blast in disguise. That is the strongest evidence the predicate works, and it is
-# why the corpus now carries 25 hand-written distinct fact pairs.
+# MOST OF THIS FILE IS ADVERSARIAL REGRESSION. A fresh-context attacker with no sight of the
+# implementation produced 22 confirmed breaking inputs against these modules while CI was
+# green. Each one below is pinned so it cannot come back.
+#
+# The single most important lesson is in the two provenance tests: their first version matched
+# /purchased/ and /login-wall/ against the REJECTION MESSAGE, and those words are constants in
+# the message template -- so one row with a typo satisfied both, and the two rows they exist to
+# protect could be deleted with the suite still green. They now assert on the INPUT.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 _node() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 
-LIMPORT='const {lintCandidates, markGenericFacts, similarity, PROVENANCE_ALLOWLIST, JURISDICTION_ALLOWLIST} = await import("./.claude/scripts/leads/lib/research-lint.mjs");
+LIMPORT='const {lintCandidates, markGenericFacts, similarity, PROVENANCE_ALLOWLIST, JURISDICTION_ALLOWLIST, GENERIC_RULE_MIN_CORPUS} = await import("./.claude/scripts/leads/lib/research-lint.mjs");
 const fs = await import("node:fs");
 const C = JSON.parse(fs.readFileSync("tests/fixtures/leads/candidates.json","utf8"));
 const V = new Map(Object.entries(JSON.parse(fs.readFileSync("tests/fixtures/leads/verify.json","utf8"))));
@@ -36,13 +39,47 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"34 34"* ]]
 }
 
-@test "purchased provenance is rejected" {
-  run _node "$LIMPORT console.log(R.rejected.some(r => /purchased/.test(r.exclusion_reason)) ? 'rejected' : 'LEAKED');"
+@test "the purchased list row specifically is rejected" {
+  run _node "$LIMPORT
+    const row = C.find(x => x.provenance === 'purchased-list');
+    console.log(!row ? 'CORPUS-MISSING-ROW' : (R.accepted.some(a => a.firm === row.firm) ? 'LEAKED' : 'rejected'));"
   [[ "$output" == *"rejected"* ]]
 }
 
-@test "login wall provenance is rejected" {
-  run _node "$LIMPORT console.log(R.rejected.some(r => /login-wall/.test(r.exclusion_reason)) ? 'rejected' : 'LEAKED');"
+@test "the login wall row specifically is rejected" {
+  run _node "$LIMPORT
+    const row = C.find(x => x.provenance === 'login-wall-scrape');
+    console.log(!row ? 'CORPUS-MISSING-ROW' : (R.accepted.some(a => a.firm === row.firm) ? 'LEAKED' : 'rejected'));"
+  [[ "$output" == *"rejected"* ]]
+}
+
+# The negative control the original pair lacked: a provenance that is merely UNKNOWN must also
+# be refused, and must not be confused with the two named rows.
+@test "an unknown provenance value is rejected too" {
+  run _node "$LIMPORT
+    const mutant = {...C[0], firm: 'Mutant Co', provenance: 'firm_site'};
+    const M = lintCandidates([...C, mutant], V);
+    console.log(M.accepted.some(a => a.firm === 'Mutant Co') ? 'LEAKED' : 'rejected');"
+  [[ "$output" == *"rejected"* ]]
+}
+
+# Provenance was a self-declared LABEL corroborated by nothing, so a purchased CSV row wearing
+# a sanctioned label was accepted. The label must now match the evidence actually supplied.
+@test "a public directory label over a login walled source is rejected" {
+  run _node "$LIMPORT
+    const smuggler = {...C[0], firm: 'Smuggler LLP', provenance: 'public-directory',
+      source_urls: ['https://www.linkedin.com/in/x', 'https://www.linkedin.com/in/y']};
+    const M = lintCandidates([...C, smuggler], V);
+    console.log(M.accepted.some(a => a.firm === 'Smuggler LLP') ? 'LEAKED' : 'rejected');"
+  [[ "$output" == *"rejected"* ]]
+}
+
+@test "a firm site label with no link on the firm domain is rejected" {
+  run _node "$LIMPORT
+    const bogus = {...C[0], firm: 'Bogus LLP', provenance: 'firm-site',
+      source_urls: ['https://directory.example.org/a', 'https://directory.example.org/b']};
+    const M = lintCandidates([...C, bogus], V);
+    console.log(M.accepted.some(a => a.firm === 'Bogus LLP') ? 'LEAKED' : 'rejected');"
   [[ "$output" == *"rejected"* ]]
 }
 
@@ -52,12 +89,18 @@ const below = R.accepted.filter(a => a.below_bar);'
 }
 
 @test "out of allowlist geography is rejected" {
-  run _node "$LIMPORT console.log(R.rejected.some(r => /outside the v1 allowlist/.test(r.exclusion_reason)) ? 'rejected' : 'LEAKED');"
+  run _node "$LIMPORT
+    const row = C.find(x => x.geography === 'DE');
+    console.log(!row ? 'CORPUS-MISSING-ROW' : (R.accepted.some(a => a.firm === row.firm) ? 'LEAKED' : 'rejected'));"
   [[ "$output" == *"rejected"* ]]
 }
 
-@test "fewer than two source links is rejected" {
-  run _node "$LIMPORT console.log(R.rejected.some(r => /source link/.test(r.exclusion_reason)) ? 'rejected' : 'LEAKED');"
+@test "fewer than two valid distinct source links is rejected" {
+  run _node "$LIMPORT
+    const dupe = {...C[0], firm: 'Dupe LLP',
+      source_urls: ['https://dupe.example.com/a', 'https://dupe.example.com/a']};
+    const M = lintCandidates([...C, dupe], V);
+    console.log(M.accepted.some(a => a.firm === 'Dupe LLP') ? 'LEAKED' : 'rejected');"
   [[ "$output" == *"rejected"* ]]
 }
 
@@ -66,14 +109,37 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"all-reasoned"* ]]
 }
 
-@test "an unverifiable email is HELD and not rejected" {
+# ---------- fail-closed verification ----------
+#
+# The original read `=== "unverifiable" ? held : verified`, so a lookup MISS and every verdict
+# a real provider might return all mapped to VERIFIED, i.e. sendable. "invalid" means the
+# provider says the mailbox does not exist -- a guaranteed hard bounce on a domain that took
+# 2-4 weeks to warm.
+@test "any verdict that is not verified is HELD" {
+  run _node "$LIMPORT
+    const out = ['invalid','risky','catch-all','unknown','UNVERIFIED',null,undefined].map(v => {
+      const m = new Map(V); m.set(C[0].email.toLowerCase(), v);
+      const r = lintCandidates(C, m).accepted.find(a => a.firm === C[0].firm);
+      return r ? r.email_status : 'rejected';
+    });
+    console.log(out.every(s => s === 'held') ? 'all-held' : 'SENDABLE:' + out.join(','));"
+  [[ "$output" == *"all-held"* ]]
+}
+
+@test "an email absent from the verifier map is HELD not verified" {
+  run _node "$LIMPORT
+    const r = lintCandidates(C, new Map()).accepted.find(a => a.firm === C[0].firm);
+    console.log(r.email_status === 'held' ? 'held' : 'FAIL-OPEN:' + r.email_status);"
+  [[ "$output" == *"held"* ]]
+}
+
+@test "the corpus unverifiable row is HELD and not rejected" {
   run _node "$LIMPORT console.log(held.length === 1 && R.rejected.every(r => !/held@/.test(JSON.stringify(r))) ? 'held-not-rejected' : 'WRONG');"
   [[ "$output" == *"held-not-rejected"* ]]
 }
 
-# The predicate, asserted on facts rather than on candidates. Three PASS rows carry the same
-# generic fact and STAY PASS because each still has two lead-specific ones -- which is what
-# makes the fourth row's fall to BELOW-BAR a property of the rule, not of the fixture.
+# ---------- the ICP-generic predicate ----------
+
 @test "a fact carried by three other candidates is marked generic" {
   run _node "$LIMPORT
     const m = markGenericFacts(C);
@@ -106,8 +172,97 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"below-bar"* ]]
 }
 
-@test "similarity is symmetric and identical text scores one" {
-  run _node "$LIMPORT console.log(similarity('the firm has a website','the firm has a website') === 1 && Math.abs(similarity('alpha beta','beta alpha') - similarity('beta alpha','alpha beta')) < 1e-12 ? 'sane' : 'BROKEN');"
+# The repetition rule is COMPARATIVE: with <=3 candidates there is nothing to compare against,
+# so it cannot fire and a template-blast batch passes 100%. That is not a threshold to tune --
+# it is a limit to declare, and a run below the floor must say so rather than pass silently.
+@test "a corpus too small for the repetition rule says so instead of passing silently" {
+  run _node "$LIMPORT
+    const M = lintCandidates(C.slice(0, 3), V);
+    console.log(M.genericRuleApplied === false && /NOT checked/.test(M.corpusWarning || '') ? 'declared' : 'SILENT-PASS');"
+  [[ "$output" == *"declared"* ]]
+}
+
+@test "the full corpus is above the repetition rule floor" {
+  run _node "$LIMPORT console.log(R.genericRuleApplied === true ? 'applied' : 'NOT-APPLIED');"
+  [[ "$output" == *"applied"* ]]
+}
+
+# One query parameter defeated rule 2 entirely: the counter was keyed on the RAW url while the
+# comparison went through hostOf. Ten of ten caught became zero of ten. This is the
+# validate-one-read-compare-another class, in one function.
+@test "a shared directory URL is still detected when a query parameter differs" {
+  run _node "$LIMPORT
+    const shared = 'https://directory.example.org/listing';
+    const rows = [0,1,2,3,4].map(i => ({firm: 'Q' + i, email: 'q' + i + '@q' + i + '.example.com',
+      firm_domain: 'q' + i + '.example.com',
+      facts: [{text: 'this firm appears in the state bar directory listing for the district',
+               evidence_url: shared + '?ref=' + i, relevance: 'r'}]}));
+    const M = markGenericFacts(rows);
+    const gen = M.flatMap(x => x.facts).filter(f => f.generic).length;
+    console.log(gen === 5 ? 'all-detected' : 'ESCAPED:' + gen + '/5');"
+  [[ "$output" == *"all-detected"* ]]
+}
+
+@test "a shared directory URL is still detected when a fragment differs" {
+  run _node "$LIMPORT
+    const shared = 'https://directory.example.org/listing';
+    const rows = [0,1,2,3,4].map(i => ({firm: 'H' + i, email: 'h' + i + '@h' + i + '.example.com',
+      firm_domain: 'h' + i + '.example.com',
+      facts: [{text: 'this firm appears in the state bar directory listing for the district',
+               evidence_url: shared + '#' + i, relevance: 'r'}]}));
+    const M = markGenericFacts(rows);
+    console.log(M.flatMap(x => x.facts).filter(f => f.generic).length === 5 ? 'all-detected' : 'ESCAPED');"
+  [[ "$output" == *"all-detected"* ]]
+}
+
+# firm_domain was caller-supplied and validated against nothing, so declaring it to BE the
+# shared directory host turned every generic citation into a lead-specific one.
+@test "declaring firm domain as the shared source host does not evade rule two" {
+  run _node "$LIMPORT
+    const shared = 'https://directory.example.org/listing';
+    const rows = [0,1,2,3,4].map(i => ({firm: 'F' + i, email: 'f' + i + '@f' + i + '.example.com',
+      firm_domain: 'directory.example.org',
+      facts: [{text: 'this firm appears in the state bar directory listing for the district',
+               evidence_url: shared, relevance: 'r'}]}));
+    const M = markGenericFacts(rows);
+    console.log(M.flatMap(x => x.facts).filter(f => f.generic).length === 5 ? 'all-detected' : 'ESCAPED');"
+  [[ "$output" == *"all-detected"* ]]
+}
+
+# Self-exclusion was applied in rule 1 and omitted in the adjacent rule 2, in the same
+# function: one candidate citing one URL three times marked its own facts generic.
+@test "a lone candidate citing one URL three times is not self marked generic" {
+  run _node "$LIMPORT
+    const lone = [{firm: 'Lone LLP', email: 'l@lone.example.com', firm_domain: 'lone.example.com',
+      facts: [0,1,2].map(i => ({text: 'a distinct claim number ' + i + ' about this particular firm and its own work',
+        evidence_url: 'https://third.example.org/page', relevance: 'r'}))}];
+    const M = markGenericFacts(lone);
+    console.log(M[0].facts.some(f => f.generic) ? 'SELF-MARKED' : 'not-self-marked');"
+  [[ "$output" == *"not-self-marked"* ]]
+}
+
+# KEEP is ASCII, so any fact in Devanagari or Tamil normalizes to "" -- and returning 1 for two
+# empty normalizations marked every non-Latin fact generic, in an INDIA-ONLY campaign. A false
+# positive that silently kills good drafts is what ADR-0404 WARN-first exists to avoid.
+@test "two facts that normalize to nothing are not treated as identical" {
+  run _node "$LIMPORT console.log(similarity('!!', 'x') === 1 || similarity('!!', '!!') === 1 ? 'STILL-IDENTICAL' : 'not-identical');"
+  [[ "$output" == *"not-identical"* ]]
+}
+
+# isCitable never looked at f.text and source_urls was length-checked only, so two zero-content
+# facts and two empty-string links passed as a clean 2-fact PASS.
+@test "empty facts and empty source links do not make a PASS" {
+  run _node "$LIMPORT
+    const hollow = {...C[0], firm: 'Hollow LLP', source_urls: ['',''],
+      facts: [{text:'',evidence_url:'x',relevance:'y'},{text:'',evidence_url:'z',relevance:'w'}]};
+    const M = lintCandidates([...C, hollow], V);
+    const a = M.accepted.find(x => x.firm === 'Hollow LLP');
+    console.log(!a ? 'rejected' : (a.below_bar ? 'below-bar' : 'PASSED-HOLLOW'));"
+  [[ "$output" != *"PASSED-HOLLOW"* ]]
+}
+
+@test "similarity is symmetric" {
+  run _node "$LIMPORT console.log(Math.abs(similarity('alpha beta gamma','beta alpha gamma') - similarity('beta alpha gamma','alpha beta gamma')) < 1e-12 ? 'sane' : 'BROKEN');"
   [[ "$output" == *"sane"* ]]
 }
 
@@ -116,7 +271,7 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"4 1 closed"* ]]
 }
 
-@test "this file declares and runs 17 tests" {
+@test "this file declares and runs 30 tests" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
-  [ "$declared" -eq 17 ] || { echo "declared $declared, expected 17"; false; }
+  [ "$declared" -eq 30 ] || { echo "declared $declared, expected 30"; false; }
 }

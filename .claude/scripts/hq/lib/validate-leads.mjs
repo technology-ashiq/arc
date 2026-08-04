@@ -19,7 +19,15 @@
 //      receipts as DUP_IDEM, and a cap derived from receipts that were never written counts
 //      zero and never trips.
 
-import { SpineError, sha256Hex, IST_TS_RE } from "./canonical.mjs";
+import { SpineError, sha256Hex } from "./canonical.mjs";
+
+// NOT canonical.mjs's IST_TS_RE. That grammar permits an optional fractional part, so ONE
+// instant has ten accepted spellings -- and these strings go into idem preimages verbatim,
+// so two spellings of one moment become two receipts. A double-counted `outreach.replied`
+// with triage_class "bounce" can FREEZE a healthy campaign; a double-counted meeting is a
+// lie in the report. Payload timestamps therefore admit exactly one form, and the calendar
+// is checked rather than only the shape.
+const PAYLOAD_TS_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\+05:30$/;
 
 export const LEADS_KINDS = Object.freeze([
   "lead.researched",
@@ -50,7 +58,11 @@ export function isLeadsKind(kind) {
 // and store.mjs mints under the highest key in the keyring -- so pinning `v1` here would make
 // every post-rotation id invalid on the day someone rotates, which is precisely the day the
 // system must keep working. Phase 0 mints v1; the grammar does not care.
-const LEAD_ID_RE = /^lead_hmac_v\d+_[0-9a-f]{32}$/;
+// CANONICAL version only: no leading zeros. `\d+` accepted `lead_hmac_v01_`, which the minter
+// can never produce (store.mjs formats a Number) -- so a suppression receipt could be indexed
+// under a string no lookup would ever equal, and the person gets contacted again. That is
+// D1's un-fixed twin: D1 fixed the version RANGE and nobody fixed version CANONICALIZATION.
+const LEAD_ID_RE = /^lead_hmac_v[1-9][0-9]*_[0-9a-f]{32}$/;
 // Deliberately NOT accepted for a lead id, and asserted against by fixture: the unkeyed
 // `h-<hex16>` form evolve uses for URL-derived source ids.
 const BARE_HASH_RE = /^h-[0-9a-f]{16}$/;
@@ -59,8 +71,12 @@ const CAMPAIGN_RE = /^[a-z0-9-]{1,64}$/;
 const HEX64 = /^[0-9a-f]{64}$/;
 // metric.observed source ids accept BOTH grammars (ADR-0408's flagged deviation back to
 // PLAN-evolve): the frozen spec's opaque/`h-` forms, plus leads' keyed form.
-const SOURCE_ID_RE = /^([A-Za-z0-9][A-Za-z0-9._-]{0,63}|h-[0-9a-f]{16}|lead_hmac_v\d+_[0-9a-f]{32})$/;
+const SOURCE_ID_RE = /^([A-Za-z0-9][A-Za-z0-9._-]{0,63}|h-[0-9a-f]{16}|lead_hmac_v[1-9][0-9]*_[0-9a-f]{32})$/;
 const TOKEN_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+// Metric dimensions are machine labels, never free text. The looser TOKEN_RE admitted
+// "Priya.Sharma-Advocates" -- a person's name on a public spine, which safety property 1
+// names explicitly and which assertNoPii (email/URL shapes only) cannot see.
+const DIMENSION_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const STORE_ID_RE = /^[0-9a-f]{16}$/;
 const FINGERPRINT_RE = /^[0-9a-f]{8}$/;
 
@@ -76,13 +92,23 @@ const GEO_RE = /^[A-Z]{2}$/;
 // common accident, and it dies here rather than on a public spine.
 const EMAIL_SHAPE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
 const URL_SHAPE = /\b(?:https?:\/\/|www\.)/i;
+// A BARE HOST is the same leak as a URL with a scheme -- a firm domain is the deliverable
+// form of a lead's identity. `www.sharma-associates.in` was refused while
+// `sharma-associates.in` was ACCEPTED, decided by a cosmetic prefix. That is D2's un-fixed
+// twin: pii-tripwire.sh carries the corrected reasoning (suffix matching over a domain, not
+// an anchored alternation) and the lesson never reached this file.
+//
+// Anchored on a known-TLD suffix rather than "any dotted token", so machine values like
+// `leads.campaign` or a semver stay legal while a real domain does not.
+const BARE_HOST_SHAPE =
+  /\b[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*\.(?:com|net|org|in|co|io|app|dev|me|uk|us|info|biz)\b/i;
 
 function assertNoPii(kind, key, value) {
   if (typeof value !== "string") return;
   if (EMAIL_SHAPE.test(value))
     throw new SpineError("BAD_LEADS_PII", `${kind} payload key "${key}" contains an email-shaped string — raw addresses never reach the spine (ADR-0410); use the keyed lead_hmac_v<N>_ id`);
-  if (URL_SHAPE.test(value))
-    throw new SpineError("BAD_LEADS_PII", `${kind} payload key "${key}" contains a URL — evidence links live in the private store, never in a receipt (ADR-0410)`);
+  if (URL_SHAPE.test(value) || BARE_HOST_SHAPE.test(value))
+    throw new SpineError("BAD_LEADS_PII", `${kind} payload key "${key}" contains a URL or a bare hostname — evidence links and firm domains live in the private store, never in a receipt (ADR-0410)`);
 }
 
 // Closed key sets. Missing required key, or ANY unknown key, is a refusal — never a
@@ -120,10 +146,16 @@ const opt = (v) => (v === undefined || v === null ? DASH : String(v));
 
 export function leadsIdem(kind, p) {
   switch (kind) {
+    // TOTAL preimage, and it now means it. The first version omitted draft_sha,
+    // submitted_at, idem_key and provider_message_id from `outreach.sent` -- so re-approving
+    // an EDITED draft for the same touch produced a colliding idem and the second receipt was
+    // dropped as DUP_IDEM, while two mails had actually left the building. The daily cap and
+    // the rolling touch cap then counted one. That is verbatim the C2 failure this rule cites
+    // as its own reason for existing.
     case "lead.researched":
-      return sha256Hex(`lead.researched|${p.campaign}|${p.lead_id}`);
+      return sha256Hex(`lead.researched|${p.campaign}|${p.lead_id}|${opt(p.below_bar)}|${p.store_fingerprint}`);
     case "outreach.sent":
-      return sha256Hex(`outreach.sent|${p.campaign}|${p.lead_id}|${p.touch_n}`);
+      return sha256Hex(`outreach.sent|${p.campaign}|${p.lead_id}|${p.touch_n}|${p.draft_sha}|${p.submitted_at}|${p.idem_key}|${p.provider_message_id}`);
     case "outreach.replied":
       return sha256Hex(`outreach.replied|${p.campaign}|${p.lead_id}|${p.ingested_at}`);
     case "meeting.booked":
@@ -144,22 +176,35 @@ export function leadsIdem(kind, p) {
 }
 
 function assertTs(kind, key, value) {
-  if (typeof value !== "string" || !IST_TS_RE.test(value))
-    throw new SpineError("BAD_LEADS_TS", `${kind}.${key} ${JSON.stringify(value)} must be YYYY-MM-DDTHH:MM:SS+05:30 — the same grammar as the event ts, because it rides an idem preimage`);
+  const m = typeof value === "string" ? PAYLOAD_TS_RE.exec(value) : null;
+  if (!m)
+    throw new SpineError("BAD_LEADS_TS", `${kind}.${key} ${JSON.stringify(value)} must be exactly YYYY-MM-DDTHH:MM:SS+05:30 — one spelling per instant, with no fractional part, because this string goes into an idem preimage verbatim`);
+  const [, y, mo, d, h, mi, sec] = m.map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || d > 31 || h > 23 || mi > 59 || sec > 59)
+    throw new SpineError("BAD_LEADS_TS", `${kind}.${key} ${JSON.stringify(value)} is out of range`);
+  const probe = new Date(Date.UTC(y, mo - 1, d));
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d)
+    throw new SpineError("BAD_LEADS_TS", `${kind}.${key} ${JSON.stringify(value)} is not a real calendar date`);
 }
 
 export function assertLeads(event) {
   const kind = event.kind;
   const p = event.payload;
+  const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const shape = SHAPES[kind];
   if (!shape) throw new SpineError("UNKNOWN_KIND", `assertLeads called with non-leads kind ${JSON.stringify(kind)}`);
+
+  // payload null/undefined threw a raw TypeError, escaping the SpineError taxonomy every
+  // caller switches on.
+  if (p === null || typeof p !== "object" || Array.isArray(p))
+    throw new SpineError("BAD_LEADS", `${kind} payload must be an object`);
 
   const allowed = new Set([...shape.required, ...shape.optional]);
   for (const k of Object.keys(p))
     if (!allowed.has(k))
       throw new SpineError("BAD_LEADS", `${kind} payload has unknown key "${k}" (closed to ${[...allowed].join("|")})`);
   for (const k of shape.required)
-    if (!(k in p)) throw new SpineError("BAD_LEADS", `${kind} payload is missing "${k}"`);
+    if (!has(p, k)) throw new SpineError("BAD_LEADS", `${kind} payload is missing "${k}" (own property; the prototype chain does not count)`);
 
   // The blanket PII sweep runs BEFORE the per-field rules, so a leaked address is reported as
   // a leak rather than as whatever shape error it also happens to be.
@@ -167,11 +212,11 @@ export function assertLeads(event) {
 
   if (kind === "metric.observed") {
     for (const k of ["module", "surface", "metric"])
-      if (typeof p[k] !== "string" || !TOKEN_RE.test(p[k]))
-        throw new SpineError("BAD_LEADS", `metric.observed.${k} must be an opaque token`);
+      if (typeof p[k] !== "string" || !DIMENSION_RE.test(p[k]))
+        throw new SpineError("BAD_LEADS", `metric.observed.${k} must be a lowercase machine dimension [a-z0-9][a-z0-9_-]* — not free text, which is where a person's name hides`);
     for (const k of ["variant", "cohort"])
-      if (k in p && (typeof p[k] !== "string" || !TOKEN_RE.test(p[k])))
-        throw new SpineError("BAD_LEADS", `metric.observed.${k}, when present, must be an opaque token`);
+      if (has(p, k) && (typeof p[k] !== "string" || !DIMENSION_RE.test(p[k])))
+        throw new SpineError("BAD_LEADS", `metric.observed.${k}, when present, must be a lowercase machine dimension`);
     if (typeof p.value !== "number" || !Number.isFinite(p.value))
       throw new SpineError("BAD_LEADS", "metric.observed.value must be a finite number");
     if (!Number.isSafeInteger(p.unit_count) || p.unit_count < 0)
@@ -192,7 +237,7 @@ export function assertLeads(event) {
       : "";
     throw new SpineError("BAD_LEADS", `${kind}.lead_id must match lead_hmac_v<N>_<32 hex>${hint}`);
   }
-  if ("campaign" in p && (typeof p.campaign !== "string" || !CAMPAIGN_RE.test(p.campaign)))
+  if (has(p, "campaign") && (typeof p.campaign !== "string" || !CAMPAIGN_RE.test(p.campaign)))
     throw new SpineError("BAD_LEADS", `${kind}.campaign must be [a-z0-9-]{1,64} — "|" is the idem delimiter and must not be smuggleable into it`);
 
   switch (kind) {
@@ -205,7 +250,7 @@ export function assertLeads(event) {
         throw new SpineError("BAD_LEADS", `email_status ${JSON.stringify(p.email_status)} is outside verified|held (exact case)`);
       if (!Number.isSafeInteger(p.fact_count) || p.fact_count < 0)
         throw new SpineError("BAD_LEADS", "fact_count must be a non-negative integer");
-      if ("below_bar" in p && typeof p.below_bar !== "boolean")
+      if (has(p, "below_bar") && typeof p.below_bar !== "boolean")
         throw new SpineError("BAD_LEADS", "below_bar, when present, must be a boolean");
       if (typeof p.store_id !== "string" || !STORE_ID_RE.test(p.store_id))
         throw new SpineError("BAD_LEADS", "store_id must be 16 lowercase hex");
@@ -226,7 +271,7 @@ export function assertLeads(event) {
     case "outreach.replied":
       if (!TRIAGE.has(p.triage_class))
         throw new SpineError("BAD_LEADS", `triage_class ${JSON.stringify(p.triage_class)} is outside ${[...TRIAGE].join("|")} (exact case)`);
-      if ("in_reply_to_touch" in p && (!Number.isSafeInteger(p.in_reply_to_touch) || p.in_reply_to_touch < 1))
+      if (has(p, "in_reply_to_touch") && (!Number.isSafeInteger(p.in_reply_to_touch) || p.in_reply_to_touch < 1))
         throw new SpineError("BAD_LEADS", "in_reply_to_touch, when present, must be a positive integer");
       assertTs(kind, "ingested_at", p.ingested_at);
       break;
@@ -240,7 +285,7 @@ export function assertLeads(event) {
       break;
     case "deal.won":
     case "deal.lost":
-      if ("amount_inr" in p && (!Number.isSafeInteger(p.amount_inr) || p.amount_inr < 0))
+      if (has(p, "amount_inr") && (!Number.isSafeInteger(p.amount_inr) || p.amount_inr < 0))
         throw new SpineError("BAD_LEADS", "amount_inr, when present, must be a non-negative integer in paise");
       assertTs(kind, "decided_at", p.decided_at);
       break;

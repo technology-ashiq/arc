@@ -55,7 +55,10 @@ export function assertOutsideRepo(repoRoot, p = storePath()) {
   return store;
 }
 
-const SECRET_RE = /^secret\.v(\d+)$/;
+// Canonical version only. `secret.v01` and `secret.v1` both parsed to 1, so `leadId(store,
+// email, 1)` resolved to whichever readdirSync happened to return first -- non-deterministic
+// across the three-OS matrix, and two different secrets both minting ids labelled v1.
+const SECRET_RE = /^secret\.v([1-9][0-9]*)$/;
 
 function secretFiles(dir) {
   if (!existsSync(dir)) return [];
@@ -119,11 +122,32 @@ export function initStore({ repoRoot } = {}) {
 export function rotateSecret({ repoRoot } = {}) {
   const store = openStore({ repoRoot });
   const next = store.current.version + 1;
-  writeFileSync(join(store.dir, `secret.v${next}`), randomBytes(32).toString("hex"), { mode: 0o600 });
+  // initStore refuses to clobber and names the consequence; rotate did not, which made it the
+  // one path that could destroy a live secret. Two ways it bit: two concurrent rotations
+  // silently lose one, and at 2^53 the increment is a no-op so `next === current` and the
+  // write lands ON the live key -- orphaning every id derived under it, including suppressions
+  // whose dossier was purged. That is the exact outcome additive rotation exists to prevent.
+  if (!Number.isSafeInteger(next) || next <= store.current.version)
+    throw new StoreError("BAD_KEY_VERSION", `cannot derive a successor to secret.v${store.current.version}`);
+  const path = join(store.dir, `secret.v${next}`);
+  if (existsSync(path))
+    throw new StoreError("STORE_ALREADY_INITIALISED", `secret.v${next} already exists — refusing to clobber a key that ids may already be derived under`);
+  writeFileSync(path, randomBytes(32).toString("hex"), { mode: 0o600, flag: "wx" });
   return { dir: store.dir, version: next };
 }
 
-export const normalizeEmail = (email) => String(email).trim().toLowerCase();
+// Unicode normalization is NOT optional here. Without NFC, the NFC and NFD spellings of
+// "josé@firm.in" are two different HMACs, hence two lead ids, hence two identities --
+// suppress one and the other stays contactable. Zero-width characters do the same thing and
+// arrive routinely as copy-paste artifacts from web unsubscribe forms; `trim()` strips
+// U+FEFF but not U+200B/U+200C/U+200D.
+// Written as escapes, never as literal characters. A zero-width character pasted into source
+// is invisible in every editor and diff — which is exactly the property that makes it a
+// problem in an email, and exactly why it must not be a property of the code that removes it.
+const ZERO_WIDTH_CODES = new Set([0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF]);
+const stripInvisible = (s) => Array.from(s).filter((ch) => !ZERO_WIDTH_CODES.has(ch.codePointAt(0))).join("");
+export const normalizeEmail = (email) =>
+  stripInvisible(String(email).normalize("NFC")).trim().toLowerCase();
 
 // The id that reaches the spine. Keyed, not a bare hash: emails are low-entropy, so
 // sha256(email) is dictionary-attackable by anyone holding a public directory -- and this

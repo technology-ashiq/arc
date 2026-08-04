@@ -53,7 +53,11 @@ function trigrams(text) {
 
 export function similarity(a, b) {
   const A = trigrams(a), B = trigrams(b);
-  if (A.size === 0 && B.size === 0) return 1;
+  // Two facts that both normalize to nothing are NOT "identical" -- they are two facts with
+  // no comparable content. Returning 1 marked every non-Latin-script fact generic, in an
+  // India-only campaign, which is a false positive that silently kills good drafts. KEEP is
+  // ASCII, so Devanagari and Tamil normalize to "".
+  if (A.size === 0 || B.size === 0) return 0;
   let inter = 0;
   for (const g of A) if (B.has(g)) inter++;
   const union = A.size + B.size - inter;
@@ -68,16 +72,33 @@ const hostOf = (url) => {
   try { return new URL(String(url)).host.replace(/^www\./, "").toLowerCase(); } catch { return ""; }
 };
 
+// Rule 2 keyed its counter on the RAW url string while comparing hosts through hostOf --
+// "validate one read, compare another", the exact recurring class. One query parameter
+// (`?ref=3`) or one fragment (`#3`) made five identical directory citations look like five
+// distinct sources, and the rule went from 10/10 caught to 0/10.
+const canonicalUrl = (url) => {
+  try {
+    const u = new URL(String(url));
+    return `${u.protocol}//${u.host.replace(/^www\./, "").toLowerCase()}${u.pathname.replace(/\/+$/, "")}`;
+  } catch { return String(url).trim().toLowerCase(); }
+};
+
 // Marks the FACT, not the candidate. A candidate drops to BELOW-BAR only when it is left
 // with fewer than MIN_CITABLE_FACTS after generic facts are struck -- which is how three
 // PASS rows can each cite the same generic fact and stay PASS, while the one whose ONLY
 // fact is generic falls through.
 export function markGenericFacts(candidates) {
   const all = candidates.flatMap((c, ci) => (c.facts || []).map((f, fi) => ({ ci, fi, f })));
-  const urlCount = new Map();
-  for (const { f } of all) {
-    const h = hostOf(f.evidence_url);
-    if (h) urlCount.set(f.evidence_url, (urlCount.get(f.evidence_url) || 0) + 1);
+  // Count DISTINCT CANDIDATES per canonical URL, not raw facts. Counting facts let a single
+  // candidate citing one third-party URL three times mark its own facts generic with no other
+  // candidate in the corpus -- self-exclusion was applied in rule 1 and omitted in rule 2, in
+  // the same function.
+  const urlCandidates = new Map();
+  for (const { ci, f } of all) {
+    const key = canonicalUrl(f.evidence_url);
+    if (!key) continue;
+    if (!urlCandidates.has(key)) urlCandidates.set(key, new Set());
+    urlCandidates.get(key).add(ci);
   }
 
   return candidates.map((c, ci) => ({
@@ -91,11 +112,17 @@ export function markGenericFacts(candidates) {
       }
       const byRepetition = coCiters.size >= GENERIC_MIN_COCITERS;
 
-      // rule 2 -- evidence that is not the lead's own domain and is shared with >=2 others
-      const own = hostOf(`https://${c.firm_domain || ""}`);
+      // rule 2 -- evidence that is not the lead's own domain and is shared with >=2 OTHER
+      // candidates. `firm_domain` is corroborated against the email domain: it was
+      // caller-supplied and validated against nothing, so declaring firm_domain to BE the
+      // shared directory host turned every generic citation into a "lead-specific" one.
+      const claimed = hostOf(`https://${c.firm_domain || ""}`);
+      const fromEmail = String(c.email || "").split("@")[1] || "";
+      const own = claimed && (claimed === fromEmail.toLowerCase() || fromEmail.toLowerCase().endsWith("." + claimed)) ? claimed : "";
       const evHost = hostOf(f.evidence_url);
-      const shared = (urlCount.get(f.evidence_url) || 0) - 1;
-      const bySharedUrl = evHost !== "" && evHost !== own && shared >= SHARED_URL_MIN_OTHERS;
+      const others = new Set(urlCandidates.get(canonicalUrl(f.evidence_url)) || []);
+      others.delete(ci);
+      const bySharedUrl = evHost !== "" && evHost !== own && others.size >= SHARED_URL_MIN_OTHERS;
 
       return { ...f, generic: byRepetition || bySharedUrl, _fi: fi };
     }),
@@ -105,9 +132,54 @@ export function markGenericFacts(candidates) {
 // A fact is citable when it is lead-specific AND carries both its evidence URL and the
 // fact->offer relevance line. The relevance line is what ADR-0404's FAIL class checks a draft
 // against; a fact without one cannot support a personalized first touch.
-const isCitable = (f) => !f.generic && !!String(f.evidence_url || "").trim() && !!String(f.relevance || "").trim();
+const isValidUrl = (u) => { try { const x = new URL(String(u)); return x.protocol === "http:" || x.protocol === "https:"; } catch { return false; } };
+// `text` was never inspected, so two zero-content facts with an evidence_url and a relevance
+// line passed as a clean 2-fact PASS. A fact with no text is not a fact.
+const isCitable = (f) =>
+  !f.generic && String(f.text || "").trim().length >= 12 && isValidUrl(f.evidence_url) && !!String(f.relevance || "").trim();
+
+// H15: provenance was a LABEL the caller picked, and nothing corroborated it -- so a purchased
+// CSV row labelled "public-directory" was accepted, and the comment "rejected structurally"
+// described something the code did not do. Each class now has to be consistent with the
+// evidence actually supplied.
+const LOGIN_WALLED = ["linkedin.com", "facebook.com", "instagram.com", "x.com", "twitter.com"];
+function provenanceCorroborated(c, urls) {
+  const hosts = urls.map((u) => hostOf(u)).filter(Boolean);
+  const emailHost = (String(c.email || "").split("@")[1] || "").toLowerCase();
+  const isOwn = (h) => emailHost && (h === emailHost || emailHost.endsWith("." + h) || h.endsWith("." + emailHost));
+  const walled = hosts.filter((h) => LOGIN_WALLED.some((w) => h === w || h.endsWith("." + w)));
+
+  switch (c.provenance) {
+    case "firm-site":
+      // Must cite the firm's own domain, or it is not the firm's site.
+      return hosts.some(isOwn) ? null : `provenance "firm-site" but no source link is on the firm's own domain (${emailHost || "unknown"})`;
+    case "manual-linkedin-note":
+      // The ONE sanctioned login-walled class, and it must actually be one -- otherwise it is
+      // a label anything can wear to smuggle scraped content past the allowlist.
+      return walled.length ? null : `provenance "manual-linkedin-note" but no source link is on a LinkedIn-class host`;
+    case "public-directory":
+    case "public-listing":
+      // Must NOT be login-walled: a directory behind a login is a scrape wearing a label.
+      return walled.length ? `provenance "${c.provenance}" but ${walled[0]} is login-walled — that is a scrape, whatever the label says` : null;
+    default:
+      return `provenance "${c.provenance}" is outside the closed allowlist`;
+  }
+}
+
+const normKey = (e) => String(e == null ? "" : e).normalize("NFC").trim().toLowerCase();
+
+// H8 (a D3 RECURRENCE, not a cousin): rule 1 counts >=3 OTHER candidates, so it cannot fire
+// at all on a batch of 3 or fewer -- confirmed 100% PASS on template-identical drafts at
+// n<=3, and 100% BELOW-BAR at n>=4. D3 replaced a percentage that could never fire on a small
+// corpus with an absolute that also could never fire on a small corpus.
+//
+// There is no threshold that fixes this, because the rule is inherently comparative: with two
+// candidates there is nothing to compare against. So the honest answer is to SAY SO rather
+// than emit a silent PASS. The caller surfaces this loudly; it is not swallowed.
+export const GENERIC_RULE_MIN_CORPUS = GENERIC_MIN_COCITERS + 1;
 
 export function lintCandidates(candidates, verdictByEmail) {
+  const corpusTooSmall = candidates.length < GENERIC_RULE_MIN_CORPUS;
   const marked = markGenericFacts(candidates);
   const accepted = [];
   const rejected = [];
@@ -124,13 +196,25 @@ export function lintCandidates(candidates, verdictByEmail) {
       reject(`geography "${c.geography}" is outside the v1 allowlist ${JURISDICTION_ALLOWLIST.join(",")} — expanding it is its own ADR carrying that regime's rules (ADR-0406)`);
       continue;
     }
-    if ((c.source_urls || []).length < MIN_SOURCE_URLS) {
-      reject(`only ${(c.source_urls || []).length} source link(s); ${MIN_SOURCE_URLS} required — a dossier is an audit trail, not an assertion`);
+    // Length was the only check, so ["",""] satisfied "two source links". Validity and
+    // DISTINCTNESS are what make it an audit trail; the same URL twice is one source.
+    const urls = [...new Set((c.source_urls || []).filter(isValidUrl).map(canonicalUrl))];
+    if (urls.length < MIN_SOURCE_URLS) {
+      reject(`only ${urls.length} valid distinct source link(s); ${MIN_SOURCE_URLS} required — a dossier is an audit trail, not an assertion`);
       continue;
     }
 
+    const badProv = provenanceCorroborated(c, urls);
+    if (badProv) { reject(badProv + " (ADR-0409)"); continue; }
+
     const citable = c.facts.filter(isCitable);
-    const emailStatus = verdictByEmail.get(String(c.email).toLowerCase()) === "unverifiable" ? "held" : "verified";
+    // FAIL CLOSED. This read `=== "unverifiable" ? "held" : "verified"`, so a lookup MISS, a
+    // null, and every unrecognized verdict a real verifier might return ("invalid", "risky",
+    // "catch-all", "unknown") all mapped to VERIFIED, i.e. sendable. "invalid" means the
+    // provider says the mailbox does not exist -- a guaranteed hard bounce on a domain that
+    // took 2-4 weeks to warm. Only an explicit "verified" now clears; everything else HOLDs.
+    const verdict = verdictByEmail.get(normKey(c.email));
+    const emailStatus = verdict === "verified" ? "verified" : "held";
     accepted.push({
       ...c,
       email_status: emailStatus,
@@ -142,5 +226,14 @@ export function lintCandidates(candidates, verdictByEmail) {
         : null,
     });
   }
-  return { accepted, rejected };
+  return {
+    accepted,
+    rejected,
+    // Never a silent pass. A run below the floor did not "find no template blast" -- it was
+    // structurally incapable of looking.
+    genericRuleApplied: !corpusTooSmall,
+    corpusWarning: corpusTooSmall
+      ? `only ${candidates.length} candidate(s): the ICP-generic repetition rule needs at least ${GENERIC_RULE_MIN_CORPUS} to fire, so template-blast was NOT checked in this run`
+      : null,
+  };
 }

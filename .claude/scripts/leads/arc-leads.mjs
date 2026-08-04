@@ -76,7 +76,8 @@ async function cmdResearch(icpPath) {
   const verdicts = new Map();
   for (const c of candidates) verdicts.set(String(c.email).toLowerCase(), await verifier().verify(c.email));
 
-  const { accepted, rejected } = lintCandidates(candidates, verdicts);
+  const { accepted, rejected, corpusWarning } = lintCandidates(candidates, verdicts);
+  if (corpusWarning) console.error(`arc-leads: WARNING — ${corpusWarning}`);
 
   const dossierDir = join(store.dir, "dossiers");
   mkdirSync(dossierDir, { recursive: true });

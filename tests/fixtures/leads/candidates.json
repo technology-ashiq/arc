@@ -92,7 +92,7 @@
     "firm": "Firm 4",
     "firm_domain": "firm4.example.com",
     "geography": "IN",
-    "provenance": "manual-linkedin-note",
+    "provenance": "firm-site",
     "source_urls": [
       "https://firm4.example.com/about",
       "https://firm4.example.com/team"
@@ -116,7 +116,7 @@
     "firm": "Firm 5",
     "firm_domain": "firm5.example.com",
     "geography": "IN",
-    "provenance": "firm-site",
+    "provenance": "public-directory",
     "source_urls": [
       "https://firm5.example.com/about",
       "https://firm5.example.com/team"
@@ -140,7 +140,7 @@
     "firm": "Firm 6",
     "firm_domain": "firm6.example.com",
     "geography": "IN",
-    "provenance": "public-directory",
+    "provenance": "public-listing",
     "source_urls": [
       "https://firm6.example.com/about",
       "https://firm6.example.com/team"
@@ -164,7 +164,7 @@
     "firm": "Firm 7",
     "firm_domain": "firm7.example.com",
     "geography": "IN",
-    "provenance": "public-listing",
+    "provenance": "firm-site",
     "source_urls": [
       "https://firm7.example.com/about",
       "https://firm7.example.com/team"
@@ -191,7 +191,7 @@
     "provenance": "manual-linkedin-note",
     "source_urls": [
       "https://firm8.example.com/about",
-      "https://firm8.example.com/team"
+      "https://www.linkedin.com/in/adv8"
     ],
     "facts": [
       {
@@ -212,7 +212,7 @@
     "firm": "Firm 9",
     "firm_domain": "firm9.example.com",
     "geography": "IN",
-    "provenance": "firm-site",
+    "provenance": "public-listing",
     "source_urls": [
       "https://firm9.example.com/about",
       "https://firm9.example.com/team"
@@ -236,7 +236,7 @@
     "firm": "Firm 10",
     "firm_domain": "firm10.example.com",
     "geography": "IN",
-    "provenance": "public-directory",
+    "provenance": "firm-site",
     "source_urls": [
       "https://firm10.example.com/about",
       "https://firm10.example.com/team"
@@ -260,7 +260,7 @@
     "firm": "Firm 11",
     "firm_domain": "firm11.example.com",
     "geography": "IN",
-    "provenance": "public-listing",
+    "provenance": "public-directory",
     "source_urls": [
       "https://firm11.example.com/about",
       "https://firm11.example.com/team"
@@ -284,7 +284,7 @@
     "firm": "Firm 12",
     "firm_domain": "firm12.example.com",
     "geography": "IN",
-    "provenance": "manual-linkedin-note",
+    "provenance": "public-listing",
     "source_urls": [
       "https://firm12.example.com/about",
       "https://firm12.example.com/team"
@@ -380,7 +380,7 @@
     "firm": "Firm 16",
     "firm_domain": "firm16.example.com",
     "geography": "IN",
-    "provenance": "manual-linkedin-note",
+    "provenance": "firm-site",
     "source_urls": [
       "https://firm16.example.com/about",
       "https://firm16.example.com/team"
@@ -404,7 +404,7 @@
     "firm": "Firm 17",
     "firm_domain": "firm17.example.com",
     "geography": "IN",
-    "provenance": "firm-site",
+    "provenance": "public-directory",
     "source_urls": [
       "https://firm17.example.com/about",
       "https://firm17.example.com/team"
@@ -428,7 +428,7 @@
     "firm": "Firm 18",
     "firm_domain": "firm18.example.com",
     "geography": "IN",
-    "provenance": "public-directory",
+    "provenance": "public-listing",
     "source_urls": [
       "https://firm18.example.com/about",
       "https://firm18.example.com/team"
@@ -452,7 +452,7 @@
     "firm": "Firm 19",
     "firm_domain": "firm19.example.com",
     "geography": "IN",
-    "provenance": "public-listing",
+    "provenance": "firm-site",
     "source_urls": [
       "https://firm19.example.com/about",
       "https://firm19.example.com/team"
@@ -476,7 +476,7 @@
     "firm": "Firm 20",
     "firm_domain": "firm20.example.com",
     "geography": "IN",
-    "provenance": "manual-linkedin-note",
+    "provenance": "public-directory",
     "source_urls": [
       "https://firm20.example.com/about",
       "https://firm20.example.com/team"
@@ -500,7 +500,7 @@
     "firm": "Firm 21",
     "firm_domain": "firm21.example.com",
     "geography": "IN",
-    "provenance": "firm-site",
+    "provenance": "public-listing",
     "source_urls": [
       "https://firm21.example.com/about",
       "https://firm21.example.com/team"
@@ -524,7 +524,7 @@
     "firm": "Firm 22",
     "firm_domain": "firm22.example.com",
     "geography": "IN",
-    "provenance": "public-directory",
+    "provenance": "firm-site",
     "source_urls": [
       "https://firm22.example.com/about",
       "https://firm22.example.com/team"
@@ -548,7 +548,7 @@
     "firm": "Firm 23",
     "firm_domain": "firm23.example.com",
     "geography": "IN",
-    "provenance": "public-listing",
+    "provenance": "public-directory",
     "source_urls": [
       "https://firm23.example.com/about",
       "https://firm23.example.com/team"
@@ -572,7 +572,7 @@
     "firm": "Firm 24",
     "firm_domain": "firm24.example.com",
     "geography": "IN",
-    "provenance": "manual-linkedin-note",
+    "provenance": "public-listing",
     "source_urls": [
       "https://firm24.example.com/about",
       "https://firm24.example.com/team"
@@ -646,8 +646,8 @@
     "geography": "IN",
     "provenance": "firm-site",
     "source_urls": [
-      "https://firm27.example.com/a",
-      "https://firm27.example.com/b"
+      "https://firm27.example.com/about",
+      "https://firm27.example.com/team"
     ],
     "facts": []
   },
@@ -657,10 +657,10 @@
     "firm": "Firm 28",
     "firm_domain": "firm28.example.com",
     "geography": "IN",
-    "provenance": "public-directory",
+    "provenance": "firm-site",
     "source_urls": [
-      "https://firm28.example.com/a",
-      "https://firm28.example.com/b"
+      "https://firm28.example.com/about",
+      "https://firm28.example.com/team"
     ],
     "facts": [
       {
@@ -678,8 +678,8 @@
     "geography": "IN",
     "provenance": "firm-site",
     "source_urls": [
-      "https://firm29.example.com/a",
-      "https://firm29.example.com/b"
+      "https://firm29.example.com/about",
+      "https://firm29.example.com/team"
     ],
     "facts": [
       {
@@ -728,8 +728,8 @@
     "geography": "",
     "provenance": "firm-site",
     "source_urls": [
-      "https://a.example.com/1",
-      "https://a.example.com/2"
+      "https://firm32.example.com/a",
+      "https://firm32.example.com/b"
     ],
     "facts": []
   },
@@ -741,8 +741,8 @@
     "geography": "DE",
     "provenance": "firm-site",
     "source_urls": [
-      "https://a.example.com/1",
-      "https://a.example.com/2"
+      "https://firm33.example.com/a",
+      "https://firm33.example.com/b"
     ],
     "facts": []
   },
