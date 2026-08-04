@@ -1,0 +1,23 @@
+{
+  "name": "leads",
+  "version": "1.0.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/leads/arc-leads.mjs",
+    ".claude/scripts/leads/lib/deps.mjs",
+    ".claude/scripts/leads/lib/preflight.mjs",
+    ".claude/scripts/leads/lib/research-lint.mjs",
+    ".claude/scripts/leads/lib/spine-read.mjs",
+    ".claude/scripts/leads/lib/store.mjs",
+    ".claude/scripts/leads/pii-tripwire.sh"
+  ],
+  "files": [
+    ".claude/config/leads.json"
+  ],
+  "docs": []
+}

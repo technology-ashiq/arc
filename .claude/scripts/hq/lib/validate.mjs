@@ -4,8 +4,9 @@
 // values are rejected, never normalized. Normalizing is how a validator quietly becomes a
 // suggestion (council v2's case-insensitive-then-exact-compare class).
 
-import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex } from "./canonical.mjs";
+import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex, IST_TS_RE } from "./canonical.mjs";
 import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
+import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -18,8 +19,14 @@ const MAX_COST_MAGNITUDE = 1e12;
 // ADR-0026: the vocabulary is CLOSED. Extensions only via a new ADR.
 // Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready),
 // then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read),
-// then 22 -> 30 by ADR-0309 (evolve's eight experiment receipts, frozen by ADR-0304).
-// `metric.observed` is deliberately NOT here: it is the client module's kind (ADR-0308).
+// then 22 -> 30 by ADR-0309 (evolve's eight experiment receipts, frozen by ADR-0304),
+// then 31 -> 39 by ADR-0400 (leads' seven pipeline receipts) together with ADR-0408.
+//
+// `metric.observed` used to be deliberately absent here, because ADR-0308 rules that it lands
+// in the FIRST CLIENT's cycle rather than in evolve's. leads IS that first client (ADR-0408),
+// so it arrives now -- in the SAME edit as the seven pipeline kinds, so the closed vocabulary
+// is touched once this cycle rather than twice. Its 4-week trigger clock does NOT start here:
+// it starts at the first real send, which is Phase 3 and BLOCKED (ADR-0413).
 export const KINDS = Object.freeze([
   "idea.captured", "council.verdict", "approval.requested", "decision.recorded",
   "kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
@@ -31,6 +38,7 @@ export const KINDS = Object.freeze([
   // already existed (0 emitted); this records what actually happened, which is a distinct later
   // fact and therefore its own kind per ADR-0304's one-kind-per-lifecycle-step rule.
   "council.outcome",
+  ...LEADS_KINDS,
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -61,7 +69,9 @@ import { PROCESS_RE } from "../../core/variant-grammar.mjs";
 const VENTURE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RUN_ID_RE = /^r-[A-Za-z0-9._-]{1,64}$/;
 const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/;
-const TS_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?\+05:30$/;
+// Moved to canonical.mjs as IST_TS_RE so leads' payload `*_at` validator shares ONE definition
+// with the event `ts` rule (ADR-0400). Aliased, not re-declared: a copied regex drifts.
+const TS_RE = IST_TS_RE;
 const OUTCOMES = new Set(["ok", "fail", "partial"]);
 const COST_SOURCES = new Set(["measured", "estimated", "manual"]);
 const COST_KEYS = ["tokens_in", "tokens_out", "inr_estimate", "source"];
@@ -271,13 +281,14 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106/0107/0309)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106/0107/0309/0310/0400)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);
   if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
+  if (isLeadsKind(event.kind)) assertLeads(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

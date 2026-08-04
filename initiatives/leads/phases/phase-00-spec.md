@@ -179,12 +179,22 @@ makes it prove the fake swaps the response and not the code path.
 
 ### C14 — Timestamps
 
-**Every `*_at` and `window_*` field is ISO-8601 UTC with a literal `Z`, second precision, no
-offset form:** `YYYY-MM-DDTHH:MM:SSZ`. The validator rejects anything else, including a
-`+05:30` offset spelling of the same instant — C3 concatenates these into idem preimages, so
-two spellings would be two idems. **IST is a rendering and bucketing concern only:** the
-daily cap converts `submitted_at` to Asia/Kolkata at comparison time via
-`Intl.DateTimeFormat` with `timeZone: "Asia/Kolkata"`, never by storing local time.
+**Every payload `*_at` and `window_*` field uses the SAME grammar as the spine's own event
+`ts`:** `YYYY-MM-DDTHH:MM:SS(.frac)?+05:30`. Corrected from an earlier UTC-`Z` draft — the
+spine's `TS_RE` already pins `+05:30`, and a second timestamp grammar in the same file is the
+drift the repo has an explicit rule against ("a copied regex is a regex that drifts").
+
+**One definition, imported by both:** `IST_TS_RE` moves to `canonical.mjs`; `validate.mjs`
+and `validate-leads.mjs` both import it. Neither re-declares it.
+
+The validator rejects any other spelling — including UTC-`Z` for the same instant — because
+C3 concatenates these into idem preimages, so two spellings would be two idems. A bonus of
+matching the house grammar: `submitted_at` is already IST, so ADR-0403's daily-cap bucketing
+reads the date part directly with no timezone conversion.
+
+**Scope note (do not over-apply):** this rule governs *payload* fields only. The event's own
+`ts` is already validated by `TS_RE`; applying a new rule to it would break every existing
+kind.
 
 `campaign` is `[a-z0-9-]{1,64}` — `|` is the idem delimiter and must not be smuggleable into
 a campaign name.
