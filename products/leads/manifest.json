@@ -9,6 +9,7 @@
   "agents": [],
   "scripts": [
     ".claude/scripts/leads/arc-leads.mjs",
+    ".claude/scripts/leads/lib/caps.mjs",
     ".claude/scripts/leads/lib/deps.mjs",
     ".claude/scripts/leads/lib/preflight.mjs",
     ".claude/scripts/leads/lib/research-lint.mjs",
