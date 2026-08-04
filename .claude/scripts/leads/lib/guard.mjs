@@ -6,8 +6,8 @@
 //
 // Chain order is load-bearing and is asserted by fixture:
 //
-//   campaign-state (HOLD|FROZEN) -> unresolved-intent -> suppression -> reply-stop
-//     -> touch-cap (rolling 7d) -> daily-cap (IST, submitted) -> send-window -> draft_sha
+//   campaign-state (HOLD|FROZEN) -> unresolved-intent -> ALREADY-SENT -> suppression
+//     -> reply-stop -> touch-cap (rolling 7d) -> daily-cap (IST) -> send-window -> draft_sha
 //
 // The first two steps were added at kickoff by the attack panel. ADR-0403 defined HOLD/FROZEN
 // and ADR-0411 defined unresolved intents, but NEITHER was in the chain — so every breaker
@@ -127,34 +127,53 @@ export function guardSend({ events, store, draft, now, config }) {
   if (pending.length)
     throw new GuardRefusal("unresolved-intent", `${pending.length} unresolved send intent(s) in the journal. No send is attempted anywhere until \`arc-leads reconcile\` has run (ADR-0411).`);
 
-  // 3. suppression — checked across EVERY key version, so a rotation cannot un-suppress
+  // 3. ALREADY SENT. Found by walking the send path end to end rather than by reading it: a
+  //    second run of the daily command re-entered the whole chain for a draft that had already
+  //    been sent, because the touch cap counts touches (1 of 2 used) and nothing asked the
+  //    narrower question "has THIS touch already gone out?".
+  //
+  //    The receipt idem stopped the duplicate RECEIPT, so the spine stayed honest -- but only
+  //    after the provider had already been asked to submit again. On the fake that is
+  //    invisible (it is idempotent by key); on a real provider it is a second submit, and the
+  //    only thing standing between it and a duplicate email is the provider honouring the
+  //    idempotency key. Depending on that is exactly what ADR-0411 says not to do.
+  const alreadySent = events.some(
+    (e) => e.kind === "outreach.sent" &&
+      e.payload?.campaign === campaign &&
+      e.payload?.lead_id === lead_id &&
+      e.payload?.touch_n === touch_n
+  );
+  if (alreadySent)
+    throw new GuardRefusal("already-sent", `touch ${touch_n} to this lead in "${campaign}" already has an outreach.sent receipt — refusing before the provider is asked, rather than relying on it to deduplicate.`);
+
+  // 4. suppression — checked across EVERY key version, so a rotation cannot un-suppress
   //    someone who asked to be forgotten (ADR-0400's keyring).
   if (state.suppressed.has(lead_id))
     throw new GuardRefusal("suppression", `lead is on the suppression ledger — unsubscribed, bounced, or manually suppressed. This survives across campaigns and dossier deletion.`);
 
-  // 4. reply-stop. This is the TOCTOU case: a reply recorded AFTER approval permanently
+  // 5. reply-stop. This is the TOCTOU case: a reply recorded AFTER approval permanently
   //    blocks the send that approval authorized.
   if (state.replied.has(lead_id))
     throw new GuardRefusal("reply-stop", `lead has already replied — the sequence stops itself. Approval authorized an attempt, not a send (ADR-0403).`);
 
-  // 5. rolling touch cap — rolling, not a calendar week: a calendar week lets two touches
+  // 6. rolling touch cap — rolling, not a calendar week: a calendar week lets two touches
   //    land Sunday and Monday and calls it two weeks.
   const prior = (state.touches.get(lead_id) || []).filter((t) => withinRollingWindow(t, now, caps.rolling_window_days));
   if (prior.length >= caps.touches_per_lead)
     throw new GuardRefusal("touch-cap", `lead already had ${prior.length} touch(es) in the rolling ${caps.rolling_window_days}-day window; the cap is ${caps.touches_per_lead}.`);
 
-  // 6. daily cap — SUBMITTED sends only; attempts the provider refused do not count.
+  // 7. daily cap — SUBMITTED sends only; attempts the provider refused do not count.
   //    Effective count includes unresolved intents, but step 2 already refused those.
   const day = istDay(now);
   const today = state.perDay.get(day) || 0;
   if (today >= caps.per_ist_day)
     throw new GuardRefusal("daily-cap", `${today} send(s) already submitted on IST day ${day}; the cap is ${caps.per_ist_day}. Raising it in config is refused above the hard ceiling (ADR-0403).`);
 
-  // 7. send window
+  // 8. send window
   if (!inSendWindow(now, caps.send_window_ist))
     throw new GuardRefusal("send-window", `${now} is outside the IST send window (${caps.send_window_ist.start}-${caps.send_window_ist.end}, weekdays).`);
 
-  // 8. draft sha — approval binds the EXACT content. Edited-after-approval is refused
+  // 9. draft sha — approval binds the EXACT content. Edited-after-approval is refused
   //    (ADR-0412, evolve's candidate_sha discipline applied to outreach).
   if (!approved_sha || draft_sha !== approved_sha)
     throw new GuardRefusal("draft-sha", `the draft changed after approval (approved ${String(approved_sha).slice(0, 12)}, current ${String(draft_sha).slice(0, 12)}). Approval binds exact content (ADR-0412).`);

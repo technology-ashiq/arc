@@ -73,6 +73,12 @@ const HEX64 = /^[0-9a-f]{64}$/;
 // PLAN-evolve): the frozen spec's opaque/`h-` forms, plus leads' keyed form.
 const SOURCE_ID_RE = /^([A-Za-z0-9][A-Za-z0-9._-]{0,63}|h-[0-9a-f]{16}|lead_hmac_v[1-9][0-9]*_[0-9a-f]{32})$/;
 const TOKEN_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+// Provider message ids are EXTERNAL identifiers whose shape we do not control -- UUIDs,
+// long opaque strings, vendor-prefixed hashes. TOKEN_RE's 64-char bound is a house rule for
+// values we mint, and applying it to a value the provider mints would refuse a legitimate
+// receipt for a send that already happened, which is the worst possible moment to be strict.
+// Still bounded and still character-restricted, so it cannot smuggle a delimiter or PII.
+const PROVIDER_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$/;
 // Metric dimensions are machine labels, never free text. The looser TOKEN_RE admitted
 // "Priya.Sharma-Advocates" -- a person's name on a public spine, which safety property 1
 // names explicitly and which assertNoPii (email/URL shapes only) cannot see.
@@ -262,8 +268,8 @@ export function assertLeads(event) {
         throw new SpineError("BAD_LEADS", "touch_n must be a positive integer");
       if (typeof p.idem_key !== "string" || !TOKEN_RE.test(p.idem_key))
         throw new SpineError("BAD_LEADS", "idem_key must be an opaque token (the provider idempotency key)");
-      if (typeof p.provider_message_id !== "string" || !TOKEN_RE.test(p.provider_message_id))
-        throw new SpineError("BAD_LEADS", "provider_message_id must be an opaque token");
+      if (typeof p.provider_message_id !== "string" || !PROVIDER_ID_RE.test(p.provider_message_id))
+        throw new SpineError("BAD_LEADS", "provider_message_id must be an opaque provider identifier (<=255 chars, no delimiters)");
       if (typeof p.draft_sha !== "string" || !HEX64.test(p.draft_sha))
         throw new SpineError("BAD_LEADS", "draft_sha must be a lowercase sha256 hex — approval binds the exact content (ADR-0412)");
       assertTs(kind, "submitted_at", p.submitted_at);

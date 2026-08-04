@@ -20,6 +20,12 @@ import { source, verifier, ProviderError, PROVIDER_EXIT } from "./lib/deps.mjs";
 import { preflight, PREFLIGHT_REFUSED } from "./lib/preflight.mjs";
 import { leadsIdem } from "../hq/lib/validate-leads.mjs";
 import { readAllEvents } from "./lib/spine-read.mjs";
+import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
+import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
+import { runDaily, approvedShaFor } from "./lib/sequencer.mjs";
+import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
+import { provider } from "./lib/deps.mjs";
+import { GuardRefusal } from "./lib/guard.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
@@ -136,6 +142,122 @@ async function cmdResearch(icpPath) {
   for (const r of rejected) console.log(`  REJECTED ${r.firm}: ${r.exclusion_reason}`);
 }
 
+// ---------- campaign / draft / review / send (Phase 01) ----------
+//
+// The IST wall-clock stamp every cap buckets by. ARC_LEADS_NOW exists so a fixture can place
+// a send at 23:59 or 00:01 without waiting for midnight -- the same shape as the spine's own
+// test-only clock door, and it is never set in production.
+function nowIst() {
+  if (process.env.ARC_LEADS_NOW) return process.env.ARC_LEADS_NOW;
+  const d = new Date(Date.now() + 5.5 * 3600 * 1000);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}` +
+    `T${p(d.getUTCHours())}:${p(d.getUTCMinutes())}:${p(d.getUTCSeconds())}+05:30`;
+}
+
+function cmdCampaignInit(name) {
+  const store = openStore({ repoRoot: REPO_ROOT });
+  const rec = initCampaign(store, name, { createdAt: nowIst() });
+  console.log(`arc-leads: campaign "${rec.campaign}" bound to store ${rec.store_id}/${rec.store_fingerprint}`);
+}
+
+// Drafts are LINTED before they are written, and a FAIL never reaches the inbox. That is the
+// deterministic half of ADR-0404: a draft citing a fact absent from the dossier cannot be
+// approved, because it is never offered for approval.
+function cmdDraft(campaign, file) {
+  if (!campaign || !file) die(2, "usage: arc-leads draft <campaign> <drafts.json>");
+  const store = openStore({ repoRoot: REPO_ROOT });
+  assertCampaignStore(store, campaign);
+  const incoming = JSON.parse(readFileSync(file, "utf8"));
+
+  const linted = incoming.map((d) => {
+    const dossierPath = join(store.dir, "dossiers", `${d.lead_id}.json`);
+    if (!existsSync(dossierPath)) die(2, `no dossier for ${d.lead_id} — research it before drafting to it`);
+    return { ...d, ...lintDraft(d, JSON.parse(readFileSync(dossierPath, "utf8"))) };
+  });
+
+  // Campaign-scope similarity runs over the whole batch: per-draft checks are structurally
+  // blind to template-blast, which is a property of the SET rather than of any member.
+  const scored = lintCampaign(
+    linted.map((d, i) => ({ ref: String(i), body: d.body, verdict: d.verdict, warns: d.warns }))
+  );
+
+  let written = 0, blocked = 0;
+  linted.forEach((d, i) => {
+    if (scored[i].verdict === VERDICT.FAIL) {
+      blocked++;
+      console.log(`  FAIL  ${d.lead_id}: ${d.fails.join(" | ")}`);
+      return;
+    }
+    const warns = scored[i].warns;
+    const rec = writeDraft(store, {
+      campaign, lead_id: d.lead_id, touch_n: d.touch_n, body: d.body, cites: d.cites,
+      lintStatus: scored[i].verdict === VERDICT.PASS ? "PASS" : `BELOW-BAR: ${warns.join(" | ")}`,
+    });
+    emit("approval.requested", approvalPayload(rec));
+    written++;
+    console.log(`  ${scored[i].verdict === VERDICT.PASS ? "PASS " : "WARN "} ${rec.draft_ref} ${d.lead_id}${warns.length ? " — " + warns.join(" | ") : ""}`);
+  });
+  console.log(`arc-leads draft: ${written} queued for approval, ${blocked} FAIL blocked before the inbox`);
+}
+
+// The local render. The spine carries an opaque ref; the human reads the body HERE, beside the
+// dossier evidence, so the cited facts can be checked against their sources.
+function cmdReview(ref) {
+  if (!ref) die(2, "usage: arc-leads review <draft_ref>");
+  const store = openStore({ repoRoot: REPO_ROOT });
+  const d = readDraft(store, ref);
+  const dossierPath = join(store.dir, "dossiers", `${d.lead_id}.json`);
+  const dossier = existsSync(dossierPath) ? JSON.parse(readFileSync(dossierPath, "utf8")) : null;
+  console.log(`draft_ref : ${d.draft_ref}`);
+  console.log(`campaign  : ${d.campaign}  touch ${d.touch_n}`);
+  console.log(`lint      : ${d.lint_status}`);
+  const cur = currentSha(store, ref);
+  console.log(`draft_sha : ${d.draft_sha}${cur === d.draft_sha ? "" : "   *** BODY EDITED SINCE WRITE: " + cur + " ***"}`);
+  if (dossier) {
+    console.log(`lead      : ${dossier.name} <${dossier.email}>  ${dossier.firm}`);
+    console.log("evidence  :");
+    for (const f of dossier.citable_facts || [])
+      console.log(`  - ${f.text}\n      ${f.evidence_url}\n      why: ${f.relevance}`);
+  }
+  console.log("--- draft body ---");
+  console.log(d.body);
+}
+
+async function cmdReconcile() {
+  const store = openStore({ repoRoot: REPO_ROOT });
+  const out = await reconcile(store, {
+    events: readAllEvents({ allowMissing: true }),
+    lookup: (k) => provider().lookupByMessageId(k),
+    emitReceipt: async (p) => emit("outreach.sent", p),
+  });
+  console.log(`arc-leads reconcile: ${out.resolvedFromSpine} resolved from the spine (no provider call) · ${out.emittedLate} late receipt(s) · ${out.voided} voided · ${out.providerCalls} provider call(s)`);
+  const left = unresolvedIntents(store);
+  if (left.length) die(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
+}
+
+// The human-started daily command. No cron, no daemon, no background anything (ADR-0403).
+async function cmdDaily(campaign) {
+  if (!campaign) die(2, "usage: arc-leads daily <campaign>");
+  const store = openStore({ repoRoot: REPO_ROOT });
+  assertCampaignStore(store, campaign);
+  const readEvents = () => readAllEvents({ allowMissing: true });
+  const approved = listDrafts(store, campaign)
+    .filter((d) => approvedShaFor(readEvents(), d.draft_ref))
+    .map((d) => d.draft_ref);
+  if (!approved.length) { console.log("arc-leads daily: no approved drafts — nothing to send"); return; }
+
+  const out = await runDaily({
+    store, readEvents, drafts: approved, now: nowIst(),
+    emitReceipt: async (p) => emit("outreach.sent", p),
+  });
+  if (out.halted) die(3, out.halted);
+  for (const r of out.results)
+    console.log(r.ok ? `  SENT    ${r.draftRef} (${r.provider_message_id})` : `  REFUSED ${r.draftRef} [${r.step}] ${r.why}`);
+  const sent = out.results.filter((r) => r.ok).length;
+  console.log(`arc-leads daily: ${sent} sent, ${out.results.length - sent} refused`);
+}
+
 // ---------- preflight ----------
 async function cmdPreflight() {
   const res = await preflight({ warmupApproved: process.env.LEADS_WARMUP_APPROVED === "1" });
@@ -186,16 +308,31 @@ function cmdState(json) {
 const [cmd, ...rest] = process.argv.slice(2);
 try {
   if (cmd === "store" && rest[0] === "init") cmdStoreInit();
+  else if (cmd === "campaign" && rest[0] === "init") cmdCampaignInit(rest[1]);
   else if (cmd === "research") await cmdResearch(rest[0]);
+  else if (cmd === "draft") cmdDraft(rest[0], rest[1]);
+  else if (cmd === "review") cmdReview(rest[0]);
+  else if (cmd === "reconcile") await cmdReconcile();
+  else if (cmd === "daily") await cmdDaily(rest[0]);
   else if (cmd === "preflight") await cmdPreflight();
   else if (cmd === "state") cmdState(rest.includes("--json"));
   else {
-    console.error("arc-leads: usage: arc-leads <store init|research ICP.json|preflight|state --json>");
-    console.error("  Phase 00 surface only. Sending arrives in Phase 01; the real campaign is BLOCKED (ADR-0413).");
+    console.error("arc-leads: usage:");
+    console.error("  store init                      mint the private store and its HMAC secret");
+    console.error("  campaign init <name>            bind a campaign to this store");
+    console.error("  research ICP.json               ICP in, dossiers + receipts out");
+    console.error("  draft <campaign> <drafts.json>  lint, then queue for approval (FAIL never reaches the inbox)");
+    console.error("  review <draft_ref>              render the draft LOCALLY, beside its evidence");
+    console.error("  daily <campaign>                the human-started send run (no daemon, ever)");
+    console.error("  reconcile                       spine-first recovery of unresolved intents");
+    console.error("  preflight | state --json");
+    console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
     process.exit(2);
   }
 } catch (e) {
   if (e instanceof StoreError) die(5, e.message);
+  if (e instanceof DraftError) die(2, e.message);
+  if (e instanceof GuardRefusal) die(3, `[${e.step}] ${e.message}`);
   if (e instanceof ProviderError) die(PROVIDER_EXIT, `${e.kind}: ${e.message}`);
   die(2, e.message);
 }
