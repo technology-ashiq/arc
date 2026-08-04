@@ -21,6 +21,22 @@ paths:
   LAST stage, so a failing suite reports success. Redirect to a file and read it, or check
   `${PIPESTATUS[0]}`. A masked red suite is worse than no suite.
 
+## Where tests run — CI, never this box
+
+**Do not run `bats`, the full suite, or a suite shard locally.** It clogs the machine, and a green
+local run proves nothing about the three-OS matrix that actually gates: the failures that matter
+here have been Windows path resolution, BSD-vs-GNU `sed`, filesystem case-folding and locale
+collation — every one of them invisible on the box that wrote the code. Node for a parse check or
+to generate an artifact is fine; a test RUN is not.
+
+CI is the only gate, so make each push buy a full cycle: batch related work into one commit rather
+than pushing per-fix.
+
+**Read the per-JOB conclusions, never the watcher's exit code.** `gh run watch --exit-status` has
+returned **0 on a run whose conclusion was `failure`** — the same shape as an emitter exiting 0
+while every receipt it wrote was quarantined. Use `gh run view <id> --json jobs` and assert on the
+conclusions themselves.
+
 ## The vacuous pass — a test that passes while executing nothing
 
 A green test proves the assertion held. It does not prove the code ran. Cycle 6 shipped this
@@ -44,3 +60,15 @@ Three rules, and they are cheap:
 
 The general form: **prefer an assertion that fails when the code is deleted.** If ripping out the
 implementation would leave the test green, the test is measuring nothing.
+
+### The test that was never there
+
+Cycle 7 found the worse sibling: **bats silently DROPS a `@test` whose name contains a non-ASCII
+character.** Five tests written with em-dashes in their titles were never registered, never ran and
+never failed. The file was green. The only signal was the test count falling on CI.
+
+- **`@test` names are ASCII-only.** No em-dashes, no smart quotes, no arrows. Put the nuance in the
+  body, not the title.
+- **A suite that IS the proof of a rule asserts its own count** — an explicit final test that fails
+  when the registered total changes unnoticed.
+- A suite running fewer tests than it declares is indistinguishable from a suite that passes.

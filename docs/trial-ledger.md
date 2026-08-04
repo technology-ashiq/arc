@@ -280,3 +280,59 @@ consecutive cycle they ran clean on a plan written by the same author who design
 Clean-because-correct and clean-because-blind stay indistinguishable until one fires on a plan
 it did not shape. Two cycles of silence is not evidence of correctness; it is the same
 un-tested condition, twice.
+
+---
+
+## Cycle 7 · arc-evolve (2026-08-03 → 2026-08-04) — no promotion
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-08-04 | `appetite-sum` | every run, cycle-long | **yes, every run** | **unadjudicated — see below** |
+| 2026-08-04 | 7 other kickoff-lint substance gates | every run | no | **n/a — not counted** (author-written plan; silence, not accuracy) |
+| 2026-08-04 | `spine-api` | evolve board joins the scan (`b103d7a`); `spine-reader-lint.sh` exit 0 | no | no |
+
+**`appetite-sum` — 100% declared, 100.0% actual, and the fire scores as neither.** It warned every
+run that "phase appetites sum to 7d = 100% of 7d total — zero slack is its own fiction". Cycle 4 is
+this gate's one confirmation (100% declared → 112% actual). Here the cycle landed **exactly at cap
+and did not overrun**, so the prediction neither landed like Cycle 4's nor inverted like Cycle 3's.
+
+The substance did hold, and it is on the record in the lane: Phase 04 was named at kickoff as the
+designated cut and was **built rather than cut**, so the only slack in the plan was spent as work.
+The cycle carried no buffer and finished only because nothing went badly wrong for long. That is
+the condition the gate names — it simply never got tested, because nothing needed absorbing.
+
+**Unadjudicated, therefore counts toward nothing**, the same treatment `pre-mortem-cite` and
+`adr-wired` have carried since 2026-07-19. The run count stays at **1 of 3** (Cycle 4's).
+
+**`spine-api` — the run this ledger asked for by name arrived, and it still is not the run it
+needed.** The 2026-07-28 decision said what would move it: *"one more clean run plus at least one
+run against hq consumer code written by someone not designing to this lint — the natural occasion
+is the next cycle's first new spine consumer (dashboard, **evolve**, or policy)."* evolve arrived.
+`.claude/scripts/evolve/board.mjs` is a genuine outside consumer of the reader contract, the lint
+was widened to scan `.claude/scripts/evolve/`, and it exits 0. That is the third clean run.
+
+**But `board.mjs` was written with ADR-0030 in hand.** It is the same author designing to the same
+lint, which is precisely the ambiguity this file already refuses to resolve in a gate's favour. The
+condition was "code written by someone **not** designing to this lint", and that has still never
+happened. Criterion 1 remains the strongest in the file; criterion 2 remains unmet on its own terms.
+
+**Net: no flip.** Nothing leaves the `TRIAL` set; `arc.gates.yaml` keeps `mode: warn` for
+`spine-api`.
+
+### Registered, not promoted: a pattern-matching gate that BLOCKs from birth
+
+Cycle 7 shipped the **money-surface denylist** (`.claude/scripts/core/money-surfaces.json` +
+`moneySurfaceMatch`), which refuses any `promote_via` path touching a money surface. REQ-01 required
+it to `exit 2` **permanently**, from birth — and it is a glob pattern-match, exactly the shape
+ADR-0101 assigns to WARN-first trial ("false-block risk lives in pattern matching, never in did the
+file parse").
+
+It is recorded here as a **deliberate exception, not an oversight**. The asymmetry justifies it: a
+false block refuses to auto-optimise something it should not have touched, which is the safe
+direction, whereas a false pass lets an experiment rewrite a payment path. Its v2 form is already
+infix (`**/*stripe*/**`) because prefix-only matching missed `app/(pricing)/page.tsx` during the
+adversarial pass. Logged so the exception is visible rather than assumed.
+
+> Gap noted, not filled: this ledger has no promotion decision for **Cycle 5** or **Cycle 6**. The
+> eight kickoff-lint gates ran across both. Their evidence is unrecorded and cannot be
+> reconstructed here honestly, so it is not being back-filled — only flagged.

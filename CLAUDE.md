@@ -60,10 +60,20 @@
   (ADR-0054). Resolution order + paths → `.claude/rules/lanes.md`. Don't inline it here.
 - New build? Start with `/arc-kickoff` — PLAN.md + phases-by-risk + PROGRESS.md BEFORE any code.
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
+- **"Tests green" means green on CI. Never run a suite on this box** — and read per-JOB conclusions,
+  not the watcher's exit code → `.claude/rules/testing.md` § where tests run.
 - Offline-first: every external dependency gets an interface + fake + real impl.
 - A gate/lint/parser is NOT done until an adversarial construct-a-breaking-input pass has run
   against it and the found holes are fixed + pinned as fixtures (council v2+v3: 43 real holes
   in code that looked correct and passed its own tests). Mandatory verification, not review.
+  **The pass attacks the TEST that protects the rule, not only the rule** — Cycle 7's propose-only
+  guard was a grep that a mutant module (overwriting the canonical file, deleting the champion,
+  committing, spawning a deploy) walked straight past; the mutant IS the negative control.
+  **And the attacker's prompt carries the lane's running list of already-fixed defects**, with the
+  instruction to check each one in every OTHER file: "validate one read, compare another" was
+  closed in `verdict.mjs` and left open in `lineage.mjs` one phase later — the second twin-fix
+  recurrence in two days, after the written "grep the pattern, not the file" rule failed to take.
+  A fix is not applied until it has been attacked somewhere it was never made.
 - **That pass is TWO fresh agents with different surfaces, not one generalist** — one on the
   decision logic, one on the shell/OS boundary. Cycle 6 ran 7 passes for 77 real holes, and
   where two attacked one gate they shared the root cause and almost none of the findings. A
