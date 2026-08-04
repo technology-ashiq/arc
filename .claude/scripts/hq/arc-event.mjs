@@ -27,6 +27,7 @@ import {
 } from "./lib/canonical.mjs";
 import { validateEvent } from "./lib/validate.mjs";
 import { experimentIdem, isExperimentKind } from "./lib/validate-experiment.mjs";
+import { leadsIdem, isLeadsKind } from "./lib/validate-leads.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
@@ -100,6 +101,12 @@ function safeExperimentIdem(kind, payload, venture, supersedes) {
   try { return experimentIdem(kind, payload, venture, supersedes); } catch { return null; }
 }
 
+// Same shape for the leads pipeline kinds (ADR-0400). Null on a malformed payload so the
+// operator sees the real field error from validateEvent rather than a hashing stack trace.
+function safeLeadsIdem(kind, payload) {
+  try { return leadsIdem(kind, payload); } catch { return null; }
+}
+
 // ---------- event construction ----------
 function synthesize(kind, flags, { deriveIdem }) {
   const payload = flags["payload-file"]
@@ -144,7 +151,21 @@ function synthesize(kind, flags, { deriveIdem }) {
   const ms = nowMs();
   const contentPre = `${actor}|${venture}|${kind}|${runId}|${outcome}|${canonicalize(payload)}`;
   let idem;
-  if (isExperimentKind(kind)) {
+  if (isLeadsKind(kind)) {
+    // Identical treatment to the experiment kinds, for the identical reason (ADR-0400):
+    // a pipeline receipt is a LIFECYCLE FACT with a declared identity. One lead is researched
+    // once per campaign; touch 2 to one lead is one receipt. Time is deliberately NOT in the
+    // preimage -- a doubled `outreach.sent` for one touch is a real double-send and must
+    // collide rather than land twice and quietly free a cap slot.
+    //
+    // The caller idem is REFUSED (anti-preclaim): the emit path otherwise honours --idem, so
+    // without this an attacker could pre-claim a real receipt's stable key with a decoy
+    // payload. The real receipt then collides on DUP_IDEM and is silently lost -- and a cap
+    // derived from receipts counts one fewer send than actually happened.
+    if (flags.idem !== undefined)
+      throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
+    idem = safeLeadsIdem(kind, payload) ?? sha256Hex(`${contentPre}|${ms}`);
+  } else if (isExperimentKind(kind)) {
     if (flags.idem !== undefined)
       throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
     // A malformed payload cannot produce an idem at all; let validateEvent report the real

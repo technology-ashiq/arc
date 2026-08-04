@@ -1,0 +1,6 @@
+{
+  "spf": true,
+  "dkim": true,
+  "dmarc": true,
+  "warmup_days": null
+}

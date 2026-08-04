@@ -137,6 +137,15 @@ export function formatIst(ms) {
   );
 }
 
+// The one IST timestamp grammar. It lived as a private `TS_RE` in validate.mjs until leads
+// (ADR-0400) needed the SAME shape for its payload `*_at` fields -- and this repo's standing
+// rule is that a copied regex is a regex that drifts (retro-log 2026-07-22). So it moved here,
+// the module both validators already import, and neither re-declares it.
+//
+// Payload timestamps share the event `ts` grammar deliberately: leads concatenates them into
+// total-preimage idems (ADR-0400), so two spellings of one instant would be two idems.
+export const IST_TS_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,9})?\+05:30$/;
+
 // The day a ts belongs to is simply its own local date -- ts is already in +05:30.
 export function dayOf(ts) {
   const day = String(ts).slice(0, 10);

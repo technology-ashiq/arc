@@ -1,0 +1,11 @@
+{
+  "campaign": "pilot-fake",
+  "geography": "IN",
+  "segment": "solo advocates and 2-10 staff firms",
+  "practice_area": "commercial litigation",
+  "why_they_buy": "matter tracking breaks down past ~5 concurrent matters",
+  "disqualifiers": [
+    "in-house teams",
+    "firms above 25 staff"
+  ]
+}

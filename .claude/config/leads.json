@@ -1,0 +1,21 @@
+{
+  "_note": "Non-secret, tracked config. The store path is NEVER here — it resolves at runtime from ARC_LEADS_STORE with an os.homedir() default, because a personal filesystem path committed to a future-public repo is itself a leak (ADR-0410).",
+  "_sending_domain_note": "Empty is the HONEST value: no dedicated cold-outbound domain exists yet, and preflight REFUSES on it rather than passing vacuously. Filling this in is Phase-3 gate row 2, which costs 2-4 calendar weeks of warm-up (ADR-0413).",
+  "sending_domain": "",
+  "product_domains": ["lexos.app"],
+  "dkim_selector": "default",
+  "warmup_log_path": "",
+  "seed_evidence_path": "",
+  "caps": {
+    "per_ist_day": 20,
+    "per_ist_day_ceiling": 20,
+    "touches_per_lead": 2,
+    "touches_per_lead_ceiling": 2,
+    "rolling_window_days": 7,
+    "send_window_ist": { "days": [1, 2, 3, 4, 5], "start": "09:30", "end": "18:00" }
+  },
+  "below_bar": {
+    "min_cited_facts": 2,
+    "similarity_threshold": 0.7
+  }
+}
