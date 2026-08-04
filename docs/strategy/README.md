@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-03, leads plan added)
+## File map & status (updated 2026-08-04, absorb + executor briefs added)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (22 files) | **ACTIVE — the operational layer** | Kickoff-ready: 10 full PLANs + 11 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 10 full PLANs + 13 BRIEFs + ordering/triggers in `plans/README.md` |
 | `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -102,6 +102,24 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     if leads kicks off before growth, PLAN-leads' LEA-I ruling may take that obligation
     (deviation to be recorded at that kickoff).** `BRIEF-leads.md` superseded → moved
     to `docs/archive/`.
+12. **2026-08-04:** `plans/BRIEF-absorb.md` + `plans/BRIEF-executor.md` added (drafted
+    in a Cowork session, owner-approved; both **sleeping on pull-triggers**). **absorb**
+    = the technique refinery: study external agents/tools **read-only** → extraction
+    report (ABSORB technique / INTEGRATE infra / ROUTE model / SKIP data-moat matrix) →
+    arc-native rebuild from an allowlist → A/B in the `evidence/planner-bench/` PLANOFF
+    format → propose-only adopt/retire + a ≤12-entries-per-lane toolbox registry. NEW
+    lane; claims the next free ADR century per `PORTFOLIO.md`; its cycle also lands the
+    PLAN-develop §7.1 team-leader addendum (its REQ-5 — EVO-H0 "client's cycle"
+    precedent) and the owner-judge receipt grammar (ABS-D) that bench later inherits.
+    **executor** = agent-runtime drivers (Hermes-Agent/OpenClaw-class) as ENG-D
+    engine-lane drivers — L1-drafts action cap, own-credentials isolation with the
+    exit-5 data boundary, `run.completed` fingerprints, and the `engine/router.yaml`
+    delta (`cap:`/`judge:`/`hosted:` fields on runtime rows) as its REQ-4 in ONE
+    reviewed diff; kickoff's **first act** = a one-paragraph ADR-0069 amendment (the
+    router header's own rule for routing questions the policy doesn't yet answer).
+    Decisions ABS-A…F / EXE-A…E named as letters; real ADR numbers at kickoff from the
+    owning lane's century band. Recommended order: absorb first — its A/B evidence is
+    the receipt that fires executor's trigger.
 
 ## Provenance
 

@@ -44,6 +44,8 @@
 | — | chat (HQ MCP) | `BRIEF-chat-mcp.md` | Pull: dashboard live + conversational demand |
 | — | policy engine | `BRIEF-policy.md` | Pull: ≥3 kinds at L2 — **required before scheduler** |
 | — | scheduler | `BRIEF-scheduler.md` | Pull: first L3 process · policy engine is a hard prereq |
+| — | absorb v1 · the technique refinery | `BRIEF-absorb.md` | Pull: a task class arc runs demonstrably **loses** to an external agent's approach (receipted A/B / PLANOFF evidence) — or a develop Capability Proposal returns "technique, not artifact" (added 2026-08-04). NEW lane at kickoff — claims the next free ADR century per `PORTFOLIO.md`. Its cycle also lands the PLAN-develop team-leader addendum (REQ-5) and the owner-judge receipt grammar (ABS-D) that bench later inherits |
+| — | executor · agent-runtime driver | `BRIEF-executor.md` | Pull: a **receipted need** for a capability no current driver has (Capability Proposal / absorb INTEGRATE verdict / pilot evidence) — added 2026-08-04. Engine-lane work under the live ENG-D contract (prereq "engine v1 shipped" MET — C6 closed 2026-08-03); kickoff's first act = one-paragraph ADR-0069 amendment; router.yaml delta is its REQ-4. L1-drafts cap until the policy engine wakes |
 | — | trader sandbox | `BRIEF-trader.md` | Pull: monthly revenue + Ashiq's written opening — **last** |
 
 **Full PLANs** (the 10 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
