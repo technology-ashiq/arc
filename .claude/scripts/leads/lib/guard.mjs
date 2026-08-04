@@ -21,6 +21,25 @@ import { existsSync, writeFileSync, readFileSync, unlinkSync, openSync, closeSyn
 import { join } from "node:path";
 import { istDay, inSendWindow, withinRollingWindow, loadCaps, assertNoCapOverrides } from "./caps.mjs";
 import { unresolvedIntents } from "./journal.mjs";
+import { leadIdsAllVersions } from "./store.mjs";
+
+// The dossier holds the email; this function is the only place in the guard that touches it,
+// and nothing downstream ever receives it. Without this, `state.suppressed.has(lead_id)`
+// checked ONE id -- so after a key rotation every person who unsubscribed under the previous
+// key became contactable again, which is the single worst thing this system can do.
+//
+// Returns null when it cannot resolve (no dossier, no email, or an id that does not belong to
+// this store). The caller treats null as a REFUSAL, never as "no suppression found".
+function resolveKeyringIds(store, leadId) {
+  try {
+    const p = join(store.dir, "dossiers", `${leadId}.json`);
+    if (!existsSync(p)) return null;
+    const email = JSON.parse(readFileSync(p, "utf8")).email;
+    if (!email) return null;
+    const ids = leadIdsAllVersions(store, email);
+    return ids.includes(leadId) ? ids : null;
+  } catch { return null; }
+}
 
 export class GuardRefusal extends Error {
   constructor(step, message) { super(message); this.name = "GuardRefusal"; this.step = step; }
@@ -200,6 +219,11 @@ export function guardSend({ events, store, draft, now, config }) {
   assertNoCapOverrides();
   const caps = loadCaps(config);
   const { campaign, lead_id, touch_n, draft_sha, approved_sha } = draft;
+  // Every id this address could EVER have had. RESOLVED HERE, from the store, and never taken
+  // from the caller: a caller-supplied list is a list that can be short, and a SHORT list is
+  // exactly the rotation hole wearing a fix's clothes (a probe passing only the current id
+  // sent to an unsubscriber). The guard owns the check, so no call site can weaken it.
+  const allIds = resolveKeyringIds(store, lead_id);
   const state = deriveState(events, { campaign });
   const lifetime = [...state.perDay.values()].reduce((a, b) => a + b, 0);
 
@@ -245,8 +269,11 @@ export function guardSend({ events, store, draft, now, config }) {
 
   // 4. suppression — checked across EVERY key version, so a rotation cannot un-suppress
   //    someone who asked to be forgotten (ADR-0400's keyring).
-  if (state.suppressed.has(lead_id))
-    throw new GuardRefusal("suppression", `lead is on the suppression ledger — unsubscribed, bounced, or manually suppressed. This survives across campaigns and dossier deletion.`);
+  if (!allIds)
+    throw new GuardRefusal("suppression", `could not resolve this lead's id across the store keyring (missing dossier, missing email, or a lead from another store) — refusing rather than checking a single id, because a key rotation would then miss a suppression made under the previous key (ADR-0400).`);
+  const hit = allIds.find((id) => state.suppressed.has(id));
+  if (hit)
+    throw new GuardRefusal("suppression", `lead is on the suppression ledger${hit === lead_id ? "" : ` under a PREVIOUS key version (${hit.slice(0, 20)}...)`} — unsubscribed, bounced, or manually suppressed. This survives across campaigns, key rotations and dossier deletion.`);
 
   // 5. reply-stop. This is the TOCTOU case: a reply recorded AFTER approval permanently
   //    blocks the send that approval authorized.

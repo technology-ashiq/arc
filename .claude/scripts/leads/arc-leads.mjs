@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, writeFileSync, readdirSync, readFileSync, rmSync
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { initStore, openStore, leadId, fingerprint, StoreError, storePath, STORE_FILE_MODE } from "./lib/store.mjs";
+import { initStore, openStore, leadId, leadIdsAllVersions, fingerprint, StoreError, storePath, STORE_FILE_MODE, STORE_DIR_MODE } from "./lib/store.mjs";
 import { lintCandidates } from "./lib/research-lint.mjs";
 import { source, verifier, ProviderError, PROVIDER_EXIT } from "./lib/deps.mjs";
 import { preflight, PREFLIGHT_REFUSED } from "./lib/preflight.mjs";
@@ -102,7 +102,9 @@ async function cmdResearch(icpPath) {
   if (corpusWarning) console.error(`arc-leads: WARNING — ${corpusWarning}`);
 
   const dossierDir = join(store.dir, "dossiers");
-  mkdirSync(dossierDir, { recursive: true });
+  // 0700 / 0600, from the store's own constants. These two writes are the ones store.mjs
+  // names in its comment as having forgotten them -- and they still had.
+  mkdirSync(dossierDir, { recursive: true, mode: STORE_DIR_MODE });
   const fp = fingerprint(store);
 
   for (const a of accepted) {

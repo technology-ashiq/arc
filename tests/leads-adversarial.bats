@@ -264,9 +264,74 @@ const refuse = (events, draft=base, now=NOW, st=store) => { try { guardSend({eve
   [[ "$output" == *"test-only clock door"* ]] || { echo "reached the wrong error: $output"; false; }
 }
 
-@test "this file registers the 26 tests it declares" {
+# ---------- key rotation vs the suppression ledger ----------
+#
+# The guard checked ONE lead_id against the suppression set while `leadIdsAllVersions` sat
+# unused -- called nowhere in src, only by a test that asserted the KEYRING retained v1 and
+# never that the guard consulted it. So after a rotation, everyone who unsubscribed under the
+# previous key became contactable again: the single worst thing this system can do, and
+# verbatim the outcome store.mjs says additive rotation exists to prevent.
+#
+# The resolution now happens INSIDE the guard, from the store, because a caller-supplied list
+# is a list that can be short -- and a short list is the same hole wearing a fix.
+@test "a lead suppressed under an old key is still refused after a rotation" {
+  run _g "$PRELUDE
+    const {initStore, openStore, leadId, rotateSecret} = await import('./.claude/scripts/leads/lib/store.mjs');
+    process.env.ARC_LEADS_STORE = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'rot'));
+    initStore(); let st = openStore();
+    const EMAIL = 'adv@firm.example.com';
+    const v1 = leadId(st, EMAIL);
+    const ev = [{kind:'lead.suppressed', payload:{lead_id:v1, reason:'unsubscribe', suppressed_at:NOW}}];
+    rotateSecret(); st = openStore();
+    const v2 = leadId(st, EMAIL);
+    fsx.mkdirSync(pathx.join(st.dir,'dossiers'), {recursive:true});
+    fsx.writeFileSync(pathx.join(st.dir,'dossiers', v2 + '.json'), JSON.stringify({lead_id:v2, email:EMAIL}));
+    const d = {campaign:'pilot', lead_id:v2, touch_n:1, draft_sha:SHA, approved_sha:SHA};
+    console.log((v1 === v2 ? 'IDS-DID-NOT-ROTATE ' : '') + refuse(ev, d, NOW, st));"
+  [[ "$output" == *"suppression"* ]]
+  [[ "$output" != *"IDS-DID-NOT-ROTATE"* ]]
+}
+
+@test "a caller supplied short id list cannot weaken the suppression check" {
+  run _g "$PRELUDE
+    const {initStore, openStore, leadId, rotateSecret} = await import('./.claude/scripts/leads/lib/store.mjs');
+    process.env.ARC_LEADS_STORE = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'rot2'));
+    initStore(); let st = openStore();
+    const EMAIL = 'adv@firm.example.com';
+    const v1 = leadId(st, EMAIL);
+    const ev = [{kind:'lead.suppressed', payload:{lead_id:v1, reason:'unsubscribe', suppressed_at:NOW}}];
+    rotateSecret(); st = openStore();
+    const v2 = leadId(st, EMAIL);
+    fsx.mkdirSync(pathx.join(st.dir,'dossiers'), {recursive:true});
+    fsx.writeFileSync(pathx.join(st.dir,'dossiers', v2 + '.json'), JSON.stringify({lead_id:v2, email:EMAIL}));
+    const d = {campaign:'pilot', lead_id:v2, touch_n:1, draft_sha:SHA, approved_sha:SHA, lead_ids_all_versions:[v2]};
+    console.log(refuse(ev, d, NOW, st));"
+  [[ "$output" == *"suppression"* ]]
+}
+
+# A lead the guard cannot resolve against the keyring is REFUSED, never waved through: an
+# unresolvable id means the suppression check could not run, and "could not check" must never
+# read as "found nothing".
+@test "a lead with no dossier is refused rather than checked against one id" {
+  run _g "$PRELUDE
+    const {initStore, openStore, leadId} = await import('./.claude/scripts/leads/lib/store.mjs');
+    process.env.ARC_LEADS_STORE = fsx.mkdtempSync(pathx.join(osx.tmpdir(), 'rot3'));
+    initStore(); const st = openStore();
+    const id = leadId(st, 'nobody@firm.example.com');
+    console.log(refuse([], {campaign:'pilot', lead_id:id, touch_n:1, draft_sha:SHA, approved_sha:SHA}, NOW, st));"
+  [[ "$output" == *"suppression"* ]]
+}
+
+# store.mjs exports the modes precisely so the CLI cannot forget them -- and its own comment
+# named the dossier and rejected.jsonl writes as having forgotten them. They still had.
+@test "the dossier directory and its files carry the store modes" {
+  run grep -c "STORE_DIR_MODE\|STORE_FILE_MODE" "$ARC_ROOT/.claude/scripts/leads/arc-leads.mjs"
+  [ "$output" -ge 3 ] || { echo "the CLI writes store files without the exported modes: $output"; false; }
+}
+
+@test "this file registers the 30 tests it declares" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 26 ] || { echo "declared $declared, expected 26"; false; }
+  [ "$declared" -eq 30 ] || { echo "declared $declared, expected 30"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }
