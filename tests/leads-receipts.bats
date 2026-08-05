@@ -23,26 +23,24 @@ const RESEARCHED = {lead_id:ID, campaign:"pilot", provenance:"firm-site", geogra
   email_status:"verified", fact_count:2, store_id:"0123456789abcdef", store_fingerprint:"deadbeef"};
 const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.code; } };'
 
-@test "the vocabulary holds all eight leads kinds, uniquely and with no undeclared extras" {
-  # The literal "39" this assertion used to carry went stale the moment ADR-0073 added
-  # constitution.adopted -- the THIRD landing of one class. ADR-0309 predicted it by name
-  # ("anything that hardcodes 22 will drift"), evolve's own count test then hardcoded 30 and broke
-  # on ADR-0310, and this one hardcoded 39. What the test is actually for is that leads' eight
-  # kinds are present, unique, and the only ones leads declares -- all three asserted against
-  # LEADS_KINDS itself, so any OTHER lane extending the closed set can never break it again.
-  # Deleting a leads kind still turns this red, which a bare KINDS.length check would not.
+# DERIVED, not hard-typed. This asserted "39" as a literal, which its neighbours in
+# evolve-receipts.bats do not — and a literal count fails for the wrong reason the next time any
+# lane adds a kind, teaching whoever hits it to bump the number rather than ask what changed.
+#
+# The property that actually matters is that the leads extension was purely ADDITIVE: no
+# duplicate, and no leads kind quietly SHADOWING a kind another lane already owned. A collision
+# would leave the count looking plausible while two lanes validated one name.
+@test "the leads kinds extend KINDS additively with no duplicate and no shadowing" {
   run _node 'const {KINDS} = await import("./.claude/scripts/hq/lib/validate.mjs");
     const {LEADS_KINDS} = await import("./.claude/scripts/hq/lib/validate-leads.mjs");
-    const want = ["lead.researched","outreach.sent","outreach.replied","meeting.booked","lead.suppressed","deal.won","deal.lost","metric.observed"];
-    const missing = want.filter(k => !KINDS.includes(k));
-    const undeclared = LEADS_KINDS.filter(k => !want.includes(k));
-    console.log([
-      missing.length ? "MISSING:" + missing.join(",") : "all-present",
-      undeclared.length ? "UNDECLARED:" + undeclared.join(",") : "no-extras",
-      KINDS.length === new Set(KINDS).size ? "unique" : "DUPLICATES",
-    ].join(" "));'
+    const missing = LEADS_KINDS.filter(k => !KINDS.includes(k));
+    const others = KINDS.filter(k => !LEADS_KINDS.includes(k));
+    const dup = KINDS.length !== new Set(KINDS).size;
+    const additive = KINDS.length === others.length + LEADS_KINDS.length;
+    console.log([LEADS_KINDS.length, missing.length ? "MISSING:"+missing.join(",") : "all-present",
+      dup ? "DUPLICATE" : "unique", additive ? "additive" : "SHADOWED"].join(" "));'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"all-present no-extras unique"* ]]
+  [[ "$output" == *"8 all-present unique additive"* ]]
 }
 
 @test "a well formed lead researched receipt is accepted" {

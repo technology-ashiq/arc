@@ -129,12 +129,94 @@ const GOOD = {sending_domain:"outreach.example.net", product_domains:["lexos.app
   [[ "$output" == *"warmup"* ]]
 }
 
-@test "this file registers the 16 tests it declares" {
+# ---------- REQ-07: the seed-inbox smoke, its own gate (Phase 02) ----------
+#
+# `seed_evidence_path` sat in the committed config with NO reader anywhere. These tests are
+# the reader's contract. REQ-07 is deliberately NOT folded into preflight() — a gate that
+# fails for reasons outside the question it asks has been given two jobs, and folding it in
+# made two REQ-00 tests above fail for a REQ-07 reason. `arc-leads preflight` composes both.
+SIMPORT='const {seedSmokeFinding, SEED_EVIDENCE_MAX_AGE_DAYS} = await import("./.claude/scripts/leads/lib/preflight.mjs");
+const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seed"));
+const at = (daysAgo) => new Date(Date.now() - daysAgo * 86400000).toISOString();
+const FULL = {mailboxes: ["gmail-seed", "outlook-seed"], inbox_placement: true, auth_headers: true,
+  unsubscribe: true, reply_ingested: true, bounce_ingested: true};
+const write = (obj) => { const p = path.join(dir, "seed.json"); fs.writeFileSync(p, JSON.stringify(obj)); return p; };
+const verdict = (p) => { const f = seedSmokeFinding(p); return (f.ok ? "PASS " : "REFUSED ") + f.rule; };'
+
+@test "REQ-07 refuses when no seed evidence path is configured" {
+  run _node "$SIMPORT console.log(verdict(''));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED seed-smoke"* ]]
+}
+
+@test "REQ-07 accepts dated fresh evidence across two mailboxes" {
+  run _node "$SIMPORT console.log(verdict(write({...FULL, dated: at(2)})));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"PASS seed-smoke"* ]]
+}
+
+@test "REQ-07 refuses evidence older than the limit" {
+  run _node "$SIMPORT console.log(verdict(write({...FULL, dated: at(SEED_EVIDENCE_MAX_AGE_DAYS + 1)})));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED"* ]]
+}
+
+# Undated is the spoof this clause exists to close: a file that cannot be shown to be fresh is
+# indistinguishable from evidence produced before the last DNS change.
+@test "REQ-07 refuses undated evidence rather than trusting it" {
+  run _node "$SIMPORT console.log(verdict(write({...FULL})));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED"* ]]
+}
+
+@test "REQ-07 refuses forward dated evidence" {
+  run _node "$SIMPORT console.log(verdict(write({...FULL, dated: at(-3)})));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED"* ]]
+}
+
+@test "REQ-07 refuses a single mailbox and unreadable evidence" {
+  run _node "$SIMPORT const one = verdict(write({...FULL, dated: at(1), mailboxes: ['only-gmail']}));
+    const p = path.join(dir, 'broken.json'); fs.writeFileSync(p, 'not json at all');
+    console.log(one + ' | ' + verdict(p));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED seed-smoke | REFUSED seed-smoke"* ]]
+}
+
+# An ABSENT clause is a FAILED clause. Asserted one clause at a time, so a rule that checks
+# only the first key in the list cannot pass this.
+@test "REQ-07 refuses when any single clause is absent" {
+  run _node "$SIMPORT const keys = ['inbox_placement', 'auth_headers', 'unsubscribe', 'reply_ingested', 'bounce_ingested'];
+    const results = keys.map((k) => { const ev = {...FULL, dated: at(1)}; delete ev[k]; return verdict(write(ev)); });
+    const passed = results.filter((r) => r.startsWith('PASS'));
+    console.log(results.length + ' clauses dropped, ' + passed.length + ' still passed');"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"5 clauses dropped, 0 still passed"* ]]
+}
+
+
+# `Array.isArray` plus `length >= 2` accepted the same mailbox listed twice, and even
+# `[null, 0]`. This is REQ-07, the gate that decides whether a real campaign may start, and
+# "two mailboxes" is the clause's entire content -- the point is provider diversity.
+@test "REQ-07 refuses duplicate or empty mailbox entries" {
+  run _node "$SIMPORT const dup   = verdict(write({...FULL, dated: at(1), mailboxes: ['seed@a.example.net', 'seed@a.example.net']}));
+    const nulls = verdict(write({...FULL, dated: at(1), mailboxes: [null, 0]}));
+    const blank = verdict(write({...FULL, dated: at(1), mailboxes: ['  ', 'seed@a.example.net']}));
+    const good  = verdict(write({...FULL, dated: at(1)}));
+    console.log([dup, nulls, blank, good].join(' | '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Three refusals AND the positive control -- a clause that refused everything would satisfy
+  # the negatives on its own.
+  [[ "$output" == *"REFUSED seed-smoke | REFUSED seed-smoke | REFUSED seed-smoke | PASS seed-smoke"* ]]
+}
+
+@test "this file registers the 24 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 16 ] || { echo "declared $declared, expected 16"; false; }
+  [ "$declared" -eq 24 ] || { echo "declared $declared, expected 24"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

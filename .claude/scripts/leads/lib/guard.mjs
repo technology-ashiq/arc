@@ -138,7 +138,12 @@ export function deriveState(events, { campaign }) {
     if (e.kind === "lead.suppressed") suppressed.add(p.lead_id);
     else if (e.kind === "outreach.replied") {
       replied.add(p.lead_id);
-      if (p.triage_class === "bounce") bounces++;
+      // BOTH terminal classes self-suppress from the reply receipt alone. `unsubscribe` did
+      // and `bounce` did not, in adjacent lines (D6). ingestReply emits an explicit
+      // lead.suppressed for both, but its own header documents a crash window between the
+      // receipt and its consequences — land in it on a bounce and a confirmed-dead address
+      // stays sendable while the campaign counts the bounce against itself.
+      if (p.triage_class === "bounce") { bounces++; suppressed.add(p.lead_id); }
       if (p.triage_class === "unsubscribe") suppressed.add(p.lead_id);
     } else if (e.kind === "outreach.sent") {
       if (!touches.has(p.lead_id)) touches.set(p.lead_id, []);
@@ -149,11 +154,24 @@ export function deriveState(events, { campaign }) {
       const d = istDay(p.submitted_at);
       perDay.set(d, (perDay.get(d) || 0) + 1);
     } else if (
-      // Scoped and TYPED. The first version stringified the entire payload of every
-      // incident.raised on the spine and regexed it, so an incident from another lane whose
-      // text merely mentioned "no complaints so far" froze every leads campaign -- and the
-      // clearance hole above then un-froze it with an unrelated approval.
-      e.kind === "incident.raised" && p.module === "leads" && p.campaign === campaign && p.kind === "spam-complaint"
+      // TYPED, and scoped to the leads module — but NOT to one campaign.
+      //
+      // The asymmetry this fixes: bounces were counted across every campaign (the branch
+      // above has no campaign filter) while complaints were counted for this campaign only.
+      // So the MORE severe signal had the NARROWER blast radius, and a spam complaint in
+      // campaign A left campaign B sending from the same domain at full rate.
+      //
+      // The asset these breakers protect is the SENDING DOMAIN, and there is exactly one of
+      // those (ADR-0402). A complaint against it is a fact about it, not about whichever
+      // campaign happened to trigger it. Both signals are therefore module-wide, which is the
+      // safe direction: it freezes more, never less, and each campaign still clears its own
+      // freeze through its own inbox approval.
+      //
+      // The earlier version was scoped and typed to fix a different bug — a free-text regex
+      // over every incident on the spine froze leads on another lane's incident text. `module
+      // === "leads"` is what fixed that; `campaign === campaign` was collateral, and it is the
+      // part that had to go.
+      e.kind === "incident.raised" && p.module === "leads" && p.kind === "spam-complaint"
     ) complaints++;
   }
   return { suppressed, replied, touches, perDay, bounces, complaints, campaign };
@@ -162,11 +180,15 @@ export function deriveState(events, { campaign }) {
 // Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage
 // floor freezes on noise — HOLD is the honest small-n response, FREEZE the evidenced one.
 export function breakerState(state, lifetimeSends) {
-  if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded" };
-  if (state.bounces >= 2) return { level: "FROZEN", why: `${state.bounces} bounces in this campaign` };
+  if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded against the leads sending domain" };
+  if (state.bounces >= 2) // NOT "in this campaign". deriveState counts bounces across every leads campaign,
+    // because the asset these breakers protect is the one sending domain -- so an operator
+    // told "3 bounces in this campaign" against a campaign holding one goes looking for two
+    // that are not there.
+    return { level: "FROZEN", why: `${state.bounces} bounces across the leads sending domain` };
   if (lifetimeSends >= 50 && state.bounces / lifetimeSends >= 0.03)
-    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% at ${lifetimeSends} lifetime sends` };
-  if (state.bounces === 1) return { level: "HOLD", why: "the first bounce — sends pause until a human reviews the cause" };
+    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% across ${lifetimeSends} lifetime sends on this domain` };
+  if (state.bounces === 1) return { level: "HOLD", why: "the first bounce on this domain — sends pause until a human reviews the cause" };
   return { level: "OK", why: null };
 }
 
@@ -258,10 +280,24 @@ export function guardSend({ events, store, draft, now, config }) {
   const tn = Number(touch_n);
   if (!Number.isSafeInteger(tn) || tn < 1)
     throw new GuardRefusal("bad-touch", `touch_n ${JSON.stringify(touch_n)} is not a positive integer`);
+  // EVERY key version, here and in steps 5 and 6 below.
+  //
+  // Step 4 resolved the whole keyring and steps 3, 5 and 6 each checked ONE id — the same
+  // defect, in three adjacent branches, under a comment calling the single-id version "the
+  // single worst thing this system can do" (D6). After a rotation the receipts a person
+  // already has carry their v1 id while a fresh draft carries v2, so: a `no` or `later` reply
+  // did not stop the sequence, the already-sent check did not see the send that had gone out,
+  // and the rolling touch cap reset to zero. Only `unsubscribe` and `bounce` were protected,
+  // and only because they land in the keyring-wide suppression set.
+  //
+  // `allIds` is null when the lead cannot be resolved; step 4 refuses on that. Until then,
+  // fall back to the single id so the earlier steps still check what they can.
+  const idsToCheck = allIds || [lead_id];
+  const isThisLead = (id) => idsToCheck.includes(id);
   const alreadySent = events.some(
     (e) => e.kind === "outreach.sent" &&
       e.payload?.campaign === campaign &&
-      e.payload?.lead_id === lead_id &&
+      isThisLead(e.payload?.lead_id) &&
       Number(e.payload?.touch_n) === tn
   );
   if (alreadySent)
@@ -276,16 +312,20 @@ export function guardSend({ events, store, draft, now, config }) {
     throw new GuardRefusal("suppression", `lead is on the suppression ledger${hit === lead_id ? "" : ` under a PREVIOUS key version (${hit.slice(0, 20)}...)`} — unsubscribed, bounced, or manually suppressed. This survives across campaigns, key rotations and dossier deletion.`);
 
   // 5. reply-stop. This is the TOCTOU case: a reply recorded AFTER approval permanently
-  //    blocks the send that approval authorized.
-  if (state.replied.has(lead_id))
-    throw new GuardRefusal("reply-stop", `lead has already replied — the sequence stops itself. Approval authorized an attempt, not a send (ADR-0403).`);
+  //    blocks the send that approval authorized. Keyring-wide, like step 4 — a reply under a
+  //    previous key is still that person answering.
+  const repliedAs = idsToCheck.find((id) => state.replied.has(id));
+  if (repliedAs)
+    throw new GuardRefusal("reply-stop", `lead has already replied${repliedAs === lead_id ? "" : ` under a PREVIOUS key version (${repliedAs.slice(0, 20)}...)`} — the sequence stops itself. Approval authorized an attempt, not a send (ADR-0403).`);
 
   // 6. rolling touch cap — rolling, not a calendar week: a calendar week lets two touches
-  //    land Sunday and Monday and calls it two weeks.
-  const prior = (state.touches.get(lead_id) || []).filter((t) => withinRollingWindow(t, now, caps.rolling_window_days));
+  //    land Sunday and Monday and calls it two weeks. Touches are summed across every key
+  //    version, or a rotation would hand every lead a fresh allowance.
+  const allTouches = idsToCheck.flatMap((id) => state.touches.get(id) || []);
+  const prior = allTouches.filter((t) => withinRollingWindow(t, now, caps.rolling_window_days));
   // A touch recorded AFTER `now` means the clock moved backwards, not that the touch does not
   // count. Treating it as outside the window emptied the touch cap under any backward skew.
-  const future = (state.touches.get(lead_id) || []).filter((t) => Date.parse(t) > Date.parse(now));
+  const future = allTouches.filter((t) => Date.parse(t) > Date.parse(now));
   if (future.length)
     throw new GuardRefusal("clock-skew", `${future.length} touch(es) for this lead are stamped AFTER the current send time (${now}) — refusing rather than counting them as outside the rolling window.`);
   if (prior.length >= caps.touches_per_lead)

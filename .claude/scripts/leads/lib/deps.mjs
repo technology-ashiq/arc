@@ -11,7 +11,7 @@
 // cycle shipped three "contract-satisfying" drivers whose real code never ran, because the
 // fake returned before the real function was reached.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
 import { request as httpsRequest } from "node:https";
 import { resolveTxt as dnsResolveTxt } from "node:dns/promises";
@@ -80,6 +80,48 @@ const sourceReal = {
 };
 export const source = () => (usingFakes() ? sourceFake : sourceReal);
 
+// ---------- inbound replies (ADR-0405) ----------
+//
+// The webhook path lives behind the same interface as everything else, so that when a provider
+// is finally chosen the manual path does not have to be rewritten — it becomes the fallback it
+// was always documented as. Today `real` refuses, and `arc-leads ingest-reply --file` is the
+// only path that runs.
+//
+// `fetch()` returns RAW BYTES per message, never a parsed object. Parsing belongs to
+// replies.mjs, which is the module that carries the adversarial passes; a provider driver that
+// pre-parses would move parser-class work behind a boundary nothing attacks.
+// Kept in step with replies.mjs MAX_REPLY_BYTES. Duplicated rather than imported so this
+// module keeps no parser dependency, and the provider-contract suite asserts the two are
+// equal -- a constant copied without that assertion is a constant that drifts.
+export const INBOUND_MAX_BYTES = 1024 * 1024;
+
+const inboundFake = {
+  async fetch() {
+    const dir = pathResolve(fixtureDir(), "replies");
+    if (!existsSync(dir)) return [];
+    // The SAME ceiling as the other two ingest doors, and a case-insensitive extension match.
+    // This one read every file whole and left the limit to fire inside the parser -- after the
+    // allocation -- which is the identical defect fixed for `--file` and stdin, surviving in
+    // the adjacent branch. It is also the door that will carry provider bytes once one is bound.
+    return readdirSync(dir)
+      .filter((f) => f.toLowerCase().endsWith(".eml"))   // .EML exists on the case-insensitive legs
+      .sort()
+      .map((f) => {
+        const full = pathResolve(dir, f);
+        const size = statSync(full).size;
+        if (size > INBOUND_MAX_BYTES)
+          throw new ProviderError("refused", `inbound message ${f} is ${size} bytes; the limit is ${INBOUND_MAX_BYTES}`);
+        return { source: f, bytes: readFileSync(full) };
+      });
+  },
+};
+const inboundReal = {
+  async fetch() {
+    throw new ProviderError("config", "no inbound reply source is bound — the webhook path binds at Phase-3 entry (ADR-0405/0413). Until then use `arc-leads ingest-reply --file <path>`, which is the documented manual fallback and not a workaround");
+  },
+};
+export const inbound = () => (usingFakes() ? inboundFake : inboundReal);
+
 // ---------- sending provider ----------
 
 const providerFake = {
@@ -110,6 +152,37 @@ const providerFake = {
 let _submits = null;
 const fakeSubmits = () => (_submits ||= new Map());
 
+// The ack decision, EXTRACTED from the HTTPS callback so it can be tested directly rather than
+// mocked around. Testing it in place would need a TLS server with a self-signed cert and a
+// client willing to trust it — i.e. a test that proves something about a weakened client.
+//
+// This read `JSON.parse(buf)` and resolved on anything parseable, ignoring the status code
+// entirely, so a 500 whose body is `{"error":"overloaded"}` came back as an ACK. sendOne
+// writes the receipt on an ack: a cap slot and a journal resolution spent on a mail that was
+// never accepted, with the spine recording it as sent.
+//
+// 2xx only. 429 and 5xx are transport-class because they are the retryable ones and ADR-0411's
+// reconcile decides whether to retry; 4xx is a refusal, because retrying a malformed request
+// only repeats it.
+export function decodeProviderResponse(statusCode, body) {
+  const code = statusCode || 0;
+  const buf = String(body == null ? "" : body);
+  if (code < 200 || code >= 300) {
+    const kind = code === 429 || code >= 500 ? "transport" : "refused";
+    // The body is NOT echoed: a provider error body can quote the message it rejected,
+    // recipient address included, and this string reaches stderr and CI logs.
+    throw new ProviderError(kind, `provider returned HTTP ${code} (${buf.length} bytes of body, not echoed) — this is not an ack and no receipt is written`);
+  }
+  let parsed;
+  try { parsed = JSON.parse(buf); }
+  catch { throw new ProviderError("refused", `unparseable provider response (HTTP ${code})`); }
+  // A 2xx with no message id is not an ack either: the receipt's provider_message_id is what
+  // reconcile looks the send up by, and "" would make it unfindable forever.
+  if (!parsed || typeof parsed.provider_message_id !== "string" || !parsed.provider_message_id)
+    throw new ProviderError("refused", `provider returned HTTP ${code} with no provider_message_id — reconcile has nothing to look the send up by (ADR-0411)`);
+  return parsed;
+}
+
 // The REAL provider with no vendor bound. It is a thin HTTPS client and nothing more; the
 // point of it existing now is that the code-path test can reach its own catch block.
 const providerReal = {
@@ -120,8 +193,11 @@ const providerReal = {
       const req = httpsRequest(`${base}/send`, { method: "POST", timeout: 5000 }, (r) => {
         let buf = "";
         r.on("data", (d) => (buf += d));
+        // THE STATUS CODE DECIDES, and the body only then. The rule lives in
+        // decodeProviderResponse above, where a test can reach it without a TLS server.
         r.on("end", () => {
-          try { res(JSON.parse(buf)); } catch { rej(new ProviderError("refused", `unparseable provider response (${r.statusCode})`)); }
+          try { res(decodeProviderResponse(r.statusCode, buf)); }
+          catch (e) { rej(e); }
         });
       });
       req.on("timeout", () => { req.destroy(); rej(new ProviderError("transport", "provider timed out")); });
@@ -135,7 +211,9 @@ const providerReal = {
 };
 export const provider = () => (usingFakes() ? providerFake : providerReal);
 
+function fixtureDir() {
+  return process.env.LEADS_FIXTURE_DIR || pathResolve(process.cwd(), "tests/fixtures/leads");
+}
 function fixture(name) {
-  const root = process.env.LEADS_FIXTURE_DIR || pathResolve(process.cwd(), "tests/fixtures/leads");
-  return pathResolve(root, name);
+  return pathResolve(fixtureDir(), name);
 }
