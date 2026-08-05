@@ -138,6 +138,25 @@ const refuse = (events, draft=base, now=NOW, st=store) => { try { guardSend({eve
   [[ "$output" == *"17:00"* ]]
 }
 
+# A key named like a limit that NOTHING READS is worse than a rejected one. The shipped config
+# carried per_ist_day_ceiling and touches_per_lead_ceiling in the caps block, read nowhere:
+# an operator raising per_ist_day_ceiling to 100 got no error, no effect, and every reason to
+# believe the hard ceiling had moved. Hard ceilings live in code and no config key moves them.
+@test "an unknown key in the caps block is refused rather than ignored" {
+  run _g "$PRELUDE
+    try { loadCaps(cfg({caps:{per_ist_day_ceiling:100}})); console.log('ACCEPTED'); } catch (e) { console.log(e.code); }"
+  [[ "$output" == *"UNKNOWN_CAP_KEY"* ]]
+}
+
+# The negative control for the test above: the refusal must be about the KEY being unknown,
+# not about loadCaps refusing everything. A rule that rejects its own shipped config would
+# pass the assertion above while being catastrophically wrong.
+@test "the committed config still loads under the closed cap key set" {
+  run _g "$PRELUDE const c = loadCaps(); console.log([c.per_ist_day, c.touches_per_lead, c.rolling_window_days].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"20 2 7"* ]]
+}
+
 # ---------- complaint detection was an unscoped stringify+regex ----------
 
 @test "an unrelated incident does not freeze a leads campaign" {
@@ -349,9 +368,47 @@ const refuse = (events, draft=base, now=NOW, st=store) => { try { guardSend({eve
   [ "$output" -ge 3 ] || { echo "the CLI writes store files without the exported modes: $output"; false; }
 }
 
-@test "this file registers the 30 tests it declares" {
+
+# ---------- the complaint breaker is MODULE-wide, not campaign-scoped (Phase 02) ----------
+#
+# Bounces were counted across every campaign and complaints for one campaign only, so the MORE
+# severe signal had the NARROWER blast radius: a spam complaint in campaign A left campaign B
+# sending from the same domain at full rate, and there is exactly one sending domain.
+#
+# This test is the one that KILLS THE MUTANT. Both pre-existing complaint tests pass
+# `campaign: pilot`, which is the campaign under test, so restoring the campaign filter -- i.e.
+# undoing this change entirely -- passes both of them. Only a complaint raised against a
+# DIFFERENT campaign can tell the two behaviours apart.
+@test "a spam complaint in another campaign freezes this one" {
+  run _g "$PRELUDE
+    console.log(refuse([{kind:'incident.raised', payload:{module:'leads', campaign:'other-campaign', kind:'spam-complaint'}}]));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"campaign-state"* ]]
+}
+
+# The negative control, and it is what keeps the widening honest: the scope is the leads MODULE,
+# not the whole spine. An incident from another lane must still not freeze a leads campaign --
+# that was the original bug this scoping was introduced to fix, and it must stay fixed.
+@test "an incident from another module still does not freeze a leads campaign" {
+  run _g "$PRELUDE
+    console.log(refuse([{kind:'incident.raised', payload:{module:'evolve', campaign:'pilot', kind:'spam-complaint'}}]));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"ALLOWED"* ]]
+}
+
+# A cap-shaped key at the TOP level of the config was accepted silently: an operator who wrote
+# `per_ist_day: 500` outside the caps block got no error, no warning and no effect -- verbatim
+# the failure the closed key set exists to stop, surviving one scope up.
+@test "a cap key written at the top level of the config is refused" {
+  run _g "$PRELUDE
+    try { loadCaps(cfg({per_ist_day:500, caps:{per_ist_day:20}})); console.log('ACCEPTED'); } catch (e) { console.log(e.code); }"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"CAP_KEY_AT_TOP_LEVEL"* ]]
+}
+
+@test "this file registers the 35 tests it declares" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 30 ] || { echo "declared $declared, expected 30"; false; }
+  [ "$declared" -eq 35 ] || { echo "declared $declared, expected 35"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }

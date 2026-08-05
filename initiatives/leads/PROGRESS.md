@@ -85,13 +85,24 @@ plausibly ≤6 weeks away. Row 2 is the critical path and cannot be compressed.
 
 ## Now
 
-**Current position: Phase 01 CLOSED (2026-08-04).** Phases 00 and 01 are both closed with
-both adversarial surfaces run: **67 holes total**, every one found while CI was green.
+**Current position: Phase 02 IN PROGRESS (opened 2026-08-05).** Phases 00 and 01 are both
+closed with both adversarial surfaces run: **67 holes total**, every one found while CI was
+green. Phase 01 merged to `main` as `52a7a63` (PR #111); Phase 02 builds on
+`feat/leads-phase-02`, cut fresh from that merge.
 
-**Next step: Phase 02 — Replies.** Ingestion (`--file`/stdin, repo paths refused), the parser
+**Phase 02 — Replies.** Ingestion (`--file`/stdin, repo paths refused), the parser
 (parser-class, so it carries its own adversarial passes), triage classes to receipts, the
 calendar draft produced in the same run as its ingestion, and auto-stop wired to the Phase-01
 pre-send check.
+
+**Routed through `/arc-change` at phase start (2026-08-05), before any code:**
+
+| What | Where it landed |
+|---|---|
+| A reply's identity is its content, not its arrival time | **ADR-0414** — `outreach.replied` gains `reply_ref`; idem preimage becomes `campaign\|lead_id\|triage_class\|reply_ref` |
+| The coarse "expected failure first" line | phase-02 spec § Verification plan, now concrete |
+| The live-demo scenario | same |
+| Four findings the Phase-01 review deferred here | phase-02 spec § *Carried in from the Phase-01 review* |
 
 **Budget the adversarial passes properly.** Across two phases they have found 67 holes in code
 that CI called green, and the two surfaces have consistently shared almost nothing — which is

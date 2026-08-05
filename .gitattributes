@@ -48,3 +48,13 @@ tests/fixtures/develop/breaking/** -text
 # fixture directory whose cases attack at the byte level gets `-text` in the same commit that
 # creates it. OVERRIDES `* text=auto eol=lf`.
 tests/fixtures/engine/hostile/** -text
+
+# Cycle 8, leads Phase 02: reply fixtures. SIXTH occurrence, and this one is worse than the
+# five above -- here the bytes are not merely what the parser is attacked with, they ARE the
+# receipt's identity. ADR-0414 keys `outreach.replied` on sha256 of the raw bytes, so any eol
+# rewrite gives the same reply a different id on the Windows leg than on the ubuntu one, and
+# the idempotency the whole ADR exists to provide silently stops holding across platforms.
+# The corpus also carries deliberate CRLF and bare-LF cases whose whole point is the ending.
+# Applied in the same commit that creates the directory, per the rule above.
+tests/fixtures/leads/replies/** -text
+tests/fixtures/leads/replies-hostile/** -text

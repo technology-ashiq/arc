@@ -80,22 +80,46 @@ const stripWinPrefix = (s) =>
 // Case-fold only where the filesystem does. Folding on ubuntu would REJECT a legitimately
 // distinct path, which is its own bug.
 const CASE_INSENSITIVE_FS = process.platform === "win32" || process.platform === "darwin";
+
+// Win32 STRIPS trailing dots and spaces from every path component, so `C:\repo.\store` and
+// `C:\repo \store` both open `C:\repo\store`. `realpathSync.native` FAILS on those spellings
+// (libuv long-paths them, which disables exactly that normalisation), so `realOf` falls back
+// to the lexical string and the prefix comparison missed — a fifth bypass alongside the four
+// this header already lists. The store then landed in a directory that Explorer, `cmd` and
+// `git` all normalise away and cannot open, which means ADR-0410's delete-on-request purge,
+// spelling the path normally, would never find it either.
+const stripWinTrailers = (s) =>
+  process.platform === "win32" ? s.replace(/[. ]+(?=[\\/]|$)/g, "") : s;
+
 const cmpForm = (s) => {
-  const t = stripWinPrefix(s).replace(/[\\/]+$/, "");
+  const t = stripWinTrailers(stripWinPrefix(s)).replace(/[\\/]+$/, "");
   return CASE_INSENSITIVE_FS ? t.toLowerCase() : t;
 };
 
-export function assertOutsideRepo(repoRoot, p = storePath()) {
+// The containment TEST, separated from the store's refusal so that every other path-outside-
+// the-repo rule reuses this exact comparison instead of growing its own. Phase 02's
+// `ingest-reply --file` is the second caller, and a second hand-written comparison there would
+// have shipped all four bypasses above again — "validate one read, compare another" (D5) is
+// the defect class, and one function with two callers is what closes it.
+//
+// Returns the resolved real path alongside the verdict, because callers want to name the
+// resolved path in their refusal rather than the string the user typed.
+export function isInsideRepo(repoRoot, p) {
   const root = realOf(repoRoot);
-  const store = realOf(p);
+  const target = realOf(p);
   const r = cmpForm(root);
-  const s = cmpForm(store);
-  if (s === r || s.startsWith(r + sep) || s.startsWith(r + "/"))
+  const s = cmpForm(target);
+  return { inside: s === r || s.startsWith(r + sep) || s.startsWith(r + "/"), resolved: target, root };
+}
+
+export function assertOutsideRepo(repoRoot, p = storePath()) {
+  const { inside, resolved, root } = isInsideRepo(repoRoot, p);
+  if (inside)
     throw new StoreError(
       "STORE_INSIDE_REPO",
-      `store resolves to ${store}, which is inside the repository at ${root} — lead PII must never live where git can track or clean it (ADR-0410)`
+      `store resolves to ${resolved}, which is inside the repository at ${root} — lead PII must never live where git can track or clean it (ADR-0410)`
     );
-  return store;
+  return resolved;
 }
 
 // Canonical version only. `secret.v01` and `secret.v1` both parsed to 1, so `leadId(store,

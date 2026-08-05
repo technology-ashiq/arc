@@ -1,0 +1,284 @@
+// ingest.mjs — one reply, end to end (ADR-0405, ADR-0412, ADR-0414).
+//
+// The ordering here is the phase's whole safety argument and it is not rearrangeable:
+//
+//   read bytes    -- from a file OUTSIDE the repo, or stdin. Never argv.
+//   parse         -- replies.mjs; a refusal names the offset, never the content
+//   resolve lead  -- via the store keyring, so a reply to an address suppressed under an
+//                    older key still lands on the right lead
+//   persist reply -- store-side, `wx`, so re-ingesting the same bytes is a no-op
+//   receipt       -- outreach.replied, keyed on the reply's CONTENT (ADR-0414)
+//   consequences  -- suppression / meeting draft, in the SAME run as the ingestion
+//
+// "In the same run" is a design commitment, not a performance note. The design source asks for
+// a calendar reply within a 16:00-IST SLA; drafting at ingestion satisfies that by
+// construction in both webhook and manual mode, with no cutoff clock, no business-day
+// arithmetic and no public-holiday calendar — none of which this cycle could validate, Phase 3
+// being blocked. A deadline you cannot miss beats a deadline you measure.
+//
+// The receipt comes BEFORE the consequences on purpose. If the process dies between them, the
+// reply is on the spine and the sequence is already stopped (reply-stop keys on the receipt,
+// not on its class) — so the failure mode is a missing calendar draft, which a human notices,
+// rather than a mail sent to someone who replied, which nobody notices until it is public.
+
+import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { parseReply, ReplyParseError, MAX_REPLY_BYTES } from "./replies.mjs";
+import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } from "./store.mjs";
+import { writeMeetingDraft, meetingApprovalPayload, readCampaign } from "./drafts.mjs";
+import { leadsIdem } from "../../hq/lib/validate-leads.mjs";
+
+export class IngestRefusal extends Error {
+  constructor(step, message) { super(message); this.name = "IngestRefusal"; this.step = step; }
+}
+
+// ---------- reading the bytes ----------
+
+// A reply file inside the repository is refused for the same reason the store is (ADR-0410):
+// the repo is headed public, `git clean -xfd` deletes ignored files, and one `git add -f` is
+// permanent. Checked with store.mjs's OWN containment function — realpath'd, Windows prefixes
+// stripped, case-folded only where the filesystem folds — rather than a `startsWith` written
+// again here. The four bypasses that function survived are not worth re-discovering.
+export function readReplyFile(repoRoot, path) {
+  const p = String(path || "");
+  if (!p.trim()) throw new IngestRefusal("usage", "--file needs a path");
+  const { inside, resolved, root } = isInsideRepo(repoRoot, p);
+  if (inside)
+    throw new IngestRefusal(
+      "path",
+      `${resolved} is inside the repository at ${root} — reply files hold the lead's own words and their address, and must live outside the tree entirely (ADR-0410/0412). ` +
+        `Move it under the private store or any path outside the repo and re-run.`
+    );
+  if (!existsSync(resolved)) throw new IngestRefusal("path", `no such file: ${resolved}`);
+  // SIZE BEFORE READ. replies.mjs states "limits before work ... a hostile input cannot make
+  // us allocate first and refuse second" -- and both doors into it did exactly that. A 200 MiB
+  // file was fully read into memory and only then refused as TOO_LARGE, so the limit protected
+  // the parser and nothing else. stat is the check; the read never happens.
+  const size = statSync(resolved).size;
+  if (size > MAX_REPLY_BYTES)
+    throw new IngestRefusal("path", `${resolved} is ${size} bytes; the limit is ${MAX_REPLY_BYTES}. Refused before reading it, not after.`);
+  return readFileSync(resolved);
+}
+
+// stdin, read to completion as BYTES. `--file` and stdin are the only two doors, and both
+// hand over a Buffer: a string here would fold invalid UTF-8 onto U+FFFD and change the
+// reply's identity (ADR-0414).
+export async function readStdin(stream) {
+  const chunks = [];
+  let total = 0;
+  for await (const c of stream) {
+    const b = Buffer.isBuffer(c) ? c : Buffer.from(c);
+    total += b.length;
+    // A running count, checked per chunk. There is no file to stat here, so this is the only
+    // place the ceiling can bite -- and without it a pipe was unbounded, which is strictly
+    // worse than the file door it mirrors.
+    if (total > MAX_REPLY_BYTES)
+      throw new IngestRefusal("stdin", `stdin exceeded ${MAX_REPLY_BYTES} bytes; refusing mid-stream rather than buffering the rest`);
+    chunks.push(b);
+  }
+  return Buffer.concat(chunks);
+}
+
+// ---------- resolving whose reply it is ----------
+//
+// Every key version, newest first, and the FIRST id with a dossier wins. A single-version
+// lookup would fail to identify anyone researched before a rotation — and failing to identify
+// a reply means failing to stop the sequence, which is the same lead getting touch 2 after
+// they said no.
+export function resolveLead(store, address) {
+  for (const id of leadIdsAllVersions(store, address)) {
+    const p = join(store.dir, "dossiers", `${id}.json`);
+    if (!existsSync(p)) continue;
+    const d = JSON.parse(readFileSync(p, "utf8"));
+    return { lead_id: d.lead_id || id, campaign: d.campaign, dossier: d };
+  }
+  return null;
+}
+
+// The highest touch already sent to this lead in this campaign. Derived from receipts like
+// every other count in this system — a reply's `In-Reply-To` header is attacker-controlled and
+// is not consulted for anything that matters.
+export function lastTouchOf(events, campaign, leadId) {
+  let n = 0;
+  for (const e of events)
+    if (e.kind === "outreach.sent" && e.payload?.campaign === campaign && e.payload?.lead_id === leadId)
+      n = Math.max(n, Number(e.payload.touch_n) || 0);
+  return n || null;
+}
+
+// ---------- the reply record (store side) ----------
+//
+// Everything the spine may not hold: the address, the body, the headers we read. Written with
+// `wx`, so a second ingestion of the same bytes finds it already there and does not rewrite
+// it. The path is the reply_ref, which is the content hash, so "same bytes -> same path" is
+// arithmetic rather than a check.
+function persistReply(store, rec) {
+  const dir = join(store.dir, "replies");
+  mkdirSync(dir, { recursive: true, mode: STORE_DIR_MODE });
+  const p = join(dir, `${rec.reply_ref}.json`);
+  try {
+    writeFileSync(p, JSON.stringify(rec, null, 2) + "\n", { mode: STORE_FILE_MODE, flag: "wx" });
+    return { fresh: true };
+  } catch (e) {
+    if (e.code === "EEXIST") return { fresh: false };
+    throw e;
+  }
+}
+
+// ---------- the calendar draft ----------
+//
+// Assembled from a template plus the configured calendar link. No lead-specific text is
+// generated here: this reply goes to someone who already said yes, so ADR-0404's
+// personalization bar does not apply, and inventing a "personal" line for a warm lead is
+// exactly the slop that gate exists to stop.
+export function meetingBody({ calendarUrl }) {
+  return [
+    "Thanks for coming back to me — glad it is useful.",
+    "",
+    "Easiest is to pick a slot that suits you:",
+    `  ${calendarUrl}`,
+    "",
+    "If none of those work, tell me two or three times that do and I will make one of them work.",
+  ].join("\n");
+}
+
+// ---------- one reply, end to end ----------
+//
+// `emit` is injected rather than imported so that this module has no opinion about the spine
+// transport, and so a test can assert the exact receipts in the exact order without a spine.
+// No `repoRoot` parameter: the path rule belongs to readReplyFile, which is the only function
+// that ever sees a path. By the time bytes reach here there is nothing left to contain, and a
+// parameter that is accepted and ignored reads to the next caller as a check being performed.
+export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)" }) {
+  let parsed;
+  try {
+    parsed = parseReply(bytes);
+  } catch (e) {
+    if (e instanceof ReplyParseError)
+      // The path is added HERE, by the caller's layer, because the parser is never told it.
+      // The parser cannot leak a path it does not have, and this is the only place a path and
+      // a parse failure meet.
+      throw new IngestRefusal("parse", `${sourceLabel}: ${e.message}`);
+    throw e;
+  }
+
+  const who = resolveLead(store, parsed.address);
+  if (!who)
+    throw new IngestRefusal(
+      "unknown-lead",
+      `${sourceLabel}: reply ${parsed.reply_ref} is from an address with no dossier in this store (checked every key version). ` +
+        `The address is deliberately not printed. Open the file to see it — it is not going into a log.`
+    );
+
+  // A campaign whose record was minted under a different keyring cannot be reasoned about:
+  // its receipts carry ids derived from a secret this run does not have.
+  //
+  // Converted to an IngestRefusal rather than letting the DraftError fly. In a BATCH the
+  // caller catches refusals per reply and carries on; an unconverted error class escapes that
+  // loop and halts the run, so one lead whose campaign record is missing would stop every
+  // reply behind it from being ingested -- and a reply we fail to ingest is a sequence we
+  // fail to stop. The one most likely to be behind it is the unsubscribe.
+  try {
+    readCampaign(store, who.campaign);
+  } catch (e) {
+    throw new IngestRefusal("campaign", `${sourceLabel}: reply ${parsed.reply_ref} belongs to campaign "${who.campaign}" — ${e.message}`);
+  }
+
+  // ADR-0414 makes a re-ingest produce the SAME idem, which the spine then refuses as
+  // DUP_IDEM -- correctly, since the receipt is already recorded. But a refusal from the
+  // emitter is an ERROR to whatever called it, so the first version of this path turned the
+  // ordinary "did that run finish?" re-run into a crash on its second line, and never reached
+  // the calendar draft. The receipt layer was idempotent and the command was not.
+  //
+  // So: an emit whose idem is already on the spine is SKIPPED here, deterministically, from
+  // the fold this function was handed. The CLI keeps a second guard for the race (two
+  // processes, both past this check) -- belt and braces, because losing that race must be
+  // boring rather than an exception.
+  const onSpine = new Set(events.map((e) => e && e.idem).filter(Boolean));
+  const emitted = [];
+  const emitOnce = async (kind, payload) => {
+    if (onSpine.has(leadsIdem(kind, payload))) return { duplicate: true };
+    await emit(kind, payload);
+    emitted.push(kind);
+    return { duplicate: false };
+  };
+
+  const inReplyTo = lastTouchOf(events, who.campaign, who.lead_id);
+  const replyRec = {
+    reply_ref: parsed.reply_ref,
+    lead_id: who.lead_id,
+    campaign: who.campaign,
+    triage_class: parsed.triage_class,
+    matched_rule: parsed.matched,
+    address: parsed.address,      // PII — store only
+    body_text: parsed.body_text,  // PII — store only
+    ingested_at: now,
+    source: sourceLabel,
+    in_reply_to_touch: inReplyTo,
+  };
+  const { fresh } = persistReply(store, replyRec);
+
+  const payload = {
+    lead_id: who.lead_id,
+    campaign: who.campaign,
+    triage_class: parsed.triage_class,
+    ingested_at: now,
+    reply_ref: parsed.reply_ref,
+    ...(inReplyTo ? { in_reply_to_touch: inReplyTo } : {}),
+  };
+  const repliedEmit = await emitOnce("outreach.replied", payload);
+
+  const out = {
+    reply_ref: parsed.reply_ref,
+    lead_id: who.lead_id,
+    campaign: who.campaign,
+    triage_class: parsed.triage_class,
+    matched: parsed.matched,
+    fresh,
+    receipt_duplicate: repliedEmit.duplicate,
+    emitted,
+    suppressed: false,
+    meeting_ref: null,
+    meeting_created: false,
+  };
+
+  // Suppression, in the same run. `unsubscribe` is a request and `bounce` is a fact, and both
+  // end contact with that address — the reasons differ so the two receipts have distinct idems
+  // (ADR-0400) and a lead who bounces and later unsubscribes is not deduplicated into one.
+  if (parsed.triage_class === "unsubscribe" || parsed.triage_class === "bounce") {
+    await emitOnce("lead.suppressed", {
+      lead_id: who.lead_id,
+      campaign: who.campaign,
+      reason: parsed.triage_class === "unsubscribe" ? "unsubscribe" : "bounce",
+      suppressed_at: now,
+    });
+    out.suppressed = true;
+  }
+
+  // The calendar draft, in the same run as the ingestion that classified it.
+  if (parsed.triage_class === "interested") {
+    const calendarUrl = String(config?.calendar_url || "").trim();
+    if (!calendarUrl)
+      throw new IngestRefusal(
+        "no-calendar",
+        `${sourceLabel}: reply ${parsed.reply_ref} classified interested, but calendar_url is not configured — refusing rather than dropping a warm lead silently. ` +
+          `The receipt IS on the spine and the sequence is stopped; set calendar_url in the leads config and re-run this ingestion to mint the draft.`
+      );
+    const { created, rec } = writeMeetingDraft(store, {
+      campaign: who.campaign,
+      lead_id: who.lead_id,
+      reply_ref: parsed.reply_ref,
+      // Keyed on the LEAD, not the reply -- see writeMeetingDraft.
+      body: meetingBody({ calendarUrl }),
+      calendar_url: calendarUrl,
+    });
+    out.meeting_ref = rec.meeting_ref;
+    out.meeting_created = created;
+    // The inbox item is minted only with the draft. Re-emitting on a re-ingest would put a
+    // second approval for one meeting in front of the human, and two approvals for one thing
+    // is how the wrong one gets approved.
+    if (created) await emit("approval.requested", meetingApprovalPayload(rec));
+  }
+
+  return out;
+}
