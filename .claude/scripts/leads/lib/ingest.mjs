@@ -2,7 +2,8 @@
 //
 // The ordering here is the phase's whole safety argument and it is not rearrangeable:
 //
-//   read bytes    -- from a file OUTSIDE the repo, or stdin. Never argv.
+//   read bytes    -- from a file OUTSIDE the repo, from stdin, or from the ADR-0405
+//                    inbound interface. THREE doors, and never argv.
 //   parse         -- replies.mjs; a refusal names the offset, never the content
 //   resolve lead  -- via the store keyring, so a reply to an address suppressed under an
 //                    older key still lands on the right lead
@@ -25,7 +26,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from "no
 import { join } from "node:path";
 import { parseReply, ReplyParseError, MAX_REPLY_BYTES } from "./replies.mjs";
 import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } from "./store.mjs";
-import { writeMeetingDraft, meetingApprovalPayload, readCampaign } from "./drafts.mjs";
+import { writeMeetingDraft, meetingApprovalPayload, assertCampaignStore } from "./drafts.mjs";
 import { leadsIdem } from "../../hq/lib/validate-leads.mjs";
 
 export class IngestRefusal extends Error {
@@ -120,8 +121,26 @@ function persistReply(store, rec) {
     writeFileSync(p, JSON.stringify(rec, null, 2) + "\n", { mode: STORE_FILE_MODE, flag: "wx" });
     return { fresh: true };
   } catch (e) {
-    if (e.code === "EEXIST") return { fresh: false };
-    throw e;
+    if (e.code !== "EEXIST") throw e;
+    // A RE-CLASSIFICATION is refused, loudly, rather than half-applied.
+    //
+    // `wx` keeps the store record immutable and the idem includes triage_class, so
+    // re-ingesting identical bytes under an improved parser that returns a DIFFERENT class
+    // mints a second receipt on the spine while the store keeps the old one. Spine and store
+    // then disagree about one reply, and on a bounce reclassification that is bounces 1 -> 2,
+    // i.e. FROZEN. Two derivations of one value that disagree is D5, and the honest answer is
+    // that a reclassification is a `supersedes` correction a human makes deliberately, not
+    // something an ingest run does on its own (ADR-0414).
+    let prior;
+    try { prior = JSON.parse(readFileSync(p, "utf8")); } catch { return { fresh: false }; }
+    if (prior.triage_class && prior.triage_class !== rec.triage_class)
+      throw new IngestRefusal(
+        "reclassified",
+        `reply ${rec.reply_ref} is already recorded as "${prior.triage_class}" and this run classifies it "${rec.triage_class}". ` +
+          `Refusing: the store would keep one class while the spine gained a receipt for the other. ` +
+          `A re-classification is a supersedes correction on the spine, made deliberately (ADR-0414).`
+      );
+    return { fresh: false };
   }
 }
 
@@ -178,8 +197,13 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   // loop and halts the run, so one lead whose campaign record is missing would stop every
   // reply behind it from being ingested -- and a reply we fail to ingest is a sequence we
   // fail to stop. The one most likely to be behind it is the unsubscribe.
+  // assertCampaignStore, NOT readCampaign. The paragraph above described the keyring binding
+  // and the code performed a file-exists check -- a comment claiming a safety property the
+  // code does not implement, which is this repository's single most repeated defect and the
+  // reason the rule about it exists. The comment in drafts.mjs even named this call site as
+  // the one that "carried on accepting", and then left it accepting.
   try {
-    readCampaign(store, who.campaign);
+    assertCampaignStore(store, who.campaign);
   } catch (e) {
     throw new IngestRefusal("campaign", `${sourceLabel}: reply ${parsed.reply_ref} belongs to campaign "${who.campaign}" — ${e.message}`);
   }
@@ -195,11 +219,9 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   // processes, both past this check) -- belt and braces, because losing that race must be
   // boring rather than an exception.
   const onSpine = new Set(events.map((e) => e && e.idem).filter(Boolean));
-  const emitted = [];
   const emitOnce = async (kind, payload) => {
     if (onSpine.has(leadsIdem(kind, payload))) return { duplicate: true };
     await emit(kind, payload);
-    emitted.push(kind);
     return { duplicate: false };
   };
 
@@ -236,7 +258,6 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     matched: parsed.matched,
     fresh,
     receipt_duplicate: repliedEmit.duplicate,
-    emitted,
     suppressed: false,
     meeting_ref: null,
     meeting_created: false,

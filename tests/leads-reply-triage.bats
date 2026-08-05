@@ -162,14 +162,40 @@ const FROM = "From: Adv 1 <adv1@firm1.example.com>";'
   [[ "$output" == *"unsubscribe unsubscribe unsubscribe unsubscribe unsubscribe"* ]]
 }
 
-# The apostrophe spelling, built from a char code so no shell or JS layer can eat it. This is
-# the single most common way a person writes it, and the original grammar had only `do not`.
-@test "the apostrophe spelling of a negated contact request also suppresses" {
-  run _t "$TIMPORT const q = String.fromCharCode(39);
-    const cases = [\"Don\" + q + \"t email me again.\", \"Please don\" + q + \"t contact me.\"];
-    console.log(cases.map((b) => cls(mail(FROM, b))).join(\" \"));"
+# EVERY apostrophe spelling, each built from a char code so no shell or JS layer can eat it.
+#
+# The first version of this test was named for the apostrophe and tested only U+0027 -- the one
+# spelling that already worked. U+2019 is what iOS, Android, Word, Outlook and Gmail insert by
+# autocorrect, i.e. what a person actually types, and what `=E2=80=99` decodes to on the
+# quoted-printable path this parser supports. With it, "please don<U+2019>t call me again"
+# classified INTERESTED and minted a calendar draft for someone who had just refused contact.
+# A test named after a case it does not cover is worse than no test.
+@test "every apostrophe spelling of a negated contact request suppresses" {
+  run _t "$TIMPORT const marks = [39, 0x2019, 0x2018, 0x02BC, 0x02B9, 0xFF07, 0x2032, 0x00B4, 0x60];
+    const seen = marks.map((c) => cls(mail(FROM, \"Please don\" + String.fromCharCode(c) + \"t call me again.\")));
+    const wrong = seen.filter((x) => x !== \"unsubscribe\");
+    console.log(marks.length + \" spellings, \" + wrong.length + \" failed to suppress\" + (wrong.length ? \": \" + wrong.join(\",\") : \"\"));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"unsubscribe unsubscribe"* ]]
+  [[ "$output" == *"9 spellings, 0 failed to suppress"* ]]
+}
+
+# The same fold reaches the parser through quoted-printable, which is where a curly apostrophe
+# arrives from a real mail client.
+@test "a curly apostrophe arriving as quoted printable also suppresses" {
+  run _t "$TIMPORT console.log(cls(B(FROM + \"\nContent-Type: text/plain; charset=utf-8\nContent-Transfer-Encoding: quoted-printable\n\nPlease don=E2=80=99t contact me again.\n\")));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"unsubscribe"* ]]
+}
+
+# The negative control for the fold: an apostrophe appears in ordinary warm replies too, and
+# folding must not turn them into refusals.
+@test "the apostrophe fold does not disturb warm replies that contain one" {
+  run _t "$TIMPORT const q = String.fromCharCode(0x2019);
+    const cases = [[\"Sounds good, let\" + q + \"s talk.\", \"interested\"], [\"We\" + q + \"re good for now, not a fit.\", \"no\"]];
+    const wrong = cases.filter((c) => cls(mail(FROM, c[0])) !== c[1]);
+    console.log(cases.length + \" controls, \" + wrong.length + \" misclassified\");"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 controls, 0 misclassified"* ]]
 }
 
 # The opt-out grammar was pinned to the exact spellings of ONE shipped fixture -- `do not` but
@@ -260,9 +286,9 @@ const FROM = "From: Adv 1 <adv1@firm1.example.com>";'
   [[ "$output" == *"reply_87aa2824757cd79f14b9d6f6f0a330f2 CR=7 interested"* ]]
 }
 
-@test "this file registers the 26 tests it declares" {
+@test "this file registers the 28 tests it declares" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 26 ] || { echo "declared $declared, expected 26"; false; }
+  [ "$declared" -eq 28 ] || { echo "declared $declared, expected 28"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

@@ -352,7 +352,7 @@ _sandbox() {
   export ARC_SPINE_ROOT="$(echo "$box" | cut -d'|' -f3)"
   [ -n "$ARC_LEADS_STORE" ] && [ -f "$ARC_LEADS_STORE/reply.eml" ] || { echo "sandbox not built: $box"; false; }
 
-  # Only adv1 has a dossier here, so the other nine corpus replies refuse as unknown leads.
+  # Only adv1 has a dossier here, so the other corpus replies refuse as unknown leads.
   run _cli ingest-reply --inbound
   [ "$status" -eq 3 ]
   # The run reached the END despite refusals -- the summary line only prints after the loop.
@@ -518,9 +518,43 @@ _sandbox() {
   [[ "$output" == *"EMPTY_INPUT"* ]]
 }
 
-@test "this file registers the 31 tests it declares" {
+# `wx` keeps the store record immutable while the idem includes triage_class, so re-ingesting
+# the same bytes under a parser that returns a DIFFERENT class would leave the store holding one
+# class and the spine holding a receipt for the other. On a bounce reclassification that is
+# bounces 1 -> 2, i.e. FROZEN. Refused, and the refusal names both classes.
+@test "re-ingesting a reply under a different class is refused rather than half applied" {
+  run _c "$CIMPORT const {s} = freshStore();
+    const bytes = mail(\"Adv 1 <\" + EMAIL + \">\", \"Thanks, but not interested.\");
+    const first = await run1(s, bytes);
+    // Rewrite the stored class, as an improved parser would have produced.
+    const p = path.join(s.dir, \"replies\", first.out.reply_ref + \".json\");
+    const recd = JSON.parse(fs.readFileSync(p, \"utf8\"));
+    fs.writeFileSync(p, JSON.stringify({...recd, triage_class: \"bounce\"}));
+    const r = recorder();
+    let step = \"ACCEPTED\";
+    try { await I.ingestReply({store: s, bytes, events: [], now: NOW, emit: r.emit, config: CFG, sourceLabel: \"t\"}); }
+    catch (e) { step = e.step; }
+    console.log([first.out.triage_class, step, r.seen.length].join(\" \"));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Nothing is emitted on the refusing run -- the divergence is caught before the receipt.
+  [[ "$output" == *"no reclassified 0"* ]]
+}
+
+# The negative control: the SAME bytes with the same class must still be a boring no-op, or the
+# refusal above would have broken idempotency, which is the whole of ADR-0414.
+@test "re-ingesting a reply under the same class is still a no op" {
+  run _c "$CIMPORT const {s} = freshStore();
+    const bytes = mail(\"Adv 1 <\" + EMAIL + \">\", \"Thanks, but not interested.\");
+    await run1(s, bytes);
+    const again = await run1(s, bytes);
+    console.log([again.out.triage_class, again.out.fresh].join(\" \"));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"no false"* ]]
+}
+
+@test "this file registers the 33 tests it declares" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 31 ] || { echo "declared $declared, expected 31"; false; }
+  [ "$declared" -eq 33 ] || { echo "declared $declared, expected 33"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

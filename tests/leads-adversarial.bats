@@ -39,6 +39,9 @@ function withDossier(st, email) {
   return id;
 }
 const SHA = "c".repeat(64);
+// outreach.replied carries reply_ref now (ADR-0414); a fold input without one is a shape the
+// validator refuses, i.e. a receipt that cannot exist on any spine.
+const RREF = "reply_" + "d".repeat(32);
 const NOW = "2026-08-04T10:00:00+05:30";
 // The JOURNAL tests only need a directory; the GUARD tests need a real store.
 const mkstore = () => ({dir: fsx.mkdtempSync(pathx.join(osx.tmpdir(), "j"))});
@@ -47,7 +50,7 @@ const ID = withDossier(store, "adv@firm.example.com");
 const OTHER = withDossier(store, "other@firm.example.com");
 const base = {campaign:"pilot", lead_id:ID, touch_n:1, draft_sha:SHA, approved_sha:SHA};
 const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k", provider_message_id:"m", draft_sha:SHA}});
-const bounce = (camp="pilot") => ({kind:"outreach.replied", payload:{lead_id:OTHER, campaign:camp, triage_class:"bounce", ingested_at:NOW}});
+const bounce = (camp="pilot") => ({kind:"outreach.replied", payload:{lead_id:OTHER, campaign:camp, triage_class:"bounce", ingested_at:NOW, reply_ref:RREF}});
 const intent = (s) => writeIntent(s, {idempotency_key:"k1", lead_hmac:ID, campaign:"pilot", touch_n:1, draft_sha:SHA, submitted_at:NOW, store_fingerprint:"deadbeef"});
 const cfg = (o) => { const p = pathx.join(fsx.mkdtempSync(pathx.join(osx.tmpdir(),"cfg")), "leads.json"); fsx.writeFileSync(p, JSON.stringify(o)); return p; };
 const refuse = (events, draft=base, now=NOW, st=store) => { try { guardSend({events, store: st, draft, now}); return "ALLOWED"; } catch (e) { return e instanceof GuardRefusal ? e.step : "ERR:" + e.message; } };'

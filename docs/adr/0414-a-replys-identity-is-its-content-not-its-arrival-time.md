@@ -83,10 +83,15 @@ outreach.replied|<campaign>|<lead_id>|<triage_class>|<reply_ref>
   deliberate, documented exception to ADR-0400's total-preimage rule, and the rule is not
   weakened: the preimage must be total over **every field that distinguishes two legitimately
   different receipts**, and two ingests of one reply are not two receipts.
-- **A re-classification is a `supersedes` correction**, never a second receipt. Re-ingesting
-  the same bytes under an improved parser that returns a different class *does* mint a
-  distinct idem, which would double-count a `bounce`. The emitter is not what stops that; the
-  correction discipline is, and the fixture pins it.
+- **A re-classification is REFUSED at ingest**, and is a `supersedes` correction on the spine
+  when a human decides to make one. Re-ingesting the same bytes under an improved parser that
+  returns a different class *does* mint a distinct idem, which would double-count a `bounce` --
+  and worse, the store record is written `wx`, so it would keep the OLD class while the spine
+  gained a receipt for the new one. Spine and store disagreeing about one reply is the exact
+  two-derivations defect this repo keeps finding.
+  The first draft of this ADR said "the correction discipline is what stops that, and the
+  fixture pins it". No fixture pinned it, and discipline is not a mechanism. `persistReply`
+  now compares the stored class to the new one and refuses the run, naming both.
 - `reply_ref` is opaque on the spine exactly as `draft_ref` is (ADR-0412). The reply body,
   its headers and the address it came from live in the store; the spine gets the hash.
 

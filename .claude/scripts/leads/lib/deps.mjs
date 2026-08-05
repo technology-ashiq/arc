@@ -11,7 +11,7 @@
 // cycle shipped three "contract-satisfying" drivers whose real code never ran, because the
 // fake returned before the real function was reached.
 
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
 import { request as httpsRequest } from "node:https";
 import { resolveTxt as dnsResolveTxt } from "node:dns/promises";
@@ -90,14 +90,29 @@ export const source = () => (usingFakes() ? sourceFake : sourceReal);
 // `fetch()` returns RAW BYTES per message, never a parsed object. Parsing belongs to
 // replies.mjs, which is the module that carries the adversarial passes; a provider driver that
 // pre-parses would move parser-class work behind a boundary nothing attacks.
+// Kept in step with replies.mjs MAX_REPLY_BYTES. Duplicated rather than imported so this
+// module keeps no parser dependency, and the provider-contract suite asserts the two are
+// equal -- a constant copied without that assertion is a constant that drifts.
+export const INBOUND_MAX_BYTES = 1024 * 1024;
+
 const inboundFake = {
   async fetch() {
     const dir = pathResolve(fixtureDir(), "replies");
     if (!existsSync(dir)) return [];
+    // The SAME ceiling as the other two ingest doors, and a case-insensitive extension match.
+    // This one read every file whole and left the limit to fire inside the parser -- after the
+    // allocation -- which is the identical defect fixed for `--file` and stdin, surviving in
+    // the adjacent branch. It is also the door that will carry provider bytes once one is bound.
     return readdirSync(dir)
-      .filter((f) => f.endsWith(".eml"))
+      .filter((f) => f.toLowerCase().endsWith(".eml"))   // .EML exists on the case-insensitive legs
       .sort()
-      .map((f) => ({ source: f, bytes: readFileSync(pathResolve(dir, f)) }));
+      .map((f) => {
+        const full = pathResolve(dir, f);
+        const size = statSync(full).size;
+        if (size > INBOUND_MAX_BYTES)
+          throw new ProviderError("refused", `inbound message ${f} is ${size} bytes; the limit is ${INBOUND_MAX_BYTES}`);
+        return { source: f, bytes: readFileSync(full) };
+      });
   },
 };
 const inboundReal = {

@@ -364,7 +364,7 @@ async function cmdIngestReply(argv) {
       // The spine is re-read per reply. An unsubscribe ingested two replies ago changes what
       // the next one derives, and a snapshot taken before the loop would not know it.
       const r = await ingestReply({
-        store, bytes: inp.bytes, repoRoot: REPO_ROOT, events: readAllEvents({ allowMissing: true }),
+        store, bytes: inp.bytes, events: readAllEvents({ allowMissing: true }),
         now, emit: emitFn, config: cfg, sourceLabel: inp.label,
       });
       ok++;

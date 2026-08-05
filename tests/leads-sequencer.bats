@@ -39,6 +39,9 @@ const store = realStore();
 const ID = withDossier(store, "adv@firm.example.com");
 const OTHER = withDossier(store, "other@firm.example.com");
 const SHA = "c".repeat(64);
+// outreach.replied carries reply_ref now (ADR-0414); a fold input without one is a shape the
+// validator refuses, i.e. a receipt that cannot exist on any spine.
+const RREF = "reply_" + "d".repeat(32);
 const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k"+n, provider_message_id:"m"+n, draft_sha:SHA}});
 const base = {campaign:"pilot", lead_id:ID, touch_n:1, draft_sha:SHA, approved_sha:SHA};
 const NOW = "2026-08-04T10:00:00+05:30";
@@ -53,7 +56,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 }
 
 @test "a reply recorded after approval permanently blocks that send" {
-  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'interested', ingested_at:NOW}}]));"
+  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'interested', ingested_at:NOW, reply_ref:RREF}}]));"
   [[ "$output" == *"reply-stop"* ]]
 }
 
@@ -63,7 +66,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 }
 
 @test "an unsubscribe reply suppresses in the same fold" {
-  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'unsubscribe', ingested_at:NOW}}]));"
+  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'unsubscribe', ingested_at:NOW, reply_ref:RREF}}]));"
   [[ "$output" == *"suppression"* ]] || [[ "$output" == *"reply-stop"* ]]
 }
 
@@ -210,14 +213,14 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 # assertion the original fixtures lacked: they checked that a receipt was EMITTED, not that a
 # send was STOPPED.
 @test "a fired breaker actually stops a send" {
-  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}}]));"
+  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW, reply_ref:RREF}}]));"
   [[ "$output" == *"campaign-state"* ]]
 }
 
 @test "a fired breaker is not cleared by a flag or an env var" {
   run _g "$GIMPORT
     process.env.LEADS_FORCE = '1';
-    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}}];
+    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW, reply_ref:RREF}}];
     console.log(refuse(ev));"
   [[ "$output" == *"campaign-state"* ]]
 }
@@ -228,7 +231,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 # tests/leads-adversarial.bats, which builds the incident id the same way the guard does.
 @test "a free text approval reason does not clear a breaker" {
   run _g "$GIMPORT
-    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}},
+    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW, reply_ref:RREF}},
                 {id:'01D', kind:'decision.recorded', payload:{decides:'01J000000000000000000000AB', verdict:'approve', reason:'HOLD on pilot reviewed: the address was a typo, resuming'}}];
     console.log(refuse(ev));"
   [[ "$output" == *"campaign-state"* ]]

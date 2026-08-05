@@ -474,9 +474,6 @@ export function isDeliveryReport(headers, bodyText = "") {
   return isDaemonSender(headers) && (finalRecipient(bodyText) !== null || dsnDisposition(bodyText) !== null);
 }
 
-// Backwards-compatible name; a delivery report is only a BOUNCE once its Action says so.
-export const isBounce = isDeliveryReport;
-
 // RFC 3464 disposition. A delivery report is not automatically a failure: mail systems send
 // `Action: delayed` retry warnings (Gmail and Postfix both do, and both say in the body "you
 // do not need to resend your message"), and `delivered`/`relayed` reports on request.
@@ -502,10 +499,26 @@ export function dsnDisposition(bodyText) {
 // `interested` would mint meeting drafts from noise and defaulting to `unsubscribe` would
 // silently suppress a warm lead on a parser miss. `later` is the class whose mistake a human
 // can still undo.
+// Every apostrophe-shaped character folded to the ASCII one BEFORE a rule runs.
+//
+// U+2019 is what iOS, Android, Word, Outlook and Gmail insert by autocorrect -- it is what a
+// person actually types -- and it is what `=E2=80=99` decodes to on the quoted-printable path
+// this parser explicitly supports. Without the fold, `don<U+2019>t call me again` classified as
+// INTERESTED and minted a calendar draft, while the ASCII spelling of the same sentence
+// suppressed. The rules were pinned to one spelling of a character with six (D1), and the test
+// named "the apostrophe spelling" exercised the ASCII one that already worked.
+//
+// Folded for CLASSIFICATION ONLY. `reply_ref` is computed over the raw bytes before any
+// parsing, so nothing here can move a receipt identity. Same discipline as store.mjs
+// normalising an address before it is hashed.
+const APOSTROPHES = /[‘’ʼʹ＇′´`]/g;
+const foldApostrophes = (s) => String(s).replace(APOSTROPHES, "'");
+
 export function triage(visibleText) {
-  if (NEGATED_CONTACT.test(visibleText)) return { triage_class: "unsubscribe", matched: "negated-contact" };
+  const text = foldApostrophes(visibleText);
+  if (NEGATED_CONTACT.test(text)) return { triage_class: "unsubscribe", matched: "negated-contact" };
   for (const [cls, re] of RULES) {
-    const m = re.exec(visibleText);
+    const m = re.exec(text);
     // `matched` is the RULE NAME, never the matched text — the matched text is content.
     if (m) return { triage_class: cls, matched: cls };
   }

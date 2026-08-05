@@ -240,12 +240,23 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"refusing to fold"* ]]
 }
 
-@test "this file registers the 21 tests it declares" {
+# INBOUND_MAX_BYTES is a copy of MAX_REPLY_BYTES, kept so deps.mjs needs no parser dependency.
+# A constant copied without an assertion is a constant that drifts, and the drift would be
+# silent: the inbound door would accept what the parser then refuses, after the allocation.
+@test "the inbound size ceiling equals the parser size limit" {
+  run _fake 'const {INBOUND_MAX_BYTES} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const {MAX_REPLY_BYTES} = await import("./.claude/scripts/leads/lib/replies.mjs");
+    console.log(INBOUND_MAX_BYTES === MAX_REPLY_BYTES ? "in-step " + INBOUND_MAX_BYTES : "DRIFTED " + INBOUND_MAX_BYTES + " vs " + MAX_REPLY_BYTES);'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"in-step 1048576"* ]]
+}
+
+@test "this file registers the 22 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 21 ] || { echo "declared $declared, expected 21"; false; }
+  [ "$declared" -eq 22 ] || { echo "declared $declared, expected 22"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

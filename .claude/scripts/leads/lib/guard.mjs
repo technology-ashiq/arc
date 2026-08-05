@@ -180,11 +180,15 @@ export function deriveState(events, { campaign }) {
 // Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage
 // floor freezes on noise — HOLD is the honest small-n response, FREEZE the evidenced one.
 export function breakerState(state, lifetimeSends) {
-  if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded" };
-  if (state.bounces >= 2) return { level: "FROZEN", why: `${state.bounces} bounces in this campaign` };
+  if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded against the leads sending domain" };
+  if (state.bounces >= 2) // NOT "in this campaign". deriveState counts bounces across every leads campaign,
+    // because the asset these breakers protect is the one sending domain -- so an operator
+    // told "3 bounces in this campaign" against a campaign holding one goes looking for two
+    // that are not there.
+    return { level: "FROZEN", why: `${state.bounces} bounces across the leads sending domain` };
   if (lifetimeSends >= 50 && state.bounces / lifetimeSends >= 0.03)
-    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% at ${lifetimeSends} lifetime sends` };
-  if (state.bounces === 1) return { level: "HOLD", why: "the first bounce — sends pause until a human reviews the cause" };
+    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% across ${lifetimeSends} lifetime sends on this domain` };
+  if (state.bounces === 1) return { level: "HOLD", why: "the first bounce on this domain — sends pause until a human reviews the cause" };
   return { level: "OK", why: null };
 }
 
