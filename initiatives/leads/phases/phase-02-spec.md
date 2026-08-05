@@ -17,8 +17,8 @@ without echoing one byte of its content.
 - [x] **Unsubscribe-in-reply** → `lead.suppressed` receipt, effective in the same run
 - [x] **ADR-0414 reply identity**: `outreach.replied` carries `reply_ref` (content hash of the raw bytes) and its idem preimage is `campaign|lead_id|triage_class|reply_ref` — `ingested_at` leaves the preimage
 - [x] **Adversarial pass on the parser complete**, holes pinned as fixtures
-- [ ] tests green **on CI** — per-JOB conclusions read, not the watcher's exit code
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log)
+- [x] tests green **on CI** — per-JOB conclusions read, not the watcher's exit code
+- [x] tracker updated (PROGRESS.md row ✅ + done-log)
 
 ### Carried in from the Phase-01 review (recorded there, owed here)
 

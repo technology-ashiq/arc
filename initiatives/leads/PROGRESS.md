@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-leads (Cycle 8, opened 2026-08-04)
-phase: 02
+phase: 03
 appetite: 7d
-burn: 3.5d
+burn: 4.5d
 blocked-on: —
 depends-on: —
 
@@ -22,10 +22,10 @@ depends-on: —
 |---|---|---|---|
 | 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
-| 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | not started |
+| 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
 | 03 | Real campaign | 1.0d | 🚫 **BLOCKED** |
 
-**Appetite burn: 3.5 of 7 days used (50%).** 5.5d allocated across the four phases; **1.5d
+**Appetite burn: 4.5 of 7 days used (64%).** 5.5d allocated across the four phases; **1.5d
 deliberately unallocated** as the overrun absorber — the arc-portfolio lesson (Cycle 4
 allocated 100%, `appetite-sum` warned every run, Phase 02 overran with nothing to absorb it,
 closed ~112%).
@@ -82,37 +82,51 @@ plausibly ≤6 weeks away. Row 2 is the critical path and cannot be compressed.
   A mutation pass then showed **7 of 12 mutant guards passing the first suite**, because
   `sequencer.mjs` and `journal.mjs` had zero coverage. Two new suites close that.
   Evidence: `initiatives/leads/evidence/phase-01/`. CI green on every leg.
+- **2026-08-05 — Phase 02 CLOSED.** The reply path, end to end. **29 more holes across the two
+  mandatory surfaces**, again with CI green throughout and again with the two agents sharing
+  almost nothing. Running total for the cycle: **96**. The sharpest: a multipart carrying only
+  `text/html` parsed to an EMPTY body and classified `later`, so an HTML-only "remove me from
+  your list" produced no suppression; `stripQuoted` ate the whole message of a bottom-posted
+  reply; "Do not call me" classified as `interested` and minted a calendar draft; a transient
+  "delivery delayed" DSN suppressed a live lead permanently and two of them froze the campaign;
+  and reply-stop, already-sent and the touch cap each checked ONE lead id while suppression
+  checked the whole keyring, in adjacent branches.
+  **ADR-0414** was routed through `/arc-change` before any code: `outreach.replied` was keyed on
+  `ingested_at`, which both split one reply into two receipts on re-ingest AND collapsed a "no
+  thanks" and an "unsubscribe me" from the same second into one. It is keyed on content now.
+  **The pre-merge review found the worst one:** the negated-contact rule accepted the ASCII
+  apostrophe and not U+2019 — what every phone and word processor actually inserts — so
+  `please don't call me again`, typed normally, classified as `interested`. The test named "the
+  apostrophe spelling" tested the ASCII one that already worked.
+  **CI caught three more that I did not**, including two new tests whose assertions could never
+  have matched on any code. Run 31018199453: **19/19 jobs success**.
+  Evidence: `initiatives/leads/evidence/phase-02/`.
 
 ## Now
 
-**Current position: Phase 02 IN PROGRESS (opened 2026-08-05).** Phases 00 and 01 are both
-closed with both adversarial surfaces run: **67 holes total**, every one found while CI was
-green. Phase 01 merged to `main` as `52a7a63` (PR #111); Phase 02 builds on
-`feat/leads-phase-02`, cut fresh from that merge.
+**Current position: Phase 02 CLOSED (2026-08-05).** Phases 00, 01 and 02 are all closed with
+both adversarial surfaces run on each: **96 holes total**, every one found while CI was green.
+Phase 01 merged as `52a7a63` (PR #111); Phase 02 is PR #113.
 
-**Phase 02 — Replies.** Ingestion (`--file`/stdin, repo paths refused), the parser
-(parser-class, so it carries its own adversarial passes), triage classes to receipts, the
-calendar draft produced in the same run as its ingestion, and auto-stop wired to the Phase-01
-pre-send check.
+**Next step: Phase 03 — and it is BLOCKED, not next.** It waits on four things no code
+produces (the table above): a named offer, a dedicated domain warmed >=14d with DMARC green,
+an ICP v0 file, and a capability report naming a provider. Rows 2-4 are **calendar-gated, not
+effort-gated** — row 2 alone is 2-4 calendar weeks and cannot be compressed. Start them the
+moment outbound is plausibly <=6 weeks away.
 
-**Routed through `/arc-change` at phase start (2026-08-05), before any code:**
+**What this cycle has produced is a fixture-proven, UNEXERCISED engine** (ADR-0413, standing
+caution). Every provider fixture encodes a guess at a vendor that has not been chosen. The
+first real campaign is what tests them, and it is the only thing that can.
 
-| What | Where it landed |
-|---|---|
-| A reply's identity is its content, not its arrival time | **ADR-0414** — `outreach.replied` gains `reply_ref`; idem preimage becomes `campaign\|lead_id\|triage_class\|reply_ref` |
-| The coarse "expected failure first" line | phase-02 spec § Verification plan, now concrete |
-| The live-demo scenario | same |
-| Four findings the Phase-01 review deferred here | phase-02 spec § *Carried in from the Phase-01 review* |
+**Budget the adversarial passes properly.** Across three phases they have found 96 holes in
+code CI called green, and the two surfaces have consistently shared almost nothing — which is
+the whole argument for running both rather than one thorough pass. Phase 02 cost 1.0d and
+found 29.
 
-**Budget the adversarial passes properly.** Across two phases they have found 67 holes in code
-that CI called green, and the two surfaces have consistently shared almost nothing — which is
-the whole argument for running both rather than one thorough pass.
+**Every attacker prompt carries the running defect list D1-D6** and checks each entry in every
+OTHER file: a fix is not applied until it has been attacked somewhere it was never made.
 
-**Every Phase 01 attacker prompt must carry the running defect list D1–D6** and check each
-entry in every OTHER file: a fix is not applied until it has been attacked somewhere it was
-never made.
-
-| # | Defect class, found in Phase 00 |
+| # | Defect class |
 |---|---|
 | D1 | a grammar/parse pinned to one form while the producer emits another |
 | D2 | an anchored match that mishandles a legitimate variant (subdomain, bare host) |
@@ -121,12 +135,15 @@ never made.
 | D5 | validate one read, compare another — two derivations of one value that disagree |
 | D6 | a guard applied in one branch and omitted in the adjacent one |
 
-**D5 and D6 are the recurring pair** — between them roughly half of Phase 01's 28 holes.
-Check every value that is derived twice, and every guard that appears in one branch.
+**D6 was the whole story of Phase 02.** Reply-stop / already-sent / touch-cap versus
+suppression. Single-part `text/html` refused while its multipart twin was not. `--file` and
+stdin bounded while `--inbound` was not. Five sibling writes using `wx` and `emit()` not. The
+pattern to check is never the file the bug was found in.
+
+**And a seventh class earned its place: D7 — a test named after a case it does not cover.**
+The apostrophe test, the e2e assertion reading the wrong spine path, and two new tests whose
+assertions could never match. All three were invisible without executing them, which is
+precisely why CI is the gate.
 
 **Standing constraint:** no local test runs — CI is the only gate. Batch commits so each push
 buys a full CI cycle.
-
-**Standing caution (ADR-0413):** this cycle produces a **fixture-proven, unexercised** engine.
-It does not make outbound ready. Every provider fixture encodes a guess at a vendor that has
-not been chosen; the first real campaign is what tests them.
