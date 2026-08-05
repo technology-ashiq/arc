@@ -29,7 +29,7 @@
 |---|---|
 | Two real consumer repos installed (venturemind · Opportunity-Scout) | ✅ Cycle-1 era |
 | Company runs on receipts (spine live on real work) | ✅ 2026-07-24 — dogfood day 1+ |
-| Constitution adopted (first `constitution.adopted` event) | ⏳ pending — Phase-04 retro |
+| Constitution adopted (first `constitution.adopted` event) | ✅ 2026-08-06 — v1.0, receipt `01KZ9V0QXNNMB3ZH18MSH8DKH3` |
 | Venture chosen for Cycle-3 | ⏳ pending — decision overdue |
 | First real ₹ (`revenue.received`) | ⏳ target Sep 2026 |
 

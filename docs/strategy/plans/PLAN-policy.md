@@ -20,8 +20,8 @@
 > a scheduler may not land before policy, by its own prerequisite).
 > **Prerequisites:** spine (live since C2, closed vocabulary) · approval inbox (live) ·
 > trial-ledger promotion culture (live) · `arc-run` headless runner (live since the
-> engine cycle) · **constitution ADOPTED** — still pending; see the precursor note in
-> the kickoff prompt. **Do not start while another lane holds the live slot** (A9).
+> engine cycle) · **constitution ADOPTED** — ✅ done 2026-08-06, v1.0, receipt
+> `01KZ9V0QXNNMB3ZH18MSH8DKH3`. **Do not start while another lane holds the live slot** (A9).
 >
 > **Relationship to existing plans:** the engine's `arc-run` and the interactive hooks
 > are the enforcement points this plan arms; the scheduler inherits enforcement for free
@@ -45,9 +45,15 @@ incident — so the first unattended run is policed by code before that run exis
   `.claude/scripts/hq/lib/validate.mjs` → `KINDS.length=31`): 22 (ADR-0107) + 8
   experiment kinds (ADR-0309) + `council.outcome` (ADR-0310). All counts below are
   stated as *live length + N* — hardcoded totals go stale (ADR-0107's own lesson).
-- `constitution.adopted` is **not in the vocabulary** (grep: zero hits) and the
-  Constitution is **still DRAFT** (HISTORY milestone ⏳). Adoption is two steps: a micro
-  vocab ADR (+1 kind), then sign-off + the event.
+- ~~`constitution.adopted` is **not in the vocabulary** and the Constitution is **still
+  DRAFT**~~ — **RESOLVED 2026-08-06, ahead of kickoff.** The predicted two steps both ran:
+  ADR-0073 added the kind (vocabulary 39 → 40, ADR-0026 extension) and the Constitution was
+  adopted at v1.0, receipt `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6`. The
+  hard kickoff gate this bullet describes is now OPEN. Three self-contradictions in the text
+  were fixed first (#114): the amendment path named a kind that never existed, violations
+  named another, and the file was not at the repo root its own Enforcement clause claims.
+  **The other bullets in this section are still dated 2026-08-04 and drifted — see the
+  kickoff re-verification before relying on any count here.**
 - Constitution **E2 verbatim is five items**: moving money · killing a venture ·
   changing prices · unlocking real-money trading · publishing under Ashiq's name. The
   brief's "refunds" is not E2 text — it is subsumed under "moving money" (POL-B).
