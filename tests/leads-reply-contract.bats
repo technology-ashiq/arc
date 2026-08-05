@@ -449,7 +449,7 @@ _sandbox() {
     let send = \"OK\";
     try { assertCampaignStore(s2, \"pilot\"); } catch (e) { send = e.code; }
     const ingest = await run1(s2, fx(\"01-interested.eml\"));
-    console.log(send + \" \" + ingest.triage_class);"
+    console.log(send + \" \" + ingest.out.triage_class);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"OK interested"* ]]
 }
@@ -459,7 +459,7 @@ _sandbox() {
 # draft carries v2. Only unsubscribe and bounce were protected, and only because they land in
 # the keyring-wide suppression set.
 @test "reply stop survives a key rotation" {
-  run _c "$CIMPORT const {rotateSecret, leadId} = await import(\"./.claude/scripts/leads/lib/store.mjs\");
+  run _c "$CIMPORT const {rotateSecret} = await import(\"./.claude/scripts/leads/lib/store.mjs\");
     const {s, id} = freshStore();
     const {seen} = await run1(s, mail(\"Adv 1 <\" + EMAIL + \">\", \"Thanks, but not interested.\"));
     rotateSecret();

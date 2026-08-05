@@ -489,7 +489,7 @@ export function dsnDisposition(bodyText) {
   if (action) return action[1].toLowerCase();
   // No Action field: fall back to the status class. 5.x.x is permanent, 4.x.x is transient.
   if (status) return status[1] === "4" ? "delayed" : status[1] === "5" ? "failed" : "relayed";
-  return null;   // an unstructured daemon message; the caller decides
+  return null;   // an unstructured mail-system message; the caller decides
 }
 
 // The default is `later`, and the choice is asymmetric on purpose. An unclassifiable reply

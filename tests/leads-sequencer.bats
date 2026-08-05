@@ -272,9 +272,32 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 # daemon, ever" was a hit, so the test failed for describing the rule it enforces. A
 # whole-line comment cannot execute anything; the portability lint in this repo already draws
 # exactly this distinction and this test did not.
+#
+# `mailer-daemon` and `mail-daemon` are excluded, and that is a real distinction rather than a
+# hole: they are the RFC role addresses a BOUNCE arrives from, matched by replies.mjs to decide
+# whether a message came from a mail system or a person. A hyphenated mail role cannot schedule
+# anything. The alternative -- renaming the constant to dodge the grep -- would leave the next
+# legitimate mail-role match failing for the same reason, so the guard gets the distinction.
+# A bare `daemon`, and anything that could actually run, still fails.
 @test "no scheduler daemon or cron exists in the leads tree" {
-  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$ARC_ROOT/.claude/scripts/leads/' | grep -vE ':[[:space:]]*(//|#|\*)'"
+  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$ARC_ROOT/.claude/scripts/leads/' | grep -vE ':[[:space:]]*(//|#|\*)' | grep -viE 'mail(er)?-daemon'"
   [ "$status" -ne 0 ] || { echo "background execution appeared in CODE: $output"; false; }
+}
+
+# The negative control for the exclusion above: the guard must still fire on real background
+# execution, and on a bare `daemon` that is not a mail role. Without this, the `grep -v` could
+# be widened to nothing and the suite would stay green.
+@test "the no-daemon guard still fires on real background execution" {
+  local probe; probe="$BATS_TEST_TMPDIR/probe"
+  mkdir -p "$probe"
+  printf '%s\n' 'setInterval(() => send(), 1000);' > "$probe/bad.mjs"
+  printf '%s\n' 'const daemon = spawnDetached();' > "$probe/also-bad.mjs"
+  printf '%s\n' 'const DAEMON_LOCAL = /^mailer-daemon$/i;' > "$probe/ok.mjs"
+  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$probe/' | grep -vE ':[[:space:]]*(//|#|\*)' | grep -viE 'mail(er)?-daemon'"
+  [ "$status" -eq 0 ] || { echo "the guard went blind"; false; }
+  [[ "$output" == *"bad.mjs"* ]]
+  [[ "$output" == *"also-bad.mjs"* ]]
+  [[ "$output" != *"ok.mjs"* ]]
 }
 
 # ADR-0407 promotion is deliberately NOT built this cycle: its only input is >=2 campaigns and
@@ -284,9 +307,9 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
   [ "$status" -ne 0 ] || { echo "an autonomy path appeared: $output"; false; }
 }
 
-@test "this file registers the 33 tests it declares" {
+@test "this file registers the 34 tests it declares" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 33 ] || { echo "declared $declared, expected 33"; false; }
+  [ "$declared" -eq 34 ] || { echo "declared $declared, expected 34"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }
