@@ -34,6 +34,7 @@
     ".claude/scripts/core/json-strict.mjs"
   ],
   "files": [
+    "CONSTITUTION.md",
     ".claude/scripts/core/money-surfaces.json",
     ".claude/hooks/_dispatch.sh",
     ".claude/hooks/SessionStart.sh",

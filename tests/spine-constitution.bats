@@ -23,7 +23,7 @@ _node() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 PRE='const {validateEvent} = await import("./.claude/scripts/hq/lib/validate.mjs");
 const DOC_SHA = "827d6f84fb1444ae40b64d8378e6985e5d1e133ec3580efe8a15766d1b7f4c79";
 const IDEM = "38003cd9c17c0a16912e19749e2b85ab795dda4e28dc8b197a4761991ff5bd96";
-const P = (over={}) => ({document:"docs/strategy/arc-CONSTITUTION.md", version:"1.0", sha256:DOC_SHA, ...over});
+const P = (over={}) => ({document:"CONSTITUTION.md", version:"1.0", sha256:DOC_SHA, ...over});
 const mk = (payload=P(), over={}) => ({id:"01JQ8XZ9K0ABCDEFGH00000051", v:1, ts:"2026-07-22T21:30:00+05:30",
   idem: IDEM, actor:"human:ashiq", process:"spine-fixture@1.0.0", model:null, venture:"arc",
   run_id:"r-t", kind:"constitution.adopted", payload, outcome:"ok", cost:null, evidence:null,

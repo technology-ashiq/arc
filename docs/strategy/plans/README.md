@@ -78,7 +78,7 @@ what's missing, and why roles ≠ standing agents: `../arc-company-org-blueprint
 
 ## Standing rules (apply to every kickoff from this pack)
 
-- Constitution (`../arc-CONSTITUTION-draft.md`) outranks everything here — adopt it at
+- Constitution (`../../../CONSTITUTION.md`) outranks everything here — adopt it at
   Cycle-2 kickoff if not already law.
 - Venture track outweighs OS track on any tie (kill criteria in the master plan §10).
 - New parser-class code always gets the adversarial pass before FAIL promotion.

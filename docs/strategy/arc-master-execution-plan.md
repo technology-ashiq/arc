@@ -263,7 +263,7 @@ may add revenue but never get their own cycle — **ship-with, not build-for**.
     cooling + human sign-off + `constitution.amended` event), machines may cite but never
     amend, enforcement via process preambles (the model-alignment layer) + kickoff-lint
     citation check (TRIAL) + /arc-change step-0 + council lens. Draft:
-    `arc-CONSTITUTION-draft.md`; adopted only on Ashiq's sign-off (first
+    `CONSTITUTION.md` at repo root; adopted only on Ashiq's sign-off (first
     `constitution.adopted` spine event).
 
 ## 12. Immediate next actions (this week)

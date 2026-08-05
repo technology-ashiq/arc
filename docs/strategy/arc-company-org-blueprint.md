@@ -73,7 +73,7 @@ owner yet) · **HUMAN** (deliberately never automated).
 | # | Role | arc seat | State |
 |---|---|---|---|
 | 1 | Board of directors | `/arc-council` (stances + experts + verifier + juror) | EXISTS |
-| 2 | Constitution / charter | `arc-CONSTITUTION-draft.md` (adoption pending) | EXISTS (draft) |
+| 2 | Constitution / charter | `CONSTITUTION.md` at repo root (adoption pending) | EXISTS (draft) |
 | 3 | Internal auditor | spine gap-audit + evidence bundles | EXISTS |
 | 4 | Calibration keeper | council-calibrate + Brier scoreboard | EXISTS — data 0 |
 
