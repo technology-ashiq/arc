@@ -20,7 +20,8 @@ const MAX_COST_MAGNITUDE = 1e12;
 // Extended 18 -> 21 by ADR-0106 (develop lifecycle: started / slice proven / handoff ready),
 // then 21 -> 22 by ADR-0107 (slice.stuck — where a build bleeds time, for /arc-retro to read),
 // then 22 -> 30 by ADR-0309 (evolve's eight experiment receipts, frozen by ADR-0304),
-// then 31 -> 39 by ADR-0400 (leads' seven pipeline receipts) together with ADR-0408.
+// then 31 -> 39 by ADR-0400 (leads' seven pipeline receipts) together with ADR-0408,
+// then 39 -> 40 by ADR-0073 (the Constitution becoming law).
 //
 // `metric.observed` used to be deliberately absent here, because ADR-0308 rules that it lands
 // in the FIRST CLIENT's cycle rather than in evolve's. leads IS that first client (ADR-0408),
@@ -39,6 +40,11 @@ export const KINDS = Object.freeze([
   // fact and therefore its own kind per ADR-0304's one-kind-per-lifecycle-step rule.
   "council.outcome",
   ...LEADS_KINDS,
+  // 39 -> 40 by ADR-0073. The Constitution's own adoption clause names this kind, so until it
+  // existed the clause was un-executable: the event that makes arc's highest-precedence document
+  // law would itself quarantine as UNKNOWN_KIND. It is a company organ (ADR-0053), so its shape
+  // lives here inline beside decision.recorded and the council pair, not in a lane module.
+  "constitution.adopted",
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -121,6 +127,22 @@ function assertTimestamp(ts) {
     throw new SpineError("BAD_TS", `ts "${ts}" is further ahead than the spine accepts (now ${formatIst(nowMs())})`);
 }
 
+// The stored-path discipline, in ONE place. Every path this schema keeps is dereferenced by a
+// human or a tool later, so a traversal or an absolute path accepted today is a file read
+// somewhere else tomorrow. Shared by `evidence` and by ADR-0073's constitution `document`: a
+// second copy of these four rules is a second place the next hole has to be fixed, and it is the
+// twin that gets missed (retro-log: the same read-validation fix landed in one module and not its
+// sibling, twice in two days).
+function assertPathShape(p, code, label) {
+  if (hasControlChar(p)) throw new SpineError(code, `${label} contains a control character`);
+  if (p.includes("\\")) throw new SpineError(code, `${label} "${p}" contains a backslash -- POSIX-relative paths only`);
+  if (p.startsWith("/") || /^[A-Za-z]:/.test(p) || p.startsWith("~"))
+    throw new SpineError(code, `${label} "${p}" is absolute`);
+  for (const seg of p.split("/"))
+    if (seg === ".." || seg === ".")
+      throw new SpineError(code, `${label} "${p}" contains a "${seg}" segment`);
+}
+
 // Evidence paths are dereferenced by humans and tools later; a traversal or absolute path
 // stored today is a file read somewhere else tomorrow.
 function assertEvidencePath(p) {
@@ -129,13 +151,7 @@ function assertEvidencePath(p) {
   // astral characters occupy four times the budget a reader allocated for it.
   if (typeof p !== "string" || p.length === 0 || Buffer.byteLength(p, "utf8") > 512)
     throw new SpineError("BAD_EVIDENCE", "evidence must be null or at most 512 bytes");
-  if (hasControlChar(p)) throw new SpineError("BAD_EVIDENCE", "evidence contains a control character");
-  if (p.includes("\\")) throw new SpineError("BAD_EVIDENCE", `evidence "${p}" contains a backslash -- POSIX-relative paths only`);
-  if (p.startsWith("/") || /^[A-Za-z]:/.test(p) || p.startsWith("~"))
-    throw new SpineError("BAD_EVIDENCE", `evidence "${p}" is absolute`);
-  for (const seg of p.split("/"))
-    if (seg === ".." || seg === ".")
-      throw new SpineError("BAD_EVIDENCE", `evidence "${p}" contains a "${seg}" segment`);
+  assertPathShape(p, "BAD_EVIDENCE", "evidence");
 }
 
 function assertCost(cost) {
@@ -202,6 +218,43 @@ function assertDecision(event) {
   // shows open. Welding the mechanical key to the semantic decides closes that two-key desync.
   if (event.idem !== sha256Hex(`decision.recorded|${payload.decides}`))
     throw new SpineError("BAD_DECISION", `decision.idem must be sha256("decision.recorded|"+decides) -- a decision's idem is bound to the approval it decides`);
+}
+
+// constitution.adopted (ADR-0073) -- the Constitution becoming law. The shape is closed for the
+// same reason decision.recorded is: this is the company's highest-precedence fact, and a malformed
+// one must never seal onto an append-only spine.
+//
+// `sha256` is the field carrying the weight. policy-lint will quote Constitution E2 VERBATIM and
+// has to prove WHICH BYTES it quoted. A receipt that names a document without pinning its content
+// names a file that can be edited afterward with nothing noticing -- which is how the strictest
+// gate in the company ends up anchored to a poster (PLAN-policy pre-mortem row 3).
+const CONSTITUTION_KEYS = ["document", "version", "sha256"];
+// Dotted numeric, two or three components. Deliberately NOT full semver: a constitution version is
+// a human label on adopted text, and prerelease/build metadata is not a thing law has.
+const CONSTITUTION_VERSION_RE = /^[0-9]+\.[0-9]+(\.[0-9]+)?$/;
+
+function assertConstitution(event) {
+  const p = event.payload;
+  for (const k of Object.keys(p))
+    if (!CONSTITUTION_KEYS.includes(k))
+      throw new SpineError("BAD_CONSTITUTION", `constitution.adopted payload has unknown key "${k}" (shape is closed to ${CONSTITUTION_KEYS.join("|")})`);
+  for (const k of CONSTITUTION_KEYS)
+    if (!(k in p))
+      throw new SpineError("BAD_CONSTITUTION", `constitution.adopted payload is missing "${k}"`);
+  if (typeof p.document !== "string" || p.document.length === 0 || Buffer.byteLength(p.document, "utf8") > 512)
+    throw new SpineError("BAD_CONSTITUTION", "constitution.document must be a non-empty repo-relative path of at most 512 bytes");
+  assertPathShape(p.document, "BAD_CONSTITUTION", "constitution.document");
+  if (typeof p.version !== "string" || !CONSTITUTION_VERSION_RE.test(p.version))
+    throw new SpineError("BAD_CONSTITUTION", `constitution.version ${JSON.stringify(p.version)} must be dotted numeric, e.g. "1.0"`);
+  if (typeof p.sha256 !== "string" || !HEX64.test(p.sha256))
+    throw new SpineError("BAD_CONSTITUTION", "constitution.sha256 must be lowercase sha256 hex of the adopted bytes");
+  // Welded LAST, so a bad shape/path/version still reports its own error first -- same ordering
+  // rule as assertDecision. The idem binds the mechanical key to the semantic content: adopting
+  // byte-identical text twice collides on DUP_IDEM instead of writing a second law saying the same
+  // thing, while an amendment hashes differently, earns its own idem for free, and names its
+  // predecessor through the event-level `supersedes` rather than a payload flag.
+  if (event.idem !== sha256Hex(`constitution.adopted|${p.sha256}`))
+    throw new SpineError("BAD_CONSTITUTION", `constitution.idem must be sha256("constitution.adopted|"+sha256) -- an adoption's idem is bound to the text it adopts`);
 }
 
 // The council measuring ITSELF (ADR-0307/0310). Two kinds, both closed:
@@ -281,11 +334,12 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0106/0107/0309/0310/0400)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
   if (event.kind === "decision.recorded") assertDecision(event);
+  if (event.kind === "constitution.adopted") assertConstitution(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);
   if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
   if (isLeadsKind(event.kind)) assertLeads(event);
