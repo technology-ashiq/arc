@@ -23,13 +23,26 @@ const RESEARCHED = {lead_id:ID, campaign:"pilot", provenance:"firm-site", geogra
   email_status:"verified", fact_count:2, store_id:"0123456789abcdef", store_fingerprint:"deadbeef"};
 const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.code; } };'
 
-@test "KINDS is 39 and holds all eight leads kinds" {
+@test "the vocabulary holds all eight leads kinds, uniquely and with no undeclared extras" {
+  # The literal "39" this assertion used to carry went stale the moment ADR-0073 added
+  # constitution.adopted -- the THIRD landing of one class. ADR-0309 predicted it by name
+  # ("anything that hardcodes 22 will drift"), evolve's own count test then hardcoded 30 and broke
+  # on ADR-0310, and this one hardcoded 39. What the test is actually for is that leads' eight
+  # kinds are present, unique, and the only ones leads declares -- all three asserted against
+  # LEADS_KINDS itself, so any OTHER lane extending the closed set can never break it again.
+  # Deleting a leads kind still turns this red, which a bare KINDS.length check would not.
   run _node 'const {KINDS} = await import("./.claude/scripts/hq/lib/validate.mjs");
+    const {LEADS_KINDS} = await import("./.claude/scripts/hq/lib/validate-leads.mjs");
     const want = ["lead.researched","outreach.sent","outreach.replied","meeting.booked","lead.suppressed","deal.won","deal.lost","metric.observed"];
     const missing = want.filter(k => !KINDS.includes(k));
-    console.log(KINDS.length + " " + (missing.length ? "MISSING:" + missing.join(",") : "all-present"));'
+    const undeclared = LEADS_KINDS.filter(k => !want.includes(k));
+    console.log([
+      missing.length ? "MISSING:" + missing.join(",") : "all-present",
+      undeclared.length ? "UNDECLARED:" + undeclared.join(",") : "no-extras",
+      KINDS.length === new Set(KINDS).size ? "unique" : "DUPLICATES",
+    ].join(" "));'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"39 all-present"* ]]
+  [[ "$output" == *"all-present no-extras unique"* ]]
 }
 
 @test "a well formed lead researched receipt is accepted" {

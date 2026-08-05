@@ -155,7 +155,7 @@
 .claude/scripts/hq/lib/spine-io.mjs	5a263f54de96ad6826763ad8560a28d28a719a50fe7c378425f50f52b956906a
 .claude/scripts/hq/lib/validate-experiment.mjs	21ad45d162632f47308962ef5282a814f1951685b45d99e4ba73fba6f9d54597
 .claude/scripts/hq/lib/validate-leads.mjs	68faffe4b2bf284cf2b8feaf3488ba0edec963e055100acbeb199013da3809b4
-.claude/scripts/hq/lib/validate.mjs	51bb7deec1c57bf7add646e5c17c6d9c2ce08384942262559792ae107496a2fd
+.claude/scripts/hq/lib/validate.mjs	191ba4feaa398cb17638a69f9094362fb256bf471c4ad2820563295b07a0ca74
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
 .claude/scripts/leads/arc-leads.mjs	55b55e0252138c78a6ee1b66a3c53528e45ab37fad6d4f8ce8cfbb78199c6393
 .claude/scripts/leads/lib/caps.mjs	4e078019f55a11b439d85fb0d06933b4e22e31e4dd02b68f440b05b6fe69ede3

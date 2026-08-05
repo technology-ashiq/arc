@@ -48,3 +48,9 @@
 48-ts-far-future.json	BAD_TS	far-future ts creates a day file no close will ever reach
 49-cost-huge.json	BAD_COST	unbounded magnitude poisons every downstream aggregate
 50-supersedes-self.json	BAD_SUPERSEDES	an event superseding itself is a cycle for any replay that resolves chains
+51-constitution-valid.json	ACCEPT	the adoption receipt in its correct form -- welded idem, lowercase hash (ADR-0073)
+52-constitution-unknown-key.json	BAD_CONSTITUTION	a "status" field on an append-only receipt is a field that learns to lie
+53-constitution-missing-hash.json	BAD_CONSTITUTION	naming a document without pinning its bytes is the poster failure this kind exists to stop
+54-constitution-uppercase-hash.json	BAD_CONSTITUTION	case-varied hex must NOT normalize -- it would hash-compare unequal against the real digest
+55-constitution-doc-traversal.json	BAD_CONSTITUTION	the document path is dereferenced by policy-lint later, so a traversal is a file read elsewhere
+56-constitution-unwelded-idem.json	BAD_CONSTITUTION	an idem not bound to the adopted text lets two different laws occupy one adoption slot

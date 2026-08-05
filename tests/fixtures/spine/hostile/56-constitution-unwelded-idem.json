@@ -1,0 +1,21 @@
+{
+  "id": "01JQ8XZ9K0ABCDEFGH00000056",
+  "v": 1,
+  "ts": "2026-07-22T21:30:00+05:30",
+  "idem": "8690f21ee782b1e0a39d0fafddef7a57c147365bc9b359e0a23dfbd789175be7",
+  "actor": "human:ashiq",
+  "process": "spine-fixture@1.0.0",
+  "model": null,
+  "venture": "arc",
+  "run_id": "r-fixture-0056",
+  "kind": "constitution.adopted",
+  "payload": {
+    "document": "docs/strategy/arc-CONSTITUTION.md",
+    "version": "1.0",
+    "sha256": "827d6f84fb1444ae40b64d8378e6985e5d1e133ec3580efe8a15766d1b7f4c79"
+  },
+  "outcome": "ok",
+  "cost": null,
+  "evidence": null,
+  "supersedes": null
+}
