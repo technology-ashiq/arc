@@ -37,7 +37,7 @@ implements exactly this split — the org below assumes it everywhere.
 
 | Layer | Contents | State |
 |---|---|---|
-| Governance | Constitution draft · council (12 jurors + verifier + cross-model juror, SHA-256-bound) · Brier calibration scripts · approval inbox | Design world-class; **calibration data = 0** |
+| Governance | Constitution **adopted v1.0** (2026-08-06, hash-pinned receipt) · council (12 jurors + verifier + cross-model juror, SHA-256-bound) · Brier calibration scripts · approval inbox | Design world-class; **calibration data = 0** |
 | Factory | kickoff v3.5 · 22 commands · 23 agents · attack panel · simulation gate · phase-done evidence · retro · trial-ledger · 334 bats · 3-OS CI | The build problem is solved |
 | Security | arc-scan (semgrep/codeql/gitleaks/trivy/trufflehog/zap) · rls-gate · guard hooks | Enterprise-grade for a solo shop |
 | HQ | Receipt spine live (Phase-04 dogfood) · brief · inbox · revenue ingest (simulated) | Mechanism proven, live value pending |
@@ -73,7 +73,7 @@ owner yet) · **HUMAN** (deliberately never automated).
 | # | Role | arc seat | State |
 |---|---|---|---|
 | 1 | Board of directors | `/arc-council` (stances + experts + verifier + juror) | EXISTS |
-| 2 | Constitution / charter | `CONSTITUTION.md` at repo root (adoption pending) | EXISTS (draft) |
+| 2 | Constitution / charter | `CONSTITUTION.md` at repo root, adopted v1.0 2026-08-06 | LIVE (receipt `01KZ9V0QXNNMB3ZH18MSH8DKH3`) |
 | 3 | Internal auditor | spine gap-audit + evidence bundles | EXISTS |
 | 4 | Calibration keeper | council-calibrate + Brier scoreboard | EXISTS — data 0 |
 

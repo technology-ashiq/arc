@@ -21,7 +21,7 @@
 North-star: **₹/month of revenue per hour of Ashiq's weekly involvement.**
 Five laws: process over model · if it isn't an event it didn't happen · trust is earned
 by evidence · everything measured, everything improvable · boring tech, receipts everywhere.
-Above all of it sits the **arc Constitution** (decision log #14; draft pending adoption) —
+Above all of it sits the **arc Constitution** (decision log #14; adopted v1.0 on 2026-08-06) —
 the five laws graduate into its articles; every future decision passes it first.
 
 ## 1. Where we are today (2026-07-18)

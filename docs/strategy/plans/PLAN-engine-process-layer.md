@@ -20,8 +20,9 @@
 > anticipates exactly this kind of gap-notice; firing on an unrecorded trigger without
 > the amendment would put plan and policy in contradiction (MP-A: policy outranks).
 > **Prerequisites:** spine live (C2) ✓ · Balanced Model Policy adopted (ADR-0069, C5) ✓.
-> **Do not start before a trigger fires** (Constitution A8 — still draft; its adoption
-> receipt is a standing governance gap this plan notes and does not solve). Engine work
+> **Do not start before a trigger fires** (Constitution A8 — adopted v1.0 on 2026-08-06,
+> receipt `01KZ9V0QXNNMB3ZH18MSH8DKH3`; the governance gap this plan noted is now closed).
+> Engine work
 > lives in its own lane, born only by `/arc-kickoff --lane engine` (ADR-0054); board row
 > order stays the owner's priority call (ADR-0051/0052 — WIP visible, never gated).
 
