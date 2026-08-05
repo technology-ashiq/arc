@@ -11,8 +11,8 @@
   "kind": "constitution.adopted",
   "payload": {
     "document": "docs/strategy/../../../etc/passwd",
-    "version": "1.0",
-    "sha256": "827d6f84fb1444ae40b64d8378e6985e5d1e133ec3580efe8a15766d1b7f4c79"
+    "sha256": "827d6f84fb1444ae40b64d8378e6985e5d1e133ec3580efe8a15766d1b7f4c79",
+    "version": "1.0"
   },
   "outcome": "ok",
   "cost": null,
