@@ -85,6 +85,8 @@ const PROVIDER_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,254}$/;
 const DIMENSION_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 const STORE_ID_RE = /^[0-9a-f]{16}$/;
 const FINGERPRINT_RE = /^[0-9a-f]{8}$/;
+// ADR-0414. Same opaque-fixed-width discipline as drafts.mjs's `draft_<16 hex>` ref.
+const REPLY_REF_RE = /^reply_[0-9a-f]{32}$/;
 
 const PROVENANCE = new Set(["firm-site", "public-directory", "public-listing", "manual-linkedin-note"]);
 const EMAIL_STATUS = new Set(["verified", "held"]);
@@ -130,7 +132,7 @@ const SHAPES = {
     optional: [],
   },
   "outreach.replied": {
-    required: ["lead_id", "campaign", "triage_class", "ingested_at"],
+    required: ["lead_id", "campaign", "triage_class", "ingested_at", "reply_ref"],
     optional: ["in_reply_to_touch"],
   },
   "meeting.booked": { required: ["lead_id", "campaign", "booked_at"], optional: [] },
@@ -162,8 +164,15 @@ export function leadsIdem(kind, p) {
       return sha256Hex(`lead.researched|${p.campaign}|${p.lead_id}|${opt(p.below_bar)}|${p.store_fingerprint}`);
     case "outreach.sent":
       return sha256Hex(`outreach.sent|${p.campaign}|${p.lead_id}|${p.touch_n}|${p.draft_sha}|${p.submitted_at}|${p.idem_key}|${p.provider_message_id}`);
+    // ADR-0414. `ingested_at` is DELIBERATELY absent and its absence is the fix. It stamps our
+    // processing, not the reply, so it split one reply into two receipts on any re-ingest --
+    // which is the ordinary response to "did that run finish?" -- while `triage_class` being
+    // absent collapsed a "no thanks" and an "unsubscribe me" arriving in the same second into
+    // one receipt, dropping whichever came second. Total preimage means total over the fields
+    // that distinguish two legitimately DIFFERENT receipts; two ingests of one reply are not
+    // two receipts.
     case "outreach.replied":
-      return sha256Hex(`outreach.replied|${p.campaign}|${p.lead_id}|${p.ingested_at}`);
+      return sha256Hex(`outreach.replied|${p.campaign}|${p.lead_id}|${p.triage_class}|${p.reply_ref}`);
     case "meeting.booked":
       return sha256Hex(`meeting.booked|${p.campaign}|${p.lead_id}|${p.booked_at}`);
     case "lead.suppressed":
@@ -279,6 +288,10 @@ export function assertLeads(event) {
         throw new SpineError("BAD_LEADS", `triage_class ${JSON.stringify(p.triage_class)} is outside ${[...TRIAGE].join("|")} (exact case)`);
       if (has(p, "in_reply_to_touch") && (!Number.isSafeInteger(p.in_reply_to_touch) || p.in_reply_to_touch < 1))
         throw new SpineError("BAD_LEADS", "in_reply_to_touch, when present, must be a positive integer");
+      // Opaque and FIXED-WIDTH, exactly as draft_ref is (ADR-0412). It is the reply's identity
+      // on a public spine, so the shape is pinned here rather than trusted from the producer.
+      if (typeof p.reply_ref !== "string" || !REPLY_REF_RE.test(p.reply_ref))
+        throw new SpineError("BAD_LEADS", "reply_ref must be reply_<32 lowercase hex> — the content hash of the reply's raw bytes (ADR-0414); the body itself never reaches the spine");
       assertTs(kind, "ingested_at", p.ingested_at);
       break;
     case "meeting.booked":

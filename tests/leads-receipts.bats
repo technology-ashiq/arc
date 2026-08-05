@@ -23,13 +23,24 @@ const RESEARCHED = {lead_id:ID, campaign:"pilot", provenance:"firm-site", geogra
   email_status:"verified", fact_count:2, store_id:"0123456789abcdef", store_fingerprint:"deadbeef"};
 const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.code; } };'
 
-@test "KINDS is 39 and holds all eight leads kinds" {
+# DERIVED, not hard-typed. This asserted "39" as a literal, which its neighbours in
+# evolve-receipts.bats do not — and a literal count fails for the wrong reason the next time any
+# lane adds a kind, teaching whoever hits it to bump the number rather than ask what changed.
+#
+# The property that actually matters is that the leads extension was purely ADDITIVE: no
+# duplicate, and no leads kind quietly SHADOWING a kind another lane already owned. A collision
+# would leave the count looking plausible while two lanes validated one name.
+@test "the leads kinds extend KINDS additively with no duplicate and no shadowing" {
   run _node 'const {KINDS} = await import("./.claude/scripts/hq/lib/validate.mjs");
-    const want = ["lead.researched","outreach.sent","outreach.replied","meeting.booked","lead.suppressed","deal.won","deal.lost","metric.observed"];
-    const missing = want.filter(k => !KINDS.includes(k));
-    console.log(KINDS.length + " " + (missing.length ? "MISSING:" + missing.join(",") : "all-present"));'
+    const {LEADS_KINDS} = await import("./.claude/scripts/hq/lib/validate-leads.mjs");
+    const missing = LEADS_KINDS.filter(k => !KINDS.includes(k));
+    const others = KINDS.filter(k => !LEADS_KINDS.includes(k));
+    const dup = KINDS.length !== new Set(KINDS).size;
+    const additive = KINDS.length === others.length + LEADS_KINDS.length;
+    console.log([LEADS_KINDS.length, missing.length ? "MISSING:"+missing.join(",") : "all-present",
+      dup ? "DUPLICATE" : "unique", additive ? "additive" : "SHADOWED"].join(" "));'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"39 all-present"* ]]
+  [[ "$output" == *"8 all-present unique additive"* ]]
 }
 
 @test "a well formed lead researched receipt is accepted" {

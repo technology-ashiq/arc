@@ -39,6 +39,9 @@ const store = realStore();
 const ID = withDossier(store, "adv@firm.example.com");
 const OTHER = withDossier(store, "other@firm.example.com");
 const SHA = "c".repeat(64);
+// outreach.replied carries reply_ref now (ADR-0414); a fold input without one is a shape the
+// validator refuses, i.e. a receipt that cannot exist on any spine.
+const RREF = "reply_" + "d".repeat(32);
 const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k"+n, provider_message_id:"m"+n, draft_sha:SHA}});
 const base = {campaign:"pilot", lead_id:ID, touch_n:1, draft_sha:SHA, approved_sha:SHA};
 const NOW = "2026-08-04T10:00:00+05:30";
@@ -53,7 +56,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 }
 
 @test "a reply recorded after approval permanently blocks that send" {
-  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'interested', ingested_at:NOW}}]));"
+  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'interested', ingested_at:NOW, reply_ref:RREF}}]));"
   [[ "$output" == *"reply-stop"* ]]
 }
 
@@ -63,7 +66,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 }
 
 @test "an unsubscribe reply suppresses in the same fold" {
-  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'unsubscribe', ingested_at:NOW}}]));"
+  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:ID, campaign:'pilot', triage_class:'unsubscribe', ingested_at:NOW, reply_ref:RREF}}]));"
   [[ "$output" == *"suppression"* ]] || [[ "$output" == *"reply-stop"* ]]
 }
 
@@ -210,14 +213,14 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 # assertion the original fixtures lacked: they checked that a receipt was EMITTED, not that a
 # send was STOPPED.
 @test "a fired breaker actually stops a send" {
-  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}}]));"
+  run _g "$GIMPORT console.log(refuse([{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW, reply_ref:RREF}}]));"
   [[ "$output" == *"campaign-state"* ]]
 }
 
 @test "a fired breaker is not cleared by a flag or an env var" {
   run _g "$GIMPORT
     process.env.LEADS_FORCE = '1';
-    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}}];
+    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW, reply_ref:RREF}}];
     console.log(refuse(ev));"
   [[ "$output" == *"campaign-state"* ]]
 }
@@ -228,7 +231,7 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 # tests/leads-adversarial.bats, which builds the incident id the same way the guard does.
 @test "a free text approval reason does not clear a breaker" {
   run _g "$GIMPORT
-    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW}},
+    const ev = [{kind:'outreach.replied', payload:{lead_id:OTHER, campaign:'pilot', triage_class:'bounce', ingested_at:NOW, reply_ref:RREF}},
                 {id:'01D', kind:'decision.recorded', payload:{decides:'01J000000000000000000000AB', verdict:'approve', reason:'HOLD on pilot reviewed: the address was a typo, resuming'}}];
     console.log(refuse(ev));"
   [[ "$output" == *"campaign-state"* ]]
@@ -269,9 +272,32 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
 # daemon, ever" was a hit, so the test failed for describing the rule it enforces. A
 # whole-line comment cannot execute anything; the portability lint in this repo already draws
 # exactly this distinction and this test did not.
+#
+# `mailer-daemon` and `mail-daemon` are excluded, and that is a real distinction rather than a
+# hole: they are the RFC role addresses a BOUNCE arrives from, matched by replies.mjs to decide
+# whether a message came from a mail system or a person. A hyphenated mail role cannot schedule
+# anything. The alternative -- renaming the constant to dodge the grep -- would leave the next
+# legitimate mail-role match failing for the same reason, so the guard gets the distinction.
+# A bare `daemon`, and anything that could actually run, still fails.
 @test "no scheduler daemon or cron exists in the leads tree" {
-  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$ARC_ROOT/.claude/scripts/leads/' | grep -vE ':[[:space:]]*(//|#|\*)'"
+  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$ARC_ROOT/.claude/scripts/leads/' | grep -vE ':[[:space:]]*(//|#|\*)' | grep -viE 'mail(er)?-daemon'"
   [ "$status" -ne 0 ] || { echo "background execution appeared in CODE: $output"; false; }
+}
+
+# The negative control for the exclusion above: the guard must still fire on real background
+# execution, and on a bare `daemon` that is not a mail role. Without this, the `grep -v` could
+# be widened to nothing and the suite would stay green.
+@test "the no-daemon guard still fires on real background execution" {
+  local probe; probe="$BATS_TEST_TMPDIR/probe"
+  mkdir -p "$probe"
+  printf '%s\n' 'setInterval(() => send(), 1000);' > "$probe/bad.mjs"
+  printf '%s\n' 'const daemon = spawnDetached();' > "$probe/also-bad.mjs"
+  printf '%s\n' 'const DAEMON_LOCAL = /^mailer-daemon$/i;' > "$probe/ok.mjs"
+  run bash -c "grep -rnE 'setInterval|cron|daemon|node-schedule' '$probe/' | grep -vE ':[[:space:]]*(//|#|\*)' | grep -viE 'mail(er)?-daemon'"
+  [ "$status" -eq 0 ] || { echo "the guard went blind"; false; }
+  [[ "$output" == *"bad.mjs"* ]]
+  [[ "$output" == *"also-bad.mjs"* ]]
+  [[ "$output" != *"ok.mjs"* ]]
 }
 
 # ADR-0407 promotion is deliberately NOT built this cycle: its only input is >=2 campaigns and
@@ -281,9 +307,9 @@ const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store
   [ "$status" -ne 0 ] || { echo "an autonomy path appeared: $output"; false; }
 }
 
-@test "this file registers the 33 tests it declares" {
+@test "this file registers the 34 tests it declares" {
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 33 ] || { echo "declared $declared, expected 33"; false; }
+  [ "$declared" -eq 34 ] || { echo "declared $declared, expected 34"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }

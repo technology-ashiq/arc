@@ -43,6 +43,54 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"config"* ]]
 }
 
+# ---------- the ack decision (Phase 02) ----------
+#
+# `submit` resolved on ANY parseable JSON body, ignoring the status code, so a 500 whose body
+# was `{"error":"overloaded"}` came back as an ACK -- and sendOne writes the receipt on an ack.
+# A cap slot and a journal resolution spent on a mail that was never accepted, with the spine
+# recording it as sent. The rule was extracted from the HTTPS callback so it is tested rather
+# than mocked around: testing it in place needs a TLS server and a client willing to trust a
+# self-signed cert, i.e. a test that proves something about a weakened client.
+
+@test "a non 2xx response is never an ack, whatever its body says" {
+  run _fake 'const {decodeProviderResponse, ProviderError} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const verdict = (code, body) => { try { decodeProviderResponse(code, body); return "ACK"; }
+      catch (e) { return e instanceof ProviderError ? e.kind : "WRONG:" + e.name; } };
+    console.log([[500, "{\"provider_message_id\":\"m1\"}"], [503, "{\"error\":\"overloaded\"}"],
+                 [429, "{\"provider_message_id\":\"m1\"}"], [400, "{\"provider_message_id\":\"m1\"}"],
+                 [403, "{}"], [0, "{\"provider_message_id\":\"m1\"}"]]
+      .map(([c, b]) => c + "=" + verdict(c, b)).join(" "));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Retryable classes are transport (reconcile decides); 4xx is a refusal (a retry repeats it).
+  # A status of 0 -- no status at all -- is `refused`, not `transport`: calling it retryable
+  # would be claiming evidence of a retryable condition that we do not have. Either way the
+  # intent stays unresolved and reconcile settles it, so the class is operator information.
+  [[ "$output" == *"500=transport 503=transport 429=transport 400=refused 403=refused 0=refused"* ]]
+}
+
+@test "a 2xx with no provider message id is not an ack either" {
+  run _fake 'const {decodeProviderResponse, ProviderError} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const verdict = (code, body) => { try { return "ACK:" + decodeProviderResponse(code, body).provider_message_id; }
+      catch (e) { return e instanceof ProviderError ? e.kind : "WRONG:" + e.name; } };
+    console.log([verdict(200, "{}"), verdict(200, "{\"provider_message_id\":\"\"}"),
+                 verdict(200, "not json"), verdict(202, "{\"provider_message_id\":\"m9\"}")].join(" "));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The positive case is asserted alongside the refusals: a decoder that refused EVERYTHING
+  # would satisfy the three negatives on its own.
+  [[ "$output" == *"refused refused refused ACK:m9"* ]]
+}
+
+@test "a provider error body is never echoed into the refusal" {
+  run _fake 'const {decodeProviderResponse} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const marker = "ZZRECIPIENTZZ";
+    let msg = "";
+    try { decodeProviderResponse(400, "{\"error\":\"rejected message for " + marker + "\"}"); }
+    catch (e) { msg = e.message; }
+    console.log((msg ? "refused" : "NO-REFUSAL") + " " + (msg.indexOf(marker) === -1 ? "clean" : "LEAKED"));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"refused clean"* ]]
+}
+
 @test "the fake provider is idempotent on a repeated idem key" {
   run _fake 'const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
     const a = await provider().submit({idem_key:"same"});
@@ -192,12 +240,23 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"refusing to fold"* ]]
 }
 
-@test "this file registers the 18 tests it declares" {
+# INBOUND_MAX_BYTES is a copy of MAX_REPLY_BYTES, kept so deps.mjs needs no parser dependency.
+# A constant copied without an assertion is a constant that drifts, and the drift would be
+# silent: the inbound door would accept what the parser then refuses, after the allocation.
+@test "the inbound size ceiling equals the parser size limit" {
+  run _fake 'const {INBOUND_MAX_BYTES} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const {MAX_REPLY_BYTES} = await import("./.claude/scripts/leads/lib/replies.mjs");
+    console.log(INBOUND_MAX_BYTES === MAX_REPLY_BYTES ? "in-step " + INBOUND_MAX_BYTES : "DRIFTED " + INBOUND_MAX_BYTES + " vs " + MAX_REPLY_BYTES);'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"in-step 1048576"* ]]
+}
+
+@test "this file registers the 22 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 18 ] || { echo "declared $declared, expected 18"; false; }
+  [ "$declared" -eq 22 ] || { echo "declared $declared, expected 22"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

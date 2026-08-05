@@ -63,8 +63,38 @@ const minutesOf = (hhmm) => {
   return Number(m[1]) * 60 + Number(m[2]);
 };
 
+// The caps block is a CLOSED key set, exactly like a spine payload. An unknown key is refused,
+// never ignored.
+//
+// This is not tidiness. The shipped config carried `per_ist_day_ceiling: 20` and
+// `touches_per_lead_ceiling: 2` — two keys that nothing reads, sitting in the caps block,
+// named after the one thing config is forbidden to change. An operator raising
+// `per_ist_day_ceiling` to 100 gets no error, no warning and no effect, and every reason to
+// believe the ceiling moved. A silently-ignored key is worse than a rejected one precisely
+// when it is named after a safety property: it reads as a control and behaves as a comment.
+const CAP_KEYS = Object.freeze(Object.keys(DEFAULTS));
+
 export function loadCaps(path = process.env.LEADS_CONFIG || DEFAULT_CONFIG) {
   const cfg = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : {};
+  // The same rule ONE LEVEL UP. `{ per_ist_day: 500, caps: { per_ist_day: 20 } }` was accepted
+  // silently: an operator who put a cap at the top level got no error, no warning and no
+  // effect — verbatim the failure the closed key set below exists to stop, surviving in the
+  // adjacent scope (D6).
+  for (const k of Object.keys(cfg))
+    if (CAP_KEYS.includes(k))
+      throw new CapError(
+        "CAP_KEY_AT_TOP_LEVEL",
+        `"${k}" is a cap and belongs under "caps", not at the top level of the config. ` +
+          `Refusing rather than ignoring it — a limit written in the wrong place looks exactly like a limit that is not working.`
+      );
+  for (const k of Object.keys(cfg.caps || {}))
+    if (!CAP_KEYS.includes(k))
+      throw new CapError(
+        "UNKNOWN_CAP_KEY",
+        `caps.${k} is not a cap this code reads (known: ${CAP_KEYS.join(", ")}). Refusing rather than ignoring it — ` +
+          `a key named like a limit that nothing reads is indistinguishable from a limit that is not working. ` +
+          `Hard ceilings live in code (ADR-0403) and no config key moves them.`
+      );
   const caps = { ...DEFAULTS, ...(cfg.caps || {}) };
 
   // The ask-to-exceed refusal. Note it fires on the CONFIG, before any send is attempted:

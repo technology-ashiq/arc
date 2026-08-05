@@ -5,12 +5,14 @@
   "product_domains": ["lexos.app"],
   "dkim_selector": "default",
   "warmup_log_path": "",
+  "_seed_evidence_note": "REQ-07's Phase-3 entry gate: a dated seed-inbox smoke run, <=7 days old, across >=2 owned mailboxes. Read by preflight.seedSmokeFinding, which runs BEFORE the sending-domain refusal so that it is a reader that actually executes in the state this repo ships in.",
   "seed_evidence_path": "",
+  "_calendar_url_note": "Where an interested reply's calendar draft points. Empty refuses the draft loudly rather than dropping a warm lead silently — the outreach.replied receipt is still written and the sequence still stops.",
+  "calendar_url": "",
+  "_caps_note": "Ceilings are NOT here and cannot be. They live in caps.mjs CEILINGS/FLOORS (ADR-0403); config may only lower a limit. Two keys named per_ist_day_ceiling and touches_per_lead_ceiling used to sit in this block with no reader anywhere — removed 2026-08-05, and the block is now a closed key set that refuses an unknown key rather than ignoring it.",
   "caps": {
     "per_ist_day": 20,
-    "per_ist_day_ceiling": 20,
     "touches_per_lead": 2,
-    "touches_per_lead_ceiling": 2,
     "rolling_window_days": 7,
     "send_window_ist": { "days": [1, 2, 3, 4, 5], "start": "09:30", "end": "18:00" }
   },

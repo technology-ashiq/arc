@@ -52,6 +52,12 @@ async function txt(name) {
   catch { return []; }
 }
 
+// `preflight()` is REQ-00 and ONLY REQ-00: is this domain fit to send from. REQ-07 (the
+// fake→real gap: a dated seed-inbox smoke) is a DIFFERENT requirement with a different gate,
+// and it lives in seedSmokeFinding below. Folding it in here was the first attempt and it was
+// wrong twice over — it made two REQ-00 tests fail for a REQ-07 reason, which is the tell:
+// when a gate starts failing for reasons outside the question it asks, it has been given two
+// jobs. `arc-leads preflight` is the composition point; it runs both and reports both.
 export async function preflight({ config, warmupApproved = false } = {}) {
   const cfg = config || loadConfig();
   const findings = [];
@@ -106,6 +112,48 @@ export async function preflight({ config, warmupApproved = false } = {}) {
   }
 
   return { ok: findings.every((f) => f.ok), findings };
+}
+
+// REQ-07. Seed-inbox smoke evidence must exist, be DATED, and be no older than 7 days.
+//
+// Undated is refused rather than accepted-with-a-warning: an undated file is indistinguishable
+// from evidence produced before the last DNS change, and the whole point of the clause is that
+// deliverability evidence decays. Unparseable is refused for the same reason — "we could not
+// read it" must never read as "there was nothing wrong with it".
+export const SEED_EVIDENCE_MAX_AGE_DAYS = 7;
+
+export function seedSmokeFinding(path, now = Date.now()) {
+  const rule = "seed-smoke";
+  const p = String(path || "").trim();
+  if (!p)
+    return { ok: false, rule, detail: `seed_evidence_path is empty — no dated seed-inbox smoke exists. Phase-3 entry requires a run <=${SEED_EVIDENCE_MAX_AGE_DAYS} days old against >=2 owned seed mailboxes (REQ-07, ADR-0413)` };
+  if (!existsSync(p))
+    return { ok: false, rule, detail: `seed_evidence_path points at ${p}, which does not exist` };
+  let ev;
+  try { ev = JSON.parse(readFileSync(p, "utf8")); }
+  catch { return { ok: false, rule, detail: `seed evidence at ${p} is not readable JSON — refusing, because an unreadable gate artifact must never pass as an unremarkable one` }; }
+
+  const stamp = typeof ev.dated === "string" ? Date.parse(ev.dated) : NaN;
+  if (!Number.isFinite(stamp))
+    return { ok: false, rule, detail: `seed evidence at ${p} carries no parseable "dated" field — undated evidence cannot be shown to be fresh, so it is refused rather than trusted` };
+  const ageDays = (now - stamp) / 86400000;
+  if (ageDays > SEED_EVIDENCE_MAX_AGE_DAYS)
+    return { ok: false, rule, detail: `seed evidence is ${ageDays.toFixed(1)} days old; the limit is ${SEED_EVIDENCE_MAX_AGE_DAYS} (REQ-07)` };
+  if (ageDays < 0)
+    return { ok: false, rule, detail: `seed evidence is dated ${Math.abs(ageDays).toFixed(1)} days in the FUTURE — refusing rather than treating a forward-dated artifact as fresh` };
+
+  // DISTINCT, non-empty strings. `length >= 2` alone accepted the same mailbox listed twice
+  // and even `[null, 0]` — and this is REQ-07, the gate that decides whether a real campaign
+  // may start. "Two mailboxes" means two, and the point of the clause is provider diversity.
+  const raw = Array.isArray(ev.mailboxes) ? ev.mailboxes : [];
+  const mailboxes = [...new Set(raw.filter((m) => typeof m === "string" && m.trim()).map((m) => m.trim().toLowerCase()))];
+  if (mailboxes.length < 2)
+    return { ok: false, rule, detail: `seed evidence names ${mailboxes.length} distinct non-empty mailbox(es) out of ${raw.length} entries; REQ-07 requires >=2 owned seed mailboxes (Gmail + Outlook-class)` };
+  const missing = ["inbox_placement", "auth_headers", "unsubscribe", "reply_ingested", "bounce_ingested"]
+    .filter((k) => ev[k] !== true);
+  if (missing.length)
+    return { ok: false, rule, detail: `seed evidence does not assert ${missing.join(", ")} — every clause must be true, and an absent clause is a failed one` };
+  return { ok: true, rule, detail: `seed smoke ${ageDays.toFixed(1)}d old across ${mailboxes.length} mailboxes` };
 }
 
 function readWarmupLog(path) {

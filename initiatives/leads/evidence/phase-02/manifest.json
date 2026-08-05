@@ -1,0 +1,14 @@
+{
+  "phase": "02",
+  "commit": "2b7f507",
+  "short": "2b7f507",
+  "generated": "2026-08-05T00:00:00Z",
+  "ci_run": "31018199453",
+  "ci_jobs": "19/19 success",
+  "files": [
+    {
+      "name": "handoff.md",
+      "sha256": "2b55d58eeea1b81d54026591bd008c7425b633b12622cfd783a126f0923cfbc9"
+    }
+  ]
+}
