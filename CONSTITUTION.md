@@ -1,12 +1,14 @@
-# The arc Constitution (DRAFT v0.1)
+# The arc Constitution (v1.0)
 
 > The DNA of the company. This document outranks every roadmap, architecture doc, ADR,
 > PLAN, prompt, and line of code. When anything conflicts with it, that thing is wrong.
 > It is written to be read in two minutes and to survive contributors, AI models, and
 > Ashiq's own future moods. Precedence: **Constitution > ADRs > PLAN.md > code.**
 >
-> Adoption status: DRAFT — becomes law on Ashiq's explicit sign-off, recorded as the
-> spine's first `constitution.adopted` event.
+> Adoption status: **ADOPTED v1.0**, signed off by Ashiq on 2026-08-06. The sign-off is this
+> text landing on `main`; the receipt is the spine's first `constitution.adopted` event, whose
+> payload pins the sha256 of this file (ADR-0073). Amending it means a fresh
+> `constitution.adopted` that supersedes that one — see Amendment process below.
 
 ---
 
