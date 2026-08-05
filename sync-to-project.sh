@@ -150,6 +150,14 @@ for f in blueprint.md how-it-works.md build-playbook.md product-runbook.md plugi
   [ -f "$SRC/docs/$f" ] && cp "$SRC/docs/$f" "$TARGET/docs/$f"
 done
 
+# The Constitution ships with EVERY install -- that is its own Enforcement clause 1, "every
+# instance carries it", and the clause is only true if both install paths carry it. It sits at
+# the repo ROOT rather than under docs/, so the loop above cannot pick it up and it is copied
+# explicitly here. The --products path gets it from core/manifest.json instead; a file that
+# shipped through only one of the two paths would make the clause half-true, which is the
+# poster failure the clause exists to prevent. Mirrored in sync-to-project.ps1.
+[ -f "$SRC/CONSTITUTION.md" ] && cp "$SRC/CONSTITUTION.md" "$TARGET/CONSTITUTION.md"
+
 # arc-council docs + sessions skeleton (the .claude council core already rode along above).
 # The target's own verdicts -- docs/council/sessions/** -- are never touched (v1 phase-04 contract).
 mkdir -p "$TARGET/docs/council/references" "$TARGET/docs/council/sessions/.juror"

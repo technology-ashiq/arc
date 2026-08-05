@@ -17,7 +17,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | File | Status | Role now |
 |---|---|---|
 | `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 11 full PLANs + 12 BRIEFs + ordering/triggers in `plans/README.md` |
-| `arc-CONSTITUTION-draft.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). On adoption (Phase-04 retro, first `constitution.adopted` event) the file moves to repo root as `CONSTITUTION.md` |
+| `../../CONSTITUTION.md` | **ACTIVE · awaiting Ashiq's sign-off** | The DNA (3 eternal + 10 working articles). Now at repo root and in the core manifest, per its own Enforcement clause 1 — the move happened BEFORE adoption on purpose, because the path is pinned inside the `constitution.adopted` receipt and cannot be corrected afterwards. Adoption is now only the version bump + status line + the event |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
 | `arc-full-architecture.md` | ACTIVE — reference | The target picture: 16 modules / kernel–workflows–ventures, model-agnostic engine, evolve contract, data layer. Briefs assume its definitions |

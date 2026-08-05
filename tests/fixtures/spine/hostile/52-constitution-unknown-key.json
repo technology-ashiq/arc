@@ -10,7 +10,7 @@
   "run_id": "r-fixture-0052",
   "kind": "constitution.adopted",
   "payload": {
-    "document": "docs/strategy/arc-CONSTITUTION.md",
+    "document": "CONSTITUTION.md",
     "sha256": "827d6f84fb1444ae40b64d8378e6985e5d1e133ec3580efe8a15766d1b7f4c79",
     "status": "current",
     "version": "1.0"

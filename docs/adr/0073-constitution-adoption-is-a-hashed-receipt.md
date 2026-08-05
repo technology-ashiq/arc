@@ -10,7 +10,7 @@ hash no longer identifies the adopted law.
 
 ## Context
 
-The Constitution (`docs/strategy/arc-CONSTITUTION-draft.md`) has outranked every ADR, PLAN and line of
+The Constitution (`CONSTITUTION.md`, at the repo root) has outranked every ADR, PLAN and line of
 code since it was written, and is still DRAFT. Its own adoption clause names the mechanism it needs:
 *"becomes law on Ashiq's explicit sign-off, recorded as the spine's first `constitution.adopted`
 event."* That kind does not exist.
@@ -85,10 +85,18 @@ later adoption is a second `constitution.adopted` whose **event-level `supersede
 one. No payload field, no "current" flag: a status field on an append-only receipt is a field that
 learns to lie.
 
-**The document is renamed at adoption** — `docs/strategy/arc-CONSTITUTION-draft.md` →
-`docs/strategy/arc-CONSTITUTION.md` — and the rename happens **before** the hash is taken. The path
-sits inside the hashed receipt permanently; baking `-draft` into the filename of adopted law is the
-poster-drift failure in miniature.
+**The document is moved before adoption, not at it** — `docs/strategy/arc-CONSTITUTION-draft.md` →
+**`CONSTITUTION.md` at the repo root**, added to the core manifest. The path sits inside the hashed
+receipt permanently, so it has to be final before the hash is taken; baking `-draft` into the
+filename of adopted law is the poster-drift failure in miniature.
+
+**Corrected 2026-08-05, before adoption.** The first version of this ADR named
+`docs/strategy/arc-CONSTITUTION.md` as the target. That contradicted the Constitution's own
+Enforcement clause 1 — *"`CONSTITUTION.md` lives at the arc repo root, ships in the core manifest —
+every instance carries it"* — and `docs/strategy/README.md` had already recorded the same intent.
+Since the path is permanent once hashed, the mistake was worth catching here rather than in the
+receipt. Moving it early also means adoption itself is only a version bump, a status line, and the
+event.
 
 **The count stays derived** (ADR-0107): the `UNKNOWN_KIND` message reads `KINDS.length`, never a typed
 total. Per ADR-0106's rule the unknown-kind hostile fixture is re-run —

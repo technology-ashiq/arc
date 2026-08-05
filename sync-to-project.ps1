@@ -125,6 +125,11 @@ foreach ($f in @("blueprint.md", "how-it-works.md", "build-playbook.md", "produc
   Copy-Item "$src\docs\$f" "$Target\docs\$f" -Force
 }
 
+# The Constitution ships with EVERY install - Enforcement clause 1, "every instance carries it".
+# Root file, not under docs\, so the loop above cannot pick it up. Mirrors sync-to-project.sh;
+# the byte-identity golden compares both paths, so these two must stay in step.
+if (Test-Path "$src\CONSTITUTION.md") { Copy-Item "$src\CONSTITUTION.md" "$Target\CONSTITUTION.md" -Force }
+
 # arc-council docs + sessions skeleton (the .claude council core already rode along above).
 New-Item -ItemType Directory -Force -Path "$Target\docs\council\references", "$Target\docs\council\sessions\.juror" | Out-Null
 if (Test-Path "$src\docs\council\README.md") { Copy-Item "$src\docs\council\README.md" "$Target\docs\council\README.md" -Force }

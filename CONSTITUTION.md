@@ -74,8 +74,11 @@ pinned so it cannot be unlearned.
 
 - **Tier E:** unamendable. A fork that changes Tier E is a different company.
 - **Tier A:** written amendment proposal (ADR form, names the article, the change, the
-  evidence) → **7-day cooling period** → explicit human sign-off → `constitution.amended`
-  event on the spine → version bump. No batch amendments.
+  evidence) → **7-day cooling period** → explicit human sign-off → a fresh
+  `constitution.adopted` event whose `supersedes` names the one it replaces → version
+  bump. No batch amendments. An amendment is a re-adoption of the whole text, so the
+  receipt always pins the exact bytes that are law at that moment (ADR-0073); there is no
+  separate amendment kind, and no status field on the receipt that could drift from it.
 - **Machines never amend.** evolve, council, and any agent may CITE the constitution in
   reasoning, and may flag tension between an article and reality — but only the human
   may propose or approve an amendment.
@@ -92,8 +95,9 @@ pinned so it cannot be unlearned.
 4. `/arc-change` triage step 0: "does this violate an article?" — if yes, it needs an
    amendment, not a workaround.
 5. Council verdicts include a constitution-compliance lens.
-6. Adoption, amendments, and violations are all spine events — the constitution itself
-   runs on receipts (E1 applies to this document too).
+6. Adoption and amendments are `constitution.adopted` events, each amendment superseding
+   the one before it; a violation is an `incident.raised`. The constitution itself runs on
+   receipts (E1 applies to this document too).
 
 ## Lineage note
 
