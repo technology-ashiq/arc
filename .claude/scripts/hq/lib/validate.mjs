@@ -7,7 +7,6 @@
 import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex, IST_TS_RE } from "./canonical.mjs";
 import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
-import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -41,9 +40,6 @@ export const KINDS = Object.freeze([
   // fact and therefore its own kind per ADR-0304's one-kind-per-lifecycle-step rule.
   "council.outcome",
   ...LEADS_KINDS,
-  // 40 -> 44 by ADR-0508 (POL-E). Four authority receipts: two for a level change, because a
-  // human decision and a machine demotion are different truth sources, and two for money.
-  ...POLICY_KINDS,
   // 39 -> 40 by ADR-0073. The Constitution's own adoption clause names this kind, so until it
   // existed the clause was un-executable: the event that makes arc's highest-precedence document
   // law would itself quarantine as UNKNOWN_KIND. It is a company organ (ADR-0053), so its shape
@@ -338,7 +334,7 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400/0508)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
@@ -347,10 +343,6 @@ export function validateEvent(event) {
   if (isExperimentKind(event.kind)) assertExperiment(event);
   if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
   if (isLeadsKind(event.kind)) assertLeads(event);
-  if (isPolicyKind(event.kind)) assertPolicy(event);
-  // A PROFILE, not a kind: approval.requested stays generic for every other gate in the repo,
-  // and only a payload declaring subject: "policy.promotion" is held to the strict shape.
-  if (isPromotionRequest(event)) assertPromotionRequest(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

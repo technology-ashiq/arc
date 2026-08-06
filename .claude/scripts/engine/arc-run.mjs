@@ -40,7 +40,6 @@ import { join, resolve } from "node:path";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
-import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 
 const DRIVERS = ["claude-code", "codex", "generic-api"];
 
@@ -262,7 +261,7 @@ function emitRun(payload) {
   else if (tier) args.push("--model", "unpinned");
   let id = "";
   try {
-    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), ...args], { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
+    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), ...args], { encoding: "utf8", cwd: root }).trim();
   } catch (e) {
     console.error(`arc-run: WARN could not emit run.completed: ${String(e.message).split("\n")[0]}`);
     return;
@@ -297,59 +296,9 @@ function verifyLanded(id) {
 }
 
 // ---------- the run ----------
-/**
- * THE POLICY GATE (REQ-02, ADR-0500..0507). It sits at the top of `invoke` because that is the
- * single place a driver is ever started -- one call site, so there is no second path to find.
- *
- * FAIL-CLOSED: a policy check that THROWS blocks the run (ADR-0028's fail-safe precedent). The
- * catch below denies rather than proceeding, because "the check broke, so we ran it anyway" is
- * the whole failure class this build exists to remove.
- *
- * No policy logic lives here -- every decision is the shared library's (POL-D).
- */
-let policyNotInForceAnnounced = false;
-function policyGate(name) {
-  try {
-    const gate = authorizeRun({ processName, doc, root });
-    if (!gate.inForce) {
-      // LOUD, once per run. A disarmed guard must never be silent -- the same contract
-      // PreToolUse.sh keeps when its dispatcher is missing.
-      if (!policyNotInForceAnnounced) {
-        policyNotInForceAnnounced = true;
-        console.error(`arc-run: NOTICE ${gate.reason} — this run is unpoliced`);
-      }
-      return null;
-    }
-    if (gate.mayInvoke) return null;
-    return { gate, reason: gate.denials.map((d) => d.reason).join("; ") };
-  } catch (e) {
-    return { gate: null, reason: `the policy check threw (${String(e.message).split("\n")[0]}) -- fail-closed` };
-  }
-}
-
 function invoke(name) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
   if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null };
-
-  const blocked = policyGate(name);
-  if (blocked) {
-    // NO SIDE EFFECT: the driver process never starts. The incident is a receipt, and the cap
-    // it derives from is recomputed on the NEXT authorization inside this same run -- the
-    // reducer reads the event stream, so a demotion lands mid-run rather than at the next start.
-    const detail = `policy denied ${processName}: ${blocked.reason}`;
-    console.error(`arc-run: ${detail}`);
-    try {
-      execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "incident.raised",
-        "--payload", JSON.stringify({ what: detail, severity: "high", source: "arc-run policy gate" }),
-        "--process", `${doc.name}@${doc.version}`, "--outcome", "fail"],
-        { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" });
-    } catch (e) {
-      // A receipt we could not write is reported, never swallowed -- but it does not un-deny
-      // the action. Quarantine is not enforcement success (ADR-0106/0032).
-      console.error(`arc-run: WARN could not emit incident.raised: ${String(e.message).split("\n")[0]}`);
-    }
-    return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true };
-  }
   const tmp = mkdtempSync(join(tmpdir(), "arc-run-"));
   const costFile = join(tmp, "cost.json");
   const rem = msRemaining();
@@ -388,12 +337,6 @@ function attempt(name) {
   // that an over-budget run "reports a budget outcome" was false.
   if (r.timedOut) return { ...r, verdict: "budget", why: `exceeded the ${budget.min}-minute budget for the RUN` };
   if (r.code === 2) return { ...r, verdict: "budget", why: r.stderr.trim() || "driver declined for budget" };
-  // POLICY BEFORE DRIVER, and for exactly the reason the budget arm above exists. A denial fell
-  // through to `verdict: "driver"`, so ONE denial produced three high-severity incidents as the
-  // fallback chain retried, and the append-only receipt claimed the driver had failed when no
-  // driver had run at all. A false claim in a ledger is worse than an absent one (ADR-0069 b5 /
-  // Constitution E3), and no other driver is going to be more permitted than the first.
-  if (r.policyDenied) return { ...r, verdict: "policy", why: r.stderr.trim() || "denied by policy" };
   if (r.code !== 0) return { ...r, verdict: "driver", why: r.stderr.trim() || `driver exited ${r.code}` };
 
   let output;
@@ -438,16 +381,6 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   a = attempt(driver);
 }
 
-// A policy denial is its own outcome and its own exit. It never reaches the fallback loop above
-// (that loop only runs on `verdict === "driver"`), because no other driver is going to be more
-// permitted than the first -- retrying would just raise the same incident again, which is what
-// it did before this arm existed.
-if (a.verdict === "policy") {
-  console.error(`arc-run: ${a.why}`);
-  emitRun({ outcome: "fail", reason: "policy", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
-  process.exit(1);
-}
-
 if (a.verdict === "budget") {
   console.error(`arc-run: ${a.why}`);
   emitRun({ outcome: "fail", reason: "budget", driver, cost: a.cost ?? undefined });
@@ -480,7 +413,7 @@ if (a.verdict === "schema") {
   };
   let id = "";
   try {
-    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested", "--payload", JSON.stringify(proposal)], { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
+    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested", "--payload", JSON.stringify(proposal)], { encoding: "utf8", cwd: root }).trim();
     verifyLanded(id);
   } catch (e) { console.error(`arc-run: WARN could not emit the escalation proposal: ${String(e.message).split("\n")[0]}`); }
 
