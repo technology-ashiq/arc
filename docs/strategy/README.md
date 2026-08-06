@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-04 — PLAN-policy promoted; earlier same day: absorb + executor briefs)
+## File map & status (updated 2026-08-06 — PLAN-absorb promoted; same day: Constitution adopted v1.0)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 11 full PLANs + 12 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 12 full PLANs + 11 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -29,6 +29,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-evolve.md`~~ | **MOVED → `docs/archive/`** (2026-08-02) | Superseded by `plans/PLAN-evolve.md`; kept in archive for history — never feed the brief to a kickoff (its auto-revert rule was owner-overturned; the plan is the design source) |
 | ~~`plans/BRIEF-leads.md`~~ | **MOVED → `docs/archive/`** (2026-08-03) | Superseded by `plans/PLAN-leads.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: PII/store/HMAC/journal rules exist only in the plan) |
 | ~~`plans/BRIEF-policy.md`~~ | **MOVED → `docs/archive/`** (2026-08-04) | Superseded by `plans/PLAN-policy.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: the two-key authority state machine, spend-under-E2 definition, typed event profiles and the hook feasibility gate exist only in the plan) |
+| ~~`plans/BRIEF-absorb.md`~~ | **MOVED → `docs/archive/`** (2026-08-06) | Superseded by `plans/PLAN-absorb.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan past the brief: the fourth load-bearing trigger arm + two-speed operating model, the sealed-blind owner-judge mechanics, the ABS-C allowlist candidate, the ≥2-cycles threshold assumption, and the stale-0400-century correction exist only in the plan) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -143,6 +144,30 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     policy engine wakes" is POL-G's driver-eligibility contract from the other side ·
     `arc-full-architecture.md`'s "policy L0–L4" is superseded by L0–L3 (recorded in the
     kickoff ADR). `BRIEF-policy.md` superseded → moved to `docs/archive/`.
+
+14. **2026-08-06:** `plans/PLAN-absorb.md` added (absorb v1 — the technique refinery:
+    read-only, injection-aware study of a named external source → deterministic
+    extraction report [ABSORB technique / INTEGRATE infra / ROUTE model / SKIP
+    data-moat] → arc-native rebuild from the ABS-C allowlist → A/B on ≥3 fixtures in
+    the PLANOFF format → propose-only adopt/retire via the inbox + a ≤12-per-lane
+    registry with displacement; decisions ABS-A..F locked over Cowork review rounds,
+    ABS-G [century · code home · registry seed · first target] open at kickoff; ADR
+    numbers at kickoff from the claimed century — the brief's "0400" note is stale,
+    leads claimed the 0400s at birth). **The trigger gains a FOURTH arm — the
+    two-speed model (owner-settled 2026-08-06): Speed 1 = install-and-use (manual
+    owner installs under the existing DEV-B/C vet + `capability-lock.json` law —
+    market velocity, zero build cost); Speed 2 = absorb the proven winners (technique
+    portions rebuilt on the allowlist; service portions stay installed per the
+    INTEGRATE verdict). Speed 1 is Speed 2's evidence supply: an installed capability
+    with receipted use across ≥2 cycles — or named by a lane brief/retro — fires the
+    trigger; the lock row + REQ-05's per-slice use receipts ARE the detection
+    machinery. No radar, no scheduled scanning; ADR-0110 unchanged
+    (`/arc-capability` installs nothing — install stays a manual owner action).**
+    REQ-05 lands the PLAN-develop §7.1 team-leader addendum in absorb's own cycle
+    (EVO-H0 client's-cycle precedent); ABS-D owner-judge receipt grammar is defined
+    once here — bench inherits it at its own kickoff. Kickoff gates in-file: live
+    slot free (A9) · venture-clock ruling (ADR-0071) resolved · receipted trigger
+    evidence. `BRIEF-absorb.md` superseded → moved to `docs/archive/`.
 
 ## Provenance
 

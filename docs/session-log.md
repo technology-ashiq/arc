@@ -602,3 +602,15 @@ Appended automatically by the SessionEnd hook. Newest entry at the bottom.
 ## 2026-08-04 12:01 — main
 - Last commit: 8e80927 evolve Cycle 7 · Phase 00 — contract, eight experiment receipts, steel thread (#108)
 - Uncommitted files at exit: 1
+
+## 2026-08-05 01:37 — main
+- Last commit: a846499  PLAN (design source) — Policy Engine: enforced capability vectors
+- Uncommitted files at exit: 0
+
+## 2026-08-06 02:41 — ?
+- Last commit: 3efa434 feat(constitution): adopt v1.0 (#115)
+- Uncommitted files at exit: 1
+
+## 2026-08-06 03:06 — main
+- Last commit: 3efa434 feat(constitution): adopt v1.0 (#115)
+- Uncommitted files at exit: 1

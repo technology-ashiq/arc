@@ -44,11 +44,11 @@
 | — | chat (HQ MCP) | `BRIEF-chat-mcp.md` | Pull: dashboard live + conversational demand |
 | — | policy engine | `PLAN-policy.md` | Pull: ≥3 action kinds at ≥L2 OR the first scheduler/headless job is **APPROVED** — **required before scheduler** · **full plan ready, SLEEPING** (owner-approved 2026-08-04; decisions POL-A…J locked over 3 review rounds; POL-K — lane/century/code home — open by design, decided at kickoff). Pre-kickoff gate inside: **Constitution ADOPTED** (`constitution.adopted` is not in today's vocabulary — micro vocab ADR + sign-off + event first; verify else STOP). Core: two-key authority (YAML ceiling + event-earned cap, L1 birth, demotion bites from the effective level), deny-by-default, fail-closed at `arc-run` + hooks (P0 hook feasibility matrix — unprovable class = static deny or L0/L1), `spend` = pre-approved provider budgets only (E2 money never above L1, Mode A only), vocab +4 kinds on live `KINDS.length`, P4 red-team 2d untouchable |
 | — | scheduler | `BRIEF-scheduler.md` | Pull: first L3 process · policy engine is a hard prereq |
-| — | absorb v1 · the technique refinery | `BRIEF-absorb.md` | Pull: a task class arc runs demonstrably **loses** to an external agent's approach (receipted A/B / PLANOFF evidence) — or a develop Capability Proposal returns "technique, not artifact" (added 2026-08-04). NEW lane at kickoff — claims the next free ADR century per `PORTFOLIO.md`. Its cycle also lands the PLAN-develop team-leader addendum (REQ-5) and the owner-judge receipt grammar (ABS-D) that bench later inherits |
+| — | absorb v1 · the technique refinery | `PLAN-absorb.md` | Pull (any of FOUR arms): a task class arc runs demonstrably **loses** to an external agent (receipted A/B / PLANOFF) · a develop Capability Proposal returns "technique, not artifact" · the owner names a measured weakness · **an installed capability turns load-bearing** (manual install under the existing DEV-B/C vet+lock law; receipted use across ≥2 cycles or a lane brief/retro names it — the two-speed model, owner-settled 2026-08-06: install-and-use daily, absorb the proven winners; no radar, no scheduled scanning) — **full plan ready, SLEEPING** (owner-approved 2026-08-06; ABS-A..F locked, ABS-G open at kickoff). NEW lane at kickoff — claims the next free ADR century per `PORTFOLIO.md` (the brief's 0400 note is stale; leads claimed the 0400s at birth). Its cycle also lands the PLAN-develop §7.1 team-leader addendum (REQ-05, EVO-H0 client's-cycle precedent) and the owner-judge grammar (ABS-D) that bench later inherits. Gates in-file: live slot free (A9) · venture-clock ruling (ADR-0071 → 2026-08-11) resolved · receipted trigger evidence named in the kickoff prompt |
 | — | executor · agent-runtime driver | `BRIEF-executor.md` | Pull: a **receipted need** for a capability no current driver has (Capability Proposal / absorb INTEGRATE verdict / pilot evidence) — added 2026-08-04. Engine-lane work under the live ENG-D contract (prereq "engine v1 shipped" MET — C6 closed 2026-08-03); kickoff's first act = one-paragraph ADR-0069 amendment; router.yaml delta is its REQ-4. L1-drafts cap until the policy engine wakes |
 | — | trader sandbox | `BRIEF-trader.md` | Pull: monthly revenue + Ashiq's written opening — **last** |
 
-**Full PLANs** (the 11 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
+**Full PLANs** (the 12 `PLAN-*.md` files) are kickoff-grade: REQ tables (or locked
 decision records), appetites, ADR-ready decisions, phases, pre-mortems. **BRIEFs** are
 deliberately lighter — real REQs and locked non-negotiables, but current-state gets
 filled at their kickoff (writing 400-line plans for far-future modules today would be
@@ -78,7 +78,7 @@ what's missing, and why roles ≠ standing agents: `../arc-company-org-blueprint
 
 ## Standing rules (apply to every kickoff from this pack)
 
-- Constitution (`../../../CONSTITUTION.md`) outranks everything here — adopt it at
+- Constitution (`../arc-CONSTITUTION-draft.md`) outranks everything here — adopt it at
   Cycle-2 kickoff if not already law.
 - Venture track outweighs OS track on any tie (kill criteria in the master plan §10).
 - New parser-class code always gets the adversarial pass before FAIL promotion.
