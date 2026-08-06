@@ -487,14 +487,24 @@ _sandbox() {
     const {MAX_REPLY_BYTES} = await import(\"./.claude/scripts/leads/lib/replies.mjs\");
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), \"big\"));
     const big = path.join(dir, \"big.eml\");
-    fs.writeFileSync(big, Buffer.alloc(MAX_REPLY_BYTES + 1024, 97));
+    // 8x the limit, not limit+1KiB. The property under test is that the BYTES ARE NEVER LOADED,
+    // and the instrument is RSS -- which carries perhaps a MiB of allocator and GC noise on any
+    // given run. At limit+1KiB the signal and the noise are the same size, so this asserted
+    // \"grew by under 1 MiB\" against a measurement whose error bar IS 1 MiB, and went red on
+    // ubuntu-18 in three runs out of four while refusing the file perfectly every time
+    // (\`step\` was always \`path\`). Eight MiB of signal against ~1 MiB of noise makes the
+    // same claim decidable. See the leads-lane note in the commit that changed this.
+    const PROBE_BYTES = MAX_REPLY_BYTES * 8;
+    fs.writeFileSync(big, Buffer.alloc(PROBE_BYTES, 97));
+    if (global.gc) global.gc();
     const before = process.memoryUsage().rss;
     let step = \"ACCEPTED\";
     try { I2.readReplyFile(\"$ARC_ROOT\", big); } catch (e) { step = e.step; }
-    const grewMiB = Math.round((process.memoryUsage().rss - before) / 1048576);
-    console.log(step + \" grew=\" + (grewMiB < 1 ? \"under-1MiB\" : grewMiB + \"MiB\"));"
+    const grewMiB = (process.memoryUsage().rss - before) / 1048576;
+    // A real read of an 8 MiB file cannot come in under 4 MiB; noise cannot reach it.
+    console.log(step + \" grew=\" + (grewMiB < 4 ? \"below-half-the-file\" : Math.round(grewMiB) + \"MiB\"));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"path grew=under-1MiB"* ]]
+  [[ "$output" == *"path grew=below-half-the-file"* ]]
 }
 
 # `--stdin` had NO happy-path test at all -- only the mutual-exclusion refusal -- so readStdin

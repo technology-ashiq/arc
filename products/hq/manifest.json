@@ -13,17 +13,35 @@
     ".claude/scripts/hq/arc-inbox.mjs",
     ".claude/scripts/hq/arc-replay.mjs",
     ".claude/scripts/hq/lib/canonical.mjs",
+    ".claude/scripts/hq/lib/policy/authorize.mjs",
+    ".claude/scripts/hq/lib/policy/constitution.mjs",
+    ".claude/scripts/hq/lib/policy/encode.mjs",
+    ".claude/scripts/hq/lib/policy/index.mjs",
+    ".claude/scripts/hq/lib/policy/lint.mjs",
+    ".claude/scripts/hq/lib/policy/model.mjs",
+    ".claude/scripts/hq/lib/policy/promotion.mjs",
+    ".claude/scripts/hq/lib/policy/reduce.mjs",
+    ".claude/scripts/hq/lib/policy/resources.mjs",
+    ".claude/scripts/hq/lib/policy/run-gate.mjs",
+    ".claude/scripts/hq/lib/policy/spend.mjs",
+    ".claude/scripts/hq/lib/policy/tool-capabilities.json",
+    ".claude/scripts/hq/lib/policy/yaml.mjs",
     ".claude/scripts/hq/lib/redact.mjs",
     ".claude/scripts/hq/lib/spine-io.mjs",
     ".claude/scripts/hq/lib/validate-experiment.mjs",
     ".claude/scripts/hq/lib/validate-leads.mjs",
+    ".claude/scripts/hq/lib/validate-policy.mjs",
     ".claude/scripts/hq/lib/validate.mjs",
+    ".claude/scripts/hq/policy-hook.mjs",
+    ".claude/scripts/hq/policy-lint.mjs",
+    ".claude/scripts/hq/policy-matrix.mjs",
     ".claude/scripts/hq/spine.mjs"
   ],
   "files": [
     ".claude/hooks/SessionStart.d/90-emit.sh",
     ".claude/hooks/SessionEnd.d/90-emit.sh",
-    ".claude/hooks/PostToolUse.d/90-emit.sh"
+    ".claude/hooks/PostToolUse.d/90-emit.sh",
+    ".claude/hooks/PreToolUse.d/40-policy.sh"
   ],
   "docs": []
 }

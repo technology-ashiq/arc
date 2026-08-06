@@ -67,3 +67,8 @@ AGENTS.md
 # Planner-bench output (large, regenerable — not committed despite the evidence rule above)
 docs/evidence/planner-bench/
 .gstack/
+
+# Same-device temp dirs used by the policy filesystem-identity tests (hardlinks cannot
+# cross devices, and the CI runners split the checkout and the temp dir across volumes).
+# Each test removes its own in a finally block; this is the belt for a crashed run.
+.pol-tmp-*/
