@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-policy (born 2026-08-06)
-phase: 00 — approved, not yet started
+phase: 01 — next
 appetite: 7d
-burn: 0d
+burn: 2d
 blocked-on: —
 depends-on: —
 
@@ -23,8 +23,8 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | ▶ **NEXT** · Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ⬜ not started |
-| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ⬜ not started |
+| 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
+| 01 | ▶ **NEXT** · Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ⬜ not started |
 | 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | ⬜ not started |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
@@ -47,22 +47,35 @@ _(nothing yet — the lane was born 2026-08-06 and has not been approved to buil
 
 | Date | What closed | Evidence |
 |---|---|---|
+| 2026-08-06 | **Phase 00 CLOSED.** The law, its parser and the decision. `policy-lint` FAILs from birth; `authorizeAction` returns deny/propose/execute with everything injected; 54 hostile fixtures (30 static + 24 runtime, incl. 2 controls); 63-row feasibility matrix generated from `.mcp.json`; 88 new tests across 6 bats suites. **Two fresh agents found ~24 capability escalations against code that was green on its own tests** — all closed, all pinned. Red-first proven on CI run 31102122394 before any implementation existed | CI **31108185564, 19/19 green** · `initiatives/policy/evidence/phase-00/` (live-demo.md, handoff.md, hook-matrix.json/.md) |
 | 2026-08-06 | Lane born. PLAN.md + 5 phase specs + **ADR-0500..0507** written. Verification: 4 plan-attackers (27 findings, 24 accepted, 3 rejected) and **8 plan-simulator rounds** — blocker count 7 → 6 → 6 → 3 → 2 → 2 → 3 → **1 HARD**, closed by naming which of two E2 readings wins. `kickoff-lint` green on every run. **Not a phase close** — recorded so the kickoff itself has a receipt | `kickoff.done` `01KZB1805TC27WCCMF3DHQRVM0` · `approval.requested` `01KZB1878PENK4YZ98VKQYPK1J` |
 
 ## Now
 
-**Current position: plan APPROVED 2026-08-06, Phase 0 is next and not yet started.** The
-approval is a receipt, not a recollection: `approval.requested` `01KZB1878PENK4YZ98VKQYPK1J`
-answered by `decision.recorded` `01KZBFDM37P135EQPBBZNTP3JH`, verdict `approve`, reason
-`policy-plan-approved`. Burn is 0 of 7 days.
+**Current position: Phase 00 CLOSED 2026-08-06. Phase 01 is next.** Burn 2 of 7 days (29%),
+which is Phase 0's full allocation and no more — the day-2 kill criterion did not fire.
 
-**Next step: `/arc-develop start 0`.** Phase 0's **five** bats files go **red first** — the two
-expected failures are named verbatim in `phases/phase-00-spec.md` (`policy-lint.bats` first case
-at exit 127, and `policy-authorize.bats` on the hardlink case). No implementation before those
-two are red. Day 2 ends at the kill criterion: REQ-01's exit not reached → STOP and retro the
-schema scope, with the pre-planned cut list in the spec taken in its written order first.
+Phase 0 shipped the steel thread: a request goes into `authorizeAction` and a reasoned
+`deny` / `propose` / `execute` comes out, against fakes. What it cost to get there is the part
+worth carrying forward — **two fresh agents on two surfaces found ~24 capability escalations in
+code that was green on its own tests**, including prototype pollution that made `policy-lint`
+print "is law" over a file granting L3 spend, with a `policy_hash` identical to the honest
+file. Every one is closed and pinned. Four separate CI runs went red on cross-platform issues
+invisible on the dev box.
 
-**Context the executor needs**, in order of how much it shaped the build:
+**Next step: `/arc-develop start 1`.** Phase 1 wires the Phase-0 decision function into
+`arc-run` **before** the `spawnSync("bash", [sh, "run", …])` driver call — the wiring and its
+proof, not the building of the check, which is done. Then the capability fixture matrix (one
+absence assertion per class), the bypass fixtures, and the money guard with its crash-window
+cases. Nothing in Phase 1 writes policy logic: a second interpretation at the call site is the
+POL-D violation the phase exists to avoid.
+
+**What Phase 0 hands over:** `authorizeAction({kind, capability, resource}, {policy, events})`
+reads no file and no global state, so Phase 1 supplies the real `hq.policy.yaml` and the real
+spine and changes nothing else. The tool-to-capability table and the 63-row matrix say which
+classes need which enforcement.
+
+**Context that shaped the build**, in order of how much it matters:
 
 1. **The interactive surface is weaker than the design source assumed.** A PreToolUse hook
    blocks only on `exit 2`; timeout, crash, missing script and malformed JSON all let the tool
