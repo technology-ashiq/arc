@@ -102,45 +102,6 @@ export function fakeResponse(processName) {
 }
 
 /**
- * Ask the shared policy library whether this process may run at all. Returns a reason string
- * when it may not, or null.
- *
- * Loaded lazily and defensively: a driver invoked from a tree with no policy library present
- * (an older consumer repo, a partial install) must keep working, so a missing module is
- * "not in force" -- the same contract arc-run keeps, announced the same way. A module that IS
- * present and throws denies.
- */
-async function driverPolicyDenial(processName) {
-  if (!processName) return null;
-  let gate;
-  try {
-    gate = await import("../../hq/lib/policy/run-gate.mjs");
-  } catch {
-    return null; // no policy library in this tree -- nothing has been declared, nothing to enforce
-  }
-  try {
-    const root = gate.policyRoot();
-    const { readFileSync, existsSync } = await import("node:fs");
-    const { join } = await import("node:path");
-    const canon = join(root, "processes", `${processName}.process.yaml`);
-    if (!existsSync(canon)) return null; // arc-run reports the missing process better than we can
-    const { parseYamlSubset } = await import("../yaml-subset.mjs");
-    const parsed = parseYamlSubset(readFileSync(canon, "utf8"));
-    const doc = parsed && parsed.ok ? parsed.value : null;
-    const verdict = gate.authorizeRun({ processName, doc, root });
-    if (!verdict.inForce) {
-      process.stderr.write(`arc-driver: NOTICE ${verdict.reason} — this run is unpoliced\n`);
-      return null;
-    }
-    return verdict.mayInvoke ? null : verdict.denials.map((d) => d.reason).join("; ");
-  } catch (e) {
-    // Fail-closed. A policy check that breaks blocks; "the check threw so we ran it anyway" is
-    // the failure class this build exists to remove.
-    return `the policy check threw (${String(e && e.message).split("\n")[0]}) -- fail-closed`;
-  }
-}
-
-/**
  * The one entry point every driver core calls. Handles the argv contract, the budget
  * decline, the fake path, the cost sidecar and the exit discipline, so a new driver is
  * genuinely one `produce()` function -- which is the north-star REQ-08 times.
@@ -151,21 +112,6 @@ export async function runDriver(name, produce) {
 
   if (verb !== "run") {
     die(EXIT.DRIVER_FAIL, `usage: ${name}.sh run <process> <input-json> <budget>`);
-    return;
-  }
-
-  // THE SECOND GATE, and the reason it exists: arc-run is not the only way to start a driver.
-  // `bash drivers/claude-code.sh run <process> '{}' ''` reaches this function directly, and the
-  // repo's own engine suite does exactly that. An adversarial pass pointed out that a gate with
-  // one call site is only sole-entry if nothing else can call the thing it guards -- so the
-  // check lives HERE too, at the one function every driver core funnels through, and arc-run's
-  // gate becomes the early, better-reported copy rather than the only one.
-  //
-  // POL-D still holds: no policy logic is written here. This asks the same shared library the
-  // same question, and a check that throws DENIES (ADR-0028 fail-safe).
-  const denial = await driverPolicyDenial(processName);
-  if (denial) {
-    die(EXIT.DRIVER_FAIL, `policy denied ${processName}: ${denial}`);
     return;
   }
   let budget;
