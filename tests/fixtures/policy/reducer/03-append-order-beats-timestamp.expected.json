@@ -1,9 +1,0 @@
-[
-  {
-    "action_kind": "session:interactive",
-    "capability": "write",
-    "ceiling": "L2",
-    "cap": "L2",
-    "effective": "L2"
-  }
-]
