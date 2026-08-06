@@ -333,9 +333,65 @@ EOF
     echo "the run receipt does not record a policy outcome"; false; }
 }
 
+@test "BYPASS -- a driver invoked DIRECTLY still refuses a denied process" {
+  # arc-run is not the only way to start a driver. `bash drivers/claude-code.sh run <p> '{}' ''`
+  # reaches runDriver with no wrapper in sight, and the repo's own engine suite does exactly
+  # that. A gate with one call site is only sole-entry if nothing else can call the thing it
+  # guards -- so the same check lives at runDriver, the one function every driver core funnels
+  # through. phase-01-spec lists this as a required bypass fixture.
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/processes" "$d/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  cat > "$d/processes/denied.process.yaml" <<'EOF'
+name: denied
+version: 1.0.0
+permissions: declared
+inputs: []
+tools:
+  - fs.write
+output:
+  type: object
+EOF
+  sed -e 's/"process:kickoff-plan":/"process:denied":/' \
+      -e '0,/    write: { level: L2, roots: \["initiatives\/\*\*", "docs\/adr\/\*\*"\] }/s//    write: { level: L0 }/' \
+      "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
+
+  run env ARC_DRIVER_FAKE='{"ok":true}' bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run denied '{}' ''
+  [ "$status" -ne 0 ] || { echo "the driver ran a denied process when invoked directly"; echo "$output"; false; }
+  [[ "$output" == *"policy denied"* ]] || { echo "no policy denial from the direct driver call: $output"; false; }
+}
+
+@test "BYPASS -- every driver funnels through the gated entry point" {
+  # If a new driver core stops calling runDriver, it silently leaves the gate behind. Assert the
+  # structure rather than trusting the convention.
+  cd "$ARC_ROOT"
+  local missing=""
+  for core in .claude/scripts/engine/drivers/*.mjs; do
+    case "$core" in *common.mjs) continue ;; esac
+    grep -q "runDriver" "$core" || missing="$missing $(basename "$core")"
+  done
+  [ -z "$missing" ] || { echo "driver cores that bypass runDriver:$missing"; false; }
+  grep -q "driverPolicyDenial" .claude/scripts/engine/drivers/common.mjs || {
+    echo "runDriver does not consult policy"; false; }
+}
+
+@test "BYPASS -- a driver in a tree with no policy library still runs, and says so" {
+  # An older consumer repo or a partial install has no policy library. Refusing there would
+  # brick the driver rather than police it -- same contract arc-run keeps for a root with no
+  # policy file, announced the same way.
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/processes" "$d/.claude/scripts/engine/drivers"
+  cp "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.sh" \
+     "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.mjs" \
+     "$ARC_ROOT/.claude/scripts/engine/drivers/common.mjs" "$d/.claude/scripts/engine/drivers/"
+  run env ARC_DRIVER_FAKE='{"ok":true}' bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run anything '{}' ''
+  # It must NOT die on a missing policy module -- whatever else it says about the fake.
+  [[ "$output" != *"policy denied"* ]] || { echo "a tree with no policy library was denied: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 24 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 24 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 27 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 27 -- a @test was silently dropped"
     false
   }
 }
