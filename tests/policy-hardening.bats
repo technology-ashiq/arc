@@ -36,7 +36,11 @@ const up = (capability, to) => ({ id:"01JQ8XZ9K0ABCDEFGH"+String(++n).padStart(8
             to_level:to, trial_ledger_ref:"t" } });
 const A = (capability, resource, over={}, events=[]) =>
   P.authorizeAction({kind:"session:interactive", capability, resource}, {policy:base(over), events}).decision;
-const tmp = () => fs.mkdtempSync(pth.join(process.env.BATS_TEST_TMPDIR || os.tmpdir(), "pol-"));'
+// INSIDE THE REPO, so a hardlink is same-device by construction. The Windows runner puts the
+// checkout on D: and its temp dirs on C: on some shards, and a cross-device EXDEV would make
+// this suite skip exactly the checks it exists to pin.
+const tmp = () => fs.mkdtempSync(pth.join(process.cwd(), ".pol-tmp-"));
+const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); } catch {} };'
 
 @test "a parsed mapping has a null prototype, so __proto__ cannot reach a grant" {
   # The worst finding of the pass, and both surfaces found it independently. A `{}` literal
@@ -56,12 +60,14 @@ const tmp = () => fs.mkdtempSync(pth.join(process.env.BATS_TEST_TMPDIR || os.tmp
   # .claude/hooks/PreToolUse.sh (a glob entry) was not, because the glob was matched by walking
   # the LINK's parents and by string prefix, both of which a hardlink defeats by construction.
   run _node "$PRE
-    const dir = tmp(); const link = pth.join(dir, 'looks-fine.sh');
-    try { fs.linkSync('.claude/hooks/PreToolUse.sh', link); }
-    catch (e) { console.log('deny(skip:' + e.code + ')'); process.exit(0); }
-    console.log(A('write', link, { write:{level:'L3'} }, [up('write','L3')]));"
+    const dir = tmp();
+    try {
+      const link = pth.join(dir, 'looks-fine.sh');
+      fs.linkSync('.claude/hooks/PreToolUse.sh', link);
+      console.log(A('write', link, { write:{level:'L3'} }, [up('write','L3')]));
+    } finally { cleanup(dir); }"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == deny* ]]
+  [ "$output" = "deny" ]
 }
 
 @test "a junction inside an allowed write root cannot escape it" {
@@ -69,11 +75,14 @@ const tmp = () => fs.mkdtempSync(pth.join(process.env.BATS_TEST_TMPDIR || os.tmp
   # initiatives/esc/keys.txt look like a legal write that landed outside the repo entirely.
   # The un-grantable list survived (it realpaths); nothing else did.
   run _node "$PRE
-    const outside = tmp(); fs.writeFileSync(pth.join(outside,'keys.txt'), 'x');
-    const inside = tmp(); const link = pth.join(inside, 'esc');
-    try { fs.symlinkSync(outside, link, 'junction'); }
-    catch (e) { console.log('false(skip:' + e.code + ')'); process.exit(0); }
-    console.log(P.withinRoots(pth.join(link,'keys.txt'), [pth.basename(inside) + '/**'], pth.dirname(inside)));"
+    const outside = tmp(); const inside = tmp();
+    try {
+      fs.writeFileSync(pth.join(outside,'keys.txt'), 'x');
+      const link = pth.join(inside, 'esc');
+      try { fs.symlinkSync(outside, link, 'junction'); }
+      catch (e) { console.log('false:skipped-' + e.code); process.exit(0); }
+      console.log(P.withinRoots(pth.join(link,'keys.txt'), [pth.basename(inside) + '/**'], pth.dirname(inside)));
+    } finally { cleanup(outside); cleanup(inside); }"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == false* ]]
 }

@@ -49,16 +49,19 @@ const A = (capability, resource, over={}, events=[]) => {
 @test "authorizeAction denies a write to a hardlink of settings.json" {
   # The named red-first test. It creates a REAL hardlink, so it can only pass if the
   # dev+ino identity comparison actually ran -- a path-string check would allow it.
-  # The temp dir MUST be on the same volume as the repo: a hardlink cannot cross devices, and
-  # on the Windows runner the checkout is on D: while os.tmpdir() is on C: -- EXDEV, every time.
-  # BATS_TEST_TMPDIR sits beside the checkout, so it is the right base on all three legs.
+  # A hardlink cannot cross devices, and the Windows runner splits them unpredictably: the
+  # checkout is on D: while BOTH os.tmpdir() and BATS_TEST_TMPDIR have been observed on C: on
+  # some shards and on D: on others. So the link is made INSIDE THE REPO, where same-device is
+  # true by construction rather than by luck. This test must never silently skip -- it is the
+  # only proof that the dev+ino comparison actually runs.
   run _node "$PRE
-    const fs = await import('node:fs'); const os = await import('node:os'); const p = await import('node:path');
-    const tmpBase = process.env.BATS_TEST_TMPDIR || os.tmpdir();
-    const dir = fs.mkdtempSync(p.join(tmpBase, 'pol-'));
-    const link = p.join(dir, 'innocent.json');
-    fs.linkSync('.claude/settings.json', link);
-    console.log(A('write', link, { write:{level:'L3'} }, [raise('write','L3')]));"
+    const fs = await import('node:fs'); const p = await import('node:path');
+    const dir = fs.mkdtempSync(p.join(process.cwd(), '.pol-tmp-'));
+    try {
+      const link = p.join(dir, 'innocent.json');
+      fs.linkSync('.claude/settings.json', link);
+      console.log(A('write', link, { write:{level:'L3'} }, [raise('write','L3')]));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == deny:* ]]
 }
@@ -159,14 +162,18 @@ const A = (capability, resource, over={}, events=[]) => {
 
 @test "a symlink to a guarded file is denied" {
   run _node "$PRE
-    const fs = await import('node:fs'); const os = await import('node:os'); const p = await import('node:path');
-    const tmpBase = process.env.BATS_TEST_TMPDIR || os.tmpdir();
-    const dir = fs.mkdtempSync(p.join(tmpBase, 'pol-'));
-    const link = p.join(dir, 'ln.json');
-    let made = true;
-    try { fs.symlinkSync(p.resolve('.claude/settings.json'), link); } catch { made = false; }
-    if (!made) { console.log('deny:skip'); }
-    else console.log(A('write', link, { write:{level:'L3'} }, [raise('write','L3')]));"
+    const fs = await import('node:fs'); const p = await import('node:path');
+    const dir = fs.mkdtempSync(p.join(process.cwd(), '.pol-tmp-'));
+    try {
+      const link = p.join(dir, 'ln.json');
+      let made = true;
+      // Creating a symlink on Windows needs Developer Mode or elevation, so this one MAY
+      // legitimately skip -- and it says so out loud rather than printing a bare deny, because
+      // a skip that looks like a pass is how a suite stops testing anything.
+      try { fs.symlinkSync(p.resolve('.claude/settings.json'), link); } catch { made = false; }
+      if (!made) console.log('deny:skipped-no-symlink-privilege');
+      else console.log(A('write', link, { write:{level:'L3'} }, [raise('write','L3')]));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == deny:* ]]
 }
