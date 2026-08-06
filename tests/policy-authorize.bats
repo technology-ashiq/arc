@@ -54,8 +54,8 @@ const A = (capability, resource, over={}, events=[]) => {
   # BATS_TEST_TMPDIR sits beside the checkout, so it is the right base on all three legs.
   run _node "$PRE
     const fs = await import('node:fs'); const os = await import('node:os'); const p = await import('node:path');
-    const base = process.env.BATS_TEST_TMPDIR || os.tmpdir();
-    const dir = fs.mkdtempSync(p.join(base, 'pol-'));
+    const tmpBase = process.env.BATS_TEST_TMPDIR || os.tmpdir();
+    const dir = fs.mkdtempSync(p.join(tmpBase, 'pol-'));
     const link = p.join(dir, 'innocent.json');
     fs.linkSync('.claude/settings.json', link);
     console.log(A('write', link, { write:{level:'L3'} }, [raise('write','L3')]));"
@@ -160,8 +160,8 @@ const A = (capability, resource, over={}, events=[]) => {
 @test "a symlink to a guarded file is denied" {
   run _node "$PRE
     const fs = await import('node:fs'); const os = await import('node:os'); const p = await import('node:path');
-    const base = process.env.BATS_TEST_TMPDIR || os.tmpdir();
-    const dir = fs.mkdtempSync(p.join(base, 'pol-'));
+    const tmpBase = process.env.BATS_TEST_TMPDIR || os.tmpdir();
+    const dir = fs.mkdtempSync(p.join(tmpBase, 'pol-'));
     const link = p.join(dir, 'ln.json');
     let made = true;
     try { fs.symlinkSync(p.resolve('.claude/settings.json'), link); } catch { made = false; }
