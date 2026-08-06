@@ -25,3 +25,11 @@ export {
 } from "./reduce.mjs";
 export { authorizeAction, mayExecute, reproducedBy, shellArgv0, shellTargets } from "./authorize.mjs";
 export { lintPolicy } from "./lint.mjs";
+export {
+  reservationLedger, spendCap, checkReservation, reserveAndSpend, stuckReservations,
+  RESERVED, RELEASED, SETTLED,
+} from "./spend.mjs";
+export {
+  authorizeRun, crossCheckDeclared, declaredCapabilities, loadPolicyFromDisk, loadPolicyEvents,
+  TOOL_CAPABILITIES,
+} from "./run-gate.mjs";
