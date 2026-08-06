@@ -81,6 +81,15 @@ _default_kinds() {
 KINDS
 }
 
+# Portable in-place sed. BSD sed -- which the macOS CI leg runs -- requires a suffix after -i,
+# and `-i.bak` with no space satisfies GNU and BSD alike. Same helper as tests/kickoff-lint.bats.
+# A bare `sed -i` here would be green on ubuntu and windows and red on macos, which is the worst
+# kind of green: it looks like flake rather than a portability bug.
+sedi() {
+  local f="${!#}"
+  sed -i.bak "$@" && rm -f "${f}.bak"
+}
+
 _lint() { cd "$ARC_ROOT" && node "$LINT" "$1"; }
 
 setup() {
@@ -94,14 +103,14 @@ setup() {
 }
 
 @test "policy-lint exits 2 when a capability is granted L4" {
-  sed -i 's/read: { level: L3 }/read: { level: L4 }/' "$POL"
+  sedi 's/read: { level: L3 }/read: { level: L4 }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"L4"* ]]
 }
 
 @test "an unknown capability name is a hard error" {
-  sed -i 's/read: { level: L3 }/telepathy: { level: L3 }/' "$POL"
+  sedi 's/read: { level: L3 }/telepathy: { level: L3 }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"telepathy"* ]]
@@ -115,116 +124,120 @@ setup() {
 }
 
 @test "a missing e2 key is a lint error -- silence is not consent" {
-  sed -i '/e2: \[\]/d' "$POL"
+  sedi '/e2: \[\]/d' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"e2"* ]]
 }
 
 @test "a non-empty e2 caps every capability at L1, blanket not per-item" {
-  sed -i 's/e2: \[\]/e2: ["killing a venture"]/' "$POL"
+  sedi 's/e2: \[\]/e2: ["killing a venture"]/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"E2"* ]] || [[ "$output" == *"e2"* ]]
 }
 
 @test "an e2 entry that is not one of the five constitutional items is rejected" {
-  sed -i 's/e2: \[\]/e2: ["reorganising the furniture"]/' "$POL"
+  sedi 's/e2: \[\]/e2: ["reorganising the furniture"]/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "spend above L1 is an unconditional error even with an empty e2" {
-  sed -i 's/spend: { level: L0 }/spend: { level: L2, cap: { amount: 100, currency: "INR", window: daily } }/' "$POL"
+  sedi 's/spend: { level: L0 }/spend: { level: L2, cap: { amount: 100, currency: "INR", window: daily } }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"spend"* ]]
 }
 
 @test "duplicate keys in one mapping are rejected before the second value is assigned" {
-  sed -i 's/write: { level: L0 }/write: { level: L0 }\n    write: { level: L3 }/' "$POL"
+  # Appended rather than sed-substituted: a `\n` in a sed REPLACEMENT is a GNU extension that
+  # BSD sed does not honour, and the kinds block is last, so this lands inside the same mapping.
+  # The attack is a SECOND, more permissive write grant silently overriding the stricter one --
+  # which is what a parser that assigns as it reads would do, with no error anywhere.
+  printf '    write: { level: L3 }\n' >> "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"duplicate"* ]]
 }
 
 @test "a contradictory grant -- a write root that swallows an un-grantable resource" {
-  sed -i 's|write: { level: L0 }|write: { level: L2, roots: ["**"] }|' "$POL"
+  sedi 's|write: { level: L0 }|write: { level: L2, roots: ["**"] }|' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "a contradictory grant -- bounded network whose bound admits nothing" {
-  sed -i 's/network: { level: L0 }/network: { level: L2, domains: [] }/' "$POL"
+  sedi 's/network: { level: L0 }/network: { level: L2, domains: [] }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "L2 with no declared bound is an error -- that is what separates L2 from L3" {
-  sed -i 's/write: { level: L0 }/write: { level: L2 }/' "$POL"
+  sedi 's/write: { level: L0 }/write: { level: L2 }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "a wildcard network domain is rejected" {
-  sed -i 's/network: { level: L0 }/network: { level: L2, domains: ["*.example.com"] }/' "$POL"
+  sedi 's/network: { level: L0 }/network: { level: L2, domains: ["*.example.com"] }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "an IP literal network domain is rejected" {
-  sed -i 's/network: { level: L0 }/network: { level: L2, domains: ["10.0.0.1"] }/' "$POL"
+  sedi 's/network: { level: L0 }/network: { level: L2, domains: ["10.0.0.1"] }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "a negative spend amount is rejected" {
-  sed -i 's/spend: { level: L0 }/spend: { level: L1, cap: { amount: -5, currency: "INR", window: daily } }/' "$POL"
+  sedi 's/spend: { level: L0 }/spend: { level: L1, cap: { amount: -5, currency: "INR", window: daily } }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "a decimal spend amount is rejected -- minor units are integers" {
-  sed -i 's/spend: { level: L0 }/spend: { level: L1, cap: { amount: 10.5, currency: "INR", window: daily } }/' "$POL"
+  sedi 's/spend: { level: L0 }/spend: { level: L1, cap: { amount: 10.5, currency: "INR", window: daily } }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "a lowercase currency is rejected" {
-  sed -i 's/spend: { level: L0 }/spend: { level: L1, cap: { amount: 10, currency: "inr", window: daily } }/' "$POL"
+  sedi 's/spend: { level: L0 }/spend: { level: L1, cap: { amount: 10, currency: "inr", window: daily } }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "an argv0 absent from argv0_classes is a lint error, never an implicit narrow" {
-  sed -i 's/argv0_allow: \["bats", "jq"\]/argv0_allow: ["bats", "curl"]/' "$POL"
+  sedi 's/argv0_allow: \["bats", "jq"\]/argv0_allow: ["bats", "curl"]/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"curl"* ]]
 }
 
 @test "an argv0_classes entry listing shell in its reproduces is a lint error" {
-  sed -i 's/bats: { class: narrow, reproduces: \[\] }/bats: { class: narrow, reproduces: ["shell"] }/' "$POL"
+  sedi 's/bats: { class: narrow, reproduces: \[\] }/bats: { class: narrow, reproduces: ["shell"] }/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"shell"* ]]
 }
 
 @test "an unknown kind name is rejected -- the subject set is derived, not invented" {
-  sed -i 's/"session:interactive":/"process:no-such-process-anywhere":/' "$POL"
+  sedi 's/"session:interactive":/"process:no-such-process-anywhere":/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
 }
 
 @test "the E2 quote must match the Constitution element for element" {
-  sed -i 's/- "changing prices"/- "changing the prices"/' "$POL"
+  sedi 's/- "changing prices"/- "changing the prices"/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"E2"* ]]
 }
 
 @test "a wrong constitution sha256 fails the hash check before the parse is attempted" {
-  sed -i 's/233a64961dc0a028ceca6b113405ead699f9185b39342924c32c05f9786b6ee6/0000000000000000000000000000000000000000000000000000000000000000/' "$POL"
+  sedi 's/233a64961dc0a028ceca6b113405ead699f9185b39342924c32c05f9786b6ee6/0000000000000000000000000000000000000000000000000000000000000000/' "$POL"
   run _lint "$POL"
   [ "$status" -eq 2 ]
   [[ "$output" == *"sha256"* ]] || [[ "$output" == *"hash"* ]]

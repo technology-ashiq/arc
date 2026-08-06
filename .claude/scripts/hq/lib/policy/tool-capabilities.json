@@ -1,0 +1,106 @@
+{
+  "_comment": [
+    "Tool-to-capability mapping for the hook feasibility matrix (ADR-0503, phase 00).",
+    "A committed TABLE, not a heuristic. A tool may map to more than one capability, so every",
+    "value is a list.",
+    "",
+    "DEFAULT-DENY AT THE SERVER LEVEL, and this is the load-bearing part: each server carries a",
+    "`default` capability set applied to every tool NOT listed under `tools`. The default is the",
+    "conservative union of what that server can reach, so a tool nobody has enumerated is",
+    "treated as the most dangerous thing its server can do -- never as harmless. A server absent",
+    "from this file makes policy-matrix exit 2 rather than guessing, which mirrors argv0_classes",
+    "(ADR-0507): deny-by-default applied to classification itself, in both places, for the same",
+    "reason.",
+    "",
+    "`tools` lists what has actually been observed. It is deliberately incomplete -- the point of",
+    "`default` is that incompleteness is safe."
+  ],
+  "builtin": {
+    "tools": {
+      "Bash": ["shell"],
+      "PowerShell": ["shell"],
+      "Write": ["write"],
+      "Edit": ["write"],
+      "NotebookEdit": ["write"],
+      "Read": ["read"],
+      "Glob": ["read"],
+      "Grep": ["read"],
+      "WebFetch": ["network"],
+      "WebSearch": ["network"],
+      "Agent": ["shell"],
+      "Task": ["shell"]
+    },
+    "default": ["shell", "write", "network"]
+  },
+  "servers": {
+    "stripe": {
+      "note": "Real money. Every tool is treated as spend and E2 territory until enumerated, and spend is never above L1 in v1 (POL-F).",
+      "tools": {},
+      "default": ["spend"]
+    },
+    "supabase": {
+      "note": "Real data and real deploys. Migrations and edge functions are deploy-class.",
+      "tools": {
+        "apply_migration": ["write", "deploy"],
+        "execute_sql": ["write"],
+        "deploy_edge_function": ["deploy"],
+        "create_branch": ["deploy"],
+        "delete_branch": ["deploy"],
+        "merge_branch": ["deploy"],
+        "rebase_branch": ["deploy"],
+        "reset_branch": ["deploy"],
+        "list_tables": ["read"],
+        "list_migrations": ["read"],
+        "list_branches": ["read"],
+        "list_extensions": ["read"],
+        "list_edge_functions": ["read"],
+        "get_edge_function": ["read"],
+        "get_logs": ["read"],
+        "get_advisors": ["read"],
+        "get_project_url": ["read"],
+        "get_publishable_keys": ["read"],
+        "generate_typescript_types": ["read"],
+        "search_docs": ["network"]
+      },
+      "default": ["write", "deploy"]
+    },
+    "playwright": {
+      "note": "A real browser reaches the network and the filesystem; browser_run_code_unsafe and browser_evaluate execute arbitrary code, which is shell by any honest reading.",
+      "tools": {
+        "browser_navigate": ["network"],
+        "browser_navigate_back": ["network"],
+        "browser_network_request": ["network"],
+        "browser_network_requests": ["read"],
+        "browser_evaluate": ["shell", "network"],
+        "browser_run_code_unsafe": ["shell", "network"],
+        "browser_file_upload": ["read", "network"],
+        "browser_take_screenshot": ["write"],
+        "browser_snapshot": ["read"],
+        "browser_console_messages": ["read"],
+        "browser_find": ["read"],
+        "browser_click": ["network"],
+        "browser_type": ["network"],
+        "browser_fill_form": ["network"],
+        "browser_press_key": ["network"],
+        "browser_hover": ["network"],
+        "browser_select_option": ["network"],
+        "browser_drag": ["network"],
+        "browser_drop": ["network"],
+        "browser_resize": ["read"],
+        "browser_tabs": ["network"],
+        "browser_wait_for": ["read"],
+        "browser_handle_dialog": ["network"],
+        "browser_close": ["read"]
+      },
+      "default": ["network", "shell"]
+    },
+    "context7": {
+      "note": "Documentation fetch. Read-only as far as this repo is concerned, but it leaves the machine, so it is network.",
+      "tools": {
+        "query-docs": ["network"],
+        "resolve-library-id": ["network"]
+      },
+      "default": ["network"]
+    }
+  }
+}

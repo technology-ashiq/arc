@@ -1,0 +1,42 @@
+# Phase 00 hostile corpus. file<TAB>family<TAB>expected<TAB>what it attacks
+# family: static  -> fed to policy-lint, expected is always exit2
+# family: runtime -> fed to authorizeAction, expected is the decision
+# Adding an attack means adding a fixture and one row here -- never new test code.
+01-unknown-kind-name.yaml	static	exit2	a kind naming a process that does not exist
+02-unknown-capability.yaml	static	exit2	a capability outside the closed eight
+03-duplicate-keys.yaml	static	exit2	two write blocks for one kind -- the permissive one must not win
+04-contradictory-write-root.yaml	static	exit2	a write root that swallows the un-grantable resources
+05-contradictory-empty-domains.yaml	static	exit2	bounded network whose bound admits nothing
+06-money-negative.yaml	static	exit2	a negative spend cap
+07-money-decimal.yaml	static	exit2	a decimal spend cap -- minor units are integers
+08-money-lowercase-currency.yaml	static	exit2	a currency that is not ISO-4217 uppercase
+09-domain-wildcard.yaml	static	exit2	a wildcard domain
+10-domain-ip-literal.yaml	static	exit2	an IP literal domain
+11-domain-private-net.yaml	static	exit2	a private-range literal
+12-domain-encoded.yaml	static	exit2	a percent-encoded domain
+13-missing-e2.yaml	static	exit2	no e2 key at all -- silence is not consent
+14-e2-at-l2.yaml	static	exit2	a kind declaring an E2 action while holding a capability at L2
+15-e2-at-l3.yaml	static	exit2	the same at L3
+16-spend-above-l1.yaml	static	exit2	spend above L1 with an empty e2 -- still unconditional
+17-level-l4.yaml	static	exit2	L4, which arc-full-architecture still names
+18-argv0-unclassified.yaml	static	exit2	an argv0 absent from argv0_classes
+19-argv0-class-lists-shell.yaml	static	exit2	an argv0_classes entry that makes effective(shell) self-referential
+20-e2-quote-drift.yaml	static	exit2	the E2 quote drifted from the adopted text
+21-constitution-hash-mismatch.yaml	static	exit2	a pin that no longer matches CONSTITUTION.md
+22-unknown-top-level-key.yaml	static	exit2	an unknown top-level key
+23-l2-no-bound.yaml	static	exit2	L2 with no declared bound -- that is what separates L2 from L3
+24-tab-indent.yaml	static	exit2	a tab where indentation belongs
+50-write-to-settings.json	runtime	deny	a direct write to the file that holds the deny floor
+51-write-to-policy-file.json	runtime	deny	a write to hq.policy.yaml -- the ceiling is a repo edit, never an agent action
+52-delete-a-hook.json	runtime	deny	a write into the hook dir -- a missing hook script fails OPEN
+53-create-inside-hook-dir.json	runtime	deny	a NEW file in the hook dir, which has no inode yet
+54-path-traversal.json	runtime	deny	a traversal out of an allowed root onto a guarded file
+55-write-outside-roots.json	runtime	deny	a write outside the declared roots
+56-interpreter-argv0-escape.json	runtime	deny	node -e, which carries no chaining metacharacter and no discrete path -- only ADR-0507 catches it
+57-shell-chaining.json	runtime	deny	an allowed argv0 with a chained second command
+58-shell-redirection.json	runtime	deny	redirection writes a file without ever using a write grant
+59-mutate-guarded-via-shell.json	runtime	deny	git checkout -- restores a guarded file with no write grant in sight
+60-argv0-not-allowed.json	runtime	deny	an argv0 outside the allowlist
+61-absent-kind-write.json	runtime	deny	deny-by-default: a kind absent from the file
+62-born-at-l1-proposes.json	runtime	propose	the CONTROL: a legitimate write at its birth level is proposed, not denied -- a corpus that only ever returns deny proves nothing
+63-granted-executes.json	runtime	execute	the second CONTROL: the same write, once a human raised it
