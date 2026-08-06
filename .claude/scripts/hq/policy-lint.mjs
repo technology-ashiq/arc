@@ -17,6 +17,9 @@ import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lintPolicy } from "./lib/policy/lint.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
+import { CAPABILITIES, minLevel } from "./lib/policy/model.mjs";
+import { resolveEffectivePolicy } from "./lib/policy/reduce.mjs";
+import { reproducedBy } from "./lib/policy/authorize.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..", "..");
@@ -41,6 +44,42 @@ function processNames(root) {
   return names;
 }
 
+/**
+ * Print the DERIVED kind x capability x level table -- what the file actually means once
+ * ADR-0507's shell derivation and the birth cap are applied, not what it appears to say.
+ * A reviewer reading only the YAML cannot see either, and an adversarial pass showed a
+ * one-line file mutation that changed every grant while the lint printed a bare count.
+ */
+function printDerivedTable(text) {
+  let doc;
+  try {
+    doc = parsePolicyYaml(text);
+  } catch {
+    return;
+  }
+  const kinds = Object.keys(doc.kinds || {});
+  if (kinds.length === 0) {
+    process.stdout.write("  (no kinds declared -- every action kind is read-only at L1)\n");
+    return;
+  }
+  const pad = (s, n) => String(s).padEnd(n);
+  process.stdout.write(`  ${pad("action kind", 28)}${CAPABILITIES.map((c) => pad(c, 9)).join("")}\n`);
+  for (const kind of kinds) {
+    const cells = CAPABILITIES.map((capability) => {
+      const declared = resolveEffectivePolicy(kind, capability, { policy: doc, events: [] });
+      let level = declared.effective;
+      if (capability === "shell") {
+        const grant = doc.kinds[kind].shell || {};
+        for (const c of reproducedBy(grant.argv0_allow, doc.argv0_classes))
+          level = minLevel(level, resolveEffectivePolicy(kind, c, { policy: doc, events: [] }).effective);
+      }
+      return pad(level, 9);
+    });
+    process.stdout.write(`  ${pad(kind, 28)}${cells.join("")}\n`);
+  }
+  process.stdout.write("  (effective at birth: every cap starts at L1, so nothing above L1 executes yet)\n");
+}
+
 function main(argv) {
   const args = argv.filter((a) => a !== "--");
   const target = args[0] || "hq.policy.yaml";
@@ -61,14 +100,17 @@ function main(argv) {
 
   const constitutionPath = join(ROOT, "CONSTITUTION.md");
   // ONE buffer for both the hash check and the parse -- no TOCTOU gap between them (ADR-0506).
+  // A missing file is a VIOLATION raised by lintPolicy, never a warning printed here: both E2
+  // checks are on the never-cut list, so "is law" with them skipped is the poster document.
   const constitutionBuffer = existsSync(constitutionPath) ? readFileSync(constitutionPath) : null;
-  if (!constitutionBuffer)
-    process.stderr.write("policy-lint: CONSTITUTION.md not found -- E2 checks skipped\n");
 
   const violations = lintPolicy(text, { constitutionBuffer, processNames: processNames(ROOT) });
 
   if (violations.length === 0) {
-    process.stdout.write(`policy-lint: ${target} is law -- 0 violations\n`);
+    // The path is printed RESOLVED. A CI step run from the wrong cwd once reported
+    // "hq.policy.yaml is law" about an entirely different file.
+    process.stdout.write(`policy-lint: ${path} is law -- 0 violations\n`);
+    printDerivedTable(text);
     return 0;
   }
   process.stderr.write(`policy-lint: ${target} is NOT law -- ${violations.length} violation(s)\n`);

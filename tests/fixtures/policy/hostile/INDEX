@@ -26,6 +26,12 @@
 22-unknown-top-level-key.yaml	static	exit2	an unknown top-level key
 23-l2-no-bound.yaml	static	exit2	L2 with no declared bound -- that is what separates L2 from L3
 24-tab-indent.yaml	static	exit2	a tab where indentation belongs
+25-proto-kind-entry.yaml	static	exit2	ADVERSARIAL A1/BC6: __proto__ as a kind-entry key -- invisible to Object.keys, so lint saw nothing while grant.level read straight through the prototype
+26-proto-flow-mapping.yaml	static	exit2	ADVERSARIAL BC6: the same through a flow mapping
+27-constructor-key.yaml	static	exit2	ADVERSARIAL A1: the sibling key that also mutates object shape
+28-root-inside-guarded-tree.yaml	static	exit2	ADVERSARIAL BC2: a write root of .claude/hooks -- inside a guarded tree, and the one-directional swallow check missed it
+29-shell-derived-contradiction.yaml	static	exit2	ADVERSARIAL A-nit: a shell grant claiming L2 whose ADR-0507 derivation is L0 -- L0 wearing L2's label
+30-ungrantable-actions-short.yaml	static	exit2	ADVERSARIAL A10: a truncated E2 quote that the self-validating fallback used to accept
 50-write-to-settings.json	runtime	deny	a direct write to the file that holds the deny floor
 51-write-to-policy-file.json	runtime	deny	a write to hq.policy.yaml -- the ceiling is a repo edit, never an agent action
 52-delete-a-hook.json	runtime	deny	a write into the hook dir -- a missing hook script fails OPEN
@@ -40,3 +46,13 @@
 61-absent-kind-write.json	runtime	deny	deny-by-default: a kind absent from the file
 62-born-at-l1-proposes.json	runtime	propose	the CONTROL: a legitimate write at its birth level is proposed, not denied -- a corpus that only ever returns deny proves nothing
 63-granted-executes.json	runtime	execute	the second CONTROL: the same write, once a human raised it
+64-decoy-operand.json	runtime	deny	ADVERSARIAL A2/BC1: one extra operand ahead of the real target defeated the guard, because only the first slash-bearing argument was inspected
+65-decoy-operand-hook.json	runtime	deny	ADVERSARIAL BC1: the same shape aimed at a hook script, where a missing file fails OPEN
+66-flag-value-target.json	runtime	deny	ADVERSARIAL BW1: the target hidden inside --flag=value
+67-mutator-no-operand.json	runtime	deny	ADVERSARIAL BW1: a file-mutating program naming no operand the guard can resolve -- unresolvable is denied, never skipped
+68-l3-redirection.json	runtime	deny	ADVERSARIAL A7/BC4: at L3 the chaining and redirection refusal never ran, because it lived inside the L2 branch
+69-l3-chaining.json	runtime	deny	ADVERSARIAL BC4: the chained twin of the same hole
+70-unclassified-argv0-runtime.json	runtime	deny	ADVERSARIAL A3: at runtime an unclassified argv0 was skipped, i.e. treated as an implicit narrow -- the exact opposite of what ADR-0507 says. Static row 18 existed; this is the runtime twin, and hooks never run the lint
+71-hooks-dir-itself.json	runtime	deny	ADVERSARIAL BC2: every glob branch tested for a STRICT descendant, so .claude/hooks itself was reachable while its children were not
+72-engine-source-write.json	runtime	deny	ADVERSARIAL A4/BC7: ADR-0502's own sentence turned on the guard -- the engine's source was not on the un-grantable list while .claude/scripts/** was a write root
+73-spend-at-l2.json	runtime	deny	ADVERSARIAL A5: the L2 branch had arms for write, shell, network and targets -- and none for spend, so any amount executed with its cap never consulted

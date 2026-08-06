@@ -44,6 +44,14 @@ ungrantable_resources:
   - ".claude/settings.local.json"
   - ".claude/hooks/**"
   - "hq.policy.yaml"
+  # The engine's OWN SOURCE. An adversarial pass pointed ADR-0502's own sentence back at it --
+  # "a backstop that the thing it binds can delete is not a backstop" -- and the guard's code
+  # was not on the list while `.claude/scripts/**` was a write root. Latent only because the
+  # birth cap is L1: the first legitimate write promotion would have handed an agent its own
+  # decision function.
+  - ".claude/scripts/hq/lib/policy/**"
+  - ".claude/scripts/hq/policy-lint.mjs"
+  - ".claude/scripts/hq/policy-matrix.mjs"
 
 # Closed enums for the capabilities that have no live consumer yet. Empty is the honest state:
 # a grammar written for a capability nobody calls is stale on arrival.
@@ -65,11 +73,18 @@ argv0_classes:
   pwsh: { class: interpreter, reproduces: ["*"] }
   npm: { class: interpreter, reproduces: ["*"] }
   npx: { class: interpreter, reproduces: ["*"] }
-  git: { class: vcs, reproduces: ["write", "network"] }
-  gh: { class: vcs, reproduces: ["write", "network"] }
+  # bats executes arbitrary bash from the file it is handed. It was classed `narrow` here and
+  # in the spec's own worked example; an adversarial pass ran `bats tests/evil.bats` straight
+  # through an uncapped L2 grant, and `session:interactive` may write `tests/**`, so
+  # write-then-run was a complete arbitrary-code path. It is an interpreter.
+  bats: { class: interpreter, reproduces: ["*"] }
+  # git -c alias.x=!cmd, -c core.pager=, --exec-path make git a general machine. Distinguishing
+  # `git diff` from `git checkout` needs subcommand parsing, which is the named rabbit hole, so
+  # git is modelled by what it CAN do.
+  git: { class: interpreter, reproduces: ["*"] }
+  gh: { class: vcs, reproduces: ["write", "network", "publish", "deploy"] }
   curl: { class: fetcher, reproduces: ["network"] }
   wget: { class: fetcher, reproduces: ["network"] }
-  bats: { class: narrow, reproduces: [] }
   jq: { class: narrow, reproduces: [] }
   diff: { class: narrow, reproduces: [] }
   sha256sum: { class: narrow, reproduces: [] }
@@ -79,11 +94,18 @@ argv0_classes:
 # climb is event-earned, one human decision at a time, and this file is the ceiling those
 # decisions may not exceed.
 kinds:
+  # NOTE on every `shell` grant below sitting at L1. With ADR-0507's derivation, a shell grant
+  # is capped at the minimum of every capability its programs can reproduce -- and every program
+  # anyone actually needs (node, git, bats, npm) is a general machine, so shell can only exceed
+  # L1 for a kind whose write, network and spend are ALL already that high. Since spend can
+  # never exceed L1 in v1, shell above L1 is unreachable today, and `policy-lint` now says so
+  # rather than letting a grant claim L2 and derive L0. That is the rule working, not a
+  # limitation to route around: a process that needs `node` is asking for unbounded everything.
   "session:interactive":
     e2: []
     read: { level: L3 }
-    write: { level: L2, roots: ["initiatives/**", "docs/**", "tests/**", ".claude/scripts/**"] }
-    shell: { level: L2, argv0_allow: ["git", "node", "bats", "jq", "gh"] }
+    write: { level: L2, roots: ["initiatives/**", "docs/**", "tests/**"] }
+    shell: { level: L1 }
     network: { level: L1 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -105,7 +127,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L0 }
-    shell: { level: L2, argv0_allow: ["git", "diff"] }
+    shell: { level: L1 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }
@@ -116,7 +138,7 @@ kinds:
     e2: []
     read: { level: L3 }
     write: { level: L0 }
-    shell: { level: L2, argv0_allow: ["git"] }
+    shell: { level: L1 }
     network: { level: L0 }
     message: { level: L0 }
     publish: { level: L0 }

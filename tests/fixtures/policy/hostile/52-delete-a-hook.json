@@ -17,7 +17,10 @@
       ".claude/settings.json",
       ".claude/settings.local.json",
       ".claude/hooks/**",
-      "hq.policy.yaml"
+      "hq.policy.yaml",
+      ".claude/scripts/hq/lib/policy/**",
+      ".claude/scripts/hq/policy-lint.mjs",
+      ".claude/scripts/hq/policy-matrix.mjs"
     ],
     "targets": {
       "message": [],

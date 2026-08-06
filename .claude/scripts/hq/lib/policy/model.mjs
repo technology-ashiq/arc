@@ -69,11 +69,17 @@ export const CHAINING = Object.freeze([";", "&&", "||", "|", "`", "$(", "\n", "&
 /** The three-valued decision (ADR-0505 consequence of the L1 semantics). */
 export const DECISIONS = Object.freeze(["deny", "propose", "execute"]);
 
-/** Map an effective level to its decision, before any bound is consulted. */
+/**
+ * Map an effective level to its decision, before any bound is consulted.
+ * The default is DENY, not execute: no path reaches it today because `isLevel` gates everything
+ * upstream, but the one function that turns a level into permission should fail closed if it is
+ * ever handed something it does not recognise.
+ */
 export function decisionForLevel(level) {
   switch (level) {
     case "L0": return "deny";
     case "L1": return "propose";
-    default: return "execute"; // L2 and L3 -- the bound is checked separately for L2
+    case "L2": case "L3": return "execute"; // the bound is checked separately for L2
+    default: return "deny";
   }
 }

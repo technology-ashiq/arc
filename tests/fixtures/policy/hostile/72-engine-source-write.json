@@ -53,10 +53,7 @@
           "level": "L3"
         },
         "write": {
-          "level": "L2",
-          "roots": [
-            "tmp/**"
-          ]
+          "level": "L3"
         },
         "shell": {
           "level": "L0"
@@ -82,7 +79,7 @@
   "action": {
     "kind": "session:interactive",
     "capability": "write",
-    "resource": "elsewhere/x"
+    "resource": ".claude/scripts/hq/lib/policy/authorize.mjs"
   },
   "events": [
     {
@@ -96,7 +93,7 @@
         "decision_ref": "d",
         "from_level": "L1",
         "policy_hash": "0",
-        "to_level": "L2",
+        "to_level": "L3",
         "trial_ledger_ref": "t"
       }
     }

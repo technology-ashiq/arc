@@ -53,13 +53,13 @@
           "level": "L3"
         },
         "write": {
-          "level": "L2",
-          "roots": [
-            "tmp/**"
-          ]
+          "level": "L0"
         },
         "shell": {
-          "level": "L0"
+          "level": "L2",
+          "argv0_allow": [
+            "cp"
+          ]
         },
         "network": {
           "level": "L0"
@@ -81,8 +81,8 @@
   },
   "action": {
     "kind": "session:interactive",
-    "capability": "write",
-    "resource": "elsewhere/x"
+    "capability": "shell",
+    "resource": "cp payload --target-directory=.claude/hooks"
   },
   "events": [
     {
@@ -91,7 +91,7 @@
       "ts": "2026-08-06T10:00:00+05:30",
       "payload": {
         "action_kind": "session:interactive",
-        "capability": "write",
+        "capability": "shell",
         "correlation": "r",
         "decision_ref": "d",
         "from_level": "L1",

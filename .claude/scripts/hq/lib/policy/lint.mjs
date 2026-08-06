@@ -57,8 +57,23 @@ export function lintPolicy(text, opts = {}) {
   if (typeof c.version !== "string") add("constitution.version must be a string");
   if (typeof c.receipt !== "string") add("constitution.receipt must be the constitution.adopted ULID");
 
+  // ungrantable_actions is shape-checked INDEPENDENTLY of the E2 comparison. Without this, the
+  // fallback below let the file validate its own quote: `[]` and a bare string both passed
+  // whenever CONSTITUTION.md was unavailable.
+  if (!Array.isArray(doc.ungrantable_actions) || doc.ungrantable_actions.length !== 5)
+    add(`ungrantable_actions must be a list of exactly the five constitutional E2 items`);
+  else
+    for (const a of doc.ungrantable_actions)
+      if (typeof a !== "string" || a.trim() === "")
+        add(`ungrantable_actions entry ${JSON.stringify(a)} must be a non-empty string`);
+
   let e2Items = null;
-  if (opts.constitutionBuffer && typeof c.sha256 === "string") {
+  if (!opts.constitutionBuffer) {
+    // A VIOLATION, not a warning. Both E2 checks are on the plan's never-cut list, and a lint
+    // that prints "is law" with them skipped is the poster document it exists to prevent.
+    add(`CONSTITUTION.md was not readable -- the E2 checks are on the never-cut list, so a policy ` +
+        `file cannot be declared law without them`);
+  } else if (typeof c.sha256 === "string") {
     try {
       e2Items = verifyConstitution(opts.constitutionBuffer, c.sha256, doc.ungrantable_actions);
     } catch (e) {
@@ -145,8 +160,14 @@ export function lintPolicy(text, opts = {}) {
       if (capability === "spend" && above1)
         add(`${where}.spend is ${level} -- spend above L1 is an error unconditionally: moving money is E2`);
 
-      if ((capability === "publish" || capability === "deploy") && above1 && e2NonEmpty === false && !Array.isArray(e2))
-        add(`${where}.${capability} above L1 requires an explicit e2 declaration`);
+      // publish/deploy above L1 is reachable only with `e2: []` (rule 2 is blanket), and nothing
+      // can verify an empty list is true -- ADR-0506 names this as the model's one unverified
+      // human declaration. The earlier guard here could never fire, and a dead guard reads like
+      // a real one. It is replaced with an advisory line the reviewer actually sees.
+      if ((capability === "publish" || capability === "deploy") && above1 && Array.isArray(e2) && e2.length === 0)
+        add(`REQUIRES-SIGNOFF ${where}.${capability} is ${level} with e2: [] -- nothing verifies ` +
+            `that this kind does not publish under Ashiq's name. Say so explicitly in the PR ` +
+            `description or drop the level (ADR-0506)`);
 
       // A bound is what separates L2 from L3.
       const key = BOUND_KEY[capability];
@@ -160,7 +181,20 @@ export function lintPolicy(text, opts = {}) {
 
       if (capability === "write") checkRoots(grant.roots, where, resources, add);
       if (capability === "network") checkDomains(grant.domains, where, add);
-      if (capability === "shell") checkArgv0(grant.argv0_allow, where, classes, add);
+      if (capability === "shell") {
+        checkArgv0(grant.argv0_allow, where, classes, add);
+        // A shell grant whose DERIVED level is L0 is the same contradiction as an empty bound:
+        // it claims L2 and can never be L2. Left silent it creates standing pressure to quietly
+        // drop the interpreter from the allowlist, which is how the ADR-0507 cap gets removed
+        // by someone trying to make their process work.
+        if (above1) {
+          const derived = derivedShellCeiling(entry, grant.argv0_allow, classes);
+          if (rank(derived) < rank(level))
+            add(`${where}.shell declares ${level} but ADR-0507 derives ${derived} from its ` +
+                `allowlist (its programs reproduce a capability granted no higher) -- ` +
+                `contradictory grant: raise the other capabilities or lower this one`);
+        }
+      }
       if (capability === "spend") checkSpendCap(grant.cap, where, add);
       if (["message", "publish", "deploy"].includes(capability) && grant.targets != null)
         for (const t of grant.targets)
@@ -170,6 +204,26 @@ export function lintPolicy(text, opts = {}) {
   }
 
   return v;
+}
+
+/** The ceiling ADR-0507's derivation allows for a shell grant, from declared levels alone. */
+function derivedShellCeiling(entry, argv0Allow, classes) {
+  const reproduced = new Set();
+  for (const p of argv0Allow || []) {
+    const cls = Object.prototype.hasOwnProperty.call(classes, p) ? classes[p] : null;
+    const list = cls && Array.isArray(cls.reproduces) ? cls.reproduces : ["*"]; // unknown = everything
+    for (const cap of list) {
+      if (cap === "*") CAPABILITIES.filter((x) => x !== "shell").forEach((x) => reproduced.add(x));
+      else if (cap !== "shell") reproduced.add(cap);
+    }
+  }
+  let out = "L3";
+  for (const cap of reproduced) {
+    const g = entry[cap];
+    const lvl = g && typeof g === "object" && isLevel(g.level) ? g.level : "L0";
+    if (rank(lvl) < rank(out)) out = lvl;
+  }
+  return out;
 }
 
 function checkRoots(roots, where, resources, add) {
@@ -186,8 +240,17 @@ function checkRoots(roots, where, resources, add) {
     for (const res of resources || []) {
       if (typeof res !== "string") continue;
       const target = res.endsWith("/**") ? res.slice(0, -3) : res;
-      if (r === "**" || (r.endsWith("/**") && (target === r.slice(0, -3) || target.startsWith(r.slice(0, -3) + "/"))))
-        add(`${where}.write.roots ${JSON.stringify(r)} swallows the un-grantable resource ${JSON.stringify(res)} -- contradictory grant`);
+      const prefix = r.endsWith("/**") ? r.slice(0, -3) : null;
+      if (
+        r === "**" ||
+        r === target ||
+        (prefix !== null && (target === prefix || target.startsWith(prefix + "/"))) ||
+        // The reverse containment too: a root of `.claude/hooks` sits INSIDE the guarded
+        // `.claude/hooks/**`, and the one-directional check missed it entirely.
+        (prefix !== null && res.endsWith("/**") && prefix.startsWith(target + "/")) ||
+        (prefix !== null && prefix === target)
+      )
+        add(`${where}.write.roots ${JSON.stringify(r)} swallows or lands inside the un-grantable resource ${JSON.stringify(res)} -- contradictory grant`);
     }
   }
 }

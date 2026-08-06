@@ -23,5 +23,5 @@ export { buildResourceGuard, guardedEntryFor, withinRoots, hasShortName } from "
 export {
   resolveEffectivePolicy, resolveVector, ceilingFor, grantFor, LEVEL_CHANGED, DEMOTED,
 } from "./reduce.mjs";
-export { authorizeAction, reproducedBy, shellArgv0 } from "./authorize.mjs";
+export { authorizeAction, mayExecute, reproducedBy, shellArgv0, shellTargets } from "./authorize.mjs";
 export { lintPolicy } from "./lint.mjs";

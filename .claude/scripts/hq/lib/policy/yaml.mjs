@@ -13,11 +13,23 @@
  * stricter one, with no error anywhere. So every mapping tracks its own seen-keys set and
  * throws BEFORE the second value is assigned.
  *
+ * THE SECOND THING, found by an adversarial pass and worse than the first: a mapping built as a
+ * plain `{}` literal accepts `__proto__` as a key, and assigning it sets the object's PROTOTYPE
+ * instead of an own property. `Object.keys` never sees it, so `lint.mjs` never sees it, so the
+ * file lints clean -- while `grant.level` reads straight through the prototype chain and returns
+ * whatever the attacker wrote. `policyHash` was identical to the honest file's, so the validator,
+ * the receipt and the reviewer all agreed and all three were wrong. Mappings are therefore built
+ * with `Object.create(null)`, AND the three dangerous key names are rejected outright: one of
+ * those alone would be enough, and this file is where being paranoid is cheap.
+ *
  * Supported: block mappings (2-space indent), block sequences, flow mappings/sequences on one
  * line, double-quoted and bare scalars, integers and decimals, `#` comments outside quotes.
  * Not supported, on purpose: anchors, aliases, tags, multi-line scalars, single quotes,
  * multi-document streams, tabs for indentation.
  */
+
+/** Keys that mutate an object's shape rather than its contents. Never legal in a policy file. */
+const FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 export class PolicyParseError extends Error {
   constructor(message, line) {
@@ -102,12 +114,14 @@ function flowValue(text, line) {
   if (t.startsWith("{")) {
     if (!t.endsWith("}")) fail("unterminated flow mapping", line);
     const body = t.slice(1, -1).trim();
-    const out = {};
+    const out = Object.create(null);
     if (body === "") return out;
     const seen = new Set();
     for (const part of splitFlow(body, line)) {
       const idx = splitKey(part, line);
       const key = String(scalar(part.slice(0, idx), line));
+      if (FORBIDDEN_KEYS.has(key))
+        fail(`key ${JSON.stringify(key)} mutates the object shape rather than its contents`, line);
       if (seen.has(key)) fail(`duplicate key ${JSON.stringify(key)} in one flow mapping`, line);
       seen.add(key);
       out[key] = flowValue(part.slice(idx + 1), line);
@@ -174,13 +188,15 @@ export function parsePolicyYaml(text) {
   }
 
   function parseMap(indent) {
-    const out = {};
+    const out = Object.create(null);
     const seen = new Set();
     while (pos < lines.length && lines[pos].indent === indent) {
       const cur = lines[pos];
       if (cur.text.startsWith("- ")) fail("a sequence entry where a mapping key was expected", cur.line);
       const idx = splitKey(cur.text, cur.line);
       const key = String(scalar(cur.text.slice(0, idx), cur.line));
+      if (FORBIDDEN_KEYS.has(key))
+        fail(`key ${JSON.stringify(key)} mutates the object shape rather than its contents`, cur.line);
       // Reject BEFORE assigning: the second value must never reach the object, because the
       // whole risk is a more permissive grant quietly replacing a stricter one.
       if (seen.has(key)) fail(`duplicate key ${JSON.stringify(key)} in one mapping`, cur.line);

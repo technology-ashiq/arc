@@ -30,21 +30,27 @@ import { BIRTH_CAP, CAPABILITIES, isLevel, minLevel, oneDown } from "./model.mjs
 export const LEVEL_CHANGED = "policy.level.changed";
 export const DEMOTED = "policy.demoted";
 
+// Every lookup is own-property only. A plain `obj[key]` walks the prototype chain, so a policy
+// carrying a `__proto__:` mapping -- invisible to Object.keys and therefore to the lint -- could
+// answer for a grant that was never written. yaml.mjs now refuses that key and builds with
+// Object.create(null); this is the second lock, because the parser is not the only way an
+// object reaches here (a hook could hand us a JSON-parsed policy).
+const own = (o, k) => (o != null && Object.prototype.hasOwnProperty.call(o, k) ? o[k] : undefined);
+
 /** The ceiling a kind declares for a capability. An absent kind is read-only at L1 (POL-B). */
 export function ceilingFor(policy, kind, capability) {
-  const kinds = (policy && policy.kinds) || {};
-  const entry = kinds[kind];
+  const entry = own(policy && policy.kinds, kind);
   if (!entry) return capability === "read" ? "L1" : "L0";
-  const grant = entry[capability];
+  const grant = own(entry, capability);
   if (!grant || typeof grant !== "object") return "L0";
-  return isLevel(grant.level) ? grant.level : "L0";
+  return isLevel(own(grant, "level")) ? grant.level : "L0";
 }
 
 /** The grant object (bounds live here), or null when the kind or capability is absent. */
 export function grantFor(policy, kind, capability) {
-  const entry = ((policy && policy.kinds) || {})[kind];
+  const entry = own(policy && policy.kinds, kind);
   if (!entry) return null;
-  const grant = entry[capability];
+  const grant = own(entry, capability);
   return grant && typeof grant === "object" ? grant : null;
 }
 
@@ -62,17 +68,30 @@ export function resolveEffectivePolicy(kind, capability, { policy, events } = {}
 
   for (const event of events || []) {
     if (!event || typeof event !== "object") continue;
+    if (event.kind !== LEVEL_CHANGED && event.kind !== DEMOTED) continue;
     const p = event.payload;
-    if (!p || p.action_kind !== kind || p.capability !== capability) continue;
+    // A transition event with no payload cannot be matched to a pair, so it cannot be silently
+    // dropped either: dropping always fails PERMISSIVE (a mistyped demotion leaves the cap
+    // high), which is the shape of ADR-0501's "an event that lands in quarantine is never
+    // reported as enforcement success".
+    if (!p || typeof p !== "object")
+      throw new Error(`${event.kind} ${event.id || "(no id)"} has no payload -- a transition that cannot be read must not be ignored`);
+    if (p.action_kind !== kind || p.capability !== capability) continue;
 
     if (event.kind === LEVEL_CHANGED) {
-      if (isLevel(p.to_level)) cap = p.to_level;
+      if (!isLevel(p.to_level))
+        throw new Error(`${event.kind} ${event.id || "(no id)"} carries to_level ${JSON.stringify(p.to_level)}, which is not a level`);
+      // CLAMPED to the ceiling at fold time. Storing it raw made an approval to L3 under a
+      // ceiling of L1 a no-op its reviewer could see -- and a time bomb: a later, unrelated
+      // reviewed edit raising the ceiling would arm L3 instantly, with no second human
+      // decision. The reducer already reasoned about the cap-above-ceiling no-op for demotion
+      // and missed the promotion twin.
+      cap = minLevel(ceiling, p.to_level);
       continue;
     }
-    if (event.kind === DEMOTED) {
-      // Bite from the effective level, and compute it -- never trust the payload's to_level.
-      cap = oneDown(minLevel(ceiling, cap));
-    }
+    // Demotion: bite from the effective level, and COMPUTE it -- never trust the payload's
+    // to_level, or a forged event would be a promotion.
+    cap = oneDown(minLevel(ceiling, cap));
   }
 
   return { ceiling, cap, effective: minLevel(ceiling, cap) };

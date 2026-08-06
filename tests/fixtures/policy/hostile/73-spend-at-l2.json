@@ -53,10 +53,7 @@
           "level": "L3"
         },
         "write": {
-          "level": "L2",
-          "roots": [
-            "tmp/**"
-          ]
+          "level": "L0"
         },
         "shell": {
           "level": "L0"
@@ -74,15 +71,20 @@
           "level": "L0"
         },
         "spend": {
-          "level": "L0"
+          "level": "L2",
+          "cap": {
+            "amount": 5,
+            "currency": "USD",
+            "window": "daily"
+          }
         }
       }
     }
   },
   "action": {
     "kind": "session:interactive",
-    "capability": "write",
-    "resource": "elsewhere/x"
+    "capability": "spend",
+    "resource": 1000000000
   },
   "events": [
     {
@@ -91,7 +93,7 @@
       "ts": "2026-08-06T10:00:00+05:30",
       "payload": {
         "action_kind": "session:interactive",
-        "capability": "write",
+        "capability": "spend",
         "correlation": "r",
         "decision_ref": "d",
         "from_level": "L1",

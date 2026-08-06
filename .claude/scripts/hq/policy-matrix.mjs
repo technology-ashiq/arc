@@ -22,9 +22,17 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildResourceGuard, guardedEntryFor } from "./lib/policy/resources.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TABLE = JSON.parse(readFileSync(join(HERE, "lib", "policy", "tool-capabilities.json"), "utf8"));
+
+/** The same un-grantable set the engine enforces, so this tool cannot be turned against it. */
+const GUARDED = [
+  ".claude/settings.json", ".claude/settings.local.json", ".claude/hooks/**", "hq.policy.yaml",
+  ".claude/scripts/hq/lib/policy/**", ".claude/scripts/hq/policy-lint.mjs",
+  ".claude/scripts/hq/policy-matrix.mjs",
+];
 
 /** ADR-0501: the classes whose misuse is not cheaply reversible carry a static deny as well. */
 const STATIC_DENY = new Set(["spend", "deploy", "publish"]);
@@ -103,6 +111,19 @@ function main(argv) {
   for (const server of servers)
     if (!rows.some((r) => r.server === server))
       problems.push(`server ${JSON.stringify(server)} produced zero rows`);
+
+  // Both output paths are checked against the un-grantable list before anything is created.
+  // An adversarial pass pointed out that mkdirSync({recursive:true}) + writeFileSync on an
+  // attacker-supplied --out is an arbitrary-path write primitive living inside the policy
+  // engine itself -- `--out .claude/settings.json` is the same call as the honest one.
+  const guard = buildResourceGuard(GUARDED, process.cwd());
+  for (const candidate of [outJson, outMd].filter(Boolean)) {
+    const hit = guardedEntryFor(candidate, guard);
+    if (hit) {
+      process.stderr.write(`policy-matrix: refusing to write ${candidate} -- it resolves to the un-grantable resource ${hit}\n`);
+      return 2;
+    }
+  }
 
   const outPath = resolve(process.cwd(), outJson);
   mkdirSync(dirname(outPath), { recursive: true });

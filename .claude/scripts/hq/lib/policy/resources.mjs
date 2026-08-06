@@ -27,8 +27,8 @@
  * where the parent exists, then case-folding on win32 only.
  */
 
-import { statSync, realpathSync } from "node:fs";
-import { resolve, dirname, basename, sep, relative } from "node:path";
+import { statSync, realpathSync, readdirSync } from "node:fs";
+import { resolve, dirname, basename, sep, relative, join } from "node:path";
 
 const WIN = process.platform === "win32";
 
@@ -40,6 +40,23 @@ const norm = (p) => {
 
 /** 8.3 short names (RUNPRO~1) are rejected outright -- realpath does not always collapse them. */
 export const hasShortName = (p) => p.split(/[\\/]+/).some((seg) => /~\d/.test(seg));
+
+/** Every path under `dir`, bounded so a symlink loop or a huge tree cannot hang the guard. */
+function walk(dir, out = [], depth = 0) {
+  if (depth > 12 || out.length > 5000) return out;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  for (const e of entries) {
+    const p = join(dir, e.name);
+    out.push(p);
+    if (e.isDirectory()) walk(p, out, depth + 1);
+  }
+  return out;
+}
 
 function identity(abs) {
   try {
@@ -67,6 +84,16 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
       const abs = resolve(root, dirEntry);
       const id = identity(abs);
       globs.push({ entry, abs, key: id ? id.key : null, normalised: norm(abs) });
+      // Enumerate the tree's inodes NOW, so a hardlink into it is caught by identity like any
+      // exact entry. Without this the glob was matched only by walking the LINK's parents and
+      // by string prefix -- both of which a hardlink defeats by construction, which is exactly
+      // the case this module's header claims identity was chosen for. An adversarial pass
+      // proved it: a hardlink to .claude/settings.json was caught, a hardlink to
+      // .claude/hooks/PreToolUse.sh was not.
+      for (const child of walk(abs)) {
+        const cid = identity(child);
+        if (cid && !exact.has(cid.key)) exact.set(cid.key, entry);
+      }
       continue;
     }
     const abs = resolve(root, entry);
@@ -113,6 +140,13 @@ export function guardedEntryFor(resource, guard) {
 
   // Directory-tree entries (`.claude/hooks/**`) for targets that DO exist.
   for (const g of guard.globs) {
+    // THE DIRECTORY ITSELF, not only its descendants. Every branch below tests for a strict
+    // descendant, so `.claude/hooks` was reachable while `.claude/hooks/anything` was not --
+    // and `rm -r .claude/hooks` disarms the whole expressive layer in one command.
+    if (g.key && id && id.key === g.key) return g.entry;
+    const target = id ? id.real : abs;
+    if (norm(target) === g.normalised) return g.entry;
+
     if (g.key && id) {
       let cur = dirname(id.real);
       for (let depth = 0; depth < 64; depth++) {
@@ -123,7 +157,6 @@ export function guardedEntryFor(resource, guard) {
         cur = next;
       }
     }
-    const target = id ? id.real : abs;
     if (norm(target).startsWith(g.normalised + "/")) return g.entry;
   }
 
@@ -134,18 +167,45 @@ export function guardedEntryFor(resource, guard) {
   return null;
 }
 
-/** Is `resource` inside one of the declared write roots? Globs are `prefix/**` or `**`. */
+/**
+ * Is `resource` inside one of the declared write roots? Globs are `prefix/**` or `**`.
+ *
+ * The path is RESOLVED THROUGH THE FILESYSTEM first, via the deepest ancestor that exists. A
+ * purely lexical check let a junction inside an allowed root escape to anywhere on the disk:
+ * `initiatives/esc -> C:\secrets` made `initiatives/esc/keys.txt` look like a legal write and
+ * land outside the repo. The un-grantable list survived that (it realpaths), but nothing else
+ * did -- `.git/hooks/pre-commit` and `.mcp.json` were both reachable.
+ */
 export function withinRoots(resource, roots, root = process.cwd()) {
   if (!Array.isArray(roots) || roots.length === 0) return false;
+
   const abs = resolve(root, resource);
-  const rel = relative(root, abs).split(sep).join("/");
-  if (rel.startsWith("../")) return false; // escaped the repo entirely
+  let real = abs;
+  let cur = abs;
+  const tail = [];
+  for (let depth = 0; depth < 64; depth++) {
+    const id = identity(cur);
+    if (id) { real = tail.length ? join(id.real, ...tail.reverse()) : id.real; break; }
+    const next = dirname(cur);
+    if (next === cur) break;
+    tail.push(basename(cur));
+    cur = next;
+  }
+
+  const rootId = identity(root);
+  const realRoot = rootId ? rootId.real : root;
+  const rel = relative(realRoot, real).split(sep).join("/");
+  if (rel === "" || rel.startsWith("../") || /^[A-Za-z]:/.test(rel)) return false; // outside the repo
+
+  const cmp = (s) => (WIN ? s.toLowerCase() : s);
   for (const pattern of roots) {
     if (pattern === "**") return true;
-    if (pattern.endsWith("/**")) {
-      const prefix = pattern.slice(0, -3);
-      if (rel === prefix || rel.startsWith(prefix + "/")) return true;
-    } else if (rel === pattern) return true;
+    const p = cmp(pattern);
+    const r = cmp(rel);
+    if (p.endsWith("/**")) {
+      const prefix = p.slice(0, -3);
+      if (r === prefix || r.startsWith(prefix + "/")) return true;
+    } else if (r === p) return true;
   }
   return false;
 }

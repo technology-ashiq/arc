@@ -80,6 +80,13 @@ export function preimageHash(value) {
 export function policyHash(policy) {
   return preimageHash({
     version: policy.version,
+    // The constitution pin and the level table are IN the preimage. Leaving them out meant a
+    // file repinned to a different adopted Constitution, or one that redefined what L2 means,
+    // hashed identically to the honest file -- and policy_hash is what every
+    // policy.level.changed and spend.reserved carries to say which law the decision was made
+    // under. Those are exactly the material differences it must not hide.
+    constitution: policy.constitution,
+    levels: policy.levels,
     ungrantable_actions: policy.ungrantable_actions,
     ungrantable_resources: policy.ungrantable_resources,
     targets: policy.targets,
