@@ -18,8 +18,10 @@
  * `unrestricted` does not widen anything, it just stops narrowing.
  */
 
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+import { KINDS, validateEvent } from "../validate.mjs";
 import { parsePolicyYaml } from "./yaml.mjs";
 import { CAPABILITIES, PROCESS_PREFIX } from "./model.mjs";
 import { resolveEffectivePolicy, LEVEL_CHANGED, DEMOTED } from "./reduce.mjs";
@@ -31,14 +33,14 @@ import { buildResourceGuard } from "./resources.mjs";
  * fetches and pushes; `agent.invoke` maps to shell because a subagent is a general machine --
  * the same reasoning ADR-0507 applies to an interpreter in an argv0 allowlist.
  */
-export const TOOL_CAPABILITIES = Object.freeze({
+export const TOOL_CAPABILITIES = Object.freeze(Object.assign(Object.create(null), {
   "fs.read": ["read"],
   "fs.write": ["write"],
   "shell.run": ["shell"],
   "git.op": ["shell", "network"],
   "agent.invoke": ["shell"],
   "ask.human": [], // a prompt to a human is not a capability the machine holds
-});
+}));
 
 /**
  * The capabilities a process declares.
@@ -62,26 +64,99 @@ export function declaredCapabilities(doc) {
     // A token appears as `shell.run`, as `shell.run:` (a trailing colon), or -- when it carries
     // a sub-block -- as a one-key mapping. Stringifying that mapping throws, which is how this
     // read a real process file and died rather than denying.
-    const token = (raw && typeof raw === "object" && !Array.isArray(raw))
-      ? String(Object.keys(raw)[0] ?? "")
-      : String(raw ?? "");
-    const clean = token.replace(/:$/, "").trim();
-    const caps = TOOL_CAPABILITIES[clean];
-    if (caps === undefined) return new Set(CAPABILITIES);
+    //
+    // A mapping with MORE than one key declares everything: `- fs.read: a` with `shell.run: b`
+    // indented under it parses as two keys, and taking only the first meant `shell.run` was on
+    // the page and invisible to the gate -- fewer declared capabilities means fewer denials, so
+    // silence there widened the grant. Silence on a shape you do not understand is the
+    // deny-by-default violation this module exists to close.
+    let clean;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const keys = Object.keys(raw);
+      if (keys.length !== 1) return new Set(CAPABILITIES);
+      clean = String(keys[0]);
+    } else {
+      clean = String(raw ?? "");
+    }
+    clean = clean.replace(/:$/, "").trim();
+    // Own-property only: `constructor`, `toString` and friends are inherited, so a plain lookup
+    // returned a function and the deny-by-default arm never fired -- it threw instead.
+    const caps = Object.prototype.hasOwnProperty.call(TOOL_CAPABILITIES, clean)
+      ? TOOL_CAPABILITIES[clean] : undefined;
+    if (!Array.isArray(caps)) return new Set(CAPABILITIES);
     caps.forEach((c) => out.add(c));
   }
   return out;
 }
 
-/** Read `hq.policy.yaml`. Absent means deny-by-default, never "no policy so anything goes". */
-export function loadPolicyFromDisk(root) {
+/**
+ * THE ROOT THAT GOVERNS IS THE ONE THIS CODE LIVES IN, never the caller's `--root`.
+ *
+ * `arc-run` takes `--root`, falling back to `$ARC_ROOT` and then git's toplevel, and used that
+ * same value to find the policy. So `ARC_ROOT=/tmp/anywhere` produced an unpoliced run of an
+ * attacker-authored process and driver -- a one-variable disarm of the whole gate, which makes
+ * "enforcement lives in code paths agents cannot bypass" false as written.
+ *
+ * The policy root is derived from this module's own location: walk up until a directory
+ * containing `.claude/scripts/hq/lib/policy/` is found. A consumer repo that copies the scripts
+ * in still resolves to its own root and stays not-in-force if it has no policy file; the arc
+ * repo resolves to itself no matter what `--root` says.
+ */
+export function policyRoot() {
+  let dir = dirname(fileURLToPath(import.meta.url));
+  for (let up = 0; up < 12; up++) {
+    if (dir.endsWith(`${sep}.claude${sep}scripts${sep}hq${sep}lib${sep}policy`)) {
+      // .../ROOT/.claude/scripts/hq/lib/policy -> five segments below ROOT
+      return resolve(dir, "..", "..", "..", "..", "..");
+    }
+    const next = dirname(dir);
+    if (next === dir) break;
+    dir = next;
+  }
+  return process.cwd();
+}
+
+/**
+ * Read `hq.policy.yaml` from the governing root.
+ *
+ * ONLY A TRUE ABSENCE returns null. `existsSync` conflates ENOENT with ENOTDIR, ELOOP, a
+ * dangling symlink and an unreadable parent -- and every one of those used to land in the
+ * not-in-force branch, so making the file merely UNREADABLE disarmed the gate as thoroughly as
+ * deleting it (which ADR-0502 does prevent). Anything that exists in any form must be read, and
+ * a read or parse failure throws so the caller's fail-closed catch takes it.
+ */
+export function loadPolicyFromDisk(root = policyRoot()) {
   const path = join(root, "hq.policy.yaml");
-  if (!existsSync(path)) return null;
+  let stat = null;
+  try { stat = lstatSync(path); } catch (e) {
+    if (e && e.code === "ENOENT") return null; // genuinely not adopted here
+    throw e;                                   // ENOTDIR, EACCES, ELOOP -> fail-closed
+  }
+  if (!stat) return null;
   return parsePolicyYaml(readFileSync(path, "utf8"));
 }
 
-/** The policy transition events on the spine, in append order. */
+/**
+ * The policy transition events on the spine, in append order -- EVERY ONE VALIDATED BY THE
+ * SPINE'S OWN VALIDATOR.
+ *
+ * The first version JSON.parsed each line and accepted it on `kind` alone: no sha recomputation,
+ * no key-set check, no ULID, no idem. An adversarial pass appended ONE hand-written line to a
+ * jsonl file and lifted `session:interactive` write from the L1 birth cap to its L2 ceiling --
+ * `propose` became `execute` -- which then authorized writing a driver script and a process file
+ * that a second finding could run. A cap is only as trustworthy as the chain it is folded from,
+ * and this loader was reading an unvalidated file as if it were the spine.
+ *
+ * AND UNTIL THE KINDS EXIST, EVERY READABLE EVENT IS FORGED BY CONSTRUCTION.
+ * `policy.level.changed` and `policy.demoted` do not enter the closed vocabulary until Phase 2's
+ * ADR, so the sanctioned emitter quarantines them as UNKNOWN_KIND today. Anything sitting in a
+ * jsonl file under those kinds got there some other way. So this returns nothing at all until
+ * the vocabulary carries them -- reading a kind the spine cannot emit is reading only forgeries.
+ */
 export function loadPolicyEvents(root) {
+  const vocabularyHasPolicyKinds = KINDS.includes(LEVEL_CHANGED) && KINDS.includes(DEMOTED);
+  if (!vocabularyHasPolicyKinds) return [];
+
   const dir = join(root, ".claude", "state", "hq", "events");
   if (!existsSync(dir)) return [];
   const out = [];
@@ -92,7 +167,10 @@ export function loadPolicyEvents(root) {
       if (!line.trim()) continue;
       let e;
       try { e = JSON.parse(line); } catch { continue; } // a corrupt line is not a transition
-      if (e && (e.kind === LEVEL_CHANGED || e.kind === DEMOTED)) out.push(e);
+      if (!e || (e.kind !== LEVEL_CHANGED && e.kind !== DEMOTED)) continue;
+      // The spine's own validator, not a second opinion that can drift from it (POL-D).
+      try { validateEvent(e); } catch { continue; }
+      out.push(e);
     }
   }
   return out;
@@ -106,9 +184,13 @@ export function loadPolicyEvents(root) {
  * plausible resource for that capability, so a pass here means "this process could act", not
  * "this specific string was allowed" -- the fixture matrix pins the specific strings.
  */
-export function authorizeRun({ processName, doc, root = process.cwd(), policy, events } = {}) {
-  const pol = policy !== undefined ? policy : loadPolicyFromDisk(root);
-  const evs = events !== undefined ? events : loadPolicyEvents(root);
+export function authorizeRun({ processName, doc, root, policy, events } = {}) {
+  // The GOVERNING root, not the caller's. `--root` says where the work happens; it does not get
+  // to say which law applies.
+  const govRoot = policyRoot();
+  const pol = policy !== undefined ? policy : loadPolicyFromDisk(govRoot);
+  const evs = events !== undefined ? events : loadPolicyEvents(govRoot);
+  root = root || govRoot;
   const kind = PROCESS_PREFIX + processName;
 
   /**

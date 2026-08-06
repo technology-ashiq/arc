@@ -197,9 +197,140 @@ const run = (doc, over={}, events=[]) =>
     echo "arc-run's policy gate has no fail-closed catch"; false; }
 }
 
+@test "END TO END -- arc-run refuses a denied process and the driver never runs" {
+  # THE TEST THIS SUITE DID NOT HAVE. Everything else here proves the library or greps the
+  # source; not one test executed arc-run. An adversarial pass changed `if (blocked)` to
+  # `if (blocked && false)` -- a fail-open wiring that ignores the gate entirely -- and all
+  # three guarding assertions stayed green while the driver ran. Textual ordering is not
+  # evidence that a gate is wired.
+  #
+  # The governing policy root is derived from the module's own location, so copying the scripts
+  # into a temp root makes THAT root's policy the law -- which is how a denying policy can be
+  # tested without touching the repo's own.
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/processes" "$d/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+
+  # A process that declares a write, and a policy that denies write for its kind.
+  cat > "$d/processes/denied.process.yaml" <<'EOF'
+name: denied
+version: 1.0.0
+permissions: declared
+inputs: []
+tools:
+  - fs.write
+output:
+  type: object
+EOF
+  sed -e 's/"process:kickoff-plan":/"process:denied":/' \
+      -e '0,/    write: { level: L2, roots: \["initiatives\/\*\*", "docs\/adr\/\*\*"\] }/s//    write: { level: L0 }/' \
+      "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
+
+  # A driver that writes a marker if it ever starts. Its absence is the assertion.
+  cat > "$d/.claude/scripts/engine/drivers/claude-code.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "DRIVER-RAN" > "$(dirname "$0")/../../../../DRIVER-RAN.txt"
+echo '{"ok":true}'
+EOF
+  chmod +x "$d/.claude/scripts/engine/drivers/claude-code.sh" 2>/dev/null || true
+
+  run node "$d/.claude/scripts/engine/arc-run.mjs" --process denied --driver claude-code --root "$d"
+  [ "$status" -ne 0 ] || { echo "arc-run exited 0 on a denied process"; echo "$output"; false; }
+  # NO SIDE EFFECT: the marker proves the driver started, so its absence is the property.
+  [ ! -f "$d/DRIVER-RAN.txt" ] || { echo "the driver RAN despite the denial"; false; }
+  # A POSITIVE marker too -- an absence alone is also satisfied by a crash before the gate.
+  [[ "$output" == *"policy denied"* ]] || { echo "no policy denial in the output: $output"; false; }
+}
+
+@test "END TO END -- a permitted process still reaches its driver" {
+  # The other half, and the one that stops the test above from passing against a runner that
+  # refuses everything. An absence assertion needs a positive control.
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/processes" "$d/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  cp "$ARC_ROOT/hq.policy.yaml" "$d/hq.policy.yaml"
+  cat > "$d/processes/allowed.process.yaml" <<'EOF'
+name: allowed
+version: 1.0.0
+permissions: declared
+inputs: []
+tools:
+  - fs.read
+output:
+  type: object
+EOF
+  cat > "$d/.claude/scripts/engine/drivers/claude-code.sh" <<'EOF'
+#!/usr/bin/env bash
+echo "DRIVER-RAN" > "$(dirname "$0")/../../../../DRIVER-RAN.txt"
+echo '{}'
+EOF
+  chmod +x "$d/.claude/scripts/engine/drivers/claude-code.sh" 2>/dev/null || true
+
+  run node "$d/.claude/scripts/engine/arc-run.mjs" --process allowed --driver claude-code --root "$d"
+  [ -f "$d/DRIVER-RAN.txt" ] || { echo "a permitted process did not reach its driver: $output"; false; }
+}
+
+@test "ARC_ROOT cannot move the law -- the governing root is where this code lives" {
+  # A one-variable disarm: --root and $ARC_ROOT chose which policy applied, so
+  # `ARC_ROOT=/tmp/anywhere` produced an unpoliced run of an attacker-authored process and
+  # driver. The work root and the law root are now different things.
+  cd "$ARC_ROOT"
+  run env ARC_ROOT=/tmp/definitely-not-the-repo node --input-type=module -e "
+    const G = await import('./.claude/scripts/hq/lib/policy/run-gate.mjs');
+    const inRepo = G.policyRoot().replace(/\\\\/g,'/').endsWith('arc-policy');
+    console.log(inRepo && !!G.loadPolicyFromDisk() ? 'pinned' : 'MOVED:' + G.policyRoot());"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "pinned" ]
+}
+
+@test "a forged policy event cannot raise a cap" {
+  # loadPolicyEvents accepted any JSON line whose `kind` matched. One hand-written line lifted
+  # session:interactive write from the L1 birth cap to its L2 ceiling -- propose became execute.
+  # And until Phase 2 adds the kinds to the closed vocabulary, EVERY event this loader can read
+  # is forged by construction, because the sanctioned emitter would quarantine them.
+  cd "$ARC_ROOT"
+  run node --input-type=module -e "
+    const G = await import('./.claude/scripts/hq/lib/policy/run-gate.mjs');
+    const { KINDS } = await import('./.claude/scripts/hq/lib/validate.mjs');
+    const vocab = KINDS.includes('policy.level.changed');
+    const loaded = G.loadPolicyEvents(process.cwd()).length;
+    console.log('vocab=' + vocab + ' loaded=' + loaded);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Until the vocabulary carries the kinds, the loader must return nothing at all.
+  [ "$output" = "vocab=false loaded=0" ]
+}
+
+@test "an inherited property name is not a known tool token" {
+  run _node "$PRE
+    const sizes = ['constructor','toString','valueOf','hasOwnProperty'].map(t =>
+      run({ permissions:'declared', tools:[t] }).declared.length);
+    console.log(sizes.join(','));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "8,8,8,8" ]
+}
+
+@test "a tools mapping with more than one key declares everything" {
+  # Taking only the first key meant a second tool was on the page and invisible to the gate --
+  # fewer declared capabilities means fewer denials, so the silence widened the grant.
+  run _node "$PRE
+    console.log(run({ permissions:'declared', tools:[{ 'fs.read':'a', 'shell.run':'b' }] }).declared.length);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "8" ]
+}
+
+@test "a policy denial is its own verdict, not a driver fault" {
+  # One denial produced three high-severity incidents as the fallback chain retried, and the
+  # append-only receipt claimed the driver had failed when no driver had run.
+  cd "$ARC_ROOT"
+  grep -q 'verdict: "policy"' .claude/scripts/engine/arc-run.mjs || {
+    echo "a policy denial still falls through to verdict: driver"; false; }
+  grep -q 'reason: "policy"' .claude/scripts/engine/arc-run.mjs || {
+    echo "the run receipt does not record a policy outcome"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 24 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 24 -- a @test was silently dropped"
     false
   }
 }

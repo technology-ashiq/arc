@@ -262,7 +262,7 @@ function emitRun(payload) {
   else if (tier) args.push("--model", "unpinned");
   let id = "";
   try {
-    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), ...args], { encoding: "utf8", cwd: root }).trim();
+    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), ...args], { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
   } catch (e) {
     console.error(`arc-run: WARN could not emit run.completed: ${String(e.message).split("\n")[0]}`);
     return;
@@ -342,7 +342,7 @@ function invoke(name) {
       execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "incident.raised",
         "--payload", JSON.stringify({ what: detail, severity: "high", source: "arc-run policy gate" }),
         "--process", `${doc.name}@${doc.version}`, "--outcome", "fail"],
-        { encoding: "utf8", cwd: root });
+        { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" });
     } catch (e) {
       // A receipt we could not write is reported, never swallowed -- but it does not un-deny
       // the action. Quarantine is not enforcement success (ADR-0106/0032).
@@ -388,6 +388,12 @@ function attempt(name) {
   // that an over-budget run "reports a budget outcome" was false.
   if (r.timedOut) return { ...r, verdict: "budget", why: `exceeded the ${budget.min}-minute budget for the RUN` };
   if (r.code === 2) return { ...r, verdict: "budget", why: r.stderr.trim() || "driver declined for budget" };
+  // POLICY BEFORE DRIVER, and for exactly the reason the budget arm above exists. A denial fell
+  // through to `verdict: "driver"`, so ONE denial produced three high-severity incidents as the
+  // fallback chain retried, and the append-only receipt claimed the driver had failed when no
+  // driver had run at all. A false claim in a ledger is worse than an absent one (ADR-0069 b5 /
+  // Constitution E3), and no other driver is going to be more permitted than the first.
+  if (r.policyDenied) return { ...r, verdict: "policy", why: r.stderr.trim() || "denied by policy" };
   if (r.code !== 0) return { ...r, verdict: "driver", why: r.stderr.trim() || `driver exited ${r.code}` };
 
   let output;
@@ -432,6 +438,16 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   a = attempt(driver);
 }
 
+// A policy denial is its own outcome and its own exit. It never reaches the fallback loop above
+// (that loop only runs on `verdict === "driver"`), because no other driver is going to be more
+// permitted than the first -- retrying would just raise the same incident again, which is what
+// it did before this arm existed.
+if (a.verdict === "policy") {
+  console.error(`arc-run: ${a.why}`);
+  emitRun({ outcome: "fail", reason: "policy", driver, attempts: attemptsMade, cost: a.cost ?? undefined });
+  process.exit(1);
+}
+
 if (a.verdict === "budget") {
   console.error(`arc-run: ${a.why}`);
   emitRun({ outcome: "fail", reason: "budget", driver, cost: a.cost ?? undefined });
@@ -464,7 +480,7 @@ if (a.verdict === "schema") {
   };
   let id = "";
   try {
-    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested", "--payload", JSON.stringify(proposal)], { encoding: "utf8", cwd: root }).trim();
+    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested", "--payload", JSON.stringify(proposal)], { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
     verifyLanded(id);
   } catch (e) { console.error(`arc-run: WARN could not emit the escalation proposal: ${String(e.message).split("\n")[0]}`); }
 
