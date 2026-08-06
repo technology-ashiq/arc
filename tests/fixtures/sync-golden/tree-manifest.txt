@@ -63,6 +63,7 @@
 .claude/hooks/PreToolUse-edit.d/10-design-critic.sh	24220634bcaef9277e9a5ae50951c36885ade261096db67ee62e8023fa5a02c6
 .claude/hooks/PreToolUse-edit.sh	8dea19705f6a3d6eb2d1b16d328becadd2183d869871a1b9dbc808b8c4d8ab23
 .claude/hooks/PreToolUse.d/00-destructive.sh	8ed748949b643aadb938ccb322138bcb913e700ab89c7eda5ac04ce8ef590e23
+.claude/hooks/PreToolUse.d/40-policy.sh	3d9ca1fabc9f5fcf0077745ebf35225bcff1841a98e97454375f2b171d0c0a33
 .claude/hooks/PreToolUse.d/50-deploy.sh	e49e823b0c0ca1472ddb367c59f295dc5e008b86cd5b7d39146f1855724d20bd
 .claude/hooks/PreToolUse.sh	b9665de9907ba4798e1ee0152155d0ebafcf4ca1e4acd281322e8f5ef760802b
 .claude/hooks/SessionEnd.d/00-session-log.sh	eee5a7732098143bf3d781de55fad79ef382e783e4e08b4af0d7a78108a84b79
@@ -169,6 +170,7 @@
 .claude/scripts/hq/lib/validate-leads.mjs	3e10ef306904128cc93a8cc38f6393299ad7f81784ffa45558f4e0af10da7945
 .claude/scripts/hq/lib/validate-policy.mjs	b4ef77c2d5bb91ad6b62d4fa6f891183e54fbb26388150adddfa756a2ca67c5a
 .claude/scripts/hq/lib/validate.mjs	2087a6fb19ce81d1d5d7bcadfafb7b0a8512f13275308d945db3486213b7d309
+.claude/scripts/hq/policy-hook.mjs	6d03ebdf537d966c2ddd81e5a4361f2d485fcda093dfbeb4990b24dccef2541a
 .claude/scripts/hq/policy-lint.mjs	30ed526f3c56432367046b1eb42dda4be0d75bb239bdf5e121f92c51b0437104
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
@@ -211,7 +213,7 @@
 .claude/scripts/review/docs-drift.sh	58350eacf21af4597089ce4408fdbfe872d4d78155f1f635004648ce9091ec69
 .claude/scripts/review/rls-gate.sh	89546ffad7a827260c7bfe9d926bd800a2b128b87d3dd2547bf836a788f21f8f
 .claude/scripts/review/spine-reader-lint.sh	23f8c4e99e70330b420a3255b618c7297abc09d147247a4161422fe5551bf6bb
-.claude/settings.json	1ed03c1e4ecce0a8e5ad4714b65b9f76e7c164b657cc40e32b814c27fcb30d3e
+.claude/settings.json	14073b2217509326ed64d8331a938ba37bf7ea162bf0e360043a2b36bf172f93
 .claude/skills/seo-article-writer/SKILL.md	a449f79c81db18571c719b9ec0c9973c932faeaecab4468eb4043e749672cb0d
 .claude/templates/toolchain-health-artifact.html	6d45dc06f8f22bef160e3048dd8653763c5be4ce689e69060ecf5b7322f24af4
 .env.example	fd87fc51650fcc9fd34ff4ba99422af1ac8178b613be151cf72f8fc1a062278c

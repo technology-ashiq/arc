@@ -31,6 +31,7 @@
     ".claude/scripts/hq/lib/validate-leads.mjs",
     ".claude/scripts/hq/lib/validate-policy.mjs",
     ".claude/scripts/hq/lib/validate.mjs",
+    ".claude/scripts/hq/policy-hook.mjs",
     ".claude/scripts/hq/policy-lint.mjs",
     ".claude/scripts/hq/policy-matrix.mjs",
     ".claude/scripts/hq/spine.mjs"
@@ -38,7 +39,8 @@
   "files": [
     ".claude/hooks/SessionStart.d/90-emit.sh",
     ".claude/hooks/SessionEnd.d/90-emit.sh",
-    ".claude/hooks/PostToolUse.d/90-emit.sh"
+    ".claude/hooks/PostToolUse.d/90-emit.sh",
+    ".claude/hooks/PreToolUse.d/40-policy.sh"
   ],
   "docs": []
 }
