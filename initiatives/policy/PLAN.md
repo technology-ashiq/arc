@@ -185,6 +185,7 @@ flowchart TB
 | 0505 | Authority is keyed per **(action kind, capability)** pair everywhere, and a demotion bites only the capability involved in the denied action | accepted |
 | 0506 | E2 binds to grants through a **mandatory `e2:` declaration** per kind (plus an unconditional `spend` rule), and quote drift is caught by parsing the **hash-pinned** Constitution | accepted |
 | 0507 | **No capability may be used to exceed another capability's grant** — `shell` is capped at the minimum of every capability its allowlisted programs can reproduce; an unclassified program is an error | accepted |
+| 0508 | The four authority receipts extend the closed vocabulary 40 -> 44 (POL-E). Two kinds per direction, because a human decision and a machine demotion are different truth sources | accepted |
 
 Locked upstream in the approved design source and not re-decided here: POL-A (the YAML is the
 ceiling, L0–L3 closed) · POL-B (deny-by-default, E2 verbatim) · POL-C (two-key state machine,

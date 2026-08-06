@@ -167,7 +167,8 @@
 .claude/scripts/hq/lib/spine-io.mjs	5a263f54de96ad6826763ad8560a28d28a719a50fe7c378425f50f52b956906a
 .claude/scripts/hq/lib/validate-experiment.mjs	21ad45d162632f47308962ef5282a814f1951685b45d99e4ba73fba6f9d54597
 .claude/scripts/hq/lib/validate-leads.mjs	3e10ef306904128cc93a8cc38f6393299ad7f81784ffa45558f4e0af10da7945
-.claude/scripts/hq/lib/validate.mjs	191ba4feaa398cb17638a69f9094362fb256bf471c4ad2820563295b07a0ca74
+.claude/scripts/hq/lib/validate-policy.mjs	b4ef77c2d5bb91ad6b62d4fa6f891183e54fbb26388150adddfa756a2ca67c5a
+.claude/scripts/hq/lib/validate.mjs	2087a6fb19ce81d1d5d7bcadfafb7b0a8512f13275308d945db3486213b7d309
 .claude/scripts/hq/policy-lint.mjs	30ed526f3c56432367046b1eb42dda4be0d75bb239bdf5e121f92c51b0437104
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4

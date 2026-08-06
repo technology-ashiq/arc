@@ -29,6 +29,7 @@
     ".claude/scripts/hq/lib/spine-io.mjs",
     ".claude/scripts/hq/lib/validate-experiment.mjs",
     ".claude/scripts/hq/lib/validate-leads.mjs",
+    ".claude/scripts/hq/lib/validate-policy.mjs",
     ".claude/scripts/hq/lib/validate.mjs",
     ".claude/scripts/hq/policy-lint.mjs",
     ".claude/scripts/hq/policy-matrix.mjs",
