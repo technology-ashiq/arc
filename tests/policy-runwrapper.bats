@@ -275,10 +275,15 @@ EOF
   # `ARC_ROOT=/tmp/anywhere` produced an unpoliced run of an attacker-authored process and
   # driver. The work root and the law root are now different things.
   cd "$ARC_ROOT"
+  # Assert the PROPERTY, not a directory name: the governing root is not the one ARC_ROOT names,
+  # and it is a root that actually carries a policy file. The first version compared against the
+  # local checkout's folder name and went red on CI, where the checkout is `D:\a\arc\arc` --
+  # the resolution was right and the assertion was parochial.
   run env ARC_ROOT=/tmp/definitely-not-the-repo node --input-type=module -e "
     const G = await import('./.claude/scripts/hq/lib/policy/run-gate.mjs');
-    const inRepo = G.policyRoot().replace(/\\\\/g,'/').endsWith('arc-policy');
-    console.log(inRepo && !!G.loadPolicyFromDisk() ? 'pinned' : 'MOVED:' + G.policyRoot());"
+    const gov = G.policyRoot().replace(/\\\\/g,'/');
+    const moved = gov === '/tmp/definitely-not-the-repo';
+    console.log(!moved && !!G.loadPolicyFromDisk() ? 'pinned' : 'MOVED:' + gov);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "pinned" ]
 }
