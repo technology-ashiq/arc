@@ -307,11 +307,21 @@ function verifyLanded(id) {
  *
  * No policy logic lives here -- every decision is the shared library's (POL-D).
  */
+let policyNotInForceAnnounced = false;
 function policyGate(name) {
   try {
     const gate = authorizeRun({ processName, doc, root });
+    if (!gate.inForce) {
+      // LOUD, once per run. A disarmed guard must never be silent -- the same contract
+      // PreToolUse.sh keeps when its dispatcher is missing.
+      if (!policyNotInForceAnnounced) {
+        policyNotInForceAnnounced = true;
+        console.error(`arc-run: NOTICE ${gate.reason} — this run is unpoliced`);
+      }
+      return null;
+    }
     if (gate.mayInvoke) return null;
-    return { gate, reason: gate.spawn.reason };
+    return { gate, reason: gate.denials.map((d) => d.reason).join("; ") };
   } catch (e) {
     return { gate: null, reason: `the policy check threw (${String(e.message).split("\n")[0]}) -- fail-closed` };
   }

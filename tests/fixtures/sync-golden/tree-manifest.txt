@@ -127,7 +127,7 @@
 .claude/scripts/engine/adapters/claude-code.mjs	7ea271ed5518d206b0eddedfa4ccea97c9bcfb441294bc18f55cf81904097e97
 .claude/scripts/engine/adapters/codex.mjs	1d46d11e9ae8f17754b26cbab7b3af849a52767459b74c7d2349f4d3a7686d2b
 .claude/scripts/engine/arc-compile.mjs	806de30d7dd9f63d7df9d742e41854ea1c88b08ab43ce4a51f43c9176e60a2a8
-.claude/scripts/engine/arc-run.mjs	2517f7439033b21d765941aafb3f69a8106345ce2ca6392d1355dec148c1a54a
+.claude/scripts/engine/arc-run.mjs	6ad11e9d48dc40f4016225c5385bb7b973f696e1caf8bf2e1162b195635a39b8
 .claude/scripts/engine/drivers/claude-code.mjs	1c40257f5a1f892acc83d380a9a54f4d742659410c5990ea27f4d62a6b1930ec
 .claude/scripts/engine/drivers/claude-code.sh	c85ad83beaf07d4a7aa13228e30e3598944fe0eb98f0160b2d93bd437f42b1f7
 .claude/scripts/engine/drivers/codex.mjs	5d6c44d2c87593387aae80734a58fd377192c0b00b2e6d3085b2a3ce12c69f7e
@@ -159,7 +159,7 @@
 .claude/scripts/hq/lib/policy/model.mjs	0c1e027e9e20c29849578a5dbb5513136e48e0aac749a3d01f68b3f5c3f39dde
 .claude/scripts/hq/lib/policy/reduce.mjs	639a1f81a122f8bf0216ecccd9b406da97bfef6a76f30aad0fe818ad39708470
 .claude/scripts/hq/lib/policy/resources.mjs	add354c93a579676d9782ad60df1d14f7c2c765b37e82b1b6667b16b82334fc0
-.claude/scripts/hq/lib/policy/run-gate.mjs	9bb43473067a5a8e6127f1b07e2cb86ee9ab7698caa0783ad60c0cf3402b74d0
+.claude/scripts/hq/lib/policy/run-gate.mjs	05367b5d25d78e472e3b084cdaeab8278e5f73cc373440484a6e48d44110fe0f
 .claude/scripts/hq/lib/policy/tool-capabilities.json	f0c1cdd0dac19d7127c327fc251f3a3572eb0817a6be94cd6f8d5a57dd5f8f24
 .claude/scripts/hq/lib/policy/yaml.mjs	43908a3e8bf5ed5f1ea199fd6d9a6beba1a3e63b60a226a9c4f87373794520f7
 .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314

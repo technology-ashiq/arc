@@ -111,8 +111,29 @@ export function authorizeRun({ processName, doc, root = process.cwd(), policy, e
   const evs = events !== undefined ? events : loadPolicyEvents(root);
   const kind = PROCESS_PREFIX + processName;
 
-  // A missing policy file does not mean "unpoliced". With no file every kind is absent, so
-  // POL-B's deny-by-default floor applies and only `read` survives, at L1.
+  /**
+   * NO POLICY FILE IN THIS ROOT -> the engine is NOT IN FORCE here, and the run proceeds.
+   *
+   * This is the one place the deny-by-default reflex is wrong, and it took a broken engine test
+   * to see it. Deny-by-default is a rule INSIDE a policy file -- an action kind absent from the
+   * file is read-only. It is not a rule about the file's own absence. A root that has never
+   * adopted policy has declared nothing, so there is nothing to enforce, and refusing to run
+   * would brick every consumer repo and every test fixture that copies the scripts into a temp
+   * directory (which is exactly how engine-driver-contract.bats works).
+   *
+   * What stops this from being the fail-open it looks like: where policy IS in force,
+   * `hq.policy.yaml` is on the un-grantable resource list (ADR-0502), so no policed write can
+   * delete it to reach this branch. And the caller says so out loud -- the same shape as
+   * PreToolUse.sh announcing that a missing dispatcher disarmed its guards. A disarmed guard
+   * must never be silent.
+   */
+  if (!pol)
+    return {
+      kind, inForce: false, effective: {}, declared: [...declaredCapabilities(doc)].sort(),
+      denials: [], spawn: null, mayInvoke: true,
+      reason: `no hq.policy.yaml at ${root} -- the policy engine is not in force in this root`,
+    };
+
   const effective = {};
   const declared = declaredCapabilities(doc);
   const denials = [];
@@ -126,15 +147,19 @@ export function authorizeRun({ processName, doc, root = process.cwd(), policy, e
       denials.push({ capability, level: "L0", reason: `${kind}/${capability} is denied by policy (ceiling ${resolved.ceiling}, cap ${resolved.cap})` });
   }
 
-  // The driver invocation itself is a shell action, so it is authorized like any other -- there
-  // is no "the wrapper is special" path, because that path is what an attacker looks for.
+  // Starting the driver is the RUNNER's act, not the process's, so it is not authorized as a
+  // synthetic `shell` action by the process. Doing that made an absent kind unable to run at
+  // all -- which sounds strict until you notice it also blocked every process that simply has
+  // no row yet, turning the birth-rule gap (POL-I, Phase 3) into an outage. What the process
+  // may DO is the question here, and its declared capabilities are the answer.
   const spawn = authorizeAction(
-    { kind, capability: "shell", resource: `bash drivers/${processName}.sh` },
-    { policy: pol || {}, events: evs, root, guard }
+    { kind, capability: "read", resource: `processes/${processName}.process.yaml` },
+    { policy: pol, events: evs, root, guard }
   );
 
   return {
     kind,
+    inForce: true,
     effective,
     declared: [...declared].sort(),
     denials,
@@ -155,7 +180,7 @@ export function authorizeRun({ processName, doc, root = process.cwd(), policy, e
      * would either brick the runner or wave through every individual write inside a run that was
      * allowed to start.
      */
-    mayInvoke: denials.length === 0 && spawn.decision !== "deny",
+    mayInvoke: denials.length === 0,
   };
 }
 

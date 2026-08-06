@@ -89,25 +89,39 @@ const run = (doc, over={}, events=[]) =>
   [ "$output" = "0" ]
 }
 
-@test "with no policy file at all every non-read capability is denied" {
-  # Absent must never mean unpoliced. REQ-03: an empty or missing file yields a read-only system.
+@test "a root with no policy file is NOT IN FORCE, and says so" {
+  # The one place the deny-by-default reflex is wrong. Deny-by-default is a rule INSIDE a policy
+  # file -- an absent action kind is read-only -- not a rule about the file's own absence. A root
+  # that never adopted policy has declared nothing, so refusing to run would brick every consumer
+  # repo and every test fixture that copies the scripts into a temp dir. What keeps this from
+  # being a fail-open: where policy IS in force, hq.policy.yaml is un-grantable (ADR-0502), so no
+  # policed write can delete it to reach this branch -- and the runner announces it out loud.
   run _node "$PRE
     const g = G.authorizeRun({ processName:'demo', doc:{permissions:'declared',tools:['fs.write']},
       root: process.cwd(), policy: null, events: [] });
-    console.log(g.mayInvoke + ' ' + g.denials.map(d=>d.capability).join(','));"
+    console.log(g.inForce + '/' + g.mayInvoke + '/' + (g.reason || '').includes('not in force'));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "false write" ]
+  [ "$output" = "false/true/true" ]
 }
 
-@test "a kind absent from the policy file can read and nothing else" {
+@test "arc-run announces an unpoliced run rather than passing quietly" {
+  cd "$ARC_ROOT"
+  grep -q "this run is unpoliced" .claude/scripts/engine/arc-run.mjs || {
+    echo "arc-run does not announce that policy is not in force -- a disarmed guard must never be silent"
+    false
+  }
+}
+
+@test "with a policy file present an unlisted kind is still deny-by-default" {
+  # The rule that DOES apply inside a file: a kind nobody listed gets read at L1 and nothing else.
   run _node "$PRE
-    const g = G.authorizeRun({ processName:'ghost', doc:{permissions:'declared',tools:['fs.read']},
+    const r = G.authorizeRun({ processName:'ghost', doc:{permissions:'declared',tools:['fs.read']},
       root: process.cwd(), policy: pol(), events: [] });
     const w = G.authorizeRun({ processName:'ghost', doc:{permissions:'declared',tools:['fs.write']},
       root: process.cwd(), policy: pol(), events: [] });
-    console.log(g.mayInvoke + '/' + w.mayInvoke);"
+    console.log(r.mayInvoke + '/' + w.mayInvoke + '/' + w.denials[0].capability);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "true/false" ]
+  [ "$output" = "true/false/write" ]
 }
 
 @test "a demotion event lands on the gate without restarting the run" {
@@ -184,8 +198,8 @@ const run = (doc, over={}, events=[]) =>
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 16 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
     false
   }
 }
