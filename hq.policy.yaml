@@ -117,7 +117,7 @@ kinds:
     read: { level: L3 }
     write: { level: L2, roots: ["initiatives/**", "docs/adr/**"] }
     shell: { level: L1 }
-    network: { level: L0 }
+    network: { level: L1 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -126,9 +126,9 @@ kinds:
   "process:review-diff":
     e2: []
     read: { level: L3 }
-    write: { level: L0 }
+    write: { level: L1 }
     shell: { level: L1 }
-    network: { level: L0 }
+    network: { level: L1 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }
@@ -139,7 +139,7 @@ kinds:
     read: { level: L3 }
     write: { level: L0 }
     shell: { level: L1 }
-    network: { level: L0 }
+    network: { level: L1 }
     message: { level: L0 }
     publish: { level: L0 }
     deploy: { level: L0 }

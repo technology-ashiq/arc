@@ -21,6 +21,7 @@
     ".claude/scripts/hq/lib/policy/model.mjs",
     ".claude/scripts/hq/lib/policy/reduce.mjs",
     ".claude/scripts/hq/lib/policy/resources.mjs",
+    ".claude/scripts/hq/lib/policy/run-gate.mjs",
     ".claude/scripts/hq/lib/policy/tool-capabilities.json",
     ".claude/scripts/hq/lib/policy/yaml.mjs",
     ".claude/scripts/hq/lib/redact.mjs",

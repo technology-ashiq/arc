@@ -40,6 +40,7 @@ import { join, resolve } from "node:path";
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
+import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 
 const DRIVERS = ["claude-code", "codex", "generic-api"];
 
@@ -296,9 +297,49 @@ function verifyLanded(id) {
 }
 
 // ---------- the run ----------
+/**
+ * THE POLICY GATE (REQ-02, ADR-0500..0507). It sits at the top of `invoke` because that is the
+ * single place a driver is ever started -- one call site, so there is no second path to find.
+ *
+ * FAIL-CLOSED: a policy check that THROWS blocks the run (ADR-0028's fail-safe precedent). The
+ * catch below denies rather than proceeding, because "the check broke, so we ran it anyway" is
+ * the whole failure class this build exists to remove.
+ *
+ * No policy logic lives here -- every decision is the shared library's (POL-D).
+ */
+function policyGate(name) {
+  try {
+    const gate = authorizeRun({ processName, doc, root });
+    if (gate.mayInvoke) return null;
+    return { gate, reason: gate.spawn.reason };
+  } catch (e) {
+    return { gate: null, reason: `the policy check threw (${String(e.message).split("\n")[0]}) -- fail-closed` };
+  }
+}
+
 function invoke(name) {
   const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
   if (!existsSync(sh)) return { code: 1, stdout: "", stderr: `driver ${name} not installed at ${sh}`, cost: null };
+
+  const blocked = policyGate(name);
+  if (blocked) {
+    // NO SIDE EFFECT: the driver process never starts. The incident is a receipt, and the cap
+    // it derives from is recomputed on the NEXT authorization inside this same run -- the
+    // reducer reads the event stream, so a demotion lands mid-run rather than at the next start.
+    const detail = `policy denied ${processName}: ${blocked.reason}`;
+    console.error(`arc-run: ${detail}`);
+    try {
+      execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "incident.raised",
+        "--payload", JSON.stringify({ what: detail, severity: "high", source: "arc-run policy gate" }),
+        "--process", `${doc.name}@${doc.version}`, "--outcome", "fail"],
+        { encoding: "utf8", cwd: root });
+    } catch (e) {
+      // A receipt we could not write is reported, never swallowed -- but it does not un-deny
+      // the action. Quarantine is not enforcement success (ADR-0106/0032).
+      console.error(`arc-run: WARN could not emit incident.raised: ${String(e.message).split("\n")[0]}`);
+    }
+    return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true };
+  }
   const tmp = mkdtempSync(join(tmpdir(), "arc-run-"));
   const costFile = join(tmp, "cost.json");
   const rem = msRemaining();
