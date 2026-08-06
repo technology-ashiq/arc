@@ -53,8 +53,23 @@ _frag() { # $1 = NN-name.sh, stdin = body
   [ "$status" -eq 0 ]
 }
 
-@test "FAIL-OPEN mode 3 -- a fragment whose interpreter is missing lets the tool through" {
+@test "NOT fail-open -- a bad shebang still blocks, because the dispatcher runs bash explicitly" {
+  # Written expecting a fail-open and corrected by CI on all three legs, which is the finding:
+  # _dispatch.sh invokes `bash "$f"` rather than exec'ing the fragment, so the shebang is never
+  # consulted. This repo's dispatcher is therefore MORE fail-closed than the raw platform
+  # contract for this one mode. ADR-0501's fail-open surface is narrower here than the docs
+  # imply -- and that is exactly the kind of claim the feasibility matrix exists to settle by
+  # fixture rather than by reading.
   printf '#!/usr/bin/env no-such-interpreter-anywhere\nexit 2\n' | _frag "10-nointerp.sh"
+  run _fire
+  [ "$status" -eq 2 ]
+}
+
+@test "FAIL-OPEN mode 3 -- a fragment file that does not exist is skipped silently" {
+  # The real missing-script fail-open: the glob matches nothing, the chain runs zero fragments
+  # and returns 0. Nothing announces that a guard which was supposed to be there is not.
+  printf '#!/usr/bin/env bash\nexit 2\n' | _frag "10-block.sh"
+  rm -f "$SANDBOX/.claude/hooks/PreToolUse.d/10-block.sh"
   run _fire
   [ "$status" -eq 0 ]
 }
@@ -97,12 +112,16 @@ _frag() { # $1 = NN-name.sh, stdin = body
 }
 
 @test "the matrix covers every server declared in the repo mcp config" {
+  # Reads the COMMITTED artifact at its default path rather than a temp file: on the Windows
+  # leg a POSIX-form $BATS_TEST_TMPDIR is resolved differently by node than by bash, so the
+  # generator wrote one place and the reader looked in another. A repo-relative path has no
+  # such translation, and the artifact is a Phase-0 deliverable anyway.
   cd "$ARC_ROOT"
-  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json --out "$BATS_TEST_TMPDIR/m.json"
+  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   run node --input-type=module -e "
     const fs = await import('node:fs');
-    const rows = JSON.parse(fs.readFileSync('$BATS_TEST_TMPDIR/m.json','utf8'));
+    const rows = JSON.parse(fs.readFileSync('initiatives/policy/evidence/phase-00/hook-matrix.json','utf8'));
     const declared = Object.keys(JSON.parse(fs.readFileSync('.mcp.json','utf8')).mcpServers);
     const covered = new Set(rows.filter(r => r.surface === 'mcp').map(r => r.server));
     const missing = declared.filter(s => !covered.has(s));
@@ -116,11 +135,11 @@ _frag() { # $1 = NN-name.sh, stdin = body
 
 @test "every built-in side-effect tool class has a matrix row" {
   cd "$ARC_ROOT"
-  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json --out "$BATS_TEST_TMPDIR/m2.json"
+  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   run node --input-type=module -e "
     const fs = await import('node:fs');
-    const rows = JSON.parse(fs.readFileSync('$BATS_TEST_TMPDIR/m2.json','utf8'));
+    const rows = JSON.parse(fs.readFileSync('initiatives/policy/evidence/phase-00/hook-matrix.json','utf8'));
     const builtin = new Set(rows.filter(r => r.surface === 'builtin').map(r => r.tool));
     for (const t of ['Bash','Write','Edit'])
       if (!builtin.has(t)) throw new Error('no matrix row for built-in tool ' + t);
@@ -130,8 +149,8 @@ _frag() { # $1 = NN-name.sh, stdin = body
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
     false
   }
 }

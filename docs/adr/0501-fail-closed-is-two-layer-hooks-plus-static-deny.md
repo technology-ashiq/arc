@@ -86,6 +86,28 @@ are proven by fixture in Phase 0, not assumed. Tracked in the Assumptions ledger
 forbids, and spends Phase 0 budget the day-2 kill criterion cannot afford. B — leaves the
 majority of the failure space fail-open while claiming fail-closed.
 
+## Evidence note added after Phase 0 measured it (2026-08-06)
+
+The table above describes the **platform** contract, read from the docs. Phase 0's feasibility
+fixtures measured this repo's own dispatcher against it and found one mode narrower than the
+documentation implies, in our favour:
+
+- **A fragment with an unusable shebang still BLOCKS here.** `.claude/hooks/_dispatch.sh`
+  invokes `bash "$f"` rather than exec'ing the fragment, so the shebang is never consulted and
+  a fragment that would be unspawnable on its own still runs and can exit 2. The fixture was
+  written expecting a fail-open and was corrected by CI on all three legs.
+- The genuine missing-script fail-open remains, one level up: a fragment **file** that is not
+  there is skipped by the glob, the chain runs zero fragments and returns 0, and nothing
+  announces that a guard which was supposed to be present is absent. That is why ADR-0502 makes
+  `.claude/hooks/**` an un-grantable target — deleting a fragment is the cheapest way to disarm
+  the expressive layer.
+- `PreToolUse.sh` exits 0 with a written warning when the dispatcher itself is missing. Loud,
+  but still open.
+
+The decision is unchanged: the static floor is still required, because timeout, crash and
+absent-fragment remain open. What changed is that the claim is now measured rather than
+recalled, which is what the matrix exists for.
+
 ## Consequences
 
 Easier: the interactive surface has a floor that survives a broken hook, a hung hook, a deleted
