@@ -72,3 +72,4 @@ docs/evidence/planner-bench/
 # cross devices, and the CI runners split the checkout and the temp dir across volumes).
 # Each test removes its own in a finally block; this is the belt for a crashed run.
 .pol-tmp-*/
+tmp-escape-probe/
