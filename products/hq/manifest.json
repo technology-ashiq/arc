@@ -19,6 +19,7 @@
     ".claude/scripts/hq/lib/policy/index.mjs",
     ".claude/scripts/hq/lib/policy/lint.mjs",
     ".claude/scripts/hq/lib/policy/model.mjs",
+    ".claude/scripts/hq/lib/policy/promotion.mjs",
     ".claude/scripts/hq/lib/policy/reduce.mjs",
     ".claude/scripts/hq/lib/policy/resources.mjs",
     ".claude/scripts/hq/lib/policy/run-gate.mjs",

@@ -7,7 +7,7 @@
 import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex, IST_TS_RE } from "./canonical.mjs";
 import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
-import { POLICY_KINDS, assertPolicy, isPolicyKind } from "./validate-policy.mjs";
+import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -348,6 +348,9 @@ export function validateEvent(event) {
   if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
   if (isLeadsKind(event.kind)) assertLeads(event);
   if (isPolicyKind(event.kind)) assertPolicy(event);
+  // A PROFILE, not a kind: approval.requested stays generic for every other gate in the repo,
+  // and only a payload declaring subject: "policy.promotion" is held to the strict shape.
+  if (isPromotionRequest(event)) assertPromotionRequest(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

@@ -33,3 +33,6 @@ export {
   authorizeRun, crossCheckDeclared, declaredCapabilities, loadPolicyFromDisk, loadPolicyEvents,
   TOOL_CAPABILITIES,
 } from "./run-gate.mjs";
+export {
+  buildPromotionRequest, applyDecision, buildDemotion, levelAfterDemotion, PROMOTION_SUBJECT,
+} from "./promotion.mjs";

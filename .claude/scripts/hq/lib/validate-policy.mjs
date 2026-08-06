@@ -179,3 +179,57 @@ export function assertPolicy(event) {
 
 /** Exported so an emitter can compute the idem it must supply. */
 export const policyIdem = (kind, payload) => sha256Hex(idemPreimage(kind, payload));
+
+// ---------------------------------------------------------------------------------------------
+// The `policy.promotion` PROFILE on approval.requested (POL-E).
+//
+// `approval.requested` has no payload validator at all — it is the generic human-gate receipt,
+// and it must stay generic. So this is a PROFILE: it applies only when the payload declares
+// `subject: "policy.promotion"`, and every other approval in the repo is untouched. Forward-only
+// (ADR-0068 spirit): nothing is retrofitted onto approvals already on the spine.
+//
+// Why a strict shape here when the kind itself is loose: this is the receipt that authorises a
+// capability to climb. `decision.recorded`'s payload is closed to `decides|verdict|reason`
+// (validate.mjs:192), so the decision CANNOT carry the evidence — it can only point at the
+// request. That makes this payload the only place the trial-ledger citation and the target level
+// can live, and an unvalidated field here is an unvalidated promotion.
+// ---------------------------------------------------------------------------------------------
+
+export const PROMOTION_SUBJECT = "policy.promotion";
+
+const PROMOTION_KEYS = [
+  "action_kind", "capability", "correlation", "from_level", "gate",
+  "policy_hash", "subject", "to_level", "trial_ledger_ref", "what",
+];
+
+export const isPromotionRequest = (event) =>
+  event && event.kind === "approval.requested" && event.payload &&
+  event.payload.subject === PROMOTION_SUBJECT;
+
+export function assertPromotionRequest(event) {
+  const p = event.payload;
+  for (const k of Object.keys(p))
+    if (!PROMOTION_KEYS.includes(k))
+      bad(`approval.requested[${PROMOTION_SUBJECT}] has unknown key "${k}" (the profile is closed to ${PROMOTION_KEYS.join("|")})`);
+  for (const k of PROMOTION_KEYS)
+    if (!(k in p)) bad(`approval.requested[${PROMOTION_SUBJECT}] is missing "${k}"`);
+
+  assertActionKind("approval.requested", p.action_kind);
+  assertCapability("approval.requested", p.capability);
+  assertLevel("approval.requested", "from_level", p.from_level);
+  assertLevel("approval.requested", "to_level", p.to_level);
+  assertHash("approval.requested", "policy_hash", p.policy_hash);
+  assertNonEmpty("approval.requested", "correlation", p.correlation);
+  assertNonEmpty("approval.requested", "what", p.what);
+  if (p.gate !== "policy") bad(`approval.requested[${PROMOTION_SUBJECT}].gate must be "policy"`);
+
+  // A promotion must RAISE. A request to "promote" downward would be a demotion with no
+  // incident to cite, arriving through the human door where nothing checks for one.
+  const rank = (l) => Number(l.slice(1));
+  if (rank(p.to_level) <= rank(p.from_level))
+    bad(`approval.requested[${PROMOTION_SUBJECT}] asks for ${p.from_level} -> ${p.to_level}; a promotion must raise the level. Lowering one is a repo edit to the ceiling (POL-A) or an incident-backed policy.demoted`);
+
+  // The evidence a human is being asked to weigh. A4: trust is re-earned, never argued back —
+  // so a request with no citation is not a request, it is a nudge.
+  assertNonEmpty("approval.requested", "trial_ledger_ref", p.trial_ledger_ref);
+}
