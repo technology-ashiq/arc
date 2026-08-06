@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-policy (born 2026-08-06)
-phase: 01 — next
+phase: 02 — in progress (01 built + hardened, awaiting CI)
 appetite: 7d
-burn: 2d
+burn: 3.5d
 blocked-on: —
 depends-on: —
 
@@ -24,12 +24,12 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
-| 01 | ▶ **NEXT** · Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ⬜ not started |
-| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | ⬜ not started |
+| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 built + hardened, awaiting CI |
+| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 in progress |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
 
-**Appetite burn: 0 of 7 days used (0%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
+**Appetite burn: ~3.5 of 7 days used (50%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
 **never taken from Phase 4**. The allocation changed at kickoff, after the simulation gate: Phase
 0 went 1 → 2 days because a law-and-parser-only phase could not run its own runtime hostile
 families or exercise its own reducer, and Phase 3 went 0.5 → 0.25 because its migration is
@@ -43,8 +43,6 @@ an unclosable bypass class → STOP.
 
 ## Done-log
 
-_(nothing yet — the lane was born 2026-08-06 and has not been approved to build)_
-
 | Date | What closed | Evidence |
 |---|---|---|
 | 2026-08-06 | **Phase 00 CLOSED.** The law, its parser and the decision. `policy-lint` FAILs from birth; `authorizeAction` returns deny/propose/execute with everything injected; 54 hostile fixtures (30 static + 24 runtime, incl. 2 controls); 63-row feasibility matrix generated from `.mcp.json`; 88 new tests across 6 bats suites. **Two fresh agents found ~24 capability escalations against code that was green on its own tests** — all closed, all pinned. Red-first proven on CI run 31102122394 before any implementation existed | CI **31108185564, 19/19 green** · `initiatives/policy/evidence/phase-00/` (live-demo.md, handoff.md, hook-matrix.json/.md) |
@@ -52,8 +50,31 @@ _(nothing yet — the lane was born 2026-08-06 and has not been approved to buil
 
 ## Now
 
-**Current position: Phase 00 CLOSED 2026-08-06. Phase 01 is next.** Burn 2 of 7 days (29%),
-which is Phase 0's full allocation and no more — the day-2 kill criterion did not fire.
+**Current position: Phase 00 CLOSED. Phase 01 built and adversarially hardened; Phase 02 in
+progress. CI IS THE BLOCKER, and it is not ours** — every job on the last four runs failed at
+`Set up job` with GitHub's `Failed to resolve action download info: Service Unavailable`, before
+a single test executed. Two runs are queued behind it. Nothing since the Phase-1 gate commit has
+been through CI, so everything below is verified by running the modules directly (which
+`.claude/rules/testing.md` permits) and not by the gate that actually counts.
+
+**Phase 01 — built, both surfaces attacked, all findings closed.**
+The gate sits at `invoke()` in `arc-run` AND at `runDriver` in `drivers/common.mjs`, because
+arc-run was never the only door — the repo's own engine suite invokes a driver directly. The
+money guard reserves under a lock that re-reads the chain, and never guesses about a crash.
+Two fresh agents found ~30 escalations between them; the worst were `ARC_ROOT=/tmp/x` disarming
+the whole gate in one variable, a forged JSONL line raising a cap, and three concurrent
+reservations charging 240 against a cap of 100.
+
+**Phase 02 — vocabulary and interactive surface landed.** ADR-0508 takes the closed vocabulary
+40 → 44; `validate-policy.mjs` holds the four payloads. The PreToolUse fragment and the static
+deny floor are both in (ADR-0501's two layers), with a cross-check test that they never
+contradict. **Still owed: the promotion chain end-to-end through the inbox, and automatic
+demotion on incident.**
+
+Burn ~3.5 of 7 days.
+
+Original Phase-0 note, kept because the appetite arithmetic still rests on it: 2 of 7 days was
+Phase 0's full allocation and no more — the day-2 kill criterion did not fire.
 
 Phase 0 shipped the steel thread: a request goes into `authorizeAction` and a reasoned
 `deny` / `propose` / `execute` comes out, against fakes. What it cost to get there is the part
