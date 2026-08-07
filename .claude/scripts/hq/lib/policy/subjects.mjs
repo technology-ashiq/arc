@@ -81,6 +81,20 @@ export function processSubjects(root) {
     err.code = "PROCESSES_UNREADABLE";
     throw err;
   }
+  // CASE-VARIANT IS ITS OWN ANSWER, and this function used to fall through it. A directory
+  // committed as `Processes/` is opened by Windows and macOS and missed by Linux, so falling
+  // through produced a subject set on two legs and an uncaught ENOENT throw on the third --
+  // policy-lint, the FAIL-capable gate, does not catch it. kickoff-lint gates on this state
+  // before calling and got it right; this caller did not. That is the twin-fix shape: the guard
+  // written in one consumer and not the other, which this lane has now shipped four times.
+  if (state === "case-variant") {
+    const err = new Error(
+      `a directory matching "processes" only case-insensitively exists here -- Windows and macOS ` +
+      `open it and Linux does not, so the subject set differs per platform. Rename it to exactly ` +
+      `"processes".`);
+    err.code = "PROCESSES_UNREADABLE";
+    throw err;
+  }
   const dir = join(root, DIRNAME);
 
   let entries;

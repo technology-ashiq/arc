@@ -55,15 +55,27 @@ set -uo pipefail
 # ---------------------------------------------------------------------------------------------
 [ "${ARC_POLICY_HOOK:-0}" = "1" ] || exit 0
 
-. "${CLAUDE_PROJECT_DIR:-.}/.claude/hooks/_dispatch.sh" 2>/dev/null || exit 2
+# NOT sourcing _dispatch.sh. This file used neither arc_dispatch nor arc_hook_field from it, so
+# the source line was pure liability: arbitrary shell executed INSIDE the authority path, with an
+# `exit 0` in that file enough to allow everything. A Phase 04 attacker replaced _dispatch.sh
+# with `exit 0` and a Write to hq.policy.yaml came back permitted.
 
 PAYLOAD=$(cat)
 ROOT="${CLAUDE_PROJECT_DIR:-.}"
 
-# No policy library in this tree -- an older consumer repo or a partial install. Not in force,
-# same contract arc-run keeps, and it says so rather than passing silently.
-if [ ! -f "$ROOT/.claude/scripts/hq/lib/policy/run-gate.mjs" ]; then
+# NOT IN FORCE is decided by the absence of the LAW, not the absence of the library.
+#
+# This tested for run-gate.mjs, so moving or renaming one library file turned enforcement off and
+# reported nothing -- a Phase 04 attacker did it with `mv`. In a tree that HAS hq.policy.yaml, an
+# absent library is tampering, not a partial install; in a consumer repo with no policy file at
+# all there is genuinely nothing to enforce. Gating on the law gets both right.
+if [ ! -f "$ROOT/hq.policy.yaml" ]; then
   exit 0
+fi
+if [ ! -f "$ROOT/.claude/scripts/hq/lib/policy/run-gate.mjs" ]; then
+  printf 'BLOCKED by policy: hq.policy.yaml is present but the policy library is missing -- that is tampering, not a partial install
+' >&2
+  exit 2
 fi
 
 # The decision is made in Node, because the library is the only thing entitled to make it.

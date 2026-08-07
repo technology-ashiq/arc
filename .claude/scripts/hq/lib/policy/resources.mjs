@@ -41,6 +41,27 @@ const norm = (p) => {
 /** 8.3 short names (RUNPRO~1) are rejected outright -- realpath does not always collapse them. */
 export const hasShortName = (p) => p.split(/[\\/]+/).some((seg) => /~\d/.test(seg));
 
+/**
+ * A path segment ending in a dot or a space, which Win32 STRIPS at the API layer.
+ *
+ * `hq.policy.yaml.` and `hq.policy.yaml ` are the same file as `hq.policy.yaml` to every Win32
+ * caller, and a different string to every check in this module: `realpathSync` fails on the
+ * un-stripped name so `identity()` returns null, and the string comparisons carry the dot right
+ * through. A Phase 04 attacker used it to REPLACE the real bytes of both `.claude/settings.json`
+ * (3219 -> 14 bytes) and `hq.policy.yaml` (6660 -> 14) through PowerShell, while
+ * `guardedEntryFor` reported the target clear. `pwsh` is already a classified interpreter, so
+ * this is a program the policy contemplates permitting.
+ *
+ * Rejected outright rather than trimmed, exactly as `hasShortName` is. Trimming would mean this
+ * module deciding which of two names the operating system meant, and it is the aliasing itself
+ * that is the attack -- one path, two identities, one of which no check can see.
+ *
+ * NOT gated on win32. A repo checked out on Linux is read by CI on Windows, and a guard whose
+ * verdict depends on the runner is the cross-leg disagreement this lane has now shipped twice.
+ */
+export const hasTrailingDotOrSpace = (p) =>
+  p.split(/[\\/]+/).some((seg) => seg.length > 0 && /[. ]$/.test(seg) && seg !== "." && seg !== "..");
+
 /** Every path under `dir`, bounded so a symlink loop or a huge tree cannot hang the guard. */
 function walk(dir, out = [], depth = 0) {
   if (depth > 12 || out.length > 5000) return out;
@@ -118,6 +139,7 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
 export function guardedEntryFor(resource, guard) {
   if (typeof resource !== "string" || resource === "") return null;
   if (hasShortName(resource)) return "8.3 short name";
+  if (hasTrailingDotOrSpace(resource)) return "trailing dot or space (win32 path alias)";
 
   const abs = resolve(guard.root, resource);
 
@@ -196,6 +218,7 @@ export function guardedEntryFor(resource, guard) {
  */
 export function containsGuardedEntry(resource, guard) {
   if (typeof resource !== "string" || resource === "") return null;
+  if (hasTrailingDotOrSpace(resource)) return "trailing dot or space (win32 path alias)";
   const abs = resolve(guard.root, resource);
   const id = identity(abs);
   const target = norm(id ? id.real : abs);

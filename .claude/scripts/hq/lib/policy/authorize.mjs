@@ -45,6 +45,37 @@ const verdict = (decision, effective, reason) => ({ decision, effective, reason 
 const FILE_MUTATORS = new Set([
   "cp", "mv", "rm", "sed", "tee", "install", "truncate", "chmod", "chown", "ln", "touch",
   "dd", "shred", "patch", "git", "gh", "npm", "node", "python", "python3", "bash", "sh", "attrib",
+  // Added in Phase 04. A fresh attacker ran each of these at shell L3 against the shipped
+  // un-grantable list and got PROPOSE -- meaning the ADR-0502 target check never fired -- while
+  // `rm -r .claude` correctly denied. Every one deletes or overwrites a path it is handed.
+  "find", "rsync", "tar", "unzip", "7z", "gzip", "gunzip", "zip", "xz", "bzip2", "cpio",
+  "robocopy", "xcopy", "del", "erase", "move", "rmdir", "rd", "copy",
+  // Interpreters the Set forgot while keeping node/python/bash. pwsh is already a classified
+  // argv0_class, so it is a program the policy contemplates permitting.
+  "pwsh", "powershell", "cmd", "deno", "bun", "go", "ts-node", "tsx", "perl", "ruby", "php",
+  "yarn", "pnpm", "npx", "make", "cargo", "cmake", "gradle", "mvn", "emacs", "vim", "reg",
+  "docker", "podman", "bats",
+]);
+
+/**
+ * Programs whose argv0 is NOT this command's identity -- they exec something else.
+ *
+ * `shellArgv0` returns the FIRST word, and every downstream check keys on it: the argv0_classes
+ * lookup, ADR-0507's derivation, the FILE_MUTATORS test. So `env rm -r .claude` is classified as
+ * `env`, and a Phase 04 attacker got PROPOSE from all of these while the bare `rm` denied:
+ *
+ *   env - nice - nohup - timeout - setsid - stdbuf - flock - sudo - doas - busybox - xargs
+ *
+ * That is not a gap in one Set, it is the argv0 model failing on its own terms: any allowlist
+ * keyed on the first word is one wrapper away from meaningless. Refused OUTRIGHT, the way
+ * CHAINING is, rather than resolved -- resolving would mean this module parsing every wrapper's
+ * flag grammar to find the real program, which is the rabbit hole ADR-0507 named when it chose
+ * to model `git` by what it CAN do rather than by subcommand.
+ */
+const ARGV0_LAUNDERERS = new Set([
+  "env", "nice", "ionice", "nohup", "timeout", "setsid", "stdbuf", "flock", "chroot",
+  "sudo", "doas", "su", "runuser", "busybox", "xargs", "watch", "script", "unbuffer",
+  "command", "exec", "eval", "time", "strace", "ltrace", "proot", "firejail",
 ]);
 
 /**
@@ -166,6 +197,17 @@ export function authorizeAction({ kind, capability, resource } = {}, ctx = {}) {
       return verdict("deny", "L0",
         `a chained or redirecting command is refused outright at any level -- argv0-checking ` +
         `${JSON.stringify(resource)} would check the wrong program`);
+    // Same refusal, same reason, one step further. A launcher's name is not the identity of what
+    // it runs: `env rm -r .claude` is classified as `env` by every check below, and a Phase 04
+    // attacker got PROPOSE from eleven such wrappers while the bare `rm` correctly denied.
+    // Refused outright rather than resolved -- resolving means parsing each wrapper's flag
+    // grammar to find the real program, the rabbit hole ADR-0507 named when it chose to model
+    // `git` by what it CAN do rather than by subcommand.
+    if (ARGV0_LAUNDERERS.has(argv0))
+      return verdict("deny", "L0",
+        `${argv0} runs another program, so argv0 is not this command's identity -- refused ` +
+        `outright at any level. Name the program directly: an allowlist keyed on the first word ` +
+        `is one wrapper away from meaningless`);
   }
 
   // 2. Un-grantable targets, before any level is consulted (ADR-0502).
