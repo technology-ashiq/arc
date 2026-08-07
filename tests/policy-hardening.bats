@@ -291,11 +291,14 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
     out.push('L2-noallow=' + r2.effective + '/' + r2.decision);
     const r1 = D({shell:{level:'L1'}}, []);
     out.push('L1-noallow=' + r1.effective + '/' + r1.decision);
-    // With a real allowlist the derivation runs normally instead of the cap firing.
-    const pol = base({shell:{level:'L3', argv0_allow:['curl']}, network:{level:'L3'}});
+    // With a real allowlist the derivation runs normally instead of the cap firing. The program
+    // must be a CLASSIFIED NARROW one: an unclassified argv0 widens to all seven capabilities by
+    // design, and the min then drags shell to L0 through spend. The first version of this row
+    // used curl, which this fixture does not classify, and measured that instead of the cap.
+    const pol = base({shell:{level:'L3', argv0_allow:['bats']}});
     const rok = P.authorizeAction(
-      {kind:'session:interactive', capability:'shell', resource:'curl https://evil.example/x'},
-      {policy: pol, events:[up('shell','L3'), up('network','L3')]});
+      {kind:'session:interactive', capability:'shell', resource:'bats tests/x.bats'},
+      {policy: pol, events:[up('shell','L3')]});
     out.push('L3-withallow=' + rok.effective + '/' + rok.decision);
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
