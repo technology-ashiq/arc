@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-policy (born 2026-08-06)
-phase: 02 — in progress (01 built + hardened, awaiting CI)
+phase: 02 — in progress (00–02 merged to main, CI 19/19 green)
 appetite: 7d
-burn: 3.5d
+burn: 4d
 blocked-on: —
 depends-on: —
 
@@ -24,12 +24,12 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
-| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 built + hardened, awaiting CI |
-| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 in progress |
+| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 built + hardened, CI green — not closed (`/arc-phase-done 1` owes live demo + evidence) |
+| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 every exit criterion built — not closed (`/arc-phase-done 2` owes live demo + evidence) |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
 
-**Appetite burn: ~3.5 of 7 days used (50%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
+**Appetite burn: ~4 of 7 days used (57%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
 **never taken from Phase 4**. The allocation changed at kickoff, after the simulation gate: Phase
 0 went 1 → 2 days because a law-and-parser-only phase could not run its own runtime hostile
 families or exercise its own reducer, and Phase 3 went 0.5 → 0.25 because its migration is
@@ -45,17 +45,42 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
+| 2026-08-07 | **Phases 00–02 landed on `main`.** Not a phase close — 01 and 02 still owe their DoD (live demo + evidence bundle). Recorded because the code is now in the trunk and the CI story around it is the cycle's most expensive lesson: merged without CI (#117), reverted (#118), re-proposed and made genuinely green (#119) | CI **31148958597, 19/19 green** on `0f2d53d` · merge `8064706` · main re-verified by `workflow_dispatch` |
 | 2026-08-06 | **Phase 00 CLOSED.** The law, its parser and the decision. `policy-lint` FAILs from birth; `authorizeAction` returns deny/propose/execute with everything injected; 54 hostile fixtures (30 static + 24 runtime, incl. 2 controls); 63-row feasibility matrix generated from `.mcp.json`; 88 new tests across 6 bats suites. **Two fresh agents found ~24 capability escalations against code that was green on its own tests** — all closed, all pinned. Red-first proven on CI run 31102122394 before any implementation existed | CI **31108185564, 19/19 green** · `initiatives/policy/evidence/phase-00/` (live-demo.md, handoff.md, hook-matrix.json/.md) |
 | 2026-08-06 | Lane born. PLAN.md + 5 phase specs + **ADR-0500..0507** written. Verification: 4 plan-attackers (27 findings, 24 accepted, 3 rejected) and **8 plan-simulator rounds** — blocker count 7 → 6 → 6 → 3 → 2 → 2 → 3 → **1 HARD**, closed by naming which of two E2 readings wins. `kickoff-lint` green on every run. **Not a phase close** — recorded so the kickoff itself has a receipt | `kickoff.done` `01KZB1805TC27WCCMF3DHQRVM0` · `approval.requested` `01KZB1878PENK4YZ98VKQYPK1J` |
 
 ## Now
 
-**Current position: Phase 00 CLOSED. Phase 01 built and adversarially hardened; Phase 02 in
-progress. CI IS THE BLOCKER, and it is not ours** — every job on the last four runs failed at
-`Set up job` with GitHub's `Failed to resolve action download info: Service Unavailable`, before
-a single test executed. Two runs are queued behind it. Nothing since the Phase-1 gate commit has
-been through CI, so everything below is verified by running the modules directly (which
-`.claude/rules/testing.md` permits) and not by the gate that actually counts.
+**Current position: Phase 00 CLOSED. Phase 01 and Phase 02 built, adversarially hardened, and
+now GREEN ON CI AND MERGED** — run **31148958597, 19/19**, merged as `8064706` (PR #119).
+
+**How that took two attempts, and the rule it cost.** PR #117 was merged on 2026-08-06 with
+eleven commits that had never completed a CI run — GitHub Actions was in a major outage and
+every job died at `Set up job`. The thing nobody said out loud is that **`arc-ci` runs on
+`pull_request` and `workflow_dispatch` only, so a push to `main` is never tested at all**:
+merging did not "get it tested later", it removed the last chance to test it. Main was reverted
+(PR #118, `02d12cd`) back to its last green tree and the branch re-proposed as PR #119.
+
+That second run then went red on 7 of 19 jobs — and **not one of the four failures was the
+policy engine**. Every one was a fixture that never built the condition it claimed to test:
+
+| Test | What it actually measured |
+|---|---|
+| `END TO END -- arc-run refuses a denied process` | A `sed` that never lowered `write` to L0, so the gate correctly permitted a run the test called a fail-open |
+| `BYPASS -- a driver invoked DIRECTLY` | Same `sed`, plus `ARC_DRIVER_FAKE` handed a JSON document where the contract wants a directory — the driver died on its own fake check |
+| `BYPASS -- a tree with no policy library` | A missing `yaml-subset.mjs` stack trace. Its only assertion was "the output does not say policy denied", which a crash satisfies |
+| `the unknown-kind message reports the DERIVED size` | Its own fixture factory: `policyIdem` knows four kinds and threw on the deliberately-unknown one, so `validateEvent` was never reached |
+
+The `sed` was `0,/re/` plus an empty `s//.../`. BSD sed rejects a line-0 address outright, and
+`//` means *the last regex used* — on CI that resolved to the rename expression rather than the
+range's. Fixed in `0f2d53d`: one `awk` pass with no implicit state, asserting its own output,
+**scoped to the kind's own block** because a bare `grep 'level: L0'` is already satisfied by
+`process:commit-msg-draft` and holds whether or not the edit landed.
+
+Two of those four are textbook `.claude/rules/testing.md` vacuous passes, and the general lesson
+is sharper than "assert it ran": **a fixture that silently fails to build its condition is a pass
+generator pointed either way.** Here it made a working gate look broken. The next one makes a
+broken gate look fine.
 
 **Phase 01 — built, both surfaces attacked, all findings closed.**
 The gate sits at `invoke()` in `arc-run` AND at `runDriver` in `drivers/common.mjs`, because
@@ -65,13 +90,39 @@ Two fresh agents found ~30 escalations between them; the worst were `ARC_ROOT=/t
 the whole gate in one variable, a forged JSONL line raising a cap, and three concurrent
 reservations charging 240 against a cap of 100.
 
-**Phase 02 — vocabulary and interactive surface landed.** ADR-0508 takes the closed vocabulary
-40 → 44; `validate-policy.mjs` holds the four payloads. The PreToolUse fragment and the static
-deny floor are both in (ADR-0501's two layers), with a cross-check test that they never
-contradict. **Still owed: the promotion chain end-to-end through the inbox, and automatic
-demotion on incident.**
+**Phase 02 — vocabulary, interactive surface, promotion chain, and now the rendering.** ADR-0508
+takes the closed vocabulary 40 → 44; `validate-policy.mjs` holds the four payloads. The PreToolUse
+fragment and the static deny floor are both in (ADR-0501's two layers), with a cross-check test
+that they never contradict. `arc brief` and the inbox now render the four receipts — the exit
+criterion the spec marked "cut this first if the appetite is going".
 
-Burn ~3.5 of 7 days.
+**Writing that renderer found the phase's worst defect: none of the four kinds could be emitted
+at all.** `arc-event` derives an idem per kind family — leads, experiment, everything else — and
+had no branch for the policy kinds, so it produced `sha256(contentPre|ms)` while `validateEvent`
+re-derived `policyIdem` and refused the mismatch. **Every policy receipt was REJECTED and
+quarantined.** The vocabulary was extended, the payload validators were written, the promotion
+module built the events, and nothing could write one to the spine.
+
+It was invisible for the same reason four CI failures were: every test drove the modules
+*directly*. Not one drove the sanctioned emitter, which is precisely what `phase-02-spec`'s
+verification plan asked for — *"read back from the spine directory rather than from emitter
+return values"*. The fix mirrors the two existing branches exactly, including refusing a
+caller-supplied `--idem` (anti-preclaim: an attacker who can emit could otherwise claim a real
+receipt's stable key, and the genuine receipt would collide on `DUP_IDEM` and vanish — a
+demotion that vanishes is a cap that never drops).
+
+**A second finding, larger than this lane.** `arc-brief` mapped kinds to groups with
+`if (group) push`, silently skipping anything unmapped — and the table is **22 kinds behind the
+closed vocabulary**. Every `develop.*`, `slice.*`, `experiment.*` and leads-pipeline receipt has
+been dropped from the brief since those lanes shipped. The catch-all group now surfaces them by
+name instead. **Assigning them real groups is those lanes' call, not this one's** — flagging it
+here rather than guessing.
+
+**Still owed on 02:** nothing from the spec's list — but 01 and 02 both still owe
+`/arc-phase-done` (live demo + evidence bundle), which is what makes a phase closed rather than
+merely green.
+
+Burn ~4 of 7 days.
 
 Original Phase-0 note, kept because the appetite arithmetic still rests on it: 2 of 7 days was
 Phase 0's full allocation and no more — the day-2 kill criterion did not fire.
@@ -84,7 +135,16 @@ print "is law" over a file granting L3 spend, with a `policy_hash` identical to 
 file. Every one is closed and pinned. Four separate CI runs went red on cross-platform issues
 invisible on the dev box.
 
-**Next step: `/arc-develop start 1`.** Phase 1 wires the Phase-0 decision function into
+**Next steps, in order.** Phase 01 and Phase 02 are *built and green*, which is not the same as
+*closed*: neither has been through `/arc-phase-done`, so neither has a live demo or an evidence
+bundle. Phase 02 also still owes the `arc brief` / inbox rendering of a pending promotion. Phase
+03 (birth rule + cap inventory) is deferred to a separate session by the owner. Phase 04 — the
+two untouchable adversarial days — has not started, and this cycle has just supplied it with a
+fifth surface worth attacking: the fixtures themselves.
+
+Original Phase-0 handover note, kept for the record:
+
+**`/arc-develop start 1`.** Phase 1 wires the Phase-0 decision function into
 `arc-run` **before** the `spawnSync("bash", [sh, "run", …])` driver call — the wiring and its
 proof, not the building of the check, which is done. Then the capability fixture matrix (one
 absence assertion per class), the bypass fixtures, and the money guard with its crash-window
