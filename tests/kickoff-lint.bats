@@ -563,7 +563,12 @@ mkproc() {
   ran
   [ "$status" -eq 0 ]
   [[ "$output" == *"[birth-rule]"* ]]
-  [[ "$output" == *"processes/sub/"* ]]
+  # Match the ENTRY NAME and the rule, not the exact sentence. Three assertions in this file
+  # have now gone red because the message was reworded while the behaviour was correct; a test
+  # that breaks on prose is a test that gets loosened under pressure rather than fixed.
+  [[ "$output" == *"processes/sub"* ]]
+  [[ "$output" == *"not a regular file"* ]]
+  [[ "$output" == *"checked 1 process(es)"* ]]
 }
 
 @test "birth-rule: a process the parser cannot read is still checked by its filename" {

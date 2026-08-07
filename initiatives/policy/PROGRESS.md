@@ -119,6 +119,59 @@ is attic'd (A10, ADR-0023). `concurrencyRefusal` is the nearest candidate and is
 retired — it is unborn rather than dead, never wired in the first place, and atticing another
 lane's un-wired cap is not this lane's call.
 
+**THE BIRTH RULE'S OWN ADVERSARIAL PASS — two fresh agents, different surfaces, 20 findings.**
+Mandatory before the gate ships, and it earned its cost twice over. Both agents attacked the
+TEST as well as the rule, and both built mutant copies of `kickoff-lint` with the check deleted.
+
+**The worst finding was that the gate compared the wrong string.** `arc-run --process X` opens
+`processes/X.process.yaml` and authorizes `process:X` — the **filename stem**. `name:` is never
+read for authority. The first cut gated on `name:` (inherited from `policy-lint`'s
+`processNames`), so `evil.process.yaml` declaring `name: kickoff-plan` looked governed while
+`arc-run --process evil` ran ungoverned — the exact silent gap the rule exists to close. **And
+the suite pinned that blindness as correct**, in a test written to lock the behaviour in. That is
+the running list's *validate one read, compare another* defect — closed in `verdict.mjs`, left
+open in `lineage.mjs` — reproduced a third time, by this lane, one phase after the rule about it
+was written down. Both tests are inverted.
+
+**The measurement went further than the finding.** Warning about unreadable process files fired
+on all three real ones, so it was measured rather than argued: `parsePolicyYaml` **throws on
+every committed `.process.yaml`** (its 2-space indentation rule), and the engine's own
+`parseYamlSubset` reads them but surfaces no top-level `name`. So `processNames`'s `doc.name`
+branch is **dead on the real tree and always has been** — `policy-lint` has been comparing
+filename stems since the day it was written, through a catch-fallback nobody had measured. The
+stem is not the better choice; it is the only subject string any consumer has ever had.
+
+**Then the second agent deleted the whole check and ran the suite: 7 of 18 tests stayed green** —
+including both tests whose own comments called them the control. Every one asserted only that a
+string was ABSENT, which a deleted check satisfies exactly as well as a working one. That is
+`.claude/rules/testing.md`'s third rule, and this lane wrote seven violations of it in a file
+whose header quotes the rule. The fix is a positive marker: `kickoff-lint` now always prints
+which of its states the birth rule reached, so deleting the block turns those tests red — and it
+closes the separate defect that silence covered five distinct states with one indistinguishable
+nothing.
+
+| Hole | What it was | Now |
+|---|---|---|
+| Subject string | gated on `name:`, runtime uses the stem | stem, and a stem/name disagreement is itself reported |
+| `processes/` as a regular file | `ENOTDIR` crash, exit 1, no verdict line — an advisory gate taking down every lane's kickoff | typed error, caught by the advisory caller, still thrown for `policy-lint` (a validator that silently stops checking is fail-open) |
+| Case-variant directory | `existsSync("processes")` is a string compare on a case-insensitive FS — `Processes/` warned on Windows and macOS and was silent on Linux, **same commit** | identity from an exact-byte directory listing; a case variant is reported |
+| Symlinked process file | dropped by a dirent `isFile()` on Linux, while git materialises it as a regular file on the Windows runner — subject set differed per leg | classified by `statSync`, which follows the link *and* keeps the FIFO door shut (`readFileSync` on a FIFO blocks forever and no `try/catch` interrupts it). Both halves of that trade are now written down |
+| `oddExtension` fed to `policy-lint` | **a regression I introduced** — a loose extension match made `GHOSTCASE.PROCESS.YAML` the subject `ghostcase`, so `policy-lint` would accept a row for a file Linux cannot open: a fail-open in the one FAIL-capable gate | `processNames` is exact-suffix-only again, restoring the original behaviour; the advisory gate reports the ambiguity |
+| `processes/` with only a subdirectory | completely silent — the empty-list branch short-circuited before the non-file loop | reported |
+| No `processes/` dir at all | disarmed **both** gates: `lint.mjs` guards with `processNames && …`, so a null subject set skips its existence check | policy rows with no directory are reported |
+| Three surviving mutants | only-check-first-entry, skip-when-no-process-rows, unfiltered-governed-set — every fixture had exactly one process file | one fixture each |
+
+Two attacks **failed**, and that is evidence too: a differential harness ran the old private
+`processNames` against the imported one over **29 constructed trees** with zero divergences, so
+the extraction is behaviour-preserving; and prototype pollution is closed on this path.
+
+Tests in `tests/kickoff-lint.bats`: **48 → 71**, count asserted from `BATS_TEST_NAMES`.
+
+**Known and NOT fixed, recorded rather than smoothed over:** the birth rule sits after section 1,
+so a tree with no `PLAN.md` exits before it runs — a company-level check gated behind a
+lane-level artifact. Moving it means reordering `kickoff-lint`'s TRIAL/tier setup, which is not a
+phase-03 advisory-check change.
+
 **A harness defect found in passing, recorded rather than fixed.** `/arc-develop next` resolves
 its ledger with `findLedger`, which returns the FIRST `phase-NN-tasks.md` holding any unproven
 slice — for this lane that is phase 01, whose ledger was never filled because 01 and 02 were
