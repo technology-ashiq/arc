@@ -237,24 +237,37 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" == *"README.md=ALLOWED"* ]]
 }
 
-@test "PHASE 04 -- a shell command deleting an ancestor is denied at every level" {
-  # The decision, not just the guard lookup. At L3 with an unrestricted allowlist this is the
-  # difference between a policy engine and a suggestion.
+@test "PHASE 04 -- a shell command deleting an ancestor is denied at a level that EXECUTES" {
+  # The decision, not just the guard lookup. The grant below carries a REAL argv0_allow with a
+  # narrow program, so shell genuinely resolves to L3 and these commands would run -- without
+  # that, the sibling fix caps an allowlist-less L3 shell to L1 and every row below would read
+  # `propose` for a reason that has nothing to do with the ancestor guard. That is exactly what
+  # the first version of this test measured, and CI caught it.
   run _node "$PRE
-    const over = { shell:{level:'L3'}, write:{level:'L3', roots:['**']} };
+    const pol = base({ shell:{level:'L3', argv0_allow:['rm']}, write:{level:'L3', roots:['**']} });
+    pol.argv0_classes.rm = { class:'narrow', reproduces:[] };
+    // The EVENTS matter as much as the ceiling. Every pair is born at L1, so a ceiling of L3
+    // with an empty stream still resolves to min(L3, L1) = L1 and everything reads \`propose\`
+    // for a reason unrelated to this guard. The promotions raise the earned cap so the level
+    // genuinely executes -- which is the only state in which an ancestor delete is dangerous.
+    const ev = [up('shell','L3'), up('write','L3')];
+    const D = (resource) => P.authorizeAction(
+      {kind:'session:interactive', capability:'shell', resource}, {policy: pol, events: ev}).decision;
     const out = [];
     for (const cmd of ['rm -rf .claude', 'rm -rf .claude/scripts', 'rm -rf .', 'rm -r .claude/hooks']) {
-      out.push(JSON.stringify(cmd) + '=' + A('shell', cmd, over));
+      out.push(JSON.stringify(cmd) + '=' + D(cmd));
     }
-    out.push('control=' + A('shell', 'rm -rf docs/scratch', over));
+    out.push('control=' + D('rm -rf docs/scratch'));
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *'"rm -rf .claude"=deny'* ]]
-  [[ "$output" == *'"rm -rf .claude/scripts"=deny'* ]]
-  [[ "$output" == *'"rm -rf ."=deny'* ]]
-  [[ "$output" == *'"rm -r .claude/hooks"=deny'* ]]
-  # The control proves the rule did not simply deny everything.
-  [[ "$output" == *"control=execute"* ]]
+  [[ "$output" == *'"rm -rf .claude"=deny'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'"rm -rf .claude/scripts"=deny'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'"rm -rf ."=deny'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'"rm -r .claude/hooks"=deny'* ]] || { echo "$output"; false; }
+  # THE CONTROL, and it carries the whole weight: at the same level, with the same allowlist,
+  # a delete outside every guarded path must still EXECUTE. Without this row, a rule that denied
+  # all shell would pass every assertion above.
+  [[ "$output" == *"control=execute"* ]] || { echo "$output"; false; }
 }
 
 @test "PHASE 04 -- shell that EXECUTES with no argv0_allow is capped, not unbounded" {
