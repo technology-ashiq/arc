@@ -82,29 +82,83 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
   [[ "$output" == *"BAD_POLICY"* ]] || { echo "expected a payload rejection: $output"; false; }
 }
 
-@test "every kind THIS LANE added is grouped by the brief" {
-  # DERIVED from POLICY_KINDS, never typed (ADR-0107) -- so a fifth authority kind fails here on
-  # the day it is added rather than disappearing from the brief.
-  #
-  # Scoped to this lane's four ON PURPOSE. The group table is 22 kinds behind the full closed
-  # vocabulary -- every develop.*, slice.*, experiment.* and leads-pipeline receipt has been
-  # silently dropped by this file since those lanes shipped. Asserting the WHOLE vocabulary here
-  # would put a red test on other lanes' desks for a grouping decision that is theirs to make,
-  # which is the cross-lane friction ADR-0107's derive-never-type rule exists to avoid. The
-  # catch-all makes their kinds visible; naming their group is their call.
+# THE GATE. Reports every kind in the derived closed vocabulary that has no section, and names
+# the lane that owns each one -- because the honest answer to "who fixes the catch-all" used to be
+# nobody, which is how it ran 22 kinds deep. Takes the file to inspect as $1 so the mutation test
+# below can point it at a deliberately broken copy; a gate nothing has ever attacked is a
+# decoration.
+_coverage() {
   cd "$ARC_ROOT"
-  run node --input-type=module -e "
+  BRIEF_SRC="$1" node --input-type=module -e "
     const fs = await import('node:fs');
-    const { POLICY_KINDS } = await import('./.claude/scripts/hq/lib/validate-policy.mjs');
-    const src = fs.readFileSync('.claude/scripts/hq/arc-brief.mjs', 'utf8');
+    const v = await import('./.claude/scripts/hq/lib/validate.mjs');
+    const e = await import('./.claude/scripts/hq/lib/validate-experiment.mjs');
+    const l = await import('./.claude/scripts/hq/lib/validate-leads.mjs');
+    const p = await import('./.claude/scripts/hq/lib/validate-policy.mjs');
+    const owner = (k) => e.EXPERIMENT_KINDS.includes(k) ? 'evolve'
+                       : l.LEADS_KINDS.includes(k)      ? 'leads'
+                       : p.POLICY_KINDS.includes(k)     ? 'policy' : 'core';
+    const src = fs.readFileSync(process.env.BRIEF_SRC, 'utf8');
     const start = src.indexOf('const GROUPS = [');
     const end = src.indexOf('];', start);
-    if (start < 0 || end < 0) throw new Error('no GROUPS table in arc-brief.mjs');
-    const table = src.slice(start, end);
-    const missing = POLICY_KINDS.filter(k => !table.includes(JSON.stringify(k)));
-    console.log(missing.length ? 'UNGROUPED:' + missing.join(',') : 'all-' + POLICY_KINDS.length + '-grouped');"
+    if (start < 0 || end < 0) throw new Error('no GROUPS table in ' + process.env.BRIEF_SRC);
+    // STRIP COMMENTS FIRST. The table is commented heavily and those comments name kinds in
+    // prose -- outreach.replied, deal.won, experiment.assigned all appear in sentences
+    // explaining why they sit where they do. A raw text search would count a kind mentioned
+    // only in a comment as grouped, so removing a kind from the array while leaving the
+    // sentence about it would pass. That is the vacuous shape this whole suite exists for.
+    const table = src.slice(start, end).split('\n').filter((x) => !x.trim().startsWith('//')).join('\n');
+    const missing = v.KINDS.filter((k) => !table.includes(JSON.stringify(k)));
+    console.log(missing.length
+      ? 'UNGROUPED:' + missing.map((k) => k + '(' + owner(k) + ')').join(',')
+      : 'all-' + v.KINDS.length + '-grouped');"
+}
+
+@test "every kind in the closed vocabulary is grouped by the brief" {
+  # DERIVED from KINDS, never typed (ADR-0107) -- so a kind added by ANY lane fails here on the
+  # day it is added rather than disappearing from the brief.
+  #
+  # This was scoped to POLICY_KINDS when it was written, deliberately: the table was then 22 kinds
+  # behind the vocabulary, and asserting the whole of it would have put a red test on four other
+  # lanes' desks for a grouping decision that was theirs to make. That reason expired when the
+  # owner routed the question to each lane and every kind got a section. The scope widens with it,
+  # and widening it is the entire point -- a line in a brief saying "no group assigned" named a
+  # file but never named an owner, so nobody ever fixed it. This names an owner and blocks a merge.
+  run _coverage "$ARC_ROOT/.claude/scripts/hq/arc-brief.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "all-4-grouped" ] || { echo "$output"; false; }
+  [[ "$output" == all-*-grouped ]] || { echo "$output"; false; }
+}
+
+@test "MUTATION -- the coverage gate fails when a kind is dropped from the table" {
+  # The gate's own negative control. Two mutations, because they fail differently:
+  #
+  #   1. delete the kind outright        -> must be reported missing
+  #   2. delete it but KEEP a comment naming it -> must STILL be reported missing
+  #
+  # The second is the one that matters. Every kind in that table is discussed in a nearby comment,
+  # so a text-matching gate that did not strip comments would pass mutation 2 and this suite would
+  # be asserting nothing about the kinds it talks about most.
+  local d; d="$BATS_TEST_TMPDIR/gate"
+  mkdir -p "$d"
+
+  # 1 -- a clean deletion. `promotion.proposed` is evolve-owned, so the owner label is checked too.
+  sed 's/"promotion.proposed", //' "$ARC_ROOT/.claude/scripts/hq/arc-brief.mjs" > "$d/dropped.mjs"
+  ! grep -q '"promotion.proposed", ' "$d/dropped.mjs" || {
+    echo "mutation 1 did not apply -- this test would measure nothing"; false; }
+  run _coverage "$d/dropped.mjs"
+  [ "$status" -eq 0 ] || { echo "the gate crashed instead of reporting: $output"; false; }
+  [[ "$output" == *"promotion.proposed(evolve)"* ]] || {
+    echo "the gate missed a dropped kind, or misnamed its owner: $output"; false; }
+
+  # 2 -- deleted from the array, still named in a comment one line above it.
+  sed 's/"meeting.booked"\]\]/]]/; s|// `policy.demoted` sits|// meeting.booked is named here on purpose -- `policy.demoted` sits|' \
+    "$ARC_ROOT/.claude/scripts/hq/arc-brief.mjs" > "$d/comment-only.mjs"
+  grep -q '// meeting.booked is named here on purpose' "$d/comment-only.mjs" || {
+    echo "mutation 2 did not plant the comment -- this test would measure nothing"; false; }
+  run _coverage "$d/comment-only.mjs"
+  [ "$status" -eq 0 ] || { echo "the gate crashed instead of reporting: $output"; false; }
+  [[ "$output" == *"meeting.booked(leads)"* ]] || {
+    echo "a kind named only in a COMMENT was counted as grouped: $output"; false; }
 }
 
 @test "the brief puts each authority receipt in its own group" {
@@ -179,14 +233,36 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
   [[ "$output" == *"spend.reserved"* ]] || { echo "the event itself vanished: $output"; false; }
 }
 
+# Builds a sandbox tree whose brief does NOT know `develop.started`, and echoes the path to it.
+#
+# Needed because the catch-all is now unreachable by design: every one of the closed 44 has a
+# section and the gate above keeps it that way, so no real kind falls through any more. The
+# behaviour still has to be provable, and the honest way to prove it is to manufacture the only
+# condition that can produce it -- a table behind its vocabulary, which is exactly the state the
+# whole table sat in for months. The whole `scripts` dir is copied, not the one file: arc-brief
+# imports siblings by relative path, and a lone copy dies on module resolution. That failure mode
+# is not hypothetical -- a first attempt at this crashed, printed nothing, and the line-budget
+# assertion PASSED on the crash.
+_tree_without_develop_started() {
+  local d="$BATS_TEST_TMPDIR/$1"
+  mkdir -p "$d/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  sed 's/"develop.started", //' "$ARC_ROOT/.claude/scripts/hq/arc-brief.mjs" > "$d/.claude/scripts/hq/arc-brief.mjs"
+  # THE MUTATION ASSERTS ITSELF. A sed that matched nothing leaves every test below measuring the
+  # real table and passing for no reason.
+  ! grep -q '"develop.started"' "$d/.claude/scripts/hq/arc-brief.mjs" || {
+    echo "the mutation did not apply -- this test would measure nothing"; return 1; }
+  echo "$d/.claude/scripts/hq/arc-brief.mjs"
+}
+
 @test "BUDGET -- an ordinary day of catch-all receipts cannot bury the brief" {
   # The regression this collapse exists for, measured before it was written: 50 develop/slice
   # receipts on one day rendered a 53-line brief against the 40-line one-screen budget, 50 of
   # those lines identical and individually empty. The catch-all had been placed in the
   # never-collapse tier beside needs-you and money, whose exemption does not transfer -- every one
-  # of THEIR lines needs human eyes, and an ungrouped line is a kind waiting for its own lane to
-  # claim a group. 12 receipts is enough to prove the tier: uncollapsed that is 13 lines, collapsed
-  # it is 1.
+  # of THEIR lines needs human eyes, and an ungrouped line is a kind whose lane has not claimed it.
+  # 12 receipts is enough to prove the tier: uncollapsed that is 13 lines, collapsed it is 1.
+  local brief; brief="$(_tree_without_develop_started budget)" || { echo "$brief"; false; }
   local i
   for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
     _emit develop.started --payload "{\"lane\":\"probe$i\"}" >/dev/null
@@ -197,7 +273,7 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
   local sealed; sealed=$(grep -c '"kind":"' "$SPINE/events/2026-07-22.jsonl")
   [ "$sealed" -eq 12 ] || { echo "built $sealed sealed receipts, not 12 -- this test would measure nothing"; false; }
 
-  run _brief
+  run node "$brief" --date 2026-07-22
   # Exit first, always. A crashing renderer prints nothing, and nothing is under budget.
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"ungrouped: 12 (develop.started 12)"* ]] || { echo "the catch-all did not collapse: $output"; false; }
@@ -210,8 +286,9 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
   # arc-brief.mjs is the only way another lane learns it owes its kinds a group, and the generic
   # hint in the renderer matches `background` and `progress` by name, so it never reaches this
   # group. A count under a name nobody recognises is a puzzle; both clauses make it an instruction.
+  local brief; brief="$(_tree_without_develop_started collapsed)" || { echo "$brief"; false; }
   _emit develop.started --payload '{"lane":"probe"}' >/dev/null
-  run _brief
+  run node "$brief" --date 2026-07-22
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"no group assigned in arc-brief.mjs"* ]] || { echo "the instruction was lost in the collapse: $output"; false; }
   [[ "$output" == *"--full to expand"* ]] || { echo "the collapsed group does not advertise its detail: $output"; false; }
@@ -220,13 +297,31 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
 @test "FULL -- --full expands the catch-all back to one line per receipt" {
   # The collapse hides the detail; it must never destroy it. A group that reads identically
   # collapsed and expanded is a group whose --full does nothing.
+  local brief; brief="$(_tree_without_develop_started full)" || { echo "$brief"; false; }
   _emit develop.started --payload '{"lane":"a"}' >/dev/null
   _emit develop.started --payload '{"lane":"b"}' >/dev/null
-  run _brief --full
+  run node "$brief" --date 2026-07-22 --full
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"ungrouped (2)"* ]] || { echo "--full did not expand the catch-all: $output"; false; }
   local n; n=$(printf '%s\n' "$output" | grep -c '^  develop.started$')
   [ "$n" -eq 2 ] || { echo "expected 2 expanded receipt lines, found $n: $output"; false; }
+}
+
+@test "EMPTY -- the catch-all is unreachable on the real table" {
+  # The positive control for the gate, from the render side rather than the source side. Every one
+  # of the closed 44 has a section, so no real day can produce an ungrouped line -- and a suite
+  # whose only catch-all tests run against MUTATED trees would never notice if the real table
+  # regressed. Drive the same kinds through the real renderer and the word must not appear.
+  _emit develop.started --payload '{"lane":"a"}' >/dev/null
+  _emit slice.done --payload '{"lane":"a"}' >/dev/null
+  _all_four
+  local sealed; sealed=$(grep -c '"kind":"' "$SPINE/events/2026-07-22.jsonl")
+  [ "$sealed" -eq 6 ] || { echo "built $sealed sealed receipts, not 6 -- this test would measure nothing"; false; }
+  run _brief --full
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Never bare "output does not contain X" -- a crash satisfies that. Pair it with proof of render.
+  [[ "$output" == *"brief 2026-07-22"* ]] || { echo "the renderer produced no brief at all: $output"; false; }
+  [[ "$output" != *"ungrouped"* ]] || { echo "a real kind fell through on the shipped table: $output"; false; }
 }
 
 @test "CONTROL -- needs-you never collapses, however noisy the day gets" {
@@ -268,8 +363,8 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 19 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 19 -- a @test was silently dropped"
     false
   }
 }

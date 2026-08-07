@@ -25,28 +25,74 @@ const BOOL_FLAGS = new Set(["full"]);
 // REQ-05: every kind maps to exactly one group; the order here is the render order. needs-you
 // and money are never collapsed; background then progress collapse to counts when a day
 // overflows the line budget.
+// Every row below that is not a company kind was decided by the lane that owns it, not by this
+// file. The table sat 22 kinds behind the vocabulary for months precisely because guessing on
+// another lane's behalf felt worse than leaving a hole -- so the question was routed to each
+// lane and answered with evidence. Two of the four sections carry a consequence a lane cannot
+// see from its own side, and both bit during that round:
+//
+//   needs-you and money NEVER collapse. A high-volume kind here buries the day.
+//   background ALWAYS collapses, and it collapses BEFORE the line budget is measured.
+//   progress collapses only AFTER, and as a whole -- so a high-volume kind in progress does not
+//   only collapse itself, it pushes every OTHER lane's progress into a count on the same day.
+//
+// That last clause is why `experiment.assigned` and `experiment.measured` are down in background
+// rather than up in progress with the other six experiment kinds: they are per-UNIT, not
+// per-experiment (`validate-experiment.mjs:118-119` require `unit_id`), so one live experiment is
+// an N-hundred-line stream. Group choice for a high-volume kind is a cross-lane side effect.
 const GROUPS = [
   // `policy.demoted` sits with the things that need a human. It is machine-derived and needs no
   // approval to happen -- which is exactly why it belongs here: authority dropping silently is
   // the one authority change nobody asked for. The incident it cites is already on this line;
   // what the incident cannot say is which grant was lost.
-  ["needs-you", ["approval.requested", "incident.raised", "policy.demoted"]],
+  //
+  // `outreach.replied` is deliberately NOT here, and the reasoning generalises: leads triage is
+  // fully automatic, and the one class of five that needs a human already emits
+  // `approval.requested` (`ingest.mjs:301`), which is on this line. Adding the parent kind would
+  // double-surface one demand and drag the other four classes -- including `bounce`, a
+  // `triage_class` rather than its own kind -- into the tier that never collapses.
+  //
+  // `slice.stuck` is two signals under one name: `backstop: fingerprint-3x` is machine-directed,
+  // `attempts-5` is addressed to a person. The table keys on kind, not payload, so the more
+  // severe reading wins. It has fired zero times to date, so never-collapsing costs nothing; if
+  // it ever fires at volume it is the first kind in the vocabulary needing payload-level routing.
+  ["needs-you", ["approval.requested", "incident.raised", "policy.demoted",
+                 "handoff.ready", "slice.stuck", "promotion.proposed", "meeting.booked"]],
+  // This is the money VIEW, not cash movement -- `revenue.simulated` is here and ADR-0026 marks
+  // it never in P&L, and `spend.reserved` is an earmark rather than a payment. `deal.won` belongs
+  // on those terms: it is the rarest and highest-value receipt the leads lane emits, and a
+  // `deal.won` with no matching `revenue.received` is an unpaid invoice visible in one glance --
+  // a reconciliation that only works while both sit in the same never-collapsing section.
+  // It renders as a bare line until its payload carries `amount` + `currency`; `amount_inr` is
+  // already paise (`validate-leads.mjs:307`), so that is a field-name gap in the leads lane's own
+  // ADR band, not a semantic one. A visibly incomplete money line announces the gap; a
+  // correctly-formatted progress line would hide it while under-ranking the event.
   ["money",     ["revenue.received", "revenue.simulated", "cost.incurred",
-                 "spend.reserved", "spend.released"]],
+                 "spend.reserved", "spend.released", "deal.won"]],
+  // `experiment.rolled_back` is here rather than in needs-you because ADR-0305 makes the machine
+  // propose-only in both directions: its payload carries a `commit_ref`, which exists only
+  // because a human already merged. The part that needed eyes fired earlier as `incident.raised`.
+  // Filing a closed loop in the section reserved for open ones is how people learn to skim it.
   ["progress",  ["kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
                  "ship.done", "run.completed", "decision.recorded", "council.verdict",
-                 "policy.level.changed"]],
-  ["background",["note.logged", "redaction.applied", "day.closed", "idea.captured"]],
+                 "policy.level.changed", "develop.started", "slice.done",
+                 "experiment.opened", "experiment.verdict", "experiment.promoted",
+                 "experiment.rolled_back", "experiment.closed", "council.outcome",
+                 "outreach.replied", "deal.lost", "constitution.adopted"]],
+  ["background",["note.logged", "redaction.applied", "day.closed", "idea.captured",
+                 "experiment.assigned", "experiment.measured",
+                 "lead.researched", "outreach.sent", "lead.suppressed", "metric.observed"]],
   // NOT a group anything routes to by name -- the catch-all for a vocabulary kind this file
   // does not know. `GROUP_OF.get` returned undefined for such a kind and the event was simply
   // skipped, and a brief that silently omits a kind reads exactly like a quiet day. That is the
   // failure mode the UNREADABLE LINES counter one screen down already exists to prevent.
   //
-  // ADR-0508's four kinds were the ones that exposed it, but they were not the only casualties:
-  // the table below is 22 kinds behind the closed vocabulary, and every `develop.*`, `slice.*`,
-  // `experiment.*` and leads-pipeline receipt has been dropped here since those lanes shipped.
-  // Grouping THOSE is their lanes' call, not this file's guess -- so they surface here, named,
-  // instead of vanishing. Renders last, never collapses.
+  // It should now be permanently EMPTY: every one of the closed 44 is assigned above, and the
+  // coverage test in `tests/policy-brief.bats` derives its list from `KINDS` and fails if a kind
+  // is added without a section. A lane extending the vocabulary gives it a home in the same
+  // change, which is the only version of this that does not rot -- the catch-all ran 22 kinds
+  // deep because a line saying "no group assigned" named a file but never named an owner.
+  // Renders last, and collapses with background (see the always-collapse tier below).
   ["ungrouped", []],
 ];
 const GROUP_OF = new Map();

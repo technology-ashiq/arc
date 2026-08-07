@@ -56,6 +56,52 @@ an unclosable bypass class → STOP.
 **Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
 inventory), which the owner has assigned to a separate session.**
 
+**Filed 2026-08-07 through `/arc-change` — all 22 ungrouped kinds get a section, and then a gate
+so the situation cannot recur.** The two entries below record the catch-all being given a budget;
+this is the follow-through the second of them left open. Classified a **bug** on the same grounds:
+the renderer's contract is to rank the day, and for exactly half the vocabulary it does not.
+
+**The assignments are not this lane's guesses.** The owner routed the question to each lane's own
+session and relayed three answers back — `develop` (4 kinds), `evolve` (10), `leads` (7), plus
+`constitution.adopted`, which is company-level and belongs to no lane. Every row below is that
+lane's call. Two guesses were overruled with evidence and both overrules are adopted:
+
+| Kind | Guessed | Lane's answer | The evidence that moved it |
+|---|---|---|---|
+| `outreach.replied` | `needs-you` | **`progress`** | Triage is fully automatic and `ingest.mjs:301` already emits `approval.requested` — a `needs-you` kind — for the one class of five that needs a human. Putting the parent kind there too double-surfaces one demand and drags the other four classes into the never-collapse tier with it. `bounce` is a `triage_class`, not its own kind, so one bad sending day would put twenty bounce receipts into the group that must never be buried |
+| `deal.won` | `money` (hedged) | **`money`** (hedge rejected) | The hedge framed `money` as cash that moved. `revenue.simulated` is already in that group and ADR-0026 marks it *never in P&L*, and `spend.reserved` is an earmark — so the section's real rule is the money **view**, not cash movement. A `deal.won` with no matching `revenue.received` is an unpaid invoice visible in one glance, and that reconciliation only works if both sit in the same never-collapsing section |
+
+`experiment.assigned` and `experiment.measured` went to `background` rather than `progress` for a
+reason worth keeping: they are **per-unit**, not per-experiment (`validate-experiment.mjs:118-119`
+require `unit_id`), so one live experiment is an N-hundred-line stream. `background` collapses
+before the line budget is measured and `progress` collapses after — so a high-volume kind in
+`progress` does not only collapse itself, it pushes `phase.closed`, `ship.done` and every other
+lane's progress into a count on the same day. Group choice for a high-volume kind is a cross-lane
+side effect, not a local preference.
+
+**Three claims in those replies were checked against the tree rather than taken:**
+
+| Claim | Source | Verdict |
+|---|---|---|
+| `metric.observed` is not in `KINDS` yet, so the assignment is advisory | evolve | **Wrong.** It is in the closed 44, via `LEADS_KINDS` (`validate-leads.mjs:44`, ADR-0400/0408). ADR-0308 made implementing it a no-go for *evolve*; the leads lane shipped it. `background` is adopted on evolve's volume reasoning, but the lane that may overrule it is `leads` |
+| The `ungrouped` entry still carries a comment saying it never collapses | evolve | **Right, and it is this lane's own defect** — left stale by PR #125, one line under the code that contradicts it. Fixed in the same change |
+| `amount_inr` is a non-negative integer in paise | leads | **Right** (`validate-leads.mjs:307`). Minor units, exactly what `moneyLine` reads — only the field *name* differs, so `deal.won` renders as a bare line in `money` until the leads lane widens the payload. That is their ADR band; not folded in here |
+| The progress collapse will systematically eat rare state-change kinds | develop | **Already handled.** The collapsed head names every distinct kind with its count, sorted — `progress: 13 (commit.done 12 · phase.closed 1)`, verified on a sandbox spine. Nothing is dropped |
+
+**Then the gate, which is the part that stops this recurring.** The coverage test in
+`tests/policy-brief.bats` was deliberately scoped to `POLICY_KINDS` when it was written, because a
+wider scope would have handed four other lanes a red test for a table this lane did not own. With
+every kind assigned that reason expires, so it widens to the full derived `KINDS`. A lane adding a
+kind now gives it a section in the same change or CI refuses — the obligation attached to the code
+rather than to a line in a brief nobody was assigned to read. That is the honest answer to *who is
+responsible for the catch-all*: until now, nobody, which is why it ran 22 kinds deep.
+
+`slice.stuck` carries a caveat worth recording for whoever hits it next: develop reports it is two
+signals under one name (`backstop: fingerprint-3x` is machine-directed, `attempts-5` is
+human-directed), the section table keys on kind rather than payload, and so the more severe reading
+wins. It has fired zero times to date, so a never-collapsing section costs nothing today. If it
+ever fires at volume, it is the first kind in the vocabulary that will need payload-level routing.
+
 **CLOSED 2026-08-07, merged as `6d3e3fb` (PR #125), main re-verified green by `workflow_dispatch`
 run `31169800528`, 19/19 jobs — the catch-all group had no line budget.** Filed through
 `/arc-change` and fixed the same day. Left in full below rather than deleted, because the defect is
