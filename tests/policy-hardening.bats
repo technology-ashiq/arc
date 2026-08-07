@@ -180,12 +180,20 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
 
 @test "WRITE ABSENCE ROW -- the positive control: the same writer does write when permitted" {
   # Without this the row above is satisfied by a policy-matrix that never writes anything at all,
-  # which is the same green from a deleted feature.
+  # which is the same green a deleted feature produces.
+  #
+  # The target is INSIDE the repo, for the same Windows reason the `tmp()` helper above already
+  # is. `$BATS_TEST_TMPDIR` on the Windows runner is under `C:/Users/RUNNER~1/...` -- an 8.3 short
+  # name -- and the resource guard refuses any path with a short component, because a short name
+  # can alias a guarded path. The guard was right and the fixture was wrong.
   cd "$ARC_ROOT"
-  local out="$BATS_TEST_TMPDIR/matrix.json"
-  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json --out "$out"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ -s "$out" ] || { echo "the permitted write produced no file -- the absence above proves nothing"; false; }
+  local d; d="$(mktemp -d "$ARC_ROOT/.pol-tmp-XXXXXX")"
+  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json --out "$d/matrix.json"
+  local status_seen="$status" output_seen="$output"
+  local wrote=0; [ -s "$d/matrix.json" ] && wrote=1
+  rm -rf "$d"
+  [ "$status_seen" -eq 0 ] || { echo "$output_seen"; false; }
+  [ "$wrote" -eq 1 ] || { echo "the permitted write produced no file -- the absence above proves nothing"; false; }
 }
 
 @test "the shipped policy lints clean and prints its DERIVED table" {

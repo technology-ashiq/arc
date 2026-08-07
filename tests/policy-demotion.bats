@@ -82,7 +82,10 @@ _ask() {
   node "$D/.claude/scripts/hq/policy-hook.mjs" < "$BATS_TEST_TMPDIR/payload.json"
 }
 
-_kinds() { cat "$ARC_SPINE_ROOT/events/"*.jsonl 2>/dev/null | grep -o '"kind":"[^"]*"' | sed 's/.*://' | tr -d '"' | sort | tr '\n' ' '; }
+# The trailing separator is stripped HERE, not left to the caller. `$( )` strips trailing
+# NEWLINES, not spaces -- so `tr '\n' ' '` leaves one behind that survives command substitution,
+# and an expected value written without it can never match.
+_kinds() { cat "$ARC_SPINE_ROOT/events/"*.jsonl 2>/dev/null | grep -o '"kind":"[^"]*"' | sed 's/.*://' | tr -d '"' | sort | tr '\n' ' ' | sed 's/ *$//'; }
 _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l | tr -d " "; }
 
 @test "AN OVERREACH AT EXECUTE COSTS A LEVEL, and both receipts land sealed" {
@@ -92,8 +95,6 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   [[ "$output" == *"outside the declared write roots"* ]] || { echo "$output"; false; }
   [[ "$output" == *"demoted L2 -> L1"* ]] || { echo "no demotion reported: $output"; false; }
   # READ IT BACK. An emitter can exit 0 having quarantined everything it wrote.
-  # No trailing space in the expected value: `$( )` strips it, and an expectation that can never
-  # match is a red test that teaches nothing.
   [ "$(_kinds)" = "incident.raised policy.demoted policy.level.changed" ] || {
     echo "spine holds: $(_kinds)"; false; }
   [ "$(_quarantined)" = "0" ] || { echo "receipts were quarantined"; false; }
@@ -164,16 +165,28 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   # ADR-0505 at the EMITTER, not only in the reducer: authority is keyed per (kind, capability)
   # pair, so the bite must not touch a sibling that did nothing wrong.
   #
-  # Asserted through the reducer rather than by making a network call. `network` carries a level
-  # and no domain allowlist, so at L2 every URL is denied for an unrelated reason -- and that deny
-  # would itself be an overreach and demote network, which would make this test assert the
-  # opposite of what it reads. The cap is the fact; a second tool call is a second experiment.
-  _root; _raise write L2; _raise network L2
+  # Asserted through the reducer, not by making a network call: `network` carries a level and no
+  # domain allowlist, so at L2 every URL is denied for an unrelated reason -- and THAT deny would
+  # itself be an overreach and demote network, making this test assert the opposite of what it
+  # reads. The cap is the fact; a second tool call is a second experiment.
+  #
+  # And the siblings are not raised first, because they cannot be: `network` and `shell` have an
+  # L1 CEILING in the shipped policy, so a promotion to L2 is clamped straight back to L1 and the
+  # fixture would be measuring a grant it never got. (`_raise` catches that -- it did.) Their
+  # levels are captured before the bite and compared after, which is the property either way.
+  _root; _raise write L2
+  local net_before shell_before; net_before="$(_level network)"; shell_before="$(_level shell)"
   run _ask '{"tool_name":"Write","tool_input":{"file_path":"/etc/nope.txt"}}'
   [ "$status" -eq 2 ]
   [[ "$output" == *"demoted L2 -> L1"* ]] || { echo "$output"; false; }
-  [ "$(_level write)" = "L1" ]   || { echo "write did not drop: $(_level write)"; false; }
-  [ "$(_level network)" = "L2" ] || { echo "a write incident took network with it: $(_level network)"; false; }
+  [ "$(_level write)" = "L1" ] || { echo "write did not drop: $(_level write)"; false; }
+  [ "$(_level network)" = "$net_before" ]   || { echo "network moved: $net_before -> $(_level network)"; false; }
+  [ "$(_level shell)" = "$shell_before" ]   || { echo "shell moved: $shell_before -> $(_level shell)"; false; }
+  # And the receipt itself names one capability, so no sibling was demoted silently either.
+  [ "$(cat "$ARC_SPINE_ROOT/events/"*.jsonl | grep -c '"kind":"policy.demoted"')" = "1" ] || {
+    echo "more than one demotion was written"; false; }
+  cat "$ARC_SPINE_ROOT/events/"*.jsonl | grep '"kind":"policy.demoted"' | grep -q '"capability":"write"' || {
+    echo "the demotion does not name write"; false; }
 }
 
 @test "the bite is SELF LIMITING -- repeating the overreach stops costing levels" {
