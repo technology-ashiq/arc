@@ -50,8 +50,38 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-03 | approach-sketch COUNT (develop-lint) | arc-develop Cycle 6, phases 05-08 | **YES** — fired on phase-01 slice 01, whose title names `develop-lint.mjs` | **unadjudicated** — the slice predates the check by four phases, so the firing is retroactive: neither a clean fire nor a false one. It has never yet fired on a slice written while the check existed |
 | 2026-08-03 | self-declared-number (develop-lint) | arc-develop Cycle 6, phases 05-08 | no — silent across 55 slices | **n/a — not counted as a clean run.** Same-author silence on ledgers written against the check, which this file already says must not be scored as accuracy |
 | 2026-08-03 | tier-floor (develop-lint) | arc-develop Cycle 6, phases 05-08 | no — silent; no `kind: ui` slice exists to test it | **n/a — not counted.** The floor it exists to enforce was never reachable |
+| 2026-08-07 | birth-rule (kickoff-lint) | registered at birth, policy Phase 03 | not yet | — |
+| 2026-08-07 | birth-rule (kickoff-lint) | arc's own tree, all 8 lanes | no — silent on every lane | **n/a — NOT counted as 8 clean runs, and not as one.** See below |
 
-### develop-lint's two trial groups (ADR-0101)
+### `birth-rule` — why its silence proves nothing yet (policy Phase 03, REQ-07)
+
+The gate fires when a `processes/*.process.yaml` has no `process:NAME` row in `hq.policy.yaml`.
+Run across all eight lanes on 2026-08-07 it printed **nothing**, and that is the correct output:
+all three processes carry rows. It is also **worthless as promotion evidence**, for the reason
+this file already states twice — same-author silence on a tree written against the check is not
+accuracy, it is tautology. Counting eight silent lanes as eight clean runs would be the most
+expensive misreading available here.
+
+**What a real clean run looks like for this gate:** a process file lands in `processes/` in some
+*other* lane's change, and the gate fires on it, and the row it asked for turns out to be the
+right thing to add. Until a process is born after this check existed, the count stays at zero
+however many times the lint is run.
+
+**Fixture-proven: yes**, and by more than the criteria ask. `tests/kickoff-lint.bats` carries nine
+`[birth-rule]` cases including both directions of the `name:`-beats-filename rule, an unparseable
+policy file, and a CI control that runs against the real tree. Two fresh adversarial agents on
+different surfaces additionally built mutant `kickoff-lint` copies with the check deleted, to find
+tests that stay green when the gate is gone.
+
+**A tension worth recording for whoever judges promotion.** By the principle stated below for
+`develop-lint` — structural checks BLOCK from v1, only heuristics WARN-first, because false-block
+risk lives in pattern matching and never in "did the file parse" — this gate is **structural**. A
+file either has a row or it does not; there is no judgement in it and no false positive to protect
+against. It is in TRIAL anyway, and not for the usual reason: `kickoff-lint.mjs` is run by every
+lane and is **synced into consumer repos with no policy engine**, so the blast radius of a wrong
+FAIL is a sibling lane's kickoff breaking over a file it never touched. That is a
+consequence-of-being-wrong argument, not a likelihood-of-being-wrong one, and it is the whole
+reason `/arc-retro` should think twice before promoting a check that looks trivially safe.
 
 `develop-lint` ships its **structural** checks as real BLOCKs from v1 and only its **heuristic**
 checks WARN-first. The line is drawn on a principle, not a preference: false-block risk lives in

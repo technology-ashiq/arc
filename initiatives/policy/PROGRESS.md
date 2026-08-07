@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-policy (born 2026-08-06)
-phase: 03 — not started (00, 01, 02 all CLOSED)
+phase: 03 — in progress (00, 01, 02 all CLOSED)
 appetite: 7d
-burn: 4.5d
+burn: 4.6d
 blocked-on: —
 depends-on: —
 
@@ -53,8 +53,80 @@ an unclosable bypass class → STOP.
 
 ## Now
 
-**Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
-inventory), which the owner has assigned to a separate session.**
+**Current position: Phases 00, 01 and 02 are CLOSED. Phase 03 is IN PROGRESS in this session and
+Phase 04 follows on the same branch — the owner reassigned both here on 2026-08-07, superseding
+the earlier note that Phase 03 belonged to a separate session. Nothing merges until 04 is done:
+one branch, `feat/arc-policy-phase-03-04`, PR #130 held as a draft so CI runs on every push
+without landing a half-finished security phase on main.**
+
+**PHASE 03 — the birth rule is built and the cap inventory is taken.**
+`kickoff-lint` carries `[birth-rule]`, WARN-first in TRIAL: a `processes/*.process.yaml` with no
+`process:NAME` row in `hq.policy.yaml` is flagged. `policy-lint` already FAILed the *other*
+direction of that relation — a row naming a process that does not exist — and nobody had ever
+walked it this way, so a process could land ungoverned and no gate said a word. Deny-by-default
+means such a module is read-only at L1, so this was never an escalation; it was a **silent
+capability gap**, the module quietly unable to do what it was written for.
+
+The resolution now lives once, in `.claude/scripts/hq/lib/policy/subjects.mjs`, and `policy-lint`
+imports the function it used to keep private. Two gates reading one relation from two files is
+the drift POL-D forbids, and its failure mode is the quiet one: both keep passing while the pair
+of them stops covering the middle.
+
+There is **no date and no git-history boundary** for "born after policy went live". All three
+processes already carry rows, so the set is complete today and any new process without one flags
+on arrival — no clock, and it survives a shallow CI checkout where `git log --diff-filter=A`
+returns nothing.
+
+**The gate may never FAIL, and the reason is not the usual one.** `kickoff-lint.mjs` is run by
+every lane and is synced into consumer repos that have no policy engine at all, so a wrong FAIL
+breaks a sibling lane's kickoff over a file it never touched. By the structural-vs-heuristic
+principle in `docs/trial-ledger.md` this check would qualify to BLOCK from v1 — a file either has
+a row or it does not. It is in TRIAL on blast radius, not on false-positive risk, and that
+distinction is written into the ledger so `/arc-retro` does not promote it as trivially safe.
+
+**Its silence today is worth nothing as evidence.** The gate printed nothing across all eight
+lanes, which is correct and also tautological: it is same-author silence on a tree written
+against the check, which `docs/trial-ledger.md` already refuses to score as accuracy twice over.
+The ledger records those eight runs as **not counted** — the promotion count stays at zero until
+a process is born in some other lane's change and the gate fires on it.
+
+**THE INVENTORY'S ONE FINDING, AND IT CONTRADICTS THIS PLAN.**
+`initiatives/policy/evidence/phase-03/cap-inventory.md` — 53 cited `file:line` rows reopened and
+checked against the claim (53 matched, 0 missing), and the three load-bearing *negatives*
+re-derived by grep rather than accepted, because a negative is where a survey is weakest: no
+driver reads the budget it is handed, so `--budget inr` is a post-hoc stop rather than an
+authorization and the money is already spent when `arc-run.mjs:438` checks; `concurrencyRefusal`
+has no production caller at all; and the council `Seats: 6 max. Model calls: 7 max.` envelope has
+no counter anywhere, enforced only by the agent choosing to obey.
+
+REQ-07 defers migration on the stated ground that **no live cap-bearing module exists**. That
+premise is false. `leads` is LIVE and ships the whole shape under ADR-0403 — ceilings frozen in
+code, floors because *lowering* a window weakens a cap, env and flag overrides refused outright,
+and `guardSend` throwing before the provider is contacted, reached from `sequencer.mjs:83` in
+production rather than a test.
+
+**The deferral holds anyway, and the reopening condition is now this.** REQ-07's own words are
+that migration "reopens as new work the day a real module exists, never hunted for inside this
+cycle's 0.25 days". The day has arrived, so the deferral stops resting on *"there is nothing to
+migrate"* and starts resting on *"this is out of budget"* — a different and more honest sentence.
+**What reopens it:** a new cycle, scoped to migrating `.claude/scripts/leads/lib/caps.mjs` and
+`guard.mjs` onto the policy engine, owned by the `leads` lane and not by this one —
+`initiatives/leads/**` is do-not-touch here, and ADR-0403 is their band. It is not conditional on
+any further trigger; the trigger fired.
+
+**Retired cap paths: none.** Nothing in the four surveyed areas is superseded or dead, so nothing
+is attic'd (A10, ADR-0023). `concurrencyRefusal` is the nearest candidate and is explicitly **not**
+retired — it is unborn rather than dead, never wired in the first place, and atticing another
+lane's un-wired cap is not this lane's call.
+
+**A harness defect found in passing, recorded rather than fixed.** `/arc-develop next` resolves
+its ledger with `findLedger`, which returns the FIRST `phase-NN-tasks.md` holding any unproven
+slice — for this lane that is phase 01, whose ledger was never filled because 01 and 02 were
+built before the harness was used. So `next` is permanently pinned to a CLOSED phase, and it
+wrote a Context Pack line into that closed phase's ledger before I reverted it. Phase 03 was
+driven by editing `phase-03-tasks.md` directly. Fixing `develop.mjs` is the engine lane's call
+and is not being done mid-phase from here; backfilling 01 and 02's ledgers to unstick it would
+be fabricating evidence for closed phases, which is worse than the bug.
 
 **CLOSED 2026-08-07, merged as `cf82928` (PR #128), main re-verified green by `workflow_dispatch`
 run `31182279167`, 19/19 jobs — all 22 ungrouped kinds now hold a section, and the coverage gate
