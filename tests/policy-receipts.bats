@@ -20,10 +20,18 @@ _node() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 PRE='const { validateEvent, KINDS } = await import("./.claude/scripts/hq/lib/validate.mjs");
 const { POLICY_KINDS, policyIdem } = await import("./.claude/scripts/hq/lib/validate-policy.mjs");
 const H = "0".repeat(64), U = "01JQ8XZ9K0ABCDEFGH00000009";
-const mk = (kind, payload, over = {}) => ({ id:"01JQ8XZ9K0ABCDEFGH00000001", v:1,
-  ts:"2026-08-06T21:30:00+05:30", idem: policyIdem(kind, payload), actor:"human:ashiq",
-  process:"policy-fixture@1.0.0", model:null, venture:"arc", run_id:"r-t", kind, payload,
-  outcome:"ok", cost:null, evidence:null, supersedes:null, ...over });
+// `idem` is computed LAZILY, and skipped entirely when the caller supplies one. policyIdem knows
+// only the four policy kinds and throws BAD_POLICY on anything else -- so building a deliberately
+// UNKNOWN kind through this helper died in the builder, and the test that meant to prove the
+// validator says UNKNOWN_KIND was reading the fixture factory instead. Assert on the thing under
+// test, never on the scaffolding that reaches it.
+const mk = (kind, payload, over = {}) => {
+  const has = Object.prototype.hasOwnProperty.call(over, "idem");
+  return { id:"01JQ8XZ9K0ABCDEFGH00000001", v:1, ts:"2026-08-06T21:30:00+05:30",
+    idem: has ? over.idem : policyIdem(kind, payload), actor:"human:ashiq",
+    process:"policy-fixture@1.0.0", model:null, venture:"arc", run_id:"r-t", kind, payload,
+    outcome:"ok", cost:null, evidence:null, supersedes:null, ...over };
+};
 const LVL = { action_kind:"session:interactive", capability:"write", correlation:"r",
   decision_ref:U, from_level:"L1", policy_hash:H, to_level:"L2",
   trial_ledger_ref:"docs/trial-ledger.md#t" };
@@ -50,9 +58,10 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
   # anywhere hardcodes the total.
   run _node "$PRE
     const n = KINDS.length;
-    console.log(refuses(() => validateEvent(mk('not.akind', {}))) === 'UNKNOWN_KIND' ? 'refused:' + n : 'ACCEPTED');"
+    const code = refuses(() => validateEvent(mk('not.akind', {}, { idem: H })));
+    console.log(code === 'UNKNOWN_KIND' ? 'refused:' + n : code);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == refused:* ]]
+  [[ "$output" == refused:* ]] || { echo "expected UNKNOWN_KIND, got: $output"; false; }
 }
 
 @test "each of the four well formed receipts is accepted" {

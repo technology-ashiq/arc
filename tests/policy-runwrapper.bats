@@ -22,6 +22,33 @@ load 'test_helper'
 
 _node() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 
+# A copy of the repo's own policy in which the kind `process:denied` exists and its write is L0.
+#
+# This was two `sed` expressions -- a `0,/re/` range plus an empty `s//.../` regex -- and both are
+# traps. BSD sed rejects a line-0 address outright, and `//` means "the last regex USED", which on
+# CI resolved to the RENAME expression rather than the range's. The write line was therefore never
+# lowered: `process:denied` kept its L2 grant, the gate correctly permitted the run, and the two
+# end-to-end tests below reported a fail-open that did not exist. A fixture that quietly fails to
+# deny is a pass generator pointed the other way -- it makes a WORKING gate look broken, and next
+# time it will make a broken one look fine.
+#
+# One awk pass, no implicit state, and it asserts its own output before any caller trusts it.
+_denying_policy() {
+  awk '
+    /^  "process:kickoff-plan":/ { print "  \"process:denied\":"; inblock = 1; next }
+    /^  [^ ]/                    { inblock = 0 }
+    inblock && /^    write:/     { print "    write: { level: L0 }"; next }
+    { print }
+  ' "$ARC_ROOT/hq.policy.yaml" > "$1"
+  grep -q '"process:denied":' "$1" || {
+    echo "fixture policy carries no process:denied kind -- the rename did not apply"; return 1; }
+  # SCOPED to that kind's own block. A bare `grep 'level: L0'` over the whole file is satisfied by
+  # process:commit-msg-draft, which is already L0 -- an assertion that holds whether or not the
+  # edit landed, which is the same class of nothing-measured this helper exists to remove.
+  grep -A4 '"process:denied":' "$1" | grep -q 'write: { level: L0 }' || {
+    echo "fixture policy does not deny process:denied/write -- the L0 edit did not apply"; return 1; }
+}
+
 PRE='const G = await import("./.claude/scripts/hq/lib/policy/run-gate.mjs");
 const { parseYamlSubset } = await import("./.claude/scripts/engine/yaml-subset.mjs");
 const fs = await import("node:fs");
@@ -222,9 +249,7 @@ tools:
 output:
   type: object
 EOF
-  sed -e 's/"process:kickoff-plan":/"process:denied":/' \
-      -e '0,/    write: { level: L2, roots: \["initiatives\/\*\*", "docs\/adr\/\*\*"\] }/s//    write: { level: L0 }/' \
-      "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
+  _denying_policy "$d/hq.policy.yaml" || return 1
 
   # A driver that writes a marker if it ever starts. Its absence is the assertion.
   cat > "$d/.claude/scripts/engine/drivers/claude-code.sh" <<'EOF'
@@ -370,13 +395,19 @@ tools:
 output:
   type: object
 EOF
-  sed -e 's/"process:kickoff-plan":/"process:denied":/' \
-      -e '0,/    write: { level: L2, roots: \["initiatives\/\*\*", "docs\/adr\/\*\*"\] }/s//    write: { level: L0 }/' \
-      "$ARC_ROOT/hq.policy.yaml" > "$d/hq.policy.yaml"
+  _denying_policy "$d/hq.policy.yaml" || return 1
 
-  run env ARC_DRIVER_FAKE='{"ok":true}' bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run denied '{}' ''
+  # A REAL recording. ARC_DRIVER_FAKE names a DIRECTORY holding <process>.json, and it was being
+  # handed a JSON document -- so the driver died on its own fake-contract check and the exit-code
+  # assertion below passed for a reason that had nothing to do with policy. With a valid recording
+  # the fixture is a negative control: delete the gate and this run SUCCEEDS, so the test fails.
+  mkdir -p "$d/fake"
+  echo '{"ok":true}' > "$d/fake/denied.json"
+
+  run env ARC_DRIVER_FAKE="$d/fake" bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run denied '{}' ''
   [ "$status" -ne 0 ] || { echo "the driver ran a denied process when invoked directly"; echo "$output"; false; }
   [[ "$output" == *"policy denied"* ]] || { echo "no policy denial from the direct driver call: $output"; false; }
+  [[ "$output" != *'"ok":true'* ]] || { echo "the denied driver still emitted its recording: $output"; false; }
 }
 
 @test "BYPASS -- every driver funnels through the gated entry point" {
@@ -393,23 +424,33 @@ EOF
     echo "runDriver does not consult policy"; false; }
 }
 
-@test "BYPASS -- a driver in a tree with no policy library still runs, and says so" {
+@test "BYPASS -- a driver in a tree with no policy library still runs" {
   # An older consumer repo or a partial install has no policy library. Refusing there would
-  # brick the driver rather than police it -- same contract arc-run keeps for a root with no
-  # policy file, announced the same way.
+  # brick the driver rather than police it -- the same contract arc-run keeps for a root with no
+  # policy file.
+  #
+  # THE FIXTURE WAS THE BUG. It copied three driver files into an otherwise empty tree, so the
+  # driver died on a missing `yaml-subset.mjs` long before policy was ever consulted -- and the
+  # sole assertion, "the output does not say policy denied", is satisfied by any crash. A green
+  # test measuring a stack trace, which is exactly the shape testing.md names. The tree now has
+  # everything EXCEPT the policy library, which is the condition the test claims to describe, and
+  # a positive assertion proves the driver reached the end.
   local d; d="$(mktemp -d)"
-  mkdir -p "$d/processes" "$d/.claude/scripts/engine/drivers"
-  cp "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.sh" \
-     "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.mjs" \
-     "$ARC_ROOT/.claude/scripts/engine/drivers/common.mjs" "$d/.claude/scripts/engine/drivers/"
-  run env ARC_DRIVER_FAKE='{"ok":true}' bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run anything '{}' ''
-  # It must NOT die on a missing policy module -- whatever else it says about the fake.
+  mkdir -p "$d/.claude" "$d/fake"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  # Moved rather than deleted: the point is a tree where the module cannot be imported.
+  mv "$d/.claude/scripts/hq/lib/policy" "$d/policy-parked"
+  echo '{"ok":true}' > "$d/fake/anything.json"
+
+  run env ARC_DRIVER_FAKE="$d/fake" bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run anything '{}' ''
+  [ "$status" -eq 0 ] || { echo "a driver with no policy library did not run: $output"; false; }
+  [[ "$output" == *'"ok":true'* ]] || { echo "the driver produced no response: $output"; false; }
   [[ "$output" != *"policy denied"* ]] || { echo "a tree with no policy library was denied: $output"; false; }
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 27 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 27 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 28 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 28 -- a @test was silently dropped"
     false
   }
 }
