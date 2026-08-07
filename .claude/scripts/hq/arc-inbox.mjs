@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { SpineError, ULID_RE, sha256Hex } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
+import { isPromotionRequest } from "./lib/validate-policy.mjs";
 import { query } from "./spine.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -46,6 +47,15 @@ async function listInbox(root) {
     const what = typeof p.what === "string" ? p.what : "";
     const gate = typeof p.gate === "string" ? p.gate : "?";
     process.stdout.write(`${e.event.id}  ${what}  (${gate})  ${e.event.venture}\n`);
+    // A PROMOTION is the one approval whose sentence is not enough to decide on. Which pair,
+    // how far, and on what evidence are all validated fields (ADR-0508's promotion profile), so
+    // putting them on the screen where the decision is made costs nothing and is the difference
+    // between weighing a request and rubber-stamping it. A4: trust is re-earned, never argued
+    // back -- a request with no citation in front of the human is a nudge wearing a receipt.
+    if (isPromotionRequest(e.event))
+      process.stdout.write(
+        `    policy  ${p.action_kind}/${p.capability}  ${p.from_level} -> ${p.to_level}` +
+        `  evidence ${p.trial_ledger_ref}\n`);
   }
   return 0;
 }

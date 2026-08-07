@@ -28,6 +28,7 @@ import {
 import { validateEvent } from "./lib/validate.mjs";
 import { experimentIdem, isExperimentKind } from "./lib/validate-experiment.mjs";
 import { leadsIdem, isLeadsKind } from "./lib/validate-leads.mjs";
+import { policyIdem, isPolicyKind } from "./lib/validate-policy.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
@@ -107,6 +108,11 @@ function safeLeadsIdem(kind, payload) {
   try { return leadsIdem(kind, payload); } catch { return null; }
 }
 
+// And for the four authority receipts (ADR-0508). Same reason, same shape.
+function safePolicyIdem(kind, payload) {
+  try { return policyIdem(kind, payload); } catch { return null; }
+}
+
 // ---------- event construction ----------
 function synthesize(kind, flags, { deriveIdem }) {
   const payload = flags["payload-file"]
@@ -171,6 +177,23 @@ function synthesize(kind, flags, { deriveIdem }) {
     // A malformed payload cannot produce an idem at all; let validateEvent report the real
     // field error rather than dying here on a missing key.
     idem = safeExperimentIdem(kind, payload, venture, flags.supersedes ?? null) ?? sha256Hex(`${contentPre}|${ms}`);
+  } else if (isPolicyKind(kind)) {
+    // THE FOUR AUTHORITY RECEIPTS (ADR-0508), and the branch whose absence made them
+    // unemittable. `validateEvent` re-derives `policyIdem` and refuses a mismatch, so without a
+    // derivation HERE the default `sha256(contentPre|ms)` never matched and every single policy
+    // receipt was REJECTED and quarantined -- the vocabulary was extended, the payload
+    // validators were written and the promotion module built the events, and nothing could
+    // actually write one to the spine. Invisible because every test drove the modules directly
+    // and none drove the emitter, which is why phase-02's verification plan asks for the chain
+    // to be read back off the spine rather than from a return value.
+    //
+    // `--idem` is REFUSED, for the reason the two branches above refuse it: the emit path
+    // otherwise honours a caller idem, so an attacker who can emit could pre-claim a real
+    // receipt's stable key and the genuine receipt would then collide on DUP_IDEM and be
+    // silently lost. A demotion that vanishes is a cap that never drops.
+    if (flags.idem !== undefined)
+      throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
+    idem = safePolicyIdem(kind, payload) ?? sha256Hex(`${contentPre}|${ms}`);
   } else {
     idem = deriveIdem ? sha256Hex(contentPre) : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
   }

@@ -26,21 +26,63 @@ const BOOL_FLAGS = new Set(["full"]);
 // and money are never collapsed; background then progress collapse to counts when a day
 // overflows the line budget.
 const GROUPS = [
-  ["needs-you", ["approval.requested", "incident.raised"]],
-  ["money",     ["revenue.received", "revenue.simulated", "cost.incurred"]],
+  // `policy.demoted` sits with the things that need a human. It is machine-derived and needs no
+  // approval to happen -- which is exactly why it belongs here: authority dropping silently is
+  // the one authority change nobody asked for. The incident it cites is already on this line;
+  // what the incident cannot say is which grant was lost.
+  ["needs-you", ["approval.requested", "incident.raised", "policy.demoted"]],
+  ["money",     ["revenue.received", "revenue.simulated", "cost.incurred",
+                 "spend.reserved", "spend.released"]],
   ["progress",  ["kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
-                 "ship.done", "run.completed", "decision.recorded", "council.verdict"]],
+                 "ship.done", "run.completed", "decision.recorded", "council.verdict",
+                 "policy.level.changed"]],
   ["background",["note.logged", "redaction.applied", "day.closed", "idea.captured"]],
+  // NOT a group anything routes to by name -- the catch-all for a vocabulary kind this file
+  // does not know. `GROUP_OF.get` returned undefined for such a kind and the event was simply
+  // skipped, and a brief that silently omits a kind reads exactly like a quiet day. That is the
+  // failure mode the UNREADABLE LINES counter one screen down already exists to prevent.
+  //
+  // ADR-0508's four kinds were the ones that exposed it, but they were not the only casualties:
+  // the table below is 22 kinds behind the closed vocabulary, and every `develop.*`, `slice.*`,
+  // `experiment.*` and leads-pipeline receipt has been dropped here since those lanes shipped.
+  // Grouping THOSE is their lanes' call, not this file's guess -- so they surface here, named,
+  // instead of vanishing. Renders last, never collapses.
+  ["ungrouped", []],
 ];
 const GROUP_OF = new Map();
 for (const [g, kinds] of GROUPS) for (const k of kinds) GROUP_OF.set(k, g);
 
-// Money is stored in MINOR units (paise); a receipt shows major.minor. Non-money lines are
-// just the kind -- the group + its count is the signal; per-event detail lives in the feed.
+// Money is stored in MINOR units (paise); a receipt shows major.minor.
 function moneyLine(ev) {
   const p = ev.payload || {};
   if (Number.isInteger(p.amount) && typeof p.currency === "string")
     return `  ${ev.kind}  ${p.currency} ${Math.floor(p.amount / 100)}.${String(p.amount % 100).padStart(2, "0")}  ${ev.venture}`;
+  // A release carries no amount -- it points at the reservation it frees. WHO decided nothing
+  // was charged is the fact that matters: `policy` and `provider_attested_no_charge` are
+  // different claims, and the second rests on a provider's word (ADR-0508). An auditor must be
+  // able to tell them apart without a second query.
+  if (typeof p.released_on === "string")
+    return `  ${ev.kind}  released_on=${p.released_on}  ${ev.venture}`;
+  return `  ${ev.kind}`;
+}
+
+// An authority change with no pair and no direction on it is a notification, not a receipt.
+// Both policy kinds carry (action_kind, capability, from_level, to_level) by validator, so the
+// line is total for them.
+function authorityLine(ev) {
+  const p = ev.payload || {};
+  if (typeof p.action_kind === "string" && typeof p.capability === "string")
+    return `  ${ev.kind}  ${p.action_kind}/${p.capability}  ${p.from_level} -> ${p.to_level}`;
+  return `  ${ev.kind}`;
+}
+
+const AUTHORITY_KINDS = new Set(["policy.level.changed", "policy.demoted"]);
+
+// Non-money, non-authority lines are just the kind -- the group and its count are the signal,
+// and per-event detail lives in the feed.
+function eventLine(ev, group) {
+  if (group === "money") return moneyLine(ev);
+  if (AUTHORITY_KINDS.has(ev.kind)) return authorityLine(ev);
   return `  ${ev.kind}`;
 }
 
@@ -68,8 +110,10 @@ export function render(day, events, torn, { full = false } = {}) {
 
   const buckets = new Map(GROUPS.map(([g]) => [g, []]));
   for (const e of events) {
-    const g = GROUP_OF.get(e.event.kind);
-    if (g) buckets.get(g).push(e.event); // every closed-vocabulary kind maps to a group
+    // Fall THROUGH to ungrouped, never skip. The old form was `if (g) push`, and the comment
+    // beside it asserted that every closed-vocabulary kind maps to a group -- true when it was
+    // written and false the moment ADR-0508 added four.
+    buckets.get(GROUP_OF.get(e.event.kind) || "ungrouped").push(e.event);
   }
   const collapsed = new Set();
 
@@ -82,7 +126,12 @@ export function render(day, events, torn, { full = false } = {}) {
       const parts = [...c.keys()].sort().map((k) => `${k} ${c.get(k)}`).join(" · ");
       return [`${g}: ${evs.length} (${parts})`];
     }
-    return [`${g} (${evs.length})`, ...evs.map((ev) => (g === "money" ? moneyLine(ev) : `  ${ev.kind}`))];
+    // The catch-all says why it is not empty. A count under a name nobody recognises is a
+    // puzzle; this is an instruction.
+    const head = g === "ungrouped"
+      ? `ungrouped (${evs.length})  — no group assigned in arc-brief.mjs`
+      : `${g} (${evs.length})`;
+    return [head, ...evs.map((ev) => eventLine(ev, g))];
   };
 
   const assemble = () => {
