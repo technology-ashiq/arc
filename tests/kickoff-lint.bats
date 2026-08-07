@@ -412,7 +412,8 @@ mkproc() {
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[birth-rule]"* ]]
+  [[ "$output" == *"no processes/ in this tree"* ]]   # POSITIVE: the check ran and said so
+  [[ "$output" != *"WARN  [birth-rule]"* ]]
 }
 
 @test "birth-rule: processes without the law WARNs that they are ungoverned" {
@@ -435,7 +436,8 @@ mkproc() {
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[birth-rule]"* ]]
+  [[ "$output" == *"holds 0 process file(s)"* ]]      # POSITIVE: it looked, and found none
+  [[ "$output" != *"WARN  [birth-rule]"* ]]
 }
 
 @test "birth-rule: a process with no policy row WARNs and names the file" {
@@ -456,7 +458,9 @@ mkproc() {
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[birth-rule]"* ]]
+  [[ "$output" == *"checked 1 process(es)"* ]]        # POSITIVE: it examined the file
+  [[ "$output" == *"0 ungoverned"* ]]
+  [[ "$output" != *"WARN  [birth-rule]"* ]]
 }
 
 @test "birth-rule: a governed name: cannot launder an ungoverned filename" {
@@ -541,7 +545,12 @@ mkproc() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"[birth-rule]"* ]]
   [[ "$output" == *"not a readable directory"* ]]
-  [[ "$output" != *"ENOTDIR"* ]]                         # not a leaked stack trace
+  [[ "$output" == *"NOT checked"* ]]                     # POSITIVE: it reports the state it hit
+  # A leaked STACK TRACE is the thing to exclude, not the errno: the message quotes the OS error
+  # deliberately, and the first version of this assertion banned the substring "ENOTDIR" and so
+  # failed on all three legs against a correct message.
+  [[ "$output" != *"at readdirSync"* ]]
+  [[ "$output" != *"node:internal"* ]]
 }
 
 @test "birth-rule: a nested directory under processes/ is reported, not missed" {
@@ -583,7 +592,9 @@ mkproc() {
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[birth-rule]"* ]]
+  [[ "$output" == *"checked 1 process(es)"* ]]        # POSITIVE: unreadable, still examined
+  [[ "$output" == *"0 ungoverned"* ]]
+  [[ "$output" != *"WARN  [birth-rule]"* ]]
 }
 
 @test "birth-rule: an unparseable POLICY file WARNs and never crashes the lint" {
@@ -605,7 +616,66 @@ mkproc() {
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[birth-rule]"* ]]
+  [[ "$output" == *"holds 0 process file(s)"* ]]      # POSITIVE: read the dir, matched none
+  [[ "$output" != *"WARN  [birth-rule]"* ]]
+}
+
+@test "birth-rule: a processes/ holding ONLY a subdirectory is not silent" {
+  # Was completely silent: the empty-list branch short-circuited before the non-file loop, so
+  # the warning added for exactly this shape only appeared when an ordinary process file also
+  # existed. arc-run --process sub/x still resolves through it.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkdir -p "$TMP/processes/sub"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"processes/sub is not a regular file"* ]]
+  [[ "$output" == *"holds 0 process file(s)"* ]]
+}
+
+@test "birth-rule: a case-variant processes directory is reported, not skipped" {
+  # existsSync is not an identity check. A directory committed as Processes/ is opened by
+  # Windows and macOS and missed by Linux, so the same commit produced a different verdict per
+  # CI leg -- silence on ubuntu, a warning on the others.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkdir -p "$TMP/Processes"
+  printf 'name: sneaky
+version: 1
+' > "$TMP/Processes/sneaky.process.yaml"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"only case-insensitively exists here"* ]]
+  [[ "$output" == *"NOT checked"* ]]
+}
+
+@test "birth-rule: policy rows with no processes/ directory are reported" {
+  # Deleting processes/ disarmed BOTH gates: policy-lint guards its existence check with
+  # `processNames && ...`, so a null subject set skips it entirely, and nothing else looked.
+  # Removing the directory must not be quieter than keeping it.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"row(s) but there is no processes/ directory"* ]]
+  [[ "$output" == *"no processes/ in this tree"* ]]
+}
+
+@test "birth-rule: a case-variant EXTENSION is reported and hidden from policy-lint" {
+  # GHOSTCASE.PROCESS.YAML opens on Windows and macOS and not on Linux. The advisory gate says
+  # so; processNames() must NOT hand it to policy-lint, or policy-lint accepts a
+  # process:ghostcase row for a process the Linux runner cannot open -- a fail-open in the one
+  # gate that is FAIL-capable.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" kickoff-plan kickoff-plan
+  printf 'name: ghostcase
+version: 1
+' > "$TMP/processes/GHOSTCASE.PROCESS.YAML"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"only case-insensitively"* ]]
+  [[ "$output" == *"checked 2 process(es)"* ]]
 }
 
 # THE control, same shape as adr-dup's: this runs against the REAL tree, so a process merged
@@ -615,12 +685,24 @@ mkproc() {
   # a bare root exits 3 (ambiguous) and this test would assert against a resolver message
   # instead of the check. The birth rule reads root-level files, so the lane choice is
   # irrelevant to what is measured -- it only gets the resolver out of the way.
+  #
+  # This test called itself THE control and was not one: with the whole birth-rule block
+  # deleted it stayed green, because its only assertion was that a string was absent. The
+  # marker below is what makes it falsifiable, and the count is DERIVED from the tree rather
+  # than typed, so adding a process cannot silently drift past it (ADR-0107).
+  local n; n=$(ls processes/*.process.yaml 2>/dev/null | wc -l | tr -d " ")
+  [ "$n" -ge 1 ]                                         # the fixture is not empty
   run $LINT_CMD . --lane policy
   ran
-  [ "$status" -eq 0 ]                                    # every other test pairs the negative
-  [[ "$output" != *"[birth-rule]"* ]] || { echo "$output"; false; }
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"checked $n process(es) against hq.policy.yaml"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"0 ungoverned"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"WARN  [birth-rule]"* ]] || { echo "$output"; false; }
 }
 
+# NOT a control for the gate -- it never invokes kickoff-lint. It asserts the tree invariant the
+# gate depends on, from the other side, so a process whose name: drifts from its filename is
+# caught even in the cases where the parser cannot read the file to compare them.
 @test "birth-rule: every process in this repository declares its own filename" {
   # The stem/name invariant, asserted on the real tree rather than only in fixtures. While these
   # two strings agree, the gate and the runtime cannot read one file as two subjects.
@@ -641,5 +723,5 @@ mkproc() {
 # actually registered -- rather than grepping the file, which counts lines bats ignored.
 @test "kickoff-lint suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 67 ] || { echo "registered $registered tests, expected 67"; false; }
+  [ "$registered" -eq 71 ] || { echo "registered $registered tests, expected 71"; false; }
 }

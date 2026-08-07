@@ -11,36 +11,52 @@
  * in the worst way: each gate keeps passing while the pair of them stops covering the middle.
  *
  * ---------------------------------------------------------------------------------------
- * WHICH STRING IS THE SUBJECT -- the finding that rewrote this file.
+ * WHICH STRING IS THE SUBJECT. There are two candidates and they are not the same string:
+ * the FILENAME STEM of `processes/<stem>.process.yaml`, and the `name:` field inside it.
  *
- * There are two candidate names for a process and they are NOT the same string:
+ * The RUNTIME uses the stem and only the stem: `arc-run --process X` opens
+ * processes/X.process.yaml (arc-run.mjs:80) and authorizes `process:X` (run-gate.mjs:196).
  *
- *   the FILENAME STEM   `processes/<stem>.process.yaml`
- *   the DECLARED NAME   the `name:` field inside that file
- *
- * The RUNTIME uses the stem, and only the stem. `arc-run --process X` builds
- * `processes/X.process.yaml` (arc-run.mjs:80) and authorizes against
- * `kind = "process:" + X` (run-gate.mjs:196). `name:` is never read for this.
- *
- * `processNames()` -- which predates this file and which policy-lint has always used --
- * reads `name:`. So a file whose `name:` disagrees with its stem is governed under one string
- * and authorized under another, and a birth rule keyed on `name:` goes blind exactly where it
- * matters: `evil.process.yaml` declaring `name: kickoff-plan` looks governed, while
- * `arc-run --process evil` runs as the ungoverned `process:evil`. A fresh adversarial pass
- * found this pinned as CORRECT by the birth rule's own first test -- the running list's
- * "validate one read, compare another" defect (verdict.mjs, then lineage.mjs), in a third file.
- *
- * The resolution is not to pick a winner. It is to make the two strings the same and say so:
- * every subject carries `stem` AND `name`, callers that gate on authority use `stem`, and a
- * disagreement between them is itself reportable. All three processes in the tree satisfy
- * stem === name today, so the invariant costs nothing to hold and everything to lose.
+ * And on the real tree `name:` is not merely secondary, it is UNREADABLE. `parsePolicyYaml`
+ * throws on all three committed process files (its 2-space indentation rule), and the engine's
+ * own `parseYamlSubset` reads them but surfaces no top-level `name`. So the fallback below is
+ * not a guess that happens to be right -- it is the only subject string any consumer has ever
+ * had, and policy-lint has been comparing filename stems since the day it was written.
+ * `name:` is kept because a fixture-shaped file can carry one, and a disagreement between the
+ * two is worth reporting where it is visible at all.
  * ---------------------------------------------------------------------------------------
+ *
+ * CROSS-LEG IDENTITY. Everything here is decided by exact bytes on purpose. A directory listing
+ * is the one thing all three CI legs can be made to agree on; `existsSync` on a case-insensitive
+ * filesystem is not (`Processes/` is the same directory on Windows and macOS and a different one
+ * on Linux). Callers that must not disagree across legs use `processesDirState`.
  */
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { parsePolicyYaml } from "./yaml.mjs";
 
 const SUFFIX = ".process.yaml";
+const DIRNAME = "processes";
+
+/**
+ * How `processes/` exists in this root, decided by exact bytes rather than by existsSync.
+ *
+ * Returns "absent" | "exact" | "case-variant" | "not-a-directory".
+ *
+ * `case-variant` is its own answer because it is the one that flips a verdict per CI leg: a
+ * directory committed as `Processes/` is opened by Windows and macOS and missed by Linux, so a
+ * caller that treats it as absent produces a different result on the same commit depending on
+ * the runner. Reported, never guessed at.
+ */
+export function processesDirState(root) {
+  let entries;
+  try { entries = readdirSync(root, { withFileTypes: true }); }
+  catch { return "absent"; }
+  const exact = entries.find((e) => e.name === DIRNAME);
+  if (exact) return exact.isDirectory() ? "exact" : "not-a-directory";
+  const variant = entries.find((e) => e.name.toLowerCase() === DIRNAME);
+  return variant ? "case-variant" : "absent";
+}
 
 /**
  * Every process in the tree, or null when there is no processes/ dir at all.
@@ -48,28 +64,24 @@ const SUFFIX = ".process.yaml";
  * null means "cannot check" and is NOT the empty list, which means "checked, there are none".
  * A caller that conflates them reports a missing directory as a clean result.
  *
- * THROWS when processes/ exists but cannot be read (it is a regular file, a permission is
- * denied, a Windows lock). That is deliberate and it preserves policy-lint's behaviour
- * exactly: before this function existed its `readdirSync` threw there too, and policy-lint is
- * a FAIL-capable validator, so swallowing an unreadable subject set would be a fail-open --
- * it would silently stop checking that policy rows name real processes. Advisory callers
- * catch it; validators must not.
+ * THROWS when processes/ exists but cannot be read. That is deliberate and preserves
+ * policy-lint's behaviour exactly: before this function existed its readdirSync threw there
+ * too, and policy-lint is a FAIL-capable validator, so swallowing an unreadable subject set
+ * would be a fail-open -- it would silently stop checking that policy rows name real
+ * processes. Advisory callers catch it; validators must not. VERIFY THIS CONTRACT WHENEVER A
+ * NEW CALLER APPEARS: which side of it a caller is on is not inferable from the call.
  *
- * Each subject is `{ file, stem, name, parsed, oddExtension }`:
- *   stem          the authority string -- what the runtime keys on
- *   name          the declared `name:`, falling back to stem
- *   parsed        false when the narrow parser could not read the file, so a caller can tell
- *                 "declares this name" from "is garbage and I guessed"
- *   oddExtension  the file matches <stem>.process.yaml only case-insensitively. On Windows and
- *                 macOS the runtime still opens it; on Linux it does not. Reported rather than
- *                 silently included, because a subject that exists on two CI legs and not the
- *                 third is worse than one that exists nowhere.
- *
- * The subject set is a directory listing, never an invention (ADR-0504).
+ * Each subject is `{ file, stem, name, parsed, oddExtension, viaSymlink }`.
  */
 export function processSubjects(root) {
-  const dir = join(root, "processes");
-  if (!existsSync(dir)) return null;
+  const state = processesDirState(root);
+  if (state === "absent") return null;
+  if (state === "not-a-directory") {
+    const err = new Error(`processes/ exists but is not a directory`);
+    err.code = "PROCESSES_UNREADABLE";
+    throw err;
+  }
+  const dir = join(root, DIRNAME);
 
   let entries;
   try {
@@ -83,54 +95,74 @@ export function processSubjects(root) {
 
   const out = [];
   for (const ent of entries) {
-    if (!ent.isFile()) continue;                  // a subdirectory is not a process; see below
     const file = ent.name;
     const exact = file.endsWith(SUFFIX);
-    const loose = file.toLowerCase().endsWith(SUFFIX);
+    const loose = file.toLowerCase().endsWith(SUFFIX.toLowerCase());
     if (!exact && !loose) continue;
     const stem = file.slice(0, file.length - SUFFIX.length);
     if (!stem) continue;                          // a bare ".process.yaml" names nothing
+
+    // Classify by FOLLOWING the link, not by the dirent's own type. A dirent-only `isFile()`
+    // drops a symlink -- and git materializes a committed symlink as a regular file on the
+    // Windows runner (core.symlinks=false) while leaving it a link on Linux, so that filter
+    // made the same commit produce different subject sets per leg.
+    //
+    // statSync is also what keeps the FIFO door shut: it does not block, while readFileSync on
+    // a FIFO blocks forever and no try/catch can interrupt it. Classify with stat, then read
+    // ONLY a regular file. Both halves of that trade are load-bearing; neither may be dropped
+    // without reopening the other.
+    let st = null;
+    try { st = statSync(join(dir, file)); } catch { st = null; }
+    if (!st || !st.isFile()) continue;
+    const viaSymlink = ent.isSymbolicLink();
 
     let name = stem, parsed = true;
     try {
       const doc = parsePolicyYaml(readFileSync(join(dir, file), "utf8"));
       if (doc && typeof doc.name === "string") name = doc.name;
     } catch {
-      // A process file this narrow parser cannot read still contributes its filename, so a
-      // policy row for it is not rejected because of an unrelated parser limitation. The flag
-      // is what stops that fallback being mistaken for a declaration.
-      parsed = false;
+      parsed = false;                             // the normal case; see the header
     }
-    out.push({ file, stem, name, parsed, oddExtension: !exact });
+    out.push({ file, stem, name, parsed, oddExtension: !exact, viaSymlink });
   }
   return out;
 }
 
 /**
- * Directory entries under processes/ that are NOT files -- a nested directory hides
- * `processes/sub/x.process.yaml` from this non-recursive listing while `arc-run --process
- * sub/x` still resolves it. Returned separately so an advisory caller can report the shape
- * without this module inventing a traversal policy.
+ * Directory entries under processes/ that are not regular files after following links --
+ * a nested directory hides `processes/sub/x.process.yaml` from this non-recursive listing
+ * while `arc-run --process sub/x` still resolves it, and a junction or reparse point named
+ * `x.process.yaml` is reachable by the runtime and invisible here.
  */
 export function processDirEntries(root) {
-  const dir = join(root, "processes");
-  if (!existsSync(dir)) return null;
+  if (processesDirState(root) !== "exact") return null;
+  const dir = join(root, DIRNAME);
   let entries;
   try { entries = readdirSync(dir, { withFileTypes: true }); }
   catch { return null; }
-  return entries.filter((e) => !e.isFile()).map((e) => e.name);
+  return entries
+    .filter((e) => {
+      let st = null;
+      try { st = statSync(join(dir, e.name)); } catch { return true; }
+      return !st.isFile();
+    })
+    .map((e) => e.name);
 }
 
 /**
- * The DECLARED names, in tree order. null propagates.
+ * The subject names policy-lint checks its rows against, in tree order. null propagates.
  *
- * Kept keyed on `name:` deliberately: this is policy-lint's long-standing input and a
- * differential run over 29 constructed trees proved the extraction behaviour-preserving.
- * Changing what it returns would change what policy-lint FAILs on, which is a separate,
- * reviewed decision and not a side effect of adding the birth rule. Authority-gating callers
- * want `processSubjects(...).stem`, not this.
+ * EXACT-SUFFIX ONLY. A `GHOSTCASE.PROCESS.YAML` is opened by Windows and macOS and not by
+ * Linux, so admitting it here would let policy-lint accept a `process:ghostcase` row for a
+ * process that does not exist on the Linux runner -- a fail-open in the one gate that is
+ * FAIL-capable. It is excluded here and reported by the advisory gate instead, which is the
+ * right place for "this file is ambiguous" to be said out loud. This also restores the
+ * pre-extraction behaviour byte-for-byte: the original `endsWith` was case-sensitive.
+ *
+ * Kept keyed on `name:` deliberately, though on real files that always falls back to the stem
+ * (see the header). Authority-gating callers want `processSubjects(...).stem`, not this.
  */
 export function processNames(root) {
   const subs = processSubjects(root);
-  return subs === null ? null : subs.map((s) => s.name);
+  return subs === null ? null : subs.filter((s) => !s.oddExtension).map((s) => s.name);
 }
