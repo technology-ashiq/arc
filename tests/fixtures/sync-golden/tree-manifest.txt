@@ -164,7 +164,7 @@
 .claude/scripts/hq/lib/policy/promotion.mjs	e145ed38cd9b148a695060488bbf4002a48404b1dc835841a0ddef91a99a8347
 .claude/scripts/hq/lib/policy/reduce.mjs	639a1f81a122f8bf0216ecccd9b406da97bfef6a76f30aad0fe818ad39708470
 .claude/scripts/hq/lib/policy/resources.mjs	3cdadf002e8edbf3ded3878f929fed85f3de0313886cc14e0c38fcb1656b752c
-.claude/scripts/hq/lib/policy/run-gate.mjs	9aa5d829e7edd6e92023b4a408264ef36cb8c95d78c8f5bf4a3bf7287750c324
+.claude/scripts/hq/lib/policy/run-gate.mjs	18d929488d4106e60e85ce507da68d10a8fc69b2593e8c3dad06a29cc355c8a4
 .claude/scripts/hq/lib/policy/spend.mjs	4f238a2ab1ab9be318ce41b37d85c95b138e1445cd15b6ebe9ce1c80d1984398
 .claude/scripts/hq/lib/policy/subjects.mjs	2bf705b683413eec5effbde308cfb59f07fdb440e90e8caa0f0b650134f1522f
 .claude/scripts/hq/lib/policy/tool-capabilities.json	f0c1cdd0dac19d7127c327fc251f3a3572eb0817a6be94cd6f8d5a57dd5f8f24

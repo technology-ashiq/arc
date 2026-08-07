@@ -330,9 +330,83 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" == *"network=[network]"* ]] || { echo "$output"; false; }
 }
 
+@test "PHASE 04 -- a forged spine line cannot raise a cap, and a copied one cannot undo a demotion" {
+  # TWO findings, one loop. loadPolicyEvents ran every line through validateEvent and called that
+  # integrity. It is not: validateEvent checks SHAPE and never recomputes the content hash --
+  # `eventSha` is exported by canonical.mjs and nothing on the read path called it. A Phase 04
+  # attacker raised a cap L1 -> L2 with ONE appended line carrying a deliberately wrong sha, a
+  # decision_ref naming no event that exists, and a zeroed policy_hash.
+  #
+  # And the loader de-duplicated nothing, while `policy.level.changed` is an ABSOLUTE set in the
+  # reducer -- so a genuine, correctly-sealed, already-applied promotion appearing a second time
+  # RESTORES a cap a later demotion took away. No forgery needed for that one: `cp` is enough.
+  #
+  # Both are driven through the REAL loadPolicyEvents against a temp spine, not through the
+  # reducer with injected objects, because the hole was in the READ path.
+  run _node "$PRE
+    const { policyIdem } = await import('./.claude/scripts/hq/lib/validate-policy.mjs');
+    const { eventSha }   = await import('./.claude/scripts/hq/lib/canonical.mjs');
+    const root = fs.mkdtempSync(pth.join(os.tmpdir(), 'forge-'));
+    const dir = pth.join(root, '.claude', 'state', 'hq', 'events');
+    fs.mkdirSync(dir, { recursive: true });
+    const mk = (id, to) => {
+      const e = { v:1, id, kind:'policy.level.changed', ts:'2026-08-06T10:00:00+05:30',
+        actor:'human', process:'policy-promotion@1.0.0', run_id:'r-01JQ8XZ9K0ABCDEFGH00000003',
+        venture:'arc', model:null, cost:null, outcome:'ok', evidence:null, supersedes:null,
+        payload:{ action_kind:'session:interactive', capability:'write', correlation:'r',
+          decision_ref:'01JQ8XZ9K0ABCDEFGH00000002', from_level:'L1',
+          policy_hash:'a'.repeat(64), to_level:to, trial_ledger_ref:'t' } };
+      e.idem = policyIdem(e.kind, e.payload); e.sha = eventSha(e); return e;
+    };
+    const f = pth.join(dir, '2026-08-06.jsonl');
+    const w = (o) => fs.writeFileSync(f, JSON.stringify(o) + '\n');
+    const n = () => P.loadPolicyEvents(root).length;
+    const good = mk('01JQ8XZ9K0ABCDEFGH00000010', 'L2');
+    const out = [];
+    w(good);                                              out.push('genuine=' + n());
+    w({ ...good, sha: 'f'.repeat(64) });                  out.push('wrongsha=' + n());
+    const t = JSON.parse(JSON.stringify(good)); t.payload.to_level = 'L3';
+    w(t);                                                 out.push('tampered=' + n());
+    w(good);
+    fs.appendFileSync(pth.join(dir, '2026-08-08.jsonl'), JSON.stringify(good) + '\n');
+    out.push('duplicated=' + n());
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # THE CONTROL FIRST: a correctly sealed event must still load, or every row below passes for
+  # the wrong reason and the engine has simply stopped reading its own spine.
+  [[ "$output" == *"genuine=1"* ]] || { echo "a genuine sealed event was rejected: $output"; false; }
+  [[ "$output" == *"wrongsha=0"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"tampered=0"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"duplicated=1"* ]] || { echo "the copy was counted twice: $output"; false; }
+}
+
+@test "PHASE 04 -- every event on the REAL spine passes the new integrity check" {
+  # The control that makes the check safe to ship. A sha comparison that rejects the live spine
+  # would not be hardening, it would be an outage -- and the only honest way to know is to run it
+  # over the real thing. Measured at 531 lines, 531 verified, 0 mismatches.
+  run _node "$PRE
+    const { eventSha } = await import('./.claude/scripts/hq/lib/canonical.mjs');
+    const dir = pth.join(process.cwd(), '.claude', 'state', 'hq', 'events');
+    if (!fs.existsSync(dir)) { console.log('total=0 bad=0'); process.exit(0); }
+    let total = 0, bad = 0;
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.jsonl'))) {
+      for (const line of fs.readFileSync(pth.join(dir, f), 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        let e; try { e = JSON.parse(line); } catch { continue; }
+        total++;
+        if (eventSha(e) !== e.sha) bad++;
+      }
+    }
+    console.log('total=' + total + ' bad=' + bad);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *" bad=0"* ]] || { echo "the real spine fails its own seal: $output"; false; }
+  # Not vacuous on an empty checkout: assert the loop actually saw lines.
+  [[ "$output" != *"total=0 "* ]] || { echo "no spine events were read at all: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 18 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 18 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 20 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 20 -- a @test was silently dropped"
     false
   }
 }

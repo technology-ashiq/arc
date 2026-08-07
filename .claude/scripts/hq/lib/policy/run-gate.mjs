@@ -22,6 +22,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KINDS, validateEvent } from "../validate.mjs";
+import { eventSha } from "../canonical.mjs";
 import { parsePolicyYaml } from "./yaml.mjs";
 import { CAPABILITIES, PROCESS_PREFIX } from "./model.mjs";
 import { resolveEffectivePolicy, LEVEL_CHANGED, DEMOTED } from "./reduce.mjs";
@@ -160,6 +161,7 @@ export function loadPolicyEvents(root) {
   const dir = join(root, ".claude", "state", "hq", "events");
   if (!existsSync(dir)) return [];
   const out = [];
+  const seen = new Set();
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".jsonl")).sort()) {
     let text;
     try { text = readFileSync(join(dir, file), "utf8"); } catch { continue; }
@@ -170,6 +172,29 @@ export function loadPolicyEvents(root) {
       if (!e || (e.kind !== LEVEL_CHANGED && e.kind !== DEMOTED)) continue;
       // The spine's own validator, not a second opinion that can drift from it (POL-D).
       try { validateEvent(e); } catch { continue; }
+      // ...but validateEvent checks SHAPE. It never recomputes the content hash — `eventSha` is
+      // exported by canonical.mjs and nothing on the read path called it — so a hand-written line
+      // with a plausible shape was accepted and folded. A Phase 04 attacker raised a cap L1 → L2
+      // with ONE appended line carrying a deliberately wrong sha, a `decision_ref` naming no
+      // event that exists, and a zeroed `policy_hash`. Shape is not integrity.
+      //
+      // The sha covers every field except itself, so this refuses any line edited after it was
+      // sealed, including one that copied a real receipt and changed the level. It does NOT
+      // prove the promotion was AUTHORISED — that needs `decision_ref` resolved to a real
+      // approval, a chain walk this loader cannot do alone. Recorded as still-owed rather than
+      // implied by this check.
+      let sealed;
+      try { sealed = eventSha(e); } catch { continue; }
+      if (typeof e.sha !== "string" || e.sha !== sealed) continue;
+      // A transition counts ONCE, by event id. Every *.jsonl in the directory is folded in
+      // order and `policy.level.changed` is an ABSOLUTE set in the reducer, so a genuine,
+      // correctly-sealed, already-applied promotion appearing a second time RESTORES a cap a
+      // later demotion took away. No forgery needed: copying one day file is enough, and the
+      // attacker did exactly that. "A demotion that vanishes is a cap that never drops" was
+      // closed once for a preclaimed idem; this is the same sentence reached with `cp`.
+      const key = typeof e.id === "string" ? e.id : sealed;
+      if (seen.has(key)) continue;
+      seen.add(key);
       out.push(e);
     }
   }
