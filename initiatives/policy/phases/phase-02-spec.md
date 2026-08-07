@@ -20,7 +20,14 @@ enforcement property.
 - [ ] Every new kind has a **closed typed payload**, is idem-bound (ADR-0304 pattern), carries
       the policy file hash (forward-only, never estimated) and a run correlation id. Payload
       keys are authored **sorted**, because `tests/spine-emit.bats` round-trips every ACCEPT
-      fixture byte-for-byte through `canonicalize()`.
+      fixture byte-for-byte through `canonicalize()`. The four kinds and the reasoning for two
+      pairs rather than one directional kind are **ADR-0508**, which also makes the extension a
+      one-way door: a spine kind is permanent once emitted.
+- [ ] **The sanctioned emitter can actually write them.** `arc-event` derives an idem per kind
+      family and refuses a caller-supplied one; without a branch for these four it derived a
+      value `validateEvent` then rejected, and **every policy receipt was quarantined** — a
+      vocabulary nothing can write to is a vocabulary in name only. Proven by emitting all four
+      and reading them back off `events/*.jsonl`, never from a return value (ADR-0508).
 - [ ] The **unknown-kind hostile fixture is re-run** after the extension (ADR-0106 rule), and
       the derived-count assertion updated to the new live length.
 - [ ] **Promotion chain live end-to-end:** `approval.requested` under the strict
@@ -61,12 +68,43 @@ enforcement property.
 
 ## Verification plan
 
-One coarse line at kickoff, refined via `/arc-change` when the phase starts: bats suites for the
-four new kinds (accept + hostile fixtures, derived count), an end-to-end promotion chain driven
-through `arc-inbox` and read back from the spine directory rather than from emitter return
-values, a demotion fixture set including the three race cases, and an interactive bypass suite
-driven through real PreToolUse dispatch — with the layer-1-versus-layer-2 cross-check as the
-gate that the two representations have not drifted.
+> **REFINED 2026-08-07 at phase close** (`/arc-phase-done` step 2: a coarse one-liner is refined
+> before it is run). The kickoff line is preserved below it, because what the phase *actually*
+> had to verify turned out to include something the one-liner could not have named.
+
+- **Test command:** `bats tests/policy-receipts.bats tests/policy-promotion.bats
+  tests/policy-brief.bats tests/policy-demotion.bats tests/policy-hook.bats
+  tests/policy-hook-matrix.bats` — **CI is the gate**; nothing runs on the dev box.
+- **Live demo scenario:** (1) Emit all four ADR-0508 kinds through the sanctioned emitter and
+  **read them back off `events/*.jsonl`**, asserting the quarantine directory is empty.
+  (2) Drive the promotion chain end to end — build the request, seal it, decide it **through
+  `arc-inbox`**, apply with the ceiling re-checked at decision time, seal `policy.level.changed`,
+  and fold the spine to show the cap moved L1 → L2. (3) Raise an incident by overreaching at
+  execute authority and show the automatic `policy.demoted` citing it. (4) Render the day with
+  `arc brief` and list the pending promotion with `arc-inbox inbox`, showing the authority delta
+  and its trial-ledger citation. (5) Show layer 2 — the static `permissions.deny` floor — and the
+  cross-check that it never contradicts layer 1.
+- **Real-system check:** every receipt is produced by `arc-event.sh` and read back from the spine
+  directory. **No fact in the demo comes from an emitter's return value**, because an emitter
+  exiting 0 while every receipt it wrote was quarantined is precisely the defect this phase
+  found.
+- **Expected evidence:** CI output for the six bats files; the ULIDs of the four sealed receipts
+  and of the promotion chain's `approval.requested` → `decision.recorded` →
+  `policy.level.changed`; the rendered brief and inbox; all committed under
+  `initiatives/policy/evidence/phase-02/`.
+
+**The kickoff line, kept for the record:** *bats suites for the four new kinds (accept + hostile
+fixtures, derived count), an end-to-end promotion chain driven through `arc-inbox` and read back
+from the spine directory rather than from emitter return values, a demotion fixture set including
+the three race cases, and an interactive bypass suite driven through real PreToolUse dispatch —
+with the layer-1-versus-layer-2 cross-check as the gate that the two representations have not
+drifted.*
+
+It named the right things. What it could not name is the one that mattered most: **that the
+emitter had no idem branch for the four kinds, so every policy receipt was rejected and
+quarantined.** The clause *"read back from the spine directory rather than from emitter return
+values"* was the instruction that would have caught it, and no test written before this close
+followed it.
 
 ## Rabbit holes in this phase
 
