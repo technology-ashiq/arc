@@ -206,76 +206,67 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" == *"is law"* ]]
 }
 
-@test "PHASE 04 -- deleting an ANCESTOR of a guarded path is denied" {
-  # A fresh adversarial pass ran these at shell L3 against the shipped ungrantable list:
-  #   rm -r  .claude/hooks    -> deny        (the directory itself, fixed in Phase 00)
-  #   rm -rf .claude          -> EXECUTE     <-- takes the hooks, settings AND the policy library
-  #   rm -rf .claude/scripts  -> EXECUTE     <-- takes the policy library
-  #   rm -rf .                -> EXECUTE     <-- takes hq.policy.yaml as well
-  # Every branch of guardedEntryFor asked "is this target inside something guarded?". None asked
-  # the reverse. ADR-0502: a backstop that the thing it binds can delete is not a backstop.
+@test "PHASE 04 -- a target that CONTAINS a guarded path is recognised" {
+  # A Phase 04 attacker ran these at shell L3 against the shipped ungrantable list: a recursive
+  # delete of .claude/hooks was denied, and the same delete of .claude, of .claude/scripts and of
+  # the repo root all EXECUTED -- taking the hooks, the settings file and the policy library with
+  # them. Every branch of guardedEntryFor asks "is this target inside something guarded?"; none
+  # asked the reverse. ADR-0502: a backstop that the thing it binds can delete is not a backstop.
   run _node "$PRE
     const g = P.buildResourceGuard(base().ungrantable_resources, process.cwd());
-    const hit = (r) => P.guardedEntryFor(r, g);
+    const hit = (r) => P.containsGuardedEntry(r, g) ? 'CONTAINS' : 'clear';
     const out = [];
-    for (const r of ['.claude', '.claude/scripts', '.claude/scripts/hq', '.']) {
-      out.push(r + '=' + (hit(r) ? 'GUARDED' : 'ALLOWED'));
-    }
-    // and the write roots must NOT be swept up -- a guard that denies everything is not a guard
-    for (const r of ['docs', 'tests', 'initiatives', 'README.md']) {
-      out.push(r + '=' + (hit(r) ? 'GUARDED' : 'ALLOWED'));
-    }
+    for (const r of ['.claude', '.claude/scripts', '.claude/scripts/hq', '.'])
+      out.push(r + '=' + hit(r));
+    for (const r of ['docs', 'tests', 'initiatives', 'README.md'])
+      out.push(r + '=' + hit(r));
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *".claude=GUARDED"* ]]
-  [[ "$output" == *".claude/scripts=GUARDED"* ]]
-  [[ "$output" == *".claude/scripts/hq=GUARDED"* ]]
-  [[ "$output" == *".=GUARDED"* ]]
-  [[ "$output" == *"docs=ALLOWED"* ]]
-  [[ "$output" == *"tests=ALLOWED"* ]]
-  [[ "$output" == *"initiatives=ALLOWED"* ]]
-  [[ "$output" == *"README.md=ALLOWED"* ]]
+  [[ "$output" == *".claude=CONTAINS"* ]] || { echo "$output"; false; }
+  [[ "$output" == *".claude/scripts=CONTAINS"* ]] || { echo "$output"; false; }
+  [[ "$output" == *".claude/scripts/hq=CONTAINS"* ]] || { echo "$output"; false; }
+  [[ "$output" == *".=CONTAINS"* ]] || { echo "$output"; false; }
+  # The write roots must NOT be swept up. A guard that denies everything is not a guard.
+  [[ "$output" == *"docs=clear"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"tests=clear"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"initiatives=clear"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"README.md=clear"* ]] || { echo "$output"; false; }
 }
 
-@test "PHASE 04 -- a shell command deleting an ancestor is denied at a level that EXECUTES" {
-  # The decision, not just the guard lookup. The grant below carries a REAL argv0_allow with a
-  # narrow program, so shell genuinely resolves to L3 and these commands would run -- without
-  # that, the sibling fix caps an allowlist-less L3 shell to L1 and every row below would read
-  # `propose` for a reason that has nothing to do with the ancestor guard. That is exactly what
-  # the first version of this test measured, and CI caught it.
+@test "PHASE 04 -- deleting an ancestor is denied at a level that EXECUTES" {
+  # The decision, not the guard lookup. TWO things have to be true before this measures anything.
+  # The grant needs a real argv0_allow, or the sibling fix caps an allowlist-less shell to the
+  # birth cap. And the EVENTS matter as much as the ceiling: every pair is born at L1, so a
+  # ceiling of L3 against an empty stream still resolves to min of L3 and L1, and every row reads
+  # propose for a reason unrelated to this guard. Both versions of this test got that wrong and
+  # CI caught both.
   run _node "$PRE
-    const pol = base({ shell:{level:'L3', argv0_allow:['rm']}, write:{level:'L3', roots:['**']} });
+    const pol = base({ shell:{level:'L3', argv0_allow:['rm','jq']}, write:{level:'L3', roots:['**']} });
     pol.argv0_classes.rm = { class:'narrow', reproduces:[] };
-    // The EVENTS matter as much as the ceiling. Every pair is born at L1, so a ceiling of L3
-    // with an empty stream still resolves to min(L3, L1) = L1 and everything reads \`propose\`
-    // for a reason unrelated to this guard. The promotions raise the earned cap so the level
-    // genuinely executes -- which is the only state in which an ancestor delete is dangerous.
+    pol.argv0_classes.jq = { class:'narrow', reproduces:[] };
     const ev = [up('shell','L3'), up('write','L3')];
     const D = (resource) => P.authorizeAction(
       {kind:'session:interactive', capability:'shell', resource}, {policy: pol, events: ev}).decision;
     const out = [];
-    for (const cmd of ['rm -rf .claude', 'rm -rf .claude/scripts', 'rm -rf .', 'rm -r .claude/hooks']) {
-      out.push(JSON.stringify(cmd) + '=' + D(cmd));
-    }
+    out.push('parent=' + D('rm -rf .claude'));
+    out.push('scripts=' + D('rm -rf .claude/scripts'));
+    out.push('root=' + D('rm -rf .'));
+    out.push('hooks=' + D('rm -r .claude/hooks'));
     out.push('control=' + D('rm -rf docs/scratch'));
-    // A NON-MUTATING program naming the repo root. The first version of this rule denied it,
-    // because `.` contains every guarded path -- so `jq .` and `git status .` became policy
-    // violations. Being an ancestor is only dangerous when something can destroy the target.
-    pol.argv0_classes.jq = { class:'narrow', reproduces:[] };
-    pol.kinds['session:interactive'].shell.argv0_allow = ['rm','jq'];
-    out.push('readonly-dot=' + D('jq .'));
+    out.push('readonly=' + D('jq .'));
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *'"rm -rf .claude"=deny'* ]] || { echo "$output"; false; }
-  [[ "$output" == *'"rm -rf .claude/scripts"=deny'* ]] || { echo "$output"; false; }
-  [[ "$output" == *'"rm -rf ."=deny'* ]] || { echo "$output"; false; }
-  [[ "$output" == *'"rm -r .claude/hooks"=deny'* ]] || { echo "$output"; false; }
-  # THE CONTROL, and it carries the whole weight: at the same level, with the same allowlist,
-  # a delete outside every guarded path must still EXECUTE. Without this row, a rule that denied
-  # all shell would pass every assertion above.
+  [[ "$output" == *"parent=deny"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"scripts=deny"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"root=deny"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"hooks=deny"* ]] || { echo "$output"; false; }
+  # CONTROL ONE: at the same level, with the same allowlist, a delete outside every guarded path
+  # must still EXECUTE -- without it, a rule that denied all shell would pass every row above.
   [[ "$output" == *"control=execute"* ]] || { echo "$output"; false; }
-  # The scoping control: a read-only program naming the repo root must NOT be denied.
-  [[ "$output" == *"readonly-dot=execute"* ]] || { echo "$output"; false; }
+  # CONTROL TWO: the scoping. Being an ancestor is only dangerous when something can destroy the
+  # target, so a read-only program naming the repo root must not be denied. The first version of
+  # this rule denied jq . and git status . outright.
+  [[ "$output" == *"readonly=execute"* ]] || { echo "$output"; false; }
 }
 
 @test "PHASE 04 -- shell that EXECUTES with no argv0_allow is capped, not unbounded" {
