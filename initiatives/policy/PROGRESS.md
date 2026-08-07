@@ -56,7 +56,12 @@ an unclosable bypass class → STOP.
 **Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
 inventory), which the owner has assigned to a separate session.**
 
-**Open defect, filed 2026-08-07 through `/arc-change` — the catch-all group has no line budget.**
+**CLOSED 2026-08-07, merged as `6d3e3fb` (PR #125), main re-verified green by `workflow_dispatch`
+run `31169800528`, 19/19 jobs — the catch-all group had no line budget.** Filed through
+`/arc-change` and fixed the same day. Left in full below rather than deleted, because the defect is
+a better record than its absence: it is the second time in two days that closing one failure in
+this renderer opened another.
+
 Phase 02 replaced `arc-brief`'s `if (group) push` with a fall-through to an `ungrouped` group, so a
 kind the table does not know is now named instead of dropped. That closed a silent omission and
 opened a loud one: `ungrouped` was placed in the never-collapse tier beside `needs-you` and
@@ -70,13 +75,32 @@ and individually empty. With `leads` LIVE and 22 kinds routing to the catch-all,
 ordinary day rather than a pathological one, and the group that overflows is the one group holding
 nothing a human must act on.
 
-Fix: `ungrouped` collapses on the same always-collapse rule as `background`, and the collapsed head
-keeps its `— no group assigned in arc-brief.mjs` instruction, which is the only part of that line
-telling another lane what it owes. Classified a **bug**, not new scope — it is a defect against the
-renderer's own documented contract, shipped hours ago inside Phase 02, so it takes the
-`/arc-fix-issue` shape (root cause → failing test → fix) rather than a REQ row. Cost ~0.05 days
-against the 0.25 days of slack, never from Phase 04. Assumptions ledger scanned at intake: no
-trigger fires. **Giving the other 22 kinds real groups stays those lanes' call, not this one's.**
+Fix, as shipped: `ungrouped` collapses on the same always-collapse rule as `background`, and the
+collapsed head keeps its `— no group assigned in arc-brief.mjs` instruction, which is the only part
+of that line telling another lane what it owes. The same 50-receipt spine now renders 3 lines;
+`--full` still renders 53. Classified a **bug**, not new scope — a defect against the renderer's own
+documented contract, shipped hours earlier inside Phase 02, so it took the `/arc-fix-issue` shape
+(root cause → failing test → fix) rather than a REQ row. Cost ~0.05 days against the 0.25 days of
+slack, never from Phase 04. Assumptions ledger scanned at intake: no trigger fired.
+
+Four tests in `tests/policy-brief.bats` (13 → 17), and **two of them are controls rather than
+coverage**, recorded as such because counting them as regression proof would overstate what this
+change is guarded by. `BUDGET` and `COLLAPSED` were run against a sandbox holding the pre-fix file
+and go red there. `FULL` and `CONTROL` pass on both trees by design — `FULL` guards that the
+collapse hides detail rather than destroying it, and `CONTROL` asserts the tier boundary from the
+other side, so a rule that ever swallowed `needs-you` fails there and nowhere else. That pre-fix
+check itself misfired once and is worth keeping: the first attempt crashed on unresolved relative
+imports, printed nothing, and the budget assertion **passed on the crash** — so it now copies the
+whole `scripts/` tree and asserts exit 0 before reading any output.
+
+**Giving the other 22 kinds real groups stays those lanes' call, not this one's.** `develop` (4
+kinds) and `evolve` (10) have the ask filed in their own `## Now` as of `afc1852` (PR #126).
+`leads` (7 kinds, including `deal.won`, which carries an optional `amount_inr` and is the one
+uncovered kind arguably belonging in `money`) is **deliberately not filed**: it is the one LIVE
+lane, this PLAN lists `initiatives/leads/**` do-not-touch, and `feat/leads-phase-02` is four commits
+ahead of main with two of them editing the very file the note would land in. Writing it from here
+hands a live lane a merge conflict instead of a message. It is owed once that branch merges.
+`constitution.adopted` (ADR-0073) is company-level and belongs to no lane at all.
 
 **Kill-criterion check at this close.** Burn is 4.5 of 7 days (64%), past the 50% tripwire — and
 the tripwire's condition is *"at 50% burn, Phase 1 must be done, or the scope-cut conversation is
