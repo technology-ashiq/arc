@@ -1,2 +1,2 @@
-[trial-status] 0 substance gate(s) live, 8 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
+[trial-status] 0 substance gate(s) live, 9 in trial — promote via /arc-retro (criteria: docs/trial-ledger.md)
 kickoff-lint: all checks passed ✔

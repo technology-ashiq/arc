@@ -388,10 +388,15 @@ addrow() {
 # shared company file red for a lane that touched nothing.
 #
 # The policy file under test is the REAL hq.policy.yaml, copied in. A hand-rolled minimal one
-# risks the narrow parser rejecting it, which would route every test through the
-# "did not parse" branch and pass for the wrong reason -- the vacuous pass this repo has
-# shipped three times. Each test below therefore asserts the SPECIFIC message it expects, and
-# every test asserts the lint actually reached its verdict line rather than dying early.
+# risks the narrow parser rejecting it, which would route every test through the "did not parse"
+# branch and pass for the wrong reason -- the vacuous pass this repo has shipped three times.
+# Each test therefore asserts the SPECIFIC message it expects, so a parse failure fails the test
+# rather than satisfying it, and every test asserts the lint reached its verdict line.
+#
+# THE SUBJECT IS THE FILENAME STEM. arc-run --process X opens processes/X.process.yaml and
+# authorizes process:X; `name:` is never read for authority. Two tests below were originally
+# written the other way round and asserted the blindness was correct -- a fresh adversarial pass
+# found them. They are inverted here, and that inversion is the point of the pass.
 
 ran() { [[ "$output" == *"kickoff-lint:"* ]]; }
 
@@ -410,13 +415,27 @@ mkproc() {
   [[ "$output" != *"[birth-rule]"* ]]
 }
 
-@test "birth-rule: processes without the law WARNs that the tree is ungoverned" {
+@test "birth-rule: processes without the law WARNs that they are ungoverned" {
+  cp hq.policy.yaml "$TMP/policy-backup.yaml"      # fixture builder proves its own input exists
+  [ -s "$TMP/policy-backup.yaml" ]
+  rm -f "$TMP/policy-backup.yaml"
   mkproc "$TMP" alpha alpha
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
   [[ "$output" == *"[birth-rule]"* ]]
   [[ "$output" == *"ungoverned"* ]]
+}
+
+@test "birth-rule: an EMPTY processes dir with no law is silent" {
+  # Regression: the condition was existsSync("processes"), so any consumer repo keeping a
+  # processes/ folder for unrelated reasons ate a policy WARN on every kickoff. There are no
+  # processes here, so there is nothing ungoverned to report.
+  mkdir -p "$TMP/processes"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[birth-rule]"* ]]
 }
 
 @test "birth-rule: a process with no policy row WARNs and names the file" {
@@ -440,31 +459,134 @@ mkproc() {
   [[ "$output" != *"[birth-rule]"* ]]
 }
 
-@test "birth-rule: the subject is the name: field, not the filename -- governed case" {
-  # policy-lint resolves `process:NAME` through the file's own name: field, falling back to the
-  # filename. Both gates read that relation from lib/policy/subjects.mjs; if they ever stop
-  # agreeing, this test and policy-lint's own go red in opposite directions.
+@test "birth-rule: a governed name: cannot launder an ungoverned filename" {
+  # THE INVERTED TEST. This file declares name: kickoff-plan, which IS governed -- and the
+  # original version of this test asserted silence for exactly that reason. But the runtime
+  # opens processes/zzz-unrelated-filename.process.yaml and authorizes
+  # process:zzz-unrelated-filename, which is governed by nothing. Silence here was the hole.
   cp hq.policy.yaml "$TMP/hq.policy.yaml"
   mkproc "$TMP" zzz-unrelated-filename kickoff-plan
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[birth-rule]"* ]]
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"process:zzz-unrelated-filename"* ]]
+  [[ "$output" == *"name: kickoff-plan"* ]]             # and the disagreement is named
 }
 
-@test "birth-rule: the subject is the name: field, not the filename -- firing case" {
-  # The mirror of the test above, and the one that would still pass if the check silently used
-  # the filename: the FILE is named after a governed process, the process inside it is not.
+@test "birth-rule: a governed filename with a foreign name: reports the disagreement" {
+  # The mirror. The STEM is governed, so there is no missing row -- but the file claims to be
+  # something else, and while the two strings differ a policy row can govern a subject nobody
+  # can run while the runnable one goes unchecked.
   cp hq.policy.yaml "$TMP/hq.policy.yaml"
   mkproc "$TMP" kickoff-plan smuggled
   run $LINT_CMD "$TMP"
   ran
   [ "$status" -eq 0 ]
   [[ "$output" == *"[birth-rule]"* ]]
-  [[ "$output" == *"process:smuggled"* ]]
+  [[ "$output" == *"the runtime authorizes it as"* ]]
+  [[ "$output" != *"has no policy row"* ]]              # the row exists; only the names differ
 }
 
-@test "birth-rule: an unparseable policy file WARNs and never crashes the lint" {
+@test "birth-rule: a SECOND ungoverned process is still found" {
+  # Kills the mutant that checks only the first entry. Every other fixture here has exactly one
+  # process file, so `find`-instead-of-`filter`, an early break, or a .slice(0,1) shipped green.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" a-kickoff-plan kickoff-plan             # sorts first, and is ungoverned by stem
+  mkproc "$TMP" z-rogue z-rogue                         # sorts last, ungoverned
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"process:z-rogue"* ]]                # the LAST entry must be reported
+  [[ "$output" == *"process:a-kickoff-plan"* ]]
+}
+
+@test "birth-rule: a policy file with no process rows governs nothing" {
+  # Kills the mutant that skips the check when the governed set is empty. Emptying kinds: is the
+  # single most dangerous edit to the law, and it is where the gate must be loudest, not silent.
+  awk '/^kinds:/{print; exit} {print}' hq.policy.yaml > "$TMP/hq.policy.yaml"
+  [ -s "$TMP/hq.policy.yaml" ]                          # the fixture builder proves its fixture
+  ! grep -q "process:kickoff-plan" "$TMP/hq.policy.yaml"
+  mkproc "$TMP" kickoff-plan kickoff-plan
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"has no policy row"* ]]              # specific: a parse failure fails this
+  [[ "$output" == *"process:kickoff-plan"* ]]
+}
+
+@test "birth-rule: a kinds key without the process: prefix governs nothing" {
+  # Kills the mutant that builds the governed set from every kinds key with a bare
+  # .replace("process:",""), which quietly promotes session:interactive -- and any other
+  # unprefixed key -- into a governing row. Uses a bare key rather than a file named
+  # `session:interactive.process.yaml`, because a colon is not a legal Windows filename and the
+  # fixture has to run on all three legs.
+  awk '/^kinds:/{print; exit} {print}' hq.policy.yaml > "$TMP/hq.policy.yaml"
+  printf '  "alpha":\n    e2: []\n    read: { level: L3 }\n' >> "$TMP/hq.policy.yaml"
+  mkproc "$TMP" alpha alpha
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"has no policy row"* ]]
+  [[ "$output" == *"process:alpha"* ]]
+}
+
+@test "birth-rule: a regular FILE at processes/ WARNs and never crashes the lint" {
+  # existsSync guards existence, not type. This threw ENOTDIR out of readdirSync, exited 1, and
+  # printed no verdict line at all -- an advisory check taking down every lane's kickoff.
+  printf 'not a directory\n' > "$TMP/processes"
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  run $LINT_CMD "$TMP"
+  ran                                                    # the verdict line is the proof it lived
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"not a readable directory"* ]]
+  [[ "$output" != *"ENOTDIR"* ]]                         # not a leaked stack trace
+}
+
+@test "birth-rule: a nested directory under processes/ is reported, not missed" {
+  # readdirSync does not descend, while `arc-run --process sub/x` resolves inside it.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" kickoff-plan kickoff-plan
+  mkdir -p "$TMP/processes/sub"
+  printf 'name: hidden\nversion: 1\n' > "$TMP/processes/sub/hidden.process.yaml"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"processes/sub/"* ]]
+}
+
+@test "birth-rule: a process the parser cannot read is still checked by its filename" {
+  # parsePolicyYaml throws on ALL THREE real process files (its indentation rule), and the
+  # engine's own parseYamlSubset surfaces no top-level name from them either. So an unparseable
+  # process file is the NORMAL case, not the exotic one, and the fallback to the filename is not
+  # a guess -- it is the only subject string the runtime ever had. What must never happen is a
+  # parser failure becoming a blind spot: the stem is still checked against the law.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkdir -p "$TMP/processes"
+  printf 'name: [ unterminated\n  and: not the subset\n' > "$TMP/processes/rogue.process.yaml"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"has no policy row"* ]]
+  [[ "$output" == *"process:rogue"* ]]
+}
+
+@test "birth-rule: an unreadable process file with a GOVERNED filename stays silent" {
+  # The other side of the same rule, and the one that would have caught the noise: the three
+  # real process files are all unparseable and all governed, so a check that reported the parse
+  # failure fired on every legitimate process in the repository.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkdir -p "$TMP/processes"
+  printf 'name: [ unterminated\n  and: not the subset\n' > "$TMP/processes/kickoff-plan.process.yaml"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[birth-rule]"* ]]
+}
+
+@test "birth-rule: an unparseable POLICY file WARNs and never crashes the lint" {
   printf 'kinds: [ this is not\n  the subset parser\n' > "$TMP/hq.policy.yaml"
   mkproc "$TMP" alpha alpha
   run $LINT_CMD "$TMP"
@@ -492,10 +614,26 @@ mkproc() {
   # --lane is mandatory here: arc has an initiatives/ dir with more than one eligible lane, so
   # a bare root exits 3 (ambiguous) and this test would assert against a resolver message
   # instead of the check. The birth rule reads root-level files, so the lane choice is
-  # irrelevant to what is being measured -- it only gets the resolver out of the way.
+  # irrelevant to what is measured -- it only gets the resolver out of the way.
   run $LINT_CMD . --lane policy
   ran
+  [ "$status" -eq 0 ]                                    # every other test pairs the negative
   [[ "$output" != *"[birth-rule]"* ]] || { echo "$output"; false; }
+}
+
+@test "birth-rule: every process in this repository declares its own filename" {
+  # The stem/name invariant, asserted on the real tree rather than only in fixtures. While these
+  # two strings agree, the gate and the runtime cannot read one file as two subjects.
+  run bash -c '
+    bad=0
+    for f in processes/*.process.yaml; do
+      stem=$(basename "$f" .process.yaml)
+      nm=$(sed -n "s/^name:[[:space:]]*//p" "$f" | head -1)
+      [ "$stem" = "$nm" ] || { echo "$f declares $nm"; bad=1; }
+    done
+    exit $bad'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -n "$(ls processes/*.process.yaml 2>/dev/null)" ]    # the loop ran over something
 }
 
 # bats silently DROPS a test whose @test name is not ASCII, and a dropped test is invisible
@@ -503,5 +641,5 @@ mkproc() {
 # actually registered -- rather than grepping the file, which counts lines bats ignored.
 @test "kickoff-lint suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 58 ] || { echo "registered $registered tests, expected 58"; false; }
+  [ "$registered" -eq 67 ] || { echo "registered $registered tests, expected 67"; false; }
 }

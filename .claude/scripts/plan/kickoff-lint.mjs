@@ -548,39 +548,84 @@ else if (!/##\s*Now/i.test(readT("PROGRESS.md"))) fail("progress", "PROGRESS.md 
 //   neither hq.policy.yaml nor processes/  → say nothing. A venture repo, working as designed.
 //   processes/ but no hq.policy.yaml       → WARN. That is arc with its law missing.
 //   both                                    → run the check.
+//
+// THE SUBJECT IS THE FILENAME STEM, not the `name:` field. `arc-run --process X` opens
+// processes/X.process.yaml and authorizes `process:X` (arc-run.mjs:80, run-gate.mjs:196) —
+// `name:` is never read for authority. A first cut of this check gated on `name:` and was
+// therefore blind to the one case that matters: evil.process.yaml declaring
+// `name: kickoff-plan` looked governed while `arc-run --process evil` ran ungoverned. A fresh
+// adversarial pass found that, and found this file's own test asserting the blindness was
+// correct. The fix is not to pick a winner but to require the two strings to agree.
 {
   const hasPolicy = existsSync(join(root, "hq.policy.yaml"));
   const hasProcesses = existsSync(join(root, "processes"));
-  if (hasProcesses && !hasPolicy) {
-    warn("birth-rule", "processes/ exists but hq.policy.yaml does not — every process in this tree is ungoverned and the birth rule cannot be checked");
-  } else if (hasPolicy && hasProcesses) {
+  if (!hasProcesses) {
+    // No processes/ at all — nothing to govern, whether or not a policy file exists.
+  } else {
     // Dynamic and guarded on purpose. A static import puts every lane's kickoff — and every
     // consumer repo's — one moved file away from a crash, to run an ADVISORY check. The
     // resolution itself is imported rather than re-implemented (POL-D): policy-lint reads the
     // same relation from the other side, and two readings drift.
-    let subjects = null, parse = null, loadErr = "";
+    let subjects = null, dirEntries = null, parse = null, loadErr = "";
     try {
-      ({ processSubjects: subjects } = await import("../hq/lib/policy/subjects.mjs"));
+      ({ processSubjects: subjects, processDirEntries: dirEntries } = await import("../hq/lib/policy/subjects.mjs"));
       ({ parsePolicyYaml: parse } = await import("../hq/lib/policy/yaml.mjs"));
     } catch (e) { loadErr = e?.message || String(e); }
 
+    // processSubjects THROWS when processes/ exists but cannot be read — a regular file where a
+    // directory belongs, a denied permission, a Windows lock. It throws for policy-lint's sake
+    // (a validator that silently stops checking is fail-open). Here it must not: an advisory
+    // gate that takes down every lane's kickoff with an ENOTDIR stack trace is a worse failure
+    // than the one it was written to prevent.
+    let subs = null, readErr = "";
+    if (subjects) {
+      try { subs = subjects(root); }
+      catch (e) { readErr = e?.message || String(e); }
+    }
+
     if (!subjects || !parse) {
-      warn("birth-rule", `hq.policy.yaml is present but the policy library could not be loaded (${loadErr || "unknown"}) — birth rule skipped`);
+      warn("birth-rule", `processes/ is present but the policy library could not be loaded (${loadErr || "unknown"}) — birth rule skipped`);
+    } else if (readErr) {
+      warn("birth-rule", `${readErr} — birth rule skipped. This is not a clean tree: something is at processes/ that is not a readable directory.`);
+    } else if (!subs || subs.length === 0) {
+      // An empty (or vanished) processes/ dir governs nothing. Warning here would fire on any
+      // consumer repo that happens to keep a processes/ folder for unrelated reasons — the
+      // exact blast radius this design argues it is avoiding.
+    } else if (!hasPolicy) {
+      gate("birth-rule", `processes/ holds ${subs.length} process(es) but hq.policy.yaml does not exist — every one of them is ungoverned and the birth rule cannot be checked`);
     } else {
       let doc = null;
       try { doc = parse(readFileSync(join(root, "hq.policy.yaml"), "utf8")); }
       catch (e) { warn("birth-rule", `hq.policy.yaml did not parse (${e?.message || e}) — birth rule skipped; policy-lint is the authority on that file and will say so louder`); }
       if (doc) {
         // A kinds: key that is absent, or not a mapping, is policy-lint's failure to report,
-        // not this one's. Read it defensively and check what is there.
+        // not this one's. Read it defensively and check what is there. An EMPTY kinds mapping is
+        // a legitimate parse and must leave every process ungoverned rather than skip the check.
         const kinds = doc.kinds && typeof doc.kinds === "object" && !Array.isArray(doc.kinds) ? doc.kinds : {};
         const governed = new Set(
           Object.keys(kinds).filter((k) => k.startsWith("process:")).map((k) => k.slice("process:".length)),
         );
-        const subs = subjects(root) || [];
-        for (const { file, name } of subs)
-          if (!governed.has(name))
-            gate("birth-rule", `processes/${file} has no policy row — add \`"process:${name}":\` to hq.policy.yaml kinds (born at L1, every capability declared) in the same change that adds the module. Without it the process is read-only at L1 by deny-by-default, silently.`);
+        for (const { file, stem, name, parsed, oddExtension } of subs) {
+          if (!governed.has(stem))
+            gate("birth-rule", `processes/${file} has no policy row — add \`"process:${stem}":\` to hq.policy.yaml kinds (born at L1, every capability declared) in the same change that adds the module. Without it the process is read-only at L1 by deny-by-default, silently.`);
+          // Reported even when the row exists: a stem/name disagreement is what lets the gate and
+          // the runtime read one file as two different subjects.
+          if (parsed && name !== stem)
+            gate("birth-rule", `processes/${file} declares \`name: ${name}\` but the runtime authorizes it as \`process:${stem}\` (arc-run keys on the filename, never on name:). Make them equal — while they differ, a policy row can govern a subject nobody can run and leave the runnable one ungoverned.`);
+          // NOT reported: a process file the policy parser cannot read. Measured on this tree,
+          // `parsePolicyYaml` throws on ALL THREE real process files (its indentation rule), and
+          // the engine's own `parseYamlSubset` reads them but surfaces no top-level `name`. So
+          // the filename fallback is not a guess that happens to be right — on every real file it
+          // is the only subject string any consumer has ever had, which is the same string the
+          // runtime authorizes. Warning about it fired on every legitimate process in the repo.
+          if (oddExtension)
+            gate("birth-rule", `processes/${file} matches .process.yaml only case-insensitively — Windows and macOS will open it and Linux will not, so this subject exists on two CI legs and not the third.`);
+        }
+        // Non-recursive by design, but say so rather than miss silently: readdirSync does not
+        // descend, while `arc-run --process sub/x` resolves processes/sub/x.process.yaml.
+        const nested = dirEntries ? (dirEntries(root) || []) : [];
+        for (const d of nested)
+          gate("birth-rule", `processes/${d}/ is a directory — the birth rule does not descend into it, but \`arc-run --process ${d}/NAME\` still resolves inside it. Any process in there is unchecked.`);
       }
     }
   }
