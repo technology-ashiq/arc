@@ -95,12 +95,48 @@ _ask() { # $1 = json payload
   # ADR-0501: exit 2 is the ONLY fail-closed path a PreToolUse hook has. Every error branch in
   # the fragment must end there -- the opposite of its neighbours, which degrade permissively
   # because they guard conveniences rather than authority.
+  #
+  # ASSERTED BEHAVIOURALLY, not by grepping the file. The first version grepped the fragment for
+  # the string "exit 2", and when the body moved to the shared policy-decide.sh the fragment
+  # became a three-line wrapper -- the grep went red while the behaviour was unchanged and
+  # correct. A grep over source is a test of prose; drive the thing and break it instead.
   cd "$ARC_ROOT"
-  local frag=".claude/hooks/PreToolUse.d/40-policy.sh"
-  # No error branch may exit 0. Count the exits that are not 0 in the case arms.
-  grep -q "exit 2" "$frag" || { echo "the fragment has no fail-closed exit"; false; }
-  grep -q "_dispatch.sh\" 2>/dev/null || exit 2" "$frag" || {
-    echo "a missing dispatcher does not deny"; false; }
+  local payload="$BATS_TEST_TMPDIR/p.json"
+  printf '%s' '{"tool_name":"Bash","tool_input":{"command":"echo hi"}}' > "$payload"
+  # A node that cannot decide. The fragment must DENY rather than shrug.
+  run bash -c "cd '$ARC_ROOT' && ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$ARC_ROOT' ARC_NODE=/nonexistent/node bash .claude/hooks/PreToolUse.d/40-policy.sh < '$payload'"
+  [ "$status" -eq 2 ] || { echo "a broken decider did not deny: status=$status"; false; }
+  [[ "$output" == *"did not complete"* ]] || { echo "the denial does not say why: $output"; false; }
+  # Both matchers share one body, so the Edit/Write fragment must fail closed identically.
+  printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"docs/x.md"}}' > "$payload"
+  run bash -c "cd '$ARC_ROOT' && ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$ARC_ROOT' ARC_NODE=/nonexistent/node bash .claude/hooks/PreToolUse-edit.d/40-policy.sh < '$payload'"
+  [ "$status" -eq 2 ] || { echo "the Edit/Write fragment did not fail closed: status=$status"; false; }
+}
+
+@test "the Edit and Write tools reach the policy engine at all" {
+  # THE REGRESSION TEST FOR THIS CYCLE'S WORST HOLE. settings.json wired the policy fragment
+  # under the `Bash` matcher only; `Edit|Write` ran PreToolUse-edit.d/, which held a freeze guard
+  # and a design critic and no policy check. A Write could therefore replace authorize.mjs
+  # itself, after which the armed Bash gate permitted an edit it had refused one command before.
+  cd "$ARC_ROOT"
+  [ -f ".claude/hooks/PreToolUse-edit.d/40-policy.sh" ] || {
+    echo "the Edit/Write matcher has no policy fragment -- the write path is unpoliced"; false; }
+  local payload="$BATS_TEST_TMPDIR/w.json"
+  printf '%s' '{"tool_name":"Write","tool_input":{"file_path":".claude/hooks/PreToolUse.d/40-policy.sh"}}' > "$payload"
+  run bash -c "cd '$ARC_ROOT' && ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$ARC_ROOT' bash .claude/hooks/PreToolUse-edit.d/40-policy.sh < '$payload'"
+  [ "$status" -eq 2 ] || { echo "a Write to the enforcement fragment was permitted: status=$status"; false; }
+  [[ "$output" == *"un-grantable"* ]] || { echo "denied, but not as an ADR-0502 target: $output"; false; }
+}
+
+@test "both policy fragments share ONE body, never a second copy" {
+  # POL-D. Two fragments each holding their own translation of a policy answer is guaranteed
+  # drift, and it is silent: both keep exiting 0 while they stop agreeing on what a denial is.
+  cd "$ARC_ROOT"
+  for f in .claude/hooks/PreToolUse.d/40-policy.sh .claude/hooks/PreToolUse-edit.d/40-policy.sh; do
+    grep -q "policy-decide.sh" "$f" || { echo "$f does not delegate to the shared body"; false; }
+    grep -q "policy-hook.mjs" "$f" && { echo "$f holds its own copy of the decision"; false; }
+  done
+  [ -x ".claude/hooks/policy-decide.sh" ] || { echo "the shared body is not executable"; false; }
 }
 
 @test "the fragment is armed by ARC_POLICY_HOOK and inert without it" {
@@ -153,8 +189,8 @@ _ask() { # $1 = json payload
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 16 -- a @test was silently dropped"
     false
   }
 }
