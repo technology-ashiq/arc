@@ -35,6 +35,19 @@ a race.
       nothing else, one fixture per capability class; an empty policy file yields a fully
       read-only system; a **missing** policy file blocks every non-read action rather than
       granting them.
+
+      > **DEVIATION, accepted during the build — `6755768`.** The last clause is not what shipped
+      > and is not what should ship. A missing policy file makes the engine **NOT IN FORCE** in
+      > that root and the run proceeds, loudly. Deny-by-default is a rule *inside* a policy file —
+      > an action kind absent from the file is read-only — not a rule about the file's own
+      > absence. A root that never adopted policy has declared nothing, so refusing to run there
+      > bricks every consumer repo and every test fixture that copies the scripts into a temp
+      > directory. What keeps this from being the fail-open it resembles: where policy IS in
+      > force, `hq.policy.yaml` is un-grantable (ADR-0502), so no policed write can delete it to
+      > reach this branch — and the caller announces the disarm out loud, the same contract
+      > `PreToolUse.sh` keeps for a missing dispatcher. An **empty** file still yields a
+      > read-only system, unchanged. Recorded here because a spec that contradicts the tree
+      > makes the tree look wrong.
 - [ ] Money guard core (REQ-06): read settled + active reservations from the spine → atomic
       `spend.reserved` under `withLock` → provider call with an idempotency key → `cost.incurred`
       (settlement profile) or `spend.released`. Reservation state is **derived from the event

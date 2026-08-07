@@ -19,7 +19,7 @@ Updated: 2026-08-07
 | engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
 | evolve | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) | — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised) | 7d / 7.0d | — | `/arc-kickoff --lane evolve` when a real client names a surface |
 | leads | LIVE | arc-leads (Cycle 8, opened 2026-08-04) | 03 | 7d / 4.5d | — | Phases 00–02 closed; **Phase 03 is calendar-gated, not effort-gated** — a warmed domain is 2–4 weeks (ADR-0413) |
-| policy | LIVE | arc-policy (Cycle 9, born 2026-08-06) | 02 | 7d / 4d | — | Phase 00 closed; 01 + 02 merged on CI 19/19 green (PR #119, #120). **Automatic demotion is the one open exit criterion and needs a design call**; 01 and 02 also owe their DoD |
+| policy | LIVE | arc-policy (Cycle 9, born 2026-08-06) | 02 | 7d / 4d | — | Phase 00 closed; 01 + 02 merged on CI 19/19 green (PR #119–#121). **Neither 01 nor 02 can close: the demotion emitter (one design call) and the absence matrix for network/message/publish/deploy (one scoping call) are open** — both need Ashiq |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |
