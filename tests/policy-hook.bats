@@ -194,9 +194,33 @@ _ask() { # $1 = json payload
   [ "$output" = "consistent" ]
 }
 
+@test "PHASE 04 -- an MCP server named after a prototype key gets the WORST case" {
+  # matrix.servers[server] is a bare index, so `constructor`, `toString`, `valueOf` and
+  # `hasOwnProperty` resolve up the prototype chain to a truthy value. The unclassified-server
+  # branch was therefore skipped for exactly those names and they fell through to the ["write"]
+  # default instead of ["spend","write","deploy","publish"]. run-gate.mjs carries this fix with
+  # this comment; the builtin branch below it has it; the MCP branch did not. Fourth recurrence
+  # of a prototype-chain read in this lane.
+  cd "$ARC_ROOT"
+  local payload="$BATS_TEST_TMPDIR/m.json"
+  # A genuinely unknown server is the reference: it must be denied on SPEND, the worst it could be.
+  printf '%s' '{"tool_name":"mcp__totally_unknown_server__x","tool_input":{}}' > "$payload"
+  run bash -c "cd '$ARC_ROOT' && ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$ARC_ROOT' bash .claude/hooks/PreToolUse.d/40-policy.sh < '$payload'"
+  [ "$status" -eq 2 ] || { echo "unknown server not denied: $output"; false; }
+  [[ "$output" == *"spend"* ]] || { echo "unknown server not treated as worst-case: $output"; false; }
+  # Every prototype-key name must reach the SAME verdict as the unknown server above.
+  for name in constructor toString valueOf hasOwnProperty; do
+    printf '%s' "{\"tool_name\":\"mcp__${name}__x\",\"tool_input\":{}}" > "$payload"
+    run bash -c "cd '$ARC_ROOT' && ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$ARC_ROOT' bash .claude/hooks/PreToolUse.d/40-policy.sh < '$payload'"
+    [ "$status" -eq 2 ] || { echo "mcp__${name}__ not denied: $output"; false; }
+    [[ "$output" == *"spend"* ]] || {
+      echo "mcp__${name}__ was downgraded below worst-case: $output"; false; }
+  done
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 16 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
     false
   }
 }

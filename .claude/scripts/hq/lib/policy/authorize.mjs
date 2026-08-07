@@ -29,7 +29,7 @@
  */
 
 import {
-  BOUND_KEY, CAPABILITIES, CHAINING, NON_SHELL_CAPABILITIES,
+  BIRTH_CAP, BOUND_KEY, CAPABILITIES, CHAINING, NON_SHELL_CAPABILITIES,
   decisionForLevel, minLevel, rank,
 } from "./model.mjs";
 import { resolveEffectivePolicy, grantFor } from "./reduce.mjs";
@@ -58,6 +58,9 @@ const FILE_MUTATORS = new Set([
  */
 export function reproducedBy(argv0Allow, argv0Classes) {
   const out = new Set();
+  // An empty or absent allowlist reproduces NOTHING, and that is the honest answer for this
+  // function -- no program is permitted, so no capability is reachable through one. The hole it
+  // opened lives in the caller, not here: see effectiveShell.
   for (const program of argv0Allow || []) {
     if (!has(argv0Classes, program)) {
       NON_SHELL_CAPABILITIES.forEach((x) => out.add(x));
@@ -68,7 +71,14 @@ export function reproducedBy(argv0Allow, argv0Classes) {
     for (const c of reproduces) {
       if (c === "*") NON_SHELL_CAPABILITIES.forEach((x) => out.add(x));
       else if (c !== "shell" && CAPABILITIES.includes(c)) out.add(c);
-      else if (c !== "shell") NON_SHELL_CAPABILITIES.forEach((x) => out.add(x)); // unknown token
+      // "shell" itself, and any unknown token, are both malformed -- and the malformed case
+      // must widen, never narrow. The previous version excluded "shell" from BOTH arms, so the
+      // one token ADR-0507 forbids was the one that made the derivation add nothing at all:
+      // `reproduces: ["shell"]` returned an empty set and uncapped the grant. The lint rejects
+      // that token, but this function is also called by hooks that never ran the lint -- which
+      // is the reasoning already written above for the unclassified program, applied one branch
+      // further down where it had been dropped.
+      else NON_SHELL_CAPABILITIES.forEach((x) => out.add(x));
     }
   }
   return out;
@@ -82,7 +92,26 @@ export function reproducedBy(argv0Allow, argv0Classes) {
  */
 function effectiveShell(kind, ctx, declaredShell) {
   const grant = grantFor(ctx.policy, kind, "shell");
-  const reproduced = reproducedBy(grant && grant.argv0_allow, ctx.policy && ctx.policy.argv0_classes);
+  const allow = grant && grant.argv0_allow;
+  const reproduced = reproducedBy(allow, ctx.policy && ctx.policy.argv0_classes);
+
+  // AN EXECUTING SHELL WITH NO ALLOWLIST IS UNBOUNDED, and it was the one shape that skipped
+  // ADR-0507 entirely. `shell: { level: L3 }` with no `argv0_allow:` reproduces nothing, so the
+  // loop below mins over an EMPTY set and the level stays exactly as declared -- and the L3
+  // branch of authorizeAction never consults an allowlist either, so nothing downstream caught
+  // it. A Phase 04 attacker raised one kind's shell to L3 and got unbounded network and an
+  // unbounded interpreter out of a kind whose write and network were both L1, with policy-lint
+  // printing "is law" over the file.
+  //
+  // Scoped to levels that EXECUTE, deliberately. At L0 and L1 nothing runs, so an absent
+  // allowlist decides nothing there -- and every kind in the shipped policy holds shell at L1
+  // with no allowlist, so failing closed unconditionally would silently move all of them to L0
+  // and change behaviour the finding never asked to change. `decisionForLevel` is the library's
+  // own answer to "would this level have executed" (POL-D), never a rank comparison.
+  if (decisionForLevel(declaredShell) === "execute" && (!Array.isArray(allow) || allow.length === 0)) {
+    return BIRTH_CAP;
+  }
+
   let level = declaredShell;
   for (const capability of reproduced) {
     const other = resolveEffectivePolicy(kind, capability, ctx).effective;

