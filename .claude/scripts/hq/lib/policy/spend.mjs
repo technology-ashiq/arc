@@ -172,6 +172,24 @@ export function checkReservation({ kind, amount, currency, day = null }, { polic
     return deny(`the spend chain could not be read, so no reservation is possible: ${e.message}`);
   }
 
+  // MONEY THAT MOVED AND RECONCILES TO NOTHING IS STILL MONEY. `reservationLedger` collects
+  // `unreconciled` -- a `cost.incurred` or `spend.released` naming a reservation this window does
+  // not hold -- and its own header says those are "surfaced, never dropped". They were surfaced
+  // and then dropped: `committed` is settled + open, so an unreconciled settlement of any size
+  // was invisible to the cap. A Phase 04 attacker moved 999,999 minor units past a cap of 10,000
+  // with one such event.
+  //
+  // They cannot simply be ADDED to the total: the entry carries no trustworthy amount, because
+  // the reservation that would have declared the currency and magnitude is the thing missing. So
+  // this refuses instead, which is the rule the rest of this module already follows -- an
+  // unreadable chain is not an empty chain, and a settlement that cannot be read must not be
+  // treated as zero. A human reconciles it; the machine does not guess.
+  if (ledger.unreconciled.length)
+    return deny(`the spend chain has ${ledger.unreconciled.length} unreconciled money event(s) ` +
+      `(${ledger.unreconciled.map((u) => `${u.kind} -> ${u.ref}`).slice(0, 3).join(", ")}) -- ` +
+      `money moved that this window cannot account for, and it carries no amount to charge ` +
+      `against the cap. Reconcile it before reserving again.`);
+
   const remaining = cap.amount - ledger.committed;
   if (amount > remaining)
     return deny(`${amount} exceeds the remaining ${cap.window} budget: cap ${cap.amount}, ` +
@@ -202,6 +220,22 @@ export async function reserveAndSpend(
 ) {
   if (typeof idempotencyKey !== "string" || idempotencyKey.trim() === "")
     return { ok: false, stage: "reserve", reason: "an idempotency key is required -- the whole retry story rests on it" };
+  // THE WINDOW IS MANDATORY HERE, though it stays optional in checkReservation.
+  //
+  // `day` defaulted to null and `inWindow` returns true for everything when day is null, so the
+  // "daily" cap silently became an all-time cap for any caller that forgot the argument -- and
+  // this is the entry point that calls a provider. It fails closed (yesterday's spend permanently
+  // consumes today's budget) which is why nothing noticed, but a daily window that never resets
+  // is not the cap the grant declares. `reservationLedger`'s header already recorded that this
+  // field "was named in four places and implemented in none"; it is implemented in one now and
+  // was defaulted off in the only entry point that spends money.
+  //
+  // Not derived from a clock: this module opens no file and reads no global state, which is what
+  // makes it testable. An absent window is an unanswered question, and the answer is refuse.
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day))
+    return { ok: false, stage: "reserve", reason:
+      `a UTC day (YYYY-MM-DD) is required -- without it the daily window matches every event ever ` +
+      `recorded and the declared cap stops being daily. Got ${JSON.stringify(day)}.` };
   if (typeof providerCall !== "function")
     return { ok: false, stage: "reserve", reason: "no providerCall was supplied" };
   if (typeof readEvents !== "function" || typeof emit !== "function" || typeof withLock !== "function")
