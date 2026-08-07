@@ -1,0 +1,16 @@
+[
+  {
+    "action_kind": "session:interactive",
+    "capability": "write",
+    "ceiling": "L2",
+    "cap": "L2",
+    "effective": "L2"
+  },
+  {
+    "action_kind": "session:interactive",
+    "capability": "network",
+    "ceiling": "L2",
+    "cap": "L1",
+    "effective": "L1"
+  }
+]
