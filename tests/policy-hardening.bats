@@ -161,13 +161,39 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [ "$output" = "classified" ]
 }
 
-@test "policy-matrix refuses to write to an un-grantable path" {
+@test "WRITE ABSENCE ROW -- policy-matrix refuses an un-grantable --out and the file is untouched" {
   # mkdirSync recursive + writeFileSync on an attacker-supplied --out is an arbitrary-path write
   # primitive living inside the policy engine itself.
+  #
+  # The exit code and the message prove the guard RAN and reached its decision. They do not prove
+  # the write did not happen -- a guard that refuses AFTER writing would satisfy both. This is
+  # phase-01's `denied write -> the target file is byte-identical` row, and the byte comparison
+  # is the half it was missing.
   cd "$ARC_ROOT"
+  local before; before="$(_arc_sha256 < .claude/settings.json)"
   run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json --out .claude/settings.json
   [ "$status" -eq 2 ]
   [[ "$output" == *"un-grantable"* ]]
+  local after; after="$(_arc_sha256 < .claude/settings.json)"
+  [ "$before" = "$after" ] || { echo "the denied write CHANGED the target file"; false; }
+}
+
+@test "WRITE ABSENCE ROW -- the positive control: the same writer does write when permitted" {
+  # Without this the row above is satisfied by a policy-matrix that never writes anything at all,
+  # which is the same green a deleted feature produces.
+  #
+  # The target is INSIDE the repo, for the same Windows reason the `tmp()` helper above already
+  # is. `$BATS_TEST_TMPDIR` on the Windows runner is under `C:/Users/RUNNER~1/...` -- an 8.3 short
+  # name -- and the resource guard refuses any path with a short component, because a short name
+  # can alias a guarded path. The guard was right and the fixture was wrong.
+  cd "$ARC_ROOT"
+  local d; d="$(mktemp -d "$ARC_ROOT/.pol-tmp-XXXXXX")"
+  run node .claude/scripts/hq/policy-matrix.mjs --from .mcp.json --out "$d/matrix.json"
+  local status_seen="$status" output_seen="$output"
+  local wrote=0; [ -s "$d/matrix.json" ] && wrote=1
+  rm -rf "$d"
+  [ "$status_seen" -eq 0 ] || { echo "$output_seen"; false; }
+  [ "$wrote" -eq 1 ] || { echo "the permitted write produced no file -- the absence above proves nothing"; false; }
 }
 
 @test "the shipped policy lints clean and prints its DERIVED table" {
@@ -181,8 +207,8 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
     false
   }
 }

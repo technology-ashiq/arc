@@ -16,6 +16,7 @@
     ".claude/scripts/hq/lib/policy/authorize.mjs",
     ".claude/scripts/hq/lib/policy/constitution.mjs",
     ".claude/scripts/hq/lib/policy/encode.mjs",
+    ".claude/scripts/hq/lib/policy/incident.mjs",
     ".claude/scripts/hq/lib/policy/index.mjs",
     ".claude/scripts/hq/lib/policy/lint.mjs",
     ".claude/scripts/hq/lib/policy/model.mjs",

@@ -36,3 +36,4 @@ export {
 export {
   buildPromotionRequest, applyDecision, buildDemotion, levelAfterDemotion, PROMOTION_SUBJECT,
 } from "./promotion.mjs";
+export { recordOverreach } from "./incident.mjs";
