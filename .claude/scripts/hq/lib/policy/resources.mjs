@@ -76,6 +76,11 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
   const exact = new Map(); // dev:ino -> declared entry
   const globs = []; // { entry, prefix } for `**` entries
   const absent = []; // { entry, normalised } -- string fallback only
+  // EVERY declared entry, normalised, whatever kind it is. The other three structures answer
+  // "is this target inside a guarded entry?"; this one exists to answer the reverse -- "does
+  // this target CONTAIN a guarded entry?" -- which nothing asked, so `rm -rf .claude` was
+  // permitted while `rm -r .claude/hooks` was denied. See guardedEntryFor.
+  const declared = [];
 
   for (const entry of ungrantableResources || []) {
     if (typeof entry !== "string" || entry === "") continue;
@@ -83,6 +88,7 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
       const dirEntry = entry.slice(0, -3);
       const abs = resolve(root, dirEntry);
       const id = identity(abs);
+      declared.push({ entry, normalised: norm(id ? id.real : abs) });
       globs.push({ entry, abs, key: id ? id.key : null, normalised: norm(abs) });
       // Enumerate the tree's inodes NOW, so a hardlink into it is caught by identity like any
       // exact entry. Without this the glob was matched only by walking the LINK's parents and
@@ -98,10 +104,11 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
     }
     const abs = resolve(root, entry);
     const id = identity(abs);
+    declared.push({ entry, normalised: norm(id ? id.real : abs) });
     if (id) exact.set(id.key, entry);
     else absent.push({ entry, normalised: norm(abs) });
   }
-  return { exact, globs, absent, root };
+  return { exact, globs, absent, declared, root };
 }
 
 /**
@@ -163,6 +170,25 @@ export function guardedEntryFor(resource, guard) {
   // Case (b): guarded paths absent from this checkout -- normalised string comparison.
   const target = norm(id ? id.real : abs);
   for (const a of guard.absent) if (target === a.normalised) return a.entry;
+
+  // Case (c): THE TARGET IS AN ANCESTOR OF A GUARDED ENTRY.
+  //
+  // Every branch above asks the same question in a different way -- is this target inside
+  // something guarded? None of them asked the reverse. `.claude/hooks` was denied and `.claude`
+  // was permitted, so `rm -rf .claude` took the hooks, the settings file and the policy library
+  // in one command, and `rm -rf .` took hq.policy.yaml with them. A fresh adversarial pass
+  // confirmed all three executing at shell L3.
+  //
+  // This module's own header already argued the case for the level below: "THE DIRECTORY
+  // ITSELF, not only its descendants". The same sentence read upwards is this branch, and
+  // ADR-0502's is blunter -- a backstop that the thing it binds can delete is not a backstop.
+  //
+  // Deleting a parent is not a narrower act than deleting the child, so the denial names the
+  // guarded entry that would be destroyed rather than the path that was asked for.
+  for (const d of guard.declared || []) {
+    if (d.normalised === target) continue;              // handled above, by identity
+    if (d.normalised.startsWith(target + "/")) return d.entry;
+  }
 
   return null;
 }

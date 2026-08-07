@@ -206,9 +206,60 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" == *"is law"* ]]
 }
 
+@test "PHASE 04 -- deleting an ANCESTOR of a guarded path is denied" {
+  # A fresh adversarial pass ran these at shell L3 against the shipped ungrantable list:
+  #   rm -r  .claude/hooks    -> deny        (the directory itself, fixed in Phase 00)
+  #   rm -rf .claude          -> EXECUTE     <-- takes the hooks, settings AND the policy library
+  #   rm -rf .claude/scripts  -> EXECUTE     <-- takes the policy library
+  #   rm -rf .                -> EXECUTE     <-- takes hq.policy.yaml as well
+  # Every branch of guardedEntryFor asked "is this target inside something guarded?". None asked
+  # the reverse. ADR-0502: a backstop that the thing it binds can delete is not a backstop.
+  run _node "$PRE
+    const g = P.buildResourceGuard(base().ungrantable_resources, process.cwd());
+    const hit = (r) => P.guardedEntryFor(r, g);
+    const out = [];
+    for (const r of ['.claude', '.claude/scripts', '.claude/scripts/hq', '.']) {
+      out.push(r + '=' + (hit(r) ? 'GUARDED' : 'ALLOWED'));
+    }
+    // and the write roots must NOT be swept up -- a guard that denies everything is not a guard
+    for (const r of ['docs', 'tests', 'initiatives', 'README.md']) {
+      out.push(r + '=' + (hit(r) ? 'GUARDED' : 'ALLOWED'));
+    }
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *".claude=GUARDED"* ]]
+  [[ "$output" == *".claude/scripts=GUARDED"* ]]
+  [[ "$output" == *".claude/scripts/hq=GUARDED"* ]]
+  [[ "$output" == *".=GUARDED"* ]]
+  [[ "$output" == *"docs=ALLOWED"* ]]
+  [[ "$output" == *"tests=ALLOWED"* ]]
+  [[ "$output" == *"initiatives=ALLOWED"* ]]
+  [[ "$output" == *"README.md=ALLOWED"* ]]
+}
+
+@test "PHASE 04 -- a shell command deleting an ancestor is denied at every level" {
+  # The decision, not just the guard lookup. At L3 with an unrestricted allowlist this is the
+  # difference between a policy engine and a suggestion.
+  run _node "$PRE
+    const over = { shell:{level:'L3'}, write:{level:'L3', roots:['**']} };
+    const out = [];
+    for (const cmd of ['rm -rf .claude', 'rm -rf .claude/scripts', 'rm -rf .', 'rm -r .claude/hooks']) {
+      out.push(JSON.stringify(cmd) + '=' + A('shell', cmd, over));
+    }
+    out.push('control=' + A('shell', 'rm -rf docs/scratch', over));
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *'"rm -rf .claude"=deny'* ]]
+  [[ "$output" == *'"rm -rf .claude/scripts"=deny'* ]]
+  [[ "$output" == *'"rm -rf ."=deny'* ]]
+  [[ "$output" == *'"rm -r .claude/hooks"=deny'* ]]
+  # The control proves the rule did not simply deny everything.
+  [[ "$output" == *"control=execute"* ]]
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 16 -- a @test was silently dropped"
     false
   }
 }
