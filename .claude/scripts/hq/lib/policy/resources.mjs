@@ -171,25 +171,38 @@ export function guardedEntryFor(resource, guard) {
   const target = norm(id ? id.real : abs);
   for (const a of guard.absent) if (target === a.normalised) return a.entry;
 
-  // Case (c): THE TARGET IS AN ANCESTOR OF A GUARDED ENTRY.
-  //
-  // Every branch above asks the same question in a different way -- is this target inside
-  // something guarded? None of them asked the reverse. `.claude/hooks` was denied and `.claude`
-  // was permitted, so `rm -rf .claude` took the hooks, the settings file and the policy library
-  // in one command, and `rm -rf .` took hq.policy.yaml with them. A fresh adversarial pass
-  // confirmed all three executing at shell L3.
-  //
-  // This module's own header already argued the case for the level below: "THE DIRECTORY
-  // ITSELF, not only its descendants". The same sentence read upwards is this branch, and
-  // ADR-0502's is blunter -- a backstop that the thing it binds can delete is not a backstop.
-  //
-  // Deleting a parent is not a narrower act than deleting the child, so the denial names the
-  // guarded entry that would be destroyed rather than the path that was asked for.
+  return null;
+}
+
+/**
+ * Does `resource` CONTAIN a guarded entry -- is it an ancestor of one?
+ *
+ * Every branch of guardedEntryFor asks the same question in a different way: is this target
+ * INSIDE something guarded? None asked the reverse. `.claude/hooks` was denied and `.claude`
+ * was permitted, so a recursive delete of `.claude` took the hooks, the settings file and the
+ * policy library in one command, and the same at the repo root took hq.policy.yaml with them. A
+ * Phase 04 attacker confirmed all three executing at shell L3.
+ *
+ * This module's header already argued the level below: "THE DIRECTORY ITSELF, not only its
+ * descendants". Read upwards, that sentence is this function. ADR-0502 is blunter -- a backstop
+ * that the thing it binds can delete is not a backstop.
+ *
+ * SEPARATE FROM guardedEntryFor ON PURPOSE. Being an ancestor is only dangerous when something
+ * MUTATES the target: `jq .` and `git status .` name the repo root as an operand and destroy
+ * nothing, and folding this into the main lookup denied both. A guard that denies a read is not
+ * a stricter guard, it is a broken one -- so the caller applies this only where a file can
+ * actually be destroyed. Returns the guarded entry that WOULD be destroyed, not the path asked
+ * for, because deleting a parent is not a narrower act than deleting the child.
+ */
+export function containsGuardedEntry(resource, guard) {
+  if (typeof resource !== "string" || resource === "") return null;
+  const abs = resolve(guard.root, resource);
+  const id = identity(abs);
+  const target = norm(id ? id.real : abs);
   for (const d of guard.declared || []) {
-    if (d.normalised === target) continue;              // handled above, by identity
+    if (d.normalised === target) continue;              // that is guardedEntryFor's job
     if (d.normalised.startsWith(target + "/")) return d.entry;
   }
-
   return null;
 }
 

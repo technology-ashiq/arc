@@ -33,7 +33,7 @@ import {
   decisionForLevel, minLevel, rank,
 } from "./model.mjs";
 import { resolveEffectivePolicy, grantFor } from "./reduce.mjs";
-import { buildResourceGuard, guardedEntryFor, withinRoots } from "./resources.mjs";
+import { buildResourceGuard, guardedEntryFor, containsGuardedEntry, withinRoots } from "./resources.mjs";
 
 const has = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
 const verdict = (decision, effective, reason) => ({ decision, effective, reason });
@@ -172,12 +172,23 @@ export function authorizeAction({ kind, capability, resource } = {}, ctx = {}) {
   if (capability === "write" || capability === "shell") {
     const guard = ctx.guard || buildResourceGuard(policy.ungrantable_resources, root);
     const targets = capability === "shell" ? shellTargets(resource) : [resource];
+    // A shell operand is only capable of destroying a guarded file when the program mutates
+    // files. `jq .` and `git status .` name the repo root and destroy nothing, so the ancestor
+    // rule is scoped to the mutators -- a guard that denies a read is not stricter, it is broken.
+    const mutates = capability === "write" || FILE_MUTATORS.has(argv0);
     for (const target of targets) {
       const hit = guardedEntryFor(target, guard);
       if (hit)
         return verdict("deny", "L0",
           `${target} resolves to the un-grantable resource ${hit} -- excluded from every ` +
           `write and file-mutating shell grant regardless of ceiling or cap (ADR-0502)`);
+      // The ANCESTOR case: the target is not itself guarded, it CONTAINS something that is.
+      const inside = mutates ? containsGuardedEntry(target, guard) : null;
+      if (inside)
+        return verdict("deny", "L0",
+          `${target} contains the un-grantable resource ${inside} -- deleting or overwriting a ` +
+          `parent is not a narrower act than the child, and a backstop the bound thing can ` +
+          `remove is not a backstop (ADR-0502)`);
     }
     // An unresolvable target on a file-mutating program denies. `git clean -xdf .claude` and
     // `sed -i s@a@b@ settings.json` name no operand the guard can resolve, and skipping the

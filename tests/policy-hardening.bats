@@ -258,6 +258,12 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
       out.push(JSON.stringify(cmd) + '=' + D(cmd));
     }
     out.push('control=' + D('rm -rf docs/scratch'));
+    // A NON-MUTATING program naming the repo root. The first version of this rule denied it,
+    // because `.` contains every guarded path -- so `jq .` and `git status .` became policy
+    // violations. Being an ancestor is only dangerous when something can destroy the target.
+    pol.argv0_classes.jq = { class:'narrow', reproduces:[] };
+    pol.kinds['session:interactive'].shell.argv0_allow = ['rm','jq'];
+    out.push('readonly-dot=' + D('jq .'));
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *'"rm -rf .claude"=deny'* ]] || { echo "$output"; false; }
@@ -268,6 +274,8 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   # a delete outside every guarded path must still EXECUTE. Without this row, a rule that denied
   # all shell would pass every assertion above.
   [[ "$output" == *"control=execute"* ]] || { echo "$output"; false; }
+  # The scoping control: a read-only program naming the repo root must NOT be denied.
+  [[ "$output" == *"readonly-dot=execute"* ]] || { echo "$output"; false; }
 }
 
 @test "PHASE 04 -- shell that EXECUTES with no argv0_allow is capped, not unbounded" {
