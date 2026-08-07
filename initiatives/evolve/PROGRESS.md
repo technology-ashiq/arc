@@ -80,6 +80,36 @@ bank the contract, lint and vocabulary ADRs as documentation, stop, retro.
 Burn 7.0d of 7.0d - exactly the appetite, with zero slack, which the `appetite-sum` warning
 flagged at kickoff and which stayed true.
 
+### Inbox from the `policy` lane, 2026-08-07 — ten evolve kinds have no `arc brief` group
+
+`arc-brief.mjs` sorts every event kind into one of four sections — `needs-you`, `money`,
+`progress`, `background` — and that table is **22 kinds behind the closed vocabulary of 44**.
+Ten of the 22 are this lane's: the eight experiment receipts (`experiment.opened`, `assigned`,
+`measured`, `verdict`, `promoted`, `rolled_back`, `closed`, plus `promotion.proposed`),
+`council.outcome` (ADR-0310) and `metric.observed` (ADR-0308).
+
+**The urgent half is already fixed and needs nothing from you.** Until 2026-08-07 the renderer
+used `if (group) push`, so a kind missing from the table rendered as *nothing at all* — every
+one of these ten has been silently absent from the brief since this lane shipped, and a day full
+of them read exactly like a quiet day. That matters more here than in most lanes: this cycle
+closed with all five phases green and eight experiment receipts fixture-proven but unexercised,
+so the first real experiment run would have produced a brief showing no experiment at all.
+Unmapped kinds now fall through to a catch-all that names them, and the catch-all collapses to a
+count so it cannot bury the sections above it (`6d3e3fb`, PR #125). Nothing is dropped any more.
+
+**What is left is a decision only this lane can make.** The ten sit in a catch-all rather than a
+section, so the brief can show them but cannot rank them — an `experiment.verdict` and a routine
+`experiment.measured` arrive at identical weight. Two look worth real thought rather than a
+default: `promotion.proposed`, which is a proposal awaiting a human and therefore plausibly
+`needs-you` rather than `progress`; and `metric.observed`, which ADR-0308 already has opinions
+about and which is high-volume enough that `background` may be the honest home. The policy lane
+deliberately did not guess. A wrong guess does not break anything — it makes the daily brief
+quietly misrepresent this lane's work, which is worse than the catch-all it would replace.
+
+Cost when someone picks it up: ten entries in the `GROUPS` table at the top of
+`.claude/scripts/hq/arc-brief.mjs`. The tests guarding that table are in `tests/policy-brief.bats`,
+including a control that fails if a change ever collapses `needs-you`.
+
 **Phase 04 was the designated cut and was built anyway.** ADR-0307 named it as the thing to drop
 under burn pressure. It was not dropped, so the cut was never spent - and that is worth stating
 plainly rather than quietly banking as good news, because it means this cycle carried no slack at

@@ -278,6 +278,32 @@ agent types register at session start — the identical debt Cycle 5 recorded fo
 **Every phase of Cycle 6 is closed on green CI (run `30782174344`, 19 of 19 jobs at head
 `27cb7ce`). The cycle is ready to merge — PR #100, still open by instruction.**
 
+### Inbox from the `policy` lane, 2026-08-07 — four develop kinds have no `arc brief` group
+
+`arc-brief.mjs` sorts every event kind into one of four sections — `needs-you`, `money`,
+`progress`, `background` — and that table is **22 kinds behind the closed vocabulary of 44**.
+Four of the 22 are this lane's: `develop.started`, `slice.done`, `handoff.ready`, `slice.stuck`.
+
+**The urgent half is already fixed and needs nothing from you.** Until 2026-08-07 the renderer
+used `if (group) push`, so a kind missing from the table rendered as *nothing at all* — every
+`develop.*` and `slice.*` receipt has been silently absent from the brief since this lane
+shipped, and a day full of them read exactly like a quiet day. Unmapped kinds now fall through
+to a catch-all that names them, and the catch-all collapses to a count so it cannot bury the
+sections above it (`6d3e3fb`, PR #125). Nothing is dropped any more.
+
+**What is left is a decision only this lane can make.** The four sit in a catch-all rather than
+a section, so the brief can show them but cannot rank them — a `slice.stuck` and a routine
+`develop.started` arrive at identical weight. `slice.stuck` is the one genuinely worth thinking
+about: `validate.mjs` describes it as *where a build bleeds time, for `/arc-retro` to read*,
+which makes it a `needs-you` line if this lane wants it in front of a human the same day, and
+`background` if it is only ever retro material. The policy lane deliberately did not guess.
+A wrong guess does not break anything — it makes the daily brief quietly misrepresent this
+lane's work, which is worse than the catch-all it would replace.
+
+Cost when someone picks it up: four entries in the `GROUPS` table at the top of
+`.claude/scripts/hq/arc-brief.mjs`. The tests guarding that table are in `tests/policy-brief.bats`,
+including a control that fails if a change ever collapses `needs-you`.
+
 ### Cycle 6 position
 
 | phase | state |
