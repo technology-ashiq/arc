@@ -1,6 +1,6 @@
 {
   "name": "leads",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "requires": [
     "core",
     "hq"
@@ -12,9 +12,11 @@
     ".claude/scripts/leads/lib/caps.mjs",
     ".claude/scripts/leads/lib/deps.mjs",
     ".claude/scripts/leads/lib/drafts.mjs",
+    ".claude/scripts/leads/lib/env.mjs",
     ".claude/scripts/leads/lib/guard.mjs",
     ".claude/scripts/leads/lib/ingest.mjs",
     ".claude/scripts/leads/lib/journal.mjs",
+    ".claude/scripts/leads/lib/mail.mjs",
     ".claude/scripts/leads/lib/personalization.mjs",
     ".claude/scripts/leads/lib/preflight.mjs",
     ".claude/scripts/leads/lib/replies.mjs",

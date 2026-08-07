@@ -1,0 +1,4 @@
+{
+  "_comment": "Mailer fake behaviour (ADR-0415). The fake REQUIRES this file to exist -- an absent-file branch that defaulted to accepting is the same defect authstatus.json shipped, where three deliverability clauses passed because a file was missing. Set http_status to a non-2xx code to make the fake take the failure path through decodeMailResponse; leave it out for the accept path.",
+  "body": {}
+}

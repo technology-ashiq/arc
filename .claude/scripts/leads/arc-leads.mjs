@@ -29,6 +29,8 @@ import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
 import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
+import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
+import { sendNotification, MailRefusal } from "./lib/mail.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
@@ -452,6 +454,46 @@ function cmdState(json) {
   return out;
 }
 
+// ---------- notification mail (Phase 04, ADR-0415) ----------
+//
+// This is NOT the outreach path. It carries owner-directed mail only — deploy and canary
+// failures, waiting approvals, the daily brief — so that arc can reach a human who is not
+// sitting at a terminal. `lib/mail.mjs` holds the allowlist and quota rules; this function
+// only parses flags and hands over.
+async function cmdMail(argv) {
+  // `.env.local` is read HERE rather than at startup, deliberately. Every other subcommand
+  // keeps exactly the environment it had before this phase existed, so a credential file
+  // cannot change the behaviour of a send, a reconcile or a cap check merely by being present
+  // — including ARC_LEADS_NOW and ARC_LEADS_FAKE, whose whole guarantee is that they are
+  // test-only doors nothing in production sets.
+  const envInfo = loadEnvLocal({ root: REPO_ROOT });
+  if (envInfo.present && envInfo.skipped.length)
+    console.error(`arc-leads: warning — ${ENV_LOCAL} line(s) ${envInfo.skipped.join(", ")} are not NAME=value and were skipped`);
+
+  // A flag whose value is missing must not silently consume the NEXT FLAG as its value:
+  // `--to --subject x` would otherwise send to a recipient literally named "--subject".
+  const flag = (name) => {
+    const i = argv.indexOf(name);
+    if (i === -1) return undefined;
+    const v = argv[i + 1];
+    return v === undefined || String(v).startsWith("--") ? undefined : v;
+  };
+
+  const to = flag("--to");
+  const subject = flag("--subject");
+  if (!to || !subject)
+    die(2, "usage: arc-leads mail --to <address> --subject <subject> [--text <body>] [--kind <kind>]");
+
+  const store = openStore({ repoRoot: REPO_ROOT });
+  const res = await sendNotification(
+    { to, subject, text: flag("--text") ?? "", kind: flag("--kind") ?? "notify" },
+    { storeDir: store.dir, nowTs: nowIst() },
+  );
+  // The recipient is NOT printed. The operator typed it and already knows it; this line is
+  // what ends up in a CI log, and the address has no business being there.
+  console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
+}
+
 // ---------- main ----------
 // ARC_LEADS_NOW buckets the daily cap, so it is a cap override and is validated HERE --
 // before any subcommand, before any store or config is touched. It lived inside cmdDaily and
@@ -476,6 +518,7 @@ try {
   else if (cmd === "unlock") cmdUnlock();
   else if (cmd === "daily") await cmdDaily(rest[0]);
   else if (cmd === "preflight") await cmdPreflight();
+  else if (cmd === "mail") await cmdMail(rest);
   else if (cmd === "state") cmdState(rest.includes("--json"));
   else {
     console.error("arc-leads: usage:");
@@ -488,6 +531,7 @@ try {
     console.error("  ingest-reply --file <p>|--stdin|--inbound   a reply in: triage, receipt, suppression or calendar draft, same run");
     console.error("  reconcile                       spine-first recovery of unresolved intents");
     console.error("  unlock                          clear a send lock whose holder is DEAD (refuses if alive)");
+    console.error("  mail --to <a> --subject <s> [--text <b>]   arc -> owner notification only; allowlist-locked (ADR-0415)");
     console.error("  preflight | state --json");
     console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
     process.exit(2);
@@ -498,5 +542,10 @@ try {
   if (e instanceof GuardRefusal) die(3, `[${e.step}] ${e.message}`);
   if (e instanceof IngestRefusal) die(e.step === "usage" ? 2 : 3, `[${e.step}] ${e.message}`);
   if (e instanceof ProviderError) die(PROVIDER_EXIT, `${e.kind}: ${e.message}`);
+  if (e instanceof EnvError) die(2, e.message);
+  // "log" is NOT a refusal — it means the mail went out and only the bookkeeping failed, so it
+  // maps to the store-error code rather than the refused-by-a-gate one. A caller that retried
+  // on a refusal code would send a second copy of a mail that was already delivered.
+  if (e instanceof MailRefusal) die(e.kind === "config" ? 2 : e.kind === "log" ? 5 : 3, `[${e.kind}] ${e.message}`);
   die(2, e.message);
 }
