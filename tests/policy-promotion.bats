@@ -165,9 +165,105 @@ const threw = (fn) => { try { fn(); return "NO-THROW"; } catch (e) { return e.me
   [ "$output" = "true" ]
 }
 
+@test "LIVE END TO END -- request, decide through the inbox, apply, and read the cap off the spine" {
+  # THE TEST THIS SUITE DID NOT HAVE, and phase-02-spec asked for by name: the chain driven
+  # "through arc-inbox and read back from the spine directory rather than from emitter return
+  # values". Every test above this line calls the module directly. That is why nobody noticed the
+  # four kinds could not be EMITTED at all -- arc-event had no idem branch for them, so the
+  # validator refused its derivation and every receipt was quarantined. A chain of correct
+  # functions is not a working chain.
+  local d="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$d/.claude/state/hq"
+  export ARC_SPINE_ROOT="$d/.claude/state/hq"
+
+  # The programs go in FILES, not in shell strings -- and each one is asserted non-empty, because
+  # a heredoc that never lands leaves a test running zero bytes and passing.
+  cat > "$d/policy.mjs" <<'MJS'
+export const K = "session:interactive";
+export const pol = () => ({ version: 1,
+  constitution: { version: "1.0", sha256: "x", receipt: "r" },
+  levels: { L0: "d", L1: "p", L2: "b", L3: "u" },
+  ungrantable_actions: [], ungrantable_resources: [],
+  targets: { message: [], publish: [], deploy: [] }, argv0_classes: {},
+  kinds: { [K]: { e2: [], read: { level: "L3" }, write: { level: "L2" }, shell: { level: "L1" },
+    network: { level: "L1" }, message: { level: "L0" }, publish: { level: "L0" },
+    deploy: { level: "L0" }, spend: { level: "L0" } } } });
+MJS
+  cat > "$d/step1.mjs" <<'MJS'
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+const [root, here] = process.argv.slice(2);
+const P = await import(pathToFileURL(resolve(root, ".claude/scripts/hq/lib/policy/promotion.mjs")).href);
+const { K, pol } = await import(pathToFileURL(resolve(here, "policy.mjs")).href);
+process.stdout.write(JSON.stringify(P.buildPromotionRequest(
+  { kind: K, capability: "write", toLevel: "L2", trialLedgerRef: "docs/trial-ledger.md#t9" },
+  { policy: pol(), events: [] })));
+MJS
+  cat > "$d/step2.mjs" <<'MJS'
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+const [root, here, reqId] = process.argv.slice(2);
+const P = await import(pathToFileURL(resolve(root, ".claude/scripts/hq/lib/policy/promotion.mjs")).href);
+const { pol } = await import(pathToFileURL(resolve(here, "policy.mjs")).href);
+const { query } = await import(pathToFileURL(resolve(root, ".claude/scripts/hq/spine.mjs")).href);
+const { spineRoot } = await import(pathToFileURL(resolve(root, ".claude/scripts/hq/lib/spine-io.mjs")).href);
+const all = (await query(spineRoot(), {})).events.map((e) => e.event);
+const request = all.find((e) => e.id === reqId);
+const decision = all.find((e) => e.kind === "decision.recorded" && e.payload.decides === reqId);
+if (!request) throw new Error("the approval was not readable off the spine");
+if (!decision) throw new Error("the decision was not readable off the spine");
+process.stdout.write(JSON.stringify(P.applyDecision({ request, decision }, { policy: pol(), events: [] })));
+MJS
+  cat > "$d/step3.mjs" <<'MJS'
+import { pathToFileURL } from "node:url";
+import { resolve } from "node:path";
+const [root, here] = process.argv.slice(2);
+const G = await import(pathToFileURL(resolve(root, ".claude/scripts/hq/lib/policy/run-gate.mjs")).href);
+const R = await import(pathToFileURL(resolve(root, ".claude/scripts/hq/lib/policy/reduce.mjs")).href);
+const { K, pol } = await import(pathToFileURL(resolve(here, "policy.mjs")).href);
+const events = G.loadPolicyEvents(here);
+const r = R.resolveEffectivePolicy(K, "write", { policy: pol(), events });
+console.log("folded=" + events.length + " " + r.ceiling + "/" + r.cap + "/" + r.effective);
+MJS
+  for f in policy step1 step2 step3; do
+    [ -s "$d/$f.mjs" ] || { echo "$f.mjs is empty -- the heredoc never landed"; false; }
+  done
+
+  # 1. the request, built by the module against a policy whose write ceiling is L2
+  local req; req="$(node "$d/step1.mjs" "$ARC_ROOT" "$d")"
+  [ -n "$req" ] || { echo "step1 produced no request payload"; false; }
+
+  # 2. the request on the spine, through the ONE writer
+  local reqId; reqId="$(bash "$ARC_ROOT/.claude/scripts/hq/arc-event.sh" emit approval.requested --payload "$req" --strict)"
+  [[ "$reqId" =~ ^[0-9A-HJKMNP-TV-Z]{26}$ ]] || { echo "the approval did not seal: $reqId"; false; }
+
+  # 3. the HUMAN decision, through the inbox and nothing else
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-inbox.mjs" approve "$reqId" --reason "trial evidence reviewed"
+  [ "$status" -eq 0 ] || { echo "the inbox refused the decision: $output"; false; }
+
+  # 4. the applied payload, which re-checks the ceiling AT DECISION TIME
+  local applied; applied="$(node "$d/step2.mjs" "$ARC_ROOT" "$d" "$reqId")"
+  [[ "$applied" == *'"to_level":"L2"'* ]] || { echo "the applied payload is not a promotion to L2: $applied"; false; }
+  [[ "$applied" == *'"decision_ref":"'* ]] || { echo "the applied payload cites no decision: $applied"; false; }
+
+  # 5. the authority receipt on the spine
+  local applyId; applyId="$(bash "$ARC_ROOT/.claude/scripts/hq/arc-event.sh" emit policy.level.changed --payload "$applied" --strict)"
+  [[ "$applyId" =~ ^[0-9A-HJKMNP-TV-Z]{26}$ ]] || { echo "the level change did not seal: $applyId"; false; }
+  # An emitter can exit 0 having quarantined everything it wrote, so the seal is checked, not
+  # assumed. A glob inside `[ -s ]` breaks outright on two matches -- count the directory.
+  local quarantined; quarantined="$(ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l | tr -d " ")"
+  [ "$quarantined" = "0" ] || {
+    echo "$quarantined receipt file(s) quarantined"; cat "$ARC_SPINE_ROOT/events/_quarantine"/* 2>/dev/null; false; }
+
+  # 6. THE POINT: the reducer folds it from the spine and the cap has actually moved.
+  run node "$d/step3.mjs" "$ARC_ROOT" "$d"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "folded=1 L2/L2/L2" ] || { echo "the cap did not move: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 15 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 16 -- a @test was silently dropped"
     false
   }
 }

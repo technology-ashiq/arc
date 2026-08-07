@@ -333,9 +333,20 @@ function invoke(name) {
 
   const blocked = policyGate(name);
   if (blocked) {
-    // NO SIDE EFFECT: the driver process never starts. The incident is a receipt, and the cap
-    // it derives from is recomputed on the NEXT authorization inside this same run -- the
-    // reducer reads the event stream, so a demotion lands mid-run rather than at the next start.
+    // NO SIDE EFFECT: the driver process never starts, and the denial is a receipt.
+    //
+    // IT IS NOT YET A DEMOTION, and the comment that used to sit here said otherwise -- that the
+    // cap "is recomputed on the NEXT authorization inside this same run, so a demotion lands
+    // mid-run". The reducer would indeed fold one; nothing emits one. `buildDemotion` exists in
+    // the policy library and has no caller.
+    //
+    // Wiring it HERE would also be theatre: this gate only ever denies at L0 (authorizeRun pushes
+    // a denial exactly when effective === "L0"), and `buildDemotion` correctly returns null when
+    // there is nothing left to take. A call that can never fire looks like the criterion is met.
+    // The level a denial can actually cost is one taken at the ACTION boundary, where a pair
+    // still holding L2/L3 is refused for a resource or invariant reason -- and putting spine
+    // writes in the blocking PreToolUse path is a decision with real latency and failure-mode
+    // consequences, not an implementation detail. Tracked as the open half of phase 02.
     const detail = `policy denied ${processName}: ${blocked.reason}`;
     console.error(`arc-run: ${detail}`);
     try {
