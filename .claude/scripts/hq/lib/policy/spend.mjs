@@ -137,6 +137,25 @@ export function checkReservation({ kind, amount, currency, day = null }, { polic
   if (amount > MAX_SPEND_MINOR_UNITS) return deny(`amount ${amount} exceeds the absolute magnitude ceiling ${MAX_SPEND_MINOR_UNITS}`);
   if (!CURRENCY_RE.test(currency || "")) return deny(`currency ${JSON.stringify(currency)} is not ISO-4217`);
 
+  // DENIES AT L0 ONLY, and that is deliberate rather than an oversight -- a Phase 04 attacker
+  // reported the opposite and the fix it implies would delete the module.
+  //
+  // The observation is real: authorizeAction, asked about the same pair at the same level,
+  // answers `propose` where this returns ok. But authorizeAction ALSO denies spend above L1
+  // outright (authorize.mjs:211, POL-F: no real-money movement above L1 in v1, regardless of the
+  // declared cap). So spend can never reach a level that executes, and requiring one here would
+  // make checkReservation unreachable by construction -- a money guard that cannot be called is
+  // not a stricter money guard.
+  //
+  // The two modules are answering DIFFERENT questions. authorizeAction answers "may this action
+  // be performed", and for spend in v1 the answer is always no. This answers "would this amount
+  // fit inside the declared cap", which is exactly what an L1 propose has to know in order to
+  // prepare and record a spend it will never perform. The check is the preparation.
+  //
+  // What is genuinely owed sits one layer up, in reserveAndSpend: that function calls a PROVIDER,
+  // which is real-money movement, and it inherits this L0-only test rather than asking whether
+  // the level executes. Recorded in PROGRESS as owed, not patched here, because moving it is a
+  // POL-F decision about what L1 may do with money and not a build-session judgement call.
   const effective = resolveEffectivePolicy(kind, "spend", { policy, events }).effective;
   if (effective === "L0") return deny(`${kind}/spend is denied by policy`);
 
@@ -211,6 +230,38 @@ export async function reserveAndSpend(
       idempotency_key: idempotencyKey, policy_hash: hash, window: "daily",
     });
     if (!id) return { ok: false, reason: "the reservation receipt was not sealed -- no provider call is made" };
+
+    // THE LOCK IS TAKEN ON TRUST, so verify the OUTCOME rather than the mechanism.
+    //
+    // `withLock` arrives by injection and is only type-checked. A caller supplying
+    // `async (fn) => fn()` gets no mutual exclusion whatsoever, and nothing here could tell --
+    // this module's header says the concurrency defect was closed because "the DoD asked for
+    // withLock and the module had never imported it. It does now." It does not import it; it
+    // accepts it. A Phase 04 attacker passed a pass-through and charged 3 x 5000 against a cap
+    // of 10000, reproducing the exact defect the header calls closed. The existing test passes
+    // because the TEST supplies a real lock -- it proves the parameter is used, never that it
+    // excludes.
+    //
+    // A module with no I/O cannot prove another function serialises. What it CAN do is re-read
+    // after appending and check the result: if the chain now commits more than the cap allows,
+    // someone else was inside this section with us. Release what we just wrote and refuse, so a
+    // broken lock costs a failed reservation instead of an overspend.
+    let after = null;
+    try { after = reservationLedger(await readEvents(), kind, { day }); } catch { after = null; }
+    if (after && after.committed > check.cap.amount) {
+      const rid = await emit(RELEASED, {
+        correlation: keyRef(idempotencyKey), policy_hash: hash,
+        reason: `concurrent writer detected: after sealing ${id} the chain commits ${after.committed} ` +
+          `against a cap of ${check.cap.amount}, so the supplied lock did not serialise`,
+        released_on: "policy", reservation_ref: id,
+      });
+      return {
+        ok: false, stuck: !rid,
+        reason: `the reservation was sealed and then found to breach the cap -- committed ${after.committed} ` +
+          `against ${check.cap.amount}. The supplied withLock did not exclude another writer. ` +
+          (rid ? `Reservation ${id} was released.` : `The release receipt did NOT seal, so ${id} still holds budget and needs a human.`),
+      };
+    }
     return { ok: true, id };
   });
 
