@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-leads (Cycle 8, opened 2026-08-04)
-phase: 03
+phase: 04
 appetite: 7d
 burn: 4.5d
 blocked-on: —
@@ -23,30 +23,56 @@ depends-on: —
 | 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
-| 03 | Real campaign | 1.0d | 🚫 **BLOCKED** |
+| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 1.0d | ⏳ second — depends on 04 |
+| 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ⏳ **next — runs first** |
+| 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
-**Appetite burn: 4.5 of 7 days used (64%).** 5.5d allocated across the four phases; **1.5d
-deliberately unallocated** as the overrun absorber — the arc-portfolio lesson (Cycle 4
-allocated 100%, `appetite-sum` warned every run, Phase 02 overran with nothing to absorb it,
-closed ~112%).
+**Appetite burn: 4.5 of 7 days used (64%). 6.5d now allocated (93%) — absorber down to 0.5d.**
+The absorber exists because of the arc-portfolio lesson (Cycle 4 allocated 100%,
+`appetite-sum` warned every run, Phase 02 overran with nothing to absorb it, closed ~112%).
+
+**Re-shaped 2026-08-08.** The owner supplied 5 addresses he controls or knows, which splits the
+old Phase 03 in two: the **machine** is proved now as a rehearsal (Phase 03, REQ-07), and the
+**business result** — reply rate, bounces, cold-domain reputation, whether the offer lands —
+travels to a parked Phase 05 with REQ-05 and its 1.0d. Phase 04 (REQ-08) builds the Resend
+transport and the allowlist guard that Phase 03 then reuses, which is why **04 runs before 03**.
+
+**Risk, once and plainly: 0.5d of absorber against two unbuilt phases**, in a lane where every
+phase so far cost an adversarial pass that found 22–29 real holes. One overrun hits the 100%
+cut line. Mitigation is the ordering — Phase 04 is a complete, useful capability on its own, so
+if appetite runs out after it the cycle stops at a clean line rather than half a rehearsal.
 
 **Kill checkpoint: at 3.5 days burned (50%), are REQ-03's cap/suppression fixtures green?**
 If not: stop. Nothing sends, ever, without the guard. Bank the ADR-0400 vocabulary and the
 ADR-0404 lint as documentation, retro.
 
-## Phase 03 is BLOCKED — the four things code cannot supply
+## Phase 05 (the REAL campaign) is BLOCKED — the four things code cannot supply
 
-| # | Gate row | Who unblocks | Cost |
-|---|---|---|---|
-| 1 | A real offer, named | owner | blocked on LexOS billing (P5, Sep '26) |
-| 2 | **Dedicated domain warmed ≥14d + DMARC green** | owner | **2–4 calendar weeks — the long pole** |
-| 3 | ICP v0 file | owner | ~1 hour |
-| 4 | Calendar link live | owner | ~15 min |
-| 5 | Capability report → provider + verifier | `/arc-capability` | ~1 session |
-| 6 | LEA-I / EVO-H0 ruling | ✔ resolved — ADR-0408 | done |
+**Phase 03 is not on this list any more.** The rehearsal needs none of these rows: 5 known
+recipients on an allowlist, from the product domain in ADR-0416 rehearsal mode, need no offer,
+no ICP, no warmed cold domain and no cold-outbound vendor. What follows blocks the **real**
+campaign only.
+
+
+Pre-mortem row 4 requires every one of rows 1–4 to carry an owner and a **date started**, or to
+be explicitly marked **not this quarter**, and forbids recording the cycle CLOSED in
+`docs/HISTORY.md` while any row is undated and unmarked. That column is filled below, which is
+the only thing that turns the row from a document into a trigger.
+
+| # | Gate row | Who unblocks | Cost | Date started / state (2026-08-08) |
+|---|---|---|---|---|
+| 1 | A real offer, named | owner | blocked on LexOS billing (P5, Sep '26) | **NOT THIS QUARTER** — owner confirmed 2026-08-08 he cannot yet name the 25 recipients, which is direct evidence the offer is undefined rather than late |
+| 2 | **Dedicated domain warmed ≥14d + DMARC green** | owner | **2–4 calendar weeks — the long pole** | **NOT THIS QUARTER** — deliberately not started. Warming a domain against an offer that does not exist starts a clock nobody can use, and `automemory.ai` is the product domain and can never serve this row (ADR-0402) |
+| 3 | ICP v0 file | owner | ~1 hour | **NOT THIS QUARTER** — derives from row 1; writing it first would be inventing an audience for an unnamed offer |
+| 4 | Calendar link live | owner | ~15 min | **NOT THIS QUARTER** — cheap, but pointless before rows 1–3 |
+| 5 | Capability report → provider + verifier | `/arc-capability` | ~1 session | not run — deferred with the phase |
+| 6 | LEA-I / EVO-H0 ruling | ✔ resolved — ADR-0408 | done | done |
 
 Rows 2–4 are **calendar-gated, not effort-gated** — start them the moment outbound is
-plausibly ≤6 weeks away. Row 2 is the critical path and cannot be compressed.
+plausibly ≤6 weeks away. Row 2 is the critical path and cannot be compressed. **The trigger to
+re-date all four rows is row 1 landing: the day an offer is named, this table is re-opened and
+row 2 starts the same week**, because from that day the warm-up is the longest thing between
+here and a first send.
 
 ## Done log
 
@@ -101,22 +127,64 @@ plausibly ≤6 weeks away. Row 2 is the critical path and cannot be compressed.
   **CI caught three more that I did not**, including two new tests whose assertions could never
   have matched on any code. Run 31018199453: **19/19 jobs success**.
   Evidence: `initiatives/leads/evidence/phase-02/`.
+- **2026-08-08 — cycle re-shaped** via `/arc-change`, in two moves the same day. First, owner
+  decision: vendor-first, do not build what vendors already sell, learn from real usage before
+  automating — with his own question, "who are the 25 people?", as the forcing evidence that the
+  offer is undefined rather than late. Then he refused the park: **5 addresses instead of 25**,
+  and finish the lane. That is the better call, because it separates two things the old Phase 03
+  had welded together — proving the machine, which 5 known recipients can do, and proving the
+  business result, which only strangers can.
+  **Result:** Phase 03 becomes the **rehearsal** (REQ-07 expanded, full pipeline once against a
+  real server); Phase 04 is **arc's own mail** (REQ-08) and runs FIRST because it builds the
+  transport and the allowlist guard Phase 03 reuses; Phase 05 is the **real campaign** (REQ-05
+  re-mapped), parked with its 1.0d and its four gate rows marked NOT THIS QUARTER with a written
+  re-open trigger — pre-mortem row 4 satisfied.
+  **New ADRs:** **0415** — owner-directed mail on a transactional API, allowlist enforced in
+  code, and explicitly **no new spine event kind** (a notification is the postman, not the news;
+  the fact it carries already has a receipt). **0416** — the outreach path may bind the product
+  domain only in rehearsal mode: allowlist-locked, receipt-marked, so real / simulated /
+  rehearsal are three classes that never mix in a count. Resend's idempotency keys satisfy
+  ADR-0402's hard filter; their **24-hour retention** is recorded as a constraint on ADR-0411's
+  reconcile, which must treat an expired key as unresolvable rather than as "never sent".
+  **Appetite: 6.5 of 7 allocated (93%), absorber down to 0.5d** — the tightest this cycle has
+  been, mitigated by ordering so Phase 04 is a clean stopping line. No assumption trigger FIRED;
+  the ledger now records which rows the rehearsal partly answers and which stay open.
 
 ## Now
 
-**Current position: Phase 02 CLOSED (2026-08-05).** Phases 00, 01 and 02 are all closed with
-both adversarial surfaces run on each: **96 holes total**, every one found while CI was green.
-Phase 01 merged as `52a7a63` (PR #111); Phase 02 is PR #113.
+**Current position: Phase 02 CLOSED (2026-08-05). Cycle re-shaped 2026-08-08 — Phases 03 and 04
+are both live, Phase 05 parked.** Phases 00, 01 and 02 are closed with both adversarial surfaces
+run on each: **96 holes total**, every one found while CI was green. Phase 01 merged as
+`52a7a63` (PR #111); Phase 02 as `427d533` (PR #113).
 
-**Next step: Phase 03 — and it is BLOCKED, not next.** It waits on four things no code
-produces (the table above): a named offer, a dedicated domain warmed >=14d with DMARC green,
-an ICP v0 file, and a capability report naming a provider. Rows 2-4 are **calendar-gated, not
-effort-gated** — row 2 alone is 2-4 calendar weeks and cannot be compressed. Start them the
-moment outbound is plausibly <=6 weeks away.
+**What changed.** The real campaign was blocked on business inputs that do not exist — the
+owner cannot name 25 ICP recipients, which is what an undefined offer looks like from the
+inside. He supplied **5 addresses he controls or knows** instead. That does not create an offer,
+but it does make the *machine* testable, so the old Phase 03 split: the rehearsal stays here
+(Phase 03, REQ-07), the business result parks to Phase 05 with REQ-05 and its 1.0d.
 
-**What this cycle has produced is a fixture-proven, UNEXERCISED engine** (ADR-0413, standing
-caution). Every provider fixture encodes a guess at a vendor that has not been chosen. The
-first real campaign is what tests them, and it is the only thing that can.
+**Next step: Phase 04 — arc's own mail — and it runs BEFORE Phase 03.** Owner-directed
+notification from `automemory.ai` through Resend's HTTP API (ADR-0415), so deploy/canary
+failures, waiting approvals and the daily brief reach him off-terminal. It also builds the two
+things Phase 03 needs — the Resend transport and the env-declared allowlist guard — and proves
+them on mail addressed to the owner, where a mistake costs nothing.
+
+**Then Phase 03 — the rehearsal.** ADR-0416 lets the outreach path bind the product domain in
+rehearsal mode only: allowlist-locked, and every send receipt-marked so those five can never be
+counted as real first touches by any report. The five run the complete journey — research →
+dossier → draft → lint → L1 approval → send → receipt → real reply ingested → triage →
+auto-stop — with the real `lib/provider.mjs` bound to Resend rather than the fake.
+
+**Owner's side, done 2026-08-08:** `arc@automemory.ai` created on Zoho, `automemory.ai` verified
+in Resend. **Outstanding from him:** the Resend API key (private store outside the repo, never
+in a chat transcript), the allowlist, the 5 addresses, and at least one recipient willing to
+reply by hand — reply ingestion against real mail is the half a send cannot exercise.
+
+**ADR-0413's caution survives all of this, narrowed rather than retired.** Phase 03 validates
+the Phase 00–02 fixtures **against Resend and against nothing else**. The cold-outbound vendor
+is a different market with different terms — transactional providers forbid unsolicited mail —
+so Phase 05 re-validates every fixture against whatever it binds. "The send path is exercised"
+will be true of the rehearsal vendor only, and any wider reading of it is wrong.
 
 **Budget the adversarial passes properly.** Across three phases they have found 96 holes in
 code CI called green, and the two surfaces have consistently shared almost nothing — which is
