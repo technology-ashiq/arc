@@ -56,10 +56,13 @@ an unclosable bypass class → STOP.
 **Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
 inventory), which the owner has assigned to a separate session.**
 
-**Filed 2026-08-07 through `/arc-change` — all 22 ungrouped kinds get a section, and then a gate
-so the situation cannot recur.** The two entries below record the catch-all being given a budget;
-this is the follow-through the second of them left open. Classified a **bug** on the same grounds:
-the renderer's contract is to rank the day, and for exactly half the vocabulary it does not.
+**CLOSED 2026-08-07, merged as `cf82928` (PR #128), main re-verified green by `workflow_dispatch`
+run `31182279167`, 19/19 jobs — all 22 ungrouped kinds now hold a section, and the coverage gate
+widened from `POLICY_KINDS` to the full derived `KINDS`, so the catch-all cannot silently refill.**
+Filed 2026-08-07 through `/arc-change` and fixed the same day. The two entries below record the
+catch-all being given a budget; this is the follow-through the second of them left open. Classified
+a **bug** on the same grounds: the renderer's contract is to rank the day, and for exactly half the
+vocabulary it did not.
 
 **The assignments are not this lane's guesses.** The owner routed the question to each lane's own
 session and relayed three answers back — `develop` (4 kinds), `evolve` (10), `leads` (7), plus
@@ -147,6 +150,12 @@ lane, this PLAN lists `initiatives/leads/**` do-not-touch, and `feat/leads-phase
 ahead of main with two of them editing the very file the note would land in. Writing it from here
 hands a live lane a merge conflict instead of a message. It is owed once that branch merges.
 `constitution.adopted` (ADR-0073) is company-level and belongs to no lane at all.
+
+**Superseded by the entry at the top of `## Now`.** All three lanes answered — the owner routed the
+question to each lane's own session rather than this one guessing, `leads` included, so the debt
+recorded in the paragraph above is paid. Left in place rather than rewritten: a stale line under
+the code that contradicts it is the exact defect `evolve` caught this lane shipping in PR #125, and
+the cheap fix for it is a marker, not a deletion.
 
 **Kill-criterion check at this close.** Burn is 4.5 of 7 days (64%), past the 50% tripwire — and
 the tripwire's condition is *"at 50% burn, Phase 1 must be done, or the scope-cut conversation is
