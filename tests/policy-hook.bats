@@ -132,9 +132,15 @@ _ask() { # $1 = json payload
   # POL-D. Two fragments each holding their own translation of a policy answer is guaranteed
   # drift, and it is silent: both keep exiting 0 while they stop agreeing on what a denial is.
   cd "$ARC_ROOT"
+  # COMMENTS ARE STRIPPED FIRST. The first version grepped the whole file for "policy-hook.mjs"
+  # and went red on the Edit/Write fragment's own comment -- the paragraph explaining why the
+  # fragment exists names the module it must not call. A grep over source cannot tell code from
+  # prose, which is the same mistake that made the sibling test above go red one commit ago.
   for f in .claude/hooks/PreToolUse.d/40-policy.sh .claude/hooks/PreToolUse-edit.d/40-policy.sh; do
     grep -q "policy-decide.sh" "$f" || { echo "$f does not delegate to the shared body"; false; }
-    grep -q "policy-hook.mjs" "$f" && { echo "$f holds its own copy of the decision"; false; }
+    if grep -v '^[[:space:]]*#' "$f" | grep -q "policy-hook.mjs"; then
+      echo "$f holds its own copy of the decision"; false
+    fi
   done
   [ -x ".claude/hooks/policy-decide.sh" ] || { echo "the shared body is not executable"; false; }
 }
