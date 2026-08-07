@@ -124,7 +124,12 @@ export function render(day, events, torn, { full = false } = {}) {
       const c = new Map();
       for (const ev of evs) c.set(ev.kind, (c.get(ev.kind) || 0) + 1);
       const parts = [...c.keys()].sort().map((k) => `${k} ${c.get(k)}`).join(" · ");
-      return [`${g}: ${evs.length} (${parts})`];
+      // Collapsing is a LAYOUT change and never a compression of the instruction. The sentence
+      // naming this file is the only way another lane learns it owes its kinds a group, and the
+      // generic hint one screen down matches `background` and `progress` by name, so it never
+      // reaches here -- both clauses ride on the head instead.
+      const tail = g === "ungrouped" ? "  — no group assigned in arc-brief.mjs; --full to expand" : "";
+      return [`${g}: ${evs.length} (${parts})${tail}`];
     }
     // The catch-all says why it is not empty. A count under a name nobody recognises is a
     // puzzle; this is an instruction.
@@ -148,10 +153,19 @@ export function render(day, events, torn, { full = false } = {}) {
 
   let out = assemble();
   if (!full) {
-    // background is the noise floor -- ALWAYS a count, never a wall of note.logged lines.
-    // progress then collapses too only when the day STILL overflows one screen. needs-you and
-    // money always stay expanded.
-    if (buckets.get("background").length) { collapsed.add("background"); out = assemble(); }
+    // background and ungrouped are BOTH noise floors -- ALWAYS a count, never a wall of
+    // note.logged lines. progress then collapses too only when the day STILL overflows one
+    // screen. needs-you and money always stay expanded.
+    //
+    // ungrouped joined this tier because the catch-all that stopped kinds vanishing then had no
+    // budget of its own: 50 develop/slice receipts on one day rendered a 53-line brief against
+    // the 40-line screen, 50 of those lines identical. It had been sitting in the never-collapse
+    // tier beside needs-you and money, whose exemption does not transfer -- every one of THEIR
+    // lines needs human eyes, and an ungrouped line is a kind waiting for its lane to claim a
+    // group. It is also 22 kinds wide, which made it the group most able to bury needs-you: the
+    // one group that must never be buried.
+    for (const g of ["background", "ungrouped"]) if (buckets.get(g).length) collapsed.add(g);
+    if (collapsed.size) out = assemble();
     if (out.length > budget && buckets.get("progress").length) { collapsed.add("progress"); out = assemble(); }
     if (collapsed.size)
       for (let i = 0; i < out.length; i++)
