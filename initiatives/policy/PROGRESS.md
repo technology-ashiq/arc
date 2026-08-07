@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-policy (born 2026-08-06)
-phase: 02 — in progress (00–02 merged to main, CI 19/19 green)
+phase: 03 — not started (00, 01, 02 all CLOSED)
 appetite: 7d
-burn: 4d
+burn: 4.5d
 blocked-on: —
 depends-on: —
 
@@ -24,12 +24,12 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
-| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 every exit criterion met after the 2026-08-07 decisions — awaiting `/arc-phase-done 1` |
-| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 every exit criterion met — awaiting `/arc-phase-done 2` |
+| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ✅ done 2026-08-07 |
+| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | ✅ done 2026-08-07 |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
 
-**Appetite burn: ~4 of 7 days used (57%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
+**Appetite burn: ~4.5 of 7 days used (64%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
 **never taken from Phase 4**. The allocation changed at kickoff, after the simulation gate: Phase
 0 went 1 → 2 days because a law-and-parser-only phase could not run its own runtime hostile
 families or exercise its own reducer, and Phase 3 went 0.5 → 0.25 because its migration is
@@ -45,14 +45,26 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
+| 2026-08-07 | **Phase 02 CLOSED.** The four authority receipts (ADR-0508, vocabulary 40 → 44) and the emitter branch that makes them writable; the promotion chain live end-to-end through `arc-inbox`; automatic demotion on an overreach; both ADR-0501 layers with the cross-check; brief and inbox rendering. **The phase found that none of the four kinds could be emitted at all** — `arc-event` had no idem branch, so every policy receipt was rejected and quarantined while the emitter exited 0. 5 bats suites, 67 tests. `amendments: 0` · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-02/` (live-demo.md, handoff.md, manifest) |
+| 2026-08-07 | **Phase 01 CLOSED.** The headless gate at `arc-run` **and** at `runDriver`, the governing root pinned to the code rather than `--root`, the money guard reserving under a lock that re-reads, and the demotion emitter at the action boundary. ~30 escalations from two fresh adversarial agents, all closed and pinned. 4 bats suites, 83 tests. `amendments: 2` (the demotion surface and the absence-matrix scope, both decided by the owner on 2026-08-07) · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-01/` (live-demo.md, handoff.md, manifest) |
 | 2026-08-07 | **Phases 00–02 landed on `main`.** Not a phase close — 01 and 02 still owe their DoD (live demo + evidence bundle). Recorded because the code is now in the trunk and the CI story around it is the cycle's most expensive lesson: merged without CI (#117), reverted (#118), re-proposed and made genuinely green (#119) | CI **31148958597, 19/19 green** on `0f2d53d` · merge `8064706` · main re-verified by `workflow_dispatch` |
 | 2026-08-06 | **Phase 00 CLOSED.** The law, its parser and the decision. `policy-lint` FAILs from birth; `authorizeAction` returns deny/propose/execute with everything injected; 54 hostile fixtures (30 static + 24 runtime, incl. 2 controls); 63-row feasibility matrix generated from `.mcp.json`; 88 new tests across 6 bats suites. **Two fresh agents found ~24 capability escalations against code that was green on its own tests** — all closed, all pinned. Red-first proven on CI run 31102122394 before any implementation existed | CI **31108185564, 19/19 green** · `initiatives/policy/evidence/phase-00/` (live-demo.md, handoff.md, hook-matrix.json/.md) |
 | 2026-08-06 | Lane born. PLAN.md + 5 phase specs + **ADR-0500..0507** written. Verification: 4 plan-attackers (27 findings, 24 accepted, 3 rejected) and **8 plan-simulator rounds** — blocker count 7 → 6 → 6 → 3 → 2 → 2 → 3 → **1 HARD**, closed by naming which of two E2 readings wins. `kickoff-lint` green on every run. **Not a phase close** — recorded so the kickoff itself has a receipt | `kickoff.done` `01KZB1805TC27WCCMF3DHQRVM0` · `approval.requested` `01KZB1878PENK4YZ98VKQYPK1J` |
 
 ## Now
 
-**Current position: Phase 00 CLOSED. Phase 01 and Phase 02 built, adversarially hardened, and
-now GREEN ON CI AND MERGED** — run **31148958597, 19/19**, merged as `8064706` (PR #119).
+**Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
+inventory), which the owner has assigned to a separate session.**
+
+**Kill-criterion check at this close.** Burn is 4.5 of 7 days (64%), past the 50% tripwire — and
+the tripwire's condition is *"at 50% burn, Phase 1 must be done, or the scope-cut conversation is
+mandatory."* Phase 1 **is** done, and so is Phase 2. **No scope cut is triggered.** What remains
+is 0.25 days for Phase 3 and the 2 untouchable days for Phase 4, which is 2.25 against 2.5 days
+of appetite left. Phase 4's two days are not available to borrow from, so Phase 3 is the only
+place slack can come from if it is needed.
+
+**Everything below is the record of how 00–02 got here.** It is kept in full rather than
+summarised, because most of it is defects that looked like working code.
 
 **How that took two attempts, and the rule it cost.** PR #117 was merged on 2026-08-06 with
 eleven commits that had never completed a CI run — GitHub Actions was in a major outage and

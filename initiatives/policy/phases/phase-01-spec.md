@@ -92,23 +92,44 @@ a race.
 
 ## Verification plan
 
-- **Test command:** `bats tests/policy-runwrapper.bats tests/policy-capabilities.bats tests/policy-bypass.bats tests/policy-spend.bats`
-  — one file at a time, foreground; **CI is the gate**. (`tests/policy-authorize.bats` belongs to
+- **Test command:** `bats tests/policy-runwrapper.bats tests/policy-spend.bats tests/policy-demotion.bats tests/policy-hardening.bats`
+  — **CI is the gate**; nothing runs on the dev box. (`tests/policy-authorize.bats` belongs to
   Phase 0 and stays green here.)
+
+  > **RECONCILED 2026-08-07.** This line named `policy-capabilities.bats` and
+  > `policy-bypass.bats`, which do not exist and never did. The work went where the surface was
+  > rather than where the plan guessed: the bypass fixtures live in `policy-runwrapper.bats`
+  > (direct driver invocation, alternate driver path, env-var injection, and the funnel
+  > assertion), the write absence row and the OS-boundary attacks live in `policy-hardening.bats`,
+  > and the demotion wiring got its own file once it existed. **A verification plan naming files
+  > nobody wrote is not a plan that passed — it is a plan nobody read**, and it would have been
+  > satisfied by `bats` exiting 0 on a glob that matched nothing.
 - **Expected failure first:** `bats tests/policy-capabilities.bats` fails on
   `@test "denied write leaves the target byte-identical"` — before this phase, `arc-run` has no
   policy check at all, so the driver runs, the write lands, and the assertion reports a sha256
   mismatch against the pre-run digest. That failure is the proof the fixture measures
   enforcement rather than absence of activity. Each file asserts its own registered test count
   from `BATS_TEST_NAMES`, and all `@test` names are ASCII-only.
-- **Live demo scenario:** (1) Grant a test process `write` at `L2` with a write root of
-  `tmp/allowed/`; run it through `arc-run` writing to `tmp/allowed/x` → succeeds. (2) Same
-  process, same run, write to `tmp/denied/x` → blocked, `tmp/denied/x` does not exist, an
-  `incident.raised` ULID is printed. (3) Immediately re-authorize in that same run → the
-  effective level is one lower than it was in step 1, printed. (4) Set a daily spend cap of
-  `100` minor units, run a job that reserves `80` → allowed; run a second → blocked with the
-  reservation ledger derived from the spine and printed. (5) Kill the process between reserve
-  and call, restart → the same idempotency key is reused, no double charge on the fake.
+- **Live demo scenario:** (1) A process declaring `fs.write` against a policy that grants it →
+  `arc-run` reaches the driver and the driver's marker file exists. (2) The same process against
+  a policy that denies `write` → `arc-run` exits non-zero with `policy denied`, the driver marker
+  is **absent**, and an `incident.raised` ULID is printed. (3) On the interactive surface, with
+  `session:interactive/write` raised to `L2` by a sealed receipt, a `Write` outside the declared
+  roots → blocked, `policy.demoted L2 -> L1` printed, and both ULIDs read back off the spine.
+  (4) The very next authorization of the write that succeeded before is now `propose`, not
+  `execute` — the cap moved without a restart. (5) Daily spend cap `100` minor units: reserve
+  `80` → allowed; a second reserve → blocked, with the ledger **derived from the spine** and
+  printed. (6) A crash between reserve and provider call → the reservation stays open, surfaces
+  as stuck, and is never auto-released or auto-retried.
+
+  > **RECONCILED 2026-08-07, with the demotion decision.** Steps 2–3 originally put the demotion
+  > at `arc-run`, "in that same run". It cannot live there and be real: `authorizeRun` pushes a
+  > denial exactly when the effective level is already `L0`, so a demotion at that call site can
+  > never fire once — `buildDemotion` correctly returns null when there is nothing left to take.
+  > The owner's decision (option A, 2026-08-07) put the emitter at the **action** boundary, where
+  > a pair that genuinely holds execute authority can reach past it. The property the plan wanted
+  > — *the next authorization sees the lower level, without a restart* — is unchanged and is
+  > step 4; only the surface it is demonstrated on moved to the one where it can happen.
 - **Real-system check:** `arc-run` is driven for real against a committed fake driver, and every
   spine event produced is read back from `.claude/state/hq/events/` — never asserted from the
   emitter's return value, because a quarantined event with exit 0 is exactly how this repo has
