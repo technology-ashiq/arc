@@ -24,7 +24,7 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
-| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 built + hardened, CI green — not closed (`/arc-phase-done 1` owes live demo + evidence) |
+| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 gate + money guard done and hardened; **2 criteria open** — the mid-run demotion, and the absence matrix for network/message/publish/deploy (see Now) |
 | 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 all but one built; **automatic demotion is open and needs a design call** (see Now) |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
@@ -131,8 +131,36 @@ The demotion fixtures themselves — cap-above-ceiling bite, same-run double inc
 append-order race, cross-capability isolation — are all green in `policy-reducer.bats`. What is
 missing is only the thing that turns a real incident into a real receipt.
 
-01 and 02 both also still owe `/arc-phase-done` (live demo + evidence bundle), which is what
-makes a phase closed rather than merely green.
+**And Phase 01 does not close either — I audited its checklist too, and it owes more than a
+demo.** The line above this one used to say 01 owed only "live demo + evidence". It does not.
+
+| Phase 01 exit criterion | Real state |
+|---|---|
+| `authorizeAction` before `spawnSync`, one call site, others searched for | ✅ — and a second gate at `runDriver`, because arc-run was never the only door |
+| declared ∩ grant, POL-D cross-check lint | ✅ |
+| A denied action produces no side effect and emits `incident.raised` | ✅ |
+| …**and the same run's next authorization sees the demoted level** | ❌ **the same gap as Phase 02's automatic demotion.** One missing emitter blocks two phases |
+| **Capability fixture matrix, one row per class, each asserting an absence** | ❌ **only `spend` has one** (31 fixtures). `network`, `message`, `publish`, `deploy` have no fake-backed absence fixture — "the fake server logs 0 requests", "the fake provider has 0 send records", "the fake publisher has 0 releases" were never built. `write` and `shell` are covered at the decision layer but not as runtime absence rows |
+| Bypass fixtures — direct driver · nested denied command · env-var injection · alternate driver path | ✅ all four |
+| Deny-by-default at runtime | ✅ with a **recorded deviation**: a *missing* policy file makes the engine not-in-force rather than blocking (`6755768`). Deliberate and well-reasoned, but the spec still said the opposite until now — a spec that contradicts the tree makes the tree look wrong. Deviation note now written into `phase-01-spec.md` |
+| Money guard + its nine fixture families | ✅ |
+| Tests green on CI, per-job conclusions read | ✅ |
+| Two fresh adversarial agents, different surfaces | ✅ ~54 escalations closed |
+| `tree-manifest` · tracker · **phase-close receipt** | manifest ✅ · tracker ✅ · receipt ❌ (the phase is not closed) |
+
+**So: neither 01 nor 02 can close, and they are blocked on two things, not five.**
+
+1. **The demotion emitter** — one decision (below), then a small amount of code. Unblocks the
+   third criterion of 01 and the automatic-demotion criterion of 02.
+2. **The capability fixture matrix for `network` / `message` / `publish` / `deploy`** — this one
+   is a scoping question, not an oversight. Those classes need a *fake provider to observe*, and
+   the only real senders in this repo belong to the `leads` lane. Building fakes for capabilities
+   no policed code path exercises yet risks fixtures that assert nothing, which is the failure
+   this whole cycle keeps finding. The honest options are: build the fakes anyway as the contract
+   for future senders · narrow the criterion to the classes with a live code path and say so ·
+   hand it to Phase 04, where the adversarial pass will name the classes that actually matter.
+
+Both need Ashiq. Everything that did not need him is done.
 
 Burn ~4 of 7 days.
 
