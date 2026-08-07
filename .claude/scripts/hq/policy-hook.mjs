@@ -23,6 +23,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { authorizeAction } from "./lib/policy/authorize.mjs";
 import { loadPolicyFromDisk, loadPolicyEvents, policyRoot } from "./lib/policy/run-gate.mjs";
+import { recordOverreach } from "./lib/policy/incident.mjs";
 import { SESSION_KIND } from "./lib/policy/model.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -108,6 +109,25 @@ function main() {
     const verdict = authorizeAction({ kind: SESSION_KIND, capability, resource }, { policy, events, root });
     if (verdict.decision === "deny") {
       process.stdout.write(`BLOCKED by policy: ${toolName} needs ${capability} -- ${verdict.reason}\n`);
+      // THE DENIAL COSTS A LEVEL, when the pair held one to lose. `recordOverreach` decides
+      // whether this deny is an overreach or an ordinary deny-by-default, and writes the two
+      // receipts if it is. It never throws, and its result never reaches the return value below:
+      // the action is denied whether or not the receipt lands. A failed receipt is reported --
+      // "the demotion could not be sealed" and "there was nothing to take" must not read alike --
+      // but it does not soften the block, and it must never be able to allow.
+      const bite = recordOverreach(
+        { kind: SESSION_KIND, capability, effective: verdict.effective,
+          what: `${toolName} denied: ${verdict.reason}`, root },
+        { policy, events });
+      if (bite.demoted)
+        process.stdout.write(`policy: ${SESSION_KIND}/${capability} demoted ${bite.from} -> ${bite.to}, citing ${bite.incidentId}\n`);
+      else if (bite.incidentId)
+        process.stdout.write(`policy: incident ${bite.incidentId} raised, no demotion (${bite.reason})\n`);
+      else if (!bite.skipped)
+        // An overreach the ledger could not record. Saying nothing here would leave the operator
+        // believing the authority chain is intact when it just lost an entry -- the same reason
+        // the dispatcher announces a missing fragment instead of quietly allowing.
+        process.stdout.write(`policy: WARN the overreach was NOT recorded -- ${bite.reason}\n`);
       return 2;
     }
     if (verdict.decision === "propose") {

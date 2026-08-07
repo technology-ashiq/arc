@@ -24,8 +24,8 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
-| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 gate + money guard done and hardened; **2 criteria open** — the mid-run demotion, and the absence matrix for network/message/publish/deploy (see Now) |
-| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 all but one built; **automatic demotion is open and needs a design call** (see Now) |
+| 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 every exit criterion met after the 2026-08-07 decisions — awaiting `/arc-phase-done 1` |
+| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 every exit criterion met — awaiting `/arc-phase-done 2` |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
 
@@ -131,16 +131,49 @@ The demotion fixtures themselves — cap-above-ceiling bite, same-run double inc
 append-order race, cross-capability isolation — are all green in `policy-reducer.bats`. What is
 missing is only the thing that turns a real incident into a real receipt.
 
-**And Phase 01 does not close either — I audited its checklist too, and it owes more than a
-demo.** The line above this one used to say 01 owed only "live demo + evidence". It does not.
+**BOTH OPEN ITEMS WERE DECIDED BY THE OWNER ON 2026-08-07, option A on each, and both are now
+built.**
+
+**1 — the demotion emitter goes in the hook's deny path.** `.claude/scripts/hq/lib/policy/incident.mjs`
+raises the incident and seals the demotion citing it, and `policy-hook.mjs` calls it. The rule
+turned out to be narrower than "deny above L0": it fires only when the level would otherwise have
+**executed**. Denies land at L1 too — the integrity checks are hoisted out of the L2 branch, so a
+pair at its birth cap still gets a hard deny for touching the settings file — and reading that as
+an overreach would make the first such attempt in any fresh repo cost the session its ability
+even to propose. `decisionForLevel(effective) === "execute"` is the test, and it is the library's
+function rather than a rank comparison, because "would this level have executed" is exactly what
+that function answers (POL-D).
+
+Three properties are pinned in `policy-demotion.bats` because each one, wrong, breaks the engine
+rather than a test: a **propose never demotes** (else the policy walks itself to L0 in a handful
+of ordinary tool calls); the bite is **self-limiting** (repeating one mistake stops costing
+levels once the pair can no longer execute); and a **receipt that cannot be written still denies,
+loudly** — the first cut printed nothing on that path, because both report branches keyed on an
+incident id the failure means you never got, so a lost authority receipt read exactly like a
+routine deny.
+
+**2 — the absence matrix is narrowed to the classes with a live code path.** `write`, `shell`,
+`spend`. The other four are deferred with the obligation attached to the code rather than
+dropped: *the phase that puts `network`, `message`, `publish` or `deploy` behind a real call
+takes its matrix row with it, in the same change.* Reason in `phase-01-spec.md`: those rows all
+observe a fake that a policed code path was supposed to have called, no policed sender exists
+here, and a fake that sees nothing sees exactly the same nothing when the fixture is broken, when
+the gate is deleted, and when the file is skipped. And `write`'s row was completed rather than
+assumed — the existing `policy-matrix` test asserted the exit code and the message but never that
+the target file was unchanged, which a guard that refuses *after* writing would also satisfy.
+
+The audit that produced those two items is kept below, because it is the more useful record.
+
+**Phase 01 audit, 2026-08-07.** The line above this one used to say 01 owed only "live demo +
+evidence". It did not.
 
 | Phase 01 exit criterion | Real state |
 |---|---|
 | `authorizeAction` before `spawnSync`, one call site, others searched for | ✅ — and a second gate at `runDriver`, because arc-run was never the only door |
 | declared ∩ grant, POL-D cross-check lint | ✅ |
 | A denied action produces no side effect and emits `incident.raised` | ✅ |
-| …**and the same run's next authorization sees the demoted level** | ❌ **the same gap as Phase 02's automatic demotion.** One missing emitter blocks two phases |
-| **Capability fixture matrix, one row per class, each asserting an absence** | ❌ **only `spend` has one** (31 fixtures). `network`, `message`, `publish`, `deploy` have no fake-backed absence fixture — "the fake server logs 0 requests", "the fake provider has 0 send records", "the fake publisher has 0 releases" were never built. `write` and `shell` are covered at the decision layer but not as runtime absence rows |
+| …**and the same run's next authorization sees the demoted level** | ✅ built 2026-08-07 — pinned by `PHASE 01 REQ-03` in `policy-demotion.bats` |
+| **Capability fixture matrix, one row per class, each asserting an absence** | ✅ for the classes with a live code path (write · shell · spend); the other four deferred with the obligation attached to the code. Was: **only `spend` had one** (31 fixtures). `network`, `message`, `publish`, `deploy` have no fake-backed absence fixture — "the fake server logs 0 requests", "the fake provider has 0 send records", "the fake publisher has 0 releases" were never built. `write` and `shell` are covered at the decision layer but not as runtime absence rows |
 | Bypass fixtures — direct driver · nested denied command · env-var injection · alternate driver path | ✅ all four |
 | Deny-by-default at runtime | ✅ with a **recorded deviation**: a *missing* policy file makes the engine not-in-force rather than blocking (`6755768`). Deliberate and well-reasoned, but the spec still said the opposite until now — a spec that contradicts the tree makes the tree look wrong. Deviation note now written into `phase-01-spec.md` |
 | Money guard + its nine fixture families | ✅ |

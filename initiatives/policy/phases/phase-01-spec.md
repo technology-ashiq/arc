@@ -29,6 +29,30 @@ a race.
       spend → 0 provider calls. Each fixture asserts the guarded code path **ran** before
       asserting what it produced — an absence that would also hold if nothing executed is a
       vacuous pass.
+
+      > **NARROWED, 2026-08-07, by the owner.** The matrix covers the classes this repo can
+      > actually observe: **write · shell · spend**. `network`, `message`, `publish` and `deploy`
+      > are **deferred to the phase that gates a real sender**, and are capped at L0 or L1 in
+      > `hq.policy.yaml` until then.
+      >
+      > The reason is the rule this cycle kept re-learning. Those four rows are written as *"the
+      > fake server logs 0 requests"*, *"the fake provider has 0 send records"*, *"the fake
+      > publisher has 0 releases"* — every one of them observes a **fake that a policed code path
+      > is supposed to have called**. No policed sender exists here: the only real senders in the
+      > tree belong to the `leads` lane and are not behind this gate. So the fixture would build a
+      > fake, deny an action nothing was going to perform, and assert the fake saw nothing —
+      > **which is also what it sees when the fixture is broken, when the gate is deleted, and
+      > when the whole file is skipped.** That is a vacuous pass with a row in a matrix, and this
+      > phase's own criterion forbids it two sentences earlier.
+      >
+      > **What replaces it, and what re-opens it.** Each of the four is denied at the DECISION
+      > layer today (`policy-authorize.bats`) and at the interactive boundary
+      > (`policy-hook.bats`), so nothing is ungoverned — what is missing is only the runtime
+      > absence row, and a runtime absence row needs a runtime. The obligation moves with the
+      > code: **the phase that puts any of those four capabilities behind a real call takes its
+      > matrix row with it**, in the same change, or that phase does not close either. Recorded
+      > here rather than dropped, because a criterion deleted quietly is a criterion nobody ever
+      > meets.
 - [ ] **Bypass fixtures, all blocked:** direct driver invocation, a denied command nested inside
       an allowed shell, environment-variable injection, an alternate driver path.
 - [ ] Deny-by-default proven at runtime (REQ-03): a kind absent from the file can read and do
