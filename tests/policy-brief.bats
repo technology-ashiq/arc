@@ -16,6 +16,12 @@
 # brief that reads exactly like a quiet day. The catch-all group is the fix and the mutation
 # test below is its proof: an untested safety net is a decoration.
 #
+# The catch-all then needed a budget of its own, which is the third half of this suite. It landed
+# in the never-collapse tier beside needs-you and money, and 50 develop/slice receipts on one day
+# rendered a 53-line brief against a 40-line screen. Trading a silent omission for a loud one is
+# not a fix, so the BUDGET / COLLAPSED / FULL tests pin the collapse and the CONTROL test pins the
+# tier boundary from the other side -- a rule that swallowed needs-you instead would pass all three.
+#
 # ASCII-only test names; the file asserts its own registered count at the bottom.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
@@ -165,9 +171,81 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
 
   run node "$d/.claude/scripts/hq/arc-brief.mjs" --date 2026-07-22
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"ungrouped (1)"*   ]] || { echo "an unknown kind was dropped: $output"; false; }
-  [[ "$output" == *"spend.reserved"*  ]] || { echo "the event itself vanished: $output"; false; }
+  [[ "$output" == *"ungrouped: 1 (spend.reserved 1)"* ]] || { echo "an unknown kind was dropped: $output"; false; }
   [[ "$output" == *"no group assigned in arc-brief.mjs"* ]] || { echo "the heading does not say where to fix it: $output"; false; }
+  # The count proves it was seen; only --full proves the EVENT survived rather than a tally of it.
+  run node "$d/.claude/scripts/hq/arc-brief.mjs" --date 2026-07-22 --full
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"spend.reserved"* ]] || { echo "the event itself vanished: $output"; false; }
+}
+
+@test "BUDGET -- an ordinary day of catch-all receipts cannot bury the brief" {
+  # The regression this collapse exists for, measured before it was written: 50 develop/slice
+  # receipts on one day rendered a 53-line brief against the 40-line one-screen budget, 50 of
+  # those lines identical and individually empty. The catch-all had been placed in the
+  # never-collapse tier beside needs-you and money, whose exemption does not transfer -- every one
+  # of THEIR lines needs human eyes, and an ungrouped line is a kind waiting for its own lane to
+  # claim a group. 12 receipts is enough to prove the tier: uncollapsed that is 13 lines, collapsed
+  # it is 1.
+  local i
+  for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    _emit develop.started --payload "{\"lane\":\"probe$i\"}" >/dev/null
+  done
+  # THE FIXTURE ASSERTS ITSELF. Twelve quarantined receipts render an empty brief that satisfies
+  # every line-count assertion below for exactly the wrong reason -- and this suite exists because
+  # that is not hypothetical here.
+  local sealed; sealed=$(grep -c '"kind":"' "$SPINE/events/2026-07-22.jsonl")
+  [ "$sealed" -eq 12 ] || { echo "built $sealed sealed receipts, not 12 -- this test would measure nothing"; false; }
+
+  run _brief
+  # Exit first, always. A crashing renderer prints nothing, and nothing is under budget.
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"ungrouped: 12 (develop.started 12)"* ]] || { echo "the catch-all did not collapse: $output"; false; }
+  local lines; lines=$(printf '%s\n' "$output" | wc -l)
+  [ "$lines" -le 5 ] || { echo "12 catch-all receipts rendered $lines lines: $output"; false; }
+}
+
+@test "COLLAPSED -- the catch-all still says where to fix it, and that --full exists" {
+  # Collapsing is a LAYOUT change, never a compression of the instruction. The sentence naming
+  # arc-brief.mjs is the only way another lane learns it owes its kinds a group, and the generic
+  # hint in the renderer matches `background` and `progress` by name, so it never reaches this
+  # group. A count under a name nobody recognises is a puzzle; both clauses make it an instruction.
+  _emit develop.started --payload '{"lane":"probe"}' >/dev/null
+  run _brief
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"no group assigned in arc-brief.mjs"* ]] || { echo "the instruction was lost in the collapse: $output"; false; }
+  [[ "$output" == *"--full to expand"* ]] || { echo "the collapsed group does not advertise its detail: $output"; false; }
+}
+
+@test "FULL -- --full expands the catch-all back to one line per receipt" {
+  # The collapse hides the detail; it must never destroy it. A group that reads identically
+  # collapsed and expanded is a group whose --full does nothing.
+  _emit develop.started --payload '{"lane":"a"}' >/dev/null
+  _emit develop.started --payload '{"lane":"b"}' >/dev/null
+  run _brief --full
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"ungrouped (2)"* ]] || { echo "--full did not expand the catch-all: $output"; false; }
+  local n; n=$(printf '%s\n' "$output" | grep -c '^  develop.started$')
+  [ "$n" -eq 2 ] || { echo "expected 2 expanded receipt lines, found $n: $output"; false; }
+}
+
+@test "CONTROL -- needs-you never collapses, however noisy the day gets" {
+  # The tier boundary this change moves the catch-all ACROSS, asserted from the other side. If the
+  # always-collapse rule ever widened to needs-you, a day would render `needs-you: 9 (...)` and
+  # every approval and incident a human owes a decision to would arrive as a number. Without this
+  # control, a collapse rule that swallowed the wrong group would still pass every test above.
+  local i
+  for i in 1 2 3 4 5 6 7 8 9; do
+    _emit incident.raised --payload "{\"what\":\"probe$i\"}" >/dev/null
+  done
+  local sealed; sealed=$(grep -c '"kind":"' "$SPINE/events/2026-07-22.jsonl")
+  [ "$sealed" -eq 9 ] || { echo "built $sealed sealed incidents, not 9 -- this test would measure nothing"; false; }
+
+  run _brief
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"needs-you (9)"* ]] || { echo "needs-you was collapsed: $output"; false; }
+  local n; n=$(printf '%s\n' "$output" | grep -c '^  incident.raised$')
+  [ "$n" -eq 9 ] || { echo "expected 9 expanded needs-you lines, found $n: $output"; false; }
 }
 
 @test "the inbox prints the authority delta and its citation for a promotion" {
@@ -190,8 +268,8 @@ _all_four() { _reserved >/dev/null; _released >/dev/null; _raised >/dev/null; _d
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 13 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
     false
   }
 }

@@ -56,6 +56,28 @@ an unclosable bypass class → STOP.
 **Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
 inventory), which the owner has assigned to a separate session.**
 
+**Open defect, filed 2026-08-07 through `/arc-change` — the catch-all group has no line budget.**
+Phase 02 replaced `arc-brief`'s `if (group) push` with a fall-through to an `ungrouped` group, so a
+kind the table does not know is now named instead of dropped. That closed a silent omission and
+opened a loud one: `ungrouped` was placed in the never-collapse tier beside `needs-you` and
+`money`, and those two are exempt for a reason that does not transfer — every one of their lines
+needs human eyes. An ungrouped line does not; it is a kind waiting for its own lane to claim a
+group, and the count plus the kind names carry all of it.
+
+Measured rather than argued, on a sandbox spine: **50 `develop.started` / `slice.done` receipts on
+one day render a 53-line brief against the 40-line one-screen budget**, 50 of those lines identical
+and individually empty. With `leads` LIVE and 22 kinds routing to the catch-all, that is an
+ordinary day rather than a pathological one, and the group that overflows is the one group holding
+nothing a human must act on.
+
+Fix: `ungrouped` collapses on the same always-collapse rule as `background`, and the collapsed head
+keeps its `— no group assigned in arc-brief.mjs` instruction, which is the only part of that line
+telling another lane what it owes. Classified a **bug**, not new scope — it is a defect against the
+renderer's own documented contract, shipped hours ago inside Phase 02, so it takes the
+`/arc-fix-issue` shape (root cause → failing test → fix) rather than a REQ row. Cost ~0.05 days
+against the 0.25 days of slack, never from Phase 04. Assumptions ledger scanned at intake: no
+trigger fires. **Giving the other 22 kinds real groups stays those lanes' call, not this one's.**
+
 **Kill-criterion check at this close.** Burn is 4.5 of 7 days (64%), past the 50% tripwire — and
 the tripwire's condition is *"at 50% burn, Phase 1 must be done, or the scope-cut conversation is
 mandatory."* Phase 1 **is** done, and so is Phase 2. **No scope cut is triggered.** What remains
