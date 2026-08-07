@@ -351,16 +351,18 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
     };
     const f = pth.join(dir, '2026-08-06.jsonl');
     const w = (o) => fs.writeFileSync(f, JSON.stringify(o) + '\n');
-    const n = () => P.loadPolicyEvents(root).length;
+    // NOT named n: the shared PRE block already declares one as the ULID counter for up(),
+    // and a duplicate const in the same module scope is a SyntaxError before a line runs.
+    const loaded = () => P.loadPolicyEvents(root).length;
     const good = mk('01JQ8XZ9K0ABCDEFGH00000010', 'L2');
     const out = [];
-    w(good);                                              out.push('genuine=' + n());
-    w({ ...good, sha: 'f'.repeat(64) });                  out.push('wrongsha=' + n());
+    w(good);                                              out.push('genuine=' + loaded());
+    w({ ...good, sha: 'f'.repeat(64) });                  out.push('wrongsha=' + loaded());
     const t = JSON.parse(JSON.stringify(good)); t.payload.to_level = 'L3';
-    w(t);                                                 out.push('tampered=' + n());
+    w(t);                                                 out.push('tampered=' + loaded());
     w(good);
     fs.appendFileSync(pth.join(dir, '2026-08-08.jsonl'), JSON.stringify(good) + '\n');
-    out.push('duplicated=' + n());
+    out.push('duplicated=' + loaded());
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # THE CONTROL FIRST: a correctly sealed event must still load, or every row below passes for
