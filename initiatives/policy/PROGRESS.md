@@ -25,7 +25,7 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
 | 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | 🔨 built + hardened, CI green — not closed (`/arc-phase-done 1` owes live demo + evidence) |
-| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 every exit criterion built — not closed (`/arc-phase-done 2` owes live demo + evidence) |
+| 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | 🔨 all but one built; **automatic demotion is open and needs a design call** (see Now) |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
 | 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
 
@@ -118,9 +118,21 @@ been dropped from the brief since those lanes shipped. The catch-all group now s
 name instead. **Assigning them real groups is those lanes' call, not this one's** — flagging it
 here rather than guessing.
 
-**Still owed on 02:** nothing from the spec's list — but 01 and 02 both still owe
-`/arc-phase-done` (live demo + evidence bundle), which is what makes a phase closed rather than
-merely green.
+**Still owed on 02 — and the first version of this line said "nothing", which was wrong.** I
+wrote it, then audited the spec's checklist against the code and found two criteria genuinely
+open. Correcting it here rather than letting a tracker claim something the tree does not support:
+
+| Exit criterion | Real state |
+|---|---|
+| Promotion chain **live end-to-end through `arc-inbox`** | ✅ now done — driven through the real CLIs, decision made through the inbox, `policy.level.changed` sealed, and the reducer folds it back off the spine to move the cap L1 → L2. It could not have passed before the emitter fix |
+| **Automatic demotion** on incident | ❌ **open, and it needs a decision.** `buildDemotion` exists in the library with **no caller**. Wiring it into `arc-run`'s gate would be theatre: that gate denies only at L0, and `buildDemotion` correctly returns null when there is nothing left to take, so the call could never fire. The level a denial can actually cost is one taken at the **action** boundary — where a pair still holding L2/L3 is refused for a resource or invariant reason — and that means spine writes inside the blocking `PreToolUse` path. Latency and a new failure mode on an interactive session is a design call, not an implementation detail |
+
+The demotion fixtures themselves — cap-above-ceiling bite, same-run double incident, the
+append-order race, cross-capability isolation — are all green in `policy-reducer.bats`. What is
+missing is only the thing that turns a real incident into a real receipt.
+
+01 and 02 both also still owe `/arc-phase-done` (live demo + evidence bundle), which is what
+makes a phase closed rather than merely green.
 
 Burn ~4 of 7 days.
 
