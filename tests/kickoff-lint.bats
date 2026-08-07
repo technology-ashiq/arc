@@ -381,3 +381,127 @@ addrow() {
   [ "$status" -eq 0 ]
   [ -z "$output" ] || { echo "duplicate ADR number(s) in docs/adr/: $output"; false; }
 }
+
+# ---------- [birth-rule] (policy Phase 03, REQ-07) ----------
+# The gate is ADVISORY and stays that way: every firing case asserts exit 0 alongside the WARN,
+# because this file is run by every lane and is synced into consumer repos. A FAIL here turns a
+# shared company file red for a lane that touched nothing.
+#
+# The policy file under test is the REAL hq.policy.yaml, copied in. A hand-rolled minimal one
+# risks the narrow parser rejecting it, which would route every test through the
+# "did not parse" branch and pass for the wrong reason -- the vacuous pass this repo has
+# shipped three times. Each test below therefore asserts the SPECIFIC message it expects, and
+# every test asserts the lint actually reached its verdict line rather than dying early.
+
+ran() { [[ "$output" == *"kickoff-lint:"* ]]; }
+
+# Write a process file. $1 dir, $2 filename stem, $3 the `name:` value inside.
+mkproc() {
+  mkdir -p "$1/processes"
+  printf 'name: %s\nversion: 1\n' "$3" > "$1/processes/$2.process.yaml"
+}
+
+@test "birth-rule: a repo with no policy engine says nothing at all" {
+  # The consumer-repo case, and the load-bearing one: no hq.policy.yaml, no processes/.
+  # Silence here is the contract that lets this file ship into venture repos.
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[birth-rule]"* ]]
+}
+
+@test "birth-rule: processes without the law WARNs that the tree is ungoverned" {
+  mkproc "$TMP" alpha alpha
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"ungoverned"* ]]
+}
+
+@test "birth-rule: a process with no policy row WARNs and names the file" {
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" newthing newthing
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]                                   # advisory, never a FAIL
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"processes/newthing.process.yaml"* ]]
+  [[ "$output" == *"process:newthing"* ]]               # the fix, not just the complaint
+  [[ "$output" == *"[trial]"* ]]                        # and it is still in TRIAL
+}
+
+@test "birth-rule: a process that HAS its policy row is silent" {
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" kickoff-plan kickoff-plan
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[birth-rule]"* ]]
+}
+
+@test "birth-rule: the subject is the name: field, not the filename -- governed case" {
+  # policy-lint resolves `process:NAME` through the file's own name: field, falling back to the
+  # filename. Both gates read that relation from lib/policy/subjects.mjs; if they ever stop
+  # agreeing, this test and policy-lint's own go red in opposite directions.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" zzz-unrelated-filename kickoff-plan
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[birth-rule]"* ]]
+}
+
+@test "birth-rule: the subject is the name: field, not the filename -- firing case" {
+  # The mirror of the test above, and the one that would still pass if the check silently used
+  # the filename: the FILE is named after a governed process, the process inside it is not.
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkproc "$TMP" kickoff-plan smuggled
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"process:smuggled"* ]]
+}
+
+@test "birth-rule: an unparseable policy file WARNs and never crashes the lint" {
+  printf 'kinds: [ this is not\n  the subset parser\n' > "$TMP/hq.policy.yaml"
+  mkproc "$TMP" alpha alpha
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[birth-rule]"* ]]
+  [[ "$output" == *"policy-lint is the authority"* ]]
+}
+
+@test "birth-rule: files in processes/ that are not .process.yaml are ignored" {
+  cp hq.policy.yaml "$TMP/hq.policy.yaml"
+  mkdir -p "$TMP/processes"
+  printf 'x\n' > "$TMP/processes/README.md"
+  printf 'x\n' > "$TMP/processes/alpha.process.yaml.bak"
+  printf 'x\n' > "$TMP/processes/notes.txt"
+  run $LINT_CMD "$TMP"
+  ran
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"[birth-rule]"* ]]
+}
+
+# THE control, same shape as adr-dup's: this runs against the REAL tree, so a process merged
+# from any branch without its policy row turns the suite red without anyone remembering to look.
+@test "birth-rule: every process in this repository carries its policy row" {
+  # --lane is mandatory here: arc has an initiatives/ dir with more than one eligible lane, so
+  # a bare root exits 3 (ambiguous) and this test would assert against a resolver message
+  # instead of the check. The birth rule reads root-level files, so the lane choice is
+  # irrelevant to what is being measured -- it only gets the resolver out of the way.
+  run $LINT_CMD . --lane policy
+  ran
+  [[ "$output" != *"[birth-rule]"* ]] || { echo "$output"; false; }
+}
+
+# bats silently DROPS a test whose @test name is not ASCII, and a dropped test is invisible
+# except as a shrinking count. Assert the registered count from BATS_TEST_NAMES -- what bats
+# actually registered -- rather than grepping the file, which counts lines bats ignored.
+@test "kickoff-lint suite registers every test it defines" {
+  registered=${#BATS_TEST_NAMES[@]}
+  [ "$registered" -eq 58 ] || { echo "registered $registered tests, expected 58"; false; }
+}

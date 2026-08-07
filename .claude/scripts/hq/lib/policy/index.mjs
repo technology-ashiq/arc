@@ -10,6 +10,7 @@
  */
 
 export { parsePolicyYaml, PolicyParseError } from "./yaml.mjs";
+export { processSubjects, processNames } from "./subjects.mjs";
 export {
   CAPABILITIES, NON_SHELL_CAPABILITIES, LEVELS, BIRTH_CAP, BOUND_KEY, CHAINING, DECISIONS,
   SESSION_KIND, PROCESS_PREFIX, TOP_LEVEL_KEYS, ARGV0_CLASSES,

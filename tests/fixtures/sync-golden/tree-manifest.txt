@@ -156,7 +156,7 @@
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
 .claude/scripts/hq/lib/policy/encode.mjs	436c17ed6bd3269e8ce39383803706da27064531b112f2f43feb10bf5487bcb1
 .claude/scripts/hq/lib/policy/incident.mjs	36feea2323955b965b9247ccc975bcf677d3340191bb299853714067265d7517
-.claude/scripts/hq/lib/policy/index.mjs	0643357fa79fec49eaeb206bc29476bda82a842a9f65a3993578b444bb83cc73
+.claude/scripts/hq/lib/policy/index.mjs	e3c1e76087f8935805388e60af49cd9da4d544e0d8420490e2db771d7f527e39
 .claude/scripts/hq/lib/policy/lint.mjs	97931f85a729100ba26ba18dba2fe443ca03be1bc99fb3b64949abda3d9e24db
 .claude/scripts/hq/lib/policy/model.mjs	0c1e027e9e20c29849578a5dbb5513136e48e0aac749a3d01f68b3f5c3f39dde
 .claude/scripts/hq/lib/policy/promotion.mjs	e145ed38cd9b148a695060488bbf4002a48404b1dc835841a0ddef91a99a8347
@@ -164,6 +164,7 @@
 .claude/scripts/hq/lib/policy/resources.mjs	add354c93a579676d9782ad60df1d14f7c2c765b37e82b1b6667b16b82334fc0
 .claude/scripts/hq/lib/policy/run-gate.mjs	9aa5d829e7edd6e92023b4a408264ef36cb8c95d78c8f5bf4a3bf7287750c324
 .claude/scripts/hq/lib/policy/spend.mjs	4f238a2ab1ab9be318ce41b37d85c95b138e1445cd15b6ebe9ce1c80d1984398
+.claude/scripts/hq/lib/policy/subjects.mjs	28567b24c181b1b00734eebb3b3386a136db84c9207c1ff7ef1c2c0816e1f01e
 .claude/scripts/hq/lib/policy/tool-capabilities.json	f0c1cdd0dac19d7127c327fc251f3a3572eb0817a6be94cd6f8d5a57dd5f8f24
 .claude/scripts/hq/lib/policy/yaml.mjs	43908a3e8bf5ed5f1ea199fd6d9a6beba1a3e63b60a226a9c4f87373794520f7
 .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314
@@ -173,7 +174,7 @@
 .claude/scripts/hq/lib/validate-policy.mjs	6b5bd88f51b75956bbf1b3bc755360002e27db431d7488695c96c8c2456be657
 .claude/scripts/hq/lib/validate.mjs	b4b33edf893159717ba43e1b549846ce806721017efd8a9bd41faa26f4d25b1b
 .claude/scripts/hq/policy-hook.mjs	375a83a004df3eb3f78ae5be2a49edda26a806dc1c934b5bdb209dbd762635a7
-.claude/scripts/hq/policy-lint.mjs	30ed526f3c56432367046b1eb42dda4be0d75bb239bdf5e121f92c51b0437104
+.claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
 .claude/scripts/leads/arc-leads.mjs	34c15c604a955997a20648f13c5c9738fcebce64da9a00338627658cab5f96fe
@@ -193,7 +194,7 @@
 .claude/scripts/leads/pii-tripwire.sh	7b61af67a2c17015dea50d156e67d574bc5584f98274c9457e2dd42a5b5d83aa
 .claude/scripts/plan/arc-bytediff.sh	252b971a2c8a7e2267fcdedcec34c85ecfa4a520d65590c0995c29f6d0e424f8
 .claude/scripts/plan/arc-evidence.sh	ddbc49a3da693499d34d2e7e904db017a045e6fb4558f5b0c867c432b9f013e0
-.claude/scripts/plan/kickoff-lint.mjs	ce4f84fc5bb4c47e7c2422695975e65919a7d4fad74029ca7324bef9702cde4f
+.claude/scripts/plan/kickoff-lint.mjs	9d0c61b0ac6cbb5e273398869592f57de244c3e6e05e30e816f401fd9ddb42e7
 .claude/scripts/review/arc-scan/adapters/codeql.sh	2096a51e1440b321f5ca1a2b7f1cb6870c661c10d82e64f8dc60b170ad80b7a2
 .claude/scripts/review/arc-scan/adapters/gitleaks.sh	efac63b8cf026d05eaafabbec934bb287b2bb67c6f72d0cee7806c088631ff9d
 .claude/scripts/review/arc-scan/adapters/semgrep.sh	24fb3a8beaac5cc9cb8ef3fe175e8e268bd5540264269b8dba26831164f34e2a

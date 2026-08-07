@@ -164,6 +164,7 @@ const v3check = isV3 ? fail : warn;
 const TRIAL = new Set([
   "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
   "architecture", "current-state-structure", "nonneg-drift", "verify-red",
+  "birth-rule",
 ]);
 const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) : v3check(group, msg));
 
@@ -174,6 +175,7 @@ const gate = (group, msg) => (TRIAL.has(group) ? warn(group, `${msg} [trial]`) :
 const SUBSTANCE = new Set([
   "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
   "architecture", "current-state-structure", "nonneg-drift", "verify-red",
+  "birth-rule",
 ]);
 trialStatusLine =
   `[trial-status] ${[...SUBSTANCE].filter((g) => !TRIAL.has(g)).length} substance gate(s) live, ` +
@@ -528,6 +530,61 @@ if (!existsSync(join(root, "docs", "retro-log.md")))
 // ---------- 12. PROGRESS.md exists with ## Now ----------
 if (!existsT("PROGRESS.md")) fail("progress", "PROGRESS.md not found");
 else if (!/##\s*Now/i.test(readT("PROGRESS.md"))) fail("progress", "PROGRESS.md missing '## Now' section");
+
+// ---------- 13. birth rule (policy Phase 03, REQ-07): a module is born with its policy row ----------
+// The OTHER direction from policy-lint. That gate FAILs a `process:NAME` row naming a process
+// that does not exist; nothing walked the relation the other way, so a process file could land
+// with no policy row at all and no gate said a word. Deny-by-default (POL-B) means such a
+// module is read-only at L1, so this is not an escalation — it is a SILENT capability gap: the
+// module runs, quietly unable to do what it was written for, and the reason lives in a file its
+// author never opened. The birth rule attaches the obligation to the code instead.
+//
+// ADVISORY, WARN-first in TRIAL — unlike policy-lint, which FAILs from birth. Two reasons this
+// one may not FAIL: this file is run by EVERY lane, so a check that turns red on a shared
+// company file breaks a sibling lane's kickoff for something that lane did not touch; and it is
+// synced into consumer repos that have no policy engine at all.
+//
+// Silence is therefore load-bearing, and the three cases are deliberately different:
+//   neither hq.policy.yaml nor processes/  → say nothing. A venture repo, working as designed.
+//   processes/ but no hq.policy.yaml       → WARN. That is arc with its law missing.
+//   both                                    → run the check.
+{
+  const hasPolicy = existsSync(join(root, "hq.policy.yaml"));
+  const hasProcesses = existsSync(join(root, "processes"));
+  if (hasProcesses && !hasPolicy) {
+    warn("birth-rule", "processes/ exists but hq.policy.yaml does not — every process in this tree is ungoverned and the birth rule cannot be checked");
+  } else if (hasPolicy && hasProcesses) {
+    // Dynamic and guarded on purpose. A static import puts every lane's kickoff — and every
+    // consumer repo's — one moved file away from a crash, to run an ADVISORY check. The
+    // resolution itself is imported rather than re-implemented (POL-D): policy-lint reads the
+    // same relation from the other side, and two readings drift.
+    let subjects = null, parse = null, loadErr = "";
+    try {
+      ({ processSubjects: subjects } = await import("../hq/lib/policy/subjects.mjs"));
+      ({ parsePolicyYaml: parse } = await import("../hq/lib/policy/yaml.mjs"));
+    } catch (e) { loadErr = e?.message || String(e); }
+
+    if (!subjects || !parse) {
+      warn("birth-rule", `hq.policy.yaml is present but the policy library could not be loaded (${loadErr || "unknown"}) — birth rule skipped`);
+    } else {
+      let doc = null;
+      try { doc = parse(readFileSync(join(root, "hq.policy.yaml"), "utf8")); }
+      catch (e) { warn("birth-rule", `hq.policy.yaml did not parse (${e?.message || e}) — birth rule skipped; policy-lint is the authority on that file and will say so louder`); }
+      if (doc) {
+        // A kinds: key that is absent, or not a mapping, is policy-lint's failure to report,
+        // not this one's. Read it defensively and check what is there.
+        const kinds = doc.kinds && typeof doc.kinds === "object" && !Array.isArray(doc.kinds) ? doc.kinds : {};
+        const governed = new Set(
+          Object.keys(kinds).filter((k) => k.startsWith("process:")).map((k) => k.slice("process:".length)),
+        );
+        const subs = subjects(root) || [];
+        for (const { file, name } of subs)
+          if (!governed.has(name))
+            gate("birth-rule", `processes/${file} has no policy row — add \`"process:${name}":\` to hq.policy.yaml kinds (born at L1, every capability declared) in the same change that adds the module. Without it the process is read-only at L1 by deny-by-default, silently.`);
+      }
+    }
+  }
+}
 
 report();
 
