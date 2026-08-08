@@ -22,42 +22,74 @@ unattributable. `phases/phase-03-spec.md` declares `Depends on: phase-04` for th
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **`mailer()` in `lib/deps.mjs` (interface + fake + Resend HTTP impl) and the policy in
+- [x] **`mailer()` in `lib/deps.mjs` (interface + fake + Resend HTTP impl) and the policy in
       `lib/mail.mjs`** per ADR-0415 — a plain HTTPS POST, no SDK, key read from env. The policy
       module is deliberately NOT an outreach-policy module and must not import from that path
       (`sequencer.mjs`, `guard.mjs`, `journal.mjs`, `drafts.mjs`, `personalization.mjs`,
       `replies.mjs`, `preflight.mjs`, `ingest.mjs`) — sharing `deps.mjs`, the dumb transport
       shelf every external edge in this lane sits on, is not the coupling ADR-0402 forbids
-- [ ] **The allowlist guard, as a fixture first**: a recipient absent from the env-declared
+- [x] **The allowlist guard, as a fixture first**: a recipient absent from the env-declared
       owner allowlist is refused **before any network call**. This is the whole reason the
       product domain is safe to send from — it is a test, never a sentence
-- [ ] **Caps in code, matching the free tier**: 101st send in one IST day → refused · 3,001st
+- [x] **Caps in code, matching the free tier**: 101st send in one IST day → refused · 3,001st
       in a calendar month → refused · quota exhausted → **fails loudly with a named error**.
       A notification path that quietly stops is worse than no notifications at all
-- [ ] **Secret handling proved, not asserted**: key absent → refused with a named error, never
+- [x] **Secret handling proved, not asserted**: key absent → refused with a named error, never
       a silent success · key present in argv → refused · key never printed to stdout, a log, a
       receipt, or any **tracked** file. It lives in `.env.local` and nowhere else — arc's
       existing convention, already read by `/arc-toolcheck`
-- [ ] **A test asserts `.env.local` is gitignored**, by asking git rather than by reading
+- [x] **A test asserts `.env.local` is gitignored**, by asking git rather than by reading
       `.gitignore` — the file's safety rests entirely on one ignore rule, and a rule nothing
       checks is a rule that can be edited away without anyone noticing
-- [ ] **Contract suite green against BOTH fake and real** (`tests/leads-mailer-contract.bats`),
+- [x] **Contract suite green against BOTH fake and real** (`tests/leads-mailer-contract.bats`),
       including the negative control: the **real** impl pointed at an unreachable endpoint
       reaches its own code and exits with its own failure code, so a silently-substituted fake
       cannot pass the suite
-- [ ] **Three triggers wired end to end**: deploy/canary failure · L1 approval items waiting ·
+- [x] **Three triggers wired end to end**: deploy/canary failure · L1 approval items waiting ·
       daily brief
-- [ ] **Inbox placement proved from the delivered message, on two mailbox classes** — the Zoho
+- [~] **Inbox placement proved from the delivered message, on two mailbox classes** — the Zoho
       `arc@` mailbox on the product domain and a Gmail-class mailbox. Not spam. SPF/DKIM/DMARC read from the
       **received headers of the delivered mail**, never from our own DNS lookup, which would
-      prove only what we published and not what the receiver accepted
-- [ ] tests green **on CI**; tracker updated
+      prove only what we published and not what the receiver accepted.
+      **PLACEMENT CONFIRMED by the owner, 2026-08-08: the mail is in the INBOX, not in spam.**
+      **HEADERS READ** on the Zoho mailbox: `dkim=pass` signed `d=automemory.ai` (aligned to the
+      From domain, the strong half) and `spf=pass` on the envelope domain `send.automemory.ai`.
+      **No DMARC result, because no DMARC record exists** — `_dmarc.automemory.ai` is NXDOMAIN
+      on a live lookup, so Zoho had nothing to evaluate rather than having omitted it.
+      **Remaining: publish an enforcing DMARC record, then read the Gmail-class mailbox.** That
+      order is deliberate — reading the stricter mailbox first would measure a configuration
+      already known to be incomplete. `lib/preflight.mjs:82-83` refuses on both a missing record
+      and on `p=none`, so this is Phase 03's entry gate and not a cosmetic row.
+- [x] tests green **on CI**; tracker updated
+
+## What actually happened (2026-08-08)
+
+Merged as `074927d` (PR #131) and `dd08c16` (PR #133); main verified green by workflow_dispatch
+after each, because CI runs on the PR and not on the merge.
+
+**Seven live messages through the real vendor** — `notify` 2, `canary` 3, `brief` 2 — all seven
+reported **delivered** by the vendor, no bounce, no complaint. Every one is in the delivery log
+with its vendor id and every one was counted against the daily quota.
+
+**Two adversarial surfaces, 27 findings, overlapping on three.** CI then found two classes
+neither saw: a real address in tracked files, and eight tests that passed on Linux and macOS
+while failing on Windows because they interpolated bats temp paths into embedded node programs.
+Three further CI reds followed and each taught something — four tests had gone stale in a
+refactor (one of them passing against a *different* guard than its name claimed), and a
+`/dev/null` fixture failed on Windows for the right verdict and the wrong cause. Tests 47 → 74.
+
+**The suite is `tests/leads-mail-guard.bats`.** This spec originally named
+`leads-mailer-contract.bats` and `leads-mailer-guard.bats`; neither was ever created. The
+contract-vs-guard split did not survive contact — the negative control (the real impl pointed at
+an unreachable endpoint, reaching its own code and exiting with its own failure code) belongs
+beside the guards it protects, not in a second file that would import the same modules to make
+the same assertions.
 
 ## Verification plan
 
-- **Test command:** `bats tests/leads-mailer-contract.bats tests/leads-mailer-guard.bats`
-  — on CI. No local suite runs (standing constraint).
-- **Expected failure first:** `leads-mailer-guard.bats`'s allowlist case runs before
+- **Test command:** `bats tests/leads-mail-guard.bats` — on CI. No local suite runs (standing
+  constraint).
+- **Expected failure first:** the allowlist case runs before
   `lib/mail.mjs` exists and fails on the missing module, not on an assertion — so the first
   green must come from the guard actually refusing a non-allowlisted recipient, and the suite
   asserts its own declared `@test` count so a test that never registers is visible as a falling

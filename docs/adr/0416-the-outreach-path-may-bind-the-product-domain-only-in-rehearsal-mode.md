@@ -1,6 +1,6 @@
 # ADR 0416 — the outreach path may bind the product domain only in rehearsal mode
 
-**Status:** proposed
+**Status:** accepted
 **Date:** 2026-08-08
 **Product:** `leads`
 **Reversibility:** one-way (it narrows a non-negotiable; widening it again means re-opening ADR-0402)

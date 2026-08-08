@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-leads (Cycle 8, opened 2026-08-04)
-phase: 04
+phase: 03
 appetite: 7d
-burn: 4.5d
+burn: 5.5d
 blocked-on: —
 depends-on: —
 
@@ -24,10 +24,13 @@ depends-on: —
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
 | 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 1.0d | ⏳ second — depends on 04 |
-| 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ⏳ **next — runs first** |
+| 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ✅ closed 2026-08-08 — 9 live sends, 9 delivered, 74 tests. Closed with ONE row open by the owner's explicit decision: DMARC does not exist, so the Gmail-class header read is deferred behind publishing it |
 | 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
-**Appetite burn: 4.5 of 7 days used (64%). 6.5d now allocated (93%) — absorber down to 0.5d.**
+**Appetite burn: 5.5 of 7 days used (79%). 6.5d allocated (93%) — absorber down to 0.5d.**
+**Kill checkpoint evaluated at this close:** past 50%, so the test fires — REQ-03's
+cap/suppression fixtures are green (Phase 01, closed 2026-08-04), so the criterion does not
+trip and no scope cut is forced. 1.5d of appetite remains against Phase 03's 1.0d.
 The absorber exists because of the arc-portfolio lesson (Cycle 4 allocated 100%,
 `appetite-sum` warned every run, Phase 02 overran with nothing to absorb it, closed ~112%).
 
@@ -149,13 +152,46 @@ here and a first send.
   **Appetite: 6.5 of 7 allocated (93%), absorber down to 0.5d** — the tightest this cycle has
   been, mitigated by ordering so Phase 04 is a clean stopping line. No assumption trigger FIRED;
   the ledger now records which rows the rehearsal partly answers and which stay open.
+- **2026-08-08 — Phase 04 CLOSED.** arc sends its own mail. `mailer()` on `lib/deps.mjs`,
+  policy in `lib/mail.mjs`, `.env.local` readable from Node for the first time, and one
+  delivery path shared by `arc-leads mail` and `arc-leads notify (canary|approvals|brief)`.
+  Merged `074927d` (PR #131), `dd08c16` (PR #133), `#134`. **Appetite 1.0d, actual ~1.0d.
+  amendments: 0 · reopened: n.** Tests **47 → 74**; CI 19/19 on the branch and on merged main.
+  **Nine live sends through the real vendor — notify 2, canary 3, brief 2, approvals 2 — nine
+  delivered, zero bounces, zero complaints**, each in the delivery log and counted against the
+  daily cap. Placement confirmed by the owner: **inbox, not spam**. Headers read from the
+  delivered mail: `dkim=pass` signed `d=automemory.ai` (aligned to the From domain) and
+  `spf=pass` on the envelope domain.
+  **Defects, and where they came from — the transferable part.** Two adversarial surfaces
+  returned **27 findings overlapping on THREE** (fourth time in this lane that two surfaces
+  shared almost nothing). CI found two classes neither saw: a real address in tracked files, and
+  eight tests green on Linux and macOS while red on Windows for handing bats temp paths to node.
+  Three further reds each taught something — four tests had gone stale in a refactor, **one of
+  them passing against a DIFFERENT guard than its name claimed**, which is a green test
+  measuring nothing. A local probe caught two before CI, including an `ENOENT`-vs-`ENOTDIR`
+  split that made a fail-closed guard fail open on exactly one of three legs. The close ceremony
+  found three more: two ADRs still `proposed`, a PLAN naming a module that does not exist, and
+  the `approvals` trigger with zero live coverage (proved against a throwaway spine).
+  **Closed with one row open, by the owner's explicit decision.** `_dmarc.automemory.ai` is
+  NXDOMAIN — no DMARC record exists, so no receiver can report one. `lib/preflight.mjs:82-83`
+  refuses on both a missing record and `p=none`, which makes this **Phase 03's entry gate**, and
+  the Gmail-class header read is deliberately deferred behind publishing it rather than spent
+  measuring a configuration already known to be incomplete.
+  Evidence: `initiatives/leads/evidence/phase-04/` (bundle verified).
 
 ## Now
 
-**Current position: Phase 02 CLOSED (2026-08-05). Cycle re-shaped 2026-08-08 — Phases 03 and 04
-are both live, Phase 05 parked.** Phases 00, 01 and 02 are closed with both adversarial surfaces
-run on each: **96 holes total**, every one found while CI was green. Phase 01 merged as
-`52a7a63` (PR #111); Phase 02 as `427d533` (PR #113).
+**Current position: Phase 04 CLOSED (2026-08-08). Next is Phase 03 — the rehearsal — and it
+is BLOCKED on one DNS record.** Phases 00, 01, 02 and 04 are closed with both adversarial
+surfaces run on each: **123 holes total**, every one found while CI was green. Phase 01 merged
+as `52a7a63` (PR #111); Phase 02 as `427d533` (PR #113); Phase 04 as `074927d` (PR #131) and
+`dd08c16` (PR #133).
+
+**The one thing standing between here and Phase 03 is a TXT record.**
+`_dmarc.automemory.ai` does not resolve, `lib/preflight.mjs:82-83` refuses on both a missing
+record and on `p=none`, and REQ-00 is written that way on purpose — the deliverability gate is
+code, not a checklist. Publish `v=DMARC1; p=quarantine; rua=...` at `_dmarc.automemory.ai` on
+the registrar and the gate opens. Nothing else in Phase 03 is waiting on anything.
 
 **What changed.** The real campaign was blocked on business inputs that do not exist — the
 owner cannot name 25 ICP recipients, which is what an undefined offer looks like from the
@@ -163,11 +199,56 @@ inside. He supplied **5 addresses he controls or knows** instead. That does not 
 but it does make the *machine* testable, so the old Phase 03 split: the rehearsal stays here
 (Phase 03, REQ-07), the business result parks to Phase 05 with REQ-05 and its 1.0d.
 
-**Next step: Phase 04 — arc's own mail — and it runs BEFORE Phase 03.** Owner-directed
-notification from `automemory.ai` through Resend's HTTP API (ADR-0415), so deploy/canary
-failures, waiting approvals and the daily brief reach him off-terminal. It also builds the two
-things Phase 03 needs — the Resend transport and the env-declared allowlist guard — and proves
-them on mail addressed to the owner, where a mistake costs nothing.
+**Phase 04 is BUILT, MERGED and EXERCISED AGAINST THE REAL VENDOR — and it is not closed.**
+Merged as `074927d` (PR #131) and `dd08c16` (PR #133), main verified green by dispatch after
+each. Owner-directed notification from `automemory.ai` through Resend's HTTP API (ADR-0415).
+It also built the two things Phase 03 needs — the Resend transport and the env-declared
+allowlist guard — and proved them on mail addressed to the owner, where a mistake costs nothing.
+
+**What is proved, by running it rather than by asserting it.** Seven live messages on
+2026-08-08: `notify` 2, `canary` 3, `brief` 2. The vendor reports all seven **delivered**, no
+bounce and no complaint. Each is in the delivery log with its vendor id, and the daily quota
+counted every one. All three triggers fired end to end, `notify brief` mailing the brief the
+renderer produced rather than a second rendering that could disagree with it.
+
+**Two adversarial surfaces returned 27 findings and overlapped on THREE**, the fourth time in
+this lane that two surfaces have shared almost nothing. CI then found two classes neither saw —
+a real address in tracked files, and eight tests that passed on Linux and macOS while failing on
+Windows because they handed bats temp paths to node. Tests went 47 → 74.
+
+**Placement is confirmed: the mail is in the INBOX, not in spam** (owner, 2026-08-08). That is
+the half that decides whether this capability works at all, and it is the half a brand-new
+sending domain most often fails — a notification path that lands in spam is a notification path
+that does not exist. `delivered` from the sending vendor was never that answer: it is the
+sender's account of its own work, and the receiver's verdict is a different fact.
+
+**The received headers were read on 2026-08-08, and they found the thing this ceremony existed
+to find.** From the Zoho mailbox, on the `approvals` message:
+
+```
+Authentication-Results: mx.zohomail.in; dkim=pass; spf=pass
+X-ZohoMail-DKIM: pass (identity @automemory.ai)
+DKIM-Signature: s=resend; d=automemory.ai
+Return-Path: <bounce-id on the send.automemory.ai envelope domain>
+```
+
+SPF passes on the envelope domain and DKIM passes signed as `d=automemory.ai` — **aligned to
+the From domain**, which is the strong half. **There is no DMARC line, and the reason is not
+that Zoho omitted it: `_dmarc.automemory.ai` does not resolve at all** (NXDOMAIN, live lookup
+against 8.8.8.8). Nothing was published, so nothing could be evaluated.
+
+**That is a Phase 03 blocker, discovered here rather than at Phase 03's entry.**
+`lib/preflight.mjs:82` refuses when no `v=DMARC1` record resolves, and again at `:83` when the
+policy is `p=none`. REQ-00 is written that way on purpose. So the rehearsal cannot start until
+a DMARC record exists **and** enforces — one DNS TXT record at `_dmarc.automemory.ai`, which is
+the owner's registrar to add and nobody else's.
+
+Reading the Gmail-class mailbox's headers is deliberately deferred until after that record
+exists: today it would measure a configuration we already know is incomplete, and the answer
+would have to be thrown away. The sequence is publish DMARC → re-read on the stricter mailbox.
+
+**Next: Phase 03 — the rehearsal**, on the 5 addresses. The outreach engine has still never
+touched a real mail server (ADR-0413).
 
 **Then Phase 03 — the rehearsal.** ADR-0416 lets the outreach path bind the product domain in
 rehearsal mode only: allowlist-locked, and every send receipt-marked so those five can never be

@@ -1,6 +1,6 @@
 # ADR 0415 — arc's own notification mail is owner-directed and rides a transactional API
 
-**Status:** proposed
+**Status:** accepted
 **Date:** 2026-08-08
 **Product:** `leads`
 **Reversibility:** two-way
