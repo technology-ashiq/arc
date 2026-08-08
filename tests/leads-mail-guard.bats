@@ -38,6 +38,12 @@ _m() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 LEADS_FIXTURE_DIR="$ARC_ROOT/tests/fix
 # A native temp directory, made by node so the path is one node can resolve on every leg.
 _tmpdir() { cd "$ARC_ROOT" && node -e 'const fs=require("node:fs"),os=require("node:os"),p=require("node:path");process.stdout.write(fs.mkdtempSync(p.join(os.tmpdir(),"mail")))'; }
 
+# A native path to an EMPTY file. `/dev/null` is not that path: Git Bash rewrites it to `nul`
+# on the way into argv and node then resolves it against the working directory, so the Windows
+# leg failed with ENOENT while asserting a refusal about emptiness -- red for the right reason
+# and the wrong cause, in a file whose own header forbids handing shell paths to node.
+_emptyfile() { cd "$ARC_ROOT" && node -e 'const fs=require("node:fs"),os=require("node:os"),p=require("node:path");const d=fs.mkdtempSync(p.join(os.tmpdir(),"mail"));const f=p.join(d,"empty.txt");fs.writeFileSync(f,"");process.stdout.write(f)'; }
+
 _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
 
 # ---------- the code-path test: the real mailer reaches its own code ----------
@@ -903,10 +909,26 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # reader that arc pages for nothing.
   cd "$ARC_ROOT"
   local dir; dir="$(_tmpdir)"
+  local empty; empty="$(_emptyfile)"
   [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
-  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file /dev/null
+  [ -f "$empty" ] || { echo "the empty fixture file was not created"; false; }
+  [ ! -s "$empty" ] || { echo "the fixture file is not empty, so this test would not measure emptiness"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file "$empty"
   [ "$status" -eq 2 ]
   [[ "$output" == *"detail is empty"* ]]
+}
+
+@test "notify canary names a missing detail file instead of leaking a raw errno" {
+  # An alert path that dies with `ENOENT: no such file or directory` at 3am is telling the
+  # operator about node, not about the alert. It is also the shape the emptiness test hit on the
+  # Windows leg, which is how a wrong-cause failure hid behind a right-looking assertion.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file "$dir/does-not-exist.txt"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"could not be read"* ]]
+  [[ "$output" != *"ENOENT:"* ]]
 }
 
 @test "notify canary has no argv door for the failure detail" {
@@ -1017,5 +1039,5 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 73 ] || { echo "expected 73 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 74 ] || { echo "expected 74 tests, found $declared -- update this number deliberately"; false; }
 }

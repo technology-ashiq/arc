@@ -599,8 +599,12 @@ async function cmdNotify(argv) {
       die(2, "usage: arc-leads notify canary (--text-file <path> | --stdin) [--what <one line>] — the failure detail arrives as bytes, never in argv");
     if (file && useStdin) die(2, "give the detail ONE way: --text-file <path> or --stdin");
     let detail;
-    if (file) detail = readFileSync(file, "utf8");
-    else {
+    if (file) {
+      // Named, not re-thrown. A raw `ENOENT: no such file or directory` out of an alert path is
+      // telling the operator about node at the moment they need to be told about the outage.
+      try { detail = readFileSync(file, "utf8"); }
+      catch (e) { die(2, `the failure detail file could not be read (${e.code || e.message}) — the alert was NOT sent`); }
+    } else {
       if (process.stdin.isTTY) die(2, "--stdin has no pipe attached (stdin is a terminal)");
       detail = await readStdin(process.stdin);
     }
