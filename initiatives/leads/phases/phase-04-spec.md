@@ -52,10 +52,14 @@ unattributable. `phases/phase-03-spec.md` declares `Depends on: phase-04` for th
       **received headers of the delivered mail**, never from our own DNS lookup, which would
       prove only what we published and not what the receiver accepted.
       **PLACEMENT CONFIRMED by the owner, 2026-08-08: the mail is in the INBOX, not in spam.**
-      That is the half that decides whether this capability works at all, and it is the half a
-      brand-new sending domain most often fails. **The received-header auth verdict is still
-      unread** — it is the difference between "it arrived" and "the receiver verified who sent
-      it", and only the second one predicts what happens when volume goes up.
+      **HEADERS READ** on the Zoho mailbox: `dkim=pass` signed `d=automemory.ai` (aligned to the
+      From domain, the strong half) and `spf=pass` on the envelope domain `send.automemory.ai`.
+      **No DMARC result, because no DMARC record exists** — `_dmarc.automemory.ai` is NXDOMAIN
+      on a live lookup, so Zoho had nothing to evaluate rather than having omitted it.
+      **Remaining: publish an enforcing DMARC record, then read the Gmail-class mailbox.** That
+      order is deliberate — reading the stricter mailbox first would measure a configuration
+      already known to be incomplete. `lib/preflight.mjs:82-83` refuses on both a missing record
+      and on `p=none`, so this is Phase 03's entry gate and not a cosmetic row.
 - [x] tests green **on CI**; tracker updated
 
 ## What actually happened (2026-08-08)

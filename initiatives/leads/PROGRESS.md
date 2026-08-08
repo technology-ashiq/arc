@@ -186,11 +186,30 @@ sending domain most often fails — a notification path that lands in spam is a 
 that does not exist. `delivered` from the sending vendor was never that answer: it is the
 sender's account of its own work, and the receiver's verdict is a different fact.
 
-**What remains unread is the received-header auth verdict** — SPF/DKIM/DMARC as the receiving
-server recorded them. It is the difference between "it arrived" and "the receiver verified who
-sent it", and only the second one predicts what happens when volume goes up or when the same
-domain is asked to carry a campaign. It does not block the notification capability, which is
-proved; it is the row Phase 03 will need before it trusts this domain with anything wider.
+**The received headers were read on 2026-08-08, and they found the thing this ceremony existed
+to find.** From the Zoho mailbox, on the `approvals` message:
+
+```
+Authentication-Results: mx.zohomail.in; dkim=pass; spf=pass
+X-ZohoMail-DKIM: pass (identity @automemory.ai)
+DKIM-Signature: s=resend; d=automemory.ai
+Return-Path: <bounce-id on the send.automemory.ai envelope domain>
+```
+
+SPF passes on the envelope domain and DKIM passes signed as `d=automemory.ai` — **aligned to
+the From domain**, which is the strong half. **There is no DMARC line, and the reason is not
+that Zoho omitted it: `_dmarc.automemory.ai` does not resolve at all** (NXDOMAIN, live lookup
+against 8.8.8.8). Nothing was published, so nothing could be evaluated.
+
+**That is a Phase 03 blocker, discovered here rather than at Phase 03's entry.**
+`lib/preflight.mjs:82` refuses when no `v=DMARC1` record resolves, and again at `:83` when the
+policy is `p=none`. REQ-00 is written that way on purpose. So the rehearsal cannot start until
+a DMARC record exists **and** enforces — one DNS TXT record at `_dmarc.automemory.ai`, which is
+the owner's registrar to add and nobody else's.
+
+Reading the Gmail-class mailbox's headers is deliberately deferred until after that record
+exists: today it would measure a configuration we already know is incomplete, and the answer
+would have to be thrown away. The sequence is publish DMARC → re-read on the stricter mailbox.
 
 **Next: Phase 03 — the rehearsal**, on the 5 addresses. The outreach engine has still never
 touched a real mail server (ADR-0413).
