@@ -45,7 +45,7 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
-| 2026-08-08 | **Phase 04 — built, attacked and green; NOT yet closed.** Two days, four fresh agents on two surfaces, **26 findings**: 23 closed in code, 2 rejected after measurement, 1 written up as an owner action. 17 new bats tests and **the hostile corpus grown 54 → 64 rows**, which is the phase's own exit check. The kill criterion **did not fire** — five findings look like that class (each a way for layer 1 not to run) and in every case the architecture was right and the wiring was wrong. **It cannot close until the three `.claude/settings.json` edits land**: an agent is refused that file by two independent layers, which is the rule working | CI **31245716829, 19/19 green** on `615cee0` · `initiatives/policy/evidence/phase-04/` (findings.md, live-demo.md, handoff.md) · [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md) |
+| 2026-08-08 | **Phase 04 — built, attacked, green and MERGED as `677b67e` (PR #130); NOT yet closed.** Two days, four fresh agents on two surfaces, **26 findings**: 23 closed in code, 2 rejected after measurement, 1 written up as an owner action. 17 new bats tests and **the hostile corpus grown 54 → 64 rows**, which is the phase's own exit check. The kill criterion **did not fire** — five findings look like that class (each a way for layer 1 not to run) and in every case the architecture was right and the wiring was wrong. **It cannot close until the three `.claude/settings.json` edits land**: an agent is refused that file by two independent layers, which is the rule working | CI **31245716829, 19/19 green** on `615cee0` · `initiatives/policy/evidence/phase-04/` (findings.md, live-demo.md, handoff.md) · [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md) |
 | 2026-08-08 | **Phase 03 CLOSED.** The birth rule in `kickoff-lint` (WARN-first in TRIAL), the resolution extracted to `lib/policy/subjects.mjs` so two gates read one relation from one place, and the 53-row cap inventory. **The inventory falsified REQ-07's own deferral premise** — `leads` is a live cap-bearing module — so the deferral now rests on "out of budget" rather than "nothing to migrate", with a named reopening owner. Its own adversarial pass: two agents, 20 findings, incl. the gate comparing the wrong string with a test pinning that blindness as correct, and 7 of 18 tests passing with the check deleted. `tests/kickoff-lint.bats` 48 → 71 | CI **31216027150, 19/19 green** on `074ef19` · `initiatives/policy/evidence/phase-03/cap-inventory.md` · `phase.closed` `01KZG4JYB2EV5NAHFCRXB44X4X` (read back off the spine, 0 quarantined) |
 | 2026-08-07 | **Phase 02 CLOSED.** The four authority receipts (ADR-0508, vocabulary 40 → 44) and the emitter branch that makes them writable; the promotion chain live end-to-end through `arc-inbox`; automatic demotion on an overreach; both ADR-0501 layers with the cross-check; brief and inbox rendering. **The phase found that none of the four kinds could be emitted at all** — `arc-event` had no idem branch, so every policy receipt was rejected and quarantined while the emitter exited 0. 5 bats suites, 67 tests. `amendments: 0` · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-02/` (live-demo.md, handoff.md, manifest) |
 | 2026-08-07 | **Phase 01 CLOSED.** The headless gate at `arc-run` **and** at `runDriver`, the governing root pinned to the code rather than `--root`, the money guard reserving under a lock that re-reads, and the demotion emitter at the action boundary. ~30 escalations from two fresh adversarial agents, all closed and pinned. 4 bats suites, 83 tests. `amendments: 2` (the demotion surface and the absence-matrix scope, both decided by the owner on 2026-08-07) · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-01/` (live-demo.md, handoff.md, manifest) |
@@ -55,11 +55,18 @@ an unclosable bypass class → STOP.
 
 ## Now
 
-**Current position: 00, 01, 02 and 03 are CLOSED. Phase 04 is built, attacked and green, and is
-held open on ONE thing that is not mine to do.** One branch, `feat/arc-policy-phase-03-04`, PR
-#130 as a draft so CI runs on every push without landing a half-finished security phase on main.
+**Current position: 00, 01, 02 and 03 are CLOSED. Phase 04 is built, attacked, green and MERGED —
+`677b67e` (PR #130), 2026-08-08 — and stays OPEN on one item that is not an agent's to do.**
 
-### What Phase 04 is waiting on
+**Why it merged before it closed, which reverses the plan written here yesterday.** The plan said
+nothing merges until 04 closes, and the reason was sound: do not land a half-finished security
+phase on main. It is no longer the situation. Every line of the phase is written, attacked and
+green on three CI legs; the single remaining item is a change to a file an agent is *refused by
+design*, so holding the branch does not bring it closer — it only keeps 26 closed findings out of
+the trunk while main sits in the weaker state the branch fixes. Merging is strictly the safer
+side. The owner reversed the hold explicitly on 2026-08-08.
+
+### What Phase 04 is still waiting on
 
 **Three edits to `.claude/settings.json`, written out with paste-ready diffs in
 [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md).** That file is
