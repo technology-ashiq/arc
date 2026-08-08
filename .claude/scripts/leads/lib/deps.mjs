@@ -211,6 +211,117 @@ const providerReal = {
 };
 export const provider = () => (usingFakes() ? providerFake : providerReal);
 
+// ---------- notification mail (ADR-0415) ----------
+//
+// A SEPARATE boundary from `provider` above, and the separation is the point rather than an
+// accident of layout. `provider` is the cold-outbound path: suppression lists, idempotency
+// lookup, bounce and complaint handling, caps derived from receipts. This one carries a single
+// owner-directed send and nothing else.
+//
+// From Phase 03 both post to the same vendor, which is exactly why the POLICY layers must stay
+// in separate modules (`lib/mail.mjs` here, `sequencer.mjs`/`guard.mjs` there). A shared
+// "sendMail" helper is precisely how the product domain ends up inside the cold-outbound path
+// that ADR-0402 exists to keep it out of — the coupling would arrive as a convenience, not as
+// a decision, and nobody would review it.
+export const MAIL_BASE_URL_DEFAULT = "https://api.resend.com";
+
+// The ack decision, EXTRACTED from the HTTPS callback for the same reason
+// `decodeProviderResponse` is: testing it in place would need a TLS server with a self-signed
+// cert and a client willing to trust it, i.e. a test that proves something about a weakened
+// client rather than about this rule.
+export function decodeMailResponse(statusCode, body) {
+  const code = statusCode || 0;
+  const buf = String(body == null ? "" : body);
+  if (code < 200 || code >= 300) {
+    const kind = code === 429 || code >= 500 ? "transport" : "refused";
+    // 429 is called out by name because it is the one an operator will actually hit: Resend's
+    // free tier stops at 100/day, and "rate limited" reads as transient noise unless the
+    // message says the quota might simply be gone for the day.
+    const hint = code === 429
+      ? " — rate limited OR the daily/monthly quota is exhausted; nothing was delivered"
+      : "";
+    // The body is NOT echoed. A vendor error body quotes the message it rejected, recipient
+    // address included, and this string reaches stderr and CI logs.
+    throw new ProviderError(kind, `mail vendor returned HTTP ${code}${hint} (${buf.length} bytes of body, not echoed) — this is not an ack and nothing is logged as sent`);
+  }
+  let parsed;
+  try { parsed = JSON.parse(buf); }
+  catch { throw new ProviderError("refused", `unparseable mail-vendor response (HTTP ${code})`); }
+  // A 2xx with no id is not an ack: the id is the only handle the delivery log has for
+  // matching a send against the vendor dashboard, and "" would make it unmatchable forever.
+  // The emptiness test is on the TRIMMED value, because `!parsed.id` measures length and the
+  // property wanted is content — `" "`, `"\n"` and a lone NUL are all non-empty strings and all
+  // exactly as unmatchable as `""`, and they would be written into the delivery log and printed
+  // to the CI log as a blank id.
+  if (!parsed || typeof parsed.id !== "string" || parsed.id.trim() === "")
+    throw new ProviderError("refused", `mail vendor returned HTTP ${code} with no message id — there is nothing to record the send against`);
+  return parsed;
+}
+
+// The fake REQUIRES its fixture and does not default to accepting.
+//
+// `authStatus` above learned this the expensive way: its absent-file branch returned
+// spf/dkim/dmarc all true, so three deliverability clauses PASSED because a file was missing.
+// An accept-by-default mailer fake has the identical shape — a test that means to inject a 500,
+// misspells the fixture path, and passes green having proved nothing.
+const mailerFake = {
+  async send({ to, idem_key }) {
+    const cfg = JSON.parse(readFileSync(fixture("mail.json"), "utf8"));
+    if (cfg && cfg.http_status && (cfg.http_status < 200 || cfg.http_status >= 300))
+      return decodeMailResponse(cfg.http_status, JSON.stringify(cfg.body || {}));
+    const store = fakeMails();
+    if (store.has(idem_key)) return store.get(idem_key);
+    const ack = { id: `fake-mail-${idem_key}`, to: String(to) };
+    store.set(idem_key, ack);
+    return ack;
+  },
+};
+let _mails = null;
+const fakeMails = () => (_mails ||= new Map());
+
+const mailerReal = {
+  async send({ to, from, subject, text, idem_key }) {
+    const key = process.env.RESEND_API_KEY;
+    // The NAME is in the message and the value never is. This string reaches stderr and CI.
+    if (!key)
+      throw new ProviderError("config", "RESEND_API_KEY is unset — set it in .env.local (see .env.example). Refusing to send.");
+    const base = process.env.ARC_LEADS_MAIL_BASE_URL || MAIL_BASE_URL_DEFAULT;
+    const payload = JSON.stringify({ from, to: [to], subject, text });
+    return new Promise((res, rej) => {
+      const req = httpsRequest(
+        `${base}/emails`,
+        {
+          method: "POST",
+          timeout: 10000,
+          headers: {
+            // Bearer token in a header, never in the URL: a URL lands in proxy logs and in
+            // any redirect the client follows.
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+            // ADR-0402's hard filter, and ADR-0416 records the constraint that comes with it:
+            // the vendor retains these for 24 HOURS. Past that the question "was this already
+            // sent?" has no answer, and an absent key must never be read as "never sent".
+            "Idempotency-Key": String(idem_key),
+            "Content-Length": Buffer.byteLength(payload),
+          },
+        },
+        (r) => {
+          let buf = "";
+          r.on("data", (d) => (buf += d));
+          r.on("end", () => {
+            try { res(decodeMailResponse(r.statusCode, buf)); }
+            catch (e) { rej(e); }
+          });
+        },
+      );
+      req.on("timeout", () => { req.destroy(); rej(new ProviderError("transport", "mail vendor timed out")); });
+      req.on("error", (e) => rej(new ProviderError("transport", `mail vendor unreachable: ${e.code || e.message}`)));
+      req.end(payload);
+    });
+  },
+};
+export const mailer = () => (usingFakes() ? mailerFake : mailerReal);
+
 function fixtureDir() {
   return process.env.LEADS_FIXTURE_DIR || pathResolve(process.cwd(), "tests/fixtures/leads");
 }

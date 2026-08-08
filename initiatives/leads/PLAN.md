@@ -60,9 +60,10 @@ no sending-domain DNS. All four re-verified at this kickoff.
 | REQ-02 | Template-blast is structurally impossible | ADR-0404 lint, 3 classes. FAIL (blocks inbox from birth): no lead-specific reference · cited fact absent from dossier · no fact→offer relevance line. BELOW-BAR (WARN on the inbox item): `<2` dossier-cited facts · slop markers · cross-draft body similarity ≥70%. Fixtures: zero-specific draft → FAIL · invented fact → FAIL · 2 drafts ≥70% identical → BELOW-BAR · N real facts + relevance → PASS | 1 | active |
 | REQ-03 | Caps and suppression cannot be exceeded — even when asked | ADR-0403 in code: ≤20 submitted sends per IST day · ≤2 touches/lead per rolling 7d · auto-stop on reply · IST business-hours window · event-backed global suppression checked before every send. All state derives from receipts via the reader — **no mutable counter file exists**. Fixtures: 21st send refused · 3rd touch refused · suppressed lead refused · post-reply send refused · **config raised past hard ceiling refused** · CLI/env bypass refused · hand-edited counter irrelevant (counts rebuild) · midnight-IST boundary correct · approved-then-replied → permanently blocked at send moment | 1 | active |
 | REQ-04 | Replies never rot | ADR-0405 ingestion (`--file`/stdin — never argv) → parsed → `outreach.replied` with triage class → auto-stop takes effect before the next batch. "Interested" → calendar-link draft **created in the same run as the ingestion that classified it** — which satisfies the design source's 16:00-IST SLA in both webhook and manual mode **by construction**, with no cutoff clock, no business-day arithmetic and no public-holiday calendar (none of which this cycle can validate, Phase 3 being BLOCKED). Fixtures: interested reply → draft in the store + inbox item before the run exits · same reply ingested twice → exactly one draft (idem) · unsubscribe-in-reply → suppression same run | 2 | active |
-| REQ-05 | One real campaign, honestly measured | ≥25 sends over ≥3 days to real ICP leads, every send individually L1-approved. Acceptance: zero cap/suppression violations · zero spam complaints · no FREEZE breaker fired · every HOLD reviewed and resolved before further sends. Bounce rate is **recorded, never a standalone small-n threshold**. Reply rate = unique replying leads / **submitted** first touches | 3 | active |
+| REQ-05 | One real campaign, honestly measured | ≥25 sends over ≥3 days to real ICP leads, every send individually L1-approved. Acceptance: zero cap/suppression violations · zero spam complaints · no FREEZE breaker fired · every HOLD reviewed and resolved before further sends. Bounce rate is **recorded, never a standalone small-n threshold**. Reply rate = unique replying leads / **submitted** first touches | 5 | active |
 | REQ-06 | RevOps truth lives on the spine and replays identically | Every send/reply/meeting/suppression = typed receipt via the standard emitter: closed payloads, total-preimage idem, `supersedes` corrections, `lead_id` = ADR-0400 keyed HMAC. Fixtures: raw email in payload → rejected · bare unkeyed h-HEX16 id → rejected · duplicate send idem impossible · **wipe derived state → replay → byte-identical reader-derived state dump** (`arc-leads state --json`: dossier index + per-lead touch/suppression counts). The *campaign report*'s replay identity is REQ-05/Phase-3 acceptance — no report generator is built in Phase 0 | 0 | active |
-| REQ-07 | The fake→real gap is closed before lead send #1 | Phase-3 entry gate in code: **dated** seed-inbox smoke ≤7 days old — send to ≥2 owned seed mailboxes (Gmail + Outlook-class), verify inbox placement (not spam), auth headers pass, unsubscribe works end-to-end, reply + bounce ingestion fire on the seeds. Fixtures: stale/undated seed evidence (>7d) → refused · Phase-3 entry without seed smoke → refused | 3 | active |
+| REQ-07 | The fake→real gap is closed before lead send #1 | Two parts, both in Phase 03. **(a) The entry gate, in code:** **dated** seed-inbox smoke ≤7 days old — send to ≥2 owned seed mailboxes (Gmail + Outlook-class), verify inbox placement (not spam), auth headers pass, unsubscribe works end-to-end, reply + bounce ingestion fire on the seeds. Fixtures: stale/undated seed evidence (>7d) → refused · entry without seed smoke → refused. **(b) The rehearsal itself (ADR-0416):** the FULL outreach pipeline run once against a real mail server on **5 allowlisted addresses** — research → dossier → draft → ADR-0404 lint → L1 approval → send → receipt → reply ingested → triage → auto-stop — with the real `lib/provider.mjs` bound to Resend, not the fake. Acceptance: every one of the five completes the journey · zero sends to a non-allowlisted address (refused before any network call) · **every rehearsal receipt carries its rehearsal mark, and a report over the rehearsal window counted as real returns zero real sends** · a deliberately crashed send is resolved by reconcile through a real idempotency key, not double-sent. **This proves the machine, not the offer** — reply rate, bounce rate, complaint rate and cold-domain reputation are untestable on five known recipients and are REQ-05's job | 3 | active |
+| REQ-08 | arc can reach me when I am not at the terminal | ADR-0415 `mailer()` in `lib/deps.mjs` + policy in `lib/mail.mjs`, deliberately NOT the outreach policy modules (`sequencer.mjs`/`guard.mjs`/`journal.mjs`). Real mail from `automemory.ai` lands **in the inbox, not spam**, in ≥2 owned mailboxes of different classes (the Zoho `arc@` mailbox on the product domain + a Gmail-class one), with SPF/DKIM/DMARC **read from the delivered message's own received headers — never from our own DNS lookup**, which would prove only what we published and not what the receiver accepted. Three real triggers wired: deploy/canary failure · L1 approval items waiting · daily brief. Fixtures: **recipient absent from the env-declared owner allowlist → refused before any network call** (this, not a sentence in an ADR, is what stops the product domain becoming cold outbound — ADR-0402) · 101st send in one IST day → refused · 3,001st in a calendar month → refused · quota exhausted → **fails loudly, never a silent no-op** (a notification path that quietly stops is worse than none) · API key absent → refused with a named error · key passed in argv or echoed to a log → refused · real impl pointed at an unreachable endpoint → reaches its own code and exits with its own failure code, proving the fake was not silently substituted | 4 | active |
 
 <!-- Deviation from the design source, forced by kickoff-lint [reqs] (every REQ maps to
      exactly ONE phase): its REQ-00 mapped to "0 + 3-entry" and its REQ-06 to "0–3".
@@ -166,6 +167,7 @@ flowchart TB
 - Caps and suppression are code with fixtures, not policy text. Adversarial breaking pass on cap enforcement, suppression, the personalization lint and the reply parser before any WARN→FAIL promotion.
 - No purchased lists, no scraped emails from login-walled sources, no fake personalization — all three structurally enforced by lint and fixtures, never merely requested.
 - Domain reputation is a company asset: dedicated cold domain, warm-up respected, unsubscribe honored instantly, List-Unsubscribe everywhere, breakers on bounce and complaint.
+- The product domain reaches only people on an env-declared allowlist, refused in code before any network call, never by policy text: arc's own notification mail is owner-directed (ADR-0415), and the outreach path may bind the product domain ONLY in ADR-0416 rehearsal mode, allowlist-locked and receipt-marked. Real cold outbound always requires the dedicated domain (ADR-0402). Real, simulated and rehearsal sends are three classes and are never mixed in any count.
 - No LinkedIn automation (ToS) — LinkedIn first-touch drafts are for manual sending only.
 - No raw PII on the spine, in receipts, in argv, or anywhere under the repo directory: keyed HMAC lead ids (ADR-0400); names, emails, drafts and journal only in the ADR-0410 private store outside the repo, tripwire-lint-watched.
 - Spine discipline: standard emitter, reader-only consumption, closed payloads, total-preimage idems, `supersedes` corrections, real and simulated never mixed.
@@ -205,15 +207,33 @@ reports suffice** · HTML email design → **plain text** · sequence-length exp
 | ~15 min/day of inbox ritual is sustainable for the campaign's duration | Approvals stall >24h during the campaign; the campaign auto-PAUSES (it never auto-sends) | 3 |
 | The India-only allowlist covers the ICP well enough that v1 needs no second jurisdiction | The ICP's qualifying leads are majority out-of-allowlist — expansion is then its own ADR, not an allowlist edit | 0 |
 
+**Ledger status at the 2026-08-08 re-shape — no trigger has FIRED, and the partial coverage
+matters more than that.** Of the three rows the old Phase 3 was to test:
+
+- **A provider meeting ADR-0402's hard filter exists** — now **answered for rehearsal**: Resend
+  has idempotency keys (ADR-0416). Still **open for the cold-outbound vendor**, which is a
+  different market with different terms, and that is Phase 05's `/arc-capability` question.
+- **The fake's semantics match the real provider (ADR-0413)** — Phase 03's rehearsal tests this
+  **against Resend only**. Every fixture it exercises is validated against the rehearsal vendor
+  and against nothing else. A future cold-outbound vendor may still contradict any of them, so
+  this row stays open and ADR-0413's caution stays live.
+- **~15 min/day of inbox ritual is sustainable** — **UNTESTED and untestable this cycle.** Five
+  known recipients over one run is not a ritual; the row needs a multi-day campaign.
+
+An untested assumption looks identical to a surviving one on this table, which is exactly how a
+plan rots quietly. None of these three may be read as validated because Phases 03 and 04 closed
+green. Phase 04's mailer work (ADR-0415) touches none of them at all.
+
 ## External dependencies
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
-| Sending provider (submit, suppression, auth status) | `lib/provider.mjs` — `submit()`, `lookupByMessageId()`, `suppressionList()`, `authStatus()` | `lib/provider-fake.mjs` — deterministic acks, injectable crash points, idempotency-key store | bound at Phase-3 entry per ADR-0402 | `tests/leads-provider-contract.bats` — same suite against fake (Phase 0) and real (Phase 3). **The fake swaps the RESPONSE, never the code path**: one test points the real `lib/provider.mjs` at an unreachable endpoint and asserts it reached its own code and exited with its own failure code. With Phase 3 BLOCKED this suite runs only against a vendor that does not exist — green here is fixture evidence, never a contract (ADR-0413) |
+| Sending provider (submit, suppression, auth status) | `lib/provider.mjs` — `submit()`, `lookupByMessageId()`, `suppressionList()`, `authStatus()` | `lib/provider-fake.mjs` — deterministic acks, injectable crash points, idempotency-key store | **Resend, in ADR-0416 rehearsal mode, at Phase 03** — idempotency keys satisfy ADR-0402's hard filter. The cold-outbound vendor for real sends is a **different** binding, chosen via `/arc-capability` at Phase 05, because transactional providers forbid unsolicited mail in their terms | `tests/leads-provider-contract.bats` — same suite against fake (Phase 0) and real (Phase 3). **The fake swaps the RESPONSE, never the code path**: one test points the real `lib/provider.mjs` at an unreachable endpoint and asserts it reached its own code and exited with its own failure code. From Phase 03 this suite finally runs against a real server — but against the *rehearsal* vendor, so green proves the pipeline, never the cold-outbound vendor's behaviour (ADR-0413 stands) |
 | Inbound reply source | `lib/inbound.mjs` — `poll()` / `ingestFile()` | `lib/inbound-fake.mjs` — fixture mail corpus incl. malformed | webhook if supported, else `--file` (designated cut #1) | `tests/leads-reply-contract.bats` |
 | DNS resolver (SPF/DKIM/DMARC) | `lib/dns.mjs` — `resolveTxt()` | `lib/dns-fake.mjs` — record-present / record-absent / stale-evidence cases | Node `dns/promises` | `tests/leads-preflight.bats` |
 | Email verifier | `lib/verify-email.mjs` — `verify()` | `lib/verify-email-fake.mjs` — verified / unverifiable / invalid | vetted verifier or MX+syntax, from the capability report | `tests/leads-research-lint.bats` |
 | **Lead source** (candidate discovery) | `lib/source.mjs` — `search(icp)` | `lib/source-fake.mjs` — 34-candidate corpus, reserved domains only: 25 clean + 9 each failing exactly one lint rule | manual research against ADR-0409's allowlisted classes | `tests/leads-research-lint.bats` |
+| **Notification mail** (arc → owner, ADR-0415) | `mailer()` in `lib/deps.mjs` — `send({to, from, subject, text, idem_key})`; policy (allowlist, quota, idem derivation) in `lib/mail.mjs`, separate from `lib/provider.mjs` on purpose: the product domain must never sit inside the cold-outbound code path | `mailerFake` in `lib/deps.mjs` — deterministic accepts keyed by idem, injectable non-2xx via `tests/fixtures/leads/mail.json`. **Requires its fixture**: an accept-by-default fake is the defect `authstatus.json` shipped | Resend HTTP API on `automemory.ai` — plain HTTPS POST, no SDK, key from `.env.local` | `tests/leads-mail-guard.bats` — as with the provider, one test points the **real** impl at an unreachable endpoint and asserts it reached its own code and exited with its own failure code, so a silently-substituted fake cannot pass |
 
 ## Pre-mortem (Klein)
 
@@ -236,8 +256,28 @@ reports suffice** · HTML email design → **plain text** · sequence-length exp
 | 00 | Foundations — ADR-0410 store + HMAC secret + tripwire lint FIRST, then ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, ICP format, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | pending |
 | 01 | Sequencer — caps, suppression ledger, send-window, HOLD/FREEZE breakers, receipt-derived state, ADR-0411 journal + spine-first reconcile, ADR-0404 personalization lint + similarity guard, ADR-0412 review boundary, send-moment guard, human-started daily command | 2.0d | pending |
 | 02 | Replies — ingestion (`--file`, store-side only), parser, triage classes → receipts, SLA calendar-draft path, auto-stop wired to pre-send check | 1.0d | pending |
-| 03 | Real campaign — provider bound, seed-inbox smoke, ≥25 sends over ≥3 days, daily triage, metrics, retro | 1.0d | **BLOCKED** (ADR-0413) |
+| 03 | **Rehearsal campaign** (ADR-0416) — real `lib/provider.mjs` bound to Resend, rehearsal mode allowlist-locked + receipt-marked, seed-inbox smoke, the full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile against a real idempotency key | 1.0d | pending — **depends on phase 04** |
+| 04 | arc's own mail — ADR-0415 `mailer()` in `lib/deps.mjs` + `lib/mail.mjs` policy, env-declared owner allowlist and daily/monthly caps enforced in code, three triggers wired (deploy/canary failure, approvals waiting, daily brief), inbox-placement proved on two mailbox classes from the delivered headers | 1.0d | pending — **runs first** |
+| 05 | Real campaign — dedicated cold domain warmed, cold-outbound vendor bound via `/arc-capability`, ≥25 sends over ≥3 days to real ICP leads, daily triage, metrics, retro | 1.0d | **BLOCKED** (ADR-0413) → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
-**Appetite burn: 5.5 of 7 days allocated (79%).** The unallocated 1.5d is the deliberate
-overrun absorber. Phase 03's 1.0d is allocated but **not startable** — its four gate rows are
-business and calendar physics, not engineering (ADR-0413).
+**Appetite burn: 6.5 of 7 days allocated (93%). The absorber is down to 0.5d and this is the
+tightest the cycle has been — read the risk line below before adding anything else.**
+
+**Re-shaped 2026-08-08.** The real campaign was blocked on business inputs that do not exist:
+the owner confirmed he cannot name 25 ICP recipients, which is what an undefined offer looks
+like from the inside. Rather than park the whole thing, he supplied **5 addresses he controls
+or knows**, which turns the untestable half into a testable one. So the old Phase 03 splits:
+the *machine* is proved now as a **rehearsal** (Phase 03, ADR-0416, serving REQ-07), and the
+*business result* — reply rate, bounce behaviour, cold-domain reputation, whether the offer
+lands — travels to a **parked Phase 05** with REQ-05 and its own 1.0d. Phase 04 (arc's own
+mail, REQ-08) is the new capability that pays for itself immediately and, not incidentally,
+builds the Resend transport and the allowlist guard that Phase 03 then reuses — which is why
+**04 runs before 03** despite the numbering.
+
+**Risk, stated once and plainly.** 6.5 of 7 allocated leaves 0.5d of absorber against two
+unbuilt phases, in a lane whose every phase so far has cost an adversarial pass finding 22–29
+real holes. One overrun puts this at the 100% cut line. The mitigation is the ordering: Phase
+04 is a complete, useful, shippable capability on its own, so if appetite runs out after it,
+the cycle stops at a clean line with a working feature rather than half a rehearsal. The 50%
+kill checkpoint (REQ-03's cap/suppression fixtures green) passed at Phase 01, so **no scope cut
+is triggered today** — but at 93% the next unplanned thing is a cut conversation, not a yes.

@@ -1,82 +1,112 @@
-# Phase 03 — Real campaign
+# Phase 03 — Rehearsal campaign
 
-**Goal (one line):** ≥25 real sends over ≥3 days to real ICP leads, every one L1-approved,
-zero cap or suppression violations, honestly reported.
-**Appetite:** 1.0 day (0.5d effort spread over ≥3 elapsed campaign days + 0.5d retro)
-**Depends on:** phase-02
+**Goal (one line):** run the entire outreach pipeline once, end to end, against a real mail
+server, on 5 allowlisted addresses — so that every fixture written across Phases 00–02 is
+finally checked against something other than our own guess.
+**Appetite:** 1.0 day
+**Depends on:** phase-04
 
-## STATUS: BLOCKED — this phase is not startable (ADR-0413)
+## Why this is Phase 03 and why it runs after Phase 04
 
-This phase is **blocked, not deferred and not cut.** Its entry gate is *built* (see below);
-its inputs are business and calendar physics that no code produces.
+The old Phase 03 was one thing — a real campaign — and it was blocked because it needed an
+offer, an ICP and a warmed cold domain. On 2026-08-08 the owner split that block open by
+supplying **5 addresses he controls or knows**. That does not produce an offer, so the business
+half moved to the parked Phase 05. What it does produce is the ability to answer the entirely
+mechanical question the lane has never been able to answer: **does the machine work against a
+real mail server?**
 
-| # | Gate row | State at 2026-08-04 | Who unblocks it |
-|---|---|---|---|
-| 1 | A real offer, named | ✗ — blocked on LexOS billing (its P5, Sep '26 first-₹ target) | owner |
-| 2 | Dedicated domain live + warmed ≥14d + DMARC green | ✗ — **2–4 calendar weeks. The long pole.** Start it the moment outbound is plausibly ≤6 weeks out | owner |
-| 3 | ICP v0 file | ✗ — ~1 hour of owner business judgment | owner |
-| 4 | Calendar link live + test-booked | ✗ — ~15 minutes | owner |
-| 5 | Capability scout report → provider + verifier pick | ✗ — `/arc-capability`; ADR-0402's idempotency hard filter applies | `/arc-capability` |
-| 6 | LEA-I / EVO-H0 ruling | ✔ **resolved** — ADR-0408 | done |
+It runs after Phase 04 because Phase 04 builds the two things this phase needs — the Resend
+transport and the env-declared allowlist guard — and proves both on mail addressed to the owner,
+where a mistake costs nothing. Building them here instead would mean debugging a transport and
+a pipeline at the same time, which is how a failure becomes unattributable.
 
-**Do not start this phase by relaxing a row.** The cascade rule exists because a kickoff that
-builds ahead of the domain sends from a cold one to make a deadline. Rows 2–4 are
-calendar-gated, not effort-gated: they should start weeks before this phase does.
+**ADR-0416 is what makes this legal.** The outreach path binds the product domain only in
+rehearsal mode: allowlist-locked, and every send receipt-marked so these five can never be
+counted as real first touches by any report, ever.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **All six gate rows above evidenced** — this is the entry condition, not an exit one
-- [ ] **REQ-07 seed-inbox smoke passed, DATED ≤7 days old at campaign start**: ≥2 owned seed mailboxes (Gmail + Outlook-class), inbox placement verified (not spam), auth headers pass, unsubscribe end-to-end, reply + bounce ingestion fire on the seeds
-- [ ] **ADR-0402 provider bound**: the real implementation satisfies the interface, and the same contract suite that ran against the fake in Phase 00 runs green against it
-- [ ] **The campaign**: ≥25 sends over ≥3 days under the daily cap, every send L1-approved; exact daily distribution set when the phase starts
-- [ ] Daily triage ritual run; SLA met per REQ-04
-- [ ] `metric.observed` emitted per ADR-0408 — the kind, validator and grammar shipped in Phase 00's single vocabulary edit; **this phase is where the first real emission happens, and therefore where evolve's 4-week clock actually starts** — not at the Phase 0–2 merge
-- [ ] **Campaign report, reader-derived and replay-identical**: researched · approved · submitted · reply rate = unique replying leads / **submitted** first touches · positive-reply rate · meetings · bounce rate · unsubscribes · cap/suppression blocks · HOLD events · zero violations
-- [ ] **Qualitative retro doc (human-written, not derived)**: top objections · which personalization evidence actually earned replies · L1-stay recommendation — **written entirely in ADR-0410's opaque vocabulary: `lead_hmac`, `draft_ref`, provenance class, triage class. No lead or firm name, no domain, no quoted draft or reply text.** ADR-0410's tripwire matches email shapes and store paths, not names or prose, so this file is the one artifact in the lane its own guard cannot police
+- [ ] **`lib/provider.mjs` really bound to Resend** — the real implementation, not the fake, and
+      the Phase-00 contract suite runs green against it including the negative control (the real
+      impl pointed at an unreachable endpoint reaches its own code and exits with its own
+      failure code)
+- [ ] **Rehearsal mode, both properties fixture-proven before any real send**: a recipient
+      outside the allowlist is refused **before any network call** · every rehearsal send
+      carries its rehearsal mark in its receipt
+- [ ] **The mixing guard, proved by its own negative**: a report run over the rehearsal window,
+      asked for real sends, returns **zero** — and the assertion checks the count, not the
+      absence of a word in the output
+- [ ] **The full journey, all 5, end to end**: research → dossier with evidence → draft →
+      ADR-0404 personalization lint → L1 approval in the inbox → send → receipt → reply
+      ingested from a real mailbox → triage class → auto-stop takes effect. Not five sends —
+      five complete journeys
+- [ ] **Reply ingestion against real mail, not the fixture corpus** — real MIME, real client
+      quoting, at least one HTML-only reply and one bottom-posted reply among the five, since
+      both were live bugs in Phase 02 and both were found in fixtures written by us
+- [ ] **Crash-and-reconcile against a real idempotency key**: kill a send mid-flight, run
+      reconcile, confirm the mail was resolved rather than sent twice. **Also assert the
+      24-hour-expiry path** (ADR-0416): an expired key must be treated as
+      unresolvable-by-provider and fall back to the spine-first path, never read as "never sent"
+- [ ] **REQ-07 seed-inbox smoke, dated**: ≥2 owned mailboxes of different classes, inbox
+      placement verified from the delivered message's own received headers, auth headers pass,
+      unsubscribe end-to-end, reply + bounce ingestion fire on the seeds
+- [ ] Caps and suppression observed under real timing: a 3rd touch inside 7d refused · a
+      replied-to lead refused at the send moment · a suppressed address refused
 - [ ] tests green **on CI**; tracker updated
-
-**REQ-05 acceptance explicitly is NOT a bounce threshold.** At n=25 one bounce is 4%, which
-would fail a `<3%` criterion on a reviewed, resumable HOLD event. Acceptance is: zero
-cap/suppression violations · zero spam complaints · no FREEZE fired · every HOLD reviewed and
-resolved before further sends. Bounce rate is recorded and fed to the retro.
-
-## What IS built while this phase is blocked
-
-The **entry gate itself**, so that when the rows are evidenced the gate is already code and
-refuses on failure regardless of what any evidence file claims:
-
-- live DNS resolution of SPF/DKIM/DMARC (REQ-00, Phase 00)
-- provider auth status through the interface (REQ-00, Phase 00)
-- **dated** seed-evidence check: undated or >7 days → refused (REQ-07)
-- Phase-3 entry without a seed smoke → refused (REQ-07)
 
 ## Verification plan
 
-- **Test command:** refine at phase start via `/arc-change` — the entry-gate fixtures run in Phase 00/01 CI; the campaign's own verification is the report plus the retro.
-- **Live demo scenario:** the campaign IS the demo. One real lead's journey end to end: researched with sealed evidence → a draft citing two true facts from that evidence → approved in the inbox → sent inside every cap from the warmed domain → the reply lands and the sequence stops itself → "interested" triage puts a calendar draft in the inbox within SLA → the meeting books, the receipt lands.
-- **Real-system check:** the seed mailboxes, the provider dashboard, and the DMARC report — inspected by a human before lead send #1.
-- **Expected evidence:** seed-smoke transcript with its date, **seed addresses rendered as `seed-1`/`seed-2` and never verbatim**; the reader-derived campaign report; the human retro doc (opaque refs only, per the exit criterion); `initiatives/leads/evidence/phase-03/manifest.json`. **The "one real lead's journey" demo is captured by `arc-leads report --journey LEAD_HMAC` from the reader — a raw terminal transcript of `arc-leads review` is PII and is never committed under `initiatives/leads/evidence/**`.**
+- **Test command:** `bats tests/leads-provider-contract.bats tests/leads-rehearsal-guard.bats`
+  — on CI. No local suite runs (standing constraint).
+- **Expected failure first:** `leads-rehearsal-guard.bats`'s mixing case runs before the
+  rehearsal mark exists and fails because the report counts 5 sends as real where it must count
+  0 — a count assertion, so a mutant that changes the wording cannot pass it. The suite asserts
+  its own declared `@test` count and uses ASCII-only test names (pre-mortem 8).
+- **Live demo scenario:** the five journeys, watched live. Pick one of the five and follow it
+  all the way: its dossier, its draft, the lint verdict, the approval, the send, the mail
+  arriving in that real inbox, a reply typed by hand from that inbox, the triage class, and the
+  sequence refusing to touch that address again. Then attempt a send to an address deliberately
+  left off the allowlist and watch it refused with no network call made.
+- **Real-system check:** open the recipient mailboxes by hand and read the received headers for
+  SPF/DKIM/DMARC results and inbox-vs-spam placement. Open the Resend dashboard and match every
+  send to a delivery record. **Look at the artifact — an agent's report about a mailbox is not
+  the mailbox.**
+- **Expected evidence:** `initiatives/leads/evidence/phase-03/` — the reader-derived rehearsal
+  report with its rehearsal-vs-real counts, received-header blocks with auth results, the
+  refusal transcripts, the crash-and-reconcile transcript including the expired-key case, CI run
+  id with per-job conclusions, `manifest.json`. **Recipients appear as `rehearsal-1` … `-5`,
+  never verbatim** — these are real people's addresses and ADR-0410 applies to them exactly as
+  it applies to leads.
 
 ## Rabbit holes in this phase
 
-Deliverability scoring engines → **provider reports suffice** · chasing a bounce number at
-n=25 → **ADR-0403's HOLD is the honest small-n response** · expanding the ICP mid-campaign →
-**one ICP, v1**.
+Tuning the drafts to get a nice reply from someone you know → **the reply content is not
+evidence here, only that the pipeline carried it**. Treating a green run as validation of the
+cold-outbound vendor → it is not, and Phase 05 re-validates every fixture. Building a rehearsal
+"mode switch" that a caller can pass → the mode is a property of the binding and its receipts,
+never a flag someone can forget.
 
 ## Out of scope for this phase
 
-Any autonomy promotion — that is ADR-0407's separate trial-ledger path, and it needs ≥2
-campaigns. **The ADR-0407 promotion evaluator is built here or later, never in Phase 01** — it
-has no possible input until campaign #2. A/B or self-optimizing logic — evolve owns experiments later.
+**Every claim that needs strangers.** Reply rate, positive-reply rate, bounce rate, complaint
+rate, cold-domain reputation, whether the offer works, whether personalization earns replies —
+none of these are testable on five known recipients and all of them are Phase 05's. A report
+from this phase that quotes a reply rate is reporting a number about the owner's own friends.
+
+Cold sends from `automemory.ai` in any volume. The dedicated cold domain. The cold-outbound
+vendor pick (`/arc-capability`, Phase 05). ADR-0407 autonomy promotion.
 
 ## Your-setup / pending
 
-**All six gate rows above.** Rows 2–4 are calendar-gated and should start now if outbound is
-plausibly ≤6 weeks away. Row 2 (domain warm-up) is the critical path and cannot be compressed.
-
-**If deliverability breaks mid-cycle** (DMARC regression, warm-up insufficient): the campaign
-becomes an operational-runway milestone, the cycle banks Phases 0–2 on fixture evidence, and
-the retro records the miss. **Never send from a cold or broken domain to make a deadline.**
+- **The 5 addresses**, in `ARC_LEADS_REHEARSAL_ALLOWLIST` in `.env.local` — **a separate list
+  from the mailer's** (`ARC_LEADS_MAIL_ALLOWLIST`), so a rehearsal recipient never starts
+  receiving arc's deploy alerts and the owner never becomes a valid cold-rehearsal target.
+- **Which kind they are**: mailboxes the owner controls, or people he knows. Both are fine for
+  the mechanics; the difference is only what may be claimed afterwards, and it is recorded in
+  the evidence bundle so a later reader cannot mistake one for the other.
+- **The Resend API key** — already in `.env.local` from Phase 04, same key, nothing new.
+- **At least one recipient willing to reply by hand**, since reply ingestion against real mail
+  is the half of the pipeline a send cannot exercise.
 
 ## Non-negotiables (verbatim from PLAN)
 
@@ -84,6 +114,7 @@ the retro records the miss. **Never send from a cold or broken domain to make a 
 - Caps and suppression are code with fixtures, not policy text. Adversarial breaking pass on cap enforcement, suppression, the personalization lint and the reply parser before any WARN→FAIL promotion.
 - No purchased lists, no scraped emails from login-walled sources, no fake personalization — all three structurally enforced by lint and fixtures, never merely requested.
 - Domain reputation is a company asset: dedicated cold domain, warm-up respected, unsubscribe honored instantly, List-Unsubscribe everywhere, breakers on bounce and complaint.
+- The product domain reaches only people on an env-declared allowlist, refused in code before any network call, never by policy text: arc's own notification mail is owner-directed (ADR-0415), and the outreach path may bind the product domain ONLY in ADR-0416 rehearsal mode, allowlist-locked and receipt-marked. Real cold outbound always requires the dedicated domain (ADR-0402). Real, simulated and rehearsal sends are three classes and are never mixed in any count.
 - No LinkedIn automation (ToS) — LinkedIn first-touch drafts are for manual sending only.
 - No raw PII on the spine, in receipts, in argv, or anywhere under the repo directory: keyed HMAC lead ids (ADR-0400); names, emails, drafts and journal only in the ADR-0410 private store outside the repo, tripwire-lint-watched.
 - Spine discipline: standard emitter, reader-only consumption, closed payloads, total-preimage idems, `supersedes` corrections, real and simulated never mixed.
