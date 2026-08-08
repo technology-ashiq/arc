@@ -813,6 +813,43 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   [[ "$output" != *"no positional argument"* ]]
 }
 
+@test "the recipient is inferred when the owner allowlist holds exactly one address" {
+  # Owner-directed mail goes to an address that is already declared in .env.local. Making every
+  # caller repeat it in argv would put it in a process listing, in shell history and verbatim in
+  # CI logs -- the three exposures this module refuses everywhere else. Getting past the parser
+  # and dying on the uninitialised store is the proof the recipient was resolved.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_LEADS_MAIL_ALLOWLIST="owner@example.com" \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [[ "$output" == *"store not initialised"* ]] || { echo "the recipient was not inferred: $output"; false; }
+  [ "$status" -eq 5 ]
+}
+
+@test "the recipient is NOT inferred when the allowlist holds more than one address" {
+  # Picking one of several recipients is a choice, and a default that makes a choice silently is
+  # how the wrong person gets mailed.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_LEADS_MAIL_ALLOWLIST="owner@example.com,other@example.org" \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"holds 2 addresses"* ]]
+  [[ "$output" != *"owner@example.com"* ]] || { echo "the refusal echoed an address: $output"; false; }
+}
+
+@test "an empty allowlist refuses the inferred recipient rather than sending to nobody" {
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" -u ARC_LEADS_MAIL_ALLOWLIST \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"ARC_LEADS_MAIL_ALLOWLIST is unset"* ]]
+}
+
 @test "two body sources at once are refused" {
   run _cli mail --to owner@example.com --subject s --text a --stdin
   [ "$status" -eq 2 ]
@@ -906,5 +943,5 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 65 ] || { echo "expected 65 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 68 ] || { echo "expected 68 tests, found $declared -- update this number deliberately"; false; }
 }

@@ -30,7 +30,7 @@ import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
 import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
-import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames } from "./lib/mail.mjs";
+import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
@@ -508,8 +508,23 @@ async function cmdMail(argv) {
     die(2, `mail takes no positional argument (got ${a.length} bytes of one) — every value belongs to a named flag`);
   }
   const to = got["--to"], subject = got["--subject"], text = got["--text"], textFile = got["--text-file"], kind = got["--kind"];
-  if (!to || !subject)
-    die(2, "usage: arc-leads mail --to <address> --subject <subject> [--text <body> | --text-file <path> | --stdin] [--kind <kind>] (any flag also takes --name=value)");
+  if (!subject)
+    die(2, "usage: arc-leads mail [--to <address>] --subject <subject> [--text <body> | --text-file <path> | --stdin] [--kind <kind>] (any flag also takes --name=value)");
+
+  // `--to` is OPTIONAL when the owner allowlist holds exactly one address, and that is not a
+  // convenience. This path exists to reach ONE person whose address is already declared in
+  // `.env.local`; making every caller repeat it in argv puts the address in `ps`, in shell
+  // history and verbatim in CI logs — the three exposures this module refuses everywhere else.
+  // With more than one allowed address there is a real choice to make, so it refuses to guess.
+  let recipient = to;
+  if (!recipient) {
+    let list;
+    try { list = [...loadAllowlist(process.env)]; }
+    catch (e) { die(MAIL_EXIT[e.kind] ?? 3, `[${e.kind}] ${e.message}`); }
+    if (list.length !== 1)
+      die(2, `--to was omitted and ARC_LEADS_MAIL_ALLOWLIST holds ${list.length} addresses — it is only inferred when there is exactly one, because picking one of several recipients is a choice and not a default`);
+    recipient = list[0];
+  }
 
   // Three doors for the BODY, and the two that keep it out of argv are the documented ones.
   // A notification body is a canary tail or a failure detail, and argv is readable in a process
@@ -535,7 +550,7 @@ async function cmdMail(argv) {
   const release = acquireLock(store);
   try {
     const res = await sendNotification(
-      { to, subject, text: body, kind: kind ?? "notify" },
+      { to: recipient, subject, text: body, kind: kind ?? "notify" },
       { storeDir: store.dir, nowTs: nowIst() },
     );
     // The recipient is NOT printed. The operator typed it and already knows it; this line is
