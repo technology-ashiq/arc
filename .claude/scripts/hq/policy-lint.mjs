@@ -12,7 +12,7 @@
  * Exit codes: 0 clean · 1 usage/IO · 2 the file is not law.
  */
 
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { lintPolicy } from "./lib/policy/lint.mjs";
@@ -20,29 +20,13 @@ import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { CAPABILITIES, minLevel } from "./lib/policy/model.mjs";
 import { resolveEffectivePolicy } from "./lib/policy/reduce.mjs";
 import { reproducedBy } from "./lib/policy/authorize.mjs";
+// The subject-set resolution moved to lib/policy/subjects.mjs in Phase 03: kickoff-lint's
+// birth rule consumes the SAME relation from the other direction, and a relation computed in
+// two files is a relation that drifts (POL-D). This file's behaviour is unchanged.
+import { processNames } from "./lib/policy/subjects.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..", "..");
-
-/** The closed subject set is a directory listing, never an invention (ADR-0504). */
-function processNames(root) {
-  const dir = join(root, "processes");
-  if (!existsSync(dir)) return null; // no processes/ at all -- cannot check, do not pretend to
-  const names = [];
-  for (const file of readdirSync(dir)) {
-    if (!file.endsWith(".process.yaml")) continue;
-    try {
-      const doc = parsePolicyYaml(readFileSync(join(dir, file), "utf8"));
-      if (doc && typeof doc.name === "string") names.push(doc.name);
-      else names.push(file.replace(/\.process\.yaml$/, ""));
-    } catch {
-      // A process file this narrow parser cannot read still contributes its filename, so a
-      // policy row for it is not rejected because of an unrelated parser limitation.
-      names.push(file.replace(/\.process\.yaml$/, ""));
-    }
-  }
-  return names;
-}
 
 /**
  * Print the DERIVED kind x capability x level table -- what the file actually means once

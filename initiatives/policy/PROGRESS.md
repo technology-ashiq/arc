@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-policy "Enforced capability vectors"
 
 status: LIVE
-cycle: arc-policy (born 2026-08-06)
-phase: 03 — not started (00, 01, 02 all CLOSED)
+cycle: arc-policy (Cycle 9, born 2026-08-06)
+phase: 04 — in progress (00, 01, 02, 03 all CLOSED)
 appetite: 7d
-burn: 4.5d
-blocked-on: —
+burn: 6.8d
+blocked-on: external — owner: 3 edits to .claude/settings.json
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -26,8 +26,8 @@ depends-on: —
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
 | 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ✅ done 2026-08-07 |
 | 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | ✅ done 2026-08-07 |
-| 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
-| 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
+| 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ✅ done 2026-08-08 |
+| 04 | **Adversarial security pass — two full days, untouchable** | 2 days | 🟨 built and green; closes on the owner action |
 
 **Appetite burn: ~4.5 of 7 days used (64%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
 **never taken from Phase 4**. The allocation changed at kickoff, after the simulation gate: Phase
@@ -45,6 +45,8 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
+| 2026-08-08 | **Phase 04 — built, attacked and green; NOT yet closed.** Two days, four fresh agents on two surfaces, **26 findings**: 23 closed in code, 2 rejected after measurement, 1 written up as an owner action. 17 new bats tests and **the hostile corpus grown 54 → 64 rows**, which is the phase's own exit check. The kill criterion **did not fire** — five findings look like that class (each a way for layer 1 not to run) and in every case the architecture was right and the wiring was wrong. **It cannot close until the three `.claude/settings.json` edits land**: an agent is refused that file by two independent layers, which is the rule working | CI **31245716829, 19/19 green** on `615cee0` · `initiatives/policy/evidence/phase-04/` (findings.md, live-demo.md, handoff.md) · [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md) |
+| 2026-08-08 | **Phase 03 CLOSED.** The birth rule in `kickoff-lint` (WARN-first in TRIAL), the resolution extracted to `lib/policy/subjects.mjs` so two gates read one relation from one place, and the 53-row cap inventory. **The inventory falsified REQ-07's own deferral premise** — `leads` is a live cap-bearing module — so the deferral now rests on "out of budget" rather than "nothing to migrate", with a named reopening owner. Its own adversarial pass: two agents, 20 findings, incl. the gate comparing the wrong string with a test pinning that blindness as correct, and 7 of 18 tests passing with the check deleted. `tests/kickoff-lint.bats` 48 → 71 | CI **31216027150, 19/19 green** on `074ef19` · `initiatives/policy/evidence/phase-03/cap-inventory.md` · `phase.closed` `01KZG4JYB2EV5NAHFCRXB44X4X` (read back off the spine, 0 quarantined) |
 | 2026-08-07 | **Phase 02 CLOSED.** The four authority receipts (ADR-0508, vocabulary 40 → 44) and the emitter branch that makes them writable; the promotion chain live end-to-end through `arc-inbox`; automatic demotion on an overreach; both ADR-0501 layers with the cross-check; brief and inbox rendering. **The phase found that none of the four kinds could be emitted at all** — `arc-event` had no idem branch, so every policy receipt was rejected and quarantined while the emitter exited 0. 5 bats suites, 67 tests. `amendments: 0` · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-02/` (live-demo.md, handoff.md, manifest) |
 | 2026-08-07 | **Phase 01 CLOSED.** The headless gate at `arc-run` **and** at `runDriver`, the governing root pinned to the code rather than `--root`, the money guard reserving under a lock that re-reads, and the demotion emitter at the action boundary. ~30 escalations from two fresh adversarial agents, all closed and pinned. 4 bats suites, 83 tests. `amendments: 2` (the demotion surface and the absence-matrix scope, both decided by the owner on 2026-08-07) · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-01/` (live-demo.md, handoff.md, manifest) |
 | 2026-08-07 | **Phases 00–02 landed on `main`.** Not a phase close — 01 and 02 still owe their DoD (live demo + evidence bundle). Recorded because the code is now in the trunk and the CI story around it is the cycle's most expensive lesson: merged without CI (#117), reverted (#118), re-proposed and made genuinely green (#119) | CI **31148958597, 19/19 green** on `0f2d53d` · merge `8064706` · main re-verified by `workflow_dispatch` |
@@ -53,8 +55,208 @@ an unclosable bypass class → STOP.
 
 ## Now
 
-**Current position: Phases 00, 01 and 02 are CLOSED. Next is Phase 03 (birth rule + cap
-inventory), which the owner has assigned to a separate session.**
+**Current position: 00, 01, 02 and 03 are CLOSED. Phase 04 is built, attacked and green, and is
+held open on ONE thing that is not mine to do.** One branch, `feat/arc-policy-phase-03-04`, PR
+#130 as a draft so CI runs on every push without landing a half-finished security phase on main.
+
+### What Phase 04 is waiting on
+
+**Three edits to `.claude/settings.json`, written out with paste-ready diffs in
+[`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md).** That file is
+on the un-grantable resource list (ADR-0502) *and* in the harness's own `permissions.deny`, so an
+agent is refused `Edit` and `Write` on it by two independent layers. That is the rule working, and
+it is why these three are a document rather than a commit.
+
+1. **The deny floor does not cover the guard's own files.** 24 entries, none for
+   `.claude/hooks/**` or `.claude/scripts/hq/lib/policy/**`. With the hook disarmed — the shipped
+   default — one session can permanently disarm every future armed one, because nothing restores
+   what it removed. **Do this one first.**
+2. **The `Edit|Write` matcher misses `MultiEdit` and `NotebookEdit`.** Both write to disk.
+3. **The MCP surface reaches no policy check at all.** `policy-hook.mjs` carries a complete
+   per-server capability table that no matcher ever routes to — the same shape as the Edit/Write
+   hole this phase closed, one surface over. Live and unpoliced: `mcp__stripe__*` (real money,
+   which E2 forbids), `apply_migration`, `browser_run_code_unsafe`. **Do this one last and
+   separately** — it will be noisy, and noisy is it working.
+
+### Phase 04, in one screen
+
+**26 findings. 23 closed, 2 rejected after measurement, 1 the owner action above.** Full attempt
+list with severities and verdicts in
+[`initiatives/policy/evidence/phase-04/findings.md`](evidence/phase-04/findings.md); eight attacks
+run for real against a throwaway root in [`live-demo.md`](evidence/phase-04/live-demo.md).
+
+**Day two was harder than day one and found more, because its target was day one's fixes.** Three
+day-two findings exist only because a day-one fix created them or moved them one step over — and
+finding 26 (`argv0_allow` enforced only at L2) came from attacking finding 20's fix, which had
+closed "what if the list is missing" and left "what if the list is present and then ignored" wide
+open. **The fifth twin-fix recurrence in this lane.**
+
+The three that mattered most:
+
+| | Finding | Why it is the worst of its day |
+|---|---|---|
+| 1 | **The entire Edit/Write tool family reached no policy check at all** | Demonstrated end to end with the Bash gate ARMED: `Write` replaced `authorize.mjs` (10658 → 153 bytes, returning execute unconditionally), after which the armed gate permitted a `settings.json` edit it had refused one command earlier |
+| 10 | **A trailing dot or space is a second name for the same file** | The only finding in the cycle with a proven byte-level side effect: through PowerShell, `.claude/settings.json` went 3219 → 14 bytes and `hq.policy.yaml` 6660 → 14, while the guard reported the target clear |
+| 18 | **A promotion citing an approval that does not exist raised a cap** | `decision_ref` was written, shape-checked and hashed into the idem — and never dereferenced anywhere in the repo. Both day-two attackers found it independently and both ranked it first |
+
+**Two findings were rejected, and recording that is not a formality.** A claim that this branch had
+reverted the two spend guards (the attacker mutation-tested an older HEAD and copied the tree
+mid-edit — verified on disk, both guards present, count 35). And a demand that `checkReservation`
+require `execute`, which was attempted, measured, and backed out: POL-F caps spend at L1 in v1, so
+it makes the money guard **unreachable** and breaks 31 tests. A pass that adopts every finding is
+credulous, not adversarial.
+
+**And the fixtures themselves were a finding.** The `decision_ref` check turned CI red on seven
+tests — for the right reason: every fixture that raised a cap was citing an approval that did not
+exist, which is exactly the forgery the check refuses. The demotion suite's `_raise` now walks the
+real chain (request → decide → apply) through the production builders and the one writer. **The
+read-back inside `_raise` is the only reason this surfaced at all** — a fixture that silently fails
+to grant makes every "no demotion" assertion in that file pass for the wrong reason.
+
+### The honest posture, which belongs at the top rather than in a footnote
+
+**While `ARC_POLICY_HOOK` is off — the shipped default — the engine is safe because it is
+disarmed, not because it enforces.** That is a documented POL-H decision, not an oversight:
+`session:interactive` holds shell and write at L1, so with it armed every Bash and every Write in
+a live session is `propose`, which is correct by the model and unusable as a session. Arming it
+for real means raising a ceiling, and POL-A says a ceiling change is a human edit in a reviewed
+diff. The tests set the flag, so the enforcement path runs on every CI leg rather than sitting
+unproven behind it.
+
+### Recorded as owed rather than closed
+
+- **`encode` coerces `Map`, `Set` and `Date` to `{}`.** Real, raised on day two, not closed here:
+  nothing in the policy path constructs one today, so closing it is a change to the hashing
+  contract with no current caller.
+- **`reserveAndSpend` calls a provider at L1.** POL-F bans real-money movement above L1 in v1 and
+  the reservation path is reachable below it. The money phase owns it.
+- **`..process.yaml` yields the stem `"."`.** Cosmetic today; the birth rule reports it.
+- **`/arc-develop next` is permanently pinned to phase 01's abandoned ledger** (`findLedger`
+  returns the first `phase-NN-tasks.md` holding an unproven slice). Phases 03 and 04 were driven by
+  editing their tasks files directly. Fixing `develop.mjs` is the engine lane's call; backfilling
+  01 and 02's ledgers to unstick it would be fabricating evidence for closed phases.
+
+**PHASE 03 — the birth rule is built and the cap inventory is taken.**
+`kickoff-lint` carries `[birth-rule]`, WARN-first in TRIAL: a `processes/*.process.yaml` with no
+`process:NAME` row in `hq.policy.yaml` is flagged. `policy-lint` already FAILed the *other*
+direction of that relation — a row naming a process that does not exist — and nobody had ever
+walked it this way, so a process could land ungoverned and no gate said a word. Deny-by-default
+means such a module is read-only at L1, so this was never an escalation; it was a **silent
+capability gap**, the module quietly unable to do what it was written for.
+
+The resolution now lives once, in `.claude/scripts/hq/lib/policy/subjects.mjs`, and `policy-lint`
+imports the function it used to keep private. Two gates reading one relation from two files is
+the drift POL-D forbids, and its failure mode is the quiet one: both keep passing while the pair
+of them stops covering the middle.
+
+There is **no date and no git-history boundary** for "born after policy went live". All three
+processes already carry rows, so the set is complete today and any new process without one flags
+on arrival — no clock, and it survives a shallow CI checkout where `git log --diff-filter=A`
+returns nothing.
+
+**The gate may never FAIL, and the reason is not the usual one.** `kickoff-lint.mjs` is run by
+every lane and is synced into consumer repos that have no policy engine at all, so a wrong FAIL
+breaks a sibling lane's kickoff over a file it never touched. By the structural-vs-heuristic
+principle in `docs/trial-ledger.md` this check would qualify to BLOCK from v1 — a file either has
+a row or it does not. It is in TRIAL on blast radius, not on false-positive risk, and that
+distinction is written into the ledger so `/arc-retro` does not promote it as trivially safe.
+
+**Its silence today is worth nothing as evidence.** The gate printed nothing across all eight
+lanes, which is correct and also tautological: it is same-author silence on a tree written
+against the check, which `docs/trial-ledger.md` already refuses to score as accuracy twice over.
+The ledger records those eight runs as **not counted** — the promotion count stays at zero until
+a process is born in some other lane's change and the gate fires on it.
+
+**THE INVENTORY'S ONE FINDING, AND IT CONTRADICTS THIS PLAN.**
+`initiatives/policy/evidence/phase-03/cap-inventory.md` — 53 cited `file:line` rows reopened and
+checked against the claim (53 matched, 0 missing), and the three load-bearing *negatives*
+re-derived by grep rather than accepted, because a negative is where a survey is weakest: no
+driver reads the budget it is handed, so `--budget inr` is a post-hoc stop rather than an
+authorization and the money is already spent when `arc-run.mjs:438` checks; `concurrencyRefusal`
+has no production caller at all; and the council `Seats: 6 max. Model calls: 7 max.` envelope has
+no counter anywhere, enforced only by the agent choosing to obey.
+
+REQ-07 defers migration on the stated ground that **no live cap-bearing module exists**. That
+premise is false. `leads` is LIVE and ships the whole shape under ADR-0403 — ceilings frozen in
+code, floors because *lowering* a window weakens a cap, env and flag overrides refused outright,
+and `guardSend` throwing before the provider is contacted, reached from `sequencer.mjs:83` in
+production rather than a test.
+
+**The deferral holds anyway, and the reopening condition is now this.** REQ-07's own words are
+that migration "reopens as new work the day a real module exists, never hunted for inside this
+cycle's 0.25 days". The day has arrived, so the deferral stops resting on *"there is nothing to
+migrate"* and starts resting on *"this is out of budget"* — a different and more honest sentence.
+**What reopens it:** a new cycle, scoped to migrating `.claude/scripts/leads/lib/caps.mjs` and
+`guard.mjs` onto the policy engine, owned by the `leads` lane and not by this one —
+`initiatives/leads/**` is do-not-touch here, and ADR-0403 is their band. It is not conditional on
+any further trigger; the trigger fired.
+
+**Retired cap paths: none.** Nothing in the four surveyed areas is superseded or dead, so nothing
+is attic'd (A10, ADR-0023). `concurrencyRefusal` is the nearest candidate and is explicitly **not**
+retired — it is unborn rather than dead, never wired in the first place, and atticing another
+lane's un-wired cap is not this lane's call.
+
+**THE BIRTH RULE'S OWN ADVERSARIAL PASS — two fresh agents, different surfaces, 20 findings.**
+Mandatory before the gate ships, and it earned its cost twice over. Both agents attacked the
+TEST as well as the rule, and both built mutant copies of `kickoff-lint` with the check deleted.
+
+**The worst finding was that the gate compared the wrong string.** `arc-run --process X` opens
+`processes/X.process.yaml` and authorizes `process:X` — the **filename stem**. `name:` is never
+read for authority. The first cut gated on `name:` (inherited from `policy-lint`'s
+`processNames`), so `evil.process.yaml` declaring `name: kickoff-plan` looked governed while
+`arc-run --process evil` ran ungoverned — the exact silent gap the rule exists to close. **And
+the suite pinned that blindness as correct**, in a test written to lock the behaviour in. That is
+the running list's *validate one read, compare another* defect — closed in `verdict.mjs`, left
+open in `lineage.mjs` — reproduced a third time, by this lane, one phase after the rule about it
+was written down. Both tests are inverted.
+
+**The measurement went further than the finding.** Warning about unreadable process files fired
+on all three real ones, so it was measured rather than argued: `parsePolicyYaml` **throws on
+every committed `.process.yaml`** (its 2-space indentation rule), and the engine's own
+`parseYamlSubset` reads them but surfaces no top-level `name`. So `processNames`'s `doc.name`
+branch is **dead on the real tree and always has been** — `policy-lint` has been comparing
+filename stems since the day it was written, through a catch-fallback nobody had measured. The
+stem is not the better choice; it is the only subject string any consumer has ever had.
+
+**Then the second agent deleted the whole check and ran the suite: 7 of 18 tests stayed green** —
+including both tests whose own comments called them the control. Every one asserted only that a
+string was ABSENT, which a deleted check satisfies exactly as well as a working one. That is
+`.claude/rules/testing.md`'s third rule, and this lane wrote seven violations of it in a file
+whose header quotes the rule. The fix is a positive marker: `kickoff-lint` now always prints
+which of its states the birth rule reached, so deleting the block turns those tests red — and it
+closes the separate defect that silence covered five distinct states with one indistinguishable
+nothing.
+
+| Hole | What it was | Now |
+|---|---|---|
+| Subject string | gated on `name:`, runtime uses the stem | stem, and a stem/name disagreement is itself reported |
+| `processes/` as a regular file | `ENOTDIR` crash, exit 1, no verdict line — an advisory gate taking down every lane's kickoff | typed error, caught by the advisory caller, still thrown for `policy-lint` (a validator that silently stops checking is fail-open) |
+| Case-variant directory | `existsSync("processes")` is a string compare on a case-insensitive FS — `Processes/` warned on Windows and macOS and was silent on Linux, **same commit** | identity from an exact-byte directory listing; a case variant is reported |
+| Symlinked process file | dropped by a dirent `isFile()` on Linux, while git materialises it as a regular file on the Windows runner — subject set differed per leg | classified by `statSync`, which follows the link *and* keeps the FIFO door shut (`readFileSync` on a FIFO blocks forever and no `try/catch` interrupts it). Both halves of that trade are now written down |
+| `oddExtension` fed to `policy-lint` | **a regression I introduced** — a loose extension match made `GHOSTCASE.PROCESS.YAML` the subject `ghostcase`, so `policy-lint` would accept a row for a file Linux cannot open: a fail-open in the one FAIL-capable gate | `processNames` is exact-suffix-only again, restoring the original behaviour; the advisory gate reports the ambiguity |
+| `processes/` with only a subdirectory | completely silent — the empty-list branch short-circuited before the non-file loop | reported |
+| No `processes/` dir at all | disarmed **both** gates: `lint.mjs` guards with `processNames && …`, so a null subject set skips its existence check | policy rows with no directory are reported |
+| Three surviving mutants | only-check-first-entry, skip-when-no-process-rows, unfiltered-governed-set — every fixture had exactly one process file | one fixture each |
+
+Two attacks **failed**, and that is evidence too: a differential harness ran the old private
+`processNames` against the imported one over **29 constructed trees** with zero divergences, so
+the extraction is behaviour-preserving; and prototype pollution is closed on this path.
+
+Tests in `tests/kickoff-lint.bats`: **48 → 71**, count asserted from `BATS_TEST_NAMES`.
+
+**Known and NOT fixed, recorded rather than smoothed over:** the birth rule sits after section 1,
+so a tree with no `PLAN.md` exits before it runs — a company-level check gated behind a
+lane-level artifact. Moving it means reordering `kickoff-lint`'s TRIAL/tier setup, which is not a
+phase-03 advisory-check change.
+
+**A harness defect found in passing, recorded rather than fixed.** `/arc-develop next` resolves
+its ledger with `findLedger`, which returns the FIRST `phase-NN-tasks.md` holding any unproven
+slice — for this lane that is phase 01, whose ledger was never filled because 01 and 02 were
+built before the harness was used. So `next` is permanently pinned to a CLOSED phase, and it
+wrote a Context Pack line into that closed phase's ledger before I reverted it. Phase 03 was
+driven by editing `phase-03-tasks.md` directly. Fixing `develop.mjs` is the engine lane's call
+and is not being done mid-phase from here; backfilling 01 and 02's ledgers to unstick it would
+be fabricating evidence for closed phases, which is worse than the bug.
 
 **CLOSED 2026-08-07, merged as `cf82928` (PR #128), main re-verified green by `workflow_dispatch`
 run `31182279167`, 19/19 jobs — all 22 ungrouped kinds now hold a section, and the coverage gate

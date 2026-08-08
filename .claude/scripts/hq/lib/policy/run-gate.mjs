@@ -22,6 +22,7 @@ import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { KINDS, validateEvent } from "../validate.mjs";
+import { eventSha } from "../canonical.mjs";
 import { parsePolicyYaml } from "./yaml.mjs";
 import { CAPABILITIES, PROCESS_PREFIX } from "./model.mjs";
 import { resolveEffectivePolicy, LEVEL_CHANGED, DEMOTED } from "./reduce.mjs";
@@ -160,6 +161,37 @@ export function loadPolicyEvents(root) {
   const dir = join(root, ".claude", "state", "hq", "events");
   if (!existsSync(dir)) return [];
   const out = [];
+  const seen = new Set();
+  // THE PROMOTION CHAIN, resolved rather than assumed. A `policy.level.changed` carries a
+  // `decision_ref`, and until now that field was written, shape-checked and hashed into the idem
+  // -- and NEVER dereferenced anywhere in the repo. Two independent day-two attackers built a
+  // fully self-consistent, correctly-sealed line naming an approval that does not exist and
+  // raised a cap L1 -> L2 with it. The sha check added earlier proves a line was not EDITED after
+  // sealing; it says nothing about whether a human ever authorised it, because `eventSha` and
+  // `policyIdem` are exported and pure, so an attacker seals their own forgery.
+  //
+  // Collected in a first pass because the decision may live in an earlier day file than the
+  // promotion that cites it. A demotion is NOT gated this way: it is raised by the engine on an
+  // incident, cites an `incident_ref` rather than a decision, and refusing to fold demotions on a
+  // missing reference would fail OPEN -- the cap would stay high, which is the one direction this
+  // must never fail in.
+  const decisionIds = new Set();
+  const files = readdirSync(dir).filter((f) => f.endsWith(".jsonl")).sort();
+  for (const file of files) {
+    let text;
+    try { text = readFileSync(join(dir, file), "utf8"); } catch { continue; }
+    for (const line of text.split("\n")) {
+      if (!line.trim() || !line.includes("decision.recorded")) continue;
+      let e;
+      try { e = JSON.parse(line); } catch { continue; }
+      if (!e || e.kind !== "decision.recorded" || typeof e.id !== "string") continue;
+      try { validateEvent(e); } catch { continue; }
+      let sealed;
+      try { sealed = eventSha(e); } catch { continue; }
+      if (typeof e.sha !== "string" || e.sha !== sealed) continue;
+      decisionIds.add(e.id);
+    }
+  }
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".jsonl")).sort()) {
     let text;
     try { text = readFileSync(join(dir, file), "utf8"); } catch { continue; }
@@ -170,6 +202,43 @@ export function loadPolicyEvents(root) {
       if (!e || (e.kind !== LEVEL_CHANGED && e.kind !== DEMOTED)) continue;
       // The spine's own validator, not a second opinion that can drift from it (POL-D).
       try { validateEvent(e); } catch { continue; }
+      // ...but validateEvent checks SHAPE. It never recomputes the content hash — `eventSha` is
+      // exported by canonical.mjs and nothing on the read path called it — so a hand-written line
+      // with a plausible shape was accepted and folded. A Phase 04 attacker raised a cap L1 → L2
+      // with ONE appended line carrying a deliberately wrong sha, a `decision_ref` naming no
+      // event that exists, and a zeroed `policy_hash`. Shape is not integrity.
+      //
+      // The sha covers every field except itself, so this refuses any line edited after it was
+      // sealed, including one that copied a real receipt and changed the level. It does NOT
+      // prove the promotion was AUTHORISED — that needs `decision_ref` resolved to a real
+      // approval, a chain walk this loader cannot do alone. Recorded as still-owed rather than
+      // implied by this check.
+      let sealed;
+      try { sealed = eventSha(e); } catch { continue; }
+      if (typeof e.sha !== "string" || e.sha !== sealed) continue;
+      // A transition counts ONCE, by event id. Every *.jsonl in the directory is folded in
+      // order and `policy.level.changed` is an ABSOLUTE set in the reducer, so a genuine,
+      // correctly-sealed, already-applied promotion appearing a second time RESTORES a cap a
+      // later demotion took away. No forgery needed: copying one day file is enough, and the
+      // attacker did exactly that. "A demotion that vanishes is a cap that never drops" was
+      // closed once for a preclaimed idem; this is the same sentence reached with `cp`.
+      // DEDUP ON `idem`, WHICH IS THE SPINE'S OWN IDENTITY, not on `id`. The spine quarantines a
+      // duplicate on DUP_IDEM; this loader re-implemented dedup over raw jsonl and keyed on the
+      // ULID instead. Two consequences, both measured by a day-two attacker: a later event
+      // REUSING a prior id suppressed a genuine demotion (fail-open -- the cap stayed high), and
+      // a re-sealed copy of a promotion with a FRESH id but the same idem folded a second time,
+      // so the "a copied line cannot undo a demotion" fix only ever covered exact-id copies.
+      // Validate one read, compare another, on the read path.
+      // A PROMOTION MUST CITE A DECISION THAT EXISTS. Demotions are exempt (see above): they are
+      // engine-raised on an incident and only ever LOWER a cap.
+      if (e.kind === LEVEL_CHANGED) {
+        const ref = e.payload && e.payload.decision_ref;
+        if (typeof ref !== "string" || !decisionIds.has(ref)) continue;
+      }
+      const key = typeof e.idem === "string" && e.idem ? e.idem
+        : (typeof e.id === "string" ? e.id : sealed);
+      if (seen.has(key)) continue;
+      seen.add(key);
       out.push(e);
     }
   }

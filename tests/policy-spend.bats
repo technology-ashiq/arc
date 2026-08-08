@@ -348,9 +348,109 @@ const call = (st, over = {}) => S.reserveAndSpend(
   [ "$output" = "deterministic:50" ]
 }
 
+@test "PHASE 04 -- a lock that does not exclude is DETECTED, not trusted" {
+  # withLock arrives by INJECTION and is only type-checked. This module header says the
+  # concurrency defect was closed because "the DoD asked for withLock and the module had never
+  # imported it. It does now." It does not import it -- it accepts it. A Phase 04 attacker passed
+  # `async (fn) => fn()` and charged 3 x 5000 against a cap of 10000, reproducing the exact defect
+  # the header calls closed. The existing suite could not see it: every test supplies st.withLock,
+  # a REAL lock, so it proves the parameter is used and never that it excludes. `st.noLock` was
+  # already sitting in the harness, defined and referenced by nothing.
+  #
+  # A module with no I/O cannot prove another function serialises. It CAN re-read after appending
+  # and check the outcome, which is what this pins.
+  run _node "$PRE
+    const st = store();
+    const prov = fakeProvider();
+    const rs = await Promise.all([
+      call(st, { key:'a', amount:40, prov, lock: st.noLock }),
+      call(st, { key:'b', amount:40, prov, lock: st.noLock }),
+      call(st, { key:'c', amount:40, prov, lock: st.noLock }),
+    ]);
+    const led = S.reservationLedger(st.events, KIND, { day: DAY });
+    console.log('ok=' + rs.filter(r => r.ok).length + ' committed=' + led.committed +
+                ' detected=' + rs.filter(r => /did not exclude/.test(r.reason || '')).length);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The cap is 100 and three calls of 40 would commit 120. Nothing may commit past the cap.
+  [[ "$output" == *"committed=0"* ]] || { echo "a broken lock still overspent: $output"; false; }
+  [[ "$output" == *"detected=3"* ]] || { echo "the breach was not detected as a lock failure: $output"; false; }
+}
+
+@test "PHASE 04 -- a REAL lock still settles up to the cap and refuses only past it" {
+  # THE CONTROL for the test above, and it carries the whole weight. A post-append check that
+  # rejects everything would pass that test perfectly while breaking the money flow entirely.
+  # Two calls of 40 fit inside 100; the third must be refused by the CAP, not by the lock check.
+  run _node "$PRE
+    const st = store();
+    const prov = fakeProvider();
+    const a = await call(st, { key:'a', amount:40, prov });
+    const b = await call(st, { key:'b', amount:40, prov });
+    const c = await call(st, { key:'c', amount:40, prov });
+    const led = S.reservationLedger(st.events, KIND, { day: DAY });
+    console.log('a=' + a.ok + ' b=' + b.ok + ' c=' + c.ok + ' committed=' + led.committed +
+                ' thirdReason=' + (/exceeds the remaining/.test(c.reason || '') ? 'cap' : 'other'));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"a=true"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"b=true"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"c=false"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"committed=80"* ]] || { echo "$output"; false; }
+  # Refused by the CAP, not by the concurrency check -- otherwise the fix is masking the guard.
+  [[ "$output" == *"thirdReason=cap"* ]] || { echo "$output"; false; }
+}
+
+@test "PHASE 04 -- money that reconciles to nothing blocks further reserving" {
+  # reservationLedger collects `unreconciled` -- a settlement naming a reservation this window
+  # does not hold -- and its header says they are "surfaced, never dropped". They were surfaced
+  # and then dropped: `committed` is settled + open, so checkReservation never saw them. A Phase
+  # 04 attacker moved 999,999 minor units past a cap of 10,000 with one such event.
+  #
+  # They cannot be ADDED to the total: the entry carries no trustworthy amount, because the
+  # reservation that would declare its currency and magnitude is the missing thing. So it
+  # refuses, which is the rule the rest of this module already follows.
+  run _node "$PRE
+    const orphan = settledEv('01JQ8XZ9K0ABCDEFGHNOSUCHXX', 999999);
+    const r = S.checkReservation({kind:KIND, amount:40, currency:'INR', day:DAY},
+                                 {policy:pol(100), events:[orphan]});
+    const clean = S.checkReservation({kind:KIND, amount:40, currency:'INR', day:DAY},
+                                 {policy:pol(100), events:[]});
+    console.log('orphan=' + r.ok + ' unrec=' + /unreconciled/.test(r.reason || '') +
+                ' clean=' + clean.ok);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"orphan=false"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"unrec=true"* ]] || { echo "refused, but not as an unreconciled chain: $output"; false; }
+  # THE CONTROL: a clean chain must still reserve, or this is just a module that always says no.
+  [[ "$output" == *"clean=true"* ]] || { echo "$output"; false; }
+}
+
+@test "PHASE 04 -- reserveAndSpend refuses without a day, so daily stays daily" {
+  # `day` defaulted to null and inWindow returns true for everything when day is null, so the
+  # daily cap silently became an all-time cap for any caller that forgot the argument -- in the
+  # one entry point that calls a provider. It fails closed, which is why nothing noticed:
+  # yesterday permanently consumes today. But a window that never resets is not the cap the grant
+  # declares. Not derived from a clock: this module reads no global state, and an absent window
+  # is an unanswered question.
+  run _node "$PRE
+    const st = store();
+    const prov = fakeProvider();
+    const noDay = await S.reserveAndSpend({kind:KIND, amount:40, currency:'INR', idempotencyKey:'k1'},
+      {policy:pol(100), readEvents:st.readEvents, emit:st.emit, providerCall:prov, withLock:st.withLock});
+    const bad = await S.reserveAndSpend({kind:KIND, amount:40, currency:'INR', idempotencyKey:'k2', day:'06-08-2026'},
+      {policy:pol(100), readEvents:st.readEvents, emit:st.emit, providerCall:prov, withLock:st.withLock});
+    const good = await call(st, { key:'k3', amount:40, prov });
+    console.log('noDay=' + noDay.ok + ' bad=' + bad.ok + ' good=' + good.ok +
+                ' providerCalls=' + prov.calls.length);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"noDay=false"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"bad=false"* ]] || { echo "a malformed day was accepted: $output"; false; }
+  # THE CONTROL: a real day still settles, and the provider was called EXACTLY once -- the two
+  # refusals must not have reached it. An absence assertion on its own would pass on a crash.
+  [[ "$output" == *"good=true"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"providerCalls=1"* ]] || { echo "the refused calls still reached the provider: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 31 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 31 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 35 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 35 -- a @test was silently dropped"
     false
   }
 }

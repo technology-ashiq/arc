@@ -9,7 +9,7 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-07
+Updated: 2026-08-08
 
 ## Active initiatives
 
@@ -19,7 +19,7 @@ Updated: 2026-08-07
 | engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
 | evolve | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) | — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised) | 7d / 7.0d | — | `/arc-kickoff --lane evolve` when a real client names a surface |
 | leads | LIVE | arc-leads (Cycle 8, opened 2026-08-04) | 03 | 7d / 4.5d | — | Phases 00–02 closed; **Phase 03 is calendar-gated, not effort-gated** — a warmed domain is 2–4 weeks (ADR-0413) |
-| policy | LIVE | arc-policy (Cycle 9, born 2026-08-06) | 03 | 7d / 4.5d | — | **Phases 00, 01 and 02 all CLOSED** (2026-08-07), each with a live demo and a verified evidence bundle. 64% burnt against 2.25 days of remaining work — no scope cut triggered. Next: `/arc-kickoff`-free Phase 03 (birth rule + cap inventory), assigned to a separate session |
+| policy | LIVE | arc-policy (Cycle 9, born 2026-08-06) | 04 — in progress (00, 01, 02, 03 all CLOSED) | 7d / 6.8d | external — owner: 3 edits to `.claude/settings.json` / — | **00–03 CLOSED. Phase 04 built, attacked and green** — 2 days, 4 fresh agents, 26 findings (23 closed · 2 rejected after measurement · 1 the owner action), hostile corpus 54 → 64 rows, kill criterion did not fire. It cannot close until the three `docs/owner-action-settings-json.md` edits land: an agent is refused that file by two independent layers, which is the rule working. Nothing merges until 04 closes — one branch, PR #130 as a draft |
 | model-policy | IDLE | model-policy (Cycle 5, closed 2026-08-02) | — (cycle closed) | 3d / 0.7d | — | `/arc-kickoff --lane model-policy` when a new cycle pulls it |
 | portfolio | IDLE | arc-portfolio (Cycle 4, closed 2026-08-02) | — (no live cycle) | 3d / 3.35d | — | `/arc-kickoff --lane portfolio` when a new cycle starts |
 | design | IDLE | arc-design (Cycle 3, closed 2026-07-30) | — (no live cycle) | — / — | — | `/arc-kickoff --lane design` when a new cycle starts |

@@ -55,7 +55,15 @@ function capabilitiesFor(toolName, matrix) {
   if (!matrix) return null;
   if (toolName.startsWith("mcp__")) {
     const [, server, tool] = toolName.split("__");
-    const entry = matrix.servers && matrix.servers[server];
+    // hasOwnProperty, not a bare index. `matrix.servers["constructor"]` resolves up the
+    // prototype chain to a truthy function, so an UNCLASSIFIED server named `constructor`,
+    // `toString`, `valueOf` or `hasOwnProperty` skipped the worst-case branch below and fell
+    // through to the ["write"] default instead of ["spend","write","deploy","publish"].
+    // run-gate.mjs carries this exact fix with this exact comment, and the builtin branch six
+    // lines down has it too -- this branch is the one that was missed. Fourth recurrence of a
+    // prototype-chain read in this lane.
+    const entry = matrix.servers && Object.prototype.hasOwnProperty.call(matrix.servers, server)
+      ? matrix.servers[server] : null;
     if (!entry) return ["spend", "write", "deploy", "publish"]; // unclassified server: the worst it could be
     const own = entry.tools && Object.prototype.hasOwnProperty.call(entry.tools, tool)
       ? entry.tools[tool] : null;
