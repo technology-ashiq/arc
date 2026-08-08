@@ -120,8 +120,22 @@ node .claude/scripts/hq/policy-lint.mjs hq.policy.yaml     # expect: is law -- 0
 node .claude/scripts/core/product-lint.mjs                 # expect: all manifests valid
 ```
 
-Then tell me and I will run the branch's CI. `tests/policy-hook.bats` has a `LAYER 2` test that
-reads this file's deny list — if a comma is wrong, that test says so before anything else does.
+**Then tell me — do not push yet.** One thing will be red and it is not your mistake:
+
+> `.claude/settings.json` is **byte-pinned** in `tests/fixtures/sync-golden/tree-manifest.txt`
+> (line 221). Any edit to it changes that hash and turns two `tests/sync.bats` tests red on all
+> three CI legs — *"bare install is byte-identical to the golden fixture"*, rsync path and cp-r
+> path. The gate is doing its job; the manifest just has to be regenerated in the same commit.
+
+That regeneration is a one-line job and it is mine. Say the word and I will:
+
+1. Recompute the row (`sha256` of the file with `\r` stripped, which is how the harness hashes it)
+   and patch line 221.
+2. Run the branch's CI. `tests/policy-hook.bats` carries a `LAYER 2` test that reads your deny
+   list and a `PHASE 04` test that reads the matchers, so a wrong comma or a broken matcher shows
+   up there before anything else. The deny-list test is a **subset** check, so your 13 new entries
+   cannot break it by being extra — only by being malformed JSON.
+3. Emit the `phase.closed` receipt and open PR #130 for merge.
 
 ## What is still open after all three
 
