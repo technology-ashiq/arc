@@ -41,6 +41,27 @@ const norm = (p) => {
 /** 8.3 short names (RUNPRO~1) are rejected outright -- realpath does not always collapse them. */
 export const hasShortName = (p) => p.split(/[\\/]+/).some((seg) => /~\d/.test(seg));
 
+/**
+ * A path segment ending in a dot or a space, which Win32 STRIPS at the API layer.
+ *
+ * `hq.policy.yaml.` and `hq.policy.yaml ` are the same file as `hq.policy.yaml` to every Win32
+ * caller, and a different string to every check in this module: `realpathSync` fails on the
+ * un-stripped name so `identity()` returns null, and the string comparisons carry the dot right
+ * through. A Phase 04 attacker used it to REPLACE the real bytes of both `.claude/settings.json`
+ * (3219 -> 14 bytes) and `hq.policy.yaml` (6660 -> 14) through PowerShell, while
+ * `guardedEntryFor` reported the target clear. `pwsh` is already a classified interpreter, so
+ * this is a program the policy contemplates permitting.
+ *
+ * Rejected outright rather than trimmed, exactly as `hasShortName` is. Trimming would mean this
+ * module deciding which of two names the operating system meant, and it is the aliasing itself
+ * that is the attack -- one path, two identities, one of which no check can see.
+ *
+ * NOT gated on win32. A repo checked out on Linux is read by CI on Windows, and a guard whose
+ * verdict depends on the runner is the cross-leg disagreement this lane has now shipped twice.
+ */
+export const hasTrailingDotOrSpace = (p) =>
+  p.split(/[\\/]+/).some((seg) => seg.length > 0 && /[. ]$/.test(seg) && seg !== "." && seg !== "..");
+
 /** Every path under `dir`, bounded so a symlink loop or a huge tree cannot hang the guard. */
 function walk(dir, out = [], depth = 0) {
   if (depth > 12 || out.length > 5000) return out;
@@ -76,6 +97,11 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
   const exact = new Map(); // dev:ino -> declared entry
   const globs = []; // { entry, prefix } for `**` entries
   const absent = []; // { entry, normalised } -- string fallback only
+  // EVERY declared entry, normalised, whatever kind it is. The other three structures answer
+  // "is this target inside a guarded entry?"; this one exists to answer the reverse -- "does
+  // this target CONTAIN a guarded entry?" -- which nothing asked, so `rm -rf .claude` was
+  // permitted while `rm -r .claude/hooks` was denied. See guardedEntryFor.
+  const declared = [];
 
   for (const entry of ungrantableResources || []) {
     if (typeof entry !== "string" || entry === "") continue;
@@ -83,6 +109,7 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
       const dirEntry = entry.slice(0, -3);
       const abs = resolve(root, dirEntry);
       const id = identity(abs);
+      declared.push({ entry, normalised: norm(id ? id.real : abs) });
       globs.push({ entry, abs, key: id ? id.key : null, normalised: norm(abs) });
       // Enumerate the tree's inodes NOW, so a hardlink into it is caught by identity like any
       // exact entry. Without this the glob was matched only by walking the LINK's parents and
@@ -98,10 +125,11 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
     }
     const abs = resolve(root, entry);
     const id = identity(abs);
+    declared.push({ entry, normalised: norm(id ? id.real : abs) });
     if (id) exact.set(id.key, entry);
     else absent.push({ entry, normalised: norm(abs) });
   }
-  return { exact, globs, absent, root };
+  return { exact, globs, absent, declared, root };
 }
 
 /**
@@ -111,6 +139,7 @@ export function buildResourceGuard(ungrantableResources, root = process.cwd()) {
 export function guardedEntryFor(resource, guard) {
   if (typeof resource !== "string" || resource === "") return null;
   if (hasShortName(resource)) return "8.3 short name";
+  if (hasTrailingDotOrSpace(resource)) return "trailing dot or space (win32 path alias)";
 
   const abs = resolve(guard.root, resource);
 
@@ -164,6 +193,39 @@ export function guardedEntryFor(resource, guard) {
   const target = norm(id ? id.real : abs);
   for (const a of guard.absent) if (target === a.normalised) return a.entry;
 
+  return null;
+}
+
+/**
+ * Does `resource` CONTAIN a guarded entry -- is it an ancestor of one?
+ *
+ * Every branch of guardedEntryFor asks the same question in a different way: is this target
+ * INSIDE something guarded? None asked the reverse. `.claude/hooks` was denied and `.claude`
+ * was permitted, so a recursive delete of `.claude` took the hooks, the settings file and the
+ * policy library in one command, and the same at the repo root took hq.policy.yaml with them. A
+ * Phase 04 attacker confirmed all three executing at shell L3.
+ *
+ * This module's header already argued the level below: "THE DIRECTORY ITSELF, not only its
+ * descendants". Read upwards, that sentence is this function. ADR-0502 is blunter -- a backstop
+ * that the thing it binds can delete is not a backstop.
+ *
+ * SEPARATE FROM guardedEntryFor ON PURPOSE. Being an ancestor is only dangerous when something
+ * MUTATES the target: `jq .` and `git status .` name the repo root as an operand and destroy
+ * nothing, and folding this into the main lookup denied both. A guard that denies a read is not
+ * a stricter guard, it is a broken one -- so the caller applies this only where a file can
+ * actually be destroyed. Returns the guarded entry that WOULD be destroyed, not the path asked
+ * for, because deleting a parent is not a narrower act than deleting the child.
+ */
+export function containsGuardedEntry(resource, guard) {
+  if (typeof resource !== "string" || resource === "") return null;
+  if (hasTrailingDotOrSpace(resource)) return "trailing dot or space (win32 path alias)";
+  const abs = resolve(guard.root, resource);
+  const id = identity(abs);
+  const target = norm(id ? id.real : abs);
+  for (const d of guard.declared || []) {
+    if (d.normalised === target) continue;              // that is guardedEntryFor's job
+    if (d.normalised.startsWith(target + "/")) return d.entry;
+  }
   return null;
 }
 

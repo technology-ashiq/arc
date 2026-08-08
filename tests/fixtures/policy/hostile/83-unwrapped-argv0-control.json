@@ -1,0 +1,107 @@
+{
+  "policy": {
+    "version": 1,
+    "constitution": {
+      "version": "1.0",
+      "sha256": "x",
+      "receipt": "r"
+    },
+    "levels": {
+      "L0": "d",
+      "L1": "p",
+      "L2": "b",
+      "L3": "u"
+    },
+    "ungrantable_actions": [],
+    "ungrantable_resources": [
+      ".claude/settings.json",
+      ".claude/settings.local.json",
+      ".claude/hooks/**",
+      "hq.policy.yaml",
+      ".claude/scripts/hq/lib/policy/**",
+      ".claude/scripts/hq/policy-lint.mjs"
+    ],
+    "targets": {
+      "message": [],
+      "publish": [],
+      "deploy": []
+    },
+    "argv0_classes": {
+      "node": {
+        "class": "interpreter",
+        "reproduces": [
+          "*"
+        ]
+      },
+      "git": {
+        "class": "vcs",
+        "reproduces": [
+          "write",
+          "network"
+        ]
+      },
+      "bats": {
+        "class": "narrow",
+        "reproduces": []
+      },
+      "del": {
+        "class": "narrow",
+        "reproduces": []
+      }
+    },
+    "kinds": {
+      "session:interactive": {
+        "e2": [],
+        "read": {
+          "level": "L3"
+        },
+        "write": {
+          "level": "L0"
+        },
+        "shell": {
+          "level": "L3",
+          "argv0_allow": [
+            "bats"
+          ]
+        },
+        "network": {
+          "level": "L0"
+        },
+        "message": {
+          "level": "L0"
+        },
+        "publish": {
+          "level": "L0"
+        },
+        "deploy": {
+          "level": "L0"
+        },
+        "spend": {
+          "level": "L0"
+        }
+      }
+    }
+  },
+  "action": {
+    "kind": "session:interactive",
+    "capability": "shell",
+    "resource": "bats tests/x.bats"
+  },
+  "events": [
+    {
+      "id": "01JQ8XZ9K0ABCDEFGH00000010",
+      "kind": "policy.level.changed",
+      "ts": "2026-08-06T10:00:00+05:30",
+      "payload": {
+        "action_kind": "session:interactive",
+        "capability": "shell",
+        "correlation": "r",
+        "decision_ref": "d",
+        "from_level": "L1",
+        "policy_hash": "0",
+        "to_level": "L3",
+        "trial_ledger_ref": "t"
+      }
+    }
+  ]
+}

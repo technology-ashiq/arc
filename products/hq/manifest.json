@@ -25,6 +25,7 @@
     ".claude/scripts/hq/lib/policy/resources.mjs",
     ".claude/scripts/hq/lib/policy/run-gate.mjs",
     ".claude/scripts/hq/lib/policy/spend.mjs",
+    ".claude/scripts/hq/lib/policy/subjects.mjs",
     ".claude/scripts/hq/lib/policy/tool-capabilities.json",
     ".claude/scripts/hq/lib/policy/yaml.mjs",
     ".claude/scripts/hq/lib/redact.mjs",
@@ -42,7 +43,9 @@
     ".claude/hooks/SessionStart.d/90-emit.sh",
     ".claude/hooks/SessionEnd.d/90-emit.sh",
     ".claude/hooks/PostToolUse.d/90-emit.sh",
-    ".claude/hooks/PreToolUse.d/40-policy.sh"
+    ".claude/hooks/PreToolUse.d/40-policy.sh",
+    ".claude/hooks/PreToolUse-edit.d/40-policy.sh",
+    ".claude/hooks/policy-decide.sh"
   ],
   "docs": []
 }

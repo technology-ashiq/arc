@@ -10,6 +10,7 @@
  */
 
 export { parsePolicyYaml, PolicyParseError } from "./yaml.mjs";
+export { processSubjects, processNames } from "./subjects.mjs";
 export {
   CAPABILITIES, NON_SHELL_CAPABILITIES, LEVELS, BIRTH_CAP, BOUND_KEY, CHAINING, DECISIONS,
   SESSION_KIND, PROCESS_PREFIX, TOP_LEVEL_KEYS, ARGV0_CLASSES,
@@ -19,7 +20,7 @@ export { encode, preimageHash, policyHash, EncodeError } from "./encode.mjs";
 export {
   verifyConstitution, checkConstitutionHash, parseE2, checkE2Quote, ConstitutionError,
 } from "./constitution.mjs";
-export { buildResourceGuard, guardedEntryFor, withinRoots, hasShortName } from "./resources.mjs";
+export { buildResourceGuard, guardedEntryFor, containsGuardedEntry, withinRoots, hasShortName, hasTrailingDotOrSpace } from "./resources.mjs";
 export {
   resolveEffectivePolicy, resolveVector, ceilingFor, grantFor, LEVEL_CHANGED, DEMOTED,
 } from "./reduce.mjs";

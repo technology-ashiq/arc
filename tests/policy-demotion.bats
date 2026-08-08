@@ -34,23 +34,46 @@ _root() {
   cp "$ARC_ROOT/hq.policy.yaml" "$D/hq.policy.yaml"
   export ARC_SPINE_ROOT="$D/.claude/state/hq"
   cat > "$D/raise.mjs" <<'MJS'
-// Seal a REAL policy.level.changed so the pair actually holds execute authority. Building the
-// event by hand would prove nothing: the point is that the reducer folds what the emitter wrote.
+// Seal a REAL promotion so the pair actually holds execute authority. Building the events by
+// hand would prove nothing: the point is that the reducer folds what the emitter wrote.
+//
+// THE CHAIN IS THREE RECEIPTS, NOT ONE. A `policy.level.changed` whose `decision_ref` names no
+// `decision.recorded` on the spine is no longer folded (run-gate.mjs), so this fixture's old
+// hardcoded ULID -- an approval that never existed -- stopped granting anything the moment that
+// landed. Caught by _raise's read-back, which is the only reason every "no demotion" assertion
+// below did not quietly start passing for the wrong reason. That read-back is the negative
+// control for this whole suite; do not remove it.
+//
+// request -> decision -> level change, built by the PRODUCTION builders (buildPromotionRequest /
+// applyDecision) and written through the one writer. A fixture that hand-rolls the payloads is
+// testing its own arithmetic, not the chain a human approval actually walks.
 import { pathToFileURL } from "node:url";
 import { resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 const [D, capability, to] = process.argv.slice(2);
 const P = await import(pathToFileURL(resolve(D, ".claude/scripts/hq/lib/policy/index.mjs")).href);
+const C = await import(pathToFileURL(resolve(D, ".claude/scripts/hq/lib/canonical.mjs")).href);
 const policy = P.loadPolicyFromDisk(D);
-const payload = { action_kind: "session:interactive", capability,
-  correlation: "fixture", decision_ref: "01JQ8XZ9K0ABCDEFGH00000009", from_level: "L1",
-  policy_hash: P.policyHash(policy), to_level: to,
-  trial_ledger_ref: "docs/trial-ledger.md#fixture" };
-execFileSync("bash", [resolve(D, ".claude/scripts/hq/arc-event.sh"), "emit",
-  "policy.level.changed", "--payload", JSON.stringify(payload), "--strict"],
-  { encoding: "utf8", cwd: D });
-const evs = P.loadPolicyEvents(D);
-console.log(P.resolveEffectivePolicy("session:interactive", capability, { policy, events: evs }).effective);
+// Re-read the spine on every call: applyDecision derives from_level from what is folded NOW,
+// and the request it answers is already on there by then.
+const ctx = () => ({ policy, events: P.loadPolicyEvents(D) });
+const emit = (kind, payload, extra) => execFileSync("bash",
+  [resolve(D, ".claude/scripts/hq/arc-event.sh"), "emit", kind,
+   "--payload", JSON.stringify(payload), ...(extra || []), "--strict"],
+  { encoding: "utf8", cwd: D }).trim();
+
+const reqPayload = P.buildPromotionRequest({ kind: "session:interactive", capability,
+  toLevel: to, trialLedgerRef: "docs/trial-ledger.md#fixture" }, ctx());
+const request = { id: emit("approval.requested", reqPayload), payload: reqPayload };
+
+// The idem is keyed on the approval this decides, exactly as arc-inbox keys it -- the emit path
+// derives no idem for this kind, and validateEvent refuses any other value.
+const decPayload = { decides: request.id, reason: "fixture approval", verdict: "approve" };
+const decision = { id: emit("decision.recorded", decPayload,
+  ["--idem", C.sha256Hex("decision.recorded|" + request.id)]), payload: decPayload };
+
+emit("policy.level.changed", P.applyDecision({ request, decision }, ctx()));
+console.log(P.resolveEffectivePolicy("session:interactive", capability, ctx()).effective);
 MJS
   cat > "$D/level.mjs" <<'MJS'
 // The effective level of a pair, folded from whatever is actually on the spine.
@@ -95,7 +118,10 @@ _quarantined() { ls -1 "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | wc -l 
   [[ "$output" == *"outside the declared write roots"* ]] || { echo "$output"; false; }
   [[ "$output" == *"demoted L2 -> L1"* ]] || { echo "no demotion reported: $output"; false; }
   # READ IT BACK. An emitter can exit 0 having quarantined everything it wrote.
-  [ "$(_kinds)" = "incident.raised policy.demoted policy.level.changed" ] || {
+  # The first two are the promotion chain _raise sealed (approval -> decision), the last three
+  # are what this deny produced. Listed in full rather than grepped for: an exact set is what
+  # catches a receipt the engine wrote and nobody expected.
+  [ "$(_kinds)" = "approval.requested decision.recorded incident.raised policy.demoted policy.level.changed" ] || {
     echo "spine holds: $(_kinds)"; false; }
   [ "$(_quarantined)" = "0" ] || { echo "receipts were quarantined"; false; }
 }

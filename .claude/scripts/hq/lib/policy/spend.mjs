@@ -137,6 +137,25 @@ export function checkReservation({ kind, amount, currency, day = null }, { polic
   if (amount > MAX_SPEND_MINOR_UNITS) return deny(`amount ${amount} exceeds the absolute magnitude ceiling ${MAX_SPEND_MINOR_UNITS}`);
   if (!CURRENCY_RE.test(currency || "")) return deny(`currency ${JSON.stringify(currency)} is not ISO-4217`);
 
+  // DENIES AT L0 ONLY, and that is deliberate rather than an oversight -- a Phase 04 attacker
+  // reported the opposite and the fix it implies would delete the module.
+  //
+  // The observation is real: authorizeAction, asked about the same pair at the same level,
+  // answers `propose` where this returns ok. But authorizeAction ALSO denies spend above L1
+  // outright (authorize.mjs:211, POL-F: no real-money movement above L1 in v1, regardless of the
+  // declared cap). So spend can never reach a level that executes, and requiring one here would
+  // make checkReservation unreachable by construction -- a money guard that cannot be called is
+  // not a stricter money guard.
+  //
+  // The two modules are answering DIFFERENT questions. authorizeAction answers "may this action
+  // be performed", and for spend in v1 the answer is always no. This answers "would this amount
+  // fit inside the declared cap", which is exactly what an L1 propose has to know in order to
+  // prepare and record a spend it will never perform. The check is the preparation.
+  //
+  // What is genuinely owed sits one layer up, in reserveAndSpend: that function calls a PROVIDER,
+  // which is real-money movement, and it inherits this L0-only test rather than asking whether
+  // the level executes. Recorded in PROGRESS as owed, not patched here, because moving it is a
+  // POL-F decision about what L1 may do with money and not a build-session judgement call.
   const effective = resolveEffectivePolicy(kind, "spend", { policy, events }).effective;
   if (effective === "L0") return deny(`${kind}/spend is denied by policy`);
 
@@ -152,6 +171,24 @@ export function checkReservation({ kind, amount, currency, day = null }, { polic
     // An unreadable chain is not an empty chain. Denying is the only safe reading.
     return deny(`the spend chain could not be read, so no reservation is possible: ${e.message}`);
   }
+
+  // MONEY THAT MOVED AND RECONCILES TO NOTHING IS STILL MONEY. `reservationLedger` collects
+  // `unreconciled` -- a `cost.incurred` or `spend.released` naming a reservation this window does
+  // not hold -- and its own header says those are "surfaced, never dropped". They were surfaced
+  // and then dropped: `committed` is settled + open, so an unreconciled settlement of any size
+  // was invisible to the cap. A Phase 04 attacker moved 999,999 minor units past a cap of 10,000
+  // with one such event.
+  //
+  // They cannot simply be ADDED to the total: the entry carries no trustworthy amount, because
+  // the reservation that would have declared the currency and magnitude is the thing missing. So
+  // this refuses instead, which is the rule the rest of this module already follows -- an
+  // unreadable chain is not an empty chain, and a settlement that cannot be read must not be
+  // treated as zero. A human reconciles it; the machine does not guess.
+  if (ledger.unreconciled.length)
+    return deny(`the spend chain has ${ledger.unreconciled.length} unreconciled money event(s) ` +
+      `(${ledger.unreconciled.map((u) => `${u.kind} -> ${u.ref}`).slice(0, 3).join(", ")}) -- ` +
+      `money moved that this window cannot account for, and it carries no amount to charge ` +
+      `against the cap. Reconcile it before reserving again.`);
 
   const remaining = cap.amount - ledger.committed;
   if (amount > remaining)
@@ -183,6 +220,22 @@ export async function reserveAndSpend(
 ) {
   if (typeof idempotencyKey !== "string" || idempotencyKey.trim() === "")
     return { ok: false, stage: "reserve", reason: "an idempotency key is required -- the whole retry story rests on it" };
+  // THE WINDOW IS MANDATORY HERE, though it stays optional in checkReservation.
+  //
+  // `day` defaulted to null and `inWindow` returns true for everything when day is null, so the
+  // "daily" cap silently became an all-time cap for any caller that forgot the argument -- and
+  // this is the entry point that calls a provider. It fails closed (yesterday's spend permanently
+  // consumes today's budget) which is why nothing noticed, but a daily window that never resets
+  // is not the cap the grant declares. `reservationLedger`'s header already recorded that this
+  // field "was named in four places and implemented in none"; it is implemented in one now and
+  // was defaulted off in the only entry point that spends money.
+  //
+  // Not derived from a clock: this module opens no file and reads no global state, which is what
+  // makes it testable. An absent window is an unanswered question, and the answer is refuse.
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day))
+    return { ok: false, stage: "reserve", reason:
+      `a UTC day (YYYY-MM-DD) is required -- without it the daily window matches every event ever ` +
+      `recorded and the declared cap stops being daily. Got ${JSON.stringify(day)}.` };
   if (typeof providerCall !== "function")
     return { ok: false, stage: "reserve", reason: "no providerCall was supplied" };
   if (typeof readEvents !== "function" || typeof emit !== "function" || typeof withLock !== "function")
@@ -211,6 +264,38 @@ export async function reserveAndSpend(
       idempotency_key: idempotencyKey, policy_hash: hash, window: "daily",
     });
     if (!id) return { ok: false, reason: "the reservation receipt was not sealed -- no provider call is made" };
+
+    // THE LOCK IS TAKEN ON TRUST, so verify the OUTCOME rather than the mechanism.
+    //
+    // `withLock` arrives by injection and is only type-checked. A caller supplying
+    // `async (fn) => fn()` gets no mutual exclusion whatsoever, and nothing here could tell --
+    // this module's header says the concurrency defect was closed because "the DoD asked for
+    // withLock and the module had never imported it. It does now." It does not import it; it
+    // accepts it. A Phase 04 attacker passed a pass-through and charged 3 x 5000 against a cap
+    // of 10000, reproducing the exact defect the header calls closed. The existing test passes
+    // because the TEST supplies a real lock -- it proves the parameter is used, never that it
+    // excludes.
+    //
+    // A module with no I/O cannot prove another function serialises. What it CAN do is re-read
+    // after appending and check the result: if the chain now commits more than the cap allows,
+    // someone else was inside this section with us. Release what we just wrote and refuse, so a
+    // broken lock costs a failed reservation instead of an overspend.
+    let after = null;
+    try { after = reservationLedger(await readEvents(), kind, { day }); } catch { after = null; }
+    if (after && after.committed > check.cap.amount) {
+      const rid = await emit(RELEASED, {
+        correlation: keyRef(idempotencyKey), policy_hash: hash,
+        reason: `concurrent writer detected: after sealing ${id} the chain commits ${after.committed} ` +
+          `against a cap of ${check.cap.amount}, so the supplied lock did not serialise`,
+        released_on: "policy", reservation_ref: id,
+      });
+      return {
+        ok: false, stuck: !rid,
+        reason: `the reservation was sealed and then found to breach the cap -- committed ${after.committed} ` +
+          `against ${check.cap.amount}. The supplied withLock did not exclude another writer. ` +
+          (rid ? `Reservation ${id} was released.` : `The release receipt did NOT seal, so ${id} still holds budget and needs a human.`),
+      };
+    }
     return { ok: true, id };
   });
 

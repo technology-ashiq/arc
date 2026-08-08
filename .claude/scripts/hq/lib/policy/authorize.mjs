@@ -29,11 +29,11 @@
  */
 
 import {
-  BOUND_KEY, CAPABILITIES, CHAINING, NON_SHELL_CAPABILITIES,
+  BIRTH_CAP, BOUND_KEY, CAPABILITIES, CHAINING, NON_SHELL_CAPABILITIES,
   decisionForLevel, minLevel, rank,
 } from "./model.mjs";
 import { resolveEffectivePolicy, grantFor } from "./reduce.mjs";
-import { buildResourceGuard, guardedEntryFor, withinRoots } from "./resources.mjs";
+import { buildResourceGuard, guardedEntryFor, containsGuardedEntry, withinRoots } from "./resources.mjs";
 
 const has = (o, k) => o != null && Object.prototype.hasOwnProperty.call(o, k);
 const verdict = (decision, effective, reason) => ({ decision, effective, reason });
@@ -45,6 +45,37 @@ const verdict = (decision, effective, reason) => ({ decision, effective, reason 
 const FILE_MUTATORS = new Set([
   "cp", "mv", "rm", "sed", "tee", "install", "truncate", "chmod", "chown", "ln", "touch",
   "dd", "shred", "patch", "git", "gh", "npm", "node", "python", "python3", "bash", "sh", "attrib",
+  // Added in Phase 04. A fresh attacker ran each of these at shell L3 against the shipped
+  // un-grantable list and got PROPOSE -- meaning the ADR-0502 target check never fired -- while
+  // `rm -r .claude` correctly denied. Every one deletes or overwrites a path it is handed.
+  "find", "rsync", "tar", "unzip", "7z", "gzip", "gunzip", "zip", "xz", "bzip2", "cpio",
+  "robocopy", "xcopy", "del", "erase", "move", "rmdir", "rd", "copy",
+  // Interpreters the Set forgot while keeping node/python/bash. pwsh is already a classified
+  // argv0_class, so it is a program the policy contemplates permitting.
+  "pwsh", "powershell", "cmd", "deno", "bun", "go", "ts-node", "tsx", "perl", "ruby", "php",
+  "yarn", "pnpm", "npx", "make", "cargo", "cmake", "gradle", "mvn", "emacs", "vim", "reg",
+  "docker", "podman", "bats",
+]);
+
+/**
+ * Programs whose argv0 is NOT this command's identity -- they exec something else.
+ *
+ * `shellArgv0` returns the FIRST word, and every downstream check keys on it: the argv0_classes
+ * lookup, ADR-0507's derivation, the FILE_MUTATORS test. So `env rm -r .claude` is classified as
+ * `env`, and a Phase 04 attacker got PROPOSE from all of these while the bare `rm` denied:
+ *
+ *   env - nice - nohup - timeout - setsid - stdbuf - flock - sudo - doas - busybox - xargs
+ *
+ * That is not a gap in one Set, it is the argv0 model failing on its own terms: any allowlist
+ * keyed on the first word is one wrapper away from meaningless. Refused OUTRIGHT, the way
+ * CHAINING is, rather than resolved -- resolving would mean this module parsing every wrapper's
+ * flag grammar to find the real program, which is the rabbit hole ADR-0507 named when it chose
+ * to model `git` by what it CAN do rather than by subcommand.
+ */
+const ARGV0_LAUNDERERS = new Set([
+  "env", "nice", "ionice", "nohup", "timeout", "setsid", "stdbuf", "flock", "chroot",
+  "sudo", "doas", "su", "runuser", "busybox", "xargs", "watch", "script", "unbuffer",
+  "command", "exec", "eval", "time", "strace", "ltrace", "proot", "firejail",
 ]);
 
 /**
@@ -58,6 +89,9 @@ const FILE_MUTATORS = new Set([
  */
 export function reproducedBy(argv0Allow, argv0Classes) {
   const out = new Set();
+  // An empty or absent allowlist reproduces NOTHING, and that is the honest answer for this
+  // function -- no program is permitted, so no capability is reachable through one. The hole it
+  // opened lives in the caller, not here: see effectiveShell.
   for (const program of argv0Allow || []) {
     if (!has(argv0Classes, program)) {
       NON_SHELL_CAPABILITIES.forEach((x) => out.add(x));
@@ -68,7 +102,14 @@ export function reproducedBy(argv0Allow, argv0Classes) {
     for (const c of reproduces) {
       if (c === "*") NON_SHELL_CAPABILITIES.forEach((x) => out.add(x));
       else if (c !== "shell" && CAPABILITIES.includes(c)) out.add(c);
-      else if (c !== "shell") NON_SHELL_CAPABILITIES.forEach((x) => out.add(x)); // unknown token
+      // "shell" itself, and any unknown token, are both malformed -- and the malformed case
+      // must widen, never narrow. The previous version excluded "shell" from BOTH arms, so the
+      // one token ADR-0507 forbids was the one that made the derivation add nothing at all:
+      // `reproduces: ["shell"]` returned an empty set and uncapped the grant. The lint rejects
+      // that token, but this function is also called by hooks that never ran the lint -- which
+      // is the reasoning already written above for the unclassified program, applied one branch
+      // further down where it had been dropped.
+      else NON_SHELL_CAPABILITIES.forEach((x) => out.add(x));
     }
   }
   return out;
@@ -82,7 +123,26 @@ export function reproducedBy(argv0Allow, argv0Classes) {
  */
 function effectiveShell(kind, ctx, declaredShell) {
   const grant = grantFor(ctx.policy, kind, "shell");
-  const reproduced = reproducedBy(grant && grant.argv0_allow, ctx.policy && ctx.policy.argv0_classes);
+  const allow = grant && grant.argv0_allow;
+  const reproduced = reproducedBy(allow, ctx.policy && ctx.policy.argv0_classes);
+
+  // AN EXECUTING SHELL WITH NO ALLOWLIST IS UNBOUNDED, and it was the one shape that skipped
+  // ADR-0507 entirely. `shell: { level: L3 }` with no `argv0_allow:` reproduces nothing, so the
+  // loop below mins over an EMPTY set and the level stays exactly as declared -- and the L3
+  // branch of authorizeAction never consults an allowlist either, so nothing downstream caught
+  // it. A Phase 04 attacker raised one kind's shell to L3 and got unbounded network and an
+  // unbounded interpreter out of a kind whose write and network were both L1, with policy-lint
+  // printing "is law" over the file.
+  //
+  // Scoped to levels that EXECUTE, deliberately. At L0 and L1 nothing runs, so an absent
+  // allowlist decides nothing there -- and every kind in the shipped policy holds shell at L1
+  // with no allowlist, so failing closed unconditionally would silently move all of them to L0
+  // and change behaviour the finding never asked to change. `decisionForLevel` is the library's
+  // own answer to "would this level have executed" (POL-D), never a rank comparison.
+  if (decisionForLevel(declaredShell) === "execute" && (!Array.isArray(allow) || allow.length === 0)) {
+    return BIRTH_CAP;
+  }
+
   let level = declaredShell;
   for (const capability of reproduced) {
     const other = resolveEffectivePolicy(kind, capability, ctx).effective;
@@ -137,18 +197,40 @@ export function authorizeAction({ kind, capability, resource } = {}, ctx = {}) {
       return verdict("deny", "L0",
         `a chained or redirecting command is refused outright at any level -- argv0-checking ` +
         `${JSON.stringify(resource)} would check the wrong program`);
+    // Same refusal, same reason, one step further. A launcher's name is not the identity of what
+    // it runs: `env rm -r .claude` is classified as `env` by every check below, and a Phase 04
+    // attacker got PROPOSE from eleven such wrappers while the bare `rm` correctly denied.
+    // Refused outright rather than resolved -- resolving means parsing each wrapper's flag
+    // grammar to find the real program, the rabbit hole ADR-0507 named when it chose to model
+    // `git` by what it CAN do rather than by subcommand.
+    if (ARGV0_LAUNDERERS.has(argv0))
+      return verdict("deny", "L0",
+        `${argv0} runs another program, so argv0 is not this command's identity -- refused ` +
+        `outright at any level. Name the program directly: an allowlist keyed on the first word ` +
+        `is one wrapper away from meaningless`);
   }
 
   // 2. Un-grantable targets, before any level is consulted (ADR-0502).
   if (capability === "write" || capability === "shell") {
     const guard = ctx.guard || buildResourceGuard(policy.ungrantable_resources, root);
     const targets = capability === "shell" ? shellTargets(resource) : [resource];
+    // A shell operand is only capable of destroying a guarded file when the program mutates
+    // files. `jq .` and `git status .` name the repo root and destroy nothing, so the ancestor
+    // rule is scoped to the mutators -- a guard that denies a read is not stricter, it is broken.
+    const mutates = capability === "write" || FILE_MUTATORS.has(argv0);
     for (const target of targets) {
       const hit = guardedEntryFor(target, guard);
       if (hit)
         return verdict("deny", "L0",
           `${target} resolves to the un-grantable resource ${hit} -- excluded from every ` +
           `write and file-mutating shell grant regardless of ceiling or cap (ADR-0502)`);
+      // The ANCESTOR case: the target is not itself guarded, it CONTAINS something that is.
+      const inside = mutates ? containsGuardedEntry(target, guard) : null;
+      if (inside)
+        return verdict("deny", "L0",
+          `${target} contains the un-grantable resource ${inside} -- deleting or overwriting a ` +
+          `parent is not a narrower act than the child, and a backstop the bound thing can ` +
+          `remove is not a backstop (ADR-0502)`);
     }
     // An unresolvable target on a file-mutating program denies. `git clean -xdf .claude` and
     // `sed -i s@a@b@ settings.json` name no operand the guard can resolve, and skipping the
@@ -184,8 +266,38 @@ export function authorizeAction({ kind, capability, resource } = {}, ctx = {}) {
     return verdict("propose", effective,
       `${kind}/${capability} is at L1 -- prepare and record it, never execute it`);
 
+  // 3b. THE SHELL ALLOWLIST IS NOT A BOUND -- IT IS WHAT BOUGHT THE LEVEL, so it is enforced at
+  //     L3 too. For the other seven capabilities "L3 is unbounded within the capability" is a
+  //     coherent reading: the bound narrows a grant the level already justified. For shell it is
+  //     circular. ADR-0507 defines effective(shell) as the min over `reproduced_by(argv0_allow)`,
+  //     so the declared list is the INPUT to the cap that permitted L3 in the first place. Ignore
+  //     it at L3 and the set actually admitted is every program on the machine -- whose reproduces
+  //     set is "everything" -- while the cap was computed over the two or three names someone
+  //     wrote down. The derivation is then evaluated over a set the engine does not enforce, and
+  //     ADR-0507's invariant ("no capability may exceed another's grant") is decorative again.
+  //
+  //     Measured: `shell: { level: L3, argv0_allow: ["bats"] }` -- bats is classified narrow, so
+  //     nothing caps it and L3 is reached -- executed `node -e`, `curl`, `dd` and a recursive
+  //     delete. Latent rather than live: every shell grant in the shipped hq.policy.yaml sits at
+  //     L1 with no allowlist at all. It is the SAME SHAPE as the empty-allowlist hole closed one
+  //     commit earlier, one step over: that fix asked "what if the list is missing", this asks
+  //     "what if the list is present and then ignored". Grep the pattern, not the file.
+  //
+  //     An ABSENT list is left alone rather than denied: effectiveShell already caps a shell
+  //     grant with no allowlist to the birth cap, so L3 with no list cannot be reached, and
+  //     denying on a state that cannot occur would only obscure which rule is doing the work.
+  if (capability === "shell" && effective === "L3") {
+    const grant = grantFor(policy, kind, capability) || {};
+    const allow = has(grant, "argv0_allow") ? grant.argv0_allow : null;
+    if (Array.isArray(allow) && !allow.includes(argv0))
+      return verdict("deny", effective,
+        `${argv0} is not in the declared argv0_allow. At L3 that list is not a bound to be ` +
+        `relaxed -- it is what ADR-0507 derived this level FROM, so admitting a program outside ` +
+        `it means the cap was computed over programs the engine never checked`);
+  }
+
   // 4. The bound, at L2 only. L3 is unbounded within the capability, by definition -- but note
-  //    that steps 1 and 2 have already run, so "unbounded" never means "unchecked".
+  //    that steps 1, 2 and 3b have already run, so "unbounded" never means "unchecked".
   if (effective === "L2") {
     const grant = grantFor(policy, kind, capability) || {};
     const key = BOUND_KEY[capability];
