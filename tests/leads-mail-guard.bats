@@ -866,6 +866,66 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   [[ "$output" == *"LOCK:true RELEASE:true"* ]]
 }
 
+# ---------- the three triggers ----------
+
+@test "notify approvals sends NOTHING when nothing is waiting" {
+  # The design, not an omission. A channel that mails "0 waiting" every day is a channel the
+  # owner learns to ignore, and an ignored alert channel is the same as no alert channel -- the
+  # exact failure ADR-0415 exists to prevent. Asserted by the absence of a send AND the presence
+  # of the explanation, so a crash cannot satisfy it.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_SPINE_ROOT="$dir/spine" \
+    ARC_LEADS_MAIL_ALLOWLIST="owner@example.com" ARC_LEADS_MAIL_FROM="arc@example.com" \
+    node .claude/scripts/leads/arc-leads.mjs notify approvals
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"nothing waiting"* ]]
+  [[ "$output" != *"mail sent"* ]]
+}
+
+@test "notify canary refuses a detail that is empty" {
+  # An alert that says nothing is worse than no alert: it consumes the channel and teaches the
+  # reader that arc pages for nothing.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file /dev/null
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"detail is empty"* ]]
+}
+
+@test "notify canary has no argv door for the failure detail" {
+  # A canary tail is exactly the content that ends up quoted into a process listing and a CI
+  # log. There are two doors and both hand over BYTES; --text is not one of them.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text "connection refused on :8443"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--text-file"* ]]
+  [[ "$output" == *"never in argv"* ]]
+}
+
+@test "an unknown notify trigger prints the three that exist" {
+  run _cli notify nope
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"canary"* ]]
+  [[ "$output" == *"approvals"* ]]
+  [[ "$output" == *"brief"* ]]
+}
+
+@test "mail and notify share one delivery path" {
+  # Two copies would be two places for the env guard, the lock and the recipient rule to drift
+  # apart, and the ones that drift are the ones nobody looks at again.
+  cd "$ARC_ROOT"
+  run node -e 'const s=require("node:fs").readFileSync(".claude/scripts/leads/arc-leads.mjs","utf8");const calls=(s.match(/deliverNotification\(/g)||[]).length;const sends=(s.match(/await sendNotification\(/g)||[]).length;process.stdout.write("DELIVER:"+calls+" SEND:"+sends)'
+  [ "$status" -eq 0 ]
+  # One definition plus its callers; exactly ONE place calls sendNotification.
+  [[ "$output" == *"SEND:1"* ]] || { echo "sendNotification is called from more than one place: $output"; false; }
+  [[ "$output" == *"DELIVER:5"* ]] || { echo "unexpected number of deliverNotification references: $output"; false; }
+}
+
 # ---------- the fake, and the boundary it must not cross ----------
 
 @test "a fake send returns an id and appends exactly one log line" {
@@ -943,5 +1003,5 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 68 ] || { echo "expected 68 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 73 ] || { echo "expected 73 tests, found $declared -- update this number deliberately"; false; }
 }

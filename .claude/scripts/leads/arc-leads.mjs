@@ -460,7 +460,10 @@ function cmdState(json) {
 // failures, waiting approvals, the daily brief — so that arc can reach a human who is not
 // sitting at a terminal. `lib/mail.mjs` holds the allowlist and quota rules; this function
 // only parses flags and hands over.
-async function cmdMail(argv) {
+// ONE delivery path, shared by `mail` (a human composing) and `notify` (a trigger firing).
+// Two copies of this would be two places for the env guard, the lock and the recipient rule to
+// drift apart, and the ones that drift are always the ones nobody looks at again.
+async function deliverNotification({ to, subject, text, kind }) {
   // `.env.local` is read HERE rather than at startup, deliberately. Every other subcommand
   // keeps exactly the environment it had before this phase existed, so a credential file
   // cannot change the behaviour of a send, a reconcile or a cap check merely by being present.
@@ -473,6 +476,42 @@ async function cmdMail(argv) {
   // be tested without writing a `.env.local` into a real repository root.
   assertEnvLocalNames(envInfo.names || [], ENV_LOCAL);
 
+  // `--to` is OPTIONAL when the owner allowlist holds exactly one address, and that is not a
+  // convenience. This path exists to reach ONE person whose address is already declared in
+  // `.env.local`; making every caller repeat it in argv puts the address in `ps`, in shell
+  // history and verbatim in CI logs — the three exposures this module refuses everywhere else.
+  // With more than one allowed address there is a real choice to make, so it refuses to guess.
+  let recipient = to;
+  if (!recipient) {
+    let list;
+    try { list = [...loadAllowlist(process.env)]; }
+    catch (e) { die(MAIL_EXIT[e.kind] ?? 3, `[${e.kind}] ${e.message}`); }
+    if (list.length !== 1)
+      die(2, `--to was omitted and ARC_LEADS_MAIL_ALLOWLIST holds ${list.length} addresses — it is only inferred when there is exactly one, because picking one of several recipients is a choice and not a default`);
+    recipient = list[0];
+  }
+
+  const store = openStore({ repoRoot: REPO_ROOT });
+  // The cap is a check-then-act across a read, a network call and an append, so without
+  // exclusion two notifications firing together (a canary hook and a phase-close hook) both
+  // read 99 and both send. `cmdReconcile` already takes this lock; the guard was applied in one
+  // branch and omitted in the adjacent one, which is this lane's most repeated defect (D6).
+  const release = acquireLock(store);
+  try {
+    const res = await sendNotification(
+      { to: recipient, subject, text, kind },
+      { storeDir: store.dir, nowTs: nowIst() },
+    );
+    // The recipient is NOT printed. The operator typed it or declared it and already knows it;
+    // this line is what ends up in a CI log, and the address has no business being there.
+    console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
+    return res;
+  } finally {
+    release();
+  }
+}
+
+async function cmdMail(argv) {
   // Parsed as a LOOP that consumes a flag and its value together, the same shape as
   // `cmdIngestReply`. Scanning for each flag independently with `indexOf` is D5 in miniature:
   // `--text --to` makes the scan for `--to` match the argv element that IS another flag's
@@ -511,21 +550,6 @@ async function cmdMail(argv) {
   if (!subject)
     die(2, "usage: arc-leads mail [--to <address>] --subject <subject> [--text <body> | --text-file <path> | --stdin] [--kind <kind>] (any flag also takes --name=value)");
 
-  // `--to` is OPTIONAL when the owner allowlist holds exactly one address, and that is not a
-  // convenience. This path exists to reach ONE person whose address is already declared in
-  // `.env.local`; making every caller repeat it in argv puts the address in `ps`, in shell
-  // history and verbatim in CI logs — the three exposures this module refuses everywhere else.
-  // With more than one allowed address there is a real choice to make, so it refuses to guess.
-  let recipient = to;
-  if (!recipient) {
-    let list;
-    try { list = [...loadAllowlist(process.env)]; }
-    catch (e) { die(MAIL_EXIT[e.kind] ?? 3, `[${e.kind}] ${e.message}`); }
-    if (list.length !== 1)
-      die(2, `--to was omitted and ARC_LEADS_MAIL_ALLOWLIST holds ${list.length} addresses — it is only inferred when there is exactly one, because picking one of several recipients is a choice and not a default`);
-    recipient = list[0];
-  }
-
   // Three doors for the BODY, and the two that keep it out of argv are the documented ones.
   // A notification body is a canary tail or a failure detail, and argv is readable in a process
   // listing, lands in shell history, and is captured verbatim by CI job logs — the same three
@@ -542,23 +566,100 @@ async function cmdMail(argv) {
     body = await readStdin(process.stdin);
   }
 
-  const store = openStore({ repoRoot: REPO_ROOT });
-  // The cap is a check-then-act across a read, a network call and an append, so without
-  // exclusion two notifications firing together (a canary hook and a phase-close hook) both
-  // read 99 and both send. `cmdReconcile` already takes this lock; the guard was applied in one
-  // branch and omitted in the adjacent one, which is this lane's most repeated defect (D6).
-  const release = acquireLock(store);
-  try {
-    const res = await sendNotification(
-      { to: recipient, subject, text: body, kind: kind ?? "notify" },
-      { storeDir: store.dir, nowTs: nowIst() },
-    );
-    // The recipient is NOT printed. The operator typed it and already knows it; this line is
-    // what ends up in a CI log, and the address has no business being there.
-    console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
-  } finally {
-    release();
+  await deliverNotification({ to, subject, text: body, kind: kind ?? "notify" });
+}
+
+// ---------- the three triggers (Phase 04 DoD) ----------
+//
+// A trigger differs from `mail` in exactly one way that matters: it composes its own message
+// from state, so nobody has to remember what a good alert says at the moment something is on
+// fire. Everything else -- the allowlist, the quota, the lock, the log -- is the same path.
+//
+// `approvals` sends NOTHING when nothing is waiting, and that is the design, not an omission.
+// A channel that mails "0 waiting" every day is a channel the owner learns to ignore, and an
+// ignored alert channel is indistinguishable from no alert channel at all -- which is the exact
+// failure ADR-0415 exists to prevent.
+async function cmdNotify(argv) {
+  const trigger = argv[0];
+  const rest = argv.slice(1);
+  const flag = (name) => {
+    const i = rest.indexOf(name);
+    if (i === -1) return null;
+    const v = rest[i + 1];
+    if (v === undefined || String(v).startsWith("--")) die(2, `${name} needs a value`);
+    return v;
+  };
+  const useStdin = rest.includes("--stdin");
+
+  if (trigger === "canary") {
+    // The failure DETAIL arrives as bytes, never as an argument: a canary tail is exactly the
+    // kind of content that ends up quoted into a process listing and a CI log (ADR-0412).
+    const file = flag("--text-file");
+    if (!file && !useStdin)
+      die(2, "usage: arc-leads notify canary (--text-file <path> | --stdin) [--what <one line>] — the failure detail arrives as bytes, never in argv");
+    if (file && useStdin) die(2, "give the detail ONE way: --text-file <path> or --stdin");
+    let detail;
+    if (file) detail = readFileSync(file, "utf8");
+    else {
+      if (process.stdin.isTTY) die(2, "--stdin has no pipe attached (stdin is a terminal)");
+      detail = await readStdin(process.stdin);
+    }
+    if (!String(detail).trim())
+      die(2, "the failure detail is empty — refusing to send an alert that says nothing, which is worse than no alert");
+    const what = flag("--what") || "a deploy or canary check failed";
+    await deliverNotification({
+      subject: `arc ALERT: ${what}`,
+      text: `${what}\n\nat ${nowIst()}\n\n---- detail ----\n${detail}`,
+      kind: "canary",
+    });
+    return;
   }
+
+  if (trigger === "approvals") {
+    // Pending = an approval.requested with no decision.recorded citing its ULID. The pairing is
+    // the spine's own (`decision.decides` is the approval ULID), so this counts what the inbox
+    // shows rather than inventing a second definition of "waiting" (D5).
+    const events = readAllEvents({ allowMissing: true });
+    const decided = new Set();
+    const requested = [];
+    for (const e of events) {
+      if (e.kind === "decision.recorded" && e.payload && e.payload.decides) decided.add(e.payload.decides);
+      else if (e.kind === "approval.requested") requested.push(e);
+    }
+    const waiting = requested.filter((e) => !decided.has(e.id || e.ulid));
+    if (waiting.length === 0) {
+      console.log("arc-leads notify approvals: nothing waiting — no mail sent (a channel that reports zero every day is a channel nobody reads)");
+      return;
+    }
+    const oldest = waiting.map((e) => e.ts || "").filter(Boolean).sort()[0] || "unknown";
+    await deliverNotification({
+      subject: `arc: ${waiting.length} approval item(s) waiting`,
+      text: `${waiting.length} item(s) are waiting for your decision.\n\nOldest since: ${oldest}\n\nRun \`arc-leads review <draft_ref>\` to see one, or open the approval inbox.\n\nNothing sends without you (L1, ADR-0407).`,
+      kind: "approvals",
+    });
+    return;
+  }
+
+  if (trigger === "brief") {
+    // The brief already renders itself to stdout, so this mails THE BRIEF rather than a second
+    // rendering of the same day that could disagree with it.
+    let brief;
+    try {
+      brief = execFileSync(process.execPath, [join(REPO_ROOT, ".claude/scripts/hq/arc-brief.mjs")], { encoding: "utf8" });
+    } catch (e) {
+      die(3, `the brief could not be rendered (${e.status ?? e.code ?? e.message}) — refusing to mail a brief that failed to build, because an empty brief reads as a quiet day`);
+    }
+    if (!String(brief).trim())
+      die(3, "the brief rendered empty — refusing to send, because an empty brief is indistinguishable from a quiet day");
+    await deliverNotification({
+      subject: `arc daily brief — ${nowIst().slice(0, 10)}`,
+      text: brief,
+      kind: "brief",
+    });
+    return;
+  }
+
+  die(2, "usage: arc-leads notify (canary --text-file <p>|--stdin [--what <line>] | approvals | brief)");
 }
 
 // ---------- main ----------
@@ -586,6 +687,7 @@ try {
   else if (cmd === "daily") await cmdDaily(rest[0]);
   else if (cmd === "preflight") await cmdPreflight();
   else if (cmd === "mail") await cmdMail(rest);
+  else if (cmd === "notify") await cmdNotify(rest);
   else if (cmd === "state") cmdState(rest.includes("--json"));
   else {
     console.error("arc-leads: usage:");
@@ -598,7 +700,8 @@ try {
     console.error("  ingest-reply --file <p>|--stdin|--inbound   a reply in: triage, receipt, suppression or calendar draft, same run");
     console.error("  reconcile                       spine-first recovery of unresolved intents");
     console.error("  unlock                          clear a send lock whose holder is DEAD (refuses if alive)");
-    console.error("  mail --to <a> --subject <s> [--text <b>|--text-file <p>|--stdin]   arc -> owner notification only; allowlist-locked (ADR-0415)");
+    console.error("  mail [--to <a>] --subject <s> [--text <b>|--text-file <p>|--stdin]   arc -> owner notification only; allowlist-locked (ADR-0415)");
+    console.error("  notify canary --stdin | notify approvals | notify brief   the three triggers; approvals is SILENT when nothing waits");
     console.error("  preflight | state --json");
     console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
     process.exit(2);
