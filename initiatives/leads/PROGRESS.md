@@ -175,10 +175,18 @@ counted as real first touches by any report. The five run the complete journey �
 dossier → draft → lint → L1 approval → send → receipt → real reply ingested → triage →
 auto-stop — with the real `lib/provider.mjs` bound to Resend rather than the fake.
 
-**Owner's side, done 2026-08-08:** `arc@automemory.ai` created on Zoho, `automemory.ai` verified
-in Resend. **Outstanding from him:** the Resend API key (private store outside the repo, never
-in a chat transcript), the allowlist, the 5 addresses, and at least one recipient willing to
-reply by hand — reply ingestion against real mail is the half a send cannot exercise.
+**Owner's side, done 2026-08-08:** the `arc@` mailbox created on Zoho, `automemory.ai` verified
+in Resend, and `RESEND_API_KEY`, `ARC_LEADS_MAIL_FROM`, `ARC_LEADS_MAIL_ALLOWLIST` and
+`ARC_LEADS_REHEARSAL_ALLOWLIST` placed in `.env.local` — arc's one credential home, gitignored,
+never in a chat transcript. **Outstanding from him:** the 5 addresses, and at least one recipient
+willing to reply by hand — reply ingestion against real mail is the half a send cannot exercise.
+
+**Two naming drifts, tracked rather than patched in passing.** The PLAN names the outreach
+provider `lib/provider.mjs`; the built code puts `provider()` on `lib/deps.mjs` beside every
+other external edge, and the outreach POLICY lives in `sequencer.mjs`/`guard.mjs`/`journal.mjs`.
+And `research-lint.mjs`'s `normKey` does NFC+trim+lowercase WITHOUT the zero-width strip that
+`store.mjs normalizeEmail` applies, so two normalizers disagree on invisible characters. Both
+predate Phase 04, both need `/arc-change`, and neither is edited from inside this phase.
 
 **ADR-0413's caution survives all of this, narrowed rather than retired.** Phase 03 validates
 the Phase 00–02 fixtures **against Resend and against nothing else**. The cold-outbound vendor

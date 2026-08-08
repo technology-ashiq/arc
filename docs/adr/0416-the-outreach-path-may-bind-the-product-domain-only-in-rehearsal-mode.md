@@ -20,8 +20,9 @@ he controls or knows, to run the pipeline against end to end. That is not cold o
 recipient is known and consenting, there is no stranger to burn a reputation with, and the
 question it answers is entirely mechanical — does the machine work against a real server.
 
-The tension is that answering it means running the **outreach** code path (`lib/provider.mjs`,
-not `lib/mail.mjs`) from `automemory.ai`, the product domain. ADR-0402's rule is structural
+The tension is that answering it means running the **outreach** code path (`provider()` on
+`lib/deps.mjs` with its policy in `sequencer.mjs`/`guard.mjs`/`journal.mjs`, not `lib/mail.mjs`)
+from `automemory.ai`, the product domain. ADR-0402's rule is structural
 on purpose: it does not say "do not send cold mail from the product domain", it says the
 outreach path and the product domain never meet, because a rule with a judgement call in it
 gets relaxed under deadline pressure, and one spam complaint on `automemory.ai` also puts
@@ -64,7 +65,8 @@ it is a quiet one — the number would simply be wrong, with nothing to notice.
 satisfies ADR-0402's hard filter: Resend supports idempotency keys on its send endpoint, so a
 crashed or retried send can be resolved rather than double-sent, which is what ADR-0411's
 reconcile depends on. The policy layers stay separate — `lib/mail.mjs` is owner-directed,
-`lib/provider.mjs` is the outreach path — even though both post to the same vendor. Sharing a
+`sequencer.mjs`/`guard.mjs`/`journal.mjs` are the outreach path — even though both post to the
+same vendor, and even though both sit on the same `lib/deps.mjs` transport shelf. Sharing a
 dumb HTTP client is not the coupling ADR-0402 forbids; sharing a *domain* under cold-outbound
 conditions is.
 

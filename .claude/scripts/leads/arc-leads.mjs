@@ -30,7 +30,7 @@ import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
 import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
-import { sendNotification, MailRefusal } from "./lib/mail.mjs";
+import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames } from "./lib/mail.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
@@ -463,35 +463,87 @@ function cmdState(json) {
 async function cmdMail(argv) {
   // `.env.local` is read HERE rather than at startup, deliberately. Every other subcommand
   // keeps exactly the environment it had before this phase existed, so a credential file
-  // cannot change the behaviour of a send, a reconcile or a cap check merely by being present
-  // — including ARC_LEADS_NOW and ARC_LEADS_FAKE, whose whole guarantee is that they are
-  // test-only doors nothing in production sets.
+  // cannot change the behaviour of a send, a reconcile or a cap check merely by being present.
   const envInfo = loadEnvLocal({ root: REPO_ROOT });
   if (envInfo.present && envInfo.skipped.length)
     console.error(`arc-leads: warning — ${ENV_LOCAL} line(s) ${envInfo.skipped.join(", ")} are not NAME=value and were skipped`);
+  if (envInfo.present && envInfo.blank.length)
+    console.error(`arc-leads: warning — ${ENV_LOCAL} declares ${envInfo.blank.join(", ")} with an empty value, which counts as unset`);
+  // The list and the refusal live in `lib/mail.mjs`, beside the rules they protect, so they can
+  // be tested without writing a `.env.local` into a real repository root.
+  assertEnvLocalNames(envInfo.names || [], ENV_LOCAL);
 
-  // A flag whose value is missing must not silently consume the NEXT FLAG as its value:
-  // `--to --subject x` would otherwise send to a recipient literally named "--subject".
-  const flag = (name) => {
-    const i = argv.indexOf(name);
-    if (i === -1) return undefined;
-    const v = argv[i + 1];
-    return v === undefined || String(v).startsWith("--") ? undefined : v;
-  };
+  // Parsed as a LOOP that consumes a flag and its value together, the same shape as
+  // `cmdIngestReply`. Scanning for each flag independently with `indexOf` is D5 in miniature:
+  // `--text --to` makes the scan for `--to` match the argv element that IS another flag's
+  // value, so the real recipient is shadowed. A loop also makes an unknown flag, a duplicate,
+  // and a bare positional refusable rather than silently dropped — `--body "..."` used to be
+  // accepted, ignored, and delivered as an empty mail with exit 0.
+  const got = { "--to": null, "--subject": null, "--text": null, "--text-file": null, "--kind": null };
+  let useStdin = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    // `--name=value` is accepted as well as `--name value`, and it is the ONLY way to pass a
+    // value that legitimately begins with two dashes. The separated form keeps its guard: a
+    // flag must never silently consume the NEXT FLAG as its value, because `--to --subject x`
+    // would otherwise send to a recipient literally named "--subject". An end-of-options `--`
+    // marker was tried instead and is worse — it makes every later token positional, so the
+    // guard it was meant to relax simply disappeared.
+    let name = a, inline = null;
+    const eq = a.indexOf("=");
+    if (a.startsWith("--") && eq > 2) { name = a.slice(0, eq); inline = a.slice(eq + 1); }
 
-  const to = flag("--to");
-  const subject = flag("--subject");
+    if (name === "--stdin") { useStdin = true; continue; }
+    if (Object.prototype.hasOwnProperty.call(got, name)) {
+      if (got[name] !== null) die(2, `${name} given twice — which one is authoritative is exactly the ambiguity this refuses rather than resolving`);
+      if (inline !== null) { got[name] = inline; continue; }
+      const v = argv[i + 1];
+      if (v === undefined || String(v).startsWith("--"))
+        die(2, `${name} needs a value — write \`${name}=<value>\` if the value itself begins with two dashes`);
+      got[name] = v;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--")) die(2, `unknown flag ${a}`);
+    die(2, `mail takes no positional argument (got ${a.length} bytes of one) — every value belongs to a named flag`);
+  }
+  const to = got["--to"], subject = got["--subject"], text = got["--text"], textFile = got["--text-file"], kind = got["--kind"];
   if (!to || !subject)
-    die(2, "usage: arc-leads mail --to <address> --subject <subject> [--text <body>] [--kind <kind>]");
+    die(2, "usage: arc-leads mail --to <address> --subject <subject> [--text <body> | --text-file <path> | --stdin] [--kind <kind>] (any flag also takes --name=value)");
+
+  // Three doors for the BODY, and the two that keep it out of argv are the documented ones.
+  // A notification body is a canary tail or a failure detail, and argv is readable in a process
+  // listing, lands in shell history, and is captured verbatim by CI job logs — the same three
+  // exposures `cmdIngestReply` refuses argv-borne content over (ADR-0412). `--text` stays for
+  // one-line bodies because forcing a file for "deploy failed" would be theatre.
+  const bodySources = [text !== null, textFile !== null, useStdin].filter(Boolean).length;
+  if (bodySources > 1)
+    die(2, "give the body ONE way: --text, --text-file <path>, or --stdin");
+  let body = text ?? "";
+  if (textFile !== null) body = readFileSync(textFile, "utf8");
+  if (useStdin) {
+    if (process.stdin.isTTY)
+      die(2, "--stdin has no pipe attached (stdin is a terminal). Pipe the body in, or use `--text-file <path>`.");
+    body = await readStdin(process.stdin);
+  }
 
   const store = openStore({ repoRoot: REPO_ROOT });
-  const res = await sendNotification(
-    { to, subject, text: flag("--text") ?? "", kind: flag("--kind") ?? "notify" },
-    { storeDir: store.dir, nowTs: nowIst() },
-  );
-  // The recipient is NOT printed. The operator typed it and already knows it; this line is
-  // what ends up in a CI log, and the address has no business being there.
-  console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
+  // The cap is a check-then-act across a read, a network call and an append, so without
+  // exclusion two notifications firing together (a canary hook and a phase-close hook) both
+  // read 99 and both send. `cmdReconcile` already takes this lock; the guard was applied in one
+  // branch and omitted in the adjacent one, which is this lane's most repeated defect (D6).
+  const release = acquireLock(store);
+  try {
+    const res = await sendNotification(
+      { to, subject, text: body, kind: kind ?? "notify" },
+      { storeDir: store.dir, nowTs: nowIst() },
+    );
+    // The recipient is NOT printed. The operator typed it and already knows it; this line is
+    // what ends up in a CI log, and the address has no business being there.
+    console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
+  } finally {
+    release();
+  }
 }
 
 // ---------- main ----------
@@ -531,7 +583,7 @@ try {
     console.error("  ingest-reply --file <p>|--stdin|--inbound   a reply in: triage, receipt, suppression or calendar draft, same run");
     console.error("  reconcile                       spine-first recovery of unresolved intents");
     console.error("  unlock                          clear a send lock whose holder is DEAD (refuses if alive)");
-    console.error("  mail --to <a> --subject <s> [--text <b>]   arc -> owner notification only; allowlist-locked (ADR-0415)");
+    console.error("  mail --to <a> --subject <s> [--text <b>|--text-file <p>|--stdin]   arc -> owner notification only; allowlist-locked (ADR-0415)");
     console.error("  preflight | state --json");
     console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
     process.exit(2);
@@ -543,9 +595,11 @@ try {
   if (e instanceof IngestRefusal) die(e.step === "usage" ? 2 : 3, `[${e.step}] ${e.message}`);
   if (e instanceof ProviderError) die(PROVIDER_EXIT, `${e.kind}: ${e.message}`);
   if (e instanceof EnvError) die(2, e.message);
-  // "log" is NOT a refusal — it means the mail went out and only the bookkeeping failed, so it
-  // maps to the store-error code rather than the refused-by-a-gate one. A caller that retried
-  // on a refusal code would send a second copy of a mail that was already delivered.
-  if (e instanceof MailRefusal) die(e.kind === "config" ? 2 : e.kind === "log" ? 5 : 3, `[${e.kind}] ${e.message}`);
+  // The map is imported from `mail.mjs`, beside the throws, rather than re-derived here as a
+  // chain of ternaries. The distinction it carries: `sent-unlogged` means the mail IS in the
+  // inbox and only the bookkeeping failed, so a caller must NOT retry, while every other kind
+  // means nothing was delivered. An unknown kind falls to 3 rather than 0 — a refusal nobody
+  // mapped is still a refusal.
+  if (e instanceof MailRefusal) die(MAIL_EXIT[e.kind] ?? 3, `[${e.kind}] ${e.message}`);
   die(2, e.message);
 }

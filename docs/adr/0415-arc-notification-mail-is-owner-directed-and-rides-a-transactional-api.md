@@ -37,7 +37,8 @@ and invoice mail in spam. So any mail capability we put on the product domain mu
    for transactional mail, which is exactly what owner-directed notification is. Cons: a second
    vendor to reason about; the 100/day free cap is a real ceiling that must be enforced in code
    rather than hoped for.
-3. **Reuse the leads outreach provider interface (`lib/provider.mjs`)** — pros: no new
+3. **Reuse the leads outreach provider interface (`provider()` on `lib/deps.mjs`, with its
+   policy in `sequencer.mjs`/`guard.mjs`/`journal.mjs`)** — pros: no new
    interface, no new contract suite. Cons: that interface is shaped entirely for cold outbound
    — suppression lists, idempotency-key lookup, bounce and complaint webhooks — and none of it
    applies to mail addressed to the owner. Worse, it would place the product domain inside the
@@ -48,7 +49,17 @@ and invoice mail in spam. So any mail capability we put on the product domain mu
 **Option 2, with a hard separation.** The transport joins the other external edges in
 `lib/deps.mjs` as `mailer()` — interface, fake and real together, the shape every dependency in
 this lane already has — and the POLICY lives in a distinct `lib/mail.mjs`, deliberately not
-`lib/provider.mjs`, sending through Resend's HTTP API from `automemory.ai`.
+an outreach-policy module, sending through Resend's HTTP API from `automemory.ai`.
+
+**A naming correction that matters, because the separation is the decision.** The PLAN's
+external-dependency table calls the outreach provider `lib/provider.mjs`; no such file exists.
+`provider()` sits on `lib/deps.mjs` — the shelf every external edge in this lane sits on — and
+the outreach POLICY lives in `sequencer.mjs`, `guard.mjs` and `journal.mjs`. So `lib/mail.mjs`
+sharing `deps.mjs` with the outreach transport is not a violation of this decision; it is the
+same shelf, and the separation being asserted is between the two POLICY layers. Stating it
+against a filename that does not exist would have made the rule unverifiable — and the first
+test written to enforce it grepped for exactly one module name and passed while `mail.mjs`
+imported any of the other seven.
 
 The separation that matters is the policy one. Two transports posting to the same vendor is
 unremarkable; two policy layers sharing a module is how the product domain acquires a
@@ -97,7 +108,7 @@ Resend's free tier is 3,000 emails/month, 100/day, one verified domain —
 revisit trigger is for.
 **Rejected because:** Zoho SMTP — costs money on day one for a capability the alternative gives
 free, and puts hand-written protocol code where a silent bug is expensive. Reusing
-`lib/provider.mjs` — it would put the product domain inside the cold-outbound code path, the
+the outreach policy modules — it would put the product domain inside the cold-outbound code path, the
 one coupling ADR-0402 forbids.
 
 ## Consequences
@@ -115,8 +126,8 @@ real constraint that code must respect, and a notification path that silently st
 would be worse than no notifications at all, so quota exhaustion has to fail loudly.
 
 **What this does NOT do, stated plainly so it is not claimed later.** This does not resolve
-ADR-0413. Resend is not the cold-outbound provider and `lib/mail.mjs` is not
-`lib/provider.mjs`. Exercising the notification path says nothing about whether the outreach
+ADR-0413. Resend is not the cold-outbound provider and `lib/mail.mjs` is not the outreach
+policy. Exercising the notification path says nothing about whether the outreach
 fixtures match the behaviour of whichever vendor is eventually bound in a real campaign.
 ADR-0413's standing caution — that the outreach engine is fixture-proven and unexercised —
 remains true and is only retired by a real campaign.

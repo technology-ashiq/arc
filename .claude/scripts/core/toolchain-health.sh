@@ -30,7 +30,29 @@ MANUAL=$(mktemp 2>/dev/null || echo /tmp/tc_man.$$)
 
 have(){ command -v "$1" >/dev/null 2>&1; }
 ver(){ "$1" --version 2>/dev/null | head -n1 | tr -d '\r' | cut -c1-22; }
-env_has(){ [ -f .env.local ] && grep -Eq "^[[:space:]]*$1=.+" .env.local; }
+# Whether .env.local sets $1 to a usable value.
+#
+# This must agree with .claude/scripts/leads/lib/env.mjs, which is the Node-side reader of the
+# SAME file, because this function answers the question "am I configured?" that an operator
+# consults before deciding a refusal is a bug. The first version was `grep -Eq "^[[:space:]]*$1=.+"`
+# and the two readers disagreed in BOTH directions (D1/D5):
+#
+#   export NAME=v   env.mjs strips the `export ` prefix and loads it; this grep is anchored at
+#                   the name, so a working key was reported as `fill: NAME`.
+#   NAME=""         `.+` matches the two quote characters, so this reported a green ENV CONTRACT
+#                   while env.mjs stripped the matched pair, got "", and refused the send.
+#
+# Duplicate assignments resolve LAST-WINS here too, matching env.mjs's Map.
+env_has(){
+  [ -f .env.local ] || return 1
+  _eh_v=$(sed -n "s/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}$1=//p" .env.local | tail -n1)
+  [ -n "$_eh_v" ] || return 1
+  # An empty quoted value is an unset value, which is what the copy of .env.example ships.
+  case "$_eh_v" in
+    '""'|"''") return 1 ;;
+  esac
+  return 0
+}
 
 fix_add(){
   case "$1" in *"<"*) return ;; esac

@@ -24,7 +24,10 @@ unattributable. `phases/phase-03-spec.md` declares `Depends on: phase-04` for th
 
 - [ ] **`mailer()` in `lib/deps.mjs` (interface + fake + Resend HTTP impl) and the policy in
       `lib/mail.mjs`** per ADR-0415 — a plain HTTPS POST, no SDK, key read from env. The policy
-      module is deliberately NOT `lib/provider.mjs` and must not import from the outreach path
+      module is deliberately NOT an outreach-policy module and must not import from that path
+      (`sequencer.mjs`, `guard.mjs`, `journal.mjs`, `drafts.mjs`, `personalization.mjs`,
+      `replies.mjs`, `preflight.mjs`, `ingest.mjs`) — sharing `deps.mjs`, the dumb transport
+      shelf every external edge in this lane sits on, is not the coupling ADR-0402 forbids
 - [ ] **The allowlist guard, as a fixture first**: a recipient absent from the env-declared
       owner allowlist is refused **before any network call**. This is the whole reason the
       product domain is safe to send from — it is a test, never a sentence
@@ -44,8 +47,8 @@ unattributable. `phases/phase-03-spec.md` declares `Depends on: phase-04` for th
       cannot pass the suite
 - [ ] **Three triggers wired end to end**: deploy/canary failure · L1 approval items waiting ·
       daily brief
-- [ ] **Inbox placement proved from the delivered message, on two mailbox classes** — Zoho
-      `arc@automemory.ai` and a Gmail-class mailbox. Not spam. SPF/DKIM/DMARC read from the
+- [ ] **Inbox placement proved from the delivered message, on two mailbox classes** — the Zoho
+      `arc@` mailbox on the product domain and a Gmail-class mailbox. Not spam. SPF/DKIM/DMARC read from the
       **received headers of the delivered mail**, never from our own DNS lookup, which would
       prove only what we published and not what the receiver accepted
 - [ ] tests green **on CI**; tracker updated
@@ -60,7 +63,7 @@ unattributable. `phases/phase-03-spec.md` declares `Depends on: phase-04` for th
   asserts its own declared `@test` count so a test that never registers is visible as a falling
   number rather than a silent pass. ASCII-only test names (pre-mortem 8).
 - **Live demo scenario:** break a deploy on purpose (or fire the canary path against a failing
-  probe) with the owner away from the terminal; the alert mail arrives in `arc@automemory.ai`.
+  probe) with the owner away from the terminal; the alert mail arrives in the Zoho `arc@` mailbox.
   Then run the daily brief and watch it land in the Gmail-class mailbox. Then call the mailer
   with a recipient outside the allowlist and watch it refuse before any network call.
 - **Real-system check:** open both mailboxes by hand. Confirm the message is in the inbox and
@@ -83,7 +86,7 @@ purpose and a "shared" mailer is how the product domain ends up inside the cold-
 ## Out of scope for this phase
 
 **Anything that would let this be claimed as campaign progress.** This phase does not bind the
-outreach provider (`lib/provider.mjs` is untouched — that is Phase 03), does not resolve
+outreach provider (`provider()` and the outreach policy modules are untouched — that is Phase 03), does not resolve
 ADR-0413, and does not validate a single Phase 00–02 provider fixture. Different interface,
 different policy layer, even though Phase 03 will post to the same vendor. REQ-07's seed smoke
 is *satisfied in kind* here — owned mailboxes, placement, auth headers — but REQ-07 itself is
@@ -95,15 +98,21 @@ concept and adding one would blur exactly the line this phase exists to hold.
 
 ## Your-setup / pending
 
-Done by the owner on 2026-08-08: `arc@automemory.ai` created on Zoho (receive side);
-`automemory.ai` verified in Resend (send side); **`RESEND_API_KEY` placed in `.env.local`** —
-arc's existing single home for credentials, gitignored, and already the file
-`/arc-toolcheck` reads. Never in a commit, never in chat where it would land in a transcript.
+Done by the owner on 2026-08-08: the `arc@` mailbox created on Zoho (receive side);
+`automemory.ai` verified in Resend (send side); and **`RESEND_API_KEY`, `ARC_LEADS_MAIL_FROM`,
+`ARC_LEADS_MAIL_ALLOWLIST` and `ARC_LEADS_REHEARSAL_ALLOWLIST` placed in `.env.local`** — arc's
+existing single home for credentials, gitignored, and already the file `/arc-toolcheck` reads.
+Never in a commit, never in chat where it would land in a transcript.
 
-Still needed: **`ARC_LEADS_MAIL_FROM`** and **`ARC_LEADS_MAIL_ALLOWLIST`** in the same file —
-declared by name in `.env.example`. The allowlist is the owner's addresses only; the rehearsal
-recipients are a separate list (`ARC_LEADS_REHEARSAL_ALLOWLIST`, Phase 03) so that a rehearsal
-recipient never starts receiving deploy alerts.
+The two allowlists stay separate on purpose: the mail allowlist is the owner's addresses only,
+and the rehearsal recipients are their own list (Phase 03) so a rehearsal recipient never starts
+receiving deploy alerts and the owner never becomes a valid cold-rehearsal target.
+
+**`.env.local` carries credentials and nothing else.** `ARC_LEADS_FAKE`, `ARC_LEADS_NOW`,
+`ARC_LEADS_STORE`, `ARC_LEADS_MAIL_BASE_URL` and `LEADS_FIXTURE_DIR` are refused when they
+arrive from that file: it is read inside the mail subcommand, which is after the startup guard
+that polices those doors, so a file setting `ARC_LEADS_FAKE=1` would otherwise switch the
+notification path to the fake and report a delivered mail that never left.
 
 **One caveat that belongs with the decision, not discovered later:** `git clean -xfd` deletes
 ignored files, so a clean wipes `.env.local`. For the Resend key that is a two-minute re-paste

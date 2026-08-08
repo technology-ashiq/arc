@@ -15,7 +15,7 @@
 // counts and nothing else, because the whole point of the file it reads is that its contents
 // do not travel.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { resolve as pathResolve } from "node:path";
 
 export const ENV_LOCAL = ".env.local";
@@ -74,12 +74,30 @@ export function parseEnvFile(text) {
 // chdir-ing the whole process, which in a bats file would leak into every later test.
 export function loadEnvLocal({ root = process.cwd(), env = process.env } = {}) {
   const path = pathResolve(root, ENV_LOCAL);
-  if (!existsSync(path)) return { path, present: false, loaded: 0, skipped: [] };
 
+  // ONE read decides both questions, for the same reason `mail.mjs readQuota` does: asking
+  // `existsSync` first and reading second reintroduces the fail-open the catch block below
+  // exists to prevent. `existsSync` answers false for EVERY error — EACCES on the containing
+  // directory, a parent that is a file, ELOOP, a dangling symlink — so an unreadable credential
+  // file was reported as an absent one, which is precisely the "go looking in the wrong place"
+  // outcome this function refuses.
+  //
+  // And ENOENT alone does not mean absent: with a regular file where `root` should be, Linux and
+  // macOS report ENOTDIR while Windows reports ENOENT for the identical broken path, so trusting
+  // the code fails closed on two legs and open on the third. ENOENT is confirmed against `root`.
   let text;
   try {
     text = readFileSync(path, "utf8");
   } catch (e) {
+    if (e && e.code === "ENOENT") {
+      let st = null;
+      try { st = statSync(root); } catch (e2) {
+        throw new EnvError("unreadable", `${ENV_LOCAL} could not be read: its directory is unreadable (${(e2 && e2.code) || e2.message}) — refusing to continue as if it were absent`);
+      }
+      if (!st.isDirectory())
+        throw new EnvError("unreadable", `${ENV_LOCAL} could not be read: the path it would live in is not a directory — refusing to continue as if it were absent`);
+      return { path, present: false, loaded: 0, names: [], blank: [], skipped: [] };
+    }
     // An unreadable `.env.local` is an ERROR and never a quiet fallback to "no credentials".
     // Falling through would produce "RESEND_API_KEY is unset" from a file that is sitting
     // right there with the key in it, and the operator would go looking in the wrong place.
@@ -87,15 +105,22 @@ export function loadEnvLocal({ root = process.cwd(), env = process.env } = {}) {
   }
 
   const { values, skipped } = parseEnvFile(text);
-  let loaded = 0;
+  const names = [];
+  const blank = [];
   for (const [name, value] of values) {
-    // Unset AND empty both count as absent. An operator who leaves `RESEND_API_KEY=` in place
-    // after copying `.env.example` has not configured anything, and treating that empty string
-    // as a set value produces an auth failure at the vendor instead of a clear refusal here.
+    // Unset AND empty count as absent on BOTH sides, which the first version only did on the
+    // environment side. `RESEND_API_KEY=` is the literal result of `cp .env.example .env.local`,
+    // and assigning its empty string counted as `loaded`, appeared in no warning list, and
+    // surfaced later as an auth failure at the vendor rather than as a clear refusal here. It is
+    // reported as `blank` instead: an operator who half-filled the file gets told which line.
+    if (value === "") { blank.push(name); continue; }
     if (env[name] === undefined || env[name] === "") {
       env[name] = value;
-      loaded++;
+      names.push(name);
     }
   }
-  return { path, present: true, loaded, skipped };
+  // `names` and `blank` carry NAMES, never values. The names are already public — `.env.example`
+  // declares every one of them — and a caller cannot enforce a policy about which variables a
+  // credential file may set without being told which ones it set.
+  return { path, present: true, loaded: names.length, names, blank, skipped };
 }

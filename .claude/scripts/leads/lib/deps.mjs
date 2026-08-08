@@ -249,7 +249,11 @@ export function decodeMailResponse(statusCode, body) {
   catch { throw new ProviderError("refused", `unparseable mail-vendor response (HTTP ${code})`); }
   // A 2xx with no id is not an ack: the id is the only handle the delivery log has for
   // matching a send against the vendor dashboard, and "" would make it unmatchable forever.
-  if (!parsed || typeof parsed.id !== "string" || !parsed.id)
+  // The emptiness test is on the TRIMMED value, because `!parsed.id` measures length and the
+  // property wanted is content — `" "`, `"\n"` and a lone NUL are all non-empty strings and all
+  // exactly as unmatchable as `""`, and they would be written into the delivery log and printed
+  // to the CI log as a blank id.
+  if (!parsed || typeof parsed.id !== "string" || parsed.id.trim() === "")
     throw new ProviderError("refused", `mail vendor returned HTTP ${code} with no message id — there is nothing to record the send against`);
   return parsed;
 }
