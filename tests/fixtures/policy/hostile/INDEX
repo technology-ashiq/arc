@@ -56,3 +56,13 @@
 71-hooks-dir-itself.json	runtime	deny	ADVERSARIAL BC2: every glob branch tested for a STRICT descendant, so .claude/hooks itself was reachable while its children were not
 72-engine-source-write.json	runtime	deny	ADVERSARIAL A4/BC7: ADR-0502's own sentence turned on the guard -- the engine's source was not on the un-grantable list while .claude/scripts/** was a write root
 73-spend-at-l2.json	runtime	deny	ADVERSARIAL A5: the L2 branch had arms for write, shell, network and targets -- and none for spend, so any amount executed with its cap never consulted
+74-trailing-dot-alias.json	runtime	deny	PHASE 04: Win32 strips a trailing dot, so this IS hq.policy.yaml to every Win32 caller and a different string to every guard check -- measured, 6660 bytes to 14
+75-trailing-space-alias.json	runtime	deny	PHASE 04: the same aliasing with a trailing space -- settings.json went 3219 bytes to 14 while the guard reported the target clear
+76-trailing-dot-parent.json	runtime	deny	PHASE 04: the alias in a PARENT segment rather than the basename -- the rule is per-segment or it is not a rule
+77-argv0-launderer-env.json	runtime	deny	PHASE 04: env runs another program, so argv0 is env and every downstream check reads the wrong name -- eleven wrappers returned propose while the bare program denied
+78-argv0-launderer-busybox.json	runtime	deny	PHASE 04: the same laundering through a multi-call binary -- refused outright, because resolving it means parsing every wrapper's flag grammar
+79-l3-argv0-not-allowed.json	runtime	deny	PHASE 04: argv0_allow was enforced only at L2, yet ADR-0507 DERIVES L3 from reproduced_by(argv0_allow) -- so the list that bought the level was then ignored
+80-l3-shell-no-allowlist.json	runtime	propose	PHASE 04: shell granted execute with NO allowlist: reproducedBy returns the empty set, so the derivation minned over nothing and kept L3 -- now capped to the birth cap
+81-mutator-widened-del.json	runtime	deny	PHASE 04: FILE_MUTATORS knew node/python/bash and not del, robocopy, xcopy, tar, find or rsync, so a mutator outside the Set never reached the guarded-operand check
+82-interior-dot-control.json	runtime	execute	PHASE 04: CONTROL: a dot INSIDE a segment is an ordinary filename -- without this the trailing-dot rows above would pass against deny-everything
+83-unwrapped-argv0-control.json	runtime	execute	PHASE 04: CONTROL: the same command with no wrapper must still execute, or the launderer rows above prove only that shell is off
