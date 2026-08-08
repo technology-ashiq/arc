@@ -125,7 +125,24 @@ reads this file's deny list — if a comma is wrong, that test says so before an
 
 ## What is still open after all three
 
-`decision_ref` on a promotion receipt is written, shape-checked, hashed into the idem — and
-**never resolved to a real approval**. A correctly-sealed line naming an approval that does not
-exist still raises a cap. Both attackers found it independently. It is mine to close, not yours,
-and it is the next thing I am doing.
+**Nothing that is yours.** These three are the whole owner surface of Phase 04.
+
+`decision_ref` — the finding that sat here, where a correctly-sealed promotion naming an approval
+that does not exist still raised a cap — **is closed.** `loadPolicyEvents` now collects the ids of
+every `decision.recorded` that passes both `validateEvent` and its own `eventSha`, and refuses to
+fold a promotion whose `decision_ref` is not among them. Proven both ways against a real decision
+lifted off the live spine: real → folded, fake → not. Demotions are deliberately exempt — they are
+engine-raised on an incident and only ever *lower* a cap, so gating them would fail open.
+
+Four findings are recorded as **owed rather than closed**, all in
+[`initiatives/policy/evidence/phase-04/handoff.md`](../initiatives/policy/evidence/phase-04/handoff.md):
+`encode` coercing `Map`/`Set`/`Date` to `{}`, `reserveAndSpend` reaching a provider at L1, the
+`"."` stem, and `/arc-develop next` pinned to a closed phase's ledger. None is an escalation and
+none needs you.
+
+## After all three land, tell me and I will
+
+1. Run the branch's CI (`tests/policy-hook.bats` has a `LAYER 2` test that reads your deny list,
+   and a `PHASE 04` test that reads the matchers — a wrong comma turns those red first).
+2. Close Phase 04 with its spine receipt, which is the last thing the phase owes.
+3. Merge PR #130.

@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-policy "Enforced capability vectors"
 
 status: LIVE
-cycle: arc-policy (born 2026-08-06)
-phase: 03 — in progress (00, 01, 02 all CLOSED)
+cycle: arc-policy (Cycle 9, born 2026-08-06)
+phase: 04 — in progress (00, 01, 02, 03 all CLOSED)
 appetite: 7d
-burn: 4.6d
-blocked-on: —
+burn: 6.8d
+blocked-on: external — owner: 3 edits to .claude/settings.json
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -26,8 +26,8 @@ depends-on: —
 | 00 | Steel thread — the law, its parser **and the decision**: schema, canonical L0–L3 table, `policy-lint` (FAILs from birth), `resolveEffectivePolicy` + `authorizeAction` against fakes, hostile corpus green (static **and** runtime families), hook feasibility matrix generated from `.mcp.json` | 2 days | ✅ done 2026-08-06 |
 | 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ✅ done 2026-08-07 |
 | 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | ✅ done 2026-08-07 |
-| 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ⬜ not started |
-| 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ⬜ not started |
+| 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ✅ done 2026-08-08 |
+| 04 | **Adversarial security pass — two full days, untouchable** | 2 days | 🟨 built and green; closes on the owner action |
 
 **Appetite burn: ~4.5 of 7 days used (64%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
 **never taken from Phase 4**. The allocation changed at kickoff, after the simulation gate: Phase
@@ -45,6 +45,8 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
+| 2026-08-08 | **Phase 04 — built, attacked and green; NOT yet closed.** Two days, four fresh agents on two surfaces, **26 findings**: 23 closed in code, 2 rejected after measurement, 1 written up as an owner action. 17 new bats tests and **the hostile corpus grown 54 → 64 rows**, which is the phase's own exit check. The kill criterion **did not fire** — five findings look like that class (each a way for layer 1 not to run) and in every case the architecture was right and the wiring was wrong. **It cannot close until the three `.claude/settings.json` edits land**: an agent is refused that file by two independent layers, which is the rule working | CI **31245716829, 19/19 green** on `615cee0` · `initiatives/policy/evidence/phase-04/` (findings.md, live-demo.md, handoff.md) · [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md) |
+| 2026-08-08 | **Phase 03 CLOSED.** The birth rule in `kickoff-lint` (WARN-first in TRIAL), the resolution extracted to `lib/policy/subjects.mjs` so two gates read one relation from one place, and the 53-row cap inventory. **The inventory falsified REQ-07's own deferral premise** — `leads` is a live cap-bearing module — so the deferral now rests on "out of budget" rather than "nothing to migrate", with a named reopening owner. Its own adversarial pass: two agents, 20 findings, incl. the gate comparing the wrong string with a test pinning that blindness as correct, and 7 of 18 tests passing with the check deleted. `tests/kickoff-lint.bats` 48 → 71 | CI **31216027150, 19/19 green** on `074ef19` · `initiatives/policy/evidence/phase-03/cap-inventory.md` |
 | 2026-08-07 | **Phase 02 CLOSED.** The four authority receipts (ADR-0508, vocabulary 40 → 44) and the emitter branch that makes them writable; the promotion chain live end-to-end through `arc-inbox`; automatic demotion on an overreach; both ADR-0501 layers with the cross-check; brief and inbox rendering. **The phase found that none of the four kinds could be emitted at all** — `arc-event` had no idem branch, so every policy receipt was rejected and quarantined while the emitter exited 0. 5 bats suites, 67 tests. `amendments: 0` · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-02/` (live-demo.md, handoff.md, manifest) |
 | 2026-08-07 | **Phase 01 CLOSED.** The headless gate at `arc-run` **and** at `runDriver`, the governing root pinned to the code rather than `--root`, the money guard reserving under a lock that re-reads, and the demotion emitter at the action boundary. ~30 escalations from two fresh adversarial agents, all closed and pinned. 4 bats suites, 83 tests. `amendments: 2` (the demotion surface and the absence-matrix scope, both decided by the owner on 2026-08-07) · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-01/` (live-demo.md, handoff.md, manifest) |
 | 2026-08-07 | **Phases 00–02 landed on `main`.** Not a phase close — 01 and 02 still owe their DoD (live demo + evidence bundle). Recorded because the code is now in the trunk and the CI story around it is the cycle's most expensive lesson: merged without CI (#117), reverted (#118), re-proposed and made genuinely green (#119) | CI **31148958597, 19/19 green** on `0f2d53d` · merge `8064706` · main re-verified by `workflow_dispatch` |
@@ -53,11 +55,86 @@ an unclosable bypass class → STOP.
 
 ## Now
 
-**Current position: Phases 00, 01 and 02 are CLOSED. Phase 03 is IN PROGRESS in this session and
-Phase 04 follows on the same branch — the owner reassigned both here on 2026-08-07, superseding
-the earlier note that Phase 03 belonged to a separate session. Nothing merges until 04 is done:
-one branch, `feat/arc-policy-phase-03-04`, PR #130 held as a draft so CI runs on every push
-without landing a half-finished security phase on main.**
+**Current position: 00, 01, 02 and 03 are CLOSED. Phase 04 is built, attacked and green, and is
+held open on ONE thing that is not mine to do.** One branch, `feat/arc-policy-phase-03-04`, PR
+#130 as a draft so CI runs on every push without landing a half-finished security phase on main.
+
+### What Phase 04 is waiting on
+
+**Three edits to `.claude/settings.json`, written out with paste-ready diffs in
+[`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md).** That file is
+on the un-grantable resource list (ADR-0502) *and* in the harness's own `permissions.deny`, so an
+agent is refused `Edit` and `Write` on it by two independent layers. That is the rule working, and
+it is why these three are a document rather than a commit.
+
+1. **The deny floor does not cover the guard's own files.** 24 entries, none for
+   `.claude/hooks/**` or `.claude/scripts/hq/lib/policy/**`. With the hook disarmed — the shipped
+   default — one session can permanently disarm every future armed one, because nothing restores
+   what it removed. **Do this one first.**
+2. **The `Edit|Write` matcher misses `MultiEdit` and `NotebookEdit`.** Both write to disk.
+3. **The MCP surface reaches no policy check at all.** `policy-hook.mjs` carries a complete
+   per-server capability table that no matcher ever routes to — the same shape as the Edit/Write
+   hole this phase closed, one surface over. Live and unpoliced: `mcp__stripe__*` (real money,
+   which E2 forbids), `apply_migration`, `browser_run_code_unsafe`. **Do this one last and
+   separately** — it will be noisy, and noisy is it working.
+
+### Phase 04, in one screen
+
+**26 findings. 23 closed, 2 rejected after measurement, 1 the owner action above.** Full attempt
+list with severities and verdicts in
+[`initiatives/policy/evidence/phase-04/findings.md`](evidence/phase-04/findings.md); eight attacks
+run for real against a throwaway root in [`live-demo.md`](evidence/phase-04/live-demo.md).
+
+**Day two was harder than day one and found more, because its target was day one's fixes.** Three
+day-two findings exist only because a day-one fix created them or moved them one step over — and
+finding 26 (`argv0_allow` enforced only at L2) came from attacking finding 20's fix, which had
+closed "what if the list is missing" and left "what if the list is present and then ignored" wide
+open. **The fifth twin-fix recurrence in this lane.**
+
+The three that mattered most:
+
+| | Finding | Why it is the worst of its day |
+|---|---|---|
+| 1 | **The entire Edit/Write tool family reached no policy check at all** | Demonstrated end to end with the Bash gate ARMED: `Write` replaced `authorize.mjs` (10658 → 153 bytes, returning execute unconditionally), after which the armed gate permitted a `settings.json` edit it had refused one command earlier |
+| 10 | **A trailing dot or space is a second name for the same file** | The only finding in the cycle with a proven byte-level side effect: through PowerShell, `.claude/settings.json` went 3219 → 14 bytes and `hq.policy.yaml` 6660 → 14, while the guard reported the target clear |
+| 18 | **A promotion citing an approval that does not exist raised a cap** | `decision_ref` was written, shape-checked and hashed into the idem — and never dereferenced anywhere in the repo. Both day-two attackers found it independently and both ranked it first |
+
+**Two findings were rejected, and recording that is not a formality.** A claim that this branch had
+reverted the two spend guards (the attacker mutation-tested an older HEAD and copied the tree
+mid-edit — verified on disk, both guards present, count 35). And a demand that `checkReservation`
+require `execute`, which was attempted, measured, and backed out: POL-F caps spend at L1 in v1, so
+it makes the money guard **unreachable** and breaks 31 tests. A pass that adopts every finding is
+credulous, not adversarial.
+
+**And the fixtures themselves were a finding.** The `decision_ref` check turned CI red on seven
+tests — for the right reason: every fixture that raised a cap was citing an approval that did not
+exist, which is exactly the forgery the check refuses. The demotion suite's `_raise` now walks the
+real chain (request → decide → apply) through the production builders and the one writer. **The
+read-back inside `_raise` is the only reason this surfaced at all** — a fixture that silently fails
+to grant makes every "no demotion" assertion in that file pass for the wrong reason.
+
+### The honest posture, which belongs at the top rather than in a footnote
+
+**While `ARC_POLICY_HOOK` is off — the shipped default — the engine is safe because it is
+disarmed, not because it enforces.** That is a documented POL-H decision, not an oversight:
+`session:interactive` holds shell and write at L1, so with it armed every Bash and every Write in
+a live session is `propose`, which is correct by the model and unusable as a session. Arming it
+for real means raising a ceiling, and POL-A says a ceiling change is a human edit in a reviewed
+diff. The tests set the flag, so the enforcement path runs on every CI leg rather than sitting
+unproven behind it.
+
+### Recorded as owed rather than closed
+
+- **`encode` coerces `Map`, `Set` and `Date` to `{}`.** Real, raised on day two, not closed here:
+  nothing in the policy path constructs one today, so closing it is a change to the hashing
+  contract with no current caller.
+- **`reserveAndSpend` calls a provider at L1.** POL-F bans real-money movement above L1 in v1 and
+  the reservation path is reachable below it. The money phase owns it.
+- **`..process.yaml` yields the stem `"."`.** Cosmetic today; the birth rule reports it.
+- **`/arc-develop next` is permanently pinned to phase 01's abandoned ledger** (`findLedger`
+  returns the first `phase-NN-tasks.md` holding an unproven slice). Phases 03 and 04 were driven by
+  editing their tasks files directly. Fixing `develop.mjs` is the engine lane's call; backfilling
+  01 and 02's ledgers to unstick it would be fabricating evidence for closed phases.
 
 **PHASE 03 — the birth rule is built and the cap inventory is taken.**
 `kickoff-lint` carries `[birth-rule]`, WARN-first in TRIAL: a `processes/*.process.yaml` with no
