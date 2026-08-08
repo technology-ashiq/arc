@@ -218,9 +218,109 @@ _ask() { # $1 = json payload
   done
 }
 
+@test "PHASE 04 -- the fragment sources nothing, and both wrappers are the same body" {
+  # THE SOURCED DISPATCHER WAS A BYPASS. policy-decide.sh sourced _dispatch.sh and used NEITHER
+  # function from it -- pure liability: arbitrary shell executed INSIDE the authority path, where
+  # a single `exit 0` in that file allows everything. A day-two attacker replaced _dispatch.sh
+  # with `exit 0` and a Write to hq.policy.yaml came back permitted.
+  #
+  # Pinned as a text rule because that is the shape of the defect: not a wrong decision, an
+  # untrusted file given the right to make one. The authority path sources nothing at all.
+  cd "$ARC_ROOT"
+  ! grep -qE '^[[:space:]]*(\.|source)[[:space:]]' .claude/hooks/policy-decide.sh || {
+    echo "policy-decide.sh sources a file -- the authority path must source nothing:"
+    grep -nE '^[[:space:]]*(\.|source)[[:space:]]' .claude/hooks/policy-decide.sh
+    false
+  }
+  # POL-D, checked rather than asserted in a comment: two consumers, ONE body. A wrapper that
+  # grew its own copy of the logic is the drift this file exists to prevent, and it is silent --
+  # both keep exiting 0 while they stop agreeing on what a denial looks like.
+  for w in .claude/hooks/PreToolUse.d/40-policy.sh .claude/hooks/PreToolUse-edit.d/40-policy.sh; do
+    [ -f "$w" ] || { echo "$w is missing -- a matcher routes to nothing"; false; }
+    grep -q "policy-decide.sh" "$w" || { echo "$w does not reach the shared body"; false; }
+    # Small enough that it cannot be holding a second implementation.
+    [ "$(grep -cv '^[[:space:]]*\(#.*\)\?$' "$w")" -le 5 ] || {
+      echo "$w has grown its own logic:"; cat "$w"; false; }
+  done
+}
+
+@test "PHASE 04 -- not-in-force is decided by the absent LAW, never the absent library" {
+  # The fragment tested for run-gate.mjs, so `mv run-gate.mjs run-gate.mjs.bak` turned enforcement
+  # off SILENTLY and exited 0 -- a day-two attacker did exactly that. In a tree that HAS
+  # hq.policy.yaml an absent library is tampering; in a consumer repo with no policy file there is
+  # genuinely nothing to enforce, and refusing to run would brick every venture repo. Gating on
+  # the law gets both right, and the tampering case now exits 2 instead of 0.
+  local D="$BATS_TEST_TMPDIR/froot"
+  mkdir -p "$D/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$D/.claude/"
+  cp -r "$ARC_ROOT/.claude/hooks" "$D/.claude/"
+  local pay="$BATS_TEST_TMPDIR/w.json"
+  printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"hq.policy.yaml","content":"x"}}' > "$pay"
+  local frag="$D/.claude/hooks/policy-decide.sh"
+
+  # 1. NO LAW. A consumer repo that never adopted policy: allowed, quietly.
+  run bash -c "ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$D' bash '$frag' < '$pay'"
+  [ "$status" -eq 0 ] || { echo "a repo with no policy file was blocked: $output"; false; }
+
+  # 2. LAW PRESENT, LIBRARY MOVED. This is the attack, and it must be LOUD.
+  cp "$ARC_ROOT/hq.policy.yaml" "$D/hq.policy.yaml"
+  mv "$D/.claude/scripts/hq/lib/policy/run-gate.mjs" "$D/.claude/scripts/hq/lib/policy/run-gate.bak"
+  run bash -c "ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$D' bash '$frag' < '$pay'"
+  [ "$status" -eq 2 ] || { echo "moving one library file turned enforcement off: $output"; false; }
+  [[ "$output" == *"tampering"* ]] || { echo "the refusal does not name what happened: $output"; false; }
+
+  # 3. THE CONTROL. Law and library both present: the fragment must reach a REAL decision and
+  #    deny this write on the un-grantable list. Without this row, rows 1 and 2 would both pass
+  #    against a fragment that had simply stopped working.
+  mv "$D/.claude/scripts/hq/lib/policy/run-gate.bak" "$D/.claude/scripts/hq/lib/policy/run-gate.mjs"
+  run bash -c "ARC_POLICY_HOOK=1 CLAUDE_PROJECT_DIR='$D' bash '$frag' < '$pay'"
+  [ "$status" -eq 2 ] || { echo "an intact tree did not deny a write to the policy file: $output"; false; }
+  [[ "$output" == *"un-grantable"* ]] || { echo "denied, but not by the policy library: $output"; false; }
+
+  # 4. AND THE FLAG STILL GOVERNS. Disarmed, the same call is allowed -- otherwise this suite
+  #    would be proving enforcement that the shipped default does not actually have (POL-H).
+  run bash -c "CLAUDE_PROJECT_DIR='$D' bash '$frag' < '$pay'"
+  [ "$status" -eq 0 ] || { echo "the disarmed fragment still blocked: $output"; false; }
+}
+
+@test "PHASE 04 -- settings.json actually ROUTES the policed tools to the fragment" {
+  # THE WIRING WAS NEVER ASSERTED ANYWHERE. A day-two attacker deleted the entire
+  # hooks.PreToolUse block from settings.json and all seventeen tests in this file stayed green:
+  # every one of them invokes policy-hook.mjs or a .d fragment DIRECTLY, so the suite proved the
+  # decision logic and never that anything calls it. That is layer 1 being unreachable while its
+  # tests pass -- the same shape as the MCP branch below, which is live code no matcher reaches.
+  #
+  # The mutant IS the negative control: the identical predicate run against a settings object
+  # with the block removed must report nothing routed.
+  cd "$ARC_ROOT"
+  run node --input-type=module -e '
+    const fs = await import("node:fs");
+    const s = JSON.parse(fs.readFileSync(".claude/settings.json", "utf8"));
+    // Anchored, which is the strict reading -- if the harness anchors matchers then this is what
+    // is really routed, and if it does not, anchored is a subset and still true.
+    const routed = (cfg, tool) => (cfg.hooks && cfg.hooks.PreToolUse || []).some((b) =>
+      typeof b.matcher === "string" && new RegExp("^(" + b.matcher + ")$").test(tool) &&
+      (b.hooks || []).some((h) => typeof h.command === "string"
+        && h.command.includes(".claude/hooks/PreToolUse")));
+    const mutant = JSON.parse(JSON.stringify(s));
+    delete mutant.hooks.PreToolUse;
+    const row = (cfg, tag) => ["Bash","Edit","Write"]
+      .map((t) => tag + ":" + t + "=" + routed(cfg, t)).join(" ");
+    console.log(row(s, "live") + " " + row(mutant, "mutant"));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for t in Bash Edit Write; do
+    [[ "$output" == *"live:$t=true"* ]] || {
+      echo "$t reaches no policy hook at all -- layer 1 is unreachable for it: $output"; false; }
+    # THE MUTANT. If this says true, the predicate is not reading the wiring and the row above
+    # proves nothing.
+    [[ "$output" == *"mutant:$t=false"* ]] || {
+      echo "the predicate passes with the PreToolUse block deleted -- it measures nothing: $output"; false; }
+  done
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 17 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 17 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 20 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 20 -- a @test was silently dropped"
     false
   }
 }

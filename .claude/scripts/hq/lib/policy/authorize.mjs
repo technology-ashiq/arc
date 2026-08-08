@@ -266,8 +266,38 @@ export function authorizeAction({ kind, capability, resource } = {}, ctx = {}) {
     return verdict("propose", effective,
       `${kind}/${capability} is at L1 -- prepare and record it, never execute it`);
 
+  // 3b. THE SHELL ALLOWLIST IS NOT A BOUND -- IT IS WHAT BOUGHT THE LEVEL, so it is enforced at
+  //     L3 too. For the other seven capabilities "L3 is unbounded within the capability" is a
+  //     coherent reading: the bound narrows a grant the level already justified. For shell it is
+  //     circular. ADR-0507 defines effective(shell) as the min over `reproduced_by(argv0_allow)`,
+  //     so the declared list is the INPUT to the cap that permitted L3 in the first place. Ignore
+  //     it at L3 and the set actually admitted is every program on the machine -- whose reproduces
+  //     set is "everything" -- while the cap was computed over the two or three names someone
+  //     wrote down. The derivation is then evaluated over a set the engine does not enforce, and
+  //     ADR-0507's invariant ("no capability may exceed another's grant") is decorative again.
+  //
+  //     Measured: `shell: { level: L3, argv0_allow: ["bats"] }` -- bats is classified narrow, so
+  //     nothing caps it and L3 is reached -- executed `node -e`, `curl`, `dd` and a recursive
+  //     delete. Latent rather than live: every shell grant in the shipped hq.policy.yaml sits at
+  //     L1 with no allowlist at all. It is the SAME SHAPE as the empty-allowlist hole closed one
+  //     commit earlier, one step over: that fix asked "what if the list is missing", this asks
+  //     "what if the list is present and then ignored". Grep the pattern, not the file.
+  //
+  //     An ABSENT list is left alone rather than denied: effectiveShell already caps a shell
+  //     grant with no allowlist to the birth cap, so L3 with no list cannot be reached, and
+  //     denying on a state that cannot occur would only obscure which rule is doing the work.
+  if (capability === "shell" && effective === "L3") {
+    const grant = grantFor(policy, kind, capability) || {};
+    const allow = has(grant, "argv0_allow") ? grant.argv0_allow : null;
+    if (Array.isArray(allow) && !allow.includes(argv0))
+      return verdict("deny", effective,
+        `${argv0} is not in the declared argv0_allow. At L3 that list is not a bound to be ` +
+        `relaxed -- it is what ADR-0507 derived this level FROM, so admitting a program outside ` +
+        `it means the cap was computed over programs the engine never checked`);
+  }
+
   // 4. The bound, at L2 only. L3 is unbounded within the capability, by definition -- but note
-  //    that steps 1 and 2 have already run, so "unbounded" never means "unchecked".
+  //    that steps 1, 2 and 3b have already run, so "unbounded" never means "unchecked".
   if (effective === "L2") {
     const grant = grantFor(policy, kind, capability) || {};
     const key = BOUND_KEY[capability];

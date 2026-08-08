@@ -352,21 +352,43 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   # reducer with injected objects, because the hole was in the READ path.
   run _node "$PRE
     const { policyIdem } = await import('./.claude/scripts/hq/lib/validate-policy.mjs');
-    const { eventSha }   = await import('./.claude/scripts/hq/lib/canonical.mjs');
+    const { eventSha, sha256Hex } = await import('./.claude/scripts/hq/lib/canonical.mjs');
     const root = fs.mkdtempSync(pth.join(os.tmpdir(), 'forge-'));
     const dir = pth.join(root, '.claude', 'state', 'hq', 'events');
     fs.mkdirSync(dir, { recursive: true });
-    const mk = (id, to) => {
+    const DEC = '01JQ8XZ9K0ABCDEFGH00000002';
+    // The approval the promotion cites, sealed the same way. Before this existed the fixture
+    // named a decision that was never on the spine -- which is precisely the forgery the
+    // decision_ref check now refuses, so the CONTROL row was itself the attack.
+    const decision = (() => {
+      const e = { v:1, id:DEC, kind:'decision.recorded', ts:'2026-08-06T09:00:00+05:30',
+        actor:'human', process:'arc-inbox@1.0.0', run_id:'r-01JQ8XZ9K0ABCDEFGH00000003',
+        venture:'arc', model:null, cost:null, outcome:'ok', evidence:null, supersedes:null,
+        payload:{ decides:'01JQ8XZ9K0ABCDEFGH00000001', reason:'fixture', verdict:'approve' } };
+      e.idem = sha256Hex('decision.recorded|' + e.payload.decides); e.sha = eventSha(e); return e;
+    })();
+    const mk = (id, to, ref) => {
       const e = { v:1, id, kind:'policy.level.changed', ts:'2026-08-06T10:00:00+05:30',
         actor:'human', process:'policy-promotion@1.0.0', run_id:'r-01JQ8XZ9K0ABCDEFGH00000003',
         venture:'arc', model:null, cost:null, outcome:'ok', evidence:null, supersedes:null,
         payload:{ action_kind:'session:interactive', capability:'write', correlation:'r',
-          decision_ref:'01JQ8XZ9K0ABCDEFGH00000002', from_level:'L1',
+          decision_ref: ref || DEC, from_level:'L1',
           policy_hash:'a'.repeat(64), to_level:to, trial_ledger_ref:'t' } };
       e.idem = policyIdem(e.kind, e.payload); e.sha = eventSha(e); return e;
     };
+    const drop = (id) => {
+      const e = { v:1, id, kind:'policy.demoted', ts:'2026-08-06T11:00:00+05:30',
+        actor:'engine', process:'policy-hook@1.0.0', run_id:'r-01JQ8XZ9K0ABCDEFGH00000003',
+        venture:'arc', model:null, cost:null, outcome:'ok', evidence:null, supersedes:null,
+        payload:{ action_kind:'session:interactive', capability:'write', correlation:'r',
+          from_level:'L2', incident_ref:'01JQ8XZ9K0ABCDEFGH00000004',
+          policy_hash:'a'.repeat(64), to_level:'L1' } };
+      e.idem = policyIdem(e.kind, e.payload); e.sha = eventSha(e); return e;
+    };
     const f = pth.join(dir, '2026-08-06.jsonl');
-    const w = (o) => fs.writeFileSync(f, JSON.stringify(o) + '\n');
+    // The decision is on every write: it is the standing fact the promotions cite, not one of
+    // the lines under test.
+    const w = (o) => fs.writeFileSync(f, JSON.stringify(decision) + '\n' + JSON.stringify(o) + '\n');
     // NOT named n: the shared PRE block already declares one as the ULID counter for up(),
     // and a duplicate const in the same module scope is a SyntaxError before a line runs.
     const loaded = () => P.loadPolicyEvents(root).length;
@@ -376,9 +398,32 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
     w({ ...good, sha: 'f'.repeat(64) });                  out.push('wrongsha=' + loaded());
     const t = JSON.parse(JSON.stringify(good)); t.payload.to_level = 'L3';
     w(t);                                                 out.push('tampered=' + loaded());
+    // AN APPROVAL THAT DOES NOT EXIST. Correctly sealed, correct idem, plausible in every field
+    // -- and citing a ULID no decision.recorded carries. Two day-two attackers raised a cap with
+    // exactly this line, because eventSha is exported and pure so the forger seals their own.
+    w(mk('01JQ8XZ9K0ABCDEFGH00000011', 'L2', '01JQ8XZ9K0ABCDEFGH00000099'));
+    out.push('orphan=' + loaded());
+    // A DECISION THAT IS ITSELF FORGED cannot launder a promotion: the loader sha-verifies the
+    // decision before admitting its id, so a promotion citing it is as orphaned as the row above.
+    fs.writeFileSync(f, JSON.stringify({ ...decision, sha:'f'.repeat(64) }) + '\n'
+      + JSON.stringify(good) + '\n');
+    out.push('forgeddecision=' + loaded());
+    // THE FAIL-OPEN CONTROL. A demotion carries no decision_ref at all -- it is engine-raised on
+    // an incident. Gating it the same way would leave a cap HIGH, the one direction this must
+    // never fail in, so it must load with no decision anywhere on the spine.
+    fs.writeFileSync(f, JSON.stringify(drop('01JQ8XZ9K0ABCDEFGH00000012')) + '\n');
+    out.push('demotiononly=' + loaded());
     w(good);
     fs.appendFileSync(pth.join(dir, '2026-08-08.jsonl'), JSON.stringify(good) + '\n');
     out.push('duplicated=' + loaded());
+    // SAME IDEM, FRESH ID, RE-SEALED. The dedup keyed on the ULID until day two, so this is the
+    // copy that walked past the fix above and restored a cap a demotion had taken.
+    const twin = JSON.parse(JSON.stringify(good));
+    twin.id = '01JQ8XZ9K0ABCDEFGH00000013';
+    delete twin.sha; twin.sha = eventSha(twin);
+    fs.writeFileSync(f, JSON.stringify(decision) + '\n' + JSON.stringify(good) + '\n'
+      + JSON.stringify(twin) + '\n');
+    out.push('reidcopy=' + loaded());
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # THE CONTROL FIRST: a correctly sealed event must still load, or every row below passes for
@@ -386,7 +431,11 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" == *"genuine=1"* ]] || { echo "a genuine sealed event was rejected: $output"; false; }
   [[ "$output" == *"wrongsha=0"* ]] || { echo "$output"; false; }
   [[ "$output" == *"tampered=0"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"orphan=0"* ]] || { echo "a promotion citing no real decision was folded: $output"; false; }
+  [[ "$output" == *"forgeddecision=0"* ]] || { echo "a forged decision laundered a promotion: $output"; false; }
+  [[ "$output" == *"demotiononly=1"* ]] || { echo "a demotion was gated on a decision -- the cap stays high: $output"; false; }
   [[ "$output" == *"duplicated=1"* ]] || { echo "the copy was counted twice: $output"; false; }
+  [[ "$output" == *"reidcopy=1"* ]] || { echo "a re-sealed copy with a fresh id folded twice: $output"; false; }
 }
 
 @test "PHASE 04 -- every event on the REAL spine passes the new integrity check" {
@@ -413,9 +462,143 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   [[ "$output" != *"total=0 "* ]] || { echo "no spine events were read at all: $output"; false; }
 }
 
+@test "PHASE 04 -- a trailing dot or space is a second name for a guarded file, and is refused" {
+  # THE ONLY FINDING IN THIS CYCLE WITH A PROVEN BYTE-LEVEL SIDE EFFECT. Win32 STRIPS a trailing
+  # dot or space at the API layer, so "hq.policy.yaml." is the same file as "hq.policy.yaml" to
+  # every Win32 caller and a different string to every check in resources.mjs. Measured through
+  # PowerShell -- which is a CLASSIFIED interpreter, so this is a program the policy contemplates
+  # permitting: .claude/settings.json went 3219 -> 14 bytes and hq.policy.yaml 6660 -> 14, while
+  # guardedEntryFor reported the target clear.
+  #
+  # Rejected outright the way hasShortName rejects 8.3 names, never trimmed: trimming means this
+  # module deciding which of two names the OS meant, and the aliasing IS the attack -- one path,
+  # two identities, one of them invisible to the guard.
+  run _node "$PRE
+    const W = { write:{level:'L3'} };
+    const d = (r) => JSON.stringify(r) + '=' + A('write', r, W, [up('write','L3')]);
+    console.log([d('hq.policy.yaml'), d('hq.policy.yaml.'), d('hq.policy.yaml '),
+                 d('./.claude/settings.json.'), d('docs/sub./y.md'),
+                 d('docs/x.md'), d('docs/v1.2.md')].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The plain name, as the reference every alias below is measured against.
+  [[ "$output" == *'"hq.policy.yaml"=deny'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'"hq.policy.yaml."=deny'* ]] || { echo "the trailing-dot alias reached the file: $output"; false; }
+  [[ "$output" == *'"hq.policy.yaml "=deny'* ]] || { echo "the trailing-space alias reached the file: $output"; false; }
+  [[ "$output" == *'"./.claude/settings.json."=deny'* ]] || { echo "$output"; false; }
+  # A DIRECTORY segment aliases too -- the rule is per-segment, not just on the basename.
+  [[ "$output" == *'"docs/sub./y.md"=deny'* ]] || { echo "an aliased parent directory passed: $output"; false; }
+  # CONTROLS. Without these the rule could be "deny every write" and every row above would still
+  # pass. A dot INSIDE a segment is an ordinary filename and must be untouched.
+  [[ "$output" == *'"docs/x.md"=execute'* ]] || { echo "an ordinary write was denied: $output"; false; }
+  [[ "$output" == *'"docs/v1.2.md"=execute'* ]] || { echo "an interior dot was treated as an alias: $output"; false; }
+}
+
+@test "PHASE 04 -- a wrapper program is refused outright, because argv0 is not its identity" {
+  # THE ARGV0 MODEL FAILING ON ITS OWN TERMS. shellArgv0 returns the FIRST word and every check
+  # downstream keys on it -- the argv0_classes lookup, ADR-0507's derivation, FILE_MUTATORS. So
+  # `env rm -r .claude` is classified as `env`, and a day-two attacker got PROPOSE out of eleven
+  # wrappers while the bare `rm` correctly denied. That is not a gap in one Set: any allowlist
+  # keyed on the first word is one wrapper away from meaningless.
+  #
+  # Refused OUTRIGHT, like chaining. Resolving them means parsing each wrapper's flag grammar to
+  # find the real program -- the rabbit hole ADR-0507 named when it chose to model `git` by what
+  # it CAN do rather than by subcommand.
+  run _node "$PRE
+    const SH = { shell:{level:'L3', argv0_allow:['bats']} };
+    const d = (c) => c.split(' ')[0] + '=' + A('shell', c, SH, [up('shell','L3')]);
+    const wrapped = ['env','nice','nohup','timeout','setsid','stdbuf','flock','sudo','doas',
+                     'busybox','xargs','watch','command','exec','su','chroot','ionice','script']
+      .map((w) => d(w + ' bats tests/x.bats'));
+    console.log([...wrapped, d('bats tests/x.bats')].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Every wrapper the two attackers ran, each one prefixing a command that is otherwise allowed.
+  for w in env nice nohup timeout setsid stdbuf flock sudo doas busybox xargs watch command exec su chroot ionice script; do
+    [[ "$output" == *"$w=deny"* ]] || { echo "$w laundered its argv0 through: $output"; false; }
+  done
+  # THE CONTROL: the same command WITHOUT a wrapper must still execute, or this rule is just
+  # "deny shell" and every row above passes for the wrong reason.
+  [[ "$output" == *"bats=execute"* ]] || { echo "the unwrapped control was denied: $output"; false; }
+}
+
+@test "PHASE 04 -- argv0_allow is enforced at L3, because it is what bought the level" {
+  # FOUND ATTACKING THE PREVIOUS FIX rather than the original code. The empty-allowlist hole was
+  # closed one commit earlier ("what if the list is missing"); this is the same shape one step
+  # over ("what if the list is present and then ignored").
+  #
+  # argv0_allow was enforced only inside the L2 branch, on the reading that "L3 is unbounded
+  # within the capability". For the other seven capabilities that is coherent. For shell it is
+  # circular: ADR-0507 DERIVES effective(shell) from reproduced_by(argv0_allow), so the declared
+  # list is the input to the cap that permitted L3. `bats` is classified narrow and reproduces
+  # nothing, so it caps nothing and L3 is reached -- and then node, curl, dd and a recursive
+  # delete all executed under a grant whose safety argument was the word "bats".
+  #
+  # Latent rather than live: every shell grant in the shipped hq.policy.yaml sits at L1 with no
+  # allowlist. Pinned anyway -- the ceiling is one reviewed repo edit away, and the engine's own
+  # invariant is what was broken.
+  run _node "$PRE
+    const out = [];
+    for (const lvl of ['L2','L3']) {
+      const SH = { shell:{level:lvl, argv0_allow:['bats']} };
+      for (const c of ['bats t', 'node -e 1', 'curl http://x', 'dd if=/dev/zero of=/tmp/y'])
+        out.push(lvl + ':' + c.split(' ')[0] + '=' + A('shell', c, SH, [up('shell',lvl)]));
+    }
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # L2 is the reference behaviour -- it always enforced the list. L3 must now match it.
+  for lvl in L2 L3; do
+    [[ "$output" == *"$lvl:bats=execute"* ]] || { echo "$lvl denied its own allowlisted program: $output"; false; }
+    [[ "$output" == *"$lvl:node=deny"* ]] || { echo "$lvl admitted an interpreter outside the list: $output"; false; }
+    [[ "$output" == *"$lvl:curl=deny"* ]] || { echo "$output"; false; }
+    [[ "$output" == *"$lvl:dd=deny"* ]] || { echo "$output"; false; }
+  done
+}
+
+@test "PHASE 04 -- a case-variant processes directory throws rather than resolving per platform" {
+  # THE FOURTH TWIN-FIX RECURRENCE IN THIS LANE. processSubjects branched on "absent" and
+  # "not-a-directory" and FELL THROUGH for "case-variant" -- so a `Processes/` directory yielded
+  # a real subject set on Windows and macOS and an uncaught ENOENT throw on Linux, inside
+  # policy-lint, which is the FAIL-capable gate. kickoff-lint gates on that state before calling
+  # and got it right; this caller did not. Same guard, one consumer, not the other.
+  #
+  # Decided by exact BYTES (a directory listing) rather than existsSync, which is the one thing
+  # all three CI legs agree on -- so this test measures the same thing on every runner.
+  run _node "$PRE
+    const S = await import('./.claude/scripts/hq/lib/policy/subjects.mjs');
+    const out = [];
+    const probe = (label, fn) => { try { out.push(label + '=' + fn()); }
+                                   catch (e) { out.push(label + '=throw:' + e.code); } };
+    const a = tmp();
+    try {
+      fs.mkdirSync(pth.join(a, 'Processes'));
+      out.push('state=' + S.processesDirState(a));
+      probe('subjects', () => 'list' + S.processSubjects(a).length);
+      probe('names', () => 'list' + S.processNames(a).length);
+    } finally { cleanup(a); }
+    const b = tmp();
+    try {
+      fs.mkdirSync(pth.join(b, 'processes'));
+      fs.writeFileSync(pth.join(b, 'processes', 'demo.process.yaml'), 'name: demo');
+      probe('exact', () => S.processNames(b).join(','));
+    } finally { cleanup(b); }
+    const c = tmp();
+    try { probe('absent', () => String(S.processNames(c))); } finally { cleanup(c); }
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"state=case-variant"* ]] || { echo "the dir state itself is wrong: $output"; false; }
+  # BOTH consumers, not just the one that was reported. The typed code is what policy-lint keys
+  # on to FAIL loudly instead of dying on a raw ENOENT.
+  [[ "$output" == *"subjects=throw:PROCESSES_UNREADABLE"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"names=throw:PROCESSES_UNREADABLE"* ]] || { echo "processNames still resolves a case-variant dir: $output"; false; }
+  # CONTROLS, both directions. An exact directory must still be READ, and an absent one must
+  # still be null -- "cannot check" is not the empty list, and a rule that threw on everything
+  # would pass the rows above while breaking the gate.
+  [[ "$output" == *"exact=demo"* ]] || { echo "an exact processes dir stopped resolving: $output"; false; }
+  [[ "$output" == *"absent=null"* ]] || { echo "an absent dir is no longer null: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 20 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 20 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 24 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 24 -- a @test was silently dropped"
     false
   }
 }
