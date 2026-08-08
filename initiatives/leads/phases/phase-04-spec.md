@@ -47,10 +47,15 @@ unattributable. `phases/phase-03-spec.md` declares `Depends on: phase-04` for th
       cannot pass the suite
 - [x] **Three triggers wired end to end**: deploy/canary failure · L1 approval items waiting ·
       daily brief
-- [ ] **Inbox placement proved from the delivered message, on two mailbox classes** — the Zoho
+- [~] **Inbox placement proved from the delivered message, on two mailbox classes** — the Zoho
       `arc@` mailbox on the product domain and a Gmail-class mailbox. Not spam. SPF/DKIM/DMARC read from the
       **received headers of the delivered mail**, never from our own DNS lookup, which would
-      prove only what we published and not what the receiver accepted
+      prove only what we published and not what the receiver accepted.
+      **PLACEMENT CONFIRMED by the owner, 2026-08-08: the mail is in the INBOX, not in spam.**
+      That is the half that decides whether this capability works at all, and it is the half a
+      brand-new sending domain most often fails. **The received-header auth verdict is still
+      unread** — it is the difference between "it arrived" and "the receiver verified who sent
+      it", and only the second one predicts what happens when volume goes up.
 - [x] tests green **on CI**; tracker updated
 
 ## What actually happened (2026-08-08)

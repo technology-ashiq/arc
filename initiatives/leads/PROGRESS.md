@@ -180,11 +180,17 @@ this lane that two surfaces have shared almost nothing. CI then found two classe
 a real address in tracked files, and eight tests that passed on Linux and macOS while failing on
 Windows because they handed bats temp paths to node. Tests went 47 → 74.
 
-**The one item still open is the one no agent can do.** Inbox placement: whether the mail sits
-in the inbox or in spam, and what SPF/DKIM/DMARC say in the **received headers of the delivered
-message**. `delivered` from the sending vendor is not that answer — it is the sender's account
-of its own work. The owner confirmed the daily brief arrived on 2026-08-08; the spam question
-and the header verdict are still unread, on both mailbox classes.
+**Placement is confirmed: the mail is in the INBOX, not in spam** (owner, 2026-08-08). That is
+the half that decides whether this capability works at all, and it is the half a brand-new
+sending domain most often fails — a notification path that lands in spam is a notification path
+that does not exist. `delivered` from the sending vendor was never that answer: it is the
+sender's account of its own work, and the receiver's verdict is a different fact.
+
+**What remains unread is the received-header auth verdict** — SPF/DKIM/DMARC as the receiving
+server recorded them. It is the difference between "it arrived" and "the receiver verified who
+sent it", and only the second one predicts what happens when volume goes up or when the same
+domain is asked to carry a campaign. It does not block the notification capability, which is
+proved; it is the row Phase 03 will need before it trusts this domain with anything wider.
 
 **Next: Phase 03 — the rehearsal**, on the 5 addresses. The outreach engine has still never
 touched a real mail server (ADR-0413).
