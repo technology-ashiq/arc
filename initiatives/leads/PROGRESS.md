@@ -24,7 +24,7 @@ depends-on: —
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
 | 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 1.0d | ⏳ second — depends on 04 |
-| 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ⏳ **next — runs first** |
+| 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | 🔨 **built, merged (`074927d`+`dd08c16`), 7 live sends all delivered, 74 tests green** — NOT closed: inbox-vs-spam and the received-header auth verdict are unread |
 | 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
 **Appetite burn: 4.5 of 7 days used (64%). 6.5d now allocated (93%) — absorber down to 0.5d.**
@@ -163,11 +163,31 @@ inside. He supplied **5 addresses he controls or knows** instead. That does not 
 but it does make the *machine* testable, so the old Phase 03 split: the rehearsal stays here
 (Phase 03, REQ-07), the business result parks to Phase 05 with REQ-05 and its 1.0d.
 
-**Next step: Phase 04 — arc's own mail — and it runs BEFORE Phase 03.** Owner-directed
-notification from `automemory.ai` through Resend's HTTP API (ADR-0415), so deploy/canary
-failures, waiting approvals and the daily brief reach him off-terminal. It also builds the two
-things Phase 03 needs — the Resend transport and the env-declared allowlist guard — and proves
-them on mail addressed to the owner, where a mistake costs nothing.
+**Phase 04 is BUILT, MERGED and EXERCISED AGAINST THE REAL VENDOR — and it is not closed.**
+Merged as `074927d` (PR #131) and `dd08c16` (PR #133), main verified green by dispatch after
+each. Owner-directed notification from `automemory.ai` through Resend's HTTP API (ADR-0415).
+It also built the two things Phase 03 needs — the Resend transport and the env-declared
+allowlist guard — and proved them on mail addressed to the owner, where a mistake costs nothing.
+
+**What is proved, by running it rather than by asserting it.** Seven live messages on
+2026-08-08: `notify` 2, `canary` 3, `brief` 2. The vendor reports all seven **delivered**, no
+bounce and no complaint. Each is in the delivery log with its vendor id, and the daily quota
+counted every one. All three triggers fired end to end, `notify brief` mailing the brief the
+renderer produced rather than a second rendering that could disagree with it.
+
+**Two adversarial surfaces returned 27 findings and overlapped on THREE**, the fourth time in
+this lane that two surfaces have shared almost nothing. CI then found two classes neither saw —
+a real address in tracked files, and eight tests that passed on Linux and macOS while failing on
+Windows because they handed bats temp paths to node. Tests went 47 → 74.
+
+**The one item still open is the one no agent can do.** Inbox placement: whether the mail sits
+in the inbox or in spam, and what SPF/DKIM/DMARC say in the **received headers of the delivered
+message**. `delivered` from the sending vendor is not that answer — it is the sender's account
+of its own work. The owner confirmed the daily brief arrived on 2026-08-08; the spam question
+and the header verdict are still unread, on both mailbox classes.
+
+**Next: Phase 03 — the rehearsal**, on the 5 addresses. The outreach engine has still never
+touched a real mail server (ADR-0413).
 
 **Then Phase 03 — the rehearsal.** ADR-0416 lets the outreach path bind the product domain in
 rehearsal mode only: allowlist-locked, and every send receipt-marked so those five can never be
