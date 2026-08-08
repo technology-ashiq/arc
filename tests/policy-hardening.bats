@@ -442,6 +442,19 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
   # The control that makes the check safe to ship. A sha comparison that rejects the live spine
   # would not be hardening, it would be an outage -- and the only honest way to know is to run it
   # over the real thing. Measured at 531 lines, 531 verified, 0 mismatches.
+  #
+  # SKIPPED where there is no real spine, and the reason is not cosmetic (leads lane, 2026-08-08).
+  # `.claude/state/` is untracked -- `git ls-files .claude/state` returns nothing -- so a CI
+  # checkout has no events at all, and this test passed only when some OTHER test file in the
+  # same shard happened to create them first. Shard membership is derived from the test file
+  # list, so growing an unrelated suite re-balanced the shards, that neighbour moved away, and
+  # this went red on a branch that never touched policy. Inheriting the state you assert on is
+  # the defect; the total=0 guard below correctly refused to pass on nothing.
+  #
+  # A skip keeps the control honest: it runs wherever a live spine exists (the owner's machine,
+  # any working checkout) and reports its absence out loud rather than borrowing a neighbour's
+  # leftovers. Skips count as executed in the CI executed-vs-declared reconciliation.
+  [ -d "$ARC_ROOT/.claude/state/hq/events" ] || skip "no real spine in this checkout -- .claude/state is untracked, so there is nothing to verify here"
   run _node "$PRE
     const { eventSha } = await import('./.claude/scripts/hq/lib/canonical.mjs');
     const dir = pth.join(process.cwd(), '.claude', 'state', 'hq', 'events');
@@ -458,8 +471,10 @@ const cleanup = (d) => { try { fs.rmSync(d, { recursive: true, force: true }); }
     console.log('total=' + total + ' bad=' + bad);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *" bad=0"* ]] || { echo "the real spine fails its own seal: $output"; false; }
-  # Not vacuous on an empty checkout: assert the loop actually saw lines.
-  [[ "$output" != *"total=0 "* ]] || { echo "no spine events were read at all: $output"; false; }
+  # Not vacuous: the directory exists, so the loop must actually have seen lines. This stays a
+  # FAILURE rather than a skip -- an events directory that yields nothing means the reader is
+  # broken or the files are unparseable, which is exactly what this control is looking for.
+  [[ "$output" != *"total=0 "* ]] || { echo "the spine directory exists but no events were read: $output"; false; }
 }
 
 @test "PHASE 04 -- a trailing dot or space is a second name for a guarded file, and is refused" {
