@@ -757,7 +757,10 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
 # ---------- the CLI ----------
 
 @test "the mail subcommand prints usage when a required flag is missing" {
-  run _cli mail --subject hello
+  # --subject is the only REQUIRED flag now; --to is inferred from a one-entry allowlist. The
+  # earlier version of this test omitted --to and stopped measuring usage the moment that became
+  # optional -- it then passed on an allowlist refusal instead, which is a different guard.
+  run _cli mail --text hello
   [ "$status" -eq 2 ]
   [[ "$output" == *"usage: arc-leads mail"* ]]
 }
@@ -844,7 +847,9 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   cd "$ARC_ROOT"
   local dir; dir="$(_tmpdir)"
   [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
-  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" -u ARC_LEADS_MAIL_ALLOWLIST \
+  # `-u` is an OPTION and must precede the NAME=value operands; after them, env treats it as the
+  # command to run and dies with "env: -u: No such file or directory".
+  run env -u ARC_LEADS_MAIL_ALLOWLIST ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" \
     node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
   [ "$status" -eq 2 ]
   [[ "$output" == *"ARC_LEADS_MAIL_ALLOWLIST is unset"* ]]
@@ -856,14 +861,20 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   [[ "$output" == *"ONE way"* ]]
 }
 
-@test "the mail subcommand takes the send lock" {
+@test "the delivery path takes the send lock" {
   # The cap is a check-then-act across a read, a network call and an append. Two notification
   # hooks firing together both read 99 and both send. cmdReconcile already takes this lock; the
   # guard was applied in one branch and omitted in the adjacent one.
+  #
+  # The lock lives in deliverNotification, the ONE function that sends. This test used to read
+  # cmdMail and went green-to-red the moment the lock moved there with the send -- correctly:
+  # a test anchored to the wrong function measures nothing once the code moves.
   cd "$ARC_ROOT"
-  run node -e 'const s=require("node:fs").readFileSync(".claude/scripts/leads/arc-leads.mjs","utf8");const i=s.indexOf("async function cmdMail");const body=s.slice(i, s.indexOf("\n}\n", i));process.stdout.write("LOCK:"+body.includes("acquireLock")+" RELEASE:"+body.includes("release()"))'
+  run node -e 'const s=require("node:fs").readFileSync(".claude/scripts/leads/arc-leads.mjs","utf8");const i=s.indexOf("async function deliverNotification");const body=s.slice(i, s.indexOf("\n}\n", i));process.stdout.write("FOUND:"+(i>=0)+" LOCK:"+body.includes("acquireLock")+" RELEASE:"+body.includes("release()")+" SEND:"+body.includes("sendNotification("))'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"LOCK:true RELEASE:true"* ]]
+  [[ "$output" == *"FOUND:true"* ]] || { echo "deliverNotification was not found: $output"; false; }
+  # The send and the lock in the SAME function body, which is the property that matters.
+  [[ "$output" == *"LOCK:true RELEASE:true SEND:true"* ]]
 }
 
 # ---------- the three triggers ----------
@@ -881,7 +892,10 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     node .claude/scripts/leads/arc-leads.mjs notify approvals
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"nothing waiting"* ]]
-  [[ "$output" != *"mail sent"* ]]
+  # The confirmation line is `arc-leads: mail sent id=...`. A bare "mail sent" substring is the
+  # wrong assertion: the explanation this test WANTS to see contains the words "no mail sent",
+  # so the naive form failed on the very output that proves the behaviour is correct.
+  [[ "$output" != *"arc-leads: mail sent id="* ]]
 }
 
 @test "notify canary refuses a detail that is empty" {
