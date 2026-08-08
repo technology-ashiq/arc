@@ -38,6 +38,12 @@ _m() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 LEADS_FIXTURE_DIR="$ARC_ROOT/tests/fix
 # A native temp directory, made by node so the path is one node can resolve on every leg.
 _tmpdir() { cd "$ARC_ROOT" && node -e 'const fs=require("node:fs"),os=require("node:os"),p=require("node:path");process.stdout.write(fs.mkdtempSync(p.join(os.tmpdir(),"mail")))'; }
 
+# A native path to an EMPTY file. `/dev/null` is not that path: Git Bash rewrites it to `nul`
+# on the way into argv and node then resolves it against the working directory, so the Windows
+# leg failed with ENOENT while asserting a refusal about emptiness -- red for the right reason
+# and the wrong cause, in a file whose own header forbids handing shell paths to node.
+_emptyfile() { cd "$ARC_ROOT" && node -e 'const fs=require("node:fs"),os=require("node:os"),p=require("node:path");const d=fs.mkdtempSync(p.join(os.tmpdir(),"mail"));const f=p.join(d,"empty.txt");fs.writeFileSync(f,"");process.stdout.write(f)'; }
+
 _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
 
 # ---------- the code-path test: the real mailer reaches its own code ----------
@@ -757,7 +763,10 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
 # ---------- the CLI ----------
 
 @test "the mail subcommand prints usage when a required flag is missing" {
-  run _cli mail --subject hello
+  # --subject is the only REQUIRED flag now; --to is inferred from a one-entry allowlist. The
+  # earlier version of this test omitted --to and stopped measuring usage the moment that became
+  # optional -- it then passed on an allowlist refusal instead, which is a different guard.
+  run _cli mail --text hello
   [ "$status" -eq 2 ]
   [[ "$output" == *"usage: arc-leads mail"* ]]
 }
@@ -813,20 +822,144 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   [[ "$output" != *"no positional argument"* ]]
 }
 
+@test "the recipient is inferred when the owner allowlist holds exactly one address" {
+  # Owner-directed mail goes to an address that is already declared in .env.local. Making every
+  # caller repeat it in argv would put it in a process listing, in shell history and verbatim in
+  # CI logs -- the three exposures this module refuses everywhere else. Getting past the parser
+  # and dying on the uninitialised store is the proof the recipient was resolved.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_LEADS_MAIL_ALLOWLIST="owner@example.com" \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [[ "$output" == *"store not initialised"* ]] || { echo "the recipient was not inferred: $output"; false; }
+  [ "$status" -eq 5 ]
+}
+
+@test "the recipient is NOT inferred when the allowlist holds more than one address" {
+  # Picking one of several recipients is a choice, and a default that makes a choice silently is
+  # how the wrong person gets mailed.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_LEADS_MAIL_ALLOWLIST="owner@example.com,other@example.org" \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"holds 2 addresses"* ]]
+  [[ "$output" != *"owner@example.com"* ]] || { echo "the refusal echoed an address: $output"; false; }
+}
+
+@test "an empty allowlist refuses the inferred recipient rather than sending to nobody" {
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  # `-u` is an OPTION and must precede the NAME=value operands; after them, env treats it as the
+  # command to run and dies with "env: -u: No such file or directory".
+  run env -u ARC_LEADS_MAIL_ALLOWLIST ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"ARC_LEADS_MAIL_ALLOWLIST is unset"* ]]
+}
+
 @test "two body sources at once are refused" {
   run _cli mail --to owner@example.com --subject s --text a --stdin
   [ "$status" -eq 2 ]
   [[ "$output" == *"ONE way"* ]]
 }
 
-@test "the mail subcommand takes the send lock" {
+@test "the delivery path takes the send lock" {
   # The cap is a check-then-act across a read, a network call and an append. Two notification
   # hooks firing together both read 99 and both send. cmdReconcile already takes this lock; the
   # guard was applied in one branch and omitted in the adjacent one.
+  #
+  # The lock lives in deliverNotification, the ONE function that sends. This test used to read
+  # cmdMail and went green-to-red the moment the lock moved there with the send -- correctly:
+  # a test anchored to the wrong function measures nothing once the code moves.
   cd "$ARC_ROOT"
-  run node -e 'const s=require("node:fs").readFileSync(".claude/scripts/leads/arc-leads.mjs","utf8");const i=s.indexOf("async function cmdMail");const body=s.slice(i, s.indexOf("\n}\n", i));process.stdout.write("LOCK:"+body.includes("acquireLock")+" RELEASE:"+body.includes("release()"))'
+  run node -e 'const s=require("node:fs").readFileSync(".claude/scripts/leads/arc-leads.mjs","utf8");const i=s.indexOf("async function deliverNotification");const body=s.slice(i, s.indexOf("\n}\n", i));process.stdout.write("FOUND:"+(i>=0)+" LOCK:"+body.includes("acquireLock")+" RELEASE:"+body.includes("release()")+" SEND:"+body.includes("sendNotification("))'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"LOCK:true RELEASE:true"* ]]
+  [[ "$output" == *"FOUND:true"* ]] || { echo "deliverNotification was not found: $output"; false; }
+  # The send and the lock in the SAME function body, which is the property that matters.
+  [[ "$output" == *"LOCK:true RELEASE:true SEND:true"* ]]
+}
+
+# ---------- the three triggers ----------
+
+@test "notify approvals sends NOTHING when nothing is waiting" {
+  # The design, not an omission. A channel that mails "0 waiting" every day is a channel the
+  # owner learns to ignore, and an ignored alert channel is the same as no alert channel -- the
+  # exact failure ADR-0415 exists to prevent. Asserted by the absence of a send AND the presence
+  # of the explanation, so a crash cannot satisfy it.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_SPINE_ROOT="$dir/spine" \
+    ARC_LEADS_MAIL_ALLOWLIST="owner@example.com" ARC_LEADS_MAIL_FROM="arc@example.com" \
+    node .claude/scripts/leads/arc-leads.mjs notify approvals
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"nothing waiting"* ]]
+  # The confirmation line is `arc-leads: mail sent id=...`. A bare "mail sent" substring is the
+  # wrong assertion: the explanation this test WANTS to see contains the words "no mail sent",
+  # so the naive form failed on the very output that proves the behaviour is correct.
+  [[ "$output" != *"arc-leads: mail sent id="* ]]
+}
+
+@test "notify canary refuses a detail that is empty" {
+  # An alert that says nothing is worse than no alert: it consumes the channel and teaches the
+  # reader that arc pages for nothing.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  local empty; empty="$(_emptyfile)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  [ -f "$empty" ] || { echo "the empty fixture file was not created"; false; }
+  [ ! -s "$empty" ] || { echo "the fixture file is not empty, so this test would not measure emptiness"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file "$empty"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"detail is empty"* ]]
+}
+
+@test "notify canary names a missing detail file instead of leaking a raw errno" {
+  # An alert path that dies with `ENOENT: no such file or directory` at 3am is telling the
+  # operator about node, not about the alert. It is also the shape the emptiness test hit on the
+  # Windows leg, which is how a wrong-cause failure hid behind a right-looking assertion.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file "$dir/does-not-exist.txt"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"could not be read"* ]]
+  [[ "$output" != *"ENOENT:"* ]]
+}
+
+@test "notify canary has no argv door for the failure detail" {
+  # A canary tail is exactly the content that ends up quoted into a process listing and a CI
+  # log. There are two doors and both hand over BYTES; --text is not one of them.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text "connection refused on :8443"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--text-file"* ]]
+  [[ "$output" == *"never in argv"* ]]
+}
+
+@test "an unknown notify trigger prints the three that exist" {
+  run _cli notify nope
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"canary"* ]]
+  [[ "$output" == *"approvals"* ]]
+  [[ "$output" == *"brief"* ]]
+}
+
+@test "mail and notify share one delivery path" {
+  # Two copies would be two places for the env guard, the lock and the recipient rule to drift
+  # apart, and the ones that drift are the ones nobody looks at again.
+  cd "$ARC_ROOT"
+  run node -e 'const s=require("node:fs").readFileSync(".claude/scripts/leads/arc-leads.mjs","utf8");const calls=(s.match(/deliverNotification\(/g)||[]).length;const sends=(s.match(/await sendNotification\(/g)||[]).length;process.stdout.write("DELIVER:"+calls+" SEND:"+sends)'
+  [ "$status" -eq 0 ]
+  # One definition plus its callers; exactly ONE place calls sendNotification.
+  [[ "$output" == *"SEND:1"* ]] || { echo "sendNotification is called from more than one place: $output"; false; }
+  [[ "$output" == *"DELIVER:5"* ]] || { echo "unexpected number of deliverNotification references: $output"; false; }
 }
 
 # ---------- the fake, and the boundary it must not cross ----------
@@ -906,5 +1039,5 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 65 ] || { echo "expected 65 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 74 ] || { echo "expected 74 tests, found $declared -- update this number deliberately"; false; }
 }
