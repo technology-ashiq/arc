@@ -19,7 +19,7 @@ import { resolveTxt as dnsResolveTxt } from "node:dns/promises";
 // The ONE dossier read, shared with the send-moment guard, which needs the same file for the
 // opposite purpose (see store.mjs). A second copy here is defect class D5 the moment one of
 // the two grows a normalisation the other lacks.
-import { openStore, dossierEmail } from "./store.mjs";
+import { openStore, dossierEmail, normalizeEmail, leadIdsAllVersions, isAddressShaped } from "./store.mjs";
 
 // Anchored to the REPO, never to process.cwd(), for the same reason caps.mjs and preflight.mjs
 // are: it is what keeps ADR-0410's store-is-outside-the-repo assertion meaningful when the
@@ -221,11 +221,14 @@ export const OUTREACH_BASE_URL_DEFAULT = "https://api.resend.com";
 // the tokens are distinct from each other on purpose, because two refusals that both merely
 // name ADR-0410 are indistinguishable to a test and a store that failed to open would read as
 // a dossier holding junk.
-export const RECIPIENT_REFUSALS = ["STORE_UNREADABLE", "UNRESOLVABLE_RECIPIENT", "RECIPIENT_NOT_AN_ADDRESS"];
+export const RECIPIENT_REFUSALS = ["STORE_UNREADABLE", "UNRESOLVABLE_RECIPIENT", "RECIPIENT_NOT_AN_ADDRESS", "RECIPIENT_ID_MISMATCH"];
 
 function assertResolvedRecipient(to) {
+  // The shape rule is store.mjs's `isAddressShaped`, shared with the parser that counts the
+  // rehearsal lock. Two copies of these three conditions is exactly the D5 shape this module's
+  // own header names.
   const s = String(to == null ? "" : to).trim();
-  if (!s.includes("@") || s.startsWith("@") || s.endsWith("@"))
+  if (!isAddressShaped(s))
     throw new ProviderError("config", "RECIPIENT_NOT_AN_ADDRESS: the resolved recipient is not an address — the dossier this lead id points at holds no usable email (ADR-0410). Refusing before any network call rather than letting the vendor reject it. The value is not echoed.");
   return s;
 }
@@ -241,16 +244,62 @@ function assertResolvedRecipient(to) {
 // an address arriving here that was never a lead id never passed that check, so accepting one
 // would be a containment hole opened by a convenience. `dossierEmail` returns null for
 // anything without a dossier, which includes every raw address and every traversal attempt.
-function resolveRecipient(to) {
+//
+// THE ROUND TRIP IS THE WHOLE POINT, and it was missing. The guard authorises an ID; the vendor
+// is handed an ADDRESS; nothing bound the two together, so the address delivered to was not the
+// address the allowlist authorised. Two confirmed ways, both reproduced:
+//
+//   spelling  a dossier filed at an allowlisted address's id, holding that same address with a
+//             U+200B inside the local part, passed every guard (leadId hashes normalizeEmail,
+//             which strips zero-width) and then put the ZERO-WIDTH spelling on the wire. NFD
+//             against NFC, and upper against lower, reach it the same way. No address literal
+//             appears here on purpose: this file is not a fixture path, and the tripwire is
+//             right to refuse one even inside the comment that explains the bug.
+//   substitution  a dossier filed at the id of an allowlisted address but HOLDING a stranger's
+//             address cleared the id-space allowlist outright. Containment then rested on the
+//             later suppression step, and the mutant that deletes that step left three suites
+//             green.
+//
+// So: the resolved address must re-derive to the id we were asked to send to, and the value
+// returned is the NORMALISED one. Normalising the wire value is not cosmetic — normalizeEmail
+// is this lane's definition of address identity (it is what `leadId` hashes), so it is the only
+// spelling of which "this is the address the allowlist authorised" is a true sentence. It folds
+// case in the local part, which RFC 5321 permits a receiver to distinguish; that trade is
+// deliberate and it is the same trade the allowlist, the suppression ledger and every lead id
+// in this lane already made.
+//
+// EXPORTED for the same reason `decodeProviderResponse` above is: the value it returns is the
+// property, and reading it in place would need a TLS server with a self-signed cert and a client
+// willing to trust it — a test that proves something about a weakened client. `submit` below is
+// its only production caller and the provider-contract suite still reaches it through `submit`,
+// so the does-the-real-code-path-run property is untouched; this seam exists so a fixture can
+// pin the RETURNED ADDRESS rather than only the refusals. Without it, `return
+// assertResolvedRecipient(email)` — the raw value, the bug — survives every test in the tree.
+export function resolveRecipient(to) {
   let store;
   try { store = openStore({ repoRoot: REPO_ROOT }); }
   catch (e) {
     throw new ProviderError("config", `STORE_UNREADABLE: the private store could not be opened to resolve the recipient (${e.code || e.message}) — refusing before any network call (ADR-0410)`);
   }
-  const email = dossierEmail(store, String(to == null ? "" : to).trim());
+  const leadRef = String(to == null ? "" : to).trim();
+  const email = dossierEmail(store, leadRef);
   if (email === null)
     throw new ProviderError("config", "UNRESOLVABLE_RECIPIENT: submit() takes the keyed lead id (ADR-0400) and could not resolve it to an address in the private store — no dossier, no email, or a recipient that was never a lead id. Refusing before any network call; the value is not echoed, because it may be the address itself.");
-  return assertResolvedRecipient(email);
+  // Shape FIRST, then the round trip. A dossier holding `not-an-address` fails both, and the
+  // shape refusal is the one that describes it: telling an operator that junk "does not derive
+  // back to this lead id" is true and useless, where "the dossier holds no usable email" names
+  // the file to open.
+  const canonical = assertResolvedRecipient(normalizeEmail(email));
+  let ids = [];
+  try { ids = leadIdsAllVersions(store, email); } catch { ids = []; }
+  if (!ids.includes(leadRef))
+    // A DIFFERENT refusal from UNRESOLVABLE_RECIPIENT, and the split is the fix as much as the
+    // check: the dossier EXISTS and holds an address, so reporting it as missing would send the
+    // operator looking for a file that is sitting right there. Neither the id nor the address is
+    // echoed — this is the refusal a tampered store produces, so it is the one most likely to be
+    // read out of a CI log by someone who should not have either value.
+    throw new ProviderError("config", "RECIPIENT_ID_MISMATCH: the dossier for this lead id exists and holds an address, but that address does not derive back to this id under any key version in the keyring (ADR-0400). The dossier has been edited, moved, or filed under the wrong id, and the guard authorised the ID rather than what the file now holds — refusing before any network call rather than delivering to an address nothing authorised. Neither value is echoed.");
+  return canonical;
 }
 
 function resendRequest({ path, method, key, payload, timeout = 10000, idemKey = null }) {

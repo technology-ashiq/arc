@@ -204,7 +204,11 @@ export function leadsIdem(kind, p) {
   }
 }
 
-function assertTs(kind, key, value) {
+// EXPORTED since slice 04. `guard.mjs sendCounts` takes window bounds that are compared against
+// these very payload stamps, and it took them raw — so `...Z` or a date-only bound answered the
+// ADR-0416 mixing question with a silent zero. A second copy of PAYLOAD_TS_RE over there would
+// have been the same D5 the allowlist parsers were collapsed for; one grammar, one validator.
+export function assertTs(kind, key, value) {
   const m = typeof value === "string" ? PAYLOAD_TS_RE.exec(value) : null;
   if (!m)
     throw new SpineError("BAD_LEADS_TS", `${kind}.${key} ${JSON.stringify(value)} must be exactly YYYY-MM-DDTHH:MM:SS+05:30 — one spelling per instant, with no fractional part, because this string goes into an idem preimage verbatim`);

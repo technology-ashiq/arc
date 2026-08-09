@@ -130,11 +130,21 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
   // this an unreadable config raised past runDaily instead of stopping one draft — and it
   // would have stopped it for the right reason, since a send whose mode cannot be determined
   // must not go at all.
-  let rehearsal;
-  try { rehearsal = effectiveSendingDomain(loadConfig(config), env).rehearsal === true; }
+  let eff;
+  try { eff = effectiveSendingDomain(loadConfig(config), env); }
   catch (e) {
     return { draftRef, ok: false, step: "config", why: `the leads config could not be read (${e.message}) — refusing rather than sending without knowing whether this is a rehearsal (ADR-0416)` };
   }
+  // BLOCKED and NOT-A-REHEARSAL are different facts and the mark collapses them onto one value.
+  // `effectiveSendingDomain` returns `blocked` WITHOUT throwing and leaves `rehearsal` false, so
+  // reading only `.rehearsal` marks a blocked rehearsal `false` — a receipt asserting a send was
+  // real cold outbound when the operator declared a rehearsal and got the config wrong. That the
+  // guard refuses this state first, and unsubscribeHeader after it, is not a reason to omit the
+  // check: a mark that is only correct because a different function throws first is the D6 shape
+  // this lane has recorded repeatedly. Refused rather than thrown, per this function's contract.
+  if (eff.blocked)
+    return { draftRef, ok: false, step: "rehearsal-mode", why: `ADR-0416 rehearsal mode is DECLARED but incomplete, so no mark can be derived and the send is refused rather than recorded as a real cold send: ${eff.blocked}` };
+  const rehearsal = eff.rehearsal === true;
 
   const idemKey = idemKeyFor({ campaign: draft.campaign, lead_id: draft.lead_id, touch_n: draft.touch_n });
   const intent = {

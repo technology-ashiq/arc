@@ -86,9 +86,18 @@ export function writeIntent(store, intent) {
   // was made in cannot be turned into a valid receipt by reconcile, and finding that out
   // BEFORE the submit costs a refusal, while finding it out after costs an intent that no
   // reconcile can ever resolve. `false` passes: it is a decision, not an absence.
-  for (const k of ["idempotency_key", "lead_hmac", "campaign", "touch_n", "draft_sha", "submitted_at", "store_fingerprint", "rehearsal"])
+  for (const k of ["idempotency_key", "lead_hmac", "campaign", "touch_n", "draft_sha", "submitted_at", "store_fingerprint"])
     if (intent[k] === undefined || intent[k] === null || intent[k] === "")
       throw new JournalError("BAD_INTENT", `journal intent is missing "${k}" — an intent that cannot identify its send cannot be reconciled`);
+  // `rehearsal` gets the RECEIPT SCHEMA's rule, not the presence rule the seven above get. It
+  // was in that list, so it was checked for undefined/null/"" only — and `0`, `"false"` and `[]`
+  // were written happily, then reached reconcile step 2.5 (which correctly demands a boolean)
+  // or the validator (which refuses anything but a boolean). A pre-submit gate that is WEAKER
+  // than the schema it anticipates is not a gate: it converts a refusal that costs nothing into
+  // an intent no reconcile can resolve, which is exactly the wedge step 2.5 exists to describe.
+  // Same rule, same word, checked where it was never made.
+  if (typeof intent.rehearsal !== "boolean")
+    throw new JournalError("BAD_INTENT", `journal intent carries rehearsal ${JSON.stringify(intent.rehearsal) ?? "undefined"}, which is not a boolean — an intent that cannot say which mode its send was made in cannot become a valid receipt (ADR-0416). \`false\` passes: it is a decision, not an absence.`);
   const p = join(journalDir(store), `${intent.idempotency_key}.json`);
   // Written before the submit, never after. The whole design rests on the intent existing on
   // disk before the provider is told anything.

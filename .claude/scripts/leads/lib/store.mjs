@@ -229,6 +229,21 @@ const stripInvisible = (s) => Array.from(s).filter((ch) => !ZERO_WIDTH_CODES.has
 export const normalizeEmail = (email) =>
   stripInvisible(String(email).normalize("NFC")).trim().toLowerCase();
 
+// The address SHAPE rule, in ONE place. Two callers ask it for opposite reasons: preflight
+// counts the address-shaped entries that make up the ADR-0416 rehearsal lock, and the real
+// provider refuses a resolved recipient that is not one. They were two hand-written copies of
+// the same three conditions -- defect class D5, and the direction that bites is an entry the
+// lock counts and the wire refuses (an operator told five recipients are locked when one of
+// them can never be delivered to), or the reverse.
+//
+// Deliberately CRUDE. It is not an RFC 5321 parser and must not become one: its job is to
+// separate "this is an address" from "this is the word yes", which is what stops
+// `ARC_LEADS_REHEARSAL_ALLOWLIST=yes` being a one-word unlock of the product domain.
+export const isAddressShaped = (s) => {
+  const t = String(s == null ? "" : s);
+  return t.includes("@") && !t.startsWith("@") && !t.endsWith("@");
+};
+
 // The id that reaches the spine. Keyed, not a bare hash: emails are low-entropy, so
 // sha256(email) is dictionary-attackable by anyone holding a public directory -- and this
 // spine is going public.

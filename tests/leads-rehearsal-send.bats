@@ -39,7 +39,8 @@ const {sendOne} = await import("./.claude/scripts/leads/lib/sequencer.mjs");
 const {initStore, openStore, rotateSecret, leadId, dossierEmail} = await import("./.claude/scripts/leads/lib/store.mjs");
 const {initCampaign, writeDraft} = await import("./.claude/scripts/leads/lib/drafts.mjs");
 const {writeIntent, reconcile, idemKeyFor, journalDir} = await import("./.claude/scripts/leads/lib/journal.mjs");
-const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
+const {provider, resolveRecipient} = await import("./.claude/scripts/leads/lib/deps.mjs");
+const {rehearsalMode, rehearsalRecipients} = await import("./.claude/scripts/leads/lib/preflight.mjs");
 const {leadsIdem} = await import("./.claude/scripts/hq/lib/validate-leads.mjs");
 const {validateEvent} = await import("./.claude/scripts/hq/lib/validate.mjs");
 const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
@@ -68,6 +69,17 @@ function dossier(s, email) {
   fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email}));
   return id;
 }
+// Files a dossier AT the id of one address while it HOLDS another. That is the tampered store,
+// and it is the shape the allowlist could not see: the guard authorises an ID, the vendor is
+// handed whatever the file says, and until slice 04 nothing bound the two together.
+function refile(s, atEmail, holdingEmail) {
+  const id = leadId(s, atEmail);
+  fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email: holdingEmail}));
+  return id;
+}
+// The refusal TOKEN, never the sentence (D4). A NO-REFUSAL answer is printed rather than
+// swallowed so a resolution that succeeds when it must not cannot read as a passing absence.
+const tok = (fn) => { try { return "NO-REFUSAL:" + fn(); } catch (e) { return String(e.message).split(":")[0]; } };
 const draftOf = (s, id) => writeDraft(s, {campaign: "pilot", lead_id: id, touch_n: 1,
   body: "Hi there, this is the body.", cites: [], lintStatus: "PASS"});
 const approvals = (r) => [
@@ -155,6 +167,51 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
   [[ "$output" == *"echoes=false names-the-var=true reserved=true dotless=true"* ]]
 }
 
+# THE ID IS NOT THE ADDRESS. The allowlist is compared in id space and the vendor is handed an
+# address, and for a whole slice nothing bound the two together: a dossier at the id of
+# `one@example.test` holding a ZERO-WIDTH spelling of it passed every guard and then put the
+# zero-width spelling on the wire, because `leadId` hashes `normalizeEmail` (NFC + zero-width
+# strip + trim + lowercase) while the resolver returned the dossier value with only `.trim()`.
+# NFD-vs-NFC and case reach it the same way.
+#
+# `len` is the negative control and it is the whole test. `resolveRecipient` returning the RAW
+# dossier value still satisfies "it resolved" and still satisfies the round trip -- only the
+# LENGTH tells the two apart, because the zero-width character is invisible in every editor,
+# every diff and every terminal that would print this assertion.
+@test "the address the vendor is handed is the spelling the allowlist authorized" {
+  run -0 _r "$RSEND
+    const s = freshStore();
+    const zw = refile(s, \"one@example.test\", \"o\u200Bne@example.test\");
+    const nfd = refile(s, \"two@example.test\", \"TWO@Example.Test\".normalize(\"NFD\"));
+    console.log(\"guard=\" + step(s, zw, ON) + \" wire=\" + resolveRecipient(zw) + \" len=\" + resolveRecipient(zw).length +
+      \" allowlisted=\" + (resolveRecipient(zw) === \"one@example.test\") +
+      \" case-and-nfd=\" + (resolveRecipient(nfd) === \"two@example.test\"));"
+  [[ "$output" == *"guard=ALLOWED wire=one@example.test len=16 allowlisted=true case-and-nfd=true"* ]]
+}
+
+# MEMBERSHIP IS NOT CONTAINMENT, and `on-list=true` is what makes this test say so. The id IS on
+# the ADR-0416 allowlist and the send is refused anyway, because the dossier behind that id holds
+# somebody else. Before slice 04 the allowlist step asked only `allowed.has(lead_id)`, so this
+# passed it outright and containment rested on the LATER suppression step -- the mutant that
+# deletes that step left this file, leads-provider-contract and leads-receipts all green.
+#
+# Both doors are asserted, and that is deliberate rather than belt-and-braces: a guard that holds
+# only because a different function throws first is not a guard (D6, recorded three times in
+# guard.mjs). The wire refusal is read by TOKEN so a copy-edit cannot redden CI.
+@test "a dossier holding another address is refused at the guard and at the wire" {
+  run -0 _r "$RSEND
+    const s = freshStore();
+    const id = refile(s, \"one@example.test\", \"stranger@example.test\");
+    const rec = draftOf(s, id);
+    const seen = countingProvider();
+    const r = await sendOne({store: s, events: approvals(rec), draftRef: rec.draft_ref, now: NOW,
+      config: CFG, env: ON, emitReceipt: async () => { throw new Error(\"a refused send must emit nothing\"); }});
+    console.log(\"on-list=\" + rehearsalAllowedIds(s, ON).has(id) + \" guard=\" + step(s, id, ON) +
+      \" sent=\" + r.ok + \" step=\" + r.step + \" submits=\" + seen.submits +
+      \" wire=\" + tok(() => resolveRecipient(id)));"
+  [[ "$output" == *"on-list=true guard=rehearsal-allowlist sent=false step=rehearsal-allowlist submits=0 wire=RECIPIENT_ID_MISMATCH"* ]]
+}
+
 # ID SPACE, every key version. A single-version check is the mirror of the suppression bug
 # guard.mjs names as the single worst thing this system can do: after a rotation the receipts
 # and drafts a person already has carry their v1 id while the store mints v2.
@@ -187,13 +244,27 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
 # Declared-but-incomplete must refuse AT THE GUARD. `blocked` leaves eff.rehearsal false, so a
 # check keyed off that flag would turn a broken rehearsal config into an unguarded send --
 # and unsubscribeHeader refusing the same state is exactly why this must not lean on it.
+#
+# The sendOne leg is the same state read one layer up, and it exists because the MARK collapses
+# BLOCKED and NOT-A-REHEARSAL onto one value: `effectiveSendingDomain` returns `blocked` without
+# throwing and leaves `rehearsal` false, so a caller reading only `.rehearsal` would stamp a
+# blocked rehearsal `false` -- a receipt asserting a send was real cold outbound when the
+# operator declared a rehearsal and got the config wrong. `step=rehearsal-mode` is the refusal
+# class either door produces; `submits=0` is what says no socket was opened on the way there.
 @test "a declared but incomplete rehearsal is refused by the guard itself" {
   run -0 _r "$RSEND
     const s = freshStore(); const id = dossier(s, \"stranger@example.test\");
     console.log([step(s, id, {ARC_LEADS_REHEARSAL: \"1\"}),
                  step(s, id, {ARC_LEADS_REHEARSAL: \"1\", ARC_LEADS_REHEARSAL_ALLOWLIST: \"yes\"}),
-                 step(s, id, {ARC_LEADS_REHEARSAL: \"1\", ARC_LEADS_REHEARSAL_ALLOWLIST: \"\"})].join(\" \"));"
+                 step(s, id, {ARC_LEADS_REHEARSAL: \"1\", ARC_LEADS_REHEARSAL_ALLOWLIST: \"\"})].join(\" \"));
+    const rec = draftOf(s, id);
+    const seen = countingProvider();
+    const r = await sendOne({store: s, events: approvals(rec), draftRef: rec.draft_ref, now: NOW, config: CFG,
+      env: {ARC_LEADS_REHEARSAL: \"1\", ARC_LEADS_REHEARSAL_ALLOWLIST: \"yes\"},
+      emitReceipt: async () => { throw new Error(\"a blocked rehearsal must emit no receipt\"); }});
+    console.log(\"sent=\" + r.ok + \" step=\" + r.step + \" submits=\" + seen.submits);"
   [[ "$output" == *"rehearsal-mode rehearsal-mode rehearsal-mode"* ]]
+  [[ "$output" == *"sent=false step=rehearsal-mode submits=0"* ]]
 }
 
 # The paired NEGATIVE, and it is the one that keeps this honest. With rehearsal undeclared the
@@ -285,29 +356,46 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
 # The crash path has to carry the mode too. reconcile can run days later from a shell where
 # ARC_LEADS_REHEARSAL is set differently, so the mark comes from the journalled INTENT and a
 # recovery receipt can never reclassify a send that already happened.
+#
+# BOTH modes, and the `false` leg is the negative control that was missing. With only the `true`
+# leg, `rehearsal: intent.rehearsal` and a hardcoded `rehearsal: true` are indistinguishable --
+# so the mutant that hardcodes it survived, and under it every recovery receipt for a REAL cold
+# send would be written as a rehearsal. That is the mixing this whole file exists to prevent,
+# arriving through the one path no operator watches.
 @test "a late receipt from reconcile carries the mode the intent was written with" {
   run -0 _r "$RSEND
     const s = freshStore(); const id = dossier(s, \"one@example.test\");
-    writeIntent(s, {idempotency_key: \"k1\", lead_hmac: id, campaign: \"pilot\", touch_n: 1,
-      draft_sha: SHA, submitted_at: NOW, store_fingerprint: \"deadbeef\", rehearsal: true});
-    let p = null;
-    const out = await reconcile(s, {events: [], lookup: async () => ({found: true, provider_message_id: \"pm1\"}),
-      emitReceipt: async (x) => { p = x; }});
-    console.log(\"emitted=\" + out.emittedLate + \" mark=\" + JSON.stringify(p && p.rehearsal));"
-  [[ "$output" == *"emitted=1 mark=true"* ]]
+    const late = async (mode, key) => {
+      writeIntent(s, {idempotency_key: key, lead_hmac: id, campaign: \"pilot\", touch_n: 1,
+        draft_sha: SHA, submitted_at: NOW, store_fingerprint: \"deadbeef\", rehearsal: mode});
+      let p = null;
+      const out = await reconcile(s, {events: [], lookup: async () => ({found: true, provider_message_id: \"pm1\"}),
+        emitReceipt: async (x) => { p = x; }});
+      return out.emittedLate + \"/\" + JSON.stringify(p && p.rehearsal); };
+    console.log(\"rehearsal=\" + await late(true, \"k1\") + \" real=\" + await late(false, \"k2\"));"
+  [[ "$output" == *"rehearsal=1/true real=1/false"* ]]
 }
 
 # An intent that cannot say which mode its send was made in cannot become a valid receipt.
 # Finding that out before the submit costs a refusal; finding it out afterwards costs an intent
 # no reconcile can ever resolve, which wedges every future send.
+#
+# The pre-submit gate must be AS STRICT AS THE SCHEMA IT ANTICIPATES, and it was weaker: it
+# rejected only undefined/null/"", so `0`, `"false"` and `[]` were written happily and then
+# produced receipts the validator refuses -- converting a refusal that costs nothing into exactly
+# the unresolvable intent reconcile step 2.5 exists to describe. Same rule, same word, checked
+# where it was never made.
 @test "an intent with no mode is refused before the submit rather than at reconcile" {
   run -0 _r "$RSEND
     const s = freshStore();
     const base = {idempotency_key: \"k1\", lead_hmac: dossier(s, \"one@example.test\"), campaign: \"pilot\",
       touch_n: 1, draft_sha: SHA, submitted_at: NOW, store_fingerprint: \"deadbeef\"};
     const say = (o) => { try { writeIntent(s, o); return \"WRITTEN\"; } catch (e) { return e.code; } };
-    console.log(say(base) + \" \" + say({...base, rehearsal: false}) + \" \" + say({...base, rehearsal: true}));"
+    console.log(say(base) + \" \" + say({...base, rehearsal: false}) + \" \" + say({...base, rehearsal: true}));
+    console.log(\"as-strict-as-the-schema=\" +
+      [0, \"false\", \"true\", 1, [], {}, null].every((m) => say({...base, rehearsal: m}) === \"BAD_INTENT\"));"
   [[ "$output" == *"BAD_INTENT WRITTEN WRITTEN"* ]]
+  [[ "$output" == *"as-strict-as-the-schema=true"* ]]
 }
 
 # ---------- the mixing guard, as a COUNT ----------
@@ -352,6 +440,83 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
       \" scoped=\" + sendCounts([inside, other], {campaign: \"pilot\"}).total +
       \" unscoped=\" + sendCounts([inside, other]).total);"
   [[ "$output" == *"windowed=1 unwindowed=2 scoped=1 unscoped=2"* ]]
+}
+
+# A WINDOW THE COUNTER CANNOT PLACE IS A REFUSAL, NEVER A ZERO. The bounds are compared as
+# strings against payload stamps pinned to `+05:30`, and they were taken raw while every other
+# timestamp in this lane goes through `assertTs`. So the obvious question got a confident wrong
+# answer in the unsafe direction: `Z` sorts after `+`, and a date-only bound sorts before every
+# stamp on that day, so both spellings of the same window returned all zeros against a spine
+# holding one real send. This is the ONE number ADR-0416s mixing guard exists to produce.
+#
+# `house=` and `none=` are the positive controls. Without them a counter that threw on
+# everything, or one that returned zero for every question, would satisfy the four refusals.
+@test "the mixing counter refuses a window it cannot place rather than answering zero" {
+  run -0 _r "$RSEND
+    const truth = [sent(false, NOW), sent(true, NOW)];
+    const ask = (w) => { try { return \"real:\" + sendCounts(truth, w).real; } catch (e) { return e.code; } };
+    console.log(\"utc=\" + ask({from: \"2026-08-04T04:00:00Z\", to: \"2026-08-04T05:00:00Z\"}) +
+      \" date-only=\" + ask({from: \"2026-08-04\", to: \"2026-08-05\"}) +
+      \" fractional=\" + ask({from: \"2026-08-04T00:00:00.000+05:30\", to: WINDOW.to}) +
+      \" prose=\" + ask({from: \"yesterday\", to: \"today\"}) +
+      \" no-such-day=\" + ask({from: \"2026-02-30T00:00:00+05:30\", to: WINDOW.to}) +
+      \" house=\" + ask(WINDOW) + \" none=\" + ask({}));"
+  [[ "$output" == *"utc=BAD_LEADS_TS date-only=BAD_LEADS_TS fractional=BAD_LEADS_TS prose=BAD_LEADS_TS no-such-day=BAD_LEADS_TS house=real:1 none=real:1"* ]]
+}
+
+# The counter documents that an unplaceable receipt must not escape the count by being
+# unreadable, and nothing tested it -- so `if (!placeable) continue;` was a surviving mutant on a
+# written-down rule. Under it, corrupting ONE field of ONE receipt deletes a real send from the
+# number that claims none happened, which is the mixing guard failing in the direction it exists
+# to catch. `placed=` is the positive control that the counter counts at all.
+@test "a receipt whose stamp cannot be placed still counts inside a window" {
+  run -0 _r "$RSEND
+    const junk = {kind: \"outreach.sent\", payload: {...RECEIPT, submitted_at: \"not-a-timestamp\", rehearsal: false}};
+    const gone = {kind: \"outreach.sent\", payload: {...RECEIPT, submitted_at: undefined, rehearsal: false}};
+    console.log(\"junk-windowed=\" + sendCounts([junk], WINDOW).real + \" junk-unwindowed=\" + sendCounts([junk]).real +
+      \" absent-windowed=\" + sendCounts([gone], WINDOW).real + \" placed=\" + sendCounts([sent(false, NOW)], WINDOW).real);"
+  [[ "$output" == *"junk-windowed=1 junk-unwindowed=1 absent-windowed=1 placed=1"* ]]
+}
+
+# `p.rehearsal === true`, never `p.rehearsal`. The truthy form was a surviving mutant, and it
+# fails in the ONE direction ADR-0416 forbids outright: a REAL send reclassified as a rehearsal,
+# because `"false"`, `1` and `[]` are all truthy. The schema takes a boolean and nothing else, so
+# a non-boolean can only come from a receipt this build did not write, and the honest reading of
+# one is "unmarked" -- which counts as real. Both booleans are asserted beside the mutants so a
+# counter that classified everything as unmarked could not pass either.
+@test "a mark that is not a boolean counts as unmarked and real, never as a rehearsal" {
+  run -0 _r "$RSEND
+    const mark = (m) => { const c = sendCounts([{kind: \"outreach.sent\", payload: {...RECEIPT, rehearsal: m}}], WINDOW);
+      return c.rehearsal + \"/\" + c.real + \"/\" + c.unmarked; };
+    console.log(\"str-false=\" + mark(\"false\") + \" one=\" + mark(1) + \" arr=\" + mark([]) + \" str-no=\" + mark(\"no\") +
+      \" true=\" + mark(true) + \" false=\" + mark(false));"
+  [[ "$output" == *"str-false=0/1/1 one=0/1/1 arr=0/1/1 str-no=0/1/1 true=1/0/0 false=0/1/0"* ]]
+}
+
+# ---------- one variable, one parser ----------
+
+# TWO parsers read ARC_LEADS_REHEARSAL_ALLOWLIST and they disagreed (D5). `rehearsalMode` filtered
+# on address shape and did not dedup; `loadAllowlist` normalised and deduped with no shape check;
+# and preflight printed the FORMER count to the operator as "a lock of N address-shaped
+# entr(y/ies)" -- a number derived by the parser that does not decide who is reachable, while
+# `rehearsalAllowedIds` mapped the OTHER one into id space.
+#
+# All three numbers are asserted TOGETHER, and that is the only form of this assertion that
+# means anything: each alone is satisfied by either parser, and it is their agreement that is
+# the property. `duplicate` and `spellings` are what the old count got wrong (a lock of 2 over
+# one person), `word` and `only-word` are what the old membership got wrong (a keyed id minted
+# for the string "yes" while the mode reported no lock at all).
+@test "the lock count the operator is shown comes from the parser that decides reachability" {
+  run -0 _r "$RSEND
+    const s = freshStore();
+    const look = (raw) => { const env = {ARC_LEADS_REHEARSAL: \"1\", ARC_LEADS_REHEARSAL_ALLOWLIST: raw};
+      return rehearsalMode(env).count + \"/\" + rehearsalRecipients(env).length + \"/\" +
+        (rehearsalAllowedIds(s, env).size / s.keyring.length); };
+    console.log(\"two=\" + look(\"one@example.test,two@example.test\") +
+      \" duplicate=\" + look(\"one@example.test,one@example.test\") +
+      \" spellings=\" + look(\"one@example.test,ONE@Example.Test \") +
+      \" word=\" + look(\"one@example.test,yes\") + \" only-word=\" + look(\"yes\") + \" empty=\" + look(\"\"));"
+  [[ "$output" == *"two=2/2/2 duplicate=1/1/1 spellings=1/1/1 word=1/1/1 only-word=0/0/0 empty=0/0/0"* ]]
 }
 
 # ---------- the intents that came BEFORE the mark ----------
@@ -461,7 +626,7 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
   local pat='^[[:blank:]]*((@test[[:blank:]])|((function[[:blank:]]+)?[^[:blank:]()]+[[:blank:]]*\(\)[[:blank:]]+[{][[:blank:]]*#[[:blank:]]*@test))'
   declared="$(grep -cE "$pat" "$BATS_TEST_FILENAME")"
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 22 ] || { echo "file declares $declared test(s); expected 22"; false; }
+  [ "$declared" -eq 28 ] || { echo "file declares $declared test(s); expected 28"; false; }
   [ "$registered" -eq "$declared" ] || {
     echo "file declares $declared test(s); bats registered $registered -- one was DROPPED"; false; }
   [ "$BATS_TEST_NUMBER" -eq "$declared" ] || {

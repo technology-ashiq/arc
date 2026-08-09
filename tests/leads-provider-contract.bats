@@ -124,6 +124,37 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" != *":other"* ]]
 }
 
+# THE ROUND TRIP. The guard authorises an ID and the vendor is handed an ADDRESS, and nothing
+# bound the two together: a dossier filed at the id of an allowlisted address but HOLDING a
+# stranger's address resolved cleanly and put the stranger on the wire. Reproduced, and the
+# refusal has its own token because the dossier EXISTS here -- reporting it as UNRESOLVABLE would
+# send the operator looking for a file that is sitting right there.
+#
+# `mismatch` and `honest` are asserted together. The refusal alone is satisfied by a resolver
+# that refuses everything, and this is the exact door a real rehearsal send has to walk through.
+@test "a dossier whose address does not derive back to its own id is refused by name" {
+  cd "$ARC_ROOT"
+  run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" \
+      ARC_LEADS_OUTREACH_FROM="arc@example.test" LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" \
+      node --input-type=module -e '
+    const {resolveRecipient, RECIPIENT_REFUSALS} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const {initStore, openStore, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const fs = await import("node:fs"), path = await import("node:path");
+    initStore();
+    const s = openStore();
+    fs.mkdirSync(path.join(s.dir, "dossiers"), {recursive: true});
+    const refile = (at, holding) => { const id = leadId(s, at);
+      fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email: holding})); return id; };
+    const tok = (id) => { try { return "NO-REFUSAL:" + resolveRecipient(id); }
+      catch (e) { return RECIPIENT_REFUSALS.filter((t) => e.message.includes(t)).join("+") || "NO-TOKEN"; } };
+    console.log("mismatch=" + tok(refile("one@example.test", "stranger@example.test")) +
+      " echoes=" + /[^ ]+@[^ ]+/.test((() => { try { resolveRecipient(refile("one@example.test", "stranger@example.test")); return ""; }
+        catch (e) { return e.message; } })()) +
+      " honest=" + tok(refile("two@example.test", "two@example.test")));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"mismatch=RECIPIENT_ID_MISMATCH echoes=false honest=NO-REFUSAL:two@example.test"* ]]
+}
+
 # Resend names its ack field `id`; this repo's canonical field is provider_message_id. The
 # mapping is a parameter on the ONE decoder rather than a second decoder, so the status-code
 # rule has a single definition -- a drifted copy of it would be D5 in the function whose only
@@ -380,15 +411,15 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
       " uninitialised=" + await hits("lead_hmac_v1_" + "f".repeat(32)));'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # Exactly one token, and the RIGHT one: a join of two would print STORE_UNREADABLE+... here.
-  [[ "$output" == *"tokens=3 distinct=true uninitialised=STORE_UNREADABLE"* ]]
+  [[ "$output" == *"tokens=4 distinct=true uninitialised=STORE_UNREADABLE"* ]]
 }
 
-@test "this file registers the 27 tests it declares" {
+@test "this file registers the 28 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 27 ] || { echo "declared $declared, expected 27"; false; }
+  [ "$declared" -eq 28 ] || { echo "declared $declared, expected 28"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }
