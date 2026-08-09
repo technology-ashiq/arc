@@ -9,12 +9,13 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-08
+Updated: 2026-08-09
 
 ## Active initiatives
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
+| absorb | LIVE | arc-absorb (Cycle 10, born 2026-08-09) | 00 — not started (kickoff STOPped at the approval gate) | 8d / 0d | owner — approve `PLAN.md` + phase specs before any Phase 0 work / — | **Lane born today, and born on a waiver — read `docs/adr/0074` before questioning it.** All three of the design source's gates failed: the live slot was held by leads and policy, the venture clock ran to 2026-08-11, and **no trigger arm had fired** (PLANOFF-01 has arc at the *top* composite; PLANOFF-02 is designed-not-run; no Capability Proposal returned "technique"; `capability-lock.json`'s one row has zero use receipts). The owner was shown that audit and ruled **arc-first**: ADR-0074 defers the venture clock explicitly, waives the trigger gate for this cycle only, and **flags the A8 tension for him rather than resolving it**. ADR-0600–0606 record ABS-A..G; ABS-G decided the century, `products/absorb/` as the code home, an empty registry seed, and the **first target — the unspecified-input defect class, studying gstack's post-build review pass** (PLANOFF-01: arc planned by risk and still neither found nor survived the malformed-escape defect that gstack's review pass caught). Attack panel returned **18 findings across 3 surfaces, 17 accepted**; kickoff-lint green. **Next: owner approval, then Phase 00's DEV-B/C boundary audit** |
 | develop | IDLE | arc-develop (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as 17473e7 / PR #100) | 7d / 2.1d | — | `/arc-kickoff --lane develop` when a new cycle pulls it |
 | engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
 | evolve | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) | — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised) | 7d / 7.0d | — | `/arc-kickoff --lane evolve` when a real client names a surface |
@@ -42,7 +43,8 @@ So a lane claims a **century**, and never numbers outside it:
 | 0300–0399 | `evolve` — claimed at birth, 2026-08-03 (0300–0310 taken) |
 | 0400–0499 | `leads` — claimed at birth, 2026-08-04 (0400–0413 taken) |
 | 0500–0599 | `policy` — claimed at birth, 2026-08-06 (0500–0508 taken) |
-| 0600–0699 | next lane to be born |
+| 0600–0699 | `absorb` — claimed at birth, 2026-08-09 (0600–0606 taken) |
+| 0700–0799 | next lane to be born |
 
 `/arc-kickoff` assigns the next free century when it creates a lane, and `kickoff-lint`'s
 `[adr-dup]` check FAILs when two files claim one number — so a forgotten band is caught by CI

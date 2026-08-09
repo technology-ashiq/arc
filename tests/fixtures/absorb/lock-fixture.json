@@ -1,0 +1,39 @@
+{
+  "$comment": "Synthetic capability-lock.json for tests/absorb-registry-ref.bats. Mirrors the REAL lock's shape as read on 2026-08-09 (nine row fields, capabilities[] + refusals[]) so a reference that resolves here resolves there. NOT a copy of the real lock: the fixture carries edge rows the real file cannot be made to carry - a second version of one name, so a resolvable-but-ambiguous reference can be tested, which the real single-row lock could never exercise. That is the whole reason the contract test reads BOTH files: a fixture-only test cannot see develop reshaping the real lock, and a real-file-only test cannot construct the edge rows.",
+  "capabilities": [
+    {
+      "name": "fixture-tool",
+      "registry": "npm",
+      "version": "1.0.0",
+      "hash": "sha512-0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "publisher-auth": "fixture only, never fetched",
+      "build-attestation": "none published",
+      "checked": "2026-08-09",
+      "source": "npm:fixture-tool@1.0.0, synthetic",
+      "class": "read-only (no human OK needed)"
+    },
+    {
+      "name": "twin-tool",
+      "registry": "npm",
+      "version": "1.0.0",
+      "hash": "sha512-1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+      "publisher-auth": "fixture only, never fetched",
+      "build-attestation": "none published",
+      "checked": "2026-08-09",
+      "source": "npm:twin-tool@1.0.0, synthetic",
+      "class": "read-only (no human OK needed)"
+    },
+    {
+      "name": "twin-tool",
+      "registry": "npm",
+      "version": "1.0.0",
+      "hash": "sha512-2222222222222222222222222222222222222222222222222222222222222222222222222222222222222222",
+      "publisher-auth": "fixture only, never fetched — DELIBERATE DUPLICATE of twin-tool@1.0.0",
+      "build-attestation": "none published",
+      "checked": "2026-08-09",
+      "source": "npm:twin-tool@1.0.0, synthetic duplicate",
+      "class": "read-only (no human OK needed)"
+    }
+  ],
+  "refusals": []
+}

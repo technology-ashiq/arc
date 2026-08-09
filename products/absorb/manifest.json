@@ -1,0 +1,16 @@
+{
+  "name": "absorb",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/absorb/registry-ref.mjs",
+    ".claude/scripts/absorb/report-lint.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

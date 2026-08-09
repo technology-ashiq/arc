@@ -1,0 +1,67 @@
+Phase 00 steel thread -- live demo, run 2026-08-09 on the committed tree.
+
+A named source goes in, report-lint returns a verdict, the verdict is this file. Input -> core ->
+output, thinnest end-to-end slice of the refinery's paperwork spine.
+
+READ THE EXIT CODES CAREFULLY. Both lints are WARN-first in TRIAL, so EVERY judged run below exits
+0 -- including the runs that report defects. The exit code carries no verdict here by design; a
+WARN-first lint that exits non-zero is a BLOCK wearing a WARN's label. The verdict is the payload.
+That is also why both bats suites carry a mutant negative control: a stub printing "0 warnings"
+would satisfy any status-only assertion, so the tests assert on the warning text instead.
+
+Specimen: initiatives/absorb/evidence/phase-00/sample-report.md -- deliberately synthetic. A real
+study needs the read-only injection-aware harness that does not exist until Phase 01, and the
+ADR-0606 first target belongs to Phase 04. The steel thread needs a well-formed report, not a true
+one.
+
+=========================================================================================
+### DEMO 1 -- clean specimen report
+$ node .claude/scripts/absorb/report-lint.mjs initiatives/absorb/evidence/phase-00/sample-report.md
+report-lint: 0 warnings
+exit=0
+
+### DEMO 2 -- required heading removed (## Verdict summary renamed to ## Totals)
+WARN  [heading] missing required heading "## Verdict summary" (ADR-0601 requires all five, verbatim)
+report-lint: 1 warning [trial] - WARN-first, exit 0 by design (docs/trial-ledger.md)
+exit=0
+
+### DEMO 3 -- citation blanked on row T-01
+WARN  [row-field] T-01: "citation" is empty - ADR-0601 requires it on every row
+report-lint: 1 warning [trial] - WARN-first, exit 0 by design (docs/trial-ledger.md)
+exit=0
+
+  ^ THE LOAD-BEARING LINE IN THIS FILE. The warning names the row id AND the field. A lint that
+    never visited the row could not name it, which is what makes the corresponding bats assertion
+    non-vacuous rather than merely green.
+
+### DEMO 4 -- the committed registry resolves against the REAL lock
+$ node .claude/scripts/absorb/registry-ref.mjs products/absorb/registry.json \
+      .claude/scripts/develop/capability-lock.json
+registry-ref: 0 warnings (0 rows checked against 1 lock entry)
+exit=0
+
+  ^ 0 rows is correct and is ADR-0606's empty seed. 1 lock entry is the real madge row. This run
+    also IS the structural assertion on the committed registry: registry-ref exits 2 on
+    unparseable JSON and on a missing techniques array, so a clean 0 here means the file parsed
+    and its array was found.
+
+### DEMO 5 -- an unresolvable reference and a copied lock field are both named
+Input: a synthetic registry row T-09 with lock_ref ghost@0.0.1 and its own "hash" field.
+WARN  [duplication] T-09: carries "hash", which belongs to capability-lock.json alone - reference
+                    the lock entry, never copy it (A5, REQ-04)
+WARN  [lock-ref] T-09: lock_ref ghost@0.0.1 resolves to no row in
+                 .claude/scripts/develop/capability-lock.json - an unresolvable reference is not a pin
+exit=0
+
+  ^ Both A5 halves demonstrated in one run: a row may not COPY the lock, and a row's REFERENCE
+    into the lock must actually resolve.
+=========================================================================================
+
+WHAT THIS DEMO DOES NOT PROVE, stated so the phase close cannot overclaim:
+
+- Nothing here proves the bats suites pass. That is CI's verdict, read per JOB conclusion via
+  `gh run view --json jobs`, never from a watcher's exit code.
+- Nothing here proves the no-execution study boundary. There is no study harness yet; that is
+  Phase 01's exit criterion and its STOP condition.
+- The specimen was not studied, so the classification matrix is untested against a real finding.
+  Assumptions-ledger row 2 carries that bet, and Phase 04 is where it is tested.
