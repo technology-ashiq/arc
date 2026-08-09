@@ -273,6 +273,12 @@ async function cmdReconcile() {
     emitReceipt: async (p) => emit("outreach.sent", p),
   });
   console.log(`arc-leads reconcile: ${out.resolvedFromSpine} resolved from the spine (no provider call) · ${out.emittedLate} late receipt(s) · ${out.voided} voided · ${out.providerCalls} provider call(s)`);
+  // The per-intent failures, PRINTED. reconcile collects them so one bad intent cannot stop it
+  // healing the healthy ones -- but nothing printed them, so the operator saw only "N intent(s)
+  // still unresolved" and had no idea which intent, why, or what to do about it. An intent that
+  // predates ADR-0416 wedges every send in the campaign and names its own remedy; a remedy in
+  // an object nobody prints is not a remedy.
+  for (const err of out.errors || []) console.error(`  ! ${err}`);
   const left = unresolvedIntents(store);
   if (left.length) die(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
   } finally { release(); }

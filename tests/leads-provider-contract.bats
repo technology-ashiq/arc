@@ -75,6 +75,13 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
 # allowlist is enforced in id space by the send-moment guard, so an address arriving here that
 # was never a lead id never passed that check, and accepting one would be a containment hole
 # opened by a convenience.
+#
+# Discriminated on the TOKEN the refusal is contractually required to carry, never on its
+# prose. D4: this test and the one below classified by sentence substring, so a copy-edit that
+# changed no behaviour at all reddened CI -- the failure mode where the test punishes the thing
+# it is not measuring. `deps.mjs RECIPIENT_REFUSALS` is the closed list, and the tokens are
+# distinct from one another so a store that failed to open cannot read as a resolved-but-junk
+# address. tests/leads-rehearsal-send.bats already matched an identifier this way.
 @test "the real provider refuses every recipient it cannot resolve from the private store" {
   cd "$ARC_ROOT"
   run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" \
@@ -86,7 +93,7 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
     for (const to of ["lead_9f3a2b", "", null, "@example.test", "example.test@", "one@example.test",
                       "../../secret", "lead_hmac_v1_" + "f".repeat(32)]) {
       try { await provider().submit({idem_key:"k", to, subject:"s", body:"b"}); console.log("UNEXPECTED-SUCCESS"); }
-      catch (e) { console.log(e.kind + (e.message.includes("could not resolve it to an address") ? ":unresolvable" : ":other " + e.message.slice(0, 40))); } }'
+      catch (e) { console.log(e.kind + (e.message.startsWith("UNRESOLVABLE_RECIPIENT:") ? ":unresolvable" : ":other " + e.message.slice(0, 40))); } }'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" != *"UNEXPECTED-SUCCESS"* ]]
   [[ "$output" != *":other"* ]]
@@ -111,9 +118,10 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
     const id = leadId(s, "junk@example.test");
     fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email: "not-an-address"}));
     try { await provider().submit({idem_key:"k", to:id, subject:"s", body:"b"}); console.log("UNEXPECTED-SUCCESS"); }
-    catch (e) { console.log(e.kind + (e.message.includes("resolved recipient is not an address") ? ":not-an-address" : ":other " + e.message.slice(0, 40))); }'
+    catch (e) { console.log(e.kind + (e.message.startsWith("RECIPIENT_NOT_AN_ADDRESS:") ? ":not-an-address" : ":other " + e.message.slice(0, 40))); }'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"config:not-an-address"* ]]
+  [[ "$output" != *":other"* ]]
 }
 
 # Resend names its ack field `id`; this repo's canonical field is provider_message_id. The
@@ -353,12 +361,34 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"in-step 1048576"* ]]
 }
 
-@test "this file registers the 26 tests it declares" {
+# The negative control for the two tests above. Discriminating on a token is only better than
+# discriminating on prose if the tokens are TELLABLE APART -- and the obvious version of this
+# fix was to match the ADR each refusal names, which fails: the unreadable-store refusal and
+# the junk-dossier refusal both name ADR-0410, so a store that could not be opened would have
+# read as a dossier holding junk and the not-an-address test would pass without ever reaching
+# the dossier. Each refusal carries EXACTLY ONE of the closed set, and this asserts the count.
+@test "each recipient refusal carries exactly one of the closed refusal tokens" {
+  cd "$ARC_ROOT"
+  run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" \
+      ARC_LEADS_OUTREACH_FROM="arc@example.test" LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" \
+      ARC_LEADS_STORE="$BATS_TEST_TMPDIR/never-initialised" node --input-type=module -e '
+    const {provider, RECIPIENT_REFUSALS} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const hits = async (to) => { try { await provider().submit({idem_key:"k", to, subject:"s", body:"b"}); return "UNEXPECTED-SUCCESS"; }
+      catch (e) { return RECIPIENT_REFUSALS.filter((t) => e.message.includes(t)).join("+") || "NO-TOKEN:" + e.message.slice(0, 40); } };
+    console.log("tokens=" + RECIPIENT_REFUSALS.length +
+      " distinct=" + (new Set(RECIPIENT_REFUSALS).size === RECIPIENT_REFUSALS.length) +
+      " uninitialised=" + await hits("lead_hmac_v1_" + "f".repeat(32)));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Exactly one token, and the RIGHT one: a join of two would print STORE_UNREADABLE+... here.
+  [[ "$output" == *"tokens=3 distinct=true uninitialised=STORE_UNREADABLE"* ]]
+}
+
+@test "this file registers the 27 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 26 ] || { echo "declared $declared, expected 26"; false; }
+  [ "$declared" -eq 27 ] || { echo "declared $declared, expected 27"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

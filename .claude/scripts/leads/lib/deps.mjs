@@ -213,10 +213,20 @@ export const OUTREACH_BASE_URL_DEFAULT = "https://api.resend.com";
 // came out of the dossier, which is the value that can actually be junk (a hand-edited file, a
 // half-written record). A hash or a fragment reaching Resend comes back as a 400 that reads
 // like a transport problem, and the receipt path must never see an ack for it.
+//
+// Each of the three recipient refusals below LEADS with a stable machine token, the shape the
+// binding refusals in this module already use (`RESEND_API_KEY is unset — …`). D4: the tests
+// used to classify these by prose substring, so rewording three sentences with no behaviour
+// change whatsoever reddened CI. The token is the contract and the sentence is for the human;
+// the tokens are distinct from each other on purpose, because two refusals that both merely
+// name ADR-0410 are indistinguishable to a test and a store that failed to open would read as
+// a dossier holding junk.
+export const RECIPIENT_REFUSALS = ["STORE_UNREADABLE", "UNRESOLVABLE_RECIPIENT", "RECIPIENT_NOT_AN_ADDRESS"];
+
 function assertResolvedRecipient(to) {
   const s = String(to == null ? "" : to).trim();
   if (!s.includes("@") || s.startsWith("@") || s.endsWith("@"))
-    throw new ProviderError("config", "the resolved recipient is not an address — the dossier this lead id points at holds no usable email. Refusing before any network call rather than letting the vendor reject it. The value is not echoed.");
+    throw new ProviderError("config", "RECIPIENT_NOT_AN_ADDRESS: the resolved recipient is not an address — the dossier this lead id points at holds no usable email (ADR-0410). Refusing before any network call rather than letting the vendor reject it. The value is not echoed.");
   return s;
 }
 
@@ -235,11 +245,11 @@ function resolveRecipient(to) {
   let store;
   try { store = openStore({ repoRoot: REPO_ROOT }); }
   catch (e) {
-    throw new ProviderError("config", `the private store could not be opened to resolve the recipient (${e.code || e.message}) — refusing before any network call (ADR-0410)`);
+    throw new ProviderError("config", `STORE_UNREADABLE: the private store could not be opened to resolve the recipient (${e.code || e.message}) — refusing before any network call (ADR-0410)`);
   }
   const email = dossierEmail(store, String(to == null ? "" : to).trim());
   if (email === null)
-    throw new ProviderError("config", "submit() takes the keyed lead id (ADR-0400) and could not resolve it to an address in the private store — no dossier, no email, or a recipient that was never a lead id. Refusing before any network call; the value is not echoed, because it may be the address itself.");
+    throw new ProviderError("config", "UNRESOLVABLE_RECIPIENT: submit() takes the keyed lead id (ADR-0400) and could not resolve it to an address in the private store — no dossier, no email, or a recipient that was never a lead id. Refusing before any network call; the value is not echoed, because it may be the address itself.");
   return assertResolvedRecipient(email);
 }
 

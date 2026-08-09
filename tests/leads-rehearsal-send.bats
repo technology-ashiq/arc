@@ -36,9 +36,9 @@ _r() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 node --input-type=module -e "$1"; }
 
 RSEND='const {guardSend, GuardRefusal, rehearsalAllowedIds, sendCounts, REHEARSAL_ALLOWLIST_VAR} = await import("./.claude/scripts/leads/lib/guard.mjs");
 const {sendOne} = await import("./.claude/scripts/leads/lib/sequencer.mjs");
-const {initStore, openStore, rotateSecret, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
+const {initStore, openStore, rotateSecret, leadId, dossierEmail} = await import("./.claude/scripts/leads/lib/store.mjs");
 const {initCampaign, writeDraft} = await import("./.claude/scripts/leads/lib/drafts.mjs");
-const {writeIntent, reconcile} = await import("./.claude/scripts/leads/lib/journal.mjs");
+const {writeIntent, reconcile, idemKeyFor, journalDir} = await import("./.claude/scripts/leads/lib/journal.mjs");
 const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
 const {leadsIdem} = await import("./.claude/scripts/hq/lib/validate-leads.mjs");
 const {validateEvent} = await import("./.claude/scripts/hq/lib/validate.mjs");
@@ -96,6 +96,9 @@ const mk = (payload) => ({id: "01J000000000000000000000AB", v: 1, ts: NOW, idem:
   actor: "arc-leads", process: "leads@1.0.0", model: null, venture: "arc", run_id: "r-t", kind: "outreach.sent",
   payload, outcome: "ok", cost: null, evidence: null, supersedes: null});
 const verdict = (payload) => { try { validateEvent(mk(payload)); return "ACCEPTED"; } catch (e) { return e.code; } };
+// The same call read for its MESSAGE. A code alone cannot tell a key the schema requires from
+// one it merely type-checks: both refuse, and only the sentence says which rule bit.
+const vwhy = (payload) => { try { validateEvent(mk(payload)); return "ACCEPTED"; } catch (e) { return e.message; } };
 const sent = (mark, at) => ({kind: "outreach.sent", payload: {...RECEIPT, submitted_at: at, rehearsal: mark}});
 const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:30"};'
 
@@ -125,12 +128,31 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
 
 # The allowlist refusal is the line most likely to be read out of a CI log by someone who
 # should not have the address, and the operator already knows which recipients they listed.
+#
+# The detector is deliberately CRUDER than the addresses the allowlist accepts. The precise
+# form it used to carry demanded an ASCII dot-TLD, so it saw nothing in an internationalised
+# domain (non-ASCII labels) and nothing in a dotless host -- and loadAllowlist takes both, so
+# the leak it was watching for could walk straight past the watcher. A refusal that must
+# contain NO address has no reason to own an opinion about which addresses are well formed;
+# anything with an at-sign in it fails here.
+#
+# The two positive controls are what stop `echoes=false` passing on a detector that detects
+# nothing at all -- a crash satisfies an absence assertion on its own. The dotless one is the
+# case the old form missed, written literally rather than assembled and naming no domain that
+# could leak. Matching the IDENTIFIER rather than the sentence is the other half, and the shape
+# the provider-contract refusals were moved to: rewording a message must never redden CI.
+#
+# Watch the LITERALS here: the first draft of this comment carried an address in a .example
+# TLD to illustrate the miss, and pii-tripwire refused the file. Reserved means the accepted
+# set (example.com/.net/.org and subdomains, .test, .invalid), not RFC 2606 read loosely --
+# and the rule applies to prose in a fixture-class file exactly as it does to code.
 @test "the allowlist refusal names no address" {
   run -0 _r "$RSEND
     const s = freshStore(); dossier(s, \"one@example.test\");
     const msg = why(s, dossier(s, \"stranger@example.test\"), ON);
-    console.log(\"echoes=\" + /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}/.test(msg) + \" names-the-var=\" + msg.includes(\"ARC_LEADS_REHEARSAL_ALLOWLIST\"));"
-  [[ "$output" == *"echoes=false names-the-var=true"* ]]
+    console.log(\"echoes=\" + /\S+@\S+/.test(msg) + \" names-the-var=\" + msg.includes(\"ARC_LEADS_REHEARSAL_ALLOWLIST\") +
+      \" reserved=\" + /\S+@\S+/.test(\"stranger@example.test\") + \" dotless=\" + /\S+@\S+/.test(\"x@localhost\"));"
+  [[ "$output" == *"echoes=false names-the-var=true reserved=true dotless=true"* ]]
 }
 
 # ID SPACE, every key version. A single-version check is the mirror of the suppression bug
@@ -221,12 +243,30 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
 # reclassify a rehearsal send as a real first touch -- the one fail-open ADR-0416 exists to
 # prevent. And a boolean, not a truthy value: two spellings of one fact reach the idem preimage
 # as two different strings, which is how one send becomes two receipts.
+#
+# `undefined` is the case this list was missing, and it is the one production actually emits:
+# an intent written before ADR-0416 reaches the emit as `rehearsal: undefined`. It carries
+# CANON_TYPE, not BAD_LEADS, and that is CORRECT rather than a gap -- `undefined` has no wire
+# representation at all, so canonicalisation refuses it at the serialization boundary before a
+# single domain rule is consulted, and no message on this path can ever name ADR-0416 for it.
+# Which is exactly why the named refusal for that case lives UPSTREAM, in reconcile step 2.5,
+# where the intent can still be described; the code pinned here is what makes that necessary.
+#
+# `required=` is the whole ADR-0416 decision, asserted directly. Moving `rehearsal` from
+# `required` to `optional` in SHAPES passed every test in this file, because the boolean check
+# catches an absent key independently -- so the decision sat on an unpinned line. The two rules
+# refuse with DIFFERENT sentences (`is missing "rehearsal"` vs `must be a boolean`), and the
+# sentence is the only thing that can tell them apart.
 @test "an outreach sent receipt without a boolean mark is refused by the schema" {
   run -0 _r "$RSEND
     const {rehearsal: drop, ...bare} = RECEIPT;
     console.log([verdict(RECEIPT), verdict(bare), verdict({...RECEIPT, rehearsal: \"true\"}),
-                 verdict({...RECEIPT, rehearsal: 1}), verdict({...RECEIPT, rehearsal: null})].join(\" \"));"
-  [[ "$output" == *"ACCEPTED BAD_LEADS BAD_LEADS BAD_LEADS BAD_LEADS"* ]]
+                 verdict({...RECEIPT, rehearsal: 1}), verdict({...RECEIPT, rehearsal: null}),
+                 verdict({...RECEIPT, rehearsal: undefined})].join(\" \"));
+    console.log(\"required=\" + /is missing .rehearsal./.test(vwhy(bare)) +
+      \" undefined-is-unserializable=\" + /rehearsal: undefined is not serializable/.test(vwhy({...RECEIPT, rehearsal: undefined})));"
+  [[ "$output" == *"ACCEPTED BAD_LEADS BAD_LEADS BAD_LEADS BAD_LEADS CANON_TYPE"* ]]
+  [[ "$output" == *"required=true undefined-is-unserializable=true"* ]]
 }
 
 # The other half, and the more dangerous one to omit: a field in the payload but NOT in the
@@ -314,15 +354,118 @@ const WINDOW = {from: "2026-08-04T00:00:00+05:30", to: "2026-08-04T23:59:59+05:3
   [[ "$output" == *"windowed=1 unwindowed=2 scoped=1 unscoped=2"* ]]
 }
 
+# ---------- the intents that came BEFORE the mark ----------
+
+# The wedge, reproduced. An intent left on disk by a build older than ADR-0416 carries no mark
+# at all, so reconcile emitted `rehearsal: undefined` and the canonicaliser refused it with
+# `$.payload.rehearsal: undefined is not serializable` -- a sentence naming neither the ADR nor
+# any remedy. Nothing could clear it: reconcile must not guess the mode, so the run failed
+# identically forever while guard step 2 refused EVERY send in the campaign, and each of those
+# runs spent a real provider lookup to arrive at the same failure. A wedge with a bill attached.
+#
+# Written straight to disk here, with the exact key set the older writeIntent required, because
+# writeIntent itself now refuses to produce one -- so the only way this file can exist is the
+# way it actually exists in the field.
+@test "an intent predating the mark fails by name and never reaches the provider" {
+  run -0 _r "$RSEND
+    const s = freshStore(); const id = dossier(s, \"one@example.test\");
+    fs.writeFileSync(path.join(journalDir(s), \"k1.json\"), JSON.stringify({idempotency_key: \"k1\",
+      lead_hmac: id, campaign: \"pilot\", touch_n: 1, draft_sha: SHA, submitted_at: NOW,
+      store_fingerprint: \"deadbeef\", resolved: false}));
+    let calls = 0;
+    const out = await reconcile(s, {events: [],
+      lookup: async () => { calls++; return {found: true, provider_message_id: \"pm1\"}; },
+      emitReceipt: async () => { throw new Error(\"an emit that cannot succeed must not be attempted\"); }});
+    const msg = (out.errors || []).join(\"|\");
+    console.log(\"lookups=\" + calls + \" providerCalls=\" + out.providerCalls + \" unmarked=\" + out.unmarked +
+      \" named=\" + msg.includes(\"INTENT_PREDATES_ADR_0416\") + \" adr=\" + msg.includes(\"predates ADR-0416\") +
+      \" remedy=\" + (msg.includes(\"Fix it by hand\") && msg.includes(\"delete the file to void it\")) +
+      \" still-pending=\" + step(s, id, ON));"
+  [[ "$output" == *"lookups=0 providerCalls=0 unmarked=1 named=true adr=true remedy=true still-pending=unresolved-intent"* ]]
+}
+
+# The paired POSITIVE, and it is what keeps the fix from being a blanket halt. One unmarkable
+# intent must not stop reconcile healing the healthy ones -- that is the same defect the corrupt
+# branch above it already records, and a fix that re-introduced it would pass the test above.
+@test "one intent with no mode does not stop the healthy intents beside it healing" {
+  run -0 _r "$RSEND
+    const s = freshStore(); const id = dossier(s, \"one@example.test\");
+    const base = {lead_hmac: id, campaign: \"pilot\", draft_sha: SHA, submitted_at: NOW, store_fingerprint: \"deadbeef\", resolved: false};
+    fs.writeFileSync(path.join(journalDir(s), \"k1.json\"), JSON.stringify({...base, idempotency_key: \"k1\", touch_n: 1}));
+    fs.writeFileSync(path.join(journalDir(s), \"k2.json\"), JSON.stringify({...base, idempotency_key: \"k2\", touch_n: 2, rehearsal: true}));
+    let p = null;
+    const out = await reconcile(s, {events: [], lookup: async () => ({found: true, provider_message_id: \"pm2\"}),
+      emitReceipt: async (x) => { p = x; }});
+    console.log(\"emitted=\" + out.emittedLate + \" unmarked=\" + out.unmarked + \" providerCalls=\" + out.providerCalls +
+      \" mark=\" + JSON.stringify(p && p.rehearsal) + \" left=\" + fs.readdirSync(journalDir(s)).length);"
+  [[ "$output" == *"emitted=1 unmarked=1 providerCalls=1 mark=true left=1"* ]]
+}
+
+# ---------- the vendor key, pinned ----------
+
+# Its INPUTS are mode-invariant and the two-idem test above proves the receipt half. Its VALUE
+# is version-sensitive, and it MOVED once already, unwatched, when the mark joined the receipt
+# preimage: 51e7deec... became 68cfaadb... for the same three inputs. That hash is the vendor
+# Idempotency-Key, and the header of journal.mjs calls the vendor 24-hour dedup the last thing
+# standing between a crash and a duplicate to a real human -- a key that moves silently is that
+# dedup silently not firing on the resend. Pinned to a LITERAL so the next move is this diff.
+@test "the vendor idempotency key is pinned to a literal and ignores the mode" {
+  run -0 _r "$RSEND
+    const args = {campaign: \"pilot\", lead_id: RECEIPT.lead_id, touch_n: 1};
+    console.log(\"key=\" + idemKeyFor(args) +
+      \" mode-invariant=\" + (idemKeyFor({...args, rehearsal: true}) === idemKeyFor({...args, rehearsal: false})) +
+      \" touch-sensitive=\" + (idemKeyFor(args) !== idemKeyFor({...args, touch_n: 2})) +
+      \" campaign-sensitive=\" + (idemKeyFor(args) !== idemKeyFor({...args, campaign: \"other\"})));"
+  [[ "$output" == *"key=68cfaadb6e201e11ab8e0fa2a268b0d98d8b5de18f338dd25e8d59700a49933e"* ]]
+  [[ "$output" == *"mode-invariant=true touch-sensitive=true campaign-sensitive=true"* ]]
+}
+
+# ---------- the one dossier read ----------
+
+# dossierEmail was lifted out of guard.mjs so the send-moment guard and the real provider cannot
+# drift (D5) -- and it arrived with two callers and no test of its own. Deleting its type check,
+# `typeof email === "string" && email.trim() !== ""` for a bare `String(email)`, left all
+# eighteen tests in this file green. That deletion is not cosmetic: a number reaching
+# normalizeEmail mints a stable, plausible lead id for a person who does not exist, and the
+# provider hands the same junk to the vendor. Every failure is null, and null is a REFUSAL at
+# both callers rather than nothing-to-check-here.
+@test "the shared dossier read returns null for every unusable dossier" {
+  run -0 _r "$RSEND
+    const s = freshStore();
+    const put = (email) => { const id = leadId(s, \"probe@example.test\");
+      fs.writeFileSync(path.join(s.dir, \"dossiers\", id + \".json\"), JSON.stringify({lead_id: id, email})); return id; };
+    const say = (v) => JSON.stringify(dossierEmail(s, v));
+    fs.writeFileSync(path.join(s.dir, \"dossiers\", \"lead_hmac_v1_\" + \"e\".repeat(32) + \".json\"), \"{not json\");
+    console.log([say(\"lead_hmac_v1_\" + \"f\".repeat(32)), say(\"lead_hmac_v1_\" + \"e\".repeat(32)),
+                 say(put(12345)), say(put(\"\")), say(put(\"   \")), say(put(null)),
+                 say(dossier(s, \"one@example.test\"))].join(\" \"));"
+  [[ "$output" == *"null null null null null null \"one@example.test\""* ]]
+}
+
 # LAST on purpose: BATS_TEST_NUMBER is then the count bats actually registered AND REACHED, so
-# comparing it against what the file declares catches a declared test that never ran. The
-# declaration grep is bats OWN pattern (leading blanks allowed, blank after @test), because the
-# narrower `^@test ` anchor misses three forms bats executes.
+# comparing it against what the file declares catches a declared test that never ran.
+#
+# THREE numbers now, and the middle one is the one that cannot be fooled. The previous version
+# compared a grep of the @test line against a literal -- but bats ALSO registers the comment
+# form, a shell function declaration whose opening brace is followed by a @test marker comment,
+# with or without the `function` keyword. That grep could not see it. A test written in the
+# comment form and placed AFTER this one ran, passed or failed on its own, and left BOTH
+# `declared` and BATS_TEST_NUMBER sitting at the old figure -- a self-count blind to exactly the
+# test it exists to notice. `${#BATS_TEST_NAMES[@]}` is what bats REGISTERED, taken from bats
+# rather than re-derived, and the grep is extended to the comment form so a declaration bats
+# DROPPED is still visible as a disagreement between the two.
+#
+# `[{]` rather than `\{`: a brace after `.*` reads as an interval bound to some ERE engines and
+# the bracket spelling means one thing on all three legs.
 @test "this suite declares as many tests as bats reached" {
-  declared="$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")"
-  [ "$declared" -eq 18 ] || { echo "file declares $declared test(s); expected 18"; false; }
+  local pat='^[[:blank:]]*((@test[[:blank:]])|((function[[:blank:]]+)?[^[:blank:]()]+[[:blank:]]*\(\)[[:blank:]]+[{][[:blank:]]*#[[:blank:]]*@test))'
+  declared="$(grep -cE "$pat" "$BATS_TEST_FILENAME")"
+  registered=${#BATS_TEST_NAMES[@]}
+  [ "$declared" -eq 22 ] || { echo "file declares $declared test(s); expected 22"; false; }
+  [ "$registered" -eq "$declared" ] || {
+    echo "file declares $declared test(s); bats registered $registered -- one was DROPPED"; false; }
   [ "$BATS_TEST_NUMBER" -eq "$declared" ] || {
     echo "file declares $declared test(s); bats reached $BATS_TEST_NUMBER"; false; }
-  offenders="$(grep -E '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME" | LC_ALL=C grep -c '[^ -~]' || true)"
-  [ "$offenders" -eq 0 ] || { echo "$offenders @test name(s) carry non-ASCII bytes"; false; }
+  offenders="$(grep -E "$pat" "$BATS_TEST_FILENAME" | LC_ALL=C grep -c '[^ -~]' || true)"
+  [ "$offenders" -eq 0 ] || { echo "$offenders test name(s) carry non-ASCII bytes"; false; }
 }
