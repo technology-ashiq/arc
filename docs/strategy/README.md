@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-09 — PLAN-executor + PLAN-scheduler promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-09 — PLAN-executor + PLAN-scheduler + PLAN-ledger promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 14 full PLANs + 9 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 15 full PLANs + 8 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -32,6 +32,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-absorb.md`~~ | **MOVED → `docs/archive/`** (2026-08-06) | Superseded by `plans/PLAN-absorb.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan past the brief: the fourth load-bearing trigger arm + two-speed operating model, the sealed-blind owner-judge mechanics, the ABS-C allowlist candidate, the ≥2-cycles threshold assumption, and the stale-0400-century correction exist only in the plan) |
 | ~~`plans/BRIEF-executor.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-executor.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger, the capability-gap verdict arm, the 12-fixture real-runtime Isolation Certification Suite, credential-capped budgets with calibration receipts, context-pack batch/angle/feedback semantics, `review_by:` tenure + the termination spec, the EXE-K freedom clause and the unlock ladder exist only in the plan) |
 | ~~`plans/BRIEF-scheduler.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-scheduler.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the two-type job taxonomy, the ceiling lint, idem=job@slot, the zero-retry reconciliation with ADR-0203/0204, the deterministic jobs panel and the fire-drill REQ exist only in the plan; the brief's kickoff prompt is pre-portfolio/bare-token — the plan's is lane-native) |
+| ~~`plans/BRIEF-ledger.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-ledger.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the PII-free payload contract with validator-first ordering, gross/fees/tax/net money semantics, FX-at-ingest replay determinism, the blocking both-direction reconciliation gate, natural-key duplicate detection, goalpost receipts on `ventures.yaml`, the measured/declared/allocated cost trichotomy and the `month.closed` micro vocab ADR exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -230,6 +231,38 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     self-modification / spend-kind / credential bans in jobs-lint. v1 jobs:
     brief-materialize · day-close-roll (seals D−1 at 00:15, `catchup: run`) ·
     lexos-canary candidate. `BRIEF-scheduler.md` superseded → moved to `docs/archive/`.
+
+17. **2026-08-09:** `plans/PLAN-ledger.md` added (ledger v1 — "the money brain":
+    per-venture P&L truth derived reader-only from spine receipts; v1.0, landed
+    owner-approved from a Cowork session; decisions LED-A…K locked over four review
+    rounds 2026-08-03 → 2026-08-09; ADR numbers at kickoff from the century claimed per
+    `PORTFOLIO.md` — NEW lane). **Trigger converted to FIRED under the owner's Build-out
+    Mandate (2026-08-09 — same receipt as correction #15, cited by the kickoff ADRs;
+    honesty note in-file: the live spine's money side is zero events and none are
+    invented — real views render honest-empty until the first real ₹, fixtures +
+    `revenue.simulated` carry the proof, and the old pull-trigger "≥2 revenue sources"
+    survives only as the live-value milestone; closure = C2 REQ-07 pattern, mechanism
+    proven / live value pending).** Core beyond the brief: **PII-free revenue payloads**
+    (LED-C — the PLAN-leads PII law applied to money: what the immutable spine never
+    receives it never has to erase; validator ships BEFORE the first real ingest,
+    ordering-critical) · money semantics gross/fees/tax/net with GST kept out of MRR
+    (LED-C/H) · FX-at-ingest — conversion facts are receipts, replay is
+    offline-deterministic (LED-D) · **reconciliation as a BLOCKING both-direction
+    month-close gate** (missed AND duplicate suspects; LED-F), with `month.closed`
+    added by micro vocab ADR against live `KINDS.length` (LED-E, ADR-0107 rule), IST
+    boundaries, and post-close corrections booking into the recording month — a frozen
+    month never restates · cost trichotomy measured/declared/allocated never mixed —
+    subscription AI plans are declared fixed costs (per-run apportionment of a flat fee
+    is fake precision), `venture: arc` = Overhead, unattributed (LED-G — C2's cut
+    REQ-08 revived, org-blueprint role #49) · natural-key duplicate detection in the
+    derived layer (LED-K — C2's content-idem contract untouched) · `ventures.yaml` as
+    a root organ whose edits require a `decision.recorded` — goalposts move only on
+    the record (LED-I) · `arc pnl` CLI-first, the brief's `/arc-pnl` retired (LED-J) ·
+    `hq.policy.yaml` rows for the close/ingest action kinds land in the same change
+    (POL-I; policy C9 merged 2026-08-08). Cross-plan: the per-venture "₹ returned per
+    AI-₹" ratio is a future `metric.observed` candidate named when EVO-H0's vocabulary
+    lands (correction #10) — nothing ships here. `BRIEF-ledger.md` superseded → moved
+    to `docs/archive/`.
 
 ## Provenance
 
