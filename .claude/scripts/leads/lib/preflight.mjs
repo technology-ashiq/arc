@@ -212,8 +212,18 @@ export async function preflight({ config, warmupApproved = false, env = process.
   catch (e) { refuse("provider-auth", `provider authStatus() failed: ${e.message}`); }
 
   if (auth) {
-    for (const k of ["spf", "dkim", "dmarc"])
-      auth[k] ? pass(`provider-${k}`, "provider reports authenticated") : refuse(`provider-${k}`, `provider reports ${k} NOT authenticated — a live DNS record the provider cannot see does not send mail`);
+    for (const k of ["spf", "dkim", "dmarc"]) {
+      // `null` is a THIRD state: the vendor cannot evaluate this clause at all (Resend does
+      // not evaluate DMARC). Treating it as false makes the gate unpassable for a domain whose
+      // DMARC is fine; treating it as true invents a clause nobody checked. It defers to the
+      // LIVE DNS row for the same clause instead, and says which source decided.
+      if (auth[k] === null || auth[k] === undefined) {
+        const live = findings.find((f) => f.rule === k);
+        if (live && live.ok) pass(`provider-${k}`, `provider cannot evaluate ${k}; deferring to the live DNS row, which passed`);
+        else refuse(`provider-${k}`, `provider cannot evaluate ${k} and the live DNS row did not pass — with no source able to confirm it, this clause is refused rather than assumed`);
+      } else if (auth[k]) pass(`provider-${k}`, "provider reports authenticated");
+      else refuse(`provider-${k}`, `provider reports ${k} NOT authenticated — a live DNS record the provider cannot see does not send mail`);
+    }
 
     // The warm-up clause.
     if (typeof auth.warmup_days === "number") {
