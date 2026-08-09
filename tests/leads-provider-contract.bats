@@ -25,22 +25,85 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
 
 # ---------- the code-path test ----------
 
+# The negative control, and it now has to be given the config the bound provider requires --
+# a key, a sender, and a RESOLVED recipient -- or it stops at the first config refusal and
+# never reaches the socket. Reaching `transport` is the whole assertion: it proves the real
+# module ran its own code rather than the fake being silently substituted.
+# The key is a placeholder that never leaves the process: 127.0.0.1:1 refuses the connection
+# before any bytes are written.
 @test "the real provider module reaches its own code and exits with its own failure code" {
   cd "$ARC_ROOT"
-  run env -u ARC_LEADS_FAKE LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" node --input-type=module -e '
+  run env -u ARC_LEADS_FAKE LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" \
+      RESEND_API_KEY="placeholder-not-a-key" ARC_LEADS_OUTREACH_FROM="arc@example.test" \
+      node --input-type=module -e '
     const {provider, ProviderError} = await import("./.claude/scripts/leads/lib/deps.mjs");
-    try { await provider().submit({idem_key:"k", to:"x", subject:"s", body:"b", headers:{}}); console.log("UNEXPECTED-SUCCESS"); }
+    try { await provider().submit({idem_key:"k", to:"one@example.test", subject:"s", body:"b", headers:{}}); console.log("UNEXPECTED-SUCCESS"); }
     catch (e) { console.log(e instanceof ProviderError ? "ProviderError:" + e.kind : "WRONG-ERROR:" + e.constructor.name); }'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"ProviderError:transport"* ]]
 }
 
-@test "the real provider refuses when no base URL is bound" {
+# Replaces "refuses when no base URL is bound": the base URL now DEFAULTS to Resend, so that
+# assertion would pass for the wrong reason forever. The credential is the binding now, and
+# each refusal is asserted by NAME so a test cannot pass on whichever config check happens to
+# fire first.
+@test "the real provider refuses, by name, for each piece of binding it is missing" {
   cd "$ARC_ROOT"
-  run env -u ARC_LEADS_FAKE -u LEADS_PROVIDER_BASE_URL node --input-type=module -e '
+  run env -u ARC_LEADS_FAKE -u RESEND_API_KEY -u ARC_LEADS_OUTREACH_FROM node --input-type=module -e '
     const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
-    try { await provider().submit({}); console.log("UNEXPECTED-SUCCESS"); } catch (e) { console.log(e.kind); }'
-  [[ "$output" == *"config"* ]]
+    const say = async (env, label) => { Object.assign(process.env, env);
+      try { await provider().submit({idem_key:"k", to:"one@example.test", subject:"s", body:"b"}); console.log(label + "=UNEXPECTED-SUCCESS"); }
+      catch (e) { console.log(label + "=" + e.kind + ":" + (e.message.match(/^[A-Z_]+/) || [e.message.slice(0,24)])[0]); } };
+    await say({}, "nokey");
+    await say({RESEND_API_KEY: "placeholder-not-a-key"}, "nofrom");'
+  [[ "$output" == *"nokey=config:RESEND_API_KEY"* ]]
+  [[ "$output" == *"nofrom=config:ARC_LEADS_OUTREACH_FROM"* ]]
+}
+
+# sendOne passes the keyed lead id (ADR-0400), not an address. Handing that to the vendor
+# would surface as a 400 that reads like a transport problem, so it is refused before any
+# network call -- resolving the id against the private store, and the rehearsal allowlist
+# refusal that belongs with it, are slice 04.
+@test "the real provider refuses a recipient that is a lead id rather than an address" {
+  cd "$ARC_ROOT"
+  run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" \
+      ARC_LEADS_OUTREACH_FROM="arc@example.test" LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" \
+      node --input-type=module -e '
+    const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    for (const to of ["lead_9f3a2b", "", null, "@example.test", "example.test@"]) {
+      try { await provider().submit({idem_key:"k", to, subject:"s", body:"b"}); console.log("UNEXPECTED-SUCCESS"); }
+      catch (e) { console.log(e.kind + (e.message.includes("not an address") ? ":not-an-address" : ":other")); } }'
+  [[ "$output" != *"UNEXPECTED-SUCCESS"* ]]
+  [[ "$output" != *":other"* ]]
+}
+
+# Resend names its ack field `id`; this repo's canonical field is provider_message_id. The
+# mapping is a parameter on the ONE decoder rather than a second decoder, so the status-code
+# rule has a single definition -- a drifted copy of it would be D5 in the function whose only
+# job is deciding what counts as an ack.
+@test "the Resend ack field is mapped to the canonical provider_message_id" {
+  cd "$ARC_ROOT"
+  run env -u ARC_LEADS_FAKE node --input-type=module -e '
+    const {decodeProviderResponse} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    console.log("mapped=" + decodeProviderResponse(200, JSON.stringify({id: "re_abc123"}), "id").provider_message_id);
+    try { decodeProviderResponse(200, JSON.stringify({id: "re_abc123"})); console.log("UNMAPPED-ACCEPTED"); }
+    catch (e) { console.log("unmapped=" + e.kind); }
+    try { decodeProviderResponse(500, JSON.stringify({id: "re_abc123"}), "id"); console.log("5XX-ACCEPTED"); }
+    catch (e) { console.log("5xx=" + e.kind); }'
+  [[ "$output" == *"mapped=re_abc123"* ]]
+  [[ "$output" == *"unmapped=refused"* ]]
+  [[ "$output" == *"5xx=transport"* ]]
+}
+
+# Returning [] would read as "nobody is suppressed" -- the fail-open this repo refuses.
+@test "the suppression list refuses rather than returning an empty list" {
+  cd "$ARC_ROOT"
+  run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" node --input-type=module -e '
+    const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    try { const r = await provider().suppressionList(); console.log("RETURNED:" + JSON.stringify(r)); }
+    catch (e) { console.log(e.kind + ":" + (e.message.includes("no general suppression list") ? "named" : "vague")); }'
+  [[ "$output" == *"config:named"* ]]
+  [[ "$output" != *"RETURNED"* ]]
 }
 
 # ---------- the ack decision (Phase 02) ----------
@@ -251,12 +314,12 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"in-step 1048576"* ]]
 }
 
-@test "this file registers the 22 tests it declares" {
+@test "this file registers the 25 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 22 ] || { echo "declared $declared, expected 22"; false; }
+  [ "$declared" -eq 25 ] || { echo "declared $declared, expected 25"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

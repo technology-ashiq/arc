@@ -164,7 +164,11 @@ const fakeSubmits = () => (_submits ||= new Map());
 // 2xx only. 429 and 5xx are transport-class because they are the retryable ones and ADR-0411's
 // reconcile decides whether to retry; 4xx is a refusal, because retrying a malformed request
 // only repeats it.
-export function decodeProviderResponse(statusCode, body) {
+// `idField` exists because Resend returns `{"id": "..."}` and this repo's canonical ack field
+// is `provider_message_id`. The mapping is a PARAMETER rather than a second decoder so the
+// status-code rule below has exactly one definition: a copy of it that drifted would be defect
+// class D5 in the one function whose whole job is deciding what counts as an ack.
+export function decodeProviderResponse(statusCode, body, idField = "provider_message_id") {
   const code = statusCode || 0;
   const buf = String(body == null ? "" : body);
   if (code < 200 || code >= 300) {
@@ -178,36 +182,133 @@ export function decodeProviderResponse(statusCode, body) {
   catch { throw new ProviderError("refused", `unparseable provider response (HTTP ${code})`); }
   // A 2xx with no message id is not an ack either: the receipt's provider_message_id is what
   // reconcile looks the send up by, and "" would make it unfindable forever.
-  if (!parsed || typeof parsed.provider_message_id !== "string" || !parsed.provider_message_id)
-    throw new ProviderError("refused", `provider returned HTTP ${code} with no provider_message_id — reconcile has nothing to look the send up by (ADR-0411)`);
-  return parsed;
+  const id = parsed == null ? undefined : parsed[idField];
+  if (typeof id !== "string" || !id)
+    throw new ProviderError("refused", `provider returned HTTP ${code} with no ${idField} — reconcile has nothing to look the send up by (ADR-0411)`);
+  // Always returns the CANONICAL field name whatever the vendor called it, so no caller
+  // downstream has to know which vendor is bound.
+  return { ...parsed, provider_message_id: id };
 }
 
-// The REAL provider with no vendor bound. It is a thin HTTPS client and nothing more; the
-// point of it existing now is that the code-path test can reach its own catch block.
+// ---------- the OUTREACH provider, bound to Resend (ADR-0416, phase 03 slice 03) ----------
+//
+// Separate from mailerReal above by ADR-0415: arc's own notification mail and the outreach
+// path share a vendor and a transport SHAPE, and share no policy, no allowlist and no quota.
+// Merging them is what would let an outreach bug reach the owner-notification path, or an
+// owner allowlist silently authorise a cold send.
+export const OUTREACH_BASE_URL_DEFAULT = "https://api.resend.com";
+
+// An address, not a lead id. `sendOne` passes `draft.lead_id` -- a keyed HMAC (ADR-0400) --
+// and the real implementation is what resolves it against the ADR-0410 private store. That
+// resolution, and the per-recipient allowlist refusal that belongs with it, are slice 04.
+// Until then this REFUSES rather than handing a hash to a vendor: a 400 from Resend would
+// look like a transport problem, and the receipt path must never see an ack for it.
+function assertResolvedRecipient(to) {
+  const s = String(to == null ? "" : to).trim();
+  if (!s.includes("@") || s.startsWith("@") || s.endsWith("@"))
+    throw new ProviderError("config", "submit() was handed a recipient that is not an address — sendOne passes the keyed lead id (ADR-0400) and resolving it against the private store, with the rehearsal allowlist refusal that goes with it, is phase-03 slice 04. Refusing before any network call rather than letting the vendor reject a hash.");
+  return s;
+}
+
+function resendRequest({ path, method, key, payload, timeout = 10000, idemKey = null }) {
+  const base = process.env.LEADS_PROVIDER_BASE_URL || OUTREACH_BASE_URL_DEFAULT;
+  const headers = {
+    // Bearer token in a header, never in the URL: a URL lands in proxy logs and in any
+    // redirect the client follows.
+    Authorization: `Bearer ${key}`,
+    "Content-Type": "application/json",
+  };
+  // ADR-0402's hard filter. ADR-0416 records what comes with it: the vendor retains these for
+  // 24 HOURS, after which "was this already sent?" has no answer, and an absent key must never
+  // be read as "never sent" -- that is the spine-first fallback reconcile owns.
+  if (idemKey !== null) headers["Idempotency-Key"] = String(idemKey);
+  if (payload !== undefined) headers["Content-Length"] = Buffer.byteLength(payload);
+  return new Promise((res, rej) => {
+    const req = httpsRequest(`${base}${path}`, { method, timeout, headers }, (r) => {
+      let buf = "";
+      r.on("data", (d) => (buf += d));
+      r.on("end", () => res({ statusCode: r.statusCode, body: buf }));
+    });
+    req.on("timeout", () => { req.destroy(); rej(new ProviderError("transport", "provider timed out")); });
+    req.on("error", (e) => rej(new ProviderError("transport", `provider unreachable: ${e.code || e.message}`)));
+    if (payload === undefined) req.end(); else req.end(payload);
+  });
+}
+
+function outreachKey() {
+  // The NAME is in the message and the value never is. This string reaches stderr and CI.
+  const key = process.env.RESEND_API_KEY;
+  if (!key) throw new ProviderError("config", "RESEND_API_KEY is unset — the outreach provider is not bound. Set it in .env.local (see .env.example).");
+  return key;
+}
+
 const providerReal = {
   async submit(body) {
-    const base = process.env.LEADS_PROVIDER_BASE_URL;
-    if (!base) throw new ProviderError("config", "LEADS_PROVIDER_BASE_URL is unset — no provider is bound until Phase-3 entry (ADR-0402)");
-    return new Promise((res, rej) => {
-      const req = httpsRequest(`${base}/send`, { method: "POST", timeout: 5000 }, (r) => {
-        let buf = "";
-        r.on("data", (d) => (buf += d));
-        // THE STATUS CODE DECIDES, and the body only then. The rule lives in
-        // decodeProviderResponse above, where a test can reach it without a TLS server.
-        r.on("end", () => {
-          try { res(decodeProviderResponse(r.statusCode, buf)); }
-          catch (e) { rej(e); }
-        });
-      });
-      req.on("timeout", () => { req.destroy(); rej(new ProviderError("transport", "provider timed out")); });
-      req.on("error", (e) => rej(new ProviderError("transport", `provider unreachable: ${e.code || e.message}`)));
-      req.end(JSON.stringify(body));
+    const key = outreachKey();
+    const to = assertResolvedRecipient(body && body.to);
+    const from = process.env.ARC_LEADS_OUTREACH_FROM;
+    if (!from) throw new ProviderError("config", "ARC_LEADS_OUTREACH_FROM is unset — a send needs an envelope sender, and it is deliberately NOT reused from the notification mailer (ADR-0415).");
+    const payload = JSON.stringify({
+      from, to: [to],
+      subject: (body && body.subject) || "",
+      text: (body && body.body) || "",
+      headers: (body && body.headers) || {},
     });
+    // THE STATUS CODE DECIDES, and the body only then. Resend names its ack field `id`; the
+    // rule and the mapping both live in decodeProviderResponse, where a test reaches them
+    // without needing a TLS server.
+    const { statusCode, body: buf } = await resendRequest({
+      path: "/emails", method: "POST", key, payload, idemKey: body && body.idem_key,
+    });
+    return decodeProviderResponse(statusCode, buf, "id");
   },
-  async lookupByMessageId() { throw new ProviderError("config", "no provider bound"); },
-  async suppressionList() { throw new ProviderError("config", "no provider bound"); },
-  async authStatus() { throw new ProviderError("config", "no provider bound"); },
+
+  async lookupByMessageId(id) {
+    const key = outreachKey();
+    if (!id) throw new ProviderError("config", "lookupByMessageId() needs a provider message id");
+    const { statusCode, body } = await resendRequest({ path: `/emails/${encodeURIComponent(id)}`, method: "GET", key });
+    // 404 is the ANSWER "the vendor has no record", not a failure to ask. Reconcile must be
+    // able to tell those apart: past the 24h retention an absent record means unknown, never
+    // "never sent" (ADR-0416).
+    if (statusCode === 404) return { found: false, provider_message_id: null, status: null };
+    const ack = decodeProviderResponse(statusCode, body, "id");
+    return { found: true, provider_message_id: ack.provider_message_id, status: ack.last_event || ack.status || "accepted" };
+  },
+
+  // Named refusal, not a stub. Resend exposes no general suppression endpoint -- its
+  // unsubscribe state lives per-audience under /audiences/:id/contacts, which is a different
+  // model from the one ADR-0402 assumes. Returning [] here would read as "nobody is
+  // suppressed" and is the exact fail-open this repo refuses; the real answer is that the
+  // rehearsal derives suppression from its own receipts (ADR-0411), and the cold-outbound
+  // vendor for phase 05 must satisfy the hard filter properly.
+  async suppressionList() {
+    throw new ProviderError("config", "Resend exposes no general suppression list — suppression is derived from receipts for the rehearsal (ADR-0411), and a vendor-side list is part of the phase-05 capability question. Refusing rather than returning an empty list that would read as nobody-is-suppressed.");
+  },
+
+  async authStatus() {
+    const key = outreachKey();
+    const { statusCode, body } = await resendRequest({ path: "/domains", method: "GET", key });
+    if (statusCode < 200 || statusCode >= 300)
+      throw new ProviderError(statusCode === 429 || statusCode >= 500 ? "transport" : "refused", `provider /domains returned HTTP ${statusCode} (${String(body).length} bytes, not echoed)`);
+    let parsed;
+    try { parsed = JSON.parse(String(body)); }
+    catch { throw new ProviderError("refused", `unparseable /domains response (HTTP ${statusCode})`); }
+    const domains = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.data) ? parsed.data : null);
+    if (!domains) throw new ProviderError("refused", "provider /domains response carried no domain list — refusing rather than reporting an unverified authentication status");
+    const want = String(process.env.ARC_LEADS_OUTREACH_FROM || "").split("@").pop().toLowerCase();
+    const row = domains.find((d) => d && String(d.name || "").toLowerCase() === want);
+    // No all-green default, and no all-green ABSENT default either: a domain the vendor does
+    // not list is not authenticated, and saying so is the whole contract of this call.
+    if (!row) return { spf: false, dkim: false, dmarc: null, warmup_days: null };
+    const verified = String(row.status || "").toLowerCase() === "verified";
+    // `dmarc: null` means THE VENDOR CANNOT ANSWER, which is a third state and not a false.
+    // Resend verifies SPF and DKIM as one domain status and does not evaluate DMARC at all.
+    // Returning `verified` here would invent a clause the vendor never checked -- the exact
+    // shape the fixture loader above was fixed for. Returning `false` would be equally wrong
+    // and would make the gate unpassable for a domain whose DMARC is fine. preflight resolves
+    // DMARC live from DNS, and that live row is the only honest source for it.
+    return { spf: verified, dkim: verified, dmarc: null, warmup_days: null };
+  },
 };
 export const provider = () => (usingFakes() ? providerFake : providerReal);
 
