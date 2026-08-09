@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-policy (Cycle 9, born 2026-08-06)
-phase: 04 — in progress (00, 01, 02, 03 all CLOSED)
+phase: 04 — CLOSED (all five phases done)
 appetite: 7d
-burn: 6.8d
-blocked-on: external — owner: 3 edits to .claude/settings.json
+burn: 7.0d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -27,9 +27,13 @@ depends-on: —
 | 01 | Headless enforcement — wire the Phase-0 decision into `arc-run` before any driver call, capability fixture matrix, deny-by-default at runtime, money guard with reservation flow and double-spend fixtures | 1.25 days | ✅ done 2026-08-07 |
 | 02 | Receipts and interactive — vocab ADR (+4 kinds), promotion chain end-to-end through the inbox, automatic demotion, hook fragments, static deny floor and its cross-check | 1.25 days | ✅ done 2026-08-07 |
 | 03 | Birth-rule and cap inventory, migration deferred by evidence | 0.25 days | ✅ done 2026-08-08 |
-| 04 | **Adversarial security pass — two full days, untouchable** | 2 days | 🟨 built and green; closes on the owner action |
+| 04 | **Adversarial security pass — two full days, untouchable** | 2 days | ✅ done 2026-08-10 |
 
-**Appetite burn: ~4.5 of 7 days used (64%).** Phases allocate **6.75 of 7 days; 0.25 days of slack**,
+**Appetite burn: 7.0 of 7 days used (100%) — every phase closed, no overrun.** The 0.25 days of
+slack went where the allocation said it could not come from: nowhere near Phase 4. It paid for the
+owner action's round trip on 2026-08-09/10, which was not in the plan because the plan did not
+predict that its own security phase would find a hole only the human could close. Phases allocate
+**6.75 of 7 days; 0.25 days of slack**,
 **never taken from Phase 4**. The allocation changed at kickoff, after the simulation gate: Phase
 0 went 1 → 2 days because a law-and-parser-only phase could not run its own runtime hostile
 families or exercise its own reducer, and Phase 3 went 0.5 → 0.25 because its migration is
@@ -45,6 +49,7 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
+| 2026-08-10 | **Phase 04 CLOSED — the last item was the owner's, and it took a different shape of asking.** The three `.claude/settings.json` edits are applied: `permissions.deny` **24 → 37** with ten entries naming a guard file, the write matcher now `Edit\|Write\|MultiEdit\|NotebookEdit`, and a third `PreToolUse` matcher (`mcp__.*\|Agent\|Task\|WebFetch\|WebSearch`) finally routing the per-server capability table `policy-hook.mjs` had carried unreachable since Phase 02. **What made them applicable was giving up on the diff** — the same three sat undone for a day as a document of three diffs, and closed in one sitting once they were two complete files to copy, generated from the live file so the result could be diffed byte-for-byte afterwards. Landed off `main` in PR #147, **not** inside absorb's open PR. `amendments: 0` · `reopened: 0` | CI **31329133765, 19/19 green** on `feat/policy-owner-settings` · `initiatives/policy/evidence/phase-04/owner-action.md` (state read back off the applied file, sha256 `019d160a…`) · `phase.closed` **`01KZKX2VM48QVVRTWM2CY2VBW5`** (read back off the spine, 0 quarantined) · the two tests that read the real file rather than a fixture of it: `policy-hook.bats` **LAYER 2** and **PHASE 04** |
 | 2026-08-08 | **Phase 04 — built, attacked, green and MERGED as `677b67e` (PR #130); NOT yet closed.** Two days, four fresh agents on two surfaces, **26 findings**: 23 closed in code, 2 rejected after measurement, 1 written up as an owner action. 17 new bats tests and **the hostile corpus grown 54 → 64 rows**, which is the phase's own exit check. The kill criterion **did not fire** — five findings look like that class (each a way for layer 1 not to run) and in every case the architecture was right and the wiring was wrong. **It cannot close until the three `.claude/settings.json` edits land**: an agent is refused that file by two independent layers, which is the rule working | CI **31245716829, 19/19 green** on `615cee0` · `initiatives/policy/evidence/phase-04/` (findings.md, live-demo.md, handoff.md) · [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md) |
 | 2026-08-08 | **Phase 03 CLOSED.** The birth rule in `kickoff-lint` (WARN-first in TRIAL), the resolution extracted to `lib/policy/subjects.mjs` so two gates read one relation from one place, and the 53-row cap inventory. **The inventory falsified REQ-07's own deferral premise** — `leads` is a live cap-bearing module — so the deferral now rests on "out of budget" rather than "nothing to migrate", with a named reopening owner. Its own adversarial pass: two agents, 20 findings, incl. the gate comparing the wrong string with a test pinning that blindness as correct, and 7 of 18 tests passing with the check deleted. `tests/kickoff-lint.bats` 48 → 71 | CI **31216027150, 19/19 green** on `074ef19` · `initiatives/policy/evidence/phase-03/cap-inventory.md` · `phase.closed` `01KZG4JYB2EV5NAHFCRXB44X4X` (read back off the spine, 0 quarantined) |
 | 2026-08-07 | **Phase 02 CLOSED.** The four authority receipts (ADR-0508, vocabulary 40 → 44) and the emitter branch that makes them writable; the promotion chain live end-to-end through `arc-inbox`; automatic demotion on an overreach; both ADR-0501 layers with the cross-check; brief and inbox rendering. **The phase found that none of the four kinds could be emitted at all** — `arc-event` had no idem branch, so every policy receipt was rejected and quarantined while the emitter exited 0. 5 bats suites, 67 tests. `amendments: 0` · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-02/` (live-demo.md, handoff.md, manifest) |
@@ -55,35 +60,42 @@ an unclosable bypass class → STOP.
 
 ## Now
 
-**Current position: 00, 01, 02 and 03 are CLOSED. Phase 04 is built, attacked, green and MERGED —
-`677b67e` (PR #130), 2026-08-08 — and stays OPEN on one item that is not an agent's to do.**
+**Current position: all five phases (00–04) are CLOSED. The cycle's build is done. The owner
+applied the three `.claude/settings.json` edits on 2026-08-09; Phase 04 closed 2026-08-10.**
 
-**Why it merged before it closed, which reverses the plan written here yesterday.** The plan said
+**Why 04 merged before it closed, which reversed the plan written on 2026-08-07.** The plan said
 nothing merges until 04 closes, and the reason was sound: do not land a half-finished security
-phase on main. It is no longer the situation. Every line of the phase is written, attacked and
-green on three CI legs; the single remaining item is a change to a file an agent is *refused by
-design*, so holding the branch does not bring it closer — it only keeps 26 closed findings out of
-the trunk while main sits in the weaker state the branch fixes. Merging is strictly the safer
-side. The owner reversed the hold explicitly on 2026-08-08.
+phase on main. It stopped being the situation. Every line of the phase was written, attacked and
+green on three CI legs; the single remaining item was a change to a file an agent is *refused by
+design*, so holding the branch did not bring it closer — it only kept 26 closed findings out of
+the trunk while main sat in the weaker state the branch fixed. The owner reversed the hold
+explicitly on 2026-08-08.
 
-### What Phase 04 is still waiting on
+### The owner action, applied — what actually closed it
 
-**Three edits to `.claude/settings.json`, written out with paste-ready diffs in
-[`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md).** That file is
-on the un-grantable resource list (ADR-0502) *and* in the harness's own `permissions.deny`, so an
-agent is refused `Edit` and `Write` on it by two independent layers. That is the rule working, and
-it is why these three are a document rather than a commit.
+The three edits landed via **PR #147** off `main`, receipted in
+[`evidence/phase-04/owner-action.md`](evidence/phase-04/owner-action.md) with the state read back
+off the applied file. Not on absorb's branch: absorb's PR (#138) was open mid-cycle, and policy's
+owner action riding inside it would have landed a second lane's change under absorb's review.
 
-1. **The deny floor does not cover the guard's own files.** 24 entries, none for
-   `.claude/hooks/**` or `.claude/scripts/hq/lib/policy/**`. With the hook disarmed — the shipped
-   default — one session can permanently disarm every future armed one, because nothing restores
-   what it removed. **Do this one first.**
-2. **The `Edit|Write` matcher misses `MultiEdit` and `NotebookEdit`.** Both write to disk.
-3. **The MCP surface reaches no policy check at all.** `policy-hook.mjs` carries a complete
-   per-server capability table that no matcher ever routes to — the same shape as the Edit/Write
-   hole this phase closed, one surface over. Live and unpoliced: `mcp__stripe__*` (real money,
-   which E2 forbids), `apply_migration`, `browser_run_code_unsafe`. **Do this one last and
-   separately** — it will be noisy, and noisy is it working.
+| # | The hole | Applied |
+|---|---|---|
+| 1 | The deny floor did not cover the guard's own files — with the hook disarmed (the shipped default) one session could permanently disarm every future armed one | `permissions.deny` **24 → 37**, ten entries naming a guard file |
+| 2 | `Edit\|Write` missed `MultiEdit` and `NotebookEdit`, both of which write to disk | matcher now `Edit\|Write\|MultiEdit\|NotebookEdit` |
+| 3 | `policy-hook.mjs` carried a complete per-server capability table no matcher ever routed to — `mcp__stripe__*` (real money, which E2 forbids), `apply_migration`, `browser_run_code_unsafe` all live and unpoliced | third `PreToolUse` matcher `mcp__.*\|Agent\|Task\|WebFetch\|WebSearch` |
+
+**What made these applicable at all was giving up on the diff.** They sat undone for a day as a
+document of three diffs, because a diff-shaped instruction is a task, and a task handed to the
+owner is the agent's job left undone. Regenerating the two whole files to paste — *from the live
+file*, so the paste could be compared byte-for-byte afterwards — closed all three in one sitting.
+`docs/owner-paste-STEP1-settings.json` / `STEP2` are the artifacts; the pattern is the finding.
+
+### What is deliberately still open, and is not a phase
+
+**REQ-07's migration of the 53-row cap inventory.** Deferred at Phase 03 on "out of budget", *not*
+on "nothing to migrate" — the inventory falsified that premise by finding `leads` is a live
+cap-bearing module. Named reopening owner is in the Phase 03 done-log row. The cycle's appetite is
+spent (7.0 of 7); this is next cycle's, or a `/arc-change` away from being scoped.
 
 ### Phase 04, in one screen
 

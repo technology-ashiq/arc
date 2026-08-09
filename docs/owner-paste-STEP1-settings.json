@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "defaultMode": "acceptEdits",
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npm run build)",
+      "Bash(npm run test:*)",
+      "Bash(npm run e2e)",
+      "Bash(git status)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(agent-browser:*)",
+      "mcp__supabase",
+      "mcp__playwright"
+    ],
+    "deny": [
+      "Bash(git push --force:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push origin master:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(rm -rf:*)",
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.*.local)",
+      "Read(./.env.production)",
+      "Read(./**/.env)",
+      "Read(./**/.env.local)",
+      "mcp__stripe__*",
+      "mcp__supabase__deploy_edge_function",
+      "mcp__supabase__apply_migration",
+      "mcp__supabase__create_branch",
+      "mcp__supabase__merge_branch",
+      "mcp__supabase__delete_branch",
+      "Edit(./.claude/settings.json)",
+      "Write(./.claude/settings.json)",
+      "Edit(./.claude/settings.local.json)",
+      "Write(./.claude/settings.local.json)",
+      "Edit(./hq.policy.yaml)",
+      "Write(./hq.policy.yaml)",
+      "Edit(./.claude/hooks/**)",
+      "Write(./.claude/hooks/**)",
+      "Edit(./.claude/scripts/hq/lib/policy/**)",
+      "Write(./.claude/scripts/hq/lib/policy/**)",
+      "Edit(./.claude/scripts/hq/policy-hook.mjs)",
+      "Write(./.claude/scripts/hq/policy-hook.mjs)",
+      "Edit(./.claude/scripts/hq/policy-lint.mjs)",
+      "Write(./.claude/scripts/hq/policy-lint.mjs)",
+      "Edit(./CONSTITUTION.md)",
+      "Write(./CONSTITUTION.md)",
+      "Write(./.claude/state/hq/events/**)",
+      "Edit(./.github/workflows/**)",
+      "Write(./.github/workflows/**)"
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/scripts/core/statusline.sh\""
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/SessionStart.sh"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/PreToolUse.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/PreToolUse-edit.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/PostToolUse.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/PreCompact.sh"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/SessionEnd.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "arc": {
+    "//profile": "strictness profile switches all gates as a set (ADR-0008 block-by-default). starter=warn-all | standard=block core + require code,security | strict=block all + full review set. Add an explicit coverageMode/docsGate/scanMode/requiredReviews key here to override the profile for one gate. Resolver: .claude/scripts/core/arc-profile.sh",
+    "profile": "standard",
+    "coverageFloor": 80,
+    "coverageSummary": "coverage/coverage-summary.json"
+  }
+}
