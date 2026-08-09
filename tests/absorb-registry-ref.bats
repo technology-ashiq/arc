@@ -50,13 +50,21 @@ setup() {
   [ "$status" -eq 0 ] || { echo "registry has no \$comment schema key"; false; }
 }
 
-# ADR-0606: the registry is born empty. The first row is written by the first real study (Phase 04),
-# which is also the first honest test of the row shape. The count comes from the implementation's
-# own summary line, so this cannot pass against a registry the tool failed to read.
-@test "the committed registry ships zero rows (ADR-0606 empty seed)" {
+# ADR-0606 seeded the registry EMPTY, and Phase 04's real study wrote its first row -- so "zero rows"
+# was true at Phase 00 and is now false by design. The assertion moved from a COUNT to the INVARIANT
+# the count was standing in for: every committed row resolves clean, and nothing is `adopted` without
+# an owner decision (REQ-07). A count would have to be edited on every future study; the invariant
+# holds forever.
+@test "every committed registry row resolves clean and none is adopted without a decision" {
   run _ref "$REAL_REGISTRY" "$REAL_LOCK"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"0 rows checked"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
+  # the loop RAN: a row count of zero would make "0 warnings" vacuous, which is what the old
+  # zero-rows assertion had quietly become once a real row existed.
+  [[ "$output" == *"row checked"* || "$output" == *"rows checked"* ]] || { echo "$output"; false; }
+  cd "$ARC_ROOT"
+  run node -e 'const r=JSON.parse(require("fs").readFileSync("products/absorb/registry.json","utf8"));const bad=r.techniques.filter(t=>(t.status==="adopted"||t.status==="retired")&&!(t.decision_refs&&(t.decision_refs.adopt||t.decision_refs.retire)));process.stdout.write(bad.length?("UNDECIDED: "+bad.map(t=>t.id).join(",")):"ok")'
+  [[ "$output" == "ok" ]] || { echo "$output"; false; }
 }
 
 # Structural validity is asserted THROUGH the real implementation rather than a second JSON reader:

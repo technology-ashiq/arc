@@ -125,14 +125,11 @@ fs.writeFileSync(p, JSON.stringify(s));
   [ ! -f "$BUNDLE/mapping.json" ] || { echo "the mapping was written despite the refusal"; false; }
 }
 
-@test "reveal with a decision writes the mapping and names the decision" {
-  _j seal --candidate T-01 --variants "absorbedvariant,oldvariant" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
-  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision 01ARZ3NDEKTSV4RRFFQ69G5FAV
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ -f "$BUNDLE/mapping.json" ]
-  grep -q "01ARZ3NDEKTSV4RRFFQ69G5FAV" "$BUNDLE/mapping.json" || { cat "$BUNDLE/mapping.json"; false; }
-  grep -q "absorbedvariant" "$BUNDLE/mapping.json" || { echo "the revealed mapping does not name the variants"; cat "$BUNDLE/mapping.json"; false; }
-}
+# DELETED and replaced by "a real decision naming a real pick reveals the mapping" further down.
+# This test handed reveal a hardcoded ULID that exists on no spine, and it PASSED -- which is
+# precisely blocker 1: the decision was believed rather than looked up. Once the lookup landed, the
+# test correctly went red. A test that only passes while the defect is present is a test FOR the
+# defect, so it goes rather than gets patched.
 
 # The bundle's published commitment is what the owner judged against. If it does not match the seal,
 # the judgement was made against a different mapping and is worthless.
@@ -279,7 +276,9 @@ process.stdout.write(JSON.stringify(keys));
   local h; h="$(_seal_hash leaky)"
   run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\",\"f3\"],\"labels\":[\"old\",\"new\"],\"commitment\":\"$h\",\"evidence_path\":\"p\",\"correlation\":\"c\"}"
   [[ "$output" == *"BAD_AB_JUDGEMENT"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"not blind"* ]] || { echo "$output"; false; }
+  # the message changed with the fix: a denylist said "not blind", the allowlist says what it is not
+  # a member OF. Asserting the old wording would have kept passing only while the denylist existed.
+  [[ "$output" == *"not one of the"* ]] || { echo "$output"; false; }
 }
 
 @test "duplicate labels are refused because one variant shown twice is not a comparison" {
@@ -342,5 +341,5 @@ process.stdout.write(JSON.stringify(keys));
 
 @test "absorb-judgement suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 27 ] || { echo "registered $registered tests, expected 27"; false; }
+  [ "$registered" -eq 26 ] || { echo "registered $registered tests, expected 26"; false; }
 }
