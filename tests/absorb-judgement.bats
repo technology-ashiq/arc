@@ -144,6 +144,95 @@ fs.writeFileSync(p, JSON.stringify(s));
   [[ "$output" == *"judged against a different mapping"* ]] || { echo "$output"; false; }
 }
 
+# ---------- the decision is LOOKED UP, never believed (Phase 03 blockers) ----------
+# v1 accepted ANY non-empty string as --decision, so the ordering property was a self-declaration:
+# `--decision "I made it up"` revealed the mapping. And ADR-0603 Amendment 1 said "absorb's chain
+# validates the pick= prefix" while nothing did -- the full chain ran green with the reason
+# "looks nicer" and no label ever named. One lookup closes both.
+
+# Emits a sealed judgement and returns its approval ULID on stdout.
+_emit_seal() { # $1 = correlation, $2 = evidence dir
+  local pl
+  pl="$(node -e 'const j=require(process.argv[1]);process.stdout.write(JSON.stringify({subject:"absorb.ab-judgement",candidate:j.candidate,fixtures:["f1","f2","f3"],labels:Object.keys(j.mapping),commitment:j.commitment,evidence_path:"scratch/b",correlation:j.correlation}))' "$ARC_ABSORB_SEAL_DIR/$1.json")"
+  cd "$ARC_ROOT" && bash "$EVENT" emit approval.requested --strict --payload "$pl" 2>&1 | tail -1
+}
+_last_decision() {
+  cd "$ARC_ROOT" && node --input-type=module -e 'const {query}=await import("./.claude/scripts/hq/spine.mjs");const {spineRoot}=await import("./.claude/scripts/hq/lib/spine-io.mjs");const e=(await query(spineRoot(),{kind:"decision.recorded"})).events;process.stdout.write(e.length?e[e.length-1].event.id:"NONE");'
+}
+_first_label() { node -e 'const j=require(process.argv[1]);process.stdout.write(Object.keys(j.mapping)[0])' "$ARC_ABSORB_SEAL_DIR/$1.json"; }
+
+@test "a non-ULID decision is refused" {
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision "I made it up"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"is not a ULID"* ]] || { echo "$output"; false; }
+  [ ! -f "$BUNDLE/mapping.json" ]
+}
+
+@test "a well-formed ULID that exists on no spine is refused" {
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision 01ARZ3NDEKTSV4RRFFQ69G5FAV
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"does not exist on the spine"* ]] || { echo "$output"; false; }
+  [ ! -f "$BUNDLE/mapping.json" ]
+}
+
+@test "a real decision whose reason names no pick is refused" {
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  local aid did
+  aid="$(_emit_seal "$CORR" "$BUNDLE")"
+  cd "$ARC_ROOT" && node .claude/scripts/hq/arc-inbox.mjs approve "$aid" --reason "looks nicer" >/dev/null 2>&1
+  did="$(_last_decision)"
+  [ "$did" != "NONE" ] || { echo "no decision was recorded, so this test proves nothing"; false; }
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision "$did"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *'does not start with "pick='* ]] || { echo "$output"; false; }
+  [ ! -f "$BUNDLE/mapping.json" ]
+}
+
+@test "a decision naming a label that is not this judgement's is refused" {
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  local aid did
+  aid="$(_emit_seal "$CORR" "$BUNDLE")"
+  cd "$ARC_ROOT" && node .claude/scripts/hq/arc-inbox.mjs approve "$aid" --reason "pick=notalabel; because" >/dev/null 2>&1
+  did="$(_last_decision)"
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision "$did"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"not one of this judgement"* ]] || { echo "$output"; false; }
+}
+
+# THE HAPPY PATH, which is what makes every refusal above meaningful: if this cannot pass, the
+# refusals are just a broken tool saying no to everything.
+@test "a real decision naming a real pick reveals the mapping and records the winner" {
+  _j seal --candidate T-01 --variants "absorbedvariant,oldvariant" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  local aid did lab
+  lab="$(_first_label "$CORR")"
+  aid="$(_emit_seal "$CORR" "$BUNDLE")"
+  cd "$ARC_ROOT" && node .claude/scripts/hq/arc-inbox.mjs approve "$aid" --reason "pick=$lab; it caught the case the other missed" >/dev/null 2>&1
+  did="$(_last_decision)"
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision "$did"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$BUNDLE/mapping.json" ]
+  grep -q "\"picked_label\": \"$lab\"" "$BUNDLE/mapping.json" || { cat "$BUNDLE/mapping.json"; false; }
+  grep -q '"decides_approval"' "$BUNDLE/mapping.json" || { echo "the reveal does not record which approval was decided"; false; }
+}
+
+# Nothing bound the pieces together before: a reveal succeeded against ANY bundle whose
+# commitment.txt happened to match, and against a decision on a different judgement entirely.
+@test "a decision on a DIFFERENT judgement cannot reveal this one" {
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "${CORR}a" >/dev/null
+  _j seal --candidate T-02 --variants "charlie,delta" --fixtures "f1,f2,f3" --evidence "$BATS_TEST_TMPDIR/b2" --correlation "${CORR}b" >/dev/null
+  local aid did lab
+  lab="$(_first_label "${CORR}b")"
+  aid="$(_emit_seal "${CORR}b" "$BATS_TEST_TMPDIR/b2")"
+  cd "$ARC_ROOT" && node .claude/scripts/hq/arc-inbox.mjs approve "$aid" --reason "pick=$lab; fine" >/dev/null 2>&1
+  did="$(_last_decision)"
+  # that decision belongs to judgement B; try to use it to reveal judgement A
+  run _j reveal --correlation "${CORR}a" --evidence "$BUNDLE" --decision "$did"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"DIFFERENT mapping"* || "$output" == *"decides correlation"* ]] || { echo "$output"; false; }
+}
+
 # ---------- the payload profile, enforced at the SPINE boundary ----------
 # These go through the real emitter, so they prove the profile is enforced where it cannot be
 # bypassed -- not merely inside absorb's own code.
@@ -253,5 +342,5 @@ process.stdout.write(JSON.stringify(keys));
 
 @test "absorb-judgement suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 21 ] || { echo "registered $registered tests, expected 21"; false; }
+  [ "$registered" -eq 27 ] || { echo "registered $registered tests, expected 27"; false; }
 }

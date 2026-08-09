@@ -79,6 +79,23 @@ exception to that; it is the case the rule is for.
 **Recorded rather than quietly reinterpreted**, because "pick + reason, both mandatory" reads like a
 schema and would have been implemented as one by the next reader.
 
+**Where it is enforced, added 2026-08-09 after the Phase 03 adversarial pass found it enforced
+NOWHERE.** This amendment originally said "absorb's chain validates that prefix" and nothing did: the
+full chain ran green with the reason `"looks nicer"` and no label was ever named. The enforcement point
+is `judgement.mjs reveal`, which now **looks the decision up on the spine** rather than believing the
+`--decision` argument, and refuses unless all five hold:
+
+1. the argument is a ULID (v1 accepted `--decision "I made it up"`),
+2. a `decision.recorded` with that id **exists**,
+3. its `decides` points at an `approval.requested` carrying `subject: "absorb.ab-judgement"`,
+4. that approval's `commitment` and `correlation` are **this seal's** — so a decision on a different
+   judgement cannot reveal this one, which it previously could,
+5. its `reason` starts with `pick=<label>; ` and that label is one of **this** judgement's blind labels.
+
+One lookup closes both. The reveal also records `decides_approval`, `verdict`, `picked_label` and
+`picked_variant` in `mapping.json`, so the bundle says what was chosen and on whose authority instead
+of only what the mapping was.
+
 
 **Easier.** "The owner judged this" becomes checkable: the seal proves the blinding, the reason
 proves it was a judgement rather than a pick, and the inbox chain already exists so no new reader
