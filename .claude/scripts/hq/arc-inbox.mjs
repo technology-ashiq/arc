@@ -18,6 +18,7 @@ import { dirname, join } from "node:path";
 import { SpineError, ULID_RE, sha256Hex } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { isPromotionRequest } from "./lib/validate-policy.mjs";
+import { isAbJudgement } from "./lib/validate-absorb.mjs";
 import { query } from "./spine.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -44,8 +45,13 @@ async function listInbox(root) {
   if (!open.length) { process.stderr.write("inbox: no open approvals\n"); return 0; }
   for (const e of open) {
     const p = e.event.payload || {};
-    const what = typeof p.what === "string" ? p.what : "";
-    const gate = typeof p.gate === "string" ? p.gate : "?";
+    // `what` falls back to `subject` so a PROFILE payload does not render as a blank line the owner
+    // cannot read. absorb's ab-judgement profile is closed to its validated fields (ADR-0603) and
+    // deliberately has no free-text `what`; without this fallback its inbox row printed as `(?)` with
+    // no description at all, which is a request the owner cannot weigh -- and an approval nobody can
+    // read is a rubber stamp with extra steps.
+    const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
+    const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
     process.stdout.write(`${e.event.id}  ${what}  (${gate})  ${e.event.venture}\n`);
     // A PROMOTION is the one approval whose sentence is not enough to decide on. Which pair,
     // how far, and on what evidence are all validated fields (ADR-0508's promotion profile), so
@@ -56,6 +62,16 @@ async function listInbox(root) {
       process.stdout.write(
         `    policy  ${p.action_kind}/${p.capability}  ${p.from_level} -> ${p.to_level}` +
         `  evidence ${p.trial_ledger_ref}\n`);
+    // Same reasoning for absorb's blind A/B (ADR-0603): the owner is picking between two labels that
+    // deliberately tell him NOTHING about which is which, so the fixtures and the evidence path are
+    // the only things he can actually weigh. Putting them where the decision is made is the
+    // difference between a judgement and a coin flip -- and the labels are printed so he knows which
+    // words are the legal answers.
+    if (isAbJudgement(e.event))
+      process.stdout.write(
+        `    absorb  candidate ${p.candidate}  pick one of: ${(p.labels || []).join(" | ")}\n` +
+        `            ${(p.fixtures || []).length} fixtures: ${(p.fixtures || []).join(", ")}\n` +
+        `            evidence ${p.evidence_path}  (sealed; the mapping is revealed only after you decide)\n`);
   }
   return 0;
 }

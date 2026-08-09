@@ -54,7 +54,31 @@ defined once, here, and why it is a one-way door — receipts written in it outl
 
 Defined once here. bench's brief gains its one inheritance line at bench's own kickoff, not now.
 
-## Consequences
+## Amendment 1 (2026-08-09, Phase 03) — the `pick` cannot be its own field, and rides in `reason`
+
+This ADR said `decision.recorded` carries **"pick + reason, both mandatory"**. Phase 03 found that
+is not implementable as written, and the discovery came from actually running the chain rather than
+from reading it.
+
+**`assertDecision` in `.claude/scripts/hq/lib/validate.mjs` closes `decision.recorded` to exactly
+`decides | verdict | reason`.** A fourth key is refused — by the same closed-shape discipline that
+makes the kind trustworthy. So a `pick` field cannot exist without widening a payload shape that
+**every lane** depends on, in the most shared file in the repo, while two other lanes are LIVE.
+
+**The pick therefore rides in `reason`, prefixed `pick=<label>; `**, and absorb's chain validates
+that prefix. The requirement is unchanged in substance — a decision still cannot be recorded without
+naming which blind label won and why — but it is carried by a field that already exists rather than
+by widening a shared contract.
+
+**Why not widen `assertDecision`.** Two reasons, and the second is the stronger. First, blast radius:
+every kind, every lane, every reader of the spine. Second, the closed shape is load-bearing *as a
+closed shape* — the value of "decision.recorded has exactly three keys" comes precisely from nobody
+being able to add a fourth for a good local reason. absorb having a good local reason is not an
+exception to that; it is the case the rule is for.
+
+**Recorded rather than quietly reinterpreted**, because "pick + reason, both mandatory" reads like a
+schema and would have been implemented as one by the next reader.
+
 
 **Easier.** "The owner judged this" becomes checkable: the seal proves the blinding, the reason
 proves it was a judgement rather than a pick, and the inbox chain already exists so no new reader
