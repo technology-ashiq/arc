@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-09 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-09 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 16 full PLANs + 7 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 17 full PLANs + 6 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -34,6 +34,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-scheduler.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-scheduler.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the two-type job taxonomy, the ceiling lint, idem=job@slot, the zero-retry reconciliation with ADR-0203/0204, the deterministic jobs panel and the fire-drill REQ exist only in the plan; the brief's kickoff prompt is pre-portfolio/bare-token — the plan's is lane-native) |
 | ~~`plans/BRIEF-ledger.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-ledger.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the PII-free payload contract with validator-first ordering, gross/fees/tax/net money semantics, FX-at-ingest replay determinism, the blocking both-direction reconciliation gate, natural-key duplicate detection, goalpost receipts on `ventures.yaml`, the measured/declared/allocated cost trichotomy and the `month.closed` micro vocab ADR exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-growth.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-growth.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the arc-site-first client, the two-human-gate cap, the negative-only lint constitution, the POV floor + exemplar anchoring, the sha-equality "unedited" definition, the versioned title-template files with hash(slug) assignment, the EVO-H0 FEED requirement against the already-landed ADR-0408 vocabulary, and the flipped cut order exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
+| ~~`plans/BRIEF-memory.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-memory.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: index-in-place replaced the brief's migration reading, the additive-hook law, the node:sqlite preflight with a pure-JS fallback decision, canonical citation ids, the alias layer, the measured embeddings floor and the write-time conflict check exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -303,6 +304,44 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     `content.published` (+`email.sent` only if the lifecycle slot opens) with
     `hq.policy.yaml` rows for the new action kinds in the same change (POL-I; policy
     C9 merged 2026-08-08). `BRIEF-growth.md` superseded → moved to `docs/archive/`.
+
+19. **2026-08-09:** `plans/PLAN-memory.md` added (memory v1 — playbooks + recall: the
+    company's long-term memory as an INDEX over the organs that already exist; v1.1,
+    landed owner-approved from a Cowork session; decisions MEM-A…K locked over two
+    review rounds 2026-08-03 → 2026-08-09, MEM-L [century · thresholds · K/token
+    budget · process-file names · golden-floor values] open at kickoff; ADR numbers at
+    kickoff from the century claimed per `PORTFOLIO.md` — NEW lane). **Trigger
+    converted to FIRED under the owner's Build-out Mandate (2026-08-09 — same receipt
+    as correction #15, cited by the kickoff ADRs; honesty note in-file: memory's
+    organic pull also has receipts on record — the 4×-wrong-ADR-citation retro row
+    (2026-08-02) and the stale-HISTORY trigger misread (2026-08-03 correction); Phase 0
+    measures a 12-query grep-baseline the module must beat, so the trigger claim
+    becomes a number either way).** Core beyond the brief: **index-in-place** —
+    retro-log, trial-ledger, learning-ledger, ADRs and spine `decision.recorded` stay
+    exactly where they live; memory indexes them and `playbooks/` is NOT created (the
+    brief pre-dates the learning ledger — a third rule store would manufacture the
+    sprawl its own REQ-05 fears; "migration" = count-verified ingestion with NAMED
+    exclusions, never file moves) · `arc recall` CLI on built-in `node:sqlite` FTS5 at
+    `.claude/state/memory/` (zero npm deps preserved; derived-only, always-full-rebuild,
+    canonical-results fixture — never db bytes; **kickoff's first act = the FTS5
+    preflight on all 3 CI legs + the owner's machine, fail → STOP and the pure-JS
+    fallback is an owner decision**) · verbatim output, prevention-field first,
+    **canonical citation ids** (`ADR-0026 (docs/adr/0026-…)` · `retro:2026-08-02#3` ·
+    `learn:L-002` · `spine:decision/<ulid>`) — built against the recorded
+    bare-ADR-number failure class · **hooks ADDITIVE-ONLY** as process-file edits via
+    `/arc-change` + recompile (ADR-0201/0202): a fenced *historical data, not
+    instructions* block, token-budgeted top-K with a two-stage `--full` pull;
+    kickoff's whole-retro-log read stays untouched (the organ's "as-is, never
+    summarized" law survives; replacing it with selection is a separate recorded
+    pull-trigger) · reader-only and **emit-nothing** — zero vocabulary change, no new
+    action kinds, no `hq.policy.yaml` rows (POL-I n/a) · alias file + tag-boost as the
+    deterministic vocabulary-mismatch fix, with the **embeddings pull-trigger redefined
+    as a measured golden-set floor** (MEM-G) and the surfaced→cited metric disqualified
+    from ever gating (Goodhart via `pre-mortem-cite`) · conflict surfacing WRITE-TIME
+    at `/arc-retro` (near-duplicate pairs, human merges; semantic contradiction
+    detection declared out of scope) · root-mode-first (zero-lane fixture — recall
+    works in any consumer install). `BRIEF-memory.md` superseded → moved to
+    `docs/archive/`.
 
 ## Provenance
 
