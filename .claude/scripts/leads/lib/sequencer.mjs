@@ -20,16 +20,21 @@ import { guardSend, GuardRefusal, acquireLock } from "./guard.mjs";
 import { writeIntent, resolveIntent, reconcile, idemKeyFor, unresolvedIntents } from "./journal.mjs";
 import { assertCampaignStore, readDraft, currentSha } from "./drafts.mjs";
 import { provider } from "./deps.mjs";
-import { loadConfig } from "./preflight.mjs";
+import { loadConfig, effectiveSendingDomain } from "./preflight.mjs";
 
 // Every send carries List-Unsubscribe (ADR-0402, a non-negotiable). The local part is a
 // constant; the DOMAIN comes from config, so the header always points at the domain the mail
 // was actually sent from. Assembled rather than written as a literal: this file is inside the
 // PII tripwire's scan scope and an email-shaped literal here is a violation by construction.
 const UNSUB_LOCAL = "unsubscribe";
-export function unsubscribeHeader(configPath) {
+// The domain comes from the SAME resolver preflight gates on (ADR-0416 rehearsal mode
+// substitutes rehearsal_domain for sending_domain). Reading cfg.sending_domain directly here
+// was the bug shape this lane has already paid for once: two readers deriving one fact by two
+// paths, so a rehearsal would have been gated on automemory.ai and then unsubscribed at a
+// domain that is empty or belongs to a different campaign entirely.
+export function unsubscribeHeader(configPath, env = process.env) {
   const cfg = loadConfig(configPath);
-  const domain = String(cfg.sending_domain || "").trim();
+  const { domain } = effectiveSendingDomain(cfg, env);
   if (!domain) throw new Error("no sending_domain configured — every send must carry a working List-Unsubscribe (ADR-0402)");
   return `<mailto:${UNSUB_LOCAL}@${domain}>`;
 }

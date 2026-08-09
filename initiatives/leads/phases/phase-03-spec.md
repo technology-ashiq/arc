@@ -26,10 +26,13 @@ counted as real first touches by any report, ever.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **`lib/provider.mjs` really bound to Resend** — the real implementation, not the fake, and
-      the Phase-00 contract suite runs green against it including the negative control (the real
-      impl pointed at an unreachable endpoint reaches its own code and exits with its own
-      failure code)
+**Order is load-bearing here, and the first draft of this list had it wrong** (fixed 2026-08-09,
+same day it was written). The provider-bind criterion was listed first, so `/arc-develop` handed
+out "bind the real Resend implementation" as slice 01 — before any slice that builds the
+rehearsal lock. That sequence puts a live send path on the product domain with nothing yet
+refusing a non-rehearsal send. **The guard is built and proven first; the real transport is bound
+onto a gate that already refuses.** The list below is in execution order, not importance order.
+
 - [ ] **The preflight gate actually opens, and opens for the right reason** (added 2026-08-09
       via `/arc-change`). `sending_domain` in `.claude/config/leads.json` is `""` today, and
       `preflight()` reads SPF for that domain **before** it reads DMARC — so it refuses at the
@@ -47,6 +50,11 @@ counted as real first touches by any report, ever.
       rehearsal mode **OFF** → **refused, citing ADR-0402** · product domain + rehearsal mode
       ON but the allowlist empty or absent → **refused** (rehearsal mode without a lock is the
       loophole, and it is the one an attacker reaches for first)
+- [ ] **`lib/provider.mjs` really bound to Resend** — the real implementation, not the fake, and
+      the Phase-00 contract suite runs green against it including the negative control (the real
+      impl pointed at an unreachable endpoint reaches its own code and exits with its own
+      failure code). **Bound only after the two criteria above are green**, so the transport is
+      attached to a gate that already refuses rather than to an open path
 - [ ] **Rehearsal mode, both properties fixture-proven before any real send**: a recipient
       outside the allowlist is refused **before any network call** · every rehearsal send
       carries its rehearsal mark in its receipt

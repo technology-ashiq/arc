@@ -47,6 +47,52 @@ export function domainConflict(sending, productDomains) {
   return null;
 }
 
+// ---- ADR-0416 rehearsal mode ----
+//
+// ADR-0416 narrowed ADR-0402 in PROSE and nothing enforced the narrowing: `product_domains`
+// did not even name `automemory.ai`, so the dedicated-domain refusal could not fire for the
+// one domain the ADR exists to control. This is that enforcement.
+//
+// THREE independent signals, all required, and the ABSENCE of any of them is the safe state:
+//
+//   declared — env ARC_LEADS_REHEARSAL=1. Deliberately an environment declaration and not a
+//              caller-passed argument: a function parameter someone forgets to pass defaults
+//              to permissive, whereas a missing env var refuses. Forgetting is fail-closed.
+//   locked   — env ARC_LEADS_REHEARSAL_ALLOWLIST with at least one ADDRESS-SHAPED entry.
+//              Shape is checked, not just non-emptiness: `ARC_LEADS_REHEARSAL_ALLOWLIST=yes`
+//              is otherwise a one-word unlock of the product domain.
+//   named    — the sending domain equals cfg.rehearsal_domain exactly. Without this, turning
+//              rehearsal on would unlock EVERY product domain, `lexos.app` included.
+//
+// Rehearsal mode is a property of the environment and the config, never of a call site.
+export function rehearsalMode(env = process.env) {
+  const declared = String(env.ARC_LEADS_REHEARSAL || "").trim() === "1";
+  const allowlist = String(env.ARC_LEADS_REHEARSAL_ALLOWLIST || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.includes("@") && !s.startsWith("@") && !s.endsWith("@"));
+  return { declared, locked: allowlist.length > 0, count: allowlist.length };
+}
+
+function normDomain(d) {
+  return String(d || "").trim().toLowerCase().replace(/\.$/, "");
+}
+
+// ONE resolver, used by preflight AND by the sequencer that builds List-Unsubscribe. Two
+// readers deriving the sending domain by two paths is how a send one counts becomes a send
+// the other does not -- this lane has already paid for that lesson once (ADR-0403 vs REQ-05).
+export function effectiveSendingDomain(cfg, env = process.env) {
+  const r = rehearsalMode(env);
+  const rehearsal = normDomain(cfg && cfg.rehearsal_domain);
+  if (r.declared && rehearsal) return { domain: rehearsal, rehearsal: true, mode: r };
+  return { domain: normDomain(cfg && cfg.sending_domain), rehearsal: false, mode: r };
+}
+
+export function effectiveDkimSelector(cfg, isRehearsal) {
+  if (isRehearsal) return (cfg && cfg.rehearsal_dkim_selector) || (cfg && cfg.dkim_selector) || "default";
+  return (cfg && cfg.dkim_selector) || "default";
+}
+
 async function txt(name) {
   try { return (await dns().resolveTxt(name)).map((r) => r.join("")); }
   catch { return []; }
@@ -58,21 +104,38 @@ async function txt(name) {
 // wrong twice over — it made two REQ-00 tests fail for a REQ-07 reason, which is the tell:
 // when a gate starts failing for reasons outside the question it asks, it has been given two
 // jobs. `arc-leads preflight` is the composition point; it runs both and reports both.
-export async function preflight({ config, warmupApproved = false } = {}) {
+export async function preflight({ config, warmupApproved = false, env = process.env } = {}) {
   const cfg = config || loadConfig();
   const findings = [];
   const refuse = (rule, detail) => findings.push({ ok: false, rule, detail });
   const pass = (rule, detail) => findings.push({ ok: true, rule, detail });
 
-  const domain = String(cfg.sending_domain || "").trim();
+  const eff = effectiveSendingDomain(cfg, env);
+  const domain = eff.domain;
+
+  // The substitution is ANNOUNCED, never silent. In rehearsal mode the configured
+  // sending_domain is not used at all, and a reader of this output must be able to see that
+  // without knowing the resolver's internals.
+  if (eff.rehearsal)
+    pass("rehearsal-mode", `ADR-0416 rehearsal mode is DECLARED — the domain under test is rehearsal_domain "${domain}"; the configured sending_domain ("${normDomain(cfg.sending_domain) || "empty"}") is not used for this run`);
+
   if (!domain) {
     refuse("sending-domain", "sending_domain is empty — no dedicated cold-outbound domain exists yet (ADR-0413). This is the honest committed value, and it refuses rather than passing vacuously");
     return { ok: false, findings };
   }
 
   const conflict = domainConflict(domain, cfg.product_domains);
-  if (conflict) refuse("dedicated-domain", conflict + " (ADR-0402)");
-  else pass("dedicated-domain", `${domain} is neither the product domain nor a subdomain of it`);
+  if (conflict) {
+    const r = eff.mode;
+    if (!r.declared)
+      refuse("dedicated-domain", conflict + " (ADR-0402)");
+    else if (!eff.rehearsal)
+      refuse("dedicated-domain", conflict + " — ARC_LEADS_REHEARSAL=1 is declared, but rehearsal_domain is unset in config, so rehearsal mode has no named domain to bind and this fell through to sending_domain. Rehearsal mode unlocks ONE named domain, never whatever happens to be configured (ADR-0416)");
+    else if (!r.locked)
+      refuse("dedicated-domain", conflict + " — rehearsal mode is declared and named, but ARC_LEADS_REHEARSAL_ALLOWLIST holds no address-shaped entry. Rehearsal mode without a lock is not rehearsal mode: the lock is the whole of what makes ADR-0416 narrower than ADR-0402 (ADR-0416)");
+    else
+      pass("dedicated-domain", `${domain} IS a product domain, permitted ONLY because ADR-0416 rehearsal mode is declared, named and locked to ${r.count} allowlisted recipient(s)`);
+  } else pass("dedicated-domain", `${domain} is neither the product domain nor a subdomain of it`);
 
   // ---- live DNS, not a file ----
   const spf = (await txt(domain)).filter((r) => r.startsWith("v=spf1"));
@@ -83,7 +146,7 @@ export async function preflight({ config, warmupApproved = false } = {}) {
   else if (/p\s*=\s*none/.test(dmarc[0])) refuse("dmarc", `DMARC policy is p=none — published but not enforcing: ${dmarc[0]}`);
   else pass("dmarc", dmarc[0]);
 
-  const selector = cfg.dkim_selector || "default";
+  const selector = effectiveDkimSelector(cfg, eff.rehearsal);
   const dkim = await txt(`${selector}._domainkey.${domain}`);
   dkim.length ? pass("dkim", `${selector}._domainkey resolves`) : refuse("dkim", `no DKIM TXT at ${selector}._domainkey.${domain} (live lookup)`);
 
