@@ -8,6 +8,7 @@ import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, s
 import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
+import { isAbJudgement, assertAbJudgement } from "./validate-absorb.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -351,6 +352,9 @@ export function validateEvent(event) {
   // A PROFILE, not a kind: approval.requested stays generic for every other gate in the repo,
   // and only a payload declaring subject: "policy.promotion" is held to the strict shape.
   if (isPromotionRequest(event)) assertPromotionRequest(event);
+  // The same pattern for absorb's owner-judge receipt (ADR-0603 / ABS-D): only a payload declaring
+  // subject: "absorb.ab-judgement" is held to its shape, so the closed vocabulary gains ZERO kinds.
+  if (isAbJudgement(event)) assertAbJudgement(event);
   if (typeof event.outcome !== "string" || !OUTCOMES.has(event.outcome))
     throw new SpineError("BAD_OUTCOME", `outcome ${JSON.stringify(event.outcome)} is outside ok|fail|partial (exact case)`);
   assertCost(event.cost);

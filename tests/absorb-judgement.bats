@@ -1,0 +1,223 @@
+#!/usr/bin/env bats
+# Phase 03 -- the sealed blind A/B and its receipt chain (REQ-06, REQ-07 / ADR-0603).
+#
+# TWO PROPERTIES, and the ORDER between them is the whole thing:
+#   1. the label-to-variant mapping is committed by HASH before the owner sees anything, and the
+#      plaintext is not in the bundle and not in git until a decision.recorded exists
+#   2. the payload is strict IN BOTH DIRECTIONS at the SPINE boundary -- unknown keys refused, and
+#      every required key's absence refused BY NAME
+#
+# WHY THE COMMITMENT EXISTS AT ALL. The first design was an honour system: the plaintext mapping sat
+# on disk from the start and the only control was one code path declining to display it. The owner
+# doing the judging has a filesystem. A commit-and-reveal hash makes "sealed" true regardless of
+# which door is used to look, and it is stdlib so A2 holds.
+#
+# ASCII-only test names -- bats silently DROPS a non-ASCII @test name, so this file asserts its own
+# registered count at the bottom.
+bats_require_minimum_version 1.5.0
+load 'test_helper'
+
+J=".claude/scripts/absorb/judgement.mjs"
+EVENT=".claude/scripts/hq/arc-event.sh"
+
+_j() { cd "$ARC_ROOT" && node "$J" "$@"; }
+
+# A payload built from parts so each test mutates exactly one thing.
+_payload() { # $1 = a jq-free JSON body override applied by sed on the base
+  printf '%s' "$1"
+}
+
+_seal_hash() { node -e 'process.stdout.write(require("crypto").createHash("sha256").update(process.argv[1]).digest("hex"))' "$1"; }
+
+# BOTH state doors are redirected into the test tmpdir. Without ARC_SPINE_ROOT these tests would
+# append real events to the repo's own spine on every CI run of every leg, and without
+# ARC_ABSORB_SEAL_DIR they would write seals into the shared repo state where two parallel shards
+# could collide. Test-only env doors, the same convention spine-emit.bats already uses.
+setup() {
+  CORR="bats-${BATS_TEST_NUMBER}"
+  BUNDLE="$BATS_TEST_TMPDIR/bundle"
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  export ARC_ABSORB_SEAL_DIR="$BATS_TEST_TMPDIR/seals"
+  mkdir -p "$ARC_SPINE_ROOT" "$ARC_ABSORB_SEAL_DIR"
+  SEAL_FILE="$ARC_ABSORB_SEAL_DIR/$CORR.json"
+}
+
+# ---------- the seal ----------
+
+@test "seal randomizes labels and puts NO mapping in the bundle" {
+  run _j seal --candidate T-01 --variants "absorbed=a.mjs,old=b.mjs" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # the payload came back and carries a commitment
+  [[ "$output" == *'"subject":"absorb.ab-judgement"'* ]] || { echo "$output"; false; }
+  [[ "$output" == *'"commitment":"'* ]] || { echo "$output"; false; }
+  # and the BUNDLE reveals nothing: no variant path, no variant name
+  [ -f "$BUNDLE/commitment.txt" ]
+  [ ! -f "$BUNDLE/mapping.json" ]
+  run grep -c -E "a\.mjs|b\.mjs|absorbed" "$BUNDLE/commitment.txt"
+  [ "$output" -eq 0 ] || { echo "the bundle leaks the mapping:"; cat "$BUNDLE/commitment.txt"; false; }
+}
+
+# A label that names its variant is not blind, so none is ever generated.
+@test "generated labels carry no information about what they label" {
+  run _j seal --candidate T-01 --variants "absorbed=a.mjs,old=b.mjs" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
+  [ "$status" -eq 0 ]
+  for leaky in old new before after absorbed rebuilt baseline control arc ours theirs original; do
+    [[ "$output" != *"\"$leaky\""* ]] || { echo "a generated label leaks: $leaky"; echo "$output"; false; }
+  done
+}
+
+@test "fewer than three fixtures is refused because REQ-03 requires three" {
+  run _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2" --evidence "$BUNDLE" --correlation "$CORR"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"at least 3"* ]] || { echo "$output"; false; }
+}
+
+@test "resealing the same correlation is refused" {
+  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"already exists"* ]] || { echo "$output"; false; }
+}
+
+@test "verify confirms the seal hashes to its own commitment" {
+  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j verify --correlation "$CORR"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"OK"* ]]
+}
+
+# The negative control for `verify`: it must FAIL on a tampered seal, or it proves nothing.
+@test "verify FAILS when the mapping is edited after sealing" {
+  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  node -e '
+const fs = require("fs"); const p = process.argv[1];
+const s = JSON.parse(fs.readFileSync(p, "utf8"));
+const k = Object.keys(s.mapping)[0];
+s.mapping[k] = "swapped-after-sealing.mjs";
+fs.writeFileSync(p, JSON.stringify(s));
+' "$SEAL_FILE"
+  run _j verify --correlation "$CORR"
+  [ "$status" -eq 3 ] || { echo "verify did not notice a tampered mapping; the commitment proves nothing"; echo "$output"; false; }
+  [[ "$output" == *"MISMATCH"* ]]
+}
+
+# ---------- the reveal, and its ordering ----------
+
+@test "reveal without a decision is refused" {
+  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE"
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"ONLY after a decision"* ]] || { echo "$output"; false; }
+  [ ! -f "$BUNDLE/mapping.json" ] || { echo "the mapping was written despite the refusal"; false; }
+}
+
+@test "reveal with a decision writes the mapping and names the decision" {
+  _j seal --candidate T-01 --variants "absorbed=a.mjs,old=b.mjs" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision 01ARZ3NDEKTSV4RRFFQ69G5FAV
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -f "$BUNDLE/mapping.json" ]
+  grep -q "01ARZ3NDEKTSV4RRFFQ69G5FAV" "$BUNDLE/mapping.json" || { cat "$BUNDLE/mapping.json"; false; }
+  grep -q "a.mjs" "$BUNDLE/mapping.json" || { echo "the revealed mapping does not name the variants"; cat "$BUNDLE/mapping.json"; false; }
+}
+
+# The bundle's published commitment is what the owner judged against. If it does not match the seal,
+# the judgement was made against a different mapping and is worthless.
+@test "reveal refuses when the bundle's commitment is not the seal's" {
+  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  printf '%s\n' "0000000000000000000000000000000000000000000000000000000000000000" > "$BUNDLE/commitment.txt"
+  run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision 01ARZ3NDEKTSV4RRFFQ69G5FAV
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"judged against a different mapping"* ]] || { echo "$output"; false; }
+}
+
+# ---------- the payload profile, enforced at the SPINE boundary ----------
+# These go through the real emitter, so they prove the profile is enforced where it cannot be
+# bypassed -- not merely inside absorb's own code.
+
+_emit() { cd "$ARC_ROOT" && bash "$EVENT" emit approval.requested --payload "$1" 2>&1; }
+
+@test "a well-formed ab-judgement payload is accepted by the spine" {
+  local h; h="$(_seal_hash well-formed)"
+  run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\",\"f3\"],\"labels\":[\"crimson\",\"harbor\"],\"commitment\":\"$h\",\"evidence_path\":\"p\",\"correlation\":\"$CORR\"}"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" != *"BAD_AB_JUDGEMENT"* ]] || { echo "$output"; false; }
+}
+
+@test "an unknown key in the profile is refused by name" {
+  local h; h="$(_seal_hash unknown-key)"
+  run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\",\"f3\"],\"labels\":[\"crimson\",\"harbor\"],\"commitment\":\"$h\",\"evidence_path\":\"p\",\"correlation\":\"c\",\"sneaky\":\"x\"}"
+  [[ "$output" == *"BAD_AB_JUDGEMENT"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"sneaky"* ]] || { echo "the refusal did not name the unknown key"; echo "$output"; false; }
+}
+
+# The likelier real slip, and the direction v1 of the spec did not promise: a payload assembled
+# programmatically that dropped a field.
+@test "every required key's absence is refused by name" {
+  local h; h="$(_seal_hash missing)"
+  for missing in candidate fixtures labels commitment evidence_path correlation; do
+    run node -e '
+const keys = { subject: "absorb.ab-judgement", candidate: "T-01", fixtures: ["f1","f2","f3"],
+               labels: ["crimson","harbor"], commitment: process.argv[2], evidence_path: "p", correlation: "c" };
+delete keys[process.argv[1]];
+process.stdout.write(JSON.stringify(keys));
+' "$missing" "$h"
+    local pl="$output"
+    run _emit "$pl"
+    [[ "$output" == *"BAD_AB_JUDGEMENT"* ]] || { echo "dropping $missing was accepted"; echo "$output"; false; }
+    [[ "$output" == *"$missing"* ]] || { echo "the refusal did not name the missing key $missing"; echo "$output"; false; }
+  done
+}
+
+@test "a leaky label is refused at the spine even if something else generated it" {
+  local h; h="$(_seal_hash leaky)"
+  run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\",\"f3\"],\"labels\":[\"old\",\"new\"],\"commitment\":\"$h\",\"evidence_path\":\"p\",\"correlation\":\"c\"}"
+  [[ "$output" == *"BAD_AB_JUDGEMENT"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"not blind"* ]] || { echo "$output"; false; }
+}
+
+@test "duplicate labels are refused because one variant shown twice is not a comparison" {
+  local h; h="$(_seal_hash dup)"
+  run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\",\"f3\"],\"labels\":[\"crimson\",\"crimson\"],\"commitment\":\"$h\",\"evidence_path\":\"p\",\"correlation\":\"c\"}"
+  [[ "$output" == *"distinct"* ]] || { echo "$output"; false; }
+}
+
+@test "a commitment that is not a sha256 hex is refused" {
+  run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\",\"f3\"],\"labels\":[\"crimson\",\"harbor\"],\"commitment\":\"not-a-hash\",\"evidence_path\":\"p\",\"correlation\":\"c\"}"
+  [[ "$output" == *"BAD_AB_JUDGEMENT"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"commitment"* ]] || { echo "$output"; false; }
+}
+
+@test "fewer than three fixtures is refused at the spine as well as at the seal" {
+  local h; h="$(_seal_hash twofix)"
+  run _emit "{\"subject\":\"absorb.ab-judgement\",\"candidate\":\"T-01\",\"fixtures\":[\"f1\",\"f2\"],\"labels\":[\"crimson\",\"harbor\"],\"commitment\":\"$h\",\"evidence_path\":\"p\",\"correlation\":\"c\"}"
+  [[ "$output" == *"at least 3"* ]] || { echo "$output"; false; }
+}
+
+# A generic approval.requested must stay generic: the profile applies ONLY to payloads declaring the
+# subject, or absorb would have broken every other gate in the repo.
+@test "an approval.requested without the subject is untouched by the profile" {
+  run _emit '{"what":"an ordinary gate","gate":"something-else"}'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" != *"BAD_AB_JUDGEMENT"* ]] || { echo "the profile leaked onto a generic approval"; echo "$output"; false; }
+}
+
+# ---------- REQ-07: nothing adopts itself, in either direction ----------
+
+@test "no absorb script writes an adopted or retired status" {
+  cd "$ARC_ROOT"
+  # A grep is a weak guard, so it is paired with the registry lint's own decision-ref check, which is
+  # what actually enforces this. This catches a future edit that introduces the capability.
+  run bash -c "grep -nE '\"(adopted|retired)\"' .claude/scripts/absorb/*.mjs | grep -vE 'STATUSES|status ===|status \\|\\||not one of|closed|// ' || true"
+  [ -z "$output" ] || { echo "an absorb script may be writing a terminal status directly:"; echo "$output"; false; }
+}
+
+@test "judgement.mjs never touches the registry" {
+  cd "$ARC_ROOT"
+  run grep -c "registry.json" "$J"
+  [ "$output" -eq 0 ] || { echo "judgement.mjs references the registry; it is propose-only"; false; }
+}
+
+@test "absorb-judgement suite registers every test it defines" {
+  registered=${#BATS_TEST_NAMES[@]}
+  [ "$registered" -eq 20 ] || { echo "registered $registered tests, expected 20"; false; }
+}

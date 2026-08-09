@@ -10,6 +10,15 @@
 > kept stable across the review rounds) and get real ADR numbers at kickoff from the
 > next free slot (pack convention — see `../README.md` correction #2).
 > Recommended appetite: **M-tier** (final number = owner's call at kickoff step 1).
+>
+> **Freeze-log addition — 2026-08-09, by the absorb lane (Cycle 10, REQ-05).** §7.1a "The team leader
+> and the toolbox" was added by absorb, not by develop, following the EVO-H0 precedent that
+> enablement lands in the CLIENT's cycle. It teaches the team leader to consult the technique registry
+> and the capability lock at brief time, adds `technique` to the Capability-Proposal verdict set (which
+> had no such value, so ADR-0604's referral rule had nothing to hook into), and records the cap,
+> displacement, retire-review and propose-only rules. **The freeze is not broken by this:** a
+> cross-lane addition is legitimate when the receiving plan gets this line, which is the whole point of
+> the line. ADR-0604 records the boundary ruling. Nothing else in this file was touched.
 > Built via `/arc-kickoff --lane develop` using the paste-ready prompt in Appendix B.
 >
 > **Lane amendment (2026-08-02):** re-grounded against the post-Cycle-4 repo — the
@@ -292,6 +301,55 @@ definition itself (exfil patterns, curl-pipe-sh, undeclared tool scopes) · leas
 privilege · **write-capable MCPs require explicit Ashiq OK**. Stars/repo-age = advisory
 context only, never a pass criterion. Lint blocks any capability used without a PASS row.
 Same-stack reuse via the lockfile; staleness re-check after 30 days.
+
+#### 7.1a · The team leader and the toolbox (added by absorb Cycle 10, REQ-05)
+
+> **Landed by another lane, on purpose.** This section was written by the **absorb** lane on
+> 2026-08-09 as its REQ-05, following the EVO-H0 precedent that *enablement lands in the client's
+> cycle*: the lane that builds a capability writes the section that teaches its client to use it.
+> ADR-0604 records the boundary ruling so this is not re-litigated in review — a cross-lane diff is
+> legitimate absorb-cycle work when the receiving plan gets a freeze-log line, which this one has.
+> **Every duty below is a harness STEP, never a standing agent or daemon.**
+
+develop's team leader has a toolbox with two drawers, and the point of this section is that it must
+**look in both** before deciding anything is missing.
+
+**At brief time, consult both — in this order:**
+
+1. **`products/absorb/registry.json`** — techniques arc has already studied. A `status: adopted` row
+   means the technique is *already in arc* and there is nothing to acquire; a `retired` row means it
+   was tried and dropped, and the row says why. Reading this first is what stops the same technique
+   being re-studied every cycle.
+2. **`.claude/scripts/develop/capability-lock.json`** — executables arc has already vetted and
+   pinned. Same-stack reuse is free; a fresh vet is not.
+
+**Receipted use, per slice.** A slice that leans on a registry technique or a locked capability says
+so in its ledger row. This is the detection machinery for absorb's fourth trigger arm — a capability
+turning *load-bearing* is discovered from receipted use across cycles, never from scanning. No radar,
+no scheduled scan; that no-go stands.
+
+**The Capability-Proposal verdict set gains a fourth value: `technique`.** Until absorb existed, a
+scout that found a technique gap had to file it as `refused here` or `unknown`, and neither routes
+anywhere. Now:
+
+| verdict | meaning |
+|---|---|
+| `worth vetting` | an installable artifact — proceed to `capability-vet.sh` |
+| `technique` | **not an artifact.** The gap is a way of working, so it is expressible as an edit to arc's own files. Refer to absorb (ADR-0604) |
+| `refused here` | rejected, with the reason |
+| `unknown` | not determinable from what was read |
+
+**The cap, and displacement.** At most **12 adopted techniques per lane**. At the cap, a new adoption
+**names what it displaces**, and the retire proposal rides with it. The cap is countable only because
+the registry is one file with a lane on every row — which is why forking it per lane is refused
+rather than merely discouraged.
+
+**Retro retire-review.** Any adopted technique unused for **2 cycles** gets a retire *proposal* at the
+retro. Unused is read from the per-slice use receipts above.
+
+**Propose-only, in both directions.** Adoption and retirement each end as an inbox item carrying a
+reason, and no code path writes those statuses directly (absorb REQ-07). A tool arriving is a
+decision; a tool leaving is also a decision.
 
 ### 7.2 · DEV-D — Pattern mining (decision-triggered)
 

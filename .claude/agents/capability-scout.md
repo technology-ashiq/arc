@@ -30,7 +30,13 @@ One table, one row per candidate:
 - **quality evidence** — what you VERIFIED. Whether a version resolves, whether an integrity
   hash is published, whether namespace authentication exists, whether a build attestation
   exists, when it was last released, what its declared scope is.
-- **verdict** — `worth vetting` · `refused here` · `unknown`.
+- **verdict** — `worth vetting` · **`technique`** · `refused here` · `unknown`.
+  - **`technique`** means the gap is **not an installable artifact**: it is a way of working, so it is
+    expressible as an edit to arc's own files rather than as a dependency. Route it to the **absorb**
+    lane (ADR-0604), which studies it read-only and rebuilds it natively. Added 2026-08-09 by absorb
+    Cycle 10 REQ-05 — until then a scout finding a technique gap had to file it as `refused here` or
+    `unknown`, and **neither routes anywhere**, so ADR-0604's referral rule had nothing to hook into.
+    Use it when what impressed you is *how* the tool works rather than *what* it ships.
 
 ## The rules that make this useful rather than dangerous
 
