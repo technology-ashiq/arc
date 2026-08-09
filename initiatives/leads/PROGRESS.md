@@ -196,7 +196,7 @@ reported as a one-row gate. A blocker list derived from the last failure is not 
 
 | # | Entry gate row | State on 2026-08-09 | Who clears it |
 |---|---|---|---|
-| 1 | `_dmarc.automemory.ai` resolves **and** enforces | **CLEARED.** Live lookup against 8.8.8.8 returns `v=DMARC1; p=quarantine; rua=mailto:…@dmarc-reports.cloudflare.net,mailto:hello@automemory.ai`. Published by the owner after the 2026-08-08 header read | owner — done |
+| 1 | `_dmarc.automemory.ai` resolves **and** enforces | **CLEARED.** Live lookup against 8.8.8.8 returns a `v=DMARC1` record with **`p=quarantine`** and two `rua=` reporting mailboxes (addresses redacted — ADR-0410 applies to every address in a tracked file, not only to lead addresses; the policy tag is the fact that matters here, the reporting inbox is not). Published by the owner after the 2026-08-08 header read | owner — done |
 | 2 | `sending_domain` in `.claude/config/leads.json` is non-empty | **OPEN.** It is `""`. `preflight()` looks up SPF for that domain **before** it looks up DMARC, so it refuses at the SPF row and the DMARC row never executes. **This, not the DNS record, is what actually stops the rehearsal today** — and it would have stopped it on 2026-08-08 too, with the same DMARC text on screen | Phase 03 build |
 | 3 | `product_domains` names `automemory.ai` | **OPEN.** The list is `["lexos.app"]` only, so ADR-0402's `dedicated-domain` refusal **cannot fire** for `automemory.ai` — bind it and `preflight()` reports it as a perfectly good dedicated domain. ADR-0416 narrowed ADR-0402 to *product domain only in rehearsal mode*, and today **no code enforces that narrowing**; `preflight.mjs` contains the string `rehearsal` zero times | Phase 03 build |
 
