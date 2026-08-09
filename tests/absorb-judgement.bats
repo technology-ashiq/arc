@@ -45,7 +45,7 @@ setup() {
 # ---------- the seal ----------
 
 @test "seal randomizes labels and puts NO mapping in the bundle" {
-  run _j seal --candidate T-01 --variants "absorbed=a.mjs,old=b.mjs" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
+  run _j seal --candidate T-01 --variants "absorbedvariant,oldvariant" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # the payload came back and carries a commitment
   [[ "$output" == *'"subject":"absorb.ab-judgement"'* ]] || { echo "$output"; false; }
@@ -53,34 +53,48 @@ setup() {
   # and the BUNDLE reveals nothing: no variant path, no variant name
   [ -f "$BUNDLE/commitment.txt" ]
   [ ! -f "$BUNDLE/mapping.json" ]
-  run grep -c -E "a\.mjs|b\.mjs|absorbed" "$BUNDLE/commitment.txt"
+  run grep -c -E "absorbedvariant|oldvariant" "$BUNDLE/commitment.txt"
   [ "$output" -eq 0 ] || { echo "the bundle leaks the mapping:"; cat "$BUNDLE/commitment.txt"; false; }
 }
 
 # A label that names its variant is not blind, so none is ever generated.
-@test "generated labels carry no information about what they label" {
-  run _j seal --candidate T-01 --variants "absorbed=a.mjs,old=b.mjs" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
-  [ "$status" -eq 0 ]
-  for leaky in old new before after absorbed rebuilt baseline control arc ours theirs original; do
-    [[ "$output" != *"\"$leaky\""* ]] || { echo "a generated label leaks: $leaky"; echo "$output"; false; }
+# THE BLINDING TEST THAT ACTUALLY FAILS WHEN BLINDING IS DELETED. The v1 version grepped for a list
+# of leaky words; a mutant that set `labels = variants.slice()` emitted "absorbed=a.mjs" and "old=b.mjs"
+# -- the variant names shown straight to the owner -- and BOTH v1 assertions PASSED, because the
+# substring `"old"` with quotes never appears in `"old=b.mjs"`. A denylist in the test repeated the
+# denylist mistake in the code.
+@test "generated labels are pool members and share no substring with any variant" {
+  run _j seal --candidate T-01 --variants "absorbedvariant,oldvariant" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local labels
+  labels="$(node -e 'const p=JSON.parse(process.argv[1]); process.stdout.write(p.labels.join(" "))' "$(printf '%s' "$output" | head -1)")"
+  [ -n "$labels" ] || { echo "no labels in the payload"; echo "$output"; false; }
+  # 1. every label is a POOL member -- the only form of this check a mutant cannot talk around
+  for l in $labels; do
+    grep -q "\"$l\"" "$ARC_ROOT/.claude/scripts/hq/lib/validate-absorb.mjs"       || { echo "label $l is not in LABEL_POOL, so blinding was bypassed"; false; }
+  done
+  # 2. and no label shares a substring with either supplied variant
+  for l in $labels; do
+    case "absorbedvariant" in *"$l"*) echo "label $l is a substring of a variant name"; false ;; esac
+    case "oldvariant" in *"$l"*) echo "label $l is a substring of a variant name"; false ;; esac
   done
 }
 
 @test "fewer than three fixtures is refused because REQ-03 requires three" {
-  run _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2" --evidence "$BUNDLE" --correlation "$CORR"
+  run _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2" --evidence "$BUNDLE" --correlation "$CORR"
   [ "$status" -eq 2 ]
   [[ "$output" == *"at least 3"* ]] || { echo "$output"; false; }
 }
 
 @test "resealing the same correlation is refused" {
-  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
-  run _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  run _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR"
   [ "$status" -eq 2 ]
   [[ "$output" == *"already exists"* ]] || { echo "$output"; false; }
 }
 
 @test "verify confirms the seal hashes to its own commitment" {
-  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
   run _j verify --correlation "$CORR"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"OK"* ]]
@@ -88,7 +102,7 @@ setup() {
 
 # The negative control for `verify`: it must FAIL on a tampered seal, or it proves nothing.
 @test "verify FAILS when the mapping is edited after sealing" {
-  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
   node -e '
 const fs = require("fs"); const p = process.argv[1];
 const s = JSON.parse(fs.readFileSync(p, "utf8"));
@@ -104,7 +118,7 @@ fs.writeFileSync(p, JSON.stringify(s));
 # ---------- the reveal, and its ordering ----------
 
 @test "reveal without a decision is refused" {
-  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
   run _j reveal --correlation "$CORR" --evidence "$BUNDLE"
   [ "$status" -eq 3 ]
   [[ "$output" == *"ONLY after a decision"* ]] || { echo "$output"; false; }
@@ -112,18 +126,18 @@ fs.writeFileSync(p, JSON.stringify(s));
 }
 
 @test "reveal with a decision writes the mapping and names the decision" {
-  _j seal --candidate T-01 --variants "absorbed=a.mjs,old=b.mjs" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  _j seal --candidate T-01 --variants "absorbedvariant,oldvariant" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
   run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision 01ARZ3NDEKTSV4RRFFQ69G5FAV
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ -f "$BUNDLE/mapping.json" ]
   grep -q "01ARZ3NDEKTSV4RRFFQ69G5FAV" "$BUNDLE/mapping.json" || { cat "$BUNDLE/mapping.json"; false; }
-  grep -q "a.mjs" "$BUNDLE/mapping.json" || { echo "the revealed mapping does not name the variants"; cat "$BUNDLE/mapping.json"; false; }
+  grep -q "absorbedvariant" "$BUNDLE/mapping.json" || { echo "the revealed mapping does not name the variants"; cat "$BUNDLE/mapping.json"; false; }
 }
 
 # The bundle's published commitment is what the owner judged against. If it does not match the seal,
 # the judgement was made against a different mapping and is worthless.
 @test "reveal refuses when the bundle's commitment is not the seal's" {
-  _j seal --candidate T-01 --variants "a=x,b=y" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
+  _j seal --candidate T-01 --variants "alpha,bravo" --fixtures "f1,f2,f3" --evidence "$BUNDLE" --correlation "$CORR" >/dev/null
   printf '%s\n' "0000000000000000000000000000000000000000000000000000000000000000" > "$BUNDLE/commitment.txt"
   run _j reveal --correlation "$CORR" --evidence "$BUNDLE" --decision 01ARZ3NDEKTSV4RRFFQ69G5FAV
   [ "$status" -eq 3 ]
@@ -134,7 +148,11 @@ fs.writeFileSync(p, JSON.stringify(s));
 # These go through the real emitter, so they prove the profile is enforced where it cannot be
 # bypassed -- not merely inside absorb's own code.
 
-_emit() { cd "$ARC_ROOT" && bash "$EVENT" emit approval.requested --payload "$1" 2>&1; }
+# --strict is LOAD-BEARING. Without it arc-event.sh exits 0 on a refusal (hook mode quarantines the
+# event instead of failing), so every `status -eq 0` assertion here could not fail and the accept-cases
+# were vacuous: the adversarial pass emitted a payload that was quarantined with ZERO events written
+# and both assertions still passed.
+_emit() { cd "$ARC_ROOT" && bash "$EVENT" emit approval.requested --strict --payload "$1" 2>&1; }
 
 @test "a well-formed ab-judgement payload is accepted by the spine" {
   local h; h="$(_seal_hash well-formed)"
@@ -203,12 +221,28 @@ process.stdout.write(JSON.stringify(keys));
 
 # ---------- REQ-07: nothing adopts itself, in either direction ----------
 
-@test "no absorb script writes an adopted or retired status" {
+# Matches ASSIGNMENT syntax, which is what the rule is actually about. The first version excluded
+# `status ===` but not `status !==`, so a pure READ of a status tripped its own guard and this test
+# was RED on the tree it shipped with -- the adversarial pass found it before CI did. And the
+# exclusion list itself was the bug: filtering out any line containing `// ` meant
+# `row.status = "adopted"; // absorb promotes its own candidate` was invisible to it. Matching what a
+# WRITE looks like needs no exclusion list at all.
+@test "no absorb script assigns an adopted or retired status" {
   cd "$ARC_ROOT"
-  # A grep is a weak guard, so it is paired with the registry lint's own decision-ref check, which is
-  # what actually enforces this. This catches a future edit that introduces the capability.
-  run bash -c "grep -nE '\"(adopted|retired)\"' .claude/scripts/absorb/*.mjs | grep -vE 'STATUSES|status ===|status \\|\\||not one of|closed|// ' || true"
-  [ -z "$output" ] || { echo "an absorb script may be writing a terminal status directly:"; echo "$output"; false; }
+  run bash -c "grep -nE '(status|\\.status)\\s*=\\s*[\"'\\'']?(adopted|retired)' .claude/scripts/absorb/*.mjs || true"
+  [ -z "$output" ] || { echo "an absorb script assigns a terminal status directly:"; echo "$output"; false; }
+}
+
+# The guard's own negative control: it must FIRE on a line that does assign, or it proves nothing --
+# including the commented form that defeated the first version.
+@test "the terminal-status guard fires on an assignment, comment or not" {
+  local m="$BATS_TEST_TMPDIR/mutant.mjs"
+  printf 'row.status = "adopted";\n' > "$m"
+  run bash -c "grep -nE '(status|\\.status)\\s*=\\s*[\"'\\'']?(adopted|retired)' '$m' || true"
+  [ -n "$output" ] || { echo "the guard does not fire on a bare assignment"; false; }
+  printf 'row.status = "adopted"; // absorb promotes its own candidate\n' > "$m"
+  run bash -c "grep -nE '(status|\\.status)\\s*=\\s*[\"'\\'']?(adopted|retired)' '$m' || true"
+  [ -n "$output" ] || { echo "a trailing comment hid the assignment, which is how v1 was defeated"; false; }
 }
 
 @test "judgement.mjs never touches the registry" {
@@ -219,5 +253,5 @@ process.stdout.write(JSON.stringify(keys));
 
 @test "absorb-judgement suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 20 ] || { echo "registered $registered tests, expected 20"; false; }
+  [ "$registered" -eq 21 ] || { echo "registered $registered tests, expected 21"; false; }
 }
