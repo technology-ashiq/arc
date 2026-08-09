@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-06 — PLAN-absorb promoted; same day: Constitution adopted v1.0)
+## File map & status (updated 2026-08-09 — PLAN-executor promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 12 full PLANs + 11 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 13 full PLANs + 10 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -30,6 +30,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-leads.md`~~ | **MOVED → `docs/archive/`** (2026-08-03) | Superseded by `plans/PLAN-leads.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: PII/store/HMAC/journal rules exist only in the plan) |
 | ~~`plans/BRIEF-policy.md`~~ | **MOVED → `docs/archive/`** (2026-08-04) | Superseded by `plans/PLAN-policy.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: the two-key authority state machine, spend-under-E2 definition, typed event profiles and the hook feasibility gate exist only in the plan) |
 | ~~`plans/BRIEF-absorb.md`~~ | **MOVED → `docs/archive/`** (2026-08-06) | Superseded by `plans/PLAN-absorb.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan past the brief: the fourth load-bearing trigger arm + two-speed operating model, the sealed-blind owner-judge mechanics, the ABS-C allowlist candidate, the ≥2-cycles threshold assumption, and the stale-0400-century correction exist only in the plan) |
+| ~~`plans/BRIEF-executor.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-executor.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger, the capability-gap verdict arm, the 12-fixture real-runtime Isolation Certification Suite, credential-capped budgets with calibration receipts, context-pack batch/angle/feedback semantics, `review_by:` tenure + the termination spec, the EXE-K freedom clause and the unlock ladder exist only in the plan) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -168,6 +169,40 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     once here — bench inherits it at its own kickoff. Kickoff gates in-file: live
     slot free (A9) · venture-clock ruling (ADR-0071) resolved · receipted trigger
     evidence. `BRIEF-absorb.md` superseded → moved to `docs/archive/`.
+
+15. **2026-08-09:** `plans/PLAN-executor.md` added (executor v1 — agent-runtime drivers,
+    Hermes-Agent/OpenClaw-class, as ENG-D engine-lane drivers; v2.0 build-out edition,
+    landed owner-instructed from a Cowork session). **Trigger converted to FIRED — the
+    owner's Build-out Mandate (2026-08-09): arc is the sole priority, ventures
+    deprioritized, no trigger-waiting; the mandate is recorded as `decision.recorded` in
+    Phase 0 and cited by the kickoff ADRs (A8's letter kept). Honesty note: no friction
+    receipt exists and none is invented — REQ-07 runs its capability-gap verdict arm
+    (per-draft accept/reject receipts), not a fabricated performance baseline.** Core
+    hardening beyond the brief: isolation **certified against the REAL runtime** (12
+    fixtures incl. memory-plant + pinned-config egress audit; mock-green = regression,
+    never certification — the Mode B lesson) · money enforced **at the credential**
+    (capped key = POL-F's pre-approved provider budget) with wall-clock budgets
+    calibrated from receipts, never guessed · the router delta adds `review_by:` tenure
+    (2 weeks, owner-ruled; load-time enforced — expiry refuses dispatch and emits one
+    idempotent rejustify-or-retire proposal) + a termination spec (key revoke = instant
+    leash) · the hire itself flows `approval.requested` → `decision.recorded`, and the
+    `hq.policy.yaml` row lands in the same change (POL-I birth-rule) · context packs
+    (human-approved `external-ok`; batch 1-pack→N-dispatches; angle freedom;
+    feedback-via-pack — the contractor learns from the briefing while its persistent
+    memory stays OFF) · the **EXE-K freedom clause** (the ADR-0049 lesson made law for
+    contractors: constrain boundaries, verify outcomes, never prescribe the runtime's
+    internal method; review = accept/reject + reason, never line-edits) · the **unlock
+    ladder** (probation → batch cadence → sampling at ≥10 accepted/0 incidents → POL-G
+    L2 eligibility → scheduler-era unattended runs; every rung a receipted human
+    decision, no time-decay). Decisions EXE-A…K named as letters; real ADR numbers at
+    kickoff from the engine lane's century band. Six owner rulings recorded in-file
+    (appetite FULL 1.5w · landing · `review_by:` 2w · messaging re-scope · trigger
+    cultivation · rung-2 threshold; two superseded same-day by the mandate, marked as
+    such). Cross-plan: the L1-drafts ceiling is POL-G seen from the driver side — now
+    enforced in code (policy C9 merged 2026-08-08, PR #130) · executor's drafts,
+    verdict receipts and scrubbed transcripts are the un-manufactured evidence base for
+    growth, bench and absorb's future cycles. `BRIEF-executor.md` superseded → moved to
+    `docs/archive/`.
 
 ## Provenance
 
