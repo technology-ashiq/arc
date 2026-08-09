@@ -45,7 +45,26 @@ evolve's experiment machinery is **not** used, and EVO-G's first-client seat sta
 **Flipping this requires an evolve-side ruling** — never an absorb-side convenience, and never a
 decision made because wiring it up looked easy on the day.
 
-## Consequences
+## Amendment 1 (2026-08-09, Phase 02) — the bundle lives under the LANE, not under `docs/evidence/`
+
+This ADR said absorb's PLANOFF bundle goes to `docs/evidence/absorb/`, mirroring
+`docs/evidence/planner-bench/`. **That contradicts two rules that were already in force**, and Phase
+02 found it while creating the directory:
+
+- `.claude/rules/lanes.md`: *"`docs/evidence/**` and `docs/archive/**` are **frozen**: the sole
+  canonical copy of pre-portfolio history. Lanes link to history, never copy it (ADR-0058)."*
+- ADR-0055: evidence is **lane-scoped forward**, at `initiatives/<lane>/evidence/…`.
+
+Mirroring `planner-bench`'s *location* was the wrong inference from mirroring its *layout*.
+`planner-bench` sits in the frozen area because it predates the portfolio split; a lane born in
+Cycle 10 does not get to join it.
+
+**The bundle path is `initiatives/absorb/evidence/planoff/`.** The protocol / scoring / RESULTS
+layout and the append-only `LEDGER.md` are unchanged — that half of the decision was about FORM, and
+the form is what ADR-0605 actually chose. The bundle carries a link to
+`docs/evidence/planner-bench/LEDGER.md` so the two remain readable side by side, which is what
+"comparable" required all along. **Lanes link to history; they do not extend it.**
+
 
 **Easier.** absorb ships without depending on an unexercised machine, and its evidence is in a
 format the repo already reads. evolve's first real client stays the one it was designed around.

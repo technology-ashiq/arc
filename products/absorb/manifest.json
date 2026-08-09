@@ -10,6 +10,7 @@
   ],
   "agents": [],
   "scripts": [
+    ".claude/scripts/absorb/rebuild-lint.mjs",
     ".claude/scripts/absorb/registry-ref.mjs",
     ".claude/scripts/absorb/report-lint.mjs",
     ".claude/scripts/absorb/study.mjs"

@@ -39,8 +39,14 @@ const normKey = (k) => String(k).toLowerCase().replace(/[-_]/g, "");
 // shape at exactly {name, version}, so anything else in it is a copy or a mistake.
 const LOCK_REF_KEYS = new Set(["name", "version"]);
 
+const STATUSES = new Set(["candidate", "trial", "adopted", "retired"]);
+const ADOPTED_CAP = 12; // ADR-0600 / REQ-04, counted PER LANE
+
 const warnings = [];
 const warn = (group, msg) => warnings.push(`WARN  [${group}] ${msg}`);
+const seenIds = new Set();
+const adopted = [];
+const displacers = [];
 
 const die = (msg) => {
   console.error(`registry-ref: ${msg}`);
@@ -101,6 +107,46 @@ for (let i = 0; i < rows.length; i++) {
     }
   }
 
+  // ---------- row shape and status lifecycle (Phase 02, REQ-04 / REQ-07) ----------
+  if (typeof row.id !== "string" || !/^T-\d{2,}$/.test(row.id || "")) {
+    warn("shape", `${label}: id must be T-NN form (zero-padded), it is what every other warning names`);
+  } else if (seenIds.has(row.id)) {
+    warn("shape", `${row.id}: duplicate id -- ids are unique within the registry`);
+  } else {
+    seenIds.add(row.id);
+  }
+
+  const status = row.status;
+  if (!STATUSES.has(status)) {
+    warn("status", `${label}: status ${JSON.stringify(status)} is not one of ${[...STATUSES].join(" | ")}`);
+  }
+  if (typeof row.lane !== "string" || !row.lane) {
+    warn("shape", `${label}: no lane -- the cap of ${ADOPTED_CAP} is counted PER LANE, so a row with no lane is uncountable`);
+  }
+  if (row.review_by !== undefined && row.review_by !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(row.review_by))) {
+    warn("shape", `${label}: review_by "${row.review_by}" is not an ISO date`);
+  }
+
+  // REQ-07, both directions: nothing adopts or retires itself. A transition into either terminal
+  // status needs a decision.recorded reference, and the harness offers no path that writes them.
+  const refs = (row.decision_refs && typeof row.decision_refs === "object" && !Array.isArray(row.decision_refs)) ? row.decision_refs : {};
+  if (status === "adopted" && !refs.adopt) {
+    warn("decision-ref", `${label}: status adopted with no decision_refs.adopt -- adoption ends in the inbox with the owner's reason, and nothing adopts itself (REQ-07)`);
+  }
+  if (status === "retired" && !refs.retire) {
+    warn("decision-ref", `${label}: status retired with no decision_refs.retire -- retirement is proposed too, in the same direction (REQ-07)`);
+  }
+  if (status === "adopted" || status === "retired") {
+    if (!row.classification_ref) {
+      warn("shape", `${label}: status ${status} with no classification_ref -- a technique cannot be adopted or retired without the report that classified it`);
+    }
+    if (!row.evidence || (Array.isArray(row.evidence) && row.evidence.length === 0)) {
+      warn("evidence", `${label}: status ${status} with no evidence -- REQ-03 requires the A/B results to travel WITH the proposal`);
+    }
+  }
+  if (status === "adopted") adopted.push(row);
+  if (row.displaces !== undefined && row.displaces !== null) displacers.push(row);
+
   const ref = row.lock_ref;
   if (ref === undefined || ref === null) continue; // nullable: a technique need not be executable
 
@@ -136,6 +182,38 @@ for (let i = 0; i < rows.length; i++) {
     );
   } else if (hits.length > 1) {
     warn("lock-ref", `${label}: lock_ref ${name}@${version} resolves to ${hits.length} rows — the lock has duplicates`);
+  }
+}
+
+// ---------- the cap and its displacement rule (REQ-04) ----------
+// The anti-hoarding control. It is countable only because the registry is ONE file with a lane on
+// every row (A5, ADR-0600) -- per-lane forks would have made the cap unenforceable, which is why
+// forking it was refused rather than merely discouraged.
+{
+  const byLane = new Map();
+  for (const r of adopted) {
+    const lane = typeof r.lane === "string" && r.lane ? r.lane : "(no lane)";
+    byLane.set(lane, (byLane.get(lane) || 0) + 1);
+  }
+  for (const [lane, n] of byLane) {
+    if (n > ADOPTED_CAP) {
+      warn("cap", `lane "${lane}" holds ${n} adopted techniques, over the cap of ${ADOPTED_CAP} -- a new adoption at the cap names its displacement and the retire proposal rides with it`);
+    } else if (n === ADOPTED_CAP) {
+      warn("cap", `lane "${lane}" is AT the cap of ${ADOPTED_CAP} -- the next adoption must name what it displaces`);
+    }
+  }
+
+  // A displacement must point at something real, and at something actually retired. A `displaces`
+  // naming a row that is still adopted is the cap being satisfied on paper only.
+  const byId = new Map();
+  for (const r of rows) if (r && typeof r === "object" && !Array.isArray(r) && typeof r.id === "string") byId.set(r.id, r);
+  for (const r of displacers) {
+    const target = byId.get(String(r.displaces));
+    if (!target) {
+      warn("cap", `${r.id || "a row"}: displaces "${r.displaces}", which is not a row in this registry`);
+    } else if (target.status !== "retired") {
+      warn("cap", `${r.id || "a row"}: displaces "${r.displaces}", whose status is "${target.status}" rather than retired -- a displacement that retires nothing does not free a slot`);
+    }
   }
 }
 

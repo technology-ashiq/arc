@@ -53,6 +53,8 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-07 | birth-rule (kickoff-lint) | registered at birth, policy Phase 03 | not yet | — |
 | 2026-08-09 | heading, inventory, id, row-field (report-lint) | registered at birth, absorb Phase 00 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
 | 2026-08-09 | lock-ref, duplication (registry-ref) | registered at birth, absorb Phase 00 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
+| 2026-08-09 | status, cap, decision-ref, evidence, shape (registry-ref) | registered at birth, absorb Phase 02 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
+| 2026-08-09 | allowlist, deps, attribution (rebuild-lint) | registered at birth, absorb Phase 02 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
 | 2026-08-07 | birth-rule (kickoff-lint) | arc's own tree, all 8 lanes | no — silent on every lane | **n/a — NOT counted as 8 clean runs, and not as one.** See below |
 
 ### `birth-rule` — why its silence proves nothing yet (policy Phase 03, REQ-07)

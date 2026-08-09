@@ -1,0 +1,21 @@
+# ADR-0602 (ABS-C) -- the ONLY paths an absorb rebuild may land on.
+#
+# THIS FILE IS THE LINT-READABLE COPY OF ADR-0602's DECISION, and it lives here rather than being
+# retyped inside a script because the ADR says the allowlist lives in ONE place. A test asserts this
+# file and the ADR agree, so the two cannot drift.
+#
+# Widening the allowlist is an AMENDMENT to ADR-0602. It is never a convenience edit made while
+# mid-rebuild, and it is never an argument made in a PR description.
+#
+# Syntax: one glob per line, `#` comments, blank lines ignored. `**` matches across directory
+# separators; `*` does not.
+#
+# EXPLICITLY OUT, and named here so a reader does not have to infer it from absence: engine code ·
+# spine and hq scripts · .claude/settings.json · .github/** workflows · anything executable by a
+# hook. Absence is the rule -- an allowlist defaults to closed -- but a self-editing loop deserves
+# the dangerous paths written down.
+
+processes/**
+docs/playbooks/**
+.claude/commands/**
+tests/**

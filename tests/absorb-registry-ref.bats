@@ -241,6 +241,120 @@ MUTANT
   [[ "$output" != *"[lock-ref]"* ]] || { echo "mutant emitted a lock-ref warning; the assertion is not discriminating"; false; }
 }
 
+# ---------- Phase 02: status lifecycle, the cap, and its displacement rule ----------
+
+_write_rows() { cat > "$1"; }   # stdin = a whole registry JSON
+
+@test "a status outside the closed four is reported" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [ { "id": "T-01", "name": "t", "status": "maybe", "lane": "absorb" } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[status]"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"candidate | trial | adopted | retired"* ]] || { echo "$output"; false; }
+}
+
+# REQ-07, both directions. Nothing adopts itself and nothing retires itself.
+@test "adopted without a decision ref is reported, and so is retired" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [
+  { "id": "T-01", "name": "a", "status": "adopted", "lane": "absorb", "classification_ref": "r.md", "evidence": ["e"] },
+  { "id": "T-02", "name": "b", "status": "retired", "lane": "absorb", "classification_ref": "r.md", "evidence": ["e"] } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"T-01: status adopted with no decision_refs.adopt"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"T-02: status retired with no decision_refs.retire"* ]] || { echo "$output"; false; }
+}
+
+@test "an adopted row with its decision ref, classification and evidence is clean" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [
+  { "id": "T-01", "name": "a", "status": "adopted", "lane": "absorb",
+    "classification_ref": "initiatives/absorb/evidence/phase-04/report.md",
+    "evidence": ["initiatives/absorb/evidence/planoff/PLANOFF-A/RESULTS.md"],
+    "decision_refs": { "adopt": "01KZJT81XTQMTX90WSZ7SAY3FH" }, "review_by": "2026-11-09" } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption without the A/B evidence that must travel with it is reported" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [
+  { "id": "T-01", "name": "a", "status": "adopted", "lane": "absorb", "classification_ref": "r.md",
+    "evidence": [], "decision_refs": { "adopt": "01ABC" } } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[evidence]"* ]] || { echo "$output"; false; }
+}
+
+# The cap is countable ONLY because the registry is one file with a lane on every row. A row with no
+# lane is uncountable, which would make the anti-hoarding control unenforceable rather than merely
+# inaccurate -- so it is reported.
+@test "a row with no lane is reported because the cap is counted per lane" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [ { "id": "T-01", "name": "t", "status": "candidate" } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no lane"* ]] || { echo "$output"; false; }
+}
+
+@test "exceeding the cap of 12 adopted in one lane is reported" {
+  cd "$ARC_ROOT"
+  node -e '
+const rows = [];
+for (let i = 1; i <= 13; i++) {
+  rows.push({ id: "T-" + String(i).padStart(2, "0"), name: "t" + i, status: "adopted", lane: "absorb",
+              classification_ref: "r.md", evidence: ["e"], decision_refs: { adopt: "01ABC" } });
+}
+require("fs").writeFileSync(process.argv[1], JSON.stringify({ $comment: "x", techniques: rows }));
+' "$REG"
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[cap]"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"over the cap of 12"* ]] || { echo "$output"; false; }
+}
+
+# A displacement that retires nothing does not free a slot -- the cap satisfied on paper only.
+@test "a displacement naming a row that is not retired is reported" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [
+  { "id": "T-01", "name": "old", "status": "adopted", "lane": "absorb", "classification_ref": "r.md",
+    "evidence": ["e"], "decision_refs": { "adopt": "01A" } },
+  { "id": "T-02", "name": "new", "status": "adopted", "lane": "absorb", "classification_ref": "r.md",
+    "evidence": ["e"], "decision_refs": { "adopt": "01B" }, "displaces": "T-01" } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rather than retired"* ]] || { echo "$output"; false; }
+}
+
+@test "a displacement naming a row that does not exist is reported" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [
+  { "id": "T-02", "name": "new", "status": "candidate", "lane": "absorb", "displaces": "T-99" } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not a row in this registry"* ]] || { echo "$output"; false; }
+}
+
+@test "a duplicate registry id is reported" {
+  _write_rows "$REG" <<'REG'
+{ "$comment": "x", "techniques": [
+  { "id": "T-01", "name": "a", "status": "candidate", "lane": "absorb" },
+  { "id": "T-01", "name": "b", "status": "candidate", "lane": "absorb" } ] }
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"duplicate id"* ]] || { echo "$output"; false; }
+}
+
 # ---------- usage errors are not verdicts ----------
 
 @test "a missing registry file exits 2 rather than reporting zero warnings" {
@@ -271,5 +385,5 @@ MUTANT
 
 @test "absorb-registry-ref suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 22 ] || { echo "registered $registered tests, expected 22"; false; }
+  [ "$registered" -eq 31 ] || { echo "registered $registered tests, expected 31"; false; }
 }
