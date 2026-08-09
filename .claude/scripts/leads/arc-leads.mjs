@@ -28,7 +28,7 @@ import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -447,7 +447,11 @@ function cmdState(json) {
   }
 
   const out = {
-    campaigns: Object.fromEntries(Object.keys(campaigns).sort().map((k) => [k, campaigns[k]])),
+    // ADR-0416's mixing guard, reported as a COUNT rather than left to a reader to grep for.
+    // `real` is the number that carries the claim, and an unmarked receipt is counted as real
+    // (see sendCounts) precisely so that a zero there means something.
+    sends: sendCounts(events),
+    campaigns: Object.fromEntries(Object.keys(campaigns).sort().map((k) => [k, { ...campaigns[k], sends: sendCounts(events, { campaign: k }) }])),
     leads: [...leads.values()].sort((a, b) => (a.lead_id < b.lead_id ? -1 : a.lead_id > b.lead_id ? 1 : 0)),
   };
   if (json) process.stdout.write(JSON.stringify(out, null, 2) + "\n");

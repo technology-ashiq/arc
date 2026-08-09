@@ -12,9 +12,19 @@
 // fake returned before the real function was reached.
 
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
-import { resolve as pathResolve } from "node:path";
+import { dirname, resolve as pathResolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { request as httpsRequest } from "node:https";
 import { resolveTxt as dnsResolveTxt } from "node:dns/promises";
+// The ONE dossier read, shared with the send-moment guard, which needs the same file for the
+// opposite purpose (see store.mjs). A second copy here is defect class D5 the moment one of
+// the two grows a normalisation the other lacks.
+import { openStore, dossierEmail } from "./store.mjs";
+
+// Anchored to the REPO, never to process.cwd(), for the same reason caps.mjs and preflight.mjs
+// are: it is what keeps ADR-0410's store-is-outside-the-repo assertion meaningful when the
+// command is run from somewhere else.
+const REPO_ROOT = pathResolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 
 export const usingFakes = () => process.env.ARC_LEADS_FAKE === "1";
 
@@ -198,16 +208,39 @@ export function decodeProviderResponse(statusCode, body, idField = "provider_mes
 // owner allowlist silently authorise a cold send.
 export const OUTREACH_BASE_URL_DEFAULT = "https://api.resend.com";
 
-// An address, not a lead id. `sendOne` passes `draft.lead_id` -- a keyed HMAC (ADR-0400) --
-// and the real implementation is what resolves it against the ADR-0410 private store. That
-// resolution, and the per-recipient allowlist refusal that belongs with it, are slice 04.
-// Until then this REFUSES rather than handing a hash to a vendor: a 400 from Resend would
-// look like a transport problem, and the receipt path must never see an ack for it.
+// The last check before the vendor sees a recipient, applied to the RESOLVED value. It used
+// to guard the caller's argument, because nothing resolved anything yet; it now guards what
+// came out of the dossier, which is the value that can actually be junk (a hand-edited file, a
+// half-written record). A hash or a fragment reaching Resend comes back as a 400 that reads
+// like a transport problem, and the receipt path must never see an ack for it.
 function assertResolvedRecipient(to) {
   const s = String(to == null ? "" : to).trim();
   if (!s.includes("@") || s.startsWith("@") || s.endsWith("@"))
-    throw new ProviderError("config", "submit() was handed a recipient that is not an address — sendOne passes the keyed lead id (ADR-0400) and resolving it against the private store, with the rehearsal allowlist refusal that goes with it, is phase-03 slice 04. Refusing before any network call rather than letting the vendor reject a hash.");
+    throw new ProviderError("config", "the resolved recipient is not an address — the dossier this lead id points at holds no usable email. Refusing before any network call rather than letting the vendor reject it. The value is not echoed.");
   return s;
+}
+
+// The keyed lead id becomes something a vendor can deliver to, HERE and nowhere else.
+//
+// `sendOne` passes `draft.lead_id`, a keyed HMAC (ADR-0400); the vendor needs the address.
+// Doing it inside the real provider is what keeps the address off the send path entirely — the
+// fake never sees one, and no module between the guard and the socket handles it.
+//
+// A raw address handed in directly is REFUSED, and that is the point rather than strictness
+// for its own sake. The ADR-0416 allowlist is enforced in ID SPACE by the send-moment guard;
+// an address arriving here that was never a lead id never passed that check, so accepting one
+// would be a containment hole opened by a convenience. `dossierEmail` returns null for
+// anything without a dossier, which includes every raw address and every traversal attempt.
+function resolveRecipient(to) {
+  let store;
+  try { store = openStore({ repoRoot: REPO_ROOT }); }
+  catch (e) {
+    throw new ProviderError("config", `the private store could not be opened to resolve the recipient (${e.code || e.message}) — refusing before any network call (ADR-0410)`);
+  }
+  const email = dossierEmail(store, String(to == null ? "" : to).trim());
+  if (email === null)
+    throw new ProviderError("config", "submit() takes the keyed lead id (ADR-0400) and could not resolve it to an address in the private store — no dossier, no email, or a recipient that was never a lead id. Refusing before any network call; the value is not echoed, because it may be the address itself.");
+  return assertResolvedRecipient(email);
 }
 
 function resendRequest({ path, method, key, payload, timeout = 10000, idemKey = null }) {
@@ -244,10 +277,13 @@ function outreachKey() {
 
 const providerReal = {
   async submit(body) {
+    // Env bindings FIRST, the store read second. Both are pre-network refusals, so the order
+    // is free — and asking the two cheap questions first means a missing credential is
+    // reported as a missing credential rather than as whatever the filesystem said.
     const key = outreachKey();
-    const to = assertResolvedRecipient(body && body.to);
     const from = process.env.ARC_LEADS_OUTREACH_FROM;
     if (!from) throw new ProviderError("config", "ARC_LEADS_OUTREACH_FROM is unset — a send needs an envelope sender, and it is deliberately NOT reused from the notification mailer (ADR-0415).");
+    const to = resolveRecipient(body && body.to);
     const payload = JSON.stringify({
       from, to: [to],
       subject: (body && body.subject) || "",

@@ -82,7 +82,7 @@ export function approvedShaFor(events, draftRef) {
 // One send. Returns a result object rather than throwing on a refusal, because a refusal is a
 // NORMAL outcome of a daily run (a lead replied, the cap is reached) and the caller reports
 // every one of them rather than stopping at the first.
-export async function sendOne({ store, events, draftRef, now, emitReceipt, config }) {
+export async function sendOne({ store, events, draftRef, now, emitReceipt, config, env = process.env }) {
   const draft = readDraft(store, draftRef);
   assertCampaignStore(store, draft.campaign);
 
@@ -98,7 +98,7 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
 
   try {
     guardSend({
-      events, store, now, config,
+      events, store, now, config, env,
       draft: {
         campaign: draft.campaign,
         lead_id: draft.lead_id,
@@ -112,6 +112,30 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
     throw e;
   }
 
+  // The rehearsal mark is DERIVED from the binding and never passed in. ADR-0416's rabbit-hole
+  // row says it plainly: the mode is a property of the run and of its receipts, never a flag a
+  // caller can forget — and a parameter someone forgets defaults to permissive, while an
+  // environment declaration that is missing simply is not a rehearsal.
+  //
+  // Resolved through `effectiveSendingDomain`, the SAME resolver unsubscribeHeader gates on,
+  // so the domain the mail actually leaves from and the mark on its receipt cannot disagree.
+  // Two readers deriving one fact by two paths is the bug shape this lane has already paid
+  // for. The guard has already refused a declared-but-incomplete rehearsal by the time we get
+  // here, so `blocked` is not reachable with a rehearsal declared; `rehearsal` is false for
+  // every undeclared run, which is what a real cold send will be in Phase 05.
+  //
+  // Returned as a REFUSAL rather than thrown, because that is this function's contract: a
+  // refusal is a normal outcome of a daily run and the caller reports every one of them.
+  // `loadCaps` tolerates a config file that is not there and `loadConfig` does not, so without
+  // this an unreadable config raised past runDaily instead of stopping one draft — and it
+  // would have stopped it for the right reason, since a send whose mode cannot be determined
+  // must not go at all.
+  let rehearsal;
+  try { rehearsal = effectiveSendingDomain(loadConfig(config), env).rehearsal === true; }
+  catch (e) {
+    return { draftRef, ok: false, step: "config", why: `the leads config could not be read (${e.message}) — refusing rather than sending without knowing whether this is a rehearsal (ADR-0416)` };
+  }
+
   const idemKey = idemKeyFor({ campaign: draft.campaign, lead_id: draft.lead_id, touch_n: draft.touch_n });
   const intent = {
     idempotency_key: idemKey,
@@ -121,6 +145,9 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
     draft_sha: approval.approvedSha,
     submitted_at: now,
     store_fingerprint: assertCampaignStore(store, draft.campaign).store_fingerprint,
+    // Journalled BEFORE the submit, so a crash cannot lose which mode the send was made in.
+    // A reconcile that had to guess would be guessing about mail that has already left.
+    rehearsal,
   };
 
   // BEFORE the submit. If the process dies after this line and before the receipt, the
@@ -131,7 +158,10 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
   try {
     ack = await provider().submit({
       idem_key: idemKey,
-      to: draft.lead_id,          // the fake never sees a real address; the real impl resolves it from the store
+      // The keyed id, never an address. The fake never sees a real one at all; the real impl
+      // resolves it from the ADR-0410 store at the last possible moment, which is what keeps
+      // every module between the guard and the socket free of raw addresses.
+      to: draft.lead_id,
       subject: draft.subject || "",
       body: draft.body,
       // Built from the configured sending domain, never hardcoded. The PII tripwire caught the
@@ -139,7 +169,12 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
       // email-shaped literal here is exactly what the gate exists to stop. It also has to be
       // config-derived to be RIGHT: the unsubscribe address must live on the domain the mail
       // is sent from, or the header points somewhere that cannot honour it.
-      headers: { "List-Unsubscribe": unsubscribeHeader(config) },
+      // The SAME `env` the guard and the mark were resolved from. Letting this one default to
+      // process.env while the mark came from a passed-in env is two readers deriving one fact
+      // by two paths -- the exact defect class this module's own header names, and it showed
+      // up the moment the mark was wired: the receipt said rehearsal while the header resolver
+      // said there is no sending domain at all.
+      headers: { "List-Unsubscribe": unsubscribeHeader(config, env) },
     });
   } catch (e) {
     // The provider refused or the transport failed. The intent STAYS unresolved on purpose:
@@ -156,6 +191,7 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
     provider_message_id: ack.provider_message_id,
     submitted_at: now,
     draft_sha: approval.approvedSha,
+    rehearsal,
   });
   resolveIntent(store, idemKey);
   return { draftRef, ok: true, provider_message_id: ack.provider_message_id };
@@ -163,7 +199,7 @@ export async function sendOne({ store, events, draftRef, now, emitReceipt, confi
 
 // The daily command. Reconcile, then walk the approved drafts in order, stopping the moment a
 // cap refuses -- continuing past a daily-cap refusal would just produce N identical refusals.
-export async function runDaily({ store, readEvents, drafts, now, emitReceipt, config }) {
+export async function runDaily({ store, readEvents, drafts, now, emitReceipt, config, env = process.env }) {
   const release = acquireLock(store);
   try {
     const pre = await reconcile(store, {
@@ -180,7 +216,7 @@ export async function runDaily({ store, readEvents, drafts, now, emitReceipt, co
     for (const d of drafts) {
       // Re-read the spine per send. A receipt emitted two lines ago changes the cap count, and
       // a stale snapshot is how the 21st send of the day goes out looking legal.
-      const r = await sendOne({ store, events: readEvents(), draftRef: d, now, emitReceipt, config });
+      const r = await sendOne({ store, events: readEvents(), draftRef: d, now, emitReceipt, config, env });
       results.push(r);
       if (!r.ok && (r.step === "daily-cap" || r.step === "campaign-state" || r.step === "unresolved-intent")) break;
     }

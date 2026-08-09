@@ -26,9 +26,11 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
 # ---------- the code-path test ----------
 
 # The negative control, and it now has to be given the config the bound provider requires --
-# a key, a sender, and a RESOLVED recipient -- or it stops at the first config refusal and
-# never reaches the socket. Reaching `transport` is the whole assertion: it proves the real
-# module ran its own code rather than the fake being silently substituted.
+# a key, a sender, and a lead id that RESOLVES against the private store -- or it stops at the
+# first config refusal and never reaches the socket. Reaching `transport` is the whole
+# assertion: it proves the real module ran its own code rather than the fake being silently
+# substituted, and since slice 04 it also proves the dossier resolution runs, because an
+# unresolvable recipient never gets as far as a socket.
 # The key is a placeholder that never leaves the process: 127.0.0.1:1 refuses the connection
 # before any bytes are written.
 @test "the real provider module reaches its own code and exits with its own failure code" {
@@ -37,7 +39,14 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
       RESEND_API_KEY="placeholder-not-a-key" ARC_LEADS_OUTREACH_FROM="arc@example.test" \
       node --input-type=module -e '
     const {provider, ProviderError} = await import("./.claude/scripts/leads/lib/deps.mjs");
-    try { await provider().submit({idem_key:"k", to:"one@example.test", subject:"s", body:"b", headers:{}}); console.log("UNEXPECTED-SUCCESS"); }
+    const {initStore, openStore, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const fs = await import("node:fs"), path = await import("node:path");
+    initStore();
+    const s = openStore();
+    fs.mkdirSync(path.join(s.dir, "dossiers"), {recursive: true});
+    const id = leadId(s, "one@example.test");
+    fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email: "one@example.test"}));
+    try { await provider().submit({idem_key:"k", to:id, subject:"s", body:"b", headers:{}}); console.log("UNEXPECTED-SUCCESS"); }
     catch (e) { console.log(e instanceof ProviderError ? "ProviderError:" + e.kind : "WRONG-ERROR:" + e.constructor.name); }'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"ProviderError:transport"* ]]
@@ -60,21 +69,51 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"nofrom=config:ARC_LEADS_OUTREACH_FROM"* ]]
 }
 
-# sendOne passes the keyed lead id (ADR-0400), not an address. Handing that to the vendor
-# would surface as a 400 that reads like a transport problem, so it is refused before any
-# network call -- resolving the id against the private store, and the rehearsal allowlist
-# refusal that belongs with it, are slice 04.
-@test "the real provider refuses a recipient that is a lead id rather than an address" {
+# sendOne passes the keyed lead id (ADR-0400), not an address, and slice 04 resolves it here
+# against the ADR-0410 private store. Anything that does not resolve is refused BEFORE any
+# network call -- including a RAW ADDRESS, which is the case worth naming: the ADR-0416
+# allowlist is enforced in id space by the send-moment guard, so an address arriving here that
+# was never a lead id never passed that check, and accepting one would be a containment hole
+# opened by a convenience.
+@test "the real provider refuses every recipient it cannot resolve from the private store" {
   cd "$ARC_ROOT"
   run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" \
       ARC_LEADS_OUTREACH_FROM="arc@example.test" LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" \
       node --input-type=module -e '
     const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
-    for (const to of ["lead_9f3a2b", "", null, "@example.test", "example.test@"]) {
+    const {initStore} = await import("./.claude/scripts/leads/lib/store.mjs");
+    initStore();
+    for (const to of ["lead_9f3a2b", "", null, "@example.test", "example.test@", "one@example.test",
+                      "../../secret", "lead_hmac_v1_" + "f".repeat(32)]) {
       try { await provider().submit({idem_key:"k", to, subject:"s", body:"b"}); console.log("UNEXPECTED-SUCCESS"); }
-      catch (e) { console.log(e.kind + (e.message.includes("not an address") ? ":not-an-address" : ":other")); } }'
+      catch (e) { console.log(e.kind + (e.message.includes("could not resolve it to an address") ? ":unresolvable" : ":other " + e.message.slice(0, 40))); } }'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" != *"UNEXPECTED-SUCCESS"* ]]
   [[ "$output" != *":other"* ]]
+  [[ "$output" == *"config:unresolvable"* ]]
+}
+
+# The address-shape guard did not go away when the resolution landed; it MOVED, from the
+# caller's argument to the value that comes out of the dossier. That is the value that can
+# actually be junk -- a hand-edited file, a half-written record -- and a fragment reaching
+# Resend comes back as a 400 that reads like a transport fault.
+@test "a dossier whose email is not address shaped is refused before any network call" {
+  cd "$ARC_ROOT"
+  run env -u ARC_LEADS_FAKE RESEND_API_KEY="placeholder-not-a-key" \
+      ARC_LEADS_OUTREACH_FROM="arc@example.test" LEADS_PROVIDER_BASE_URL="https://127.0.0.1:1" \
+      node --input-type=module -e '
+    const {provider} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const {initStore, openStore, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const fs = await import("node:fs"), path = await import("node:path");
+    initStore();
+    const s = openStore();
+    fs.mkdirSync(path.join(s.dir, "dossiers"), {recursive: true});
+    const id = leadId(s, "junk@example.test");
+    fs.writeFileSync(path.join(s.dir, "dossiers", id + ".json"), JSON.stringify({lead_id: id, email: "not-an-address"}));
+    try { await provider().submit({idem_key:"k", to:id, subject:"s", body:"b"}); console.log("UNEXPECTED-SUCCESS"); }
+    catch (e) { console.log(e.kind + (e.message.includes("resolved recipient is not an address") ? ":not-an-address" : ":other " + e.message.slice(0, 40))); }'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"config:not-an-address"* ]]
 }
 
 # Resend names its ack field `id`; this repo's canonical field is provider_message_id. The
@@ -314,12 +353,12 @@ _cli() { cd "$ARC_ROOT" && ARC_LEADS_FAKE=1 run node .claude/scripts/leads/arc-l
   [[ "$output" == *"in-step 1048576"* ]]
 }
 
-@test "this file registers the 25 tests it declares" {
+@test "this file registers the 26 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 25 ] || { echo "declared $declared, expected 25"; false; }
+  [ "$declared" -eq 26 ] || { echo "declared $declared, expected 26"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }

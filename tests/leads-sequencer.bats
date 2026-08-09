@@ -42,7 +42,10 @@ const SHA = "c".repeat(64);
 // outreach.replied carries reply_ref now (ADR-0414); a fold input without one is a shape the
 // validator refuses, i.e. a receipt that cannot exist on any spine.
 const RREF = "reply_" + "d".repeat(32);
-const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k"+n, provider_message_id:"m"+n, draft_sha:SHA}});
+// `rehearsal` is a REQUIRED key on outreach.sent since ADR-0416 (validate-leads.mjs), so a
+// fold input without one is a receipt no spine would accept -- the same reason reply_ref is
+// spelled out above. false: these fixtures are about caps and suppression, not the rehearsal.
+const sent = (n, at, lead=ID) => ({kind:"outreach.sent", payload:{lead_id:lead, campaign:"pilot", touch_n:n, submitted_at:at, idem_key:"k"+n, provider_message_id:"m"+n, draft_sha:SHA, rehearsal:false}});
 const base = {campaign:"pilot", lead_id:ID, touch_n:1, draft_sha:SHA, approved_sha:SHA};
 const NOW = "2026-08-04T10:00:00+05:30";
 const refuse = (events, draft=base, now=NOW) => { try { guardSend({events, store, draft, now}); return "ALLOWED"; } catch (e) { return e instanceof GuardRefusal ? e.step : "ERR:" + e.message; } };'

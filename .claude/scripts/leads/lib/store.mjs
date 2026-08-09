@@ -247,6 +247,28 @@ export function leadIdsAllVersions(store, email) {
   return store.keyring.map((k) => leadId(store, email, k.version)).reverse();
 }
 
+// The dossier is where the address lives, and this is the ONE function that reads it.
+//
+// Two callers need it and they need it for opposite reasons: the send-moment guard turns it
+// back into the whole keyring of ids, and the real provider hands it to the vendor. They were
+// about to be two copies of the same six lines -- defect class D5, and this lane has already
+// paid for it twice (validate one read, compare another). The moment one copy grew a
+// normalisation the other lacked, a person would be allowlisted under one spelling and
+// delivered to under another.
+//
+// Returns null for EVERY failure -- no dossier, unreadable JSON, absent or non-string email.
+// Every caller treats null as a REFUSAL, never as "nothing to check here". The type check is
+// not decoration: a number or an object here would reach normalizeEmail as String(value) and
+// mint a stable id for a person who does not exist.
+export function dossierEmail(store, leadId) {
+  try {
+    const p = join(store.dir, "dossiers", `${leadId}.json`);
+    if (!existsSync(p)) return null;
+    const email = JSON.parse(readFileSync(p, "utf8")).email;
+    return typeof email === "string" && email.trim() !== "" ? email : null;
+  } catch { return null; }
+}
+
 // sha256 of the ENCODED secret string (what is on disk), not the raw bytes -- pinned so the
 // fingerprint is reproducible from the file without knowing the encoding convention.
 export function fingerprint(store) {

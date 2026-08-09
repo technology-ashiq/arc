@@ -43,11 +43,23 @@ export function journalDir(store) {
 
 // The deterministic provider idempotency key. Same preimage family as the receipt idem, so a
 // journal intent and the receipt it becomes are provably about the same send.
+//
+// `rehearsal` joins the other four as a fixed EMPTY placeholder, and that is a decision rather
+// than an oversight. This key is the VENDOR's Idempotency-Key and must stay a pure function of
+// (campaign, lead_id, touch_n): if it varied with the mode, one touch to one person could be
+// submitted twice — once marked, once not — and the vendor's own 24-hour dedup, the last thing
+// standing between a crash and a duplicate to a real human, would not recognise the second as
+// the same send. Separating a rehearsal receipt from a real one is the SPINE idem's job, and
+// validate-leads.mjs does it there.
 export const idemKeyFor = ({ campaign, lead_id, touch_n }) =>
-  leadsIdem("outreach.sent", { campaign, lead_id, touch_n, idem_key: "", provider_message_id: "", submitted_at: "", draft_sha: "" });
+  leadsIdem("outreach.sent", { campaign, lead_id, touch_n, idem_key: "", provider_message_id: "", submitted_at: "", draft_sha: "", rehearsal: "" });
 
 export function writeIntent(store, intent) {
-  for (const k of ["idempotency_key", "lead_hmac", "campaign", "touch_n", "draft_sha", "submitted_at", "store_fingerprint"])
+  // `rehearsal` is required here too (ADR-0416). An intent that cannot say which mode its send
+  // was made in cannot be turned into a valid receipt by reconcile, and finding that out
+  // BEFORE the submit costs a refusal, while finding it out after costs an intent that no
+  // reconcile can ever resolve. `false` passes: it is a decision, not an absence.
+  for (const k of ["idempotency_key", "lead_hmac", "campaign", "touch_n", "draft_sha", "submitted_at", "store_fingerprint", "rehearsal"])
     if (intent[k] === undefined || intent[k] === null || intent[k] === "")
       throw new JournalError("BAD_INTENT", `journal intent is missing "${k}" — an intent that cannot identify its send cannot be reconciled`);
   const p = join(journalDir(store), `${intent.idempotency_key}.json`);
@@ -143,6 +155,13 @@ export async function reconcile(store, { events, lookup, emitReceipt }) {
         continue; // "accepted" with no id is not something to write a receipt from
       }
       // STEP 4 -- exactly one missing receipt, same preimage the validator re-derives.
+      //
+      // The mode comes from the INTENT, never re-derived from the environment here. Reconcile
+      // can run days later, from a shell where ARC_LEADS_REHEARSAL is set differently, and a
+      // recovery receipt that reclassified a send after the fact would be a lie about
+      // something that already happened. An intent written before the field existed carries
+      // `undefined`, the validator refuses it, and the catch below leaves the intent
+      // unresolved for a human — which is the safe direction: we must not guess.
       try {
         await emitReceipt({
           lead_id: intent.lead_hmac,
@@ -152,6 +171,7 @@ export async function reconcile(store, { events, lookup, emitReceipt }) {
           provider_message_id: found.provider_message_id,
           submitted_at: intent.submitted_at,
           draft_sha: intent.draft_sha,
+          rehearsal: intent.rehearsal,
         });
       } catch (e) {
         // Do NOT resolve the intent. An emit failure after a confirmed ack used to throw out

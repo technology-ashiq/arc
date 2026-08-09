@@ -243,7 +243,8 @@ const run1 = (s, bytes, over = {}) => { const r = recorder();
 @test "in reply to touch is derived from receipts, never from a reply header" {
   run _c "$CIMPORT const {s, id} = freshStore();
     const sent = (n) => ({kind: \"outreach.sent\", payload: {lead_id: id, campaign: \"pilot\", touch_n: n,
-      submitted_at: NOW, idem_key: \"k\" + n, provider_message_id: \"m\" + n, draft_sha: \"c\".repeat(64)}});
+      submitted_at: NOW, idem_key: \"k\" + n, provider_message_id: \"m\" + n, draft_sha: \"c\".repeat(64),
+      rehearsal: false}});
     const {seen} = await run1(s, fx(\"01-interested.eml\"), {events: [sent(1), sent(2)]});
     console.log(seen.find((e) => e.kind === \"outreach.replied\").payload.in_reply_to_touch);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

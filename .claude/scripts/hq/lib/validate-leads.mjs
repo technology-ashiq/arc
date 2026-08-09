@@ -127,8 +127,16 @@ const SHAPES = {
     required: ["lead_id", "campaign", "provenance", "geography", "email_status", "fact_count", "store_id", "store_fingerprint"],
     optional: ["below_bar"],
   },
+  // `rehearsal` is REQUIRED, not optional, and that is the whole decision (ADR-0416).
+  //
+  // Optional means absent-equals-real. A bug that drops the mark would then silently
+  // reclassify a rehearsal send as a real first touch — the exact fail-open this repo refuses,
+  // in the one place ADR-0416 exists to prevent. The note above says optionals are listed so
+  // that "absent" is a decision the schema made; absent must not be a decision here at all.
+  // The cost is that every existing outreach.sent fixture has to carry it, and paying that
+  // cost IS the point rather than a surprise inside it.
   "outreach.sent": {
-    required: ["lead_id", "campaign", "touch_n", "idem_key", "provider_message_id", "submitted_at", "draft_sha"],
+    required: ["lead_id", "campaign", "touch_n", "idem_key", "provider_message_id", "submitted_at", "draft_sha", "rehearsal"],
     optional: [],
   },
   "outreach.replied": {
@@ -162,8 +170,14 @@ export function leadsIdem(kind, p) {
     // as its own reason for existing.
     case "lead.researched":
       return sha256Hex(`lead.researched|${p.campaign}|${p.lead_id}|${opt(p.below_bar)}|${p.store_fingerprint}`);
+    // `rehearsal` is in the preimage, and adding the field WITHOUT extending it would have
+    // been the more dangerous half of the change (ADR-0416). A field that lives in the payload
+    // and not in the preimage means a rehearsal receipt and a real receipt that differ ONLY in
+    // the mark collide on one idem — so the reconcile that exists to prevent a double-send
+    // would be the thing that mixes the two classes it must never mix, and the second receipt
+    // would vanish as DUP_IDEM exactly as ~100 did in C2. Both halves or neither.
     case "outreach.sent":
-      return sha256Hex(`outreach.sent|${p.campaign}|${p.lead_id}|${p.touch_n}|${p.draft_sha}|${p.submitted_at}|${p.idem_key}|${p.provider_message_id}`);
+      return sha256Hex(`outreach.sent|${p.campaign}|${p.lead_id}|${p.touch_n}|${p.draft_sha}|${p.submitted_at}|${p.idem_key}|${p.provider_message_id}|${p.rehearsal}`);
     // ADR-0414. `ingested_at` is DELIBERATELY absent and its absence is the fix. It stamps our
     // processing, not the reply, so it split one reply into two receipts on any re-ingest --
     // which is the ordinary response to "did that run finish?" -- while `triage_class` being
@@ -281,6 +295,13 @@ export function assertLeads(event) {
         throw new SpineError("BAD_LEADS", "provider_message_id must be an opaque provider identifier (<=255 chars, no delimiters)");
       if (typeof p.draft_sha !== "string" || !HEX64.test(p.draft_sha))
         throw new SpineError("BAD_LEADS", "draft_sha must be a lowercase sha256 hex — approval binds the exact content (ADR-0412)");
+      // A BOOLEAN, not a truthy value. "false", 0 and "" are all things a caller might reach
+      // for to mean "not a rehearsal", and each of them would land in the idem preimage as a
+      // different string — two spellings of one fact, which is how two receipts get written
+      // for one send. There is no third state a reader may interpret: a send is a rehearsal
+      // send or it is a real one (ADR-0416).
+      if (typeof p.rehearsal !== "boolean")
+        throw new SpineError("BAD_LEADS", `rehearsal must be a boolean — ADR-0416 marks every send as a rehearsal send (true) or a real one (false), and it is REQUIRED rather than optional because absent-equals-real would silently reclassify a rehearsal as a real first touch`);
       assertTs(kind, "submitted_at", p.submitted_at);
       break;
     case "outreach.replied":
