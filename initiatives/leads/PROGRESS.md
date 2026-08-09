@@ -205,6 +205,37 @@ reported as a one-row gate. A blocker list derived from the last failure is not 
 `preflight()` rehearsal-aware on its own leaves the ADR-0402 guard decorative for the one
 domain it now most needs to cover. Phase 03's exit criteria carry both, together.
 
+**Both landed 2026-08-09 (PR #136, `5b7deb3`), and the first version of them was wrong in a
+way its own 13 tests could not see.** Two adversarial surfaces returned **19 findings with
+ZERO overlap** — the fifth time in this lane that two attackers have shared almost nothing.
+The headline is worth keeping in front of the next phase:
+
+> **The guard did not guard the send path.** All three rehearsal signals were checked inside
+> `preflight()`, and `cmdDaily` — the code that actually sends — never calls `preflight()`. Its
+> only domain check was `unsubscribeHeader()`. So `ARC_LEADS_REHEARSAL=1` alone bound the
+> product domain into every List-Unsubscribe and entered the send loop, while the gate refused
+> correctly in a subcommand nobody had run. **A guard belongs in the shared resolver, not in
+> one of its callers.** Defect class D6, at the largest scale this lane has hit it.
+
+Second critical: `LEADS_CONFIG` replaces the config file, so `product_domains` — the
+*definition* of "product domain" — was itself overridable, and `"product_domains": []` passed
+`lexos.app` through ADR-0402 with a full green. `caps.mjs` had solved this exact class already
+(ceilings in code, config may only lower — ADR-0403) and the pattern had not been carried
+across. The list is now frozen in code; config may add, never remove.
+
+Tests went 26 → 39 across the two files, one regression test per finding.
+
+### Carried forward from those passes — NOT fixed in PR #136, and each needs a home
+
+| # | Finding | Why it was not fixed there | Where it goes |
+|---|---|---|---|
+| 1 | `.github/workflows/ci.yml` `_declared` misses bats' `f() { # @test` comment form, so declared can come out LOWER than executed and the step prints `::error::-1 declared test(s) never executed` — a message describing the opposite of what happened | `ci.yml` is a **shared, cross-lane** file (`.claude/rules/lanes.md`); editing it mid-cycle is a known collision cost, and `policy` is LIVE | cross-lane call — needs the other live lane's session, not a unilateral edit |
+| 2 | The suite-size floor at `ci.yml:267` is `>= 911` against **1916** real tests: 1005 tests could be deleted before it reddens. Defect class D3 — a threshold that cannot fire on the input it ships with | same shared-file reason | same |
+| 3 | `normDomain` folds case and one trailing dot but not zero-width/bidi controls or punycode, so `automemory.ai` + U+200B passes the `dedicated-domain` row | **Contained today** — both product domains are pure ASCII, and the run still refuses at the DNS rows. Latent, not live | Phase 03 spec, a slice of its own |
+| 4 | Findings carry no machine-stable reason code, so the tests assert on prose: a pure copy-edit failed three of them, and a behaviour-changing mutant that kept the wording survived | Needs a shape change to every finding in `preflight.mjs`; doing it inside the adversarial-fix commit would have mixed a refactor into a security fix | Phase 03 spec, a slice of its own |
+| 5 | Per-recipient allowlist refusal before any network call. The gate proves a lock EXISTS; nothing enforces membership at send time. Note `mail.mjs` already exports `loadAllowlist(env, varName)` and `assertAllowed(to, list)`, and that `varName` parameter exists precisely so a second allowlist can reuse it | Already **slice 04's** stated exit criterion — it was never in this slice's scope | already homed; do not re-file |
+| 6 | `tests/leads-rehearsal-guard.bats` has no `tests/shard-timings.json` entry, so it rides `_default_weight` 16 against ~34s measured. Adding the file also reshuffled **33 of 95** files across shards, so any test that passed only by shard luck surfaces on the next unrelated run | That file forbids hand-written numbers — the measured value comes from `weigh-tests.yml`, a 60-job Windows run | owner's call: run the weigh workflow, or accept the imbalance |
+
 **What changed.** The real campaign was blocked on business inputs that do not exist — the
 owner cannot name 25 ICP recipients, which is what an undefined offer looks like from the
 inside. He supplied **5 addresses he controls or knows** instead. That does not create an offer,

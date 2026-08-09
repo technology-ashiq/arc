@@ -26,10 +26,13 @@ counted as real first touches by any report, ever.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] **`lib/provider.mjs` really bound to Resend** — the real implementation, not the fake, and
-      the Phase-00 contract suite runs green against it including the negative control (the real
-      impl pointed at an unreachable endpoint reaches its own code and exits with its own
-      failure code)
+**Order is load-bearing here, and the first draft of this list had it wrong** (fixed 2026-08-09,
+same day it was written). The provider-bind criterion was listed first, so `/arc-develop` handed
+out "bind the real Resend implementation" as slice 01 — before any slice that builds the
+rehearsal lock. That sequence puts a live send path on the product domain with nothing yet
+refusing a non-rehearsal send. **The guard is built and proven first; the real transport is bound
+onto a gate that already refuses.** The list below is in execution order, not importance order.
+
 - [ ] **The preflight gate actually opens, and opens for the right reason** (added 2026-08-09
       via `/arc-change`). `sending_domain` in `.claude/config/leads.json` is `""` today, and
       `preflight()` reads SPF for that domain **before** it reads DMARC — so it refuses at the
@@ -47,9 +50,79 @@ counted as real first touches by any report, ever.
       rehearsal mode **OFF** → **refused, citing ADR-0402** · product domain + rehearsal mode
       ON but the allowlist empty or absent → **refused** (rehearsal mode without a lock is the
       loophole, and it is the one an attacker reaches for first)
+- [ ] **`lib/provider.mjs` really bound to Resend** — the real implementation, not the fake, and
+      the Phase-00 contract suite runs green against it including the negative control (the real
+      impl pointed at an unreachable endpoint reaches its own code and exits with its own
+      failure code). **Bound only after the two criteria above are green**, so the transport is
+      attached to a gate that already refuses rather than to an open path
 - [ ] **Rehearsal mode, both properties fixture-proven before any real send**: a recipient
       outside the allowlist is refused **before any network call** · every rehearsal send
       carries its rehearsal mark in its receipt
+
+      **Design, settled 2026-08-09 while slice 03 was being bound — start here, not with a
+      fresh investigation.** The allowlist check must NOT resolve the address first. The
+      allowlist holds addresses; the send path carries `draft.lead_id`, a keyed HMAC
+      (ADR-0400). Compare in ID SPACE:
+
+      ```
+      allowedIds = union over each allowlist address of leadIdsAllVersions(store, address)
+      draft.lead_id not in allowedIds  ->  refuse, before any network call
+      ```
+
+      `leadIdsAllVersions` (`store.mjs`) exists already, and **all versions is the whole
+      point**: `guard.mjs` carries the same lesson in its own comment — checking ONE id meant
+      that after a key rotation every person who had unsubscribed became contactable again,
+      "the single worst thing this system can do". An allowlist checked at one key version has
+      the mirror-image bug: after a rotation the five allowlisted people stop matching and the
+      guard silently refuses everything, or worse, a future variant reads a miss as unknown.
+      No raw address touches the send path, and the check works across rotations.
+
+      The VENDOR still needs the real address. That resolution belongs in the real provider,
+      reading `store.dir/dossiers/<leadId>.json` `.email` — the shape `resolveKeyringIds` in
+      `guard.mjs:33` already uses, and it must be **lifted into a shared exported helper
+      rather than copied**, or it is defect class D5 the moment one of the two grows a
+      normalisation the other lacks. `deps.mjs providerReal.submit` currently refuses any
+      recipient that is not address-shaped, which is what holds the line until this lands.
+
+      Reuse `loadAllowlist(env, varName)` and `assertAllowed(to, list)` from `mail.mjs:125`
+      for parsing — the `varName` parameter exists precisely so a second allowlist can reuse
+      it, and `preflight.mjs` hand-rolled a weaker counter instead, which the adversarial pass
+      flagged. Parse with the shared helper; compare in id space as above.
+
+      **CHECKED 2026-08-09, and it is worse than the note anticipated — read this before
+      touching the receipt.** `outreach.sent` IS a closed key set
+      (`.claude/scripts/hq/lib/validate-leads.mjs`, `SHAPES`): `required` is
+      `lead_id, campaign, touch_n, idem_key, provider_message_id, submitted_at, draft_sha`,
+      `optional` is EMPTY, and any unknown key is refused outright. So the mark needs a schema
+      change. Two things follow that are not obvious:
+
+      1. **The mark must be `required`, not `optional`.** Optional means absent-equals-real,
+         so a bug that drops the mark silently reclassifies a rehearsal send as a real first
+         touch — the exact fail-open this repo refuses, in the one place ADR-0416 exists to
+         prevent. The schema's own comment says optionals are listed "so that absent is a
+         decision the schema made rather than a gap the validator happened not to notice";
+         absent must not be a decision here. Cost: every existing `outreach.sent` fixture
+         needs the field, and that migration is part of the slice, not a surprise in it.
+
+      2. **It must also enter the idem PREIMAGE** (`leadsIdem`, same file — today
+         `outreach.sent|campaign|lead_id|touch_n|draft_sha|submitted_at|idem_key|provider_message_id`).
+         Total-preimage idems are a non-negotiable. A field in the payload but not in the
+         preimage means a rehearsal receipt and a real receipt that differ ONLY in the mark
+         collide on one idem — so the reconcile that exists to prevent a double-send would be
+         the thing that mixes the two classes it must never mix. Adding the field without
+         extending the preimage is the more dangerous half-change of the two.
+
+      Cross-lane check done: only the leads lane has ever touched `validate-leads.mjs`
+      (`52a7a63`, `427d533`), so this is not a shared-file collision — but it IS a company
+      organ at the repo root (ADR-0053), and the emit validator must come from the MAIN clone
+      and be pulled first, or a stale checkout refuses the newly-shaped payload.
+
+      Fixtures this needs, and the third is the one an attacker reaches for: an allowlisted
+      lead sends · a non-allowlisted lead is refused **with no socket opened** (assert the
+      refusal happens before the provider is called, not merely that the send failed) · an
+      allowlisted lead whose id was minted under a PREVIOUS key still matches · a rehearsal
+      receipt carries the mark · a report over the rehearsal window asked for real sends
+      returns **zero by count**.
 - [ ] **The mixing guard, proved by its own negative**: a report run over the rehearsal window,
       asked for real sends, returns **zero** — and the assertion checks the count, not the
       absence of a word in the output
