@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-09 — PLAN-executor promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-09 — PLAN-executor + PLAN-scheduler promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 13 full PLANs + 10 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 14 full PLANs + 9 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -31,6 +31,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-policy.md`~~ | **MOVED → `docs/archive/`** (2026-08-04) | Superseded by `plans/PLAN-policy.md`; kept in archive for history — never feed the brief to a kickoff (three review rounds hardened the plan well past the brief: the two-key authority state machine, spend-under-E2 definition, typed event profiles and the hook feasibility gate exist only in the plan) |
 | ~~`plans/BRIEF-absorb.md`~~ | **MOVED → `docs/archive/`** (2026-08-06) | Superseded by `plans/PLAN-absorb.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan past the brief: the fourth load-bearing trigger arm + two-speed operating model, the sealed-blind owner-judge mechanics, the ABS-C allowlist candidate, the ≥2-cycles threshold assumption, and the stale-0400-century correction exist only in the plan) |
 | ~~`plans/BRIEF-executor.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-executor.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger, the capability-gap verdict arm, the 12-fixture real-runtime Isolation Certification Suite, credential-capped budgets with calibration receipts, context-pack batch/angle/feedback semantics, `review_by:` tenure + the termination spec, the EXE-K freedom clause and the unlock ladder exist only in the plan) |
+| ~~`plans/BRIEF-scheduler.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-scheduler.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the two-type job taxonomy, the ceiling lint, idem=job@slot, the zero-retry reconciliation with ADR-0203/0204, the deterministic jobs panel and the fire-drill REQ exist only in the plan; the brief's kickoff prompt is pre-portfolio/bare-token — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -203,6 +204,32 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     verdict receipts and scrubbed transcripts are the un-manufactured evidence base for
     growth, bench and absorb's future cycles. `BRIEF-executor.md` superseded → moved to
     `docs/archive/`.
+
+16. **2026-08-09:** `plans/PLAN-scheduler.md` added (scheduler v1 — "the heartbeat":
+    `hq.jobs.yaml` in git + one wrapper + the OS's own scheduler, arc stays daemon-free;
+    v1.0, landed owner-instructed from a Cowork session; decisions SCH-A…L locked over
+    four review rounds 2026-08-03 → 2026-08-09; ADR numbers at kickoff from the century
+    claimed per `PORTFOLIO.md`). **Trigger converted to FIRED under the owner's Build-out
+    Mandate (2026-08-09 — same receipt as correction #15, cited by the kickoff ADRs;
+    honesty note in-file: no manual-start-pain receipt existed and none is invented — the
+    proving week's actor-query metric starts the honest baseline). The policy-engine
+    prerequisite is unchanged — and now MET (policy C9 merged `677b67e` / PR #130,
+    2026-08-08): unattended registration still VERIFIES enforcement fixtures green at its
+    Phase-2 gate, fail-closed, never assumed; attended phases carry POL-D shared-library
+    authorization from Phase 0.** Core beyond the brief: two job types (script-jobs ₹0 ·
+    process-jobs via `arc-run`, mock-proven until the first live one) · GH-Actions
+    excluded for spine-receipted jobs (ADR-0025 instance spine) · ZERO scheduler-layer
+    retries (ADR-0203/0204 own the ladder — the brief's "one retry" already lives inside
+    `arc-run`) · monthly-ceiling static lint (worst-case month priced at commit time,
+    `jobs-lint --bill`) · idem = job@slot (double-fires collapse via the existing
+    dup-idem quarantine, surfaced per ADR-0032) · missed-run detection as a DETERMINISTIC
+    reader derivation in the brief (needs-you on >2× cadence; wall-clock banned to
+    preserve replay goldens; disabled ≠ overdue) · staircase phases (attended heartbeat
+    P0–P1 first, cron registration P2, proving week P3 with a fire-drill that removes an
+    OS task while the yaml still promises it) · per-job `withLock` reuse ·
+    self-modification / spend-kind / credential bans in jobs-lint. v1 jobs:
+    brief-materialize · day-close-roll (seals D−1 at 00:15, `catchup: run`) ·
+    lexos-canary candidate. `BRIEF-scheduler.md` superseded → moved to `docs/archive/`.
 
 ## Provenance
 
