@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-absorb (Cycle 10, born 2026-08-09)
-phase: 03 built + 04 study done — both HELD OPEN on owner actions (00, 01, 02 CLOSED)
+phase: 04 — study done, rebuild BLOCKED by owner ruling (00, 01, 02, 03 CLOSED)
 appetite: 8d
 burn: 5.0d
-blocked-on: owner — (1) the Phase 03 inbox pick, (2) the ADR-0602 allowlist widening that unblocks T-01's rebuild
+blocked-on: owner — the Phase 03 inbox pick (REQ-06's live demo, the one row Phase 03 closed with open)
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -32,8 +32,8 @@ depends-on: —
 | 00 | Steel thread: the matrix and its paperwork — DEV-B/C boundary audit, registry shape finalized, ADR-0601 template + `report-lint` (WARN-first) | 1d | ✅ CLOSED 2026-08-09 |
 | 01 | Study harness, hostile-input-first — read-only pipeline, injection red corpus, adversarial pass, no-execution boundary fixture-proven **or STOP** | 2d | ✅ CLOSED 2026-08-09 |
 | 02 | Registry and guards — status lint (cap 12, displacement, decision-ref), allowlist lint, license/attribution gate, PLANOFF skeleton | 1d | ✅ CLOSED 2026-08-09 |
-| 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | 🟡 BUILT, CI green — held open on ONE owner pick |
-| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; rebuild BLOCKED by ADR-0602 A1 |
+| 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | ✅ CLOSED 2026-08-09, one row open by owner decision |
+| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; rebuild BLOCKED — owner ruled the allowlist stays |
 
 **Appetite burn: 5.0 of 8 days used.** Planned allocation 6.5d, leaving 1.5d slack. Kill tripwire at
 4d (50%): if Phase 02 is not done, a scope-cut conversation is mandatory. **Phase 00: ~0.5d against
@@ -106,51 +106,69 @@ requires.
   than `lock_ref` was invisible. **And the gate had no caller at all** — `rebuild-lint` was
   reachable only from its own bats suite.
 
+- **2026-08-09 — Phase 03 CLOSED ✅, with ONE ROW OPEN by the owner's decision.** *Governance drop.*
+  **Shipped:** ADR-0603's payload profile at the SPINE boundary (`validate-absorb.mjs`, two lines in
+  the shared validator) · the hash-commitment seal/reveal (`judgement.mjs`) · REQ-05's four-part
+  cross-lane diff — `PLAN-develop` §7.1a, its freeze-log line, the `technique` verdict
+  `capability-scout.md` never had, and `docs/templates/toolbox-template.md`.
+  **Tests: 26 in `absorb-judgement.bats`**; repo 2077. **CI green 19/19**, run `31310632368`.
+  **Actual ~1.5d vs 1d appetite.** `amendments: 0` (/arc-change) · **1 ADR amendment** (ADR-0603 A1,
+  plus its enforcement clause) · `reopened: n`.
+  **REQ-05 and REQ-07 VALIDATED. REQ-06 stays `active`** — its mechanism is fixture-proven but its
+  live demo needs a real owner judgement on the real spine, and flipping it would assert a receipt
+  that does not exist, in the phase whose whole subject is that a judgement must be a receipt rather
+  than a memory. Approval `01KZJXBNKT6PEYC87TW5D53QTP` is queued and open.
+  **Closed by the owner's explicit decision** — the leads Phase 04 precedent, where closing with a
+  row open was likewise the owner's call and not the lane's.
+  **Its adversarial pass: 22 findings, 6 HIGH, three falsifying properties outright** — the
+  commitment preimage was not injective so `verify` said OK on a tampered mapping; a `--correlation`
+  traversal wrote the plaintext into a git-tracked path; the blinding test survived blinding being
+  deleted. Then two named blockers fixed: `--decision` accepted any string, and Amendment 1's
+  `pick=` prefix was enforced nowhere — I wrote that sentence and did not implement it.
+  **Evidence:** `evidence/phase-03/chain-proof.md` + manifest, verified.
+
 ## Now
 
-**Current position:** Phases 00, 01, 02 CLOSED. **Phase 03 is built and CI-green** (19/19 on run
-`31310632368`) and held open on one owner pick. **Phase 04's study and classification are done** —
-extraction report and registry row both lint clean — and its **rebuild is BLOCKED**, not deferred.
+**Current position:** Phases 00, 01, 02, 03 CLOSED. Phase 04's study and classification are done.
+**Phase 04's rebuild is closed off by the owner's ruling, not pending.**
 
-**The cycle's most valuable finding came from the first real rebuild, and it was a red CI.**
-T-01's rebuild landed in `processes/review-diff.process.yaml`, recompiled cleanly, passed
-`rebuild-lint` with 0 warnings — and turned CI red on 7 of 19 jobs, every failure an ENGINE test.
-`review-diff` is one of **three pilot processes that are engine Cycle 6's proof its compiler is
-faithful**. The engine asserts all three compile byte-identical to their hand-written baselines and
-round-trip byte-for-byte out of their block scalars against committed pre-flip fixtures.
+**THE OWNER RULED ON THE ALLOWLIST, 2026-08-09: DO NOT WIDEN.** `.claude/agents/**` stays off it and
+**T-01 stays a `candidate` row.** So the first real absorb ends at a recorded classification rather
+than an adoption — and that is the outcome, not a failure to reach one. Recorded in ADR-0602
+Amendment 1 together with the three routes that would legitimately unblock it later, in order of
+preference, so a future cycle does not re-argue this from scratch.
 
-**The trap is that the red was fixable the wrong way.** Regenerating every baseline would have gone
-green — and deleted another lane's fidelity evidence while reporting a clean absorb. Reverted instead;
-engine is back to 3/3 byte-identical. Recorded as **ADR-0602 Amendment 1**: `processes/**` excludes
-the three pilots, and changing a pilot body needs an **engine-side ruling**.
+**Why the ruling is right, kept because it will be tempting to revisit:** the first thing to test the
+boundary asked to be let through. A boundary that widens for its first real applicant was never a
+boundary, and the pressure came from the lane that wanted the room — precisely the case ADR-0602
+exists to refuse. Holding it cost one blocked rebuild; conceding it would have cost the rule.
 
-**So T-01 has no landing site inside the current allowlist.** Its real home is the review METHOD in
-`.claude/agents/code-reviewer.md`, and `.claude/agents/**` is not on the list. Widening it is an
-amendment, never a convenience edit — so it is **proposed, not taken**. Granting the room to the lane
-that wants it, mid-phase, is exactly the pressure the allowlist exists to resist. **The first real
-absorb hitting that wall is the allowlist working.**
+**What this cycle proved, and what it did not.** PROVEN on real input: study → report → classify →
+gate. The extraction report lints clean, the registry's first real row lints clean, `rebuild-lint`
+returned 0 warnings on a real diff, and the 4-bucket matrix returned 1 ABSORB / 2 SKIP / 1 ROUTE with
+nothing shoehorned. NOT PROVEN: rebuild → A/B → adoption. **REQ-08 is not met and REQ-03's A/B never
+ran** — recorded as not-met rather than narrated as nearly-done.
 
-**What is proven and what is not, stated plainly.** The loop is proven through
-**study → report → classify → gate**, all on real input: the report lints clean, the registry's first
-real row lints clean, `rebuild-lint` returned 0 warnings on a real diff, and the 4-bucket matrix
-returned 1 ABSORB / 2 SKIP / 1 ROUTE with nothing shoehorned. It is **NOT** proven through
-**rebuild → A/B → adoption**, and cannot be until the allowlist question is answered. REQ-08 is
-therefore **not met**, and REQ-03's A/B has not run.
+**One owner action remains, and it is the only one:** the Phase 03 pick, which closes REQ-06's live
+demo and is the row Phase 03 closed with open.
 
-**TWO OWNER ACTIONS, and the second is new:**
+```
+node .claude/scripts/hq/arc-inbox.mjs approve 01KZJXBNKT6PEYC87TW5D53QTP --reason "pick=quartz; <why>"
+```
 
-1. **The Phase 03 pick** — approval `01KZJXBNKT6PEYC87TW5D53QTP`, labels **quartz | fathom**. The
-   reason must now carry the `pick=<label>; ` prefix, because the chain finally enforces it:
-   `node .claude/scripts/hq/arc-inbox.mjs approve 01KZJXBNKT6PEYC87TW5D53QTP --reason "pick=quartz; ..."`
-2. **The ADR-0602 widening** — should `.claude/agents/**` join the rebuild allowlist? Yes unblocks
-   T-01 and lets Phase 04 finish. No leaves T-01 a recorded `candidate` and ends this cycle's
-   proof-of-life at the classification, which is a real and honest outcome rather than a failure.
+Labels are **quartz | fathom** and tell you nothing about which is which by design; the mapping is
+sealed behind a hash and revealed only after the decision lands. Either label is a valid answer — the
+pick proves the chain, not that one variant is better.
 
-**Retro inputs banked this cycle** (all five carried forward): CI was GREEN before three of the four
-adversarial passes found their serious holes · four of Phase 02's seven serious findings were earlier
-fixes of mine REOPENING · `arc-evidence.sh` verifies a zero-artifact bundle · a test that only passes
-while the defect is present is a test FOR the defect · and an allowlist can admit a path that another
-lane's proof has frozen.
+**Next step after that:** Phase 04 cannot complete REQ-08, so the honest close is a **retro** that
+records what the loop proved, what it did not, and the five findings below — then the cycle ends
+under its appetite with the mechanics banked and one real study on the record.
+
+**Five retro inputs banked.** CI was GREEN before three of the four adversarial passes found their
+serious holes · four of Phase 02's seven serious findings were earlier fixes of mine REOPENING ·
+`arc-evidence.sh` reports "verified" on a zero-artifact bundle · a test that only passes while the
+defect is present is a test FOR the defect · and an allowlist can admit a path that another lane's
+proof has frozen.
 
 **Unchanged and owner-owned elsewhere:** leads Phase 03 waits on the `_dmarc.automemory.ai` record;
 policy Phase 04 on three `.claude/settings.json` edits.

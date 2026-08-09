@@ -80,6 +80,29 @@ an allowlist widening, which this ADR says is an amendment and never a convenien
 amendment is proposed rather than taken: **it is the owner's call, not a mid-phase decision by the
 lane that wants the room.**
 
+### The owner's ruling, 2026-08-09: DO NOT WIDEN
+
+**The allowlist is not widened. `.claude/agents/**` stays off it, and T-01 stays a `candidate` row.**
+
+The first real absorb therefore ends at a recorded classification rather than at an adoption — and
+that is the outcome, not a failure to reach one. The technique is real, the verdict stands, the
+evidence is committed, and the row will still be there when a landing site exists.
+
+**Why this is the right call and not merely the cautious one:** the first thing to test this boundary
+asked to be let through, and a boundary that widens for its first real applicant was never a boundary.
+The pressure came from the lane that wanted the room, which is exactly the case ADR-0602 exists to
+refuse. Holding it costs one blocked rebuild; conceding it would have cost the rule.
+
+**What would legitimately unblock T-01 later**, in order of preference:
+
+1. An **engine-side ruling** on the three pilot processes — whether their bodies stay frozen as
+   fidelity evidence permanently, or whether the engine grows a deliberate re-baseline path. That is
+   engine's call about engine's own proof, and it is the clean route.
+2. A **playbook** under `docs/playbooks/**` (already allowlisted) that a future reviewed diff points
+   the `code-reviewer` agent at — but a playbook nothing references is a guard with no caller, which
+   this cycle already shipped once and had to fix.
+3. A widening, later, decided on its own merits rather than under the pressure of a blocked rebuild.
+
 **The generated-file trap, worth keeping even though the target moved.** `.claude/commands/arc-review.md`
 carries `GENERATED FILE — DO NOT EDIT … deleted by the next regeneration`. A rebuild landing there
 survives until the next `arc-compile` and then vanishes, with the registry still claiming it shipped.
