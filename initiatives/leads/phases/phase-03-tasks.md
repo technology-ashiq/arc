@@ -59,12 +59,12 @@ commit: 2c7598b
 title: **`lib/provider.mjs` really bound to Resend** — the real implementation, not the fake, and the Phase-00 contract suite runs green against it including the negative control (the real impl pointed at an unreachable endpoint reaches its own code and exits with its own failure code). **Bound only after the two criteria above are green**, so the transport is attached to a gate that already refuses rather than to an open path
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+proof: tests/leads-provider-contract.bats, 22 -> 25 tests, on CI. The negative control must now be GIVEN the config the bound provider requires, or it stops at the first config refusal and never reaches the socket -- reaching the transport failure against 127.0.0.1:1 is what proves the real module ran its own code rather than the fake being silently substituted.
+tier: contract
+sources: phase-03-spec.md, code:grep-fallback(17; no .codegraph/), adrs(17), learning(0), retro(13), churn(1)
+decision: The CREDENTIAL binds the provider, not the base URL: LEADS_PROVIDER_BASE_URL now defaults to api.resend.com, so the old refuses-when-no-base-URL assertion would have passed for the wrong reason forever. Resend names its ack field id while the canonical field here is provider_message_id, and the mapping is a PARAMETER on the single decoder rather than a second decoder, so what-counts-as-an-ack keeps one definition (a drifted copy would be D5 in the one function whose only job is that decision). suppressionList and the non-address recipient are NAMED refusals rather than stubs, because returning an empty suppression list reads as nobody-is-suppressed and handing a keyed lead id to the vendor comes back as a 400 that reads like a transport fault.
+result: CI 19/19 green, merged as eb0f83a on the base CI tested. Caught before commit: authStatus first returned dmarc true off Resend domain status, on the line directly below a comment saying that would invent a clause the vendor never checked -- Resend does not evaluate DMARC at all. It now returns dmarc null, a THIRD state meaning the vendor cannot answer, and preflight defers that clause to its own live DNS row and says which source decided. Returning false would have been equally wrong: it makes the gate unpassable for a domain whose DMARC is fine. Same defect class as the fixture loader that returned all-green when its file was missing. NOT proven: no live send has happened -- the five journeys, reply ingestion against real mail and crash-and-reconcile on a real idempotency key are slices 04 onward.
+commit: 10d3d49
 
 #### slice: 04
 
