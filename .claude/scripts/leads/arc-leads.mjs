@@ -134,6 +134,27 @@ async function cmdResearch(icpPath) {
   mkdirSync(dossierDir, { recursive: true, mode: STORE_DIR_MODE });
   const fp = fingerprint(store);
 
+  // THE RE-RUN IS THE ORDINARY CASE, and it used to be fatal. `lead.researched`'s idem preimage
+  // is `campaign|lead_id|below_bar|store_fingerprint` (validate-leads.mjs) and is deliberately
+  // stable across runs -- so re-running research, or adding a sixth lead to five already on the
+  // spine, made the emitter refuse the first duplicate as DUP_IDEM. That refusal arrives as a
+  // THROWN error out of `emit`, which killed the loop at exit 2 with the earlier dossiers
+  // rewritten and the later ones never reached: the receipt layer was idempotent and the
+  // command was not.
+  //
+  // The second-order damage was worse than the crash. The emitter quarantines every refusal
+  // BEFORE it exits (spine-io `quarantine`), and `report` refuses outright while ANY quarantine
+  // record exists -- so one re-run of research silently disabled the ADR-0416 mixing report,
+  // the single number this phase exists to produce, until a human cleared the spine by hand.
+  //
+  // `emit`'s own header already describes the remedy and names the module that has it:
+  // ingest.mjs skips an emit whose idem is on the spine, deterministically, from the fold it
+  // was handed, and keeps `allowDuplicate` as the RACE backstop for two processes that both
+  // pass that check. The guard was written in one branch and never in this one -- D6, this
+  // lane's most repeated defect. Both halves are here now.
+  const onSpine = new Set(readAllEvents({ allowMissing: true }).map((e) => e && e.idem).filter(Boolean));
+  let emitted = 0, alreadyOnSpine = 0;
+
   for (const a of accepted) {
     const id = leadId(store, a.email);
     // The dossier holds the PII. It lives in the store, outside the repo, and nothing here
@@ -146,12 +167,18 @@ async function cmdResearch(icpPath) {
       campaign, store_id: store.storeId,
     }, null, 2) + "\n");
 
-    emit("lead.researched", {
+    const receipt = {
       lead_id: id, campaign, provenance: a.provenance, geography: a.geography,
       email_status: a.email_status, fact_count: a.fact_count,
       store_id: store.storeId, store_fingerprint: fp,
       ...(a.below_bar ? { below_bar: true } : {}),
-    });
+    };
+    // The idem is computed from the SAME payload object that would be emitted, not from a
+    // re-spelling of its fields: a preimage assembled twice is free to disagree with itself on
+    // exactly the receipt that matters (D5), and this one already grew `below_bar` once.
+    if (onSpine.has(leadsIdem("lead.researched", receipt))) { alreadyOnSpine++; continue; }
+    emit("lead.researched", receipt, { allowDuplicate: true });
+    emitted++;
   }
 
   // Rejected candidates keep a record too: the 25 must be a filtered set with an audit trail,
@@ -168,6 +195,9 @@ async function cmdResearch(icpPath) {
   const below = accepted.filter((a) => a.below_bar).length;
   console.log(`arc-leads research: ${pass} PASS · ${held} HELD · ${below} BELOW-BAR · ${rejected.length} REJECTED`);
   console.log(`  dossiers: ${accepted.length} in ${dossierDir}`);
+  // COUNTED AND PRINTED, because a silent skip and a silent emit look identical to an operator
+  // asking "did that run do anything" -- which is the exact question a re-run exists to ask.
+  console.log(`  receipts: ${emitted} new · ${alreadyOnSpine} already on the spine`);
   for (const r of rejected) console.log(`  REJECTED ${r.firm}: ${r.exclusion_reason}`);
 }
 
@@ -215,11 +245,42 @@ function cmdDraft(campaign, file) {
     linted.map((d, i) => ({ ref: String(i), body: d.body, verdict: d.verdict, warns: d.warns }))
   );
 
-  let written = 0, blocked = 0;
+  // ONE APPROVAL PER (campaign, lead, touch), enforced HERE rather than left to the send moment.
+  //
+  // Re-running `draft` on the same file wrote a second draft record and emitted a second
+  // approval.requested for the identical lead and touch, and nothing anywhere refused it. The
+  // mail itself is safe -- the guard's `already-sent` row refuses the second attempt before the
+  // provider is asked -- so this is not a double-send bug, and that is precisely why it survived
+  // every existing fixture: the safety property everyone tests for still holds.
+  //
+  // What breaks is the human decision this whole phase is built on. Two inbox items for one send
+  // means the owner approves the same touch twice and "which approval authorised this mail?"
+  // stops having an answer, which is the L1 record ADR-0407 exists to keep. And a five-lead run
+  // then reports five sent and five refused, so the phase's own evidence bundle reads as though
+  // half the journeys failed.
+  //
+  // Revising a draft is EDITING the one that exists: `review` prints BODY EDITED SINCE WRITE and
+  // the guard refuses on a draft_sha that moved after approval (ADR-0412). A second record for
+  // the same touch was never the way to revise one.
+  //
+  // The map is seeded from the store and then grown as this batch writes, so two entries for one
+  // lead and touch INSIDE a single file are caught by the same rule -- a check against on-disk
+  // state alone would pass the whole batch on a first run.
+  const seenTouch = new Map();
+  for (const prior of listDrafts(store, campaign))
+    seenTouch.set(`${prior.lead_id}|${prior.touch_n}`, prior.draft_ref);
+
+  let written = 0, blocked = 0, duplicate = 0;
   linted.forEach((d, i) => {
     if (scored[i].verdict === VERDICT.FAIL) {
       blocked++;
       console.log(`  FAIL  ${d.lead_id}: ${d.fails.join(" | ")}`);
+      return;
+    }
+    const touchKey = `${d.lead_id}|${d.touch_n}`;
+    if (seenTouch.has(touchKey)) {
+      duplicate++;
+      console.log(`  DUP   ${d.lead_id}: touch ${d.touch_n} already has draft ${seenTouch.get(touchKey)} in "${campaign}" — edit that draft, or use the next touch_n. No second approval was requested.`);
       return;
     }
     const warns = scored[i].warns;
@@ -228,10 +289,11 @@ function cmdDraft(campaign, file) {
       lintStatus: scored[i].verdict === VERDICT.PASS ? "PASS" : `BELOW-BAR: ${warns.join(" | ")}`,
     });
     emit("approval.requested", approvalPayload(rec));
+    seenTouch.set(touchKey, rec.draft_ref);
     written++;
     console.log(`  ${scored[i].verdict === VERDICT.PASS ? "PASS " : "WARN "} ${rec.draft_ref} ${d.lead_id}${warns.length ? " — " + warns.join(" | ") : ""}`);
   });
-  console.log(`arc-leads draft: ${written} queued for approval, ${blocked} FAIL blocked before the inbox`);
+  console.log(`arc-leads draft: ${written} queued for approval, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused`);
 }
 
 // The local render. The spine carries an opaque ref; the human reads the body HERE, beside the
