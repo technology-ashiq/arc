@@ -58,6 +58,49 @@ onto a gate that already refuses.** The list below is in execution order, not im
 - [ ] **Rehearsal mode, both properties fixture-proven before any real send**: a recipient
       outside the allowlist is refused **before any network call** · every rehearsal send
       carries its rehearsal mark in its receipt
+
+      **Design, settled 2026-08-09 while slice 03 was being bound — start here, not with a
+      fresh investigation.** The allowlist check must NOT resolve the address first. The
+      allowlist holds addresses; the send path carries `draft.lead_id`, a keyed HMAC
+      (ADR-0400). Compare in ID SPACE:
+
+      ```
+      allowedIds = union over each allowlist address of leadIdsAllVersions(store, address)
+      draft.lead_id not in allowedIds  ->  refuse, before any network call
+      ```
+
+      `leadIdsAllVersions` (`store.mjs`) exists already, and **all versions is the whole
+      point**: `guard.mjs` carries the same lesson in its own comment — checking ONE id meant
+      that after a key rotation every person who had unsubscribed became contactable again,
+      "the single worst thing this system can do". An allowlist checked at one key version has
+      the mirror-image bug: after a rotation the five allowlisted people stop matching and the
+      guard silently refuses everything, or worse, a future variant reads a miss as unknown.
+      No raw address touches the send path, and the check works across rotations.
+
+      The VENDOR still needs the real address. That resolution belongs in the real provider,
+      reading `store.dir/dossiers/<leadId>.json` `.email` — the shape `resolveKeyringIds` in
+      `guard.mjs:33` already uses, and it must be **lifted into a shared exported helper
+      rather than copied**, or it is defect class D5 the moment one of the two grows a
+      normalisation the other lacks. `deps.mjs providerReal.submit` currently refuses any
+      recipient that is not address-shaped, which is what holds the line until this lands.
+
+      Reuse `loadAllowlist(env, varName)` and `assertAllowed(to, list)` from `mail.mjs:125`
+      for parsing — the `varName` parameter exists precisely so a second allowlist can reuse
+      it, and `preflight.mjs` hand-rolled a weaker counter instead, which the adversarial pass
+      flagged. Parse with the shared helper; compare in id space as above.
+
+      **Before writing the code, check whether the `outreach.sent` payload is a closed key
+      set.** Spine payloads are closed (a non-negotiable) and the kinds are closed at 18
+      (ADR-0026). The rehearsal mark is a payload FIELD, not a new kind, but if the payload
+      schema is closed it needs an explicit update — and a mark that fails validation would
+      quarantine every rehearsal receipt, which is worse than no mark.
+
+      Fixtures this needs, and the third is the one an attacker reaches for: an allowlisted
+      lead sends · a non-allowlisted lead is refused **with no socket opened** (assert the
+      refusal happens before the provider is called, not merely that the send failed) · an
+      allowlisted lead whose id was minted under a PREVIOUS key still matches · a rehearsal
+      receipt carries the mark · a report over the rehearsal window asked for real sends
+      returns **zero by count**.
 - [ ] **The mixing guard, proved by its own negative**: a report run over the rehearsal window,
       asked for real sends, returns **zero** — and the assertion checks the count, not the
       absence of a word in the output
