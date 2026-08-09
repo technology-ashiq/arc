@@ -106,7 +106,7 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
 
 @test "two touches to one lead produce different idems" {
   run _node "$VIMPORT
-    const base = {lead_id:ID, campaign:'pilot', idem_key:'k1', provider_message_id:'m1', submitted_at:'2026-08-04T10:00:00+05:30', draft_sha:'a'.repeat(64)};
+    const base = {lead_id:ID, campaign:'pilot', idem_key:'k1', provider_message_id:'m1', submitted_at:'2026-08-04T10:00:00+05:30', draft_sha:'a'.repeat(64), rehearsal:false};
     const a = leadsIdem('outreach.sent', {...base, touch_n:1});
     const b = leadsIdem('outreach.sent', {...base, touch_n:2});
     console.log(a === b ? 'COLLIDE' : 'distinct');"

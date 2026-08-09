@@ -21,14 +21,17 @@ import { source, verifier, ProviderError, PROVIDER_EXIT } from "./lib/deps.mjs";
 import { preflight, PREFLIGHT_REFUSED, loadConfig, seedSmokeFinding } from "./lib/preflight.mjs";
 import { ingestReply, readReplyFile, readStdin, IngestRefusal } from "./lib/ingest.mjs";
 import { inbound } from "./lib/deps.mjs";
-import { leadsIdem } from "../hq/lib/validate-leads.mjs";
-import { readAllEvents } from "./lib/spine-read.mjs";
+// `assertTs` is the house timestamp grammar, imported rather than re-spelled — the same
+// validator the payload stamps went through, so a window bound and the receipts it is compared
+// against can never be judged by two different grammars (D5).
+import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
+import { readAllEvents, dayFileCount, quarantineCount } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -273,6 +276,12 @@ async function cmdReconcile() {
     emitReceipt: async (p) => emit("outreach.sent", p),
   });
   console.log(`arc-leads reconcile: ${out.resolvedFromSpine} resolved from the spine (no provider call) · ${out.emittedLate} late receipt(s) · ${out.voided} voided · ${out.providerCalls} provider call(s)`);
+  // The per-intent failures, PRINTED. reconcile collects them so one bad intent cannot stop it
+  // healing the healthy ones -- but nothing printed them, so the operator saw only "N intent(s)
+  // still unresolved" and had no idea which intent, why, or what to do about it. An intent that
+  // predates ADR-0416 wedges every send in the campaign and names its own remedy; a remedy in
+  // an object nobody prints is not a remedy.
+  for (const err of out.errors || []) console.error(`  ! ${err}`);
   const left = unresolvedIntents(store);
   if (left.length) die(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
   } finally { release(); }
@@ -427,9 +436,17 @@ async function cmdPreflight() {
 // fold-completeness rather than "wipe and replay", a test that would delete nothing and
 // assert nothing.
 function cmdState(json) {
+  // Asked BEFORE the fold, because `allowMissing` cannot tell an empty answer from an empty
+  // spine and this surface publishes the mixing guard's own numbers. See `dayFileCount`.
+  const census = dayFileCount();
   const events = readAllEvents({ allowMissing: true });
   const leads = new Map();
-  const campaigns = {};
+  // A Map, never a plain object. `(campaigns[p.campaign] ||= {...}).submitted += 1` on a receipt
+  // whose campaign was the string `__proto__` resolved `campaigns.__proto__` to Object.prototype
+  // — truthy, so `||=` never assigned — and wrote `submitted = NaN` onto the prototype of every
+  // object in the process, while the campaign itself disappeared from `Object.keys` and from the
+  // printed report. Reproduced: `campaign keys: []` beside `sends.total: 1`.
+  const replied = new Map();
   const touch = (id) => leads.get(id) || leads.set(id, { last_touch_at: null, lead_id: id, suppressed: false, touches: 0 }).get(id);
 
   for (const e of events) {
@@ -439,18 +456,190 @@ function cmdState(json) {
       const l = touch(p.lead_id);
       l.touches += 1;
       if (!l.last_touch_at || p.submitted_at > l.last_touch_at) l.last_touch_at = p.submitted_at;
-      (campaigns[p.campaign] ||= { replied: 0, submitted: 0 }).submitted += 1;
     } else if (e.kind === "outreach.replied") {
       touch(p.lead_id);
-      (campaigns[p.campaign] ||= { replied: 0, submitted: 0 }).replied += 1;
+      if (typeof p.campaign === "string") replied.set(p.campaign, (replied.get(p.campaign) || 0) + 1);
     } else if (e.kind === "lead.suppressed") touch(p.lead_id).suppressed = true;
   }
 
+  // `submitted` is DERIVED from the same fold, not counted a second time. Row 8 of the
+  // carried-forward table: this function folded `outreach.sent` twice over one event list — once
+  // by hand into `campaigns[k].submitted`, once through `sendCounts` — and the two were free to
+  // disagree. They did, the moment a receipt carried no string campaign.
+  const names = campaignNames(events, ["outreach.sent", "outreach.replied"]);
+  const campaigns = Object.create(null);
+  for (const k of names) {
+    const sends = sendCounts(events, { campaign: k });
+    campaigns[k] = { replied: replied.get(k) || 0, submitted: sends.total, sends };
+  }
+
   const out = {
-    campaigns: Object.fromEntries(Object.keys(campaigns).sort().map((k) => [k, campaigns[k]])),
+    // ADR-0416's mixing guard, reported as a COUNT rather than left to a reader to grep for.
+    // `real` is the number that carries the claim, and an unmarked receipt is counted as real
+    // (see sendCounts) precisely so that a zero there means something.
+    //
+    // AND IT IS NOT PUBLISHED WHEN NOTHING WAS READ. `report` refuses an unreadable spine while
+    // this surface printed `{0,0,0,0}` at exit 0 over the very same reader — the unguarded
+    // configuration publishing the safety number. `state` may not refuse (it answers "what does
+    // this install know about", and a fresh install legitimately knows nothing), so it says so
+    // in the field instead of answering zero.
+    sends: census.days === 0 ? null : sendCounts(events),
+    sends_unavailable: census.days === 0 ? `${census.why} — no count is published, because zero receipts read is not zero sends` : null,
+    // Counted, never folded: a quarantined line is an input the emitter REFUSED, so a clean set
+    // of counts beside a non-empty quarantine is a claim made over receipts nobody has read.
+    quarantined: quarantineCount().records,
+    campaigns: Object.fromEntries(names.map((k) => [k, campaigns[k]])),
     leads: [...leads.values()].sort((a, b) => (a.lead_id < b.lead_id ? -1 : a.lead_id > b.lead_id ? 1 : 0)),
   };
   if (json) process.stdout.write(JSON.stringify(out, null, 2) + "\n");
+  return out;
+}
+
+// ---------- report (Phase 03 slice 05) — the mixing guard's report (ADR-0416) ----------
+//
+// ADR-0416 lets the outreach path bind the product domain in rehearsal mode, and the single
+// claim that has to survive that is: over the rehearsal window, no REAL cold send happened.
+// `sendCounts` has produced that number since slice 04 — and nothing a person could run ever
+// asked it with a window. The adversarial pass wrote that down exactly: the counter's own
+// header states the claim, and "the header's claim has no report behind it yet". A claim
+// carried only by a function with no caller is a claim nobody can check. This is the caller.
+//
+// THE ANSWER IS A NUMBER and this command only prints it. An assertion shaped "the output does
+// not contain the word real" passes for a mutant that renames the field, and passes for a
+// crash; a count does neither. The spec forbids the word-absence form in as many words.
+//
+// ONE READER, ONE FOLD. Events come from `readAllEvents` and the classification from
+// `sendCounts` — the same reader and the same function `state --json` uses, deliberately not a
+// second pass over the same receipts. A send one surface counts is a send the other counts,
+// and two derivations of one number is this lane's most repeated defect (D5), so the fixture
+// asserts the two agree over one spine rather than trusting the arrangement to hold.
+//
+// THERE IS NO VERDICT LINE AND NO PASS/FAIL EXIT, and that is a decision rather than an
+// omission. A verdict would be a SECOND derivation of the same claim, free to drift from the
+// number printed beside it; an exit code carries one bit where the answer has three axes
+// (rehearsal, real, and how much of real is merely unmarked). The exit code says whether the
+// report could be produced. The count says what happened.
+function cmdReport(argv) {
+  // The same consume-a-flag-and-its-value LOOP as `cmdMail`, for the same reason: independent
+  // scans let one flag's value shadow another's, and a loop is what makes an unknown flag, a
+  // duplicate and a bare positional refusable rather than silently dropped. A dropped
+  // `--from` here does not misfile a mail — it silently widens the window the claim is about.
+  const got = { "--campaign": null, "--from": null, "--to": null };
+  let json = false;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    let name = a, inline = null;
+    const eq = a.indexOf("=");
+    if (a.startsWith("--") && eq > 2) { name = a.slice(0, eq); inline = a.slice(eq + 1); }
+
+    if (name === "--json") {
+      if (inline !== null) die(2, "--json takes no value");
+      json = true;
+      continue;
+    }
+    if (Object.prototype.hasOwnProperty.call(got, name)) {
+      if (got[name] !== null) die(2, `${name} given twice — which one bounds the report is exactly the ambiguity this refuses rather than resolving`);
+      if (inline !== null) { got[name] = inline; continue; }
+      const v = argv[i + 1];
+      if (v === undefined || String(v).startsWith("--"))
+        die(2, `${name} needs a value — write \`${name}=<value>\` if the value itself begins with two dashes`);
+      got[name] = v;
+      i++;
+      continue;
+    }
+    if (a.startsWith("--")) die(2, `unknown flag ${a}`);
+    die(2, "report takes no positional argument — every value belongs to a named flag");
+  }
+  const campaign = got["--campaign"], from = got["--from"], to = got["--to"];
+
+  // The bounds are validated HERE, before anything is counted. `sendCounts` validates them too
+  // and that repetition is deliberate: it keeps the counter self-defending for every other
+  // caller, while this call is what puts the operator's own spelling into the refusal and what
+  // makes the ORDER comparison below safe to run on strings at all.
+  if (from !== null) assertTs("report", "--from", from);
+  if (to !== null) assertTs("report", "--to", to);
+  // AN INVERTED WINDOW MATCHES NO RECEIPT, so every count under it is zero — a confident wrong
+  // answer in the unsafe direction, which is the same failure an unplaceable bound produces and
+  // it refuses for the same reason. Lexicographic order IS chronological order for these
+  // stamps: the validator above pins one spelling per instant.
+  if (from !== null && to !== null && from > to)
+    die(2, `--from ${from} is after --to ${to} — an inverted window matches no receipt at all, so it would answer "0 real sends" to a question it never actually asked. Refusing rather than returning that zero.`);
+
+  // NO `allowMissing` HERE, and that is the one place this reader is called differently from
+  // `state`. `state` answers "what does this install know about", so a fresh install with no
+  // spine yet is a legitimate empty answer. This command answers "did a real send happen in
+  // that window", and an absent or mistyped `ARC_SPINE_ROOT` folding to zero events would
+  // produce the most reassuring possible number from having read nothing at all — the same
+  // unreadable-counted-as-empty failure `spine-read.mjs` opens its header with, arriving at the
+  // one claim ADR-0416 exists to make. A spine the reporter cannot read is a refusal.
+  const events = readAllEvents();
+
+  // A QUARANTINED RECEIPT IS A SEND NOBODY HAS READ. The emitter quarantines-and-exits-0, so one
+  // unknown payload key on a REAL send left `events/_quarantine/` holding the receipt, this
+  // reader never opening that directory, and the report answering `real: 0` at exit 0.
+  // Reproduced end to end. That is precisely "a zero that means I could not look", so it refuses
+  // rather than reporting a count beside it — a count over an incomplete set is not a smaller
+  // truth, it is the wrong answer to the question ADR-0416 exists to ask.
+  const quarantined = quarantineCount();
+  if (quarantined.records > 0)
+    die(2, `${quarantined.records} receipt(s) sit in the spine quarantine (${quarantined.files.join(", ")}) — refusing to report, because the emitter accepts a send and quarantines its receipt at exit 0, so any of them could be a real send this count cannot see. Resolve the quarantine, then ask again.`);
+
+  // A CAMPAIGN NAME OFF ARGV IS NOT A CAMPAIGN. `sendCounts` matches that axis exactly and says
+  // why: answering a name that does not exist with a silent zero is the CALLER's contract to
+  // keep, and `state --json` keeps it by only ever asking about names it folded out of the
+  // spine itself. This command takes the name from a human's shell, where "Pilot", "pilot " and
+  // a finger-slip are each one keystroke away — and every one of them would answer `real: 0`,
+  // which reads exactly like the answer the operator was hoping to see.
+  //
+  // So the name is resolved against the very receipts being counted. A campaign that carries no
+  // `outreach.sent` receipt at all refuses too, and that is the stronger answer rather than a
+  // weaker one: "no receipt on the spine carries that name" is what the reporter actually
+  // knows, and it tells a quiet campaign from a typo, which a zero cannot.
+  if (campaign !== null) {
+    // The same string-filtered set `state --json` keys its campaign map off, from one function.
+    const known = campaignNames(events);
+    if (!known.includes(campaign))
+      die(2, `no outreach.sent receipt on the spine carries campaign ${JSON.stringify(campaign)} — refusing rather than reporting zero real sends for a name that may simply be misspelled. Campaign(s) with receipts: ${known.length ? known.join(", ") : "(none)"}`);
+  }
+
+  const { counted, counts: sends } = foldSends(events, { campaign, from, to });
+
+  // A CORRECTION RECLASSIFIES A SEND; THE FOLD DOES NOT KNOW THAT. `supersedes` was ignored
+  // entirely, so a correction moving a send rehearsal<->real left the superseded original in the
+  // count beside its replacement: ONE physical send in two classes, which is the non-negotiable
+  // this whole command exists to hold. Honouring it properly is a fold-shaped change (a
+  // supersedes chain, resolved before classification) and it is not being invented inside a fix
+  // commit — so the reporter refuses and names the receipt instead of quietly double-counting.
+  const countedIds = new Set(counted.map((e) => e.id));
+  const corrections = events.filter((e) => typeof e.supersedes === "string" && countedIds.has(e.supersedes));
+  if (corrections.length)
+    die(2, `${corrections.length} event(s) on the spine supersede an outreach.sent inside this window (${corrections.map((e) => `${e.id} supersedes ${e.supersedes}`).join("; ")}) — refusing, because this fold does not resolve supersedes and would count the superseded original AND its correction, putting one physical send in two classes.`);
+
+  const out = { campaign, window: { from, to }, sends };
+  if (json) {
+    // Keyed `sends`, identically to `state --json`, so the two can be compared field for field
+    // by anything that reads both — including the fixture that asserts they never disagree.
+    process.stdout.write(JSON.stringify(out, null, 2) + "\n");
+    return out;
+  }
+  console.log(`arc-leads report: campaign ${campaign ?? "(all)"} · window ${from ?? "(open)"} .. ${to ?? "(open)"}`);
+  // One label, one number, one line, in the same order as the JSON — so the human surface and
+  // the machine surface can be compared field for field by a fixture, and a print path that
+  // showed a different number from the one derived would be a visible disagreement rather than
+  // a thing nobody thought to check.
+  console.log(`  rehearsal  ${sends.rehearsal}`);
+  console.log(`  real       ${sends.real}`);
+  // Named on its own line AND counted inside `real`. An unmarked receipt predates the ADR-0416
+  // mark, and "we cannot show this was a rehearsal" is not "it was a rehearsal" — so it counts
+  // as real, which is what keeps a zero there worth claiming. It is still named, because an
+  // operator reading a non-zero real count needs to know whether that is a cold send or a
+  // receipt of unknown vintage.
+  console.log(`  unmarked   ${sends.unmarked}   (inside the real count, never a rehearsal: receipts predating the ADR-0416 mark)`);
+  // The window's own honesty axis. An unplaceable receipt is counted in EVERY window because it
+  // must not escape the count by being unreadable — which means a window's counts silently
+  // include receipts that window could not place, and there was no field that said so.
+  console.log(`  unplaceable ${sends.unplaceable}  (counted in every window: submitted_at is not the pinned YYYY-MM-DDTHH:MM:SS+05:30 spelling, so no bound can place it)`);
+  console.log(`  total      ${sends.total}`);
   return out;
 }
 
@@ -693,6 +882,7 @@ try {
   else if (cmd === "mail") await cmdMail(rest);
   else if (cmd === "notify") await cmdNotify(rest);
   else if (cmd === "state") cmdState(rest.includes("--json"));
+  else if (cmd === "report") cmdReport(rest);
   else {
     console.error("arc-leads: usage:");
     console.error("  store init                      mint the private store and its HMAC secret");
@@ -706,6 +896,7 @@ try {
     console.error("  unlock                          clear a send lock whose holder is DEAD (refuses if alive)");
     console.error("  mail [--to <a>] --subject <s> [--text <b>|--text-file <p>|--stdin]   arc -> owner notification only; allowlist-locked (ADR-0415)");
     console.error("  notify canary --stdin | notify approvals | notify brief   the three triggers; approvals is SILENT when nothing waits");
+    console.error("  report [--campaign <c>] [--from <ts>] [--to <ts>] [--json]   the ADR-0416 mixing count over a window: rehearsal vs real, as numbers");
     console.error("  preflight | state --json");
     console.error("  The real campaign is Phase 03 and is BLOCKED on business physics (ADR-0413).");
     process.exit(2);

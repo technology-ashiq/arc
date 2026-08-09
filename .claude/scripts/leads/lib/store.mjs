@@ -229,6 +229,21 @@ const stripInvisible = (s) => Array.from(s).filter((ch) => !ZERO_WIDTH_CODES.has
 export const normalizeEmail = (email) =>
   stripInvisible(String(email).normalize("NFC")).trim().toLowerCase();
 
+// The address SHAPE rule, in ONE place. Two callers ask it for opposite reasons: preflight
+// counts the address-shaped entries that make up the ADR-0416 rehearsal lock, and the real
+// provider refuses a resolved recipient that is not one. They were two hand-written copies of
+// the same three conditions -- defect class D5, and the direction that bites is an entry the
+// lock counts and the wire refuses (an operator told five recipients are locked when one of
+// them can never be delivered to), or the reverse.
+//
+// Deliberately CRUDE. It is not an RFC 5321 parser and must not become one: its job is to
+// separate "this is an address" from "this is the word yes", which is what stops
+// `ARC_LEADS_REHEARSAL_ALLOWLIST=yes` being a one-word unlock of the product domain.
+export const isAddressShaped = (s) => {
+  const t = String(s == null ? "" : s);
+  return t.includes("@") && !t.startsWith("@") && !t.endsWith("@");
+};
+
 // The id that reaches the spine. Keyed, not a bare hash: emails are low-entropy, so
 // sha256(email) is dictionary-attackable by anyone holding a public directory -- and this
 // spine is going public.
@@ -245,6 +260,28 @@ export function leadId(store, email, version) {
 // all of them: an address suppressed under v1 must stay suppressed after a rotation to v2.
 export function leadIdsAllVersions(store, email) {
   return store.keyring.map((k) => leadId(store, email, k.version)).reverse();
+}
+
+// The dossier is where the address lives, and this is the ONE function that reads it.
+//
+// Two callers need it and they need it for opposite reasons: the send-moment guard turns it
+// back into the whole keyring of ids, and the real provider hands it to the vendor. They were
+// about to be two copies of the same six lines -- defect class D5, and this lane has already
+// paid for it twice (validate one read, compare another). The moment one copy grew a
+// normalisation the other lacked, a person would be allowlisted under one spelling and
+// delivered to under another.
+//
+// Returns null for EVERY failure -- no dossier, unreadable JSON, absent or non-string email.
+// Every caller treats null as a REFUSAL, never as "nothing to check here". The type check is
+// not decoration: a number or an object here would reach normalizeEmail as String(value) and
+// mint a stable id for a person who does not exist.
+export function dossierEmail(store, leadId) {
+  try {
+    const p = join(store.dir, "dossiers", `${leadId}.json`);
+    if (!existsSync(p)) return null;
+    const email = JSON.parse(readFileSync(p, "utf8")).email;
+    return typeof email === "string" && email.trim() !== "" ? email : null;
+  } catch { return null; }
 }
 
 // sha256 of the ENCODED secret string (what is on disk), not the raw bytes -- pinned so the
