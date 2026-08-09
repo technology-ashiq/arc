@@ -30,6 +30,23 @@ counted as real first touches by any report, ever.
       the Phase-00 contract suite runs green against it including the negative control (the real
       impl pointed at an unreachable endpoint reaches its own code and exits with its own
       failure code)
+- [ ] **The preflight gate actually opens, and opens for the right reason** (added 2026-08-09
+      via `/arc-change`). `sending_domain` in `.claude/config/leads.json` is `""` today, and
+      `preflight()` reads SPF for that domain **before** it reads DMARC — so it refuses at the
+      SPF row and the DMARC row never executes. Setting `sending_domain` is therefore part of
+      this phase, not a precondition someone else supplies. Fixture: with `sending_domain`
+      empty, preflight refuses and **names the SPF row** — a test that only asserts "refused"
+      passes for the wrong reason and would have hidden this for a second time
+- [ ] **ADR-0416's narrowing is enforced by code, not by the ADR text** (added 2026-08-09 via
+      `/arc-change`). `product_domains` is `["lexos.app"]`, so `automemory.ai` is not a product
+      domain to `preflight()` and ADR-0402's `dedicated-domain` refusal cannot fire for it;
+      `preflight.mjs` contains the string `rehearsal` zero times. **These two land together or
+      not at all**: add `automemory.ai` to `product_domains` **and** make the
+      `dedicated-domain` check rehearsal-aware in the same slice. Fixtures, all three:
+      product domain + rehearsal mode ON + allowlist locked → **passes** · product domain +
+      rehearsal mode **OFF** → **refused, citing ADR-0402** · product domain + rehearsal mode
+      ON but the allowlist empty or absent → **refused** (rehearsal mode without a lock is the
+      loophole, and it is the one an attacker reaches for first)
 - [ ] **Rehearsal mode, both properties fixture-proven before any real send**: a recipient
       outside the allowlist is refused **before any network call** · every rehearsal send
       carries its rehearsal mark in its receipt
