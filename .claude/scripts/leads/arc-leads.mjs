@@ -25,13 +25,13 @@ import { inbound } from "./lib/deps.mjs";
 // validator the payload stamps went through, so a window bound and the receipts it is compared
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
-import { readAllEvents } from "./lib/spine-read.mjs";
+import { readAllEvents, dayFileCount, quarantineCount } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -436,9 +436,17 @@ async function cmdPreflight() {
 // fold-completeness rather than "wipe and replay", a test that would delete nothing and
 // assert nothing.
 function cmdState(json) {
+  // Asked BEFORE the fold, because `allowMissing` cannot tell an empty answer from an empty
+  // spine and this surface publishes the mixing guard's own numbers. See `dayFileCount`.
+  const census = dayFileCount();
   const events = readAllEvents({ allowMissing: true });
   const leads = new Map();
-  const campaigns = {};
+  // A Map, never a plain object. `(campaigns[p.campaign] ||= {...}).submitted += 1` on a receipt
+  // whose campaign was the string `__proto__` resolved `campaigns.__proto__` to Object.prototype
+  // — truthy, so `||=` never assigned — and wrote `submitted = NaN` onto the prototype of every
+  // object in the process, while the campaign itself disappeared from `Object.keys` and from the
+  // printed report. Reproduced: `campaign keys: []` beside `sends.total: 1`.
+  const replied = new Map();
   const touch = (id) => leads.get(id) || leads.set(id, { last_touch_at: null, lead_id: id, suppressed: false, touches: 0 }).get(id);
 
   for (const e of events) {
@@ -448,19 +456,39 @@ function cmdState(json) {
       const l = touch(p.lead_id);
       l.touches += 1;
       if (!l.last_touch_at || p.submitted_at > l.last_touch_at) l.last_touch_at = p.submitted_at;
-      (campaigns[p.campaign] ||= { replied: 0, submitted: 0 }).submitted += 1;
     } else if (e.kind === "outreach.replied") {
       touch(p.lead_id);
-      (campaigns[p.campaign] ||= { replied: 0, submitted: 0 }).replied += 1;
+      if (typeof p.campaign === "string") replied.set(p.campaign, (replied.get(p.campaign) || 0) + 1);
     } else if (e.kind === "lead.suppressed") touch(p.lead_id).suppressed = true;
+  }
+
+  // `submitted` is DERIVED from the same fold, not counted a second time. Row 8 of the
+  // carried-forward table: this function folded `outreach.sent` twice over one event list — once
+  // by hand into `campaigns[k].submitted`, once through `sendCounts` — and the two were free to
+  // disagree. They did, the moment a receipt carried no string campaign.
+  const names = campaignNames(events, ["outreach.sent", "outreach.replied"]);
+  const campaigns = Object.create(null);
+  for (const k of names) {
+    const sends = sendCounts(events, { campaign: k });
+    campaigns[k] = { replied: replied.get(k) || 0, submitted: sends.total, sends };
   }
 
   const out = {
     // ADR-0416's mixing guard, reported as a COUNT rather than left to a reader to grep for.
     // `real` is the number that carries the claim, and an unmarked receipt is counted as real
     // (see sendCounts) precisely so that a zero there means something.
-    sends: sendCounts(events),
-    campaigns: Object.fromEntries(Object.keys(campaigns).sort().map((k) => [k, { ...campaigns[k], sends: sendCounts(events, { campaign: k }) }])),
+    //
+    // AND IT IS NOT PUBLISHED WHEN NOTHING WAS READ. `report` refuses an unreadable spine while
+    // this surface printed `{0,0,0,0}` at exit 0 over the very same reader — the unguarded
+    // configuration publishing the safety number. `state` may not refuse (it answers "what does
+    // this install know about", and a fresh install legitimately knows nothing), so it says so
+    // in the field instead of answering zero.
+    sends: census.days === 0 ? null : sendCounts(events),
+    sends_unavailable: census.days === 0 ? `${census.why} — no count is published, because zero receipts read is not zero sends` : null,
+    // Counted, never folded: a quarantined line is an input the emitter REFUSED, so a clean set
+    // of counts beside a non-empty quarantine is a claim made over receipts nobody has read.
+    quarantined: quarantineCount().records,
+    campaigns: Object.fromEntries(names.map((k) => [k, campaigns[k]])),
     leads: [...leads.values()].sort((a, b) => (a.lead_id < b.lead_id ? -1 : a.lead_id > b.lead_id ? 1 : 0)),
   };
   if (json) process.stdout.write(JSON.stringify(out, null, 2) + "\n");
@@ -546,6 +574,16 @@ function cmdReport(argv) {
   // one claim ADR-0416 exists to make. A spine the reporter cannot read is a refusal.
   const events = readAllEvents();
 
+  // A QUARANTINED RECEIPT IS A SEND NOBODY HAS READ. The emitter quarantines-and-exits-0, so one
+  // unknown payload key on a REAL send left `events/_quarantine/` holding the receipt, this
+  // reader never opening that directory, and the report answering `real: 0` at exit 0.
+  // Reproduced end to end. That is precisely "a zero that means I could not look", so it refuses
+  // rather than reporting a count beside it — a count over an incomplete set is not a smaller
+  // truth, it is the wrong answer to the question ADR-0416 exists to ask.
+  const quarantined = quarantineCount();
+  if (quarantined.records > 0)
+    die(2, `${quarantined.records} receipt(s) sit in the spine quarantine (${quarantined.files.join(", ")}) — refusing to report, because the emitter accepts a send and quarantines its receipt at exit 0, so any of them could be a real send this count cannot see. Resolve the quarantine, then ask again.`);
+
   // A CAMPAIGN NAME OFF ARGV IS NOT A CAMPAIGN. `sendCounts` matches that axis exactly and says
   // why: answering a name that does not exist with a silent zero is the CALLER's contract to
   // keep, and `state --json` keeps it by only ever asking about names it folded out of the
@@ -558,14 +596,25 @@ function cmdReport(argv) {
   // weaker one: "no receipt on the spine carries that name" is what the reporter actually
   // knows, and it tells a quiet campaign from a typo, which a zero cannot.
   if (campaign !== null) {
-    const known = [...new Set(
-      events.filter((e) => e.kind === "outreach.sent").map((e) => e.payload?.campaign),
-    )].filter((c) => typeof c === "string").sort();
+    // The same string-filtered set `state --json` keys its campaign map off, from one function.
+    const known = campaignNames(events);
     if (!known.includes(campaign))
       die(2, `no outreach.sent receipt on the spine carries campaign ${JSON.stringify(campaign)} — refusing rather than reporting zero real sends for a name that may simply be misspelled. Campaign(s) with receipts: ${known.length ? known.join(", ") : "(none)"}`);
   }
 
-  const sends = sendCounts(events, { campaign, from, to });
+  const { counted, counts: sends } = foldSends(events, { campaign, from, to });
+
+  // A CORRECTION RECLASSIFIES A SEND; THE FOLD DOES NOT KNOW THAT. `supersedes` was ignored
+  // entirely, so a correction moving a send rehearsal<->real left the superseded original in the
+  // count beside its replacement: ONE physical send in two classes, which is the non-negotiable
+  // this whole command exists to hold. Honouring it properly is a fold-shaped change (a
+  // supersedes chain, resolved before classification) and it is not being invented inside a fix
+  // commit — so the reporter refuses and names the receipt instead of quietly double-counting.
+  const countedIds = new Set(counted.map((e) => e.id));
+  const corrections = events.filter((e) => typeof e.supersedes === "string" && countedIds.has(e.supersedes));
+  if (corrections.length)
+    die(2, `${corrections.length} event(s) on the spine supersede an outreach.sent inside this window (${corrections.map((e) => `${e.id} supersedes ${e.supersedes}`).join("; ")}) — refusing, because this fold does not resolve supersedes and would count the superseded original AND its correction, putting one physical send in two classes.`);
+
   const out = { campaign, window: { from, to }, sends };
   if (json) {
     // Keyed `sends`, identically to `state --json`, so the two can be compared field for field
@@ -586,6 +635,10 @@ function cmdReport(argv) {
   // operator reading a non-zero real count needs to know whether that is a cold send or a
   // receipt of unknown vintage.
   console.log(`  unmarked   ${sends.unmarked}   (inside the real count, never a rehearsal: receipts predating the ADR-0416 mark)`);
+  // The window's own honesty axis. An unplaceable receipt is counted in EVERY window because it
+  // must not escape the count by being unreadable — which means a window's counts silently
+  // include receipts that window could not place, and there was no field that said so.
+  console.log(`  unplaceable ${sends.unplaceable}  (counted in every window: submitted_at is not the pinned YYYY-MM-DDTHH:MM:SS+05:30 spelling, so no bound can place it)`);
   console.log(`  total      ${sends.total}`);
   return out;
 }

@@ -31,7 +31,7 @@ import { loadConfig, effectiveSendingDomain, rehearsalMode, rehearsalRecipients,
 // The house timestamp grammar, imported rather than re-spelled. `sendCounts` compares window
 // bounds against payload timestamps, and a second copy of that pattern here is the same D5 the
 // allowlist parsers were just collapsed for.
-import { assertTs } from "../../hq/lib/validate-leads.mjs";
+import { assertTs, isPayloadTs } from "../../hq/lib/validate-leads.mjs";
 
 // The dossier holds the email; this is the only place in the guard that touches it, and
 // nothing downstream ever receives it. Without this, `state.suppressed.has(lead_id)` checked
@@ -267,20 +267,49 @@ export function deriveState(events, { campaign }) {
 // three records of. What is NOT defensible is answering a non-existent campaign with a silent
 // zero, and that is the caller's contract to keep: `cmdState` only ever passes campaign names it
 // folded out of the spine itself, so every name it asks about is one that exists.
-export function sendCounts(events, { campaign = null, from = null, to = null } = {}) {
+export function sendCounts(events, opts) {
+  return foldSends(events, opts).counts;
+}
+
+/**
+ * The one pass. `sendCounts` is the counts view of it; `counted` is the very same receipts, for
+ * a caller that has to say something about them rather than only how many there were.
+ *
+ * Split out for `supersedes`: a correction that reclassifies a send rehearsal<->real left the
+ * superseded original counted alongside it, so ONE physical send appeared in two classes — the
+ * one thing the non-negotiable forbids outright. Answering that needs the identities of the
+ * receipts inside the window, and re-deriving that set beside the counts would be a second fold
+ * over one event list, which is D5 and is exactly what row 8 of the carried-forward table was
+ * filed for. One filter, two views.
+ */
+export function foldSends(events, { campaign = null, from = null, to = null } = {}) {
   if (from !== null) assertTs("sendCounts", "from", from);
   if (to !== null) assertTs("sendCounts", "to", to);
-  let rehearsal = 0, real = 0, unmarked = 0;
+  let rehearsal = 0, real = 0, unmarked = 0, unplaceable = 0;
+  const counted = [];
   for (const e of events || []) {
     if (e.kind !== "outreach.sent") continue;
     const p = e.payload || {};
+    // EXACT, and `!==` rather than any prefix or fold. `startsWith` here is a surviving mutant
+    // that nothing caught: campaign "pilot" would then also count every receipt of "pilot-b",
+    // so a report about one campaign would silently answer about a family of them. Pinned by a
+    // fixture whose two campaign names are prefixes of each other.
     if (campaign !== null && p.campaign !== campaign) continue;
     const at = String(p.submitted_at == null ? "" : p.submitted_at);
     // `placeable` gates the window comparison ONLY. Adding `if (!placeable) continue;` here is a
     // surviving mutant the comment above forbade and nothing tested: a receipt with a junk
     // `submitted_at` would then vanish from every count, so corrupting one field of one receipt
     // would delete a real send from the number that claims none happened. Pinned by fixture.
-    const placeable = /^\d{4}-\d{2}-\d{2}T/.test(at);
+    //
+    // THE GRAMMAR IS THE PAYLOAD GRAMMAR, not an 11-character prefix of it. The prefix test
+    // admitted `2026-08-04T04:00:00Z` — a real send at 09:30 IST — into a lexicographic compare
+    // against `+05:30` bounds, where `Z` sorts after `+`, and the 09:00-10:00 IST window that
+    // contained it answered `real: 0`. A stamp that is a date but not the pinned spelling is
+    // UNPLACEABLE: it is counted in every window (an unplaceable receipt must not escape the
+    // count by being unreadable) and it is reported on its own axis, because an operator reading
+    // a window's counts needs to know how many of them the window could not actually place.
+    const placeable = isPayloadTs(at);
+    if (!placeable) unplaceable++;
     if (placeable && from !== null && at < from) continue;
     if (placeable && to !== null && at > to) continue;
     // `=== true`, never `p.rehearsal`. The truthy form is a surviving mutant that reclassifies a
@@ -288,11 +317,33 @@ export function sendCounts(events, { campaign = null, from = null, to = null } =
     // `"no"` are all truthy. The schema requires a boolean, so a non-boolean can only come from
     // a receipt this build did not write, and the honest reading of one is "unmarked", which
     // counts as real. Pinned by fixture in both directions.
+    counted.push(e);
     if (p.rehearsal === true) { rehearsal++; continue; }
     if (p.rehearsal !== false) unmarked++;
     real++;
   }
-  return { rehearsal, real, unmarked, total: rehearsal + real };
+  return { counted, counts: { rehearsal, real, unmarked, unplaceable, total: rehearsal + real } };
+}
+
+/**
+ * The campaign names the spine actually carries, as STRINGS.
+ *
+ * One derivation, because there were two: `cmdReport` resolved the operator's `--campaign`
+ * against a string-filtered set of `outreach.sent` campaigns, while `cmdState` keyed a plain
+ * object off `p.campaign` raw. A receipt whose `campaign` was absent or non-string therefore
+ * produced `campaigns.undefined` with `submitted: 1` sitting beside its own `sends.total: 0` —
+ * two derivations of one number disagreeing inside a single printed object — and a receipt
+ * naming `__proto__` wrote its count onto `Object.prototype` and vanished from the map entirely.
+ */
+export function campaignNames(events, kinds = ["outreach.sent"]) {
+  const want = new Set(kinds);
+  const names = new Set();
+  for (const e of events || []) {
+    if (!want.has(e.kind)) continue;
+    const c = (e.payload || {}).campaign;
+    if (typeof c === "string") names.add(c);
+  }
+  return [...names].sort();
 }
 
 // Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage

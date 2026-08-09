@@ -178,6 +178,24 @@ here and a first send.
   the Gmail-class header read is deliberately deferred behind publishing it rather than spent
   measuring a configuration already known to be incomplete.
   Evidence: `initiatives/leads/evidence/phase-04/` (bundle verified).
+- **2026-08-09 — Phase 03 slice 05 adversarial pass: 18 findings across two surfaces, zero
+  overlap** (sixth time in this lane). The slice shipped `arc-leads report`, whose whole job is
+  to refuse rather than answer zero when it cannot look — and **five separate ways to get a
+  confident zero out of it survived its own eleven tests**: a quarantined receipt (the emitter
+  accepts the send and exits 0), a day file renamed `.jsonl.orig` by a merge, an `events/` that
+  exists and holds nothing, `ARC_SPINE_ROOT=""` reading a different spine entirely, and a real
+  send stamped in UTC falling outside the IST window that contains it.
+  **The test surface was the worse half.** All four refusal tests asserted only `status -eq 2`
+  and an empty stdout — the absence-assertion the file's own header condemns — so replacing every
+  refusal branch with a crash killed **0 of 11**, because two refusals reach exit 2 only through
+  the catch-all `die(2, e.message)` that any exception takes. The flag parser had **zero**
+  coverage: neutralising all five of its refusals killed 0 tests, and `--campaign a --campaign b`
+  silently last-won. Tests 11 → **29**, every refusal now pinning a substring of its own message,
+  and **21 mutants applied to the real tree, 21 killed**.
+  **The transferable one:** `sendCounts` validated its window bounds with `assertTs` and tested
+  the payload stamps it compares them against with an 11-character prefix. Two grammars judging
+  one comparison — D5 wearing a prefix test as a disguise, in the one number ADR-0416 exists to
+  produce.
 
 ## Now
 
@@ -236,9 +254,13 @@ Tests went 26 → 39 across the two files, one regression test per finding.
 | 5 | Per-recipient allowlist refusal before any network call. The gate proves a lock EXISTS; nothing enforces membership at send time. Note `mail.mjs` already exports `loadAllowlist(env, varName)` and `assertAllowed(to, list)`, and that `varName` parameter exists precisely so a second allowlist can reuse it | Already **slice 04's** stated exit criterion — it was never in this slice's scope | already homed; do not re-file |
 | 6 | `tests/leads-rehearsal-guard.bats` has no `tests/shard-timings.json` entry, so it rides `_default_weight` 16 against ~34s measured. Adding the file also reshuffled **33 of 95** files across shards, so any test that passed only by shard luck surfaces on the next unrelated run | That file forbids hand-written numbers — the measured value comes from `weigh-tests.yml`, a 60-job Windows run | owner's call: run the weigh workflow, or accept the imbalance |
 | 7 | `journal.mjs` reconcile step 1+2 matches an existing receipt on `{campaign, lead_id, touch_n}` and **not on the mark**, so a rehearsal receipt satisfies the spine check for a real intent and the reverse. Contained today because the vendor idem is mode-free, so one touch to one person is one send whichever mode wrote it | It is the same question as row 10 below — whether a touch may exist twice under two modes is a Phase-05 decision, and answering it inside a fix commit would settle it by accident | Phase 05, with the real-cold-send decision |
-| 8 | `arc-leads state --json` folds `outreach.sent` TWICE over one event list — once by hand for `campaigns[k].submitted`, once through `sendCounts` — so two numbers about the same set are free to disagree (D5). They agree today | A shape change to `cmdState`, not a rehearsal-containment fix; mixing it into a security commit is what row 4 above was carried forward to avoid | Phase 03 spec, with row 4 |
+| 8 | ~~`arc-leads state --json` folds `outreach.sent` TWICE over one event list — once by hand for `campaigns[k].submitted`, once through `sendCounts` — so two numbers about the same set are free to disagree (D5). They agree today~~ | ~~A shape change to `cmdState`~~ | **CLOSED in slice 05's adversarial fixes.** They stopped agreeing the moment a receipt carried no string campaign: `campaigns.undefined` with `submitted: 1` beside its own `sends.total: 0`. `submitted` is now the fold's own total and the map is keyed off the same string-filtered set the report resolves `--campaign` against |
 | 9 | `tests/leads-rehearsal-send.bats` has no `tests/shard-timings.json` entry either, and slice 04 grew it 22 → 28 tests. Same `_default_weight` 16 problem as row 6, and the same reshuffle risk on the next unrelated run | Same reason as row 6: the file forbids hand-written numbers | owner's call, together with row 6 |
 | 10 | `idemKeyFor` is deliberately mode-free (journal.mjs documents why: the vendor key must stay a pure function of campaign/lead/touch or the 24-hour dedup stops recognising a resend). The residual is that **one touch to one person can therefore only ever be one send**, rehearsal or real — which is correct for Phase 03 and is an open question the moment real cold outbound starts | Changing it would break the vendor dedup that is the last thing standing between a crash and a duplicate to a real human | Phase 05, with REQ-05 |
+| 11 | `.github/workflows/ci.yml`'s `_declared()` AND its test-count floor both grep `^@test `, a grammar blind to bats' `f() { # @test` comment form — the same blindness `tests/leads-mixing-report.bats` argues against at length in the comment above its own self-count test, which is the only counter in the tree that handles both forms | `ci.yml` is shared cross-lane; row 1 above already owns the collision cost, and this is the same file and the same line-shape | with rows 1 and 2 — one cross-lane edit, not three |
+| 12 | `tests/leads-mixing-report.bats` has no `tests/shard-timings.json` entry, and slice 05's adversarial fixes grew it 11 → 29 tests. Same `_default_weight` 16 problem as rows 6 and 9, and the same reshuffle risk. **`shard-tests.mjs` should PRINT the count of files riding the default**, so an unmeasured entry is a visible number rather than a silent default (six files came out of the 2026-08-03 merge with no entry at all, riding 16s against real costs up to 123s) | The file forbids hand-written numbers; the measured value comes from `weigh-tests.yml`, a 60-job Windows run | owner's call, together with rows 6 and 9 |
+| 13 | `assertTs` rejects years `0001`-`0099` — `PAYLOAD_TS_RE` takes `\d{4}` and the calendar probe uses `Date.UTC(y, …)`, which maps a two-digit year into 1900+y, so `0026-…` fails the round-trip and refuses. Unreachable in the field (every stamp this system mints is this century) | A change to the house timestamp grammar touches every leads receipt and every idem preimage; it is not a fix to make inside a report commit | latent — file it if a fixture ever needs a pre-1900 stamp |
+| 14 | The self-count test's `BATS_TEST_NUMBER` cross-check assumes the whole file runs: `bats --filter` counts tests RUN, not file position, so filtering reddens a healthy suite. Latent — CI runs whole files | Noted in the test's own comment rather than removed, because the cross-check is what catches a declared test that never ran | latent; the comment is the fix |
 
 **What changed.** The real campaign was blocked on business inputs that do not exist — the
 owner cannot name 25 ICP recipients, which is what an undefined offer looks like from the
