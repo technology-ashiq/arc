@@ -21,6 +21,15 @@ LINT=".claude/scripts/absorb/report-lint.mjs"
 
 _lint() { cd "$ARC_ROOT" && node "$LINT" "$1"; }
 
+# In-place sed that works on GNU, BSD (macOS) and Git Bash alike -- `-i` alone takes an argument
+# on BSD and does not on GNU, so `-i.bak` plus a delete is the only spelling all three legs agree
+# on. Defined HERE, per file, exactly as kickoff-lint.bats:18 and policy-lint.bats:88 do: it is
+# NOT in test_helper.bash, and assuming it was cost this suite its first CI run.
+sedi() {
+  local f="${!#}"
+  sed -i.bak "$@" && rm -f "${f}.bak"
+}
+
 # A VALID report: five required headings in order, one complete inventory row. Each test mutates
 # exactly one thing, so a warning can only come from the thing that was changed. Written by
 # heredoc into a temp file, never interpolated into a shell string.
