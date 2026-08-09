@@ -83,12 +83,12 @@ commit: 0f35d81
 title: **The mixing guard, proved by its own negative**: a report run over the rehearsal window, asked for real sends, returns **zero** — and the assertion checks the count, not the absence of a word in the output
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+proof: tests/leads-mixing-report.bats -- 11 -> 29 tests, on CI (19/19 green). The zero is asserted as a COUNT read out of the reader-derived report, never as the absence of a word in the output: a grep for "no real sends" passes for a mutant that reworded the line and passes for a crash that printed nothing at all. Every refusal case now asserts WHICH guard refused and on what input, because the four refusal tests this file shipped with asserted only exit 2 plus an empty stdout, and that pair is satisfied by a crash.
+tier: contract
+sources: phase-03-spec.md, code:grep-fallback(18; no .codegraph/), adrs(17), learning(0), retro(1), churn(1)
+decision: The exit criterion says "a report over the rehearsal window asked for real sends returns zero", and the lane had no report -- `sendCounts` was a library function with no production caller, so the criterion was asserting a number nothing in the product could be asked to produce. Built `arc-leads report [--campaign] [--from] [--to] [--json]` as that caller, so the claim is made by the same surface the operator runs rather than by a test harness reaching into a module. The number is derived by the READER from spine receipts, never accumulated by the writer, so the count cannot drift from the events it claims to summarise.
+result: CI 19/19 green over branch commits 4a1b7b6 (build) and fc30780 (adversarial fixes). TWO adversarial surfaces returned 22 findings, 8 HIGH, and OVERLAPPED ON NOTHING -- the seventh time in this lane, which is the structural argument for running two surfaces rather than one thorough one. The report answered a confident zero at exit 0 in FIVE distinct ways, every one of them fail-open: (1) a QUARANTINED receipt was invisible -- nothing under `scripts/leads` had ever opened `events/_quarantine/`, so a receipt the spine had rejected and set aside read as a receipt that never existed; (2) a day file renamed `.jsonl.orig` by a merge was silently DISCARDED, because the listing FILTERED where it had to PARTITION -- one line away from the guards that already refuse a missing dir and an unreadable file, so the file that refuses two kinds of absence was ignoring a third; (3) an `events/` directory holding no day file at all counted as zero rather than as "cannot answer"; (4) `ARC_SPINE_ROOT=""` fell through a truthiness test to a DIFFERENT spine, so the report answered honestly about a store nobody was asking about; (5) a real send stamped in UTC fell OUT of the IST window that contains it, because the window BOUNDS went through `assertTs` while the payload stamps they are compared against went through an 11-character prefix -- two different notions of "when" inside one comparison. The TEST surface was the worse half: all four refusal tests asserted only `status -eq 2` and an empty stdout -- exactly the absence-assertion this file's own header condemns -- so replacing every refusal path with a crash killed 0 of 11 tests; and the flag parser had zero coverage, under which `--campaign a --campaign b` silently last-won instead of refusing an operator error. Tests 11 -> 29; 21 mutants applied, 21 killed. NOT proven: no live send has happened, so the zero is still a zero over a window in which nothing real was attempted -- the negative is proven, its positive control is not.
+commit: f2a898c
 
 #### slice: 06
 

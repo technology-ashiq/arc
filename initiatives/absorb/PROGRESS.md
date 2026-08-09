@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-absorb (Cycle 10, born 2026-08-09)
 phase: 04 — study done, rebuild BLOCKED by owner ruling (00, 01, 02, 03 CLOSED)
 appetite: 8d
-burn: 5.0d
+burn: 5.5d
 blocked-on: —
 depends-on: —
 
@@ -35,7 +35,12 @@ depends-on: —
 | 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | ✅ CLOSED 2026-08-09, one row open by owner decision |
 | 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; rebuild BLOCKED — owner ruled the allowlist stays |
 
-**Appetite burn: 5.0 of 8 days used.** Planned allocation 6.5d, leaving 1.5d slack. Kill tripwire at
+**Appetite burn: 5.5 of 8 days used.** *(Was 5.0 here and in the machine header while the Now
+section and the retro scoreboard row both said 5.5 — the retro day was worked and never counted.
+Caught by `board-lint`, which compares the board against this header and cannot see a header
+disagreeing with its own file. Three sources, one of them wrong, and the number nobody recomputed
+started lying — which is the thing `PORTFOLIO.md`'s own preamble warns about.)* Planned allocation
+6.5d, leaving 1.5d slack. Kill tripwire at
 4d (50%): if Phase 02 is not done, a scope-cut conversation is mandatory. **Phase 00: ~0.5d against
 1d** (pre-planned cut order never needed, no cut taken). **Phase 01: ~1.5d against 2d**, and the
 adversarial pass was paid for out of the phase rather than out of slack, which is what the plan
