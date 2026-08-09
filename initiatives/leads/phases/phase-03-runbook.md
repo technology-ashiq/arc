@@ -1,5 +1,39 @@
 # Phase 03 runbook — the rehearsal journey, run by hand
 
+> # ⛔ DO NOT FOLLOW THIS RUNBOOK YET
+>
+> **Two adversarial passes against the commit that added this file returned three CRITICALs,
+> and one of them is in this document.** It merged as `bbfcede` (PR #145) with the findings
+> recorded in that PR's comments and not yet fixed. Until they are:
+>
+> 1. **Step 1's `set -a; . ./.env.local; set +a` disables the guard this runbook cites in
+>    step 1 as your protection.** `assertEnvLocalNames` is a policy about what `.env.local`
+>    *carries*, but it is fed the list of what `loadEnvLocal` *applied* — and sourcing the file
+>    first guarantees that list is empty. With `ARC_LEADS_FAKE=1` in `.env.local` the run then
+>    prints `mail sent … EXIT=0` **having sent nothing**, which is the exact failure
+>    `mail.mjs` exists to prevent. Verified both ways: not sourced → `refused`, exit 2;
+>    sourced exactly as written below → `mail sent`, exit 0.
+> 2. **Step 4's duplicate refusal can name the wrong draft.** The test that was supposed to
+>    pin the pairing only proves that *some* known ref appeared in the output. This runbook
+>    then tells you to "edit that draft" — which may be a different person's mail.
+> 3. **Nothing here says `icp.json`'s `campaign` must equal the name from step 2.**
+>    `research` takes the campaign from the ICP file, not from `campaign init`. Get them wrong
+>    and every step reports success while receipts and approvals land under two different
+>    campaign names, and the phase's one number comes back "no receipts", exit 2.
+>
+> Also open: `report` has a refusal this file's Known-refusals table omits, and R2's stated
+> remedy hits it; the sourcing idiom is a second env parser that disagrees with `env.mjs` in
+> both directions, so a truncated `RESEND_API_KEY` passes this file's own verification and
+> fails at the vendor at the moment mail goes out; and no shell is named, while
+> `set -a; . ./file` does not exist in PowerShell.
+>
+> **Two code defects merged alongside it** and are equally unfixed: the `research`
+> duplicate-skip does not stop the spine quarantine, so `arc-leads report` is still killable
+> three ways; and a partial `draft` run now makes a touch **permanently and silently**
+> unqueueable, which is worse than the noisy duplicate it replaced.
+>
+> Remove this banner only when PR #145's findings are fixed and re-attacked.
+
 This is what the owner follows for the real run. Every command below was walked end to end
 against the FAKE on 2026-08-09 (slice 06); the outputs quoted are the ones the walk actually
 produced, not what the source suggests they should be.
