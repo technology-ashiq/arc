@@ -10,3 +10,4 @@
 
 | date | candidate | class | fixtures | old-way | absorbed-way | verdict | decision |
 |---|---|---|---|---:|---:|---|---|
+| 2026-08-09 | T-01 pre-emit finding verification | unspecified-input defect class | 3 named, 0 executed | n/a | n/a | blind pick: reviewproc-with-verification-gate ("read clearer") | 01KZKBYSQ5J46Y82PRN7W3AJNH |

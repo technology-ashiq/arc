@@ -5,7 +5,7 @@ cycle: arc-absorb (Cycle 10, born 2026-08-09)
 phase: 04 — study done, rebuild BLOCKED by owner ruling (00, 01, 02, 03 CLOSED)
 appetite: 8d
 burn: 5.0d
-blocked-on: owner — the Phase 03 inbox pick (REQ-06's live demo, the one row Phase 03 closed with open)
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -129,46 +129,51 @@ requires.
 
 ## Now
 
-**Current position:** Phases 00, 01, 02, 03 CLOSED. Phase 04's study and classification are done.
-**Phase 04's rebuild is closed off by the owner's ruling, not pending.**
+**Current position:** Phases 00–03 CLOSED, and **Phase 03's open row is now closed** — the owner made
+the judgement on 2026-08-09. **All owner actions on this lane are done.** Phase 04's study and
+classification are complete; its rebuild is closed off by the owner's allowlist ruling.
 
-**THE OWNER RULED ON THE ALLOWLIST, 2026-08-09: DO NOT WIDEN.** `.claude/agents/**` stays off it and
-**T-01 stays a `candidate` row.** So the first real absorb ends at a recorded classification rather
-than an adoption — and that is the outcome, not a failure to reach one. Recorded in ADR-0602
-Amendment 1 together with the three routes that would legitimately unblock it later, in order of
-preference, so a future cycle does not re-argue this from scratch.
-
-**Why the ruling is right, kept because it will be tempting to revisit:** the first thing to test the
-boundary asked to be let through. A boundary that widens for its first real applicant was never a
-boundary, and the pressure came from the lane that wanted the room — precisely the case ADR-0602
-exists to refuse. Holding it cost one blocked rebuild; conceding it would have cost the rule.
-
-**What this cycle proved, and what it did not.** PROVEN on real input: study → report → classify →
-gate. The extraction report lints clean, the registry's first real row lints clean, `rebuild-lint`
-returned 0 warnings on a real diff, and the 4-bucket matrix returned 1 ABSORB / 2 SKIP / 1 ROUTE with
-nothing shoehorned. NOT PROVEN: rebuild → A/B → adoption. **REQ-08 is not met and REQ-03's A/B never
-ran** — recorded as not-met rather than narrated as nearly-done.
-
-**One owner action remains, and it is the only one:** the Phase 03 pick, which closes REQ-06's live
-demo and is the row Phase 03 closed with open.
+**REQ-06 is VALIDATED — mechanism fixture-proven AND live-exercised.** Approval
+`01KZK9EPKCN0DJBW91QB67RYNP`, decision `01KZKBYSQ5J46Y82PRN7W3AJNH`, reason
+**`pick=meridian; read clearer`**. The mapping revealed only after the decision landed:
 
 ```
-node .claude/scripts/hq/arc-inbox.mjs approve 01KZJXBNKT6PEYC87TW5D53QTP --reason "pick=quartz; <why>"
+meridian = reviewproc-with-verification-gate
+crimson  = reviewproc-as-it-stands
 ```
 
-Labels are **quartz | fathom** and tell you nothing about which is which by design; the mapping is
-sealed behind a hash and revealed only after the decision lands. Either label is a valid answer — the
-pick proves the chain, not that one variant is better.
+**THE OWNER PICKED THE VARIANT CARRYING T-01, BLIND.** The labels come from a fixed pool of
+information-free words, randomised per seal; nothing in the request said which was which, and the
+mapping sat behind a hash commitment until a real decision existed. That is a genuine — if small —
+blind preference for the review step carrying the pre-emit verification gate, and it is a receipt
+rather than a recollection. Recorded in
+`evidence/planoff/PHASE03-CHAIN-V2/RESULTS.md` and the planoff ledger.
 
-**Next step after that:** Phase 04 cannot complete REQ-08, so the honest close is a **retro** that
-records what the loop proved, what it did not, and the five findings below — then the cycle ends
-under its appetite with the mechanics banked and one real study on the record.
+**It is NOT an adoption and NOT REQ-03's A/B.** No fixture was executed — there is no absorbed-way to
+execute, because ADR-0602 A1 leaves T-01 with no landing site. `T-01` stays `candidate` with
+`decision_refs` deliberately EMPTY: filling it would let the cap lint read this as an adopted row.
+**REQ-08 remains NOT MET.** One blind preference on wording is not evidence that a technique works,
+and saying otherwise here would be the exact overclaim this lane exists to refuse.
 
-**Five retro inputs banked.** CI was GREEN before three of the four adversarial passes found their
-serious holes · four of Phase 02's seven serious findings were earlier fixes of mine REOPENING ·
-`arc-evidence.sh` reports "verified" on a zero-artifact bundle · a test that only passes while the
-defect is present is a test FOR the defect · and an allowlist can admit a path that another lane's
-proof has frozen.
+**Two tools refused me today, and both were right.** `verify` caught that the first queued approval
+was unrevealable *before* the owner spent a decision on it — its commitment predated the v2 preimage
+fix. And `arc-evidence.sh` REFUSED to re-bundle Phase 03's evidence because that bundle belongs to the
+close commit and rewriting it would overwrite evidence from another commit; the judgement went to the
+PLANOFF bundle instead, which is where A/B evidence belongs. Respecting both guards cost two extra
+steps and produced a cleaner record.
+
+**Final REQ status:** REQ-01, 02, 04, 05, 06, 07 **validated**. REQ-03 and REQ-08 **active and NOT
+MET**, by the owner's allowlist ruling rather than by running out of time.
+
+**Next and last step: the retro.** The cycle ends at 5.5d of an 8d appetite with the mechanics banked,
+one real study on the record, one real owner receipt, and two REQs honestly unmet.
+
+**Five retro inputs banked, and a sixth from today.** CI was GREEN before three of the four
+adversarial passes found their serious holes · four of Phase 02's seven serious findings were earlier
+fixes of mine REOPENING · `arc-evidence.sh` reports "verified" on a zero-artifact bundle · a test that
+only passes while the defect is present is a test FOR the defect · an allowlist can admit a path that
+another lane's proof has frozen · **and a hash-format fix silently invalidates every outstanding
+commitment, so a versioned preimage is not optional.**
 
 **Unchanged and owner-owned elsewhere:** leads Phase 03 waits on the `_dmarc.automemory.ai` record;
 policy Phase 04 on three `.claude/settings.json` edits.

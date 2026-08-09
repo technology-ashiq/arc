@@ -12,11 +12,14 @@
         "license": "NOT FOUND -- no LICENSE/LICENCE/COPYING in the study root or above it, and no header in the file. All rights reserved by default, so ZERO copying: the rebuild is a re-expression."
       },
       "classification_ref": "initiatives/absorb/evidence/phase-04/extraction-report.md",
-      "evidence": [],
+      "evidence": [
+        "initiatives/absorb/evidence/planoff/PHASE03-CHAIN-V2/mapping.json"
+      ],
       "attribution": "gstack /review SKILL.md:1251-1281 -- the practice is re-expressed in arc's own terms, nothing copied. Credited because the source deserves it, not because a license compels it.",
       "lock_ref": null,
       "decision_refs": {},
-      "review_by": "2026-11-09"
+      "review_by": "2026-11-09",
+      "note": "Blind-picked by the owner on 2026-08-09 (decision 01KZKBYSQ5J46Y82PRN7W3AJNH, reason \"pick=meridian; read clearer\"): shown two review-process variants with labels that revealed nothing, he chose the one carrying THIS technique. That is a real signal and it is NOT an adoption -- the judgement was Phase 03's chain proof, and status stays `candidate` because ADR-0602 A1 leaves the rebuild with no landing site. decision_refs is deliberately EMPTY: filling it would let the cap lint treat this as an adopted row."
     }
   ]
 }
