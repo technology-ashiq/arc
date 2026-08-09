@@ -28,7 +28,7 @@ import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -273,6 +273,12 @@ async function cmdReconcile() {
     emitReceipt: async (p) => emit("outreach.sent", p),
   });
   console.log(`arc-leads reconcile: ${out.resolvedFromSpine} resolved from the spine (no provider call) · ${out.emittedLate} late receipt(s) · ${out.voided} voided · ${out.providerCalls} provider call(s)`);
+  // The per-intent failures, PRINTED. reconcile collects them so one bad intent cannot stop it
+  // healing the healthy ones -- but nothing printed them, so the operator saw only "N intent(s)
+  // still unresolved" and had no idea which intent, why, or what to do about it. An intent that
+  // predates ADR-0416 wedges every send in the campaign and names its own remedy; a remedy in
+  // an object nobody prints is not a remedy.
+  for (const err of out.errors || []) console.error(`  ! ${err}`);
   const left = unresolvedIntents(store);
   if (left.length) die(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
   } finally { release(); }
@@ -447,7 +453,11 @@ function cmdState(json) {
   }
 
   const out = {
-    campaigns: Object.fromEntries(Object.keys(campaigns).sort().map((k) => [k, campaigns[k]])),
+    // ADR-0416's mixing guard, reported as a COUNT rather than left to a reader to grep for.
+    // `real` is the number that carries the claim, and an unmarked receipt is counted as real
+    // (see sendCounts) precisely so that a zero there means something.
+    sends: sendCounts(events),
+    campaigns: Object.fromEntries(Object.keys(campaigns).sort().map((k) => [k, { ...campaigns[k], sends: sendCounts(events, { campaign: k }) }])),
     leads: [...leads.values()].sort((a, b) => (a.lead_id < b.lead_id ? -1 : a.lead_id > b.lead_id ? 1 : 0)),
   };
   if (json) process.stdout.write(JSON.stringify(out, null, 2) + "\n");

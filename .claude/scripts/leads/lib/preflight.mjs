@@ -22,6 +22,13 @@ import { fileURLToPath } from "node:url";
 const REPO_ROOT = pathResolve(dirname(fileURLToPath(import.meta.url)), "../../../..");
 const DEFAULT_CONFIG = pathResolve(REPO_ROOT, ".claude/config/leads.json");
 import { dns, provider } from "./deps.mjs";
+import { isAddressShaped } from "./store.mjs";
+// `loadAllowlist` ONLY, and the direction is deliberate — the same borrow guard.mjs documents.
+// mail.mjs must not import the outreach path, because sharing outreach POLICY is the coupling
+// ADR-0402 exists to prevent; borrowing its PARSER the other way is not that. The two lists stay
+// separate environment variables with separate meanings, and what is shared is the one
+// definition of how a comma-separated list of addresses is normalised.
+import { loadAllowlist } from "./mail.mjs";
 
 export const PREFLIGHT_OK = 0;
 export const PREFLIGHT_REFUSED = 3;
@@ -92,12 +99,38 @@ export function domainConflict(sending, productDomains) {
 //              rehearsal on would unlock EVERY product domain, `lexos.app` included.
 //
 // Rehearsal mode is a property of the environment and the config, never of a call site.
+//
+// The env var holding the ADR-0416 rehearsal recipients. Deliberately NOT the mailer's list: a
+// rehearsal recipient must never start receiving arc's deploy alerts, and the owner must never
+// become a valid cold-rehearsal target. It lives HERE, with the parser, and guard.mjs re-exports
+// it — the name and the parse are one fact.
+export const REHEARSAL_ALLOWLIST_VAR = "ARC_LEADS_REHEARSAL_ALLOWLIST";
+
+// THE parse of that variable, and the only one. There were two, and they disagreed (D5).
+//
+// `rehearsalMode` hand-rolled trim+lowercase with a shape filter and NO dedup; `loadAllowlist`
+// normalised (NFC + zero-width strip + trim + lowercase) and deduped with NO shape check — and
+// the number preflight printed to the operator as "a lock of N address-shaped entr(y/ies)" came
+// from the parser that does NOT decide who is reachable, while `rehearsalAllowedIds` mapped the
+// OTHER parser's output into id space. So `a@x,a@x` was reported as a lock of two people, and a
+// zero-width space inside an entry made the counted string and the reachable id two different
+// facts about one recipient.
+//
+// One function now: loadAllowlist for the normalisation, isAddressShaped for the lock rule.
+// Returns an ARRAY so the count and the membership come from the same object. Never throws —
+// `loadAllowlist` refuses an unset or empty variable, and for THIS caller an absent list is not
+// an error, it is an unlocked rehearsal, which every caller below already treats as the safe
+// state.
+export function rehearsalRecipients(env = process.env, varName = REHEARSAL_ALLOWLIST_VAR) {
+  let list;
+  try { list = loadAllowlist(env, varName); }
+  catch { return []; }
+  return [...list].filter(isAddressShaped);
+}
+
 export function rehearsalMode(env = process.env) {
   const declared = String(env.ARC_LEADS_REHEARSAL || "").trim() === "1";
-  const allowlist = String(env.ARC_LEADS_REHEARSAL_ALLOWLIST || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter((s) => s.includes("@") && !s.startsWith("@") && !s.endsWith("@"));
+  const allowlist = rehearsalRecipients(env);
   return { declared, locked: allowlist.length > 0, count: allowlist.length };
 }
 
@@ -190,6 +223,11 @@ export async function preflight({ config, warmupApproved = false, env = process.
     // that describes containment it does not perform teaches the reader to trust the wrong
     // thing. Per-recipient refusal before any network call is phase-03 slice 04, and until it
     // lands this says only what is true -- that a lock is DECLARED.
+    //
+    // `eff.mode.count` now comes from `rehearsalRecipients`, i.e. from the SAME parse that
+    // `rehearsalAllowedIds` maps into id space. It used to come from a second, weaker parser, so
+    // the number shown to the operator was derived by the reader that does not decide who is
+    // reachable — a lock of "2" against one deduped recipient.
     else pass("dedicated-domain", `${domain} IS a product domain, permitted ONLY because ADR-0416 rehearsal mode is declared, named, and a lock of ${eff.mode.count} address-shaped entr(y/ies) is declared. The gate checks that the lock EXISTS; per-recipient enforcement at send time is slice 04 and is not proven by this row`);
   } else pass("dedicated-domain", `${domain} is neither the product domain nor a subdomain of it`);
 

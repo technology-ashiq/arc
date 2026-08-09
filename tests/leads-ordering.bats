@@ -110,7 +110,7 @@ const countIntents = (s) => fs.readdirSync(journalDir(s)).filter((f) => f.endsWi
 @test "runDaily halts before any send when an intent is unresolved" {
   run _o "$ORD
     const s = freshStore(); const rec = draftFor(s);
-    writeIntent(s, {idempotency_key:'stale', lead_hmac:rec.lead_id, campaign:'pilot', touch_n:9, draft_sha:rec.draft_sha, submitted_at:NOW, store_fingerprint:'deadbeef'});
+    writeIntent(s, {idempotency_key:'stale', lead_hmac:rec.lead_id, campaign:'pilot', touch_n:9, draft_sha:rec.draft_sha, submitted_at:NOW, store_fingerprint:'deadbeef', rehearsal:false});
     let submits = 0;
     const {provider} = await import('./.claude/scripts/leads/lib/deps.mjs');
     provider().submit = async () => { submits++; return {ok:true, provider_message_id:'x'}; };
@@ -154,7 +154,7 @@ const countIntents = (s) => fs.readdirSync(journalDir(s)).filter((f) => f.endsWi
   run _o "$ORD
     const {reconcile} = await import('./.claude/scripts/leads/lib/journal.mjs');
     const s = freshStore();
-    writeIntent(s, {idempotency_key:'healthy', lead_hmac:'lead_hmac_v1_' + 'a'.repeat(32), campaign:'pilot', touch_n:1, draft_sha:'c'.repeat(64), submitted_at:NOW, store_fingerprint:'deadbeef'});
+    writeIntent(s, {idempotency_key:'healthy', lead_hmac:'lead_hmac_v1_' + 'a'.repeat(32), campaign:'pilot', touch_n:1, draft_sha:'c'.repeat(64), submitted_at:NOW, store_fingerprint:'deadbeef', rehearsal:false});
     fs.writeFileSync(path.join(journalDir(s), 'torn.json'), '{\"idem');
     const blocked = unresolvedIntents(s).length;
     const out = await reconcile(s, {events: [], lookup: async () => ({found:false}), emitReceipt: async () => {}});

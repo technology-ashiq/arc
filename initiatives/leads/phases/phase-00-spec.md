@@ -48,7 +48,7 @@ lead.suppressed   deal.won        deal.lost          metric.observed
 | Kind | Required | Optional |
 |---|---|---|
 | `lead.researched` | `lead_id, campaign, provenance, geography, email_status, fact_count, store_id, store_fingerprint` | `below_bar` |
-| `outreach.sent` | `lead_id, campaign, touch_n, idem_key, provider_message_id, submitted_at, draft_sha` | — |
+| `outreach.sent` | `lead_id, campaign, touch_n, idem_key, provider_message_id, submitted_at, draft_sha, rehearsal` | — |
 | `outreach.replied` | `lead_id, campaign, triage_class, ingested_at` | `in_reply_to_touch` |
 | `meeting.booked` | `lead_id, campaign, booked_at` | — |
 | `lead.suppressed` | `lead_id, reason, suppressed_at` | `campaign` |
@@ -58,6 +58,30 @@ lead.suppressed   deal.won        deal.lost          metric.observed
 **Forbidden in every payload:** any raw email, name, URL, subject, body, or free-text
 summary field. `email_status ∈ {verified, held}`. `triage_class ∈ {interested, later, no,
 bounce, unsubscribe}`. `reason ∈ {bounce, unsubscribe, manual}`.
+
+> **Amended 2026-08-09 — ADR-0416, Phase 03 slice 04.** The `outreach.sent` row above is the
+> CURRENT set. At Phase 00 it was the same seven keys **without `rehearsal`**; the eighth was
+> added then, and the row is corrected rather than annotated per-cell so the table stays
+> readable as the live contract.
+>
+> `rehearsal` is **required, not optional**, and that is the decision: optional means
+> absent-equals-real, so a bug that dropped the mark would silently reclassify a rehearsal send
+> as a real first touch — the one fail-open ADR-0416 exists to prevent.
+>
+> It is also in the **C3 preimage**, and both halves were needed or neither. A field that lives
+> in the payload but not the preimage lets a rehearsal receipt and a real receipt that differ
+> ONLY in the mark collide on one idem, so the reconcile that prevents a double-send becomes the
+> thing that mixes the two classes it must never mix. The C3 block below still shows the Phase-00
+> four-field preimage; the live preimage is `campaign|lead_id|touch_n|draft_sha|submitted_at|
+> idem_key|provider_message_id|rehearsal` (`validate-leads.mjs` is the source of truth).
+>
+> **Consequence worth writing down:** the journal's vendor Idempotency-Key
+> (`journal.mjs idemKeyFor`) shares that preimage family on purpose, so its VALUE moved once
+> here — `51e7deec…` → `68cfaadb…` for the same three inputs — even though its INPUTS stayed a
+> pure function of `(campaign, lead_id, touch_n)`. No live send predates the change, so nothing
+> was in flight across it; the value is now pinned to a literal in
+> `tests/leads-rehearsal-send.bats` so the next move arrives as a visible diff instead of a
+> vendor dedup quietly not firing on a resend.
 
 ### C3 — Idem preimages (total; absent optional = literal `-`)
 

@@ -6,8 +6,13 @@
 //
 // Chain order is load-bearing and is asserted by fixture:
 //
-//   campaign-state (HOLD|FROZEN) -> unresolved-intent -> ALREADY-SENT -> suppression
+//   rehearsal-allowlist (ADR-0416, only when rehearsal is DECLARED)
+//     -> campaign-state (HOLD|FROZEN) -> unresolved-intent -> ALREADY-SENT -> suppression
 //     -> reply-stop -> touch-cap (rolling 7d) -> daily-cap (IST) -> send-window -> draft_sha
+//
+// The rehearsal step is FIRST because it is the outermost question: may this person be
+// contacted at all on this run. Every step after it asks a campaign-shaped question, and
+// asking those first would be asking them about a recipient we hold no permission for.
 //
 // The first two steps were added at kickoff by the attack panel. ADR-0403 defined HOLD/FROZEN
 // and ADR-0411 defined unresolved intents, but NEITHER was in the chain — so every breaker
@@ -21,24 +26,61 @@ import { existsSync, writeFileSync, readFileSync, unlinkSync, openSync, closeSyn
 import { join } from "node:path";
 import { istDay, inSendWindow, withinRollingWindow, loadCaps, assertNoCapOverrides } from "./caps.mjs";
 import { unresolvedIntents } from "./journal.mjs";
-import { leadIdsAllVersions } from "./store.mjs";
+import { leadIdsAllVersions, dossierEmail } from "./store.mjs";
+import { loadConfig, effectiveSendingDomain, rehearsalMode, rehearsalRecipients, REHEARSAL_ALLOWLIST_VAR } from "./preflight.mjs";
+// The house timestamp grammar, imported rather than re-spelled. `sendCounts` compares window
+// bounds against payload timestamps, and a second copy of that pattern here is the same D5 the
+// allowlist parsers were just collapsed for.
+import { assertTs } from "../../hq/lib/validate-leads.mjs";
 
-// The dossier holds the email; this function is the only place in the guard that touches it,
-// and nothing downstream ever receives it. Without this, `state.suppressed.has(lead_id)`
-// checked ONE id -- so after a key rotation every person who unsubscribed under the previous
-// key became contactable again, which is the single worst thing this system can do.
+// The dossier holds the email; this is the only place in the guard that touches it, and
+// nothing downstream ever receives it. Without this, `state.suppressed.has(lead_id)` checked
+// ONE id -- so after a key rotation every person who unsubscribed under the previous key
+// became contactable again, which is the single worst thing this system can do.
+//
+// The dossier READ itself now lives in store.mjs and is shared with the real provider, which
+// needs the same file for the opposite purpose. Two copies of it would be D5 the moment one
+// grew a normalisation the other lacked.
 //
 // Returns null when it cannot resolve (no dossier, no email, or an id that does not belong to
 // this store). The caller treats null as a REFUSAL, never as "no suppression found".
 function resolveKeyringIds(store, leadId) {
+  const email = dossierEmail(store, leadId);
+  if (email === null) return null;
   try {
-    const p = join(store.dir, "dossiers", `${leadId}.json`);
-    if (!existsSync(p)) return null;
-    const email = JSON.parse(readFileSync(p, "utf8")).email;
-    if (!email) return null;
     const ids = leadIdsAllVersions(store, email);
     return ids.includes(leadId) ? ids : null;
   } catch { return null; }
+}
+
+// Re-exported, not redefined. The name now lives beside the ONE parse of that variable, in
+// preflight.mjs — `rehearsalMode` and this module were reading the same env var through two
+// different parsers, and the operator was shown the count from the one that decides nothing.
+export { REHEARSAL_ALLOWLIST_VAR };
+
+// The allowlist, mapped forward into ID SPACE.
+//
+// The list holds ADDRESSES; the send path carries `draft.lead_id`, a keyed HMAC (ADR-0400).
+// Resolving the draft's id back to an address in order to compare strings would put a raw
+// address on the send path for the sole purpose of a comparison, and it would compare at ONE
+// key version. So the addresses are mapped forward instead: every id each allowlisted address
+// could EVER have had, unioned.
+//
+// ALL VERSIONS is the whole point, and it is the mirror image of the bug resolveKeyringIds
+// above exists for. That one: checking a single id meant a rotation un-suppressed everyone who
+// had unsubscribed. This one: checking a single id means that after a rotation the allowlisted
+// people stop matching, so the rehearsal either refuses everything, or -- far worse -- a later
+// variant reads the miss as "unknown, therefore not a rehearsal recipient, therefore fine".
+export function rehearsalAllowedIds(store, env = process.env, varName = REHEARSAL_ALLOWLIST_VAR) {
+  const ids = new Set();
+  // `rehearsalRecipients`, not `loadAllowlist` directly: the SHAPE filter that decides whether
+  // the lock exists at all must be the same filter that decides which ids are reachable. With
+  // the raw list, `ARC_LEADS_REHEARSAL_ALLOWLIST=yes` contributed a keyed id for the string
+  // "yes" to this set while `rehearsalMode` reported the lock as absent — two answers about one
+  // variable, which is the defect this whole pair was collapsed to close.
+  for (const address of rehearsalRecipients(env, varName))
+    for (const id of leadIdsAllVersions(store, address)) ids.add(id);
+  return ids;
 }
 
 export class GuardRefusal extends Error {
@@ -177,6 +219,82 @@ export function deriveState(events, { campaign }) {
   return { suppressed, replied, touches, perDay, bounces, complaints, campaign };
 }
 
+// ---------- the mixing guard's counter (ADR-0416) ----------
+//
+// The rehearsal exercises the pipeline against five KNOWN people. The claim that has to
+// survive it is that no real cold send happened in that window — and that claim is a COUNT.
+// A reader that greps its own output for the word "rehearsal" passes for a mutant that changes
+// the wording and fails for one that changes the meaning, so the number is derived here and
+// the report only prints it.
+//
+// It lives beside deriveState because both are folds over `outreach.sent` and the bucketing
+// rules must not diverge. Note what deriveState deliberately does NOT do: it makes no
+// rehearsal/real distinction at all, because a rehearsal send is a real email to a real person
+// and consumes a real cap slot. Splitting the CAPS would be the mixing bug pointed the other
+// way round.
+//
+// An UNMARKED receipt counts as REAL. The schema makes `rehearsal` required, so an unmarked
+// receipt can only predate that — and "we cannot show this was a rehearsal" is not "it was a
+// rehearsal". Counting it as real is what keeps `real === 0` a claim worth making; it is also
+// reported on its own, because an operator reading a non-zero real count needs to know whether
+// that is five cold sends or five receipts of unknown vintage.
+//
+// Window bounds are compared as STRINGS. Payload timestamps are pinned to exactly
+// YYYY-MM-DDTHH:MM:SS+05:30 by the validator (one spelling per instant), so lexicographic
+// order IS chronological order and no parse here can disagree with the one the idem preimage
+// used. A stamp that does not even start with a date is never filtered OUT of a window: an
+// unplaceable receipt must not escape the count by being unreadable.
+//
+// THE BOUNDS ARE VALIDATED, and they were not. Every other timestamp in this lane goes through
+// `assertTs`; these were taken as raw strings and compared against `+05:30`-pinned payloads, so
+// a caller who asked the obvious question got a confident wrong answer in the UNSAFE direction:
+//
+//   {"from":"2026-08-04T04:00:00Z","to":"2026-08-04T05:00:00Z"}  ->  all zeros (truth: 1 real)
+//   date-only bounds ("2026-08-04")                              ->  all zeros
+//
+// `Z` sorts after `+`, so a UTC spelling of the same hour excludes everything, and a date-only
+// bound sorts before every stamp on that day. This is the ONE number ADR-0416's mixing guard
+// exists to produce — "no real cold send happened in the rehearsal window" — and a window the
+// counter cannot place must be a REFUSAL, never a zero. A zero here is a claim; an exception is
+// an operator error.
+//
+// The CAMPAIGN axis stays an EXACT match, and that is a decision rather than an omission. A
+// campaign name is an identifier this system mints and stores, not free text a human retypes
+// per query: `assertCampaignStore` resolves it against the store, so a near-miss ("Pilot",
+// "pilot ") is not a spelling variant of a real campaign, it is a campaign that does not exist.
+// Folding case or trimming here would invent a match rule that no other reader of `p.campaign`
+// applies — deriving one fact two ways, which is the defect class this file already carries
+// three records of. What is NOT defensible is answering a non-existent campaign with a silent
+// zero, and that is the caller's contract to keep: `cmdState` only ever passes campaign names it
+// folded out of the spine itself, so every name it asks about is one that exists.
+export function sendCounts(events, { campaign = null, from = null, to = null } = {}) {
+  if (from !== null) assertTs("sendCounts", "from", from);
+  if (to !== null) assertTs("sendCounts", "to", to);
+  let rehearsal = 0, real = 0, unmarked = 0;
+  for (const e of events || []) {
+    if (e.kind !== "outreach.sent") continue;
+    const p = e.payload || {};
+    if (campaign !== null && p.campaign !== campaign) continue;
+    const at = String(p.submitted_at == null ? "" : p.submitted_at);
+    // `placeable` gates the window comparison ONLY. Adding `if (!placeable) continue;` here is a
+    // surviving mutant the comment above forbade and nothing tested: a receipt with a junk
+    // `submitted_at` would then vanish from every count, so corrupting one field of one receipt
+    // would delete a real send from the number that claims none happened. Pinned by fixture.
+    const placeable = /^\d{4}-\d{2}-\d{2}T/.test(at);
+    if (placeable && from !== null && at < from) continue;
+    if (placeable && to !== null && at > to) continue;
+    // `=== true`, never `p.rehearsal`. The truthy form is a surviving mutant that reclassifies a
+    // REAL send as a rehearsal — the one direction ADR-0416 forbids — because `"false"`, `1` and
+    // `"no"` are all truthy. The schema requires a boolean, so a non-boolean can only come from
+    // a receipt this build did not write, and the honest reading of one is "unmarked", which
+    // counts as real. Pinned by fixture in both directions.
+    if (p.rehearsal === true) { rehearsal++; continue; }
+    if (p.rehearsal !== false) unmarked++;
+    real++;
+  }
+  return { rehearsal, real, unmarked, total: rehearsal + real };
+}
+
 // Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage
 // floor freezes on noise — HOLD is the honest small-n response, FREEZE the evidenced one.
 export function breakerState(state, lifetimeSends) {
@@ -237,15 +355,79 @@ export function incidentIdFor(campaign, breaker, state) {
 }
 
 // ---------- the chain ----------
-export function guardSend({ events, store, draft, now, config }) {
+export function guardSend({ events, store, draft, now, config, env = process.env }) {
   assertNoCapOverrides();
   const caps = loadCaps(config);
   const { campaign, lead_id, touch_n, draft_sha, approved_sha } = draft;
+
+  // 0. rehearsal containment (ADR-0416), compared in ID SPACE — see rehearsalAllowedIds.
+  //
+  //    Gated on DECLARED, not on "the mode resolved cleanly". A declared-but-incomplete
+  //    rehearsal leaves `eff.rehearsal` FALSE, so keying the check off that flag would turn a
+  //    broken rehearsal config into an unguarded send — the fail-open wearing a fix's clothes.
+  //    unsubscribeHeader refuses that state too, which is precisely why this must not lean on
+  //    it: a guard that holds only because a different function happens to throw first is not
+  //    a guard, and that is defect class D6 as this file has already recorded it three times.
+  //
+  //    When rehearsal is NOT declared there is no list in the world to check against. That
+  //    path is held elsewhere and deliberately: `sending_domain` is empty, so ADR-0402's
+  //    dedicated-domain row and unsubscribeHeader both refuse, and the per-recipient list for
+  //    real cold outbound is a Phase-05 question this slice must not pretend to answer.
   // Every id this address could EVER have had. RESOLVED HERE, from the store, and never taken
   // from the caller: a caller-supplied list is a list that can be short, and a SHORT list is
   // exactly the rotation hole wearing a fix's clothes (a probe passing only the current id
   // sent to an unsubscriber). The guard owns the check, so no call site can weaken it.
+  //
+  // Hoisted ABOVE the rehearsal step because step 0 needs it too — see the binding check below.
+  // It is a read and it never throws, so nothing about the refusal ORDER moved.
   const allIds = resolveKeyringIds(store, lead_id);
+
+  if (rehearsalMode(env).declared) {
+    let cfg;
+    try { cfg = loadConfig(config); }
+    catch (e) {
+      throw new GuardRefusal("rehearsal-mode", `rehearsal mode is DECLARED but the leads config could not be read (${e.message}) — refusing rather than resolving the mode from a config that is not there (ADR-0416).`);
+    }
+    const eff = effectiveSendingDomain(cfg, env);
+    if (eff.blocked)
+      throw new GuardRefusal("rehearsal-mode", `ADR-0416 rehearsal mode is DECLARED but incomplete, so the send is refused rather than quietly falling back: ${eff.blocked}`);
+    let allowed;
+    try { allowed = rehearsalAllowedIds(store, env); }
+    catch (e) {
+      throw new GuardRefusal("rehearsal-allowlist", `the ADR-0416 rehearsal allowlist could not be read: ${e.message}`);
+    }
+    // The ADDRESS is never echoed, here or in the refusal. An allowlist refusal is exactly the
+    // line most likely to be read out of a CI log by someone who should not have the address,
+    // and the operator already knows which recipients they listed. The lead id is a keyed HMAC
+    // and is safe to name, truncated, so the refusal can be matched to a draft.
+    if (!allowed.has(lead_id))
+      throw new GuardRefusal(
+        "rehearsal-allowlist",
+        `lead ${String(lead_id).slice(0, 24)}... is not on the ADR-0416 rehearsal allowlist (${allowed.size} id(s) across every key version of ${REHEARSAL_ALLOWLIST_VAR}) — refused BEFORE any network call. The address is not echoed; check ${REHEARSAL_ALLOWLIST_VAR} in .env.local.`
+      );
+    // MEMBERSHIP IS NOT CONTAINMENT. The line above asks only "is this id on the list"; nothing
+    // in it binds the id to the address in the DOSSIER behind it, and the dossier is what the
+    // provider will actually deliver to. A dossier filed at the id of an allowlisted address but
+    // holding a stranger's address cleared this step outright — containment then rested entirely
+    // on the later suppression step, and the mutant that deletes that step left
+    // leads-rehearsal-send, leads-provider-contract and leads-receipts all green.
+    //
+    // So the round trip is asserted HERE as well as at the wire (deps.mjs resolveRecipient): the
+    // address behind this id must re-derive to this id under some key version. Two independent
+    // refusals for one property is the point — a guard that holds only because a different
+    // function happens to throw first is not a guard, and this file has already recorded that
+    // lesson (D6) three times.
+    //
+    // `rehearsal-allowlist` class, not `suppression`: the question being answered is still "may
+    // this person be contacted at all on this run", and the operator needs the ADR-0416 sentence
+    // rather than a suppression one. Step 4 asks the same store the same question for a
+    // different reason and keeps its own refusal.
+    if (!allIds)
+      throw new GuardRefusal(
+        "rehearsal-allowlist",
+        `lead ${String(lead_id).slice(0, 24)}... cleared the ADR-0416 allowlist in id space, but the dossier behind that id does not hold an address that derives back to it under any key version — the dossier is missing, holds no usable email, was edited, or belongs to another store. The allowlist authorises an ID; the vendor is handed an ADDRESS, and refusing here is what stops those being two different people. Refused BEFORE any network call; neither value is echoed.`
+      );
+  }
   const state = deriveState(events, { campaign });
   const lifetime = [...state.perDay.values()].reduce((a, b) => a + b, 0);
 
