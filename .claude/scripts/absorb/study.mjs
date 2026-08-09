@@ -52,6 +52,14 @@
 //                                         enumerate, so a citation could name un-inventoried bytes.
 //   case-variant reads                     `TOP.TXT` resolved on win32/darwin and not on linux, so
 //                                         a report citation verified on two legs and failed on one.
+//                                         AND THE FIRST FIX FOR IT DID NOT WORK: it compared
+//                                         basename(rel) with basename(realpathSync(...)), but
+//                                         realpath resolves symlinks WITHOUT canonicalising case on
+//                                         win32 or darwin, so it handed back the requested spelling
+//                                         and the check compared a string with itself. CI caught it
+//                                         on exactly the two legs it was written for. The real fix
+//                                         is an exact directory-LISTING check per path segment --
+//                                         a listing cannot lie about the bytes of a name.
 //   scaffold interpolation                 --pin, --license and REFUSED PATHNAMES went into markdown
 //                                         unescaped. A filename containing newlines injected a
 //                                         fabricated "## Technique inventory" with an ABSORB row
@@ -113,6 +121,9 @@ function main() {
   const ROOT = realpathSync(resolve(rootArg));
   const ROOT_LABEL = relative(process.cwd(), ROOT).split(sep).join("/") || ROOT.split(sep).join("/");
 
+  // Folding is used ONLY to make containment checks stricter (a fold can merge two names, never
+  // split one), so folding on every platform is fail-closed. It is NOT what fixes the per-leg
+  // case divergence -- the exact directory-listing check inside confine() is. See there.
   // win32 and darwin both compare paths case-insensitively; linux does not. Folding is only used
   // to make containment checks STRICTER (a fold can only merge two names, never split one), so
   // folding on all three is fail-closed. The per-leg divergence that actually bit was a case
@@ -123,7 +134,7 @@ function main() {
   // ---------- the confinement check: the whole boundary, in one function ----------
   // `expect` is "file" or "dir". v1 hardcoded "file" and walk() gated recursion on it, so no
   // directory ever passed and the walk never recursed once.
-  function confine(rel, expect = "file") {
+  function confine(rel, expect = "file", trustCase = false) {
     if (typeof rel !== "string" || rel === "") return { ok: false, reason: "empty path" };
     if (rel.includes("\0")) return { ok: false, reason: "NUL byte in path" };
     if (isAbsolute(rel)) return { ok: false, reason: `absolute path refused: ${rel}` };
@@ -163,13 +174,33 @@ function main() {
       return { ok: false, reason: `symlink escapes the study root: ${rel} resolves outside` };
     }
 
-    // Case identity. existsSync/realpathSync are case-insensitive on win32 and darwin, so `TOP.TXT`
-    // resolved there and not on linux -- a citation that verifies on two CI legs and fails on the
-    // third. Compare the requested basename against the one the filesystem actually has.
-    const wantBase = basename(relToRoot.split(/[\\/]/).join(sep));
-    const gotBase = basename(realTarget);
-    if (wantBase !== gotBase) {
-      return { ok: false, reason: `case or alias mismatch: ${rel} resolves to ${gotBase}` };
+    // Case identity, checked against a real DIRECTORY LISTING -- not against realpath.
+    //
+    // The first attempt compared basename(rel) with basename(realpathSync(candidate)) and CI proved
+    // it useless on exactly the two legs it was written for: `realpathSync` resolves symlinks but
+    // does NOT canonicalise case on win32 or darwin, so it handed back the requested spelling and
+    // the check compared a string with itself. `README.MD` still resolved on Windows and macOS and
+    // still failed on linux -- a citation verifying on two legs and failing on the third.
+    //
+    // A listing cannot lie about the bytes of a name. Each segment must appear EXACTLY in its
+    // parent's listing, which also catches a case variant at any depth rather than only the last.
+    //
+    // `trustCase` is set by walk(), whose names came straight out of readdirSync and are therefore
+    // already exact -- without it every entry would pay one readdir per path segment.
+    if (!trustCase) {
+      let cur = ROOT;
+      for (const seg of relToRoot.split(/[\\/]/)) {
+        let names;
+        try {
+          names = readdirSync(cur);
+        } catch (e) {
+          return { ok: false, reason: `cannot list ${rel}: ${e.code || e.message}` };
+        }
+        if (!names.includes(seg)) {
+          return { ok: false, reason: `no such file inside the study root: ${rel} (no entry named exactly "${seg}" -- a case variant is not the same path on every OS)` };
+        }
+        cur = join(cur, seg);
+      }
     }
 
     let st;
@@ -233,13 +264,13 @@ function main() {
 
       if (ent.isDirectory() && !isLink) {
         if (SKIP_DIRS.has(ent.name.toLowerCase())) continue;
-        const c = confine(rel, "dir");
+        const c = confine(rel, "dir", true);
         if (!c.ok) { refusals.push({ path: rel, outcome: "REFUSE", reason: c.reason }); continue; }
         walk(c.abs, out, refusals, rel, depth + 1);
         continue;
       }
 
-      const c = confine(rel, "file");
+      const c = confine(rel, "file", true);
       if (!c.ok) { refusals.push({ path: rel, outcome: "REFUSE", reason: c.reason }); continue; }
       const k = classify(c.abs, c.st);
       if (k.outcome === "QUARANTINE") {
