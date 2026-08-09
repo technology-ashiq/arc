@@ -60,6 +60,9 @@
   (ADR-0054). Resolution order + paths → `.claude/rules/lanes.md`. Don't inline it here.
 - New build? Start with `/arc-kickoff` — PLAN.md + phases-by-risk + PROGRESS.md BEFORE any code.
 - A phase closes ONLY via `/arc-phase-done <n>`: tests green + live demo + tracker updated. Evidence over assertion.
+- **After a push, read CI per-JOB before reporting the work done.** I reported a phase built on the
+  strength of local gates twice while CI was red — once with a test that had never passed at all.
+  `gh run view <id> --json jobs`, and confirm the run's head SHA is the local HEAD.
 - **"Tests green" means green on CI. Never run a suite on this box** — and read per-JOB conclusions,
   not the watcher's exit code → `.claude/rules/testing.md` § where tests run.
 - Offline-first: every external dependency gets an interface + fake + real impl.
