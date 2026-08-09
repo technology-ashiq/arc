@@ -89,11 +89,33 @@ onto a gate that already refuses.** The list below is in execution order, not im
       it, and `preflight.mjs` hand-rolled a weaker counter instead, which the adversarial pass
       flagged. Parse with the shared helper; compare in id space as above.
 
-      **Before writing the code, check whether the `outreach.sent` payload is a closed key
-      set.** Spine payloads are closed (a non-negotiable) and the kinds are closed at 18
-      (ADR-0026). The rehearsal mark is a payload FIELD, not a new kind, but if the payload
-      schema is closed it needs an explicit update — and a mark that fails validation would
-      quarantine every rehearsal receipt, which is worse than no mark.
+      **CHECKED 2026-08-09, and it is worse than the note anticipated — read this before
+      touching the receipt.** `outreach.sent` IS a closed key set
+      (`.claude/scripts/hq/lib/validate-leads.mjs`, `SHAPES`): `required` is
+      `lead_id, campaign, touch_n, idem_key, provider_message_id, submitted_at, draft_sha`,
+      `optional` is EMPTY, and any unknown key is refused outright. So the mark needs a schema
+      change. Two things follow that are not obvious:
+
+      1. **The mark must be `required`, not `optional`.** Optional means absent-equals-real,
+         so a bug that drops the mark silently reclassifies a rehearsal send as a real first
+         touch — the exact fail-open this repo refuses, in the one place ADR-0416 exists to
+         prevent. The schema's own comment says optionals are listed "so that absent is a
+         decision the schema made rather than a gap the validator happened not to notice";
+         absent must not be a decision here. Cost: every existing `outreach.sent` fixture
+         needs the field, and that migration is part of the slice, not a surprise in it.
+
+      2. **It must also enter the idem PREIMAGE** (`leadsIdem`, same file — today
+         `outreach.sent|campaign|lead_id|touch_n|draft_sha|submitted_at|idem_key|provider_message_id`).
+         Total-preimage idems are a non-negotiable. A field in the payload but not in the
+         preimage means a rehearsal receipt and a real receipt that differ ONLY in the mark
+         collide on one idem — so the reconcile that exists to prevent a double-send would be
+         the thing that mixes the two classes it must never mix. Adding the field without
+         extending the preimage is the more dangerous half-change of the two.
+
+      Cross-lane check done: only the leads lane has ever touched `validate-leads.mjs`
+      (`52a7a63`, `427d533`), so this is not a shared-file collision — but it IS a company
+      organ at the repo root (ADR-0053), and the emit validator must come from the MAIN clone
+      and be pulled first, or a stale checkout refuses the newly-shaped payload.
 
       Fixtures this needs, and the third is the one an attacker reaches for: an allowlisted
       lead sends · a non-allowlisted lead is refused **with no socket opened** (assert the
