@@ -1,0 +1,7 @@
+3ead20018da71807f9e36e56f7db65f68779eaf50e9cee165966e2fb34b90855
+
+sha256 of the sealed label-to-variant mapping for correlation absorb-phase03-chain-v2.
+The mapping itself is NOT here and is not in git: it is derived from a nonce under
+.claude/state/absorb/seals/ (gitignored), and is written into this bundle as mapping.json
+ONLY after a decision.recorded exists for the approval. Run:
+  node .claude/scripts/absorb/judgement.mjs reveal --correlation absorb-phase03-chain-v2 --evidence initiatives/absorb/evidence/planoff/PHASE03-CHAIN-V2
