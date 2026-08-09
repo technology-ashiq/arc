@@ -20,7 +20,7 @@ import { guardSend, GuardRefusal, acquireLock } from "./guard.mjs";
 import { writeIntent, resolveIntent, reconcile, idemKeyFor, unresolvedIntents } from "./journal.mjs";
 import { assertCampaignStore, readDraft, currentSha } from "./drafts.mjs";
 import { provider } from "./deps.mjs";
-import { loadConfig, effectiveSendingDomain } from "./preflight.mjs";
+import { loadConfig, effectiveSendingDomain, configuredProductDomains, domainConflict } from "./preflight.mjs";
 
 // Every send carries List-Unsubscribe (ADR-0402, a non-negotiable). The local part is a
 // constant; the DOMAIN comes from config, so the header always points at the domain the mail
@@ -34,9 +34,21 @@ const UNSUB_LOCAL = "unsubscribe";
 // domain that is empty or belongs to a different campaign entirely.
 export function unsubscribeHeader(configPath, env = process.env) {
   const cfg = loadConfig(configPath);
-  const { domain } = effectiveSendingDomain(cfg, env);
-  if (!domain) throw new Error("no sending_domain configured — every send must carry a working List-Unsubscribe (ADR-0402)");
-  return `<mailto:${UNSUB_LOCAL}@${domain}>`;
+  const eff = effectiveSendingDomain(cfg, env);
+  // A DECLARED-but-incomplete rehearsal must not degrade into "no sending domain" here. It is
+  // its own refusal with its own sentence, because the operator who set ARC_LEADS_REHEARSAL=1
+  // needs to be told which of the three signals is missing, not told the domain is unset.
+  if (eff.blocked) throw new Error(`ADR-0416 rehearsal mode is declared but incomplete: ${eff.blocked}`);
+  // This is the chokepoint the SEND path actually runs (cmdDaily calls it before the loop;
+  // cmdPreflight is a different subcommand a send never enters). So the ADR-0402 refusal is
+  // asserted here too rather than only inside preflight() -- that split is what let one env
+  // var bind the product domain into every List-Unsubscribe while preflight refused correctly
+  // somewhere nobody was asking.
+  const { list } = configuredProductDomains(cfg);
+  const conflict = eff.rehearsal ? null : domainConflict(eff.domain, list);
+  if (conflict) throw new Error(`${conflict} (ADR-0402) — cold outbound never sends from the product domain, and rehearsal mode is not declared`);
+  if (!eff.domain) throw new Error("no sending_domain configured — every send must carry a working List-Unsubscribe (ADR-0402)");
+  return `<mailto:${UNSUB_LOCAL}@${eff.domain}>`;
 }
 
 // An approval is a PAIR on the spine: an `approval.requested` carrying the draft_ref and the
