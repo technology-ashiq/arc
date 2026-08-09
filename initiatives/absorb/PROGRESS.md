@@ -2,10 +2,10 @@
 
 status: LIVE
 cycle: arc-absorb (Cycle 10, born 2026-08-09)
-phase: 03 — starting (00, 01, 02 CLOSED)
+phase: 03 built + 04 study done — both HELD OPEN on owner actions (00, 01, 02 CLOSED)
 appetite: 8d
-burn: 3.0d
-blocked-on: —
+burn: 5.0d
+blocked-on: owner — (1) the Phase 03 inbox pick, (2) the ADR-0602 allowlist widening that unblocks T-01's rebuild
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -32,10 +32,10 @@ depends-on: —
 | 00 | Steel thread: the matrix and its paperwork — DEV-B/C boundary audit, registry shape finalized, ADR-0601 template + `report-lint` (WARN-first) | 1d | ✅ CLOSED 2026-08-09 |
 | 01 | Study harness, hostile-input-first — read-only pipeline, injection red corpus, adversarial pass, no-execution boundary fixture-proven **or STOP** | 2d | ✅ CLOSED 2026-08-09 |
 | 02 | Registry and guards — status lint (cap 12, displacement, decision-ref), allowlist lint, license/attribution gate, PLANOFF skeleton | 1d | ✅ CLOSED 2026-08-09 |
-| 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | ⬜ not started |
-| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | ⬜ not started |
+| 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | 🟡 BUILT, CI green — held open on ONE owner pick |
+| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; rebuild BLOCKED by ADR-0602 A1 |
 
-**Appetite burn: 3.0 of 8 days used.** Planned allocation 6.5d, leaving 1.5d slack. Kill tripwire at
+**Appetite burn: 5.0 of 8 days used.** Planned allocation 6.5d, leaving 1.5d slack. Kill tripwire at
 4d (50%): if Phase 02 is not done, a scope-cut conversation is mandatory. **Phase 00: ~0.5d against
 1d** (pre-planned cut order never needed, no cut taken). **Phase 01: ~1.5d against 2d**, and the
 adversarial pass was paid for out of the phase rather than out of slack, which is what the plan
@@ -108,51 +108,49 @@ requires.
 
 ## Now
 
-**Current position:** Phases 00, 01 and 02 CLOSED. Study harness, registry guards and the rebuild
-gate all exist, all fixture-proven, all adversarially attacked. **Phase 03 starting** — the
-governance drop.
+**Current position:** Phases 00, 01, 02 CLOSED. **Phase 03 is built and CI-green** (19/19 on run
+`31310632368`) and held open on one owner pick. **Phase 04's study and classification are done** —
+extraction report and registry row both lint clean — and its **rebuild is BLOCKED**, not deferred.
 
-**Trigger scan at the Phase 02 close: assumptions row 6 FIRED A SECOND TIME.**
+**The cycle's most valuable finding came from the first real rebuild, and it was a red CI.**
+T-01's rebuild landed in `processes/review-diff.process.yaml`, recompiled cleanly, passed
+`rebuild-lint` with 0 warnings — and turned CI red on 7 of 19 jobs, every failure an ENGINE test.
+`review-diff` is one of **three pilot processes that are engine Cycle 6's proof its compiler is
+faithful**. The engine asserts all three compile byte-identical to their hand-written baselines and
+round-trip byte-for-byte out of their block scalars against committed pre-flip fixtures.
 
-Its trigger is *"a deliberately malformed report or a registry row with a hash field passes its lint
-green — a wrong line of code, not a wrong decision."* Phase 02's adversarial pass found three: the
-cap evaded by a lane string, lock-owned data nested one level deeper, and block-comment stripping
-deleting live code. Resolved inside the phase again, every hole pinned as a fixture, so it is not
-routed through `/arc-change` as unresolved risk.
+**The trap is that the red was fixable the wrong way.** Regenerating every baseline would have gone
+green — and deleted another lane's fidelity evidence while reporting a clean absorb. Reverted instead;
+engine is back to 3/3 byte-identical. Recorded as **ADR-0602 Amendment 1**: `processes/**` excludes
+the three pilots, and changing a pilot body needs an **engine-side ruling**.
 
-**The second firing carries a sharper lesson than the first, and it is the retro's headline: in BOTH
-phases CI was GREEN when the adversarial pass found the serious holes.** 19/19 jobs green, then 18
-findings in Phase 01 and 21 in Phase 02. CI proves the assertions held; it cannot prove a guard
-guards. The two-surface adversarial pass is not a review step in this lane, it is the only thing that
-has ever found a class-one defect here — and it has now paid for itself three times.
+**So T-01 has no landing site inside the current allowlist.** Its real home is the review METHOD in
+`.claude/agents/code-reviewer.md`, and `.claude/agents/**` is not on the list. Widening it is an
+amendment, never a convenience edit — so it is **proposed, not taken**. Granting the room to the lane
+that wants it, mid-phase, is exactly the pressure the allowlist exists to resist. **The first real
+absorb hitting that wall is the allowlist working.**
 
-**Second retro input: four of Phase 02's seven serious findings were MY OWN EARLIER FIXES
-REOPENING** (defects #1, #3, #5 and #8 from the running list), including #8 recurring *inside the
-flag added to fix it*. The written rule "grep the pattern, not the file" has now failed in this lane
-twice. What actually worked both times was the attacker's prompt carrying the running defect list
-with the instruction to check each one in every OTHER file — mechanism over advisory, exactly as the
-2026-08-04 evolve retro concluded.
+**What is proven and what is not, stated plainly.** The loop is proven through
+**study → report → classify → gate**, all on real input: the report lints clean, the registry's first
+real row lints clean, `rebuild-lint` returned 0 warnings on a real diff, and the 4-bucket matrix
+returned 1 ABSORB / 2 SKIP / 1 ROUTE with nothing shoehorned. It is **NOT** proven through
+**rebuild → A/B → adoption**, and cannot be until the allowlist question is answered. REQ-08 is
+therefore **not met**, and REQ-03's A/B has not run.
 
-**Third retro input, about arc's own tooling:** `arc-evidence.sh bundle 02` produced a **zero-artifact
-bundle** and `verify` reported *"bundle verified"*, exit 0. It cannot distinguish "verified" from
-"nothing to verify" — in the tool whose entire purpose is making a phase close on evidence rather
-than assertion. Fifth instance of that class this cycle. Left alone (shared file, out of scope) with
-the fix named: `verify` should refuse a zero-artifact bundle.
+**TWO OWNER ACTIONS, and the second is new:**
 
-No other assumption fired. No indexed ADR's revisit condition is true.
+1. **The Phase 03 pick** — approval `01KZJXBNKT6PEYC87TW5D53QTP`, labels **quartz | fathom**. The
+   reason must now carry the `pick=<label>; ` prefix, because the chain finally enforces it:
+   `node .claude/scripts/hq/arc-inbox.mjs approve 01KZJXBNKT6PEYC87TW5D53QTP --reason "pick=quartz; ..."`
+2. **The ADR-0602 widening** — should `.claude/agents/**` join the rebuild allowlist? Yes unblocks
+   T-01 and lets Phase 04 finish. No leaves T-01 a recorded `candidate` and ends this cycle's
+   proof-of-life at the classification, which is a real and honest outcome rather than a failure.
 
-**Next step:** Phase 03 — the governance drop. ADR-0603's owner-judge payload profile (strict
-`subject: "absorb.ab-judgement"`, unknown keys AND missing required keys both refused), the
-hash-commitment blind mapping revealed only after `decision.recorded`, the inbox chain fixtures for
-REQ-06 and REQ-07, and REQ-05's `PLAN-develop` team-leader addendum as a reviewed diff plus a
-freeze-log line — which is **two** edits, because the scout's verdict set has no `technique` value for
-ADR-0604's referral rule to hook into.
+**Retro inputs banked this cycle** (all five carried forward): CI was GREEN before three of the four
+adversarial passes found their serious holes · four of Phase 02's seven serious findings were earlier
+fixes of mine REOPENING · `arc-evidence.sh` verifies a zero-artifact bundle · a test that only passes
+while the defect is present is a test FOR the defect · and an allowlist can admit a path that another
+lane's proof has frozen.
 
-**⚠ PHASE 03 NEEDS ONE OWNER PICK, and it is the first thing in this cycle that I cannot self-serve.**
-REQ-06's live demo requires a real `decision.recorded` to exist, carrying a real pick and a real
-reason, made by the owner through the existing inbox. That is the entire point of ADR-0603: a human
-judgement is a receipt, not a memory. I will build the chain, queue a synthetic blind A/B, and print
-the exact command. **Phase 04 then needs a second pick** — the real adopt-or-refuse decision.
-
-**Unchanged and owner-owned:** leads Phase 03 waits on the `_dmarc.automemory.ai` TXT record; policy
-Phase 04 waits on three `.claude/settings.json` edits.
+**Unchanged and owner-owned elsewhere:** leads Phase 03 waits on the `_dmarc.automemory.ai` record;
+policy Phase 04 on three `.claude/settings.json` edits.
