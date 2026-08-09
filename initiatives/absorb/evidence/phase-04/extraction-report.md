@@ -43,7 +43,7 @@
 
 | id | name | what it does | why it wins | citation | verdict | reason | license note | risk note |
 |---|---|---|---|---|---|---|---|---|
-| T-01 | pre-emit finding verification | A finding is UNVERIFIED unless the reviewer can quote the source line that motivated it. Unquotable findings are forced to low confidence and suppressed from the main report, kept only in an appendix for calibration audit -- and inventing a high confidence to dodge the gate is called out as defeating it | It moves verification BEFORE emission. arc verifies findings after the fact, by hand, one at a time -- which is precisely what this cycle did across three adversarial passes, with no mechanism at all. It also names the false-positive CLASSES it kills rather than claiming general accuracy | `SKILL.md:1251` heading, `1252-1256` the rule and the anti-workaround clause, `~1275-1281` the measured FP-class table | ABSORB | Expressible as a requirement in `.claude/commands/arc-review.md` and in the attacker prompt template -- both on the ADR-0602 allowlist. No new dependency, no runtime, no install | Nothing copied. The idea is re-expressed in arc's own words against arc's own surfaces; no license permits copying here, and none is needed to re-express a practice | The gate can suppress a TRUE finding whose motivating line is genuinely hard to quote. gstack mitigates with an appendix plus a calibration-learning loop; arc must keep the appendix or it converts false positives into false negatives |
+| T-01 | pre-emit finding verification | A finding is UNVERIFIED unless the reviewer can quote the source line that motivated it. Unquotable findings are forced to low confidence and suppressed from the main report, kept only in an appendix for calibration audit -- and inventing a high confidence to dodge the gate is called out as defeating it | It moves verification BEFORE emission. arc verifies findings after the fact, by hand, one at a time -- which is precisely what this cycle did across three adversarial passes, with no mechanism at all. It also names the false-positive CLASSES it kills rather than claiming general accuracy | `SKILL.md:1251` heading, `1252-1256` the rule and the anti-workaround clause, `~1275-1281` the measured FP-class table | ABSORB | Re-expressible as a requirement on arc's review surface. No new dependency, no runtime, no install. **BUT THE REBUILD IS BLOCKED and the first version of this cell was wrong** -- it named `.claude/commands/arc-review.md`, which is a GENERATED file, and the process it compiles from is one of engine Cycle 6's three pinned fidelity pilots. See the refusal log: ADR-0602 Amendment 1 | Nothing copied. The idea is re-expressed in arc's own words against arc's own surfaces; no license permits copying here, and none is needed to re-express a practice | The gate can suppress a TRUE finding whose motivating line is genuinely hard to quote. gstack mitigates with an appendix plus a calibration-learning loop; arc must keep the appendix or it converts false positives into false negatives |
 | T-02 | specialist hit-rate adaptive gating | Tracks which review specialists historically find real issues, and gates future dispatch on that measured hit rate | Turns reviewer selection into a measured feedback loop instead of a fixed panel | `SKILL.md:1324` and `SKILL.md:1347` | SKIP | Needs a persistent hit-rate store and enough review history to be non-noise. arc has neither, and building the store is bench's territory (ADR-0605), not a technique rebuild. Recorded so it is not re-studied | Nothing copied | A hit rate computed over a handful of runs would gate on noise and quietly stop dispatching a specialist that simply had not been needed yet |
 | T-03 | conditional red-team dispatch | A red-team pass dispatched conditionally rather than always | arc already does better here: the two-surface adversarial pass is MANDATORY per phase, not conditional, and this cycle's three passes found 18, 21 and (pending) findings after fully green CI | `SKILL.md:1475` | SKIP | arc's existing practice is stronger than the studied one. Recorded as studied-and-rejected so a future cycle does not re-open it as a gap | Nothing copied | None -- nothing changes |
 | T-04 | cross-review finding dedup | Deduplicates findings across multiple review passes before classification | Directly relevant: this cycle ran three adversarial passes whose findings I deduplicated by hand | `SKILL.md:1505` | ROUTE | This is orchestration of review agents, which is engine/executor territory rather than a technique absorb rebuilds. Referred, not absorbed | Nothing copied | None |
@@ -58,6 +58,21 @@
 | SKIP | 2 |
 
 ## SKIP and refusal log
+
+- **T-01's ABSORB verdict stands, and its REBUILD IS BLOCKED — recorded here because a verdict
+  without a landing site is not a finished absorb.** The rebuild was written into
+  `processes/review-diff.process.yaml`, recompiled cleanly and passed `rebuild-lint` with 0
+  warnings — then turned CI red on 7 of 19 jobs. `review-diff` is one of **three PILOT processes
+  that are engine Cycle 6's proof its compiler is faithful**: the engine asserts all three compile
+  byte-identical to their hand-written baselines and round-trip byte-for-byte out of their block
+  scalars, against committed pre-flip fixtures. Editing the body destroys that proof, and
+  "regenerating the baselines" would have deleted another lane's evidence while reporting a clean
+  absorb. **Reverted; engine is back to 3/3 byte-identical.** Recorded as ADR-0602 Amendment 1:
+  `processes/**` excludes the three pilots, and changing one needs an engine-side ruling.
+  The technique's real home is the review METHOD in `.claude/agents/code-reviewer.md`, which is
+  **not on the allowlist** — reaching it is an allowlist widening, which ADR-0602 says is an
+  amendment and never a convenience edit. **Proposed, not taken: it is the owner's call, not a
+  mid-phase decision by the lane that wants the room.**
 
 - **LICENSE REFUSAL, recorded first because it constrains everything above.** No license was found
   for the studied source, so **all rights are reserved by default and nothing may be copied.** The
