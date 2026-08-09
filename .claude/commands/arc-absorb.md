@@ -1,7 +1,7 @@
 ---
 name: arc-absorb
 description: Study an external source read-only and produce a classified extraction report. Studied code NEVER executes. Propose-only — nothing is adopted by this command.
-allowed-tools: Bash(node .claude/scripts/absorb/study.mjs:*), Bash(node .claude/scripts/absorb/report-lint.mjs:*), Bash(node .claude/scripts/absorb/registry-ref.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Bash(git log:*), Read, Write, Edit
+allowed-tools: Bash(node .claude/scripts/absorb/study.mjs:*), Bash(node .claude/scripts/absorb/report-lint.mjs:*), Bash(node .claude/scripts/absorb/registry-ref.mjs:*), Bash(node .claude/scripts/absorb/rebuild-lint.mjs:*), Bash(bash .claude/scripts/core/lane-resolve.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Bash(git log:*), Bash(git diff:*), Read, Write, Edit
 ---
 
 Study the source named in `$ARGUMENTS` and produce an extraction report.
@@ -85,7 +85,22 @@ refusal log with their reason. Never work around one.
    require a `decision.recorded` ref from the owner through the inbox, and no code path here writes
    them (REQ-07). Rebuild, A/B and adoption are separate steps, in that order.
 
-8. **Receipt:** emit `absorb.study.done`-shaped evidence via the existing kinds only. **Zero new
+8. **On an ABSORB verdict, lint the rebuild BEFORE proposing it.** The Phase 02 adversarial pass
+   found this gate had **no caller at all** — it was reachable only from its own test suite, so
+   nothing routed a real rebuild through it. That is the gap this step closes:
+   ```bash
+   git diff --name-only > /tmp/rebuild-paths.txt
+   node .claude/scripts/absorb/rebuild-lint.mjs --paths /tmp/rebuild-paths.txt \
+     --license permissive|incompatible|none
+   node .claude/scripts/absorb/registry-ref.mjs products/absorb/registry.json \
+     .claude/scripts/develop/capability-lock.json
+   ```
+   Both are WARN-first in TRIAL, so **read the warnings, never the exit code.** `rebuild-lint` checks
+   the ADR-0602 allowlist, that the rebuild adds zero runtime dependencies, and that a
+   permissive-license source is attributed in **every** rebuilt file. `registry-ref` checks the
+   status lifecycle, the cap, and that no row copies lock-owned data at any depth.
+
+9. **Receipt:** emit `absorb.study.done`-shaped evidence via the existing kinds only. **Zero new
    event kinds** (ADR-0603 is a payload profile, not a vocabulary extension).
 
 ---

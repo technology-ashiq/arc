@@ -32,7 +32,30 @@ const FORBIDDEN_NORMALISED = new Set([
   "publisherauth", "buildattestation", "attestation", "provenance",
   "class", "registry", "checked",
 ]);
-const normKey = (k) => String(k).toLowerCase().replace(/[-_]/g, "");
+const normKey = (k) => String(k).normalize("NFKC").toLowerCase().replace(/[-_\s.]/g, "");
+// The exact set above is the spellings we thought of, and the adversarial pass walked past it TWICE
+// -- first with `Hash`/`sha256`/`integrity`, then with `hash `/`sha1`/`fingerprint`/`tarball`. A
+// pattern backs the list so a new synonym is caught by shape rather than by enumeration.
+const FORBIDDEN_PATTERN = /sha\d|hash|checksum|digest|integrity|signat|fingerprint|attest|provenance|tarball|publisher/;
+const isForbiddenKey = (k) => { const n = normKey(k); return FORBIDDEN_NORMALISED.has(n) || FORBIDDEN_PATTERN.test(n); };
+
+// F2 (CRITICAL): lock-owned data nested under ANY key was invisible -- the nesting bypass was closed
+// for `lock_ref` and left open for every other object, which is the twin-fix shape this lane has now
+// hit three times. A `pin: { hash, publisher-auth, class }` object passed completely clean. So the
+// walk is RECURSIVE, over objects and array elements, and it reports the JSON path.
+function forbiddenPaths(value, trail = [], out = []) {
+  if (value === null || typeof value !== "object") return out;
+  if (Array.isArray(value)) {
+    value.forEach((v, i) => forbiddenPaths(v, trail.concat(`[${i}]`), out));
+    return out;
+  }
+  for (const [k, v] of Object.entries(value)) {
+    const here = trail.concat(k);
+    if (isForbiddenKey(k)) out.push({ key: k, path: here.join(".") });
+    forbiddenPaths(v, here, out);
+  }
+  return out;
+}
 
 // `lock_ref` is the ONE object the v1 checker never looked inside, which made it the obvious place
 // to hide a copy: every lock-owned fact nested one level deeper passed clean. ADR-0600 fixes its
@@ -98,13 +121,11 @@ for (let i = 0; i < rows.length; i++) {
   const row = raw;
   const label = typeof row.id === "string" && row.id ? row.id : `row ${i + 1} (no id)`;
 
-  for (const k of Object.keys(row)) {
-    if (FORBIDDEN_NORMALISED.has(normKey(k))) {
-      warn(
-        "duplication",
-        `${label}: carries "${k}", which belongs to capability-lock.json alone — reference the lock entry, never copy it (A5, REQ-04)`
-      );
-    }
+  for (const hit of forbiddenPaths(row)) {
+    warn(
+      "duplication",
+      `${label}: carries "${hit.key}" at ${hit.path}, which belongs to capability-lock.json alone — reference the lock entry, never copy it, at ANY depth (A5, REQ-04)`
+    );
   }
 
   // ---------- row shape and status lifecycle (Phase 02, REQ-04 / REQ-07) ----------
@@ -120,8 +141,14 @@ for (let i = 0; i < rows.length; i++) {
   if (!STATUSES.has(status)) {
     warn("status", `${label}: status ${JSON.stringify(status)} is not one of ${[...STATUSES].join(" | ")}`);
   }
+  // The cap is counted per lane, so the lane STRING is load-bearing. 14 adopted rows cycling
+  // "absorb" / "absorb " / "Absorb" / Cyrillic-a reported ZERO warnings, because byLane keyed on the
+  // raw string. Rather than normalise three ways, validate against the grammar that already exists
+  // in .claude/rules/lanes.md -- that closes trim, case and Unicode in one assertion.
   if (typeof row.lane !== "string" || !row.lane) {
     warn("shape", `${label}: no lane -- the cap of ${ADOPTED_CAP} is counted PER LANE, so a row with no lane is uncountable`);
+  } else if (!/^[a-z][a-z0-9-]*$/.test(row.lane) || row.lane.length > 64) {
+    warn("shape", `${label}: lane ${JSON.stringify(row.lane)} breaks the lane grammar in .claude/rules/lanes.md ([a-z][a-z0-9-]*, 64 max) -- a lane that differs only by case, whitespace or a lookalike character makes the cap of ${ADOPTED_CAP} uncountable`);
   }
   if (row.review_by !== undefined && row.review_by !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(row.review_by))) {
     warn("shape", `${label}: review_by "${row.review_by}" is not an ISO date`);
@@ -130,6 +157,12 @@ for (let i = 0; i < rows.length; i++) {
   // REQ-07, both directions: nothing adopts or retires itself. A transition into either terminal
   // status needs a decision.recorded reference, and the harness offers no path that writes them.
   const refs = (row.decision_refs && typeof row.decision_refs === "object" && !Array.isArray(row.decision_refs)) ? row.decision_refs : {};
+  const plausibleRef = (v) => typeof v === "string" && /^[0-9A-HJKMNP-TV-Z]{26}$|[/.]/.test(v);
+  for (const which of ["adopt", "retire"]) {
+    if (refs[which] !== undefined && !plausibleRef(refs[which])) {
+      warn("decision-ref", `${label}: decision_refs.${which} is ${JSON.stringify(refs[which])} -- a decision reference is a ULID or a path, and "nothing adopts itself" is not satisfied by a truthy value`);
+    }
+  }
   if (status === "adopted" && !refs.adopt) {
     warn("decision-ref", `${label}: status adopted with no decision_refs.adopt -- adoption ends in the inbox with the owner's reason, and nothing adopts itself (REQ-07)`);
   }
@@ -207,8 +240,14 @@ for (let i = 0; i < rows.length; i++) {
   // naming a row that is still adopted is the cap being satisfied on paper only.
   const byId = new Map();
   for (const r of rows) if (r && typeof r === "object" && !Array.isArray(r) && typeof r.id === "string") byId.set(r.id, r);
+  const claimed = new Set();
   for (const r of displacers) {
-    const target = byId.get(String(r.displaces));
+    const key = String(r.displaces);
+    if (claimed.has(key)) {
+      warn("cap", `${r.id || "a row"}: displaces "${key}", which another row already claims -- one retirement frees ONE slot, and three adoptions naming it is the cap satisfied on paper only`);
+    }
+    claimed.add(key);
+    const target = byId.get(key);
     if (!target) {
       warn("cap", `${r.id || "a row"}: displaces "${r.displaces}", which is not a row in this registry`);
     } else if (target.status !== "retired") {

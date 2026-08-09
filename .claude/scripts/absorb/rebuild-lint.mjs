@@ -25,7 +25,7 @@
 // The paths come from a FILE rather than argv because a rebuild can touch more paths than a command
 // line holds, and because a path list built by a shell loop is where quoting bugs live.
 
-import { readFileSync, existsSync, statSync } from "node:fs";
+import { readFileSync, existsSync, statSync, lstatSync } from "node:fs";
 import { resolve, join } from "node:path";
 
 const DEFAULT_ALLOWLIST = "products/absorb/allowlist.txt";
@@ -70,7 +70,9 @@ const ROOT = resolve(rootArg);
 const readable = (p) => join(ROOT, p);
 
 // ---------- the allowlist ----------
-const globs = readFileSync(allowlistPath, "utf8")
+let allowlistRaw;
+try { allowlistRaw = readFileSync(allowlistPath, "utf8"); } catch (e) { die(`cannot read allowlist ${allowlistPath}: ${e.code || e.message}`); }
+const globs = allowlistRaw
   .split("\n")
   .map((l) => l.trim())
   .filter((l) => l && !l.startsWith("#"));
@@ -92,7 +94,9 @@ function globToRe(g) {
 const allow = globs.map(globToRe);
 
 // ---------- the paths ----------
-const paths = readFileSync(pathsFile, "utf8")
+let pathsRaw;
+try { pathsRaw = readFileSync(pathsFile, "utf8"); } catch (e) { die(`cannot read --paths ${pathsFile}: ${e.code || e.message}`); }
+const paths = pathsRaw
   .split("\n")
   .map((l) => l.trim().replace(/\\/g, "/"))
   .filter(Boolean);
@@ -113,11 +117,19 @@ for (const p of paths) {
 // ---------- dependencies, by parse ----------
 // Every import FORM, not the keyword. The forms below are exactly the ones the 2026-08-04 grep
 // missed, plus the dynamic and constructed ones a grep cannot see at all.
+// `\s*` and NOT `\s+`. `import x from"lodash"`, `import"lodash"`, `import{a}from"lodash"` and
+// `export{a}from"lodash"` are all valid JS that `node --check` accepts, and every one of them walked
+// past the v1 parse -- which is the shape any minifier or bundler output arrives in.
+//
+// The literal call forms no longer demand a closing paren right after the string, because
+// `require("lo" + "dash")` fell into the GAP between the two checks: the literal form did not match
+// (no `)` after the quote) and the computed form did not match either (a quote DID follow the paren).
+// That was the single cleanest way to add a dependency invisibly.
 const IMPORT_FORMS = [
-  { re: /\bfrom\s+["']([^"']+)["']/g, what: 'from "X"' },
-  { re: /\bimport\s+["']([^"']+)["']/g, what: 'bare import "X"' },
-  { re: /\bimport\s*\(\s*["']([^"']+)["']\s*\)/g, what: "dynamic import()" },
-  { re: /\brequire\s*\(\s*["']([^"']+)["']\s*\)/g, what: "require()" },
+  { re: /\bfrom\s*["']([^"']+)["']/g, what: 'from "X"' },
+  { re: /\bimport\s*["']([^"']+)["']/g, what: 'bare import "X"' },
+  { re: /\bimport\s*\(\s*["']([^"']+)["']/g, what: "dynamic import()" },
+  { re: /\brequire\s*\(\s*["']([^"']+)["']/g, what: "require()" },
   { re: /\bcreateRequire\s*\(/g, what: "createRequire()" },
 ];
 // A specifier built from a variable cannot be resolved statically, and that is itself the finding:
@@ -125,6 +137,14 @@ const IMPORT_FORMS = [
 const DYNAMIC_SPECIFIER = [
   { re: /\bimport\s*\(\s*(?!["'])/g, what: "import() with a computed specifier" },
   { re: /\brequire\s*\(\s*(?!["'])/g, what: "require() with a computed specifier" },
+  { re: /\b(?:import|require)\s*\(\s*["'][^"']*["']\s*\+/g, what: "a concatenated specifier" },
+];
+// A loader reached through an ALIAS defeats every call-shaped pattern: `const r = require;` then
+// `r("lodash")`. The bare identifier is therefore the finding.
+const ALIASED_LOADERS = [
+  { re: /\brequire\b(?!\s*\()/g, what: "a bare `require` identifier -- an alias hides the call site" },
+  { re: /\bcreateRequire\b(?!\s*\()/g, what: "a bare `createRequire` identifier" },
+  { re: /\bmodule\.constructor\b|\bprocess\.binding\b|\bprocess\.dlopen\b/g, what: "an internal module loader" },
 ];
 const EXEC_FORMS = [
   { re: /\bchild_process\b/g, what: "child_process" },
@@ -134,14 +154,71 @@ const EXEC_FORMS = [
 
 // A specifier is a NEW runtime dependency unless it is node-builtin or repo-relative.
 const BUILTIN = /^node:/;
-const RELATIVE = /^[./]/;
+const RELATIVE = /^\.{1,2}\//;   // `./` or `../` only. A bare `/` is ABSOLUTE, and v1 read it as relative.
 
-const CODE_EXT = /\.(mjs|cjs|js|ts|mts|cts)$/;
+const CODE_EXT = /\.(mjs|cjs|js|jsx|ts|tsx|mts|cts)$/;
+// Reading is separated from PARSING because the exec/install patterns are TEXT patterns, not JS
+// syntax. Gating them on CODE_EXT meant they were off for `processes/**` (.yaml),
+// `docs/playbooks/**` (.md), `.claude/commands/**` (.md) and `tests/**` (.bats, .sh) -- which is
+// every file type the allowlist admits. A `tests/evil.bats` carrying `npm install left-pad` and a
+// curl-to-shell reported 0 warnings, and CI executes that file.
+let parsedCount = 0;
+
+// Comment stripping, line by line, and the three constructions that defeated the v1 version are
+// each named because all three were live `left-pad` imports that reported 0 warnings:
+//
+//   (a) `const open = "/*"; import evil from "left-pad"; const close = "*/";`
+//       A naive /\/\*[\s\S]*?\*\// swallowed everything between the two string literals.
+//   (b) a `/*` line followed by `// */ import evil from "left-pad";`
+//       Inside a block comment `//` means nothing, so `*/` really does close it and the import is
+//       LIVE code. A line-deleting stripper blanked it -- a false negative.
+//   (c) `const re = /[/*]/; import evil from "left-pad";`
+//       A regex literal containing `/*`.
+//
+// The rule that handles all three: `/*` opens a block ONLY when it is the first non-space on its
+// line, and a `*/` while inside a block ends it MID-LINE, keeping the remainder. So (a) and (c) are
+// never treated as comments at all, and (b) keeps its live tail.
+function stripComments(src) {
+  let inBlock = false;
+  return src
+    .split("\n")
+    .map((l) => {
+      if (inBlock) {
+        const idx = l.indexOf("*/");
+        if (idx === -1) return "";
+        inBlock = false;
+        return " ".repeat(idx + 2) + l.slice(idx + 2);
+      }
+      const t = l.trimStart();
+      if (t.startsWith("/*")) {
+        const after = l.indexOf("*/", l.indexOf("/*") + 2);
+        if (after === -1) { inBlock = true; return ""; }
+        return " ".repeat(after + 2) + l.slice(after + 2);
+      }
+      if (/^\s*\/\//.test(l)) return "";
+      return l;
+    })
+    .join("\n");
+}
 
 for (const p of paths) {
-  if (!CODE_EXT.test(p)) continue;      // a playbook or a command body carries no imports
   const abs = readable(p);
-  if (!existsSync(abs)) continue;       // a deleted path has nothing to parse
+  // A LISTED path that is not there under --root is REPORTED, never skipped. `--root` was added to
+  // separate reading from judging, and it immediately reintroduced the very silence it was fixing:
+  // pointed at a wrong-but-existing directory, every parse was skipped and the run said 0 warnings.
+  if (!existsSync(abs)) {
+    if (CODE_EXT.test(p)) warn("deps", `${p}: listed but not present under --root -- NOT parsed, so its dependencies are unknown rather than clean`);
+    continue;
+  }
+  // A symlink inside an allowlisted directory reaches any explicitly-out target, and the allowlist
+  // judges the path STRING, so nothing else can see it.
+  try {
+    if (lstatSync(abs).isSymbolicLink()) {
+      warn("allowlist", `${p}: is a symlink -- an allowlisted path that points elsewhere is how the explicitly-out list gets bypassed`);
+      continue;
+    }
+  } catch { /* fall through; the read below will report it */ }
+
   let src;
   try {
     if (statSync(abs).size > 2 * 1024 * 1024) { warn("deps", `${p}: over 2 MiB, not parsed`); continue; }
@@ -150,14 +227,19 @@ for (const p of paths) {
     warn("deps", `${p}: unreadable (${e.code || e.message}), so its dependencies were NOT checked`);
     continue;
   }
-  // Strip line comments and block comments so a documented example is not a finding. Only the
-  // first non-space `//` per line, so a `//` inside a string literal cannot truncate the line --
-  // that exact mistake defeated this lane's own boundary guard in Phase 01.
-  const stripped = src
-    .split("\n")
-    .filter((l) => !/^\s*\/\//.test(l))
-    .join("\n")
-    .replace(/\/\*[\s\S]*?\*\//g, "");
+  parsedCount++;
+  const stripped = stripComments(src);
+
+  // EXEC and INSTALL patterns run on EVERY touched file. They are TEXT patterns, not JS syntax, and
+  // gating them on CODE_EXT turned them off for every file type the allowlist actually admits --
+  // `.yaml`, `.md`, `.bats`, `.sh`. A `tests/evil.bats` carrying `npm install left-pad` and a
+  // curl-to-shell reported 0 warnings, and CI EXECUTES that file.
+  for (const { re, what } of EXEC_FORMS) {
+    re.lastIndex = 0;
+    if (re.test(stripped)) warn("deps", `${p}: names ${what} -- a rebuild does not install or execute anything`);
+  }
+
+  if (!CODE_EXT.test(p)) continue;  // only source files carry import syntax
 
   for (const { re, what } of IMPORT_FORMS) {
     re.lastIndex = 0;
@@ -173,9 +255,9 @@ for (const p of paths) {
     re.lastIndex = 0;
     if (re.test(stripped)) warn("deps", `${p}: ${what} -- a specifier no static check can resolve is how a dependency hides`);
   }
-  for (const { re, what } of EXEC_FORMS) {
+  for (const { re, what } of ALIASED_LOADERS) {
     re.lastIndex = 0;
-    if (re.test(stripped)) warn("deps", `${p}: names ${what} -- a rebuild does not install or execute anything`);
+    if (re.test(stripped)) warn("deps", `${p}: names ${what}`);
   }
 }
 
@@ -183,19 +265,32 @@ for (const p of paths) {
 // ADR-0601 puts the attribution rule in the report and REQ-02 requires it in TWO places: the
 // registry row's `attribution` field (checked by registry-ref) and a source comment in the rebuilt
 // file. This is the second place.
+// PER FILE, and the marker must name a SOURCE. The v1 check counted files carrying any one of five
+// common English words and passed the whole rebuild if ANY single file matched -- so two files copied
+// verbatim with no attribution rode through on a third file whose prose happened to say "the class
+// hierarchy here is derived from the base type". A gate satisfied by one stray word in one unrelated
+// file is not a gate.
 if (license === "permissive") {
-  const codeOrText = paths.filter((p) => existsSync(readable(p)) && statSync(readable(p)).isFile());
-  let attributed = 0;
-  for (const p of codeOrText) {
+  // A marker line must carry the word AND something that identifies where it came from: a path, a
+  // URL, or a parenthesised license. "derived from the base type" no longer clears anything.
+  const MARKER = /\b(?:adapted|derived|re-expressed|attribution|originally)\b[^\n]*(?:https?:\/\/|[\w./-]+\.(?:md|mjs|cjs|js|ts|py|go|rs|sh|ya?ml|txt)\b|\((?:MIT|BSD|Apache)[^)]*\))/i;
+  let checked = 0;
+  for (const p of paths) {
+    const abs = readable(p);
+    if (!existsSync(abs) || !statSync(abs).isFile()) continue;
+    if (!CODE_EXT.test(p)) continue;   // prose files are not the rebuild
+    checked++;
     let src = "";
-    try { src = readFileSync(readable(p), "utf8"); } catch { continue; }
-    if (/\b(?:adapted|derived|re-expressed|attribution|originally)\b/i.test(src)) attributed++;
+    try { src = readFileSync(abs, "utf8"); } catch { continue; }
+    if (!MARKER.test(src)) {
+      warn(
+        "attribution",
+        `${p}: --license permissive but this file carries no source comment naming what it was adapted from (a path, URL, or "(MIT)") -- REQ-02 requires attribution in the registry row AND in EVERY rebuilt file`
+      );
+    }
   }
-  if (attributed === 0) {
-    warn(
-      "attribution",
-      `--license permissive but no rebuilt file carries a source comment naming what it was adapted from -- REQ-02 requires attribution in the registry row AND in the file`
-    );
+  if (checked === 0) {
+    warn("attribution", `--license permissive but no rebuilt source file was found to check -- attribution was not verified rather than satisfied`);
   }
 } else if (license === "incompatible") {
   warn(
@@ -208,7 +303,7 @@ if (license === "permissive") {
 for (const w of warnings) console.log(w);
 console.log(
   warnings.length === 0
-    ? `rebuild-lint: 0 warnings (${paths.length} path${paths.length === 1 ? "" : "s"} checked against ${globs.length} allowlist pattern${globs.length === 1 ? "" : "s"})`
+    ? `rebuild-lint: 0 warnings (${parsedCount} of ${paths.length} path${paths.length === 1 ? "" : "s"} parsed, against ${globs.length} allowlist pattern${globs.length === 1 ? "" : "s"})`
     : `rebuild-lint: ${warnings.length} warning${warnings.length === 1 ? "" : "s"} [trial] — WARN-first, exit 0 by design (docs/trial-ledger.md)`
 );
 process.exitCode = 0;
