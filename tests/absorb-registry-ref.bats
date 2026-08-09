@@ -68,6 +68,25 @@ setup() {
   [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
 }
 
+# The committed registry ships zero rows by design, so every assertion about it is an assertion over
+# ZERO loop iterations -- it would keep passing if the resolver were deleted. This test puts a real
+# row against the REAL lock so the resolution path is actually exercised against the file absorb
+# depends on, not only against the fixture.
+@test "a row referencing the real lock entry resolves clean against the real lock" {
+  _write_registry "$REG" '{ "name": "madge", "version": "8.0.0" }'
+  run _ref "$REG" "$REAL_LOCK"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"1 row checked"* ]] || { echo "the row was not checked: $output"; false; }
+}
+
+@test "a row referencing a name absent from the REAL lock is reported" {
+  _write_registry "$REG" '{ "name": "not-in-the-real-lock", "version": "1.0.0" }'
+  run _ref "$REG" "$REAL_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not-in-the-real-lock@1.0.0"* ]] || { echo "$output"; false; }
+}
+
 # ---------- resolution against the fixture lock ----------
 
 @test "a lock_ref naming a fixture row resolves clean" {
@@ -120,6 +139,55 @@ setup() {
 
 # ---------- A5: a row must reference the lock, never copy it ----------
 
+# The nesting bypass the adversarial pass found: every lock-owned fact copied one level deeper,
+# inside lock_ref -- the one object the v1 checker never looked into. It passed completely clean.
+@test "lock_ref carrying anything beyond name and version is reported as duplication" {
+  cat > "$REG" <<'REG'
+{
+  "$comment": "test registry",
+  "techniques": [
+    { "id": "T-01", "name": "t", "status": "candidate", "lane": "absorb",
+      "lock_ref": { "name": "fixture-tool", "version": "1.0.0",
+                    "hash": "sha512-copied", "publisher-auth": "copied", "class": "read-only" } }
+  ]
+}
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"lock_ref carries \"hash\""* ]] || { echo "$output"; false; }
+  [[ "$output" == *"lock_ref carries \"publisher-auth\""* ]] || { echo "$output"; false; }
+  [[ "$output" == *"lock_ref carries \"class\""* ]] || { echo "$output"; false; }
+}
+
+# A denylist of exact lowercase spellings is a denylist of the spellings its author thought of.
+@test "case variants and synonyms of lock-owned fields are reported" {
+  cat > "$REG" <<'REG'
+{
+  "$comment": "test registry",
+  "techniques": [
+    { "id": "T-01", "name": "t", "status": "candidate", "lane": "absorb", "lock_ref": null,
+      "Hash": "x", "sha256": "y", "integrity": "z", "registry": "npm", "checked": "2026-08-09" }
+  ]
+}
+REG
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  for k in Hash sha256 integrity registry checked; do
+    [[ "$output" == *"carries \"$k\""* ]] || { echo "did not report $k"; echo "$output"; false; }
+  done
+}
+
+# A techniques array of the wrong element type was counted as "checked" and never judged, and
+# reported as a clean verdict -- the silent pass this tool's own header says it prevents.
+@test "non-object rows are reported rather than counted as checked" {
+  printf '{ "techniques": ["T-01", 42, null, false, [{"hash":"copied"}]] }\n' > "$REG"
+  run _ref "$REG" "$FIXTURE_LOCK"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"[shape]"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"not an object"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"0 warnings"* ]] || { echo "five bad rows reported as clean"; false; }
+}
+
 @test "a registry row carrying its own hash is reported as duplication" {
   cat > "$REG" <<'REG'
 {
@@ -166,6 +234,9 @@ MUTANT
   _write_registry "$REG" '{ "name": "not-in-lock", "version": "9.9.9" }'
   run bash -c "cd '$ARC_ROOT' && node '$mutant' '$REG' '$FIXTURE_LOCK'"
   [ "$status" -eq 0 ]
+  # POSITIVE first: prove the mutant ran and printed its line, or the absences below are satisfied
+  # by a crash and this control proves nothing.
+  [[ "$output" == *"0 warnings"* ]] || { echo "the mutant did not run: $output"; false; }
   [[ "$output" != *"not-in-lock@9.9.9"* ]] || { echo "mutant named the reference; the assertion is not discriminating"; false; }
   [[ "$output" != *"[lock-ref]"* ]] || { echo "mutant emitted a lock-ref warning; the assertion is not discriminating"; false; }
 }
@@ -200,5 +271,5 @@ MUTANT
 
 @test "absorb-registry-ref suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 17 ] || { echo "registered $registered tests, expected 17"; false; }
+  [ "$registered" -eq 22 ] || { echo "registered $registered tests, expected 22"; false; }
 }

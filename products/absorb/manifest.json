@@ -5,11 +5,14 @@
     "core",
     "hq"
   ],
-  "commands": [],
+  "commands": [
+    ".claude/commands/arc-absorb.md"
+  ],
   "agents": [],
   "scripts": [
     ".claude/scripts/absorb/registry-ref.mjs",
-    ".claude/scripts/absorb/report-lint.mjs"
+    ".claude/scripts/absorb/report-lint.mjs",
+    ".claude/scripts/absorb/study.mjs"
   ],
   "files": [],
   "docs": []

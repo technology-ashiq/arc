@@ -1,0 +1,45 @@
+# absorb Phase 01 hostile corpus.   file<TAB>family<TAB>expected<TAB>marker<TAB>what it attacks
+#
+# STUDY INPUT IS HOSTILE INPUT. Every row here is a real attack shape, pinned as a fixture so it is
+# a regression test rather than a memory. Adding an attack means adding a fixture and ONE row here
+# -- never new test code. tests/absorb-hostile.bats is a driver over this file.
+#
+# family: read -> column 1 is a committed file in this directory, fed to `study.mjs --read`.
+#                 expected is QUOTE-INERT or QUARANTINE.
+# family: path -> column 1 is a PATH STRING, not a file. Fed to `study.mjs --read` as its argument.
+#                 expected is always REFUSE -- the path is never opened at all.
+#
+# COLUMN 4 IS THE MARKER, and it exists because the driver was vacuous without it. The Phase 01
+# adversarial pass replaced study.mjs with a nine-line stub that opened NO file and printed only a
+# BEGIN and END line -- and all twelve rows passed. The driver was proving the envelope's SHAPE
+# while claiming to prove the outcome. The marker is a substring unique to each fixture's real
+# content, and for QUOTE-INERT rows the driver now asserts it appears BETWEEN the envelope markers.
+# `-` for path rows, where nothing is ever opened and there are no bytes to check.
+#
+# TWO FAMILIES ARE DELIBERATELY NOT HERE, and the reason is not oversight:
+#   - the SYMLINK escape must be a real symlink. On Git Bash `ln -s` EXITS 0 AND SILENTLY COPIES
+#     (measured: a 39-byte regular file, isSymbolicLink=false), so a committed or naively created
+#     symlink turns the attack into a harmless byte copy on exactly one CI leg. The boundary suite
+#     checks `-L` on the artifact rather than trusting the exit status, and covers NTFS junctions
+#     (`mklink /J`, no privileges needed) on the Windows leg instead.
+#   - the OVERSIZED file would be a committed megabyte for one assertion.
+# Both are constructed at run time in tests/absorb-study-boundary.bats, where the construction is
+# explicit and visible. They are named here so the corpus does not read as complete when it is not.
+#
+# QUOTE-INERT IS NOT A WEAKER REFUSE. The hostile text IS returned, because a study that cannot read
+# a hostile README cannot study anything. What the boundary guarantees is that it comes back as
+# attributed data inside a nonce-sealed envelope the content cannot close, and that nothing in it is
+# ever executed.
+01-readme-injection.md	read	QUOTE-INERT	Ignore all previous instructions	an imperative addressed to the reading agent, asking for npm install and secret exfiltration
+02-prompt-posing-as-instructions.txt	read	QUOTE-INERT	supersedes the study boundary	a fake SYSTEM block claiming to supersede the study boundary itself
+03-frontmatter-tool-grant.md	read	QUOTE-INERT	allowed-tools	frontmatter forging allowed-tools and permissions -- the exact shape engine's adversarial pass found
+04-envelope-forgery.md	read	QUOTE-INERT	tries to close its own envelope	content emitting envelope terminators, trying to escape the data region and open a forged one
+05-traversal-in-doc-path.txt	read	QUOTE-INERT	etc/passwd	traversal strings as documented paths -- inert as content, and REFUSED if ever used as a path
+06-binary-with-nul.bin	read	QUARANTINE	-	a NUL byte where text is expected -- never inlined as text
+../../../../../../etc/passwd	path	REFUSE	-	POSIX traversal out of the study root
+..\..\..\..\.env	path	REFUSE	-	Windows-separator traversal out of the study root
+subdir/../../outside.txt	path	REFUSE	-	traversal that only escapes after normalisation
+/etc/passwd	path	REFUSE	-	an absolute POSIX path
+C:\Windows\win.ini	path	REFUSE	-	an absolute Windows path, which survives MSYS argument translation
+.	path	REFUSE	-	the study root itself, which is not a regular file
+does-not-exist.md	path	REFUSE	-	a path inside the root that names nothing

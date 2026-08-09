@@ -22,18 +22,22 @@
 import { readFileSync } from "node:fs";
 
 // Fields that live in the lock and must NEVER be copied onto a registry row (A5, REQ-04).
-// `provenance` is not a lock field name -- it is the audit's word for the publisher-auth plus
-// build-attestation pair -- and it is listed because a row inventing it would be duplicating the
-// same fact under a new name, which the cap exists to prevent.
-const FORBIDDEN_ROW_FIELDS = [
-  "hash",
-  "publisher-auth",
-  "publisher_auth",
-  "build-attestation",
-  "build_attestation",
-  "class",
-  "provenance",
-];
+//
+// Matched on a NORMALISED key: lowercased with `-` and `_` removed. The Phase 01 adversarial pass
+// walked past the v1 list with `Hash` (capital), `sha256` and `integrity` (synonyms), and `registry`
+// and `checked` (lock-owned fields the list never named at all). A denylist of exact lowercase
+// spellings is a denylist of the spellings its author happened to think of.
+const FORBIDDEN_NORMALISED = new Set([
+  "hash", "sha256", "sha512", "integrity", "checksum", "digest",
+  "publisherauth", "buildattestation", "attestation", "provenance",
+  "class", "registry", "checked",
+]);
+const normKey = (k) => String(k).toLowerCase().replace(/[-_]/g, "");
+
+// `lock_ref` is the ONE object the v1 checker never looked inside, which made it the obvious place
+// to hide a copy: every lock-owned fact nested one level deeper passed clean. ADR-0600 fixes its
+// shape at exactly {name, version}, so anything else in it is a copy or a mistake.
+const LOCK_REF_KEYS = new Set(["name", "version"]);
 
 const warnings = [];
 const warn = (group, msg) => warnings.push(`WARN  [${group}] ${msg}`);
@@ -76,14 +80,23 @@ if (!Array.isArray(caps)) die(`lock at ${lockPath} has no "capabilities" array`)
 
 // ---------- resolve every lock_ref ----------
 for (let i = 0; i < rows.length; i++) {
-  const row = rows[i] || {};
-  const label = row.id || `row ${i + 1} (no id)`;
+  const raw = rows[i];
 
-  for (const f of FORBIDDEN_ROW_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(row, f)) {
+  // A non-object row is not a row. v1 did `rows[i] || {}`, so a techniques array of strings, numbers
+  // or nulls was counted as "checked" and never judged -- reported as a clean verdict, which is the
+  // silent pass this file's own header says it exists to prevent.
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    warn("shape", `row ${i + 1}: not an object (${raw === null ? "null" : Array.isArray(raw) ? "array" : typeof raw}) -- a registry row must be an object, so this row was not judged`);
+    continue;
+  }
+  const row = raw;
+  const label = typeof row.id === "string" && row.id ? row.id : `row ${i + 1} (no id)`;
+
+  for (const k of Object.keys(row)) {
+    if (FORBIDDEN_NORMALISED.has(normKey(k))) {
       warn(
         "duplication",
-        `${label}: carries "${f}", which belongs to capability-lock.json alone — reference the lock entry, never copy it (A5, REQ-04)`
+        `${label}: carries "${k}", which belongs to capability-lock.json alone — reference the lock entry, never copy it (A5, REQ-04)`
       );
     }
   }
@@ -95,6 +108,17 @@ for (let i = 0; i < rows.length; i++) {
     warn("lock-ref", `${label}: lock_ref must be an object with name and version`);
     continue;
   }
+
+  // The nesting bypass, closed: lock_ref is {name, version} and nothing else.
+  for (const k of Object.keys(ref)) {
+    if (!LOCK_REF_KEYS.has(k)) {
+      warn(
+        "duplication",
+        `${label}: lock_ref carries "${k}" — its shape is exactly {name, version} (ADR-0600), and anything else is a copy of lock-owned data nested one level deeper (A5, REQ-04)`
+      );
+    }
+  }
+
   const { name, version } = ref;
   if (!name || !version) {
     warn(

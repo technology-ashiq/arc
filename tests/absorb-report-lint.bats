@@ -112,6 +112,10 @@ MUTANT
   sedi 's/MIT, re-expressed not copied//' "$REP"
   run bash -c "cd '$ARC_ROOT' && node '$mutant' '$REP'"
   [ "$status" -eq 0 ]
+  # A POSITIVE assertion first: the mutant must actually have run and printed its line. Without it
+  # the two absence assertions below are satisfied by a mutant that crashed, which would make this
+  # control prove nothing -- the same absence-only shape it exists to guard against.
+  [[ "$output" == *"report-lint: 0 warnings"* ]] || { echo "the mutant did not run: $output"; false; }
   # The mutant is indistinguishable by status, and distinguishable by payload. That asymmetry is
   # the thing being proven.
   [[ "$output" != *"license note"* ]] || { echo "mutant named the field; the payload assertion is not discriminating"; false; }
@@ -208,6 +212,132 @@ INJECTED
   [[ "$output" == *"## Verdict summary"* ]] || { echo "$output"; false; }
 }
 
+# THE CASE THE V1 TEST MISSED. The old "quoted heading" test put a heading mid-sentence inside
+# backticks, which only proves that mid-line text is not a heading. The real failure was
+# start-of-line: `.trim()` before the check meant an INDENTED heading counted, and there was no
+# fence awareness at all -- so a report that was ENTIRELY a studied README quoted inside a fence
+# linted clean with zero warnings while containing no authored content whatsoever.
+@test "a whole report quoted inside a code fence satisfies nothing" {
+  local f="$BATS_TEST_TMPDIR/fenced.md"
+  {
+    printf '# quoted source\n\n```\n'
+    printf '## Source\n## Study scope\n## Technique inventory\n\n'
+    printf '| id | name | what it does | why it wins | citation | verdict | reason | license note | risk note |\n'
+    printf '|---|---|---|---|---|---|---|---|---|\n'
+    printf '| T-01 | a | b | c | f:1 | ABSORB | r | MIT | none |\n\n'
+    printf '## Verdict summary\n## SKIP and refusal log\n```\n'
+  } > "$f"
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  # all five reported missing: nothing inside a fence is structure
+  for h in "## Source" "## Study scope" "## Technique inventory" "## Verdict summary" "## SKIP and refusal log"; do
+    [[ "$output" == *"missing required heading \"$h\""* ]] || { echo "did not report $h"; echo "$output"; false; }
+  done
+}
+
+@test "an indented heading is content, not structure" {
+  local f="$BATS_TEST_TMPDIR/indented.md"
+  printf '# r\n\n    ## Source\n    ## Study scope\n    ## Technique inventory\n    ## Verdict summary\n    ## SKIP and refusal log\n' > "$f"
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"missing required heading \"## Source\""* ]] || { echo "$output"; false; }
+}
+
+# Builds a report whose inventory body is supplied on stdin, so these cases need no in-place sed at
+# all. The v1 drafts of the tests below used `sed` replacements containing `\n` and `|`, which GNU
+# sed accepts and BSD sed does not -- a green-here red-on-macOS shape this repo has already paid for.
+_report_with_inventory() { # $1 = target, stdin = the inventory table lines
+  local target="$1" inv
+  inv="$(cat)"
+  {
+    printf '# Extraction report -- test source\n\n## Source\n\n- **Identity:** s\n- **Pin:** abc1234\n- **License:** MIT\n\n'
+    printf '## Study scope\n\n- **Read:** README.md\n- **Archaeology budget spent:** 0.1 hours\n\n'
+    printf '## Technique inventory\n\n%s\n\n' "$inv"
+    printf '## Verdict summary\n\n| verdict | count |\n|---|---|\n| SKIP | 1 |\n\n'
+    printf '## SKIP and refusal log\n\n- none\n'
+  } > "$target"
+}
+
+_HDR='| id | name | what it does | why it wins | citation | verdict | reason | license note | risk note |'
+_SEP='|---|---|---|---|---|---|---|---|---|'
+
+# A duplicate heading shadowed the real section: ~10 row defects vanished and the single warning
+# emitted was "headings out of order" -- a confident diagnosis of a defect that did not exist.
+@test "a duplicated required heading is reported as a duplicate, not as an ordering fault" {
+  local f="$BATS_TEST_TMPDIR/dupe.md"
+  {
+    printf '# r\n\n## Source\n\n- **Identity:** s\n\n## Study scope\n\n- **Read:** x\n\n'
+    printf '## Technique inventory\n\n%s\n%s\n| T-01 | a | b | c | f:1 | SKIP | r | MIT | none |\n\n' "$_HDR" "$_SEP"
+    printf '## Technique inventory\n\n%s\n%s\n| T-02 | a | b | c | f:2 | SKIP | r | MIT | none |\n\n' "$_HDR" "$_SEP"
+    printf '## Verdict summary\n\n| verdict | count |\n|---|---|\n| SKIP | 2 |\n\n## SKIP and refusal log\n\n- none\n'
+  } > "$f"
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"duplicate required heading \"## Technique inventory\""* ]] || { echo "$output"; false; }
+  [[ "$output" != *"out of order"* ]] || { echo "a duplicate was misreported as misordering"; echo "$output"; false; }
+}
+
+# `\|` is the standard markdown escape for a literal pipe. Splitting on it added a phantom column
+# and shifted every checked field, so the lint reported the CITATION as a bad verdict -- naming a
+# field the defect was not in, while the real defect went unreported.
+@test "an escaped pipe inside a cell does not shift the checked columns" {
+  local f="$BATS_TEST_TMPDIR/escpipe.md"
+  _report_with_inventory "$f" <<INV
+$_HDR
+$_SEP
+| T-01 | uses a \\| pipe | b | c | f:1 | ABSORB | r | MIT | none |
+INV
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"is not one of ABSORB"* ]] || { echo "the escaped pipe shifted the verdict column"; echo "$output"; false; }
+  [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
+}
+
+# A misaligned row is reported AS misalignment rather than as a wrong field.
+@test "a row with the wrong number of cells is reported as misaligned" {
+  local f="$BATS_TEST_TMPDIR/misaligned.md"
+  _report_with_inventory "$f" <<INV
+$_HDR
+$_SEP
+| T-01 | a | b | c | f:1 | SKIP | r | MIT | none | EXTRA |
+INV
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"misaligned"* ]] || { echo "$output"; false; }
+}
+
+# An all-blank row matched the separator pattern and was silently discarded, so its field defects
+# were never reported and the run claimed the table had no rows at all.
+@test "an all-blank inventory row is a row, not a separator" {
+  local f="$BATS_TEST_TMPDIR/blankrow.md"
+  _report_with_inventory "$f" <<INV
+$_HDR
+$_SEP
+|  |  |  |  |  |  |  |  |  |
+INV
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"no technique rows"* ]] || { echo "a blank row was discarded as a separator"; echo "$output"; false; }
+  [[ "$output" == *"[row-field]"* ]] || { echo "the blank row's empty fields were not reported"; echo "$output"; false; }
+}
+
+# A zero-width space is not content, but `.trim()` leaves it, so it satisfied every required field.
+@test "a zero-width space does not satisfy a required field" {
+  local f="$BATS_TEST_TMPDIR/zw.md"
+  local zw
+  # written as an escape, never as a literal byte: a non-ASCII character in a test file is exactly
+  # the encoding hazard that once made five tests vanish from a green suite
+  zw="$(node -e 'process.stdout.write(String.fromCharCode(0x200B))')"
+  _report_with_inventory "$f" <<INV
+$_HDR
+$_SEP
+| T-01 | a | b | c | f:1 | SKIP | r | $zw | none |
+INV
+  run _lint "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"license note"* ]] || { echo "a zero-width space passed as content"; echo "$output"; false; }
+}
+
 # WARN-first is a contract, not an accident: a lint that exits non-zero is a BLOCK wearing a
 # WARN's label, and promotion is /arc-retro's call against docs/trial-ledger.md.
 @test "report-lint exits 0 even on a report with warnings" {
@@ -233,5 +363,5 @@ INJECTED
 
 @test "absorb-report-lint suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 14 ] || { echo "registered $registered tests, expected 14"; false; }
+  [ "$registered" -eq 21 ] || { echo "registered $registered tests, expected 21"; false; }
 }
