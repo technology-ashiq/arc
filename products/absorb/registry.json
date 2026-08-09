@@ -1,4 +1,22 @@
 {
   "$comment": "absorb technique registry (ADR-0600, ABS-A). ONE file, lane-scoped rows, never per-lane forks (A5). Lives in products/absorb/ rather than .claude/scripts/absorb/ because products/ is OUTSIDE the sync surface: a registry is written on every technique transition, and .claude/** is hash-pinned in tests/fixtures/sync-golden/tree-manifest.txt, so housing it there would put a byte-identity gate in front of routine data writes (ADR-0606 Amendment 1). ROW SHAPE, all fields required unless marked nullable: id (T-NN, unique) | name | status (candidate|trial|adopted|retired) | lane | source {name, pin, url, license} | classification_ref (path to the extraction report that classified it) | evidence (array of paths, may be empty) | attribution (nullable; REQUIRED and non-null when source.license is permissive and any code was copied rather than re-expressed - ADR-0601) | lock_ref (nullable; {name, version} referencing capability-lock.json when the technique carries an executable artifact - NEVER a hash, publisher-auth, class or provenance copy, those live in the lock alone per A5 and REQ-04) | decision_refs {adopt, retire} (nullable each; a ULID from decision.recorded - a transition to adopted or retired without one is a lint warning per REQ-04/REQ-07) | review_by (ISO date). CAP: 12 rows at status=adopted per lane; at the cap a new adoption names its displacement and the retire proposal rides with it. Phase 00 ships this schema and zero rows (ADR-0606: empty seed); the status lint, cap and displacement checks are Phase 02.",
-  "techniques": []
+  "techniques": [
+    {
+      "id": "T-01",
+      "name": "pre-emit finding verification",
+      "status": "candidate",
+      "lane": "absorb",
+      "source": {
+        "name": "gstack /review SKILL.md",
+        "pin": "sha256 92ee16af71d5e0088326869b0a211c50f94b9261eeae75656bc21f9bcfae2031 (105802 bytes, read 2026-08-09)",
+        "license": "NOT FOUND -- no LICENSE/LICENCE/COPYING in the study root or above it, and no header in the file. All rights reserved by default, so ZERO copying: the rebuild is a re-expression."
+      },
+      "classification_ref": "initiatives/absorb/evidence/phase-04/extraction-report.md",
+      "evidence": [],
+      "attribution": "gstack /review SKILL.md:1251-1281 -- the practice is re-expressed in arc's own terms, nothing copied. Credited because the source deserves it, not because a license compels it.",
+      "lock_ref": null,
+      "decision_refs": {},
+      "review_by": "2026-11-09"
+    }
+  ]
 }

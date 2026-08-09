@@ -289,12 +289,16 @@ function main() {
   // attribution a citation is checked against. `sha256-of-quoted-text` is of the exact text below,
   // which differs whenever the UTF-8 decode was lossy. v1 published only the first, so anyone
   // re-hashing the quoted region got a mismatch and could not tell forgery from mojibake.
-  function envelope(rel, rawSha, bytes, text) {
+  function envelope(rel, rawSha, bytes, text, range = null) {
     const nonce = randomBytes(12).toString("hex");
     const textSha = createHash("sha256").update(Buffer.from(text, "utf8")).digest("hex");
     return [
       `=== STUDIED CONTENT BEGIN ${nonce} ===`,
       `source-file: ${rel}`,
+      // A slice must SAY it is a slice, or a citation taken from it reads as a citation of the whole
+      // file. `sha256` stays the WHOLE file's, so the citation remains checkable against what is on
+      // disk; `sha256-of-quoted-text` covers exactly the region below.
+      ...(range ? [`lines: ${range.from}-${range.to} of ${range.of} (A SLICE, not the whole file)`] : []),
       `sha256: ${rawSha}`,
       `sha256-of-quoted-text: ${textSha}`,
       `bytes: ${bytes}`,
@@ -352,10 +356,36 @@ function main() {
       return;
     }
     const sha = createHash("sha256").update(k.buf).digest("hex");
+    const full = k.buf.toString("utf8");
+
+    // --lines FROM-TO reads a SLICE. Added in Phase 04 by real use: the first genuine study target
+    // is 1852 lines, and a study surface that can only read whole files cannot study a large source
+    // without swallowing it entirely. Confinement, classification and the envelope are unchanged --
+    // this narrows WHAT is quoted, never how safely.
+    //
+    // The envelope declares the range and keeps the WHOLE FILE's sha256, so a citation taken from a
+    // slice is still checkable against the file it came from. A slice hash would be a hash of
+    // something that exists nowhere on disk.
+    const linesArg = flag("--lines");
+    let text = full;
+    let range = null;
+    if (linesArg !== null) {
+      const m = /^(\d+)-(\d+)$/.exec(linesArg);
+      if (!m) die("--lines takes FROM-TO, both 1-based inclusive (e.g. --lines 1-200)");
+      const from = Number(m[1]);
+      const to = Number(m[2]);
+      if (from < 1) die("--lines FROM is 1-based, so it cannot be 0");
+      if (to < from) die(`--lines ${linesArg} ends before it starts`);
+      const all = full.split("\n");
+      if (from > all.length) die(`--lines ${linesArg} starts past the end of the file (${all.length} lines)`);
+      text = all.slice(from - 1, to).join("\n");
+      range = { from, to, of: all.length };
+    }
+
     // process.exitCode + falling off the end, never process.exit(): stdout to a pipe is ASYNC on
     // macOS, and every caller is a pipe. A ~1 MiB read could be truncated mid-envelope, dropping
     // the terminator -- the one property this function exists to hold.
-    process.stdout.write(envelope(rel, sha, k.size, k.buf.toString("utf8")) + "\n");
+    process.stdout.write(envelope(rel, sha, k.size, text, range) + "\n");
     return;
   }
 
