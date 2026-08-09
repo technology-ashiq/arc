@@ -75,22 +75,47 @@ body: |
      in this project, STOP and tell me to sync the template
      (`bash sync-to-project.sh <this project>`, or `sync-to-project.ps1 -Target <this project>` on
      Windows-native) — do not silently fall back to general-purpose.
-  2. Relay its findings verbatim in chat: scanner summary, Critical / Warning / Nit with
-     `file:line` + fix, and the one-line verdict: ship / fix-first / needs-discussion.
-  3. **Archive the review** to `docs/reviews/YYYY-MM-DD-HHMM-<branch>.md` (create the folder
+  2. **Verify every finding BEFORE relaying it — quote the line or the finding is unverified.**
+     For each finding the reviewer returns, you must be able to quote the source line(s) that
+     motivate it. A finding whose motivating line cannot be quoted is **UNVERIFIED**: it does not
+     appear in the findings you relay, and it goes into an `## Unverified` section of the archived
+     review instead, so a later reader can audit what was suppressed and why. Do not promote an
+     unverified finding by asserting confidence in it — that defeats the gate.
+
+     Where a symbol is produced by a generator, a template, a compiler or a schema rather than
+     written by hand, quote **the construct that creates it** — the process file, the template, the
+     migration, the schema — not the generated output. The test is "I read the source that creates
+     this symbol", never "I searched for the name and did not find it".
+
+     **Why this is here, since it costs a step:** arc has never verified a finding before emitting
+     one. It verified afterwards, by hand, one at a time — which is exactly what absorb Cycle 10 did
+     across four adversarial passes, and three of those passes produced findings that were wrong in
+     ways a quoted line would have exposed immediately. This step re-expresses a technique studied
+     from gstack's `/review` skill (`initiatives/absorb/evidence/phase-04/extraction-report.md`,
+     T-01; source `SKILL.md:1251-1281`). Nothing was copied: the source carries **no license**, so
+     the practice is re-expressed in arc's terms against arc's surfaces, and credited here because
+     it is owed rather than because a licence compels it.
+
+  3. Relay the VERIFIED findings verbatim in chat: scanner summary, Critical / Warning / Nit with
+     `file:line` + fix, and the one-line verdict: ship / fix-first / needs-discussion. State the
+     count of unverified findings alongside — a suppressed finding that nobody mentions is a
+     suppressed finding that nobody audits.
+  4. **Archive the review** to `docs/reviews/YYYY-MM-DD-HHMM-<branch>.md` (create the folder
      if needed) containing: date, branch, reviewed commit (`git rev-parse --short HEAD`),
-     the full findings, and the verdict. This is the committed audit trail.
-  4. If there are Criticals: offer to fix them now. After the fix is committed, append
+     the full findings, the verdict, and an `## Unverified` section listing every finding whose
+     motivating line could not be quoted. The unverified list is part of the audit trail, not a
+     scratch note: it is how a wrongly-suppressed finding is ever found again.
+  5. If there are Criticals: offer to fix them now. After the fix is committed, append
      "Resolved in <commit-hash>" under the relevant finding in the same review file —
      findings and their resolutions live together.
-  5. **Stamp the review ledger** so the ship-gate reflects this review (block-by-default,
+  6. **Stamp the review ledger** so the ship-gate reflects this review (block-by-default,
      ADR-0008). Run exactly one, keyed to the verdict:
      - verdict **ship** (no unresolved Criticals): `bash .claude/scripts/core/review-ledger.sh stamp code`
      - verdict **fix-first / needs-discussion**: `bash .claude/scripts/core/review-ledger.sh unstamp code`
        (leave the gate closed until a clean re-review).
      The ledger is keyed to `HEAD`, so a new commit auto-invalidates the stamp — re-run `/arc-review`
      after fixes. This closes the usermanual §8 "code review runs but never stamps" gap.
-  6. **Leave the receipt (spine)** — record the review on the spine (hook-mode, never blocks):
+  7. **Leave the receipt (spine)** — record the review on the spine (hook-mode, never blocks):
      ```bash
      bash .claude/scripts/hq/arc-event.sh emit review.completed --payload '{"branch":"<branch>","verdict":"<ship|fix-first|needs-discussion>"}'
      ```
