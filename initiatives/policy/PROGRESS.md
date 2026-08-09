@@ -49,7 +49,7 @@ an unclosable bypass class → STOP.
 
 | Date | What closed | Evidence |
 |---|---|---|
-| 2026-08-10 | **Phase 04 CLOSED — the last item was the owner's, and it took a different shape of asking.** The three `.claude/settings.json` edits are applied: `permissions.deny` **24 → 37** with ten entries naming a guard file, the write matcher now `Edit\|Write\|MultiEdit\|NotebookEdit`, and a third `PreToolUse` matcher (`mcp__.*\|Agent\|Task\|WebFetch\|WebSearch`) finally routing the per-server capability table `policy-hook.mjs` had carried unreachable since Phase 02. **What made them applicable was giving up on the diff** — the same three sat undone for a day as a document of three diffs, and closed in one sitting once they were two complete files to copy, generated from the live file so the result could be diffed byte-for-byte afterwards. Landed off `main` in PR #147, **not** inside absorb's open PR. `amendments: 0` · `reopened: 0` | CI **31329133765, 19/19 green** on `feat/policy-owner-settings` · `initiatives/policy/evidence/phase-04/owner-action.md` (state read back off the applied file, sha256 `019d160a…`) · `phase.closed` **`01KZKX2VM48QVVRTWM2CY2VBW5`** (read back off the spine, 0 quarantined) · the two tests that read the real file rather than a fixture of it: `policy-hook.bats` **LAYER 2** and **PHASE 04** |
+| 2026-08-10 | **Phase 04 CLOSED — the last item was the owner's, and it took a different shape of asking.** The three `.claude/settings.json` edits are applied: `permissions.deny` **24 → 37** with ten entries naming a guard file, the write matcher now `Edit\|Write\|MultiEdit\|NotebookEdit`, and a third `PreToolUse` matcher (`mcp__.*\|Agent\|Task\|WebFetch\|WebSearch`) finally routing the per-server capability table `policy-hook.mjs` had carried unreachable since Phase 02. **What made them applicable was giving up on the diff** — the same three sat undone for a day as a document of three diffs, and closed in one sitting once they were two complete files to copy, generated from the live file so the result could be diffed byte-for-byte afterwards. Landed off `main` in PR #147, **not** inside absorb's open PR. `amendments: 0` · `reopened: 0` | CI **31329133765, 19/19 green** on `feat/policy-owner-settings` · `initiatives/policy/evidence/phase-04/owner-action.md` (state read back off the applied file, sha256 `019d160a…`) · `phase.closed` **`01KZKXD09Q2GA2294QZPS9SB7F`** on the **canonical spine in the main clone**, read back out of `events/2026-08-10.jsonl`, 0 quarantined (see the note below — the first emit went to a worktree's spine and does not count) · the two tests that read the real file rather than a fixture of it: `policy-hook.bats` **LAYER 2** and **PHASE 04** |
 | 2026-08-08 | **Phase 04 — built, attacked, green and MERGED as `677b67e` (PR #130); NOT yet closed.** Two days, four fresh agents on two surfaces, **26 findings**: 23 closed in code, 2 rejected after measurement, 1 written up as an owner action. 17 new bats tests and **the hostile corpus grown 54 → 64 rows**, which is the phase's own exit check. The kill criterion **did not fire** — five findings look like that class (each a way for layer 1 not to run) and in every case the architecture was right and the wiring was wrong. **It cannot close until the three `.claude/settings.json` edits land**: an agent is refused that file by two independent layers, which is the rule working | CI **31245716829, 19/19 green** on `615cee0` · `initiatives/policy/evidence/phase-04/` (findings.md, live-demo.md, handoff.md) · [`docs/owner-action-settings-json.md`](../../docs/owner-action-settings-json.md) |
 | 2026-08-08 | **Phase 03 CLOSED.** The birth rule in `kickoff-lint` (WARN-first in TRIAL), the resolution extracted to `lib/policy/subjects.mjs` so two gates read one relation from one place, and the 53-row cap inventory. **The inventory falsified REQ-07's own deferral premise** — `leads` is a live cap-bearing module — so the deferral now rests on "out of budget" rather than "nothing to migrate", with a named reopening owner. Its own adversarial pass: two agents, 20 findings, incl. the gate comparing the wrong string with a test pinning that blindness as correct, and 7 of 18 tests passing with the check deleted. `tests/kickoff-lint.bats` 48 → 71 | CI **31216027150, 19/19 green** on `074ef19` · `initiatives/policy/evidence/phase-03/cap-inventory.md` · `phase.closed` `01KZG4JYB2EV5NAHFCRXB44X4X` (read back off the spine, 0 quarantined) |
 | 2026-08-07 | **Phase 02 CLOSED.** The four authority receipts (ADR-0508, vocabulary 40 → 44) and the emitter branch that makes them writable; the promotion chain live end-to-end through `arc-inbox`; automatic demotion on an overreach; both ADR-0501 layers with the cross-check; brief and inbox rendering. **The phase found that none of the four kinds could be emitted at all** — `arc-event` had no idem branch, so every policy receipt was rejected and quarantined while the emitter exited 0. 5 bats suites, 67 tests. `amendments: 0` · `reopened: n` | CI **31155440978, 19/19 green**; main re-verified **31155949595** · `initiatives/policy/evidence/phase-02/` (live-demo.md, handoff.md, manifest) |
@@ -89,6 +89,33 @@ document of three diffs, because a diff-shaped instruction is a task, and a task
 owner is the agent's job left undone. Regenerating the two whole files to paste — *from the live
 file*, so the paste could be compared byte-for-byte afterwards — closed all three in one sitting.
 `docs/owner-paste-STEP1-settings.json` / `STEP2` are the artifacts; the pattern is the finding.
+
+### Found while closing: past lane receipts were emitted into worktree spines, not the canonical one
+
+The canonical spine is `.claude/state/hq/` **in the main clone** (`E:/Work_Hub/01_Automemory/arc`).
+`.claude/state/` is gitignored, so each of this machine's nine `git worktree` checkouts gets its
+own empty one, and an emit run from a worktree writes a real, valid, *unreachable* event there.
+`ARC_SPINE_ROOT` is a test-only door in `arc-event.mjs` and is not the way to reach across.
+
+This close hit it: the first `phase.closed` (`01KZKX2VM48QVVRTWM2CY2VBW5`) was emitted from the
+`arc-absorb` worktree and stayed there. Re-emitted from the main clone as
+`01KZKXD09Q2GA2294QZPS9SB7F`, which is the one this row cites. The stray is not a duplicate of the
+record — it was never on the record.
+
+**It is not only this one.** Measured 2026-08-10: main clone **967** events / 13 day-files ·
+`arc-policy` **613** / 4 · `arc-absorb` **199** / 2. Phase 03's receipt
+`01KZG4JYB2EV5NAHFCRXB44X4X` is on `arc-policy`'s spine and **is not present in the main clone at
+all** — so a citation this tracker already carries is unresolvable from the canonical spine.
+
+**Why this is more than tidiness.** ADR-0030 makes `arc-inbox`'s OPEN set a *fold* over the spine —
+recomputed every run, no state stored anywhere else — and REQ-04 promises a wiped derived index
+rebuilds to the same inbox. Both hold per checkout and neither holds across them: an
+`approval.requested` raised in a worktree is invisible to `arc-inbox` run from the main clone, which
+reports `no open approvals` and exits 0. A silent false negative on the one surface built to stop a
+decision going unrecorded. **Not this cycle's to fix** — policy's appetite is spent and this is an
+`hq` organ, not a policy one. Filed here because it was measured here; the fix belongs to whoever
+takes `hq` next, and the shape is probably "refuse a non-test emit whose spine root is not the main
+clone" rather than "make worktrees share state".
 
 ### What is deliberately still open, and is not a phase
 
