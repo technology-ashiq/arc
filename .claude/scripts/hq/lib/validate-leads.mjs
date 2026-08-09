@@ -220,6 +220,25 @@ export function assertTs(kind, key, value) {
     throw new SpineError("BAD_LEADS_TS", `${kind}.${key} ${JSON.stringify(value)} is not a real calendar date`);
 }
 
+// The same grammar as a PREDICATE, for a fold that must decide whether a stamp may be compared
+// rather than refuse the run over it.
+//
+// `sendCounts` validated its window bounds through `assertTs` and then tested the PAYLOAD stamps
+// with an 11-character prefix (`^\d{4}-\d{2}-\d{2}T`) before comparing the two lexicographically.
+// So a receipt stamped `2026-08-04T04:00:00Z` -- a real send at 09:30 IST -- passed the prefix
+// test, then sorted after every `+05:30` stamp because `Z` > `+`, and was EXCLUDED from a
+// 09:00-10:00 IST window: `real: 0` for a window holding one real cold send. A fractional part
+// does the same. Two grammars judging one comparison is D5 wearing a prefix test as a disguise;
+// there is one grammar and this is it. A stamp that is a date but not the pinned spelling is
+// UNPLACEABLE -- reported on its own axis, counted in every window, never string-compared.
+export function isPayloadTs(value) {
+  try { assertTs("payload", "submitted_at", value); return true; }
+  catch (e) {
+    if (e instanceof SpineError && e.code === "BAD_LEADS_TS") return false;
+    throw e;
+  }
+}
+
 export function assertLeads(event) {
   const kind = event.kind;
   const p = event.payload;

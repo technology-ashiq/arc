@@ -29,8 +29,23 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.ARC_SPINE_LOCK_TIMEOUT_MS || 8000)
 // somewhere else. Otherwise the spine belongs to a REPO: we require .claude and .git in the
 // same directory. Walking up for `.claude` alone found the user's HOME config from an
 // unrelated cwd and quietly wrote one project's receipts into a global spine.
+// PRESENCE, not truthiness. The test was `if (process.env.ARC_SPINE_ROOT)`, so
+// `ARC_SPINE_ROOT=""` -- the unquoted-empty-value failure .claude/rules/lanes.md records, and
+// what `--spine-root "$UNSET_VAR"` expands to in any wrapper -- fell through to the walk-up and
+// read a DIFFERENT spine entirely. Reproduced against `arc-leads report`: five rehearsal
+// receipts on the named spine, and the report answered from the repo's own spine at exit 0.
+// The refusal below covers "the spine does not exist"; it never covered "the spine was never
+// named", and a reader that answers confidently out of the wrong file is the worse of the two.
 export function spineRoot() {
-  if (process.env.ARC_SPINE_ROOT) return resolve(process.env.ARC_SPINE_ROOT);
+  if ("ARC_SPINE_ROOT" in process.env) {
+    const named = process.env.ARC_SPINE_ROOT;
+    if (typeof named !== "string" || named.trim() === "")
+      throw new SpineError(
+        "NO_ROOT",
+        "ARC_SPINE_ROOT is set but empty -- refusing to fall back to a spine nobody named, because reading the wrong spine answers every question confidently and wrongly (unset it, or give it a path)",
+      );
+    return resolve(named);
+  }
   let dir = process.cwd();
   for (;;) {
     if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git")))
