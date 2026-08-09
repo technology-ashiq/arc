@@ -181,17 +181,29 @@ here and a first send.
 
 ## Now
 
-**Current position: Phase 04 CLOSED (2026-08-08). Next is Phase 03 — the rehearsal — and it
-is BLOCKED on one DNS record.** Phases 00, 01, 02 and 04 are closed with both adversarial
+**Current position: Phase 04 CLOSED (2026-08-08). Next is Phase 03 — the rehearsal — and its
+entry gate is THREE rows, not one.** Phases 00, 01, 02 and 04 are closed with both adversarial
 surfaces run on each: **123 holes total**, every one found while CI was green. Phase 01 merged
 as `52a7a63` (PR #111); Phase 02 as `427d533` (PR #113); Phase 04 as `074927d` (PR #131) and
 `dd08c16` (PR #133).
 
-**The one thing standing between here and Phase 03 is a TXT record.**
-`_dmarc.automemory.ai` does not resolve, `lib/preflight.mjs:82-83` refuses on both a missing
-record and on `p=none`, and REQ-00 is written that way on purpose — the deliverability gate is
-code, not a checklist. Publish `v=DMARC1; p=quarantine; rua=...` at `_dmarc.automemory.ai` on
-the registrar and the gate opens. Nothing else in Phase 03 is waiting on anything.
+**Corrected 2026-08-09 via `/arc-change`, from findings raised at `/arc-resume`.** This section
+used to say *"the one thing standing between here and Phase 03 is a TXT record"*. That sentence
+was wrong in both halves — the record now exists, and it was never the only thing. It was
+written by reading the gate off the **one refusal line that had just fired** instead of off the
+whole gate function from its first check to its last, which is how a three-row gate gets
+reported as a one-row gate. A blocker list derived from the last failure is not a blocker list.
+
+| # | Entry gate row | State on 2026-08-09 | Who clears it |
+|---|---|---|---|
+| 1 | `_dmarc.automemory.ai` resolves **and** enforces | **CLEARED.** Live lookup against 8.8.8.8 returns `v=DMARC1; p=quarantine; rua=mailto:…@dmarc-reports.cloudflare.net,mailto:hello@automemory.ai`. Published by the owner after the 2026-08-08 header read | owner — done |
+| 2 | `sending_domain` in `.claude/config/leads.json` is non-empty | **OPEN.** It is `""`. `preflight()` looks up SPF for that domain **before** it looks up DMARC, so it refuses at the SPF row and the DMARC row never executes. **This, not the DNS record, is what actually stops the rehearsal today** — and it would have stopped it on 2026-08-08 too, with the same DMARC text on screen | Phase 03 build |
+| 3 | `product_domains` names `automemory.ai` | **OPEN.** The list is `["lexos.app"]` only, so ADR-0402's `dedicated-domain` refusal **cannot fire** for `automemory.ai` — bind it and `preflight()` reports it as a perfectly good dedicated domain. ADR-0416 narrowed ADR-0402 to *product domain only in rehearsal mode*, and today **no code enforces that narrowing**; `preflight.mjs` contains the string `rehearsal` zero times | Phase 03 build |
+
+**Rows 2 and 3 are coupled and must land in the same slice.** Adding `automemory.ai` to
+`product_domains` on its own makes `preflight()` refuse the rehearsal outright; making
+`preflight()` rehearsal-aware on its own leaves the ADR-0402 guard decorative for the one
+domain it now most needs to cover. Phase 03's exit criteria carry both, together.
 
 **What changed.** The real campaign was blocked on business inputs that do not exist — the
 owner cannot name 25 ICP recipients, which is what an undefined offer looks like from the
@@ -238,14 +250,22 @@ that Zoho omitted it: `_dmarc.automemory.ai` does not resolve at all** (NXDOMAIN
 against 8.8.8.8). Nothing was published, so nothing could be evaluated.
 
 **That is a Phase 03 blocker, discovered here rather than at Phase 03's entry.**
-`lib/preflight.mjs:82` refuses when no `v=DMARC1` record resolves, and again at `:83` when the
-policy is `p=none`. REQ-00 is written that way on purpose. So the rehearsal cannot start until
-a DMARC record exists **and** enforces — one DNS TXT record at `_dmarc.automemory.ai`, which is
-the owner's registrar to add and nobody else's.
+`preflight.mjs` refuses when no `v=DMARC1` record resolves, and again when the policy is
+`p=none`. REQ-00 is written that way on purpose. So the rehearsal cannot start until a DMARC
+record exists **and** enforces — one DNS TXT record at `_dmarc.automemory.ai`, which is the
+owner's registrar to add and nobody else's.
 
-Reading the Gmail-class mailbox's headers is deliberately deferred until after that record
-exists: today it would measure a configuration we already know is incomplete, and the answer
-would have to be thrown away. The sequence is publish DMARC → re-read on the stricter mailbox.
+**Cleared 2026-08-09.** The owner published it, and a live lookup against 8.8.8.8 now returns
+`v=DMARC1; p=quarantine; rua=…`. `p=quarantine` is an enforcing policy, so it clears the
+`p=none` refusal as well as the missing-record one. Entry gate row 1 above is closed.
+
+Reading the Gmail-class mailbox's headers was deliberately deferred until after that record
+existed: before it, the read would have measured a configuration already known to be
+incomplete, and the answer would have had to be thrown away. The sequence was publish DMARC →
+re-read on the stricter mailbox. **The first half is now done, so the deferral has expired** —
+this is the single row Phase 04 was closed with open, by the owner's explicit decision, and
+its stated precondition is met. It is a Phase 03 item now (REQ-07's seed-inbox smoke already
+requires ≥2 mailbox classes read from delivered headers, which is the same read).
 
 **Next: Phase 03 — the rehearsal**, on the 5 addresses. The outreach engine has still never
 touched a real mail server (ADR-0413).
