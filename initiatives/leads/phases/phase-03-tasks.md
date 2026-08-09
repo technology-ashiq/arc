@@ -35,24 +35,24 @@ expected-proof-failures: (empty until proven)
 title: **The preflight gate actually opens, and opens for the right reason** (added 2026-08-09 via `/arc-change`). `sending_domain` in `.claude/config/leads.json` is `""` today, and `preflight()` reads SPF for that domain **before** it reads DMARC — so it refuses at the SPF row and the DMARC row never executes. Setting `sending_domain` is therefore part of this phase, not a precondition someone else supplies. Fixture: with `sending_domain` empty, preflight refuses and **names the SPF row** — a test that only asserts "refused" passes for the wrong reason and would have hidden this for a second time
 kind: logic
 risk: high
-proof: (empty until proven)
-tier: (empty until proven)
+proof: tests/leads-rehearsal-guard.bats -- 13 tests. Every refusal case asserts WHICH rule refused and WHY, never merely that something refused; the shipped config already refuses for an empty sending_domain, so a bare refused-assertion would keep passing after an accidental unlock.
+tier: contract
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The spec asked for sending_domain to be set to automemory.ai. Building it showed that to be the wrong mechanism -- it makes the repo ship with the product domain as its configured sender, one env var from live. sending_domain stays empty and keeps refusing honestly; a separate rehearsal_domain is substituted only in rehearsal mode, leaving sending_domain free for the real cold domain in Phase 05. Also found a fourth gate row nobody had listed: default._domainkey.automemory.ai is NXDOMAIN while resend._domainkey resolves, so dkim_selector is now per-mode.
+result: 9 behaviours executed directly against the module and read: mode-off refuses citing ADR-0402; declared-with-rehearsal_domain-unset refuses; declared-and-named-without-allowlist refuses; junk allowlist refuses; declared+named+locked passes naming ADR-0416 and the lock count; the substitution is announced as its own finding; rehearsal never selects lexos.app; selector resolves resend vs default; the shipped config still REFUSED first=sending-domain. pii-tripwire clean at 69 tracked files (rerun after git add -- the first run scanned 67 and had never seen the new files). kickoff-lint --lane leads: all checks passed.
+commit: 2c7598b
 
 #### slice: 02
 
 title: **ADR-0416's narrowing is enforced by code, not by the ADR text** (added 2026-08-09 via `/arc-change`). `product_domains` is `["lexos.app"]`, so `automemory.ai` is not a product domain to `preflight()` and ADR-0402's `dedicated-domain` refusal cannot fire for it; `preflight.mjs` contains the string `rehearsal` zero times. **These two land together or not at all**: add `automemory.ai` to `product_domains` **and** make the `dedicated-domain` check rehearsal-aware in the same slice. Fixtures, all three: product domain + rehearsal mode ON + allowlist locked → **passes** · product domain + rehearsal mode **OFF** → **refused, citing ADR-0402** · product domain + rehearsal mode ON but the allowlist empty or absent → **refused** (rehearsal mode without a lock is the loophole, and it is the one an attacker reaches for first)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: Same suite. The three ADR-0416 fixtures the spec named, plus three the spec did not: an allowlist of non-address junk, an allowlist of bare at-signs, and rehearsal mode failing to unlock the OTHER product domain.
+tier: contract
 sources: phase-03-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Rehearsal mode is THREE independent signals rather than one flag -- declared (env), locked (address-shaped allowlist entry), named (equals cfg.rehearsal_domain) -- and the absence of any one is the safe state. An env declaration rather than a caller argument, because a parameter someone forgets to pass defaults to permissive while a missing env var refuses. The named check exists because without it, turning rehearsal on would have unlocked lexos.app as well. Shipped in ONE commit with slice 01: either half alone is an unsafe intermediate.
+result: Same executed run as slice 01. D5 closed in the adjacent file rather than only where it was found: sequencer.mjs built List-Unsubscribe from its own read of cfg.sending_domain, so the gate would have cleared automemory.ai while the header pointed at an empty domain. Both now call one exported resolver, effectiveSendingDomain.
+commit: 2c7598b
 
 #### slice: 03
 
