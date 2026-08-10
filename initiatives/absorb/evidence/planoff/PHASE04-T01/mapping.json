@@ -1,0 +1,14 @@
+{
+  "correlation": "PHASE04-T01",
+  "candidate": "T-01",
+  "decided_by": "01KZN380GP5EDF58H6VRTT0S0T",
+  "decides_approval": "01KZN0ZBK5YW0YJRE9NZ0CW5Q1",
+  "verdict": "approve",
+  "picked_label": "quartz",
+  "picked_variant": "old-way",
+  "commitment": "0169fd065351f99d945a2ef00f7ee56f14e782ce48c203693120db02f7866e5c",
+  "mapping": {
+    "quartz": "old-way",
+    "harbor": "absorbed-way"
+  }
+}

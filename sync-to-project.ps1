@@ -119,6 +119,19 @@ if ($settingsBak -and (Test-Path $settingsPath)) {
 # Planning templates
 robocopy "$src\docs\templates" "$Target\docs\templates" /E /NFL /NDL /NJH /NJS | Out-Null
 
+# Playbooks - a DIRECTORY sync, not another entry in the flat meta-docs loop below, so a playbook
+# added later ships in FULL mode without editing either twin again. A SELECTIVE (--products) install
+# still needs a products/*/manifest.json docs row, and nothing lints that - so playbook two can ship
+# here and silently not ship there. Carried as a retro input, not claimed as solved.
+# Required because a full-mode command may reference one: arc-audit.md points at
+# finding-verification.md, which the --products path installs from products/review/manifest.json and
+# full mode would otherwise skip. Bash twin: sync-to-project.sh.
+# robocopy exit codes are NOT checked here - and no robocopy call in this file checks them. 1 means
+# success-with-copies and >=8 means failure, so a naive check would be wrong and no check means a
+# failed copy is silent. tests/sync.bats asserts the ARTIFACT on the Windows leg instead, which is
+# the only thing that catches it either way.
+robocopy "$src\docs\playbooks" "$Target\docs\playbooks" /E /NFL /NDL /NJH /NJS | Out-Null
+
 # Meta docs (safe to overwrite - they describe the system, not your product)
 New-Item -ItemType Directory -Force -Path "$Target\docs" | Out-Null
 foreach ($f in @("blueprint.md", "how-it-works.md", "build-playbook.md", "product-runbook.md", "plugins.md", "usermanual.md")) {

@@ -361,7 +361,52 @@ INV
   [[ "$output" == *"usage"* ]] || { echo "$output"; false; }
 }
 
+# --- Phase 04: the approximate-citation warning -------------------------------------------------
+# Added because an adversarial pass on T-01's rebuild found this lint required a citation to be
+# PRESENT and never RESOLVABLE -- the twin of the exact defect T-01 catches, in the same lane, one
+# file over (docs/playbooks/finding-verification.md). It then caught a real one: the extraction
+# report cited `~1275-1281` for a table that ends at 1276, so the citation was approximate AND wrong.
+
+@test "an approximate citation warns -- a tilde before a line number" {
+  sedi 's|README.md:12|README.md:~12|' "$REP"
+  run _lint "$REP"
+  [[ "$output" == *"[row-field]"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"is approximate"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"coordinate rather than evidence"* ]] || { echo "$output"; false; }
+}
+
+@test "an approximate citation warns -- the word approx before a line number" {
+  sedi 's|README.md:12|README.md approx. 12|' "$REP"
+  run _lint "$REP"
+  [[ "$output" == *"is approximate"* ]] || { echo "$output"; false; }
+}
+
+@test "an approximate citation warns -- around line N" {
+  sedi 's|README.md:12|README.md around line 12|' "$REP"
+  run _lint "$REP"
+  [[ "$output" == *"is approximate"* ]] || { echo "$output"; false; }
+}
+
+# NEGATIVE CONTROL, and it is the reason the first version of this check was wrong. The pattern
+# originally matched the bare WORDS, so it fired on a citation cell whose prose EXPLAINED that an
+# earlier citation had been approximate -- content matched as if it were structure, the same class as
+# a fenced block linting as a heading. A lint that cannot tell a citation from a sentence about
+# citations trains its reader to ignore it, which is worse than not having it.
+@test "prose ABOUT approximation does not warn -- the marker must precede a line number" {
+  sedi 's|README.md:12|README.md:12 (was approximate before, now exact)|' "$REP"
+  run _lint "$REP"
+  [[ "$output" != *"is approximate"* ]] || { echo "false positive on prose: $output"; false; }
+  [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
+}
+
+# ...and the clean fixture must NOT warn, or the three tests above prove only that the lint warns
+# about everything.
+@test "an exact citation does not warn" {
+  run _lint "$REP"
+  [[ "$output" == *"0 warnings"* ]] || { echo "$output"; false; }
+}
+
 @test "absorb-report-lint suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 21 ] || { echo "registered $registered tests, expected 21"; false; }
+  [ "$registered" -eq 26 ] || { echo "registered $registered tests, expected 26"; false; }
 }

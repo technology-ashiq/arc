@@ -169,6 +169,82 @@ export function assertAbJudgement(event) {
 // and no commitment -- and then RENDERED in the inbox through the subject fallback, so they looked
 // real. The repo's rule is that case-varied enum values are REFUSED, never normalized; a case variant
 // being silently EXEMPT from the profile it imitates is worse than either.
+// ---------------------------------------------------------------------------------------------
+// ADR-0605's adoption-proposal profile. A SECOND subject on the same kind, same pattern as above.
+//
+// ADR-0605 line 41 requires: "The results table travels WITH the adoption proposal -- a proposal
+// without its table is lint-invalid." That sentence had no implementation. A requirement written in an
+// ADR and checked by nothing is a guard with no caller, which is the class this cycle has now hit four
+// times -- and it was found while raising the very proposal the sentence governs.
+//
+// The table is carried IN the payload rather than as a path to it, which is stronger than what the ADR
+// asked for and cheaper: a path can be validated for shape but not for content without filesystem I/O,
+// and a spine validator must have no side effects. Numbers in the payload cannot rot away from the
+// receipt, and the owner reads them at the moment of deciding rather than being asked to go and look.
+export const ADOPTION_SUBJECT = "absorb.adoption";
+
+const ADOPTION_REQUIRED = Object.freeze([
+  "candidate",     // the registry row this proposes to move, T-NN
+  "direction",     // adopt | retire -- REQ-07: nothing adopts itself, in EITHER direction
+  "ab_decision",   // the ULID of the A/B pick this rests on
+  "results",       // THE TABLE. An object of metric -> value. Absent or empty is lint-invalid.
+  "recommendation",// the runner's honest recommendation, which the owner is free to overrule
+  "evidence_path", // where the bundle lives
+]);
+const ADOPTION_ALLOWED = new Set(["subject", ...ADOPTION_REQUIRED]);
+const DIRECTIONS = new Set(["adopt", "retire"]);
+const ULID_LIKE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+export function isAdoptionProposal(event) {
+  return (
+    event &&
+    event.kind === "approval.requested" &&
+    isPlainObject(event.payload) &&
+    event.payload.subject === ADOPTION_SUBJECT
+  );
+}
+
+export function assertAdoptionProposal(event) {
+  const p = event.payload;
+  const badA = (msg) => { throw new SpineError("BAD_ADOPTION_PROPOSAL", msg); };
+
+  for (const k of Object.keys(p))
+    if (!ADOPTION_ALLOWED.has(k))
+      badA(`approval.requested subject "${ADOPTION_SUBJECT}" has unknown key "${k}" (shape is closed to subject|${ADOPTION_REQUIRED.join("|")})`);
+  for (const k of ADOPTION_REQUIRED)
+    if (!(k in p))
+      badA(`approval.requested subject "${ADOPTION_SUBJECT}" is missing required key "${k}"`);
+
+  if (typeof p.candidate !== "string" || !T_ID.test(p.candidate))
+    badA(`candidate ${JSON.stringify(p.candidate)} is not a T-NN registry id`);
+  if (typeof p.direction !== "string" || !DIRECTIONS.has(p.direction))
+    badA(`direction ${JSON.stringify(p.direction)} is not adopt or retire -- REQ-07 routes both through the inbox, so the direction is part of the receipt`);
+  if (typeof p.ab_decision !== "string" || !ULID_LIKE.test(p.ab_decision))
+    badA(`ab_decision ${JSON.stringify(p.ab_decision)} is not a ULID -- a proposal that cannot name the A/B it rests on is a recommendation without evidence`);
+
+  // THE TABLE. This is the whole point of the profile.
+  if (!isPlainObject(p.results))
+    badA(`results must be an object of metric -> value -- ADR-0605: the results table travels WITH the proposal`);
+  const keys = Object.keys(p.results);
+  if (keys.length === 0)
+    badA(`results is empty -- an empty table satisfies "has a results field" while carrying no result, which is the shape the ADR forbids`);
+  for (const k of keys) {
+    const v = p.results[k];
+    if (typeof v !== "string" && typeof v !== "number")
+      badA(`results.${k} must be a string or number, got ${typeof v} -- a nested object hides a number behind a shape nobody reads`);
+    if (typeof v === "string" && (v.trim() === "" || hasControlChar(v)))
+      badA(`results.${k} is empty or carries a control character`);
+  }
+
+  if (typeof p.recommendation !== "string" || p.recommendation.trim() === "" || hasControlChar(p.recommendation))
+    badA(`recommendation must be non-empty text with no control characters -- the owner overrules a stated position, not a blank`);
+  if (typeof p.evidence_path !== "string" || p.evidence_path.trim() === "")
+    badA(`evidence_path must be a non-empty path`);
+  if (p.evidence_path.includes(String.fromCharCode(92)) || p.evidence_path.startsWith("/") ||
+      /^[A-Za-z]:/.test(p.evidence_path) || p.evidence_path.split("/").includes(".."))
+    badA(`evidence_path ${JSON.stringify(p.evidence_path)} must be a repo-relative forward-slash path with no traversal`);
+}
+
 export function isNearMissAbJudgement(event) {
   if (!event || event.kind !== "approval.requested") return false;
   const pl = event.payload;

@@ -18,6 +18,21 @@ decision recorded — because mechanics without one real absorb means the cycle 
       outside the ADR-0602 allowlist). If the verdict is not ABSORB, REQ-08 closes on the recorded
       verdict plus its evidence, and the adoption half is honestly not exercised — recorded as such
       rather than forced.
+- [ ] **The landing site is `docs/playbooks/finding-verification.md` with `.claude/commands/arc-audit.md`
+      as its caller** — ADR-0602 **Amendment 2**, which takes Amendment 1's already-recorded route 2
+      rather than widening anything. The DO-NOT-WIDEN ruling of 2026-08-09 stands. Two constraints
+      travel with this and are exit conditions, not notes: the playbook **must** have a caller from
+      birth (Amendment 1 named "a playbook nothing references" as route 2's failure mode, and this
+      cycle already shipped a guard with no caller once), and the caller **must not** be a file
+      compiled from `processes/` — `arc-review.md`, `arc-kickoff.md` and `arc-commit.md` are
+      `GENERATED FILE — DO NOT EDIT` and a rebuild there vanishes at the next `arc-compile` with the
+      registry still claiming it shipped. `arc-audit.md` is hand-written; verified, not assumed.
+- [ ] **The playbook gets its `products/review/manifest.json` `docs` row in the same diff, and the
+      golden manifest is regenerated.** `arc-audit.md` ships to consumer repos through the `review`
+      product; a caller that references a file no product installs is a dangling reference in every
+      consumer — the "guard with no caller" failure inverted, and invisible in this repo because here
+      the file exists. `product-lint` must pass and `tests/fixtures/sync-golden/tree-manifest.txt` must
+      be regenerated, since the byte-identity gate hash-pins every synced path.
 - [ ] **On an ABSORB verdict: a rebuild diff confined to the allowlist**, ideas re-expressed, zero
       new runtime dependencies, attribution in both places if anything permissive was copied.
 - [ ] **Adversarial pass on the rebuild diff, on an ABSORB verdict** — a fresh agent, unanchored to
@@ -30,7 +45,9 @@ decision recorded — because mechanics without one real absorb means the cycle 
       pass should have been missing.
 - [ ] **A/B on at least 3 representative fixtures, and the fixtures are chosen by an agent that
       never saw the rebuild diff**, of the unspecified-input defect class, old-way versus
-      absorbed-way, in PLANOFF layout (protocol, scoring, RESULTS) under `docs/evidence/absorb/`
+      absorbed-way, in PLANOFF layout (protocol, scoring, RESULTS) under `initiatives/absorb/evidence/planoff/`
+      (**ADR-0605 Amendment 1** moved it there; `docs/evidence/**` is frozen per ADR-0058, so this
+      criterion as first written pointed at a tree nothing may add to and would have read as unmet)
       with its `LEDGER.md` line (REQ-03). The next bullet stops the diff's author from grading it;
       this clause stops that same author from picking what it is graded against.
 - [ ] **The A/B runs on fixtures, never on this cycle's own diff.** The first absorb edits arc's
@@ -42,7 +59,8 @@ decision recorded — because mechanics without one real absorb means the cycle 
       table is lint-invalid — and the owner's decision recorded. The registry row moves only on that
       decision ref.
 - [ ] **The complete evidence bundle is committed** under `initiatives/absorb/evidence/phase-04/`
-      plus the PLANOFF bundle under `docs/evidence/absorb/`.
+      plus the PLANOFF bundle under `initiatives/absorb/evidence/planoff/` (ADR-0605 A1, not the frozen
+      `docs/evidence/**`).
 - [ ] **Retro recorded** in `docs/retro-log.md`, including the cycle scoreboard row, the
       assumptions ledger's fired-or-not status for all seven rows stated explicitly, **and ADR-0074's
       two open waiver conditions closed out by name** — the venture clock's status (fired or not,

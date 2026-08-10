@@ -12,6 +12,12 @@
     ".claude/agents/code-reviewer.md",
     ".claude/agents/security-auditor.md"
   ],
+  "docs": [
+    {
+      "src": "docs/playbooks/finding-verification.md",
+      "dest": "docs/playbooks/finding-verification.md"
+    }
+  ],
   "scripts": [
     ".claude/scripts/review/arc-scan/arc-scan.sh",
     ".claude/scripts/review/arc-scan/arc-scan-summary.sh",

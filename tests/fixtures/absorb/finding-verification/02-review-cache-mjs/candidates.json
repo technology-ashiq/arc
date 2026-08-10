@@ -1,0 +1,65 @@
+[
+  {
+    "id": "F1",
+    "claim": "readCache guards the read but not the parse: a truncated or hand-edited cache file throws a SyntaxError out of readCache, so a corrupt cache is fatal while a missing cache is handled.",
+    "cite": "subject/cache.mjs:20",
+    "quote": "  const entry = JSON.parse(raw);",
+    "truth": "true",
+    "quotable": true,
+    "why": "The easy case: real defect, motivating line exists, cited correctly, so both rules keep it."
+  },
+  {
+    "id": "F2",
+    "claim": "writeCache does not await writeFile, so the returned promise resolves before the entry is on disk and the write can be lost when the caller exits.",
+    "cite": "subject/cache.mjs:34",
+    "quote": "  writeFile(entryPath(key), JSON.stringify(entry), 'utf8');",
+    "truth": "true",
+    "quotable": true,
+    "why": "NEAR-MISS: real defect, quote byte-exact for line 33, but the cite is one line off at the closing brace."
+  },
+  {
+    "id": "F3",
+    "claim": "A cached null is indistinguishable from a cache miss: computeVerdict returns null for markdown paths, writeCache persists it, readCache hands back that null, and verdictFor treats null as absence, so every markdown path is recomputed and rewritten on every run and the cache never hits.",
+    "cite": "subject/index.mjs:17",
+    "quote": null,
+    "truth": "true",
+    "quotable": false,
+    "why": "THE CRITICAL CASE: the defect is the collision of two conventions across index.mjs and cache.mjs and only appears at runtime; every individual line is correct, so no line says what the claim says."
+  },
+  {
+    "id": "F4",
+    "claim": "The cache key collapses every non-alphanumeric run to a single dash, so lib/a.mjs and lib-a.mjs map to the same key and one path serves the other path's verdict.",
+    "cite": "subject/index.mjs:15",
+    "quote": "  const key = path.replace(/[^a-z0-9]+/gi, '-').toLowerCase();",
+    "truth": "true",
+    "quotable": true,
+    "why": "TRUE and quotable in the caller, not in the cache module where a reviewer looks first."
+  },
+  {
+    "id": "F5",
+    "claim": "The cache key comes from argv and is concatenated into a filesystem path, so a key of ../../etc/passwd escapes the cache directory and lets the caller read or clobber an arbitrary file.",
+    "cite": "subject/cache.mjs:9",
+    "quote": "  return join(CACHE_DIR, `${key}.json`);",
+    "truth": "false",
+    "quotable": true,
+    "why": "FALSE but the best-looking finding in the set: the cited line is real and is exactly the concatenation, yet assertSafeKey on line 8 rejects slashes and a leading dot."
+  },
+  {
+    "id": "F6",
+    "claim": "readCache returns the stored value without comparing it against the clock, so expired entries are served forever and the TTL is decorative.",
+    "cite": "subject/cache.mjs:24",
+    "quote": "  return entry.value;",
+    "truth": "false",
+    "quotable": true,
+    "why": "FALSE: the quote is byte-exact and the line is the return the claim describes, but the expiry check sits three lines above at 21."
+  },
+  {
+    "id": "F7",
+    "claim": "The entry records a relative TTL rather than an absolute expiry timestamp, so an entry written before a clock adjustment is treated as fresh forever.",
+    "cite": "subject/cache.mjs:88",
+    "quote": null,
+    "truth": "false",
+    "quotable": false,
+    "why": "FALSE and unquotable: the subject stores an absolute expiresAt, and the cite is past end of file (cache.mjs has 34 lines)."
+  }
+]
