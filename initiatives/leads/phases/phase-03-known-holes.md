@@ -1,6 +1,6 @@
 # Phase 03 — known holes, carried forward deliberately
 
-Things seven adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
+Things eight adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
 each with the reason it was left and what would close it. This file exists so that "we did not
 fix it" and "we did not notice it" stop looking identical from the outside.
 
@@ -10,7 +10,7 @@ A hole listed here is a decision. A hole not listed here is a defect.
 
 ## The bar this file exists under — owner decision, 2026-08-10
 
-Seven adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3 and 2 CRITICALs**, two surfaces each
+Eight adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3, 2 and 1 CRITICALs**, two surfaces each
 round, with near-zero overlap between the surfaces every time. Several findings in rounds 2-6
 were defects introduced *by the fix for* a previous round, twice inside the comment explaining
 that fix. The rounds were not converging on a schedule anyone could plan around.

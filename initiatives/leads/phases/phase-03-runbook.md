@@ -11,8 +11,8 @@
 >
 > **What is true as of 2026-08-10:**
 >
-> - **Six adversarial rounds have run against this slice**, two independent surfaces each, and
->   they returned 3, 9, 10, 8, 2 and 3 CRITICALs. Near-zero overlap between the surfaces every
+> - **Eight adversarial rounds have run against this slice**, two independent surfaces each, and
+>   they returned 3, 9, 10, 8, 2, 3, 2 and 1 CRITICALs. Near-zero overlap between the surfaces every
 >   round. Several findings were defects introduced *by the fix for* an earlier round — twice
 >   inside the comment explaining that fix.
 > - **CI is green**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures.
@@ -115,6 +115,7 @@ What it will tell you, and what to do:
 | `resolved from: the ENVIRONMENT (it overrode the file)` | **stop.** A value exported earlier in this shell is winning over the file you just edited. Open a new shell |
 | `resolved from: .env.local declares it EMPTY` | the line exists with nothing after the `=`; fill it in. This is not an override, and looking for one wastes an hour |
 | `resolved from: the ENVIRONMENT (the file does not declare it)` | **stop.** The addresses are only in your shell, which means they went through your history and a process listing (ADR-0412). Put them in `.env.local` and open a new shell |
+| `resolved from: NOWHERE — it is not in the file and not in this shell` | the ordinary first-run state on a fresh clone. Nothing has leaked; the list simply is not set yet. Put it in `.env.local` |
 | `entries the send will use : 0` | every send will refuse — correctly, but with a message that sends you in a circle (see *Known refusals*, R3) |
 | `distinct people` lower than `entries you typed` | two entries are the same person after normalisation (a case twin, or an invisible character pasted in), or one is not address-shaped. You have four recipients, not five |
 | `forbidden-name guard: REFUSED` | `.env.local` names a variable that decides how a send behaves — remove that line before anything else |
@@ -214,8 +215,11 @@ supported; this walk was done on 24.
 
 ## The run, in order
 
-Every command is run from the repo root. `S` below is shorthand for
-`node .claude/scripts/leads/arc-leads.mjs`.
+Every command is run from the repo root, and every one of them is written out in full as
+`node .claude/scripts/leads/arc-leads.mjs …`. There is no `arc-leads` on your PATH — a shorthand
+was defined here once and never used, while two of the Known-refusals rows told you to run the
+bare name, which in PowerShell is a "not recognized" dead end at the moment you are trying to
+recover from something.
 
 ### 1. Gate check
 
@@ -516,7 +520,7 @@ one thing that is deliberately not a file setting.
 
 **R4 — `daily` refuses: `N unresolved send intent(s) in the journal.`**
 A previous run was interrupted between the provider ack and the receipt. Run
-`arc-leads reconcile` and read every `!` line it prints. Do not delete intent files by hand —
+`node .claude/scripts/leads/arc-leads.mjs reconcile` and read every `!` line it prints. Do not delete intent files by hand —
 that is the state that prevents sending the same mail twice.
 
 **R5 — `daily` refuses: `no sending_domain configured`.**

@@ -143,7 +143,23 @@ const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
   /^(OPENSSL_|SSL_|GNUTLS_|CURL_|REQUESTS_|GIT_|HOME|USERPROFILE|XDG_|JAVA_TOOL_OPTIONS)/,
   /^(TMPDIR|TEMP|TMP)$/,        // `emit()` writes every receipt payload under os.tmpdir()
   /^(PERL|PYTHON|RUBY|GEM_|LUA_|R_)/,             // sibling runtimes a hook or a tool may spawn
-  /(_CONF|_CONFIG|_OPTS|_OPTIONS|_STARTUP|_PROFILE|_RCFILE)$/, // the shape itself
+  /(_CONF|_CONFIG|_OPTS|_OPTIONS|_STARTUP|_PROFILE|_RCFILE)$/, // the config-FILE shape
+  // AND THE SEARCH-ROOT SHAPE, because the paragraph above says "configuration files AND SEARCH
+  // ROOTS" and the patterns implemented only the first noun. Every alternative in the line above
+  // is a config-file spelling; there was no `PATH$`, `_HOME$`, `_DIR$`, `_ROOT$`, `_HOOKS$`.
+  //
+  // `GCONV_PATH` is the one that makes it a hole rather than an untidiness: glibc loads gconv
+  // modules — shared objects — from it on any multibyte conversion, in `bash` and in `node`,
+  // which is the same class of arbitrary-object load as `LD_PRELOAD`, and `LD_PRELOAD` is
+  // refused two lines up. `MSYS_NO_PATHCONV` is the Windows-leg twin and is worse in a quieter
+  // way: `arc-event.sh` hands node an MSYS `/c/...` path, so suppressing the conversion makes
+  // EVERY receipt emission fail after the send has already left. `DOTNET_STARTUP_HOOKS` and
+  // `CORECLR_PROFILER` end `_HOOKS` and `_PROFILER`, not `_OPTIONS`.
+  //
+  // Verified against `.env.example`, the owner's real `.env.local`, the four allowlisted names
+  // and every name a bats file writes into a credential file: zero false positives.
+  /(PATH|_HOME|_DIR|_ROOT|_HOOKS|_PROFILER|_PRELOAD|_LIB)$/,
+  /^(GCONV_|LOCPATH|NLSPATH|MSYS|MSYS2_|NPM_CONFIG_|DOTNET_|CORECLR_)/,
 ]);
 
 // The four names in those families that ARE credentials or recipient policy, and therefore

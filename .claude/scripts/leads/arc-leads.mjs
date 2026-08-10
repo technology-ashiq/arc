@@ -212,11 +212,19 @@ async function cmdResearch(icpPath) {
   const failedThisRun = new Set();
   const distinctLeads = new Map();
   try {
+    // INDEX FIRST HERE TOO. `cmdDraft` and `cmdIngestReply` were both moved to this order and
+    // this one — which asks the same question of the same two files and refuses on the same
+    // answer — was left behind. A key entering the index between the two reads would look
+    // orphaned, and the run would exit 2 telling the operator to restore a day file that was
+    // never missing. Narrow in practice (the racing writer would have to mint this very
+    // `lead.researched` idem, and this section holds the send lock) and free to close, which is
+    // the whole shape of the defect this lane keeps paying for: the guard applied in two
+    // branches and omitted in the third.
+    const indexed = idemKeys();
     const priorEvents = readAllEvents({ allowMissing: true });
     // Keyed by idem so a skip can compare the PAYLOAD, not merely observe that the key exists.
     const byIdem = new Map();
     for (const e of priorEvents) if (e && e.idem) byIdem.set(e.idem, e);
-    const indexed = idemKeys();
 
     for (const a of accepted) {
       const id = leadId(store, a.email);
@@ -264,10 +272,6 @@ async function cmdResearch(icpPath) {
         continue;
       }
 
-      // ON THE INDEX BUT NOT IN ANY DAY FILE. The emitter will refuse this key and quarantine the
-      // attempt, every time, forever; emitting it is choosing to create the record that disables
-      // `report`. Naming it is the only honest move — this is a spine that needs `arc-replay`,
-      // not a receipt that needs retrying.
       // ALREADY HANDLED AND ALREADY NAMED. A second row for a lead whose first row was refused
       // or orphaned must be neither retried (that is a second quarantine record) nor counted
       // again (the anomaly list would name one lead twice and over-report the total). It is
@@ -515,8 +519,20 @@ function cmdDraft(campaign, file) {
   // makes the index look ahead of the fold on a perfectly healthy spine — and this command
   // refuses on exactly that, telling the operator to restore a day file that was never missing.
   // The send lock does not exclude other spine writers (most events on a real install come from
-  // surfaces that never take it). Reading the index first can only ever UNDER-count, which is
-  // the direction that fails safe.
+  // surfaces that never take it).
+  //
+  // WHY INDEX-FIRST IS THE SAFE ORDER, stated correctly — an earlier version of this comment
+  // said "reading the index first can only ever UNDER-count, which is the direction that fails
+  // safe", and under-counting is the direction that does NOT refuse, which three lines up is
+  // called how one touch ends up with two live approvals. The justification named the unsafe
+  // direction as the safe one, inside the comment documenting the fix.
+  //
+  // The real argument comes from the emitter: `appendEventUnlocked` writes the DAY LINE first
+  // and the index line second, and tolerates the index append failing. A key therefore only ever
+  // enters `derived/idem.index` after its day line already exists. So any key that arrives
+  // between these two reads is foldable by the time the day files are read and contributes zero —
+  // index-first removes the false POSITIVE without opening a false negative. Index-second had no
+  // such argument available, and refused on a healthy spine.
   const indexKeysAtStart = idemKeys();
   const priorEvents = readAllEvents({ allowMissing: true });
   const priorDrafts = listDrafts(store, campaign);
@@ -975,10 +991,12 @@ async function cmdIngestReply(argv) {
     try {
       // The spine is re-read per reply. An unsubscribe ingested two replies ago changes what
       // the next one derives, and a snapshot taken before the loop would not know it.
-      // INDEX BEFORE EVENTS, for the reason `cmdDraft` gives: the emitter writes the day line
-      // then the index line, so reading the index second makes it look ahead of the fold
-      // whenever another spine writer lands between the two reads — and `ingestReply` refuses
-      // on exactly that. Index-first can only under-count, which fails safe.
+      // INDEX BEFORE EVENTS, for the reason `cmdDraft` gives at length: the emitter writes the
+      // day line then the index line, so a key can only enter the index after its day line
+      // exists — which means a key arriving between these two reads is foldable by the time the
+      // day files are read and contributes zero. Index-second had no such argument and refused
+      // on a healthy spine. (Not "under-counting fails safe": under-counting is the direction
+      // that does not refuse, and that is the one that ends in two live approvals.)
       const spineIdems = idemKeys();
       const r = await ingestReply({
         store, bytes: inp.bytes, events: readAllEvents({ allowMissing: true }),

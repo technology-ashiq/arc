@@ -819,6 +819,11 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
       // RUNTIME CONFIG FILES AND SEARCH ROOTS. node parses OPENSSL_CONF at STARTUP, before a
       // line of the program runs -- verified. TMPDIR moves where every receipt payload is written.
       "OPENSSL_CONF","SSL_CERT_FILE","TMPDIR","GIT_CONFIG_GLOBAL","HOME","PYTHONPATH","SOMETHING_CONF",
+      // SEARCH ROOTS, which the class is written on and the probes did not measure. The list
+      // above is one probe per config-FILE spelling; REFUSED:34/34 was true and measured the
+      // wrong axis. GCONV_PATH loads shared objects into bash and node the way LD_PRELOAD does;
+      // MSYS_NO_PATHCONV makes every receipt emission fail on the windows leg AFTER the send.
+      "GCONV_PATH","MSYS_NO_PATHCONV","DOTNET_STARTUP_HOOKS","CLASSPATH","SOMETHING_DIR","ANY_ROOT",
       // A leading space defeated the anchored patterns until the guard trimmed.
       " ARC_LEADS_FAKE"];
     let refused = 0;
@@ -833,7 +838,7 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     assertEnvLocalNames(["RESEND_API_KEY", ...ENV_LOCAL_ALLOWED, "SUPABASE_URL", "STRIPE_SECRET_KEY"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:34/34"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED:40/40"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ESCAPED:none"* ]] || { echo "$output"; false; }
   # The allowlist must hold the recipient-policy names and NOTHING that steers a send. Asserted
   # positively, so shrinking it (which would refuse the runbook's own required variables) fails

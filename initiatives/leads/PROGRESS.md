@@ -23,7 +23,7 @@ depends-on: —
 | 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
-| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 built-not-proven (3 CRITICALs open). Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
+| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 repaired on PR #150, CI green, 0 CRITICALs open. Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
 | 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ✅ closed 2026-08-08 — 9 live sends, 9 delivered, 74 tests. Closed with ONE row open by the owner's explicit decision: DMARC does not exist, so the Gmail-class header read is deferred behind publishing it |
 | 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
@@ -218,7 +218,7 @@ as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, and repaired on
 history that got the phase started and is kept because two of its three rows are the reason the
 gate reads the way it does.
 
-**Four adversarial rounds against slice 06: 3, 9, 10 and 8 CRITICALs.** Two surfaces per round,
+**Eight adversarial rounds against slice 06: 3, 9, 10, 8, 2, 3, 2 and 1 CRITICALs.** Two surfaces per round,
 near-zero overlap between them every time. Several findings in rounds 2–4 were defects
 introduced *by the fix for* a previous round — twice inside the comment explaining that fix, and
 once as a flag plus its test shipped without the branch that reads the flag. The headline
