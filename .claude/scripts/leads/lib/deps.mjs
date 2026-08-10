@@ -15,11 +15,11 @@ import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { dirname, resolve as pathResolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { request as httpsRequest } from "node:https";
-import { resolveTxt as dnsResolveTxt } from "node:dns/promises";
+import { resolveTxt as dnsResolveTxt, resolveMx as dnsResolveMx } from "node:dns/promises";
 // The ONE dossier read, shared with the send-moment guard, which needs the same file for the
 // opposite purpose (see store.mjs). A second copy here is defect class D5 the moment one of
 // the two grows a normalisation the other lacks.
-import { openStore, dossierEmail, normalizeEmail, leadIdsAllVersions, isAddressShaped } from "./store.mjs";
+import { openStore, dossierEmail, normalizeEmail, leadIdsAllVersions, isAddressShaped, isInsideRepo } from "./store.mjs";
 
 // Anchored to the REPO, never to process.cwd(), for the same reason caps.mjs and preflight.mjs
 // are: it is what keeps ADR-0410's store-is-outside-the-repo assertion meaningful when the
@@ -50,8 +50,22 @@ const dnsFake = {
     }
     return table[name].map((s) => [s]);
   },
+  // ADDED WITH verifyReal, and it throws the same way resolveTxt does rather than returning [].
+  // node's resolveMx throws ENOTFOUND/ENODATA for a domain with no MX; a fake that returned an
+  // empty array instead would make the caller's "no MX" branch reachable only through the fake
+  // and never through the real resolver, which is the fake-swaps-the-code-path defect this
+  // file's own header exists to warn about.
+  async resolveMx(name) {
+    const table = JSON.parse(readFileSync(fixture("mx.json"), "utf8"));
+    if (!(name in table)) {
+      const e = new Error(`queryMx ENOTFOUND ${name}`);
+      e.code = "ENOTFOUND";
+      throw e;
+    }
+    return table[name].map((exchange) => ({ exchange, priority: 10 }));
+  },
 };
-const dnsReal = { resolveTxt: (name) => dnsResolveTxt(name) };
+const dnsReal = { resolveTxt: (name) => dnsResolveTxt(name), resolveMx: (name) => dnsResolveMx(name) };
 export const dns = () => (usingFakes() ? dnsFake : dnsReal);
 
 // ---------- email verification ----------
@@ -66,10 +80,42 @@ const verifyFake = {
     return table[String(email).toLowerCase()] || "verified";
   },
 };
+// MX + syntax, bound 2026-08-10 by ADR-0418. No vendor, no network beyond DNS, and no address
+// ever leaves this machine -- which for a five-recipient rehearsal against addresses the owner
+// already controls is the whole of what a paid verifier would add.
+//
+// THREE STATES, and the middle one is the point. `unverifiable` is NOT an error and NOT a
+// rejection: it is a HELD lead (ADR-0409), a dossier that exists and can never be sent to. A
+// domain with no MX may still accept mail on its A record, so "no MX" is genuinely "cannot
+// confirm" rather than "invalid" -- and for cold outbound the conservative reading is the
+// correct one, because the cost of a wrong `verified` is a bounce against a domain that takes
+// 2-4 calendar weeks to warm.
+// THE RESOLVER IS INJECTED, and that is not decoration. `verifier()` returns the FAKE whenever
+// `ARC_LEADS_FAKE=1`, so there is no environment in which this function runs against `dnsFake`:
+// on CI, which fakes DNS, the real one is never reached; off CI it needs live network. Without
+// a seam the `verified` branch is unprovable in both places at once, and an unprovable branch
+// is one nobody notices deleting. Measured, not assumed -- this box answers every DNS query
+// with ECONNREFUSED, so `verified` returned `unverifiable` for gmail.com when it was written.
+export async function verifyAddress(email, resolveMx) {
+  // Syntax first, and through the SAME predicate the store mints ids with. A second address
+  // grammar here would be defect class D5: an address this accepts and `isAddressShaped`
+  // rejects is a lead that verifies and can never be given a lead_id.
+  if (!isAddressShaped(email)) return "invalid";
+  const domain = String(email).split("@").pop().trim().toLowerCase();
+  if (!domain) return "invalid";
+  try {
+    const mx = await resolveMx(domain);
+    // An empty array is a real answer a real resolver can give, not only a fake's shape.
+    return Array.isArray(mx) && mx.length > 0 ? "verified" : "unverifiable";
+  } catch {
+    // ENOTFOUND, ENODATA, SERVFAIL, ECONNREFUSED, a timeout -- every one of them means the same
+    // thing to this gate: nobody confirmed this address, so it is HELD rather than sent to.
+    return "unverifiable";
+  }
+}
+
 const verifyReal = {
-  async verify() {
-    throw new ProviderError("config", "no email verifier is bound — selected from the capability report at Phase-3 entry (ADR-0402/0409)");
-  },
+  verify: (email) => verifyAddress(email, (d) => dns().resolveMx(d)),
 };
 export const verifier = () => (usingFakes() ? verifyFake : verifyReal);
 
@@ -83,9 +129,45 @@ const sourceFake = {
     return JSON.parse(readFileSync(fixture("candidates.json"), "utf8"));
   },
 };
+
+// ADR-0417. v1 research is MANUAL -- the plan said so from kickoff and the old refusal here
+// said so too, and neither supplied the mechanism by which manual research becomes a dossier.
+// This is that mechanism, and it is deliberately the least code that could be it: the same read
+// the fake does, from a path the operator supplies, and then straight into the SAME
+// `lintCandidates` gate with no relaxation whatsoever.
+//
+// It reads. It does not normalise, deduplicate, enrich or repair. A corpus that fails the lint
+// is reported and refused, never fixed -- because the person who wrote the corpus is the person
+// who wants it to pass, which is `gate-author-cannot-be-its-attacker` in its purest form.
 const sourceReal = {
-  async search() {
-    throw new ProviderError("config", "no automated lead source is bound — v1 research is manual against ADR-0409's allowlisted classes");
+  async search(icp, opts = {}) {
+    const path = opts.corpus;
+    if (!path)
+      throw new ProviderError("config", "no lead corpus was given — v1 research is manual against ADR-0409's allowlisted classes, so `research` needs `--corpus <path>` naming a file you wrote (ADR-0417). The path goes in argv; the corpus itself never does");
+
+    // OUTSIDE THE REPO, and refused rather than warned. This is the file most likely to be
+    // dropped in the repo root by someone in a hurry, it holds names and addresses, and the PII
+    // tripwire treats every tracked leads path as a violation on sight (ADR-0410). Same
+    // predicate the store is guarded with, so the two cannot drift.
+    const { inside, resolved, root } = isInsideRepo(REPO_ROOT, path);
+    if (inside)
+      throw new ProviderError("config", `the lead corpus resolves to ${resolved}, which is inside the repository at ${root} — it holds names and addresses and must never live where git can track it (ADR-0410/0417)`);
+    if (!existsSync(resolved))
+      throw new ProviderError("config", `lead corpus not found: ${resolved}`);
+
+    let parsed;
+    try { parsed = JSON.parse(readFileSync(resolved, "utf8")); }
+    catch (e) { throw new ProviderError("config", `the lead corpus is not valid JSON (${e.message}) — nothing was read, so no dossier was written`); }
+
+    // An OBJECT here would reach `lintCandidates` as a non-iterable and die somewhere less
+    // legible; an empty array is an operator error worth naming, because "0 PASS" out of a
+    // silent empty file reads exactly like a corpus whose every entry was rejected.
+    if (!Array.isArray(parsed))
+      throw new ProviderError("config", `the lead corpus must be a JSON array of candidates, got ${parsed === null ? "null" : typeof parsed}`);
+    if (parsed.length === 0)
+      throw new ProviderError("config", `the lead corpus at ${resolved} is an empty array — refusing, because a run that researches nobody and a run whose every candidate was rejected print the same summary`);
+
+    return parsed;
   },
 };
 export const source = () => (usingFakes() ? sourceFake : sourceReal);
