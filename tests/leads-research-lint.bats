@@ -303,10 +303,24 @@ const below = R.accepted.filter(a => a.below_bar);'
   # ADR-0417. sourceReal is only reachable with ARC_LEADS_FAKE unset, so this drives the CLI
   # without it -- which is also what proves the fake is not silently substituted.
   cd "$ARC_ROOT"
-  local dir; dir="$(_tmpdir)"
-  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  # BATS_TEST_TMPDIR, not the `_tmpdir` helper: that one is defined INSIDE
+  # leads-mail-guard.bats and is not in scope here. The first version of this test called it
+  # anyway -- because another leads suite used it -- and every leg failed with `command not
+  # found` at status 127. bats supplies this one natively, per test, outside the repo, which is
+  # what the inside-the-repo assertion below needs to be meaningful.
+  local dir="$BATS_TEST_TMPDIR"
+  [ -n "$dir" ] && [ -d "$dir" ] || { echo "no per-test temp dir: '$dir'"; false; }
   printf '{"campaign":"corpustest","classes":["firm-site"],"jurisdictions":["IN"],"min_facts":2}\n' > "$dir/icp.json"
   [ -s "$dir/icp.json" ] || { echo "the icp fixture is EMPTY"; false; }
+
+  # THE STORE IS OPENED FIRST, SO IT MUST EXIST FIRST. `cmdResearch` does openStore() BEFORE
+  # source().search(), so against an uninitialised store every case below exits 5 without ever
+  # reaching the corpus -- and each `[ "$status" -eq 4 ]` fails for a reason that has nothing to
+  # do with what the test is about. The first version of this test initialised the store near
+  # the end, next to the positive control, and passed locally only because the run reused an
+  # already-initialised one. Order of setup is part of the assertion.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs store init
+  [ "$status" -eq 0 ] || { echo "store init failed, so nothing below tests what it claims: $output"; false; }
 
   # 1. no --corpus at all: the refusal must NAME the flag, since the whole defect it replaces
   #    was a refusal naming no reachable remedy.
@@ -348,8 +362,6 @@ const below = R.accepted.filter(a => a.below_bar);'
 
   # POSITIVE CONTROL. Without this every assertion above passes for a `research` that refuses
   # unconditionally -- which is precisely the state this ADR was written to end.
-  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs store init
-  [ "$status" -eq 0 ] || { echo "store init failed, so the control proves nothing: $output"; false; }
   cat > "$dir/corpus.json" <<'JSON'
 [{"name":"Adv One","email":"one@firmone.example.com","firm":"Firm One","firm_domain":"firmone.example.com",
   "geography":"IN","provenance":"firm-site",
