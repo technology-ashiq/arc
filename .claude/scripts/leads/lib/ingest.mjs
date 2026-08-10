@@ -170,7 +170,7 @@ export function meetingBody({ calendarUrl }) {
 // No `repoRoot` parameter: the path rule belongs to readReplyFile, which is the only function
 // that ever sees a path. By the time bytes reach here there is nothing left to contain, and a
 // parameter that is accepted and ignored reads to the next caller as a check being performed.
-export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)", spineIdems = [] }) {
+export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)", spineIdems = [], spineRead = false }) {
   let parsed;
   try {
     parsed = parseReply(bytes);
@@ -390,7 +390,7 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     let unfoldable = 0;
     for (const k of spineIdems) if (!foldedIdems.has(k)) unfoldable++;
     if (!announced && unfoldable > 0)
-      throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. Rebuild with arc-replay, or restore the archived day.`);
+      throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. Restore the archived or missing day file FIRST, and only then run \`node .claude/scripts/hq/arc-replay.mjs\` — replay rebuilds the index from the days that are present, so running it first drives this count to zero by forgetting the receipts rather than by finding them, and the refusal disappears without the state being repaired.`);
 
     // AN EMPTY FOLD IS NOT A SPINE THAT SAYS NO. This function's header promises a caller can
     // assert its exact receipts "without a spine", and every module test takes that up by
@@ -412,8 +412,19 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     // DUP_IDEM, so a lost race here reported "1 ingested, 0 refused" at exit 0 while the
     // tolerated refusal left the quarantine record that makes `report` refuse. Third time this
     // exact omission has been found in this file, each time on a different emit.
-    const haveFold = events.length > 0;
-    if (!announced && (created || haveFold)) {
+    // THE CALLER SAYS WHETHER IT SHOWED US THE SPINE. It is not inferred from `events.length`,
+    // and the version that inferred it was a CRITICAL of its own: wipe the spine (a fresh clone,
+    // a machine move, an `ARC_SPINE_ROOT` repoint) while the store keeps the meeting draft, and
+    // `created` is false AND the fold is empty — so the approval was silently never emitted and
+    // the run printed "1 ingested, 0 refused". It healed only on a THIRD ingest, and the operator
+    // had been given a success line and no reason to run one. That traded a double-emit a module
+    // test could see for a silent miss on the path this phase's whole SLA argument rests on.
+    //
+    // An empty fold has two causes that cannot be told apart from in here — "the caller did not
+    // show me a spine" (every module test, deliberately) and "the spine is genuinely empty"
+    // (production, after a reset) — and they need opposite answers. So the caller, which knows,
+    // states it. Default false, so a caller that says nothing gets the conservative answer.
+    if (!announced && (created || spineRead)) {
       const meetingEmit = await emit("approval.requested", meetingApprovalPayload(rec));
       if (meetingEmit && meetingEmit.duplicate) out.receipt_raced = true;
     }

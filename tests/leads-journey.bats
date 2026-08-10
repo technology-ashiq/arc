@@ -754,21 +754,57 @@ for (const f of readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test
 }
 console.log("archived: " + removed);
 MJS
+  # And its inverse: rebuild derived/idem.index from the day files that remain, which is what
+  # `arc-replay` does and what the POSITIVE CONTROL below needs in order to prove the refusal is
+  # about the INCONSISTENCY and not about the command being broken.
+  cat > "$BATS_TEST_TMPDIR/reindex.mjs" <<'MJS'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const root = process.env.ARC_SPINE_ROOT;
+const dir = join(root, "events");
+const lines = [];
+for (const f of readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n)))
+  for (const line of readFileSync(join(dir, f), "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    const ev = JSON.parse(line);
+    if (ev.idem && ev.id) lines.push(ev.idem + "\t" + ev.id);
+  }
+const d = join(root, "derived");
+if (!existsSync(d)) mkdirSync(d, { recursive: true });
+writeFileSync(join(d, "idem.index"), lines.length ? lines.join("\n") + "\n" : "");
+console.log("index rebuilt: " + lines.length);
+MJS
+  [ -s "$BATS_TEST_TMPDIR/reindex.mjs" ] || { echo "the reindex helper is EMPTY"; false; }
   [ -s "$BATS_TEST_TMPDIR/archive.mjs" ] || { echo "the archive helper is EMPTY"; false; }
   run node "$BATS_TEST_TMPDIR/archive.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"archived: 2"* ]] || { echo "the fixture stripped $output, expected 2"; false; }
   [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "the day files still hold approvals"; false; }
 
+  # THE WHOLE RUN REFUSES, not just the resume. An earlier version withheld only the resume and
+  # left the `dangling` check reading the same incomplete fold — so a touch whose approval sat in
+  # the archived day looked untouched, a new draft was written, a SECOND approval was emitted, and
+  # restoring the day made both live. Refusing the command is the only answer that holds for
+  # every inference in it.
   run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"UNSURE"* ]] || { echo "the resume ran against a spine it cannot fully read: $output"; false; }
-  [[ "$output" == *"2 unreadable-spine"* ]] || { echo "$output"; false; }
-  # THE COUNT IS THE CLAIM: nothing was announced, and no second draft was minted.
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; false; }
+  [[ "$output" == *"derived/idem.index"* ]] || { echo "$output"; false; }
+  # THE REMEDY ORDER IS PART OF THE CLAIM. arc-replay rebuilds the index from the days that are
+  # PRESENT, so running it first drives this count to zero by forgetting the receipts rather than
+  # by finding them -- and the refusal disappears without the state being repaired.
+  [[ "$output" == *"FIRST"* ]] || { echo "the refusal did not order the remedy: $output"; false; }
+  # THE COUNTS ARE THE CLAIM: nothing announced, no second draft minted.
   [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "$(_spine_count approval.requested) approval(s) re-announced against an unreadable spine"; false; }
   [ "$(_drafts_count)" -eq 2 ] || { echo "$(_drafts_count) draft file(s), expected 2"; false; }
-  # And it is NOT counted as a stale body, which is a different cause with a different remedy.
-  [[ "$output" == *"0 stale draft(s) left alone"* ]] || { echo "UNSURE was folded into the stale count: $output"; false; }
+
+  # POSITIVE CONTROL: the same command on a spine whose index matches its days runs normally.
+  # Without this, a mutant that refuses `draft` unconditionally passes everything above.
+  run node "$BATS_TEST_TMPDIR/reindex.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"index rebuilt"* ]] || { echo "$output"; false; }
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "the command refuses even on a consistent spine: $output"; false; }
+  [[ "$output" == *"2 resumed from an interrupted run"* ]] || { echo "$output"; false; }
 }
 
 @test "this file registers the 22 tests it declares" {

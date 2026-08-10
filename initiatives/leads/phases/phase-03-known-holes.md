@@ -74,8 +74,14 @@ withhold unrelated work. In `ingestReply` the refusal also lands **after** the r
 on the spine and the meeting draft is on disk, so a warm lead sits without a calendar draft until
 `arc-replay` — against that function's own "same run, a deadline you cannot miss". Left because
 narrowing it to the one `meet_` ref is a fold-shaped change and the conservative version is safe;
-the cost is latency on a spine that is already broken. **A test now makes `unfoldable` non-zero**
-(journey 22), so neither branch is deletable any more.
+the cost is latency on a spine that is already broken.
+
+> **The asymmetry closed on 2026-08-10, and this paragraph's claim about coverage was wrong.** It
+> said "a test now makes `unfoldable` non-zero (journey 22), so neither branch is deletable any
+> more". The test is the 21st `@test` (22 is the self-count), and it drives `research` and
+> `draft` only — it never calls `ingest-reply`, so `ingest.mjs`'s refusal still has no coverage
+> and is still deletable for free. Recorded as what it is. `cmdDraft` now refuses the whole run
+> rather than only the resume, which is what made the two siblings agree.
 
 **`approvalState` requires `typeof e.id === "string"` and nothing tests it.** An
 `approval.requested` with no `id` reads as "no approval exists", so `draft` mints a second one

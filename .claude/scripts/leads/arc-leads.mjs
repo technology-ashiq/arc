@@ -528,6 +528,19 @@ function cmdDraft(campaign, file) {
   let unfoldable = 0;
   for (const k of idemKeys()) if (!foldedIdems.has(k)) unfoldable++;
 
+  // AND IT REFUSES THE WHOLE RUN, not just the resume. The comment that used to sit above said
+  // "the resume is the only inference that depends on completeness" and it was wrong: the
+  // `dangling` check below reads the SAME fold to decide whether a live approval names a missing
+  // draft, and on an incomplete fold it finds nothing, so a touch whose approval is in an
+  // archived day looks untouched — a new draft is written and a SECOND approval emitted, at exit
+  // 0 with `0 unreadable-spine` printed. Restoring the archived day then makes both live and
+  // renderable on gate `leads-send`, which is the ADR-0407 state this command exists to forbid.
+  //
+  // The sibling in `ingest.mjs` refuses unconditionally in this state. This one refused only when
+  // an orphan draft file happened to exist — the same guard, one branch, D6 again.
+  if (unfoldable > 0)
+    dieUnlocked(2, `${unfoldable} idem(s) in derived/idem.index belong to events this fold cannot read, so nothing here can tell "no approval exists" from "its day is no longer on disk" — and queueing on that guess is how one touch ends up with two live approvals. Restore the archived or missing day file FIRST, and only then run \`node .claude/scripts/hq/arc-replay.mjs\`: replay rebuilds the index from the days that are present, so running it first drives this count to zero by forgetting the receipts rather than by finding them.`);
+
   // AND THE MIRROR CASE: A LIVE APPROVAL WHOSE DRAFT FILE IS GONE.
   //
   // The paragraph above says a draft on disk is half a record — and then the first version of
@@ -578,7 +591,7 @@ function cmdDraft(campaign, file) {
     else unannounced.set(key, prior);
   }
 
-  let written = 0, blocked = 0, duplicate = 0, resumed = 0, stale = 0, rejectedSame = 0, unsure = 0;
+  let written = 0, blocked = 0, duplicate = 0, resumed = 0, stale = 0, rejectedSame = 0;
   const halfWritten = [];
   linted.forEach((d, i) => {
     if (scored[i].verdict === VERDICT.FAIL) {
@@ -619,16 +632,6 @@ function cmdDraft(campaign, file) {
     }
 
     const orphan = unannounced.get(key);
-    if (orphan && unfoldable > 0) {
-      // "No approval found" is not "no approval exists" on a spine this fold cannot fully read.
-      // COUNTED SEPARATELY from `stale`. They share a shape (nothing was announced) and nothing
-      // else: STALE means the operator edited the body, UNSURE means the spine cannot be read.
-      // One summary number for both told the operator to go and look at a draft when the thing
-      // to look at was `arc-replay` — a line named after a case it does not cover.
-      unsure++;
-      console.log(`  UNSURE ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} has a draft with no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Nothing was emitted. Rebuild with arc-replay, or restore the archived day, then run this again.`);
-      return;
-    }
     if (orphan) {
       // Announce the draft that EXISTS rather than minting a second one. But only if it still
       // says what this input says: re-emitting an approval for a body the operator has since
@@ -675,7 +678,7 @@ function cmdDraft(campaign, file) {
   // into the FAIL count — reporting a touch the human REJECTED as a draft the lint blocked,
   // which are opposite facts about who decided — and omitted `HALF` entirely, so the one
   // outcome that leaves work unfinished appeared in no total at all.
-  console.log(`arc-leads draft: ${written} queued for approval, ${resumed} resumed from an interrupted run, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused, ${rejectedSame} unchanged after a rejection, ${stale} stale draft(s) left alone, ${unsure} unreadable-spine, ${halfWritten.length} half-written`);
+  console.log(`arc-leads draft: ${written} queued for approval, ${resumed} resumed from an interrupted run, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused, ${rejectedSame} unchanged after a rejection, ${stale} stale draft(s) left alone, ${halfWritten.length} half-written`);
   if (halfWritten.length) {
     for (const h of halfWritten)
       console.error(`arc-leads: HALF-WRITTEN — ${h.ref} (${h.lead}) has a draft on disk and no approval receipt: ${h.message}`);
@@ -970,6 +973,9 @@ async function cmdIngestReply(argv) {
         // `ingestReply` reaching for them itself made a module test depend on whatever
         // ARC_SPINE_ROOT pointed at, which for a suite with no setup() is this repo.
         spineIdems: idemKeys(),
+        // This layer DID read the spine, so an approval it cannot find genuinely is not there.
+        // Module callers leave this false and fall back to the store flag.
+        spineRead: true,
         now, emit: emitFn, config: cfg, sourceLabel: inp.label,
       });
       ok++;
