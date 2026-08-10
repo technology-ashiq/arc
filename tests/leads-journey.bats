@@ -139,6 +139,7 @@ _decide_all_approvals() {
   cat > "$BATS_TEST_TMPDIR/reject.mjs" <<'MJS'
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 const root = process.env.ARC_SPINE_ROOT;
 const dir = join(root, "events");
@@ -155,7 +156,14 @@ const sh = join(process.argv[2], ".claude/scripts/hq/arc-event.sh");
 for (const id of ids) {
   const pf = join(process.env.BATS_TEST_TMPDIR, "decision-" + id + ".json");
   writeFileSync(pf, JSON.stringify({ decides: id, verdict: process.argv[3] || "reject", reason: "a decision was taken" }));
-  execFileSync("bash", [sh, "emit", "decision.recorded", "--payload-file", pf, "--actor", "test", "--strict"], { encoding: "utf8" });
+  // `--idem` IS REQUIRED for this kind and only this kind. `validate.mjs` binds a decision idem
+  // to sha256("decision.recorded|" + decides) -- that binding is what makes one approval
+  // decidable exactly once -- while arc-event derives a non-leads idem from a millisecond. So
+  // the derived value never matches and the emit is refused BAD_DECISION. The first version of
+  // this helper omitted it, `execFileSync` threw, and the two tests that depend on it were red
+  // without ever reaching their own assertions. tests/policy-demotion.bats does it correctly.
+  const idem = createHash("sha256").update("decision.recorded|" + id, "utf8").digest("hex");
+  execFileSync("bash", [sh, "emit", "decision.recorded", "--payload-file", pf, "--actor", "test", "--strict", "--idem", idem], { encoding: "utf8" });
 }
 console.log("decided: " + ids.length);
 MJS
@@ -672,11 +680,18 @@ JSON
   [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s) -- the run queued despite refusing"; false; }
 }
 
-@test "an APPROVED touch is still one approval, and a later rejection reopens it" {
-  # `approvalState` was exercised only with rejections, so two mutants survived 19/19: reading
-  # any decision as "rejected" (which lets a revision queue a second approval for a touch the
-  # human has already approved), and taking decisions[0] instead of the last (which makes a
-  # late rejection unrevisable forever). Both halves are asserted here.
+@test "an APPROVED touch is still one approval, and the spine allows only one decision" {
+  # `approvalState` was exercised only with rejections, so a mutant reading ANY decision as
+  # "rejected" survived -- it lets a revision queue a second approval for a touch the human has
+  # already approved. That half is asserted first.
+  #
+  # The other half is asserted as what it IS rather than what an earlier version of this test
+  # wished it were. That version ended by rejecting an already-approved approval and expecting
+  # the touch to reopen, which the spine cannot do: `validate.mjs` binds a decision idem to
+  # sha256("decision.recorded|"+decides), so a second decision on one approval is DUP_IDEM. So
+  # "latest decision wins" is a property of a set that can never hold more than one element,
+  # and a human CANNOT revoke an approval they have already given. That is a real product gap,
+  # recorded in phases/phase-03-known-holes.md rather than papered over with a green test.
   run _cli research "$BATS_TEST_TMPDIR/icp.json"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   _mkdrafts
@@ -691,12 +706,16 @@ JSON
   [[ "$output" == *"2 duplicate touch(es) refused"* ]] || { echo "a revision queued over a live APPROVED approval: $output"; false; }
   [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s), expected 2"; false; }
 
-  # LATEST decision wins: reject after approve retires it, and the revision is then allowed.
-  _decide_all_approvals reject
-  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"2 queued for approval"* ]] || { echo "a rejection after an approval did not reopen the touch: $output"; false; }
-  [ "$(_spine_count approval.requested)" -eq 4 ] || { echo "$(_spine_count approval.requested) approval(s), expected 4"; false; }
+  # And the spine refuses the second decision, which is WHY the paragraph above is the whole
+  # story. Asserted here rather than assumed, because the reject-then-revise path in test 19
+  # only makes sense if a rejection is the one and only decision that approval can carry.
+  # The helper script is already on disk from the approve call above; it is run DIRECTLY rather
+  # than through the wrapper, because the wrapper asserts its own success and a nested `run`
+  # inside a `run` is a trap this suite does not need.
+  run node "$BATS_TEST_TMPDIR/reject.mjs" "$ARC_ROOT" reject
+  [ "$status" -ne 0 ] || { echo "the spine accepted a SECOND decision on one approval: $output"; false; }
+  [[ "$output" == *"DUP_IDEM"* ]] || { echo "expected DUP_IDEM, got: $output"; false; }
+  [ "$(_spine_count decision.recorded)" -eq 2 ] || { echo "$(_spine_count decision.recorded) decision(s), expected 2"; false; }
 }
 
 @test "this file registers the 21 tests it declares" {

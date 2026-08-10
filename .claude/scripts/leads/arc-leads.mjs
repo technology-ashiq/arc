@@ -277,9 +277,23 @@ async function cmdResearch(icpPath) {
         res = emit("lead.researched", receipt, { allowDuplicate: true });
       } catch (e) {
         emitFailed.push({ id, message: e.message });
+        // MARKED EVEN ON FAILURE. The snapshot-never-grown defect this function opens with was
+        // fixed on the success path and left in both failure paths — so a corpus holding one
+        // lead twice re-attempted the same refused emit for the second row and wrote a SECOND
+        // quarantine record, and `report` refuses while any exists. The lead is already named
+        // in `emitFailed`; retrying it inside the same run adds a blocker and no information.
+        byIdem.set(idem, { idem, payload: receipt });
+        indexed.add(idem);
         continue;
       }
-      if (res.duplicate) { racedDuplicate.push(id); continue; }
+      if (res.duplicate) {
+        racedDuplicate.push(id);
+        // The receipt IS on the spine — that is what DUP_IDEM means — so a second row for this
+        // lead must be skipped, not re-attempted into another quarantine record.
+        byIdem.set(idem, { idem, payload: receipt });
+        indexed.add(idem);
+        continue;
+      }
       emitted++;
       emittedThisRun.add(idem);
       // GROWN, so the next row for this same lead in this same corpus is caught by the branch
@@ -661,18 +675,29 @@ function cmdDraft(campaign, file) {
 // rotation the same human carries a different id, so yesterday's approval stopped matching
 // today's draft and the same person got two. `guard.mjs` had already fixed both, in three
 // adjacent branches, and this was the fourth (D6). It calls that code rather than repeating it.
-// IS THERE A LIVE APPROVAL FOR THIS DRAFT? "live" means undecided OR approved; only a trailing
-// `reject` retires one.
+// IS THERE A LIVE APPROVAL FOR THIS DRAFT? "live" means undecided OR approved; a `reject`
+// retires one.
 //
-// It reads the same two kinds `approvedShaFor` reads and applies the same latest-decision-wins
-// rule, and it deliberately treats an UNDECIDED request as live — that is the whole difference
-// between the two questions. `approvedShaFor` asks "may this send?", where undecided must mean
-// no; this asks "is the human already holding this question?", where undecided must mean yes.
-// Reversing either one is a real failure: the first sends what nobody approved, the second puts
-// the same decision in the inbox twice.
+// It deliberately treats an UNDECIDED request as live — that is the whole difference between
+// this question and `approvedShaFor`'s. That one asks "may this send?", where undecided must
+// mean no; this asks "is the human already holding this question?", where undecided must mean
+// yes. Reversing either is a real failure: the first sends what nobody approved, the second
+// puts one decision in the inbox twice.
 //
-// `events` arrives sorted by ULID, i.e. in time order, from `readAllEvents` — the same property
-// the sequencer's fold depends on for its own last-decision-wins.
+// ONE APPROVAL CAN BE DECIDED EXACTLY ONCE, and the loop below is written as if it could be
+// decided many times. That is deliberate but it is NOT a revocation mechanism, and an earlier
+// version of this comment claimed it was. `validate.mjs` binds a decision's idem to
+// sha256("decision.recorded|"+decides), so the second decision on any approval is refused
+// DUP_IDEM — verified end to end. "Latest decision wins" is therefore a property of a set that
+// never holds more than one element: harmless, matching the shape `approvedShaFor` uses, and
+// carrying no behaviour of its own.
+//
+// The consequence is a real product gap and it is recorded rather than invented around: a human
+// who approves and then changes their mind CANNOT reject that approval. See
+// `phases/phase-03-known-holes.md`. Building a revocation path inside a fix commit is exactly
+// the move this lane has been burned by.
+//
+// `events` arrives sorted by ULID, i.e. in time order, from `readAllEvents`.
 function approvalState(events, draftRef) {
   const requests = events.filter(
     (e) => e && e.kind === "approval.requested" &&

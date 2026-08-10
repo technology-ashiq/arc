@@ -378,6 +378,19 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     const announced = events.some(
       (e) => e && e.kind === "approval.requested" && e.payload && e.payload.draft_ref === rec.meeting_ref
     );
+    // "NO APPROVAL FOUND" IS ONLY "NO APPROVAL EXISTS" IF THIS FOLD CAN SEE THE WHOLE SPINE.
+    // `cmdDraft` spends twenty lines establishing that and withholds the inference when the
+    // idem index holds keys the day files no longer carry; this made the identical inference
+    // with the identical consequence — a second undecided `leads-meeting` approval for one
+    // human, which the emitter cannot deduplicate because a non-leads idem is millisecond-
+    // salted. Same defect, sibling module, one round later, with the answer already in scope as
+    // a parameter. The index keys are a superset of the fold on a healthy spine, so anything in
+    // the index and not in the fold is history this run cannot read.
+    const foldedIdems = new Set(events.map((e) => e && e.idem).filter(Boolean));
+    let unfoldable = 0;
+    for (const k of spineIdems) if (!foldedIdems.has(k)) unfoldable++;
+    if (!announced && unfoldable > 0)
+      throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. Rebuild with arc-replay, or restore the archived day.`);
     if (!announced) await emit("approval.requested", meetingApprovalPayload(rec));
   }
 
