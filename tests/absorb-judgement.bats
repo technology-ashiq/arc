@@ -425,9 +425,23 @@ _adoption() { # $1 = a JS statement mutating `p`; prints ACCEPTED or "REFUSED <m
 # CONTAINMENT CONTROL. A plain approval.requested must NOT be held to this profile, or every generic
 # approval in the repo starts failing. Same containment the ab-judgement profile carries, and the
 # reason both profiles key on an explicit subject rather than on shape.
+# Called WITHOUT `bash -c`. The first version wrapped this in `bash -c "... \"$VA\""`, and $VA is a
+# file-scope bats variable that the subshell never inherits -- so node was handed an empty path,
+# import() rejected, nothing was written, and `$output` was the rejection text rather than "false".
+# CI caught it on 5 of 19 legs. Same class as assuming a helper is exported by test_helper.bash: a name
+# that resolves in one scope and silently does not in the next.
 @test "adoption: a plain approval.requested is not held to the adoption profile (control)" {
-  run bash -c "cd \"\$ARC_ROOT\" && node -e 'import(process.argv[1]).then(m=>process.stdout.write(String(m.isAdoptionProposal({kind:\"approval.requested\",payload:{what:\"x\",gate:\"y\"}}))))' \"\$VA\""
-  [ "$output" = "false" ] || { echo "$output"; false; }
+  cd "$ARC_ROOT"
+  run node -e 'import(process.argv[1]).then((m) => {
+    const plain = { kind: "approval.requested", payload: { what: "x", gate: "y" } };
+    const ab    = { kind: "approval.requested", payload: { subject: "absorb.ab-judgement" } };
+    const mine  = { kind: "approval.requested", payload: { subject: "absorb.adoption" } };
+    process.stdout.write([m.isAdoptionProposal(plain), m.isAdoptionProposal(ab), m.isAdoptionProposal(mine)].join(","));
+  });' "./.claude/scripts/hq/lib/validate-absorb.mjs"
+  [ "$status" -eq 0 ] || { echo "the probe did not run: $output"; false; }
+  # plain=false, the OTHER absorb subject=false, its own subject=true. The third value is what makes
+  # the first two mean something: all-false is also what a broken predicate returns.
+  [ "$output" = "false,false,true" ] || { echo "$output"; false; }
 }
 
 @test "absorb-judgement suite registers every test it defines" {
