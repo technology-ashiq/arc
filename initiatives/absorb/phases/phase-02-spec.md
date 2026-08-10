@@ -29,7 +29,7 @@ attribution rule has a gate instead of a good intention.
       `fs/promises`, `child_process` and async exec/spawn, and a mutant module walked straight past
       it. The negative-control mutant here must add its dependency through **one of those exact
       missed forms**.
-- [ ] **`docs/evidence/absorb/` PLANOFF skeleton committed** — protocol, scoring and RESULTS layout
+- [ ] **`initiatives/absorb/evidence/planoff/` PLANOFF skeleton committed** (**ADR-0605 A1** moved it during this phase; the criterion as written named the frozen `docs/evidence/**`, and the phase closed against the lane path) — protocol, scoring and RESULTS layout
       plus an append-only `LEDGER.md` with its header and zero rows, mirroring
       `docs/evidence/planner-bench/` rather than reinventing it (ADR-0605).
 - [ ] **Every lint added here has a negative control that RUNS a mutant** built to walk past it, and
