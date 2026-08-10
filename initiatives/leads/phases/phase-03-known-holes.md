@@ -1,6 +1,6 @@
 # Phase 03 — known holes, carried forward deliberately
 
-Things nine adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
+Things eleven adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
 each with the reason it was left and what would close it. This file exists so that "we did not
 fix it" and "we did not notice it" stop looking identical from the outside.
 
@@ -10,10 +10,15 @@ A hole listed here is a decision. A hole not listed here is a defect.
 
 ## The bar this file exists under — owner decision, 2026-08-10
 
-Nine adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3, 2, 1 and 1 CRITICALs**, two surfaces each
+Eleven adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3, 2, 1, 1, 4 and 0 CRITICALs**, two surfaces each
 round, with near-zero overlap between the surfaces every time. Several findings in rounds 2-6
 were defects introduced *by the fix for* a previous round, twice inside the comment explaining
 that fix. The rounds were not converging on a schedule anyone could plan around.
+
+The bar was set after round 4, when only nine of those eleven numbers existed. It held: rounds 10
+and 11 found 4 CRITICALs and then none, and the tail of HIGHs the bar sent here is what this file
+is. The count is restated whenever a round lands, because a tally that stops being re-derived
+starts being a claim about a branch that has moved.
 
 Shown that and asked to choose, the owner ruled: **from round 5 onward only a CRITICAL blocks
 this slice.** HIGH and lesser findings are recorded here and carried forward, and this file
@@ -28,7 +33,7 @@ with its reason.
 
 **H-04 is CLOSED.** The owner approved the `weigh-tests.yml` run on 2026-08-10; it completed as
 run `31361908896` and its measured table is in `tests/shard-timings.json` — 60 entries → **104**,
-covering the 47 files that had no entry at all. The two files this slice grew were among them and
+covering 44 of the 47 files that had no entry at all. The two files this slice grew were among them and
 were wrong in the same direction by roughly sevenfold: `leads-journey.bats` measured **111s** and
 `leads-mail-guard.bats` **120s** against an assumed `_default_weight` of **16**.
 
@@ -196,7 +201,7 @@ part of that slice, not this one.
 ## H-05 · `ci.yml` derives the declared-test count two ways
 
 **What.** `_declared()` uses `^[[:blank:]]*@test[[:blank:]]`; the suite-size floor uses
-`'^@test '`. They agree today. The floor itself is `911` against 2239 actual, so a large
+`'^@test '`. They agree today. The floor itself is `911` against 2242 actual, so a large
 regression could pass it.
 
 **Why it is left.** `.github/**` belongs to no lane and the `policy` lane is LIVE. Editing it

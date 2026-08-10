@@ -1483,15 +1483,33 @@ async function cmdNotify(argv) {
   let useStdin = false;
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
-    if (a === "--stdin") { useStdin = true; continue; }
+    // `--stdin` gets the SAME repeat rule as the value flags, and the same no-value rule as any
+    // boolean. It was the one flag in this loop exempt from both: `--stdin --stdin` was accepted
+    // silently while `--text-file a --text-file b` refused, and `--stdin=1` fell to the
+    // unknown-flag branch and was told the flag does not exist — when it does, and takes no
+    // value. A guard present in one branch and omitted in the adjacent one is D6.
+    if (a === "--stdin" || a.startsWith("--stdin=")) {
+      if (a.length > "--stdin".length)
+        die(2, "--stdin takes no value — the detail arrives on the pipe, not on the flag");
+      if (useStdin) die(2, "--stdin was given twice — repeating it does not read the pipe twice, and an argv list nobody meant to write is an operator error");
+      useStdin = true;
+      continue;
+    }
     // `--text` gets the RULE, not the generic refusal. It is the flag an operator reaches for,
     // and the reason it does not exist is the whole point of this command's two doors: the
     // failure detail is exactly the content that ends up quoted into a process listing, into
     // shell history and verbatim into Node's `Command failed: …` on a non-zero exit (ADR-0412).
     // Telling that operator only "unknown flag" spends the one moment they are listening.
-    if (a === "--text")
+    // BOTH SPELLINGS. `--text=<detail>` is one argv element, so an `a === "--text"` test misses
+    // it and it fell through to the unknown-flag branch below — which interpolated the whole
+    // element, putting the failure detail verbatim into stderr and therefore into the CI log
+    // this rule exists to keep it out of. The refusal that enforces ADR-0412 was leaking under
+    // ADR-0412, through the equals form of the very flag it names. D1.
+    if (a === "--text" || a.startsWith("--text="))
       die(2, "--text does not exist on `notify`. The failure detail arrives as BYTES and never in argv, because argv is readable in any local process listing, lands in shell history, and is embedded verbatim into Node's error message on a non-zero exit (ADR-0412). Use --text-file <path> or --stdin.");
-    if (!(a in flags)) die(2, `unknown flag ${JSON.stringify(a)} for \`notify ${trigger ?? ""}\`. Takes --text-file <path>, --stdin, --what <one line>.`);
+    // The NAME is echoed, never the value. `--anything=<secret>` is one element, so quoting the
+    // whole of it hands back whatever the operator attached to it.
+    if (!(a in flags)) die(2, `unknown flag ${JSON.stringify(a.split("=")[0])} for \`notify ${trigger ?? ""}\`. Takes --text-file <path>, --stdin, --what <one line>.`);
     if (flags[a] !== null) die(2, `${a} was given twice — two values for one flag is an operator error, not a last-wins override`);
     const v = rest[i + 1];
     if (v === undefined || String(v).startsWith("--")) die(2, `${a} needs a value`);

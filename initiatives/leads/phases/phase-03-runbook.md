@@ -11,19 +11,26 @@
 >
 > **What is true as of 2026-08-10:**
 >
-> - **Nine adversarial rounds have run against this slice**, two independent surfaces each, and
->   they returned 3, 9, 10, 8, 2, 3, 2, 1 and 1 CRITICALs. Near-zero overlap between the surfaces every
->   round. Several findings were defects introduced *by the fix for* an earlier round — twice
->   inside the comment explaining that fix.
-> - **CI is green**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures.
+> - **Eleven adversarial rounds have run against this slice**, two independent surfaces each, and
+>   they returned 3, 9, 10, 8, 2, 3, 2, 1, 1, 4 and **0** CRITICALs. Near-zero overlap between the
+>   surfaces every round. Several findings were defects introduced *by the fix for* an earlier
+>   round — twice inside the comment explaining that fix. Round 11 read the whole branch,
+>   including round 10's fixes, and returned **MERGE**.
+> - **CI is green at `d689ec1`**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures, read
+>   per-JOB rather than off the watcher's exit code. **The sha is part of the claim** — this line
+>   said "CI is green" with no sha until 2026-08-10, which stays true-looking across every commit
+>   that follows it, including the ones that break it. If HEAD is not that sha, this line is
+>   about a tree you are not standing on.
 > - **Known holes are listed, not hidden** — `phases/phase-03-known-holes.md`, each with why it
 >   is left and what would close it. The owner set the bar on 2026-08-10: only a CRITICAL blocks
 >   this slice.
 >
-> **What is still outstanding before the live run:** the fixes from the most recent round have
-> not themselves been attacked, and the branch has not merged. Walking this document against the
-> **fake** to rehearse the sequence is fine and is what it is for. Do not do the live send until
-> that line is struck from this banner.
+> **What is still outstanding before the live run:** the branch has not merged, and round 11's own
+> HIGH-class fixes — this banner, the DNS-row and remedy corrections below, and one parser fix in
+> `cmdNotify` that ships with its own test — have not themselves been attacked. What HAS been
+> attacked is everything up to and including round 10. Walking this document against the **fake**
+> to rehearse the sequence is fine and is what it is for. Do not do the live send until this
+> paragraph is struck from this banner.
 
 This is what the owner follows for the real run. Every command below was walked end to end
 against the FAKE on 2026-08-09 (slice 06); the outputs quoted are the ones the walk actually
@@ -154,10 +161,13 @@ fixtures come from — and a credential file is not where any of those decisions
 > in behind a corporate proxy, turns off certificate validation on the request carrying your key,
 > your recipient and your text.
 >
+> **`ARC_LEADS_FAKE` is the one on that list with a silent failure mode**, which is why it leads
+> it: a `.env.local` holding `ARC_LEADS_FAKE=1` would switch the whole run to the fake and report
+> "mail sent" having sent nothing. (This sentence sat OUTSIDE this quote until 2026-08-10, so its
+> "otherwise" pointed at the sentence about `rehearsal-check.mjs` and referred to nothing.)
+>
 > If you are unsure whether a line belongs in `.env.local`, run `rehearsal-check.mjs`: it applies
 > the same guard and tells you before the send does.
-A `.env.local` holding `ARC_LEADS_FAKE=1` would otherwise switch the whole run to the fake and
-report "mail sent" having sent nothing.
 
 > The guard now reads what the file **declares** rather than what it managed to **apply**, which
 > is what made it blind to a file whose variables were already in the environment. And a run on
@@ -252,7 +262,7 @@ matters:
   ok       rehearsal-mode: … the domain under test is rehearsal_domain "automemory.ai" …
   ok       dedicated-domain: automemory.ai IS a product domain, permitted ONLY because …
   REFUSED  spf:            no v=spf1 TXT record resolves for automemory.ai (live lookup)
-  ok       dmarc:          v=DMARC1; p=quarantine at _dmarc.automemory.ai (live lookup)
+  ok       dmarc:          v=DMARC1; p=quarantine; …   ← the TXT record, verbatim, nothing else
   REFUSED  dkim:           no DKIM TXT at resend._domainkey.automemory.ai (live lookup)
   REFUSED  provider-spf / provider-dkim / provider-dmarc: …
   REFUSED  warmup:         …
@@ -263,6 +273,13 @@ exit 3
 **`sending-domain` does not appear at all**, and the two `ok` rows are the rehearsal mode
 resolving correctly — they are the good news, not a warning. **Do not count the refusals and
 compare them to a number in this document.** Read each row.
+
+> **A passing DNS row prints the record and nothing else; only a REFUSAL carries the `(live
+> lookup)` tail.** `pass("dmarc", …)` is handed `dmarc[0]` — the TXT record as resolved — while
+> `refuse` is the branch that spells out which name was queried and that the query was live. This
+> block quoted a `dmarc` pass line with a `at _dmarc.<domain> (live lookup)` suffix on it until
+> 2026-08-10; no code path emits that string, so an operator comparing the two would have gone
+> looking for a fault in a gate that was working. The same asymmetry holds for `spf`.
 
 > **The `provider-*` rows only exist because `preflight` now reads `.env.local`** and therefore
 > reaches the vendor with your real key. Before that fix it could not authenticate at all and
@@ -491,8 +508,12 @@ something genuinely refused.
 **R2 — `report` refuses: `no outreach.sent receipt on the spine carries campaign "<name>"`.**
 Not a bug. Before any send there are no receipts, so the campaign name cannot be resolved
 against them. It refuses instead of answering `real: 0`, because a silent zero for a misspelled
-name reads exactly like the answer you were hoping for. Run `report` with no `--campaign` to see
-the whole spine.
+name reads exactly like the answer you were hoping for. To see the whole spine, run it with no
+`--campaign` — written out in full, because there is no `arc-leads` on your PATH:
+
+```
+node .claude/scripts/leads/arc-leads.mjs report
+```
 
 > **The remedy above walks straight into R2b if the campaign names disagree.** "Run it with no
 > `--campaign`" is the right move for a typo and the wrong move for the mismatch in step 2's

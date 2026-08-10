@@ -1196,6 +1196,33 @@ MJS
   # AND THE DETAIL ITSELF IS NOT ECHOED BACK. A refusal that quotes the argument it refused has
   # put the content into the same log the rule exists to keep it out of.
   [[ "$output" != *"connection refused on :8443"* ]] || { echo "the refusal echoed the detail it refused: $output"; false; }
+
+  # BOTH SPELLINGS. `--text=<detail>` is ONE argv element, so an exact-match test misses it and
+  # it fell through to the unknown-flag branch, which quoted the whole element -- putting the
+  # detail verbatim into stderr and therefore into the CI log. The refusal that enforces ADR-0412
+  # was leaking under ADR-0412, through the equals form of the flag it names.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary "--text=connection refused on :8443"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"never in argv"* ]] || { echo "the equals form escaped the rule: $output"; false; }
+  [[ "$output" != *"connection refused on :8443"* ]] || { echo "the equals form echoed the detail: $output"; false; }
+
+  # And an unknown flag echoes its NAME, never whatever was attached to it.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary "--bogus=secret-value"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--bogus"* ]] || { echo "the refusal did not name the flag: $output"; false; }
+  [[ "$output" != *"secret-value"* ]] || { echo "the refusal echoed an attached value: $output"; false; }
+
+  # --stdin gets the SAME two rules as every other flag in this loop. It was exempt from both:
+  # repeating it was accepted silently while a repeated --text-file refused, and --stdin=1 was
+  # told the flag does not exist. Asserting on the DISTINCT refusal each one produces, not on a
+  # shared exit 2 -- exit 2 is also what the unknown-flag branch these used to fall into returns.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --stdin --stdin
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"given twice"* ]] || { echo "a repeated --stdin was not refused as a repeat: $output"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary "--stdin=1"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"takes no value"* ]] || { echo "--stdin=1 was not refused as a value on a boolean: $output"; false; }
+  [[ "$output" != *"unknown flag"* ]] || { echo "--stdin was reported as not existing, and it does: $output"; false; }
 }
 
 @test "notify parses its flags as a consuming loop, not by scanning for each one" {
