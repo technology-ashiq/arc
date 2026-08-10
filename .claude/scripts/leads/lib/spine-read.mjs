@@ -11,7 +11,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spineRoot, eventsDir, quarantineDir } from "../../hq/lib/spine-io.mjs";
+import { spineRoot, eventsDir, quarantineDir, readIdemIndex } from "../../hq/lib/spine-io.mjs";
 
 const DAY_RE = /^(\d{4}-\d{2}-\d{2})\.jsonl$/;
 // The entries spine-io is KNOWN to put in events/ that are not day files: the quarantine
@@ -114,6 +114,30 @@ export function dayFileCount({ root = spineRoot() } = {}) {
  * to say. It is counted, never parsed: a quarantine record is by definition an input that failed
  * validation, and interpreting it would be inventing a receipt the emitter refused to write.
  */
+/**
+ * The idem keys the EMITTER will refuse, read from the file the emitter actually refuses from.
+ *
+ * `readAllEvents` above folds `events/*.jsonl`; `appendEventUnlocked` decides DUP_IDEM against
+ * `derived/idem.index`. A caller that skips an emit by consulting the first while the emitter
+ * refuses from the second has derived one fact two ways (D5), and the two disagree in exactly
+ * the field conditions that matter: a restored or archived day file leaves the index holding
+ * keys whose events are no longer foldable, so the skip says "not on the spine, emit it" and
+ * the emitter says "already on the spine, refused" — and the receipt becomes permanently
+ * unrecordable, quarantined on every attempt.
+ *
+ * Both are needed, because they answer different halves of one question, so this returns both
+ * and lets the caller name the disagreement rather than picking a winner. It is READ-ONLY, like
+ * everything else here: the index is derived state and arc-replay owns rebuilding it.
+ */
+export function idemKeys({ root = spineRoot() } = {}) {
+  // NO try/catch. `readIdemIndex` throws INDEX_UNREADABLE on a real read failure and returns an
+  // empty map only for a genuinely absent index, which is the correct pair of answers. Swallowing
+  // the throw here would turn "I could not read the index" into "the index is empty", i.e. into
+  // "emit everything" — the same unreadable-counted-as-empty failure this module opens with,
+  // arriving one directory over.
+  return new Set(readIdemIndex(root).keys());
+}
+
 export function quarantineCount({ root = spineRoot() } = {}) {
   const dir = quarantineDir(root);
   if (!existsSync(dir)) return { records: 0, files: [] };

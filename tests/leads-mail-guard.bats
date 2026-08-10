@@ -671,11 +671,87 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     fs.writeFileSync(path.join(d, ".env.local"), "SOME_ARC_TEST_VAR=\nOTHER_ARC_TEST_VAR=filled\n");
     const env = {};
     const r = loadEnvLocal({root:d, env});
-    console.log("LOADED:" + r.loaded + " BLANK:" + r.blank.join(",") + " NAMES:" + r.names.join(","));
+    console.log("LOADED:" + r.loaded + " BLANK:" + r.blank.join(",") + " APPLIED:" + r.applied.join(","));
+    console.log("NAMES:" + r.names.join(","));
     console.log("SET:" + JSON.stringify(env.SOME_ARC_TEST_VAR));'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"LOADED:1 BLANK:SOME_ARC_TEST_VAR NAMES:OTHER_ARC_TEST_VAR"* ]]
+  # `loaded`/`applied` are about EFFECT and still exclude the blank; `names` is about what the
+  # file DECLARES and includes it, because the guard downstream refuses a forbidden name for
+  # being mentioned in a credential file at all. Asserted separately so a future collapse of the
+  # two lists back into one cannot pass this test.
+  [[ "$output" == *"LOADED:1 BLANK:SOME_ARC_TEST_VAR APPLIED:OTHER_ARC_TEST_VAR"* ]]
+  [[ "$output" == *"NAMES:SOME_ARC_TEST_VAR,OTHER_ARC_TEST_VAR"* ]]
   [[ "$output" == *"SET:undefined"* ]]
+}
+
+@test "the file guard still sees a forbidden name when the environment already holds it" {
+  # THE F1 CRITICAL, as its own test. `names` used to be pushed only where the value was
+  # APPLIED, and step 1 of the Phase 03 runbook is `set -a; . ./.env.local; set +a`
+  # -- which sets every one of them first, so every name failed the applied test and `names`
+  # came back EMPTY. The guard then saw an empty file whatever the file held, and a run with
+  # ARC_LEADS_FAKE=1 in it printed "mail sent ... EXIT=0" having delivered nothing.
+  #
+  # The two assertions are deliberately separate. NAMES-HAS-FAKE is the policy fact; APPLIED
+  # empty is the effect fact; and a mutant that collapses them back into one list makes exactly
+  # one of the two fail. A single combined assertion would let the collapse through.
+  _m '
+    const {loadEnvLocal} = await import("./.claude/scripts/leads/lib/env.mjs");
+    const {assertEnvLocalNames} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "mailenv"));
+    fs.writeFileSync(path.join(d, ".env.local"), "RESEND_API_KEY=re_x\nARC_LEADS_FAKE=1\n");
+    const env = {RESEND_API_KEY:"re_x", ARC_LEADS_FAKE:"1"};
+    const r = loadEnvLocal({root:d, env});
+    console.log("NAMES-HAS-FAKE:" + r.names.includes("ARC_LEADS_FAKE"));
+    console.log("APPLIED:" + JSON.stringify(r.applied) + " LOADED:" + r.loaded);
+    try { assertEnvLocalNames(r.names); console.log("NOT-REFUSED"); }
+    catch (e) { console.log("REFUSED:" + e.kind); }'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"NAMES-HAS-FAKE:true"* ]]
+  [[ "$output" == *"APPLIED:[] LOADED:0"* ]]
+  [[ "$output" == *"REFUSED:config"* ]]
+  [[ "$output" != *"NOT-REFUSED"* ]]
+}
+
+@test "a forbidden name declared with an empty value is still refused" {
+  # `set -a` exports ARC_LEADS_FAKE= as an empty string just as readily, and every reader that
+  # today treats "" as absent is one edit away from treating it as present. The guard refuses a
+  # MENTION, so it cannot be re-opened by an unrelated change to how another reader tests
+  # truthiness -- a guard that has to be re-checked every time a caller changes is not a guard.
+  _m '
+    const {loadEnvLocal} = await import("./.claude/scripts/leads/lib/env.mjs");
+    const {assertEnvLocalNames} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "mailenv"));
+    fs.writeFileSync(path.join(d, ".env.local"), "RESEND_API_KEY=re_x\nARC_LEADS_FAKE=\n");
+    const r = loadEnvLocal({root:d, env:{}});
+    console.log("BLANK:" + r.blank.join(",") + " NAMES:" + r.names.join(","));
+    try { assertEnvLocalNames(r.names); console.log("NOT-REFUSED"); }
+    catch (e) { console.log("REFUSED:" + e.kind); }'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"BLANK:ARC_LEADS_FAKE"* ]]
+  [[ "$output" == *"REFUSED:config"* ]]
+  [[ "$output" != *"NOT-REFUSED"* ]]
+}
+
+@test "positive control: an ordinary credential file loads and passes the guard" {
+  # The counterpart the two tests above need. Without it, a mutant that makes `names` return
+  # every name in the universe -- or makes assertEnvLocalNames throw unconditionally -- is green
+  # on both of them. This one fails the moment the guard stops distinguishing.
+  _m '
+    const {loadEnvLocal} = await import("./.claude/scripts/leads/lib/env.mjs");
+    const {assertEnvLocalNames} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "mailenv"));
+    fs.writeFileSync(path.join(d, ".env.local"), "RESEND_API_KEY=re_x\nARC_LEADS_MAIL_FROM=arc@example.com\n");
+    const env = {};
+    const r = loadEnvLocal({root:d, env});
+    console.log("NAMES:" + r.names.join(",") + " APPLIED:" + r.applied.join(",") + " LOADED:" + r.loaded);
+    assertEnvLocalNames(r.names);
+    console.log("ACCEPTED-AND-APPLIED:" + (env.RESEND_API_KEY === "re_x"));'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"NAMES:RESEND_API_KEY,ARC_LEADS_MAIL_FROM APPLIED:RESEND_API_KEY,ARC_LEADS_MAIL_FROM LOADED:2"* ]]
+  [[ "$output" == *"ACCEPTED-AND-APPLIED:true"* ]]
 }
 
 @test "the real environment wins over the file" {

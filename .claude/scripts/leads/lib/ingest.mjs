@@ -28,6 +28,7 @@ import { parseReply, ReplyParseError, MAX_REPLY_BYTES } from "./replies.mjs";
 import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } from "./store.mjs";
 import { writeMeetingDraft, meetingApprovalPayload, assertCampaignStore } from "./drafts.mjs";
 import { leadsIdem } from "../../hq/lib/validate-leads.mjs";
+import { idemKeys } from "./spine-read.mjs";
 
 export class IngestRefusal extends Error {
   constructor(step, message) { super(message); this.name = "IngestRefusal"; this.step = step; }
@@ -218,10 +219,22 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   // the fold this function was handed. The CLI keeps a second guard for the race (two
   // processes, both past this check) -- belt and braces, because losing that race must be
   // boring rather than an exception.
+  // THE SKIP SET IS THE UNION OF BOTH SPINE FILES, AND IT GROWS. Two defects fixed in
+  // `cmdResearch` were live in this function at the same time, in the sibling copy of the same
+  // idea — which is why the rule is to grep the PATTERN rather than the file:
+  //
+  //   - it folded `events/*.jsonl` while the emitter refuses from `derived/idem.index`, so a
+  //     restored or archived day left keys the fold cannot see and the emitter still rejects
+  //     (D5), and every such receipt was quarantined on every attempt;
+  //   - the set was a snapshot, so two payloads with one idem inside a single call both passed
+  //     the check and the second was refused (D6).
   const onSpine = new Set(events.map((e) => e && e.idem).filter(Boolean));
+  for (const key of idemKeys()) onSpine.add(key);
   const emitOnce = async (kind, payload) => {
-    if (onSpine.has(leadsIdem(kind, payload))) return { duplicate: true };
+    const idem = leadsIdem(kind, payload);
+    if (onSpine.has(idem)) return { duplicate: true };
     await emit(kind, payload);
+    onSpine.add(idem);
     return { duplicate: false };
   };
 
@@ -295,10 +308,14 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     });
     out.meeting_ref = rec.meeting_ref;
     out.meeting_created = created;
-    // The inbox item is minted only with the draft. Re-emitting on a re-ingest would put a
-    // second approval for one meeting in front of the human, and two approvals for one thing
-    // is how the wrong one gets approved.
-    if (created) await emit("approval.requested", meetingApprovalPayload(rec));
+    // GUARDED BY THE SPINE, NOT BY A STORE-FILE FLAG. `created` says whether THIS call wrote
+    // the draft file, which is not the question: it answers "no" both when the approval is
+    // already on the spine (correct outcome, wrong reason) and when a previous run wrote the
+    // draft and died before announcing it (wrong outcome — the meeting draft then existed with
+    // no approval, permanently, and no re-ingest would ever mint one). `meetingApprovalPayload`
+    // is fully deterministic, so `emitOnce` — six lines up, and the mechanism this file already
+    // chose for exactly this question — answers it correctly in both directions.
+    await emitOnce("approval.requested", meetingApprovalPayload(rec));
   }
 
   return out;

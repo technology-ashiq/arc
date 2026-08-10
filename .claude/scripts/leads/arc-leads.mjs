@@ -25,13 +25,13 @@ import { inbound } from "./lib/deps.mjs";
 // validator the payload stamps went through, so a window bound and the receipts it is compared
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
-import { readAllEvents, dayFileCount, quarantineCount } from "./lib/spine-read.mjs";
+import { readAllEvents, dayFileCount, quarantineCount, idemKeys } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
-import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames } from "./lib/guard.mjs";
+import { provider, usingFakes } from "./lib/deps.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames, resolveKeyringIds, normalizeTouchN } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -39,6 +39,22 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
 
 const die = (code, msg) => { console.error(`arc-leads: ${msg}`); process.exit(code); };
+
+// ONE campaign-name grammar, for every door a campaign name can enter through.
+//
+// `research` validated the name it read out of the ICP file and `draft` validated nothing at
+// all: it took the name from argv and handed it straight to `assertCampaignStore`, which asks
+// the filesystem whether that campaign directory exists. On Windows and on macOS that answer is
+// case-insensitive, so `draft Walk` opened the `walk` campaign and wrote into it under a name
+// the idem preimage treats as different — two approvals for one touch, from one keystroke.
+//
+// The grammar is not cosmetic: `|` is the idem delimiter, so a campaign name that could contain
+// one could forge the boundary between fields in another lead's preimage.
+function assertCampaignName(campaign, where) {
+  if (!/^[a-z0-9-]{1,64}$/.test(String(campaign ?? "")))
+    die(2, `${where} must match [a-z0-9-]{1,64} (got ${JSON.stringify(campaign)}) — "|" is the idem delimiter, and an uppercase variant is a different campaign to the spine and the same directory to the filesystem`);
+  return String(campaign);
+}
 
 // ---------- emit ----------
 //
@@ -76,10 +92,16 @@ function emit(kind, payload, { evidence = null, allowDuplicate = false } = {}) {
   try {
     const args = ["emit", kind, "--payload-file", tmp, "--actor", "arc-leads", "--strict"];
     if (evidence) args.push("--evidence", evidence);
-    return execFileSync("bash", [sh, ...args], { encoding: "utf8" });
+    return { duplicate: false, stdout: execFileSync("bash", [sh, ...args], { encoding: "utf8" }) };
   } catch (e) {
     const stderr = String(e.stderr || "");
-    if (allowDuplicate && DUP_IDEM_RE.test(stderr)) return "";
+    // A SWALLOWED DUPLICATE IS REPORTED, NOT ERASED. This used to return `""`, indistinguishable
+    // from a successful emit that printed nothing, so every caller counted a refusal as a new
+    // receipt — the run said "5 new receipts" for a spine that had gained none. Worse, the
+    // emitter quarantines BEFORE it writes REJECT, so the swallow leaves a record behind that
+    // makes `report` refuse outright: the one number this phase exists to produce, disabled by
+    // an outcome the caller was told was fine. Callers now learn that it happened and can say so.
+    if (allowDuplicate && DUP_IDEM_RE.test(stderr)) return { duplicate: true, stdout: "" };
     // Re-raise WITHOUT the child command line: err.message embeds the whole invocation.
     throw new Error(`arc-event refused a ${kind} receipt (exit ${e.status}). stderr: ${stderr.trim()}`);
   } finally {
@@ -109,8 +131,7 @@ async function cmdResearch(icpPath) {
   if (!existsSync(icpPath)) die(2, `ICP file not found: ${icpPath}`);
   const icp = JSON.parse(readFileSync(icpPath, "utf8"));
   const campaign = icp.campaign;
-  if (!/^[a-z0-9-]{1,64}$/.test(String(campaign || "")))
-    die(2, `ICP "campaign" must match [a-z0-9-]{1,64} (got ${JSON.stringify(campaign)}) — "|" is the idem delimiter`);
+  assertCampaignName(campaign, `ICP "campaign"`);
 
   let store;
   try { store = openStore({ repoRoot: REPO_ROOT }); }
@@ -152,33 +173,103 @@ async function cmdResearch(icpPath) {
   // was handed, and keeps `allowDuplicate` as the RACE backstop for two processes that both
   // pass that check. The guard was written in one branch and never in this one -- D6, this
   // lane's most repeated defect. Both halves are here now.
-  const onSpine = new Set(readAllEvents({ allowMissing: true }).map((e) => e && e.idem).filter(Boolean));
+  // ...and the first version of that guard was wrong in all three of the ways below, so the
+  // comment above describes the intent and this one describes what it takes to hold it.
+  //
+  // 1. THE SNAPSHOT WAS NEVER GROWN. `onSpine` was read once before the loop and never added
+  //    to, so two rows for one lead INSIDE one corpus — a duplicate row, or the same address in
+  //    a different case, both ordinary scraper output — passed the check twice and the second
+  //    emit was refused. D6 inside its own commit: the draft half of that same commit grows its
+  //    map for exactly this reason and says so.
+  // 2. THE SKIP AND THE REFUSAL READ DIFFERENT FILES. The skip folded `events/*.jsonl`; the
+  //    emitter refuses from `derived/idem.index`. One fact, two derivations (D5), and they
+  //    disagree precisely when a day file has been restored or archived: the index still holds
+  //    the key, the fold no longer sees it, so the skip says emit and the emitter says refused —
+  //    forever. Those receipts were permanently unrecordable. Both are read now, and the
+  //    DISAGREEMENT is named rather than resolved by preferring one.
+  // 3. SWALLOWING THE EXCEPTION DID NOT UNDO THE QUARANTINE. `arc-event` quarantines and then
+  //    writes REJECT, so every tolerated DUP_IDEM left a record and `report` refuses while any
+  //    record exists. The backstop therefore disabled the phase's one number while reporting
+  //    success. The remedy is to stop PRODUCING them: the read and the emits are one critical
+  //    section under the same lock `daily` and `notify` take, which is what makes the check and
+  //    the act atomic against another arc-leads process. That lock existed and this branch was
+  //    the one that never took it — the same D6, three commands apart.
+  const release = acquireLock(store);
   let emitted = 0, alreadyOnSpine = 0;
+  const changedUnderOneIdem = [], orphanedIdem = [], racedDuplicate = [], emitFailed = [];
+  try {
+    const priorEvents = readAllEvents({ allowMissing: true });
+    // Keyed by idem so a skip can compare the PAYLOAD, not merely observe that the key exists.
+    const byIdem = new Map();
+    for (const e of priorEvents) if (e && e.idem) byIdem.set(e.idem, e);
+    const indexed = idemKeys();
 
-  for (const a of accepted) {
-    const id = leadId(store, a.email);
-    // The dossier holds the PII. It lives in the store, outside the repo, and nothing here
-    // ever reaches a receipt.
-    writeFileSync(join(dossierDir, `${id}.json`), JSON.stringify({
-      lead_id: id, name: a.name, email: a.email, firm: a.firm, firm_domain: a.firm_domain,
-      geography: a.geography, provenance: a.provenance, source_urls: a.source_urls,
-      facts: a.facts, citable_facts: a.citable_facts,
-      email_status: a.email_status, below_bar: a.below_bar, below_bar_reason: a.below_bar_reason,
-      campaign, store_id: store.storeId,
-    }, null, 2) + "\n");
+    for (const a of accepted) {
+      const id = leadId(store, a.email);
+      // The dossier holds the PII. It lives in the store, outside the repo, and nothing here
+      // ever reaches a receipt.
+      writeFileSync(join(dossierDir, `${id}.json`), JSON.stringify({
+        lead_id: id, name: a.name, email: a.email, firm: a.firm, firm_domain: a.firm_domain,
+        geography: a.geography, provenance: a.provenance, source_urls: a.source_urls,
+        facts: a.facts, citable_facts: a.citable_facts,
+        email_status: a.email_status, below_bar: a.below_bar, below_bar_reason: a.below_bar_reason,
+        campaign, store_id: store.storeId,
+      }, null, 2) + "\n");
 
-    const receipt = {
-      lead_id: id, campaign, provenance: a.provenance, geography: a.geography,
-      email_status: a.email_status, fact_count: a.fact_count,
-      store_id: store.storeId, store_fingerprint: fp,
-      ...(a.below_bar ? { below_bar: true } : {}),
-    };
-    // The idem is computed from the SAME payload object that would be emitted, not from a
-    // re-spelling of its fields: a preimage assembled twice is free to disagree with itself on
-    // exactly the receipt that matters (D5), and this one already grew `below_bar` once.
-    if (onSpine.has(leadsIdem("lead.researched", receipt))) { alreadyOnSpine++; continue; }
-    emit("lead.researched", receipt, { allowDuplicate: true });
-    emitted++;
+      const receipt = {
+        lead_id: id, campaign, provenance: a.provenance, geography: a.geography,
+        email_status: a.email_status, fact_count: a.fact_count,
+        store_id: store.storeId, store_fingerprint: fp,
+        ...(a.below_bar ? { below_bar: true } : {}),
+      };
+      // The idem is computed from the SAME payload object that would be emitted, not from a
+      // re-spelling of its fields: a preimage assembled twice is free to disagree with itself on
+      // exactly the receipt that matters (D5), and this one already grew `below_bar` once.
+      const idem = leadsIdem("lead.researched", receipt);
+
+      // SAME KEY IS NOT SAME RECEIPT. The preimage is `campaign|lead_id|below_bar|fingerprint`
+      // and deliberately excludes `email_status`, so a lead that was `verified` last run and is
+      // `held` this run collides on one idem — and the old skip treated that as "already
+      // recorded" and moved on, leaving the spine asserting `verified` about a lead the verifier
+      // has since rejected. A skip that cannot tell "identical" from "merely colliding" is not a
+      // skip, it is a silent overwrite in the direction of the stale value.
+      const prior = byIdem.get(idem);
+      if (prior) {
+        const diff = payloadDiff(prior.payload, receipt);
+        if (diff.length) changedUnderOneIdem.push({ id, diff });
+        else alreadyOnSpine++;
+        continue;
+      }
+
+      // ON THE INDEX BUT NOT IN ANY DAY FILE. The emitter will refuse this key and quarantine the
+      // attempt, every time, forever; emitting it is choosing to create the record that disables
+      // `report`. Naming it is the only honest move — this is a spine that needs `arc-replay`,
+      // not a receipt that needs retrying.
+      if (indexed.has(idem)) { orphanedIdem.push(id); continue; }
+
+      // PER-LEAD FAILURE ISOLATION. The tolerance was pinned to DUP_IDEM alone, so every OTHER
+      // refusal — an unknown payload key, a closed day, a lock timeout — threw out of the loop
+      // and restored the exact pre-fix behaviour: earlier dossiers rewritten, later leads never
+      // reached, and the command's exit code the only clue. Research is safely re-runnable (the
+      // dossier write is idempotent and the receipt is keyed), so one bad lead now costs that
+      // lead and nothing else, and the run still ends non-zero with every failure named.
+      let res;
+      try {
+        res = emit("lead.researched", receipt, { allowDuplicate: true });
+      } catch (e) {
+        emitFailed.push({ id, message: e.message });
+        continue;
+      }
+      if (res.duplicate) { racedDuplicate.push(id); continue; }
+      emitted++;
+      // GROWN, so the next row for this same lead in this same corpus is caught by the branch
+      // above instead of by the emitter. The stored shape mirrors a real event closely enough for
+      // the payload comparison, and it is only ever read back inside this loop.
+      byIdem.set(idem, { idem, payload: receipt });
+      indexed.add(idem);
+    }
+  } finally {
+    release();
   }
 
   // Rejected candidates keep a record too: the 25 must be a filtered set with an audit trail,
@@ -199,6 +290,47 @@ async function cmdResearch(icpPath) {
   // asking "did that run do anything" -- which is the exact question a re-run exists to ask.
   console.log(`  receipts: ${emitted} new · ${alreadyOnSpine} already on the spine`);
   for (const r of rejected) console.log(`  REJECTED ${r.firm}: ${r.exclusion_reason}`);
+
+  // THE ANOMALIES ARE NOT FOLDED INTO THE COUNTS ABOVE. `emitted` used to include every
+  // swallowed duplicate, so a run that added nothing to the spine reported five new receipts —
+  // and the operator's next question ("did that run do anything?") had been answered wrong by
+  // the one line written to answer it. Each of these is a different thing being wrong, so each
+  // is named separately and none of them is a number beside the healthy ones.
+  const anomalies = [];
+  for (const { id, diff } of changedUnderOneIdem)
+    anomalies.push(`lead ${id}: a receipt with this exact idem is already on the spine but its payload differs (${diff.join(", ")}) — the idem preimage does not cover ${diff.join("/")}, so the spine still asserts the OLD value. Nothing was emitted; this needs a correction receipt, not a re-run`);
+  for (const id of orphanedIdem)
+    anomalies.push(`lead ${id}: its idem is in derived/idem.index but in no day file — the emitter will refuse it and quarantine every attempt. The index is derived state; rebuild it with arc-replay rather than retrying this command`);
+  for (const id of racedDuplicate)
+    anomalies.push(`lead ${id}: another writer took this idem between the read and the emit. The receipt IS on the spine, but the refusal left a quarantine record, and \`report\` refuses while any record exists — clear the quarantine before asking for the mixing report`);
+  for (const { id, message } of emitFailed)
+    anomalies.push(`lead ${id}: the emitter refused its receipt — ${message}`);
+
+  if (anomalies.length) {
+    console.error("");
+    for (const a of anomalies) console.error(`arc-leads: ANOMALY — ${a}`);
+    // EXIT NON-ZERO. Every one of these leaves the spine unable to answer the question this
+    // phase exists to ask, and an exit 0 beside a printed warning is how the previous version
+    // of this command disabled the mixing report without anybody noticing for a day.
+    die(2, `${anomalies.length} receipt(s) did not reach the spine cleanly — the dossiers are written and the run is re-runnable, but the counts above do not describe a healthy spine.`);
+  }
+}
+
+// A SHALLOW, ORDER-INDEPENDENT COMPARISON OF TWO RECEIPT PAYLOADS, returning the field names
+// that differ. Receipt payloads are flat records of scalars by construction (the emitter's own
+// header is the reason), so this deliberately does not recurse: a deep comparison here would be
+// a second, richer notion of "same receipt" than the one the validator enforces, and the point
+// of the function is to have exactly one.
+function payloadDiff(a, b) {
+  const left = a && typeof a === "object" ? a : {};
+  const right = b && typeof b === "object" ? b : {};
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  const diff = [];
+  // JSON-compared, not `!==`, so `1` and `"1"` are reported as the difference they are rather
+  // than passing as equal-ish — the same trap `normalizeTouchN` exists for one file away.
+  for (const k of [...keys].sort())
+    if (JSON.stringify(left[k]) !== JSON.stringify(right[k])) diff.push(k);
+  return diff;
 }
 
 // ---------- campaign / draft / review / send (Phase 01) ----------
@@ -229,6 +361,9 @@ function cmdCampaignInit(name) {
 // approved, because it is never offered for approval.
 function cmdDraft(campaign, file) {
   if (!campaign || !file) die(2, "usage: arc-leads draft <campaign> <drafts.json>");
+  // BEFORE `assertCampaignStore`, which asks a case-insensitive filesystem and therefore
+  // answers yes to a name the spine considers different.
+  assertCampaignName(campaign, "the <campaign> argument");
   const store = openStore({ repoRoot: REPO_ROOT });
   assertCampaignStore(store, campaign);
   const incoming = JSON.parse(readFileSync(file, "utf8"));
@@ -266,34 +401,126 @@ function cmdDraft(campaign, file) {
   // The map is seeded from the store and then grown as this batch writes, so two entries for one
   // lead and touch INSIDE a single file are caught by the same rule -- a check against on-disk
   // state alone would pass the whole batch on a first run.
+  // A DRAFT ON DISK IS HALF A RECORD, AND THE OTHER HALF IS ON THE SPINE.
+  //
+  // The seed above read only the store, and `writeDraft` (disk) runs before `emit` (spine) with
+  // nothing between them that can roll back. Any interruption in that window — Ctrl-C, the 8s
+  // spine-lock timeout, a full disk, an emitter refusal of any kind — left a draft file with no
+  // approval receipt. The next run then found that file, called it a duplicate, and printed
+  // `edit that draft` about a draft that had never been announced to anybody: 0 queued, 1
+  // duplicate refused, exit 0, reading exactly like a healthy re-run. The touch was
+  // unqueueable permanently and silently, which is strictly worse than the noisy recoverable
+  // second approval the duplicate rule was added to prevent.
+  //
+  // So the two halves are read together, and a draft with no receipt is not a duplicate — it is
+  // an unfinished write, and finishing it is what a re-run is for. Rollback would not do: a
+  // process killed between the two writes never runs its own rollback, and this recovery has to
+  // work for the case where nothing of ours got to run at all.
+  const announced = new Set(
+    readAllEvents({ allowMissing: true })
+      .filter((e) => e && e.kind === "approval.requested")
+      .map((e) => e.payload && e.payload.draft_ref)
+      .filter(Boolean)
+  );
   const seenTouch = new Map();
-  for (const prior of listDrafts(store, campaign))
-    seenTouch.set(`${prior.lead_id}|${prior.touch_n}`, prior.draft_ref);
+  const unannounced = new Map();
+  for (const prior of listDrafts(store, campaign)) {
+    let key;
+    try { key = touchKey(store, prior.lead_id, prior.touch_n); }
+    catch (e) { die(2, `the stored draft ${prior.draft_ref} carries an unusable touch_n: ${e.message}`); }
+    if (announced.has(prior.draft_ref)) seenTouch.set(key, prior.draft_ref);
+    else unannounced.set(key, prior);
+  }
 
-  let written = 0, blocked = 0, duplicate = 0;
+  let written = 0, blocked = 0, duplicate = 0, resumed = 0, stale = 0;
+  const halfWritten = [];
   linted.forEach((d, i) => {
     if (scored[i].verdict === VERDICT.FAIL) {
       blocked++;
       console.log(`  FAIL  ${d.lead_id}: ${d.fails.join(" | ")}`);
       return;
     }
-    const touchKey = `${d.lead_id}|${d.touch_n}`;
-    if (seenTouch.has(touchKey)) {
+    // An unusable `touch_n` costs THIS draft and not the run: it arrives from an input file a
+    // human wrote, and killing the batch on one bad row is the same all-or-nothing failure the
+    // rest of this function is being rescued from.
+    let key;
+    try { key = touchKey(store, d.lead_id, d.touch_n); }
+    catch (e) { blocked++; console.log(`  FAIL  ${d.lead_id}: ${e.message}`); return; }
+
+    if (seenTouch.has(key)) {
       duplicate++;
-      console.log(`  DUP   ${d.lead_id}: touch ${d.touch_n} already has draft ${seenTouch.get(touchKey)} in "${campaign}" — edit that draft, or use the next touch_n. No second approval was requested.`);
+      console.log(`  DUP   ${d.lead_id}: touch ${d.touch_n} already has draft ${seenTouch.get(key)} in "${campaign}" — edit that draft, or use the next touch_n. No second approval was requested.`);
       return;
     }
+
+    const orphan = unannounced.get(key);
+    if (orphan) {
+      // Announce the draft that EXISTS rather than minting a second one. But only if it still
+      // says what this input says: re-emitting an approval for a body the operator has since
+      // changed would bind the L1 decision to text nobody is looking at, and the approval binds
+      // `draft_sha` precisely so that cannot happen quietly.
+      const existing = readDraft(store, orphan.draft_ref);
+      if (existing.body !== d.body) {
+        stale++;
+        console.log(`  STALE ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} has a draft on disk from an interrupted run, and its body differs from this input. Nothing was announced. Review it (\`arc-leads review ${orphan.draft_ref}\`) and either keep it or remove it — this command will not announce a body you have since edited.`);
+        return;
+      }
+      try { emit("approval.requested", approvalPayload(orphan)); }
+      catch (e) { halfWritten.push({ ref: orphan.draft_ref, lead: d.lead_id, message: e.message }); return; }
+      seenTouch.set(key, orphan.draft_ref);
+      unannounced.delete(key);
+      resumed++;
+      console.log(`  RESUME ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} was written but never announced by an earlier run; its approval is in the inbox now.`);
+      return;
+    }
+
     const warns = scored[i].warns;
     const rec = writeDraft(store, {
       campaign, lead_id: d.lead_id, touch_n: d.touch_n, body: d.body, cites: d.cites,
       lintStatus: scored[i].verdict === VERDICT.PASS ? "PASS" : `BELOW-BAR: ${warns.join(" | ")}`,
     });
-    emit("approval.requested", approvalPayload(rec));
-    seenTouch.set(touchKey, rec.draft_ref);
+    // The window this whole block exists for is HERE, between the two writes. It is now
+    // survivable rather than eliminated — the next run recognises what it left behind — and the
+    // failure is named at the moment it happens instead of being discovered a day later as a
+    // refusal about a draft nobody remembers writing.
+    try { emit("approval.requested", approvalPayload(rec)); }
+    catch (e) {
+      halfWritten.push({ ref: rec.draft_ref, lead: d.lead_id, message: e.message });
+      console.log(`  HALF  ${rec.draft_ref} ${d.lead_id}: the draft is written but its approval was refused — re-run this command to finish it.`);
+      return;
+    }
+    seenTouch.set(key, rec.draft_ref);
     written++;
     console.log(`  ${scored[i].verdict === VERDICT.PASS ? "PASS " : "WARN "} ${rec.draft_ref} ${d.lead_id}${warns.length ? " — " + warns.join(" | ") : ""}`);
   });
-  console.log(`arc-leads draft: ${written} queued for approval, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused`);
+  // EVERY OUTCOME IS IN THE SUMMARY LINE. A resumed draft used to be counted as a duplicate and
+  // a half-written one as nothing at all, so the line under-reported the work in one direction
+  // and over-reported the health of the store in the other.
+  console.log(`arc-leads draft: ${written} queued for approval, ${resumed} resumed from an interrupted run, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused, ${stale} stale draft(s) left alone`);
+  if (halfWritten.length) {
+    for (const h of halfWritten)
+      console.error(`arc-leads: HALF-WRITTEN — ${h.ref} (${h.lead}) has a draft on disk and no approval receipt: ${h.message}`);
+    die(2, `${halfWritten.length} draft(s) were written without an approval receipt. Re-running this command finishes them; nothing is lost, and nothing was double-announced.`);
+  }
+}
+
+// THE (lead, touch) IDENTITY, resolved the same way the send-moment guard resolves it.
+//
+// Two things were wrong with interpolating the raw fields. `touch_n` arrives from a
+// hand-written JSON file and was never parsed, so ` 1`, `1.0`, `+1`, `1e0` and `01` were five
+// distinct keys for one touch — five live approvals for one send, from the rule that exists to
+// guarantee there is exactly one. And `lead_id` is one version of a keyed HMAC: after a key
+// rotation the same human carries a different id, so yesterday's approval stopped matching
+// today's draft and the same person got two. `guard.mjs` had already fixed both, in three
+// adjacent branches, and this was the fourth (D6). It calls that code rather than repeating it.
+function touchKey(store, leadId, touchN) {
+  const ids = resolveKeyringIds(store, leadId);
+  // Sorted and first, NOT `ids[0]`: the canonical member must not depend on the order the
+  // keyring happens to hand them back, or one rotation reorders the list and every existing key
+  // silently stops matching. `null` means the lead could not be resolved at all — the single id
+  // is the honest fallback there, and the send-moment guard refuses that case separately.
+  const canonical = ids && ids.length ? [...ids].sort()[0] : leadId;
+  return `${canonical}|${normalizeTouchN(touchN)}`;
 }
 
 // The local render. The spine carries an opaque ref; the human reads the body HERE, beside the
@@ -755,7 +982,24 @@ async function deliverNotification({ to, subject, text, kind }) {
     );
     // The recipient is NOT printed. The operator typed it or declared it and already knows it;
     // this line is what ends up in a CI log, and the address has no business being there.
-    console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
+    //
+    // THE SUCCESS LINE NAMES THE TRANSPORT, and that is the second half of the F1 fix. Closing
+    // the `.env.local` door in `env.mjs` stops a credential FILE from switching this path to the
+    // fake; it does nothing about `ARC_LEADS_FAKE=1` exported in the shell, which reaches the
+    // identical end state — `mail sent … EXIT=0` from a run that delivered nothing. A guard
+    // applied at one door and omitted at the adjacent one is D6, this lane's most repeated
+    // defect, and the rule is that a fix is not applied until it has been attacked somewhere it
+    // was never made. So the remedy is not a second guard, it is that no fake run may ever print
+    // the sentence a real delivery prints.
+    //
+    // `usingFakes()` is the SAME predicate `mailer()` selected the transport with — not a second
+    // derivation of it, and not the `fake-` prefix parsed back off the returned id, which would
+    // be one fact read two ways (D5) on the one line that has to be trustworthy.
+    console.log(
+      usingFakes()
+        ? `arc-leads: NOT SENT — ARC_LEADS_FAKE=1, so this ran on the fake mailer and nothing left this machine. id=${res.id} idem=${res.idem_key}`
+        : `arc-leads: mail sent id=${res.id} idem=${res.idem_key}`,
+    );
     return res;
   } finally {
     release();

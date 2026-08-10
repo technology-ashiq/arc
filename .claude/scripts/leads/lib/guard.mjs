@@ -44,13 +44,36 @@ import { assertTs, isPayloadTs } from "../../hq/lib/validate-leads.mjs";
 //
 // Returns null when it cannot resolve (no dossier, no email, or an id that does not belong to
 // this store). The caller treats null as a REFUSAL, never as "no suppression found".
-function resolveKeyringIds(store, leadId) {
+// EXPORTED, because `cmdDraft` needs the identical answer and was computing a weaker one.
+// Its per-touch approval key was built from the single `lead_id` on the draft, which is the
+// fourth adjacent branch of the D6 this function's own comment describes being fixed in three:
+// after a key rotation the same human carries a v1 id on yesterday's draft and a v2 id on
+// today's, so the "one approval per (campaign, lead, touch)" rule stopped seeing the first one
+// and put two live approvals for one touch in the inbox. A second, narrower resolver here would
+// be D5 by construction, so there is one.
+export function resolveKeyringIds(store, leadId) {
   const email = dossierEmail(store, leadId);
   if (email === null) return null;
   try {
     const ids = leadIdsAllVersions(store, email);
     return ids.includes(leadId) ? ids : null;
   } catch { return null; }
+}
+
+// THE ONE PARSE OF `touch_n`, exported so there is exactly one.
+//
+// The send-moment guard below already compared touches as NUMBERS, for the reason its comment
+// gives: `1` and `"1"` interpolate into the same idem while `===` calls them different touches.
+// `cmdDraft` then built its duplicate-approval key by interpolating the raw value, so ` 1`,
+// `1.0`, `+1`, `1e0` and `01` were five different keys naming one touch — five live approvals
+// for one send, from a rule whose whole purpose is that there is exactly one. The fix already
+// existed one file away and had simply never been called from the second place (D6), which is
+// why it is a shared export now rather than a second copy with the same body.
+export function normalizeTouchN(touch_n) {
+  const tn = Number(touch_n);
+  if (!Number.isSafeInteger(tn) || tn < 1)
+    throw new GuardRefusal("bad-touch", `touch_n ${JSON.stringify(touch_n)} is not a positive integer`);
+  return tn;
 }
 
 // Re-exported, not redefined. The name now lives beside the ONE parse of that variable, in
@@ -510,9 +533,7 @@ export function guardSend({ events, store, draft, now, config, env = process.env
   // while `===` says they are different touches. Two derivations of one value that disagree
   // (D5): the guard let a second submit through, and the reconciler voided an intent whose
   // receipt was sitting on the spine.
-  const tn = Number(touch_n);
-  if (!Number.isSafeInteger(tn) || tn < 1)
-    throw new GuardRefusal("bad-touch", `touch_n ${JSON.stringify(touch_n)} is not a positive integer`);
+  const tn = normalizeTouchN(touch_n);
   // EVERY key version, here and in steps 5 and 6 below.
   //
   // Step 4 resolved the whole keyring and steps 3, 5 and 6 each checked ONE id — the same

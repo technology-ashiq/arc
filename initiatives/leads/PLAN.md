@@ -73,9 +73,20 @@ no sending-domain DNS. All four re-verified at this kickoff.
 
 ## Appetite
 
-**7 days (one week) hard cap.** Effort ≈ 5.5d inside the window; 1.5d deliberately unallocated
-as the overrun absorber — the arc-portfolio lesson (Cycle 4 allocated 100%, `appetite-sum`
-warned every run, Phase 02 overran with nothing to absorb it, cycle closed ~112%).
+**11 days hard cap — extended from 7d by the owner on 2026-08-10, explicitly.** Effort ≈ 10.0d
+inside the window; 1.0d unallocated as the overrun absorber — the arc-portfolio lesson (Cycle 4
+allocated 100%, `appetite-sum` warned every run, Phase 02 overran with nothing to absorb it,
+cycle closed ~112%). The absorber is thinner than the original 1.5d and that is a real cost of
+the extension, not a rounding.
+
+**The extension, recorded rather than absorbed.** The kill criteria below say *"at 100% → cut or
+kill, never silently extend"*, and at the 2026-08-10 resume this cycle was AT that line: the
+tracker read 5.5d of 7d (79%), but Phase 03 had already spent ≈2.0d against a **1.0d** budget
+across six slices, with five slices still unbuilt. Presented with cut-to-three-slices,
+extend-explicitly, or stop, the owner chose **extend**. Phase 03's line below moves 1.0d → 4.5d
+to hold the eleven slices it actually contains, and the cycle total moves 7d → 11d. The point of
+the rule is that this paragraph exists; a cycle that quietly ran to 11d against a 7d plan would
+have looked identical in every other respect.
 
 **Tier:** M
 
@@ -93,6 +104,12 @@ green → stop.** Nothing sends, ever, without the guard. Bank the ADR-0400 voca
 ADR-0404 lint as documentation and retro. If cap enforcement cannot be made
 fixture-deterministic after 1 day of fixes → stop and redesign; never ship a cap that can be
 argued with. At 100% → cut or kill, never silently extend.
+
+**Exercised once, 2026-08-10.** The 100% line was reached and the choice was taken as an owner
+decision with a number attached (see the Appetite block above). It resolved to *extend*, not
+*cut* — which the rule permits and the word "silently" is what it forbids. The next time this
+line is reached it is a fresh decision, not a precedent: an extension that has happened once
+does not become the default, and a second one at 11d would need its own paragraph.
 
 **Cascade rule (fired at this kickoff — see ADR-0413):** offer undefined, warm-up <14d, or
 DMARC not green → the trigger was mis-read. **All four conditions hold today**, so Phase 3 is
@@ -256,12 +273,13 @@ green. Phase 04's mailer work (ADR-0415) touches none of them at all.
 | 00 | Foundations — ADR-0410 store + HMAC secret + tripwire lint FIRST, then ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, ICP format, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | pending |
 | 01 | Sequencer — caps, suppression ledger, send-window, HOLD/FREEZE breakers, receipt-derived state, ADR-0411 journal + spine-first reconcile, ADR-0404 personalization lint + similarity guard, ADR-0412 review boundary, send-moment guard, human-started daily command | 2.0d | pending |
 | 02 | Replies — ingestion (`--file`, store-side only), parser, triage classes → receipts, SLA calendar-draft path, auto-stop wired to pre-send check | 1.0d | pending |
-| 03 | **Rehearsal campaign** (ADR-0416) — real `provider()` on `lib/deps.mjs` bound to Resend, rehearsal mode allowlist-locked + receipt-marked, seed-inbox smoke, the full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile against a real idempotency key | 1.0d | pending — **depends on phase 04** |
+| 03 | **Rehearsal campaign** (ADR-0416) — real `provider()` on `lib/deps.mjs` bound to Resend, rehearsal mode allowlist-locked + receipt-marked, seed-inbox smoke, the full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile against a real idempotency key | 4.5d | in progress — 11 slices, 06 of 11 built |
 | 04 | arc's own mail — ADR-0415 `mailer()` in `lib/deps.mjs` + `lib/mail.mjs` policy, env-declared owner allowlist and daily/monthly caps enforced in code, three triggers wired (deploy/canary failure, approvals waiting, daily brief), inbox-placement proved on two mailbox classes from the delivered headers | 1.0d | pending — **runs first** |
 | 05 | Real campaign — dedicated cold domain warmed, cold-outbound vendor bound via `/arc-capability`, ≥25 sends over ≥3 days to real ICP leads, daily triage, metrics, retro | 1.0d | **BLOCKED** (ADR-0413) → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
-**Appetite burn: 6.5 of 7 days allocated (93%). The absorber is down to 0.5d and this is the
-tightest the cycle has been — read the risk line below before adding anything else.**
+**Appetite burn: 10.0 of 11 days allocated (91%) after the 2026-08-10 extension. The absorber is
+1.0d — read the risk line below before adding anything else.** Phase 05's 1.0d travelled with it
+to the next cycle and is not counted here.
 
 **Re-shaped 2026-08-08.** The real campaign was blocked on business inputs that do not exist:
 the owner confirmed he cannot name 25 ICP recipients, which is what an undefined offer looks
@@ -274,10 +292,19 @@ mail, REQ-08) is the new capability that pays for itself immediately and, not in
 builds the Resend transport and the allowlist guard that Phase 03 then reuses — which is why
 **04 runs before 03** despite the numbering.
 
-**Risk, stated once and plainly.** 6.5 of 7 allocated leaves 0.5d of absorber against two
-unbuilt phases, in a lane whose every phase so far has cost an adversarial pass finding 22–29
-real holes. One overrun puts this at the 100% cut line. The mitigation is the ordering: Phase
-04 is a complete, useful, shippable capability on its own, so if appetite runs out after it,
-the cycle stops at a clean line with a working feature rather than half a rehearsal. The 50%
-kill checkpoint (REQ-03's cap/suppression fixtures green) passed at Phase 01, so **no scope cut
-is triggered today** — but at 93% the next unplanned thing is a cut conversation, not a yes.
+**Risk, stated once and plainly — rewritten 2026-08-10, because the old paragraph's own
+prediction came true.** It said "one overrun puts this at the 100% cut line", and that is
+exactly what happened: Phase 03 overran its 1.0d roughly fivefold. The cut conversation was had
+and resolved to an extension, so the risk has not gone away, it has been *paid for*.
+
+What is left is 10.0 of 11 allocated, a 1.0d absorber, and **five unbuilt slices in a lane where
+every phase so far has cost an adversarial pass finding 19–29 real holes** — Phase 03 alone has
+run five two-surface passes and the sixth returned three CRITICALs against a commit that had
+already merged. The honest reading is that 4.5d for Phase 03 is a forecast made by the same
+process that forecast 1.0d, and the absorber covers roughly one more slice going wrong.
+
+The mitigation is unchanged and still real: the phases are ordered so the cycle can stop at a
+clean line. Phases 00–02 and 04 are closed and shippable. Inside Phase 03, slices 06–08 (the
+journey, the real reply, the crash-and-reconcile) are what prove the machine; 09–11 harden it.
+If the absorber goes, the cut is 09–11 to the next cycle, not a half-proved rehearsal. The 50%
+kill checkpoint (REQ-03's cap/suppression fixtures green) passed at Phase 01 and remains passed.
