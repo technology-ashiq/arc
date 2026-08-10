@@ -180,7 +180,29 @@ scoring infrastructure, which is bench's territory when bench wakes · certifyin
 | 12 adopted per lane is the right cap | Displacement fires on the first or second adoption (too small), or the registry never nears it (moot) | 2 builds the cap; retro tests the size |
 | The develop addendum is an uncontroversial cross-lane diff | Review objects to absorb editing `PLAN-develop` at all | 3 — ADR-0604 pre-answers it; an objection is retro input |
 | `report-lint` and the registry lint fail on a malformed input rather than passing it through | A deliberately malformed report or a registry row with a hash field passes its lint green — a wrong line of code, not a wrong decision | 1 and 2 — the adversarial pass supplies the malformed inputs |
-| PLANOFF-01's single malformed-escape catch is a repeatable technique advantage arc can re-express, not sampling noise inside a benchmark whose arc arm scored **highest overall** (composite 94.5 versus gstack's 90.8, per `docs/evidence/planner-bench/LEDGER.md`) | Phase 4's study or A/B finds the win was one lucky probe on one fixture rather than a pattern reproducible across the 3 fixtures, **or** finds the advantage came from outside the ADR-0602 allowlist | 4 — the classification's recorded reason must name this tension explicitly rather than only citing the one defect row; a ROUTE or SKIP verdict is a valid honest outcome |
+| PLANOFF-01's single malformed-escape catch is a repeatable technique advantage arc can re-express, not sampling noise inside a benchmark whose arc arm scored **highest overall** (composite 94.5 versus gstack's 90.8, per `docs/evidence/planner-bench/LEDGER.md`) | Phase 4's study or A/B finds the win was one lucky probe on one fixture rather than a pattern reproducible across the 3 fixtures, **or** finds the advantage came from outside the ADR-0602 allowlist — **arm 2 FIRED 2026-08-09**, arm 1 still untested | 4 — the classification's recorded reason must name this tension explicitly rather than only citing the one defect row; a ROUTE or SKIP verdict is a valid honest outcome |
+
+**Row 7, arm 2 — fired, and what it was load-bearing for.** The study placed T-01's *natural* home in
+the review METHOD (`.claude/agents/code-reviewer.md`) and its compiled surface in
+`processes/review-diff.process.yaml`. Neither is reachable: agents are off the allowlist, and the
+three pilot processes were excluded by ADR-0602 Amendment 1 because their bodies are engine Cycle 6's
+fidelity proof. So the advantage did come from outside the allowlist, exactly as this row predicted,
+and the row was not marked for a day — which is the silent-rot case `/arc-change` step 0 exists to
+catch.
+
+**What rested on it:** REQ-08 (one real absorb end-to-end) and REQ-03 (adoption claims are evidence)
+both assumed a rebuild could land somewhere; Phase 04's rebuild bullet and ADR-0606's target choice
+were premised on it. **Re-checked, and none of them fall.** Firing arm 2 rules out the *natural* home,
+not every home: ADR-0602 Amendment 1 itself recorded three routes that would legitimately unblock
+T-01, and route 2 — a playbook under `docs/playbooks/**`, already allowlisted — is reachable now.
+Amendment 1 also named route 2's failure mode ("a playbook nothing references is a guard with no
+caller"), and that is closed by a second allowlisted path: `.claude/commands/arc-audit.md`, which is
+hand-written rather than compiled from `processes/` — the generated-file trap Amendment 1 told a
+future rebuild to check for. Recorded as **ADR-0602 Amendment 2**.
+
+**Arm 1 is the one still live**, and it is the arm the A/B actually tests: whether the malformed-escape
+catch reproduces across three fixtures or was one lucky probe. Nothing about arm 2 firing makes arm 1
+more or less likely, and a negative A/B result stays a valid honest outcome.
 
 ## External dependencies
 

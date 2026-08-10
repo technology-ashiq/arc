@@ -38,6 +38,15 @@ improve with every project* — this command is how.
    Numbers come from PROGRESS's done-log metrics + PLAN's ledgers — count, don't estimate.
    Metrics are read HERE only; they never gate mid-build. This row is how "world's best
    planning" stays a measured claim instead of a slogan.
+4b. **Append the HISTORY entry — this is the step that was missing.** Add one row to the
+   `## At a glance` table in `docs/HISTORY.md`, newest first, at cycle close only (never mid-cycle;
+   a live row may only flip status). Copy the burn and phase counts **verbatim from the scoreboard row
+   you just wrote** — HISTORY is a derived view (A5) and a number recomputed here is a number that can
+   disagree with its own source. The Result column states the honest outcome including what was NOT
+   exercised: C7 reads "fixture-proven, UNEXERCISED" and C9 reads "4 new spine kinds, 0 production
+   emissions", because a logbook that only records what shipped cannot show what shipped and never ran.
+   This page carried a TODO asking for this step while being hand-appended three times underneath it.
+
 5. **Promote trial gates (kickoff v4 F1):** read `docs/trial-ledger.md`. Append one row per
    substance gate exercised this build (`date | gate | run-ref | fired? | false-positive?`). A gate
    is **promotable** only when BOTH hold: its bats fixture proves it FAILs on its own mutation

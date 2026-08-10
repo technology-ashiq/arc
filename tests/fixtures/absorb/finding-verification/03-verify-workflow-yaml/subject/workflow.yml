@@ -1,0 +1,31 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run one shard
+        run: bash subject/scripts/shard.sh "${{ matrix.shard }}"
+
+  lint:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shellcheck and process linters
+        run: bash subject/scripts/shard.sh lint

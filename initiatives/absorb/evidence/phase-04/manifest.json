@@ -1,0 +1,16 @@
+{
+  "phase": "04",
+  "commit": "953530712e5bace47c14aabbe7eb326fc9f28ecc",
+  "short": "9535307",
+  "generated": "2026-08-10T06:30:09Z",
+  "files": [
+    {
+      "name": "extraction-report.md",
+      "sha256": "df8fd2d3f3caa77193b73b209ee733c49714a8ac18c4aabcbaf537f99dfa10b2"
+    },
+    {
+      "name": "live-demo.md",
+      "sha256": "9947e237ad1bb2ea6224ceca0b85ba7841a173a59b9bc0f7680ef098a4a13b69"
+    }
+  ]
+}

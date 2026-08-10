@@ -225,6 +225,23 @@ if (invLines === null) {
         if (field === "verdict" && !VERDICTS.has(val)) {
           warn("row-field", `${label}: verdict "${val}" is not one of ABSORB | INTEGRATE | ROUTE | SKIP`);
         }
+        // An APPROXIMATE citation is a coordinate nobody can resolve, which is the exact failure
+        // docs/playbooks/finding-verification.md was rebuilt to catch on a different surface. This
+        // lint required a citation to be PRESENT and never that it be resolvable -- the twin of the
+        // defect, in the same lane, found by an adversarial pass on the rebuild rather than on the
+        // lint. Warning rather than requiring a `quote` column: adding a required column is a format
+        // change to a shipped report shape, and the gap is recorded in the playbook instead.
+        // The marker must be ADJACENT TO A LINE NUMBER. The first version matched the bare words, and
+        // fired on a citation cell whose prose EXPLAINED that an earlier citation had been
+        // approximate -- content matched as if it were structure, which is the same class as a fenced
+        // block linting as a heading (see stripFences below). A lint that cannot tell a citation from
+        // a sentence about citations trains its reader to ignore it.
+        if (field === "citation" &&
+            /(?:~|\bapprox(?:imately)?\.?|\bcirca\b|\b(?:around|about)\s+line)\s*\d/i.test(val)) {
+          warn("row-field",
+            `${label}: citation "${val}" is approximate -- a reader cannot resolve it, so it is a ` +
+            `coordinate rather than evidence (docs/playbooks/finding-verification.md)`);
+        }
       }
     });
   }

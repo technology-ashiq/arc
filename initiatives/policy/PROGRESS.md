@@ -1,8 +1,8 @@
 # PROGRESS.md — arc-policy "Enforced capability vectors"
 
-status: LIVE
-cycle: arc-policy (Cycle 9, born 2026-08-06)
-phase: 04 — CLOSED (all five phases done)
+status: IDLE
+cycle: arc-policy (Cycle 9, closed 2026-08-10)
+phase: — (cycle closed, merged as 677b67e / PR #130, closed by e594d6e / PR #147)
 appetite: 7d
 burn: 7.0d
 blocked-on: —
@@ -89,6 +89,39 @@ document of three diffs, because a diff-shaped instruction is a task, and a task
 owner is the agent's job left undone. Regenerating the two whole files to paste — *from the live
 file*, so the paste could be compared byte-for-byte afterwards — closed all three in one sitting.
 `docs/owner-paste-STEP1-settings.json` / `STEP2` are the artifacts; the pattern is the finding.
+
+### RETRO, 2026-08-10 — and the headline is a count, not an opinion
+
+**All four of this cycle's new spine kinds have NEVER been emitted. Not once.** Counted on the
+canonical spine (975 events, 8 kinds ever used): `promotion.requested` **0**, `incident.raised` **0**,
+and **no policy-family kind appears at all**. Phase 02's done-log says the promotion chain is "live
+end-to-end through `arc-inbox`" — and it is, through fixtures. In production it has never run.
+
+**Assumption row 1's trigger is now ARMED and half-satisfied.** It reads: *"Phase 4 closes and the
+Appetite section's own 7 dogfood days pass with zero promotion requests and zero incidents raised.
+`/arc-retro` must assert those two counts from the spine."* Phase 4 closed 2026-08-10. Both counts are
+0. **The 7 dogfood days have not passed**, so the trigger has NOT fired — but every part of it that can
+be true already is. If 2026-08-17 arrives with those counts still at 0, the assumption *"starting
+before the pull-trigger fired was right"* is falsified **by its own stated test**, and that is a
+conclusion the plan wrote for itself rather than one a retro argued into being.
+
+This puts policy in the same class the board already records for `evolve`: **fixture-proven,
+unexercised.** The board row now says so.
+
+### The six assumptions, stated — including the three I will not adjudicate
+
+Two of these are dogfood-gated and one is unobservable from the record. Saying so is the point: this
+cycle's own pre-mortem row 3 was *"the policy file drifts from reality into a poster"*, and a retro
+that scored six rows VALIDATED on a cycle whose engine never ran would be that drift.
+
+| # | Assumption | Status |
+|---|---|---|
+| 1 | Starting before the pull-trigger fired was right | **TRIGGER ARMED, not fired.** Counts asserted from the spine: 0 promotion requests, 0 incidents. Re-check 2026-08-17. |
+| 2 | A PreToolUse hook fails **open** on timeout, crash, missing script and malformed JSON | **HELD as far as the record shows.** Phase 00 generated the 63-row feasibility matrix and closed with the hostile corpus green; ADR-0501 was never superseded, which is what firing would have forced. Not asserted stronger than that, because the tracker does not record a per-mode observation. |
+| 3 | PreToolUse **fires** for MCP tools via `mcp__SERVER__TOOL` matchers | **UNVERIFIED — and this is the one to watch.** Phase 04 found the MCP surface reached no policy check at all, because *no matcher routed to it*; the owner added the matcher on 2026-08-09. So the wiring now exists and **nothing in the record shows an MCP call actually being intercepted.** The assumption is testable for the first time, and untested. |
+| 4 | Spine `withLock` is a sufficient single-writer boundary for reservations | **HELD on fixtures.** REQ-08's race fixtures did not break a reservation invariant, so autonomous spend did not drop to L1. Fixtures, not traffic — see the headline. |
+| 5 | One-level demotion is the right bite size | **NOT EVALUABLE.** Its trigger is repeat dogfood incidents at the same level; there have been zero incidents of any kind. |
+| 6 | The 8-capability set covers real actions at this scale | **HELD, with its MODEL repaired rather than its membership.** No action failed to fit a capability. But ADR-0507's invariant — *no capability may be used to exceed another capability's grant* — repaired ADR-0505's premise that the eight were independent. The set was right; the assumption that they compose cleanly was not, and that was found by an attacker, not by wiring. |
 
 ### Found while closing: past lane receipts were emitted into worktree spines, not the canonical one
 

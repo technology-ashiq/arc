@@ -1,0 +1,74 @@
+[
+  {
+    "id": "F1",
+    "claim": "bump_version leaves the patch component untouched on a minor bump, so bumping 1.4.7 by minor produces v1.5.7 instead of v1.5.0.",
+    "cite": "subject/lib/version.sh:25",
+    "quote": "      printf 'v%s.%s.%s\\n' \"$major\" \"$((minor + 1))\" \"$patch\"",
+    "truth": "true",
+    "quotable": true,
+    "why": "The easy case: a real defect whose motivating line exists and is cited correctly, so both rules keep it."
+  },
+  {
+    "id": "F2",
+    "claim": "REPO_ROOT is taken from an unchecked command substitution, so when release-tag.sh runs outside a git work tree BUILD_DIR becomes /build/release and the EXIT trap deletes a path outside the repo.",
+    "cite": "subject/release-tag.sh:5",
+    "quote": "REPO_ROOT=$(git rev-parse --show-toplevel)",
+    "truth": "true",
+    "quotable": true,
+    "why": "TRUE and quotable, but the supporting line is 5; a careless reviewer cites line 12 (the rm) which is only where the damage lands."
+  },
+  {
+    "id": "F3",
+    "claim": "The script never enables errexit, so a failing `git tag -a` does not stop execution: the push still runs and the script exits 0, reporting a release that was never tagged.",
+    "cite": "subject/release-tag.sh:1",
+    "quote": null,
+    "truth": "true",
+    "quotable": false,
+    "why": "THE CRITICAL CASE: the defect is the absence of a `set -euo pipefail` line, so no line in the file can be quoted to support it."
+  },
+  {
+    "id": "F4",
+    "claim": "ALLOW_INITIAL_TAG is defined in release.env but read by nothing, so the guard it advertises does not exist and a repo with no tags is silently tagged v0.0.1.",
+    "cite": "subject/config/release.env:8",
+    "quote": null,
+    "truth": "true",
+    "quotable": false,
+    "why": "TRUE but unquotable: the definition line can be quoted, yet the claim is about the absence of any reader across the other two files."
+  },
+  {
+    "id": "F5",
+    "claim": "The tag is force-pushed, so re-running the script after a bad release silently rewrites an existing release tag on the remote.",
+    "cite": "subject/release-tag.sh:41",
+    "quote": "git push \"$RELEASE_REMOTE\" \"refs/tags/$TAG\"",
+    "truth": "false",
+    "quotable": true,
+    "why": "FALSE with a byte-exact quote of a real, exactly-related line: the push carries no --force, so the quote matches while the claim does not."
+  },
+  {
+    "id": "F6",
+    "claim": "The bump argument is assigned straight from $1 with no check that it is one of major, minor or patch, so a typo like `mnior` falls through to bump_version and produces an empty tag.",
+    "cite": "subject/release-tag.sh:23",
+    "quote": "BUMP=\"$1\"",
+    "truth": "false",
+    "quotable": true,
+    "why": "FALSE and plausible: the cited line is real and the reasoning is ordinary, but the case block on lines 24-27 validates the argument."
+  },
+  {
+    "id": "F7",
+    "claim": "semver.sh parses the version with a regex that accepts a leading v, so bump_version receives a doubled prefix and emits vv1.5.0.",
+    "cite": "subject/lib/semver.sh:14",
+    "quote": null,
+    "truth": "false",
+    "quotable": false,
+    "why": "FALSE with an invented citation: there is no semver.sh in the subject at all."
+  },
+  {
+    "id": "F8",
+    "claim": "cleanup expands BUILD_DIR unquoted, so a checkout under a path containing a space deletes each whitespace-separated fragment instead of the build directory.",
+    "cite": "subject/release-tag.sh:14",
+    "quote": "  rm -rf $BUILD_DIR",
+    "truth": "true",
+    "quotable": true,
+    "why": "NEAR-MISS: real defect, quote byte-exact for line 12, but the cite is two lines off at `trap cleanup EXIT`."
+  }
+]

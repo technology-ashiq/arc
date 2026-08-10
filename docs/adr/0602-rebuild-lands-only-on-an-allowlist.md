@@ -117,3 +117,41 @@ route to develop's vet+lock path or to executor's INTEGRATE verdict instead, and
 wait. The allowlist will feel wrong the first time it refuses something obviously fine; that
 feeling is the control working, and the amendment path exists so it is answerable without
 weakening the gate mid-cycle.
+
+## Amendment 2 (2026-08-10, Phase 04) — route 2 taken: a playbook, and a caller that is not generated
+
+Amendment 1 recorded T-01 as having **no landing site inside the current allowlist**, and that was
+true of the two places the study named: the review METHOD in `.claude/agents/code-reviewer.md` (off
+the allowlist) and `processes/review-diff.process.yaml` (excluded by Amendment 1 as engine's
+fidelity evidence). The owner then ruled DO NOT WIDEN, which stands and is not revisited here.
+
+**Amendment 1 also listed three routes that would legitimately unblock T-01 later. This amendment
+takes route 2, unchanged, without widening anything:**
+
+| | Route 2 as written in Amendment 1 | How it is taken |
+|---|---|---|
+| Home | "a **playbook** under `docs/playbooks/**` (already allowlisted)" | `docs/playbooks/finding-verification.md` — new; the directory did not exist, which is why the allowlist entry had been aspirational |
+| Its named failure mode | "a playbook nothing references is a guard with no caller, which this cycle already shipped once and had to fix" | closed by a **second** allowlisted path: `.claude/commands/arc-audit.md` references it, so the playbook has a caller from birth |
+
+**Why `arc-audit.md` and not `arc-review.md`.** Amendment 1 left a standing instruction: *"Any
+future rebuild aimed at `.claude/commands/**` must first check whether that body is compiled from
+`processes/`."* Checked. `arc-review.md` and `arc-kickoff.md` and `arc-commit.md` carry
+`GENERATED FILE — DO NOT EDIT` and are compiled from `processes/*.process.yaml`; a rebuild there
+survives until the next `arc-compile` and then vanishes with the registry still claiming it shipped.
+`arc-audit.md` is hand-written, is listed in `products/review/manifest.json`, and is the review-family
+command that **emits findings into tracked issues** — so an unverified finding there has a real cost,
+which is precisely the cost T-01 exists to reduce.
+
+**What this does not change.** The allowlist is byte-identical: `processes/**` (minus the three
+pilots), `docs/playbooks/**`, `.claude/commands/**`, `tests/**`. No path was added. No engine artifact
+is touched. `.claude/agents/**` stays off. The DO-NOT-WIDEN ruling is honoured rather than worked
+around — this is a route the ADR already called legitimate, not a new concession, and it was available
+the whole time. Recording that plainly matters more than the rebuild: Amendment 1's last word on T-01
+was "blocked", and a reader who stopped there would carry a conclusion the ADR's own route list
+already contradicted.
+
+**What it costs.** The technique lands one surface away from where it belongs. The review *method*
+is still the right long-term home, and reaching it still needs either an engine-side ruling on the
+pilots (route 1) or a widening decided on its own merits (route 3). A playbook plus a caller is the
+honest v1, not the destination — and REQ-04's registry row must say so rather than reading as a
+finished adoption.

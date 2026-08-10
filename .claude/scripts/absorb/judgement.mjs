@@ -89,7 +89,12 @@ if (cmd === "seal") {
   const evidence = flag("--evidence");
   const correlation = flag("--correlation");
   if (!candidate || !variantsArg || !fixturesArg || !evidence || !correlation)
-    die("usage: judgement.mjs seal --candidate T-NN --variants name=path,name=path --fixtures a,b,c --evidence PATH --correlation ID");
+    // The usage string said `name=path,name=path` -- v1's format, which v2 REJECTS with a specific
+    // error about `=` being v1's delimiter. So the only documentation of this flag told the caller to
+    // do the one thing that cannot work, and the error message assumed the caller had read v1's docs
+    // rather than this line. Cost a round trip on the first real seal of the cycle.
+    die("usage: judgement.mjs seal --candidate T-NN --variants nameA,nameB --fixtures a,b,c --evidence PATH --correlation ID\n" +
+        "       --variants takes variant NAMES only (no paths, no `=`): the seal assigns the blind labels.");
 
   // Validated BEFORE any join(). `--correlation "../../../../initiatives/absorb/evidence/planoff/LEAK"`
   // wrote the plaintext mapping AND its nonce to a git-TRACKED path, because .gitignore covers

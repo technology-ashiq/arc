@@ -6,13 +6,16 @@
 > `docs/archive/` bundles, `docs/evidence/`, `CHANGELOG.md`, and (from Cycle-2 on) the
 > receipt spine. Numbers are copied verbatim from the retro stat line, never recomputed.
 >
-> ⚠ Wiring TODO (Phase-04 retro item): add an "append HISTORY entry" step to the
-> `/arc-retro` checklist so this page maintains itself from now on.
+> **Wiring CLOSED 2026-08-10.** `/arc-retro` step 4b now requires the entry, because this page was
+> hand-appended three times while a TODO asking for the step sat at the top of it — a note is not a
+> mechanism, and the note was the only thing keeping the page current.
 
 ## At a glance
 
 | # | Initiative | Dates | Result | Burn | Shipped |
 |---|---|---|---|---|---|
+| C10 | arc-absorb "The Technique Refinery" | 2026-08-09 → 2026-08-10 | **CLOSED — 5/5 phases, 8/8 REQ. The refinery refused its own first candidate and the owner overruled it; all three receipts kept** | **81% of 8d** | read-only study surface (path-segment confinement, per-segment case checks, hardlink quarantine) · 8-family hostile corpus with mutant controls · 4 lints · versioned hash-commitment seal/reveal/verify · owner-judge + adoption payload profiles on `decision.recorded` with **no new spine kind** · `ab-run` A/B harness · one real absorb: T-01 pre-emit finding verification, adopted (ADR-0074, ADR-0600..0606 + two amendments) |
+| C9 | arc-policy "Enforced Capability Vectors" | 2026-08-06 → 2026-08-10 | **CLOSED — 5/5 phases; the engine is fixture-proven and NEVER EXERCISED — 4 new spine kinds, 0 production emissions** | **100% of 7d** | `hq.policy.yaml` + `policy-lint` failing from birth · `authorizeAction` / `resolveEffectivePolicy` with everything injected · headless enforcement at `arc-run` AND `runDriver` · money guard reserving under a re-reading lock · 4 authority receipts (KINDS 40→44) · promotion chain + automatic demotion through the inbox · 64-row hostile corpus · birth rule + 53-row cap inventory (ADR-0500..0508) |
 | C7 | arc-evolve "The Self-Improvement Engine" | 2026-08-03 → 2026-08-04 | **CLOSED — 5/5 phases; north-star claim fixture-proven, UNEXERCISED** | **100% of 7d** | `evolve` manifest section + money-surface denylist · 9 new spine kinds (KINDS 22→31) with closed payloads and total-preimage idem · reader-only board · deterministic assignment + `newcombe-wilson-difference-v1` pinned to one expression tree · four-hop SHA lineage, propose-only both ways · council self-calibration (ADR-0300..0311) |
 | C6 | arc-engine "The Model-Agnostic Foundation" | 2026-08-03 | **CLOSED — 4/4 phases, one REQ partial** | ~14% of 14d | `processes/*.process.yaml` canonical layer + `process-lint` · `arc-compile` proving **3/3 byte-identical** then the flip · `arc-run` + 3 drivers behind one interface, hard budgets, proposal-receipt escalation, secret scrub, `router.yaml` (ADR-0200..0206) |
 | C6 | arc-develop "The Developer — the intelligence layers" | 2026-08-02 → 2026-08-03 | **CLOSED — 5/5 phases, REQ-03 carried** | ~30% of 7d | learning ledger + replay corpus + holdout · Context Pack (5 sources, one hop) · capability scout + vet gate + lockfile · pattern annex + approach sketches · six outcome metrics + calibration record (ADR-0108..0111) |
