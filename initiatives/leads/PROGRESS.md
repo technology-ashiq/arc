@@ -245,6 +245,30 @@ The verifier's resolver is an injected parameter, and that is load-bearing rathe
 unprovable in both places at once. Measured, not assumed — this box answers every DNS query with
 `ECONNREFUSED`, so the first version returned `unverifiable` for `gmail.com`.
 
+**2026-08-10/11 — the rehearsal journey RAN, end to end, and stops at the L1 approval.**
+Campaign `rehearsal-03` on the canonical spine, real store, `ARC_LEADS_FAKE` unset:
+
+| Step | Result |
+|---|---|
+| research | **4 PASS · 0 HELD · 1 BELOW-BAR · 0 REJECTED**, 5 dossiers, 5 receipts |
+| draft | **5 queued, 0 FAIL** — 3 PASS, 2 WARN (73% body similarity; entries 1/4 and 2/5 are near-identical descriptions, so the warning is true) |
+| review | renders the body beside its evidence, `lint: PASS`, sha matches |
+| inbox | **5 approvals, 5 distinct `lead_hmac`** — no lead carries two |
+| send | **NOT DONE.** The L1 decision is the owner's (ADR-0407) and `ARC_LEADS_OUTREACH_FROM` is unset |
+
+**Three runs are on the spine and all three are true records**, which is what an append-only
+spine is for. `rehearsal` held all five: this environment refuses port 53, so every MX lookup
+threw and ADR-0418 correctly read that as `unverifiable` → HELD. `rehearsal-02` was refused by
+the ADR-0404 lint: its facts were one template with a number changed, so the ICP-generic rule
+marked them and a generic fact cannot be cited. `rehearsal-03` is the owner-supplied roster.
+The name changed each time rather than a payload being edited, because `email_status` is not in
+the `lead.researched` idem preimage and re-running would have been a `payload differs` anomaly.
+
+**The most valuable result of the slice is that the anti-template-blast gate stopped its own
+author.** ADR-0417 wrote down that a hand-written corpus is authored by the person who wants it
+to pass; run 02 was exactly that, and REQ-02 refused it. The gate was not relaxed to get a run
+through — the corpus was replaced with the owner's real descriptions.
+
 **Slice 06 is not closed by that merge.** The merge landed the machine; the slice is *five
 complete journeys against five real people*, and the send is the owner's keystroke, not a
 scripted step (ADR-0407). `phases/phase-03-tasks.md` slice 06 stays `(empty until proven)` until
