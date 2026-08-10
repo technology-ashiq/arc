@@ -126,8 +126,33 @@ function cmdStoreInit() {
 }
 
 // ---------- research ----------
-async function cmdResearch(icpPath) {
-  if (!icpPath) die(2, "usage: arc-leads research <icp-file>");
+async function cmdResearch(argv) {
+  // A CONSUMING LOOP, like every other command in this file that takes flags. An indexOf scan
+  // resolves a repeated --corpus silently by position instead of refusing, and ignores an
+  // unknown flag entirely -- the pair of defects this lane has now fixed on four surfaces.
+  const rest = Array.isArray(argv) ? argv : [argv];
+  let icpPath = null;
+  let corpus = null;
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === undefined) continue;
+    if (!String(a).startsWith("--")) {
+      if (icpPath !== null) die(2, `two ICP files were given (${JSON.stringify(icpPath)} and ${JSON.stringify(a)}) — research reads exactly one`);
+      icpPath = a;
+      continue;
+    }
+    if (a === "--corpus" || a.startsWith("--corpus=")) {
+      // The PATH is a flag value; the corpus CONTENT never touches argv (ADR-0412/0417).
+      const v = a.startsWith("--corpus=") ? a.slice("--corpus=".length) : rest[++i];
+      if (v === undefined || v === "" || String(v).startsWith("--")) die(2, "--corpus needs a path");
+      if (corpus !== null) die(2, "--corpus was given twice — two corpora for one run is an operator error, not a last-wins override");
+      corpus = v;
+      continue;
+    }
+    die(2, `unknown flag ${JSON.stringify(String(a).split("=")[0])} for \`research\`. Takes <icp-file> and --corpus <path>.`);
+  }
+
+  if (!icpPath) die(2, "usage: arc-leads research <icp-file> [--corpus <path>]");
   if (!existsSync(icpPath)) die(2, `ICP file not found: ${icpPath}`);
   const icp = JSON.parse(readFileSync(icpPath, "utf8"));
   const campaign = icp.campaign;
@@ -138,7 +163,7 @@ async function cmdResearch(icpPath) {
   catch (e) { die(5, e.message); }
 
   let candidates;
-  try { candidates = await source().search(icp); }
+  try { candidates = await source().search(icp, { corpus }); }
   catch (e) { die(e instanceof ProviderError ? PROVIDER_EXIT : 2, e.message); }
 
   // Verify every address BEFORE linting, so `held` is decided by the verifier rather than by
@@ -1622,7 +1647,7 @@ const [cmd, ...rest] = process.argv.slice(2);
 try {
   if (cmd === "store" && rest[0] === "init") cmdStoreInit();
   else if (cmd === "campaign" && rest[0] === "init") cmdCampaignInit(rest[1]);
-  else if (cmd === "research") await cmdResearch(rest[0]);
+  else if (cmd === "research") await cmdResearch(rest);
   else if (cmd === "draft") cmdDraft(rest[0], rest[1]);
   else if (cmd === "review") cmdReview(rest[0]);
   else if (cmd === "ingest-reply") await cmdIngestReply(rest);

@@ -208,20 +208,28 @@ fixtures come from — and a credential file is not where any of those decisions
 
 ## STOP — read this before you start
 
-**Two steps of the journey cannot run today, and neither is a configuration problem.** The walk
-found both by running the pipeline outside the fake for the first time.
+**S1 and S2 are CLOSED as of 2026-08-10. This section is kept, not deleted**, because the two
+refusals it describes were the reason this runbook could not be followed for the whole of Phase
+03, and a section that simply disappears teaches the reader that blockers evaporate.
 
-| # | What refuses | Why | What unblocks it |
-|---|---|---|---|
-| **S1** | `arc-leads research` exits **4**: `no automated lead source is bound — v1 research is manual against ADR-0409's allowlisted classes` | `sourceReal.search()` is a refusal, not an implementation. `cmdResearch` is the **only** writer of `dossiers/<leadId>.json`, and the lead id is a keyed HMAC nobody can compute by hand — so there is no path by which a manually-researched person enters the store. | A reviewed binding for the real lead source (a curated corpus file, linted by the same `lintCandidates` gate). Route via `/arc-change`; binding a real external dependency is its own slice in this lane, exactly as slice 03 was for the provider. |
-| **S2** | `verifyReal.verify()` throws: `no email verifier is bound — selected from the capability report at Phase-3 entry` | Even with a corpus, research dies on the first address. | ADR-0402/0409 route this to the capability report — `/arc-capability`. It is a decision about **how an address is verified**, and a wrong answer here bounces mail from a domain that costs 2–4 weeks to warm. |
+| # | What used to refuse | What closed it |
+|---|---|---|
+| **S1** | `arc-leads research` exited **4**: `no automated lead source is bound`. `sourceReal.search()` was a refusal, not an implementation — and `cmdResearch` holds the **only** `writeFileSync` into `dossiers/`, with `lead_id` a keyed HMAC nobody can compute by hand, so there was no path by which a researched person entered the store at all | **ADR-0417**: `research` takes **`--corpus <path>`**, a file you write, outside the repo, read through the same `lintCandidates` gate with no relaxation |
+| **S2** | `verifyReal.verify()` threw: `no email verifier is bound`. Even with a corpus, research died on the first address | **ADR-0418**: syntax + a live **MX** lookup. No vendor, no account, no address leaves the machine. Three states — `invalid` → REJECTED, `unverifiable` → **HELD**, `verified` → sendable |
 
-Everything downstream of research — draft, the ADR-0404 lint, the approval, the guard, the send
-— was walked and works. The journey is blocked at its first step only.
+**So step 3 now reads `arc-leads research <icp.json> --corpus <path>`.** The path goes in argv;
+the corpus itself never does (ADR-0412). The file is **refused** if it resolves inside the
+repository, if it is not JSON, if it is not an array, or if it is empty — the last one because a
+run that researched nobody and a run whose every candidate was rejected print the same summary.
 
-**Do not work around S1 by setting `ARC_LEADS_FAKE=1`.** That switch replaces the provider, the
-verifier, the DNS reader and the inbound reader all at once. A "successful" rehearsal under it
-would send nothing to nobody and prove nothing at all.
+> **Expect HELD, not PASS, if this machine cannot resolve MX.** `unverifiable` is not an error;
+> it is a dossier that exists and can never be sent to (ADR-0409). A whole corpus coming back
+> HELD usually means DNS, not bad addresses — check that MX resolves from this box before
+> concluding your corpus is wrong.
+
+**Do not work around any of this by setting `ARC_LEADS_FAKE=1`.** That switch replaces the
+provider, the verifier, the DNS reader and the inbound reader all at once. A "successful"
+rehearsal under it would send nothing to nobody and prove nothing at all.
 
 ---
 
@@ -383,10 +391,10 @@ was already done.
 ### 3. Research → dossiers
 
 ```bash
-node .claude/scripts/leads/arc-leads.mjs research <icp.json>
+node .claude/scripts/leads/arc-leads.mjs research <icp.json> --corpus <path-to-your-corpus.json>
 ```
 
-**Blocked today — see S1/S2 above.** When it is unblocked, expect:
+**Unblocked 2026-08-10 (ADR-0417/0418); the S1/S2 box above records what it used to be.** Expect:
 
 ```
 arc-leads research: 5 PASS · 0 HELD · 0 BELOW-BAR · 0 REJECTED

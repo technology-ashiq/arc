@@ -226,15 +226,24 @@ binding before reaching it, and `lead_id` is an ADR-0400 keyed HMAC nobody can c
 **There is no path by which a researched person enters the store.** The five journeys cannot
 start, and no amount of running the runbook changes that.
 
-Routed through `/arc-change` the same day, tracker before code: **ADR-0417 (proposed)** binds the
-lead source to an operator-supplied corpus file, read through the existing `lintCandidates` gate
-— which is what PLAN's External-dependencies table already declared the real impl to be
-("manual research against ADR-0409's allowlisted classes"), in the same words the code refuses
-with. What was never built is the mechanism by which manual research becomes a dossier.
+**Both were CLOSED the same day, owner approved, and the blocker is gone.**
 
-**The verifier stays open** at `/arc-capability`: a corpus with no verifier still dies on the
-first address, so ADR-0417 does not unblock the phase on its own. Both are new dependencies, so
-`/arc-change` step 4 stops here for the owner's OK rather than proceeding to code.
+- **ADR-0417 (accepted)** — `research` takes `--corpus PATH`, an operator-written file read
+  through the same `lintCandidates` gate with no relaxation. Refused if the path resolves inside
+  the repo (ADR-0410), if it is not JSON, not an array, or empty.
+- **ADR-0418 (accepted)** — the verifier is syntax + a live MX lookup. No vendor, no account, no
+  address leaves the machine. `unverifiable` is HELD, never `invalid`, because a domain with no
+  MX can still accept mail on its A record.
+
+Proven end to end on the REAL path with `ARC_LEADS_FAKE` unset: a corpus file outside the repo
+produced **dossiers on disk and receipts on the spine**. The assertion is the dossier, not a
+summary line — a summary line can be printed by a function that wrote nothing.
+
+The verifier's resolver is an injected parameter, and that is load-bearing rather than tidy:
+`verifier()` returns the FAKE whenever `ARC_LEADS_FAKE=1`, so the real one is unreachable on CI
+(which fakes DNS) and needs live network anywhere else. Without the seam the `verified` branch is
+unprovable in both places at once. Measured, not assumed — this box answers every DNS query with
+`ECONNREFUSED`, so the first version returned `unverifiable` for `gmail.com`.
 
 **Slice 06 is not closed by that merge.** The merge landed the machine; the slice is *five
 complete journeys against five real people*, and the send is the owner's keystroke, not a

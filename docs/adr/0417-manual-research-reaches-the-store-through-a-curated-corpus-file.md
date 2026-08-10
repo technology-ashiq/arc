@@ -1,6 +1,6 @@
 # ADR 0417 — manual research reaches the store through a curated corpus file
 
-**Status:** proposed
+**Status:** accepted
 **Date:** 2026-08-10
 **Product:** `leads`
 **Reversibility:** reversible (it binds one dependency behind an interface that already exists; a later automated source replaces the impl and nothing else)
@@ -61,11 +61,17 @@ path, read through the same `lintCandidates` gate the fake corpus goes through.
 
 ## What this deliberately does not decide
 
-**S2, the email verifier, is not decided here.** ADR-0402/0409 route it to `/arc-capability`,
-and it is a different question with a worse failure mode: a wrong verifier bounces mail from a
-domain that costs 2–4 calendar weeks to warm. It stays open, and Phase 03's five journeys need
-it answered too — a corpus with no verifier still dies on the first address. Recorded as a
-separate item so that closing this ADR is not read as unblocking the phase on its own.
+**S2, the email verifier, is not decided by this ADR.** It is a different question with a worse
+failure mode — a wrong verifier bounces mail from a domain that costs 2–4 calendar weeks to warm
+— and a corpus with no verifier still dies on the first address, because `cmdResearch` verifies
+every candidate before linting so that HELD is decided by the verifier rather than by whichever
+branch ran first. The two had to be answered together to unblock the phase, and they are
+answered **separately on purpose**, so that revisiting one does not drag the other with it.
+
+It was decided the same day as **ADR-0418** — MX + syntax, no vendor, nothing leaving the
+machine. The two ADRs share a date and a blocker and nothing else: 0417 can be replaced by an
+automated source without touching verification, and 0418 can be replaced by a paid verifier at
+Phase 05 without touching where candidates come from.
 
 ## Consequences
 

@@ -271,12 +271,122 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"4 1 closed"* ]]
 }
 
-@test "this file registers the 30 tests it declares" {
+@test "the MX verifier answers all four states, and never resolves a bad address" {
+  # ADR-0418. The resolver is INJECTED, and that is the only reason this test can exist:
+  # verifier() returns the FAKE whenever ARC_LEADS_FAKE=1, so verifyReal is unreachable on CI
+  # (which fakes DNS) and needs live network anywhere else. Without the seam the `verified`
+  # branch is unprovable in both places at once. Measured, not assumed: the box this was written
+  # on answers every DNS query with ECONNREFUSED and returned `unverifiable` for gmail.com.
+  run _node 'const {verifyAddress} = await import("./.claude/scripts/leads/lib/deps.mjs");
+    const has  = async () => [{exchange:"mx.example.net", priority:10}];
+    const none = async () => [];
+    const boom = async () => { const e = new Error("queryMx ENOTFOUND"); e.code = "ENOTFOUND"; throw e; };
+    console.log("MXPRESENT:" + await verifyAddress("a@example.com", has));
+    console.log("MXEMPTY:"   + await verifyAddress("a@example.com", none));
+    console.log("MXTHROWS:"  + await verifyAddress("a@example.com", boom));
+    console.log("BADSHAPE:"  + await verifyAddress("not-an-address", has));
+    // The resolver EXPLODES if consulted. A syntax reject that still hits the network is a
+    // lookup for a string that cannot be an address, and it would make BADSHAPE pass for the
+    // wrong reason -- the resolver would throw and the catch would return unverifiable.
+    const explode = async () => { throw new Error("resolver consulted for a non-address"); };
+    console.log("NOLOOKUP:"  + await verifyAddress("nope", explode));'
+  [ "$status" -eq 0 ] || { echo "the probe did not run: $output"; false; }
+  [[ "$output" == *"MXPRESENT:verified"* ]]     || { echo "an MX record did not verify: $output"; false; }
+  [[ "$output" == *"MXEMPTY:unverifiable"* ]]   || { echo "an empty MX list was not held: $output"; false; }
+  [[ "$output" == *"MXTHROWS:unverifiable"* ]]  || { echo "a throwing resolver was not held: $output"; false; }
+  # invalid, NOT unverifiable -- the two land in different lint outcomes (REJECTED vs HELD).
+  [[ "$output" == *"BADSHAPE:invalid"* ]]       || { echo "a malformed address was not invalid: $output"; false; }
+  [[ "$output" == *"NOLOOKUP:invalid"* ]]       || { echo "the resolver was consulted for a non-address: $output"; false; }
+}
+
+@test "the corpus source refuses every way a hand-written file goes wrong" {
+  # ADR-0417. sourceReal is only reachable with ARC_LEADS_FAKE unset, so this drives the CLI
+  # without it -- which is also what proves the fake is not silently substituted.
+  cd "$ARC_ROOT"
+  # BATS_TEST_TMPDIR, not the `_tmpdir` helper: that one is defined INSIDE
+  # leads-mail-guard.bats and is not in scope here. The first version of this test called it
+  # anyway -- because another leads suite used it -- and every leg failed with `command not
+  # found` at status 127. bats supplies this one natively, per test, outside the repo, which is
+  # what the inside-the-repo assertion below needs to be meaningful.
+  local dir="$BATS_TEST_TMPDIR"
+  [ -n "$dir" ] && [ -d "$dir" ] || { echo "no per-test temp dir: '$dir'"; false; }
+  printf '{"campaign":"corpustest","classes":["firm-site"],"jurisdictions":["IN"],"min_facts":2}\n' > "$dir/icp.json"
+  [ -s "$dir/icp.json" ] || { echo "the icp fixture is EMPTY"; false; }
+
+  # THE STORE IS OPENED FIRST, SO IT MUST EXIST FIRST. `cmdResearch` does openStore() BEFORE
+  # source().search(), so against an uninitialised store every case below exits 5 without ever
+  # reaching the corpus -- and each `[ "$status" -eq 4 ]` fails for a reason that has nothing to
+  # do with what the test is about. The first version of this test initialised the store near
+  # the end, next to the positive control, and passed locally only because the run reused an
+  # already-initialised one. Order of setup is part of the assertion.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs store init
+  [ "$status" -eq 0 ] || { echo "store init failed, so nothing below tests what it claims: $output"; false; }
+
+  # 1. no --corpus at all: the refusal must NAME the flag, since the whole defect it replaces
+  #    was a refusal naming no reachable remedy.
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json"
+  [ "$status" -eq 4 ] || { echo "expected the provider exit code, got $status: $output"; false; }
+  [[ "$output" == *"--corpus"* ]] || { echo "the refusal named no flag: $output"; false; }
+
+  # 2. inside the repo: refused, because this is the file most likely to be dropped in the repo
+  #    root and the tripwire treats every tracked leads path as a violation on sight.
+  printf '[]\n' > "$ARC_ROOT/corpus-under-test.json"
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --corpus "$ARC_ROOT/corpus-under-test.json"
+  rm -f "$ARC_ROOT/corpus-under-test.json"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"inside the repository"* ]] || { echo "a corpus inside the repo was accepted: $output"; false; }
+
+  # 3. not JSON · 4. not an array · 5. empty array -- three DIFFERENT messages, because "0 PASS"
+  #    out of a silent empty file reads exactly like a corpus whose every candidate was rejected.
+  printf 'not json at all\n' > "$dir/bad.json"
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --corpus "$dir/bad.json"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"not valid JSON"* ]] || { echo "unparseable corpus: $output"; false; }
+  printf '{"a":1}\n' > "$dir/obj.json"
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --corpus "$dir/obj.json"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"must be a JSON array"* ]] || { echo "object corpus: $output"; false; }
+  printf '[]\n' > "$dir/empty.json"
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --corpus "$dir/empty.json"
+  [ "$status" -eq 4 ]
+  [[ "$output" == *"empty array"* ]] || { echo "empty corpus: $output"; false; }
+
+  # 6. operator errors on the flag itself.
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --corpus a --corpus b
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"given twice"* ]] || { echo "a repeated --corpus was accepted: $output"; false; }
+  run env ARC_LEADS_STORE="$dir/store" node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --bogus=secret-value
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--bogus"* ]] || { echo "an unknown flag was accepted: $output"; false; }
+  [[ "$output" != *"secret-value"* ]] || { echo "the refusal echoed an attached value: $output"; false; }
+
+  # POSITIVE CONTROL. Without this every assertion above passes for a `research` that refuses
+  # unconditionally -- which is precisely the state this ADR was written to end.
+  cat > "$dir/corpus.json" <<'JSON'
+[{"name":"Adv One","email":"one@firmone.example.com","firm":"Firm One","firm_domain":"firmone.example.com",
+  "geography":"IN","provenance":"firm-site",
+  "source_urls":["https://firmone.example.com/about","https://firmone.example.com/team"],
+  "facts":[{"text":"argued a limitation-period matter before the Madras High Court","evidence_url":"https://firmone.example.com/practice","relevance":"the pilot removes the tracking overhead this matter load creates"},
+           {"text":"runs a monthly clinic for first-generation litigants","evidence_url":"https://firmone.example.com/writing","relevance":"someone who documents their process adopts a process tool without persuasion"}]}]
+JSON
+  [ -s "$dir/corpus.json" ] || { echo "the corpus fixture is EMPTY"; false; }
+  run env ARC_LEADS_STORE="$dir/store" ARC_SPINE_ROOT="$dir/spine" \
+    node .claude/scripts/leads/arc-leads.mjs research "$dir/icp.json" --corpus "$dir/corpus.json"
+  [ "$status" -eq 0 ] || { echo "a valid corpus did not reach the store: $output"; false; }
+  # A DOSSIER ON DISK is the assertion, not a line of stdout: the whole defect ADR-0417 closes
+  # was that no path existed by which a researched person entered the store. A summary line can
+  # be printed by a function that wrote nothing.
+  [ -d "$dir/store/dossiers" ] || { echo "no dossiers directory: $output"; false; }
+  local n; n=$(ls "$dir/store/dossiers" | wc -l)
+  [ "$n" -eq 1 ] || { echo "expected 1 dossier written from the corpus, found $n. Output: $output"; false; }
+}
+
+@test "this file registers the 32 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 30 ] || { echo "declared $declared, expected 30"; false; }
+  [ "$declared" -eq 32 ] || { echo "declared $declared, expected 32"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }
