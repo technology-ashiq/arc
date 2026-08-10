@@ -254,3 +254,43 @@ signature three commands call, which is not a thing to do while the branch is be
 
 **What would close it.** A `root` parameter on `loadCredentials`, defaulted to `REPO_ROOT`, with
 that one test passing a temp dir.
+
+---
+
+## H-10 · `notify` cannot pick a recipient, and the fix is a decision
+
+**What.** `deliverNotification` infers the recipient from `ARC_LEADS_MAIL_ALLOWLIST` only when
+that list holds exactly one address; with more it refuses rather than guess. `cmdMail` has `--to`
+and can answer that refusal. **`cmdNotify` has no such flag and passes no recipient**, so on a box
+whose owner allowlist holds two or more addresses, all three triggers — `canary`, `approvals`,
+`brief` — exit 2 and cannot be run at all. That is the state of this box today: the allowlist
+holds two, so **arc's own canary alerting has been inert since Phase 04**.
+
+**Found** on 2026-08-10 by walking `phase-03-runbook.md` step 6 against the fake using the real
+`.env.local` — not by a test. Reproduced against `bbfcede~1`, so it pre-dates PR #145 entirely.
+
+**Why 80 mail-guard tests missed it.** Every CLI-level test in that file sets
+`ARC_LEADS_MAIL_ALLOWLIST` to a **single** entry — one address, the single value at which
+the branch cannot fire. The two-address case exists only in `loadAllowlist` unit tests, which
+never go through `cmdNotify`. A suite pinned to one value cannot see a defect that needs a second.
+
+**What was fixed here, because it has one correct answer.** The refusal told the operator to pass
+`--to`, which `cmdNotify` rejects as an unknown flag on the next line — a closed loop with no way
+out, on the alert path. `deliverNotification` now takes `recipientFlag`, each caller declares the
+flag it actually has (`mail` → `--to`, all three `notify` triggers → `null`), and the `null`
+message names the two remedies that exist. Pinned by a regression test that drives `canary` —
+chosen because `approvals` and `brief` refuse earlier for their own reasons and never reach the
+shared rule, which an earlier draft of that test discovered by failing.
+
+**What is left, and why it is a decision rather than a fix.** Making `notify` *work* on a
+multi-address allowlist needs one of three, and they are not equivalent:
+
+1. give `notify` a `--to` — consistent with `mail`, but it puts an address in argv on every
+   alert, which is the exposure the code comment says the omission exists to prevent;
+2. add a dedicated `ARC_LEADS_NOTIFY_TO` — no argv exposure, but it is a new name in the
+   `.env.local` allowlist in `mail.mjs` and therefore an ADR-0410/0412 surface change;
+3. leave it, and require the owner allowlist to hold exactly one address — zero code, but it
+   makes an undocumented single-value constraint load-bearing for arc's alerting.
+
+Route via `/arc-change`. Inventing one inside a fix commit is precisely the move that produced
+three of this slice's CRITICALs.

@@ -1343,7 +1343,15 @@ function cmdReport(argv) {
 // ONE delivery path, shared by `mail` (a human composing) and `notify` (a trigger firing).
 // Two copies of this would be two places for the env guard, the lock and the recipient rule to
 // drift apart, and the ones that drift are always the ones nobody looks at again.
-async function deliverNotification({ to, subject, text, kind }) {
+// `recipientFlag` is the flag THE CALLING COMMAND accepts, or null when it accepts none. It
+// exists because the refusal below used to hardcode "--to" for both callers, and `notify` does
+// not have a `--to` — so on any box whose owner allowlist holds more than one address, all three
+// notify triggers died at exit 2 telling the operator to pass a flag the same command rejects as
+// unknown one line later. A closed loop with no way out, on the surface whose entire job is to
+// reach a human about an outage. Pre-dates this branch (Phase 04, PR #131) and was invisible to
+// 80 mail-guard tests because every CLI-level one of them pins the allowlist to exactly ONE
+// address, which is the single value at which the branch cannot fire.
+async function deliverNotification({ to, subject, text, kind, recipientFlag = "--to" }) {
   // `.env.local` is read HERE rather than at startup, deliberately. Every other subcommand
   // keeps exactly the environment it had before this phase existed, so a credential file
   // cannot change the behaviour of a send, a reconcile or a cap check merely by being present.
@@ -1360,7 +1368,9 @@ async function deliverNotification({ to, subject, text, kind }) {
     try { list = [...loadAllowlist(process.env)]; }
     catch (e) { die(MAIL_EXIT[e.kind] ?? 3, `[${e.kind}] ${e.message}`); }
     if (list.length !== 1)
-      die(2, `--to was omitted and ARC_LEADS_MAIL_ALLOWLIST holds ${list.length} addresses — it is only inferred when there is exactly one, because picking one of several recipients is a choice and not a default`);
+      die(2, recipientFlag
+        ? `${recipientFlag} was omitted and ARC_LEADS_MAIL_ALLOWLIST holds ${list.length} addresses — it is only inferred when there is exactly one, because picking one of several recipients is a choice and not a default`
+        : `ARC_LEADS_MAIL_ALLOWLIST holds ${list.length} addresses and \`notify\` has no flag to choose between them — it reaches the ONE owner declared in .env.local, deliberately, so that no address is ever repeated into argv (ADR-0412). Two ways out, and they are different decisions: set ARC_LEADS_MAIL_ALLOWLIST to exactly one address, or use \`mail --to <address>\` for a one-off, which does put that address in argv. This message named \`--to\` until 2026-08-10, a flag this command rejects as unknown one line later.`);
     recipient = list[0];
   }
 
@@ -1540,6 +1550,7 @@ async function cmdNotify(argv) {
     const what = flag("--what") || "a deploy or canary check failed";
     await deliverNotification({
       subject: `arc ALERT: ${what}`,
+      recipientFlag: null,   // `notify` takes no recipient flag; say so, do not advertise one
       text: `${what}\n\nat ${nowIst()}\n\n---- detail ----\n${detail}`,
       kind: "canary",
     });
@@ -1565,6 +1576,7 @@ async function cmdNotify(argv) {
     const oldest = waiting.map((e) => e.ts || "").filter(Boolean).sort()[0] || "unknown";
     await deliverNotification({
       subject: `arc: ${waiting.length} approval item(s) waiting`,
+      recipientFlag: null,   // `notify` takes no recipient flag; say so, do not advertise one
       text: `${waiting.length} item(s) are waiting for your decision.\n\nOldest since: ${oldest}\n\nRun \`arc-leads review <draft_ref>\` to see one, or open the approval inbox.\n\nNothing sends without you (L1, ADR-0407).`,
       kind: "approvals",
     });
@@ -1584,6 +1596,7 @@ async function cmdNotify(argv) {
       die(3, "the brief rendered empty — refusing to send, because an empty brief is indistinguishable from a quiet day");
     await deliverNotification({
       subject: `arc daily brief — ${nowIst().slice(0, 10)}`,
+      recipientFlag: null,   // `notify` takes no recipient flag; say so, do not advertise one
       text: brief,
       kind: "brief",
     });

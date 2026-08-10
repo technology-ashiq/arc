@@ -331,6 +331,15 @@ compare them to a number in this document.** Read each row.
 > this shell and every row below it was answered by a file in `tests/fixtures`. The command
 > refuses in that state on purpose and will not print `PASS` from it at any exit code — but the
 > `ok` rows still look like `ok`, and Phase 03's entry gate is read off this output.
+>
+> **And the mismatch runs the other way too, which is the direction that catches people.**
+> `tests/fixtures/leads/dns.json` is `{}`, so under the fake every DNS lookup throws `ENOTFOUND`
+> and `spf`, `dmarc` and `dkim` can only ever print **REFUSED** — including `dmarc`, which the
+> block above shows as `ok` because that block is the REAL run. A fake walk therefore shows three
+> DNS refusals where this document shows one pass, and that is the fixture being empty, not the
+> records having disappeared. The passing and `p=none` branches are covered in
+> `tests/leads-preflight.bats`, which builds its own DNS table; they are simply unreachable from
+> the shipped fixture.
 
 > Never pipe this into `head`/`grep`. `$?` after a pipe is the **last** stage's status, so a
 > refusal reads as exit 0. This bit us while writing this runbook.
@@ -511,6 +520,22 @@ Expect `arc-leads: mail sent id=… idem=…` — **on the real mailer**. On the
 `arc-leads: NOT SENT — ARC_LEADS_FAKE=1 …` and nothing is delivered. It sends **nothing** when nothing is waiting, and
 prints `nothing waiting — no mail sent` instead; that is deliberate, not a failure. Note this
 mail is a real send to your own allowlisted address, and it does not touch the outreach path.
+
+> **On this box it will refuse instead, and the refusal is correct.** `ARC_LEADS_MAIL_ALLOWLIST`
+> currently holds **two** addresses, and `notify` reaches the ONE owner declared in `.env.local`
+> — it has no flag to choose between them, deliberately, so that no address is ever repeated
+> into argv (ADR-0412). So all three `notify` triggers exit 2 here until the allowlist holds
+> exactly one address. **`mail --to <address>` still works** and is the one-off path.
+>
+> This was found on 2026-08-10 by walking this document against the fake with the real
+> `.env.local`, and until that day the refusal told you to pass `--to` — which `notify` rejects
+> as an unknown flag on the very next line. A closed loop, on the surface whose whole job is to
+> reach a human about an outage. It pre-dates this branch (Phase 04) and was invisible to 80
+> mail-guard tests because every CLI-level one of them pins the allowlist to exactly one address,
+> which is the single value at which the branch cannot fire.
+>
+> **Which way it should be fixed is an open decision, not an oversight** — see
+> `phase-03-known-holes.md` H-10. Step 6 is optional, so this does not block the rehearsal.
 
 **Record the decision** for each approval you accept (a `decision.recorded` whose `decides` is
 that approval's ULID). Both halves are required — an `approval.requested` with no matching

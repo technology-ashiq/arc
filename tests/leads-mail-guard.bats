@@ -1346,6 +1346,53 @@ MJS
   [[ "$output" != *"MAILKINDS:mail."* ]]
 }
 
+@test "notify refuses a multi-address allowlist by naming a remedy it actually has" {
+  # THE BLINDSPOT THIS PINS: every other CLI-level test in this file sets the allowlist to
+  # exactly ONE address, which is the single value at which deliverNotification list.length
+  # check cannot fire. So `notify` shipped from Phase 04 refusing every trigger on a two-address
+  # box with "--to was omitted" -- a flag `notify` rejects as unknown one line later. A closed
+  # loop, on the surface whose job is to reach a human about an outage. Found by walking the
+  # runbook against the fake with the real .env.local, which holds two.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+  local two="a@example.com,b@example.org"
+
+  # DRIVEN THROUGH canary, and that choice is the test. `approvals` needs a waiting approval on
+  # the spine and `brief` needs a renderable brief; without those they refuse EARLIER, for their
+  # own reasons, and never reach the shared recipient rule at all. An earlier draft of this test
+  # looped over all three and asserted the recipient message -- it failed on two of them, which
+  # is how this comment came to exist. canary reaches the rule with nothing but bytes on a pipe.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_LEADS_MAIL_ALLOWLIST="$two" \
+    bash -c 'printf "shard 5 of 12 failed\n" | node .claude/scripts/leads/arc-leads.mjs notify canary --stdin'
+  [ "$status" -eq 2 ] || { echo "notify canary did not refuse on a two-address allowlist: $output"; false; }
+  # POSITIVE: it names the two real ways out, both of which exist.
+  [[ "$output" == *"set ARC_LEADS_MAIL_ALLOWLIST to exactly one address"* ]] || { echo "named no reachable remedy: $output"; false; }
+  [[ "$output" == *"mail --to"* ]] || { echo "did not point at the command that does take a recipient: $output"; false; }
+  # NEGATIVE, and it does not stand alone -- the two assertions above carry it.
+  [[ "$output" != *"--to was omitted"* ]] || { echo "still advertises a flag notify rejects: $output"; false; }
+
+  # THE DISCRIMINATOR. `mail` really does take --to, so it must still say so. One message shared
+  # by two callers with different flag sets is the whole defect; a fix that silenced both would
+  # pass every assertion above and leave `mail` unable to tell you what to do.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_LEADS_MAIL_ALLOWLIST="$two" \
+    node .claude/scripts/leads/arc-leads.mjs mail --subject s --text t
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--to was omitted"* ]] || { echo "mail lost the flag it really has: $output"; false; }
+
+  # POSITIVE CONTROL: with ONE address the send path is still reached and the fake names itself.
+  # Without this the whole test passes for a notify that refuses unconditionally. The store must
+  # be initialised for it -- the two-address refusal lands BEFORE openStore and the one-address
+  # path does not, so a shared uninitialised dir makes this exit 5 on a working build.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs store init
+  [ "$status" -eq 0 ] || { echo "store init failed, so the control below proves nothing: $output"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" ARC_SPINE_ROOT="$dir/spine" \
+    ARC_LEADS_MAIL_FROM="arc@example.com" ARC_LEADS_MAIL_ALLOWLIST="owner@example.com" \
+    bash -c 'printf "shard 5 of 12 failed\n" | node .claude/scripts/leads/arc-leads.mjs notify canary --stdin'
+  [ "$status" -eq 0 ] || { echo "the one-address path no longer reaches the mailer: $output"; false; }
+  [[ "$output" == *"NOT SENT"* ]] || { echo "the fake did not name itself: $output"; false; }
+}
+
 # ---------- the count ----------
 
 @test "this suite registers as many tests as it declares" {
@@ -1359,5 +1406,5 @@ MJS
   declared="$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 80 ] || { echo "expected 80 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 81 ] || { echo "expected 81 tests, found $declared -- update this number deliberately"; false; }
 }
