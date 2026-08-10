@@ -15,6 +15,7 @@ import {
   readSync, readdirSync, statSync, unlinkSync, writeFileSync, writeSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { execFileSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { SpineError, canonicalize, formatIst, nowMs } from "./canonical.mjs";
 
@@ -48,8 +49,10 @@ export function spineRoot() {
   }
   let dir = process.cwd();
   for (;;) {
-    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git")))
+    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git"))) {
+      assertNotLinkedWorktree(dir);
       return join(dir, ".claude", "state", "hq");
+    }
     const up = dirname(dir);
     if (up === dir) break;
     dir = up;
@@ -57,6 +60,64 @@ export function spineRoot() {
   throw new SpineError(
     "NO_ROOT",
     "no repository with .claude/ and .git/ at or above cwd -- refusing to guess a spine location (set ARC_SPINE_ROOT to be explicit)",
+  );
+}
+
+/**
+ * REFUSE to resolve a spine inside a LINKED GIT WORKTREE.
+ *
+ * `.claude/state/` is gitignored, so every worktree gets its own empty one, and this resolver used to
+ * hand one back without comment. The emit then succeeded -- valid event, correct shape, real ULID --
+ * into a spine no reader consults. Measured 2026-08-10 across the checkouts on this machine: main
+ * clone 967 events, `arc-policy` 613, `arc-absorb` 199. Policy's Phase 03 `phase.closed` receipt is on
+ * `arc-policy`'s spine and absent from the main clone, so a ULID cited in an already-merged tracker is
+ * unresolvable from the canonical spine.
+ *
+ * It cost three separate failures in one session before this guard existed: an owner `arc-inbox
+ * approve` that recorded nothing and had to be handed over twice, and a `judgement.mjs reveal` that
+ * refused a real decision as if it were forged because the seal and the decision sat on different
+ * spines.
+ *
+ * Two properties make this worth a hard refusal rather than a warning:
+ *   * `arc-inbox` folds its OPEN set over the spine with no state stored elsewhere (ADR-0030), so a
+ *     worktree spine prints `no open approvals` and exits 0 -- a silent false negative on the one
+ *     surface built to stop a decision going unrecorded.
+ *   * A failed emit leaves no trace at all, so "it ran" and "it landed" are different facts. A warning
+ *     on stdout is exactly the signal a wrapper script swallows.
+ *
+ * `ARC_SPINE_ROOT` is checked BEFORE this (see above), which keeps every test working: the test door
+ * points at a temp dir and never reaches here. That is also the reason this cannot be worked around in
+ * production by accident -- the env var is documented as test-only, so setting it to reach across is a
+ * deliberate act a reviewer can see.
+ *
+ * Detection is git's own answer, not a `.git`-is-a-file heuristic: in a linked worktree `--git-dir`
+ * and `--git-common-dir` differ, and the common dir's parent IS the main clone, which is what the
+ * message needs in order to say where to go instead.
+ */
+function assertNotLinkedWorktree(dir) {
+  let gitDir, commonDir;
+  try {
+    const opts = { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] };
+    gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], opts).trim();
+    commonDir = execFileSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], opts).trim();
+  } catch {
+    // No git, or a git too old for these flags. Not a reason to block an emit -- the guard exists to
+    // catch a specific mistake, not to make git a dependency of writing a receipt.
+    return;
+  }
+  if (!gitDir || !commonDir || gitDir === commonDir) return;
+
+  const mainClone = dirname(commonDir);
+  throw new SpineError(
+    "WORKTREE_SPINE",
+    `refusing to use the spine inside a linked git worktree (${dir}).\n` +
+      `  .claude/state/ is gitignored, so this worktree has its OWN spine and an event written here\n` +
+      `  is valid, real, and invisible to every reader -- including arc-inbox, which folds its OPEN\n` +
+      `  set over the spine and would print "no open approvals" while an approval sat here.\n` +
+      `  The canonical spine is in the main clone: ${mainClone}\n` +
+      `  Run the command from there:  cd ${mainClone} && <the same command>\n` +
+      `  (ARC_SPINE_ROOT is a TEST-ONLY door and is checked before this guard; do not set it to\n` +
+      `  reach across from a worktree.)`,
   );
 }
 
