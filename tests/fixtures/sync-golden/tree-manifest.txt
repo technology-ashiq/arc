@@ -177,7 +177,7 @@
 .claude/scripts/hq/lib/policy/tool-capabilities.json	f0c1cdd0dac19d7127c327fc251f3a3572eb0817a6be94cd6f8d5a57dd5f8f24
 .claude/scripts/hq/lib/policy/yaml.mjs	43908a3e8bf5ed5f1ea199fd6d9a6beba1a3e63b60a226a9c4f87373794520f7
 .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314
-.claude/scripts/hq/lib/spine-io.mjs	6310fb24b7ebc6190f078d4a3ce583202473f3799a7dc0d188018451f9cb1807
+.claude/scripts/hq/lib/spine-io.mjs	d2d7457e3c4a349bde162c0818f25d97151910295e75ec4e7c839dc64e514e7b
 .claude/scripts/hq/lib/validate-absorb.mjs	2b404b96f3ff5b3b3dd6d21d51b6d871040f8addd4914d5c5ca1cf17507ef14b
 .claude/scripts/hq/lib/validate-experiment.mjs	21ad45d162632f47308962ef5282a814f1951685b45d99e4ba73fba6f9d54597
 .claude/scripts/hq/lib/validate-leads.mjs	0f5cf51a91a9ec91857f433169149bfed7f35bd89f78c3ba9e5accc7bdfa2709
