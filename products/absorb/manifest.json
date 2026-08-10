@@ -1,0 +1,21 @@
+{
+  "name": "absorb",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [
+    ".claude/commands/arc-absorb.md"
+  ],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/absorb/judgement.mjs",
+    ".claude/scripts/absorb/rebuild-lint.mjs",
+    ".claude/scripts/absorb/registry-ref.mjs",
+    ".claude/scripts/absorb/report-lint.mjs",
+    ".claude/scripts/absorb/study.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

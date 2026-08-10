@@ -7,7 +7,20 @@
 > load-bearing installed capability; two-speed operating note; threshold assumption
 > row) → **v1.0 2026-08-06, full plan — decisions ABS-A..F locked; ABS-G
 > deliberately open until kickoff; real ADR numbers assigned at kickoff from the
-> claimed century.** Drafted in Cowork chat sessions 08-05/08-06 over owner review
+> claimed century.**
+> → **KICKED OFF 2026-08-09 as arc-absorb Cycle 10** (`/arc-kickoff --lane absorb`). Live plan is
+> now `initiatives/absorb/PLAN.md`; this file stays the frozen decision record. Century claimed:
+> **0600–0699**. ABS-A..G recorded as **ADR-0600..0606** (ABS-G decided at kickoff: century,
+> `products/absorb/` code home, empty registry seed, and first target = the unspecified-input
+> defect class, studying gstack's post-build review pass per PLANOFF-01).
+> **All three of this file's gates FAILED at kickoff and were waived by owner ruling** — recorded as
+> **ADR-0074**: the live slot was held by leads and policy, the venture clock ran to 2026-08-11, and
+> **no trigger arm had fired** (the "as of 2026-08-06 no arm has fired" line below was re-verified on
+> 08-09 and still held). The owner ruled arc-first; ADR-0074 defers the venture clock explicitly,
+> waives the four-arm trigger gate **for that cycle only**, and flags the A8 tension for the owner
+> rather than resolving it. The trigger paragraph below is left unedited on purpose: it is what the
+> plan said, and ADR-0074 is what overrode it.
+> Drafted in Cowork chat sessions 08-05/08-06 over owner review
 > rounds; landed in the tree on the owner's approval, uncommitted — the owner
 > branches/commits/PRs; the sandbox never touches git. This drop also moves
 > `BRIEF-absorb.md` to `docs/archive/` (evolve/leads/policy precedent) and updates

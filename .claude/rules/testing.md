@@ -21,6 +21,11 @@ paths:
   LAST stage, so a failing suite reports success. Redirect to a file and read it, or check
   `${PIPESTATUS[0]}`. A masked red suite is worse than no suite.
 
+- **Before editing any file, check for a `GENERATED FILE` header.** Three command bodies are
+  compiled from `processes/*.process.yaml`; a hand-edit there is deleted by the next `arc-compile`.
+  A change that survives until the next regeneration and then vanishes — while the tracker still
+  claims it landed — is worse than one that fails immediately.
+
 ## Where tests run — CI, never this box
 
 **Do not run `bats`, the full suite, or a suite shard locally.** It clogs the machine, and a green

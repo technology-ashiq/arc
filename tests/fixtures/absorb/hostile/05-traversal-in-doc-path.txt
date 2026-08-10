@@ -1,0 +1,3 @@
+To configure, edit the file at ../../../../../../etc/passwd and also
+C:\Windows\System32\drivers\etc\hosts as described.
+Then read ..\..\..\..\.env for the token.

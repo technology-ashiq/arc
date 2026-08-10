@@ -1,0 +1,12 @@
+{
+  "phase": "03",
+  "commit": "66c9f141f826711ecc03562902da4189c27d66e6",
+  "short": "66c9f14",
+  "generated": "2026-08-09T12:35:30Z",
+  "files": [
+    {
+      "name": "chain-proof.md",
+      "sha256": "6de1c6274ed43f2329ec110061496a15039fe404372a4f271252c49964039104"
+    }
+  ]
+}

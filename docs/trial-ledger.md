@@ -51,6 +51,10 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-03 | self-declared-number (develop-lint) | arc-develop Cycle 6, phases 05-08 | no — silent across 55 slices | **n/a — not counted as a clean run.** Same-author silence on ledgers written against the check, which this file already says must not be scored as accuracy |
 | 2026-08-03 | tier-floor (develop-lint) | arc-develop Cycle 6, phases 05-08 | no — silent; no `kind: ui` slice exists to test it | **n/a — not counted.** The floor it exists to enforce was never reachable |
 | 2026-08-07 | birth-rule (kickoff-lint) | registered at birth, policy Phase 03 | not yet | — |
+| 2026-08-09 | heading, inventory, id, row-field (report-lint) | registered at birth, absorb Phase 00 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
+| 2026-08-09 | lock-ref, duplication (registry-ref) | registered at birth, absorb Phase 00 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
+| 2026-08-09 | status, cap, decision-ref, evidence, shape (registry-ref) | registered at birth, absorb Phase 02 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
+| 2026-08-09 | allowlist, deps, attribution (rebuild-lint) | registered at birth, absorb Phase 02 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
 | 2026-08-07 | birth-rule (kickoff-lint) | arc's own tree, all 8 lanes | no — silent on every lane | **n/a — NOT counted as 8 clean runs, and not as one.** See below |
 
 ### `birth-rule` — why its silence proves nothing yet (policy Phase 03, REQ-07)
@@ -99,6 +103,74 @@ that has never fired has not been observed to be right — only to be quiet.
 <!-- Append one row per (gate × kickoff run). run-ref = a PLAN commit SHA, a dry-run id, or a
      fixture name. fired? = did the gate WARN on that run. false-positive? = did it WARN on a plan
      that was actually fine. Delete the (example) row once real runs exist. -->
+
+### absorb Cycle 10 close, 2026-08-09: THREE gates exercised, ZERO promotable, count stays at zero
+
+`report-lint` · `registry-ref` · `rebuild-lint`. Each fired repeatedly this cycle, and **not one
+firing counts as a clean dogfood run.** Every input they fired on was malformed **on purpose, by
+their own author, minutes after the check was written** — a heading renamed, a citation blanked, a
+lane string case-varied, a reference pointed at a package that does not exist.
+
+**That is fixture evidence (criterion 1). It is not criterion 2, and the distinction is the whole
+point of this file.** Counting it would be the same-author-silence error this ledger already refuses
+twice, merely inverted: same-author **noise**, on inputs built to make noise.
+
+**All three are fixture-proven to the criteria's satisfaction**, and more than asked: each carries a
+mutant negative control that RUNS a stub and asserts the suite rejects it — necessary because all
+three are WARN-first and exit 0 on every judged run, so an exit-code assertion proves nothing and
+only the warning payload can fail.
+
+**What a real clean run looks like for these three:** a report, registry row or rebuild diff produced
+by an actual study, where the lint fires on something the author did not already know was wrong and
+the thing it asked for turns out to be the right thing to add. Phase 04 produced the first real
+report — and it linted **clean on the first run**, so it is not a fire and not a clean-run datapoint
+either. **The count stays at zero for all three.**
+
+**One uncomfortable note for whoever eventually judges promotion.** In three of this cycle's four
+adversarial passes, CI was GREEN 19/19 and the pass then found serious holes in these very gates —
+including a report consisting entirely of quoted studied content that `report-lint` passed with
+**zero warnings**, and a registry row copying every lock-owned field one level deeper that
+`registry-ref` resolved **completely clean**. A gate that a fresh attacker walks past is not ready to
+FAIL a build, whatever its run count says. **Promotion should wait on an adversarial pass finding
+nothing, not merely on three quiet runs.**
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-08-09 | heading, inventory, id, row-field (report-lint) | absorb Cycle 10 close | author-malformed only; clean on the first REAL report | **n/a — not counted** |
+| 2026-08-09 | lock-ref, duplication, status, cap, decision-ref, evidence, shape (registry-ref) | absorb Cycle 10 close | author-malformed only; clean on the first REAL row | **n/a — not counted** |
+| 2026-08-09 | allowlist, deps, attribution (rebuild-lint) | absorb Cycle 10 close | author-malformed only; clean on the one REAL rebuild diff | **n/a — not counted** |
+
+### `report-lint` and `registry-ref` — registered at birth, and their first fires do NOT count (absorb Phase 00)
+
+Two lane-owned WARN-first gates joined the ledger on 2026-08-09, following the `develop-lint`
+precedent that this file already covers gates outside `kickoff-lint`:
+
+- **`report-lint`** (`.claude/scripts/absorb/report-lint.mjs`) — groups `heading` · `inventory` ·
+  `id` · `row-field`. Validates an extraction report against ADR-0601.
+- **`registry-ref`** (`.claude/scripts/absorb/registry-ref.mjs`) — groups `lock-ref` ·
+  `duplication`. Asserts a registry row's reference into `capability-lock.json` resolves, and that
+  the row copies none of the lock's fields (A5).
+
+**Both fired during Phase 00's steel-thread demo, and neither firing is promotion evidence.** Every
+input they fired on was malformed *on purpose, by their own author, minutes after the checks were
+written* — a heading renamed, a citation blanked, a reference pointed at a package that does not
+exist. That is **fixture evidence** (promotion criterion 1) and it is recorded as such. It is not a
+clean dogfood run (criterion 2), and counting it would be the same-author-silence error this file
+already refuses twice, merely inverted: same-author *noise* on inputs built to make noise.
+
+**What a real clean run looks like for these two:** a report written during an actual study — Phase
+01 at the earliest, Phase 04 for the first real one — where the lint fires on something the author
+did not already know was wrong, and the thing it asked for turns out to be the right thing to add.
+Until then the count stays at **zero**.
+
+**One asymmetry worth flagging for whoever judges promotion.** `registry-ref`'s `duplication` group
+is structural, not heuristic: a row either has a `hash` key or it does not, and there is no
+judgement in it. By this file's own structural-vs-heuristic principle it would qualify to BLOCK from
+v1. It is in TRIAL on **consistency** instead — absorb's other gate is genuinely heuristic, and
+shipping one lane's two gates at two different severities in the same phase would make the WARN-first
+rule look negotiable. That is a consequence-of-inconsistency argument, not a
+likelihood-of-being-wrong one, and it is the weaker of the two reasons this file has seen for holding
+a structural check in trial.
 
 ## First real fire — 2026-07-19
 

@@ -1,0 +1,14 @@
+{
+  "correlation": "absorb-phase03-chain-v2",
+  "candidate": "T-01",
+  "decided_by": "01KZKBYSQ5J46Y82PRN7W3AJNH",
+  "decides_approval": "01KZK9EPKCN0DJBW91QB67RYNP",
+  "verdict": "approve",
+  "picked_label": "meridian",
+  "picked_variant": "reviewproc-with-verification-gate",
+  "commitment": "3ead20018da71807f9e36e56f7db65f68779eaf50e9cee165966e2fb34b90855",
+  "mapping": {
+    "meridian": "reviewproc-with-verification-gate",
+    "crimson": "reviewproc-as-it-stands"
+  }
+}
