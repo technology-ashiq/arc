@@ -68,14 +68,34 @@ export function resolveKeyringIds(store, leadId) {
 // hashed the raw id and did not, so a rotation minted a second meeting draft and a second
 // `leads-meeting` approval for a lead whose reply had already been handled.
 //
-// SORTED and first, never `ids[0]`: the canonical member must not depend on the order the
-// keyring hands them back, or a rotation reorders the list and every existing key silently
-// stops matching. (It reorders for real at v10, which sorts before v1.) `null` means the lead
-// could not be resolved at all, and the raw id is the honest fallback there — the send-moment
-// guard refuses that case separately.
+// SORTED BY VERSION NUMBER, never `ids[0]` and never a lexicographic sort of the whole string.
+//
+// The canonical member must not depend on the order the keyring hands them back, or a rotation
+// reorders the list and every existing key silently stops matching. The first version of this
+// sorted the strings — and an earlier draft of THIS COMMENT noted "it reorders for real at v10,
+// which sorts before v1" as the justification for sorting at all, having looked straight at the
+// bug and written it down as a feature. `lead_hmac_v10_…` sorts before `lead_hmac_v1_…` because
+// `0` (0x30) is below `_` (0x5F), so the canonical member changed identity at the tenth key.
+//
+// `touchKey` survives that flip because both sides are recomputed in the same run. `meetingRefFor`
+// does NOT: it hashes this value into a `meet_` ref that is written to disk as a filename and
+// carried in the approval payload. Reproduced end to end — nine additive rotations, then the same
+// reply bytes re-ingested, and the store held TWO meeting drafts and TWO undecided
+// `leads-meeting` approvals for one human, at exit 0 on a line that reads like a healthy re-run.
+// That is the state `drafts.mjs` calls how the wrong one gets approved, produced by the plumbing
+// added to prevent it, correct for v2 through v9.
+//
+// The version is parsed and compared as a NUMBER, so the answer is the oldest id for every
+// rotation rather than for the next nine. `null` means the lead could not be resolved at all, and
+// the raw id is the honest fallback there — the send-moment guard refuses that case separately.
+const KEY_VERSION_RE = /^lead_hmac_v(\d+)_/;
 export function canonicalLeadId(store, leadId) {
   const ids = resolveKeyringIds(store, leadId);
-  return ids && ids.length ? [...ids].sort()[0] : leadId;
+  if (!ids || !ids.length) return leadId;
+  // An id that does not carry a parseable version sorts LAST rather than first: it cannot be
+  // shown to be the oldest, and picking it would be a guess with a persisted consequence.
+  const ver = (s) => { const m = KEY_VERSION_RE.exec(String(s)); return m ? Number(m[1]) : Number.POSITIVE_INFINITY; };
+  return [...ids].sort((a, b) => ver(a) - ver(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
 }
 
 // THE ONE PARSE OF `touch_n`, exported so there is exactly one.

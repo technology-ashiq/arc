@@ -52,7 +52,7 @@ const newRef = () => "draft_" + randomBytes(8).toString("hex");
 // were minted under. An empty journal in a mismatched store must not read as "no unresolved
 // intents" -- that was a confirmed hole, and this record is what makes the check possible.
 export function initCampaign(store, campaign, { createdAt }) {
-  if (!/^[a-z0-9-]{1,64}$/.test(String(campaign)))
+  if (!CAMPAIGN_NAME_RE.test(String(campaign)))
     throw new DraftError("BAD_CAMPAIGN", `campaign must be [a-z0-9-]{1,64} — "|" is the idem delimiter and must not be smuggleable into it`);
   const p = join(campaignsDir(store), `${campaign}.json`);
   if (existsSync(p)) throw new DraftError("CAMPAIGN_EXISTS", `campaign "${campaign}" already exists at ${p}`);

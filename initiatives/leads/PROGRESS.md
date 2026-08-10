@@ -218,7 +218,7 @@ as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, and repaired on
 history that got the phase started and is kept because two of its three rows are the reason the
 gate reads the way it does.
 
-**Eight adversarial rounds against slice 06: 3, 9, 10, 8, 2, 3, 2 and 1 CRITICALs.** Two surfaces per round,
+**Nine adversarial rounds against slice 06: 3, 9, 10, 8, 2, 3, 2, 1 and 1 CRITICALs.** Two surfaces per round,
 near-zero overlap between them every time. Several findings in rounds 2–4 were defects
 introduced *by the fix for* a previous round — twice inside the comment explaining that fix, and
 once as a flag plus its test shipped without the branch that reads the flag. The headline

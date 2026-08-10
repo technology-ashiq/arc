@@ -150,8 +150,8 @@ export function dayFileCount({ root = spineRoot() } = {}) {
 export const UNFOLDABLE_REMEDY =
   "Restore the archived or missing day file FIRST, and only then run `node .claude/scripts/hq/arc-replay.mjs`. " +
   "Replay rebuilds the index from the day files that are PRESENT, so running it before the restore drives this " +
-  "count to zero by FORGETTING those receipts rather than by finding them — the refusal disappears, the work is " +
-  "re-announced, and restoring the day afterwards then leaves two live approvals for one touch.";
+  "count to zero by FORGETTING those receipts rather than by finding them — the refusal disappears and the work " +
+  "is re-done against a spine that has lost the record of it.";
 
 export function idemKeys({ root = spineRoot() } = {}) {
   // NO try/catch. `readIdemIndex` throws INDEX_UNREADABLE on a real read failure and returns an

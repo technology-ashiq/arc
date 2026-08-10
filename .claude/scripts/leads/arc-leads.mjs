@@ -560,8 +560,10 @@ function cmdDraft(campaign, file) {
   // 0 with `0 unreadable-spine` printed. Restoring the archived day then makes both live and
   // renderable on gate `leads-send`, which is the ADR-0407 state this command exists to forbid.
   //
-  // The sibling in `ingest.mjs` refuses unconditionally in this state. This one refused only when
-  // an orphan draft file happened to exist — the same guard, one branch, D6 again.
+  // The sibling in `ingest.mjs` refuses on the same condition for the meeting approval it is about
+  // to announce -- NOT unconditionally, which an earlier version of this sentence claimed while
+  // using it to justify the refusal below. This one refused only when an orphan draft file
+  // happened to exist, which is narrower than either: the same guard, one branch, D6 again.
   if (unfoldable > 0)
     dieUnlocked(2, `${unfoldable} idem(s) in derived/idem.index belong to events this fold cannot read, so nothing here can tell "no approval exists" from "its day is no longer on disk" — and queueing on that guess is how one touch ends up with two live approvals. ${UNFOLDABLE_REMEDY}`);
 

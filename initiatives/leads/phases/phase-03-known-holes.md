@@ -1,6 +1,6 @@
 # Phase 03 — known holes, carried forward deliberately
 
-Things eight adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
+Things nine adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
 each with the reason it was left and what would close it. This file exists so that "we did not
 fix it" and "we did not notice it" stop looking identical from the outside.
 
@@ -10,7 +10,7 @@ A hole listed here is a decision. A hole not listed here is a defect.
 
 ## The bar this file exists under — owner decision, 2026-08-10
 
-Eight adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3, 2 and 1 CRITICALs**, two surfaces each
+Nine adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3, 2, 1 and 1 CRITICALs**, two surfaces each
 round, with near-zero overlap between the surfaces every time. Several findings in rounds 2-6
 were defects introduced *by the fix for* a previous round, twice inside the comment explaining
 that fix. The rounds were not converging on a schedule anyone could plan around.
@@ -108,6 +108,60 @@ because the run that would mint the second is the run that resumes the first.
 **Journey test 20 deliberately leaves a quarantine record** (the refused second decision), so no
 `report` assertion can follow it inside that test. Noted so the next person to extend that test
 does not spend an hour on it.
+
+## H-08 · Two CRITICALs that PRE-DATE this branch, reproduced and left
+
+Round 9 reproduced both against the merge base as well as HEAD, so neither is introduced here and
+neither blocks this slice. They are recorded because a defect found and not fixed has to look
+different from a defect not found.
+
+**`state --json` publishes the ADR-0416 mixing count over spines `report` refuses to answer over.**
+Two ways, both reproduced. A `supersedes` correction: `report` exits 2 saying it "would count the
+superseded original AND its correction, putting one physical send in two classes", while
+`state --json` prints `{"rehearsal":1,"real":1,"total":2}` at exit 0 for ONE physical send. And a
+quarantined real send: `report` refuses because "any of them could be a real send this count
+cannot see", while `state` prints `real: 0, quarantined: 1` at exit 0. `cmdState` labels that
+field "ADR-0416's mixing guard, reported as a COUNT". The guard was added to `report` at slice 05
+and never to the adjacent surface. **Left because** the fix is to move `report`'s four refusals
+into the shared fold, which changes what `state --json` is for, and that is a slice of its own.
+**What would close it:** the refusals live with `foldSends`, and both callers inherit them.
+
+**`research` re-run truncates `rejected.jsonl` to zero bytes.** Unconditional overwrite. Run once
+with an excluded firm (254 bytes), narrow the corpus, run again → 0 bytes, exit 0, nothing
+printed. `phases/phase-00-spec.md` names that file as the exclusion audit trail and the phase-00
+demo asserts `wc -l` on it; the store has no git safety net by design. The receipt layer was made
+idempotent for the re-run and the store layer was not. **Left because** the right shape —
+per-run files, or append-with-run-id, or refusing to shrink — is a store-layout decision, and
+inventing one inside a fix commit is the move that produced three of this slice's CRITICALs.
+
+---
+
+## H-09 · Round-9 findings below the bar
+
+**The RESUME branch announces an approval whose `draft_sha` does not match the body it names.**
+Reproduced: bound sha `ea8c8bd8…`, body on disk `dd98d7cb…`. The resume compares bodies
+(`existing.body !== d.body`) and never the sha, so a draft edited on disk *before* the approval
+gets an approval bound to the stale value. Fail-safe — `sendOne` recomputes `currentSha`, so
+`daily` refuses `draft-sha` forever — but the touch is wedged behind a live approval and the
+refusal describes the opposite situation (edited after approving, not before).
+
+**Five branches this slice added or moved have no negative control**, each verified deletable
+with all 22 journey tests green: `cmdDraft` index-first, `cmdResearch` index-first,
+`cmdResearch`'s orphan guard, `ingest.mjs`'s `unfoldable` refusal, and `spineRead` in the
+meeting-approval condition. `spineRead` and `spineIdems` appear in **zero** test files repo-wide.
+The two that changed *behaviour* (the refusals) are covered by journey test 21 on the `draft`
+side only.
+
+**`unannounced` is a single overwritten Map slot** while `rejectedTouch` two lines above was
+deliberately made a list for the `readdirSync`-order reason. Bounded: it decides RESUME vs STALE
+by directory order when one touch has two orphaned drafts, which the CLI cannot produce.
+
+**`tests/leads-mixing-report.bats`'s "report and state derive one set of counts, never two" is
+D7** — its fixture contains neither a superseding event nor a quarantined one, which are the two
+conditions under which they are two. That is the test that would have caught H-08's first half.
+
+**`tests/leads-sequencer.bats`'s "one bounce in fifty sends does not FREEZE on the percentage
+alone" is now a tautology** — this slice deleted the percentage branch and the test still names it.
 
 ## H-02 · `arc-leads unlock` is the stale-lock remedy and is documented in one place
 

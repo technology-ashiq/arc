@@ -129,9 +129,9 @@ const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_/, /^LEADS_/]);
 const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
   /^NODE_/,          // NODE_OPTIONS (--require), NODE_TLS_REJECT_UNAUTHORIZED, NODE_EXTRA_CA_CERTS
   /^(BASH_ENV|ENV|BASH_FUNC_.*|SHELLOPTS|IFS|COMSPEC)$/,  // shell startup and word-splitting
-  /^(PATH|PATHEXT|CDPATH)$/,                      // which binary `bash` and `node` resolve to
+  /^PATHEXT$/,                                    // which extensions Windows will execute
   /^(LD_|DYLD_)/,                                 // loader injection on Linux and macOS
-  /_PROXY$/, /^(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY)$/, // where the vendor request goes
+  /_PROXY$/,                                      // where the vendor request goes
   // RUNTIME CONFIGURATION FILES AND SEARCH ROOTS, added after round 7 found `OPENSSL_CONF` in
   // the gap. Node links OpenSSL on all three CI platforms and parses that file at STARTUP,
   // before a line of the program runs — verified on this box: a `.env.local` naming a junk file
@@ -140,7 +140,7 @@ const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
   // shared library in every `arc-event.mjs` process, which is the blast radius `BASH_ENV` is
   // refused for. It is also the accident shape: `OPENSSL_CONF` is what people paste in to get
   // past "unsafe legacy renegotiation disabled" behind a corporate proxy.
-  /^(OPENSSL_|SSL_|GNUTLS_|CURL_|REQUESTS_|GIT_|HOME|USERPROFILE|XDG_|JAVA_TOOL_OPTIONS)/,
+  /^(OPENSSL_|SSL_|GNUTLS_|CURL_|REQUESTS_|GIT_|HOME|USERPROFILE|XDG_)/,
   /^(TMPDIR|TEMP|TMP)$/,        // `emit()` writes every receipt payload under os.tmpdir()
   /^(PERL|PYTHON|RUBY|GEM_|LUA_|R_)/,             // sibling runtimes a hook or a tool may spawn
   /(_CONF|_CONFIG|_OPTS|_OPTIONS|_STARTUP|_PROFILE|_RCFILE)$/, // the config-FILE shape
@@ -159,7 +159,15 @@ const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
   // Verified against `.env.example`, the owner's real `.env.local`, the four allowlisted names
   // and every name a bats file writes into a credential file: zero false positives.
   /(PATH|_HOME|_DIR|_ROOT|_HOOKS|_PROFILER|_PRELOAD|_LIB)$/,
-  /^(GCONV_|LOCPATH|NLSPATH|MSYS|MSYS2_|NPM_CONFIG_|DOTNET_|CORECLR_)/,
+  /^(GCONV_|MSYS|NPM_CONFIG_|DOTNET_|CORECLR_)/,
+  // NOTE ON WHAT IS *NOT* IN THESE LISTS. `PATH`, `CDPATH`, `LOCPATH`, `NLSPATH`, `MSYS2_`,
+  // `JAVA_TOOL_OPTIONS` and the four explicit proxy names were all here and are all gone —
+  // every one of them is caught by a sibling alternative (`PATH$`, `MSYS`, `_OPTIONS$`,
+  // `_PROXY$`), so none of them was ever the only thing refusing anything. A pattern that
+  // cannot be the sole reason for a refusal is a threshold that cannot fire (D3), and this
+  // module has already deleted one of those rather than reorder it. The mutation probe in
+  // `leads-mail-guard.bats` now carries one name per surviving alternative, chosen so that
+  // deleting that alternative lets exactly that name through.
 ]);
 
 // The four names in those families that ARE credentials or recipient policy, and therefore

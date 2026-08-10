@@ -141,7 +141,7 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     for (const c of cases) { try { decodeMailResponse(200, c); } catch (e) { if (e.kind === "refused") refused++; } }
     console.log("REFUSED:" + refused + "/" + cases.length);'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:4/4"* ]]
+  [[ "$output" == *"REFUSED:76/76"* ]]
 }
 
 @test "the vendor error body is never echoed into the message" {
@@ -800,32 +800,23 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # name nobody has thought of is refused BY DEFAULT. That is the property that stops round six.
   _m '
     const {assertEnvLocalNames, ENV_LOCAL_ALLOWED} = await import("./.claude/scripts/leads/lib/mail.mjs");
-    const mustRefuse = ["ARC_LEADS_FAKE","ARC_LEADS_NOW","ARC_LEADS_STORE","ARC_LEADS_MAIL_BASE_URL",
+    const mustRefuse = [
+      "ARC_LEADS_FAKE","ARC_LEADS_NOW","ARC_LEADS_STORE","ARC_LEADS_MAIL_BASE_URL",
       "LEADS_FIXTURE_DIR","LEADS_PROVIDER_BASE_URL","LEADS_CONFIG","LEADS_WARMUP_APPROVED",
       "ARC_LEADS_REHEARSAL","ARC_SPINE_ROOT","ARC_SPINE_NOW","ARC_SPINE_RAND",
-      "LEADS_A_VARIABLE_NOBODY_HAS_INVENTED_YET","arc_leads_fake",
-      // PROCESS-LEVEL steering, refused for a second reason that has nothing to do with the
-      // families. `emit()` spawns bash on every receipt with the inherited environment, so
-      // BASH_ENV and NODE_OPTIONS execute attacker-chosen code inside runbook steps 3, 4 and 6 --
-      // and NODE_TLS_REJECT_UNAUTHORIZED=0, which people paste into env files behind a corporate
-      // proxy, turns off certificate validation on the request carrying the key, the recipient
-      // and the body. The three commands that read the file are daily, preflight and the
-      // notification path -- NOT research or draft, which never call loadCredentials. Those three commands are daily, preflight and the notification path --
-      // NOT research or draft, which never call loadCredentials (pinned by the test below).
-      "NODE_OPTIONS","NODE_TLS_REJECT_UNAUTHORIZED","BASH_ENV","PATH","LD_PRELOAD","HTTPS_PROXY",
-      // ARC-NATIVE names between the two old prefixes. ARC_NODE chooses the interpreter
-      // arc-event.sh runs; ARC_MODEL stamps a fact onto every receipt. The family is ^ARC_ now.
-      "ARC_NODE","ARC_MODEL","ARC_RUN_ID","ARC_VENTURE","ARC_SPINE_ACTOR","ARC_ANYTHING_NEW",
-      // RUNTIME CONFIG FILES AND SEARCH ROOTS. node parses OPENSSL_CONF at STARTUP, before a
-      // line of the program runs -- verified. TMPDIR moves where every receipt payload is written.
-      "OPENSSL_CONF","SSL_CERT_FILE","TMPDIR","GIT_CONFIG_GLOBAL","HOME","PYTHONPATH","SOMETHING_CONF",
-      // SEARCH ROOTS, which the class is written on and the probes did not measure. The list
-      // above is one probe per config-FILE spelling; REFUSED:34/34 was true and measured the
-      // wrong axis. GCONV_PATH loads shared objects into bash and node the way LD_PRELOAD does;
-      // MSYS_NO_PATHCONV makes every receipt emission fail on the windows leg AFTER the send.
-      "GCONV_PATH","MSYS_NO_PATHCONV","DOTNET_STARTUP_HOOKS","CLASSPATH","SOMETHING_DIR","ANY_ROOT",
-      // A leading space defeated the anchored patterns until the guard trimmed.
-      " ARC_LEADS_FAKE"];
+      "LEADS_A_VARIABLE_NOBODY_HAS_INVENTED_YET","arc_leads_fake","ARC_NODE","ARC_MODEL",
+      "ARC_RUN_ID","ARC_VENTURE","ARC_SPINE_ACTOR","ARC_ANYTHING_NEW"," ARC_LEADS_FAKE",
+      "NODE_EXTRA_CA_CERTS","BASH_ENV","ENV","BASH_FUNC_x","SHELLOPTS","IFS","COMSPEC","PATH",
+      "PATHEXT","CDPATH","LD_AUDIT","DYLD_INSERT_LIBRARIES","HTTPS_PROXY","OPENSSL_MODULES",
+      "SSL_CERT_FILE","GNUTLS_SYSTEM_PRIORITY_FILE","CURL_CA_BUNDLE","REQUESTS_CA_BUNDLE",
+      "GIT_CONFIG_GLOBAL","HOME","USERPROFILE","XDG_SESSION_TYPE","JAVA_TOOL_OPTIONS","TMPDIR",
+      "TEMP","TMP","PERL5OPT","PYTHONSTARTUP","RUBYOPT","GEM_SPEC_CACHE","LUA_INIT","R_LIBS",
+      "ACME_CONF","ACME_CONFIG","ACME_OPTS","ACME_OPTIONS","ACME_STARTUP","ACME_PROFILE",
+      "ACME_RCFILE","CLASSPATH","ACME_HOME","ACME_DIR","ACME_ROOT","ACME_HOOKS","ACME_PROFILER",
+      "ACME_PRELOAD","ACME_LIB","GCONV_MODULES","LOCPATH","NLSPATH","MSYS_NO_PATHCONV",
+      "MSYS2_ARG_CONV_EXCL","NPM_CONFIG_SCRIPT_SHELL","DOTNET_ROLL_FORWARD",
+      "CORECLR_ENABLE_PROFILING",
+    ];
     let refused = 0;
     const escaped = [];
     for (const n of mustRefuse) {
@@ -845,6 +836,69 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # here rather than at the operator.
   [[ "$output" == *"ALLOWED:ARC_LEADS_MAIL_FROM,ARC_LEADS_MAIL_ALLOWLIST,ARC_LEADS_REHEARSAL_ALLOWLIST,ARC_LEADS_OUTREACH_FROM"* ]] || { echo "$output"; false; }
   [[ "$output" == *"CREDENTIALS-ACCEPTED"* ]]
+}
+
+@test "the canonical keyring id is the oldest one at ten key versions, not the one that sorts first" {
+  # `canonicalLeadId` picks the member every persisted per-person ref is keyed on. It sorted the
+  # STRINGS, and `lead_hmac_v10_` sorts before `lead_hmac_v1_` because `0` is below `_` -- so the
+  # canonical member changed identity at the tenth key. `touchKey` survives that (both sides are
+  # recomputed in one run); `meetingRefFor` does not, because its `meet_` ref is written to disk
+  # as a filename and carried in the approval payload. Nine additive rotations then produced TWO
+  # meeting drafts and TWO undecided approvals for one human, at exit 0.
+  #
+  # Ten versions, because nine is the last one the broken comparator got right. Asserted through
+  # a REAL store and a real rotation rather than against a hand-built list, so the id grammar and
+  # the comparator have to agree.
+  _m '
+    const {initStore, openStore, rotateSecret, leadIdsAllVersions} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "keyring"));
+    process.env.ARC_LEADS_STORE = path.join(root, "store");
+    initStore({repoRoot: root});
+    for (let i = 0; i < 9; i++) rotateSecret({repoRoot: root});
+    const s = openStore({repoRoot: root});
+    const ids = leadIdsAllVersions(s, "one@example.test");
+    console.log("VERSIONS:" + ids.length);
+    const ver = (x) => Number((/^lead_hmac_v(\d+)_/.exec(x) || [])[1] || -1);
+    const oldest = [...ids].sort((a, b) => ver(a) - ver(b))[0];
+    const lexFirst = [...ids].sort()[0];
+    console.log("LEX-DIFFERS:" + (oldest !== lexFirst));
+    console.log("OLDEST-IS-V1:" + (ver(oldest) === 1));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # THE FIXTURE ASSERTS ITSELF: without ten versions the flip cannot happen and the test below
+  # would pass on a keyring that never exercised it.
+  [[ "$output" == *"VERSIONS:10"* ]] || { echo "the rotation did not produce ten key versions: $output"; false; }
+  [[ "$output" == *"LEX-DIFFERS:true"* ]] || { echo "the lexicographic and numeric answers agree, so this input proves nothing: $output"; false; }
+  [[ "$output" == *"OLDEST-IS-V1:true"* ]] || { echo "$output"; false; }
+}
+
+@test "canonicalLeadId returns that oldest id, so a persisted ref does not move at v10" {
+  # The property the one above establishes an input for. A mutant reverting to `[...ids].sort()[0]`
+  # returns the v10 id here and fails.
+  _m '
+    const {initStore, openStore, rotateSecret, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const {canonicalLeadId} = await import("./.claude/scripts/leads/lib/guard.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "keyring2"));
+    process.env.ARC_LEADS_STORE = path.join(root, "store");
+    initStore({repoRoot: root});
+    const s0 = openStore({repoRoot: root});
+    const v1 = leadId(s0, "one@example.test");
+    const dir = path.join(process.env.ARC_LEADS_STORE, "dossiers");
+    fs.mkdirSync(dir, {recursive: true});
+    fs.writeFileSync(path.join(dir, v1 + ".json"), JSON.stringify({lead_id: v1, email: "one@example.test"}));
+    for (let i = 0; i < 9; i++) rotateSecret({repoRoot: root});
+    const s = openStore({repoRoot: root});
+    const now = leadId(s, "one@example.test");
+    console.log("CURRENT-IS-V10:" + /^lead_hmac_v10_/.test(now));
+    console.log("CANON-FROM-V1:" + (canonicalLeadId(s, v1) === v1));
+    console.log("CANON-FROM-V10:" + (canonicalLeadId(s, now) === v1));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"CURRENT-IS-V10:true"* ]] || { echo "the store did not reach v10: $output"; false; }
+  # BOTH DIRECTIONS. Resolving from the old id and from the new one must land on the same member,
+  # or the persisted ref moves the moment a reply arrives under the new key.
+  [[ "$output" == *"CANON-FROM-V1:true"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"CANON-FROM-V10:true"* ]] || { echo "the canonical member moved at v10: $output"; false; }
 }
 
 @test "every command that reads the credential file calls the guard on it" {
@@ -1220,5 +1274,5 @@ MJS
   declared="$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 77 ] || { echo "expected 77 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 79 ] || { echo "expected 79 tests, found $declared -- update this number deliberately"; false; }
 }

@@ -11,8 +11,8 @@
 >
 > **What is true as of 2026-08-10:**
 >
-> - **Eight adversarial rounds have run against this slice**, two independent surfaces each, and
->   they returned 3, 9, 10, 8, 2, 3, 2 and 1 CRITICALs. Near-zero overlap between the surfaces every
+> - **Nine adversarial rounds have run against this slice**, two independent surfaces each, and
+>   they returned 3, 9, 10, 8, 2, 3, 2, 1 and 1 CRITICALs. Near-zero overlap between the surfaces every
 >   round. Several findings were defects introduced *by the fix for* an earlier round — twice
 >   inside the comment explaining that fix.
 > - **CI is green**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures.
