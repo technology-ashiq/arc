@@ -212,8 +212,34 @@ here and a first send.
 
 ## Now
 
-**Current position: Phase 04 CLOSED (2026-08-08). Next is Phase 03 — the rehearsal — and its
-entry gate is THREE rows, not one.** Phases 00, 01, 02 and 04 are closed with both adversarial
+**Current position, 2026-08-10: Phase 03 is RUNNING. Slices 01–05 proven; slice 06 built, merged
+as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, and repaired on
+`feat/arc-leads-slice-06-fixes` → PR #150.** Everything below this block is the entry-gate
+history that got the phase started and is kept because two of its three rows are the reason the
+gate reads the way it does.
+
+**Four adversarial rounds against slice 06: 3, 9, 10 and 8 CRITICALs.** Two surfaces per round,
+near-zero overlap between them every time. Several findings in rounds 2–4 were defects
+introduced *by the fix for* a previous round — twice inside the comment explaining that fix, and
+once as a flag plus its test shipped without the branch that reads the flag. The headline
+repairs: the meeting approval crashed every interested reply, two live approvals for one send
+were reachable from a store restore, `.env.local` could move the entire spine, `preflight` could
+print `PASS` out of `tests/fixtures`, and the forbidden-name **denylist became an allowlist**
+because five rounds each found a different name missing from it.
+
+**Three owner decisions taken today, all recorded rather than assumed:**
+
+1. **Appetite extended 7d → 11d**, Phase 03 1.0d → 4.5d, at the 100% line — `PLAN.md` § Appetite.
+2. **From round 5, only a CRITICAL blocks this slice**; HIGH and lesser are carried in
+   `phases/phase-03-known-holes.md` and re-open at phase close.
+3. **`weigh-tests.yml` dispatched** — 44 of 104 bats files had no measured shard weight.
+
+**Slice 07 is unblocked:** the owner has someone who will reply by hand, so the real-reply
+ingestion follows slice 06 with no wait.
+
+---
+
+**Entry-gate history (kept — Phase 04 CLOSED 2026-08-08, and its gate was THREE rows, not one).** Phases 00, 01, 02 and 04 are closed with both adversarial
 surfaces run on each: **123 holes total**, every one found while CI was green. Phase 01 merged
 as `52a7a63` (PR #111); Phase 02 as `427d533` (PR #113); Phase 04 as `074927d` (PR #131) and
 `dd08c16` (PR #133).

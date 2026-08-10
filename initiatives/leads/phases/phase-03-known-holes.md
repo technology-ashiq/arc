@@ -8,6 +8,28 @@ A hole listed here is a decision. A hole not listed here is a defect.
 
 **Nothing in this file blocks the rehearsal.** Each row says why.
 
+## The bar this file exists under — owner decision, 2026-08-10
+
+Four adversarial rounds against slice 06 returned **3, 9, 10 and 8 CRITICALs**, two surfaces each
+round, with near-zero overlap between the surfaces every time. Several findings in rounds 2–4
+were defects introduced *by the fix for* a previous round, twice inside the comment explaining
+that fix. The rounds were not converging on a schedule anyone could plan around.
+
+Shown that and asked to choose, the owner ruled: **from round 5 onward only a CRITICAL blocks
+this slice.** HIGH and lesser findings are recorded here and carried forward, and this file
+re-opens as a work item when the phase closes.
+
+The reasoning, recorded because the rule is only as good as the line it draws: the rehearsal
+exists to find out whether the machine works. A finding that means *a number is false*, *a guard
+does not guard*, *work is lost*, *two live approvals exist for one send*, or *an operator
+following the runbook reaches an unsafe state* stops the slice. A finding that means *a comment
+overclaims*, *a parameter is unused*, or *a correct branch is untested* does not — it lands here
+with its reason.
+
+**H-04 is being closed rather than carried:** the owner approved the `weigh-tests.yml` run on
+2026-08-10 and it was dispatched against this branch. When its measured table lands in
+`tests/shard-timings.json`, delete that row.
+
 ---
 
 ## H-01 · A human cannot revoke an approval they have already given
