@@ -23,7 +23,7 @@ depends-on: —
 | 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
-| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 repaired on PR #150, CI green, 0 CRITICALs open. Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
+| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 repaired on PR #150 across nine adversarial rounds. Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
 | 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ✅ closed 2026-08-08 — 9 live sends, 9 delivered, 74 tests. Closed with ONE row open by the owner's explicit decision: DMARC does not exist, so the Gmail-class header read is deferred behind publishing it |
 | 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
@@ -232,7 +232,7 @@ because five rounds each found a different name missing from it.
 1. **Appetite extended 7d → 11d**, Phase 03 1.0d → 4.5d, at the 100% line — `PLAN.md` § Appetite.
 2. **From round 5, only a CRITICAL blocks this slice**; HIGH and lesser are carried in
    `phases/phase-03-known-holes.md` and re-open at phase close.
-3. **`weigh-tests.yml` dispatched** — 44 of 104 bats files had no measured shard weight.
+3. **`weigh-tests.yml` dispatched** — 47 of 107 bats files had no measured shard weight (44 of them measured in that run; the other 3 arrived with the merge afterwards and are counted in _known_gap).
 
 **Slice 07 is unblocked:** the owner has someone who will reply by hand, so the real-reply
 ingestion follows slice 06 with no wait.

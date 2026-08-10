@@ -252,7 +252,7 @@ matters:
   ok       rehearsal-mode: … the domain under test is rehearsal_domain "automemory.ai" …
   ok       dedicated-domain: automemory.ai IS a product domain, permitted ONLY because …
   REFUSED  spf:            no v=spf1 TXT record resolves for automemory.ai (live lookup)
-  REFUSED  dmarc:          no v=DMARC1 TXT record resolves for _dmarc.automemory.ai (live lookup)
+  ok       dmarc:          v=DMARC1; p=quarantine at _dmarc.automemory.ai (live lookup)
   REFUSED  dkim:           no DKIM TXT at resend._domainkey.automemory.ai (live lookup)
   REFUSED  provider-spf / provider-dkim / provider-dmarc: …
   REFUSED  warmup:         …
@@ -374,7 +374,7 @@ lead and one cause:
 | Anomaly | What it means | What to do |
 |---|---|---|
 | `payload differs` | a receipt with this exact idem is already on the spine but says something else — most often a lead that was `verified` and is now `held`, because `email_status` is not part of the idem preimage | not a re-run problem. The spine still asserts the old value and needs a correction receipt |
-| `in derived/idem.index but in no day file` | a restored or archived day left the index ahead of the events | **Restore the missing day file FIRST, and only then run `node .claude/scripts/hq/arc-replay.mjs`.** Retrying this command cannot help, and running replay first is worse than doing nothing — see the box below |
+| `in derived/idem.index but in no day file` | a restored or archived day left the index ahead of the events | **Restore the archived or missing day file FIRST, and only then run `node .claude/scripts/hq/arc-replay.mjs`.** Retrying this command cannot help, and running replay first is worse than doing nothing — see the box below |
 | `another writer took this idem` | you lost a genuine race, and the refusal left a quarantine record | clear the quarantine **before** step 8, or `report` refuses |
 | `the emitter refused its receipt` | anything else | read the message; the dossiers are written and the command is re-runnable |
 

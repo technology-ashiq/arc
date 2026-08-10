@@ -1472,14 +1472,26 @@ async function cmdMail(argv) {
 async function cmdNotify(argv) {
   const trigger = argv[0];
   const rest = argv.slice(1);
-  const flag = (name) => {
-    const i = rest.indexOf(name);
-    if (i === -1) return null;
+
+  // PARSED AS A CONSUMING LOOP, like every other command that takes flags. `cmdMail`, `cmdReport`,
+  // `cmdIngestReply` and `rehearsal-check.mjs` were each rewritten out of an `indexOf` scan, and
+  // three of them carry a comment calling that scan "D5 in miniature" — the ALERT path was the
+  // branch that never got it. A scan resolves a repeated `--text-file` silently by position
+  // rather than refusing, and ignores an unknown flag entirely, on the surface whose whole job is
+  // to reach a human about an outage.
+  const flags = { "--text-file": null, "--what": null };
+  let useStdin = false;
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    if (a === "--stdin") { useStdin = true; continue; }
+    if (!(a in flags)) die(2, `unknown flag ${JSON.stringify(a)} for \`notify ${trigger ?? ""}\`. Takes --text-file <path>, --stdin, --what <one line>.`);
+    if (flags[a] !== null) die(2, `${a} was given twice — two values for one flag is an operator error, not a last-wins override`);
     const v = rest[i + 1];
-    if (v === undefined || String(v).startsWith("--")) die(2, `${name} needs a value`);
-    return v;
-  };
-  const useStdin = rest.includes("--stdin");
+    if (v === undefined || String(v).startsWith("--")) die(2, `${a} needs a value`);
+    flags[a] = v;
+    i++;
+  }
+  const flag = (name) => flags[name];
 
   if (trigger === "canary") {
     // The failure DETAIL arrives as bytes, never as an argument: a canary tail is exactly the

@@ -86,8 +86,17 @@ export function resolveKeyringIds(store, leadId) {
 // added to prevent it, correct for v2 through v9.
 //
 // The version is parsed and compared as a NUMBER, so the answer is the oldest id for every
-// rotation rather than for the next nine. `null` means the lead could not be resolved at all, and
-// the raw id is the honest fallback there — the send-moment guard refuses that case separately.
+// rotation rather than for the next nine.
+//
+// BUT ONLY WHEN THE CALLER PASSES AN ID THAT HAS ITS OWN DOSSIER FILE, and an earlier version of
+// this sentence promised it unconditionally. `resolveKeyringIds` starts from
+// `dossierEmail(store, leadId)`, so an id with no dossier resolves to `null` and this returns the
+// RAW id — which after a rotation is the newest, i.e. exactly the value the numeric sort exists
+// to avoid. Every production caller passes an id that came from `resolveLead`, which returns the
+// id of the dossier it found, so the fallback is unreachable there; the path that could reach it
+// is a stored draft whose dossier was removed (an ADR-0410 delete-on-request, a partial restore),
+// and that dies first at "no dossier for …" in the incoming half. Stated because a guarantee that
+// holds only under a precondition has to name the precondition.
 const KEY_VERSION_RE = /^lead_hmac_v(\d+)_/;
 export function canonicalLeadId(store, leadId) {
   const ids = resolveKeyringIds(store, leadId);

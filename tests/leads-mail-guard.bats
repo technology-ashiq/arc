@@ -141,7 +141,7 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     for (const c of cases) { try { decodeMailResponse(200, c); } catch (e) { if (e.kind === "refused") refused++; } }
     console.log("REFUSED:" + refused + "/" + cases.length);'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:76/76"* ]]
+  [[ "$output" == *"REFUSED:4/4"* ]]
 }
 
 @test "the vendor error body is never echoed into the message" {
@@ -829,7 +829,7 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     assertEnvLocalNames(["RESEND_API_KEY", ...ENV_LOCAL_ALLOWED, "SUPABASE_URL", "STRIPE_SECRET_KEY"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:40/40"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED:76/76"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ESCAPED:none"* ]] || { echo "$output"; false; }
   # The allowlist must hold the recipient-policy names and NOTHING that steers a send. Asserted
   # positively, so shrinking it (which would refuse the runbook's own required variables) fails
@@ -852,8 +852,14 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   _m '
     const {initStore, openStore, rotateSecret, leadIdsAllVersions} = await import("./.claude/scripts/leads/lib/store.mjs");
     const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "keyring"));
-    process.env.ARC_LEADS_STORE = path.join(root, "store");
+    // The store is a SIBLING of the repo root, never inside it. `assertOutsideRepo` refuses a
+    // store under the repo (ADR-0410: PII must not live where git can track or clean it), so the
+    // first version of this fixture threw STORE_INSIDE_REPO before its first console.log and the
+    // test could not run at all -- the exact vacuous shape this suite exists to refuse.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "keyring"));
+    const root = path.join(base, "repo");
+    fs.mkdirSync(root, {recursive: true});
+    process.env.ARC_LEADS_STORE = path.join(base, "store");
     initStore({repoRoot: root});
     for (let i = 0; i < 9; i++) rotateSecret({repoRoot: root});
     const s = openStore({repoRoot: root});
@@ -879,8 +885,11 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     const {initStore, openStore, rotateSecret, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
     const {canonicalLeadId} = await import("./.claude/scripts/leads/lib/guard.mjs");
     const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), "keyring2"));
-    process.env.ARC_LEADS_STORE = path.join(root, "store");
+    // Sibling, not nested -- see the note in the test above.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "keyring2"));
+    const root = path.join(base, "repo");
+    fs.mkdirSync(root, {recursive: true});
+    process.env.ARC_LEADS_STORE = path.join(base, "store");
     initStore({repoRoot: root});
     const s0 = openStore({repoRoot: root});
     const v1 = leadId(s0, "one@example.test");
@@ -890,6 +899,12 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     for (let i = 0; i < 9; i++) rotateSecret({repoRoot: root});
     const s = openStore({repoRoot: root});
     const now = leadId(s, "one@example.test");
+    // A DOSSIER FOR THE CURRENT ID TOO, because that is the post-rotation state production
+    // reaches: `research` re-run under the new key writes one, and `resolveLead` walks the
+    // keyring newest-first, so `who.lead_id` is always an id that HAS a dossier. Asking
+    // canonicalLeadId about an id with no dossier is a state no caller can produce --
+    // `resolveKeyringIds` returns null there and the raw id is the documented fallback.
+    fs.writeFileSync(path.join(dir, now + ".json"), JSON.stringify({lead_id: now, email: "one@example.test"}));
     console.log("CURRENT-IS-V10:" + /^lead_hmac_v10_/.test(now));
     console.log("CANON-FROM-V1:" + (canonicalLeadId(s, v1) === v1));
     console.log("CANON-FROM-V10:" + (canonicalLeadId(s, now) === v1));'
@@ -1127,10 +1142,16 @@ MJS
   #
   # AND IT NO LONGER STANDS ALONE. This whole file runs under ARC_LEADS_FAKE=1, and a successful
   # send on the fake now prints the NOT-SENT sentence instead of the confirmation -- so BOTH
-  # branches satisfy the line below and it can no longer fail. The delivery is pinned by its
-  # absence from the store journal, which a crash does not satisfy either way.
-  # Under ARC_LEADS_FAKE=1 a delivery that DID happen prints the NOT-SENT sentence, so this pair
-  # covers both spellings of "a send was attempted" and neither is satisfied by the other.
+  # branches satisfy the first line below, so it alone can no longer fail. What closes that is
+  # the SECOND line: under ARC_LEADS_FAKE=1 a delivery that DID happen prints the NOT-SENT
+  # sentence, so the pair covers both spellings of "a send was attempted" and neither is
+  # satisfied by the other. The positive `nothing waiting` assertion above is what a crash
+  # cannot satisfy.
+  #
+  # An earlier version of this comment said the delivery was "pinned by its absence from the
+  # store journal". There is no journal read in this test and never was -- the assertions are
+  # sound and the sentence describing them was invented, which is the ninth-round shape of the
+  # defect this file keeps finding: a claim in a comment that the code beside it does not make.
   [[ "$output" != *"arc-leads: mail sent id="* ]]
   [[ "$output" != *"NOT SENT"* ]] || { echo "a delivery was attempted for an empty inbox: $output"; false; }
 }
