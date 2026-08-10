@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-10 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-10 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 18 full PLANs + 5 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 19 full PLANs + 4 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -36,6 +36,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-growth.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-growth.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the arc-site-first client, the two-human-gate cap, the negative-only lint constitution, the POV floor + exemplar anchoring, the sha-equality "unedited" definition, the versioned title-template files with hash(slug) assignment, the EVO-H0 FEED requirement against the already-landed ADR-0408 vocabulary, and the flipped cut order exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-memory.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-memory.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: index-in-place replaced the brief's migration reading, the additive-hook law, the node:sqlite preflight with a pure-JS fallback decision, canonical citation ids, the alias layer, the measured embeddings floor and the write-time conflict check exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-legal-pack.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-legal-pack.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: six pages not three [the Razorpay activation superset], the `payment_model: gateway\|mor` + GST branches correcting the brief's MoR-only premise, the DPDP Rule-3 notice + fiduciary/processor two-layer clause, the value/trace/completeness lint trio, the hash-chain publish law with static-MDX routes, the production-probe checklist and the scenario-fixture completeness law exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
+| ~~`plans/BRIEF-ops.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-ops.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the OPEN live-value REQ-05 row, the OPS-G fold-derived idem formula, the flood-control meta-incident, drill mode with real-vs-drill separation, the heartbeat + deterministic staleness line, the leads private-store PII law for tickets, injection containment with template-locked drafts, policy-enforced L1 (POL-G) + POL-I rows, canary→spine unification resolving the brief's reader-only-vs-canary-history contradiction, the ADR-0408 `metric.observed` conformance with the no-evolve-clock honesty boundary, and the scheduler-job alignment exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -390,6 +391,53 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     it. Appetite 5d hard cap (4d + 1d slack; the 08-03 cost audit priced template
     AUTHORING at 1.5–2d — research banked in-file). `BRIEF-legal-pack.md` superseded
     → moved to `docs/archive/`.
+
+21. **2026-08-10:** `plans/PLAN-ops.md` added (ops v1 — the keep-it-running engine:
+    registry-driven health sweeps over every registered surface with incidents as
+    first-class receipts [raise → optional-ack → resolve, cross-day open-incident fold
+    in the daily brief], L1 support triage with drafted-never-sent replies, and a
+    weekly per-venture health report rendered from the spine reader alone; v1.1
+    build-out edition, landed owner-instructed 2026-08-10; decisions OPS-A…M locked
+    over two review rounds 2026-08-03 → 2026-08-10, re-grounded against the repo at
+    landing; ADR numbers at kickoff from the century claimed per `PORTFOLIO.md` — NEW
+    lane). **Trigger converted to FIRED under the owner's Build-out Mandate
+    (2026-08-09 — same receipt as correction #15, cited by the kickoff ADRs; honesty
+    note in-file: no ≥2-live-ventures / support-volume receipt exists and none is
+    invented — one venture [lexos, paused, deployed URL still serving], tickets ~0;
+    the original pull survives as the live-value milestone: REQ-05's "≥2 LIVE
+    ventures" row stays OPEN-at-venture-2, the C2 REQ-07 pattern, with drill mode
+    carrying the proof).** Core beyond the brief: **the OPS-G idem formula** —
+    `sha256("ops.incident|venture|check|signature|first_seen_day")` with
+    `first_seen_day` fold-derived so an open failure streak never duplicates and a
+    post-resolve recurrence is always a NEW incident (the C2 dup-idem class, closed in
+    both directions by fixture) · flood control (>N failures in one run → ONE
+    "sweep environment suspect" meta-incident, never N raises) · sweep LLM-free +
+    browser-free with retry-before-raise — always-on cost ₹0, LLM only on inbound
+    tickets (cheap-scan classify / workhorse drafts, ADR-0069) · **+2 incident kinds
+    (`incident.acknowledged`/`incident.resolved`) by micro vocab ADR against live
+    `KINDS.length`** (ADR-0107 rule; shapes in `validate-ops.mjs`, the lane-module
+    pattern) with `hq.policy.yaml` rows in the same change (POL-I; policy C9 merged
+    2026-08-08) and resolve-idem bound to the raise ULID (assertDecision template) ·
+    canary→spine unification (A5) resolving the brief's reader-only-vs-canary-history
+    contradiction · **ticket PII under the PLAN-leads private-store law — third
+    application** (leads → ledger LED-C → ops): bodies + drafts outside the tree,
+    spine carries keyed ids + classes + hashes only · injection containment (closed
+    enums with `other` + surfaced unclassified-rate, zero tool access, template-locked
+    drafts with provenance, money-action deny-list; .eml parser + classifier I/O =
+    parser-class, adversarial pass mandatory) · drafts L1 **policy-enforced** (POL-G),
+    promotion only via trial-ledger evidence + human decision · drill mode (real vs
+    drill never mixed — the `revenue.simulated` discipline applied to incidents; an
+    ignored drill is a human-loop finding) · heartbeat + deterministic "guardian
+    asleep" staleness (quiet and asleep never render the same) · severity tiers +
+    printed alert budget + precision ledger (alert quality is a REQ, not a hope) ·
+    uptime as `metric.observed` **conforming to the live ADR-0408 validator with an
+    explicit no-evolve-clock honesty boundary** (growth's GSC feed owns that trigger;
+    ops is a second honest stream) · no pushes/pages — the daily brief IS the pager ·
+    sweep shaped as a script-class ₹0 `hq.jobs.yaml` job with the `lexos-canary`
+    job-candidate reconciliation rule (whichever of ops/scheduler runs second merges
+    them into one registration). Appetite 6 build-days + a 7-calendar-day validation
+    window; designated cuts = the metric stream, then the sentiment axis.
+    `BRIEF-ops.md` superseded → moved to `docs/archive/`.
 
 ## Provenance
 
