@@ -18,6 +18,21 @@ decision recorded — because mechanics without one real absorb means the cycle 
       outside the ADR-0602 allowlist). If the verdict is not ABSORB, REQ-08 closes on the recorded
       verdict plus its evidence, and the adoption half is honestly not exercised — recorded as such
       rather than forced.
+- [ ] **The landing site is `docs/playbooks/finding-verification.md` with `.claude/commands/arc-audit.md`
+      as its caller** — ADR-0602 **Amendment 2**, which takes Amendment 1's already-recorded route 2
+      rather than widening anything. The DO-NOT-WIDEN ruling of 2026-08-09 stands. Two constraints
+      travel with this and are exit conditions, not notes: the playbook **must** have a caller from
+      birth (Amendment 1 named "a playbook nothing references" as route 2's failure mode, and this
+      cycle already shipped a guard with no caller once), and the caller **must not** be a file
+      compiled from `processes/` — `arc-review.md`, `arc-kickoff.md` and `arc-commit.md` are
+      `GENERATED FILE — DO NOT EDIT` and a rebuild there vanishes at the next `arc-compile` with the
+      registry still claiming it shipped. `arc-audit.md` is hand-written; verified, not assumed.
+- [ ] **The playbook gets its `products/review/manifest.json` `docs` row in the same diff, and the
+      golden manifest is regenerated.** `arc-audit.md` ships to consumer repos through the `review`
+      product; a caller that references a file no product installs is a dangling reference in every
+      consumer — the "guard with no caller" failure inverted, and invisible in this repo because here
+      the file exists. `product-lint` must pass and `tests/fixtures/sync-golden/tree-manifest.txt` must
+      be regenerated, since the byte-identity gate hash-pins every synced path.
 - [ ] **On an ABSORB verdict: a rebuild diff confined to the allowlist**, ideas re-expressed, zero
       new runtime dependencies, attribution in both places if anything permissive was copied.
 - [ ] **Adversarial pass on the rebuild diff, on an ABSORB verdict** — a fresh agent, unanchored to

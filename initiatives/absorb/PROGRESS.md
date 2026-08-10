@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-absorb (Cycle 10, born 2026-08-09)
-phase: 04 — study done, rebuild BLOCKED by owner ruling (00, 01, 02, 03 CLOSED)
+phase: 04 — rebuild REOPENED on ADR-0602 A2 route 2 (00, 01, 02, 03 CLOSED)
 appetite: 8d
 burn: 5.5d
 blocked-on: —
@@ -33,7 +33,7 @@ depends-on: —
 | 01 | Study harness, hostile-input-first — read-only pipeline, injection red corpus, adversarial pass, no-execution boundary fixture-proven **or STOP** | 2d | ✅ CLOSED 2026-08-09 |
 | 02 | Registry and guards — status lint (cap 12, displacement, decision-ref), allowlist lint, license/attribution gate, PLANOFF skeleton | 1d | ✅ CLOSED 2026-08-09 |
 | 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | ✅ CLOSED 2026-08-09, one row open by owner decision |
-| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; rebuild BLOCKED — owner ruled the allowlist stays |
+| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; **rebuild REOPENED** on ADR-0602 A2 route 2 — playbook + non-generated caller, allowlist untouched |
 
 **Appetite burn: 5.5 of 8 days used.** *(Was 5.0 here and in the machine header while the Now
 section and the retro scoreboard row both said 5.5 — the retro day was worked and never counted.
@@ -134,9 +134,36 @@ requires.
 
 ## Now
 
-**Current position:** Phases 00–03 CLOSED, and **Phase 03's open row is now closed** — the owner made
-the judgement on 2026-08-09. **All owner actions on this lane are done.** Phase 04's study and
-classification are complete; its rebuild is closed off by the owner's allowlist ruling.
+**Current position:** Phases 00–03 CLOSED and MERGED to `main` (`30dc9a9`, PR #138; main re-verified
+`31353611593`, 19/19, by `workflow_dispatch`). **Phase 04 is REOPENED for its rebuild** — not by
+reversing the owner's ruling, but by taking a route ADR-0602 Amendment 1 had already recorded as
+legitimate and that nobody had noticed was reachable.
+
+**The rebuild was never blocked by the allowlist. It was blocked by the two targets the study
+happened to name.** Amendment 1 listed three routes out; route 2 — a playbook under
+`docs/playbooks/**` — has been allowlisted since ADR-0602 was written. It read as unavailable only
+because `docs/playbooks/` did not exist, and because Amendment 1's own last word on T-01 was
+"blocked". Amendment 1 also named route 2's failure mode ("a playbook nothing references is a guard
+with no caller") and left a standing check ("any rebuild aimed at `.claude/commands/**` must first
+check whether that body is compiled from `processes/`"). Both are answered by the same choice:
+`.claude/commands/arc-audit.md` is the caller, and it is hand-written rather than generated — checked,
+not assumed. Recorded as **ADR-0602 Amendment 2**. The allowlist is byte-identical; `.claude/agents/**`
+stays off it; **the DO-NOT-WIDEN ruling of 2026-08-09 stands.**
+
+**Assumptions ledger row 7, arm 2, FIRED 2026-08-09 — and went unmarked for a day.** Its trigger read
+"finds the advantage came from outside the ADR-0602 allowlist", which is exactly what the study found
+about T-01's *natural* home. Marked now, with what rested on it re-checked: REQ-03, REQ-08, Phase 04's
+rebuild bullet and ADR-0606's target choice all survive, because firing arm 2 rules out the natural
+home rather than every home. Arm 1 — whether the malformed-escape catch reproduces across three
+fixtures or was one lucky probe — is the live one, and it is what the A/B tests.
+
+**`/arc-change` classified this `trivial & in-scope`:** it executes Phase 04's existing "rebuild diff
+confined to the allowlist" bullet on an allowlisted path. No new REQ, no new phase, no scope-cut
+conversation — burn 5.5 of 8 (69%), the 4d/50% tripwire was conditional on Phase 02 being unfinished
+and Phase 02 closed, and ~1d of the remaining 2.5d covers this.
+
+**All owner actions on this lane were done as of 2026-08-09**, and one new one is coming: the
+sealed-blind judgement on the A/B (REQ-03/REQ-08), which is a single command paste like the last two.
 
 **REQ-06 is VALIDATED — mechanism fixture-proven AND live-exercised.** Approval
 `01KZK9EPKCN0DJBW91QB67RYNP`, decision `01KZKBYSQ5J46Y82PRN7W3AJNH`, reason
