@@ -217,6 +217,25 @@ as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, repaired across eleven
 rounds on `feat/arc-leads-slice-06-fixes`, and **PR #150 MERGED as `b3dd8e5`** on 2026-08-10
 with CI green at `cac15e8` (19 jobs, 0 failures, read per-JOB).**
 
+**2026-08-10, after the merge: slice 06 is BLOCKED AT ITS FIRST STEP, and it always was.** A walk
+of `phases/phase-03-runbook.md` against the fake found the STOP box in that document had never
+been acted on. Verified against the code, not the document: `research` exits **4** (no lead
+source bound), `verifier().verify()` **throws** (no verifier bound), the single `writeFileSync`
+into `dossiers/` in the whole leads tree is inside `cmdResearch`, which dies at the source
+binding before reaching it, and `lead_id` is an ADR-0400 keyed HMAC nobody can compute by hand.
+**There is no path by which a researched person enters the store.** The five journeys cannot
+start, and no amount of running the runbook changes that.
+
+Routed through `/arc-change` the same day, tracker before code: **ADR-0417 (proposed)** binds the
+lead source to an operator-supplied corpus file, read through the existing `lintCandidates` gate
+— which is what PLAN's External-dependencies table already declared the real impl to be
+("manual research against ADR-0409's allowlisted classes"), in the same words the code refuses
+with. What was never built is the mechanism by which manual research becomes a dossier.
+
+**The verifier stays open** at `/arc-capability`: a corpus with no verifier still dies on the
+first address, so ADR-0417 does not unblock the phase on its own. Both are new dependencies, so
+`/arc-change` step 4 stops here for the owner's OK rather than proceeding to code.
+
 **Slice 06 is not closed by that merge.** The merge landed the machine; the slice is *five
 complete journeys against five real people*, and the send is the owner's keystroke, not a
 scripted step (ADR-0407). `phases/phase-03-tasks.md` slice 06 stays `(empty until proven)` until

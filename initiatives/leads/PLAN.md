@@ -241,6 +241,26 @@ An untested assumption looks identical to a surviving one on this table, which i
 plan rots quietly. None of these three may be read as validated because Phases 03 and 04 closed
 green. Phase 04's mailer work (ADR-0415) touches none of them at all.
 
+**2026-08-10 — a fourth row is UNTESTED, and this one reads as tested.** *"25 leads meeting
+ADR-0409's closed provenance allowlist are findable for a single ICP without purchased data"* is
+mapped to Phase 0, and Phase 0 is closed. What Phase 0 exercised was `source-fake.mjs`, whose
+corpus is **built as 25 clean candidates plus 9 each failing exactly one lint rule** — a fixture
+constructed to contain 25 qualifying leads, used to answer whether 25 qualifying leads are
+findable. The trigger ("research yields <25 qualifying leads after a full pass") cannot fire
+against a corpus authored to satisfy it. **No trigger has FIRED; this row simply has not been
+asked yet**, and the first thing that can ask it is the operator corpus in ADR-0417.
+
+**And two bindings this table never had a row for.** The lead source and the email verifier are
+both in the External-dependencies table with real impls named — *"manual research against
+ADR-0409's allowlisted classes"* and *"vetted verifier or MX+syntax, from the capability
+report"* — and both are, in code, a refusal. On 2026-08-10 that turned out to block Phase 03's
+five journeys at their first step: `cmdResearch` holds the only `writeFileSync` into `dossiers/`
+and dies at the source binding before reaching it, and `lead_id` is a keyed HMAC nobody can
+compute by hand, so there is no path by which a researched person enters the store at all. An
+assumption ledger that lists no assumption about the two dependencies the phase cannot start
+without is not measuring the thing most likely to stop the phase. ADR-0417 answers the source;
+the verifier stays open at `/arc-capability`.
+
 ## External dependencies
 
 | Dep | Interface | Fake impl | Real impl | Contract test |
