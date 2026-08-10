@@ -1193,6 +1193,43 @@ MJS
   [ "$status" -eq 2 ]
   [[ "$output" == *"--text-file"* ]]
   [[ "$output" == *"never in argv"* ]]
+  # AND THE DETAIL ITSELF IS NOT ECHOED BACK. A refusal that quotes the argument it refused has
+  # put the content into the same log the rule exists to keep it out of.
+  [[ "$output" != *"connection refused on :8443"* ]] || { echo "the refusal echoed the detail it refused: $output"; false; }
+}
+
+@test "notify parses its flags as a consuming loop, not by scanning for each one" {
+  # `cmdMail`, `cmdReport`, `cmdIngestReply` and rehearsal-check.mjs were each rewritten out of an
+  # `indexOf` scan; three of them carry a comment calling that scan "D5 in miniature". `notify`
+  # was the branch that never got it -- on the surface whose whole job is to reach a human about
+  # an outage. A scan resolves a repeated flag silently by position and ignores an unknown one.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --bogus x
+  [ "$status" -eq 2 ] || { echo "an unknown flag was accepted: $output"; false; }
+  [[ "$output" == *"unknown flag"* ]] || { echo "$output"; false; }
+
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file a --text-file b
+  [ "$status" -eq 2 ] || { echo "a repeated flag resolved by position instead of refusing: $output"; false; }
+  [[ "$output" == *"given twice"* ]] || { echo "$output"; false; }
+
+  # POSITIVE CONTROL: the flags that DO exist still parse, so the loop refuses the wrong things
+  # rather than everything. Proof is that the run reaches the RECIPIENT stage, which is past the
+  # parser -- asserted on the variable name both environments print, because the two print
+  # different sentences: CI has no .env.local so the allowlist is unset, and a developer box has
+  # one so the allowlist holds addresses. Pinning either sentence is green on one and red on the
+  # other, which is known-hole H-06 arriving as a flaky test rather than as stderr noise.
+  local detail; detail="$(_emptyfile)"
+  printf 'connection refused\n' > "$detail"
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file "$detail" --what "the canary failed"
+  [[ "$output" == *"ARC_LEADS_MAIL_ALLOWLIST"* ]] || { echo "the run did not reach the recipient stage: $output"; false; }
+  # And it got there without the parser objecting to either flag. Negatives, but each paired with
+  # the positive above rather than standing alone.
+  [[ "$output" != *"unknown flag"* ]] || { echo "a valid flag was called unknown: $output"; false; }
+  [[ "$output" != *"given twice"* ]] || { echo "two distinct flags were read as a repeat: $output"; false; }
+  [[ "$output" != *"needs a value"* ]] || { echo "a flag with a value was read as bare: $output"; false; }
 }
 
 @test "an unknown notify trigger prints the three that exist" {
@@ -1295,5 +1332,5 @@ MJS
   declared="$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 79 ] || { echo "expected 79 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 80 ] || { echo "expected 80 tests, found $declared -- update this number deliberately"; false; }
 }

@@ -187,7 +187,7 @@
 .claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
-.claude/scripts/leads/arc-leads.mjs	d13eca5b86fd08503e76fcd72c4f3eb87e6aaefb6bea16f7fbe0883db61ad1b1
+.claude/scripts/leads/arc-leads.mjs	30dc1f1381ce77c50bd6e4a13078643378125f62e81e3fc36e837bd0b624a474
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
 .claude/scripts/leads/lib/deps.mjs	4e039b3bc6bd9cafb45302bd9b17e16a13dde71706958b6cfd008ba562012a91
 .claude/scripts/leads/lib/drafts.mjs	a0be00c5fc56539f632f4cdb0737c03d4f471ce8666ebcc3ef5824a6d0dde305

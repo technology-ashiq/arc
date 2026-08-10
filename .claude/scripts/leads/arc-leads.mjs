@@ -1484,6 +1484,13 @@ async function cmdNotify(argv) {
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === "--stdin") { useStdin = true; continue; }
+    // `--text` gets the RULE, not the generic refusal. It is the flag an operator reaches for,
+    // and the reason it does not exist is the whole point of this command's two doors: the
+    // failure detail is exactly the content that ends up quoted into a process listing, into
+    // shell history and verbatim into Node's `Command failed: …` on a non-zero exit (ADR-0412).
+    // Telling that operator only "unknown flag" spends the one moment they are listening.
+    if (a === "--text")
+      die(2, "--text does not exist on `notify`. The failure detail arrives as BYTES and never in argv, because argv is readable in any local process listing, lands in shell history, and is embedded verbatim into Node's error message on a non-zero exit (ADR-0412). Use --text-file <path> or --stdin.");
     if (!(a in flags)) die(2, `unknown flag ${JSON.stringify(a)} for \`notify ${trigger ?? ""}\`. Takes --text-file <path>, --stdin, --what <one line>.`);
     if (flags[a] !== null) die(2, `${a} was given twice — two values for one flag is an operator error, not a last-wins override`);
     const v = rest[i + 1];
