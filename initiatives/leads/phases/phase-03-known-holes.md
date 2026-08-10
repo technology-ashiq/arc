@@ -1,0 +1,256 @@
+# Phase 03 — known holes, carried forward deliberately
+
+Things eleven adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
+each with the reason it was left and what would close it. This file exists so that "we did not
+fix it" and "we did not notice it" stop looking identical from the outside.
+
+A hole listed here is a decision. A hole not listed here is a defect.
+
+**Nothing in this file blocks the rehearsal.** Each row says why.
+
+## The bar this file exists under — owner decision, 2026-08-10
+
+Eleven adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3, 2, 1, 1, 4 and 0 CRITICALs**, two surfaces each
+round, with near-zero overlap between the surfaces every time. Several findings in rounds 2-6
+were defects introduced *by the fix for* a previous round, twice inside the comment explaining
+that fix. The rounds were not converging on a schedule anyone could plan around.
+
+The bar was set after round 4, when only nine of those eleven numbers existed. It held: rounds 10
+and 11 found 4 CRITICALs and then none, and the tail of HIGHs the bar sent here is what this file
+is. The count is restated whenever a round lands, because a tally that stops being re-derived
+starts being a claim about a branch that has moved.
+
+Shown that and asked to choose, the owner ruled: **from round 5 onward only a CRITICAL blocks
+this slice.** HIGH and lesser findings are recorded here and carried forward, and this file
+re-opens as a work item when the phase closes.
+
+The reasoning, recorded because the rule is only as good as the line it draws: the rehearsal
+exists to find out whether the machine works. A finding that means *a number is false*, *a guard
+does not guard*, *work is lost*, *two live approvals exist for one send*, or *an operator
+following the runbook reaches an unsafe state* stops the slice. A finding that means *a comment
+overclaims*, *a parameter is unused*, or *a correct branch is untested* does not — it lands here
+with its reason.
+
+**H-04 is CLOSED.** The owner approved the `weigh-tests.yml` run on 2026-08-10; it completed as
+run `31361908896` and its measured table is in `tests/shard-timings.json` — 60 entries → **104**,
+covering 44 of the 47 files that had no entry at all. The two files this slice grew were among them and
+were wrong in the same direction by roughly sevenfold: `leads-journey.bats` measured **111s** and
+`leads-mail-guard.bats` **120s** against an assumed `_default_weight` of **16**.
+
+Three files remain unmeasured — `absorb-ab-run.bats`, `absorb-rebuild-t01.bats`,
+`spine-worktree-guard.bats` — because they arrived with the `origin/main` merge *after* the weigh
+run was dispatched. That is stated as a **count** in `_known_gap` rather than left to a default,
+which is `.claude/rules/lanes.md`'s own instruction: a missing entry is a default rather than an
+error, so it has to be visible or it is invisible.
+
+---
+
+## H-01 · A human cannot revoke an approval they have already given
+
+**What.** `validate.mjs` binds a decision's idem to `sha256("decision.recorded|" + decides)`, so
+one `approval.requested` can carry exactly one `decision.recorded`. Verified end to end: the
+second decision on an approval is refused `DUP_IDEM`. An operator who approves a draft and then
+changes their mind has no path to reject it.
+
+**Why it looks fixed and is not.** Three places read decisions with a latest-decision-wins loop —
+`approvalState` here, `approvedShaFor` in `sequencer.mjs`, and `clearedByInbox` in `guard.mjs` —
+and two of them carry comments describing revocation ("a reject after an approve revokes it").
+Those loops are correct in shape and unreachable in effect: they fold a set that can never hold
+more than one element. The comments have been corrected; the behaviour has not, because it
+cannot be without changing the spine's decision grammar.
+
+**Why it is left.** Closing it is an ADR-level change to a company organ (the decision idem
+binding is what stops a forged second decision overwriting a real one), not a leads-lane fix,
+and inventing a revocation path inside a fix commit is precisely the move that produced three of
+this slice's CRITICALs.
+
+**What actually protects the rehearsal today.** The send-moment guard re-reads `lint_status` and
+refuses on a `draft_sha` that moved after approval (ADR-0412), so an approved draft that is then
+edited will not send. The gap is a *withdrawn* approval of an *unchanged* draft — for which the
+operator's remedy is to not run `daily`, which in a five-recipient rehearsal they are standing
+in front of anyway.
+
+**What would close it.** An ADR adding a `decision.withdrawn` kind, or widening the decision idem
+preimage to include the verdict. Either is Phase 05 work.
+
+---
+
+## H-07 · Round-5 findings classified below the bar
+
+Recorded together because they share a cause: they are places where the code is correct and the
+*coverage* or the *shape* is not, which the 2026-08-10 bar puts here rather than in the way of
+the slice.
+
+**The two `unfoldable` derivations are asymmetric.** `cmdResearch` asks the question per-idem and
+names the lead; `cmdDraft` and `ingestReply` ask a global "is *any* index key unfoldable" and
+withhold unrelated work. In `ingestReply` the refusal also lands **after** the reply receipt is
+on the spine and the meeting draft is on disk, so a warm lead sits without a calendar draft until
+`arc-replay` — against that function's own "same run, a deadline you cannot miss". Left because
+narrowing it to the one `meet_` ref is a fold-shaped change and the conservative version is safe;
+the cost is latency on a spine that is already broken.
+
+> **The asymmetry closed on 2026-08-10, and this paragraph's own claim about coverage was
+> wrong.** It said a test now makes `unfoldable` non-zero "so neither branch is deletable any
+> more". That test is the **21st** `@test` in `leads-journey.bats` (22 is the self-count), and it
+> drives `research` and `draft` only — it never calls `ingest-reply`. So `ingest.mjs`'s refusal
+> still has no coverage and is still deletable for free; recorded as what it is rather than left
+> as a claim. What did close: `cmdDraft` now refuses the whole run rather than only the resume,
+> which is what made the two siblings agree.
+
+**`approvalState` requires `typeof e.id === "string"` and nothing tests it.** An
+`approval.requested` with no `id` reads as "no approval exists", so `draft` mints a second one
+rather than refusing. Unreachable through any current writer — the emitter always assigns a ULID
+— so it is a defence against a hand-edited spine with no way to produce the input.
+
+**`ingestReply` treats a REJECTED meeting approval as announced.** A calendar approval the human
+rejects can never be re-raised by re-ingesting the reply. This is the meeting-side twin of H-01
+and closes with it.
+
+**`unannounced` keeps one orphan per touch; `rejectedTouch` keeps a list.** Two orphaned drafts
+for one touch would leave the first permanently unannounceable. Not reachable through the CLI,
+because the run that would mint the second is the run that resumes the first.
+
+**Journey test 20 deliberately leaves a quarantine record** (the refused second decision), so no
+`report` assertion can follow it inside that test. Noted so the next person to extend that test
+does not spend an hour on it.
+
+## H-08 · Two CRITICALs that PRE-DATE this branch, reproduced and left
+
+Round 9 reproduced both against the merge base as well as HEAD, so neither is introduced here and
+neither blocks this slice. They are recorded because a defect found and not fixed has to look
+different from a defect not found.
+
+**`state --json` publishes the ADR-0416 mixing count over spines `report` refuses to answer over.**
+Two ways, both reproduced. A `supersedes` correction: `report` exits 2 saying it "would count the
+superseded original AND its correction, putting one physical send in two classes", while
+`state --json` prints `{"rehearsal":1,"real":1,"total":2}` at exit 0 for ONE physical send. And a
+quarantined real send: `report` refuses because "any of them could be a real send this count
+cannot see", while `state` prints `real: 0, quarantined: 1` at exit 0. `cmdState` labels that
+field "ADR-0416's mixing guard, reported as a COUNT". The guard was added to `report` at slice 05
+and never to the adjacent surface. **Left because** the fix is to move `report`'s four refusals
+into the shared fold, which changes what `state --json` is for, and that is a slice of its own.
+**What would close it:** the refusals live with `foldSends`, and both callers inherit them.
+
+**`research` re-run truncates `rejected.jsonl` to zero bytes.** Unconditional overwrite. Run once
+with an excluded firm (254 bytes), narrow the corpus, run again → 0 bytes, exit 0, nothing
+printed. `phases/phase-00-spec.md` names that file as the exclusion audit trail and the phase-00
+demo asserts `wc -l` on it; the store has no git safety net by design. The receipt layer was made
+idempotent for the re-run and the store layer was not. **Left because** the right shape —
+per-run files, or append-with-run-id, or refusing to shrink — is a store-layout decision, and
+inventing one inside a fix commit is the move that produced three of this slice's CRITICALs.
+
+---
+
+## H-09 · Round-9 findings below the bar
+
+**The RESUME branch announces an approval whose `draft_sha` does not match the body it names.**
+Reproduced: bound sha `ea8c8bd8…`, body on disk `dd98d7cb…`. The resume compares bodies
+(`existing.body !== d.body`) and never the sha, so a draft edited on disk *before* the approval
+gets an approval bound to the stale value. Fail-safe — `sendOne` recomputes `currentSha`, so
+`daily` refuses `draft-sha` forever — but the touch is wedged behind a live approval and the
+refusal describes the opposite situation (edited after approving, not before).
+
+**Five branches this slice added or moved have no negative control**, each verified deletable
+with all 22 journey tests green: `cmdDraft` index-first, `cmdResearch` index-first,
+`cmdResearch`'s orphan guard, `ingest.mjs`'s `unfoldable` refusal, and `spineRead` in the
+meeting-approval condition. `spineRead` and `spineIdems` appear in **zero** test files repo-wide.
+The two that changed *behaviour* (the refusals) are covered by journey test 21 on the `draft`
+side only.
+
+**`unannounced` is a single overwritten Map slot** while `rejectedTouch` two lines above was
+deliberately made a list for the `readdirSync`-order reason. Bounded: it decides RESUME vs STALE
+by directory order when one touch has two orphaned drafts, which the CLI cannot produce.
+
+**`tests/leads-mixing-report.bats`'s "report and state derive one set of counts, never two" is
+D7** — its fixture contains neither a superseding event nor a quarantined one, which are the two
+conditions under which they are two. That is the test that would have caught H-08's first half.
+
+**`tests/leads-sequencer.bats`'s "one bounce in fifty sends does not FREEZE on the percentage
+alone" is now a tautology** — this slice deleted the percentage branch and the test still names it.
+
+## H-02 · `arc-leads unlock` is the stale-lock remedy and is documented in one place
+
+**What.** Every read-then-emit command now takes the send lock, and `process.exit` does not run a
+`finally`, so the code releases explicitly before dying. If a process is killed with `SIGKILL`
+between acquiring and releasing, the lock survives and `arc-leads unlock` is the only way out.
+
+**Why it is left.** The lock is deliberately never auto-broken (a dead process may sit between
+the provider ack and the receipt; stealing its lock is how one mail is sent twice, ADR-0411).
+That is the correct trade.
+
+**What actually protects the rehearsal.** The refusal names the holder and now names `unlock`
+rather than `reconcile`, which was a loop.
+
+---
+
+## H-03 · `ingest-reply` fetches an inbound batch before it takes the lock
+
+**What.** `inbound().fetch()` runs before `acquireLock`. With a real webhook source, a lock
+refusal would discard a batch already consumed from the queue.
+
+**Why it is left.** `inboundReal()` is an unbound refusal today — there is no source to consume
+from, so the ordering cannot bite in Phase 03. Reordering it means holding the send lock across a
+network call, which is its own defect and needs to be designed rather than swapped.
+
+**What would close it.** Binding a real inbound source is its own slice; the lock ordering is
+part of that slice, not this one.
+
+---
+
+
+## H-05 · `ci.yml` derives the declared-test count two ways
+
+**What.** Three defects in the pair of gates whose whole job is to notice a test that did not run.
+
+1. **Two grammars for one fact (D5).** `_declared()` uses `^[[:blank:]]*@test[[:blank:]]`; the
+   suite-size floor uses a literal `'^@test '`. They agree on today's suite and would silently
+   disagree the day someone indents a `@test` or separates it with a tab.
+2. **The floor has rotted by 1331.** It reads `-ge 911` against **2242** actual, so the suite
+   could lose 59% of itself and pass. This is the exact shape its own comment warns about — it
+   records having been raised `318 -> 891` after rotting by 550, and then rotted again.
+3. **The floor's number is itself derived two ways.** The comment says it was raised to `891`;
+   the check tests `911`. One of the two was edited and the other was not.
+
+**Why it is left.** Not the reason recorded here until 2026-08-10, which said `.github/**` could
+not be touched because the `policy` lane was LIVE. **Policy closed the same day** (`e594d6e` /
+PR #147) and `leads` is now the only LIVE lane, so the collision this pointed at no longer
+exists — a reason that stopped being re-derived, which is the class this whole round was about.
+The real reason is narrower: **`.github/` is outside this session's write permissions.** The edit
+is refused at the tool boundary, not declined on judgement.
+
+**What would close it** — a single edit, already written out, in `.github/workflows/ci.yml`:
+
+- in the `Test-count floor` step, replace `grep -rhc '^@test ' tests/ --include='*.bats'` with
+  the same `grep -rhcE '^[[:blank:]]*@test[[:blank:]]'` expression `_declared()` uses, so one
+  grammar answers both gates;
+- raise `911` to **2200** (2242 actual, the same ~2% margin the previous raise used), and delete
+  the stale `891` from the comment above it so the number appears exactly once, in the check.
+
+Verify after editing with the expression the comment already gives:
+`grep -rhcE '^[[:blank:]]*@test[[:blank:]]' tests/ --include='*.bats' | awk '{s+=$1} END{print s}'`
+
+---
+
+## H-06 · `loadCredentials()` reads the box's real `.env.local` in any test that runs a CLI command from the repo root
+
+**What.** `daily`, `preflight` and `notify` now read `.env.local` through `lib/env.mjs`. On a
+developer machine that file exists; on CI it does not. So those commands emit blank-value
+warnings locally and none on CI.
+
+**It changes BEHAVIOUR, not only stderr noise — this row said otherwise and was wrong.**
+ENV-WINS-OVER-FILE protects a value a test *sets*; it does not protect a value a test
+deliberately *unsets*. `tests/leads-mail-guard.bats` runs `env -u ARC_LEADS_MAIL_ALLOWLIST` and
+asserts the refusal says `is unset`, and `loadCredentials()` re-applies that name from the box's
+own file — so on a developer machine the run refuses for a different reason and the assertion
+fails. Verified: exit 2 either way, `is unset` absent, `holds N addresses` present. **Green on
+CI, red on any machine with a `.env.local`.** It is the only test in that shape — all 30 `env -u`
+sites were checked, and the other leads ones import the module directly and never reach
+`loadCredentials`.
+
+**Why it is left.** The alternative on the table was an environment variable pointing the loader
+somewhere else, which is a new door into the credential path — the exact shape five rounds have
+been closing. A test-only parameter on `loadCredentials` is the right answer and is a change to a
+signature three commands call, which is not a thing to do while the branch is being attacked.
+
+**What would close it.** A `root` parameter on `loadCredentials`, defaulted to `REPO_ROOT`, with
+that one test passing a temp dir.

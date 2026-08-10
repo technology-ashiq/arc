@@ -1,6 +1,6 @@
 {
   "name": "leads",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "requires": [
     "core",
     "hq"
@@ -24,7 +24,8 @@
     ".claude/scripts/leads/lib/sequencer.mjs",
     ".claude/scripts/leads/lib/spine-read.mjs",
     ".claude/scripts/leads/lib/store.mjs",
-    ".claude/scripts/leads/pii-tripwire.sh"
+    ".claude/scripts/leads/pii-tripwire.sh",
+    ".claude/scripts/leads/rehearsal-check.mjs"
   ],
   "files": [
     ".claude/config/leads.json"

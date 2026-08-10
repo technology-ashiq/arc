@@ -44,13 +44,83 @@ import { assertTs, isPayloadTs } from "../../hq/lib/validate-leads.mjs";
 //
 // Returns null when it cannot resolve (no dossier, no email, or an id that does not belong to
 // this store). The caller treats null as a REFUSAL, never as "no suppression found".
-function resolveKeyringIds(store, leadId) {
+// EXPORTED, because `cmdDraft` needs the identical answer and was computing a weaker one.
+// Its per-touch approval key was built from the single `lead_id` on the draft, which is the
+// fourth adjacent branch of the D6 this function's own comment describes being fixed in three:
+// after a key rotation the same human carries a v1 id on yesterday's draft and a v2 id on
+// today's, so the "one approval per (campaign, lead, touch)" rule stopped seeing the first one
+// and put two live approvals for one touch in the inbox. A second, narrower resolver here would
+// be D5 by construction, so there is one.
+export function resolveKeyringIds(store, leadId) {
   const email = dossierEmail(store, leadId);
   if (email === null) return null;
   try {
     const ids = leadIdsAllVersions(store, email);
     return ids.includes(leadId) ? ids : null;
   } catch { return null; }
+}
+
+// THE ONE CANONICAL ID FOR A HUMAN, across every key version they have ever had.
+//
+// A `lead_id` is one version of a keyed HMAC, so anything that keys a per-person record on the
+// raw id gets a different key after a rotation — which is how one person ends up holding two
+// live approvals for one thing. `cmdDraft` resolves its touch key this way; `meetingRefFor`
+// hashed the raw id and did not, so a rotation minted a second meeting draft and a second
+// `leads-meeting` approval for a lead whose reply had already been handled.
+//
+// SORTED BY VERSION NUMBER, never `ids[0]` and never a lexicographic sort of the whole string.
+//
+// The canonical member must not depend on the order the keyring hands them back, or a rotation
+// reorders the list and every existing key silently stops matching. The first version of this
+// sorted the strings — and an earlier draft of THIS COMMENT noted "it reorders for real at v10,
+// which sorts before v1" as the justification for sorting at all, having looked straight at the
+// bug and written it down as a feature. `lead_hmac_v10_…` sorts before `lead_hmac_v1_…` because
+// `0` (0x30) is below `_` (0x5F), so the canonical member changed identity at the tenth key.
+//
+// `touchKey` survives that flip because both sides are recomputed in the same run. `meetingRefFor`
+// does NOT: it hashes this value into a `meet_` ref that is written to disk as a filename and
+// carried in the approval payload. Reproduced end to end — nine additive rotations, then the same
+// reply bytes re-ingested, and the store held TWO meeting drafts and TWO undecided
+// `leads-meeting` approvals for one human, at exit 0 on a line that reads like a healthy re-run.
+// That is the state `drafts.mjs` calls how the wrong one gets approved, produced by the plumbing
+// added to prevent it, correct for v2 through v9.
+//
+// The version is parsed and compared as a NUMBER, so the answer is the oldest id for every
+// rotation rather than for the next nine.
+//
+// BUT ONLY WHEN THE CALLER PASSES AN ID THAT HAS ITS OWN DOSSIER FILE, and an earlier version of
+// this sentence promised it unconditionally. `resolveKeyringIds` starts from
+// `dossierEmail(store, leadId)`, so an id with no dossier resolves to `null` and this returns the
+// RAW id — which after a rotation is the newest, i.e. exactly the value the numeric sort exists
+// to avoid. Every production caller passes an id that came from `resolveLead`, which returns the
+// id of the dossier it found, so the fallback is unreachable there; the path that could reach it
+// is a stored draft whose dossier was removed (an ADR-0410 delete-on-request, a partial restore),
+// and that dies first at "no dossier for …" in the incoming half. Stated because a guarantee that
+// holds only under a precondition has to name the precondition.
+const KEY_VERSION_RE = /^lead_hmac_v(\d+)_/;
+export function canonicalLeadId(store, leadId) {
+  const ids = resolveKeyringIds(store, leadId);
+  if (!ids || !ids.length) return leadId;
+  // An id that does not carry a parseable version sorts LAST rather than first: it cannot be
+  // shown to be the oldest, and picking it would be a guess with a persisted consequence.
+  const ver = (s) => { const m = KEY_VERSION_RE.exec(String(s)); return m ? Number(m[1]) : Number.POSITIVE_INFINITY; };
+  return [...ids].sort((a, b) => ver(a) - ver(b) || (a < b ? -1 : a > b ? 1 : 0))[0];
+}
+
+// THE ONE PARSE OF `touch_n`, exported so there is exactly one.
+//
+// The send-moment guard below already compared touches as NUMBERS, for the reason its comment
+// gives: `1` and `"1"` interpolate into the same idem while `===` calls them different touches.
+// `cmdDraft` then built its duplicate-approval key by interpolating the raw value, so ` 1`,
+// `1.0`, `+1`, `1e0` and `01` were five different keys naming one touch — five live approvals
+// for one send, from a rule whose whole purpose is that there is exactly one. The fix already
+// existed one file away and had simply never been called from the second place (D6), which is
+// why it is a shared export now rather than a second copy with the same body.
+export function normalizeTouchN(touch_n) {
+  const tn = Number(touch_n);
+  if (!Number.isSafeInteger(tn) || tn < 1)
+    throw new GuardRefusal("bad-touch", `touch_n ${JSON.stringify(touch_n)} is not a positive integer`);
+  return tn;
 }
 
 // Re-exported, not redefined. The name now lives beside the ONE parse of that variable, in
@@ -106,7 +176,7 @@ export function acquireLock(store) {
     throw new GuardRefusal(
       "lock",
       `another arc-leads process holds the send lock: ${holder}. Refusing.\n` +
-        `If that process is dead, run \`arc-leads reconcile\` — the lock is NEVER auto-broken, ` +
+        `If that process is dead, run \`arc-leads unlock\` — the lock is NEVER auto-broken, ` +
         `because a dead process may sit between the provider ack and the receipt, and stealing ` +
         `its lock is how the same mail gets sent twice (ADR-0411).`
     );
@@ -348,15 +418,27 @@ export function campaignNames(events, kinds = ["outreach.sent"]) {
 
 // Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage
 // floor freezes on noise — HOLD is the honest small-n response, FREEZE the evidenced one.
-export function breakerState(state, lifetimeSends) {
+// `lifetimeSends` IS GONE FROM THE SIGNATURE, not left unused. It fed only the rate branch
+// deleted below, and a parameter a function ignores is a promise it does not keep — the next
+// reader assumes a lifetime-scoped check happens here because the argument says so. Existing
+// callers passing a second argument are unaffected; the call site in `guardSend` no longer
+// computes one for this purpose.
+export function breakerState(state) {
   if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded against the leads sending domain" };
   if (state.bounces >= 2) // NOT "in this campaign". deriveState counts bounces across every leads campaign,
     // because the asset these breakers protect is the one sending domain -- so an operator
     // told "3 bounces in this campaign" against a campaign holding one goes looking for two
     // that are not there.
     return { level: "FROZEN", why: `${state.bounces} bounces across the leads sending domain` };
-  if (lifetimeSends >= 50 && state.bounces / lifetimeSends >= 0.03)
-    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% across ${lifetimeSends} lifetime sends on this domain` };
+  // THE RATE BRANCH THAT USED TO SIT HERE COULD NEVER FIRE, and it is deleted rather than
+  // reordered. It read `lifetimeSends >= 50 && bounces / lifetimeSends >= 0.03`, but the check
+  // directly above already returns FROZEN at `bounces >= 2` — so it was only ever reached with
+  // `bounces <= 1`, where the ratio maxes out at 1/50 = 2%. Its message, `bounce rate X% across
+  // N lifetime sends`, could not be printed by any input this system can produce (D3).
+  //
+  // Reordering would have been the wrong repair: 3% of 50 is 1.5, so every rate that clears the
+  // threshold already implies two bounces, and the absolute rule fires first and says something
+  // truer. A threshold that adds nothing is not made useful by making it reachable.
   if (state.bounces === 1) return { level: "HOLD", why: "the first bounce on this domain — sends pause until a human reviews the cause" };
   return { level: "OK", why: null };
 }
@@ -480,10 +562,9 @@ export function guardSend({ events, store, draft, now, config, env = process.env
       );
   }
   const state = deriveState(events, { campaign });
-  const lifetime = [...state.perDay.values()].reduce((a, b) => a + b, 0);
 
   // 1. campaign state
-  const breaker = breakerState(state, lifetime);
+  const breaker = breakerState(state);
   const incidentId = incidentIdFor(campaign, breaker, state);
   if (breaker.level !== "OK" && !clearedByInbox(events, campaign, breaker.level, incidentId))
     throw new GuardRefusal("campaign-state", `campaign "${campaign}" is ${breaker.level}: ${breaker.why}. Clear it with an approved leads-breaker request naming incident "${incidentId}" — no flag, config value, env var or free-text approval does (ADR-0403).`);
@@ -510,9 +591,7 @@ export function guardSend({ events, store, draft, now, config, env = process.env
   // while `===` says they are different touches. Two derivations of one value that disagree
   // (D5): the guard let a second submit through, and the reconciler voided an intent whose
   // receipt was sitting on the spine.
-  const tn = Number(touch_n);
-  if (!Number.isSafeInteger(tn) || tn < 1)
-    throw new GuardRefusal("bad-touch", `touch_n ${JSON.stringify(touch_n)} is not a positive integer`);
+  const tn = normalizeTouchN(touch_n);
   // EVERY key version, here and in steps 5 and 6 below.
   //
   // Step 4 resolved the whole keyring and steps 3, 5 and 6 each checked ONE id — the same

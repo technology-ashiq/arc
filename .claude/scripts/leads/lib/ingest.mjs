@@ -27,7 +27,9 @@ import { join } from "node:path";
 import { parseReply, ReplyParseError, MAX_REPLY_BYTES } from "./replies.mjs";
 import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } from "./store.mjs";
 import { writeMeetingDraft, meetingApprovalPayload, assertCampaignStore } from "./drafts.mjs";
-import { leadsIdem } from "../../hq/lib/validate-leads.mjs";
+import { leadsIdem, LEADS_KINDS } from "../../hq/lib/validate-leads.mjs";
+import { idemKeys, UNFOLDABLE_REMEDY } from "./spine-read.mjs";
+import { canonicalLeadId } from "./guard.mjs";
 
 export class IngestRefusal extends Error {
   constructor(step, message) { super(message); this.name = "IngestRefusal"; this.step = step; }
@@ -168,7 +170,7 @@ export function meetingBody({ calendarUrl }) {
 // No `repoRoot` parameter: the path rule belongs to readReplyFile, which is the only function
 // that ever sees a path. By the time bytes reach here there is nothing left to contain, and a
 // parameter that is accepted and ignored reads to the next caller as a check being performed.
-export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)" }) {
+export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)", spineIdems = [], spineRead = false }) {
   let parsed;
   try {
     parsed = parseReply(bytes);
@@ -218,11 +220,49 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   // the fold this function was handed. The CLI keeps a second guard for the race (two
   // processes, both past this check) -- belt and braces, because losing that race must be
   // boring rather than an exception.
+  // THE SKIP SET IS THE UNION OF BOTH SPINE FILES, AND IT GROWS. Two defects fixed in
+  // `cmdResearch` were live in this function at the same time, in the sibling copy of the same
+  // idea — which is why the rule is to grep the PATTERN rather than the file:
+  //
+  //   - it folded `events/*.jsonl` while the emitter refuses from `derived/idem.index`, so a
+  //     restored or archived day left keys the fold cannot see and the emitter still rejects
+  //     (D5), and every such receipt was quarantined on every attempt;
+  //   - the set was a snapshot, so two payloads with one idem inside a single call both passed
+  //     the check and the second was refused (D6).
   const onSpine = new Set(events.map((e) => e && e.idem).filter(Boolean));
+  // THE INDEX KEYS ARE INJECTED, NOT READ FROM AMBIENT STATE. The first version called
+  // `idemKeys()`, which resolves `spineRoot()` out of the environment — so this function, whose
+  // own header promises that a test can assert its receipts without a spine, silently began
+  // reading whatever `ARC_SPINE_ROOT` happened to point at. In `leads-reply-contract.bats`,
+  // which has no `setup()` and passes `events: []`, that is this repository's own untracked
+  // index: a suite that passes or fails on a file git does not track, which is the
+  // shard-order-ambient-state failure the lane has already recorded once.
+  //
+  // The CLI passes the real set. A caller that passes nothing gets the events fold alone, which
+  // is exactly what a module test wants and what this function did before.
+  for (const key of spineIdems) onSpine.add(key);
+  // LEADS KINDS ONLY, refused loudly rather than by an obscure throw from three frames down.
+  // This wrapper is built entirely on `leadsIdem`, which is defined for the leads vocabulary and
+  // for nothing else — a caller who hands it `approval.requested` gets UNKNOWN_KIND out of a
+  // module whose name suggests it is a spine problem. That is precisely how the first attempt at
+  // the meeting-approval fix crashed every interested reply. The refusal now says what is wrong
+  // and what to use instead, at the boundary rather than in the callee.
   const emitOnce = async (kind, payload) => {
-    if (onSpine.has(leadsIdem(kind, payload))) return { duplicate: true };
-    await emit(kind, payload);
-    return { duplicate: false };
+    if (!LEADS_KINDS.includes(kind))
+      throw new IngestRefusal("internal", `emitOnce is for leads kinds only and was handed "${kind}" — that kind has no stable idem (arc-event salts a non-leads idem with the millisecond), so deduplicating it by idem is not possible. Check the spine for the receipt's own identity field instead.`);
+    const idem = leadsIdem(kind, payload);
+    if (onSpine.has(idem)) return { duplicate: true, raced: false };
+    // THE EMITTER'S OWN ANSWER IS CARRIED OUT, not discarded. The CLI injects an `emit` that
+    // tolerates DUP_IDEM, so losing the race returns `{duplicate:true}` from down there — and
+    // this wrapper threw it away and reported `{duplicate:false}`, i.e. "a new receipt was
+    // written". The run then printed "N ingested, 0 refused" at exit 0 while the tolerated
+    // refusal had left a quarantine record, and `report` — the one number this phase produces —
+    // refuses while any record exists. Distinguished from `duplicate` because they are
+    // different facts: one is "we already had it", the other is "somebody beat us to it and the
+    // spine now carries a blocker".
+    const res = await emit(kind, payload);
+    onSpine.add(idem);
+    return { duplicate: false, raced: !!(res && res.duplicate) };
   };
 
   const inReplyTo = lastTouchOf(events, who.campaign, who.lead_id);
@@ -248,6 +288,11 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     reply_ref: parsed.reply_ref,
     ...(inReplyTo ? { in_reply_to_touch: inReplyTo } : {}),
   };
+  // The `{duplicate}` answer is CARRIED, not discarded. `emitFn` in the CLI passes
+  // `allowDuplicate: true`, so a lost race is swallowed there and the tolerated refusal still
+  // leaves a quarantine record — which makes `report` refuse outright. `cmdResearch` names
+  // exactly this case and exits non-zero; this branch threw the flag away and printed
+  // "N ingested, 0 refused" at exit 0 while the phase's one number was disabled. D6.
   const repliedEmit = await emitOnce("outreach.replied", payload);
 
   const out = {
@@ -258,6 +303,7 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     matched: parsed.matched,
     fresh,
     receipt_duplicate: repliedEmit.duplicate,
+    receipt_raced: !!repliedEmit.raced,
     suppressed: false,
     meeting_ref: null,
     meeting_created: false,
@@ -267,13 +313,23 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   // end contact with that address — the reasons differ so the two receipts have distinct idems
   // (ADR-0400) and a lead who bounces and later unsubscribes is not deduplicated into one.
   if (parsed.triage_class === "unsubscribe" || parsed.triage_class === "bounce") {
-    await emitOnce("lead.suppressed", {
+    // THE RACE FLAG IS CARRIED HERE TOO. The reply receipt twenty lines up threads `raced` all
+    // the way to a non-zero exit, and this branch dropped it — so a suppression that lost a race
+    // left a quarantine record (which makes `report` refuse permanently) behind a run that
+    // printed "1 ingested, 0 refused" at exit 0. The guard applied to one emit and omitted on
+    // the adjacent one, in the same function, for the fifth time in this lane.
+    //
+    // It matters more here than there: the receipt that gets lost is the one that stops
+    // contacting somebody who asked not to be contacted.
+    const suppressEmit = await emitOnce("lead.suppressed", {
       lead_id: who.lead_id,
       campaign: who.campaign,
       reason: parsed.triage_class === "unsubscribe" ? "unsubscribe" : "bounce",
       suppressed_at: now,
     });
     out.suppressed = true;
+    out.suppressed_duplicate = suppressEmit.duplicate;
+    if (suppressEmit.raced) out.receipt_raced = true;
   }
 
   // The calendar draft, in the same run as the ingestion that classified it.
@@ -288,6 +344,11 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     const { created, rec } = writeMeetingDraft(store, {
       campaign: who.campaign,
       lead_id: who.lead_id,
+      // The REF is keyed on the canonical member of this person's keyring, so a key rotation
+      // does not mint a second meeting draft and a second live approval for one human. The
+      // record still stores the id the reply resolved to. Same function `cmdDraft` keys its
+      // touch on -- one definition of "the canonical id", not two.
+      ref_id: canonicalLeadId(store, who.lead_id),
       reply_ref: parsed.reply_ref,
       // Keyed on the LEAD, not the reply -- see writeMeetingDraft.
       body: meetingBody({ calendarUrl }),
@@ -295,10 +356,78 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     });
     out.meeting_ref = rec.meeting_ref;
     out.meeting_created = created;
-    // The inbox item is minted only with the draft. Re-emitting on a re-ingest would put a
-    // second approval for one meeting in front of the human, and two approvals for one thing
-    // is how the wrong one gets approved.
-    if (created) await emit("approval.requested", meetingApprovalPayload(rec));
+    // GUARDED BY THE SPINE, NOT BY A STORE-FILE FLAG — and NOT by `emitOnce`.
+    //
+    // `created` says whether THIS call wrote the draft file, which is not the question: it
+    // answers "no" both when the approval is already on the spine (right outcome, wrong reason)
+    // and when a previous run wrote the draft and died before announcing it (wrong outcome —
+    // the meeting draft then exists with no approval, permanently, and no re-ingest ever mints
+    // one). So the flag had to go.
+    //
+    // The obvious replacement, `emitOnce` six lines up, is WRONG TWICE, and the first attempt at
+    // this fix shipped it: `approval.requested` is not a leads kind, so `leadsIdem` throws
+    // UNKNOWN_KIND on it and EVERY interested reply crashed after writing the draft — creating
+    // the exact permanent state the paragraph above describes, for every reply rather than for
+    // an interrupted one. And even past the throw it could not work: `arc-event` derives a
+    // non-leads idem as `sha256(preimage|milliseconds)`, so two emits of one approval never
+    // share a key and an idem-set can never contain a previous run's. A payload being
+    // deterministic does not make its idem deterministic.
+    //
+    // An approval's deterministic identity is its `draft_ref`. That is what is checked, and it
+    // is the same question `cmdDraft` asks of the spine for outreach approvals.
+    const announced = events.some(
+      (e) => e && e.kind === "approval.requested" && e.payload && e.payload.draft_ref === rec.meeting_ref
+    );
+    // "NO APPROVAL FOUND" IS ONLY "NO APPROVAL EXISTS" IF THIS FOLD CAN SEE THE WHOLE SPINE.
+    // `cmdDraft` spends twenty lines establishing that and withholds the inference when the
+    // idem index holds keys the day files no longer carry; this made the identical inference
+    // with the identical consequence — a second undecided `leads-meeting` approval for one
+    // human, which the emitter cannot deduplicate because a non-leads idem is millisecond-
+    // salted. Same defect, sibling module, one round later, with the answer already in scope as
+    // a parameter. The index keys are a superset of the fold on a healthy spine, so anything in
+    // the index and not in the fold is history this run cannot read.
+    const foldedIdems = new Set(events.map((e) => e && e.idem).filter(Boolean));
+    let unfoldable = 0;
+    for (const k of spineIdems) if (!foldedIdems.has(k)) unfoldable++;
+    if (!announced && unfoldable > 0)
+      throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. ${UNFOLDABLE_REMEDY}`);
+
+    // AN EMPTY FOLD IS NOT A SPINE THAT SAYS NO. This function's header promises a caller can
+    // assert its exact receipts "without a spine", and every module test takes that up by
+    // passing `events: []` — so on a second call `announced` was false for the same reason it
+    // would be on a fresh install, and the meeting was announced twice. Two `approval.requested`
+    // for one `meet_` ref: the state `drafts.mjs` calls how the wrong one gets approved, pinned
+    // as the expected value by a suite this branch never opened. The production path was right
+    // the whole time (`cmdIngestReply` hands over the real fold), which is exactly what made it
+    // invisible from here. D6 — the guard moved and its sibling test did not.
+    //
+    // So the absence of an approval only counts as evidence when there is a fold to read it out
+    // of. With none, the honest fallback is the fact this call does know: `created` is true only
+    // when it just minted the draft file, and a draft it did not mint has already been through
+    // this branch once. The interrupted-run repair the `created` flag could not do is preserved,
+    // because in production the fold is never empty by the time a re-ingest reaches here — the
+    // previous run's `outreach.replied` is in it.
+    // The emit's answer is CARRIED, like both `emitOnce` calls above. This was the one emit in
+    // the function whose result was dropped — and the CLI injects an emitter that tolerates
+    // DUP_IDEM, so a lost race here reported "1 ingested, 0 refused" at exit 0 while the
+    // tolerated refusal left the quarantine record that makes `report` refuse. Third time this
+    // exact omission has been found in this file, each time on a different emit.
+    // THE CALLER SAYS WHETHER IT SHOWED US THE SPINE. It is not inferred from `events.length`,
+    // and the version that inferred it was a CRITICAL of its own: wipe the spine (a fresh clone,
+    // a machine move, an `ARC_SPINE_ROOT` repoint) while the store keeps the meeting draft, and
+    // `created` is false AND the fold is empty — so the approval was silently never emitted and
+    // the run printed "1 ingested, 0 refused". It healed only on a THIRD ingest, and the operator
+    // had been given a success line and no reason to run one. That traded a double-emit a module
+    // test could see for a silent miss on the path this phase's whole SLA argument rests on.
+    //
+    // An empty fold has two causes that cannot be told apart from in here — "the caller did not
+    // show me a spine" (every module test, deliberately) and "the spine is genuinely empty"
+    // (production, after a reset) — and they need opposite answers. So the caller, which knows,
+    // states it. Default false, so a caller that says nothing gets the conservative answer.
+    if (!announced && (created || spineRead)) {
+      const meetingEmit = await emit("approval.requested", meetingApprovalPayload(rec));
+      if (meetingEmit && meetingEmit.duplicate) out.receipt_raced = true;
+    }
   }
 
   return out;

@@ -166,7 +166,12 @@ function provenanceCorroborated(c, urls) {
   }
 }
 
-const normKey = (e) => String(e == null ? "" : e).normalize("NFC").trim().toLowerCase();
+// EXPORTED, because the caller that BUILDS the verdict map has to key it the same way this
+// module READS it. `cmdResearch` keyed on `String(email).toLowerCase()` while this reads with
+// NFC + trim + lowercase, so a padded or non-NFC address missed, came back `undefined`, and the
+// lead was reported HELD — indistinguishable from a real verifier hold, on a lead the verifier
+// had actually verified. One fact derived two ways (D5), across a module boundary.
+export const normKey = (e) => String(e == null ? "" : e).normalize("NFC").trim().toLowerCase();
 
 // H8 (a D3 RECURRENCE, not a cousin): rule 1 counts >=3 OTHER candidates, so it cannot fire
 // at all on a batch of 3 or fewer -- confirmed 100% PASS on template-identical drafts at

@@ -671,11 +671,87 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     fs.writeFileSync(path.join(d, ".env.local"), "SOME_ARC_TEST_VAR=\nOTHER_ARC_TEST_VAR=filled\n");
     const env = {};
     const r = loadEnvLocal({root:d, env});
-    console.log("LOADED:" + r.loaded + " BLANK:" + r.blank.join(",") + " NAMES:" + r.names.join(","));
+    console.log("LOADED:" + r.loaded + " BLANK:" + r.blank.join(",") + " APPLIED:" + r.applied.join(","));
+    console.log("NAMES:" + r.names.join(","));
     console.log("SET:" + JSON.stringify(env.SOME_ARC_TEST_VAR));'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"LOADED:1 BLANK:SOME_ARC_TEST_VAR NAMES:OTHER_ARC_TEST_VAR"* ]]
+  # `loaded`/`applied` are about EFFECT and still exclude the blank; `names` is about what the
+  # file DECLARES and includes it, because the guard downstream refuses a forbidden name for
+  # being mentioned in a credential file at all. Asserted separately so a future collapse of the
+  # two lists back into one cannot pass this test.
+  [[ "$output" == *"LOADED:1 BLANK:SOME_ARC_TEST_VAR APPLIED:OTHER_ARC_TEST_VAR"* ]]
+  [[ "$output" == *"NAMES:SOME_ARC_TEST_VAR,OTHER_ARC_TEST_VAR"* ]]
   [[ "$output" == *"SET:undefined"* ]]
+}
+
+@test "the file guard still sees a forbidden name when the environment already holds it" {
+  # THE F1 CRITICAL, as its own test. `names` used to be pushed only where the value was
+  # APPLIED, and step 1 of the Phase 03 runbook is `set -a; . ./.env.local; set +a`
+  # -- which sets every one of them first, so every name failed the applied test and `names`
+  # came back EMPTY. The guard then saw an empty file whatever the file held, and a run with
+  # ARC_LEADS_FAKE=1 in it printed "mail sent ... EXIT=0" having delivered nothing.
+  #
+  # The two assertions are deliberately separate. NAMES-HAS-FAKE is the policy fact; APPLIED
+  # empty is the effect fact; and a mutant that collapses them back into one list makes exactly
+  # one of the two fail. A single combined assertion would let the collapse through.
+  _m '
+    const {loadEnvLocal} = await import("./.claude/scripts/leads/lib/env.mjs");
+    const {assertEnvLocalNames} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "mailenv"));
+    fs.writeFileSync(path.join(d, ".env.local"), "RESEND_API_KEY=re_x\nARC_LEADS_FAKE=1\n");
+    const env = {RESEND_API_KEY:"re_x", ARC_LEADS_FAKE:"1"};
+    const r = loadEnvLocal({root:d, env});
+    console.log("NAMES-HAS-FAKE:" + r.names.includes("ARC_LEADS_FAKE"));
+    console.log("APPLIED:" + JSON.stringify(r.applied) + " LOADED:" + r.loaded);
+    try { assertEnvLocalNames(r.names); console.log("NOT-REFUSED"); }
+    catch (e) { console.log("REFUSED:" + e.kind); }'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"NAMES-HAS-FAKE:true"* ]]
+  [[ "$output" == *"APPLIED:[] LOADED:0"* ]]
+  [[ "$output" == *"REFUSED:config"* ]]
+  [[ "$output" != *"NOT-REFUSED"* ]]
+}
+
+@test "a forbidden name declared with an empty value is still refused" {
+  # `set -a` exports ARC_LEADS_FAKE= as an empty string just as readily, and every reader that
+  # today treats "" as absent is one edit away from treating it as present. The guard refuses a
+  # MENTION, so it cannot be re-opened by an unrelated change to how another reader tests
+  # truthiness -- a guard that has to be re-checked every time a caller changes is not a guard.
+  _m '
+    const {loadEnvLocal} = await import("./.claude/scripts/leads/lib/env.mjs");
+    const {assertEnvLocalNames} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "mailenv"));
+    fs.writeFileSync(path.join(d, ".env.local"), "RESEND_API_KEY=re_x\nARC_LEADS_FAKE=\n");
+    const r = loadEnvLocal({root:d, env:{}});
+    console.log("BLANK:" + r.blank.join(",") + " NAMES:" + r.names.join(","));
+    try { assertEnvLocalNames(r.names); console.log("NOT-REFUSED"); }
+    catch (e) { console.log("REFUSED:" + e.kind); }'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"BLANK:ARC_LEADS_FAKE"* ]]
+  [[ "$output" == *"REFUSED:config"* ]]
+  [[ "$output" != *"NOT-REFUSED"* ]]
+}
+
+@test "positive control: an ordinary credential file loads and passes the guard" {
+  # The counterpart the two tests above need. Without it, a mutant that makes `names` return
+  # every name in the universe -- or makes assertEnvLocalNames throw unconditionally -- is green
+  # on both of them. This one fails the moment the guard stops distinguishing.
+  _m '
+    const {loadEnvLocal} = await import("./.claude/scripts/leads/lib/env.mjs");
+    const {assertEnvLocalNames} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), "mailenv"));
+    fs.writeFileSync(path.join(d, ".env.local"), "RESEND_API_KEY=re_x\nARC_LEADS_MAIL_FROM=arc@example.com\n");
+    const env = {};
+    const r = loadEnvLocal({root:d, env});
+    console.log("NAMES:" + r.names.join(",") + " APPLIED:" + r.applied.join(",") + " LOADED:" + r.loaded);
+    assertEnvLocalNames(r.names);
+    console.log("ACCEPTED-AND-APPLIED:" + (env.RESEND_API_KEY === "re_x"));'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"NAMES:RESEND_API_KEY,ARC_LEADS_MAIL_FROM APPLIED:RESEND_API_KEY,ARC_LEADS_MAIL_FROM LOADED:2"* ]]
+  [[ "$output" == *"ACCEPTED-AND-APPLIED:true"* ]]
 }
 
 @test "the real environment wins over the file" {
@@ -713,29 +789,191 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # The startup guard runs at module evaluation, BEFORE .env.local is read, so a file setting
   # ARC_LEADS_FAKE=1 would otherwise walk past it and switch the notification path to the fake:
   # mail sent, exit 0, nothing delivered. ARC_LEADS_MAIL_BASE_URL redirects the Bearer header.
+  # THE NAMES ARE WRITTEN OUT HERE, not read out of the module under test. `N/N` derived from
+  # `ENV_LOCAL_FORBIDDEN.length` on both sides can never see a name that is MISSING from the
+  # list -- which is exactly how five separate steering variables were absent across four
+  # adversarial rounds -- and a substring assertion for `ARC_LEADS_REHEARSAL` is satisfied by
+  # `ARC_LEADS_REHEARSAL_ALLOWLIST`, so a mutant swapping the two passed every check while
+  # re-opening the product-domain unlock AND refusing the allowlist the runbook requires.
+  #
+  # The guard is now an ALLOWLIST over three families, so the meaningful assertion is that a
+  # name nobody has thought of is refused BY DEFAULT. That is the property that stops round six.
   _m '
-    const {assertEnvLocalNames, ENV_LOCAL_FORBIDDEN} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const {assertEnvLocalNames, ENV_LOCAL_ALLOWED} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const mustRefuse = [
+      "ARC_LEADS_FAKE","ARC_LEADS_NOW","ARC_LEADS_STORE","ARC_LEADS_MAIL_BASE_URL",
+      "LEADS_FIXTURE_DIR","LEADS_PROVIDER_BASE_URL","LEADS_CONFIG","LEADS_WARMUP_APPROVED",
+      "ARC_LEADS_REHEARSAL","ARC_SPINE_ROOT","ARC_SPINE_NOW","ARC_SPINE_RAND",
+      "LEADS_A_VARIABLE_NOBODY_HAS_INVENTED_YET","arc_leads_fake","ARC_NODE","ARC_MODEL",
+      "ARC_RUN_ID","ARC_VENTURE","ARC_SPINE_ACTOR","ARC_ANYTHING_NEW"," ARC_LEADS_FAKE",
+      "NODE_EXTRA_CA_CERTS","BASH_ENV","ENV","BASH_FUNC_x","SHELLOPTS","IFS","COMSPEC","PATH",
+      "PATHEXT","CDPATH","LD_AUDIT","DYLD_INSERT_LIBRARIES","HTTPS_PROXY","OPENSSL_MODULES",
+      "SSL_CERT_FILE","GNUTLS_SYSTEM_PRIORITY_FILE","CURL_CA_BUNDLE","REQUESTS_CA_BUNDLE",
+      "GIT_CONFIG_GLOBAL","HOME","USERPROFILE","XDG_SESSION_TYPE","JAVA_TOOL_OPTIONS","TMPDIR",
+      "TEMP","TMP","PERL5OPT","PYTHONSTARTUP","RUBYOPT","GEM_SPEC_CACHE","LUA_INIT","R_LIBS",
+      "ACME_CONF","ACME_CONFIG","ACME_OPTS","ACME_OPTIONS","ACME_STARTUP","ACME_PROFILE",
+      "ACME_RCFILE","CLASSPATH","ACME_HOME","ACME_DIR","ACME_ROOT","ACME_HOOKS","ACME_PROFILER",
+      "ACME_PRELOAD","ACME_LIB","GCONV_MODULES","LOCPATH","NLSPATH","MSYS_NO_PATHCONV",
+      "MSYS2_ARG_CONV_EXCL","NPM_CONFIG_SCRIPT_SHELL","DOTNET_ROLL_FORWARD",
+      "CORECLR_ENABLE_PROFILING",
+    ];
     let refused = 0;
-    for (const n of ENV_LOCAL_FORBIDDEN) { try { assertEnvLocalNames(["RESEND_API_KEY", n]); } catch (e) { if (e.kind === "config") refused++; } }
-    console.log("REFUSED:" + refused + "/" + ENV_LOCAL_FORBIDDEN.length);
-    console.log("GUARDS:" + ENV_LOCAL_FORBIDDEN.join(","));
-    assertEnvLocalNames(["RESEND_API_KEY", "ARC_LEADS_MAIL_FROM", "ARC_LEADS_MAIL_ALLOWLIST"]);
+    const escaped = [];
+    for (const n of mustRefuse) {
+      try { assertEnvLocalNames(["RESEND_API_KEY", n]); escaped.push(n); }
+      catch (e) { if (e.kind === "config") refused++; else escaped.push(n); }
+    }
+    console.log("REFUSED:" + refused + "/" + mustRefuse.length);
+    console.log("ESCAPED:" + (escaped.length ? escaped.join(",") : "none"));
+    console.log("ALLOWED:" + ENV_LOCAL_ALLOWED.join(","));
+    assertEnvLocalNames(["RESEND_API_KEY", ...ENV_LOCAL_ALLOWED, "SUPABASE_URL", "STRIPE_SECRET_KEY"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:5/5"* ]]
-  [[ "$output" == *"ARC_LEADS_FAKE"* ]]
-  [[ "$output" == *"ARC_LEADS_NOW"* ]]
-  [[ "$output" == *"ARC_LEADS_MAIL_BASE_URL"* ]]
+  [[ "$output" == *"REFUSED:76/76"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ESCAPED:none"* ]] || { echo "$output"; false; }
+  # The allowlist must hold the recipient-policy names and NOTHING that steers a send. Asserted
+  # positively, so shrinking it (which would refuse the runbook's own required variables) fails
+  # here rather than at the operator.
+  [[ "$output" == *"ALLOWED:ARC_LEADS_MAIL_FROM,ARC_LEADS_MAIL_ALLOWLIST,ARC_LEADS_REHEARSAL_ALLOWLIST,ARC_LEADS_OUTREACH_FROM"* ]] || { echo "$output"; false; }
   [[ "$output" == *"CREDENTIALS-ACCEPTED"* ]]
 }
 
-@test "the mail subcommand actually calls the credential-file guard" {
-  # The guard is worth nothing if the one caller that reads .env.local forgets to call it, and
-  # the guard itself cannot detect that.
+@test "the canonical keyring id is the oldest one at ten key versions, not the one that sorts first" {
+  # `canonicalLeadId` picks the member every persisted per-person ref is keyed on. It sorted the
+  # STRINGS, and `lead_hmac_v10_` sorts before `lead_hmac_v1_` because `0` is below `_` -- so the
+  # canonical member changed identity at the tenth key. `touchKey` survives that (both sides are
+  # recomputed in one run); `meetingRefFor` does not, because its `meet_` ref is written to disk
+  # as a filename and carried in the approval payload. Nine additive rotations then produced TWO
+  # meeting drafts and TWO undecided approvals for one human, at exit 0.
+  #
+  # Ten versions, because nine is the last one the broken comparator got right. Asserted through
+  # a REAL store and a real rotation rather than against a hand-built list, so the id grammar and
+  # the comparator have to agree.
+  _m '
+    const {initStore, openStore, rotateSecret, leadIdsAllVersions} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    // The store is a SIBLING of the repo root, never inside it. `assertOutsideRepo` refuses a
+    // store under the repo (ADR-0410: PII must not live where git can track or clean it), so the
+    // first version of this fixture threw STORE_INSIDE_REPO before its first console.log and the
+    // test could not run at all -- the exact vacuous shape this suite exists to refuse.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "keyring"));
+    const root = path.join(base, "repo");
+    fs.mkdirSync(root, {recursive: true});
+    process.env.ARC_LEADS_STORE = path.join(base, "store");
+    initStore({repoRoot: root});
+    for (let i = 0; i < 9; i++) rotateSecret({repoRoot: root});
+    const s = openStore({repoRoot: root});
+    const ids = leadIdsAllVersions(s, "one@example.test");
+    console.log("VERSIONS:" + ids.length);
+    const ver = (x) => Number((/^lead_hmac_v(\d+)_/.exec(x) || [])[1] || -1);
+    const oldest = [...ids].sort((a, b) => ver(a) - ver(b))[0];
+    const lexFirst = [...ids].sort()[0];
+    console.log("LEX-DIFFERS:" + (oldest !== lexFirst));
+    console.log("OLDEST-IS-V1:" + (ver(oldest) === 1));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # THE FIXTURE ASSERTS ITSELF: without ten versions the flip cannot happen and the test below
+  # would pass on a keyring that never exercised it.
+  [[ "$output" == *"VERSIONS:10"* ]] || { echo "the rotation did not produce ten key versions: $output"; false; }
+  [[ "$output" == *"LEX-DIFFERS:true"* ]] || { echo "the lexicographic and numeric answers agree, so this input proves nothing: $output"; false; }
+  [[ "$output" == *"OLDEST-IS-V1:true"* ]] || { echo "$output"; false; }
+}
+
+@test "canonicalLeadId returns that oldest id, so a persisted ref does not move at v10" {
+  # The property the one above establishes an input for. A mutant reverting to `[...ids].sort()[0]`
+  # returns the v10 id here and fails.
+  _m '
+    const {initStore, openStore, rotateSecret, leadId} = await import("./.claude/scripts/leads/lib/store.mjs");
+    const {canonicalLeadId} = await import("./.claude/scripts/leads/lib/guard.mjs");
+    const fs = await import("node:fs"), os = await import("node:os"), path = await import("node:path");
+    // Sibling, not nested -- see the note in the test above.
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), "keyring2"));
+    const root = path.join(base, "repo");
+    fs.mkdirSync(root, {recursive: true});
+    process.env.ARC_LEADS_STORE = path.join(base, "store");
+    initStore({repoRoot: root});
+    const s0 = openStore({repoRoot: root});
+    const v1 = leadId(s0, "one@example.test");
+    const dir = path.join(process.env.ARC_LEADS_STORE, "dossiers");
+    fs.mkdirSync(dir, {recursive: true});
+    fs.writeFileSync(path.join(dir, v1 + ".json"), JSON.stringify({lead_id: v1, email: "one@example.test"}));
+    for (let i = 0; i < 9; i++) rotateSecret({repoRoot: root});
+    const s = openStore({repoRoot: root});
+    const now = leadId(s, "one@example.test");
+    // A DOSSIER FOR THE CURRENT ID TOO, because that is the post-rotation state production
+    // reaches: `research` re-run under the new key writes one, and `resolveLead` walks the
+    // keyring newest-first, so `who.lead_id` is always an id that HAS a dossier. Asking
+    // canonicalLeadId about an id with no dossier is a state no caller can produce --
+    // `resolveKeyringIds` returns null there and the raw id is the documented fallback.
+    fs.writeFileSync(path.join(dir, now + ".json"), JSON.stringify({lead_id: now, email: "one@example.test"}));
+    console.log("CURRENT-IS-V10:" + /^lead_hmac_v10_/.test(now));
+    console.log("CANON-FROM-V1:" + (canonicalLeadId(s, v1) === v1));
+    console.log("CANON-FROM-V10:" + (canonicalLeadId(s, now) === v1));'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"CURRENT-IS-V10:true"* ]] || { echo "the store did not reach v10: $output"; false; }
+  # BOTH DIRECTIONS. Resolving from the old id and from the new one must land on the same member,
+  # or the persisted ref moves the moment a reply arrives under the new key.
+  [[ "$output" == *"CANON-FROM-V1:true"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"CANON-FROM-V10:true"* ]] || { echo "the canonical member moved at v10: $output"; false; }
+}
+
+@test "every command that reads the credential file calls the guard on it" {
+  # The guard is worth nothing if a caller that reads .env.local forgets to call it, and the
+  # guard cannot detect that itself.
+  #
+  # THE OLD VERSION OF THIS TEST WAS `grep -c assertEnvLocalNames &gt;= 2`. That name appears four
+  # times in the file (an import, two comments, one call), so deleting the `loadCredentials()`
+  # call from BOTH `cmdPreflight` and `deliverNotification` left the count at four and the whole
+  # suite green -- and one of those deletions is exactly the regression that made
+  # `arc-leads preflight: PASS` reachable from a credential file. A test named after a guard,
+  # measuring a substring frequency (D7).
+  #
+  # This walks the actual function bodies instead: brace-matched from each declaration, so a
+  # call that moves out of a function is caught even if it stays in the file. A behavioural test
+  # (write a .env.local, run preflight, expect a refusal) is not possible while
+  # `loadCredentials` anchors on the real REPO_ROOT -- that is recorded as H-06 in
+  # phases/phase-03-known-holes.md rather than left as a silent gap.
   cd "$ARC_ROOT"
-  run grep -c "assertEnvLocalNames" .claude/scripts/leads/arc-leads.mjs
-  [ "$status" -eq 0 ]
-  [ "$output" -ge 2 ]
+  cat > "$BATS_TEST_TMPDIR/callsites.mjs" <<'MJS'
+import { readFileSync } from "node:fs";
+const src = readFileSync(".claude/scripts/leads/arc-leads.mjs", "utf8");
+const want = ["cmdDaily", "cmdPreflight", "deliverNotification"];
+const missing = [];
+// A plain string search, NOT a constructed RegExp. Building one here means backslashes have to
+// survive a heredoc, a shell and a JS string literal intact, and the first version of this
+// probe lost them and died on "Unterminated group" -- a test that fails to parse is a test that
+// proves nothing, which is the whole subject of this file.
+for (const fn of want) {
+  const at = src.indexOf("function " + fn + "(");
+  if (at === -1) { missing.push(fn + " (not found at all)"); continue; }
+  // THE PARAMETER LIST IS SKIPPED FIRST. Taking the next "{" after the declaration finds the
+  // DESTRUCTURING brace of `function deliverNotification({ to, subject, ... })`, so the
+  // brace-matcher closed on the parameter list and handed back an empty body -- and the first
+  // run of this probe duly reported that function as missing the call it plainly contains.
+  // Paren depth is walked back to zero, and only then is the body brace taken.
+  let p = src.indexOf("(", at), pd = 0, afterParams = -1;
+  for (let j = p; j < src.length; j++) {
+    if (src[j] === "(") pd++;
+    else if (src[j] === ")") { pd--; if (pd === 0) { afterParams = j; break; } }
+  }
+  if (afterParams === -1) { missing.push(fn + " (unparseable parameter list)"); continue; }
+  let i = src.indexOf("{", afterParams), depth = 0, end = -1;
+  for (let j = i; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}") { depth--; if (depth === 0) { end = j; break; } }
+  }
+  const body = src.slice(i, end);
+  if (!body.includes("loadCredentials()")) missing.push(fn);
+}
+console.log("CHECKED:" + want.length);
+console.log("MISSING:" + (missing.length ? missing.join(",") : "none"));
+MJS
+  [ -s "$BATS_TEST_TMPDIR/callsites.mjs" ] || { echo "the probe is EMPTY"; false; }
+  run node "$BATS_TEST_TMPDIR/callsites.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Assert it RAN before asserting what it found: CHECKED proves all three declarations were
+  # located, so "MISSING:none" cannot be satisfied by a probe that examined nothing.
+  [[ "$output" == *"CHECKED:3"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"MISSING:none"* ]] || { echo "a command that reads .env.local does not call the guard: $output"; false; }
 }
 
 @test "the env file is ignored by git, asked OF git rather than read from gitignore" {
@@ -901,7 +1139,21 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # The confirmation line is `arc-leads: mail sent id=...`. A bare "mail sent" substring is the
   # wrong assertion: the explanation this test WANTS to see contains the words "no mail sent",
   # so the naive form failed on the very output that proves the behaviour is correct.
+  #
+  # AND IT NO LONGER STANDS ALONE. This whole file runs under ARC_LEADS_FAKE=1, and a successful
+  # send on the fake now prints the NOT-SENT sentence instead of the confirmation -- so BOTH
+  # branches satisfy the first line below, so it alone can no longer fail. What closes that is
+  # the SECOND line: under ARC_LEADS_FAKE=1 a delivery that DID happen prints the NOT-SENT
+  # sentence, so the pair covers both spellings of "a send was attempted" and neither is
+  # satisfied by the other. The positive `nothing waiting` assertion above is what a crash
+  # cannot satisfy.
+  #
+  # An earlier version of this comment said the delivery was "pinned by its absence from the
+  # store journal". There is no journal read in this test and never was -- the assertions are
+  # sound and the sentence describing them was invented, which is the ninth-round shape of the
+  # defect this file keeps finding: a claim in a comment that the code beside it does not make.
   [[ "$output" != *"arc-leads: mail sent id="* ]]
+  [[ "$output" != *"NOT SENT"* ]] || { echo "a delivery was attempted for an empty inbox: $output"; false; }
 }
 
 @test "notify canary refuses a detail that is empty" {
@@ -941,6 +1193,70 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   [ "$status" -eq 2 ]
   [[ "$output" == *"--text-file"* ]]
   [[ "$output" == *"never in argv"* ]]
+  # AND THE DETAIL ITSELF IS NOT ECHOED BACK. A refusal that quotes the argument it refused has
+  # put the content into the same log the rule exists to keep it out of.
+  [[ "$output" != *"connection refused on :8443"* ]] || { echo "the refusal echoed the detail it refused: $output"; false; }
+
+  # BOTH SPELLINGS. `--text=<detail>` is ONE argv element, so an exact-match test misses it and
+  # it fell through to the unknown-flag branch, which quoted the whole element -- putting the
+  # detail verbatim into stderr and therefore into the CI log. The refusal that enforces ADR-0412
+  # was leaking under ADR-0412, through the equals form of the flag it names.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary "--text=connection refused on :8443"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"never in argv"* ]] || { echo "the equals form escaped the rule: $output"; false; }
+  [[ "$output" != *"connection refused on :8443"* ]] || { echo "the equals form echoed the detail: $output"; false; }
+
+  # And an unknown flag echoes its NAME, never whatever was attached to it.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary "--bogus=secret-value"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"--bogus"* ]] || { echo "the refusal did not name the flag: $output"; false; }
+  [[ "$output" != *"secret-value"* ]] || { echo "the refusal echoed an attached value: $output"; false; }
+
+  # --stdin gets the SAME two rules as every other flag in this loop. It was exempt from both:
+  # repeating it was accepted silently while a repeated --text-file refused, and --stdin=1 was
+  # told the flag does not exist. Asserting on the DISTINCT refusal each one produces, not on a
+  # shared exit 2 -- exit 2 is also what the unknown-flag branch these used to fall into returns.
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --stdin --stdin
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"given twice"* ]] || { echo "a repeated --stdin was not refused as a repeat: $output"; false; }
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary "--stdin=1"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"takes no value"* ]] || { echo "--stdin=1 was not refused as a value on a boolean: $output"; false; }
+  [[ "$output" != *"unknown flag"* ]] || { echo "--stdin was reported as not existing, and it does: $output"; false; }
+}
+
+@test "notify parses its flags as a consuming loop, not by scanning for each one" {
+  # `cmdMail`, `cmdReport`, `cmdIngestReply` and rehearsal-check.mjs were each rewritten out of an
+  # `indexOf` scan; three of them carry a comment calling that scan "D5 in miniature". `notify`
+  # was the branch that never got it -- on the surface whose whole job is to reach a human about
+  # an outage. A scan resolves a repeated flag silently by position and ignores an unknown one.
+  cd "$ARC_ROOT"
+  local dir; dir="$(_tmpdir)"
+  [ -n "$dir" ] || { echo "the temp dir was not created"; false; }
+
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --bogus x
+  [ "$status" -eq 2 ] || { echo "an unknown flag was accepted: $output"; false; }
+  [[ "$output" == *"unknown flag"* ]] || { echo "$output"; false; }
+
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file a --text-file b
+  [ "$status" -eq 2 ] || { echo "a repeated flag resolved by position instead of refusing: $output"; false; }
+  [[ "$output" == *"given twice"* ]] || { echo "$output"; false; }
+
+  # POSITIVE CONTROL: the flags that DO exist still parse, so the loop refuses the wrong things
+  # rather than everything. Proof is that the run reaches the RECIPIENT stage, which is past the
+  # parser -- asserted on the variable name both environments print, because the two print
+  # different sentences: CI has no .env.local so the allowlist is unset, and a developer box has
+  # one so the allowlist holds addresses. Pinning either sentence is green on one and red on the
+  # other, which is known-hole H-06 arriving as a flaky test rather than as stderr noise.
+  local detail; detail="$(_emptyfile)"
+  printf 'connection refused\n' > "$detail"
+  run env ARC_LEADS_FAKE=1 ARC_LEADS_STORE="$dir" node .claude/scripts/leads/arc-leads.mjs notify canary --text-file "$detail" --what "the canary failed"
+  [[ "$output" == *"ARC_LEADS_MAIL_ALLOWLIST"* ]] || { echo "the run did not reach the recipient stage: $output"; false; }
+  # And it got there without the parser objecting to either flag. Negatives, but each paired with
+  # the positive above rather than standing alone.
+  [[ "$output" != *"unknown flag"* ]] || { echo "a valid flag was called unknown: $output"; false; }
+  [[ "$output" != *"given twice"* ]] || { echo "two distinct flags were read as a repeat: $output"; false; }
+  [[ "$output" != *"needs a value"* ]] || { echo "a flag with a value was read as bare: $output"; false; }
 }
 
 @test "an unknown notify trigger prints the three that exist" {
@@ -1036,8 +1352,12 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # bats silently DROPS a @test whose name holds a non-ASCII character and reports green having
   # never run it. The only signal is a falling count, so the count is asserted here.
   local declared registered
-  declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
+  # The grammar is the one CI counts with (`_declared` in ci.yml), not a narrower spelling of
+  # it: `^@test ` misses a tab-indented declaration and misses `@test` followed by a tab, so a
+  # test could be dropped by bats AND uncounted here -- the count that exists to catch a silent
+  # drop, blind to two of the three forms it has to see.
+  declared="$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 74 ] || { echo "expected 74 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 80 ] || { echo "expected 80 tests, found $declared -- update this number deliberately"; false; }
 }

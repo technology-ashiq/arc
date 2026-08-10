@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { initStore, openStore, leadId, leadIdsAllVersions, fingerprint, StoreError, storePath, STORE_FILE_MODE, STORE_DIR_MODE } from "./lib/store.mjs";
-import { lintCandidates } from "./lib/research-lint.mjs";
+import { lintCandidates, normKey } from "./lib/research-lint.mjs";
 import { source, verifier, ProviderError, PROVIDER_EXIT } from "./lib/deps.mjs";
 import { preflight, PREFLIGHT_REFUSED, loadConfig, seedSmokeFinding } from "./lib/preflight.mjs";
 import { ingestReply, readReplyFile, readStdin, IngestRefusal } from "./lib/ingest.mjs";
@@ -25,13 +25,13 @@ import { inbound } from "./lib/deps.mjs";
 // validator the payload stamps went through, so a window bound and the receipts it is compared
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
-import { readAllEvents, dayFileCount, quarantineCount } from "./lib/spine-read.mjs";
-import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
+import { readAllEvents, dayFileCount, quarantineCount, idemKeys, UNFOLDABLE_REMEDY } from "./lib/spine-read.mjs";
+import { initCampaign, assertCampaignStore, CAMPAIGN_NAME_RE, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
-import { provider } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames } from "./lib/guard.mjs";
+import { provider, usingFakes } from "./lib/deps.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames, canonicalLeadId, normalizeTouchN } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -39,6 +39,22 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../..");
 
 const die = (code, msg) => { console.error(`arc-leads: ${msg}`); process.exit(code); };
+
+// ONE campaign-name grammar, for every door a campaign name can enter through.
+//
+// `research` validated the name it read out of the ICP file and `draft` validated nothing at
+// all: it took the name from argv and handed it straight to `assertCampaignStore`, which asks
+// the filesystem whether that campaign directory exists. On Windows and on macOS that answer is
+// case-insensitive, so `draft Walk` opened the `walk` campaign and wrote into it under a name
+// the idem preimage treats as different — two approvals for one touch, from one keystroke.
+//
+// The grammar is not cosmetic: `|` is the idem delimiter, so a campaign name that could contain
+// one could forge the boundary between fields in another lead's preimage.
+function assertCampaignName(campaign, where) {
+  if (!CAMPAIGN_NAME_RE.test(String(campaign ?? "")))
+    die(2, `${where} must match [a-z0-9-]{1,64} (got ${JSON.stringify(campaign)}) — "|" is the idem delimiter, and an uppercase variant is a different campaign to the spine and the same directory to the filesystem`);
+  return String(campaign);
+}
 
 // ---------- emit ----------
 //
@@ -76,10 +92,16 @@ function emit(kind, payload, { evidence = null, allowDuplicate = false } = {}) {
   try {
     const args = ["emit", kind, "--payload-file", tmp, "--actor", "arc-leads", "--strict"];
     if (evidence) args.push("--evidence", evidence);
-    return execFileSync("bash", [sh, ...args], { encoding: "utf8" });
+    return { duplicate: false, stdout: execFileSync("bash", [sh, ...args], { encoding: "utf8" }) };
   } catch (e) {
     const stderr = String(e.stderr || "");
-    if (allowDuplicate && DUP_IDEM_RE.test(stderr)) return "";
+    // A SWALLOWED DUPLICATE IS REPORTED, NOT ERASED. This used to return `""`, indistinguishable
+    // from a successful emit that printed nothing, so every caller counted a refusal as a new
+    // receipt — the run said "5 new receipts" for a spine that had gained none. Worse, the
+    // emitter quarantines BEFORE it writes REJECT, so the swallow leaves a record behind that
+    // makes `report` refuse outright: the one number this phase exists to produce, disabled by
+    // an outcome the caller was told was fine. Callers now learn that it happened and can say so.
+    if (allowDuplicate && DUP_IDEM_RE.test(stderr)) return { duplicate: true, stdout: "" };
     // Re-raise WITHOUT the child command line: err.message embeds the whole invocation.
     throw new Error(`arc-event refused a ${kind} receipt (exit ${e.status}). stderr: ${stderr.trim()}`);
   } finally {
@@ -109,8 +131,7 @@ async function cmdResearch(icpPath) {
   if (!existsSync(icpPath)) die(2, `ICP file not found: ${icpPath}`);
   const icp = JSON.parse(readFileSync(icpPath, "utf8"));
   const campaign = icp.campaign;
-  if (!/^[a-z0-9-]{1,64}$/.test(String(campaign || "")))
-    die(2, `ICP "campaign" must match [a-z0-9-]{1,64} (got ${JSON.stringify(campaign)}) — "|" is the idem delimiter`);
+  assertCampaignName(campaign, `ICP "campaign"`);
 
   let store;
   try { store = openStore({ repoRoot: REPO_ROOT }); }
@@ -123,7 +144,12 @@ async function cmdResearch(icpPath) {
   // Verify every address BEFORE linting, so `held` is decided by the verifier rather than by
   // whichever branch happened to run first.
   const verdicts = new Map();
-  for (const c of candidates) verdicts.set(String(c.email).toLowerCase(), await verifier().verify(c.email));
+  // KEYED WITH THE FUNCTION THAT READS IT. `lintCandidates` looks these up through
+  // `normKey` (NFC + trim + lowercase); this built them with a bare `toLowerCase()`, so any
+  // address carrying padding or a non-NFC character missed the lookup and came back
+  // `undefined` — which `lintCandidates` reads as HELD. A verified lead reported as held is
+  // indistinguishable from a real hold, and it silently drops a person out of the five.
+  for (const c of candidates) verdicts.set(normKey(c.email), await verifier().verify(c.email));
 
   const { accepted, rejected, corpusWarning } = lintCandidates(candidates, verdicts);
   if (corpusWarning) console.error(`arc-leads: WARNING — ${corpusWarning}`);
@@ -152,33 +178,152 @@ async function cmdResearch(icpPath) {
   // was handed, and keeps `allowDuplicate` as the RACE backstop for two processes that both
   // pass that check. The guard was written in one branch and never in this one -- D6, this
   // lane's most repeated defect. Both halves are here now.
-  const onSpine = new Set(readAllEvents({ allowMissing: true }).map((e) => e && e.idem).filter(Boolean));
+  // ...and the first version of that guard was wrong in all three of the ways below, so the
+  // comment above describes the intent and this one describes what it takes to hold it.
+  //
+  // 1. THE SNAPSHOT WAS NEVER GROWN. `onSpine` was read once before the loop and never added
+  //    to, so two rows for one lead INSIDE one corpus — a duplicate row, or the same address in
+  //    a different case, both ordinary scraper output — passed the check twice and the second
+  //    emit was refused. D6 inside its own commit: the draft half of that same commit grows its
+  //    map for exactly this reason and says so.
+  // 2. THE SKIP AND THE REFUSAL READ DIFFERENT FILES. The skip folded `events/*.jsonl`; the
+  //    emitter refuses from `derived/idem.index`. One fact, two derivations (D5), and they
+  //    disagree precisely when a day file has been restored or archived: the index still holds
+  //    the key, the fold no longer sees it, so the skip says emit and the emitter says refused —
+  //    forever. Those receipts were permanently unrecordable. Both are read now, and the
+  //    DISAGREEMENT is named rather than resolved by preferring one.
+  // 3. SWALLOWING THE EXCEPTION DID NOT UNDO THE QUARANTINE. `arc-event` quarantines and then
+  //    writes REJECT, so every tolerated DUP_IDEM left a record and `report` refuses while any
+  //    record exists. The backstop therefore disabled the phase's one number while reporting
+  //    success. The remedy is to stop PRODUCING them: the read and the emits are one critical
+  //    section under the same lock `daily` and `notify` take, which is what makes the check and
+  //    the act atomic against another arc-leads process. That lock existed and this branch was
+  //    the one that never took it — the same D6, three commands apart.
+  const release = acquireLock(store);
   let emitted = 0, alreadyOnSpine = 0;
+  const changedUnderOneIdem = [], orphanedIdem = [], racedDuplicate = [], emitFailed = [];
+  // Which idems THIS run put on the spine, and which distinct people the corpus actually
+  // described. Both exist because `accepted.length` is a count of ROWS and every number this
+  // command prints is about PEOPLE.
+  const emittedThisRun = new Set();
+  // Idems this run has already decided NOT to write — refused by the emitter, or orphaned in
+  // the index. Kept apart from `byIdem`, which means "the spine holds this", because conflating
+  // "we gave up on it" with "it is recorded" is how a run reports a receipt that does not exist.
+  const failedThisRun = new Set();
+  const distinctLeads = new Map();
+  try {
+    // INDEX FIRST HERE TOO. `cmdDraft` and `cmdIngestReply` were both moved to this order and
+    // this one — which asks the same question of the same two files and refuses on the same
+    // answer — was left behind. A key entering the index between the two reads would look
+    // orphaned, and the run would exit 2 telling the operator to restore a day file that was
+    // never missing. Narrow in practice (the racing writer would have to mint this very
+    // `lead.researched` idem, and this section holds the send lock) and free to close, which is
+    // the whole shape of the defect this lane keeps paying for: the guard applied in two
+    // branches and omitted in the third.
+    const indexed = idemKeys();
+    const priorEvents = readAllEvents({ allowMissing: true });
+    // Keyed by idem so a skip can compare the PAYLOAD, not merely observe that the key exists.
+    const byIdem = new Map();
+    for (const e of priorEvents) if (e && e.idem) byIdem.set(e.idem, e);
 
-  for (const a of accepted) {
-    const id = leadId(store, a.email);
-    // The dossier holds the PII. It lives in the store, outside the repo, and nothing here
-    // ever reaches a receipt.
-    writeFileSync(join(dossierDir, `${id}.json`), JSON.stringify({
-      lead_id: id, name: a.name, email: a.email, firm: a.firm, firm_domain: a.firm_domain,
-      geography: a.geography, provenance: a.provenance, source_urls: a.source_urls,
-      facts: a.facts, citable_facts: a.citable_facts,
-      email_status: a.email_status, below_bar: a.below_bar, below_bar_reason: a.below_bar_reason,
-      campaign, store_id: store.storeId,
-    }, null, 2) + "\n");
+    for (const a of accepted) {
+      const id = leadId(store, a.email);
+      // LAST WRITE WINS, exactly as the dossier file does four lines below, so this map always
+      // describes the store rather than a parallel opinion of it.
+      distinctLeads.set(id, a);
+      // The dossier holds the PII. It lives in the store, outside the repo, and nothing here
+      // ever reaches a receipt.
+      writeFileSync(join(dossierDir, `${id}.json`), JSON.stringify({
+        lead_id: id, name: a.name, email: a.email, firm: a.firm, firm_domain: a.firm_domain,
+        geography: a.geography, provenance: a.provenance, source_urls: a.source_urls,
+        facts: a.facts, citable_facts: a.citable_facts,
+        email_status: a.email_status, below_bar: a.below_bar, below_bar_reason: a.below_bar_reason,
+        campaign, store_id: store.storeId,
+      }, null, 2) + "\n");
 
-    const receipt = {
-      lead_id: id, campaign, provenance: a.provenance, geography: a.geography,
-      email_status: a.email_status, fact_count: a.fact_count,
-      store_id: store.storeId, store_fingerprint: fp,
-      ...(a.below_bar ? { below_bar: true } : {}),
-    };
-    // The idem is computed from the SAME payload object that would be emitted, not from a
-    // re-spelling of its fields: a preimage assembled twice is free to disagree with itself on
-    // exactly the receipt that matters (D5), and this one already grew `below_bar` once.
-    if (onSpine.has(leadsIdem("lead.researched", receipt))) { alreadyOnSpine++; continue; }
-    emit("lead.researched", receipt, { allowDuplicate: true });
-    emitted++;
+      const receipt = {
+        lead_id: id, campaign, provenance: a.provenance, geography: a.geography,
+        email_status: a.email_status, fact_count: a.fact_count,
+        store_id: store.storeId, store_fingerprint: fp,
+        ...(a.below_bar ? { below_bar: true } : {}),
+      };
+      // The idem is computed from the SAME payload object that would be emitted, not from a
+      // re-spelling of its fields: a preimage assembled twice is free to disagree with itself on
+      // exactly the receipt that matters (D5), and this one already grew `below_bar` once.
+      const idem = leadsIdem("lead.researched", receipt);
+
+      // SAME KEY IS NOT SAME RECEIPT. The preimage is `campaign|lead_id|below_bar|fingerprint`
+      // and deliberately excludes `email_status`, so a lead that was `verified` last run and is
+      // `held` this run collides on one idem — and the old skip treated that as "already
+      // recorded" and moved on, leaving the spine asserting `verified` about a lead the verifier
+      // has since rejected. A skip that cannot tell "identical" from "merely colliding" is not a
+      // skip, it is a silent overwrite in the direction of the stale value.
+      const prior = byIdem.get(idem);
+      if (prior) {
+        const diff = payloadDiff(prior.payload, receipt);
+        // WHOSE receipt it collided with decides what the operator should DO, and the first
+        // version said the same thing either way. If this run emitted it a few rows ago, the
+        // "prior" is a sibling row in the same corpus and nothing was on the spine before now —
+        // so telling the operator to write a correction receipt sends them to fix the spine when
+        // what needs fixing is their input file. Worse, the dossier on disk has already been
+        // overwritten by the losing row, so store and spine now disagree about that lead.
+        if (diff.length) changedUnderOneIdem.push({ id, diff, sameRun: emittedThisRun.has(idem) });
+        else alreadyOnSpine++;
+        continue;
+      }
+
+      // ALREADY HANDLED AND ALREADY NAMED. A second row for a lead whose first row was refused
+      // or orphaned must be neither retried (that is a second quarantine record) nor counted
+      // again (the anomaly list would name one lead twice and over-report the total). It is
+      // deliberately checked AFTER `byIdem`, so the ordinary duplicate-row case — first row
+      // emitted, second row identical — still reports `already on the spine`, which is true.
+      if (failedThisRun.has(idem)) continue;
+
+      // ON THE INDEX BUT NOT IN ANY DAY FILE. The emitter will refuse this key and quarantine the
+      // attempt, every time, forever; emitting it is choosing to create the record that disables
+      // `report`. Naming it is the only honest move — this is a spine that needs `arc-replay`,
+      // not a receipt that needs retrying.
+      if (indexed.has(idem)) { orphanedIdem.push(id); failedThisRun.add(idem); continue; }
+
+      // PER-LEAD FAILURE ISOLATION. The tolerance was pinned to DUP_IDEM alone, so every OTHER
+      // refusal — an unknown payload key, a closed day, a lock timeout — threw out of the loop
+      // and restored the exact pre-fix behaviour: earlier dossiers rewritten, later leads never
+      // reached, and the command's exit code the only clue. Research is safely re-runnable (the
+      // dossier write is idempotent and the receipt is keyed), so one bad lead now costs that
+      // lead and nothing else, and the run still ends non-zero with every failure named.
+      let res;
+      try {
+        res = emit("lead.researched", receipt, { allowDuplicate: true });
+      } catch (e) {
+        emitFailed.push({ id, message: e.message });
+        // MARKED IN ITS OWN SET, not in `byIdem`. Marking a FAILED emit as "on the spine" was a
+        // fix in the right direction with the wrong instrument: it stopped the retry (correct —
+        // a second attempt is a second quarantine record) and it also made the next identical
+        // row print `already on the spine` about a receipt that had never been written, on a
+        // spine that could be entirely empty. A row that disagreed then drew the
+        // earlier-run remedy ("write a correction receipt") against a spine with nothing on it
+        // to correct. Two false statements out of one shortcut.
+        failedThisRun.add(idem);
+        continue;
+      }
+      if (res.duplicate) {
+        racedDuplicate.push(id);
+        // The receipt IS on the spine — that is what DUP_IDEM means — so a second row for this
+        // lead must be skipped, not re-attempted into another quarantine record.
+        byIdem.set(idem, { idem, payload: receipt });
+        indexed.add(idem);
+        continue;
+      }
+      emitted++;
+      emittedThisRun.add(idem);
+      // GROWN, so the next row for this same lead in this same corpus is caught by the branch
+      // above instead of by the emitter. The stored shape mirrors a real event closely enough for
+      // the payload comparison, and it is only ever read back inside this loop.
+      byIdem.set(idem, { idem, payload: receipt });
+      indexed.add(idem);
+    }
+  } finally {
+    release();
   }
 
   // Rejected candidates keep a record too: the 25 must be a filtered set with an audit trail,
@@ -190,15 +335,80 @@ async function cmdResearch(icpPath) {
   });
   writeFileSync(rejPath, lines.length ? lines.join("\n") + "\n" : "");
 
-  const pass = accepted.filter((a) => !a.below_bar && a.email_status === "verified").length;
-  const held = accepted.filter((a) => a.email_status === "held").length;
-  const below = accepted.filter((a) => a.below_bar).length;
-  console.log(`arc-leads research: ${pass} PASS · ${held} HELD · ${below} BELOW-BAR · ${rejected.length} REJECTED`);
-  console.log(`  dossiers: ${accepted.length} in ${dossierDir}`);
+  // EVERY NUMBER HERE IS OVER PEOPLE, NOT OVER ROWS, and it used to be over rows. A corpus
+  // holding one firm twice — its own site and a directory, which is ordinary scraper output —
+  // wrote ONE dossier file and reported `dossiers: 2`, and counted that person twice toward the
+  // "25 leads" gate REQ-05 measures. The receipts line was already honest, which is why the lie
+  // survived: the two lines disagreed and only one of them was read.
+  // A PARTITION, so the four numbers sum to the people they describe. They used to overlap:
+  // a lead that was both `held` and `below_bar` was counted twice, and a VERIFIED below-bar
+  // lead appeared only under BELOW-BAR — so an operator reading "3 PASS · 1 HELD · 1 BELOW-BAR"
+  // could not tell whether that was five people or four. Each person lands in exactly one bucket,
+  // held first because an address the verifier could not confirm can never be sent to at all.
+  const people = [...distinctLeads.values()];
+  const held = people.filter((a) => a.email_status === "held").length;
+  const below = people.filter((a) => a.email_status !== "held" && a.below_bar).length;
+  const pass = people.filter((a) => a.email_status === "verified" && !a.below_bar).length;
+  const other = people.length - held - below - pass;
+  // `other` is printed only when it is non-zero, and it exists because a partition that silently
+  // drops a bucket is the same lie as an overlapping one: an accepted lead whose email_status is
+  // neither `verified` nor `held` belongs to nobody, and would simply vanish from this line.
+  console.log(`arc-leads research: ${pass} PASS · ${held} HELD · ${below} BELOW-BAR${other ? ` · ${other} UNCLASSIFIED` : ""} · ${rejected.length} REJECTED`);
+  console.log(`  dossiers: ${people.length} in ${dossierDir}`);
+  if (people.length !== accepted.length)
+    console.log(`  NOTE: ${accepted.length} accepted row(s) collapsed to ${people.length} distinct lead(s) — a duplicated row is still one person, and every count above is over people`);
   // COUNTED AND PRINTED, because a silent skip and a silent emit look identical to an operator
   // asking "did that run do anything" -- which is the exact question a re-run exists to ask.
   console.log(`  receipts: ${emitted} new · ${alreadyOnSpine} already on the spine`);
   for (const r of rejected) console.log(`  REJECTED ${r.firm}: ${r.exclusion_reason}`);
+
+  // THE ANOMALIES ARE NOT FOLDED INTO THE COUNTS ABOVE. `emitted` used to include every
+  // swallowed duplicate, so a run that added nothing to the spine reported five new receipts —
+  // and the operator's next question ("did that run do anything?") had been answered wrong by
+  // the one line written to answer it. Each of these is a different thing being wrong, so each
+  // is named separately and none of them is a number beside the healthy ones.
+  const anomalies = [];
+  // TWO REMEDIES, BECAUSE THEY ARE TWO DIFFERENT PROBLEMS — and the flag that distinguishes
+  // them was added to the push above, asserted in a test, and never read here. The result was a
+  // red suite and, worse, an operator sent to write a spine correction receipt for a defect
+  // that lives in the file on their disk. A half-shipped fix is the class this lane keeps
+  // paying for; this is it in three lines.
+  for (const { id, diff, sameRun } of changedUnderOneIdem)
+    anomalies.push(sameRun
+      ? `lead ${id}: this corpus holds TWO rows for one person that disagree on ${diff.join(", ")} — the idem preimage does not cover ${diff.join("/")}, so they collide, and the dossier on disk has already been overwritten by whichever row came last. Nothing was emitted for the second one. Dedupe the corpus and run again; the spine is fine`
+      : `lead ${id}: a receipt with this exact idem is already on the spine from an earlier run but its payload differs (${diff.join(", ")}) — the idem preimage does not cover ${diff.join("/")}, so the spine still asserts the OLD value. Nothing was emitted; this needs a correction receipt, not a re-run`);
+  for (const id of orphanedIdem)
+    anomalies.push(`lead ${id}: its idem is in derived/idem.index but in no day file — the emitter will refuse it and quarantine every attempt. retrying this command cannot help. ${UNFOLDABLE_REMEDY}`);
+  for (const id of racedDuplicate)
+    anomalies.push(`lead ${id}: another writer took this idem between the read and the emit. The receipt IS on the spine, but the refusal left a quarantine record, and \`report\` refuses while any record exists — clear the quarantine before asking for the mixing report`);
+  for (const { id, message } of emitFailed)
+    anomalies.push(`lead ${id}: the emitter refused its receipt — ${message}`);
+
+  if (anomalies.length) {
+    console.error("");
+    for (const a of anomalies) console.error(`arc-leads: ANOMALY — ${a}`);
+    // EXIT NON-ZERO. Every one of these leaves the spine unable to answer the question this
+    // phase exists to ask, and an exit 0 beside a printed warning is how the previous version
+    // of this command disabled the mixing report without anybody noticing for a day.
+    die(2, `${anomalies.length} receipt(s) did not reach the spine cleanly — the dossiers are written and the run is re-runnable, but the counts above do not describe a healthy spine.`);
+  }
+}
+
+// A SHALLOW, ORDER-INDEPENDENT COMPARISON OF TWO RECEIPT PAYLOADS, returning the field names
+// that differ. Receipt payloads are flat records of scalars by construction (the emitter's own
+// header is the reason), so this deliberately does not recurse: a deep comparison here would be
+// a second, richer notion of "same receipt" than the one the validator enforces, and the point
+// of the function is to have exactly one.
+function payloadDiff(a, b) {
+  const left = a && typeof a === "object" ? a : {};
+  const right = b && typeof b === "object" ? b : {};
+  const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+  const diff = [];
+  // JSON-compared, not `!==`, so `1` and `"1"` are reported as the difference they are rather
+  // than passing as equal-ish — the same trap `normalizeTouchN` exists for one file away.
+  for (const k of [...keys].sort())
+    if (JSON.stringify(left[k]) !== JSON.stringify(right[k])) diff.push(k);
+  return diff;
 }
 
 // ---------- campaign / draft / review / send (Phase 01) ----------
@@ -229,6 +439,9 @@ function cmdCampaignInit(name) {
 // approved, because it is never offered for approval.
 function cmdDraft(campaign, file) {
   if (!campaign || !file) die(2, "usage: arc-leads draft <campaign> <drafts.json>");
+  // BEFORE `assertCampaignStore`, which asks a case-insensitive filesystem and therefore
+  // answers yes to a name the spine considers different.
+  assertCampaignName(campaign, "the <campaign> argument");
   const store = openStore({ repoRoot: REPO_ROOT });
   assertCampaignStore(store, campaign);
   const incoming = JSON.parse(readFileSync(file, "utf8"));
@@ -266,34 +479,301 @@ function cmdDraft(campaign, file) {
   // The map is seeded from the store and then grown as this batch writes, so two entries for one
   // lead and touch INSIDE a single file are caught by the same rule -- a check against on-disk
   // state alone would pass the whole batch on a first run.
-  const seenTouch = new Map();
-  for (const prior of listDrafts(store, campaign))
-    seenTouch.set(`${prior.lead_id}|${prior.touch_n}`, prior.draft_ref);
+  // A DRAFT ON DISK IS HALF A RECORD, AND THE OTHER HALF IS ON THE SPINE.
+  //
+  // The seed above read only the store, and `writeDraft` (disk) runs before `emit` (spine) with
+  // nothing between them that can roll back. Any interruption in that window — Ctrl-C, the 8s
+  // spine-lock timeout, a full disk, an emitter refusal of any kind — left a draft file with no
+  // approval receipt. The next run then found that file, called it a duplicate, and printed
+  // `edit that draft` about a draft that had never been announced to anybody: 0 queued, 1
+  // duplicate refused, exit 0, reading exactly like a healthy re-run. The touch was
+  // unqueueable permanently and silently, which is strictly worse than the noisy recoverable
+  // second approval the duplicate rule was added to prevent.
+  //
+  // So the two halves are read together, and a draft with no receipt is not a duplicate — it is
+  // an unfinished write, and finishing it is what a re-run is for. Rollback would not do: a
+  // process killed between the two writes never runs its own rollback, and this recovery has to
+  // work for the case where nothing of ours got to run at all.
+  // AND A REJECTED APPROVAL IS NOT A LIVE ONE. The rule is one LIVE approval per touch, and
+  // reading it as one approval EVER made a rejection terminal: the human said no in the inbox,
+  // the draft stayed on disk, `draft` called it a duplicate forever, and the only way to put a
+  // revised version in front of them was a different `touch_n` — which is a second live approval
+  // for what is physically the same touch, i.e. the exact state this rule exists to forbid. A
+  // rule whose only escape hatch is the thing it forbids is not being enforced, it is being
+  // routed around.
+  // UNDER THE LOCK, like every other read-then-emit critical section in this file. `research`,
+  // `reconcile`, `runDaily` and `deliverNotification` all take it; `draft` — which guards the
+  // same one-live-approval invariant across the same read-then-emit window — did not, so two
+  // concurrent runs both read the store and the spine, both missed, and both emitted. The
+  // adjacent branch that never got the guard, one function away from the fix that cites it (D6).
+  const releaseDraft = acquireLock(store);
+  // `die` calls `process.exit`, and `process.exit` does NOT run a `finally` block. So every
+  // refusal inside this critical section would leave `.send.lock` on disk naming a pid that had
+  // exited cleanly, and the next run would refuse with "another arc-leads process holds the send
+  // lock" — a lock the operator is explicitly told is NEVER auto-broken. The release verifies it
+  // still owns the lock before unlinking, so calling it here and again in `finally` is safe.
+  const dieUnlocked = (code, msg) => { try { releaseDraft(); } catch { /* already released */ } die(code, msg); };
+  try {
+  // THE INDEX IS READ FIRST, AND THE ORDER IS THE POINT. `appendEventUnlocked` writes the day
+  // line and THEN the index line, so a concurrent spine write landing between these two reads
+  // makes the index look ahead of the fold on a perfectly healthy spine — and this command
+  // refuses on exactly that, telling the operator to restore a day file that was never missing.
+  // The send lock does not exclude other spine writers (most events on a real install come from
+  // surfaces that never take it).
+  //
+  // WHY INDEX-FIRST IS THE SAFE ORDER, stated correctly — an earlier version of this comment
+  // said "reading the index first can only ever UNDER-count, which is the direction that fails
+  // safe", and under-counting is the direction that does NOT refuse, which three lines up is
+  // called how one touch ends up with two live approvals. The justification named the unsafe
+  // direction as the safe one, inside the comment documenting the fix.
+  //
+  // The real argument comes from the emitter: `appendEventUnlocked` writes the DAY LINE first
+  // and the index line second, and tolerates the index append failing. A key therefore only ever
+  // enters `derived/idem.index` after its day line already exists. So any key that arrives
+  // between these two reads is foldable by the time the day files are read and contributes zero —
+  // index-first removes the false POSITIVE without opening a false negative. Index-second had no
+  // such argument available, and refused on a healthy spine.
+  const indexKeysAtStart = idemKeys();
+  const priorEvents = readAllEvents({ allowMissing: true });
+  const priorDrafts = listDrafts(store, campaign);
 
-  let written = 0, blocked = 0, duplicate = 0;
+  // CAN THIS FOLD SEE THE WHOLE SPINE? The resume path below turns "I found no approval for
+  // this draft" into "emit one", and that inference is only valid if the absence is real.
+  // `approvalState` reads day files; `cmdResearch` reads day files AND `derived/idem.index`
+  // precisely because a restored or archived day leaves the index holding keys the fold can no
+  // longer see. On such a spine every already-announced draft looks unannounced, and the resume
+  // re-emits — and an `approval.requested` idem is millisecond-salted, so the emitter cannot
+  // deduplicate it. Two live approvals for one touch, from the branch added to prevent exactly
+  // that. Same D5 as `cmdResearch`, in the sibling command, one round later.
+  //
+  // The resume is the only inference that depends on completeness, so only the resume is
+  // withheld. A first-time draft on a spine with archived days is still ordinary work.
+  const foldedIdems = new Set(priorEvents.map((e) => e && e.idem).filter(Boolean));
+  let unfoldable = 0;
+  for (const k of indexKeysAtStart) if (!foldedIdems.has(k)) unfoldable++;
+
+  // AND IT REFUSES THE WHOLE RUN, not just the resume. The comment that used to sit above said
+  // "the resume is the only inference that depends on completeness" and it was wrong: the
+  // `dangling` check below reads the SAME fold to decide whether a live approval names a missing
+  // draft, and on an incomplete fold it finds nothing, so a touch whose approval is in an
+  // archived day looks untouched — a new draft is written and a SECOND approval emitted, at exit
+  // 0 with `0 unreadable-spine` printed. Restoring the archived day then makes both live and
+  // renderable on gate `leads-send`, which is the ADR-0407 state this command exists to forbid.
+  //
+  // The sibling in `ingest.mjs` refuses on the same condition for the meeting approval it is about
+  // to announce -- NOT unconditionally, which an earlier version of this sentence claimed while
+  // using it to justify the refusal below. This one refused only when an orphan draft file
+  // happened to exist, which is narrower than either: the same guard, one branch, D6 again.
+  if (unfoldable > 0)
+    dieUnlocked(2, `${unfoldable} idem(s) in derived/idem.index belong to events this fold cannot read, so nothing here can tell "no approval exists" from "its day is no longer on disk" — and queueing on that guess is how one touch ends up with two live approvals. ${UNFOLDABLE_REMEDY}`);
+
+  // AND THE MIRROR CASE: A LIVE APPROVAL WHOSE DRAFT FILE IS GONE.
+  //
+  // The paragraph above says a draft on disk is half a record — and then the first version of
+  // this block read that half and asked the spine only about drafts it had already found on
+  // disk. An `approval.requested` naming a draft_ref with no file was therefore invisible, so
+  // the same input queued a SECOND live approval for that touch: two undecided items in the
+  // inbox on gate `leads-send`, both rendering, `approvedShaFor` honouring whichever the human
+  // clicks, and "which approval authorised this mail?" with no answer — the precise ADR-0407
+  // state this whole block exists to forbid, reached at exit 0 with no warning.
+  //
+  // It is not an exotic trigger. The store lives outside the repo with no git safety net and
+  // `store init` says so: a restore from a backup taken before the draft was written, a partial
+  // copy between machines, or a tidy-up of `drafts/` produces it.
+  //
+  // It REFUSES rather than repairing, because the repair is not this command's to invent: the
+  // send path cannot read that draft either, so the state is broken for the approval that
+  // already exists, not merely for the one being asked for.
+  const onDisk = new Set(priorDrafts.map((d) => d.draft_ref));
+  const dangling = [...new Set(
+    priorEvents
+      .filter((e) => e && e.kind === "approval.requested" && e.payload &&
+        e.payload.gate === "leads-send" && e.payload.campaign === campaign &&
+        !onDisk.has(e.payload.draft_ref))
+      .map((e) => e.payload.draft_ref)
+  )].filter((ref) => approvalState(priorEvents, ref) === "live");
+  if (dangling.length)
+    dieUnlocked(2, `${dangling.length} live approval(s) in "${campaign}" name a draft this store does not hold (${dangling.join(", ")}) — refusing, because queueing anything now would put a second live approval in the inbox for a touch that already has one, and the send path cannot read the first one either. Restore the store, or reject those approvals in the inbox, then run this again.`);
+
+  const seenTouch = new Map();
+  const unannounced = new Map();
+  const rejectedTouch = new Map();
+  for (const prior of priorDrafts) {
+    let key;
+    try { key = touchKey(store, prior.lead_id, prior.touch_n); }
+    catch (e) { dieUnlocked(2, `the stored draft ${prior.draft_ref} carries an unusable touch_n: ${e.message}`); }
+    const state = approvalState(priorEvents, prior.draft_ref);
+    // A LIVE approval wins over anything else recorded for the same touch, whatever order
+    // `listDrafts` happened to return the files in. After a reject-then-revise there are two
+    // drafts for one touch and only one of them is live; picking by iteration order would make
+    // the answer depend on a directory listing.
+    if (state === "live") { seenTouch.set(key, prior.draft_ref); rejectedTouch.delete(key); unannounced.delete(key); continue; }
+    if (seenTouch.has(key)) continue;
+    // REJECTED IS KEPT AS A LIST, not as one overwritten slot. Two rejected drafts on one touch
+    // are ordinary (reject, revise, reject again) and `readdirSync` order decided which one the
+    // body comparison ran against — so re-submitting the body of the EARLIER rejected draft was
+    // silently accepted and announced again. Every rejected body for the touch is compared.
+    if (state === "rejected") { const l = rejectedTouch.get(key) || []; l.push(prior); rejectedTouch.set(key, l); }
+    else unannounced.set(key, prior);
+  }
+
+  let written = 0, blocked = 0, duplicate = 0, resumed = 0, stale = 0, rejectedSame = 0;
+  const halfWritten = [];
   linted.forEach((d, i) => {
     if (scored[i].verdict === VERDICT.FAIL) {
       blocked++;
       console.log(`  FAIL  ${d.lead_id}: ${d.fails.join(" | ")}`);
       return;
     }
-    const touchKey = `${d.lead_id}|${d.touch_n}`;
-    if (seenTouch.has(touchKey)) {
+    // An unusable `touch_n` costs THIS draft and not the run: it arrives from an input file a
+    // human wrote, and killing the batch on one bad row is the same all-or-nothing failure the
+    // rest of this function is being rescued from.
+    let key;
+    try { key = touchKey(store, d.lead_id, d.touch_n); }
+    catch (e) { blocked++; console.log(`  FAIL  ${d.lead_id}: ${e.message}`); return; }
+
+    if (seenTouch.has(key)) {
       duplicate++;
-      console.log(`  DUP   ${d.lead_id}: touch ${d.touch_n} already has draft ${seenTouch.get(touchKey)} in "${campaign}" — edit that draft, or use the next touch_n. No second approval was requested.`);
+      console.log(`  DUP   ${d.lead_id}: touch ${d.touch_n} already has draft ${seenTouch.get(key)} in "${campaign}" — edit that draft, or use the next touch_n. No second approval was requested.`);
       return;
     }
+
+    // A revision after a rejection writes a NEW draft below, with its own ref and its own
+    // draft_sha, so the rejected one stays on the spine as the record of a decision that was
+    // actually taken. The one thing refused is re-asking the identical question: the same body
+    // produces the same approval payload, the same idem, and a DUP_IDEM whose quarantine record
+    // then disables `report` — so it is refused HERE, with the reason, rather than at the
+    // emitter, where the reason is lost.
+    // EVERY rejected body for this touch, not whichever one the directory listing returned
+    // last. Refs are random hex, so "the last one" was an arbitrary choice that let the body of
+    // an earlier rejected draft through as though it were a revision.
+    const rejectedHere = rejectedTouch.get(key) || [];
+    const sameAsRejected = unannounced.has(key)
+      ? null
+      : rejectedHere.find((r) => readDraft(store, r.draft_ref).body === d.body);
+    if (sameAsRejected) {
+      rejectedSame++;
+      console.log(`  NO    ${d.lead_id}: touch ${d.touch_n} was REJECTED as draft ${sameAsRejected.draft_ref} and this input carries the same body. Change it and re-run — a revised body is announced as a new approval; an unchanged one just asks the same question again.`);
+      return;
+    }
+
+    const orphan = unannounced.get(key);
+    if (orphan) {
+      // Announce the draft that EXISTS rather than minting a second one. But only if it still
+      // says what this input says: re-emitting an approval for a body the operator has since
+      // changed would bind the L1 decision to text nobody is looking at, and the approval binds
+      // `draft_sha` precisely so that cannot happen quietly.
+      const existing = readDraft(store, orphan.draft_ref);
+      if (existing.body !== d.body) {
+        stale++;
+        console.log(`  STALE ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} has a draft on disk from an interrupted run, and its body differs from this input. Nothing was announced. Review it (\`arc-leads review ${orphan.draft_ref}\`) and either keep it or remove it — this command will not announce a body you have since edited.`);
+        return;
+      }
+      try { emit("approval.requested", approvalPayload(orphan)); }
+      catch (e) { halfWritten.push({ ref: orphan.draft_ref, lead: d.lead_id, message: e.message }); return; }
+      seenTouch.set(key, orphan.draft_ref);
+      unannounced.delete(key);
+      resumed++;
+      console.log(`  RESUME ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} was written but never announced by an earlier run; its approval is in the inbox now.`);
+      return;
+    }
+
     const warns = scored[i].warns;
     const rec = writeDraft(store, {
       campaign, lead_id: d.lead_id, touch_n: d.touch_n, body: d.body, cites: d.cites,
       lintStatus: scored[i].verdict === VERDICT.PASS ? "PASS" : `BELOW-BAR: ${warns.join(" | ")}`,
     });
-    emit("approval.requested", approvalPayload(rec));
-    seenTouch.set(touchKey, rec.draft_ref);
+    // The window this whole block exists for is HERE, between the two writes. It is now
+    // survivable rather than eliminated — the next run recognises what it left behind — and the
+    // failure is named at the moment it happens instead of being discovered a day later as a
+    // refusal about a draft nobody remembers writing.
+    try { emit("approval.requested", approvalPayload(rec)); }
+    catch (e) {
+      halfWritten.push({ ref: rec.draft_ref, lead: d.lead_id, message: e.message });
+      console.log(`  HALF  ${rec.draft_ref} ${d.lead_id}: the draft is written but its approval was refused — re-run this command to finish it.`);
+      return;
+    }
+    seenTouch.set(key, rec.draft_ref);
     written++;
     console.log(`  ${scored[i].verdict === VERDICT.PASS ? "PASS " : "WARN "} ${rec.draft_ref} ${d.lead_id}${warns.length ? " — " + warns.join(" | ") : ""}`);
   });
-  console.log(`arc-leads draft: ${written} queued for approval, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused`);
+  // EVERY OUTCOME IS IN THE SUMMARY LINE. A resumed draft used to be counted as a duplicate and
+  // a half-written one as nothing at all, so the line under-reported the work in one direction
+  // and over-reported the health of the store in the other.
+  // AND IT MEANS IT. The first version of this line said "every outcome" and then folded `NO`
+  // into the FAIL count — reporting a touch the human REJECTED as a draft the lint blocked,
+  // which are opposite facts about who decided — and omitted `HALF` entirely, so the one
+  // outcome that leaves work unfinished appeared in no total at all.
+  console.log(`arc-leads draft: ${written} queued for approval, ${resumed} resumed from an interrupted run, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused, ${rejectedSame} unchanged after a rejection, ${stale} stale draft(s) left alone, ${halfWritten.length} half-written`);
+  if (halfWritten.length) {
+    for (const h of halfWritten)
+      console.error(`arc-leads: HALF-WRITTEN — ${h.ref} (${h.lead}) has a draft on disk and no approval receipt: ${h.message}`);
+    dieUnlocked(2, `${halfWritten.length} draft(s) were written without an approval receipt. Re-running this command finishes them; nothing is lost, and nothing was double-announced.`);
+  }
+  } finally {
+    releaseDraft();
+  }
+}
+
+// THE (lead, touch) IDENTITY, resolved the same way the send-moment guard resolves it.
+//
+// Two things were wrong with interpolating the raw fields. `touch_n` arrives from a
+// hand-written JSON file and was never parsed, so ` 1`, `1.0`, `+1`, `1e0` and `01` were five
+// distinct keys for one touch — five live approvals for one send, from the rule that exists to
+// guarantee there is exactly one. And `lead_id` is one version of a keyed HMAC: after a key
+// rotation the same human carries a different id, so yesterday's approval stopped matching
+// today's draft and the same person got two. `guard.mjs` had already fixed both, in three
+// adjacent branches, and this was the fourth (D6). It calls that code rather than repeating it.
+// IS THERE A LIVE APPROVAL FOR THIS DRAFT? "live" means undecided OR approved; a `reject`
+// retires one.
+//
+// It deliberately treats an UNDECIDED request as live — that is the whole difference between
+// this question and `approvedShaFor`'s. That one asks "may this send?", where undecided must
+// mean no; this asks "is the human already holding this question?", where undecided must mean
+// yes. Reversing either is a real failure: the first sends what nobody approved, the second
+// puts one decision in the inbox twice.
+//
+// ONE APPROVAL CAN BE DECIDED EXACTLY ONCE, and the loop below is written as if it could be
+// decided many times. That is deliberate but it is NOT a revocation mechanism, and an earlier
+// version of this comment claimed it was. `validate.mjs` binds a decision's idem to
+// sha256("decision.recorded|"+decides), so the second decision on any approval is refused
+// DUP_IDEM — verified end to end. "Latest decision wins" is therefore a property of a set that
+// never holds more than one element: harmless, matching the shape `approvedShaFor` uses, and
+// carrying no behaviour of its own.
+//
+// The consequence is a real product gap and it is recorded rather than invented around: a human
+// who approves and then changes their mind CANNOT reject that approval. See
+// `phases/phase-03-known-holes.md`. Building a revocation path inside a fix commit is exactly
+// the move this lane has been burned by.
+//
+// `events` arrives sorted by ULID, i.e. in time order, from `readAllEvents`.
+function approvalState(events, draftRef) {
+  const requests = events.filter(
+    (e) => e && e.kind === "approval.requested" &&
+      // `id` MUST be present, for the reason `approvedShaFor` gives: without it a request with
+      // no id and a decision with no `decides` pair on undefined === undefined, and a decision
+      // about something else entirely gets read as this draft's.
+      typeof e.id === "string" && e.id.length > 0 &&
+      e.payload?.gate === "leads-send" &&
+      e.payload?.draft_ref === draftRef
+  );
+  if (!requests.length) return "none";
+  for (const req of requests) {
+    const decisions = events.filter(
+      (e) => e && e.kind === "decision.recorded" &&
+        typeof e.payload?.decides === "string" && e.payload.decides === req.id
+    );
+    const last = decisions[decisions.length - 1];
+    if (!last || last.payload.verdict !== "reject") return "live";
+  }
+  return "rejected";
+}
+
+function touchKey(store, leadId, touchN) {
+  // `canonicalLeadId` is shared with the meeting-draft ref rather than repeated here: two
+  // functions choosing "the canonical member of a keyring" independently is one fact derived
+  // two ways, and this lane has paid for that shape more than any other.
+  return `${canonicalLeadId(store, leadId)}|${normalizeTouchN(touchN)}`;
 }
 
 // The local render. The spine carries an opaque ref; the human reads the body HERE, beside the
@@ -331,6 +811,13 @@ async function cmdReconcile() {
   // must not be disturbed. Guarded in one branch (runDaily reconciles inside the lock) and
   // unguarded in the adjacent one -- D6.
   const release = acquireLock(store);
+  // Same reason as `cmdDraft`: `process.exit` does not run a `finally`, so a refusal inside the
+  // section left `.send.lock` behind naming a dead pid — and the documented remedy for a stale
+  // lock is this very command, so the operator was told to run the thing that had just wedged
+  // them. This branch acquired the lock in the previous slice and never got the release-before-
+  // die that goes with it: the guard applied in one branch and omitted in the adjacent one, one
+  // more time.
+  const dieUnlocked = (code, msg) => { try { release(); } catch { /* already released */ } die(code, msg); };
   try {
   const out = await reconcile(store, {
     events: readAllEvents({ allowMissing: true }),
@@ -345,13 +832,57 @@ async function cmdReconcile() {
   // an object nobody prints is not a remedy.
   for (const err of out.errors || []) console.error(`  ! ${err}`);
   const left = unresolvedIntents(store);
-  if (left.length) die(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
+  if (left.length) dieUnlocked(3, `${left.length} intent(s) still unresolved — no send will be attempted`);
   } finally { release(); }
 }
 
 // The human-started daily command. No cron, no daemon, no background anything (ADR-0403).
+// THE ONE PLACE `.env.local` ENTERS A RUN, and the reason there is no shell sourcing anywhere
+// in this lane's documentation.
+//
+// The outreach provider reads `RESEND_API_KEY` and `ARC_LEADS_OUTREACH_FROM` straight off
+// `process.env`, and nothing on the send path ever read the file they live in — so the runbook
+// told the operator to `set -a; . ./.env.local; set +a` first. That is a SECOND parser of arc's
+// one credential home, and it disagrees with `env.mjs` in both directions: bash expands an
+// unquoted `$`, executes an unquoted space, and strips an inline `#`, so a key truncated at a
+// comment still looks set and fails at the vendor at the moment mail goes out. It also does not
+// exist in PowerShell, which is this box's primary shell and which the runbook never named.
+//
+// The Phase 04 comment on this read said every other subcommand should keep exactly the
+// environment it had, "so a credential file cannot change the behaviour of a send". That intent
+// is intact and is now enforced by the thing that actually enforces it: `assertEnvLocalNames`
+// refuses the file outright if it so much as NAMES the fake switch, the clock, the store path,
+// the vendor host or the fixture dir. Supplying a credential is not changing behaviour — the
+// send still needs an approval, a guard pass, a cap, and an allowlisted recipient.
+//
+// Precedence is unchanged (ENV-WINS-OVER-FILE), so a test or a CI leg that exports a value is
+// never overridden by a file, and on a machine with no `.env.local` this is a no-op.
+function loadCredentials() {
+  const envInfo = loadEnvLocal({ root: REPO_ROOT });
+  if (envInfo.present && envInfo.skipped.length)
+    console.error(`arc-leads: warning — ${ENV_LOCAL} line(s) ${envInfo.skipped.join(", ")} are not NAME=value and were skipped`);
+  if (envInfo.present && envInfo.blank.length)
+    console.error(`arc-leads: warning — ${ENV_LOCAL} declares ${envInfo.blank.join(", ")} with an empty value, which counts as unset`);
+  // The list and the refusal live in `lib/mail.mjs`, beside the rules they protect, so they can
+  // be tested without writing a `.env.local` into a real repository root.
+  assertEnvLocalNames(envInfo.names || [], ENV_LOCAL);
+  return envInfo;
+}
+
 async function cmdDaily(campaign) {
   if (!campaign) die(2, "usage: arc-leads daily <campaign>");
+  // BEFORE the store opens and long before the provider is asked, so a poisoned credential file
+  // refuses the run rather than being discovered three frames into a send.
+  try { loadCredentials(); }
+  catch (e) { die(e instanceof EnvError ? 5 : (MAIL_EXIT[e.kind] ?? 3), e.kind ? `[${e.kind}] ${e.message}` : e.message); }
+  // THE SAME GRAMMAR `research` AND `draft` HOLD THE NAME TO, applied at the third door. It was
+  // applied at two of the three: `assertCampaignStore` asks a case-insensitive filesystem, so
+  // `daily Walk` resolved `walk.json` and was accepted — and then `listDrafts(store,"Walk")`
+  // matches `r.campaign === "Walk"` exactly, finds nothing, and prints "no approved drafts —
+  // nothing to send" at exit 0 for a campaign with approvals waiting. Verified on this box.
+  // Masked today only by the unrelated `unsubscribeHeader` refusal, i.e. it goes live the day
+  // Phase 03's sending domain lands, which is the day it does the most damage. D6/D1.
+  assertCampaignName(campaign, "the <campaign> argument");
   const store = openStore({ repoRoot: REPO_ROOT });
   assertCampaignStore(store, campaign);
 
@@ -376,6 +907,17 @@ async function cmdDaily(campaign) {
   for (const r of out.results)
     console.log(r.ok ? `  SENT    ${r.draftRef} (${r.provider_message_id})` : `  REFUSED ${r.draftRef} [${r.step}] ${r.why}`);
   const sent = out.results.filter((r) => r.ok).length;
+  // THE OUTREACH PATH NAMES ITS TRANSPORT TOO. The notification path was given this line and
+  // this one was not — the same guard at one door and omitted at the adjacent one (D6) that the
+  // notification comment itself is about, committed in the same change that wrote the comment.
+  // And this is the door that matters: `daily` is the command the whole Phase 03 runbook exists
+  // to get the operator to. Its only signal was the `fake-` prefix buried inside
+  // `provider_message_id`, which is a fact read a second way off a string (D5) on the one line
+  // an operator uses to decide whether five real people received mail.
+  if (usingFakes()) {
+    console.log(`arc-leads daily: NOT SENT — ARC_LEADS_FAKE=1, so this ran on the fake provider and nothing left this machine. ${sent} would have been submitted, ${out.results.length - sent} refused.`);
+    return;
+  }
   console.log(`arc-leads daily: ${sent} sent, ${out.results.length - sent} refused`);
 }
 
@@ -431,19 +973,58 @@ async function cmdIngestReply(argv) {
     if (!inputs.length) { console.log("arc-leads ingest-reply: the inbound source returned nothing"); return; }
   }
 
+  // THE FIFTH READ-THEN-EMIT SECTION, AND THE LAST ONE STILL UNLOCKED. `research`, `draft`,
+  // `reconcile`, `runDaily` and `deliverNotification` all take this lock; `ingest-reply` reads
+  // the spine, decides what is already there, and emits — the same window, guarding the same
+  // invariants — and took nothing. Two runs on one reply (the `--inbound` hook firing while the
+  // operator runs `--file`, or two manual runs) both saw an empty `announced` set and both
+  // emitted, putting TWO undecided `leads-meeting` approvals in the inbox for one meeting. The
+  // emitter cannot deduplicate them: `arc-event` salts a non-leads idem with the millisecond.
+  //
+  // A reply arriving while `daily` holds the lock now refuses loudly and is re-ingestible,
+  // which is strictly better than the alternative — the receipt that gets lost to a race here
+  // is the one that stops contacting somebody who asked not to be contacted.
+  const release = acquireLock(store);
+  const dieUnlocked = (code, msg) => { try { release(); } catch { /* already released */ } die(code, msg); };
+  try {
   let ok = 0, refused = 0;
+  const raced = [];
   for (const inp of inputs) {
     try {
       // The spine is re-read per reply. An unsubscribe ingested two replies ago changes what
       // the next one derives, and a snapshot taken before the loop would not know it.
+      // INDEX BEFORE EVENTS, for the reason `cmdDraft` gives at length: the emitter writes the
+      // day line then the index line, so a key can only enter the index after its day line
+      // exists — which means a key arriving between these two reads is foldable by the time the
+      // day files are read and contributes zero. Index-second had no such argument and refused
+      // on a healthy spine. (Not "under-counting fails safe": under-counting is the direction
+      // that does not refuse, and that is the one that ends in two live approvals.)
+      const spineIdems = idemKeys();
       const r = await ingestReply({
         store, bytes: inp.bytes, events: readAllEvents({ allowMissing: true }),
+        // The index keys are read HERE, by the layer that owns the spine root, and handed in.
+        // `ingestReply` reaching for them itself made a module test depend on whatever
+        // ARC_SPINE_ROOT pointed at, which for a suite with no setup() is this repo.
+        spineIdems,
+        // This layer DID read the spine, so an approval it cannot find genuinely is not there.
+        // Module callers leave this false and fall back to the store flag.
+        spineRead: true,
         now, emit: emitFn, config: cfg, sourceLabel: inp.label,
       });
       ok++;
+      // A RACED RECEIPT IS COUNTED, not decorated. Everything else in `extra` is a note about a
+      // healthy outcome; this one means the emitter refused and quarantined, and `report`
+      // refuses while any quarantine record exists — so it has to move the exit code, exactly
+      // as the same case does in `research`. Printing it beside "N ingested, 0 refused" and
+      // exiting 0 is how the phase's one number gets disabled without anybody noticing.
+      if (r.receipt_raced) raced.push(r.reply_ref);
       const extra = [
         r.fresh ? null : "already ingested",
-        r.receipt_duplicate ? "receipt already on the spine" : null,
+        r.receipt_raced ? "RACED — the emitter quarantined a duplicate; clear it before `report`" : null,
+        r.receipt_duplicate ? "reply receipt already on the spine" : null,
+        // Named separately from the reply receipt: printing one line for two different receipts
+        // meant a re-ingested unsubscribe and a first-time suppression read identically.
+        r.suppressed_duplicate ? "suppression already on the spine" : null,
         r.suppressed ? "SUPPRESSED" : null,
         r.meeting_ref ? (r.meeting_created ? `meeting draft ${r.meeting_ref}` : `meeting draft ${r.meeting_ref} (already drafted)`) : null,
         r.matched === "default" ? "UNCLASSIFIED -> later, review manually" : null,
@@ -460,8 +1041,15 @@ async function cmdIngestReply(argv) {
       else console.error(`  FAILED  [internal] ${inp.label}: ${e.message}`);
     }
   }
-  console.log(`arc-leads ingest-reply: ${ok} ingested, ${refused} refused`);
-  if (refused) process.exit(3);
+  console.log(`arc-leads ingest-reply: ${ok} ingested, ${refused} refused${raced.length ? `, ${raced.length} raced` : ""}`);
+  if (raced.length)
+    console.error(`arc-leads: ${raced.length} receipt(s) lost a race to another writer (${raced.join(", ")}) — the receipts ARE on the spine, but each refusal left a quarantine record and \`report\` refuses while any record exists. Clear the quarantine before asking for the mixing report.`);
+  // `dieUnlocked`, not `process.exit`: exiting here skips the `finally` and leaves `.send.lock`
+  // naming a pid that has gone, which the operator is told is never auto-broken.
+  if (refused || raced.length) dieUnlocked(3, `${refused} refused, ${raced.length} raced — see the lines above`);
+  } finally {
+    release();
+  }
 }
 
 function cmdUnlock() {
@@ -476,6 +1064,45 @@ function cmdUnlock() {
 
 // ---------- preflight ----------
 async function cmdPreflight() {
+  // PREFLIGHT AND THE SEND MUST RESOLVE THE SAME WORLD. `cmdDaily` reads `.env.local`; this did
+  // not, so with the rehearsal allowlist in that file the two disagreed about whether ADR-0416
+  // rehearsal mode was locked: preflight reported `count: 0` and printed a third
+  // `REFUSED rehearsal-mode … DECLARED but incomplete` row while `daily` resolved `count: 5`
+  // and was perfectly happy. A gate that answers "can I send yet" from a narrower environment
+  // than the send uses is worse than no gate — the runbook told the operator that two REFUSED
+  // rows were expected and to read them and continue, which pre-authorises ignoring a third one
+  // that is a genuine refusal in every other circumstance. D5/D6.
+  //
+  // AND IT DIES ON A POISONED FILE, exactly as `daily` does. The first version caught the
+  // refusal and carried on, reasoning that preflight's job is to report rather than to exit —
+  // which is wrong here for a mechanical reason: `loadEnvLocal` APPLIES the file's values into
+  // the environment BEFORE `assertEnvLocalNames` inspects the names, and `usingFakes()`,
+  // `dns()` and `provider()` are all resolved lazily afterwards. So "refuse and continue" ran
+  // the live-DNS gate on whatever fakes the credential file had just installed, and with a
+  // fixture directory plus a `LEADS_CONFIG` seed path `arc-leads preflight: PASS` was reachable
+  // from a file alone — REQ-00 and REQ-07 both bypassed, the operator seeing one stderr line
+  // they would read as a warning. A guard that hard-fails at one door and is downgraded to a
+  // note at the adjacent one is not a guard.
+  try { loadCredentials(); }
+  catch (e) { die(e instanceof EnvError ? 5 : (MAIL_EXIT[e.kind] ?? 3), e.kind ? `[${e.kind}] ${e.message}` : e.message); }
+  // THE GATE NAMES ITS TRANSPORT TOO, and it was the door this treatment was omitted at. The
+  // same round gave `cmdDaily` and `deliverNotification` a line saying nothing left the machine
+  // when `ARC_LEADS_FAKE=1`, and left the GATE — which is the command that answers "may I send
+  // yet" — silently reading its DNS, its DKIM and its provider authentication out of
+  // `tests/fixtures/leads/*.json`. Verified: with the repo's own committed fixtures it prints
+  // three `ok provider-*` rows, and with a full fixture set it prints `preflight: PASS` at exit
+  // 0. `preflight.mjs`'s header says it never prints PASS for a clause it could not verify; on
+  // the fakes it verifies a JSON file. The runbook's own STOP section anticipates an operator
+  // reaching for this switch, so one stale export in that shell turned the gate green.
+  //
+  // It does not REFUSE outright — a suite legitimately drives this composition against fixtures,
+  // and taking that away would trade a real test for a slow flaky live-DNS one. What it may
+  // never do is reach a PASS: under the fakes the verdict is fixed to REFUSED and labelled, so
+  // the one output that means "you may send" is unreachable from a JSON file whatever the rows
+  // say. Testability kept, the claim removed.
+  const onFixtures = usingFakes();
+  if (onFixtures)
+    console.log("arc-leads preflight: ON FIXTURES — ARC_LEADS_FAKE=1, so every row below is answered by a file in tests/fixtures rather than by DNS, the vendor or the seed evidence. This run cannot pass.");
   const res = await preflight({ warmupApproved: process.env.LEADS_WARMUP_APPROVED === "1" });
   // REQ-07 is a SEPARATE requirement with its own gate, composed here rather than folded into
   // preflight() — a gate that fails for reasons outside the question it asks has two jobs.
@@ -483,8 +1110,10 @@ async function cmdPreflight() {
   // and both must be able to say no.
   const seed = seedSmokeFinding(loadConfig().seed_evidence_path);
   for (const f of [...res.findings, seed]) console.log(`  ${f.ok ? "ok  " : "REFUSED"} ${f.rule}: ${f.detail}`);
-  if (!res.ok || !seed.ok) {
-    console.error("arc-leads preflight: REFUSED — no send may happen until every clause passes live (REQ-00) and the seed-inbox smoke is dated and fresh (REQ-07)");
+  if (!res.ok || !seed.ok || onFixtures) {
+    console.error(onFixtures
+      ? "arc-leads preflight: REFUSED — this run was ON FIXTURES (ARC_LEADS_FAKE=1). Rows that say ok were answered by a file, not by the world, and this command will not print PASS from them at any exit code."
+      : "arc-leads preflight: REFUSED — no send may happen until every clause passes live (REQ-00) and the seed-inbox smoke is dated and fresh (REQ-07)");
     process.exit(PREFLIGHT_REFUSED);
   }
   console.log("arc-leads preflight: PASS");
@@ -718,14 +1347,7 @@ async function deliverNotification({ to, subject, text, kind }) {
   // `.env.local` is read HERE rather than at startup, deliberately. Every other subcommand
   // keeps exactly the environment it had before this phase existed, so a credential file
   // cannot change the behaviour of a send, a reconcile or a cap check merely by being present.
-  const envInfo = loadEnvLocal({ root: REPO_ROOT });
-  if (envInfo.present && envInfo.skipped.length)
-    console.error(`arc-leads: warning — ${ENV_LOCAL} line(s) ${envInfo.skipped.join(", ")} are not NAME=value and were skipped`);
-  if (envInfo.present && envInfo.blank.length)
-    console.error(`arc-leads: warning — ${ENV_LOCAL} declares ${envInfo.blank.join(", ")} with an empty value, which counts as unset`);
-  // The list and the refusal live in `lib/mail.mjs`, beside the rules they protect, so they can
-  // be tested without writing a `.env.local` into a real repository root.
-  assertEnvLocalNames(envInfo.names || [], ENV_LOCAL);
+  loadCredentials();
 
   // `--to` is OPTIONAL when the owner allowlist holds exactly one address, and that is not a
   // convenience. This path exists to reach ONE person whose address is already declared in
@@ -755,7 +1377,24 @@ async function deliverNotification({ to, subject, text, kind }) {
     );
     // The recipient is NOT printed. The operator typed it or declared it and already knows it;
     // this line is what ends up in a CI log, and the address has no business being there.
-    console.log(`arc-leads: mail sent id=${res.id} idem=${res.idem_key}`);
+    //
+    // THE SUCCESS LINE NAMES THE TRANSPORT, and that is the second half of the F1 fix. Closing
+    // the `.env.local` door in `env.mjs` stops a credential FILE from switching this path to the
+    // fake; it does nothing about `ARC_LEADS_FAKE=1` exported in the shell, which reaches the
+    // identical end state — `mail sent … EXIT=0` from a run that delivered nothing. A guard
+    // applied at one door and omitted at the adjacent one is D6, this lane's most repeated
+    // defect, and the rule is that a fix is not applied until it has been attacked somewhere it
+    // was never made. So the remedy is not a second guard, it is that no fake run may ever print
+    // the sentence a real delivery prints.
+    //
+    // `usingFakes()` is the SAME predicate `mailer()` selected the transport with — not a second
+    // derivation of it, and not the `fake-` prefix parsed back off the returned id, which would
+    // be one fact read two ways (D5) on the one line that has to be trustworthy.
+    console.log(
+      usingFakes()
+        ? `arc-leads: NOT SENT — ARC_LEADS_FAKE=1, so this ran on the fake mailer and nothing left this machine. id=${res.id} idem=${res.idem_key}`
+        : `arc-leads: mail sent id=${res.id} idem=${res.idem_key}`,
+    );
     return res;
   } finally {
     release();
@@ -833,14 +1472,51 @@ async function cmdMail(argv) {
 async function cmdNotify(argv) {
   const trigger = argv[0];
   const rest = argv.slice(1);
-  const flag = (name) => {
-    const i = rest.indexOf(name);
-    if (i === -1) return null;
+
+  // PARSED AS A CONSUMING LOOP, like every other command that takes flags. `cmdMail`, `cmdReport`,
+  // `cmdIngestReply` and `rehearsal-check.mjs` were each rewritten out of an `indexOf` scan, and
+  // three of them carry a comment calling that scan "D5 in miniature" — the ALERT path was the
+  // branch that never got it. A scan resolves a repeated `--text-file` silently by position
+  // rather than refusing, and ignores an unknown flag entirely, on the surface whose whole job is
+  // to reach a human about an outage.
+  const flags = { "--text-file": null, "--what": null };
+  let useStdin = false;
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i];
+    // `--stdin` gets the SAME repeat rule as the value flags, and the same no-value rule as any
+    // boolean. It was the one flag in this loop exempt from both: `--stdin --stdin` was accepted
+    // silently while `--text-file a --text-file b` refused, and `--stdin=1` fell to the
+    // unknown-flag branch and was told the flag does not exist — when it does, and takes no
+    // value. A guard present in one branch and omitted in the adjacent one is D6.
+    if (a === "--stdin" || a.startsWith("--stdin=")) {
+      if (a.length > "--stdin".length)
+        die(2, "--stdin takes no value — the detail arrives on the pipe, not on the flag");
+      if (useStdin) die(2, "--stdin was given twice — repeating it does not read the pipe twice, and an argv list nobody meant to write is an operator error");
+      useStdin = true;
+      continue;
+    }
+    // `--text` gets the RULE, not the generic refusal. It is the flag an operator reaches for,
+    // and the reason it does not exist is the whole point of this command's two doors: the
+    // failure detail is exactly the content that ends up quoted into a process listing, into
+    // shell history and verbatim into Node's `Command failed: …` on a non-zero exit (ADR-0412).
+    // Telling that operator only "unknown flag" spends the one moment they are listening.
+    // BOTH SPELLINGS. `--text=<detail>` is one argv element, so an `a === "--text"` test misses
+    // it and it fell through to the unknown-flag branch below — which interpolated the whole
+    // element, putting the failure detail verbatim into stderr and therefore into the CI log
+    // this rule exists to keep it out of. The refusal that enforces ADR-0412 was leaking under
+    // ADR-0412, through the equals form of the very flag it names. D1.
+    if (a === "--text" || a.startsWith("--text="))
+      die(2, "--text does not exist on `notify`. The failure detail arrives as BYTES and never in argv, because argv is readable in any local process listing, lands in shell history, and is embedded verbatim into Node's error message on a non-zero exit (ADR-0412). Use --text-file <path> or --stdin.");
+    // The NAME is echoed, never the value. `--anything=<secret>` is one element, so quoting the
+    // whole of it hands back whatever the operator attached to it.
+    if (!(a in flags)) die(2, `unknown flag ${JSON.stringify(a.split("=")[0])} for \`notify ${trigger ?? ""}\`. Takes --text-file <path>, --stdin, --what <one line>.`);
+    if (flags[a] !== null) die(2, `${a} was given twice — two values for one flag is an operator error, not a last-wins override`);
     const v = rest[i + 1];
-    if (v === undefined || String(v).startsWith("--")) die(2, `${name} needs a value`);
-    return v;
-  };
-  const useStdin = rest.includes("--stdin");
+    if (v === undefined || String(v).startsWith("--")) die(2, `${a} needs a value`);
+    flags[a] = v;
+    i++;
+  }
+  const flag = (name) => flags[name];
 
   if (trigger === "canary") {
     // The failure DETAIL arrives as bytes, never as an argument: a canary tail is exactly the

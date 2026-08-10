@@ -52,7 +52,7 @@ const newRef = () => "draft_" + randomBytes(8).toString("hex");
 // were minted under. An empty journal in a mismatched store must not read as "no unresolved
 // intents" -- that was a confirmed hole, and this record is what makes the check possible.
 export function initCampaign(store, campaign, { createdAt }) {
-  if (!/^[a-z0-9-]{1,64}$/.test(String(campaign)))
+  if (!CAMPAIGN_NAME_RE.test(String(campaign)))
     throw new DraftError("BAD_CAMPAIGN", `campaign must be [a-z0-9-]{1,64} — "|" is the idem delimiter and must not be smuggleable into it`);
   const p = join(campaignsDir(store), `${campaign}.json`);
   if (existsSync(p)) throw new DraftError("CAMPAIGN_EXISTS", `campaign "${campaign}" already exists at ${p}`);
@@ -181,13 +181,26 @@ const meetingsDir = (store) => {
 // approvals for one thing is how the wrong one gets approved.
 //
 // The reply that triggered it is still recorded on the draft, so the trail is intact.
+// THE ONE CAMPAIGN-NAME GRAMMAR, in a library so every door imports it instead of re-spelling
+// it. `assertCampaignName` in the CLI and the check in `rehearsal-check.mjs` were two copies of
+// this regex: identical today, and one edit away from a checker that blesses a name the CLI
+// then refuses. `|` is the idem delimiter, which is why the character class is closed.
+export const CAMPAIGN_NAME_RE = /^[a-z0-9-]{1,64}$/;
+
 export const meetingRefFor = (campaign, leadId) =>
   "meet_" + createHash("sha256").update(`${campaign}|${leadId}`, "utf8").digest("hex").slice(0, 16);
 
 // Returns { created: false } when this reply already has its draft. That is a NORMAL outcome
 // (a re-run), not an error, and the caller reports it rather than failing.
-export function writeMeetingDraft(store, { campaign, lead_id, reply_ref, body, calendar_url }) {
-  const ref = meetingRefFor(campaign, lead_id);
+export function writeMeetingDraft(store, { campaign, lead_id, ref_id, reply_ref, body, calendar_url }) {
+  // THE REF IS KEYED ON THE CANONICAL ID, the record keeps the id this reply actually carried.
+  //
+  // `meetingRefFor` hashed the raw `lead_id`, which is ONE version of a keyed HMAC — so after a
+  // key rotation the same human resolved to a different id, produced a different `meet_` ref,
+  // and got a second meeting draft AND a second live `leads-meeting` approval. This file's own
+  // comment says two approvals for one thing is how the wrong one gets approved. The caller
+  // passes the canonical member of the keyring, resolved by the same function `cmdDraft` uses.
+  const ref = meetingRefFor(campaign, ref_id || lead_id);
   const rec = {
     meeting_ref: ref, campaign, lead_id, reply_ref, body,
     calendar_url, draft_sha: draftSha(body),

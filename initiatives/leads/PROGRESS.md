@@ -3,8 +3,8 @@
 status: LIVE
 cycle: arc-leads (Cycle 8, opened 2026-08-04)
 phase: 03
-appetite: 7d
-burn: 5.5d
+appetite: 11d
+burn: 7.5d
 blocked-on: —
 depends-on: —
 
@@ -23,14 +23,23 @@ depends-on: —
 | 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
-| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 1.0d | ⏳ second — depends on 04 |
+| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 repaired on PR #150 across eleven adversarial rounds; CI green at d689ec1 (19 jobs, 0 failures, per-JOB). Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
 | 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ✅ closed 2026-08-08 — 9 live sends, 9 delivered, 74 tests. Closed with ONE row open by the owner's explicit decision: DMARC does not exist, so the Gmail-class header read is deferred behind publishing it |
 | 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
-**Appetite burn: 5.5 of 7 days used (79%). 6.5d allocated (93%) — absorber down to 0.5d.**
-**Kill checkpoint evaluated at this close:** past 50%, so the test fires — REQ-03's
-cap/suppression fixtures are green (Phase 01, closed 2026-08-04), so the criterion does not
-trip and no scope cut is forced. 1.5d of appetite remains against Phase 03's 1.0d.
+**Appetite burn: 7.5 of 11 days used (68%). 10.0d allocated (91%) — absorber 1.0d.**
+
+**`burn:` changed meaning on 2026-08-10 and that is the point.** It used to move only at a phase
+close, so on the morning of 2026-08-10 it read 5.5d / 79% while Phase 03 had already spent ≈2.0d
+against a 1.0d budget across six slices. A burn number that can only be right between phases is
+a burn number that is wrong for the whole time a phase is running — which is the whole time
+anyone reads it. It now includes in-flight effort on the open phase, so it is an estimate
+between closes rather than a lag.
+
+**Kill checkpoint:** REQ-03's cap/suppression fixtures are green (Phase 01, closed 2026-08-04),
+so the 50% criterion does not trip. The **100% line was reached on 2026-08-10** and resolved by
+the owner as an explicit extension, 7d → 11d, recorded in `PLAN.md` § Appetite. Extending is
+what the rule permits; *silently* is what it forbids.
 The absorber exists because of the arc-portfolio lesson (Cycle 4 allocated 100%,
 `appetite-sum` warned every run, Phase 02 overran with nothing to absorb it, closed ~112%).
 
@@ -40,10 +49,14 @@ old Phase 03 in two: the **machine** is proved now as a rehearsal (Phase 03, REQ
 travels to a parked Phase 05 with REQ-05 and its 1.0d. Phase 04 (REQ-08) builds the Resend
 transport and the allowlist guard that Phase 03 then reuses, which is why **04 runs before 03**.
 
-**Risk, once and plainly: 0.5d of absorber against two unbuilt phases**, in a lane where every
-phase so far cost an adversarial pass that found 22–29 real holes. One overrun hits the 100%
-cut line. Mitigation is the ordering — Phase 04 is a complete, useful capability on its own, so
-if appetite runs out after it the cycle stops at a clean line rather than half a rehearsal.
+**Risk, once and plainly: 1.0d of absorber against five unbuilt slices**, in a lane where every
+phase so far cost an adversarial pass that found 19–29 real holes — and where Phase 03's sixth
+pass returned three CRITICALs against a commit that had already merged. The old version of this
+paragraph predicted "one overrun hits the 100% cut line"; it did, on 2026-08-10, and the line
+was paid rather than dodged. 4.5d for Phase 03 is a forecast from the same process that
+forecast 1.0d, so the absorber covers about one more slice going wrong.
+Mitigation is the ordering — slices 06–08 prove the machine, 09–11 harden it, so if the
+absorber goes the cut is 09–11 to the next cycle rather than half a proved rehearsal.
 
 **Kill checkpoint: at 3.5 days burned (50%), are REQ-03's cap/suppression fixtures green?**
 If not: stop. Nothing sends, ever, without the guard. Bank the ADR-0400 vocabulary and the
@@ -199,8 +212,37 @@ here and a first send.
 
 ## Now
 
-**Current position: Phase 04 CLOSED (2026-08-08). Next is Phase 03 — the rehearsal — and its
-entry gate is THREE rows, not one.** Phases 00, 01, 02 and 04 are closed with both adversarial
+**Current position, 2026-08-10: Phase 03 is RUNNING. Slices 01–05 proven; slice 06 built, merged
+as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, and repaired on
+`feat/arc-leads-slice-06-fixes` → PR #150.** Everything below this block is the entry-gate
+history that got the phase started and is kept because two of its three rows are the reason the
+gate reads the way it does.
+
+**Eleven adversarial rounds against slice 06: 3, 9, 10, 8, 2, 3, 2, 1, 1, 4 and 0 CRITICALs.** Two surfaces per round,
+near-zero overlap between them every time. Round 11 read the whole branch, round 10's fixes
+included, and returned **MERGE** — the first round to end with no CRITICAL, which is what the
+zero at the end of that tally is. Its five HIGH-class findings were fixed in the same pass and
+are the last thing on this branch that no round has attacked. Several findings in rounds 2–4 were defects
+introduced *by the fix for* a previous round — twice inside the comment explaining that fix, and
+once as a flag plus its test shipped without the branch that reads the flag. The headline
+repairs: the meeting approval crashed every interested reply, two live approvals for one send
+were reachable from a store restore, `.env.local` could move the entire spine, `preflight` could
+print `PASS` out of `tests/fixtures`, and the forbidden-name **denylist became an allowlist**
+because five rounds each found a different name missing from it.
+
+**Three owner decisions taken today, all recorded rather than assumed:**
+
+1. **Appetite extended 7d → 11d**, Phase 03 1.0d → 4.5d, at the 100% line — `PLAN.md` § Appetite.
+2. **From round 5, only a CRITICAL blocks this slice**; HIGH and lesser are carried in
+   `phases/phase-03-known-holes.md` and re-open at phase close.
+3. **`weigh-tests.yml` dispatched** — 47 of 107 bats files had no measured shard weight (44 of them measured in that run; the other 3 arrived with the merge afterwards and are counted in _known_gap).
+
+**Slice 07 is unblocked:** the owner has someone who will reply by hand, so the real-reply
+ingestion follows slice 06 with no wait.
+
+---
+
+**Entry-gate history (kept — Phase 04 CLOSED 2026-08-08, and its gate was THREE rows, not one).** Phases 00, 01, 02 and 04 are closed with both adversarial
 surfaces run on each: **123 holes total**, every one found while CI was green. Phase 01 merged
 as `52a7a63` (PR #111); Phase 02 as `427d533` (PR #113); Phase 04 as `074927d` (PR #131) and
 `dd08c16` (PR #133).
@@ -247,8 +289,8 @@ Tests went 26 → 39 across the two files, one regression test per finding.
 
 | # | Finding | Why it was not fixed there | Where it goes |
 |---|---|---|---|
-| 1 | `.github/workflows/ci.yml` `_declared` misses bats' `f() { # @test` comment form, so declared can come out LOWER than executed and the step prints `::error::-1 declared test(s) never executed` — a message describing the opposite of what happened | `ci.yml` is a **shared, cross-lane** file (`.claude/rules/lanes.md`); editing it mid-cycle is a known collision cost, and `policy` is LIVE | cross-lane call — needs the other live lane's session, not a unilateral edit |
-| 2 | The suite-size floor at `ci.yml:267` is `>= 911` against **1916** real tests: 1005 tests could be deleted before it reddens. Defect class D3 — a threshold that cannot fire on the input it ships with | same shared-file reason | same |
+| 1 | `.github/workflows/ci.yml` `_declared` misses bats' `f() { # @test` comment form, so declared can come out LOWER than executed and the step prints `::error::-1 declared test(s) never executed` — a message describing the opposite of what happened | **This reason went stale on 2026-08-10 and is corrected here rather than left standing.** It said `policy` is LIVE; policy CLOSED that day (`e594d6e` / PR #147) and `leads` is now the only LIVE lane, so no cross-lane collision remains. The real blocker is narrower: `.github/` is outside the build session write permissions and the edit is refused at the tool boundary | folded into `phases/phase-03-known-holes.md` **H-05**, which carries the exact edit |
+| 2 | The suite-size floor at `ci.yml:267` is `>= 911` against **2242** real tests (1916 when this row was written, and re-derived on 2026-08-10 rather than left to age): 1331 tests could be deleted before it reddens. Defect class D3 — a threshold that cannot fire on the input it ships with | same as row 1, and the same correction applies | same — **H-05** |
 | 3 | `normDomain` folds case and one trailing dot but not zero-width/bidi controls or punycode, so `automemory.ai` + U+200B passes the `dedicated-domain` row | **Contained today** — both product domains are pure ASCII, and the run still refuses at the DNS rows. Latent, not live | Phase 03 spec, a slice of its own |
 | 4 | Findings carry no machine-stable reason code, so the tests assert on prose: a pure copy-edit failed three of them, and a behaviour-changing mutant that kept the wording survived | Needs a shape change to every finding in `preflight.mjs`; doing it inside the adversarial-fix commit would have mixed a refactor into a security fix | Phase 03 spec, a slice of its own |
 | 5 | Per-recipient allowlist refusal before any network call. The gate proves a lock EXISTS; nothing enforces membership at send time. Note `mail.mjs` already exports `loadAllowlist(env, varName)` and `assertAllowed(to, list)`, and that `varName` parameter exists precisely so a second allowlist can reuse it | Already **slice 04's** stated exit criterion — it was never in this slice's scope | already homed; do not re-file |

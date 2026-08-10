@@ -11,7 +11,7 @@
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { spineRoot, eventsDir, quarantineDir } from "../../hq/lib/spine-io.mjs";
+import { spineRoot, eventsDir, quarantineDir, readIdemIndex } from "../../hq/lib/spine-io.mjs";
 
 const DAY_RE = /^(\d{4}-\d{2}-\d{2})\.jsonl$/;
 // The entries spine-io is KNOWN to put in events/ that are not day files: the quarantine
@@ -114,6 +114,54 @@ export function dayFileCount({ root = spineRoot() } = {}) {
  * to say. It is counted, never parsed: a quarantine record is by definition an input that failed
  * validation, and interpreting it would be inventing a receipt the emitter refused to write.
  */
+/**
+ * The idem keys the EMITTER will refuse, read from the file the emitter actually refuses from.
+ *
+ * `readAllEvents` above folds `events/*.jsonl`; `appendEventUnlocked` decides DUP_IDEM against
+ * `derived/idem.index`. A caller that skips an emit by consulting the first while the emitter
+ * refuses from the second has derived one fact two ways (D5), and the two disagree in exactly
+ * the field conditions that matter: a restored or archived day file leaves the index holding
+ * keys whose events are no longer foldable, so the skip says "not on the spine, emit it" and
+ * the emitter says "already on the spine, refused" — and the receipt becomes permanently
+ * unrecordable, quarantined on every attempt.
+ *
+ * Both are needed, because they answer different halves of one question, so this returns both
+ * and lets the caller name the disagreement rather than picking a winner. It is READ-ONLY, like
+ * everything else here: the index is derived state and arc-replay owns rebuilding it.
+ */
+/**
+ * ONE SENTENCE, cited by every surface that reports an index-ahead-of-events spine.
+ *
+ * Four places name this condition — `cmdDraft`'s refusal, `ingestReply`'s refusal, the
+ * `cmdResearch` anomaly line, and the runbook's troubleshooting table — and two of them said
+ * only "rebuild the index with arc-replay". Those two are the ones the operator reads FIRST
+ * (research is runbook step 3, draft is step 4, and the table is the documented path for this
+ * exact row), so the ordered version existing in the other two protected nobody.
+ *
+ * Following the unordered version reaches the state the ordered one exists to prevent, verified
+ * end to end: refusal → `arc-replay` → the count is zero because the index was rebuilt from the
+ * days that remain → `draft` resumes and re-announces → the archived day is restored, which is
+ * the whole point of archiving rather than deleting → **two live approvals for one touch**, both
+ * undecided, both rendering on gate `leads-send`.
+ *
+ * It lives here rather than being repeated because a repair procedure with two derivations is
+ * the same defect as a value with two derivations, and this one had them disagree.
+ */
+export const UNFOLDABLE_REMEDY =
+  "Restore the archived or missing day file FIRST, and only then run `node .claude/scripts/hq/arc-replay.mjs`. " +
+  "Replay rebuilds the index from the day files that are PRESENT, so running it before the restore drives this " +
+  "count to zero by FORGETTING those receipts rather than by finding them — the refusal disappears and the work " +
+  "is re-done against a spine that has lost the record of it.";
+
+export function idemKeys({ root = spineRoot() } = {}) {
+  // NO try/catch. `readIdemIndex` throws INDEX_UNREADABLE on a real read failure and returns an
+  // empty map only for a genuinely absent index, which is the correct pair of answers. Swallowing
+  // the throw here would turn "I could not read the index" into "the index is empty", i.e. into
+  // "emit everything" — the same unreadable-counted-as-empty failure this module opens with,
+  // arriving one directory over.
+  return new Set(readIdemIndex(root).keys());
+}
+
 export function quarantineCount({ root = spineRoot() } = {}) {
   const dir = quarantineDir(root);
   if (!existsSync(dir)) return { records: 0, files: [] };

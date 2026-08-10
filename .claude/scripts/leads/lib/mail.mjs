@@ -75,19 +75,176 @@ export const MAIL_EXIT = Object.freeze({
 //
 // It lives here, next to the rules it protects, rather than in the CLI, so it can be tested
 // without writing a `.env.local` into a real repository root.
-export const ENV_LOCAL_FORBIDDEN = Object.freeze([
-  "ARC_LEADS_FAKE",
-  "ARC_LEADS_NOW",
-  "ARC_LEADS_STORE",
-  "ARC_LEADS_MAIL_BASE_URL",
-  "LEADS_FIXTURE_DIR",
+// AN ALLOWLIST, BECAUSE THE DENYLIST FAILED IN SEVEN CONSECUTIVE ROUNDS.
+//
+// This was a list of names a credential file may not carry, and every adversarial round found
+// another one missing: the outreach vendor host beside the listed notification one, then
+// `LEADS_CONFIG` and `LEADS_WARMUP_APPROVED` and `ARC_LEADS_REHEARSAL`, and then `ARC_SPINE_ROOT`
+// — which redirects the ENTIRE SPINE and is therefore strictly worse than `ARC_LEADS_STORE`,
+// which had been on the list from the start. Verified: a `.env.local` line `ARC_SPINE_ROOT=<dir>`
+// passed the guard and moved every approval, receipt, cap and suppression the process then read
+// or wrote, because `loadCredentials()` is the first statement of `cmdDaily`.
+//
+// Repeated misses are not repeated oversights, it is the shape being wrong. A denylist has to be extended
+// every time somebody adds an environment variable to a module nobody is thinking about; an
+// allowlist refuses the new variable by default and makes adding one a decision. The families
+// below are the ones whose variables steer THIS product; a name outside them (SUPABASE_*,
+// STRIPE_*, JUROR_*, GITHUB_PAT …) is another product's business and is none of this guard's.
+// `^ARC_` RATHER THAN `^ARC_LEADS_` AND `^ARC_SPINE_`, because the two narrow prefixes left the
+// arc-native names in between — and one of them names the INTERPRETER. `arc-event.sh` runs
+// `"${ARC_NODE:-node}" arc-event.mjs`, and `emit()` spawns that script with the inherited
+// environment, so `ARC_NODE=/path/to/anything` in a credential file ran that thing on every
+// receipt. `ARC_NODE=true` is the quieter half: `arc-event.sh` exits 0 having written nothing,
+// `emit()` reads only the exit status and reports success, `daily` prints its send summary, and
+// `report` then answers "Campaign(s) with receipts: (none)" after every irreversible act. That
+// is the end state this whole module exists to prevent, reached through a name the script's own
+// error message tells the operator to set. `ARC_MODEL` is the same door, quieter still: it
+// stamps a false fact onto every receipt.
+//
+// Widening the prefix rather than adding two more names is the same lesson as the allowlist
+// itself. `.env.example` carries exactly three `ARC_` names and all three are allowlisted, so
+// nothing legitimate moves.
+const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_/, /^LEADS_/]);
+
+// AND A SECOND CLAUSE THAT IS NOT ABOUT FAMILIES AT ALL, because the sentence above — "a name
+// outside them is another product's business" — was false in the one direction that matters.
+//
+// `NODE_OPTIONS`, `BASH_ENV`, `PATH`, `LD_PRELOAD` and friends are not another product's
+// business: they steer THIS process and, worse, its children. `emit()` spawns `bash` on every
+// single receipt with no `env:` option, so the whole mutated environment is inherited. Verified
+// on this box: a `.env.local` line `BASH_ENV=./x.sh` passes the family guard untouched and then
+// runs `x.sh` inside every `arc-event.sh` emit reached by a command that loads the file.
+// Those are exactly three: `daily` (the send), `preflight` (runbook step 1) and the notification
+// path (step 6). NOT `research` or `draft` — an earlier version of this sentence named those two
+// and they never call `loadCredentials`, which the call-site test in leads-mail-guard.bats pins.
+//
+// The accident-shaped member of the class is the one to weigh: `NODE_TLS_REJECT_UNAUTHORIZED=0`
+// is a line people paste into env files behind a corporate proxy, and it turns off certificate
+// validation on the request that carries the Bearer key, the recipient and the body. That is
+// exactly what `ARC_LEADS_MAIL_BASE_URL` is refused for, arriving through a name nobody thought
+// to family-scope.
+//
+// Matched on SHAPE rather than enumerated, for the reason the family allowlist exists: an
+// enumeration of dangerous process variables would need extending every time a runtime adds one.
+const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
+  /^NODE_/,          // NODE_OPTIONS (--require), NODE_TLS_REJECT_UNAUTHORIZED, NODE_EXTRA_CA_CERTS
+  /^(BASH_ENV|ENV|BASH_FUNC_.*|SHELLOPTS|IFS|COMSPEC)$/,  // shell startup and word-splitting
+  /^PATHEXT$/,                                    // which extensions Windows will execute
+  /^(LD_|DYLD_)/,                                 // loader injection on Linux and macOS
+  /_PROXY$/,                                      // where the vendor request goes
+  // RUNTIME CONFIGURATION FILES AND SEARCH ROOTS, added after round 7 found `OPENSSL_CONF` in
+  // the gap. Node links OpenSSL on all three CI platforms and parses that file at STARTUP,
+  // before a line of the program runs — verified on this box: a `.env.local` naming a junk file
+  // made `node -e` die inside OpenSSL quoting the file's own contents. What follows from
+  // OpenSSL's documented grammar is `[provider_sect] module = <path>`, i.e. an attacker-chosen
+  // shared library in every `arc-event.mjs` process, which is the blast radius `BASH_ENV` is
+  // refused for. It is also the accident shape: `OPENSSL_CONF` is what people paste in to get
+  // past "unsafe legacy renegotiation disabled" behind a corporate proxy.
+  /^(OPENSSL_|SSL_|GNUTLS_|CURL_|REQUESTS_|GIT_|HOME|USERPROFILE|XDG_)/,
+  /^(TMPDIR|TEMP|TMP)$/,        // `emit()` writes every receipt payload under os.tmpdir()
+  /^(PERL|PYTHON|RUBY|GEM_|LUA_|R_)/,             // sibling runtimes a hook or a tool may spawn
+  /(_CONF|_CONFIG|_OPTS|_OPTIONS|_STARTUP|_PROFILE|_RCFILE)$/, // the config-FILE shape
+  // AND THE SEARCH-ROOT SHAPE, because the paragraph above says "configuration files AND SEARCH
+  // ROOTS" and the patterns implemented only the first noun. Every alternative in the line above
+  // is a config-file spelling; there was no `PATH$`, `_HOME$`, `_DIR$`, `_ROOT$`, `_HOOKS$`.
+  //
+  // `GCONV_PATH` is the one that makes it a hole rather than an untidiness: glibc loads gconv
+  // modules — shared objects — from it on any multibyte conversion, in `bash` and in `node`,
+  // which is the same class of arbitrary-object load as `LD_PRELOAD`, and `LD_PRELOAD` is
+  // refused two lines up. `MSYS_NO_PATHCONV` is the Windows-leg twin and is worse in a quieter
+  // way: `arc-event.sh` hands node an MSYS `/c/...` path, so suppressing the conversion makes
+  // EVERY receipt emission fail after the send has already left. `DOTNET_STARTUP_HOOKS` and
+  // `CORECLR_PROFILER` end `_HOOKS` and `_PROFILER`, not `_OPTIONS`.
+  //
+  // Verified against `.env.example`, the owner's real `.env.local`, the four allowlisted names
+  // and every name a bats file writes into a credential file: zero false positives.
+  /(PATH|_HOME|_DIR|_ROOT|_HOOKS|_PROFILER|_PRELOAD|_LIB)$/,
+  /^(GCONV_|MSYS|NPM_CONFIG_|DOTNET_|CORECLR_)/,
+  // NOTE ON WHAT IS *NOT* IN THESE LISTS. `PATH`, `CDPATH`, `LOCPATH`, `NLSPATH`, `MSYS2_`,
+  // `JAVA_TOOL_OPTIONS` and the four explicit proxy names were all here and are all gone —
+  // every one of them is caught by a sibling alternative (`PATH$`, `MSYS`, `_OPTIONS$`,
+  // `_PROXY$`), so none of them was ever the only thing refusing anything. A pattern that
+  // cannot be the sole reason for a refusal is a threshold that cannot fire (D3), and this
+  // module has already deleted one of those rather than reorder it. The mutation probe in
+  // `leads-mail-guard.bats` now carries one name per surviving alternative, chosen so that
+  // deleting that alternative lets exactly that name through.
 ]);
 
+// The four names in those families that ARE credentials or recipient policy, and therefore
+// belong in a gitignored credential file. Everything else in the families is refused.
+export const ENV_LOCAL_ALLOWED = Object.freeze([
+  "ARC_LEADS_MAIL_FROM",              // the From on arc's own notification mail
+  "ARC_LEADS_MAIL_ALLOWLIST",         // who arc may notify — an address list, not a switch
+  "ARC_LEADS_REHEARSAL_ALLOWLIST",    // the five rehearsal recipients (ADR-0416)
+  "ARC_LEADS_OUTREACH_FROM",          // the envelope sender on cold mail
+]);
+
+// Kept as a NAMED SET rather than deleted, because the refusal message earns its specificity
+// from it and because a reader looking for "why is my variable refused" should find the answer
+// beside the variable. It is no longer the mechanism — membership here is not what refuses.
+export const ENV_LOCAL_FORBIDDEN = Object.freeze([
+  "LEADS_PROVIDER_BASE_URL",   // the outreach vendor host: Bearer key + recipient + body
+  "LEADS_CONFIG",              // replaces the config file: every domain and every cap
+  "LEADS_WARMUP_APPROVED",     // makes preflight attest a clause no human approved
+  "ARC_LEADS_REHEARSAL",       // binds the PRODUCT domain into a send (ADR-0416)
+  "ARC_LEADS_FAKE",            // decides whether a send is real at all
+  "ARC_LEADS_NOW",             // rebuckets the daily cap onto a fabricated day
+  "ARC_LEADS_STORE",           // where the private store lives
+  "ARC_LEADS_MAIL_BASE_URL",   // the notification vendor host
+  "LEADS_FIXTURE_DIR",         // what the fakes read
+  "ARC_SPINE_ROOT",            // the whole spine: approvals, receipts, caps, suppression
+  "ARC_SPINE_NOW",             // the spine's own test-only clock
+  "ARC_SPINE_RAND",            // seeds ULID randomness, i.e. event identity
+]);
+
+// CASE-FOLDED, because `process.env` IS on Windows and this list is not.
+//
+// `ENV_LOCAL_FORBIDDEN.includes(n)` was an exact match, so a `.env.local` carrying
+// `arc_leads_fake=1` passed the guard untouched — and then `env["arc_leads_fake"] = "1"` set
+// `ARC_LEADS_FAKE` for the whole process, because Node's environment object folds case on
+// Windows. Verified on this box: `usingFakes()` false before the load, true after, with the
+// guard reporting nothing to refuse. That is the exact outcome this list exists to prevent,
+// reachable on the windows CI leg and on the owner's machine by changing the shift key.
+//
+// Folded rather than "also check the lowercase spelling": the failing variant set is every
+// mixed case of five names, not two spellings of them (D1 — a grammar pinned to one form).
+const ALLOWED_UPPER = ENV_LOCAL_ALLOWED.map((n) => n.toUpperCase());
+const NAMED_UPPER = ENV_LOCAL_FORBIDDEN.map((n) => n.toUpperCase());
+
 export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
-  const smuggled = names.filter((n) => ENV_LOCAL_FORBIDDEN.includes(n));
-  if (smuggled.length)
-    throw new MailRefusal("config", `${fileLabel} sets ${smuggled.join(", ")} — refused. That file is for credentials; these variables decide whether a send is real, which day the cap buckets to, where the store lives, and which host receives the key, and they are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
-  return names;
+  // Classified as they are collected, because the two clauses refuse for genuinely different
+  // reasons and the message used to give the family reason for both — telling an operator that
+  // `BASH_ENV` is "refused by default out of the ARC_*, LEADS_* families", which is provably
+  // false about the name in front of them. A refusal an operator can disprove is a refusal they
+  // learn to route around.
+  const steering = [];
+  const smuggled = names.filter((n) => {
+    // TRIMMED FIRST. The family and shape patterns are `^`-anchored, so " ARC_LEADS_FAKE" with a
+    // leading space matched none of them and was accepted. `parseEnvFile` trims before it gets
+    // here, so this is unreachable through the one feeder that exists today — and a guard whose
+    // correctness depends on its only caller staying its only caller is not a guard.
+    const u = String(n).trim().toUpperCase();
+    // Two independent reasons to refuse. The first is about THIS PRODUCT's steering variables,
+    // where the default inside the families is NO. The second is about the PROCESS and its
+    // children, and it applies whatever the name looks like.
+    if (ENV_LOCAL_PROCESS_STEERING.some((re) => re.test(u))) { steering.push(n); return true; }
+    if (!ENV_LOCAL_FAMILIES.some((re) => re.test(u))) return false;
+    return !ALLOWED_UPPER.includes(u);
+  });
+  if (!smuggled.length) return names;
+  // The message distinguishes a name we have a specific reason for from one that is simply new,
+  // because "refused by default" is a different instruction to the reader than "refused because
+  // it moves the spine". A new variable in these families is refused on purpose: adding one to
+  // the allowlist is meant to be a decision somebody makes, not something a file can assume.
+  const steeringSet = new Set(steering);
+  const family = smuggled.filter((n) => !steeringSet.has(n));
+  const known = family.filter((n) => NAMED_UPPER.includes(String(n).toUpperCase()));
+  const novel = family.filter((n) => !NAMED_UPPER.includes(String(n).toUpperCase()));
+  const parts = [];
+  if (known.length) parts.push(`${known.join(", ")} — each of these decides how a send behaves: whether it is real, whether it is a rehearsal binding the product domain, which day the cap buckets to, where the store or the whole spine lives, which host receives the Bearer token along with the recipient and the body, what the config says every cap is, or whether the warm-up counts as attested`);
+  if (novel.length) parts.push(`${novel.join(", ")} — refused by default: ${fileLabel} may carry only ${ENV_LOCAL_ALLOWED.join(", ")} out of the ARC_* and LEADS_* families, because a denylist of steering variables was extended after every one of seven adversarial rounds and missed another one each time`);
+  if (steering.length) parts.push(`${steering.join(", ")} — these steer this process or the children it spawns, whatever family they belong to. Every receipt runs \`bash\` and then \`node\` with the environment this file has just written into, so a name that chooses an interpreter, a startup file, a search path or a TLS setting chooses them for the send`);
+  throw new MailRefusal("config", `${fileLabel} sets ${parts.join("; and ")}. They are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
 }
 
 // ---------- the house timestamp grammar ----------
