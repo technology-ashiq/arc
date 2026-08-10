@@ -21,22 +21,30 @@
 >   surfaces every round. Several findings were defects introduced *by the fix for* an earlier
 >   round — twice inside the comment explaining that fix. Round 11 read the whole branch,
 >   including round 10's fixes, and returned **MERGE**.
-> - **CI is green at `0274aa8`**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures, read
->   per-JOB rather than off the watcher's exit code. **The sha is part of the claim** — this line
->   said "CI is green" with no sha until 2026-08-10, which stays true-looking across every commit
->   that follows it, including the ones that break it.
+> - **CI is green at `b3dd8e5`**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures, read
+>   per-JOB rather than off the watcher's exit code. That is the **merged tree on `main`**,
+>   verified by `workflow_dispatch` — CI never runs on a push to `main` in this repo, so the merge
+>   itself tested nothing and the dispatch is what makes this line true.
 >
->   And a sha alone would go stale on the very next commit, including this one, so the claim
->   carries its own check instead of asking you to trust it:
+>   **The sha is part of the claim** — this line said "CI is green" with no sha until 2026-08-10,
+>   which stays true-looking across every commit that follows it, including the ones that break
+>   it. But a sha alone goes stale on the next commit, so the claim carries its own check:
 >
 >   ```
->   git log --oneline 0274aa8..HEAD --name-only
+>   git log --oneline b3dd8e5..HEAD --name-only
 >   ```
 >
->   If that prints nothing, the green run IS your tree. If it prints only this file, the green run
->   covers all the code you are about to run and the difference is prose. If it prints anything
->   under `.claude/` or `tests/`, this line is about a tree you are not standing on — get a green
->   run on the one you are.
+>   If that prints nothing, the green run IS your tree. If it prints only documentation, the green
+>   run covers all the code you are about to run and the difference is prose. If it prints
+>   anything under `.claude/` or `tests/`, this line is about a tree you are not standing on — get
+>   a green run on the one you are.
+>
+>   **It has to be a sha that survives the merge.** This check first shipped naming `0274aa8`, a
+>   commit on the fix branch — and the squash merge rewrote that branch into one new commit, so
+>   `0274aa8` is not an ancestor of `main` at all and the check answered "your tree has changed
+>   code" to every operator who ran it on `main`. A self-verifying claim that cries wolf is worse
+>   than the bare sentence it replaced, because this one asks you to act on it. Any sha put here
+>   must be reachable from `main`.
 > - **Known holes are listed, not hidden** — `phases/phase-03-known-holes.md`, each with why it
 >   is left and what would close it. The owner set the bar on 2026-08-10: only a CRITICAL blocks
 >   this slice.
