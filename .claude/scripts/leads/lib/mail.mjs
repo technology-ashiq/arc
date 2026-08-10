@@ -90,7 +90,21 @@ export const MAIL_EXIT = Object.freeze({
 // allowlist refuses the new variable by default and makes adding one a decision. The families
 // below are the ones whose variables steer THIS product; a name outside them (SUPABASE_*,
 // STRIPE_*, JUROR_*, GITHUB_PAT …) is another product's business and is none of this guard's.
-const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_LEADS_/, /^LEADS_/, /^ARC_SPINE_/]);
+// `^ARC_` RATHER THAN `^ARC_LEADS_` AND `^ARC_SPINE_`, because the two narrow prefixes left the
+// arc-native names in between — and one of them names the INTERPRETER. `arc-event.sh` runs
+// `"${ARC_NODE:-node}" arc-event.mjs`, and `emit()` spawns that script with the inherited
+// environment, so `ARC_NODE=/path/to/anything` in a credential file ran that thing on every
+// receipt. `ARC_NODE=true` is the quieter half: `arc-event.sh` exits 0 having written nothing,
+// `emit()` reads only the exit status and reports success, `daily` prints its send summary, and
+// `report` then answers "Campaign(s) with receipts: (none)" after every irreversible act. That
+// is the end state this whole module exists to prevent, reached through a name the script's own
+// error message tells the operator to set. `ARC_MODEL` is the same door, quieter still: it
+// stamps a false fact onto every receipt.
+//
+// Widening the prefix rather than adding two more names is the same lesson as the allowlist
+// itself. `.env.example` carries exactly three `ARC_` names and all three are allowlisted, so
+// nothing legitimate moves.
+const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_/, /^LEADS_/]);
 
 // AND A SECOND CLAUSE THAT IS NOT ABOUT FAMILIES AT ALL, because the sentence above — "a name
 // outside them is another product's business" — was false in the one direction that matters.
@@ -99,7 +113,10 @@ const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_LEADS_/, /^LEADS_/, /^ARC_SPINE_
 // business: they steer THIS process and, worse, its children. `emit()` spawns `bash` on every
 // single receipt with no `env:` option, so the whole mutated environment is inherited. Verified
 // on this box: a `.env.local` line `BASH_ENV=./x.sh` passes the family guard untouched and then
-// runs `x.sh` inside every `arc-event.sh` emit — i.e. inside runbook steps 3, 4 and 6.
+// runs `x.sh` inside every `arc-event.sh` emit reached by a command that loads the file.
+// Those are exactly three: `daily` (the send), `preflight` (runbook step 1) and the notification
+// path (step 6). NOT `research` or `draft` — an earlier version of this sentence named those two
+// and they never call `loadCredentials`, which the call-site test in leads-mail-guard.bats pins.
 //
 // The accident-shaped member of the class is the one to weigh: `NODE_TLS_REJECT_UNAUTHORIZED=0`
 // is a line people paste into env files behind a corporate proxy, and it turns off certificate
@@ -159,6 +176,12 @@ const ALLOWED_UPPER = ENV_LOCAL_ALLOWED.map((n) => n.toUpperCase());
 const NAMED_UPPER = ENV_LOCAL_FORBIDDEN.map((n) => n.toUpperCase());
 
 export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
+  // Classified as they are collected, because the two clauses refuse for genuinely different
+  // reasons and the message used to give the family reason for both — telling an operator that
+  // `BASH_ENV` is "refused by default out of the ARC_*, LEADS_* families", which is provably
+  // false about the name in front of them. A refusal an operator can disprove is a refusal they
+  // learn to route around.
+  const steering = [];
   const smuggled = names.filter((n) => {
     // TRIMMED FIRST. The family and shape patterns are `^`-anchored, so " ARC_LEADS_FAKE" with a
     // leading space matched none of them and was accepted. `parseEnvFile` trims before it gets
@@ -168,7 +191,7 @@ export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
     // Two independent reasons to refuse. The first is about THIS PRODUCT's steering variables,
     // where the default inside the families is NO. The second is about the PROCESS and its
     // children, and it applies whatever the name looks like.
-    if (ENV_LOCAL_PROCESS_STEERING.some((re) => re.test(u))) return true;
+    if (ENV_LOCAL_PROCESS_STEERING.some((re) => re.test(u))) { steering.push(n); return true; }
     if (!ENV_LOCAL_FAMILIES.some((re) => re.test(u))) return false;
     return !ALLOWED_UPPER.includes(u);
   });
@@ -177,11 +200,14 @@ export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
   // because "refused by default" is a different instruction to the reader than "refused because
   // it moves the spine". A new variable in these families is refused on purpose: adding one to
   // the allowlist is meant to be a decision somebody makes, not something a file can assume.
-  const known = smuggled.filter((n) => NAMED_UPPER.includes(String(n).toUpperCase()));
-  const novel = smuggled.filter((n) => !NAMED_UPPER.includes(String(n).toUpperCase()));
+  const steeringSet = new Set(steering);
+  const family = smuggled.filter((n) => !steeringSet.has(n));
+  const known = family.filter((n) => NAMED_UPPER.includes(String(n).toUpperCase()));
+  const novel = family.filter((n) => !NAMED_UPPER.includes(String(n).toUpperCase()));
   const parts = [];
   if (known.length) parts.push(`${known.join(", ")} — each of these decides how a send behaves: whether it is real, whether it is a rehearsal binding the product domain, which day the cap buckets to, where the store or the whole spine lives, which host receives the Bearer token along with the recipient and the body, what the config says every cap is, or whether the warm-up counts as attested`);
-  if (novel.length) parts.push(`${novel.join(", ")} — refused by default: ${fileLabel} may carry only ${ENV_LOCAL_ALLOWED.join(", ")} out of the ARC_LEADS_*, LEADS_* and ARC_SPINE_* families, because a denylist of steering variables was extended after every one of five adversarial rounds and missed another one each time`);
+  if (novel.length) parts.push(`${novel.join(", ")} — refused by default: ${fileLabel} may carry only ${ENV_LOCAL_ALLOWED.join(", ")} out of the ARC_* and LEADS_* families, because a denylist of steering variables was extended after every one of six adversarial rounds and missed another one each time`);
+  if (steering.length) parts.push(`${steering.join(", ")} — these steer this process or the children it spawns, whatever family they belong to. Every receipt runs \`bash\` and then \`node\` with the environment this file has just written into, so a name that chooses an interpreter, a startup file, a search path or a TLS setting chooses them for the send`);
   throw new MailRefusal("config", `${fileLabel} sets ${parts.join("; and ")}. They are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
 }
 

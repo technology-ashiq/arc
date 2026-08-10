@@ -1,6 +1,6 @@
 # Phase 03 — known holes, carried forward deliberately
 
-Things four adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
+Things six adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
 each with the reason it was left and what would close it. This file exists so that "we did not
 fix it" and "we did not notice it" stop looking identical from the outside.
 
@@ -10,8 +10,8 @@ A hole listed here is a decision. A hole not listed here is a defect.
 
 ## The bar this file exists under — owner decision, 2026-08-10
 
-Four adversarial rounds against slice 06 returned **3, 9, 10 and 8 CRITICALs**, two surfaces each
-round, with near-zero overlap between the surfaces every time. Several findings in rounds 2–4
+Six adversarial rounds against slice 06 returned **3, 9, 10, 8, 2 and 3 CRITICALs**, two surfaces each
+round, with near-zero overlap between the surfaces every time. Several findings in rounds 2-6
 were defects introduced *by the fix for* a previous round, twice inside the comment explaining
 that fix. The rounds were not converging on a schedule anyone could plan around.
 
@@ -76,12 +76,13 @@ on the spine and the meeting draft is on disk, so a warm lead sits without a cal
 narrowing it to the one `meet_` ref is a fold-shaped change and the conservative version is safe;
 the cost is latency on a spine that is already broken.
 
-> **The asymmetry closed on 2026-08-10, and this paragraph's claim about coverage was wrong.** It
-> said "a test now makes `unfoldable` non-zero (journey 22), so neither branch is deletable any
-> more". The test is the 21st `@test` (22 is the self-count), and it drives `research` and
-> `draft` only — it never calls `ingest-reply`, so `ingest.mjs`'s refusal still has no coverage
-> and is still deletable for free. Recorded as what it is. `cmdDraft` now refuses the whole run
-> rather than only the resume, which is what made the two siblings agree.
+> **The asymmetry closed on 2026-08-10, and this paragraph's own claim about coverage was
+> wrong.** It said a test now makes `unfoldable` non-zero "so neither branch is deletable any
+> more". That test is the **21st** `@test` in `leads-journey.bats` (22 is the self-count), and it
+> drives `research` and `draft` only — it never calls `ingest-reply`. So `ingest.mjs`'s refusal
+> still has no coverage and is still deletable for free; recorded as what it is rather than left
+> as a claim. What did close: `cmdDraft` now refuses the whole run rather than only the resume,
+> which is what made the two siblings agree.
 
 **`approvalState` requires `typeof e.id === "string"` and nothing tests it.** An
 `approval.requested` with no `id` reads as "no approval exists", so `draft` mints a second one

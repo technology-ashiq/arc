@@ -1,38 +1,29 @@
 # Phase 03 runbook — the rehearsal journey, run by hand
 
-> # ⛔ DO NOT FOLLOW THIS RUNBOOK YET
+> # ⚠ NOT YET APPROVED FOR THE LIVE RUN — read this first
 >
-> **Two adversarial passes against the commit that added this file returned three CRITICALs,
-> and one of them is in this document.** It merged as `bbfcede` (PR #145) with the findings
-> recorded in that PR's comments and not yet fixed. Until they are:
+> **Every defect the previous banner listed is fixed.** That banner named three CRITICALs from
+> PR #145 — the `set -a; . ./.env.local` instruction that blinded its own guard, a duplicate
+> refusal that could name the wrong draft, and the unstated campaign-name contract — plus four
+> open items and two code defects. None of them survives in this document or in the code it
+> drives. It is replaced rather than deleted, because a banner whose every symptom is already
+> absent teaches the reader that banners are stale, and this lane cannot afford that.
 >
-> 1. **Step 1's `set -a; . ./.env.local; set +a` disables the guard this runbook cites in
->    step 1 as your protection.** `assertEnvLocalNames` is a policy about what `.env.local`
->    *carries*, but it is fed the list of what `loadEnvLocal` *applied* — and sourcing the file
->    first guarantees that list is empty. With `ARC_LEADS_FAKE=1` in `.env.local` the run then
->    prints `mail sent … EXIT=0` **having sent nothing**, which is the exact failure
->    `mail.mjs` exists to prevent. Verified both ways: not sourced → `refused`, exit 2;
->    sourced exactly as written below → `mail sent`, exit 0.
-> 2. **Step 4's duplicate refusal can name the wrong draft.** The test that was supposed to
->    pin the pairing only proves that *some* known ref appeared in the output. This runbook
->    then tells you to "edit that draft" — which may be a different person's mail.
-> 3. **Nothing here says `icp.json`'s `campaign` must equal the name from step 2.**
->    `research` takes the campaign from the ICP file, not from `campaign init`. Get them wrong
->    and every step reports success while receipts and approvals land under two different
->    campaign names, and the phase's one number comes back "no receipts", exit 2.
+> **What is true as of 2026-08-10:**
 >
-> Also open: `report` has a refusal this file's Known-refusals table omits, and R2's stated
-> remedy hits it; the sourcing idiom is a second env parser that disagrees with `env.mjs` in
-> both directions, so a truncated `RESEND_API_KEY` passes this file's own verification and
-> fails at the vendor at the moment mail goes out; and no shell is named, while
-> `set -a; . ./file` does not exist in PowerShell.
+> - **Six adversarial rounds have run against this slice**, two independent surfaces each, and
+>   they returned 3, 9, 10, 8, 2 and 3 CRITICALs. Near-zero overlap between the surfaces every
+>   round. Several findings were defects introduced *by the fix for* an earlier round — twice
+>   inside the comment explaining that fix.
+> - **CI is green**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures.
+> - **Known holes are listed, not hidden** — `phases/phase-03-known-holes.md`, each with why it
+>   is left and what would close it. The owner set the bar on 2026-08-10: only a CRITICAL blocks
+>   this slice.
 >
-> **Two code defects merged alongside it** and are equally unfixed: the `research`
-> duplicate-skip does not stop the spine quarantine, so `arc-leads report` is still killable
-> three ways; and a partial `draft` run now makes a touch **permanently and silently**
-> unqueueable, which is worse than the noisy duplicate it replaced.
->
-> Remove this banner only when PR #145's findings are fixed and re-attacked.
+> **What is still outstanding before the live run:** the fixes from the most recent round have
+> not themselves been attacked, and the branch has not merged. Walking this document against the
+> **fake** to rehearse the sequence is fine and is what it is for. Do not do the live send until
+> that line is struck from this banner.
 
 This is what the owner follows for the real run. Every command below was walked end to end
 against the FAKE on 2026-08-09 (slice 06); the outputs quoted are the ones the walk actually
@@ -150,8 +141,8 @@ fixtures come from — and a credential file is not where any of those decisions
 > found a different name missing from it — most recently `ARC_SPINE_ROOT`, which moves the entire
 > spine and is therefore worse than `ARC_LEADS_STORE`, which had been on the list from the start.
 > The process clause was added last: `emit()` spawns `bash` on every receipt with the inherited
-> environment, so `BASH_ENV` in a credential file runs code inside steps 3, 4 and 6 of this
-> runbook, and `NODE_TLS_REJECT_UNAUTHORIZED=0` — a line people paste in behind a corporate proxy
+> environment, so `BASH_ENV` in a credential file runs code inside every command that reads that
+> file — step 1 (`preflight`), step 6 (the notification path) and the send itself — and `NODE_TLS_REJECT_UNAUTHORIZED=0` — a line people paste in behind a corporate proxy
 > — turns off certificate validation on the request carrying your key, your recipient and your
 > text.
 >
@@ -496,9 +487,10 @@ ADR-0416 rehearsal allowlist … check ARC_LEADS_REHEARSAL_ALLOWLIST in .env.loc
 **The message used to point at a file the send path did not read**, which is why the top of this
 runbook once told you to source it. `daily` now loads `.env.local` through `lib/env.mjs` before
 it opens the store, so the allowlist in that file is the allowlist the guard sees, and this
-refusal means what it says. Fix: check the entry count with the one-liner at the top of this
-file, and check that `ARC_LEADS_REHEARSAL=1` is exported in **this** shell — the mode is the one
-thing that is deliberately not a file setting.
+refusal means what it says. Fix: run `node .claude/scripts/leads/rehearsal-check.mjs` — it
+resolves the allowlist exactly as the send does, tells you which of the four places the value
+came from, and checks that `ARC_LEADS_REHEARSAL=1` is exported in **this** shell, which is the
+one thing that is deliberately not a file setting.
 
 **R4 — `daily` refuses: `N unresolved send intent(s) in the journal.`**
 A previous run was interrupted between the provider ack and the receipt. Run
