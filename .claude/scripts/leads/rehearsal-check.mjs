@@ -104,13 +104,22 @@ const fromFile = (info.names || []).includes(REHEARSAL_ALLOWLIST_VAR);
 const isBlank = (info.blank || []).includes(REHEARSAL_ALLOWLIST_VAR);
 const wasApplied = (info.applied || []).includes(REHEARSAL_ALLOWLIST_VAR);
 const overridden = fromFile && !wasApplied && !isBlank;
+// FOUR STATES. The comment above said three and the code had three, and the missing one is the
+// ORDINARY STARTING STATE: nothing in the file and nothing in the environment. It fell through
+// to "the ENVIRONMENT (the file does not declare it)", which the runbook maps to the strongest
+// instruction in the whole document — "stop, your addresses went through your shell history" —
+// told to an operator on a fresh clone who has set nothing anywhere. A check whose header says
+// reporting the wrong cause sends the operator to the wrong place did exactly that.
+const setNowhere = !fromFile && (env[REHEARSAL_ALLOWLIST_VAR] === undefined || env[REHEARSAL_ALLOWLIST_VAR] === "");
 const source = wasApplied
   ? ENV_LOCAL
   : isBlank
     ? `${ENV_LOCAL} declares it EMPTY, so it counts as unset`
-    : fromFile
-      ? "the ENVIRONMENT (it overrode the file)"
-      : "the ENVIRONMENT (the file does not declare it)";
+    : setNowhere
+      ? "NOWHERE — it is not in the file and not in this shell"
+      : fromFile
+        ? "the ENVIRONMENT (it overrode the file)"
+        : "the ENVIRONMENT (the file does not declare it)";
 
 console.log("");
 console.log(`${REHEARSAL_ALLOWLIST_VAR} resolved from: ${source}`);
@@ -126,6 +135,7 @@ if (!recipients.length) problems.push(`${REHEARSAL_ALLOWLIST_VAR} resolves to no
 if (typed.length !== distinct.size) problems.push(`you typed ${typed.length} entr(y/ies) and the send resolves ${distinct.size} distinct person(s) — the difference is entries that collapsed together (a case or zero-width twin) or that are not address-shaped. You have ${distinct.size} recipients, not ${typed.length}`);
 if (overridden) problems.push(`the environment is overriding ${ENV_LOCAL} — a value exported earlier in this shell is what the send will use, NOT what you just edited into the file`);
 if (isBlank) problems.push(`${ENV_LOCAL} declares ${REHEARSAL_ALLOWLIST_VAR} with an empty value — that counts as unset, so fill it in rather than looking for an override`);
+if (setNowhere) problems.push(`${REHEARSAL_ALLOWLIST_VAR} is set nowhere — add it to ${ENV_LOCAL} with the five addresses. This is the first-run state, not a leak: nothing has gone through your shell history`);
 
 // THE CAMPAIGN NAME, CHECKED IN THE SAME COMMAND, because it is the same class of failure and
 // it was the other document-level CRITICAL. `research` takes the campaign from the ICP FILE and

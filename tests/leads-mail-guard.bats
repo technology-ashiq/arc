@@ -789,36 +789,100 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # The startup guard runs at module evaluation, BEFORE .env.local is read, so a file setting
   # ARC_LEADS_FAKE=1 would otherwise walk past it and switch the notification path to the fake:
   # mail sent, exit 0, nothing delivered. ARC_LEADS_MAIL_BASE_URL redirects the Bearer header.
+  # THE NAMES ARE WRITTEN OUT HERE, not read out of the module under test. `N/N` derived from
+  # `ENV_LOCAL_FORBIDDEN.length` on both sides can never see a name that is MISSING from the
+  # list -- which is exactly how five separate steering variables were absent across four
+  # adversarial rounds -- and a substring assertion for `ARC_LEADS_REHEARSAL` is satisfied by
+  # `ARC_LEADS_REHEARSAL_ALLOWLIST`, so a mutant swapping the two passed every check while
+  # re-opening the product-domain unlock AND refusing the allowlist the runbook requires.
+  #
+  # The guard is now an ALLOWLIST over three families, so the meaningful assertion is that a
+  # name nobody has thought of is refused BY DEFAULT. That is the property that stops round six.
   _m '
-    const {assertEnvLocalNames, ENV_LOCAL_FORBIDDEN} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const {assertEnvLocalNames, ENV_LOCAL_ALLOWED} = await import("./.claude/scripts/leads/lib/mail.mjs");
+    const mustRefuse = ["ARC_LEADS_FAKE","ARC_LEADS_NOW","ARC_LEADS_STORE","ARC_LEADS_MAIL_BASE_URL",
+      "LEADS_FIXTURE_DIR","LEADS_PROVIDER_BASE_URL","LEADS_CONFIG","LEADS_WARMUP_APPROVED",
+      "ARC_LEADS_REHEARSAL","ARC_SPINE_ROOT","ARC_SPINE_NOW","ARC_SPINE_RAND",
+      "LEADS_A_VARIABLE_NOBODY_HAS_INVENTED_YET","arc_leads_fake"];
     let refused = 0;
-    for (const n of ENV_LOCAL_FORBIDDEN) { try { assertEnvLocalNames(["RESEND_API_KEY", n]); } catch (e) { if (e.kind === "config") refused++; } }
-    console.log("REFUSED:" + refused + "/" + ENV_LOCAL_FORBIDDEN.length);
-    console.log("GUARDS:" + ENV_LOCAL_FORBIDDEN.join(","));
-    assertEnvLocalNames(["RESEND_API_KEY", "ARC_LEADS_MAIL_FROM", "ARC_LEADS_MAIL_ALLOWLIST"]);
+    const escaped = [];
+    for (const n of mustRefuse) {
+      try { assertEnvLocalNames(["RESEND_API_KEY", n]); escaped.push(n); }
+      catch (e) { if (e.kind === "config") refused++; else escaped.push(n); }
+    }
+    console.log("REFUSED:" + refused + "/" + mustRefuse.length);
+    console.log("ESCAPED:" + (escaped.length ? escaped.join(",") : "none"));
+    console.log("ALLOWED:" + ENV_LOCAL_ALLOWED.join(","));
+    assertEnvLocalNames(["RESEND_API_KEY", ...ENV_LOCAL_ALLOWED, "SUPABASE_URL", "STRIPE_SECRET_KEY"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:9/9"* ]]
-  [[ "$output" == *"ARC_LEADS_FAKE"* ]]
-  [[ "$output" == *"ARC_LEADS_NOW"* ]]
-  [[ "$output" == *"ARC_LEADS_MAIL_BASE_URL"* ]]
-  # The OUTREACH twins, named individually. `N/N` alone is satisfied by any list of any length,
-  # including one with the vendor host that carries the recipient and the body removed from it --
-  # which is precisely the omission this test failed to notice for two rounds.
-  [[ "$output" == *"LEADS_PROVIDER_BASE_URL"* ]]
-  [[ "$output" == *"LEADS_CONFIG"* ]]
-  [[ "$output" == *"LEADS_WARMUP_APPROVED"* ]]
-  [[ "$output" == *"ARC_LEADS_REHEARSAL"* ]]
+  [[ "$output" == *"REFUSED:14/14"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ESCAPED:none"* ]] || { echo "$output"; false; }
+  # The allowlist must hold the recipient-policy names and NOTHING that steers a send. Asserted
+  # positively, so shrinking it (which would refuse the runbook's own required variables) fails
+  # here rather than at the operator.
+  [[ "$output" == *"ALLOWED:ARC_LEADS_MAIL_FROM,ARC_LEADS_MAIL_ALLOWLIST,ARC_LEADS_REHEARSAL_ALLOWLIST,ARC_LEADS_OUTREACH_FROM"* ]] || { echo "$output"; false; }
   [[ "$output" == *"CREDENTIALS-ACCEPTED"* ]]
 }
 
-@test "the mail subcommand actually calls the credential-file guard" {
-  # The guard is worth nothing if the one caller that reads .env.local forgets to call it, and
-  # the guard itself cannot detect that.
+@test "every command that reads the credential file calls the guard on it" {
+  # The guard is worth nothing if a caller that reads .env.local forgets to call it, and the
+  # guard cannot detect that itself.
+  #
+  # THE OLD VERSION OF THIS TEST WAS `grep -c assertEnvLocalNames &gt;= 2`. That name appears four
+  # times in the file (an import, two comments, one call), so deleting the `loadCredentials()`
+  # call from BOTH `cmdPreflight` and `deliverNotification` left the count at four and the whole
+  # suite green -- and one of those deletions is exactly the regression that made
+  # `arc-leads preflight: PASS` reachable from a credential file. A test named after a guard,
+  # measuring a substring frequency (D7).
+  #
+  # This walks the actual function bodies instead: brace-matched from each declaration, so a
+  # call that moves out of a function is caught even if it stays in the file. A behavioural test
+  # (write a .env.local, run preflight, expect a refusal) is not possible while
+  # `loadCredentials` anchors on the real REPO_ROOT -- that is recorded as H-06 in
+  # phases/phase-03-known-holes.md rather than left as a silent gap.
   cd "$ARC_ROOT"
-  run grep -c "assertEnvLocalNames" .claude/scripts/leads/arc-leads.mjs
-  [ "$status" -eq 0 ]
-  [ "$output" -ge 2 ]
+  cat > "$BATS_TEST_TMPDIR/callsites.mjs" <<'MJS'
+import { readFileSync } from "node:fs";
+const src = readFileSync(".claude/scripts/leads/arc-leads.mjs", "utf8");
+const want = ["cmdDaily", "cmdPreflight", "deliverNotification"];
+const missing = [];
+// A plain string search, NOT a constructed RegExp. Building one here means backslashes have to
+// survive a heredoc, a shell and a JS string literal intact, and the first version of this
+// probe lost them and died on "Unterminated group" -- a test that fails to parse is a test that
+// proves nothing, which is the whole subject of this file.
+for (const fn of want) {
+  const at = src.indexOf("function " + fn + "(");
+  if (at === -1) { missing.push(fn + " (not found at all)"); continue; }
+  // THE PARAMETER LIST IS SKIPPED FIRST. Taking the next "{" after the declaration finds the
+  // DESTRUCTURING brace of `function deliverNotification({ to, subject, ... })`, so the
+  // brace-matcher closed on the parameter list and handed back an empty body -- and the first
+  // run of this probe duly reported that function as missing the call it plainly contains.
+  // Paren depth is walked back to zero, and only then is the body brace taken.
+  let p = src.indexOf("(", at), pd = 0, afterParams = -1;
+  for (let j = p; j < src.length; j++) {
+    if (src[j] === "(") pd++;
+    else if (src[j] === ")") { pd--; if (pd === 0) { afterParams = j; break; } }
+  }
+  if (afterParams === -1) { missing.push(fn + " (unparseable parameter list)"); continue; }
+  let i = src.indexOf("{", afterParams), depth = 0, end = -1;
+  for (let j = i; j < src.length; j++) {
+    if (src[j] === "{") depth++;
+    else if (src[j] === "}") { depth--; if (depth === 0) { end = j; break; } }
+  }
+  const body = src.slice(i, end);
+  if (!body.includes("loadCredentials()")) missing.push(fn);
+}
+console.log("CHECKED:" + want.length);
+console.log("MISSING:" + (missing.length ? missing.join(",") : "none"));
+MJS
+  [ -s "$BATS_TEST_TMPDIR/callsites.mjs" ] || { echo "the probe is EMPTY"; false; }
+  run node "$BATS_TEST_TMPDIR/callsites.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Assert it RAN before asserting what it found: CHECKED proves all three declarations were
+  # located, so "MISSING:none" cannot be satisfied by a probe that examined nothing.
+  [[ "$output" == *"CHECKED:3"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"MISSING:none"* ]] || { echo "a command that reads .env.local does not call the guard: $output"; false; }
 }
 
 @test "the env file is ignored by git, asked OF git rather than read from gitignore" {

@@ -235,29 +235,40 @@ matters:
 ```
   ok       rehearsal-mode: … the domain under test is rehearsal_domain "automemory.ai" …
   ok       dedicated-domain: automemory.ai IS a product domain, permitted ONLY because …
-  REFUSED  spf:           no v=spf1 TXT record resolves for automemory.ai (live lookup)
-  REFUSED  dmarc:         no v=DMARC1 TXT record resolves for _dmarc.automemory.ai (live lookup)
-  REFUSED  dkim:          no DKIM TXT at resend._domainkey.automemory.ai (live lookup)
-  REFUSED  provider-auth: …
-  REFUSED  seed-smoke:    …
+  REFUSED  spf:            no v=spf1 TXT record resolves for automemory.ai (live lookup)
+  REFUSED  dmarc:          no v=DMARC1 TXT record resolves for _dmarc.automemory.ai (live lookup)
+  REFUSED  dkim:           no DKIM TXT at resend._domainkey.automemory.ai (live lookup)
+  REFUSED  provider-spf / provider-dkim / provider-dmarc: …
+  REFUSED  warmup:         …
+  REFUSED  seed-smoke:     …
 exit 3
 ```
 
-**Five refusals, and `sending-domain` does not appear at all.** The two `ok` rows are the
-rehearsal mode resolving correctly — they are the good news, not a warning.
+**`sending-domain` does not appear at all**, and the two `ok` rows are the rehearsal mode
+resolving correctly — they are the good news, not a warning. **Do not count the refusals and
+compare them to a number in this document.** Read each row.
 
-> **These four are about the domain the rehearsal will actually send from, and they are live DNS
-> lookups, not config reads.** They are not the "Phase 05 cold domain" refusals the bare-shell
-> version shows, and "read them and continue" does **not** apply to them. `spf`, `dmarc` and
-> `dkim` refusing means the records are not resolving *right now* from this machine — if the
-> DMARC record was published and this says otherwise, you have a propagation or resolver problem
-> and the rehearsal will bounce. `provider-auth` and `seed-smoke` are the two rows Phase 03 is
-> allowed to carry open, and only those two.
+> **The `provider-*` rows only exist because `preflight` now reads `.env.local`** and therefore
+> reaches the vendor with your real key. Before that fix it could not authenticate at all and
+> printed a single `provider-auth` refusal instead — which is what an earlier version of this
+> block quoted, along with the claim that `provider-auth` and `seed-smoke` were "the two rows
+> Phase 03 is allowed to carry open, and only those two". Both halves were stale the moment the
+> gate started resolving the same world the send does.
 >
-> An earlier version of this document said "exactly two REFUSED rows, read them and continue"
-> for both cases. It was written against a `preflight` that did not read `.env.local` while
-> `daily` did — so the two commands disagreed about whether rehearsal mode was locked, and the
-> document was describing a gate that was answering a different question from the send.
+> With `ARC_LEADS_OUTREACH_FROM` unset — which the Preconditions above say it is — the vendor
+> lookup has no domain to match and all three `provider-*` rows refuse. That is the **expected**
+> state, not an incident. `warmup` refuses too, and stays refused even after the domain verifies,
+> because the vendor returns no warm-up age.
+>
+> **These are live questions about the world, not config reads.** `spf`, `dmarc` and `dkim`
+> refusing means the records are not resolving *right now from this machine* — if DMARC was
+> published and this says otherwise, you have a propagation or resolver problem and the
+> rehearsal will bounce. "Read them and continue" does **not** apply to any of these.
+>
+> **If the first line says `ON FIXTURES`, stop.** That means `ARC_LEADS_FAKE=1` is exported in
+> this shell and every row below it was answered by a file in `tests/fixtures`. The command
+> refuses in that state on purpose and will not print `PASS` from it at any exit code — but the
+> `ok` rows still look like `ok`, and Phase 03's entry gate is read off this output.
 
 > Never pipe this into `head`/`grep`. `$?` after a pipe is the **last** stage's status, so a
 > refusal reads as exit 0. This bit us while writing this runbook.

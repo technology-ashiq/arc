@@ -1026,6 +1026,24 @@ async function cmdPreflight() {
   // note at the adjacent one is not a guard.
   try { loadCredentials(); }
   catch (e) { die(e instanceof EnvError ? 5 : (MAIL_EXIT[e.kind] ?? 3), e.kind ? `[${e.kind}] ${e.message}` : e.message); }
+  // THE GATE NAMES ITS TRANSPORT TOO, and it was the door this treatment was omitted at. The
+  // same round gave `cmdDaily` and `deliverNotification` a line saying nothing left the machine
+  // when `ARC_LEADS_FAKE=1`, and left the GATE — which is the command that answers "may I send
+  // yet" — silently reading its DNS, its DKIM and its provider authentication out of
+  // `tests/fixtures/leads/*.json`. Verified: with the repo's own committed fixtures it prints
+  // three `ok provider-*` rows, and with a full fixture set it prints `preflight: PASS` at exit
+  // 0. `preflight.mjs`'s header says it never prints PASS for a clause it could not verify; on
+  // the fakes it verifies a JSON file. The runbook's own STOP section anticipates an operator
+  // reaching for this switch, so one stale export in that shell turned the gate green.
+  //
+  // It does not REFUSE outright — a suite legitimately drives this composition against fixtures,
+  // and taking that away would trade a real test for a slow flaky live-DNS one. What it may
+  // never do is reach a PASS: under the fakes the verdict is fixed to REFUSED and labelled, so
+  // the one output that means "you may send" is unreachable from a JSON file whatever the rows
+  // say. Testability kept, the claim removed.
+  const onFixtures = usingFakes();
+  if (onFixtures)
+    console.log("arc-leads preflight: ON FIXTURES — ARC_LEADS_FAKE=1, so every row below is answered by a file in tests/fixtures rather than by DNS, the vendor or the seed evidence. This run cannot pass.");
   const res = await preflight({ warmupApproved: process.env.LEADS_WARMUP_APPROVED === "1" });
   // REQ-07 is a SEPARATE requirement with its own gate, composed here rather than folded into
   // preflight() — a gate that fails for reasons outside the question it asks has two jobs.
@@ -1033,8 +1051,10 @@ async function cmdPreflight() {
   // and both must be able to say no.
   const seed = seedSmokeFinding(loadConfig().seed_evidence_path);
   for (const f of [...res.findings, seed]) console.log(`  ${f.ok ? "ok  " : "REFUSED"} ${f.rule}: ${f.detail}`);
-  if (!res.ok || !seed.ok) {
-    console.error("arc-leads preflight: REFUSED — no send may happen until every clause passes live (REQ-00) and the seed-inbox smoke is dated and fresh (REQ-07)");
+  if (!res.ok || !seed.ok || onFixtures) {
+    console.error(onFixtures
+      ? "arc-leads preflight: REFUSED — this run was ON FIXTURES (ARC_LEADS_FAKE=1). Rows that say ok were answered by a file, not by the world, and this command will not print PASS from them at any exit code."
+      : "arc-leads preflight: REFUSED — no send may happen until every clause passes live (REQ-00) and the seed-inbox smoke is dated and fresh (REQ-07)");
     process.exit(PREFLIGHT_REFUSED);
   }
   console.log("arc-leads preflight: PASS");

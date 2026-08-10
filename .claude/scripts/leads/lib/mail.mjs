@@ -75,28 +75,48 @@ export const MAIL_EXIT = Object.freeze({
 //
 // It lives here, next to the rules it protects, rather than in the CLI, so it can be tested
 // without writing a `.env.local` into a real repository root.
+// AN ALLOWLIST, BECAUSE THE DENYLIST FAILED FIVE TIMES.
+//
+// This was a list of names a credential file may not carry, and every adversarial round found
+// another one missing: the outreach vendor host beside the listed notification one, then
+// `LEADS_CONFIG` and `LEADS_WARMUP_APPROVED` and `ARC_LEADS_REHEARSAL`, and then `ARC_SPINE_ROOT`
+// — which redirects the ENTIRE SPINE and is therefore strictly worse than `ARC_LEADS_STORE`,
+// which had been on the list from the start. Verified: a `.env.local` line `ARC_SPINE_ROOT=<dir>`
+// passed the guard and moved every approval, receipt, cap and suppression the process then read
+// or wrote, because `loadCredentials()` is the first statement of `cmdDaily`.
+//
+// Five misses is not five oversights, it is the shape being wrong. A denylist has to be extended
+// every time somebody adds an environment variable to a module nobody is thinking about; an
+// allowlist refuses the new variable by default and makes adding one a decision. The families
+// below are the ones whose variables steer THIS product; a name outside them (SUPABASE_*,
+// STRIPE_*, JUROR_*, GITHUB_PAT …) is another product's business and is none of this guard's.
+const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_LEADS_/, /^LEADS_/, /^ARC_SPINE_/]);
+
+// The four names in those families that ARE credentials or recipient policy, and therefore
+// belong in a gitignored credential file. Everything else in the families is refused.
+export const ENV_LOCAL_ALLOWED = Object.freeze([
+  "ARC_LEADS_MAIL_FROM",              // the From on arc's own notification mail
+  "ARC_LEADS_MAIL_ALLOWLIST",         // who arc may notify — an address list, not a switch
+  "ARC_LEADS_REHEARSAL_ALLOWLIST",    // the five rehearsal recipients (ADR-0416)
+  "ARC_LEADS_OUTREACH_FROM",          // the envelope sender on cold mail
+]);
+
+// Kept as a NAMED SET rather than deleted, because the refusal message earns its specificity
+// from it and because a reader looking for "why is my variable refused" should find the answer
+// beside the variable. It is no longer the mechanism — membership here is not what refuses.
 export const ENV_LOCAL_FORBIDDEN = Object.freeze([
-  // THE OUTREACH TWINS, added 2026-08-10. The list named the NOTIFICATION vendor host and not
-  // the OUTREACH one — and the outreach request carries the Bearer key, the recipient address
-  // AND the mail body, so the omitted twin is the one that leaks more. Twin-fix recurrence,
-  // fourth occurrence in this lane: the guard was written for one door and the sibling door
-  // one module over was never added.
-  //
-  // `LEADS_CONFIG` replaces the config file wholesale, which repoints `sending_domain`,
-  // `rehearsal_domain`, `product_domains` and every cap. `LEADS_WARMUP_APPROVED` makes preflight
-  // print `PASS warmup: ATTESTED` for a clause no human approved. `ARC_LEADS_REHEARSAL` decides
-  // whether a send binds the PRODUCT domain under ADR-0416 — and both the runbook and
-  // `rehearsal-check.mjs` state in writing that it is deliberately not a file setting, which
-  // nothing enforced. A rule that two documents assert and no code checks is not a rule.
-  "LEADS_PROVIDER_BASE_URL",
-  "LEADS_CONFIG",
-  "LEADS_WARMUP_APPROVED",
-  "ARC_LEADS_REHEARSAL",
-  "ARC_LEADS_FAKE",
-  "ARC_LEADS_NOW",
-  "ARC_LEADS_STORE",
-  "ARC_LEADS_MAIL_BASE_URL",
-  "LEADS_FIXTURE_DIR",
+  "LEADS_PROVIDER_BASE_URL",   // the outreach vendor host: Bearer key + recipient + body
+  "LEADS_CONFIG",              // replaces the config file: every domain and every cap
+  "LEADS_WARMUP_APPROVED",     // makes preflight attest a clause no human approved
+  "ARC_LEADS_REHEARSAL",       // binds the PRODUCT domain into a send (ADR-0416)
+  "ARC_LEADS_FAKE",            // decides whether a send is real at all
+  "ARC_LEADS_NOW",             // rebuckets the daily cap onto a fabricated day
+  "ARC_LEADS_STORE",           // where the private store lives
+  "ARC_LEADS_MAIL_BASE_URL",   // the notification vendor host
+  "LEADS_FIXTURE_DIR",         // what the fakes read
+  "ARC_SPINE_ROOT",            // the whole spine: approvals, receipts, caps, suppression
+  "ARC_SPINE_NOW",             // the spine's own test-only clock
+  "ARC_SPINE_RAND",            // seeds ULID randomness, i.e. event identity
 ]);
 
 // CASE-FOLDED, because `process.env` IS on Windows and this list is not.
@@ -110,13 +130,27 @@ export const ENV_LOCAL_FORBIDDEN = Object.freeze([
 //
 // Folded rather than "also check the lowercase spelling": the failing variant set is every
 // mixed case of five names, not two spellings of them (D1 — a grammar pinned to one form).
-const FORBIDDEN_UPPER = ENV_LOCAL_FORBIDDEN.map((n) => n.toUpperCase());
+const ALLOWED_UPPER = ENV_LOCAL_ALLOWED.map((n) => n.toUpperCase());
+const NAMED_UPPER = ENV_LOCAL_FORBIDDEN.map((n) => n.toUpperCase());
 
 export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
-  const smuggled = names.filter((n) => FORBIDDEN_UPPER.includes(String(n).toUpperCase()));
-  if (smuggled.length)
-    throw new MailRefusal("config", `${fileLabel} sets ${smuggled.join(", ")} — refused. That file is for credentials; these variables decide whether a send is real, which day the cap buckets to, where the store lives, and which host receives the key, and they are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
-  return names;
+  const smuggled = names.filter((n) => {
+    const u = String(n).toUpperCase();
+    // Only this product's families are this guard's business, and inside them the default is NO.
+    if (!ENV_LOCAL_FAMILIES.some((re) => re.test(u))) return false;
+    return !ALLOWED_UPPER.includes(u);
+  });
+  if (!smuggled.length) return names;
+  // The message distinguishes a name we have a specific reason for from one that is simply new,
+  // because "refused by default" is a different instruction to the reader than "refused because
+  // it moves the spine". A new variable in these families is refused on purpose: adding one to
+  // the allowlist is meant to be a decision somebody makes, not something a file can assume.
+  const known = smuggled.filter((n) => NAMED_UPPER.includes(String(n).toUpperCase()));
+  const novel = smuggled.filter((n) => !NAMED_UPPER.includes(String(n).toUpperCase()));
+  const parts = [];
+  if (known.length) parts.push(`${known.join(", ")} — each of these decides how a send behaves: whether it is real, whether it is a rehearsal binding the product domain, which day the cap buckets to, where the store or the whole spine lives, which host receives the Bearer token along with the recipient and the body, what the config says every cap is, or whether the warm-up counts as attested`);
+  if (novel.length) parts.push(`${novel.join(", ")} — refused by default: ${fileLabel} may carry only ${ENV_LOCAL_ALLOWED.join(", ")} out of the ARC_LEADS_*, LEADS_* and ARC_SPINE_* families, because a denylist of steering variables was extended after every one of five adversarial rounds and missed another one each time`);
+  throw new MailRefusal("config", `${fileLabel} sets ${parts.join("; and ")}. They are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
 }
 
 // ---------- the house timestamp grammar ----------
