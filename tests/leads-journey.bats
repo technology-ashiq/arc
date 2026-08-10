@@ -91,16 +91,30 @@ import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const dir = join(process.env.ARC_LEADS_STORE, "dossiers");
 const repeat = process.argv[2] === "repeat";
+// `repeat` stays a separate boolean rather than folding into `mode`, so the within-batch
+// duplicate case composes with every other mode instead of excluding them.
 const bodies = [
   "I read your practice page and wanted to write directly rather than call.\n\nYou FACT0, and you FACT1.\n\nWe build a matter tracker for firms that outgrew a spreadsheet.\n\nWorth fifteen minutes?",
   "A colleague pointed me at your firm page, so this is not a list mail.\n\nYou FACT0, and you FACT1.\n\nOur pilot keeps concurrent matters visible without a full practice suite.\n\nSay no and I will not write again.",
 ];
+const mode = process.argv[2] || "once";
 const out = [];
 readdirSync(dir).filter((f) => f.endsWith(".json")).sort().forEach((f, i) => {
   const d = JSON.parse(readFileSync(join(dir, f), "utf8"));
   const facts = (d.citable_facts || d.facts || []).slice(0, 2);
-  const body = bodies[i % bodies.length].replace("FACT0", facts[0].text).replace("FACT1", facts[1].text);
-  const rec = { lead_id: d.lead_id, touch_n: 1, body,
+  let body = bodies[i % bodies.length].replace("FACT0", facts[0].text).replace("FACT1", facts[1].text);
+  // "rebody" keeps the lead and the touch and changes the TEXT. It is the positive control that
+  // kills the surviving mutant which adds the body to both dedup keys: with the body in the key
+  // this run queues a second approval for one touch, which is the state the rule forbids.
+  if (mode === "rebody") body = body.replace("Worth fifteen minutes?", "Worth twenty minutes?").replace("Say no and I will not write again.", "Say no and that is the end of it.");
+  // "touch2" keeps the lead and the body and moves to the NEXT touch. It is the positive control
+  // that kills the mutant which drops touch_n from both keys: without touch_n in the key, a
+  // legitimate follow-up is refused as a duplicate forever, and every absence-of-new-work
+  // assertion in this file stays green while the product silently stops working.
+  const touch = mode === "touch2" ? 2 : 1;
+  // "touchstr" spells the SAME touch as a string with padding. `1`, `"1"` and `" 1"` are one
+  // touch to the idem formula and were three different keys to the dedup map.
+  const rec = { lead_id: d.lead_id, touch_n: mode === "touchstr" ? " 1" : touch, body,
     cites: facts.map((x) => ({ fact: x.text, source: x.evidence_url, relevance: x.relevance })) };
   out.push(rec);
   if (repeat && i === 0) out.push(JSON.parse(JSON.stringify(rec)));
@@ -115,6 +129,48 @@ MJS
 }
 
 _cli() { node "$ARC_ROOT/.claude/scripts/leads/arc-leads.mjs" "$@"; }
+
+# Puts the store into the state an INTERRUPTED `draft` leaves behind: the draft files exist and
+# no approval receipt was ever written. Both halves are removed -- the day-file lines AND the
+# idem index entries -- because that is what "the emit never happened" actually means, and
+# removing only the day file would instead simulate the different failure where the index
+# outlives its events (which `research` reports as an anomaly and this is not).
+#
+# In its own FILE, executed by path: an embedded program that wants an apostrophe belongs in a
+# file (CLAUDE.md), and this one wants several.
+_unannounce() {
+  cat > "$BATS_TEST_TMPDIR/unannounce.mjs" <<'MJS'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const root = process.env.ARC_SPINE_ROOT;
+const evDir = join(root, "events");
+const dropped = new Set();
+let removed = 0;
+for (const f of readdirSync(evDir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n))) {
+  const p = join(evDir, f);
+  const keep = [];
+  for (const line of readFileSync(p, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    const ev = JSON.parse(line);
+    if (ev.kind === "approval.requested") { dropped.add(ev.idem); removed++; continue; }
+    keep.push(line);
+  }
+  writeFileSync(p, keep.length ? keep.join("\n") + "\n" : "");
+}
+const idx = join(root, "derived", "idem.index");
+if (existsSync(idx)) {
+  const keep = readFileSync(idx, "utf8").split("\n").filter((l) => l && !dropped.has(l.slice(0, l.indexOf("\t"))));
+  writeFileSync(idx, keep.length ? keep.join("\n") + "\n" : "");
+}
+console.log("unannounced: " + removed);
+MJS
+  [ -s "$BATS_TEST_TMPDIR/unannounce.mjs" ] || { echo "unannounce helper is EMPTY"; false; }
+  run node "$BATS_TEST_TMPDIR/unannounce.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # THE FIXTURE ASSERTS ITSELF. "unannounced: 0" would make every assertion below trivially true
+  # against a store nothing had happened to.
+  [[ "$output" == *"unannounced: 2"* ]] || { echo "expected to strip 2 approvals, got: $output"; false; }
+}
 
 # Counts read off the spine and the store -- the two places the journey actually leaves marks.
 #
@@ -226,17 +282,38 @@ setup() {
 # A refusal that does not say WHICH draft already holds the touch sends the operator looking
 # through a directory of opaque refs. The existing ref is the actionable half.
 @test "the duplicate refusal names the draft that already holds that touch" {
+  # THE ASSERTION IS THE PAIRING, not the presence of a ref. The first version captured one
+  # arbitrary draft ref and asked whether it appeared ANYWHERE in the output -- but a full
+  # re-run prints every ref, so any of them satisfied it. A mutant making each DUP line name a
+  # DIFFERENT lead's draft passed 9 times out of 9, and the runbook then tells the operator to
+  # "edit that draft", i.e. to edit another person's mail. The control that proves this test is
+  # live is the old one it replaces: naming NO draft at all was already caught.
   run _cli research "$BATS_TEST_TMPDIR/icp.json"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   _mkdrafts
   run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  local existing
-  existing=$(ls "$ARC_LEADS_STORE/drafts" | head -1 | sed 's/\.json$//')
-  [ -n "$existing" ] || { echo "no draft was written, so the refusal has nothing to name"; false; }
+  [ "$(_drafts_count)" -eq 2 ] || { echo "setup wrote $(_drafts_count) draft(s), expected 2"; false; }
+
   run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"$existing"* ]] || { echo "refusal never named $existing: $output"; false; }
+  local out="$output"
+
+  # Each stored draft knows its own lead and its own ref. Every DUP line must join THAT pair.
+  local checked=0 f lead ref
+  for f in "$ARC_LEADS_STORE/drafts/"*.json; do
+    lead=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(d.lead_id)' "$f")
+    ref=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(d.draft_ref)' "$f")
+    [ -n "$lead" ] || { echo "could not read a lead_id out of $f"; false; }
+    [ -n "$ref" ] || { echo "could not read a draft_ref out of $f"; false; }
+    # ONE line must carry both. Two separate "output contains" checks would pass on the mutant.
+    echo "$out" | grep -F "$lead" | grep -qF "$ref" \
+      || { echo "the DUP line for $lead does not name its own draft $ref"; echo "$out"; false; }
+    checked=$((checked + 1))
+  done
+  # A loop over an empty glob checks nothing and passes, which is the vacuous pass this file
+  # opens by refusing.
+  [ "$checked" -eq 2 ] || { echo "checked $checked pairing(s), expected 2"; false; }
 }
 
 # The within-batch half. A check against on-disk state alone passes a first run that carries the
@@ -252,9 +329,152 @@ setup() {
   [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s), expected 2"; false; }
 }
 
-@test "this file registers the 9 tests it declares" {
-  declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
+# --- the slice 06 fixes: what PR #145 got wrong, each with the control that proves it ---
+
+@test "a corpus holding one lead twice emits once and leaves no quarantine record" {
+  # C1 case (a), and it needs no re-run at all: the skip set was read once before the loop and
+  # never grown, so the second row for one lead passed the check and the emitter refused it --
+  # leaving a quarantine record, which is what makes `report` refuse.
+  cat > "$BATS_TEST_TMPDIR/fx/candidates.json" <<'JSON'
+[
+  { "name": "Lead One", "email": "one@example.test", "firm": "Firm One",
+    "firm_domain": "firm-one.example.test", "geography": "IN", "provenance": "firm-site",
+    "source_urls": ["https://firm-one.example.test/about", "https://firm-one.example.test/team"],
+    "facts": [
+      { "text": "argued a limitation-period matter before the Madras High Court",
+        "evidence_url": "https://firm-one.example.test/practice",
+        "relevance": "the pilot removes the tracking overhead this matter load creates" },
+      { "text": "runs a monthly clinic for first-generation litigants",
+        "evidence_url": "https://firm-one.example.test/writing",
+        "relevance": "someone who documents their process adopts a process tool without persuasion" }
+    ] },
+  { "name": "Lead One", "email": "ONE@example.test", "firm": "Firm One",
+    "firm_domain": "firm-one.example.test", "geography": "IN", "provenance": "firm-site",
+    "source_urls": ["https://firm-one.example.test/about", "https://firm-one.example.test/team"],
+    "facts": [
+      { "text": "argued a limitation-period matter before the Madras High Court",
+        "evidence_url": "https://firm-one.example.test/practice",
+        "relevance": "the pilot removes the tracking overhead this matter load creates" },
+      { "text": "runs a monthly clinic for first-generation litigants",
+        "evidence_url": "https://firm-one.example.test/writing",
+        "relevance": "someone who documents their process adopts a process tool without persuasion" }
+    ] }
+]
+JSON
+  cat > "$BATS_TEST_TMPDIR/fx/verify.json" <<'JSON'
+{ "one@example.test": "verified", "ONE@example.test": "verified" }
+JSON
+  [ -s "$BATS_TEST_TMPDIR/fx/candidates.json" ] || { echo "corpus fixture is EMPTY"; false; }
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # One receipt, one skip -- the case variant is the same person to normalizeEmail, so it is the
+  # same lead id and the same idem.
+  [[ "$output" == *"receipts: 1 new · 1 already on the spine"* ]] || { echo "$output"; false; }
+  [ "$(_spine_count lead.researched)" -eq 1 ] || { echo "spine holds $(_spine_count lead.researched), expected 1"; false; }
+  [ "$(_quarantine_count)" -eq 0 ] || { echo "$(_quarantine_count) quarantine record(s) -- report will refuse"; false; }
+  # The consequence, asserted rather than inferred: the number this phase exists to produce.
+  run _cli report --json
+  [ "$status" -eq 0 ] || { echo "report refused after a duplicate corpus row: $output"; false; }
+}
+
+@test "draft resumes a draft that was written but never announced" {
+  # C2. writeDraft (disk) runs before emit (spine) with no rollback, so an interruption in that
+  # window left a draft nobody had been shown -- and the next run called it a duplicate and said
+  # "edit that draft", forever, at exit 0.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "setup did not queue 2"; false; }
+  _unannounce
+  [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "the fixture did not strip the approvals"; false; }
+  [ "$(_drafts_count)" -eq 2 ] || { echo "the fixture removed the drafts too, which is not the state under test"; false; }
+
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 resumed from an interrupted run"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"0 duplicate touch(es) refused"* ]] || { echo "the orphan was still read as a duplicate: $output"; false; }
+  # The counts are the claim: the approvals came back and NO second draft was minted.
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s), expected 2"; false; }
+  [ "$(_drafts_count)" -eq 2 ] || { echo "$(_drafts_count) draft file(s), expected 2 -- a second was minted"; false; }
+}
+
+@test "a legitimate second touch to the same lead is queued, not refused" {
+  # POSITIVE CONTROL, and the one that kills the surviving mutant. Dropping touch_n from both
+  # dedup keys survived every existing test 9 times out of 9, because every one of them asserts
+  # that no NEW work appeared. Under that mutant this test fails: the follow-up is refused.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts touch2
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 queued for approval"* ]] || { echo "the second touch was not queued: $output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 4 ] || { echo "$(_spine_count approval.requested) approval(s), expected 4"; false; }
+  [ "$(_drafts_count)" -eq 4 ] || { echo "$(_drafts_count) draft file(s), expected 4"; false; }
+}
+
+@test "the same touch with an edited body is still one approval" {
+  # The other surviving mutant: adding the body to both keys survived 9/9. Under it this run
+  # queues a second approval for one touch, which is the two-live-approvals state ADR-0407
+  # exists to forbid -- and no absence-of-new-work assertion can see it.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts rebody
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 duplicate touch(es) refused"* ]] || { echo "an edited body queued a second approval: $output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s), expected 2"; false; }
+  [ "$(_drafts_count)" -eq 2 ] || { echo "$(_drafts_count) draft file(s), expected 2"; false; }
+}
+
+@test "a padded string touch_n is the same touch as the number" {
+  # ` 1`, `1.0`, `+1`, `1e0` and `01` each got their own dedup key, so one touch could hold five
+  # live approvals -- from the rule whose entire purpose is that it holds exactly one. The
+  # normaliser existed one file away in guard.mjs and had simply never been called from here.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts touchstr
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 duplicate touch(es) refused"* ]] || { echo "a padded touch_n minted a second approval: $output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s), expected 2"; false; }
+}
+
+@test "draft refuses a campaign name that is not the pinned grammar" {
+  # `Walk` opened the `walk` directory on a case-insensitive filesystem and wrote into it under
+  # a name the spine treats as a different campaign -- two approvals for one touch, from one
+  # keystroke. `research` validated the name it read; `draft` validated nothing.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft Walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; false; }
+  [[ "$output" == *"[a-z0-9-]{1,64}"* ]] || { echo "$output"; false; }
+  [ "$(_drafts_count)" -eq 0 ] || { echo "$(_drafts_count) draft(s) were written under a refused campaign name"; false; }
+  # POSITIVE CONTROL: the same file under the correct name still works, so the refusal above is
+  # about the NAME and not about the drafts being unusable.
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 queued for approval"* ]] || { echo "$output"; false; }
+}
+
+@test "this file registers the 15 tests it declares" {
+  # THE GRAMMAR IS THE ONE CI USES, not a narrower spelling of it. `grep -c "^@test "` misses a
+  # tab-indented declaration and misses `@test` followed by anything but a single space, so a
+  # test could be dropped by bats AND uncounted here -- the count that exists to catch a silent
+  # drop, blind to two of the three forms it has to see. This is the `_declared` regex in ci.yml.
+  declared=$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 9 ] || { echo "declared $declared, expected 9"; false; }
+  [ "$declared" -eq 15 ] || { echo "declared $declared, expected 15"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }
