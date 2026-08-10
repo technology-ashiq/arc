@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-09 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-10 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 17 full PLANs + 6 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 18 full PLANs + 5 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -35,6 +35,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-ledger.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-ledger.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the PII-free payload contract with validator-first ordering, gross/fees/tax/net money semantics, FX-at-ingest replay determinism, the blocking both-direction reconciliation gate, natural-key duplicate detection, goalpost receipts on `ventures.yaml`, the measured/declared/allocated cost trichotomy and the `month.closed` micro vocab ADR exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-growth.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-growth.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the arc-site-first client, the two-human-gate cap, the negative-only lint constitution, the POV floor + exemplar anchoring, the sha-equality "unedited" definition, the versioned title-template files with hash(slug) assignment, the EVO-H0 FEED requirement against the already-landed ADR-0408 vocabulary, and the flipped cut order exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-memory.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-memory.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: index-in-place replaced the brief's migration reading, the additive-hook law, the node:sqlite preflight with a pure-JS fallback decision, canonical citation ids, the alias layer, the measured embeddings floor and the write-time conflict check exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
+| ~~`plans/BRIEF-legal-pack.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-legal-pack.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: six pages not three [the Razorpay activation superset], the `payment_model: gateway\|mor` + GST branches correcting the brief's MoR-only premise, the DPDP Rule-3 notice + fiduciary/processor two-layer clause, the value/trace/completeness lint trio, the hash-chain publish law with static-MDX routes, the production-probe checklist and the scenario-fixture completeness law exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -342,6 +343,53 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     detection declared out of scope) · root-mode-first (zero-lane fixture — recall
     works in any consumer install). `BRIEF-memory.md` superseded → moved to
     `docs/archive/`.
+
+20. **2026-08-10:** `plans/PLAN-legal-pack.md` added (legal pack — customer-facing
+    policies per venture: `/arc-legal <venture>` renders SIX pages [T&C · Privacy ·
+    Refund/Cancellation · Shipping/digital-delivery · Contact · Pricing] + a launch
+    checklist from one pinned, manifest-hashed template set + a per-venture facts
+    file; v1.1, landed owner-approved 2026-08-10; decisions LEG-A…I locked over 3
+    review rounds + a 4-perspective adversarial panel [red-team · Indian-compliance
+    practitioner · YAGNI cost audit · architect] 2026-08-03 → 2026-08-10; LEG-J
+    [century · code home · first render target · probe depth] open at kickoff; ADR
+    numbers at kickoff from the century claimed per `PORTFOLIO.md` — NEW lane).
+    **Trigger converted to FIRED under the owner's Build-out Mandate (2026-08-09 —
+    same receipt as correction #15, cited by the kickoff ADRs; honesty note in-file:
+    no venture launch-prep receipt exists and none is invented — the operational fact
+    is EXTERNAL and verified [Razorpay withholds live-mode API keys until six policy
+    pages exist on the merchant site, docs-verified 2026-08-03], so the machinery is
+    built now and the original pull survives as the live-value milestone: REQ-08's
+    live-deploy + production-probe rows stay OPEN-at-venture-resume, the C2 REQ-07
+    closure pattern).** Core beyond the brief: **the brief's MoR-only premise is
+    CORRECTED on the record** — `payment_model: gateway|mor` is a required enum
+    selecting whole clause branches (gateway = operator-as-merchant + GST-posture
+    wording; a MoR clause surviving a gateway render = lint FAIL) with a
+    `gst_registered` branch beside it · **six pages, not three** (the Razorpay
+    activation superset) · DPDP-shaped privacy: Rule-3 notice contents + unified
+    grievance block (DPDP ≤90d / e-commerce 48h-ack/1-month / IT-rules windows,
+    strictest printed) + s.5(3) language-request line + the fiduciary/processor
+    two-layer clause ("your clients' data": on-instruction processing, no-AI-training,
+    sub-processors, export+deletion — the highest-stakes clause for a legal-data
+    venture, absent from the brief's pre-mortem) · three lints value/trace/completeness
+    (facts VALUES are hostile input — typed tiers, HTML-escape, compliance-claim
+    denylist on rendered output; provenance alone cannot pass an empty page; a pinned
+    ≥8-scenario set [refund-day-N±1, GST-invoice request, deletion request…] each maps
+    to its answering clause ID) — all WARN-first with adversarial passes before any
+    FAIL promotion · **hash-chain publish law**: `decision.recorded` binds
+    (facts_sha, output_shas, template_set_sha), publish refuses mismatch (TOCTOU),
+    effective_date ≥ decision time + monotonic per page, `--verify` drift command +
+    venture-side CI hash guard, policy routes = static checked-in MDX only · template
+    set governed as an asset (edits approval-gated, per-venture `pins.yaml`,
+    `--bump-templates` re-approval; original drafting only, no copied policies) ·
+    human gate L1 PERMANENT, zero new event kinds (`legal.publish` payload profile,
+    POL-E/ABS-D precedent; `legal.updated` promotion trigger named) · lawyer-review
+    triple tripwire (₹25k MRR via ledger when live OR ~Q1-2027 calendar before DPDP
+    full enforcement 2027-05 OR a design-partner advocate review). Render targets:
+    LexOS real facts in P3 (venture stays paused — pages+receipts commit to its tree,
+    live deploy at venture-resume) + the arc public site when `PLAN-growth.md` builds
+    it. Appetite 5d hard cap (4d + 1d slack; the 08-03 cost audit priced template
+    AUTHORING at 1.5–2d — research banked in-file). `BRIEF-legal-pack.md` superseded
+    → moved to `docs/archive/`.
 
 ## Provenance
 
