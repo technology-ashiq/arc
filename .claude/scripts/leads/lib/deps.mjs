@@ -65,7 +65,72 @@ const dnsFake = {
     return table[name].map((exchange) => ({ exchange, priority: 10 }));
   },
 };
-const dnsReal = { resolveTxt: (name) => dnsResolveTxt(name), resolveMx: (name) => dnsResolveMx(name) };
+// DNS-over-HTTPS, and ONLY as a fallback after the system resolver has actually failed.
+//
+// WHY IT EXISTS: some environments refuse UDP/TCP 53 while leaving HTTPS open -- the job
+// environment this was written in does exactly that, so `resolveMx` threw ECONNREFUSED for
+// gmail.com while `gh` worked all session. Under ADR-0418 a throwing resolver is `unverifiable`
+// -> HELD -> can never be sent to, so a blocked port silently held every lead in the rehearsal.
+// The gate was refusing correctly and answering a question about the network rather than about
+// the address.
+//
+// WHAT IT EXPOSES: the DOMAIN only. An MX query carries `gmail.com`, never the local part, so
+// no address reaches the resolver operator (ADR-0410/0412 hold). That asymmetry is the whole
+// reason this is acceptable where routing the ADDRESS to a verification vendor was not --
+// which is the trade ADR-0418 declined.
+//
+// It is a FALLBACK, never the primary: the system resolver is asked first and is authoritative
+// when it answers, including when it answers "no MX". Otherwise a working local resolver would
+// be silently replaced by a third party on every lookup.
+const DOH_HOST = "dns.google";
+const DOH_TIMEOUT_MS = 8000;
+
+export function resolveMxOverHttps(domain, { host = DOH_HOST, timeoutMs = DOH_TIMEOUT_MS } = {}) {
+  return new Promise((resolve, reject) => {
+    const path = `/resolve?name=${encodeURIComponent(domain)}&type=MX`;
+    const req = httpsRequest({ host, path, method: "GET", headers: { accept: "application/dns-json" }, timeout: timeoutMs }, (res) => {
+      let body = "";
+      res.setEncoding("utf8");
+      res.on("data", (c) => { body += c; });
+      res.on("end", () => {
+        if (res.statusCode !== 200) return reject(new Error(`DoH ${host} returned HTTP ${res.statusCode}`));
+        let j;
+        try { j = JSON.parse(body); } catch { return reject(new Error(`DoH ${host} returned unparseable JSON`)); }
+        // NXDOMAIN (3) is a real answer meaning the domain does not exist -- an empty list, not
+        // an error. Any other non-zero Status is a failure to answer, and must NOT read as
+        // "no MX", because those two land the lead in the same place for opposite reasons.
+        if (j.Status === 3) return resolve([]);
+        if (j.Status !== 0) return reject(new Error(`DoH ${host} returned Status ${j.Status}`));
+        const answers = Array.isArray(j.Answer) ? j.Answer : [];
+        // type 15 is MX. A CNAME in the Answer section is not an MX record.
+        const mx = answers.filter((a) => a && a.type === 15).map((a) => {
+          const parts = String(a.data || "").trim().split(/\s+/);
+          return { priority: Number(parts[0]) || 0, exchange: (parts[1] || "").replace(/\.$/, "") };
+        }).filter((r) => r.exchange !== "");
+        resolve(mx);
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(new Error(`DoH ${host} timed out after ${timeoutMs}ms`)); });
+    req.end();
+  });
+}
+
+const dnsReal = {
+  resolveTxt: (name) => dnsResolveTxt(name),
+  async resolveMx(name) {
+    try {
+      return await dnsResolveMx(name);
+    } catch (e) {
+      // ENODATA / NOTFOUND from the SYSTEM resolver are authoritative answers: the domain
+      // resolves and has no MX. Falling back on those would let a third party overrule a
+      // resolver that answered, so only a genuine failure-to-reach falls through.
+      const code = e && e.code;
+      if (code === "ENODATA" || code === "ENOTFOUND") throw e;
+      return await resolveMxOverHttps(name);
+    }
+  },
+};
 export const dns = () => (usingFakes() ? dnsFake : dnsReal);
 
 // ---------- email verification ----------

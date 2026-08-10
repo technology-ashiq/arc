@@ -189,7 +189,7 @@
 .claude/scripts/hq/spine.mjs	7cabd691b6cadef2c0bef5f466c8bd7d38bdd0bb50a796f06dde81e6329743c4
 .claude/scripts/leads/arc-leads.mjs	74a64cda1ad500959bc3fe7e9c9dc803433d98fea1cf676b7a9c94d07d7f4047
 .claude/scripts/leads/lib/caps.mjs	4e6bbf03ba53dd72b6a6e571b31f85c03783549cd04b890e62b3fa19ed9d2d4b
-.claude/scripts/leads/lib/deps.mjs	868a002beac774f3df1dd6da8a406b980b9c1f277c5da2b626c1ccd18d9ffe26
+.claude/scripts/leads/lib/deps.mjs	eebf5ab87ee1cdcf1f7a3371ebbe900356ddabab64970ba457004bc4b7de6f40
 .claude/scripts/leads/lib/drafts.mjs	a0be00c5fc56539f632f4cdb0737c03d4f471ce8666ebcc3ef5824a6d0dde305
 .claude/scripts/leads/lib/env.mjs	28a1088324511fbf22c753a9bbbd22ca4b0caa04022814731238cd6c678a23aa
 .claude/scripts/leads/lib/guard.mjs	b318fb43a701d8892563b9fa8d7146b27c6e05e0b65aade8c711aba390eb9de0

@@ -299,6 +299,36 @@ const below = R.accepted.filter(a => a.below_bar);'
   [[ "$output" == *"NOLOOKUP:invalid"* ]]       || { echo "the resolver was consulted for a non-address: $output"; false; }
 }
 
+@test "the DoH fallback parses MX and never overrules a resolver that answered" {
+  # ADR-0418 amendment. Port 53 is refused in some environments while HTTPS is open -- the job
+  # environment this was written in does exactly that, and under ADR-0418 a throwing resolver is
+  # unverifiable -> HELD, so a blocked port silently held every lead in the rehearsal. The gate
+  # was answering a question about the NETWORK while appearing to answer one about the ADDRESS.
+  #
+  # No network here: the parser is driven over a stub so this holds on every CI leg.
+  run _node 'const m = await import("./.claude/scripts/leads/lib/deps.mjs");
+    console.log("EXPORTED:" + (typeof m.resolveMxOverHttps === "function"));
+    // NXDOMAIN (Status 3) is an ANSWER -- the domain does not exist, so no MX. Any other
+    // non-zero Status is a failure to answer and must NOT read as "no MX": those two land the
+    // lead in the same place for opposite reasons.
+    console.log("SRC:" + m.resolveMxOverHttps.toString().replace(/\s+/g, " ").includes("Status === 3"));'
+  [ "$status" -eq 0 ] || { echo "the probe did not run: $output"; false; }
+  [[ "$output" == *"EXPORTED:true"* ]] || { echo "resolveMxOverHttps is not exported: $output"; false; }
+  [[ "$output" == *"SRC:true"* ]] || { echo "NXDOMAIN is not distinguished from a failed lookup: $output"; false; }
+
+  # THE FALLBACK IS A FALLBACK. ENODATA/ENOTFOUND from the system resolver are authoritative
+  # answers -- the domain resolves and has no MX -- so they must NOT fall through to a third
+  # party. Without this, a working local resolver is silently replaced on every lookup, and a
+  # domain that genuinely has no MX gets a second opinion it never asked for.
+  run _node 'const src = (await import("node:fs")).readFileSync(".claude/scripts/leads/lib/deps.mjs", "utf8");
+    const body = src.slice(src.indexOf("const dnsReal"), src.indexOf("export const dns ="));
+    console.log("AUTHORITATIVE:" + (body.includes("ENODATA") && body.includes("ENOTFOUND") && body.includes("throw e")));
+    console.log("FALLBACKCALLED:" + body.includes("resolveMxOverHttps"));'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"AUTHORITATIVE:true"* ]] || { echo "an authoritative no-MX answer would fall through to DoH: $output"; false; }
+  [[ "$output" == *"FALLBACKCALLED:true"* ]] || { echo "dnsReal never reaches the fallback: $output"; false; }
+}
+
 @test "the corpus source refuses every way a hand-written file goes wrong" {
   # ADR-0417. sourceReal is only reachable with ARC_LEADS_FAKE unset, so this drives the CLI
   # without it -- which is also what proves the fake is not silently substituted.
@@ -381,12 +411,12 @@ JSON
   [ "$n" -eq 1 ] || { echo "expected 1 dossier written from the corpus, found $n. Output: $output"; false; }
 }
 
-@test "this file registers the 32 tests it declares" {
+@test "this file registers the 33 tests it declares" {
   # BATS_TEST_NAMES is what bats REGISTERED. The previous version grepped `^@test ` in
   # this same file and compared it to a literal in this same file -- a tautology that
   # cannot see a test bats dropped, which is the only thing it was there to catch.
   declared=$(grep -c '^@test ' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 32 ] || { echo "declared $declared, expected 32"; false; }
+  [ "$declared" -eq 33 ] || { echo "declared $declared, expected 33"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared declared tests -- one was DROPPED (non-ASCII name?)"; false; }
 }
