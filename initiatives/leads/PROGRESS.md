@@ -23,7 +23,7 @@ depends-on: —
 | 00 | Foundations — ADR-0410 store + secret + tripwire FIRST, ADR-0400 vocabulary + validators, ADR-0408 `metric.observed`, ADR-0411 journal schema, researcher + dossiers + provenance lint, deliverability preflight, provider interface + fake | 1.5d | ✅ closed 2026-08-04 |
 | 01 | Sequencer — caps, suppression, breakers, receipt-derived state, spine-first reconcile, personalization lint + similarity, ADR-0412 review boundary, send-moment guard | 2.0d | ✅ closed 2026-08-04 |
 | 02 | Replies — ingestion, parser, triage, calendar drafts, auto-stop | 1.0d | ✅ closed 2026-08-05 |
-| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 repaired on PR #150 across eleven adversarial rounds; CI green at d689ec1 (19 jobs, 0 failures, per-JOB). Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
+| 03 | **Rehearsal campaign** (ADR-0416) — real provider bound to Resend, rehearsal mode allowlist-locked + receipt-marked, full pipeline run once end to end on 5 allowlisted addresses, crash-and-reconcile on a real idempotency key | 4.5d | ⏳ **in progress** — 11 slices, 01–05 proven, 06 repaired on PR #150 across eleven adversarial rounds and MERGED as b3dd8e5; CI green at cac15e8 (19 jobs, 0 failures, per-JOB). The live run -- five real journeys -- is the owner-gated act still outstanding. Appetite raised 1.0d → 4.5d by the owner on 2026-08-10 |
 | 04 | arc's own mail — ADR-0415 mailer interface + fake + Resend impl, owner allowlist + caps in code, three triggers wired, inbox placement proved on two mailbox classes | 1.0d | ✅ closed 2026-08-08 — 9 live sends, 9 delivered, 74 tests. Closed with ONE row open by the owner's explicit decision: DMARC does not exist, so the Gmail-class header read is deferred behind publishing it |
 | 05 | Real campaign — dedicated cold domain, cold-outbound vendor, ≥25 sends to real ICP leads | 1.0d | 🚫 **BLOCKED** → **PARKED to the next cycle** 2026-08-08, taking its 1.0d with it |
 
@@ -213,8 +213,15 @@ here and a first send.
 ## Now
 
 **Current position, 2026-08-10: Phase 03 is RUNNING. Slices 01–05 proven; slice 06 built, merged
-as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, and repaired on
-`feat/arc-leads-slice-06-fixes` → PR #150.** Everything below this block is the entry-gate
+as `bbfcede` (PR #145) carrying an explicit DO-NOT-MERGE, repaired across eleven adversarial
+rounds on `feat/arc-leads-slice-06-fixes`, and **PR #150 MERGED as `b3dd8e5`** on 2026-08-10
+with CI green at `cac15e8` (19 jobs, 0 failures, read per-JOB).**
+
+**Slice 06 is not closed by that merge.** The merge landed the machine; the slice is *five
+complete journeys against five real people*, and the send is the owner's keystroke, not a
+scripted step (ADR-0407). `phases/phase-03-tasks.md` slice 06 stays `(empty until proven)` until
+the run happens — filling it on the strength of a green branch is the failure this lane has
+written down twice. Everything below this block is the entry-gate
 history that got the phase started and is kept because two of its three rows are the reason the
 gate reads the way it does.
 
