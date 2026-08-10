@@ -1,6 +1,11 @@
 # Phase 03 runbook — the rehearsal journey, run by hand
 
-> # ⚠ NOT YET APPROVED FOR THE LIVE RUN — read this first
+> # ⚠ THE MACHINE GATE IS CLEAR. THE APPROVAL IS YOURS AND HAS NOT BEEN GIVEN — read this first
+>
+> This heading used to read NOT YET APPROVED, which by 2026-08-10 was true for a reason it no
+> longer named: the code gate had closed and the owner's had not. Those are different gates and
+> collapsing them into one phrase is how a reader concludes either that the code is still broken
+> or that a banner is decoration.
 >
 > **Every defect the previous banner listed is fixed.** That banner named three CRITICALs from
 > PR #145 — the `set -a; . ./.env.local` instruction that blinded its own guard, a duplicate
@@ -16,21 +21,37 @@
 >   surfaces every round. Several findings were defects introduced *by the fix for* an earlier
 >   round — twice inside the comment explaining that fix. Round 11 read the whole branch,
 >   including round 10's fixes, and returned **MERGE**.
-> - **CI is green at `d689ec1`**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures, read
+> - **CI is green at `0274aa8`**: 19 jobs, ubuntu 18/20/22 + macOS + Windows, 0 failures, read
 >   per-JOB rather than off the watcher's exit code. **The sha is part of the claim** — this line
 >   said "CI is green" with no sha until 2026-08-10, which stays true-looking across every commit
->   that follows it, including the ones that break it. If HEAD is not that sha, this line is
->   about a tree you are not standing on.
+>   that follows it, including the ones that break it.
+>
+>   And a sha alone would go stale on the very next commit, including this one, so the claim
+>   carries its own check instead of asking you to trust it:
+>
+>   ```
+>   git log --oneline 0274aa8..HEAD --name-only
+>   ```
+>
+>   If that prints nothing, the green run IS your tree. If it prints only this file, the green run
+>   covers all the code you are about to run and the difference is prose. If it prints anything
+>   under `.claude/` or `tests/`, this line is about a tree you are not standing on — get a green
+>   run on the one you are.
 > - **Known holes are listed, not hidden** — `phases/phase-03-known-holes.md`, each with why it
 >   is left and what would close it. The owner set the bar on 2026-08-10: only a CRITICAL blocks
 >   this slice.
 >
-> **What is still outstanding before the live run:** the branch has not merged, and round 11's own
-> HIGH-class fixes — this banner, the DNS-row and remedy corrections below, and one parser fix in
-> `cmdNotify` that ships with its own test — have not themselves been attacked. What HAS been
-> attacked is everything up to and including round 10. Walking this document against the **fake**
-> to rehearse the sequence is fine and is what it is for. Do not do the live send until this
-> paragraph is struck from this banner.
+> **The blocking line that stood here is struck.** It said the most recent round's fixes had not
+> been attacked, and that was the honest state through round 10. Round 11 read the whole branch,
+> round 10's fixes included, and returned MERGE. What has still never been attacked is round 11's
+> own HIGH-class repairs — this banner, the DNS-row and remedy corrections below, and one parser
+> fix in `cmdNotify` that ships with its own test — and that is stated rather than folded away,
+> because a banner that goes clean in one step teaches the reader it was never measuring anything.
+> Under the bar the owner set on 2026-08-10 those are not blocking.
+>
+> **What the live run still needs is you.** Nothing in this document sends mail; the send is a
+> separate deliberate keystroke against five real people, and it is the one thing here that
+> cannot be undone. Walk it against the **fake** first — that is what the fake is for.
 
 This is what the owner follows for the real run. Every command below was walked end to end
 against the FAKE on 2026-08-09 (slice 06); the outputs quoted are the ones the walk actually
