@@ -416,19 +416,29 @@ function cmdDraft(campaign, file) {
   // an unfinished write, and finishing it is what a re-run is for. Rollback would not do: a
   // process killed between the two writes never runs its own rollback, and this recovery has to
   // work for the case where nothing of ours got to run at all.
-  const announced = new Set(
-    readAllEvents({ allowMissing: true })
-      .filter((e) => e && e.kind === "approval.requested")
-      .map((e) => e.payload && e.payload.draft_ref)
-      .filter(Boolean)
-  );
+  // AND A REJECTED APPROVAL IS NOT A LIVE ONE. The rule is one LIVE approval per touch, and
+  // reading it as one approval EVER made a rejection terminal: the human said no in the inbox,
+  // the draft stayed on disk, `draft` called it a duplicate forever, and the only way to put a
+  // revised version in front of them was a different `touch_n` — which is a second live approval
+  // for what is physically the same touch, i.e. the exact state this rule exists to forbid. A
+  // rule whose only escape hatch is the thing it forbids is not being enforced, it is being
+  // routed around.
+  const priorEvents = readAllEvents({ allowMissing: true });
   const seenTouch = new Map();
   const unannounced = new Map();
+  const rejectedTouch = new Map();
   for (const prior of listDrafts(store, campaign)) {
     let key;
     try { key = touchKey(store, prior.lead_id, prior.touch_n); }
     catch (e) { die(2, `the stored draft ${prior.draft_ref} carries an unusable touch_n: ${e.message}`); }
-    if (announced.has(prior.draft_ref)) seenTouch.set(key, prior.draft_ref);
+    const state = approvalState(priorEvents, prior.draft_ref);
+    // A LIVE approval wins over anything else recorded for the same touch, whatever order
+    // `listDrafts` happened to return the files in. After a reject-then-revise there are two
+    // drafts for one touch and only one of them is live; picking by iteration order would make
+    // the answer depend on a directory listing.
+    if (state === "live") { seenTouch.set(key, prior.draft_ref); rejectedTouch.delete(key); unannounced.delete(key); continue; }
+    if (seenTouch.has(key)) continue;
+    if (state === "rejected") rejectedTouch.set(key, prior);
     else unannounced.set(key, prior);
   }
 
@@ -450,6 +460,19 @@ function cmdDraft(campaign, file) {
     if (seenTouch.has(key)) {
       duplicate++;
       console.log(`  DUP   ${d.lead_id}: touch ${d.touch_n} already has draft ${seenTouch.get(key)} in "${campaign}" — edit that draft, or use the next touch_n. No second approval was requested.`);
+      return;
+    }
+
+    // A revision after a rejection writes a NEW draft below, with its own ref and its own
+    // draft_sha, so the rejected one stays on the spine as the record of a decision that was
+    // actually taken. The one thing refused is re-asking the identical question: the same body
+    // produces the same approval payload, the same idem, and a DUP_IDEM whose quarantine record
+    // then disables `report` — so it is refused HERE, with the reason, rather than at the
+    // emitter, where the reason is lost.
+    const rejected = rejectedTouch.get(key);
+    if (rejected && !unannounced.has(key) && readDraft(store, rejected.draft_ref).body === d.body) {
+      blocked++;
+      console.log(`  NO    ${d.lead_id}: touch ${d.touch_n} was REJECTED as draft ${rejected.draft_ref} and this input carries the same body. Change it and re-run — a revised body is announced as a new approval; an unchanged one just asks the same question again.`);
       return;
     }
 
@@ -513,6 +536,40 @@ function cmdDraft(campaign, file) {
 // rotation the same human carries a different id, so yesterday's approval stopped matching
 // today's draft and the same person got two. `guard.mjs` had already fixed both, in three
 // adjacent branches, and this was the fourth (D6). It calls that code rather than repeating it.
+// IS THERE A LIVE APPROVAL FOR THIS DRAFT? "live" means undecided OR approved; only a trailing
+// `reject` retires one.
+//
+// It reads the same two kinds `approvedShaFor` reads and applies the same latest-decision-wins
+// rule, and it deliberately treats an UNDECIDED request as live — that is the whole difference
+// between the two questions. `approvedShaFor` asks "may this send?", where undecided must mean
+// no; this asks "is the human already holding this question?", where undecided must mean yes.
+// Reversing either one is a real failure: the first sends what nobody approved, the second puts
+// the same decision in the inbox twice.
+//
+// `events` arrives sorted by ULID, i.e. in time order, from `readAllEvents` — the same property
+// the sequencer's fold depends on for its own last-decision-wins.
+function approvalState(events, draftRef) {
+  const requests = events.filter(
+    (e) => e && e.kind === "approval.requested" &&
+      // `id` MUST be present, for the reason `approvedShaFor` gives: without it a request with
+      // no id and a decision with no `decides` pair on undefined === undefined, and a decision
+      // about something else entirely gets read as this draft's.
+      typeof e.id === "string" && e.id.length > 0 &&
+      e.payload?.gate === "leads-send" &&
+      e.payload?.draft_ref === draftRef
+  );
+  if (!requests.length) return "none";
+  for (const req of requests) {
+    const decisions = events.filter(
+      (e) => e && e.kind === "decision.recorded" &&
+        typeof e.payload?.decides === "string" && e.payload.decides === req.id
+    );
+    const last = decisions[decisions.length - 1];
+    if (!last || last.payload.verdict !== "reject") return "live";
+  }
+  return "rejected";
+}
+
 function touchKey(store, leadId, touchN) {
   const ids = resolveKeyringIds(store, leadId);
   // Sorted and first, NOT `ids[0]`: the canonical member must not depend on the order the
@@ -577,8 +634,44 @@ async function cmdReconcile() {
 }
 
 // The human-started daily command. No cron, no daemon, no background anything (ADR-0403).
+// THE ONE PLACE `.env.local` ENTERS A RUN, and the reason there is no shell sourcing anywhere
+// in this lane's documentation.
+//
+// The outreach provider reads `RESEND_API_KEY` and `ARC_LEADS_OUTREACH_FROM` straight off
+// `process.env`, and nothing on the send path ever read the file they live in — so the runbook
+// told the operator to `set -a; . ./.env.local; set +a` first. That is a SECOND parser of arc's
+// one credential home, and it disagrees with `env.mjs` in both directions: bash expands an
+// unquoted `$`, executes an unquoted space, and strips an inline `#`, so a key truncated at a
+// comment still looks set and fails at the vendor at the moment mail goes out. It also does not
+// exist in PowerShell, which is this box's primary shell and which the runbook never named.
+//
+// The Phase 04 comment on this read said every other subcommand should keep exactly the
+// environment it had, "so a credential file cannot change the behaviour of a send". That intent
+// is intact and is now enforced by the thing that actually enforces it: `assertEnvLocalNames`
+// refuses the file outright if it so much as NAMES the fake switch, the clock, the store path,
+// the vendor host or the fixture dir. Supplying a credential is not changing behaviour — the
+// send still needs an approval, a guard pass, a cap, and an allowlisted recipient.
+//
+// Precedence is unchanged (ENV-WINS-OVER-FILE), so a test or a CI leg that exports a value is
+// never overridden by a file, and on a machine with no `.env.local` this is a no-op.
+function loadCredentials() {
+  const envInfo = loadEnvLocal({ root: REPO_ROOT });
+  if (envInfo.present && envInfo.skipped.length)
+    console.error(`arc-leads: warning — ${ENV_LOCAL} line(s) ${envInfo.skipped.join(", ")} are not NAME=value and were skipped`);
+  if (envInfo.present && envInfo.blank.length)
+    console.error(`arc-leads: warning — ${ENV_LOCAL} declares ${envInfo.blank.join(", ")} with an empty value, which counts as unset`);
+  // The list and the refusal live in `lib/mail.mjs`, beside the rules they protect, so they can
+  // be tested without writing a `.env.local` into a real repository root.
+  assertEnvLocalNames(envInfo.names || [], ENV_LOCAL);
+  return envInfo;
+}
+
 async function cmdDaily(campaign) {
   if (!campaign) die(2, "usage: arc-leads daily <campaign>");
+  // BEFORE the store opens and long before the provider is asked, so a poisoned credential file
+  // refuses the run rather than being discovered three frames into a send.
+  try { loadCredentials(); }
+  catch (e) { die(e instanceof EnvError ? 5 : (MAIL_EXIT[e.kind] ?? 3), e.kind ? `[${e.kind}] ${e.message}` : e.message); }
   const store = openStore({ repoRoot: REPO_ROOT });
   assertCampaignStore(store, campaign);
 
@@ -945,14 +1038,7 @@ async function deliverNotification({ to, subject, text, kind }) {
   // `.env.local` is read HERE rather than at startup, deliberately. Every other subcommand
   // keeps exactly the environment it had before this phase existed, so a credential file
   // cannot change the behaviour of a send, a reconcile or a cap check merely by being present.
-  const envInfo = loadEnvLocal({ root: REPO_ROOT });
-  if (envInfo.present && envInfo.skipped.length)
-    console.error(`arc-leads: warning — ${ENV_LOCAL} line(s) ${envInfo.skipped.join(", ")} are not NAME=value and were skipped`);
-  if (envInfo.present && envInfo.blank.length)
-    console.error(`arc-leads: warning — ${ENV_LOCAL} declares ${envInfo.blank.join(", ")} with an empty value, which counts as unset`);
-  // The list and the refusal live in `lib/mail.mjs`, beside the rules they protect, so they can
-  // be tested without writing a `.env.local` into a real repository root.
-  assertEnvLocalNames(envInfo.names || [], ENV_LOCAL);
+  loadCredentials();
 
   // `--to` is OPTIONAL when the owner allowlist holds exactly one address, and that is not a
   // convenience. This path exists to reach ONE person whose address is already declared in

@@ -55,28 +55,67 @@ separate ways for a real person's address to become permanent (ADR-0412). The re
 in this lane deliberately do **not** echo the address for the same reason, so a refusal you can
 read in a CI log tells you *that* something was refused and never *who*.
 
-So the addresses reach the run by being **sourced from the file**, not by being typed:
+So the addresses reach the run **from the file, through arc's own reader**, and are never typed.
+
+> **This step used to say `set -a; . ./.env.local; set +a`, and that instruction was a CRITICAL
+> in its own right** — it is why this runbook carried a DO-NOT-FOLLOW banner. Two reasons, and
+> both survive the guard being repaired:
+>
+> 1. **It is a second parser.** `lib/env.mjs` is a deliberately small grammar with no variable
+>    interpolation; `.` in bash is a full shell. The two disagree in both directions — bash
+>    expands an unquoted `$`, executes an unquoted space, and strips an inline `#` comment. A
+>    `RESEND_API_KEY` silently truncated at a `#` still passes a "is it set?" check and fails at
+>    the vendor at the exact moment mail goes out.
+> 2. **It does not exist on this box's primary shell.** Nothing in this file named a shell, and
+>    PowerShell has no `set -a` and no `. ./file` with those semantics.
+
+**There is nothing to source, and nothing to export for the addresses.** `arc-leads daily`
+reads `.env.local` itself, through `lib/env.mjs` — the same reader `mail` and `notify` have used
+since Phase 04, and the only parser of that file anywhere in this lane. Put the addresses in
+`.env.local` as `ARC_LEADS_REHEARSAL_ALLOWLIST=` followed by the five addresses, comma-separated,
+and that is the whole step. (No example is written out here, and that is not squeamishness: the
+tripwire refuses **any** email-shaped string in a tracked file, and it caught the first draft of
+this very sentence.)
+
+The **one** variable you export by hand is the mode, and it is deliberately not a file setting:
+declaring a run to be a rehearsal is a per-run act, not something a file decides for you.
 
 ```bash
-set -a; . ./.env.local; set +a
+export ARC_LEADS_REHEARSAL=1          # bash / Git Bash
+```
+```powershell
+$env:ARC_LEADS_REHEARSAL = "1"        # PowerShell
 ```
 
-Do this once, in the shell you will run the whole rehearsal from. Then confirm the shell has
-them **without printing them** — a count is the whole answer:
+Then confirm arc can see the list **without printing it** — and check more than the count,
+because a count of five is exactly what a truncated list of five also prints:
 
 ```bash
-node -e 'const v=process.env.ARC_LEADS_REHEARSAL_ALLOWLIST||"";console.log("allowlist entries: "+v.split(",").filter(Boolean).length)'
+node --input-type=module -e 'const {loadEnvLocal}=await import("./.claude/scripts/leads/lib/env.mjs");const e={};loadEnvLocal({root:process.cwd(),env:e});const a=String(e.ARC_LEADS_REHEARSAL_ALLOWLIST||"").split(",").map(s=>s.trim()).filter(Boolean);console.log("entries: "+a.length+"  all address-shaped: "+a.every(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))+"  duplicates: "+(a.length-new Set(a.map(x=>x.toLowerCase())).size))'
 ```
 
-Expect `allowlist entries: 5`. If it says `0`, the sourcing did not happen and **every send will
-refuse** — correctly, but for a reason whose message will send you in a circle (see *Known
-refusals*, R3).
+Expect `entries: 5  all address-shaped: true  duplicates: 0` — this is the output it produced on
+2026-08-10 against the owner's real `.env.local`, not a transcription of what it should say. The
+flag order matters: `--input-type=module` before `-e`, or node reads the script as CommonJS and
+dies on the `await`. This asks arc's own reader, so
+what it reports is exactly what the send will see — a check that parses the file a second way
+can agree with the file and disagree with the program, which is the whole reason the previous
+version of this step was a CRITICAL. If entries is `0`, **every send will refuse** — correctly,
+but for a reason whose message will send you in a circle (see *Known refusals*, R3). If
+`all address-shaped` is `false`, something ate a character; fix `.env.local`, do not "just try
+the send".
 
 **Never set `ARC_LEADS_FAKE`, `ARC_LEADS_NOW`, `ARC_LEADS_STORE`, `ARC_LEADS_MAIL_BASE_URL` or
-`LEADS_FIXTURE_DIR` in `.env.local`.** `mail.mjs` refuses that file outright if it carries any of
-them: the CLI's startup guard runs before the file is read, so a `.env.local` holding
-`ARC_LEADS_FAKE=1` would switch the whole run to the fake and report "mail sent" having sent
-nothing.
+`LEADS_FIXTURE_DIR` in `.env.local`.** `mail.mjs` refuses that file outright if it *names* any of
+them — with or without a value — because the CLI's startup guard runs before the file is read.
+A `.env.local` holding `ARC_LEADS_FAKE=1` would otherwise switch the whole run to the fake and
+report "mail sent" having sent nothing.
+
+> The guard now reads what the file **declares** rather than what it managed to **apply**, which
+> is what made it blind to a file whose variables were already in the environment. And a run on
+> the fake mailer no longer prints the sentence a real delivery prints: it says `NOT SENT —
+> ARC_LEADS_FAKE=1 … nothing left this machine`. If you ever see that line during this
+> rehearsal, stop; nothing you have done since has sent anything.
 
 ---
 
@@ -157,6 +196,29 @@ Expect `campaign "rehearsal" bound to store <id>/<fingerprint>`.
 Re-running `campaign init` refuses at exit 2 with `already exists` — harmless, it means step 2
 was already done.
 
+> ### ⚠ THE CAMPAIGN NAME APPEARS IN THREE PLACES AND THEY MUST BE THE SAME STRING
+>
+> `rehearsal` here, `"campaign": "rehearsal"` inside your `icp.json`, and `rehearsal` as the
+> argument to `draft` in step 4. **Nothing used to check that they agreed**, and `research` takes
+> its campaign from the ICP file rather than from this command — so a walk with
+> `icp.campaign = "walk"` and this file's literal steps reported success at every single step,
+> landed the research receipts and the approvals under two different campaign names, and then
+> answered the phase's one question with:
+>
+> ```
+> no outreach.sent receipt on the spine carries campaign "rehearsal" … Campaign(s) with receipts: (none)
+> ```
+>
+> exit 2, at the very end, after every irreversible act. Check it before step 3, not after step 8:
+>
+> ```bash
+> node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).campaign)' <icp.json>
+> ```
+>
+> It must print exactly `rehearsal`. `draft` now refuses a name that is not `[a-z0-9-]{1,64}`, so
+> `Rehearsal` is rejected outright rather than opening the `rehearsal` directory on a
+> case-insensitive filesystem and writing into it under a name the spine treats as different.
+
 ### 3. Research → dossiers
 
 ```bash
@@ -181,7 +243,19 @@ addresses, and the tripwire treats every tracked leads path as a violation on si
 
 **Re-running research is safe.** It reports `receipts: 0 new · 5 already on the spine` and exits
 0. (Before slice 06 it exited 2 halfway through and left a quarantine record that disabled
-`report` — see R1.)
+`report` — see R1. The first fix for that was itself wrong in three ways and is the reason this
+file carried a DO-NOT-FOLLOW banner; the guard is now under the send lock, reads both spine
+files, and grows as it goes.)
+
+**If it exits 2 with `ANOMALY` lines, read them — they are not the same failure.** Each names one
+lead and one cause:
+
+| Anomaly | What it means | What to do |
+|---|---|---|
+| `payload differs` | a receipt with this exact idem is already on the spine but says something else — most often a lead that was `verified` and is now `held`, because `email_status` is not part of the idem preimage | not a re-run problem. The spine still asserts the old value and needs a correction receipt |
+| `in derived/idem.index but in no day file` | a restored or archived day left the index ahead of the events | rebuild the index with `arc-replay`; retrying this command cannot help |
+| `another writer took this idem` | you lost a genuine race, and the refusal left a quarantine record | clear the quarantine **before** step 8, or `report` refuses |
+| `the emitter refused its receipt` | anything else | read the message; the dossiers are written and the command is re-runnable |
 
 ### 4. Drafts → the ADR-0404 lint
 
@@ -194,7 +268,7 @@ Expect one line per draft and a summary:
 ```
   PASS  draft_<16 hex> lead_hmac_v1_<32 hex>
   …
-arc-leads draft: 5 queued for approval, 0 FAIL blocked before the inbox, 0 duplicate touch(es) refused
+arc-leads draft: 5 queued for approval, 0 resumed from an interrupted run, 0 FAIL blocked before the inbox, 0 duplicate touch(es) refused, 0 stale draft(s) left alone
 ```
 
 - `PASS` — clean.
@@ -203,9 +277,25 @@ arc-leads draft: 5 queued for approval, 0 FAIL blocked before the inbox, 0 dupli
   a fact it never mentions in the body, or citing one with no relevance line, is blocked at
   birth. This is the mechanism that makes invented personalization impossible; if you see a
   FAIL, fix the draft, do not argue with the lint.
-- `duplicate touch(es) refused` — you already have a draft for that lead and touch. The line
-  names the existing `draft_ref`. **Edit that draft**; a second record for the same touch is
-  never how you revise one, and it would put two approval items in the inbox for one send.
+- `DUP` / `duplicate touch(es) refused` — you already have a draft for that lead and touch **and
+  its approval is live in the inbox**. The line names that exact `draft_ref` — the one for the
+  lead on that line, which is worth stating because the test protecting this only proved that
+  *some* known ref appeared anywhere in the output, and a mutant that printed another lead's ref
+  on every DUP line passed it 9 times out of 9. **Edit that draft**; a second record for the same
+  touch is never how you revise one, and it would put two approval items in the inbox for one send.
+- `RESUME` — a previous run wrote that draft and died before announcing it. Nothing was lost and
+  nothing was duplicated: its approval is in the inbox now. This is the recovery path for a
+  Ctrl-C, a spine-lock timeout, or a full disk between the two writes.
+- `STALE` — same situation, except the body on disk differs from the one in this input file. It
+  was **not** announced, because approving a body you have since edited is precisely the thing
+  `draft_sha` exists to prevent. `review` it, then keep it or remove it.
+- `NO` — that touch was **rejected** in the inbox and this input carries the identical body.
+  A rejection is not permanent: change the body and re-run, and the revision is announced as a
+  new approval with its own sha. (Before this fix a rejection WAS permanent, and the only way
+  round it was a different `touch_n` — which is two live approvals for one send, the exact state
+  the one-approval-per-touch rule exists to forbid.)
+- `HALF` — the draft is on disk and its approval was refused. The command exits 2 and names it;
+  **re-run this same command** and it finishes the job.
 
 ### 5. Read every draft beside its evidence
 
@@ -282,13 +372,28 @@ against them. It refuses instead of answering `real: 0`, because a silent zero f
 name reads exactly like the answer you were hoping for. Run `report` with no `--campaign` to see
 the whole spine.
 
+> **The remedy above walks straight into R2b if the campaign names disagree.** "Run it with no
+> `--campaign`" is the right move for a typo and the wrong move for the mismatch in step 2's
+> warning box: with receipts under two names, the open report answers over both and tells you
+> nothing about either. Check the three spellings first.
+
+**R2b — `report` refuses: `N event(s) on the spine supersede an outreach.sent inside this
+window … refusing, because this fold does not resolve supersedes`.**
+**This refusal was missing from this table**, which mattered because it is reachable by exactly
+the route R2's own remedy recommends. A correction receipt reclassifies a send rehearsal↔real,
+and the fold does not follow `supersedes` — so rather than counting one physical send in two
+classes, it refuses and names the receipt. There is no operator fix: it is a fold-shaped change
+tracked for a later slice. Narrow the window with `--from`/`--to` to exclude the corrected send
+if you need the number today, and say in the evidence bundle that you did.
+
 **R3 — a send refuses: `rehearsal mode is DECLARED but incomplete` or `lead … is not on the
 ADR-0416 rehearsal allowlist … check ARC_LEADS_REHEARSAL_ALLOWLIST in .env.local`.**
-**The message points at a file the send path does not read.** `.env.local` is loaded at exactly
-one place in the CLI — the notification mailer — and every other subcommand keeps the
-environment it was given. The guard reads `process.env`. So an allowlist that only exists in
-`.env.local` is invisible to `daily`, and the run refuses (safely, but confusingly). Fix: source
-the file into the shell as shown at the top, then re-check the count.
+**The message used to point at a file the send path did not read**, which is why the top of this
+runbook once told you to source it. `daily` now loads `.env.local` through `lib/env.mjs` before
+it opens the store, so the allowlist in that file is the allowlist the guard sees, and this
+refusal means what it says. Fix: check the entry count with the one-liner at the top of this
+file, and check that `ARC_LEADS_REHEARSAL=1` is exported in **this** shell — the mode is the one
+thing that is deliberately not a file setting.
 
 **R4 — `daily` refuses: `N unresolved send intent(s) in the journal.`**
 A previous run was interrupted between the provider ack and the receipt. Run
