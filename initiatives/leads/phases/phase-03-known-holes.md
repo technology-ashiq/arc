@@ -200,14 +200,34 @@ part of that slice, not this one.
 
 ## H-05 · `ci.yml` derives the declared-test count two ways
 
-**What.** `_declared()` uses `^[[:blank:]]*@test[[:blank:]]`; the suite-size floor uses
-`'^@test '`. They agree today. The floor itself is `911` against 2242 actual, so a large
-regression could pass it.
+**What.** Three defects in the pair of gates whose whole job is to notice a test that did not run.
 
-**Why it is left.** `.github/**` belongs to no lane and the `policy` lane is LIVE. Editing it
-unilaterally mid-cycle is the collision `.claude/rules/lanes.md` records having happened twice.
+1. **Two grammars for one fact (D5).** `_declared()` uses `^[[:blank:]]*@test[[:blank:]]`; the
+   suite-size floor uses a literal `'^@test '`. They agree on today's suite and would silently
+   disagree the day someone indents a `@test` or separates it with a tab.
+2. **The floor has rotted by 1331.** It reads `-ge 911` against **2242** actual, so the suite
+   could lose 59% of itself and pass. This is the exact shape its own comment warns about — it
+   records having been raised `318 -> 891` after rotting by 550, and then rotted again.
+3. **The floor's number is itself derived two ways.** The comment says it was raised to `891`;
+   the check tests `911`. One of the two was edited and the other was not.
 
-**What would close it.** One coordinated edit, routed to the `policy` lane session.
+**Why it is left.** Not the reason recorded here until 2026-08-10, which said `.github/**` could
+not be touched because the `policy` lane was LIVE. **Policy closed the same day** (`e594d6e` /
+PR #147) and `leads` is now the only LIVE lane, so the collision this pointed at no longer
+exists — a reason that stopped being re-derived, which is the class this whole round was about.
+The real reason is narrower: **`.github/` is outside this session's write permissions.** The edit
+is refused at the tool boundary, not declined on judgement.
+
+**What would close it** — a single edit, already written out, in `.github/workflows/ci.yml`:
+
+- in the `Test-count floor` step, replace `grep -rhc '^@test ' tests/ --include='*.bats'` with
+  the same `grep -rhcE '^[[:blank:]]*@test[[:blank:]]'` expression `_declared()` uses, so one
+  grammar answers both gates;
+- raise `911` to **2200** (2242 actual, the same ~2% margin the previous raise used), and delete
+  the stale `891` from the comment above it so the number appears exactly once, in the check.
+
+Verify after editing with the expression the comment already gives:
+`grep -rhcE '^[[:blank:]]*@test[[:blank:]]' tests/ --include='*.bats' | awk '{s+=$1} END{print s}'`
 
 ---
 
