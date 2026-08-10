@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-10 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-10 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 19 full PLANs + 4 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 20 full PLANs + 3 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -37,6 +37,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-memory.md`~~ | **MOVED → `docs/archive/`** (2026-08-09) | Superseded by `plans/PLAN-memory.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: index-in-place replaced the brief's migration reading, the additive-hook law, the node:sqlite preflight with a pure-JS fallback decision, canonical citation ids, the alias layer, the measured embeddings floor and the write-time conflict check exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-legal-pack.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-legal-pack.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: six pages not three [the Razorpay activation superset], the `payment_model: gateway\|mor` + GST branches correcting the brief's MoR-only premise, the DPDP Rule-3 notice + fiduciary/processor two-layer clause, the value/trace/completeness lint trio, the hash-chain publish law with static-MDX routes, the production-probe checklist and the scenario-fixture completeness law exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-ops.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-ops.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the OPEN live-value REQ-05 row, the OPS-G fold-derived idem formula, the flood-control meta-incident, drill mode with real-vs-drill separation, the heartbeat + deterministic staleness line, the leads private-store PII law for tickets, injection containment with template-locked drafts, policy-enforced L1 (POL-G) + POL-I rows, canary→spine unification resolving the brief's reader-only-vs-canary-history contradiction, the ADR-0408 `metric.observed` conformance with the no-evolve-clock honesty boundary, and the scheduler-job alignment exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
+| ~~`plans/BRIEF-trader.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-trader.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the two-zone playground/verdict-lab law, the pre-registration + attempt-family + null-monkey + regime honesty battery with the no-WIN verdict vocabulary, the spine-receipt 72h cooldown replacing wall-clock, the ANTI-CASE cooling protocol, the fifth lock condition [compliance review], the no-broker-creds credential inventory, the divergence-as-north-metric paper run and the graceful-degradation slotting exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -438,6 +439,36 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     them into one registration). Appetite 6 build-days + a 7-calendar-day validation
     window; designated cuts = the metric stream, then the sentiment axis.
     `BRIEF-ops.md` superseded → moved to `docs/archive/`.
+
+22. **2026-08-10:** `plans/PLAN-trader.md` added (trader sandbox — "The Lab": the permanently-special,
+    fully isolated paper-trading research module; v1.1, landed owner-approved 2026-08-10; decisions TRD-A…M
+    locked over 3 review rounds 2026-08-03 → 2026-08-10; ADR numbers at kickoff from the century claimed per
+    `PORTFOLIO.md` — NEW lane). **Trigger converted under the owner's Build-out Mandate (2026-08-09 — same
+    receipt as correction #15, cited by the kickoff ADRs; A8's letter kept; honesty note in-file: the income
+    score stays 2/10 and no revenue receipt exists or is invented — the brief's revenue-gate leg is void under
+    the mandate, the written-opening leg's spirit survives as the kickoff approval itself, and the module's
+    stated value is answered research questions + autonomy-calibration evidence, never income).** Core beyond
+    the brief: **the two-zone law** (unregistered PLAYGROUND — instant, unlimited, every output watermarked
+    EXPLORATORY-NOT-EVIDENCE — vs the registered VERDICT LAB, the only place verdict vocabulary exists:
+    "automate the honesty, never bureaucratize the curiosity") · **the honesty battery** (sha-pinned
+    pre-registration + replay-derived attempt-family disclosure with a monthly registration budget · seeded
+    null-monkey percentile · buy-and-hold + cash baselines · ≥2-regime coverage tag · min-trade floor ·
+    training-window report lint; verdicts limited to LOSES / INDISTINGUISHABLE-FROM-LUCK / SURVIVES-SO-FAR —
+    "WINS" does not exist in the module) · deterministic backtester (snapshot-sha + spec-sha + cost-config-sha
+    → byte-identical reports incl. the monkey distribution; pessimistic India cost table from receipted charge
+    sheets; no-lookahead execution convention) · the 30-trading-day paper run with receipt-derived day count
+    and **backtest-vs-paper divergence as its north metric** (simulator honesty before strategy performance) ·
+    **THE LOCK hardened 4 → 5 conditions** (handwritten `trader.policy.yaml` edit · **spine-receipt 72h
+    cooldown — wall-clock never consulted** · hard caps with auto-L0 · `decision.recorded` citing the evidence
+    report · compliance review recorded) + the auto-generated ANTI-CASE report whose citation is mandatory —
+    v1 ships with **no real-order code path and no broker credentials** (creds-inventory check in CI), red-team
+    ≥1 day; real-money unlock remains outside every plan (E2, Constitution LAW) · prediction ledger at
+    paper-entry (council calibration data, non-blocking) · question-driven cycles + autopsy playbook + a
+    terminal CONTINUE/DORMANT state · own instance + own event stream (HQ merges read-only), **zero company
+    kinds added** (any company-side metric conforms to the live ADR-0408 validator and is explicitly NOT
+    evolve's trigger feed — the ops honesty boundary). Recommended slot: LAST — after the ledger + scheduler
+    lanes ship (policy C9 already live); the in-file graceful-degradation table makes any earlier slot safe.
+    `BRIEF-trader.md` superseded → moved to `docs/archive/`.
 
 ## Provenance
 
