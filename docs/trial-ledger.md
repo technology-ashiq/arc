@@ -438,3 +438,40 @@ adversarial pass. Logged so the exception is visible rather than assumed.
 > Gap noted, not filled: this ledger has no promotion decision for **Cycle 5** or **Cycle 6**. The
 > eight kickoff-lint gates ran across both. Their evidence is unrecorded and cannot be
 > reconstructed here honestly, so it is not being back-filled — only flagged.
+
+## Cycle 9 (policy) + Cycle 10 (absorb) — promotion decision, 2026-08-10
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-08-06 | `appetite-sum` | arc-policy kickoff, then every run cycle-long | **yes, every run** | **no — outcome-confirmed TRUE positive** |
+| 2026-08-09 | `appetite-sum` | arc-absorb kickoff, then every run cycle-long | **yes, every run** | **no — outcome-confirmed TRUE positive** |
+| 2026-08-09 | `pre-mortem-cite` · `adr-wired` · `adr-confidence` · `architecture` · `current-state-structure` · `nonneg-drift` · `verify-red` | arc-absorb kickoff + 5 phase closes | **no** | n/a — silent runs, no evidence either way |
+
+**`appetite-sum` scored honestly, and both fires were RIGHT.** On policy it warned that phases summed
+to 6.75 of 7 days; the 0.25d of slack was then consumed by the owner-action round trip that the plan
+had not predicted. On absorb it warned *"6.5d = 81% of 8d total — zero slack is its own fiction"*; the
+1.5d of slack was then consumed by Phase 04 **reopening**. In both cycles the gate said the margin was
+thin and in both cycles the margin was spent on something unplanned. That is what a true positive looks
+like when the plan survives anyway.
+
+**Net: NO FLIP. The eight stay in `TRIAL`, and the reason is unchanged from Cycles 3, 4 and 7.**
+
+`appetite-sum` now has **four** runs that are clean or outcome-confirmed (venturemind 07-19, 08-02,
+policy 08-06, absorb 08-09) against a bar of three. It is fixture-proven: `tests/kickoff-lint.bats`
+asserts both the over-commit warning payload and that an unparseable appetite never fails. **On the
+letter of the criteria it is promotable.** It is not being promoted, for one reason written down rather
+than felt: **three rows in this ledger read *"unadjudicated, leaning false"*** (07-22, 07-28, 08-04).
+This ledger's own rule is that a logged false-positive resets the count, and flipping a gate from WARN
+to FAIL while three of its own rows lean toward having been wrong would be promoting on judgement —
+which is the single thing the ledger exists to prevent.
+
+**What would settle it, concretely.** Adjudicate those three rows: for each, read the cycle's final
+burn out of its `PROGRESS.md` and ask whether the slack the gate warned about was in fact needed. That
+is three lookups against committed numbers, not a new dogfood cycle. It is the smallest remaining piece
+of work between `appetite-sum` and being the first live substance gate — and it is deliberately left as
+a named task rather than done here, because a gate promoted in the same breath as the evidence that
+promoted it has had no second reader.
+
+**The other seven stayed silent across two full cycles.** Ten phase closes, two kickoffs, zero fires.
+Silence is not evidence of correctness — `[trial-status]` has reported `0 live, 9 in trial` since
+Cycle 3, and a gate that has never fired on a real plan has never been tested by one either.
