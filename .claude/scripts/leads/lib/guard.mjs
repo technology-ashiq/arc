@@ -129,7 +129,7 @@ export function acquireLock(store) {
     throw new GuardRefusal(
       "lock",
       `another arc-leads process holds the send lock: ${holder}. Refusing.\n` +
-        `If that process is dead, run \`arc-leads reconcile\` — the lock is NEVER auto-broken, ` +
+        `If that process is dead, run \`arc-leads unlock\` — the lock is NEVER auto-broken, ` +
         `because a dead process may sit between the provider ack and the receipt, and stealing ` +
         `its lock is how the same mail gets sent twice (ADR-0411).`
     );
@@ -378,8 +378,15 @@ export function breakerState(state, lifetimeSends) {
     // told "3 bounces in this campaign" against a campaign holding one goes looking for two
     // that are not there.
     return { level: "FROZEN", why: `${state.bounces} bounces across the leads sending domain` };
-  if (lifetimeSends >= 50 && state.bounces / lifetimeSends >= 0.03)
-    return { level: "FROZEN", why: `bounce rate ${(100 * state.bounces / lifetimeSends).toFixed(1)}% across ${lifetimeSends} lifetime sends on this domain` };
+  // THE RATE BRANCH THAT USED TO SIT HERE COULD NEVER FIRE, and it is deleted rather than
+  // reordered. It read `lifetimeSends >= 50 && bounces / lifetimeSends >= 0.03`, but the check
+  // directly above already returns FROZEN at `bounces >= 2` — so it was only ever reached with
+  // `bounces <= 1`, where the ratio maxes out at 1/50 = 2%. Its message, `bounce rate X% across
+  // N lifetime sends`, could not be printed by any input this system can produce (D3).
+  //
+  // Reordering would have been the wrong repair: 3% of 50 is 1.5, so every rate that clears the
+  // threshold already implies two bounces, and the absolute rule fires first and says something
+  // truer. A threshold that adds nothing is not made useful by making it reachable.
   if (state.bounces === 1) return { level: "HOLD", why: "the first bounce on this domain — sends pause until a human reviews the cause" };
   return { level: "OK", why: null };
 }

@@ -49,7 +49,14 @@ export function parseEnvFile(text) {
     const line = lines[i].trim();
     if (line === "" || line.startsWith("#")) continue;
 
-    const withoutExport = line.startsWith("export ") ? line.slice(7).trim() : line;
+    // `export` FOLLOWED BY ANY WHITESPACE, not by one literal space. `export<TAB>NAME=value` is
+    // valid shell that a sourcing operator would not look at twice, and pinning the prefix to a
+    // single space made the line unparseable — so it was SKIPPED, which means it never reached
+    // `names` and the forbidden-name guard never saw it, while the shell that sourced the file
+    // had set it perfectly well. A grammar pinned to one form when the input has several (D1),
+    // sitting directly underneath a guard whose whole job is to see every name in the file.
+    const exported = /^export\s+/.exec(line);
+    const withoutExport = exported ? line.slice(exported[0].length).trim() : line;
     const eq = withoutExport.indexOf("=");
     // `indexOf` and not `split`: the FIRST `=` separates, every later one belongs to the value.
     // A base64 secret ends in `=` padding routinely, and splitting on all of them truncates it

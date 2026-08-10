@@ -27,7 +27,7 @@ import { join } from "node:path";
 import { parseReply, ReplyParseError, MAX_REPLY_BYTES } from "./replies.mjs";
 import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } from "./store.mjs";
 import { writeMeetingDraft, meetingApprovalPayload, assertCampaignStore } from "./drafts.mjs";
-import { leadsIdem } from "../../hq/lib/validate-leads.mjs";
+import { leadsIdem, LEADS_KINDS } from "../../hq/lib/validate-leads.mjs";
 import { idemKeys } from "./spine-read.mjs";
 
 export class IngestRefusal extends Error {
@@ -230,12 +230,28 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   //     the check and the second was refused (D6).
   const onSpine = new Set(events.map((e) => e && e.idem).filter(Boolean));
   for (const key of idemKeys()) onSpine.add(key);
+  // LEADS KINDS ONLY, refused loudly rather than by an obscure throw from three frames down.
+  // This wrapper is built entirely on `leadsIdem`, which is defined for the leads vocabulary and
+  // for nothing else — a caller who hands it `approval.requested` gets UNKNOWN_KIND out of a
+  // module whose name suggests it is a spine problem. That is precisely how the first attempt at
+  // the meeting-approval fix crashed every interested reply. The refusal now says what is wrong
+  // and what to use instead, at the boundary rather than in the callee.
   const emitOnce = async (kind, payload) => {
+    if (!LEADS_KINDS.includes(kind))
+      throw new IngestRefusal("internal", `emitOnce is for leads kinds only and was handed "${kind}" — that kind has no stable idem (arc-event salts a non-leads idem with the millisecond), so deduplicating it by idem is not possible. Check the spine for the receipt's own identity field instead.`);
     const idem = leadsIdem(kind, payload);
-    if (onSpine.has(idem)) return { duplicate: true };
-    await emit(kind, payload);
+    if (onSpine.has(idem)) return { duplicate: true, raced: false };
+    // THE EMITTER'S OWN ANSWER IS CARRIED OUT, not discarded. The CLI injects an `emit` that
+    // tolerates DUP_IDEM, so losing the race returns `{duplicate:true}` from down there — and
+    // this wrapper threw it away and reported `{duplicate:false}`, i.e. "a new receipt was
+    // written". The run then printed "N ingested, 0 refused" at exit 0 while the tolerated
+    // refusal had left a quarantine record, and `report` — the one number this phase produces —
+    // refuses while any record exists. Distinguished from `duplicate` because they are
+    // different facts: one is "we already had it", the other is "somebody beat us to it and the
+    // spine now carries a blocker".
+    const res = await emit(kind, payload);
     onSpine.add(idem);
-    return { duplicate: false };
+    return { duplicate: false, raced: !!(res && res.duplicate) };
   };
 
   const inReplyTo = lastTouchOf(events, who.campaign, who.lead_id);
@@ -261,6 +277,11 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     reply_ref: parsed.reply_ref,
     ...(inReplyTo ? { in_reply_to_touch: inReplyTo } : {}),
   };
+  // The `{duplicate}` answer is CARRIED, not discarded. `emitFn` in the CLI passes
+  // `allowDuplicate: true`, so a lost race is swallowed there and the tolerated refusal still
+  // leaves a quarantine record — which makes `report` refuse outright. `cmdResearch` names
+  // exactly this case and exits non-zero; this branch threw the flag away and printed
+  // "N ingested, 0 refused" at exit 0 while the phase's one number was disabled. D6.
   const repliedEmit = await emitOnce("outreach.replied", payload);
 
   const out = {
@@ -271,6 +292,7 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     matched: parsed.matched,
     fresh,
     receipt_duplicate: repliedEmit.duplicate,
+    receipt_raced: !!repliedEmit.raced,
     suppressed: false,
     meeting_ref: null,
     meeting_created: false,
@@ -308,14 +330,29 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     });
     out.meeting_ref = rec.meeting_ref;
     out.meeting_created = created;
-    // GUARDED BY THE SPINE, NOT BY A STORE-FILE FLAG. `created` says whether THIS call wrote
-    // the draft file, which is not the question: it answers "no" both when the approval is
-    // already on the spine (correct outcome, wrong reason) and when a previous run wrote the
-    // draft and died before announcing it (wrong outcome — the meeting draft then existed with
-    // no approval, permanently, and no re-ingest would ever mint one). `meetingApprovalPayload`
-    // is fully deterministic, so `emitOnce` — six lines up, and the mechanism this file already
-    // chose for exactly this question — answers it correctly in both directions.
-    await emitOnce("approval.requested", meetingApprovalPayload(rec));
+    // GUARDED BY THE SPINE, NOT BY A STORE-FILE FLAG — and NOT by `emitOnce`.
+    //
+    // `created` says whether THIS call wrote the draft file, which is not the question: it
+    // answers "no" both when the approval is already on the spine (right outcome, wrong reason)
+    // and when a previous run wrote the draft and died before announcing it (wrong outcome —
+    // the meeting draft then exists with no approval, permanently, and no re-ingest ever mints
+    // one). So the flag had to go.
+    //
+    // The obvious replacement, `emitOnce` six lines up, is WRONG TWICE, and the first attempt at
+    // this fix shipped it: `approval.requested` is not a leads kind, so `leadsIdem` throws
+    // UNKNOWN_KIND on it and EVERY interested reply crashed after writing the draft — creating
+    // the exact permanent state the paragraph above describes, for every reply rather than for
+    // an interrupted one. And even past the throw it could not work: `arc-event` derives a
+    // non-leads idem as `sha256(preimage|milliseconds)`, so two emits of one approval never
+    // share a key and an idem-set can never contain a previous run's. A payload being
+    // deterministic does not make its idem deterministic.
+    //
+    // An approval's deterministic identity is its `draft_ref`. That is what is checked, and it
+    // is the same question `cmdDraft` asks of the spine for outreach approvals.
+    const announced = events.some(
+      (e) => e && e.kind === "approval.requested" && e.payload && e.payload.draft_ref === rec.meeting_ref
+    );
+    if (!announced) await emit("approval.requested", meetingApprovalPayload(rec));
   }
 
   return out;

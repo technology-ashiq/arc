@@ -38,6 +38,13 @@ This is what the owner follows for the real run. Every command below was walked 
 against the FAKE on 2026-08-09 (slice 06); the outputs quoted are the ones the walk actually
 produced, not what the source suggests they should be.
 
+**One caveat on that claim, added 2026-08-10.** A run on the fake can no longer print the
+sentence a real delivery prints — both `mail`/`notify` and `daily` now say `NOT SENT —
+ARC_LEADS_FAKE=1 … nothing left this machine` instead. So any success line quoted below is the
+REAL one, reconstructed from the code rather than transcribed from the fake walk, and it is
+marked where it matters. If you see a `NOT SENT` line at any point in this runbook, stop:
+nothing you have done since has left the machine.
+
 **Nothing in this file sends mail.** The send is a separate, deliberate human act — ADR-0407
 makes every send individually approved, so the run stops at the approval and waits for you.
 
@@ -87,27 +94,44 @@ export ARC_LEADS_REHEARSAL=1          # bash / Git Bash
 $env:ARC_LEADS_REHEARSAL = "1"        # PowerShell
 ```
 
-Then confirm arc can see the list **without printing it** — and check more than the count,
-because a count of five is exactly what a truncated list of five also prints:
+Then confirm arc can see the list **without printing it**. One command, and it runs identically
+in bash, Git Bash and PowerShell because it is a file rather than a shell one-liner:
 
-```bash
-node --input-type=module -e 'const {loadEnvLocal}=await import("./.claude/scripts/leads/lib/env.mjs");const e={};loadEnvLocal({root:process.cwd(),env:e});const a=String(e.ARC_LEADS_REHEARSAL_ALLOWLIST||"").split(",").map(s=>s.trim()).filter(Boolean);console.log("entries: "+a.length+"  all address-shaped: "+a.every(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))+"  duplicates: "+(a.length-new Set(a.map(x=>x.toLowerCase())).size))'
+```
+node .claude/scripts/leads/rehearsal-check.mjs
 ```
 
-Expect `entries: 5  all address-shaped: true  duplicates: 0` — this is the output it produced on
-2026-08-10 against the owner's real `.env.local`, not a transcription of what it should say. The
-flag order matters: `--input-type=module` before `-e`, or node reads the script as CommonJS and
-dies on the `await`. This asks arc's own reader, so
-what it reports is exactly what the send will see — a check that parses the file a second way
-can agree with the file and disagree with the program, which is the whole reason the previous
-version of this step was a CRITICAL. If entries is `0`, **every send will refuse** — correctly,
-but for a reason whose message will send you in a circle (see *Known refusals*, R3). If
-`all address-shaped` is `false`, something ate a character; fix `.env.local`, do not "just try
-the send".
+Expect it to end with `rehearsal-check: OK`, exit 0. It prints counts and booleans only — never
+an address.
+
+> **This check used to be a shell one-liner and that was a CRITICAL of its own.** It read the
+> FILE while the send reads the file **into the environment**, where the environment wins — so
+> an operator with a stale `ARC_LEADS_REHEARSAL_ALLOWLIST` exported in their shell (which is
+> exactly what running the *previous* version of this step leaves behind) was told `entries: 5`
+> while the send resolved one stale address. It also parsed addresses a third way, disagreeing
+> with the store in both directions on zero-width characters and on single-label domains. And it
+> did not run at all in PowerShell 5.1, which strips the quotes out of `node -e` arguments.
+>
+> The script resolves everything through the same functions `arc-leads daily` uses. If it ever
+> disagrees with the send, both are wrong together — which is the only kind of check worth
+> having here.
+
+What it will tell you, and what to do:
+
+| Line | Meaning |
+|---|---|
+| `resolved from: .env.local` | good — the file is what the send will use |
+| `resolved from: the ENVIRONMENT (it overrode the file)` | **stop.** A value exported earlier in this shell is winning over the file you just edited. Open a new shell |
+| `entries the send will use : 0` | every send will refuse — correctly, but with a message that sends you in a circle (see *Known refusals*, R3) |
+| `distinct people` lower than `entries` | two entries are the same person after normalisation; you have four recipients, not five |
+| `forbidden-name guard: REFUSED` | `.env.local` names a test door — remove that line before anything else |
 
 **Never set `ARC_LEADS_FAKE`, `ARC_LEADS_NOW`, `ARC_LEADS_STORE`, `ARC_LEADS_MAIL_BASE_URL` or
 `LEADS_FIXTURE_DIR` in `.env.local`.** `mail.mjs` refuses that file outright if it *names* any of
-them — with or without a value — because the CLI's startup guard runs before the file is read.
+them — with or without a value. The reason is not a startup guard (there is only one of those,
+and it is for `ARC_LEADS_NOW`): it is that these five variables decide whether a send is real,
+which day the cap buckets to, where the store lives, which host receives the key, and where
+fixtures come from — and a credential file is not where those decisions belong.
 A `.env.local` holding `ARC_LEADS_FAKE=1` would otherwise switch the whole run to the fake and
 report "mail sent" having sent nothing.
 
@@ -140,11 +164,17 @@ would send nothing to nobody and prove nothing at all.
 
 ## Preconditions
 
-```bash
-cd <repo root>
-git fetch && git status          # clean tree, on the branch you intend
-node --version                   # 18/20/22 all supported
+Run these from the repo root. `&&` is not a statement separator in PowerShell 5.1, so the two
+git commands are listed separately rather than chained:
+
 ```
+git fetch
+git status
+node --version
+```
+
+`git status` must show a clean tree on the branch you intend. Node 18, 20, 22 and 24 are all
+supported; this walk was done on 24.
 
 - `RESEND_API_KEY` — in `.env.local` already (Phase 04).
 - `ARC_LEADS_OUTREACH_FROM` — **not set today.** The outreach provider refuses without it:
@@ -170,7 +200,7 @@ Every command is run from the repo root. `S` below is shorthand for
 node .claude/scripts/leads/arc-leads.mjs preflight
 ```
 
-Today this prints two `REFUSED` rows and exits **3**:
+Today this prints **exactly two** `REFUSED` rows and exits **3**:
 
 ```
   REFUSED sending-domain: sending_domain is empty — no dedicated cold-outbound domain exists yet (ADR-0413) …
@@ -181,6 +211,14 @@ arc-leads preflight: REFUSED — no send may happen until every clause passes li
 **That is the correct answer and it does not block the rehearsal.** `preflight` asks about the
 dedicated **cold** domain, which is Phase 05's. The rehearsal path is gated separately by
 ADR-0416's three signals, checked inside the send itself. Read the rows, then continue.
+
+> **If you see a THIRD row — `REFUSED rehearsal-mode: … DECLARED but incomplete` — that is a
+> real refusal and this step is not passing.** It used to appear routinely for a reason that had
+> nothing to do with you: `preflight` did not read `.env.local` and `daily` did, so with the
+> allowlist in that file the two commands disagreed about whether rehearsal mode was locked, and
+> the gate reported `count: 0` about a send that would have resolved five. Both read the same
+> world now. So the "two rows are expected, read them and continue" instruction above applies to
+> exactly those two rows — it is not permission to skip a third.
 
 > Never pipe this into `head`/`grep`. `$?` after a pipe is the **last** stage's status, so a
 > refusal reads as exit 0. This bit us while writing this runbook.
@@ -209,15 +247,17 @@ was already done.
 > no outreach.sent receipt on the spine carries campaign "rehearsal" … Campaign(s) with receipts: (none)
 > ```
 >
-> exit 2, at the very end, after every irreversible act. Check it before step 3, not after step 8:
+> exit 2, at the very end, after every irreversible act. Check it before step 3, not after step 8
+> — same script as step 1, two more flags, same behaviour in every shell:
 >
-> ```bash
-> node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).campaign)' <icp.json>
+> ```
+> node .claude/scripts/leads/rehearsal-check.mjs --icp path/to/icp.json --campaign rehearsal
 > ```
 >
-> It must print exactly `rehearsal`. `draft` now refuses a name that is not `[a-z0-9-]{1,64}`, so
-> `Rehearsal` is rejected outright rather than opening the `rehearsal` directory on a
-> case-insensitive filesystem and writing into it under a name the spine treats as different.
+> Expect `campaign agreement      : PASS`. `research`, `draft` and `daily` all now refuse a name
+> that is not `[a-z0-9-]{1,64}`, so `Rehearsal` is rejected outright rather than opening the
+> `rehearsal` directory on a case-insensitive filesystem and writing into it under a name the
+> spine treats as different.
 
 ### 3. Research → dossiers
 
@@ -268,7 +308,7 @@ Expect one line per draft and a summary:
 ```
   PASS  draft_<16 hex> lead_hmac_v1_<32 hex>
   …
-arc-leads draft: 5 queued for approval, 0 resumed from an interrupted run, 0 FAIL blocked before the inbox, 0 duplicate touch(es) refused, 0 stale draft(s) left alone
+arc-leads draft: 5 queued for approval, 0 resumed from an interrupted run, 0 FAIL blocked before the inbox, 0 duplicate touch(es) refused, 0 unchanged after a rejection, 0 stale draft(s) left alone, 0 half-written
 ```
 
 - `PASS` — clean.
@@ -340,7 +380,8 @@ Optionally, mail yourself the fact that they are waiting:
 node .claude/scripts/leads/arc-leads.mjs notify approvals
 ```
 
-Expect `arc-leads: mail sent id=… idem=…`. It sends **nothing** when nothing is waiting, and
+Expect `arc-leads: mail sent id=… idem=…` — **on the real mailer**. On the fake it says
+`arc-leads: NOT SENT — ARC_LEADS_FAKE=1 …` and nothing is delivered. It sends **nothing** when nothing is waiting, and
 prints `nothing waiting — no mail sent` instead; that is deliberate, not a failure. Note this
 mail is a real send to your own allowlisted address, and it does not touch the outreach path.
 

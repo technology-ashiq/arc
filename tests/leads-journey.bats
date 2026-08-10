@@ -90,9 +90,11 @@ _mkdrafts() {
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const dir = join(process.env.ARC_LEADS_STORE, "dossiers");
-const repeat = process.argv[2] === "repeat";
-// `repeat` stays a separate boolean rather than folding into `mode`, so the within-batch
-// duplicate case composes with every other mode instead of excluding them.
+// `repeat` reads its OWN argv slot. Both it and `mode` were reading argv[2], so the comment
+// claiming they compose was false in the code directly under it: passing "repeat" made the mode
+// "repeat", and passing any mode turned repeat off. Two settings sharing one slot is exactly
+// the "one fact derived two ways" shape this suite exists to catch.
+const repeat = process.argv.slice(3).includes("repeat");
 const bodies = [
   "I read your practice page and wanted to write directly rather than call.\n\nYou FACT0, and you FACT1.\n\nWe build a matter tracker for firms that outgrew a spreadsheet.\n\nWorth fifteen minutes?",
   "A colleague pointed me at your firm page, so this is not a list mail.\n\nYou FACT0, and you FACT1.\n\nOur pilot keeps concurrent matters visible without a full practice suite.\n\nSay no and I will not write again.",
@@ -123,12 +125,46 @@ writeFileSync(process.env.DRAFTS_OUT, JSON.stringify(out, null, 2) + "\n");
 console.log("drafts written: " + out.length);
 MJS
   [ -s "$BATS_TEST_TMPDIR/mkdrafts.mjs" ] || { echo "mkdrafts helper is EMPTY"; false; }
-  DRAFTS_OUT="$BATS_TEST_TMPDIR/drafts.json" run node "$BATS_TEST_TMPDIR/mkdrafts.mjs" "${1:-once}"
+  DRAFTS_OUT="$BATS_TEST_TMPDIR/drafts.json" run node "$BATS_TEST_TMPDIR/mkdrafts.mjs" "${1:-once}" "${2:-}"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ -s "$BATS_TEST_TMPDIR/drafts.json" ] || { echo "drafts.json is EMPTY"; false; }
 }
 
 _cli() { node "$ARC_ROOT/.claude/scripts/leads/arc-leads.mjs" "$@"; }
+
+# Records a `reject` decision against EVERY `approval.requested` on the spine, through the real
+# emitter, so the events the CLI folds are the events the emitter actually writes rather than a
+# hand-built shape a fold might disagree with.
+_reject_all_approvals() {
+  cat > "$BATS_TEST_TMPDIR/reject.mjs" <<'MJS'
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
+const root = process.env.ARC_SPINE_ROOT;
+const dir = join(root, "events");
+const ids = [];
+for (const f of readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n)))
+  for (const line of readFileSync(join(dir, f), "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    const ev = JSON.parse(line);
+    if (ev.kind === "approval.requested") ids.push(ev.id);
+  }
+// The repo root arrives as an ARGUMENT, not through the environment: `test_helper.bash` sets
+// ARC_ROOT without exporting it, so `process.env.ARC_ROOT` is undefined in every child process.
+const sh = join(process.argv[2], ".claude/scripts/hq/arc-event.sh");
+for (const id of ids) {
+  const pf = join(process.env.BATS_TEST_TMPDIR, "decision-" + id + ".json");
+  writeFileSync(pf, JSON.stringify({ decides: id, verdict: "reject", reason: "not this one" }));
+  execFileSync("bash", [sh, "emit", "decision.recorded", "--payload-file", pf, "--actor", "test", "--strict"], { encoding: "utf8" });
+}
+console.log("rejected: " + ids.length);
+MJS
+  [ -s "$BATS_TEST_TMPDIR/reject.mjs" ] || { echo "reject helper is EMPTY"; false; }
+  run node "$BATS_TEST_TMPDIR/reject.mjs" "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # SELF-ASSERTING FIXTURE. "rejected: 0" would make every assertion downstream trivially true.
+  [[ "$output" == *"rejected: 2"* ]] || { echo "expected to reject 2 approvals, got: $output"; false; }
+}
 
 # Puts the store into the state an INTERRUPTED `draft` leaves behind: the draft files exist and
 # no approval receipt was ever written. Both halves are removed -- the day-file lines AND the
@@ -309,6 +345,11 @@ setup() {
     # ONE line must carry both. Two separate "output contains" checks would pass on the mutant.
     echo "$out" | grep -F "$lead" | grep -qF "$ref" \
       || { echo "the DUP line for $lead does not name its own draft $ref"; echo "$out"; false; }
+    # AND ONLY its own. Co-location alone is satisfied by a mutant that prints every ref on
+    # every DUP line, which is the same "some known ref appeared" weakness one step up.
+    local others
+    others=$(echo "$out" | grep -F "$lead" | grep -oE 'draft_[0-9a-f]{16}' | grep -vF "$ref" | sort -u)
+    [ -z "$others" ] || { echo "the DUP line for $lead also names $others"; echo "$out"; false; }
     checked=$((checked + 1))
   done
   # A loop over an empty glob checks nothing and passes, which is the vacuous pass this file
@@ -321,7 +362,10 @@ setup() {
 @test "two entries for one lead and touch inside one file: the second is refused" {
   run _cli research "$BATS_TEST_TMPDIR/icp.json"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  _mkdrafts repeat
+  _mkdrafts once repeat
+  # The fixture must actually hold three rows, or "1 duplicate refused" is measuring nothing.
+  run node -e 'process.stdout.write(String(JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).length))' "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$output" = "3" ] || { echo "the repeat fixture holds $output row(s), expected 3"; false; }
   run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"1 duplicate touch(es) refused"* ]] || { echo "$output"; false; }
@@ -468,13 +512,135 @@ JSON
   [[ "$output" == *"2 queued for approval"* ]] || { echo "$output"; false; }
 }
 
-@test "this file registers the 15 tests it declares" {
+# --- what the FIRST round of fixes shipped with no coverage at all ---
+
+@test "research exits 2 and names the anomaly when one corpus holds two disagreeing rows" {
+  # The headline safety behaviour of that commit -- exit non-zero when a receipt did not reach the
+  # spine cleanly -- had ZERO tests. A mutant deleting all four anomaly loops and the die() was
+  # green on every one of them. Two rows for one firm that disagree on `provenance` is ordinary
+  # scraper output (found via its own site AND a directory).
+  cat > "$BATS_TEST_TMPDIR/fx/candidates.json" <<'JSON'
+[
+  { "name": "Lead One", "email": "one@example.test", "firm": "Firm One",
+    "firm_domain": "firm-one.example.test", "geography": "IN", "provenance": "firm-site",
+    "source_urls": ["https://firm-one.example.test/about", "https://firm-one.example.test/team"],
+    "facts": [
+      { "text": "argued a limitation-period matter before the Madras High Court",
+        "evidence_url": "https://firm-one.example.test/practice",
+        "relevance": "the pilot removes the tracking overhead this matter load creates" },
+      { "text": "runs a monthly clinic for first-generation litigants",
+        "evidence_url": "https://firm-one.example.test/writing",
+        "relevance": "someone who documents their process adopts a process tool without persuasion" }
+    ] },
+  { "name": "Lead One", "email": "one@example.test", "firm": "Firm One",
+    "firm_domain": "firm-one.example.test", "geography": "IN", "provenance": "public-directory",
+    "source_urls": ["https://firm-one.example.test/about", "https://firm-one.example.test/team"],
+    "facts": [
+      { "text": "argued a limitation-period matter before the Madras High Court",
+        "evidence_url": "https://firm-one.example.test/practice",
+        "relevance": "the pilot removes the tracking overhead this matter load creates" },
+      { "text": "runs a monthly clinic for first-generation litigants",
+        "evidence_url": "https://firm-one.example.test/writing",
+        "relevance": "someone who documents their process adopts a process tool without persuasion" }
+    ] }
+]
+JSON
+  cat > "$BATS_TEST_TMPDIR/fx/verify.json" <<'JSON'
+{ "one@example.test": "verified" }
+JSON
+  [ -s "$BATS_TEST_TMPDIR/fx/candidates.json" ] || { echo "corpus fixture is EMPTY"; false; }
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; false; }
+  [[ "$output" == *"ANOMALY"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"provenance"* ]] || { echo "the anomaly did not name the differing field: $output"; false; }
+  # The corpus is the thing to fix, not the spine: the collision is with a row THIS run emitted.
+  [[ "$output" == *"dedupe"* ]] || { echo "the anomaly sent the operator to the wrong remedy: $output"; false; }
+  # And the counts are over PEOPLE. Two rows, one person, one dossier.
+  [[ "$output" == *"dossiers: 1 "* ]] || { echo "the dossier count is over rows, not people: $output"; false; }
+}
+
+@test "a rejected approval can be revised, and the same body cannot" {
+  # `approvalState` treats undecided as live and only a trailing reject as retired -- and no
+  # test in this repository ran `draft` with a decision.recorded on the spine, so a mutant
+  # reading `if (requests.length) return "live"` survived the entire suite. Before the fix a
+  # rejection was terminal and the only escape was a different touch_n, i.e. two live approvals
+  # for one send.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _reject_all_approvals
+  # Same body: refused, and it says why.
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"was REJECTED as draft"* ]] || { echo "$output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "an identical body was re-announced"; false; }
+  # Revised body: announced as a new approval. This is the half that was impossible before.
+  _mkdrafts rebody
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 queued for approval"* ]] || { echo "a revision after a rejection was refused: $output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 4 ] || { echo "$(_spine_count approval.requested) approval(s), expected 4"; false; }
+}
+
+@test "an orphan draft whose body has changed is left alone, not announced" {
+  # The STALE branch stops an approval binding text the operator has since edited -- and nothing
+  # exercised it, so deleting it was free. The approval binds draft_sha precisely so this cannot
+  # happen quietly; the check is what makes that guarantee hold at the resume door too.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _unannounce
+  _mkdrafts rebody
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 stale draft(s) left alone"* ]] || { echo "$output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "a stale body was announced anyway"; false; }
+  [ "$(_drafts_count)" -eq 2 ] || { echo "$(_drafts_count) draft file(s) -- a second was minted for a stale touch"; false; }
+  # POSITIVE CONTROL: the UNCHANGED body still resumes, so the STALE branch is discriminating
+  # rather than a blanket refusal.
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 resumed from an interrupted run"* ]] || { echo "$output"; false; }
+}
+
+@test "a resumed approval carries the sha of the draft it names" {
+  # A mutant emitting the resume approval with any other draft_sha kept every count correct:
+  # nothing read the approval payload back. The sha is what the send-moment guard compares
+  # against, so an approval carrying the wrong one authorises a body nobody approved.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _unannounce
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 resumed"* ]] || { echo "$output"; false; }
+
+  local checked=0 f ref sha found
+  for f in "$ARC_LEADS_STORE/drafts/"*.json; do
+    ref=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(d.draft_ref)' "$f")
+    sha=$(node -e 'const d=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(d.draft_sha)' "$f")
+    [ -n "$ref" ] && [ -n "$sha" ] || { echo "could not read ref/sha out of $f"; false; }
+    found=$(cat "$ARC_SPINE_ROOT/events/"*.jsonl | grep -F "$ref" | grep -cF "$sha") || true
+    [ "${found:-0}" -ge 1 ] || { echo "the approval naming $ref does not carry its sha $sha"; false; }
+    checked=$((checked + 1))
+  done
+  [ "$checked" -eq 2 ] || { echo "checked $checked draft(s), expected 2"; false; }
+}
+
+@test "this file registers the 19 tests it declares" {
   # THE GRAMMAR IS THE ONE CI USES, not a narrower spelling of it. `grep -c "^@test "` misses a
   # tab-indented declaration and misses `@test` followed by anything but a single space, so a
   # test could be dropped by bats AND uncounted here -- the count that exists to catch a silent
   # drop, blind to two of the three forms it has to see. This is the `_declared` regex in ci.yml.
   declared=$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 15 ] || { echo "declared $declared, expected 15"; false; }
+  [ "$declared" -eq 19 ] || { echo "declared $declared, expected 19"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }

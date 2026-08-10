@@ -83,8 +83,21 @@ export const ENV_LOCAL_FORBIDDEN = Object.freeze([
   "LEADS_FIXTURE_DIR",
 ]);
 
+// CASE-FOLDED, because `process.env` IS on Windows and this list is not.
+//
+// `ENV_LOCAL_FORBIDDEN.includes(n)` was an exact match, so a `.env.local` carrying
+// `arc_leads_fake=1` passed the guard untouched — and then `env["arc_leads_fake"] = "1"` set
+// `ARC_LEADS_FAKE` for the whole process, because Node's environment object folds case on
+// Windows. Verified on this box: `usingFakes()` false before the load, true after, with the
+// guard reporting nothing to refuse. That is the exact outcome this list exists to prevent,
+// reachable on the windows CI leg and on the owner's machine by changing the shift key.
+//
+// Folded rather than "also check the lowercase spelling": the failing variant set is every
+// mixed case of five names, not two spellings of them (D1 — a grammar pinned to one form).
+const FORBIDDEN_UPPER = ENV_LOCAL_FORBIDDEN.map((n) => n.toUpperCase());
+
 export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
-  const smuggled = names.filter((n) => ENV_LOCAL_FORBIDDEN.includes(n));
+  const smuggled = names.filter((n) => FORBIDDEN_UPPER.includes(String(n).toUpperCase()));
   if (smuggled.length)
     throw new MailRefusal("config", `${fileLabel} sets ${smuggled.join(", ")} — refused. That file is for credentials; these variables decide whether a send is real, which day the cap buckets to, where the store lives, and which host receives the key, and they are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
   return names;

@@ -977,7 +977,15 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # The confirmation line is `arc-leads: mail sent id=...`. A bare "mail sent" substring is the
   # wrong assertion: the explanation this test WANTS to see contains the words "no mail sent",
   # so the naive form failed on the very output that proves the behaviour is correct.
+  #
+  # AND IT NO LONGER STANDS ALONE. This whole file runs under ARC_LEADS_FAKE=1, and a successful
+  # send on the fake now prints the NOT-SENT sentence instead of the confirmation -- so BOTH
+  # branches satisfy the line below and it can no longer fail. The delivery is pinned by its
+  # absence from the store journal, which a crash does not satisfy either way.
+  # Under ARC_LEADS_FAKE=1 a delivery that DID happen prints the NOT-SENT sentence, so this pair
+  # covers both spellings of "a send was attempted" and neither is satisfied by the other.
   [[ "$output" != *"arc-leads: mail sent id="* ]]
+  [[ "$output" != *"NOT SENT"* ]] || { echo "a delivery was attempted for an empty inbox: $output"; false; }
 }
 
 @test "notify canary refuses a detail that is empty" {
@@ -1112,8 +1120,12 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
   # bats silently DROPS a @test whose name holds a non-ASCII character and reports green having
   # never run it. The only signal is a falling count, so the count is asserted here.
   local declared registered
-  declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
+  # The grammar is the one CI counts with (`_declared` in ci.yml), not a narrower spelling of
+  # it: `^@test ` misses a tab-indented declaration and misses `@test` followed by a tab, so a
+  # test could be dropped by bats AND uncounted here -- the count that exists to catch a silent
+  # drop, blind to two of the three forms it has to see.
+  declared="$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")"
   registered="${#BATS_TEST_NAMES[@]}"
   [ "$declared" -eq "$registered" ] || { echo "declared $declared, registered $registered"; false; }
-  [ "$declared" -eq 74 ] || { echo "expected 74 tests, found $declared -- update this number deliberately"; false; }
+  [ "$declared" -eq 77 ] || { echo "expected 77 tests, found $declared -- update this number deliberately"; false; }
 }
