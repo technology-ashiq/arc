@@ -74,3 +74,41 @@ question, which is why the revisit trigger is written the way it is.
 
 **Not decided here.** Whether Phase 05 buys a verifier. This ADR deliberately does not
 pre-empt that; it says the rehearsal does not need one.
+
+---
+
+## Amendment, 2026-08-10 — a DoH fallback, because port 53 is not always open
+
+**What happened.** The first rehearsal run against the canonical spine returned **0 PASS · 5
+HELD**. Not one address was bad: the job environment refuses UDP/TCP 53 while leaving HTTPS
+open, so `resolveMx` threw `ECONNREFUSED` for every domain including `gmail.com`. Under the
+decision above a throwing resolver is `unverifiable` → HELD → can never be sent to, so a blocked
+port silently held the entire rehearsal.
+
+The gate was behaving exactly as specified and **answering a question about the network while
+appearing to answer one about the address.** That is the failure mode this lane keeps finding
+under a different costume — a correct refusal whose reason is invisible to the person reading it.
+
+**The amendment.** `dnsReal.resolveMx` falls back to **DNS-over-HTTPS** when, and only when, the
+system resolver fails to *reach* an answer.
+
+- **It is a fallback, never the primary.** The system resolver is asked first and is
+  authoritative when it answers — including when it answers "no MX". `ENODATA` and `ENOTFOUND`
+  re-throw rather than falling through, because a working local resolver must not be silently
+  replaced by a third party, and a domain that genuinely has no MX must not get a second opinion
+  it never asked for.
+- **`Status: 3` (NXDOMAIN) is an answer, not a failure.** It resolves to an empty list. Every
+  other non-zero status rejects. Collapsing those two would land a lead in the same place for
+  opposite reasons.
+- **Only type-15 records count.** A CNAME in the answer section is not an MX record.
+
+**What it exposes, and why that is the whole argument.** An MX query carries the **domain**
+only — `gmail.com`, never the local part. No address reaches the resolver operator, so
+ADR-0410 and ADR-0412 hold unchanged. That asymmetry is precisely why this is acceptable where
+routing the **address** to a verification vendor was not, which is the trade this ADR declined
+in its main body. A fallback that leaked the address would be the vendor decision wearing a
+different name.
+
+**Verified live at the time of writing:** `gmail.com` → 5 MX, `outlook.com` → 1 MX, a reserved
+`.invalid` domain → 0 (NXDOMAIN → `unverifiable` → HELD), a malformed address → `invalid`
+without any lookup at all. The offline seam still answers all four states unchanged.
