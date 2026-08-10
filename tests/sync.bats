@@ -23,6 +23,47 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   [ -f "$TARGET/docs/usermanual.md" ]
 }
 
+# docs/playbooks/ is a DIRECTORY sync on both copy paths, unlike the meta docs, which are a flat
+# hardcoded list. That difference is the point: a playbook added later ships with no twin edit.
+# Every file in the source directory must arrive, so this counts rather than naming one -- naming
+# one is how the second playbook ships nowhere while the test stays green.
+@test "sync: docs/playbooks/ is a directory sync on BOTH copy paths (rsync and cp fallback)" {
+  local want
+  want="$(find "$ARC_ROOT/docs/playbooks" -type f | wc -l | tr -d ' ')"
+  [ "$want" -gt 0 ]   # a source dir with no files would make every assertion below vacuous
+
+  bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null
+  [ "$(find "$TARGET/docs/playbooks" -type f | wc -l | tr -d ' ')" -eq "$want" ]
+
+  rm -rf "$TARGET/docs/playbooks"
+  ARC_SYNC_NO_RSYNC=1 bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null
+  [ "$(find "$TARGET/docs/playbooks" -type f | wc -l | tr -d ' ')" -eq "$want" ]
+}
+
+# NEGATIVE CONTROL. The test above passes on a tree where docs/playbooks/ happens to be copied by
+# something else -- the .claude/ rsync line, a stray wildcard, a leftover from a previous run in the
+# same target. So prove the two lines are load-bearing: delete them from a COPY of the script and the
+# playbooks must stop arriving. Without this, "the sync works" and "the sync has a line for it" are
+# the same observation, and only one of them is what the twin edit was for.
+@test "sync: a mutant with the docs/playbooks lines deleted ships NO playbook (control)" {
+  local mutant="$TARGET/mutant-sync.sh"
+  grep -v 'docs/playbooks' "$ARC_ROOT/sync-to-project.sh" > "$mutant"
+  # The grep must actually have removed something, or the mutant is the original and proves nothing.
+  [ "$(grep -c 'docs/playbooks' "$ARC_ROOT/sync-to-project.sh")" -gt 0 ]
+
+  local mtarget="$TARGET/mutant-out"
+  mkdir -p "$mtarget/.git"
+  bash "$mutant" "$mtarget" >/dev/null 2>&1 || true
+  [ ! -f "$mtarget/docs/playbooks/finding-verification.md" ]
+
+  # ...and the real script, same target shape, does ship it. Both halves, or the assertion above is
+  # satisfied by the mutant simply failing to run at all.
+  local rtarget="$TARGET/real-out"
+  mkdir -p "$rtarget/.git"
+  bash "$ARC_ROOT/sync-to-project.sh" "$rtarget" >/dev/null
+  [ -f "$rtarget/docs/playbooks/finding-verification.md" ]
+}
+
 @test "sync: never leaks personal settings or working state" {
   bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null
   [ ! -e "$TARGET/.claude/settings.local.json" ]

@@ -119,6 +119,12 @@ if ($settingsBak -and (Test-Path $settingsPath)) {
 # Planning templates
 robocopy "$src\docs\templates" "$Target\docs\templates" /E /NFL /NDL /NJH /NJS | Out-Null
 
+# Playbooks - a DIRECTORY sync, not another entry in the flat meta-docs loop below, so a playbook
+# added later ships without editing either twin again. Required because a full-mode command may
+# reference one: arc-audit.md points at finding-verification.md, which the --products path installs
+# from products/review/manifest.json and full mode would otherwise skip. Bash twin: sync-to-project.sh.
+robocopy "$src\docs\playbooks" "$Target\docs\playbooks" /E /NFL /NDL /NJH /NJS | Out-Null
+
 # Meta docs (safe to overwrite - they describe the system, not your product)
 New-Item -ItemType Directory -Force -Path "$Target\docs" | Out-Null
 foreach ($f in @("blueprint.md", "how-it-works.md", "build-playbook.md", "product-runbook.md", "plugins.md", "usermanual.md")) {
