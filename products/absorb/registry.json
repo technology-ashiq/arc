@@ -4,7 +4,7 @@
     {
       "id": "T-01",
       "name": "pre-emit finding verification",
-      "status": "candidate",
+      "status": "adopted",
       "lane": "absorb",
       "source": {
         "name": "gstack /review SKILL.md",
@@ -13,13 +13,19 @@
       },
       "classification_ref": "initiatives/absorb/evidence/phase-04/extraction-report.md",
       "evidence": [
+        "initiatives/absorb/evidence/phase-04/extraction-report.md",
+        "initiatives/absorb/evidence/planoff/PHASE04-T01/PROTOCOL.md",
+        "initiatives/absorb/evidence/planoff/PHASE04-T01/RESULTS.md",
+        "initiatives/absorb/evidence/planoff/PHASE04-T01/mapping.json",
         "initiatives/absorb/evidence/planoff/PHASE03-CHAIN-V2/mapping.json"
       ],
-      "attribution": "gstack /review SKILL.md:1251-1281 -- the practice is re-expressed in arc's own terms, nothing copied. Credited because the source deserves it, not because a license compels it.",
+      "attribution": "gstack /review SKILL.md:1251-1276 -- the practice is re-expressed in arc own terms, nothing copied. Credited because the source deserves it, not because a license compels it (license NOT FOUND, so re-expression was the only lawful route).",
       "lock_ref": null,
-      "decision_refs": {},
+      "decision_refs": {
+        "adopt": "01KZN5H1E2RDHT9ZGQ4CSR85ZB"
+      },
       "review_by": "2026-11-09",
-      "note": "Blind-picked by the owner on 2026-08-09 (decision 01KZKBYSQ5J46Y82PRN7W3AJNH, reason \"pick=meridian; read clearer\"): shown two review-process variants with labels that revealed nothing, he chose the one carrying THIS technique. That is a real signal and it is NOT an adoption -- the judgement was Phase 03's chain proof, and status stays `candidate` because ADR-0602 A1 leaves the rebuild with no landing site. decision_refs is deliberately EMPTY: filling it would let the cap lint treat this as an adopted row."
+      "note": "ADOPTED 2026-08-10 on decision 01KZN5H1E2RDHT9ZGQ4CSR85ZB (reason: adopt; appendix irundhaalum ok). Landed as docs/playbooks/finding-verification.md with .claude/commands/arc-audit.md as its caller -- ADR-0602 Amendment 2, taking Amendment 1 recorded route 2, no allowlist widening. TWO OWNER RECEIPTS POINT DIFFERENT WAYS AND BOTH STAND: the blind A/B pick (01KZN380GP5EDF58H6VRTT0S0T) chose the OLD-WAY report, reason findings neraya iruku; the adoption decision above chose to adopt anyway. RESULTS.md had already recorded, before the adoption, that the pick looked like a judgement about PRESENTATION rather than about the rule -- 13 findings shown against 22 while nine move one heading down, not away -- and refused to let that inference overturn the pick. The adoption is the owner settling it, not the record being rewritten. ENFORCEMENT IS WEAKER THAN THIS STATUS SUGGESTS: findings on /arc-audit are written by the security-auditor subagent whose definition is off the ADR-0602 allowlist, so the only mechanism is the caller forwarding the requirement into its Task prompt. Measured: the claimed class removed 3/3 across 3 fixtures, main-report precision -2.1 pts, 5 of 8 false findings untouched because a byte-match cannot judge whether a quote supports its claim."
     }
   ]
 }

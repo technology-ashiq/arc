@@ -124,14 +124,29 @@ certification. "Verification happens before emission" is likewise a discipline, 
 artifact distinguishes verify-then-write from write-then-resolve. **The fields are the technique; the
 ordering is the intent.**
 
-**NOT YET MEASURED — and the earlier version of this section said otherwise.** REQ-03's A/B has
-**three fixtures named and zero executed** (`initiatives/absorb/evidence/planoff/LEDGER.md`, and
-`README.md` there reads *"None yet"*). The one real result on the record is a single sealed blind
-preference on *wording*, not on fixtures: `planoff/PHASE03-CHAIN-V2/RESULTS.md`, decision
-`01KZKBYSQ5J46Y82PRN7W3AJNH` — whose own text says *"No fixture was executed… REQ-08 remains NOT
-MET."* So the appendix's protective effect is a design argument, and the true-but-unquotable case is
-its **only planned positive control and has not run**. When the A/B lands, this section gets numbers
-or this file gets retired through the registry — not quietly softened.
+**MEASURED 2026-08-10, and the numbers are smaller than this file's first draft implied.** Three
+fixtures, 22 candidate findings, built by an agent held blind to this rebuild
+(`initiatives/absorb/evidence/planoff/PHASE04-T01/RESULTS.md`, pass condition committed in `fd82315`
+*before* the harness existed):
+
+| | |
+|---|---|
+| The claimed class — findings whose citation does not resolve | **removed 3 of 3** |
+| True findings demoted to the appendix | **6** — none deleted, and the integrity gate `true-lost` is 0 |
+| Main-report precision | **63.6% → 61.5%**, because 6 of the 9 demoted are true |
+| False findings this rule cannot catch | **5 of 8** — they quote a real line byte-exactly and the line does not say what the claim says |
+
+**Read the third row before believing the first.** This rule does not make a report truer. It makes
+what remains in the main report *verifiable*, and what is not *visible*. Those are different goods,
+and the second cost six true findings a heading.
+
+**One hole no quote check closes**, found by the fixture author before the run: two byte-identical
+lines (`    runs-on: ubuntu-latest` in two YAML jobs) mean a quote verifies against the wrong location,
+so a mis-located finding passes as verified. Duplicate lines are ordinary in YAML and shell.
+
+**Adopted by the owner on 2026-08-10** — decision `01KZN5H1E2RDHT9ZGQ4CSR85ZB`, overruling a *retire*
+recommendation from the A/B. The blind pick on the two reports had gone the other way; both receipts
+stand and `RESULTS.md` records why without editing either.
 
 ## How to apply it
 
@@ -164,9 +179,11 @@ allowlist; the owner ruled DO NOT WIDEN on 2026-08-09 and that stands. So:
 into the subagent's Task prompt**, and re-routing those two drops as appendix entries. `/arc-audit`
 does both. That is a prompt-level instruction, not a gate: it is weaker than a lint and it is what is
 available. Fixing it properly means the review *method* in `.claude/agents/code-reviewer.md` and
-`security-auditor.md` — ADR-0602 Amendment 1's routes 1 and 3 — and `products/absorb/registry.json`
-records T-01 as **`candidate`**, not as an adoption, for exactly this reason. A playbook plus one
-forwarded prompt is the honest v1, not the destination.
+`security-auditor.md` — ADR-0602 Amendment 1's routes 1 and 3.
+
+`products/absorb/registry.json` records T-01 as **`adopted`** — and that word means *the owner decided
+to use this*, not *this is enforced*. A playbook plus one forwarded prompt is the honest v1, not the
+destination, and the row's own note says so at the same length.
 
 ## A sibling that already has this defect
 

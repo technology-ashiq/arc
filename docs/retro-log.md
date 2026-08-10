@@ -77,3 +77,13 @@
 2026-08-10 | arc-absorb | An owner command handed over without its working directory lands nowhere and has to be handed over twice | Every spine/inbox command given to the owner carries its `cd` to the main clone -- the canonical spine is gitignored so each worktree has its own, and a failed `arc-inbox approve` leaves NO trace, making "he ran it" and "it landed" different facts that must both be checked | spine,owner-action,worktree,inbox
 2026-08-10 | arc-absorb | A metric named only after the numbers are visible is chosen to flatter; the fix is committing the pass condition in its own commit BEFORE the harness exists | Write the protocol, commit it alone, then build the harness -- and when a number computed afterwards CONTRADICTS the verdict, report it above the verdict line and give it a test, because the discipline forbids swapping in a flattering metric, not adding an inconvenient one | evidence,measurement,honesty,ab
 2026-08-10 | arc-absorb | A confinement check placed in one read path and not its sibling fallback -- fourth recurrence of validate-one-read-compare-another in this lane, written minutes after describing the class in a commit message | ONE confinement function per file, every fixture-supplied path through it, and a comment forbidding any other call to resolve() on external data; a written rule about the class did not stop me reproducing it, an adversarial control did | security,twin-fix,confinement
+2026-08-10 | arc-absorb | M | rework 1/5 | amendments 1 (/arc-change) + 6 ADR | FIRED 2/7 | burn 81% | sim-blockers-r1 8 | t-to-phase0 0d
+
+> **absorb scoreboard, amended 2026-08-10 (the 08-09 row above is superseded, not corrected in place).**
+> The first row was written when the cycle looked finished at 5.5d with 6 of 8 REQs met and Phase 04
+> half-closed. It then reopened: `rework 0/4 -> 1/5` (Phase 04 itself is the reopen), `burn 69% -> 81%`,
+> `amendments 0 -> 1` plus two further ADR amendments (ADR-0602 A2, and ADR-0605's unimplemented lint
+> built). `FIRED 2/7` is unchanged in count and changed in content — row 7's arm 1 was ANSWERED by the
+> A/B rather than fired, and row 3 fired on its second arm (the owner was queued, and one command had
+> to be handed over twice because it carried no working directory). **8 of 8 REQs met.** Kept as two
+> rows because a scoreboard edited in place cannot show that a cycle was declared done and then was not.

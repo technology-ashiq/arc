@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-absorb (Cycle 10, born 2026-08-09)
-phase: 04 — rebuild REOPENED on ADR-0602 A2 route 2 (00, 01, 02, 03 CLOSED)
+phase: 04 — CLOSED (all five phases done, 8 of 8 REQ met)
 appetite: 8d
-burn: 5.5d
+burn: 6.5d
 blocked-on: —
 depends-on: —
 
@@ -33,9 +33,9 @@ depends-on: —
 | 01 | Study harness, hostile-input-first — read-only pipeline, injection red corpus, adversarial pass, no-execution boundary fixture-proven **or STOP** | 2d | ✅ CLOSED 2026-08-09 |
 | 02 | Registry and guards — status lint (cap 12, displacement, decision-ref), allowlist lint, license/attribution gate, PLANOFF skeleton | 1d | ✅ CLOSED 2026-08-09 |
 | 03 | Governance drop — ADR-0603 owner-judge profile + blind mechanics + inbox chain, REQ-05 `PLAN-develop` addendum + freeze-log line + Toolbox template | 1d | ✅ CLOSED 2026-08-09, one row open by owner decision |
-| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | 🟡 study + classification DONE; **rebuild REOPENED** on ADR-0602 A2 route 2 — playbook + non-generated caller, allowlist untouched |
+| 04 | The real absorb — ADR-0606's target end-to-end, 3-fixture A/B, sealed-blind judgement, adoption proposal, decision recorded, retro | 1.5d | ✅ CLOSED 2026-08-10 |
 
-**Appetite burn: 5.5 of 8 days used.** *(Was 5.0 here and in the machine header while the Now
+**Appetite burn: 6.5 of 8 days used — the cycle closes with 1.5d unspent.** *(Was 5.0 here and in the machine header while the Now
 section and the retro scoreboard row both said 5.5 — the retro day was worked and never counted.
 Caught by `board-lint`, which compares the board against this header and cannot see a header
 disagreeing with its own file. Three sources, one of them wrong, and the number nobody recomputed
@@ -47,6 +47,56 @@ adversarial pass was paid for out of the phase rather than out of slack, which i
 requires.
 
 ## Done-log
+
+- **2026-08-10 — Phase 04 CLOSED ✅** *The real absorb, end to end — and the result went against the
+  technique before the owner overruled it.*
+  **The rebuild was never blocked by the allowlist.** Amendment 1's last word on T-01 was "blocked",
+  and `docs/playbooks/**` had been allowlisted since ADR-0602 was written — it only read as
+  unavailable because the directory did not exist. Landed as
+  `docs/playbooks/finding-verification.md` with `.claude/commands/arc-audit.md` as its caller
+  (**ADR-0602 Amendment 2**, route 2 taken unchanged). Allowlist byte-identical, `.claude/agents/**`
+  still off it, **the DO-NOT-WIDEN ruling of 2026-08-09 unreversed.**
+  **REQ-03 and REQ-08 now MET — 8 of 8.** The loop ran end to end: study → report → classification →
+  rebuild → 3-fixture A/B → sealed-blind judgement → adoption proposal → decision recorded.
+  **The measurement, and the number that argues against it.** `ab-run` on 22 candidates across 3
+  fixtures built by an agent held blind to the rebuild: the claimed class removed **3/3**,
+  `true-lost` **0**, verdict **NEW-WINS** against a pass condition committed in `fd82315` *before the
+  harness existed*. And the main report goes **22 findings at 63.6% true → 13 at 61.5%**, because
+  **6 of the 9 demoted are TRUE**. Computed after the run, reported ABOVE the verdict line, with a
+  test pinning that position so a later tidy-up cannot bury it. 5 of 8 false findings are untouched:
+  a byte-match cannot judge whether a quote supports its claim, and the playbook says so.
+  **TWO OWNER RECEIPTS POINT DIFFERENT WAYS AND BOTH STAND.** The blind A/B pick
+  (`01KZN380GP5EDF58H6VRTT0S0T`) chose the **OLD-WAY** report — *"findings neraya iruku"*. The
+  adoption decision (`01KZN5H1E2RDHT9ZGQ4CSR85ZB`, *"adopt; appendix irundhaalum ok"*) **overruled my
+  retire recommendation**. `RESULTS.md` had already recorded, *before the adoption existed*, that the
+  pick looked like a judgement about presentation rather than about the rule — and refused to let that
+  inference overturn it. The adoption settles it with a second receipt rather than by editing the first.
+  **32 adversarial findings, two fresh agents, two surfaces, every one of this cycle's 15 defect
+  classes recurring.** CI was 19/19 GREEN before either ran — fifth time in five phases. Three would
+  have shipped harm: the rule was **strictly worse than no rule** on the ship gate (an unquotable
+  CRITICAL in a severity-less appendix satisfied "zero CRITICAL remain open" and stamped the security
+  ledger green) · an unguarded `rsync` aborted the whole sync on ubuntu/macOS when
+  `docs/playbooks/` was absent, leaving a half-installed consumer repo · **my own negative control was
+  vacuous** — the mutant's `SRC` resolved to an empty temp dir, so it copied nothing and "no playbook
+  present" passed on total failure.
+  **Four things the rebuild surfaced that outlive it:** the two sync twins disagreed about `docs/`, so
+  the playbook shipped selectively and not in full mode — and the golden manifest is generated BY full
+  mode, so the byte-identity gate structurally could not have seen it · `docs` was the only payload
+  channel with a free-form dest, and `CLAUDE.md` / `.claude/settings.json` are traversal-free, pass
+  every check, and get force-overwritten by both twins (confined in `product-lint` **and** the
+  resolver, because the sync consumes the plan while the lint runs in CI) · `report-lint` required a
+  citation to be *present* and never *resolvable*, the twin of T-01's own defect, which then caught a
+  real one in this cycle's report · **ADR-0605 required "the results table travels WITH the adoption
+  proposal" and nothing implemented it** — the fourth guard-with-no-caller of this cycle, in an ADR's
+  own requirement, found while raising the artifact it governs.
+  **Tests: 2022 → 2216.** **CI 19/19 green** on `675a07f`; merged as **`9535307`** (PR #149, a merge
+  commit deliberately — squashing would destroy the protocol-before-harness ordering `RESULTS.md`
+  cites). **Actual ~1.0d vs 1.5d.** `amendments: 1` (`/arc-change`, trivial & in-scope) · **2 ADR
+  amendments** (ADR-0602 A2, and ADR-0605's lint implemented) · `reopened: 1` (Phase 04 itself).
+  **Evidence:** `initiatives/absorb/evidence/phase-04/` (extraction-report, live-demo with verbatim
+  command output, manifest — bundle **verified, 2 artifacts**) + the full PLANOFF bundle at
+  `initiatives/absorb/evidence/planoff/PHASE04-T01/` (PROTOCOL, RESULTS, commitment, mapping, both
+  rendered reports under their sealed labels). `phase.closed` **`01KZN5XRW9A61FPBJYSZQYD28M`** on the canonical spine in the main clone, read back out of `events/2026-08-10.jsonl`, 0 quarantined.
 
 - **2026-08-09** — lane born. ADR-0074 (company: arc-first ruling, venture clock deferred, trigger
   gate waived for this cycle, A8 tension flagged) and ADR-0600..0606 (ABS-A..G) recorded. PLAN.md,
@@ -134,10 +184,20 @@ requires.
 
 ## Now
 
-**Current position:** Phases 00–03 CLOSED and MERGED to `main` (`30dc9a9`, PR #138; main re-verified
-`31353611593`, 19/19, by `workflow_dispatch`). **Phase 04 is REOPENED for its rebuild** — not by
-reversing the owner's ruling, but by taking a route ADR-0602 Amendment 1 had already recorded as
-legitimate and that nobody had noticed was reachable.
+**Current position: ALL FIVE PHASES CLOSED. 8 of 8 REQs met. The cycle is done at 6.5 of 8 days.**
+`phase.closed` `01KZN5XRW9A61FPBJYSZQYD28M`. Phases 00–03 merged as `30dc9a9` (PR #138, main
+re-verified `31353611593`); Phase 04's rebuild and A/B merged as `9535307` (PR #149).
+
+**What this cycle actually proved, in one line: the machinery said yes, the owner's first receipt said
+no, and neither was allowed to overwrite the other.** `ab-run` cleared the pass condition committed
+before it existed. The blind A/B pick went to the OLD way. The adoption decision then overruled a
+*retire* recommendation. Three receipts, three different positions, and the record carries all three
+rather than the one that reads best. A refinery whose first candidate could only ever be adopted would
+not have been a refinery.
+
+**Phase 04 was REOPENED to get there** — not by reversing the owner's DO-NOT-WIDEN ruling, but by
+taking a route ADR-0602 Amendment 1 had already recorded as legitimate and that nobody had noticed was
+reachable.
 
 **The rebuild was never blocked by the allowlist. It was blocked by the two targets the study
 happened to name.** Amendment 1 listed three routes out; route 2 — a playbook under

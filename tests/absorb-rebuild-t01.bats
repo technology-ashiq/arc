@@ -215,13 +215,40 @@ setup() {
   grep -qiE "not a substitute for the adversarial pass" "$PB"
 }
 
-# NOT YET MEASURED. The first version of the playbook told the reader to "read the RESULTS" at a path
-# where no RESULTS file exists, while the ledger there records 3 fixtures named and 0 executed -- an
-# overclaim inside the document about not overclaiming. This asserts the correction and asserts the
-# path it points at, so the citation cannot rot into a coordinate again.
-@test "t01: the playbook says NOT YET MEASURED and its cited evidence path exists" {
-  grep -qiE "NOT YET MEASURED" "$PB"
-  grep -qiE "three fixtures named and zero executed" "$PB"
+# THE PLAYBOOK'S NUMBERS ARE DERIVED FROM THE HARNESS, NOT PINNED TO A STRING.
+#
+# Its first version told the reader to "read the RESULTS" at a path where no RESULTS file existed, while
+# the ledger there recorded 3 fixtures named and 0 executed -- an overclaim inside the document about
+# not overclaiming. The obvious fix, asserting the corrected sentence, would have gone stale the moment
+# the A/B ran, which is exactly what happened. So this reads the numbers OUT of ab-run and requires the
+# playbook to carry the same ones: the two cannot drift in either direction, and a fixture added later
+# changes both together instead of turning this red.
+#
+# The precision delta is asserted SPECIFICALLY because it is the number that argues AGAINST the
+# technique. A future edit that tidied away the inconvenient row would leave the playbook reading better
+# than the measurement supports, and nothing else in this suite would notice.
+@test "t01: the playbook carries the harness's own numbers, including the one against it" {
+  local m old new red
+  m="$BATS_TEST_TMPDIR/ab.json"
+  ( cd "$ARC_ROOT" && node .claude/scripts/absorb/ab-run.mjs \
+      --fixtures tests/fixtures/absorb/finding-verification --json ) > "$m"
+  [ -s "$m" ] || { echo "the harness produced nothing"; false; }
+
+  old="$(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String(j.metrics.composition.old_main_precision_pct))' "$m")"
+  new="$(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String(j.metrics.composition.new_main_precision_pct))' "$m")"
+  red="$(node -e 'const j=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"));process.stdout.write(String(j.metrics.reduction))' "$m")"
+  [ -n "$old" ] && [ -n "$new" ] && [ -n "$red" ]
+
+  # the benefit, as the harness computes it
+  grep -qF "removed 3 of 3" "$PB"
+  [ "$red" -eq 3 ]
+  # ...and the cost, in the harness's own figures
+  grep -qF "${old}% " "$PB"
+  grep -qF "${new}%" "$PB"
+  # ...and the sentence that stops the first row being read alone
+  grep -qiE "does not make a report truer" "$PB"
+
+  [ -f "$ARC_ROOT/initiatives/absorb/evidence/planoff/PHASE04-T01/RESULTS.md" ]
   [ -f "$ARC_ROOT/initiatives/absorb/evidence/planoff/LEDGER.md" ]
 }
 
