@@ -245,7 +245,7 @@ The verifier's resolver is an injected parameter, and that is load-bearing rathe
 unprovable in both places at once. Measured, not assumed — this box answers every DNS query with
 `ECONNREFUSED`, so the first version returned `unverifiable` for `gmail.com`.
 
-**2026-08-10/11 — the rehearsal journey RAN, end to end, and stops at the L1 approval.**
+**2026-08-10/11 — the rehearsal journey RAN, end to end, and stops at the CLOCK.**
 Campaign `rehearsal-03` on the canonical spine, real store, `ARC_LEADS_FAKE` unset:
 
 | Step | Result |
@@ -254,7 +254,27 @@ Campaign `rehearsal-03` on the canonical spine, real store, `ARC_LEADS_FAKE` uns
 | draft | **5 queued, 0 FAIL** — 3 PASS, 2 WARN (73% body similarity; entries 1/4 and 2/5 are near-identical descriptions, so the warning is true) |
 | review | renders the body beside its evidence, `lint: PASS`, sha matches |
 | inbox | **5 approvals, 5 distinct `lead_hmac`** — no lead carries two |
-| send | **NOT DONE.** The L1 decision is the owner's (ADR-0407) and `ARC_LEADS_OUTREACH_FROM` is unset |
+| approvals | **5 recorded** by the owner, reason "Leads slice 6" — inbox clear |
+| send | **0 sent, 5 refused `[send-window]`** — 00:54 IST is outside 09:30–18:00 weekdays (ADR-0403). Not a fault: there is no CLI or env override, by design |
+
+
+**Everything except the clock is done.** `ARC_LEADS_OUTREACH_FROM` is set and its domain matches
+the rehearsal domain; the five approvals are decided; the drafts are pinned by `draft_sha`.
+Deliverability was checked against the world rather than against preflight's output, because
+this environment refuses port 53 and every DNS row in preflight is therefore a network artifact
+rather than an answer: over DoH, `automemory.ai` publishes SPF (`include:zoho.in ~all`) and
+DMARC (`p=quarantine`), and a DKIM key is present at `resend._domainkey`. Resend itself reports
+SPF and DKIM **authenticated** once `ARC_LEADS_OUTREACH_FROM` binds the domain. DKIM alignment
+is what carries DMARC here, which matches Phase 04's evidence of 9 delivered with `dkim=pass`.
+
+**One command remains, inside the window:**
+`ARC_LEADS_REHEARSAL=1 node .claude/scripts/leads/arc-leads.mjs daily rehearsal-03`, run from the
+main clone — the worktree guard refuses the spine from anywhere else.
+
+**A twin fix is owed and is written down rather than left implied.** The DoH fallback was added
+to `resolveMx` and NOT to `resolveTxt`, so preflight's `spf`/`dmarc`/`dkim` rows still answer a
+question about the network while appearing to answer one about the world — the same D6 shape the
+`resolveMx` fix was for, left in the adjacent branch by the person who had just fixed it.
 
 **Three runs are on the spine and all three are true records**, which is what an append-only
 spine is for. `rehearsal` held all five: this environment refuses port 53, so every MX lookup

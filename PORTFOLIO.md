@@ -9,7 +9,7 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-10
+Updated: 2026-08-11
 
 ## Active initiatives
 
