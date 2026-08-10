@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { initStore, openStore, leadId, leadIdsAllVersions, fingerprint, StoreError, storePath, STORE_FILE_MODE, STORE_DIR_MODE } from "./lib/store.mjs";
-import { lintCandidates } from "./lib/research-lint.mjs";
+import { lintCandidates, normKey } from "./lib/research-lint.mjs";
 import { source, verifier, ProviderError, PROVIDER_EXIT } from "./lib/deps.mjs";
 import { preflight, PREFLIGHT_REFUSED, loadConfig, seedSmokeFinding } from "./lib/preflight.mjs";
 import { ingestReply, readReplyFile, readStdin, IngestRefusal } from "./lib/ingest.mjs";
@@ -26,12 +26,12 @@ import { inbound } from "./lib/deps.mjs";
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
 import { readAllEvents, dayFileCount, quarantineCount, idemKeys } from "./lib/spine-read.mjs";
-import { initCampaign, assertCampaignStore, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
+import { initCampaign, assertCampaignStore, CAMPAIGN_NAME_RE, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
 import { reconcile, unresolvedIntents } from "./lib/journal.mjs";
 import { provider, usingFakes } from "./lib/deps.mjs";
-import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames, resolveKeyringIds, normalizeTouchN } from "./lib/guard.mjs";
+import { GuardRefusal, acquireLock, lockHolder, clearStaleLock, sendCounts, foldSends, campaignNames, canonicalLeadId, normalizeTouchN } from "./lib/guard.mjs";
 import { loadEnvLocal, EnvError, ENV_LOCAL } from "./lib/env.mjs";
 import { sendNotification, MailRefusal, MAIL_EXIT, assertEnvLocalNames, loadAllowlist } from "./lib/mail.mjs";
 
@@ -51,7 +51,7 @@ const die = (code, msg) => { console.error(`arc-leads: ${msg}`); process.exit(co
 // The grammar is not cosmetic: `|` is the idem delimiter, so a campaign name that could contain
 // one could forge the boundary between fields in another lead's preimage.
 function assertCampaignName(campaign, where) {
-  if (!/^[a-z0-9-]{1,64}$/.test(String(campaign ?? "")))
+  if (!CAMPAIGN_NAME_RE.test(String(campaign ?? "")))
     die(2, `${where} must match [a-z0-9-]{1,64} (got ${JSON.stringify(campaign)}) — "|" is the idem delimiter, and an uppercase variant is a different campaign to the spine and the same directory to the filesystem`);
   return String(campaign);
 }
@@ -144,7 +144,12 @@ async function cmdResearch(icpPath) {
   // Verify every address BEFORE linting, so `held` is decided by the verifier rather than by
   // whichever branch happened to run first.
   const verdicts = new Map();
-  for (const c of candidates) verdicts.set(String(c.email).toLowerCase(), await verifier().verify(c.email));
+  // KEYED WITH THE FUNCTION THAT READS IT. `lintCandidates` looks these up through
+  // `normKey` (NFC + trim + lowercase); this built them with a bare `toLowerCase()`, so any
+  // address carrying padding or a non-NFC character missed the lookup and came back
+  // `undefined` — which `lintCandidates` reads as HELD. A verified lead reported as held is
+  // indistinguishable from a real hold, and it silently drops a person out of the five.
+  for (const c of candidates) verdicts.set(normKey(c.email), await verifier().verify(c.email));
 
   const { accepted, rejected, corpusWarning } = lintCandidates(candidates, verdicts);
   if (corpusWarning) console.error(`arc-leads: WARNING — ${corpusWarning}`);
@@ -301,11 +306,20 @@ async function cmdResearch(icpPath) {
   // wrote ONE dossier file and reported `dossiers: 2`, and counted that person twice toward the
   // "25 leads" gate REQ-05 measures. The receipts line was already honest, which is why the lie
   // survived: the two lines disagreed and only one of them was read.
+  // A PARTITION, so the four numbers sum to the people they describe. They used to overlap:
+  // a lead that was both `held` and `below_bar` was counted twice, and a VERIFIED below-bar
+  // lead appeared only under BELOW-BAR — so an operator reading "3 PASS · 1 HELD · 1 BELOW-BAR"
+  // could not tell whether that was five people or four. Each person lands in exactly one bucket,
+  // held first because an address the verifier could not confirm can never be sent to at all.
   const people = [...distinctLeads.values()];
-  const pass = people.filter((a) => !a.below_bar && a.email_status === "verified").length;
   const held = people.filter((a) => a.email_status === "held").length;
-  const below = people.filter((a) => a.below_bar).length;
-  console.log(`arc-leads research: ${pass} PASS · ${held} HELD · ${below} BELOW-BAR · ${rejected.length} REJECTED`);
+  const below = people.filter((a) => a.email_status !== "held" && a.below_bar).length;
+  const pass = people.filter((a) => a.email_status === "verified" && !a.below_bar).length;
+  const other = people.length - held - below - pass;
+  // `other` is printed only when it is non-zero, and it exists because a partition that silently
+  // drops a bucket is the same lie as an overlapping one: an accepted lead whose email_status is
+  // neither `verified` nor `held` belongs to nobody, and would simply vanish from this line.
+  console.log(`arc-leads research: ${pass} PASS · ${held} HELD · ${below} BELOW-BAR${other ? ` · ${other} UNCLASSIFIED` : ""} · ${rejected.length} REJECTED`);
   console.log(`  dossiers: ${people.length} in ${dossierDir}`);
   if (people.length !== accepted.length)
     console.log(`  NOTE: ${accepted.length} accepted row(s) collapsed to ${people.length} distinct lead(s) — a duplicated row is still one person, and every count above is over people`);
@@ -320,8 +334,15 @@ async function cmdResearch(icpPath) {
   // the one line written to answer it. Each of these is a different thing being wrong, so each
   // is named separately and none of them is a number beside the healthy ones.
   const anomalies = [];
-  for (const { id, diff } of changedUnderOneIdem)
-    anomalies.push(`lead ${id}: a receipt with this exact idem is already on the spine but its payload differs (${diff.join(", ")}) — the idem preimage does not cover ${diff.join("/")}, so the spine still asserts the OLD value. Nothing was emitted; this needs a correction receipt, not a re-run`);
+  // TWO REMEDIES, BECAUSE THEY ARE TWO DIFFERENT PROBLEMS — and the flag that distinguishes
+  // them was added to the push above, asserted in a test, and never read here. The result was a
+  // red suite and, worse, an operator sent to write a spine correction receipt for a defect
+  // that lives in the file on their disk. A half-shipped fix is the class this lane keeps
+  // paying for; this is it in three lines.
+  for (const { id, diff, sameRun } of changedUnderOneIdem)
+    anomalies.push(sameRun
+      ? `lead ${id}: this corpus holds TWO rows for one person that disagree on ${diff.join(", ")} — the idem preimage does not cover ${diff.join("/")}, so they collide, and the dossier on disk has already been overwritten by whichever row came last. Nothing was emitted for the second one. Dedupe the corpus and run again; the spine is fine`
+      : `lead ${id}: a receipt with this exact idem is already on the spine from an earlier run but its payload differs (${diff.join(", ")}) — the idem preimage does not cover ${diff.join("/")}, so the spine still asserts the OLD value. Nothing was emitted; this needs a correction receipt, not a re-run`);
   for (const id of orphanedIdem)
     anomalies.push(`lead ${id}: its idem is in derived/idem.index but in no day file — the emitter will refuse it and quarantine every attempt. The index is derived state; rebuild it with arc-replay rather than retrying this command`);
   for (const id of racedDuplicate)
@@ -462,6 +483,21 @@ function cmdDraft(campaign, file) {
   const priorEvents = readAllEvents({ allowMissing: true });
   const priorDrafts = listDrafts(store, campaign);
 
+  // CAN THIS FOLD SEE THE WHOLE SPINE? The resume path below turns "I found no approval for
+  // this draft" into "emit one", and that inference is only valid if the absence is real.
+  // `approvalState` reads day files; `cmdResearch` reads day files AND `derived/idem.index`
+  // precisely because a restored or archived day leaves the index holding keys the fold can no
+  // longer see. On such a spine every already-announced draft looks unannounced, and the resume
+  // re-emits — and an `approval.requested` idem is millisecond-salted, so the emitter cannot
+  // deduplicate it. Two live approvals for one touch, from the branch added to prevent exactly
+  // that. Same D5 as `cmdResearch`, in the sibling command, one round later.
+  //
+  // The resume is the only inference that depends on completeness, so only the resume is
+  // withheld. A first-time draft on a spine with archived days is still ordinary work.
+  const foldedIdems = new Set(priorEvents.map((e) => e && e.idem).filter(Boolean));
+  let unfoldable = 0;
+  for (const k of idemKeys()) if (!foldedIdems.has(k)) unfoldable++;
+
   // AND THE MIRROR CASE: A LIVE APPROVAL WHOSE DRAFT FILE IS GONE.
   //
   // The paragraph above says a draft on disk is half a record — and then the first version of
@@ -553,6 +589,12 @@ function cmdDraft(campaign, file) {
     }
 
     const orphan = unannounced.get(key);
+    if (orphan && unfoldable > 0) {
+      // "No approval found" is not "no approval exists" on a spine this fold cannot fully read.
+      stale++;
+      console.log(`  UNSURE ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} has a draft with no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Nothing was emitted. Rebuild with arc-replay, or restore the archived day, then run this again.`);
+      return;
+    }
     if (orphan) {
       // Announce the draft that EXISTS rather than minting a second one. But only if it still
       // says what this input says: re-emitting an approval for a body the operator has since
@@ -654,13 +696,10 @@ function approvalState(events, draftRef) {
 }
 
 function touchKey(store, leadId, touchN) {
-  const ids = resolveKeyringIds(store, leadId);
-  // Sorted and first, NOT `ids[0]`: the canonical member must not depend on the order the
-  // keyring happens to hand them back, or one rotation reorders the list and every existing key
-  // silently stops matching. `null` means the lead could not be resolved at all — the single id
-  // is the honest fallback there, and the send-moment guard refuses that case separately.
-  const canonical = ids && ids.length ? [...ids].sort()[0] : leadId;
-  return `${canonical}|${normalizeTouchN(touchN)}`;
+  // `canonicalLeadId` is shared with the meeting-draft ref rather than repeated here: two
+  // functions choosing "the canonical member of a keyring" independently is one fact derived
+  // two ways, and this lane has paid for that shape more than any other.
+  return `${canonicalLeadId(store, leadId)}|${normalizeTouchN(touchN)}`;
 }
 
 // The local render. The spine carries an opaque ref; the human reads the body HERE, beside the
@@ -860,6 +899,20 @@ async function cmdIngestReply(argv) {
     if (!inputs.length) { console.log("arc-leads ingest-reply: the inbound source returned nothing"); return; }
   }
 
+  // THE FIFTH READ-THEN-EMIT SECTION, AND THE LAST ONE STILL UNLOCKED. `research`, `draft`,
+  // `reconcile`, `runDaily` and `deliverNotification` all take this lock; `ingest-reply` reads
+  // the spine, decides what is already there, and emits — the same window, guarding the same
+  // invariants — and took nothing. Two runs on one reply (the `--inbound` hook firing while the
+  // operator runs `--file`, or two manual runs) both saw an empty `announced` set and both
+  // emitted, putting TWO undecided `leads-meeting` approvals in the inbox for one meeting. The
+  // emitter cannot deduplicate them: `arc-event` salts a non-leads idem with the millisecond.
+  //
+  // A reply arriving while `daily` holds the lock now refuses loudly and is re-ingestible,
+  // which is strictly better than the alternative — the receipt that gets lost to a race here
+  // is the one that stops contacting somebody who asked not to be contacted.
+  const release = acquireLock(store);
+  const dieUnlocked = (code, msg) => { try { release(); } catch { /* already released */ } die(code, msg); };
+  try {
   let ok = 0, refused = 0;
   const raced = [];
   for (const inp of inputs) {
@@ -868,6 +921,10 @@ async function cmdIngestReply(argv) {
       // the next one derives, and a snapshot taken before the loop would not know it.
       const r = await ingestReply({
         store, bytes: inp.bytes, events: readAllEvents({ allowMissing: true }),
+        // The index keys are read HERE, by the layer that owns the spine root, and handed in.
+        // `ingestReply` reaching for them itself made a module test depend on whatever
+        // ARC_SPINE_ROOT pointed at, which for a suite with no setup() is this repo.
+        spineIdems: idemKeys(),
         now, emit: emitFn, config: cfg, sourceLabel: inp.label,
       });
       ok++;
@@ -880,7 +937,10 @@ async function cmdIngestReply(argv) {
       const extra = [
         r.fresh ? null : "already ingested",
         r.receipt_raced ? "RACED — the emitter quarantined a duplicate; clear it before `report`" : null,
-        r.receipt_duplicate ? "receipt already on the spine" : null,
+        r.receipt_duplicate ? "reply receipt already on the spine" : null,
+        // Named separately from the reply receipt: printing one line for two different receipts
+        // meant a re-ingested unsubscribe and a first-time suppression read identically.
+        r.suppressed_duplicate ? "suppression already on the spine" : null,
         r.suppressed ? "SUPPRESSED" : null,
         r.meeting_ref ? (r.meeting_created ? `meeting draft ${r.meeting_ref}` : `meeting draft ${r.meeting_ref} (already drafted)`) : null,
         r.matched === "default" ? "UNCLASSIFIED -> later, review manually" : null,
@@ -900,7 +960,12 @@ async function cmdIngestReply(argv) {
   console.log(`arc-leads ingest-reply: ${ok} ingested, ${refused} refused${raced.length ? `, ${raced.length} raced` : ""}`);
   if (raced.length)
     console.error(`arc-leads: ${raced.length} receipt(s) lost a race to another writer (${raced.join(", ")}) — the receipts ARE on the spine, but each refusal left a quarantine record and \`report\` refuses while any record exists. Clear the quarantine before asking for the mixing report.`);
-  if (refused || raced.length) process.exit(3);
+  // `dieUnlocked`, not `process.exit`: exiting here skips the `finally` and leaves `.send.lock`
+  // naming a pid that has gone, which the operator is told is never auto-broken.
+  if (refused || raced.length) dieUnlocked(3, `${refused} refused, ${raced.length} raced — see the lines above`);
+  } finally {
+    release();
+  }
 }
 
 function cmdUnlock() {
@@ -924,11 +989,18 @@ async function cmdPreflight() {
   // rows were expected and to read them and continue, which pre-authorises ignoring a third one
   // that is a genuine refusal in every other circumstance. D5/D6.
   //
-  // It does NOT die on a poisoned file: preflight's job is to report what is wrong, so a
-  // refusal from the credential guard becomes a finding rather than an exit, and `daily` still
-  // refuses to run at all.
+  // AND IT DIES ON A POISONED FILE, exactly as `daily` does. The first version caught the
+  // refusal and carried on, reasoning that preflight's job is to report rather than to exit —
+  // which is wrong here for a mechanical reason: `loadEnvLocal` APPLIES the file's values into
+  // the environment BEFORE `assertEnvLocalNames` inspects the names, and `usingFakes()`,
+  // `dns()` and `provider()` are all resolved lazily afterwards. So "refuse and continue" ran
+  // the live-DNS gate on whatever fakes the credential file had just installed, and with a
+  // fixture directory plus a `LEADS_CONFIG` seed path `arc-leads preflight: PASS` was reachable
+  // from a file alone — REQ-00 and REQ-07 both bypassed, the operator seeing one stderr line
+  // they would read as a warning. A guard that hard-fails at one door and is downgraded to a
+  // note at the adjacent one is not a guard.
   try { loadCredentials(); }
-  catch (e) { console.error(`arc-leads preflight: ${ENV_LOCAL} refused — ${e.message}`); }
+  catch (e) { die(e instanceof EnvError ? 5 : (MAIL_EXIT[e.kind] ?? 3), e.kind ? `[${e.kind}] ${e.message}` : e.message); }
   const res = await preflight({ warmupApproved: process.env.LEADS_WARMUP_APPROVED === "1" });
   // REQ-07 is a SEPARATE requirement with its own gate, composed here rather than folded into
   // preflight() — a gate that fails for reasons outside the question it asks has two jobs.

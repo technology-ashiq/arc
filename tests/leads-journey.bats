@@ -135,7 +135,7 @@ _cli() { node "$ARC_ROOT/.claude/scripts/leads/arc-leads.mjs" "$@"; }
 # Records a `reject` decision against EVERY `approval.requested` on the spine, through the real
 # emitter, so the events the CLI folds are the events the emitter actually writes rather than a
 # hand-built shape a fold might disagree with.
-_reject_all_approvals() {
+_decide_all_approvals() {
   cat > "$BATS_TEST_TMPDIR/reject.mjs" <<'MJS'
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -154,17 +154,18 @@ for (const f of readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test
 const sh = join(process.argv[2], ".claude/scripts/hq/arc-event.sh");
 for (const id of ids) {
   const pf = join(process.env.BATS_TEST_TMPDIR, "decision-" + id + ".json");
-  writeFileSync(pf, JSON.stringify({ decides: id, verdict: "reject", reason: "not this one" }));
+  writeFileSync(pf, JSON.stringify({ decides: id, verdict: process.argv[3] || "reject", reason: "a decision was taken" }));
   execFileSync("bash", [sh, "emit", "decision.recorded", "--payload-file", pf, "--actor", "test", "--strict"], { encoding: "utf8" });
 }
-console.log("rejected: " + ids.length);
+console.log("decided: " + ids.length);
 MJS
   [ -s "$BATS_TEST_TMPDIR/reject.mjs" ] || { echo "reject helper is EMPTY"; false; }
-  run node "$BATS_TEST_TMPDIR/reject.mjs" "$ARC_ROOT"
+  run node "$BATS_TEST_TMPDIR/reject.mjs" "$ARC_ROOT" "${1:-reject}"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  # SELF-ASSERTING FIXTURE. "rejected: 0" would make every assertion downstream trivially true.
-  [[ "$output" == *"rejected: 2"* ]] || { echo "expected to reject 2 approvals, got: $output"; false; }
+  # SELF-ASSERTING FIXTURE. "decided: 0" would make every assertion downstream trivially true.
+  [[ "$output" == *"decided: ${2:-2}"* ]] || { echo "expected to decide ${2:-2} approvals, got: $output"; false; }
 }
+_reject_all_approvals() { _decide_all_approvals reject "$@"; }
 
 # Puts the store into the state an INTERRUPTED `draft` leaves behind: the draft files exist and
 # no approval receipt was ever written. Both halves are removed -- the day-file lines AND the
@@ -225,7 +226,14 @@ _drafts_count() {
   n=$(ls "$ARC_LEADS_STORE/drafts" 2>/dev/null | grep -c '\.json$') || true
   echo "${n:-0}"
 }
+# ASSERTS ITS OWN PATH BEFORE IT REPORTS A ZERO. Every use of this helper compares it to 0, and
+# `cat` on a wrong path fails to /dev/null while `grep -c` prints 0 and `|| true` eats the
+# status — so a typo in the directory name made three tests pass by reading nothing. That is an
+# absence wearing a count, which is the thing this file's header refuses. The events directory
+# must exist (it does the moment anything takes the write lock); the quarantine directory
+# legitimately may not, and only THAT absence is allowed to mean zero.
 _quarantine_count() {
+  [ -d "$ARC_SPINE_ROOT/events" ] || { echo "SPINE-ROOT-WRONG: $ARC_SPINE_ROOT/events does not exist, so a quarantine count of 0 would mean nothing" >&2; return 1; }
   local n
   n=$(cat "$ARC_SPINE_ROOT/events/_quarantine/"*.jsonl 2>/dev/null | grep -c .) || true
   echo "${n:-0}"
@@ -553,8 +561,15 @@ JSON
   [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; false; }
   [[ "$output" == *"ANOMALY"* ]] || { echo "$output"; false; }
   [[ "$output" == *"provenance"* ]] || { echo "the anomaly did not name the differing field: $output"; false; }
-  # The corpus is the thing to fix, not the spine: the collision is with a row THIS run emitted.
-  [[ "$output" == *"dedupe"* ]] || { echo "the anomaly sent the operator to the wrong remedy: $output"; false; }
+  # THE REMEDY IT NAMES IS THE PAIR OF ASSERTIONS, not one substring. The collision here is with
+  # a row THIS run emitted, so the spine was never wrong and the file on disk is: the anomaly
+  # must point at the corpus and must NOT send the operator to write a correction receipt, which
+  # is the other branch and the wrong action. Asserted as a pair because either alone is weak --
+  # the positive is satisfied by any message mentioning the corpus, and the negative alone is
+  # satisfied by a crash. (The first version of this test asserted a lowercase substring that the
+  # message never contained in any branch, and the branch it was written for did not exist.)
+  [[ "$output" == *"corpus"* ]] || { echo "the anomaly did not point at the corpus: $output"; false; }
+  [[ "$output" != *"correction receipt"* ]] || { echo "the anomaly sent the operator to fix the spine for a defect in their input file: $output"; false; }
   # And the counts are over PEOPLE. Two rows, one person, one dossier.
   [[ "$output" == *"dossiers: 1 "* ]] || { echo "the dossier count is over rows, not people: $output"; false; }
 }
@@ -634,13 +649,63 @@ JSON
   [ "$checked" -eq 2 ] || { echo "checked $checked draft(s), expected 2"; false; }
 }
 
-@test "this file registers the 19 tests it declares" {
+@test "a live approval naming a draft this store does not hold refuses the run" {
+  # The mirror of the resume case, and it had no test at all: an approval on the spine whose
+  # draft file is gone was invisible to a seed built from the disk half, so the same input
+  # queued a SECOND live approval for that touch. Deleting the refusal, or flipping its
+  # `=== "live"` filter, was free.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local gone
+  gone=$(ls "$ARC_LEADS_STORE/drafts" | head -1)
+  [ -n "$gone" ] || { echo "no draft to remove"; false; }
+  rm "$ARC_LEADS_STORE/drafts/$gone"
+  [ "$(_drafts_count)" -eq 1 ] || { echo "the fixture did not remove exactly one draft"; false; }
+
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status: $output"; false; }
+  [[ "$output" == *"${gone%.json}"* ]] || { echo "the refusal did not name the missing draft: $output"; false; }
+  # And it refused BEFORE queueing anything: the spine must not have grown.
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s) -- the run queued despite refusing"; false; }
+}
+
+@test "an APPROVED touch is still one approval, and a later rejection reopens it" {
+  # `approvalState` was exercised only with rejections, so two mutants survived 19/19: reading
+  # any decision as "rejected" (which lets a revision queue a second approval for a touch the
+  # human has already approved), and taking decisions[0] instead of the last (which makes a
+  # late rejection unrevisable forever). Both halves are asserted here.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _decide_all_approvals approve
+
+  # APPROVED is live. A changed body must NOT mint a second approval for that touch.
+  _mkdrafts rebody
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 duplicate touch(es) refused"* ]] || { echo "a revision queued over a live APPROVED approval: $output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "$(_spine_count approval.requested) approval(s), expected 2"; false; }
+
+  # LATEST decision wins: reject after approve retires it, and the revision is then allowed.
+  _decide_all_approvals reject
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"2 queued for approval"* ]] || { echo "a rejection after an approval did not reopen the touch: $output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 4 ] || { echo "$(_spine_count approval.requested) approval(s), expected 4"; false; }
+}
+
+@test "this file registers the 21 tests it declares" {
   # THE GRAMMAR IS THE ONE CI USES, not a narrower spelling of it. `grep -c "^@test "` misses a
   # tab-indented declaration and misses `@test` followed by anything but a single space, so a
   # test could be dropped by bats AND uncounted here -- the count that exists to catch a silent
   # drop, blind to two of the three forms it has to see. This is the `_declared` regex in ci.yml.
   declared=$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 19 ] || { echo "declared $declared, expected 19"; false; }
+  [ "$declared" -eq 21 ] || { echo "declared $declared, expected 21"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }

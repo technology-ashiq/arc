@@ -76,6 +76,22 @@ export const MAIL_EXIT = Object.freeze({
 // It lives here, next to the rules it protects, rather than in the CLI, so it can be tested
 // without writing a `.env.local` into a real repository root.
 export const ENV_LOCAL_FORBIDDEN = Object.freeze([
+  // THE OUTREACH TWINS, added 2026-08-10. The list named the NOTIFICATION vendor host and not
+  // the OUTREACH one — and the outreach request carries the Bearer key, the recipient address
+  // AND the mail body, so the omitted twin is the one that leaks more. Twin-fix recurrence,
+  // fourth occurrence in this lane: the guard was written for one door and the sibling door
+  // one module over was never added.
+  //
+  // `LEADS_CONFIG` replaces the config file wholesale, which repoints `sending_domain`,
+  // `rehearsal_domain`, `product_domains` and every cap. `LEADS_WARMUP_APPROVED` makes preflight
+  // print `PASS warmup: ATTESTED` for a clause no human approved. `ARC_LEADS_REHEARSAL` decides
+  // whether a send binds the PRODUCT domain under ADR-0416 — and both the runbook and
+  // `rehearsal-check.mjs` state in writing that it is deliberately not a file setting, which
+  // nothing enforced. A rule that two documents assert and no code checks is not a rule.
+  "LEADS_PROVIDER_BASE_URL",
+  "LEADS_CONFIG",
+  "LEADS_WARMUP_APPROVED",
+  "ARC_LEADS_REHEARSAL",
   "ARC_LEADS_FAKE",
   "ARC_LEADS_NOW",
   "ARC_LEADS_STORE",

@@ -29,6 +29,7 @@ import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } fro
 import { writeMeetingDraft, meetingApprovalPayload, assertCampaignStore } from "./drafts.mjs";
 import { leadsIdem, LEADS_KINDS } from "../../hq/lib/validate-leads.mjs";
 import { idemKeys } from "./spine-read.mjs";
+import { canonicalLeadId } from "./guard.mjs";
 
 export class IngestRefusal extends Error {
   constructor(step, message) { super(message); this.name = "IngestRefusal"; this.step = step; }
@@ -169,7 +170,7 @@ export function meetingBody({ calendarUrl }) {
 // No `repoRoot` parameter: the path rule belongs to readReplyFile, which is the only function
 // that ever sees a path. By the time bytes reach here there is nothing left to contain, and a
 // parameter that is accepted and ignored reads to the next caller as a check being performed.
-export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)" }) {
+export async function ingestReply({ store, bytes, events, now, emit, config, sourceLabel = "(stdin)", spineIdems = [] }) {
   let parsed;
   try {
     parsed = parseReply(bytes);
@@ -229,7 +230,17 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   //   - the set was a snapshot, so two payloads with one idem inside a single call both passed
   //     the check and the second was refused (D6).
   const onSpine = new Set(events.map((e) => e && e.idem).filter(Boolean));
-  for (const key of idemKeys()) onSpine.add(key);
+  // THE INDEX KEYS ARE INJECTED, NOT READ FROM AMBIENT STATE. The first version called
+  // `idemKeys()`, which resolves `spineRoot()` out of the environment — so this function, whose
+  // own header promises that a test can assert its receipts without a spine, silently began
+  // reading whatever `ARC_SPINE_ROOT` happened to point at. In `leads-reply-contract.bats`,
+  // which has no `setup()` and passes `events: []`, that is this repository's own untracked
+  // index: a suite that passes or fails on a file git does not track, which is the
+  // shard-order-ambient-state failure the lane has already recorded once.
+  //
+  // The CLI passes the real set. A caller that passes nothing gets the events fold alone, which
+  // is exactly what a module test wants and what this function did before.
+  for (const key of spineIdems) onSpine.add(key);
   // LEADS KINDS ONLY, refused loudly rather than by an obscure throw from three frames down.
   // This wrapper is built entirely on `leadsIdem`, which is defined for the leads vocabulary and
   // for nothing else — a caller who hands it `approval.requested` gets UNKNOWN_KIND out of a
@@ -302,13 +313,23 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
   // end contact with that address — the reasons differ so the two receipts have distinct idems
   // (ADR-0400) and a lead who bounces and later unsubscribes is not deduplicated into one.
   if (parsed.triage_class === "unsubscribe" || parsed.triage_class === "bounce") {
-    await emitOnce("lead.suppressed", {
+    // THE RACE FLAG IS CARRIED HERE TOO. The reply receipt twenty lines up threads `raced` all
+    // the way to a non-zero exit, and this branch dropped it — so a suppression that lost a race
+    // left a quarantine record (which makes `report` refuse permanently) behind a run that
+    // printed "1 ingested, 0 refused" at exit 0. The guard applied to one emit and omitted on
+    // the adjacent one, in the same function, for the fifth time in this lane.
+    //
+    // It matters more here than there: the receipt that gets lost is the one that stops
+    // contacting somebody who asked not to be contacted.
+    const suppressEmit = await emitOnce("lead.suppressed", {
       lead_id: who.lead_id,
       campaign: who.campaign,
       reason: parsed.triage_class === "unsubscribe" ? "unsubscribe" : "bounce",
       suppressed_at: now,
     });
     out.suppressed = true;
+    out.suppressed_duplicate = suppressEmit.duplicate;
+    if (suppressEmit.raced) out.receipt_raced = true;
   }
 
   // The calendar draft, in the same run as the ingestion that classified it.
@@ -323,6 +344,11 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     const { created, rec } = writeMeetingDraft(store, {
       campaign: who.campaign,
       lead_id: who.lead_id,
+      // The REF is keyed on the canonical member of this person's keyring, so a key rotation
+      // does not mint a second meeting draft and a second live approval for one human. The
+      // record still stores the id the reply resolved to. Same function `cmdDraft` keys its
+      // touch on -- one definition of "the canonical id", not two.
+      ref_id: canonicalLeadId(store, who.lead_id),
       reply_ref: parsed.reply_ref,
       // Keyed on the LEAD, not the reply -- see writeMeetingDraft.
       body: meetingBody({ calendarUrl }),

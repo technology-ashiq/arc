@@ -798,10 +798,17 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     assertEnvLocalNames(["RESEND_API_KEY", "ARC_LEADS_MAIL_FROM", "ARC_LEADS_MAIL_ALLOWLIST"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:5/5"* ]]
+  [[ "$output" == *"REFUSED:9/9"* ]]
   [[ "$output" == *"ARC_LEADS_FAKE"* ]]
   [[ "$output" == *"ARC_LEADS_NOW"* ]]
   [[ "$output" == *"ARC_LEADS_MAIL_BASE_URL"* ]]
+  # The OUTREACH twins, named individually. `N/N` alone is satisfied by any list of any length,
+  # including one with the vendor host that carries the recipient and the body removed from it --
+  # which is precisely the omission this test failed to notice for two rounds.
+  [[ "$output" == *"LEADS_PROVIDER_BASE_URL"* ]]
+  [[ "$output" == *"LEADS_CONFIG"* ]]
+  [[ "$output" == *"LEADS_WARMUP_APPROVED"* ]]
+  [[ "$output" == *"ARC_LEADS_REHEARSAL"* ]]
   [[ "$output" == *"CREDENTIALS-ACCEPTED"* ]]
 }
 

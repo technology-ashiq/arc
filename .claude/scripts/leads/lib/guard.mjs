@@ -60,6 +60,24 @@ export function resolveKeyringIds(store, leadId) {
   } catch { return null; }
 }
 
+// THE ONE CANONICAL ID FOR A HUMAN, across every key version they have ever had.
+//
+// A `lead_id` is one version of a keyed HMAC, so anything that keys a per-person record on the
+// raw id gets a different key after a rotation — which is how one person ends up holding two
+// live approvals for one thing. `cmdDraft` resolves its touch key this way; `meetingRefFor`
+// hashed the raw id and did not, so a rotation minted a second meeting draft and a second
+// `leads-meeting` approval for a lead whose reply had already been handled.
+//
+// SORTED and first, never `ids[0]`: the canonical member must not depend on the order the
+// keyring hands them back, or a rotation reorders the list and every existing key silently
+// stops matching. (It reorders for real at v10, which sorts before v1.) `null` means the lead
+// could not be resolved at all, and the raw id is the honest fallback there — the send-moment
+// guard refuses that case separately.
+export function canonicalLeadId(store, leadId) {
+  const ids = resolveKeyringIds(store, leadId);
+  return ids && ids.length ? [...ids].sort()[0] : leadId;
+}
+
 // THE ONE PARSE OF `touch_n`, exported so there is exactly one.
 //
 // The send-moment guard below already compared touches as NUMBERS, for the reason its comment
@@ -371,7 +389,12 @@ export function campaignNames(events, kinds = ["outreach.sent"]) {
 
 // Sample-size-honest breakers (ADR-0403). At n=25 one bounce is 4%, so a bare percentage
 // floor freezes on noise — HOLD is the honest small-n response, FREEZE the evidenced one.
-export function breakerState(state, lifetimeSends) {
+// `lifetimeSends` IS GONE FROM THE SIGNATURE, not left unused. It fed only the rate branch
+// deleted below, and a parameter a function ignores is a promise it does not keep — the next
+// reader assumes a lifetime-scoped check happens here because the argument says so. Existing
+// callers passing a second argument are unaffected; the call site in `guardSend` no longer
+// computes one for this purpose.
+export function breakerState(state) {
   if (state.complaints > 0) return { level: "FROZEN", why: "a spam complaint was recorded against the leads sending domain" };
   if (state.bounces >= 2) // NOT "in this campaign". deriveState counts bounces across every leads campaign,
     // because the asset these breakers protect is the one sending domain -- so an operator
@@ -510,10 +533,9 @@ export function guardSend({ events, store, draft, now, config, env = process.env
       );
   }
   const state = deriveState(events, { campaign });
-  const lifetime = [...state.perDay.values()].reduce((a, b) => a + b, 0);
 
   // 1. campaign state
-  const breaker = breakerState(state, lifetime);
+  const breaker = breakerState(state);
   const incidentId = incidentIdFor(campaign, breaker, state);
   if (breaker.level !== "OK" && !clearedByInbox(events, campaign, breaker.level, incidentId))
     throw new GuardRefusal("campaign-state", `campaign "${campaign}" is ${breaker.level}: ${breaker.why}. Clear it with an approved leads-breaker request naming incident "${incidentId}" — no flag, config value, env var or free-text approval does (ADR-0403).`);

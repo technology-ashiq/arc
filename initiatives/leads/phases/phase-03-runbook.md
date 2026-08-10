@@ -122,16 +122,27 @@ What it will tell you, and what to do:
 |---|---|
 | `resolved from: .env.local` | good — the file is what the send will use |
 | `resolved from: the ENVIRONMENT (it overrode the file)` | **stop.** A value exported earlier in this shell is winning over the file you just edited. Open a new shell |
+| `resolved from: .env.local declares it EMPTY` | the line exists with nothing after the `=`; fill it in. This is not an override, and looking for one wastes an hour |
+| `resolved from: the ENVIRONMENT (the file does not declare it)` | **stop.** The addresses are only in your shell, which means they went through your history and a process listing (ADR-0412). Put them in `.env.local` and open a new shell |
 | `entries the send will use : 0` | every send will refuse — correctly, but with a message that sends you in a circle (see *Known refusals*, R3) |
-| `distinct people` lower than `entries` | two entries are the same person after normalisation; you have four recipients, not five |
-| `forbidden-name guard: REFUSED` | `.env.local` names a test door — remove that line before anything else |
+| `distinct people` lower than `entries you typed` | two entries are the same person after normalisation (a case twin, or an invisible character pasted in), or one is not address-shaped. You have four recipients, not five |
+| `forbidden-name guard: REFUSED` | `.env.local` names a variable that decides how a send behaves — remove that line before anything else |
 
-**Never set `ARC_LEADS_FAKE`, `ARC_LEADS_NOW`, `ARC_LEADS_STORE`, `ARC_LEADS_MAIL_BASE_URL` or
+**Never set `ARC_LEADS_FAKE`, `ARC_LEADS_NOW`, `ARC_LEADS_STORE`, `ARC_LEADS_REHEARSAL`,
+`ARC_LEADS_MAIL_BASE_URL`, `LEADS_PROVIDER_BASE_URL`, `LEADS_CONFIG`, `LEADS_WARMUP_APPROVED` or
 `LEADS_FIXTURE_DIR` in `.env.local`.** `mail.mjs` refuses that file outright if it *names* any of
-them — with or without a value. The reason is not a startup guard (there is only one of those,
-and it is for `ARC_LEADS_NOW`): it is that these five variables decide whether a send is real,
-which day the cap buckets to, where the store lives, which host receives the key, and where
-fixtures come from — and a credential file is not where those decisions belong.
+them — with or without a value, and whatever the case. The reason is not a startup guard (there
+is only one of those, and it is for `ARC_LEADS_NOW`): it is that these nine variables decide
+whether a send is real, whether it is a rehearsal binding the PRODUCT domain, which day the cap
+buckets to, where the store lives, which host receives the key **and the recipient and the
+body**, what the config says every cap is, whether the warm-up counts as attested, and where
+fixtures come from — and a credential file is not where any of those decisions belong.
+
+> The list held five names until 2026-08-10 and named the *notification* vendor host while
+> omitting the *outreach* one — the twin that carries the recipient address and the mail text as
+> well as the key. `LEADS_CONFIG`, `LEADS_WARMUP_APPROVED` and `ARC_LEADS_REHEARSAL` were missing
+> too; the last of those is why this document could claim the mode "is deliberately not a file
+> setting" while nothing stopped a file from setting it.
 A `.env.local` holding `ARC_LEADS_FAKE=1` would otherwise switch the whole run to the fake and
 report "mail sent" having sent nothing.
 
@@ -200,7 +211,12 @@ Every command is run from the repo root. `S` below is shorthand for
 node .claude/scripts/leads/arc-leads.mjs preflight
 ```
 
-Today this prints **exactly two** `REFUSED` rows and exits **3**:
+**What this prints depends on whether you have exported `ARC_LEADS_REHEARSAL=1` yet, and the
+difference is large.** `effectiveSendingDomain` substitutes the rehearsal domain when the mode is
+declared, so the whole gate changes subject — from the cold domain that does not exist to the
+rehearsal domain that does. Read the section that matches your shell.
+
+**Without the mode declared** (a bare shell) it prints **exactly two** `REFUSED` rows and exits **3**:
 
 ```
   REFUSED sending-domain: sending_domain is empty — no dedicated cold-outbound domain exists yet (ADR-0413) …
@@ -212,13 +228,36 @@ arc-leads preflight: REFUSED — no send may happen until every clause passes li
 dedicated **cold** domain, which is Phase 05's. The rehearsal path is gated separately by
 ADR-0416's three signals, checked inside the send itself. Read the rows, then continue.
 
-> **If you see a THIRD row — `REFUSED rehearsal-mode: … DECLARED but incomplete` — that is a
-> real refusal and this step is not passing.** It used to appear routinely for a reason that had
-> nothing to do with you: `preflight` did not read `.env.local` and `daily` did, so with the
-> allowlist in that file the two commands disagreed about whether rehearsal mode was locked, and
-> the gate reported `count: 0` about a send that would have resolved five. Both read the same
-> world now. So the "two rows are expected, read them and continue" instruction above applies to
-> exactly those two rows — it is not permission to skip a third.
+**With `ARC_LEADS_REHEARSAL=1` exported — which is the state you will actually be in from the
+allowlist step onward — it prints something completely different**, and this is the version that
+matters:
+
+```
+  ok       rehearsal-mode: … the domain under test is rehearsal_domain "automemory.ai" …
+  ok       dedicated-domain: automemory.ai IS a product domain, permitted ONLY because …
+  REFUSED  spf:           no v=spf1 TXT record resolves for automemory.ai (live lookup)
+  REFUSED  dmarc:         no v=DMARC1 TXT record resolves for _dmarc.automemory.ai (live lookup)
+  REFUSED  dkim:          no DKIM TXT at resend._domainkey.automemory.ai (live lookup)
+  REFUSED  provider-auth: …
+  REFUSED  seed-smoke:    …
+exit 3
+```
+
+**Five refusals, and `sending-domain` does not appear at all.** The two `ok` rows are the
+rehearsal mode resolving correctly — they are the good news, not a warning.
+
+> **These four are about the domain the rehearsal will actually send from, and they are live DNS
+> lookups, not config reads.** They are not the "Phase 05 cold domain" refusals the bare-shell
+> version shows, and "read them and continue" does **not** apply to them. `spf`, `dmarc` and
+> `dkim` refusing means the records are not resolving *right now* from this machine — if the
+> DMARC record was published and this says otherwise, you have a propagation or resolver problem
+> and the rehearsal will bounce. `provider-auth` and `seed-smoke` are the two rows Phase 03 is
+> allowed to carry open, and only those two.
+>
+> An earlier version of this document said "exactly two REFUSED rows, read them and continue"
+> for both cases. It was written against a `preflight` that did not read `.env.local` while
+> `daily` did — so the two commands disagreed about whether rehearsal mode was locked, and the
+> document was describing a gate that was answering a different question from the send.
 
 > Never pipe this into `head`/`grep`. `$?` after a pipe is the **last** stage's status, so a
 > refusal reads as exit 0. This bit us while writing this runbook.
