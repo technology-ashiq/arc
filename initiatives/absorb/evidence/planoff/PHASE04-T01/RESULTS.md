@@ -175,7 +175,32 @@ precisely to stop a measured result being re-narrated into the answer its author
 presentation is the real issue, that is a new candidate for a future cycle with its own study and its
 own A/B — not a re-run of this one, and not a footnote that quietly reverses a receipt.
 
+## ADOPTED 2026-08-10 — and the two receipts point different ways
+
+Proposal `01KZN50D1EP8H7PX51XY8XMHAA` (subject `absorb.adoption`, direction `retire`, my
+recommendation) · decision **`01KZN5H1E2RDHT9ZGQ4CSR85ZB`**, reason **`adopt; appendix irundhaalum ok`**
+— *adopt, the appendix is fine*. The owner overruled the recommendation. `products/absorb/
+registry.json` moves T-01 to `adopted` on that ref.
+
+**Both receipts stand and neither is edited.** The blind A/B pick chose the OLD-WAY report; the
+adoption decision chose to adopt the absorbed way. That is not a contradiction being smoothed over:
+
+- The section above recorded, **before the adoption existed**, that the pick looked like a judgement
+  about *presentation* rather than about the rule — 13 findings shown against 22, while nine move one
+  heading down rather than away — and then refused to let that inference overturn the pick.
+- The adoption is the owner **settling** that question with a second receipt. It is not the earlier
+  result being re-narrated, which is the move this lane exists to prevent and which would have been
+  available to me if I had waited to write the presentation observation until after the adoption
+  landed. It was written first, which is why it can be cited now.
+
+**What was adopted, stated at its real strength.** The claimed class is removed 3/3 across three
+fixtures. Main-report precision falls 2.1 points. Five of eight false findings are untouched because a
+byte-match cannot judge whether a quote supports its claim. Enforcement is a prompt-forwarding
+instruction, not a gate: the findings on `/arc-audit` are written by the `security-auditor` subagent
+whose definition is off the ADR-0602 allowlist, so `.claude/commands/arc-audit.md` telling the
+orchestrator to carry the requirement into the Task prompt is the whole mechanism. `adopted` is the
+registry's word for "the owner decided to use it", not for "it is enforced".
+
 ## Next
 
-The adopt-or-refuse proposal, carrying this results table, goes to the inbox. `products/absorb/
-registry.json` moves T-01 off `candidate` on **that** decision ref, or not at all.
+Nothing on this A/B. The evidence bundle, Phase 04's close and the cycle's close follow.
