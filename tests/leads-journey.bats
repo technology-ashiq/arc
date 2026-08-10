@@ -747,7 +747,10 @@ for (const f of readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test
   const keep = [];
   for (const line of readFileSync(p, "utf8").split("\n")) {
     if (!line.trim()) continue;
-    if (JSON.parse(line).kind === "approval.requested") { removed++; continue; }
+    // EXACTLY ONE, not all of them. Archiving two exercised the threshold only at 2, so a
+    // mutant reading `unfoldable > 1` passed the whole suite while leaving the single-archived-
+    // receipt case -- the ordinary one -- completely unguarded.
+    if (removed === 0 && JSON.parse(line).kind === "approval.requested") { removed++; continue; }
     keep.push(line);
   }
   writeFileSync(p, keep.length ? keep.join("\n") + "\n" : "");
@@ -778,8 +781,8 @@ MJS
   [ -s "$BATS_TEST_TMPDIR/archive.mjs" ] || { echo "the archive helper is EMPTY"; false; }
   run node "$BATS_TEST_TMPDIR/archive.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"archived: 2"* ]] || { echo "the fixture stripped $output, expected 2"; false; }
-  [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "the day files still hold approvals"; false; }
+  [[ "$output" == *"archived: 1"* ]] || { echo "the fixture stripped $output, expected 1"; false; }
+  [ "$(_spine_count approval.requested)" -eq 1 ] || { echo "expected exactly one approval left in the day files"; false; }
 
   # THE WHOLE RUN REFUSES, not just the resume. An earlier version withheld only the resume and
   # left the `dangling` check reading the same incomplete fold — so a touch whose approval sat in
@@ -792,19 +795,31 @@ MJS
   # THE REMEDY ORDER IS PART OF THE CLAIM. arc-replay rebuilds the index from the days that are
   # PRESENT, so running it first drives this count to zero by forgetting the receipts rather than
   # by finding them -- and the refusal disappears without the state being repaired.
-  [[ "$output" == *"FIRST"* ]] || { echo "the refusal did not order the remedy: $output"; false; }
-  # THE COUNTS ARE THE CLAIM: nothing announced, no second draft minted.
-  [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "$(_spine_count approval.requested) approval(s) re-announced against an unreadable spine"; false; }
+  [[ "$output" == *"day file FIRST, and only then run"* ]] || { echo "the refusal did not order the remedy: $output"; false; }
+  [[ "$output" == *"FORGETTING"* ]] || { echo "the refusal did not say what running replay first costs: $output"; false; }
+  # THE COUNTS ARE THE CLAIM: nothing NEW announced, no second draft minted. One approval is
+  # still in the day file -- only one was archived -- so the number to hold is 1, not 0.
+  [ "$(_spine_count approval.requested)" -eq 1 ] || { echo "$(_spine_count approval.requested) approval(s); the run re-announced against an unreadable spine"; false; }
   [ "$(_drafts_count)" -eq 2 ] || { echo "$(_drafts_count) draft file(s), expected 2"; false; }
 
   # POSITIVE CONTROL: the same command on a spine whose index matches its days runs normally.
   # Without this, a mutant that refuses `draft` unconditionally passes everything above.
+  #
+  # This is what makes the CRITICAL concrete rather than theoretical. Rebuilding the index while
+  # the day is still archived is EXACTLY what running `arc-replay` first does, and the command
+  # then resumes the draft whose approval it can no longer see. Restoring the archived day after
+  # this point is what would leave two live approvals on one touch -- which is why the refusal
+  # above orders the remedy, and why this test asserts that ordering is in the message.
   run node "$BATS_TEST_TMPDIR/reindex.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"index rebuilt"* ]] || { echo "$output"; false; }
   run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
   [ "$status" -eq 0 ] || { echo "the command refuses even on a consistent spine: $output"; false; }
-  [[ "$output" == *"2 resumed from an interrupted run"* ]] || { echo "$output"; false; }
+  # ONE resumed (the archived one) and ONE refused as a duplicate (the one still on the spine).
+  # Asserted as the pair, because "1 resumed" alone is also what a broken run that ignored the
+  # second draft would print.
+  [[ "$output" == *"1 resumed from an interrupted run"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"1 duplicate touch(es) refused"* ]] || { echo "$output"; false; }
 }
 
 @test "this file registers the 22 tests it declares" {

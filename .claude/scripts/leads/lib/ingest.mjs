@@ -28,7 +28,7 @@ import { parseReply, ReplyParseError, MAX_REPLY_BYTES } from "./replies.mjs";
 import { isInsideRepo, leadIdsAllVersions, STORE_FILE_MODE, STORE_DIR_MODE } from "./store.mjs";
 import { writeMeetingDraft, meetingApprovalPayload, assertCampaignStore } from "./drafts.mjs";
 import { leadsIdem, LEADS_KINDS } from "../../hq/lib/validate-leads.mjs";
-import { idemKeys } from "./spine-read.mjs";
+import { idemKeys, UNFOLDABLE_REMEDY } from "./spine-read.mjs";
 import { canonicalLeadId } from "./guard.mjs";
 
 export class IngestRefusal extends Error {
@@ -390,7 +390,7 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     let unfoldable = 0;
     for (const k of spineIdems) if (!foldedIdems.has(k)) unfoldable++;
     if (!announced && unfoldable > 0)
-      throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. Restore the archived or missing day file FIRST, and only then run \`node .claude/scripts/hq/arc-replay.mjs\` — replay rebuilds the index from the days that are present, so running it first drives this count to zero by forgetting the receipts rather than by finding them, and the refusal disappears without the state being repaired.`);
+      throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. ${UNFOLDABLE_REMEDY}`);
 
     // AN EMPTY FOLD IS NOT A SPINE THAT SAYS NO. This function's header promises a caller can
     // assert its exact receipts "without a spine", and every module test takes that up by

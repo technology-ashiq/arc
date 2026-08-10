@@ -25,7 +25,7 @@ import { inbound } from "./lib/deps.mjs";
 // validator the payload stamps went through, so a window bound and the receipts it is compared
 // against can never be judged by two different grammars (D5).
 import { leadsIdem, assertTs } from "../hq/lib/validate-leads.mjs";
-import { readAllEvents, dayFileCount, quarantineCount, idemKeys } from "./lib/spine-read.mjs";
+import { readAllEvents, dayFileCount, quarantineCount, idemKeys, UNFOLDABLE_REMEDY } from "./lib/spine-read.mjs";
 import { initCampaign, assertCampaignStore, CAMPAIGN_NAME_RE, writeDraft, readDraft, listDrafts, currentSha, approvalPayload, DraftError } from "./lib/drafts.mjs";
 import { lintDraft, lintCampaign, VERDICT } from "./lib/personalization.mjs";
 import { runDaily, approvedShaFor, unsubscribeHeader } from "./lib/sequencer.mjs";
@@ -374,7 +374,7 @@ async function cmdResearch(icpPath) {
       ? `lead ${id}: this corpus holds TWO rows for one person that disagree on ${diff.join(", ")} — the idem preimage does not cover ${diff.join("/")}, so they collide, and the dossier on disk has already been overwritten by whichever row came last. Nothing was emitted for the second one. Dedupe the corpus and run again; the spine is fine`
       : `lead ${id}: a receipt with this exact idem is already on the spine from an earlier run but its payload differs (${diff.join(", ")}) — the idem preimage does not cover ${diff.join("/")}, so the spine still asserts the OLD value. Nothing was emitted; this needs a correction receipt, not a re-run`);
   for (const id of orphanedIdem)
-    anomalies.push(`lead ${id}: its idem is in derived/idem.index but in no day file — the emitter will refuse it and quarantine every attempt. The index is derived state; rebuild it with arc-replay rather than retrying this command`);
+    anomalies.push(`lead ${id}: its idem is in derived/idem.index but in no day file — the emitter will refuse it and quarantine every attempt. retrying this command cannot help. ${UNFOLDABLE_REMEDY}`);
   for (const id of racedDuplicate)
     anomalies.push(`lead ${id}: another writer took this idem between the read and the emit. The receipt IS on the spine, but the refusal left a quarantine record, and \`report\` refuses while any record exists — clear the quarantine before asking for the mixing report`);
   for (const { id, message } of emitFailed)
@@ -510,6 +510,14 @@ function cmdDraft(campaign, file) {
   // still owns the lock before unlinking, so calling it here and again in `finally` is safe.
   const dieUnlocked = (code, msg) => { try { releaseDraft(); } catch { /* already released */ } die(code, msg); };
   try {
+  // THE INDEX IS READ FIRST, AND THE ORDER IS THE POINT. `appendEventUnlocked` writes the day
+  // line and THEN the index line, so a concurrent spine write landing between these two reads
+  // makes the index look ahead of the fold on a perfectly healthy spine — and this command
+  // refuses on exactly that, telling the operator to restore a day file that was never missing.
+  // The send lock does not exclude other spine writers (most events on a real install come from
+  // surfaces that never take it). Reading the index first can only ever UNDER-count, which is
+  // the direction that fails safe.
+  const indexKeysAtStart = idemKeys();
   const priorEvents = readAllEvents({ allowMissing: true });
   const priorDrafts = listDrafts(store, campaign);
 
@@ -526,7 +534,7 @@ function cmdDraft(campaign, file) {
   // withheld. A first-time draft on a spine with archived days is still ordinary work.
   const foldedIdems = new Set(priorEvents.map((e) => e && e.idem).filter(Boolean));
   let unfoldable = 0;
-  for (const k of idemKeys()) if (!foldedIdems.has(k)) unfoldable++;
+  for (const k of indexKeysAtStart) if (!foldedIdems.has(k)) unfoldable++;
 
   // AND IT REFUSES THE WHOLE RUN, not just the resume. The comment that used to sit above said
   // "the resume is the only inference that depends on completeness" and it was wrong: the
@@ -539,7 +547,7 @@ function cmdDraft(campaign, file) {
   // The sibling in `ingest.mjs` refuses unconditionally in this state. This one refused only when
   // an orphan draft file happened to exist — the same guard, one branch, D6 again.
   if (unfoldable > 0)
-    dieUnlocked(2, `${unfoldable} idem(s) in derived/idem.index belong to events this fold cannot read, so nothing here can tell "no approval exists" from "its day is no longer on disk" — and queueing on that guess is how one touch ends up with two live approvals. Restore the archived or missing day file FIRST, and only then run \`node .claude/scripts/hq/arc-replay.mjs\`: replay rebuilds the index from the days that are present, so running it first drives this count to zero by forgetting the receipts rather than by finding them.`);
+    dieUnlocked(2, `${unfoldable} idem(s) in derived/idem.index belong to events this fold cannot read, so nothing here can tell "no approval exists" from "its day is no longer on disk" — and queueing on that guess is how one touch ends up with two live approvals. ${UNFOLDABLE_REMEDY}`);
 
   // AND THE MIRROR CASE: A LIVE APPROVAL WHOSE DRAFT FILE IS GONE.
   //
@@ -967,12 +975,17 @@ async function cmdIngestReply(argv) {
     try {
       // The spine is re-read per reply. An unsubscribe ingested two replies ago changes what
       // the next one derives, and a snapshot taken before the loop would not know it.
+      // INDEX BEFORE EVENTS, for the reason `cmdDraft` gives: the emitter writes the day line
+      // then the index line, so reading the index second makes it look ahead of the fold
+      // whenever another spine writer lands between the two reads — and `ingestReply` refuses
+      // on exactly that. Index-first can only under-count, which fails safe.
+      const spineIdems = idemKeys();
       const r = await ingestReply({
         store, bytes: inp.bytes, events: readAllEvents({ allowMissing: true }),
         // The index keys are read HERE, by the layer that owns the spine root, and handed in.
         // `ingestReply` reaching for them itself made a module test depend on whatever
         // ARC_SPINE_ROOT pointed at, which for a suite with no setup() is this repo.
-        spineIdems: idemKeys(),
+        spineIdems,
         // This layer DID read the spine, so an approval it cannot find genuinely is not there.
         // Module callers leave this false and fall back to the store flag.
         spineRead: true,

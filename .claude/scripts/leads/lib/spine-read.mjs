@@ -129,6 +129,30 @@ export function dayFileCount({ root = spineRoot() } = {}) {
  * and lets the caller name the disagreement rather than picking a winner. It is READ-ONLY, like
  * everything else here: the index is derived state and arc-replay owns rebuilding it.
  */
+/**
+ * ONE SENTENCE, cited by every surface that reports an index-ahead-of-events spine.
+ *
+ * Four places name this condition — `cmdDraft`'s refusal, `ingestReply`'s refusal, the
+ * `cmdResearch` anomaly line, and the runbook's troubleshooting table — and two of them said
+ * only "rebuild the index with arc-replay". Those two are the ones the operator reads FIRST
+ * (research is runbook step 3, draft is step 4, and the table is the documented path for this
+ * exact row), so the ordered version existing in the other two protected nobody.
+ *
+ * Following the unordered version reaches the state the ordered one exists to prevent, verified
+ * end to end: refusal → `arc-replay` → the count is zero because the index was rebuilt from the
+ * days that remain → `draft` resumes and re-announces → the archived day is restored, which is
+ * the whole point of archiving rather than deleting → **two live approvals for one touch**, both
+ * undecided, both rendering on gate `leads-send`.
+ *
+ * It lives here rather than being repeated because a repair procedure with two derivations is
+ * the same defect as a value with two derivations, and this one had them disagree.
+ */
+export const UNFOLDABLE_REMEDY =
+  "Restore the archived or missing day file FIRST, and only then run `node .claude/scripts/hq/arc-replay.mjs`. " +
+  "Replay rebuilds the index from the day files that are PRESENT, so running it before the restore drives this " +
+  "count to zero by FORGETTING those receipts rather than by finding them — the refusal disappears, the work is " +
+  "re-announced, and restoring the day afterwards then leaves two live approvals for one touch.";
+
 export function idemKeys({ root = spineRoot() } = {}) {
   // NO try/catch. `readIdemIndex` throws INDEX_UNREADABLE on a real read failure and returns an
   // empty map only for a genuinely absent index, which is the correct pair of answers. Swallowing

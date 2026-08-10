@@ -336,6 +336,21 @@ ICP-generic rule; the draft can still be written but will carry a warning into t
 Any corpus file you feed this **must live outside the repository** — it holds names and
 addresses, and the tripwire treats every tracked leads path as a violation on sight.
 
+> ### ⚠ `arc-replay` BEFORE the restore is the one move that turns a refusal into a real defect
+>
+> Every command that hits the index-ahead-of-events state refuses and tells you the same thing,
+> in the same order, because the order is the whole instruction. Replay rebuilds the index **from
+> the day files that are present**. Run it while a day is still archived and the count goes to
+> zero — not because the receipts were found, but because they were **forgotten**. The refusal
+> then disappears, the work is re-announced, and restoring the archived day afterwards leaves
+> **two live approvals for one touch**: both undecided, both rendering in the inbox, and no
+> answer to "which approval authorised this mail?"
+>
+> Walked end to end on 2026-08-10, which is why this box exists: refuse → replay → resume →
+> restore → two live approvals on two draft refs, at exit 0 behind a success summary.
+>
+> **Restore the day file first. Then replay. Then re-run the command.**
+
 **Re-running research is safe.** It reports `receipts: 0 new · 5 already on the spine` and exits
 0. (Before slice 06 it exited 2 halfway through and left a quarantine record that disabled
 `report` — see R1. The first fix for that was itself wrong in three ways and is the reason this
@@ -348,7 +363,7 @@ lead and one cause:
 | Anomaly | What it means | What to do |
 |---|---|---|
 | `payload differs` | a receipt with this exact idem is already on the spine but says something else — most often a lead that was `verified` and is now `held`, because `email_status` is not part of the idem preimage | not a re-run problem. The spine still asserts the old value and needs a correction receipt |
-| `in derived/idem.index but in no day file` | a restored or archived day left the index ahead of the events | rebuild the index with `arc-replay`; retrying this command cannot help |
+| `in derived/idem.index but in no day file` | a restored or archived day left the index ahead of the events | **Restore the missing day file FIRST, and only then run `node .claude/scripts/hq/arc-replay.mjs`.** Retrying this command cannot help, and running replay first is worse than doing nothing — see the box below |
 | `another writer took this idem` | you lost a genuine race, and the refusal left a quarantine record | clear the quarantine **before** step 8, or `report` refuses |
 | `the emitter refused its receipt` | anything else | read the message; the dossiers are written and the command is re-runnable |
 
