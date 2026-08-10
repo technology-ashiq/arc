@@ -75,7 +75,7 @@ export const MAIL_EXIT = Object.freeze({
 //
 // It lives here, next to the rules it protects, rather than in the CLI, so it can be tested
 // without writing a `.env.local` into a real repository root.
-// AN ALLOWLIST, BECAUSE THE DENYLIST FAILED FIVE TIMES.
+// AN ALLOWLIST, BECAUSE THE DENYLIST FAILED IN SEVEN CONSECUTIVE ROUNDS.
 //
 // This was a list of names a credential file may not carry, and every adversarial round found
 // another one missing: the outreach vendor host beside the listed notification one, then
@@ -85,7 +85,7 @@ export const MAIL_EXIT = Object.freeze({
 // passed the guard and moved every approval, receipt, cap and suppression the process then read
 // or wrote, because `loadCredentials()` is the first statement of `cmdDaily`.
 //
-// Five misses is not five oversights, it is the shape being wrong. A denylist has to be extended
+// Repeated misses are not repeated oversights, it is the shape being wrong. A denylist has to be extended
 // every time somebody adds an environment variable to a module nobody is thinking about; an
 // allowlist refuses the new variable by default and makes adding one a decision. The families
 // below are the ones whose variables steer THIS product; a name outside them (SUPABASE_*,
@@ -128,10 +128,22 @@ const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_/, /^LEADS_/]);
 // enumeration of dangerous process variables would need extending every time a runtime adds one.
 const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
   /^NODE_/,          // NODE_OPTIONS (--require), NODE_TLS_REJECT_UNAUTHORIZED, NODE_EXTRA_CA_CERTS
-  /^(BASH_ENV|ENV|BASH_FUNC_.*|SHELLOPTS|IFS)$/,  // shell startup and word-splitting
-  /^(PATH|PATHEXT)$/,                             // which binary `bash` and `node` resolve to
+  /^(BASH_ENV|ENV|BASH_FUNC_.*|SHELLOPTS|IFS|COMSPEC)$/,  // shell startup and word-splitting
+  /^(PATH|PATHEXT|CDPATH)$/,                      // which binary `bash` and `node` resolve to
   /^(LD_|DYLD_)/,                                 // loader injection on Linux and macOS
   /_PROXY$/, /^(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY)$/, // where the vendor request goes
+  // RUNTIME CONFIGURATION FILES AND SEARCH ROOTS, added after round 7 found `OPENSSL_CONF` in
+  // the gap. Node links OpenSSL on all three CI platforms and parses that file at STARTUP,
+  // before a line of the program runs — verified on this box: a `.env.local` naming a junk file
+  // made `node -e` die inside OpenSSL quoting the file's own contents. What follows from
+  // OpenSSL's documented grammar is `[provider_sect] module = <path>`, i.e. an attacker-chosen
+  // shared library in every `arc-event.mjs` process, which is the blast radius `BASH_ENV` is
+  // refused for. It is also the accident shape: `OPENSSL_CONF` is what people paste in to get
+  // past "unsafe legacy renegotiation disabled" behind a corporate proxy.
+  /^(OPENSSL_|SSL_|GNUTLS_|CURL_|REQUESTS_|GIT_|HOME|USERPROFILE|XDG_|JAVA_TOOL_OPTIONS)/,
+  /^(TMPDIR|TEMP|TMP)$/,        // `emit()` writes every receipt payload under os.tmpdir()
+  /^(PERL|PYTHON|RUBY|GEM_|LUA_|R_)/,             // sibling runtimes a hook or a tool may spawn
+  /(_CONF|_CONFIG|_OPTS|_OPTIONS|_STARTUP|_PROFILE|_RCFILE)$/, // the shape itself
 ]);
 
 // The four names in those families that ARE credentials or recipient policy, and therefore
@@ -206,7 +218,7 @@ export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
   const novel = family.filter((n) => !NAMED_UPPER.includes(String(n).toUpperCase()));
   const parts = [];
   if (known.length) parts.push(`${known.join(", ")} — each of these decides how a send behaves: whether it is real, whether it is a rehearsal binding the product domain, which day the cap buckets to, where the store or the whole spine lives, which host receives the Bearer token along with the recipient and the body, what the config says every cap is, or whether the warm-up counts as attested`);
-  if (novel.length) parts.push(`${novel.join(", ")} — refused by default: ${fileLabel} may carry only ${ENV_LOCAL_ALLOWED.join(", ")} out of the ARC_* and LEADS_* families, because a denylist of steering variables was extended after every one of six adversarial rounds and missed another one each time`);
+  if (novel.length) parts.push(`${novel.join(", ")} — refused by default: ${fileLabel} may carry only ${ENV_LOCAL_ALLOWED.join(", ")} out of the ARC_* and LEADS_* families, because a denylist of steering variables was extended after every one of seven adversarial rounds and missed another one each time`);
   if (steering.length) parts.push(`${steering.join(", ")} — these steer this process or the children it spawns, whatever family they belong to. Every receipt runs \`bash\` and then \`node\` with the environment this file has just written into, so a name that chooses an interpreter, a startup file, a search path or a TLS setting chooses them for the send`);
   throw new MailRefusal("config", `${fileLabel} sets ${parts.join("; and ")}. They are refused from a file precisely because the startup guard runs before the file is read and cannot see them there.`);
 }

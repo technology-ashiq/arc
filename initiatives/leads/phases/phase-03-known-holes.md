@@ -1,6 +1,6 @@
 # Phase 03 — known holes, carried forward deliberately
 
-Things six adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
+Things seven adversarial rounds found that are **real, understood, and NOT fixed in this slice**,
 each with the reason it was left and what would close it. This file exists so that "we did not
 fix it" and "we did not notice it" stop looking identical from the outside.
 
@@ -10,7 +10,7 @@ A hole listed here is a decision. A hole not listed here is a defect.
 
 ## The bar this file exists under — owner decision, 2026-08-10
 
-Six adversarial rounds against slice 06 returned **3, 9, 10, 8, 2 and 3 CRITICALs**, two surfaces each
+Seven adversarial rounds against slice 06 returned **3, 9, 10, 8, 2, 3 and 2 CRITICALs**, two surfaces each
 round, with near-zero overlap between the surfaces every time. Several findings in rounds 2-6
 were defects introduced *by the fix for* a previous round, twice inside the comment explaining
 that fix. The rounds were not converging on a schedule anyone could plan around.
@@ -130,7 +130,9 @@ part of that slice, not this one.
 
 ---
 
-## H-04 · 44 of 104 bats files have no `tests/shard-timings.json` entry
+## H-04 · 47 of 107 bats files have no `tests/shard-timings.json` entry
+
+**Re-measured on the merged tree 2026-08-10 — it was 44 of 104 before the merge, and lanes.md is explicit that a merge invalidates a measured number. Both files this slice grew are among the 47.**
 
 **What.** They ride `_default_weight: 16` against real costs several times that, so CI shards are
 imbalanced. Growing any test file reshuffles the shards.
@@ -146,7 +148,7 @@ measured number looks authoritative.
 ## H-05 · `ci.yml` derives the declared-test count two ways
 
 **What.** `_declared()` uses `^[[:blank:]]*@test[[:blank:]]`; the suite-size floor uses
-`'^@test '`. They agree today. The floor itself is `911` against ~2159 actual, so a large
+`'^@test '`. They agree today. The floor itself is `911` against 2239 actual, so a large
 regression could pass it.
 
 **Why it is left.** `.github/**` belongs to no lane and the `policy` lane is LIVE. Editing it

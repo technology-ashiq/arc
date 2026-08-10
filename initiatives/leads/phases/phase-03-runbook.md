@@ -130,21 +130,28 @@ body**, what the config says every cap is, whether the warm-up counts as atteste
 fixtures come from — and a credential file is not where any of those decisions belong.
 
 > **Those nine are examples, not the rule** — do not read this paragraph as a list to check
-> against. The guard is an **allowlist**: inside the `ARC_LEADS_*`, `LEADS_*` and `ARC_SPINE_*`
+> against. The guard is an **allowlist**: inside the `ARC_*` and `LEADS_*`
 > families, `.env.local` may carry only `ARC_LEADS_MAIL_FROM`, `ARC_LEADS_MAIL_ALLOWLIST`,
 > `ARC_LEADS_REHEARSAL_ALLOWLIST` and `ARC_LEADS_OUTREACH_FROM`; **everything else in those
 > families is refused, including a name nobody has invented yet.** On top of that it refuses
-> anything that steers the process or its children regardless of family — `NODE_*`, `BASH_ENV`,
-> `PATH`, `LD_*`, `DYLD_*` and the proxy variables.
+> anything that steers this process or the children it spawns, regardless of family: `NODE_*`,
+> `BASH_ENV`, `PATH`, `LD_*`, `DYLD_*`, the proxy variables, and the runtime-configuration class
+> — `OPENSSL_CONF`, `SSL_*`, `GIT_*`, `HOME`, `TMPDIR`, `PYTHON*`, and anything ending `_CONF`,
+> `_CONFIG`, `_OPTIONS` or `_PROFILE`.
 >
-> It became an allowlist because it was a list of nine and five separate adversarial rounds each
-> found a different name missing from it — most recently `ARC_SPINE_ROOT`, which moves the entire
-> spine and is therefore worse than `ARC_LEADS_STORE`, which had been on the list from the start.
-> The process clause was added last: `emit()` spawns `bash` on every receipt with the inherited
-> environment, so `BASH_ENV` in a credential file runs code inside every command that reads that
-> file — step 1 (`preflight`), step 6 (the notification path) and the send itself — and `NODE_TLS_REJECT_UNAUTHORIZED=0` — a line people paste in behind a corporate proxy
-> — turns off certificate validation on the request carrying your key, your recipient and your
-> text.
+> It became an allowlist because it was a list of nine and **six** separate adversarial rounds
+> each found a different name missing from it — `ARC_SPINE_ROOT`, which moves the entire spine
+> and is therefore worse than `ARC_LEADS_STORE` which had been listed from the start; then
+> `ARC_NODE`, which chooses the interpreter `arc-event.sh` runs; then `OPENSSL_CONF`, which node
+> parses at STARTUP before a line of the program runs.
+>
+> The reason any of it matters: `emit()` spawns `bash` and then `node` on **every receipt** with
+> the environment this file has just written into, and it passes no `env:` of its own. So a name
+> that chooses an interpreter, a startup file, a search path or a TLS setting chooses them for
+> the send. That is live in every command that reads the file — step 1 (`preflight`), step 6 (the
+> notification path) and the send itself. `NODE_TLS_REJECT_UNAUTHORIZED=0`, a line people paste
+> in behind a corporate proxy, turns off certificate validation on the request carrying your key,
+> your recipient and your text.
 >
 > If you are unsure whether a line belongs in `.env.local`, run `rehearsal-check.mjs`: it applies
 > the same guard and tells you before the send does.

@@ -809,11 +809,16 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
       // BASH_ENV and NODE_OPTIONS execute attacker-chosen code inside runbook steps 3, 4 and 6 --
       // and NODE_TLS_REJECT_UNAUTHORIZED=0, which people paste into env files behind a corporate
       // proxy, turns off certificate validation on the request carrying the key, the recipient
-      // and the body.
+      // and the body. The three commands that read the file are daily, preflight and the
+      // notification path -- NOT research or draft, which never call loadCredentials. Those three commands are daily, preflight and the notification path --
+      // NOT research or draft, which never call loadCredentials (pinned by the test below).
       "NODE_OPTIONS","NODE_TLS_REJECT_UNAUTHORIZED","BASH_ENV","PATH","LD_PRELOAD","HTTPS_PROXY",
       // ARC-NATIVE names between the two old prefixes. ARC_NODE chooses the interpreter
       // arc-event.sh runs; ARC_MODEL stamps a fact onto every receipt. The family is ^ARC_ now.
       "ARC_NODE","ARC_MODEL","ARC_RUN_ID","ARC_VENTURE","ARC_SPINE_ACTOR","ARC_ANYTHING_NEW",
+      // RUNTIME CONFIG FILES AND SEARCH ROOTS. node parses OPENSSL_CONF at STARTUP, before a
+      // line of the program runs -- verified. TMPDIR moves where every receipt payload is written.
+      "OPENSSL_CONF","SSL_CERT_FILE","TMPDIR","GIT_CONFIG_GLOBAL","HOME","PYTHONPATH","SOMETHING_CONF",
       // A leading space defeated the anchored patterns until the guard trimmed.
       " ARC_LEADS_FAKE"];
     let refused = 0;
@@ -828,7 +833,7 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     assertEnvLocalNames(["RESEND_API_KEY", ...ENV_LOCAL_ALLOWED, "SUPABASE_URL", "STRIPE_SECRET_KEY"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:27/27"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED:34/34"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ESCAPED:none"* ]] || { echo "$output"; false; }
   # The allowlist must hold the recipient-policy names and NOTHING that steers a send. Asserted
   # positively, so shrinking it (which would refuse the runbook's own required variables) fails
