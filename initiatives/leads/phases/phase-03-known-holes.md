@@ -26,9 +26,17 @@ following the runbook reaches an unsafe state* stops the slice. A finding that m
 overclaims*, *a parameter is unused*, or *a correct branch is untested* does not — it lands here
 with its reason.
 
-**H-04 is being closed rather than carried:** the owner approved the `weigh-tests.yml` run on
-2026-08-10 and it was dispatched against this branch. When its measured table lands in
-`tests/shard-timings.json`, delete that row.
+**H-04 is CLOSED.** The owner approved the `weigh-tests.yml` run on 2026-08-10; it completed as
+run `31361908896` and its measured table is in `tests/shard-timings.json` — 60 entries → **104**,
+covering the 47 files that had no entry at all. The two files this slice grew were among them and
+were wrong in the same direction by roughly sevenfold: `leads-journey.bats` measured **111s** and
+`leads-mail-guard.bats` **120s** against an assumed `_default_weight` of **16**.
+
+Three files remain unmeasured — `absorb-ab-run.bats`, `absorb-rebuild-t01.bats`,
+`spine-worktree-guard.bats` — because they arrived with the `origin/main` merge *after* the weigh
+run was dispatched. That is stated as a **count** in `_known_gap` rather than left to a default,
+which is `.claude/rules/lanes.md`'s own instruction: a missing entry is a default rather than an
+error, so it has to be visible or it is invisible.
 
 ---
 
@@ -130,20 +138,6 @@ part of that slice, not this one.
 
 ---
 
-## H-04 · 47 of 107 bats files have no `tests/shard-timings.json` entry
-
-**Re-measured on the merged tree 2026-08-10 — it was 44 of 104 before the merge, and lanes.md is explicit that a merge invalidates a measured number. Both files this slice grew are among the 47.**
-
-**What.** They ride `_default_weight: 16` against real costs several times that, so CI shards are
-imbalanced. Growing any test file reshuffles the shards.
-
-**Why it is left.** The measured values come only from the `weigh-tests.yml` 60-job Windows run,
-which is the owner's call to spend. Guessing them would be worse than the default: a wrong
-measured number looks authoritative.
-
-**What would close it.** One `weigh-tests.yml` run.
-
----
 
 ## H-05 · `ci.yml` derives the declared-test count two ways
 
