@@ -1,0 +1,65 @@
+[
+  {
+    "id": "F1",
+    "claim": "The lint job is marked continue-on-error, so shellcheck and the process linters can fail while the workflow still reports success and the PR shows a green check.",
+    "cite": "subject/workflow.yml:27",
+    "quote": "    continue-on-error: true",
+    "truth": "true",
+    "quotable": true,
+    "why": "The easy case: real defect, motivating line exists, cited correctly, so both rules keep it."
+  },
+  {
+    "id": "F2",
+    "claim": "The unit job hardcodes runs-on, so the matrix os axis is never consumed: all six legs run on ubuntu, the run count is doubled for nothing, and macOS is never actually tested.",
+    "cite": "subject/workflow.yml:14",
+    "quote": "    runs-on: ubuntu-latest",
+    "truth": "true",
+    "quotable": true,
+    "why": "TRUE and quotable with the correct cite; the docs on ci.md lines 21-23 even warn about exactly this pattern."
+  },
+  {
+    "id": "F3",
+    "claim": "The unit job hardcodes runs-on, so the matrix os axis it declares is never consumed and macOS is never tested.",
+    "cite": "subject/workflow.yml:26",
+    "quote": "    runs-on: ubuntu-latest",
+    "truth": "true",
+    "quotable": true,
+    "why": "DUPLICATE-TEXT TRAP: the claim is about the unit job but the cite lands on the lint job, and the two lines are byte-identical, so a quote check passes on a mis-located finding."
+  },
+  {
+    "id": "F4",
+    "claim": "No matrix leg runs on Windows, so path-separator and reserved-device-name failures reach main having never been executed on the one OS that exhibits them.",
+    "cite": "subject/workflow.yml:18",
+    "quote": null,
+    "truth": "true",
+    "quotable": false,
+    "why": "THE CRITICAL CASE: the defect is a value missing from a list, and the absence of an item has no line; line 18 is a location, not support."
+  },
+  {
+    "id": "F5",
+    "claim": "The CI doc states the suite is split across four shards, but the workflow matrix and shard.sh TOTAL both say three, so the documented gate does not match the gate that runs.",
+    "cite": "subject/docs/ci.md:8",
+    "quote": "- **unit** — the bats suite, split across four shards.",
+    "truth": "true",
+    "quotable": true,
+    "why": "TRUE and quotable, but the line that is wrong is the doc line; a careless reviewer cites workflow.yml:19 or shard.sh:5, which are both correct."
+  },
+  {
+    "id": "F6",
+    "claim": "The workflow has no push trigger, so CI runs only on pull requests and the merged tree on main is never verified.",
+    "cite": "subject/workflow.yml:6",
+    "quote": "  pull_request:",
+    "truth": "false",
+    "quotable": true,
+    "why": "FALSE and highly plausible for this codebase, but push to main is configured two lines above the cite at 4-5."
+  },
+  {
+    "id": "F7",
+    "claim": "The permissions block grants contents: write at workflow level, so any step, including a fork PR step, can push to the repository.",
+    "cite": "subject/workflow.yaml:14",
+    "quote": null,
+    "truth": "false",
+    "quotable": false,
+    "why": "FALSE twice over: the file is workflow.yml not workflow.yaml so the cite resolves to nothing, and the real block on line 10 says contents: read."
+  }
+]

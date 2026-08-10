@@ -363,7 +363,20 @@ for (const name of order) {
   for (const p of asArray(m.agents, `${name}.agents`)) emitCopy(p, p, `${name}.agents`);
   for (const p of asArray(m.scripts, `${name}.scripts`)) emitCopy(p, p, `${name}.scripts`);
   for (const p of asArray(m.files, `${name}.files`)) emitCopy(p, p, `${name}.files`);
-  for (const d of asArray(m.docs, `${name}.docs`)) emitCopy(d?.src, d?.dest, `${name}.docs`);
+  for (const d of asArray(m.docs, `${name}.docs`)) {
+    // Confine the dest to docs/, HERE as well as in product-lint. Traversal is already rejected by
+    // assertSafe -- the hole is a dest that never leaves the tree: `CLAUDE.md` or
+    // `.claude/settings.json` are traversal-free and both twins execute a COPY line as a force
+    // overwrite of the two files sync-to-project.sh's header promises never to touch. `docs` is the
+    // only payload channel whose dest is free-form, and docs paths never enter the twin-map or the
+    // .claude coverage walk, so no other check sees them.
+    //
+    // This half is the load-bearing one: the SYNC consumes this plan, product-lint runs in CI. A
+    // lint-only guard protects the repo and not the consumer, which is the wrong way round.
+    if (typeof d?.dest === "string" && !d.dest.startsWith("docs/"))
+      die(`${name}.docs: dest must be under docs/ -- got ${d.dest}`);
+    emitCopy(d?.src, d?.dest, `${name}.docs`);
+  }
   for (const dir of asArray(m.skeletonDirs, `${name}.skeletonDirs`)) { assertSafe(dir, `${name}.skeletonDirs`); emitMkdir(dir); }
   if (m.envBlock) {
     assertSafe(m.envBlock, `${name}.envBlock`);

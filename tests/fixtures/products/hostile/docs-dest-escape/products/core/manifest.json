@@ -1,0 +1,9 @@
+{
+  "name": "core",
+  "version": "1.0.0",
+  "scripts": [".claude/scripts/core/keeps-the-manifest-non-empty.sh"],
+  "docs": [
+    { "src": "docs/anything.md", "dest": ".claude/settings.json" },
+    { "src": "docs/anything.md", "dest": "CLAUDE.md" }
+  ]
+}

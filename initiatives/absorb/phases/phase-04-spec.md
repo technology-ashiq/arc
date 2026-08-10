@@ -45,7 +45,9 @@ decision recorded — because mechanics without one real absorb means the cycle 
       pass should have been missing.
 - [ ] **A/B on at least 3 representative fixtures, and the fixtures are chosen by an agent that
       never saw the rebuild diff**, of the unspecified-input defect class, old-way versus
-      absorbed-way, in PLANOFF layout (protocol, scoring, RESULTS) under `docs/evidence/absorb/`
+      absorbed-way, in PLANOFF layout (protocol, scoring, RESULTS) under `initiatives/absorb/evidence/planoff/`
+      (**ADR-0605 Amendment 1** moved it there; `docs/evidence/**` is frozen per ADR-0058, so this
+      criterion as first written pointed at a tree nothing may add to and would have read as unmet)
       with its `LEDGER.md` line (REQ-03). The next bullet stops the diff's author from grading it;
       this clause stops that same author from picking what it is graded against.
 - [ ] **The A/B runs on fixtures, never on this cycle's own diff.** The first absorb edits arc's
@@ -57,7 +59,8 @@ decision recorded — because mechanics without one real absorb means the cycle 
       table is lint-invalid — and the owner's decision recorded. The registry row moves only on that
       decision ref.
 - [ ] **The complete evidence bundle is committed** under `initiatives/absorb/evidence/phase-04/`
-      plus the PLANOFF bundle under `docs/evidence/absorb/`.
+      plus the PLANOFF bundle under `initiatives/absorb/evidence/planoff/` (ADR-0605 A1, not the frozen
+      `docs/evidence/**`).
 - [ ] **Retro recorded** in `docs/retro-log.md`, including the cycle scoreboard row, the
       assumptions ledger's fired-or-not status for all seven rows stated explicitly, **and ADR-0074's
       two open waiver conditions closed out by name** — the venture clock's status (fired or not,

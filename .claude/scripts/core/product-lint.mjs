@@ -146,6 +146,17 @@ for (const dir of readdirSync(productsDir)) {
     else for (const d of obj.docs) {
       const sOk = checkPath(d?.src, `products/${dir}.docs.src`);
       checkPath(d?.dest, `products/${dir}.docs.dest`);
+      // `docs` is the only payload channel with a free-form dest, and traversal is not the hole --
+      // checkPath already rejects `../`. The hole is a dest that never leaves the tree: `CLAUDE.md`
+      // or `.claude/settings.json` are traversal-free, pass every check, and are executed by both
+      // twins as `cp -f` / `Copy-Item -Force` over the two files sync-to-project.sh's own header
+      // promises never to touch. docs paths also never enter `mapped`, so neither the double-map
+      // check nor the `.claude` coverage walk below can see them. Confine the dest instead: a docs
+      // entry installs documentation, and documentation lives under docs/.
+      if (typeof d?.dest === "string" && !/^docs\//.test(d.dest))
+        err(`products/${dir}: docs dest must be under docs/ -- got "${d.dest}" (a dest outside docs/ ` +
+            `is a force-overwrite of a file the sync promises not to touch, e.g. CLAUDE.md or ` +
+            `.claude/settings.json, and no other check sees docs paths)`);
       if (typeof d?.src === "string") docPaths.push(d.src);
       if (typeof d?.dest === "string") docPaths.push(d.dest);
       if (sOk && !existsSync(join(root, d.src))) err(`products/${dir}: docs src does not exist: ${d.src}`);

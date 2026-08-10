@@ -178,6 +178,42 @@ LINT="$ARC_ROOT/.claude/scripts/core/product-lint.mjs"
   [ "$status" -eq 2 ]
 }
 
+# ---------- docs dest confinement (Phase 04 absorb; found by an adversarial pass) ----------
+# `docs` is the only payload channel with a free-form dest, and TRAVERSAL is not the hole -- assertSafe
+# already rejects `../`. The hole is a dest that never leaves the tree: `CLAUDE.md` and
+# `.claude/settings.json` are traversal-free, pass every other check, and both sync twins execute a
+# COPY line as `cp -f` / `Copy-Item -Force` over the two files sync-to-project.sh's own header promises
+# never to touch. docs paths never enter the twin-map or the `.claude` coverage walk, so nothing else
+# sees them. Pre-existing in the mechanism; the absorb rebuild is the first docs entry on a security
+# surface, which is how it surfaced.
+
+@test "lint: a docs dest outside docs/ is rejected (no traversal needed)" {
+  run node "$LINT" --root "$FIX/hostile/docs-dest-escape"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"docs dest must be under docs/"* ]]
+  [[ "$output" == *".claude/settings.json"* ]]
+  [[ "$output" == *"CLAUDE.md"* ]]
+}
+
+# THE LOAD-BEARING HALF. The SYNC consumes the resolver's plan; product-lint runs in CI. A lint-only
+# guard protects this repo and not the consumer, which is the wrong way round -- and the resolver did
+# emit both COPY lines until this was added.
+@test "resolver: a docs dest outside docs/ is rejected, never emitted" {
+  run node "$RESOLVE" --products core --root "$FIX/hostile/docs-dest-escape"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"dest must be under docs/"* ]]
+  [[ "$output" != *"COPY"* ]]
+}
+
+# POSITIVE CONTROL: a legitimate docs row under docs/ still resolves. Without this, both tests above
+# are satisfied by a resolver that rejects every docs entry, which would silently unship four products'
+# documentation.
+@test "resolver: a legitimate docs dest under docs/ is still emitted" {
+  run node "$RESOLVE" --products review --root "$ARC_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"$(printf 'COPY\tdocs/playbooks/finding-verification.md\tdocs/playbooks/finding-verification.md')"* ]]
+}
+
 @test "lint: envBlock without envSentinel is rejected (W3 review: lints-clean must resolve-clean)" {
   run node "$LINT" --root "$FIX/hostile/envblock-no-sentinel"
   [ "$status" -eq 2 ]

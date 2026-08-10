@@ -35,29 +35,58 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null
   [ "$(find "$TARGET/docs/playbooks" -type f | wc -l | tr -d ' ')" -eq "$want" ]
 
-  rm -rf "$TARGET/docs/playbooks"
+  rm -rf "${TARGET:?}/docs/playbooks"
   ARC_SYNC_NO_RSYNC=1 bash "$ARC_ROOT/sync-to-project.sh" "$TARGET" >/dev/null
   [ "$(find "$TARGET/docs/playbooks" -type f | wc -l | tr -d ' ')" -eq "$want" ]
 }
 
-# NEGATIVE CONTROL. The test above passes on a tree where docs/playbooks/ happens to be copied by
-# something else -- the .claude/ rsync line, a stray wildcard, a leftover from a previous run in the
-# same target. So prove the two lines are load-bearing: delete them from a COPY of the script and the
-# playbooks must stop arriving. Without this, "the sync works" and "the sync has a line for it" are
-# the same observation, and only one of them is what the twin edit was for.
-@test "sync: a mutant with the docs/playbooks lines deleted ships NO playbook (control)" {
+# The sync must not abort when docs/playbooks/ is absent. git does not track empty directories, so a
+# tree whose last playbook was moved has no such directory -- and an unguarded `rsync` on a missing
+# source exits 23, which under `set -euo pipefail` kills the sync after .claude/ and before the meta
+# docs, CONSTITUTION.md and the registry. Half-installed consumer repo, ubuntu and macOS only. The
+# probe asserts a LATER artifact, because "the playbook is absent" is also true of a sync that died.
+@test "sync: a source tree with NO docs/playbooks/ still completes the install" {
+  local fake="$TARGET/fake-src"
+  cp -r "$ARC_ROOT/." "$fake" 2>/dev/null || true
+  rm -rf "${fake:?}/docs/playbooks" "${fake:?}/.git"
+  [ ! -d "$fake/docs/playbooks" ]
+
+  local out="$TARGET/no-pb-out"
+  mkdir -p "$out/.git"
+  run bash "$fake/sync-to-project.sh" "$out"
+  [ "$status" -eq 0 ]
+  [ -f "$out/docs/how-it-works.md" ]   # a LATER step than the playbook copy -- proves no early abort
+  [ -f "$out/CONSTITUTION.md" ]        # later still
+}
+
+# NEGATIVE CONTROL, rewritten. The first version was vacuous in the exact way the rule it protects
+# forbids, and an adversarial pass reproduced it: the mutant is written into $TARGET, sync-to-project.sh
+# derives SRC from `dirname "${BASH_SOURCE[0]}"`, so the mutant's SRC became an empty mktemp dir. It
+# copied NOTHING, and "no playbook present" passed on total failure. The old paired half ran the REAL
+# script from a different SRC, so it could never have detected that. Two fixes:
+#   * pin SRC back to the real tree, so the mutant is the original minus the mechanism;
+#   * assert the mutant RAN, by a later artifact, before asserting what it did not do.
+# And the deletion is `SRC/docs/playbooks`, not `docs/playbooks`: the broad pattern also matched the
+# `mkdir -p` line, so the mutant lost every parent directory and died on the cp path -- failing on the
+# Windows leg for a reason unrelated to the mechanism under test.
+@test "sync: a mutant with the docs/playbooks COPY lines deleted ships NO playbook (control)" {
+  [ "$(grep -c 'SRC/docs/playbooks' "$ARC_ROOT/sync-to-project.sh")" -eq 2 ]
+
   local mutant="$TARGET/mutant-sync.sh"
-  grep -v 'docs/playbooks' "$ARC_ROOT/sync-to-project.sh" > "$mutant"
-  # The grep must actually have removed something, or the mutant is the original and proves nothing.
-  [ "$(grep -c 'docs/playbooks' "$ARC_ROOT/sync-to-project.sh")" -gt 0 ]
+  grep -v 'SRC/docs/playbooks' "$ARC_ROOT/sync-to-project.sh" \
+    | sed "s|^SRC=.*|SRC=\"$ARC_ROOT\"|" > "$mutant"
+  [ "$(grep -c 'SRC/docs/playbooks' "$mutant")" -eq 0 ]
+  grep -q "^SRC=\"$ARC_ROOT\"$" "$mutant"
 
   local mtarget="$TARGET/mutant-out"
   mkdir -p "$mtarget/.git"
-  bash "$mutant" "$mtarget" >/dev/null 2>&1 || true
-  [ ! -f "$mtarget/docs/playbooks/finding-verification.md" ]
+  run bash "$mutant" "$mtarget"
+  [ "$status" -eq 0 ]                                        # the mutant RAN...
+  [ -f "$mtarget/docs/how-it-works.md" ]                     # ...and got past the playbook step...
+  [ ! -f "$mtarget/docs/playbooks/finding-verification.md" ] # ...and shipped no playbook.
 
-  # ...and the real script, same target shape, does ship it. Both halves, or the assertion above is
-  # satisfied by the mutant simply failing to run at all.
+  # The real script, same shape, does ship it. Both halves, or the assertion above is satisfied by a
+  # mutant that merely differs from the original in some other way.
   local rtarget="$TARGET/real-out"
   mkdir -p "$rtarget/.git"
   bash "$ARC_ROOT/sync-to-project.sh" "$rtarget" >/dev/null
@@ -95,6 +124,13 @@ teardown() { [ -n "${TARGET:-}" ] && rm -rf "$TARGET" 2>/dev/null || true; }
   "$ps" -NoProfile -File "$(cygpath -w "$ARC_ROOT/sync-to-project.ps1")" -Target "$(cygpath -w "$TARGET")" >/dev/null 2>&1 || true
   [ ! -e "$TARGET/.claude/state" ]
   [ ! -e "$TARGET/.claude/scheduled_tasks.lock" ]
+  # docs/playbooks/ was mirrored into BOTH twins and tested in only one of them -- the twin-fix class
+  # inverted, code mirrored and test not. The ps1 uses `robocopy … | Out-Null` and no robocopy call in
+  # that file checks $LASTEXITCODE, so a failed playbook copy on the Windows-native path is silent as
+  # well as untested. Asserting the artifact is the only thing that catches it.
+  [ -f "$TARGET/docs/playbooks/finding-verification.md" ]
+  # ...and a later step, so a ps1 that died on the playbook copy cannot pass the line above by accident.
+  [ -f "$TARGET/CONSTITUTION.md" ]
 }
 
 @test "sync: never overwrites project-owned files (CLAUDE.md, PLAN.md)" {
