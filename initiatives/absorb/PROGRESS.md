@@ -1,8 +1,8 @@
 # PROGRESS.md — arc-absorb "the technique refinery"
 
-status: LIVE
-cycle: arc-absorb (Cycle 10, born 2026-08-09)
-phase: 04 — CLOSED (all five phases done, 8 of 8 REQ met)
+status: IDLE
+cycle: arc-absorb (Cycle 10, closed 2026-08-10)
+phase: — (cycle closed, merged as 30dc9a9 / PR #138 and 6850250 / PR #151, 8 of 8 REQ)
 appetite: 8d
 burn: 6.5d
 blocked-on: —
