@@ -155,10 +155,20 @@ unilaterally mid-cycle is the collision `.claude/rules/lanes.md` records having 
 developer machine that file exists; on CI it does not. So those commands emit blank-value
 warnings locally and none on CI.
 
-**Why it is left.** ENV-WINS-OVER-FILE means no test's own exported values can be overridden, so
-this changes stderr noise rather than behaviour — and the alternative (an env var pointing the
-loader elsewhere) would be a new door into the credential path, which is the shape being
-defended against.
+**It changes BEHAVIOUR, not only stderr noise — this row said otherwise and was wrong.**
+ENV-WINS-OVER-FILE protects a value a test *sets*; it does not protect a value a test
+deliberately *unsets*. `tests/leads-mail-guard.bats` runs `env -u ARC_LEADS_MAIL_ALLOWLIST` and
+asserts the refusal says `is unset`, and `loadCredentials()` re-applies that name from the box's
+own file — so on a developer machine the run refuses for a different reason and the assertion
+fails. Verified: exit 2 either way, `is unset` absent, `holds N addresses` present. **Green on
+CI, red on any machine with a `.env.local`.** It is the only test in that shape — all 30 `env -u`
+sites were checked, and the other leads ones import the module directly and never reach
+`loadCredentials`.
 
-**What would close it.** A test-only root injection on `loadCredentials`, if a future test ever
-needs to assert on that stderr.
+**Why it is left.** The alternative on the table was an environment variable pointing the loader
+somewhere else, which is a new door into the credential path — the exact shape five rounds have
+been closing. A test-only parameter on `loadCredentials` is the right answer and is a change to a
+signature three commands call, which is not a thing to do while the branch is being attacked.
+
+**What would close it.** A `root` parameter on `loadCredentials`, defaulted to `REPO_ROOT`, with
+that one test passing a temp dir.

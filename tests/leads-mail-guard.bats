@@ -803,7 +803,16 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     const mustRefuse = ["ARC_LEADS_FAKE","ARC_LEADS_NOW","ARC_LEADS_STORE","ARC_LEADS_MAIL_BASE_URL",
       "LEADS_FIXTURE_DIR","LEADS_PROVIDER_BASE_URL","LEADS_CONFIG","LEADS_WARMUP_APPROVED",
       "ARC_LEADS_REHEARSAL","ARC_SPINE_ROOT","ARC_SPINE_NOW","ARC_SPINE_RAND",
-      "LEADS_A_VARIABLE_NOBODY_HAS_INVENTED_YET","arc_leads_fake"];
+      "LEADS_A_VARIABLE_NOBODY_HAS_INVENTED_YET","arc_leads_fake",
+      // PROCESS-LEVEL steering, refused for a second reason that has nothing to do with the
+      // families. `emit()` spawns bash on every receipt with the inherited environment, so
+      // BASH_ENV and NODE_OPTIONS execute attacker-chosen code inside runbook steps 3, 4 and 6 --
+      // and NODE_TLS_REJECT_UNAUTHORIZED=0, which people paste into env files behind a corporate
+      // proxy, turns off certificate validation on the request carrying the key, the recipient
+      // and the body.
+      "NODE_OPTIONS","NODE_TLS_REJECT_UNAUTHORIZED","BASH_ENV","PATH","LD_PRELOAD","HTTPS_PROXY",
+      // A leading space defeated the anchored patterns until the guard trimmed.
+      " ARC_LEADS_FAKE"];
     let refused = 0;
     const escaped = [];
     for (const n of mustRefuse) {
@@ -816,7 +825,7 @@ _cli() { cd "$ARC_ROOT" && node .claude/scripts/leads/arc-leads.mjs "$@"; }
     assertEnvLocalNames(["RESEND_API_KEY", ...ENV_LOCAL_ALLOWED, "SUPABASE_URL", "STRIPE_SECRET_KEY"]);
     console.log("CREDENTIALS-ACCEPTED");'
   [ "$status" -eq 0 ]
-  [[ "$output" == *"REFUSED:14/14"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"REFUSED:21/21"* ]] || { echo "$output"; false; }
   [[ "$output" == *"ESCAPED:none"* ]] || { echo "$output"; false; }
   # The allowlist must hold the recipient-policy names and NOTHING that steers a send. Asserted
   # positively, so shrinking it (which would refuse the runbook's own required variables) fails

@@ -92,6 +92,31 @@ export const MAIL_EXIT = Object.freeze({
 // STRIPE_*, JUROR_*, GITHUB_PAT …) is another product's business and is none of this guard's.
 const ENV_LOCAL_FAMILIES = Object.freeze([/^ARC_LEADS_/, /^LEADS_/, /^ARC_SPINE_/]);
 
+// AND A SECOND CLAUSE THAT IS NOT ABOUT FAMILIES AT ALL, because the sentence above — "a name
+// outside them is another product's business" — was false in the one direction that matters.
+//
+// `NODE_OPTIONS`, `BASH_ENV`, `PATH`, `LD_PRELOAD` and friends are not another product's
+// business: they steer THIS process and, worse, its children. `emit()` spawns `bash` on every
+// single receipt with no `env:` option, so the whole mutated environment is inherited. Verified
+// on this box: a `.env.local` line `BASH_ENV=./x.sh` passes the family guard untouched and then
+// runs `x.sh` inside every `arc-event.sh` emit — i.e. inside runbook steps 3, 4 and 6.
+//
+// The accident-shaped member of the class is the one to weigh: `NODE_TLS_REJECT_UNAUTHORIZED=0`
+// is a line people paste into env files behind a corporate proxy, and it turns off certificate
+// validation on the request that carries the Bearer key, the recipient and the body. That is
+// exactly what `ARC_LEADS_MAIL_BASE_URL` is refused for, arriving through a name nobody thought
+// to family-scope.
+//
+// Matched on SHAPE rather than enumerated, for the reason the family allowlist exists: an
+// enumeration of dangerous process variables would need extending every time a runtime adds one.
+const ENV_LOCAL_PROCESS_STEERING = Object.freeze([
+  /^NODE_/,          // NODE_OPTIONS (--require), NODE_TLS_REJECT_UNAUTHORIZED, NODE_EXTRA_CA_CERTS
+  /^(BASH_ENV|ENV|BASH_FUNC_.*|SHELLOPTS|IFS)$/,  // shell startup and word-splitting
+  /^(PATH|PATHEXT)$/,                             // which binary `bash` and `node` resolve to
+  /^(LD_|DYLD_)/,                                 // loader injection on Linux and macOS
+  /_PROXY$/, /^(HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY)$/, // where the vendor request goes
+]);
+
 // The four names in those families that ARE credentials or recipient policy, and therefore
 // belong in a gitignored credential file. Everything else in the families is refused.
 export const ENV_LOCAL_ALLOWED = Object.freeze([
@@ -135,8 +160,15 @@ const NAMED_UPPER = ENV_LOCAL_FORBIDDEN.map((n) => n.toUpperCase());
 
 export function assertEnvLocalNames(names = [], fileLabel = ".env.local") {
   const smuggled = names.filter((n) => {
-    const u = String(n).toUpperCase();
-    // Only this product's families are this guard's business, and inside them the default is NO.
+    // TRIMMED FIRST. The family and shape patterns are `^`-anchored, so " ARC_LEADS_FAKE" with a
+    // leading space matched none of them and was accepted. `parseEnvFile` trims before it gets
+    // here, so this is unreachable through the one feeder that exists today — and a guard whose
+    // correctness depends on its only caller staying its only caller is not a guard.
+    const u = String(n).trim().toUpperCase();
+    // Two independent reasons to refuse. The first is about THIS PRODUCT's steering variables,
+    // where the default inside the families is NO. The second is about the PROCESS and its
+    // children, and it applies whatever the name looks like.
+    if (ENV_LOCAL_PROCESS_STEERING.some((re) => re.test(u))) return true;
     if (!ENV_LOCAL_FAMILIES.some((re) => re.test(u))) return false;
     return !ALLOWED_UPPER.includes(u);
   });

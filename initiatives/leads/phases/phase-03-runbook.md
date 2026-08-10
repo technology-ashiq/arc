@@ -138,11 +138,25 @@ buckets to, where the store lives, which host receives the key **and the recipie
 body**, what the config says every cap is, whether the warm-up counts as attested, and where
 fixtures come from — and a credential file is not where any of those decisions belong.
 
-> The list held five names until 2026-08-10 and named the *notification* vendor host while
-> omitting the *outreach* one — the twin that carries the recipient address and the mail text as
-> well as the key. `LEADS_CONFIG`, `LEADS_WARMUP_APPROVED` and `ARC_LEADS_REHEARSAL` were missing
-> too; the last of those is why this document could claim the mode "is deliberately not a file
-> setting" while nothing stopped a file from setting it.
+> **Those nine are examples, not the rule** — do not read this paragraph as a list to check
+> against. The guard is an **allowlist**: inside the `ARC_LEADS_*`, `LEADS_*` and `ARC_SPINE_*`
+> families, `.env.local` may carry only `ARC_LEADS_MAIL_FROM`, `ARC_LEADS_MAIL_ALLOWLIST`,
+> `ARC_LEADS_REHEARSAL_ALLOWLIST` and `ARC_LEADS_OUTREACH_FROM`; **everything else in those
+> families is refused, including a name nobody has invented yet.** On top of that it refuses
+> anything that steers the process or its children regardless of family — `NODE_*`, `BASH_ENV`,
+> `PATH`, `LD_*`, `DYLD_*` and the proxy variables.
+>
+> It became an allowlist because it was a list of nine and five separate adversarial rounds each
+> found a different name missing from it — most recently `ARC_SPINE_ROOT`, which moves the entire
+> spine and is therefore worse than `ARC_LEADS_STORE`, which had been on the list from the start.
+> The process clause was added last: `emit()` spawns `bash` on every receipt with the inherited
+> environment, so `BASH_ENV` in a credential file runs code inside steps 3, 4 and 6 of this
+> runbook, and `NODE_TLS_REJECT_UNAUTHORIZED=0` — a line people paste in behind a corporate proxy
+> — turns off certificate validation on the request carrying your key, your recipient and your
+> text.
+>
+> If you are unsure whether a line belongs in `.env.local`, run `rehearsal-check.mjs`: it applies
+> the same guard and tells you before the send does.
 A `.env.local` holding `ARC_LEADS_FAKE=1` would otherwise switch the whole run to the fake and
 report "mail sent" having sent nothing.
 
