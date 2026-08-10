@@ -1,0 +1,7 @@
+0169fd065351f99d945a2ef00f7ee56f14e782ce48c203693120db02f7866e5c
+
+sha256 of the sealed label-to-variant mapping for correlation PHASE04-T01.
+The mapping itself is NOT here and is not in git: it is derived from a nonce under
+.claude/state/absorb/seals/ (gitignored), and is written into this bundle as mapping.json
+ONLY after a decision.recorded exists for the approval. Run:
+  node .claude/scripts/absorb/judgement.mjs reveal --correlation PHASE04-T01 --evidence initiatives/absorb/evidence/planoff/PHASE04-T01

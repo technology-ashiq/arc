@@ -11,3 +11,4 @@
 | date | candidate | class | fixtures | old-way | absorbed-way | verdict | decision |
 |---|---|---|---|---:|---:|---|---|
 | 2026-08-09 | T-01 pre-emit finding verification | unspecified-input defect class | 3 named, 0 executed | n/a | n/a | blind pick: reviewproc-with-verification-gate ("read clearer") | 01KZKBYSQ5J46Y82PRN7W3AJNH |
+| 2026-08-10 | T-01 pre-emit finding verification | unquotable-finding class (3 fixtures, 22 candidates) | 3 executed | 22 findings, 14 true / 8 false, precision 63.6% | 13 findings + 9 appendix, 8 true / 5 false, precision 61.5% | PRE-COMMITTED CONDITION: **NEW-WINS** (primary unresolvable-false-in-main 3 -> 0, true-lost 0). COMPOSITION, not part of that condition: **-2.1 pts precision**, because 6 of the 9 demoted are TRUE. Unclaimed class untouched: 5 of 8 false findings quote a real line byte-exactly. Owner pick pending | pending |

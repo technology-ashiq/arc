@@ -299,3 +299,10 @@ setup() {
   [ -n "$got" ]
   [ "$want" = "$got" ]
 }
+
+# Same reason as above: this suite is the proof that route 2 was taken correctly, so it must fail when
+# a test silently stops existing rather than when one of them fails.
+@test "absorb-rebuild-t01 suite registers every test it defines" {
+  registered=${#BATS_TEST_NAMES[@]}
+  [ "$registered" -eq 30 ] || { echo "registered $registered tests, expected 30"; false; }
+}
