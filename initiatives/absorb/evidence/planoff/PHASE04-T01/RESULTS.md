@@ -139,7 +139,43 @@ gitignored — correct before the reveal, and it means the reveal is impossible 
 shape as the spine-fragmentation finding filed against `hq` this week. The reveal writes the mapping
 into this file, which is where it becomes durable.
 
+## REVEALED 2026-08-10 — the owner picked the OLD WAY
+
+```
+quartz  = old-way          <- PICKED
+harbor  = absorbed-way
+```
+
+**Decision `01KZN380GP5EDF58H6VRTT0S0T`**, deciding approval `01KZN0ZBK5YW0YJRE9NZ0CW5Q1`, reason
+**`pick=quartz; findings neraya iruku`** — *"there are a lot of findings"*. Mapping written to
+`mapping.json` by `judgement.mjs reveal` against the recorded decision, not by hand.
+
+**So the harness and the human disagree, and that is the most valuable thing this cycle produced.**
+`ab-run` said the technique removes 3/3 of the class it claims. The owner, shown both actual outputs
+with nothing else, preferred the one *without* it. Both are true: the benefit is real and measured, and
+the owner does not value it enough to accept 9 findings moved out of the main report. ADR-0603 makes
+the owner's pick the verdict — *"`verdict` is the OWNER's recorded pick, not the runner's opinion"* —
+and a mechanism that only ratifies its own candidate is not a mechanism.
+
+**What the pick does NOT decide.** The phase spec carries **two** owner actions: this A/B pick, and a
+separate adopt-or-refuse decision on the proposal. REQ-07 requires both directions to go through the
+inbox — *"adoption and retirement each end as an inbox item with a reason"* — so the registry row does
+not move on this ULID. It moves on the adoption decision's.
+
+### One observation, and it is NOT a reason to overturn anything
+
+The reason given is about the *number* of findings. The absorbed-way report opens with
+`Appendix -- unverified: 9 entries` and then says `13 findings`; the old-way says `22 findings`. A
+reader scanning the top sees 13 against 22. But the absorbed way does not *lose* nine findings — it
+moves them one heading down.
+
+So the pick may be about **presentation** rather than about the rule. **That reading changes nothing
+here.** It is an inference about intent, the decision is a recorded fact, and this lane exists
+precisely to stop a measured result being re-narrated into the answer its author preferred. If the
+presentation is the real issue, that is a new candidate for a future cycle with its own study and its
+own A/B — not a re-run of this one, and not a footnote that quietly reverses a receipt.
+
 ## Next
 
-`products/absorb/registry.json` moves T-01 off `candidate` on the `decision.recorded` ref, or not at
-all.
+The adopt-or-refuse proposal, carrying this results table, goes to the inbox. `products/absorb/
+registry.json` moves T-01 off `candidate` on **that** decision ref, or not at all.

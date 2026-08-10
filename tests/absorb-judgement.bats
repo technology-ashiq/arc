@@ -339,7 +339,98 @@ process.stdout.write(JSON.stringify(keys));
   [ "$output" -eq 0 ] || { echo "judgement.mjs references the registry; it is propose-only"; false; }
 }
 
+# --- ADR-0605's adoption-proposal profile (added Phase 04) ------------------------------------------
+# ADR-0605 line 41 said "the results table travels WITH the adoption proposal -- a proposal without its
+# table is lint-invalid" and NOTHING implemented it. A guard with no caller, in the ADR's own
+# requirement, found while raising the very proposal it governs. The table now rides IN the payload
+# rather than as a path to it: a path can be checked for shape but not for content without filesystem
+# I/O, and a spine validator must have no side effects.
+#
+# Every refusal below is a distinct way to have a "results" field and carry no result. That is the
+# whole class the ADR's sentence was aimed at, and the reason an existence check would not have been
+# enough.
+
+VA="./.claude/scripts/hq/lib/validate-absorb.mjs"
+
+_adoption() { # $1 = a JS statement mutating `p`; prints ACCEPTED or "REFUSED <message>"
+  cd "$ARC_ROOT" && node -e '
+    import(process.argv[1]).then((m) => {
+      const p = {
+        subject: "absorb.adoption", candidate: "T-01", direction: "retire",
+        ab_decision: "01KZN380GP5EDF58H6VRTT0S0T", results: { primary: "3 -> 0" },
+        recommendation: "do not adopt", evidence_path: "initiatives/absorb/evidence/x",
+      };
+      if (process.argv[2]) eval(process.argv[2]);
+      try {
+        m.assertAdoptionProposal({ kind: "approval.requested", payload: p });
+        process.stdout.write("ACCEPTED");
+      } catch (e) { process.stdout.write("REFUSED " + e.message); }
+    });
+  ' "$VA" "$1"
+}
+
+@test "adoption: a complete proposal is accepted" {
+  run _adoption ""
+  [ "$output" = "ACCEPTED" ] || { echo "$output"; false; }
+}
+
+@test "adoption: a proposal with NO results table is refused" {
+  run _adoption "delete p.results"
+  [[ "$output" == REFUSED* ]] || { echo "$output"; false; }
+  [[ "$output" == *"missing required key"* ]]
+}
+
+@test "adoption: an EMPTY results table is refused, having the field is not having the table" {
+  run _adoption "p.results = {}"
+  [[ "$output" == *"results is empty"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption: a results table that is a string rather than a table is refused" {
+  run _adoption 'p.results = "3 -> 0"'
+  [[ "$output" == *"object of metric"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption: a nested value inside the results table is refused" {
+  run _adoption "p.results = { m: { a: 1 } }"
+  [[ "$output" == *"must be a string or number"* ]] || { echo "$output"; false; }
+}
+
+# REQ-07 routes BOTH directions through the inbox, so the direction is part of the receipt and a
+# proposal that does not say which way it goes is not a proposal.
+@test "adoption: a direction outside adopt or retire is refused" {
+  run _adoption 'p.direction = "maybe"'
+  [[ "$output" == *"not adopt or retire"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption: an ab_decision that is not a ULID is refused" {
+  run _adoption 'p.ab_decision = "yesterday"'
+  [[ "$output" == *"not a ULID"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption: a blank recommendation is refused, the owner overrules a position not a blank" {
+  run _adoption 'p.recommendation = "   "'
+  [[ "$output" == *"non-empty text"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption: an unknown key is refused, the shape is closed" {
+  run _adoption "p.extra = 1"
+  [[ "$output" == *"unknown key"* ]] || { echo "$output"; false; }
+}
+
+@test "adoption: a traversing evidence_path is refused" {
+  run _adoption 'p.evidence_path = "../../etc"'
+  [[ "$output" == *"traversal"* ]] || { echo "$output"; false; }
+}
+
+# CONTAINMENT CONTROL. A plain approval.requested must NOT be held to this profile, or every generic
+# approval in the repo starts failing. Same containment the ab-judgement profile carries, and the
+# reason both profiles key on an explicit subject rather than on shape.
+@test "adoption: a plain approval.requested is not held to the adoption profile (control)" {
+  run bash -c "cd \"\$ARC_ROOT\" && node -e 'import(process.argv[1]).then(m=>process.stdout.write(String(m.isAdoptionProposal({kind:\"approval.requested\",payload:{what:\"x\",gate:\"y\"}}))))' \"\$VA\""
+  [ "$output" = "false" ] || { echo "$output"; false; }
+}
+
 @test "absorb-judgement suite registers every test it defines" {
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 26 ] || { echo "registered $registered tests, expected 26"; false; }
+  [ "$registered" -eq 37 ] || { echo "registered $registered tests, expected 37"; false; }
 }
