@@ -391,7 +391,32 @@ export async function ingestReply({ store, bytes, events, now, emit, config, sou
     for (const k of spineIdems) if (!foldedIdems.has(k)) unfoldable++;
     if (!announced && unfoldable > 0)
       throw new IngestRefusal("spine", `the meeting draft ${rec.meeting_ref} has no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Refusing rather than putting a second approval for one meeting in front of a human. Rebuild with arc-replay, or restore the archived day.`);
-    if (!announced) await emit("approval.requested", meetingApprovalPayload(rec));
+
+    // AN EMPTY FOLD IS NOT A SPINE THAT SAYS NO. This function's header promises a caller can
+    // assert its exact receipts "without a spine", and every module test takes that up by
+    // passing `events: []` — so on a second call `announced` was false for the same reason it
+    // would be on a fresh install, and the meeting was announced twice. Two `approval.requested`
+    // for one `meet_` ref: the state `drafts.mjs` calls how the wrong one gets approved, pinned
+    // as the expected value by a suite this branch never opened. The production path was right
+    // the whole time (`cmdIngestReply` hands over the real fold), which is exactly what made it
+    // invisible from here. D6 — the guard moved and its sibling test did not.
+    //
+    // So the absence of an approval only counts as evidence when there is a fold to read it out
+    // of. With none, the honest fallback is the fact this call does know: `created` is true only
+    // when it just minted the draft file, and a draft it did not mint has already been through
+    // this branch once. The interrupted-run repair the `created` flag could not do is preserved,
+    // because in production the fold is never empty by the time a re-ingest reaches here — the
+    // previous run's `outreach.replied` is in it.
+    // The emit's answer is CARRIED, like both `emitOnce` calls above. This was the one emit in
+    // the function whose result was dropped — and the CLI injects an emitter that tolerates
+    // DUP_IDEM, so a lost race here reported "1 ingested, 0 refused" at exit 0 while the
+    // tolerated refusal left the quarantine record that makes `report` refuse. Third time this
+    // exact omission has been found in this file, each time on a different emit.
+    const haveFold = events.length > 0;
+    if (!announced && (created || haveFold)) {
+      const meetingEmit = await emit("approval.requested", meetingApprovalPayload(rec));
+      if (meetingEmit && meetingEmit.duplicate) out.receipt_raced = true;
+    }
   }
 
   return out;

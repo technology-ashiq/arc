@@ -718,13 +718,66 @@ JSON
   [ "$(_spine_count decision.recorded)" -eq 2 ] || { echo "$(_spine_count decision.recorded) decision(s), expected 2"; false; }
 }
 
-@test "this file registers the 21 tests it declares" {
+@test "a spine the fold cannot fully read stops the resume rather than re-announcing" {
+  # THE ONE TEST THAT MAKES `unfoldable` NON-ZERO, and without it both of the fixes that read it
+  # were free to delete: `cmdDraft`s UNSURE branch and the sibling refusal in `ingestReply`.
+  # `_unannounce` deliberately strips the index entries too, so no other test in this file can
+  # ever reach this branch.
+  #
+  # The state is a restored or archived day: the idem index still holds keys whose events are no
+  # longer foldable. "I found no approval for this draft" is then not evidence that none exists,
+  # and re-announcing would put a second live approval in the inbox -- which the emitter cannot
+  # deduplicate, because an approval idem is millisecond-salted.
+  run _cli research "$BATS_TEST_TMPDIR/icp.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  _mkdrafts
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_spine_count approval.requested)" -eq 2 ] || { echo "setup did not queue 2"; false; }
+
+  # Strip the day-file lines ONLY, leaving derived/idem.index intact -- that asymmetry IS the
+  # condition under test, and it is the one thing `_unannounce` deliberately does not produce.
+  cat > "$BATS_TEST_TMPDIR/archive.mjs" <<'MJS'
+import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+const dir = join(process.env.ARC_SPINE_ROOT, "events");
+let removed = 0;
+for (const f of readdirSync(dir).filter((n) => /^\d{4}-\d{2}-\d{2}\.jsonl$/.test(n))) {
+  const p = join(dir, f);
+  const keep = [];
+  for (const line of readFileSync(p, "utf8").split("\n")) {
+    if (!line.trim()) continue;
+    if (JSON.parse(line).kind === "approval.requested") { removed++; continue; }
+    keep.push(line);
+  }
+  writeFileSync(p, keep.length ? keep.join("\n") + "\n" : "");
+}
+console.log("archived: " + removed);
+MJS
+  [ -s "$BATS_TEST_TMPDIR/archive.mjs" ] || { echo "the archive helper is EMPTY"; false; }
+  run node "$BATS_TEST_TMPDIR/archive.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"archived: 2"* ]] || { echo "the fixture stripped $output, expected 2"; false; }
+  [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "the day files still hold approvals"; false; }
+
+  run _cli draft walk "$BATS_TEST_TMPDIR/drafts.json"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"UNSURE"* ]] || { echo "the resume ran against a spine it cannot fully read: $output"; false; }
+  [[ "$output" == *"2 unreadable-spine"* ]] || { echo "$output"; false; }
+  # THE COUNT IS THE CLAIM: nothing was announced, and no second draft was minted.
+  [ "$(_spine_count approval.requested)" -eq 0 ] || { echo "$(_spine_count approval.requested) approval(s) re-announced against an unreadable spine"; false; }
+  [ "$(_drafts_count)" -eq 2 ] || { echo "$(_drafts_count) draft file(s), expected 2"; false; }
+  # And it is NOT counted as a stale body, which is a different cause with a different remedy.
+  [[ "$output" == *"0 stale draft(s) left alone"* ]] || { echo "UNSURE was folded into the stale count: $output"; false; }
+}
+
+@test "this file registers the 22 tests it declares" {
   # THE GRAMMAR IS THE ONE CI USES, not a narrower spelling of it. `grep -c "^@test "` misses a
   # tab-indented declaration and misses `@test` followed by anything but a single space, so a
   # test could be dropped by bats AND uncounted here -- the count that exists to catch a silent
   # drop, blind to two of the three forms it has to see. This is the `_declared` regex in ci.yml.
   declared=$(grep -cE '^[[:blank:]]*@test[[:blank:]]' "$BATS_TEST_FILENAME")
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$declared" -eq 21 ] || { echo "declared $declared, expected 21"; false; }
+  [ "$declared" -eq 22 ] || { echo "declared $declared, expected 22"; false; }
   [ "$registered" -eq "$declared" ] || { echo "bats registered $registered of $declared -- one was DROPPED"; false; }
 }

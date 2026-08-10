@@ -206,6 +206,10 @@ async function cmdResearch(icpPath) {
   // described. Both exist because `accepted.length` is a count of ROWS and every number this
   // command prints is about PEOPLE.
   const emittedThisRun = new Set();
+  // Idems this run has already decided NOT to write — refused by the emitter, or orphaned in
+  // the index. Kept apart from `byIdem`, which means "the spine holds this", because conflating
+  // "we gave up on it" with "it is recorded" is how a run reports a receipt that does not exist.
+  const failedThisRun = new Set();
   const distinctLeads = new Map();
   try {
     const priorEvents = readAllEvents({ allowMissing: true });
@@ -264,7 +268,18 @@ async function cmdResearch(icpPath) {
       // attempt, every time, forever; emitting it is choosing to create the record that disables
       // `report`. Naming it is the only honest move — this is a spine that needs `arc-replay`,
       // not a receipt that needs retrying.
-      if (indexed.has(idem)) { orphanedIdem.push(id); continue; }
+      // ALREADY HANDLED AND ALREADY NAMED. A second row for a lead whose first row was refused
+      // or orphaned must be neither retried (that is a second quarantine record) nor counted
+      // again (the anomaly list would name one lead twice and over-report the total). It is
+      // deliberately checked AFTER `byIdem`, so the ordinary duplicate-row case — first row
+      // emitted, second row identical — still reports `already on the spine`, which is true.
+      if (failedThisRun.has(idem)) continue;
+
+      // ON THE INDEX BUT NOT IN ANY DAY FILE. The emitter will refuse this key and quarantine the
+      // attempt, every time, forever; emitting it is choosing to create the record that disables
+      // `report`. Naming it is the only honest move — this is a spine that needs `arc-replay`,
+      // not a receipt that needs retrying.
+      if (indexed.has(idem)) { orphanedIdem.push(id); failedThisRun.add(idem); continue; }
 
       // PER-LEAD FAILURE ISOLATION. The tolerance was pinned to DUP_IDEM alone, so every OTHER
       // refusal — an unknown payload key, a closed day, a lock timeout — threw out of the loop
@@ -277,13 +292,14 @@ async function cmdResearch(icpPath) {
         res = emit("lead.researched", receipt, { allowDuplicate: true });
       } catch (e) {
         emitFailed.push({ id, message: e.message });
-        // MARKED EVEN ON FAILURE. The snapshot-never-grown defect this function opens with was
-        // fixed on the success path and left in both failure paths — so a corpus holding one
-        // lead twice re-attempted the same refused emit for the second row and wrote a SECOND
-        // quarantine record, and `report` refuses while any exists. The lead is already named
-        // in `emitFailed`; retrying it inside the same run adds a blocker and no information.
-        byIdem.set(idem, { idem, payload: receipt });
-        indexed.add(idem);
+        // MARKED IN ITS OWN SET, not in `byIdem`. Marking a FAILED emit as "on the spine" was a
+        // fix in the right direction with the wrong instrument: it stopped the retry (correct —
+        // a second attempt is a second quarantine record) and it also made the next identical
+        // row print `already on the spine` about a receipt that had never been written, on a
+        // spine that could be entirely empty. A row that disagreed then drew the
+        // earlier-run remedy ("write a correction receipt") against a spine with nothing on it
+        // to correct. Two false statements out of one shortcut.
+        failedThisRun.add(idem);
         continue;
       }
       if (res.duplicate) {
@@ -562,7 +578,7 @@ function cmdDraft(campaign, file) {
     else unannounced.set(key, prior);
   }
 
-  let written = 0, blocked = 0, duplicate = 0, resumed = 0, stale = 0, rejectedSame = 0;
+  let written = 0, blocked = 0, duplicate = 0, resumed = 0, stale = 0, rejectedSame = 0, unsure = 0;
   const halfWritten = [];
   linted.forEach((d, i) => {
     if (scored[i].verdict === VERDICT.FAIL) {
@@ -605,7 +621,11 @@ function cmdDraft(campaign, file) {
     const orphan = unannounced.get(key);
     if (orphan && unfoldable > 0) {
       // "No approval found" is not "no approval exists" on a spine this fold cannot fully read.
-      stale++;
+      // COUNTED SEPARATELY from `stale`. They share a shape (nothing was announced) and nothing
+      // else: STALE means the operator edited the body, UNSURE means the spine cannot be read.
+      // One summary number for both told the operator to go and look at a draft when the thing
+      // to look at was `arc-replay` — a line named after a case it does not cover.
+      unsure++;
       console.log(`  UNSURE ${orphan.draft_ref} ${d.lead_id}: touch ${d.touch_n} has a draft with no approval in the days this fold can read, but ${unfoldable} idem(s) in derived/idem.index belong to events it cannot see — so "never announced" cannot be told from "announced on a day that is no longer here". Nothing was emitted. Rebuild with arc-replay, or restore the archived day, then run this again.`);
       return;
     }
@@ -655,7 +675,7 @@ function cmdDraft(campaign, file) {
   // into the FAIL count — reporting a touch the human REJECTED as a draft the lint blocked,
   // which are opposite facts about who decided — and omitted `HALF` entirely, so the one
   // outcome that leaves work unfinished appeared in no total at all.
-  console.log(`arc-leads draft: ${written} queued for approval, ${resumed} resumed from an interrupted run, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused, ${rejectedSame} unchanged after a rejection, ${stale} stale draft(s) left alone, ${halfWritten.length} half-written`);
+  console.log(`arc-leads draft: ${written} queued for approval, ${resumed} resumed from an interrupted run, ${blocked} FAIL blocked before the inbox, ${duplicate} duplicate touch(es) refused, ${rejectedSame} unchanged after a rejection, ${stale} stale draft(s) left alone, ${unsure} unreadable-spine, ${halfWritten.length} half-written`);
   if (halfWritten.length) {
     for (const h of halfWritten)
       console.error(`arc-leads: HALF-WRITTEN — ${h.ref} (${h.lead}) has a draft on disk and no approval receipt: ${h.message}`);

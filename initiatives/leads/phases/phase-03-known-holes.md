@@ -62,6 +62,38 @@ preimage to include the verdict. Either is Phase 05 work.
 
 ---
 
+## H-07 · Round-5 findings classified below the bar
+
+Recorded together because they share a cause: they are places where the code is correct and the
+*coverage* or the *shape* is not, which the 2026-08-10 bar puts here rather than in the way of
+the slice.
+
+**The two `unfoldable` derivations are asymmetric.** `cmdResearch` asks the question per-idem and
+names the lead; `cmdDraft` and `ingestReply` ask a global "is *any* index key unfoldable" and
+withhold unrelated work. In `ingestReply` the refusal also lands **after** the reply receipt is
+on the spine and the meeting draft is on disk, so a warm lead sits without a calendar draft until
+`arc-replay` — against that function's own "same run, a deadline you cannot miss". Left because
+narrowing it to the one `meet_` ref is a fold-shaped change and the conservative version is safe;
+the cost is latency on a spine that is already broken. **A test now makes `unfoldable` non-zero**
+(journey 22), so neither branch is deletable any more.
+
+**`approvalState` requires `typeof e.id === "string"` and nothing tests it.** An
+`approval.requested` with no `id` reads as "no approval exists", so `draft` mints a second one
+rather than refusing. Unreachable through any current writer — the emitter always assigns a ULID
+— so it is a defence against a hand-edited spine with no way to produce the input.
+
+**`ingestReply` treats a REJECTED meeting approval as announced.** A calendar approval the human
+rejects can never be re-raised by re-ingesting the reply. This is the meeting-side twin of H-01
+and closes with it.
+
+**`unannounced` keeps one orphan per touch; `rejectedTouch` keeps a list.** Two orphaned drafts
+for one touch would leave the first permanently unannounceable. Not reachable through the CLI,
+because the run that would mint the second is the run that resumes the first.
+
+**Journey test 20 deliberately leaves a quarantine record** (the refused second decision), so no
+`report` assertion can follow it inside that test. Noted so the next person to extend that test
+does not spend an hour on it.
+
 ## H-02 · `arc-leads unlock` is the stale-lock remedy and is documented in one place
 
 **What.** Every read-then-emit command now takes the send lock, and `process.exit` does not run a
