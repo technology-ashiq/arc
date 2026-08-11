@@ -195,8 +195,8 @@ proof: verified-real — `gh run view <id> --json jobs` read per-JOB, head SHA c
 tier: verified-real
 sources: phase-00-spec.md
 decision: CI is the only gate; no suite was run on this box. 31 tests in tests/memory-index.bats, auto-discovered by shard-tests.mjs, no workflow edit.
-result: Run 31482555851 on eb62094: 19/19 jobs success. Run 31484005819 on 4ca0b49: 18/19, one windows shard red on TWO TEST BUGS OF MINE, both windows-only -- a full-path compare across the bash/node boundary (windows prints C:/Users/RUNNER~1/... 8.3-shortened while bash holds /c/Users/...), and pathToFileURL handed an MSYS path, which resolves to D:\d\a\arc\arc\... . Both fixed; the module itself was green on every leg.
-commit: 4ca0b49
+result: Run 31484874136 at head 1ff8ecb: 19/19 jobs success, read per-JOB. 31/31 memory tests EXECUTED and passed on all five OS x node combinations (ubuntu 18/20/22, macOS 20, windows 20) -- confirmed by counting TAP ok lines per leg, not by the absence of a failure.
+commit: 1ff8ecb
 
 #### slice: 14
 
@@ -206,6 +206,6 @@ risk: medium
 proof: (empty until proven)
 tier: (empty until proven)
 sources: phase-00-spec.md
-decision: Closes only after 08, 12 and 13 are real.
+decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)

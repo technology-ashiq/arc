@@ -1,0 +1,24 @@
+{
+  "phase": "00",
+  "commit": "1ff8ecb244050735a118e79851a35678c848cd8e",
+  "short": "1ff8ecb",
+  "generated": "2026-08-11T11:15:03Z",
+  "files": [
+    {
+      "name": "adversarial-decision-logic.md",
+      "sha256": "9e97bd9d8505c2d250736de51e453bd596058817eb9ad9c8ea2ecd9f0f2b7a42"
+    },
+    {
+      "name": "adversarial-shell-os.md",
+      "sha256": "f9478edbcf65e527463c0fe305f972a7efb6980c64377f2ad2e9b73d684c4993"
+    },
+    {
+      "name": "counts-and-exclusions.md",
+      "sha256": "97a432f02c23839bee2aa15942ab33dafcd0d7b81a08fb1453cc663a50cf88f8"
+    },
+    {
+      "name": "grep-baseline.md",
+      "sha256": "92061a488db38de20b2342865aadacc5105fa603cd0706bd66b9fe4535d966d6"
+    }
+  ]
+}

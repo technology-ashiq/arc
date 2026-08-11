@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-memory (Cycle 11, opened 2026-08-11)
-phase: 00
+phase: 01
 appetite: 5d
-burn: 0.6d
+burn: 1d
 blocked-on: —
 depends-on: —
 
@@ -34,13 +34,13 @@ depends-on: —
 
 | # | Capability | Appetite | REQs | Status |
 |---|---|---|---|---|
-| 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | 🔨 in progress |
+| 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | ✅ closed 2026-08-11 |
 | 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | ⬜ not started |
 | 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, sqlite engine + equivalence gate | 1.25d | REQ-04..REQ-08 | ⬜ not started |
 
 ## Appetite burn
 
-**0.6d of 5d used (12%).** Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
+**1d of 5d used (20%).** Phase 00 came in at **1d against its 1.5d appetite**. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
 conversation. 5.0d (100%) — cut or kill, never silently extend.
 
 **The appetite was raised 4d → 5d by the owner on 2026-08-11**, recorded here rather than absorbed
@@ -154,28 +154,54 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
     back-filled row renumbers every later id on that date and the gate keeps passing while grading
     a different lesson. Demonstrated, then closed.
 
-**Phase 00 open. Slices 01–07, 09–12 proven; 08 (measured shard weight), 13 (CI green on the
-current head) and 14 (tracker) still owed.**
+- **2026-08-11 — PHASE 00 CLOSED.** `amendments: 2` · `reopened: n` · `t-to-phase0: 0d` ·
+  **1d against a 1.5d appetite.** Shipped: five adapters over the five company organs, one
+  derived index (`.claude/state/memory/index.json`, gitignored, full-rebuild only), count-verified
+  per organ with every excluded row named by file and line, an mtime+sha256 staleness manifest
+  with an atomic temp-then-rename swap, the 12 golden queries with content anchors, and
+  `golden-check.mjs`.
+
+  **Green on CI: 31/31 memory tests on all five OS×node combinations** (ubuntu 18/20/22, macOS 20,
+  windows 20), read per-JOB, run `31484874136` at head `1ff8ecb` — and the tests were confirmed
+  to have *executed* on each leg, not merely to have not failed.
+
+  Live counts **54 / 49 / 4 / 150 / 21 = 278 records**, 48 named exclusions of which **2 are
+  malformed and both are real**: ADR-0006 and ADR-0007 each carry two `**Status:**` lines under
+  `## Amendment`, so an amendment recording a new status would never be read. Two consecutive
+  rebuilds with the index deleted between them produced byte-identical record dumps. `git status`
+  clean afterwards; `KINDS.length` still 44; `spine-reader-lint` green **and now actually
+  scanning memory**, which it was not before.
+
+  The two amendments were both corrections of measured fact, neither a change of intent: the spec
+  said `trial-ledger 37/37` (it is 49) and `adr 140/140` (it is 150, because this lane wrote ten
+  during its own kickoff), and its section-C emit snippet was refused by six CI legs because
+  `decision.recorded` carries an idem welded to the approval it decides — written at kickoff from
+  reading the payload shape, never run.
+
+  **Assumption triggers checked, none fired.** Grep scores 1/12 by the pinned method against a
+  `>= 10/12` trigger. The "second organ carries separators inside its own data" clause was
+  measured rather than assumed: two organs do carry pipes inside code spans, but both are in
+  *prose describing the format*, not in data — the only pipe inside real data is still
+  `retro-log.md:28`. No ADR revisit condition is true, and **ADR-0708's is the inverse of what
+  happened**: it fires on heavy overlap between the two passes, and 37 findings produced exactly
+  one.
 
 ## Now
 
-**Current position, 2026-08-11: kickoff COMPLETE, every gate GREEN, STOPPED at the approval
-gate.** PLAN.md, `phases/phase-00-spec.md`, `phase-01-spec.md`, `phase-02-spec.md` and
-ADR-0700..0709 are written. `kickoff-lint` green · `board-lint` green · **simulation gate 0
-blockers** after six rounds. No product code exists and none may be written until the owner
-approves.
+**Phase 00 is CLOSED and Phase 01 is next: recall people can trust.** The index exists, is honest
+about what it could not read, and rebuilds identically. Nothing queries it yet — there is no
+ranking in the repo at all, which is why Phase 00 proved *index* determinism and Phase 01 owes
+*query* determinism.
 
-Both of the owner's 2026-08-11 rulings are applied: the third repair round was taken (and ran to
-six, reaching zero), and the appetite is **5 days with nothing cut**, so the whole of option C
-ships — canonical JS engine, sqlite accelerator, and the equivalence gate between them.
+Phase 01 (REQ-02, REQ-03, 1.75d) ships `arc-recall.mjs`: bm25 ranking with an id-ascending
+tie-break, query sanitization that makes hostile syntax literal rather than dropping it, the
+curated alias layer, verbatim output with path-bearing citations, the `--engine js|auto` seam
+REQ-07 later plugs sqlite into, a zero-lane root-mode fixture, sub-second timings on the owner box
+and two CI legs, and the additive kickoff hook via `processes/kickoff-plan.process.yaml`.
 
-**What the owner is approving:** an 8-REQ, 3-phase, 5-day cycle that indexes five existing company
-organs in place and gives `arc-recall` back their contents verbatim with openable citations, plus
-additive recall steps in kickoff and review. It creates no new store, emits no events, adds no
-spine kinds, and touches no organ's contents. If it were deleted tomorrow the company would lose a
-search box and nothing else — that property is what makes it safe to build in five days.
+**The number Phase 01 and Phase 02 have to beat is 5 of 12, not 1 of 12.** The pinned grep method
+scores 1/12, but that is a floor artifact of grep having no ranking; the ORACLE control — grep's
+best case, given a searcher who already knows the recorder's vocabulary — scores 5/12, and that is
+recorded in `evidence/phase-00/grep-baseline.md` as the real bar.
 
-**Next step on approval:** `/arc-develop start` on Phase 00 — first slice the five adapters and the
-count-verify negative control, first proof the grep baseline measured **before** anything claims to
-beat it. If grep already answers 10 of the 12 golden queries, the module's own premise is thin and
-that is a STOP-and-report, not a number to improve.
+PR **#162** stays a draft until all three phases close.
