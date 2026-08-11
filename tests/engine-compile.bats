@@ -46,7 +46,10 @@ _procs() {
   # kickoff-plan retired on 2026-08-11 when the memory lane added its recall step.
   [[ "$output" == *"2/2 byte-identical"* ]]
   [[ "$output" == *"(1 retired, ADR-0207)"* ]]
-  [[ "$output" == *"[retired] processes/kickoff-plan.process.yaml"* ]]
+  # Separator-free: arc-compile prints the PLATFORM separator, so a forward slash here passes on
+  # ubuntu and macOS and fails on windows alone -- which is exactly what it did.
+  [[ "$output" == *"[retired] "* ]]
+  [[ "$output" == *"kickoff-plan.process.yaml — migration proof retired"* ]]
 }
 
 @test "REQ-02: a retirement must be DECLARED, not inferred from a mismatch" {
