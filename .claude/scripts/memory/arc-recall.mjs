@@ -41,14 +41,62 @@ function gitToplevel() {
 }
 
 // ---------- argv ----------
-const VALUE_FLAGS = new Set(["--tag", "--source", "--since", "--lane", "--limit", "--full", "--grep", "--root", "--engine"]);
+const VALUE_FLAGS = new Set(["--tag", "--source", "--since", "--lane", "--limit", "--full", "--grep", "--root", "--engine", "--decisions"]);
 // `--full-text` used to sit here with no dispatch arm: accepted, silently dead, and absent from
 // the phase spec's CLI surface. An accepted-but-inert flag is worse than a rejected one, because
 // the operator believes it took effect.
 const BOOL_FLAGS = new Set(["--json", "--rebuild"]);
 
+// ---------- the --decisions grammar (REQ-04, ADR-0703) ----------
+// Whitespace-separated terms, ANDed. `field:value` is an exact match on the recorded string;
+// `field~value` is a case-insensitive substring. The fields are exactly the closed
+// `decision.recorded` payload plus its provenance -- naming anything else is a USAGE error and
+// never a silently-empty result, because a filter that quietly matched nothing is byte-identical
+// to a real miss. This is the `--full-text` lesson from Phase 01 applied before it can recur:
+// an accepted-but-inert term is worse than a rejected one, because the operator believes it took
+// effect. Reader-only: this filters records the index already holds, and opens no spine of its own.
+export const DECISION_FIELDS = new Set(["verdict", "reason", "decides", "ulid", "ts"]);
+
+export function parseDecisionFilter(expr) {
+  const raw = String(expr ?? "").trim();
+  // Unreachable through argv -- the empty-value guard in parseArgs fires first -- but this
+  // function is exported, and an exported parser is called directly by the adversarial pass.
+  if (!raw) throw new UsageError("--decisions was given no terms at all");
+  const terms = [];
+  const seenField = new Set();
+  for (const term of raw.split(/\s+/)) {
+    // Whichever separator comes FIRST decides the operator. A colon INSIDE a substring value
+    // (`reason~mode-B:uncertified`) must not silently retarget the match to an exact one.
+    const c = term.indexOf(":");
+    const t = term.indexOf("~");
+    const i = c === -1 ? t : t === -1 ? c : Math.min(c, t);
+    if (i === -1) throw new UsageError(`--decisions term ${JSON.stringify(term)} has no operator -- write field:value for an exact match, or field~value for a substring`);
+    const field = term.slice(0, i);
+    const op = term[i];
+    const value = term.slice(i + 1);
+    if (!field) throw new UsageError(`--decisions term ${JSON.stringify(term)} names no field before the ${JSON.stringify(op)}`);
+    if (!DECISION_FIELDS.has(field)) throw new UsageError(`--decisions field ${JSON.stringify(field)} is not one of: ${[...DECISION_FIELDS].join(", ")}`);
+    if (!value) throw new UsageError(`--decisions term ${JSON.stringify(term)} has an empty value -- refusing to guess what you meant`);
+    // A repeated field is an AND that usually cannot match at all (`verdict:reject verdict:approve`
+    // is always zero). Same rule as a repeated value flag: an operator error, never last-wins.
+    if (seenField.has(field)) throw new UsageError(`--decisions names ${JSON.stringify(field)} twice -- that is an operator error, not a last-wins override`);
+    seenField.add(field);
+    terms.push({ field, op, value });
+  }
+  return terms;
+}
+
+/** Every term must hold. A field the record does not carry is "", which matches nothing but `~`
+ *  of the empty string -- and an empty value is refused at parse time, so it cannot arise. */
+export function matchesDecision(r, terms) {
+  return terms.every((t) => {
+    const v = String(r?.fields?.[t.field] ?? "");
+    return t.op === ":" ? v === t.value : v.toLowerCase().includes(t.value.toLowerCase());
+  });
+}
+
 export function parseArgs(argv) {
-  const o = { query: [], tag: null, source: null, since: null, lane: null, limit: 5, full: null, grep: null, root: null, engine: "auto", json: false, rebuild: false };
+  const o = { query: [], tag: null, source: null, since: null, lane: null, limit: 5, full: null, grep: null, root: null, engine: "auto", json: false, rebuild: false, decisions: null, decisionsExpr: null };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -94,6 +142,8 @@ export function parseArgs(argv) {
         case "--engine":
           if (!ENGINES.has(v)) throw new UsageError(`--engine ${JSON.stringify(v)} is not one of: js, auto (sqlite arrives in Phase 2)`);
           o.engine = v; break;
+        // Parsed EAGERLY, so a malformed expression is exit 2 before any index is read or built.
+        case "--decisions": o.decisions = parseDecisionFilter(v); o.decisionsExpr = v; break;
       }
       continue;
     }
@@ -232,7 +282,7 @@ async function main() {
   // `--grep` returned before ranking, so a mistyped flag produced a plausible answer to a
   // question nobody asked. Refusing is the only honest option: applying them would change what
   // those two modes mean.
-  if (o.full && (o.grep !== null || o.query.length || o.tag || o.source || o.since || o.lane)) {
+  if (o.full && (o.grep !== null || o.decisions !== null || o.query.length || o.tag || o.source || o.since || o.lane)) {
     console.error("arc-recall: --full takes one id and nothing else; the other arguments would have been ignored in silence");
     process.exit(2);
   }
@@ -240,10 +290,26 @@ async function main() {
     console.error("arc-recall: --grep and a positional query are two different searches; the positional one would have been ignored in silence");
     process.exit(2);
   }
+  // Same refusal, same reason, for the third listing mode. --decisions selects its own organ and
+  // does not rank, so a positional query or a --grep alongside it would be dropped without a word.
+  if (o.decisions !== null && o.query.length) {
+    console.error("arc-recall: --decisions and a positional query are two different searches; the positional one would have been ignored in silence");
+    process.exit(2);
+  }
+  if (o.decisions !== null && o.grep !== null) {
+    console.error("arc-recall: --decisions and --grep are two different searches; give one of them");
+    process.exit(2);
+  }
+  // --source cannot narrow --decisions, only contradict it: any value but `decisions` yields an
+  // empty pool that reads exactly like "no decision matched your filter".
+  if (o.decisions !== null && o.source) {
+    console.error(`arc-recall: --decisions already selects the decisions organ; --source ${JSON.stringify(o.source)} could only contradict it`);
+    process.exit(2);
+  }
 
   const queryText = o.query.join(" ");
-  if (!queryText && !o.full && o.grep === null && !o.rebuild) {
-    console.error("arc-recall: nothing to look up -- give a query, --full <id>, --grep <text>, or --rebuild");
+  if (!queryText && !o.full && o.grep === null && o.decisions === null && !o.rebuild) {
+    console.error("arc-recall: nothing to look up -- give a query, --full <id>, --grep <text>, --decisions <filter>, or --rebuild");
     process.exit(2);
   }
 
@@ -267,7 +333,10 @@ async function main() {
       // Zero results IS a result. Exit 0, and say what was looked for.
       if (o.json) console.log(JSON.stringify({ query: o.full, engine: "js", results: [] }));
       else console.log(`no record with id ${o.full} (the index holds ${records.length})`);
-      process.exit(0);
+      // `return`, not process.exit(0) -- see the closing note of main(). This file's own comment
+      // named the hazard and then three branches did it anyway, which is the twin-fix shape: the
+      // rule was written down in one place and never applied to the others.
+      return;
     }
     if (o.json) console.log(JSON.stringify({ query: o.full, engine: "js", results: [r] }, null, 2));
     else { console.log(renderRow(r, 0, { ...o, full: o.full })); }
@@ -277,6 +346,36 @@ async function main() {
   const filterNotes = [];
   const pool = applyFilters(records, o, filterNotes);
 
+  // --decisions: REQ-04. A LISTING mode, deliberately not a ranked one. Ranking a filter query
+  // would let the ranker starve a filter that genuinely matched -- the exact starvation shape the
+  // rank-inside-the-pool fix closed in Phase 01 -- and "which decisions match this" has no
+  // relevance question in it to rank by. Reader-only (ADR-0703): these records came off the index,
+  // which read the spine through the reader library; nothing here opens a spine of its own.
+  if (o.decisions !== null) {
+    const matched = pool.filter((r) => r.organ === "decisions" && matchesDecision(r, o.decisions));
+    // Index order is ULID-ascending and therefore a property of the data, not of the read.
+    const hits = matched.slice(0, o.limit);
+    const total = records.filter((r) => r.organ === "decisions").length;
+    if (o.json) {
+      console.log(JSON.stringify({
+        query: o.decisionsExpr, mode: "decisions", engine: "filter", terms: o.decisions, notes: filterNotes,
+        shown: hits.length, matched: matched.length, indexed: total,
+        results: hits.map((r) => ({ ...r, citation: citationOf(r) })),
+      }, null, 2));
+      return;
+    }
+    // Every number is labelled. `shown` is printed separately from `matched` so that a --limit
+    // truncation is VISIBLE -- a partial answer that looks complete is the confident-false-negative
+    // shape `--limit 0` was refused for.
+    console.log(`decisions "${o.decisionsExpr}" -- filtered, unranked (showing ${hits.length} of ${matched.length} matching decision(s); ${total} in the index)`);
+    if (rebuilt) console.log(`  index rebuilt first: ${why}`);
+    for (const n of [...warnings, ...filterNotes]) console.log(`  note: ${n}`);
+    console.log("");
+    hits.forEach((r, i) => { console.log(renderRow(r, i, o)); console.log(""); });
+    if (matched.length === 0) console.log("  no recorded decision matched that filter. That is a result, not an error.\n");
+    return;
+  }
+
   // --grep: the honest escape valve (ADR-0709). Literal substring, no ranking, no aliases -- and
   // it says which it is, so nobody mistakes it for the ranked path.
   if (o.grep !== null) {
@@ -285,7 +384,7 @@ async function main() {
     // by ranking and invisible to grep -- 163 such words in this corpus -- while the zero-result
     // banner sends the searcher to grep precisely when ranking has failed them.
     const hits = pool.filter((r) => `${r.title}\n${r.body}\n${(r.tags ?? []).join(" ")}`.toLowerCase().includes(needle)).slice(0, o.limit);
-    if (o.json) { console.log(JSON.stringify({ query: o.grep, mode: "grep", engine: "literal", results: hits }, null, 2)); process.exit(0); }
+    if (o.json) { console.log(JSON.stringify({ query: o.grep, mode: "grep", engine: "literal", results: hits }, null, 2)); return; }
     console.log(`grep "${o.grep}" -- literal substring, unranked (${hits.length} of ${pool.length} record(s))`);
     hits.forEach((r, i) => console.log(renderRow(r, i, o)));
     return;

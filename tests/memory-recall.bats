@@ -17,6 +17,9 @@ MEM="$ARC_ROOT/.claude/scripts/memory/memory-index.mjs"
 RECALL="$ARC_ROOT/.claude/scripts/memory/arc-recall.mjs"
 GOLDEN="$ARC_ROOT/.claude/scripts/memory/golden-check.mjs"
 FIXTURES="$ARC_ROOT/tests/fixtures/memory"
+EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
+INBOX="$ARC_ROOT/.claude/scripts/hq/arc-inbox.mjs"
+VALIDATE="$ARC_ROOT/.claude/scripts/hq/lib/validate.mjs"
 
 setup() {
   SPINE="$BATS_TEST_TMPDIR/spine"
@@ -42,6 +45,28 @@ _built() {
   cp -r "$FIXTURES/organs-good" "$BATS_TEST_TMPDIR/tree"
   run node "$MEM" --root "$BATS_TEST_TMPDIR/tree" --rebuild
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$BATS_TEST_TMPDIR/tree"
+}
+
+# The same tree, plus ONE recorded decision on the tmpdir spine: verdict `reject`, reason
+# "worktree mode B is not certified". Seeded through arc-inbox and never a raw emit --
+# decision.recorded carries a WELDED idem, sha256("decision.recorded|" + decides), so a raw emit
+# is refused with BAD_DECISION.
+#
+# Every step is checked, because a fixture builder that fails quietly is a silent pass generator
+# that looks exactly like a clean run: the caller sees an empty $tree and, without the -n check
+# on the other side, a filter test would then "pass" against an empty index.
+_built_with_decision() {
+  local approval
+  approval="$(bash "$EVENT" emit approval.requested --strict --payload \
+    '{"what":"seed for the REQ-04 decisions filter","gate":"fixture"}')" || return 1
+  [ -n "$approval" ] || return 1
+  node "$INBOX" reject "$approval" --reason "worktree mode B is not certified" >/dev/null 2>&1 || return 1
+  # Exit 0 from a writer is not evidence that anything was written. Look in BOTH places.
+  [ -z "$(ls -A "$SPINE/events/_quarantine" 2>/dev/null)" ] || return 1
+  [ -n "$(ls -A "$SPINE/events" 2>/dev/null)" ] || return 1
+  cp -r "$FIXTURES/organs-good" "$BATS_TEST_TMPDIR/tree" || return 1
+  node "$MEM" --root "$BATS_TEST_TMPDIR/tree" --rebuild >/dev/null 2>&1 || return 1
   echo "$BATS_TEST_TMPDIR/tree"
 }
 
@@ -402,6 +427,100 @@ _built() {
   run node "$RECALL" --root "$tree" -- --limit
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *'recall "--limit"'* ]]
+}
+
+@test "arc-recall: --decisions returns the recorded reason byte-exact with its ULID citation" {
+  # REQ-04. The reason is reproduced as recorded -- this surface is a reader over the decisions
+  # organ, and a recall surface that paraphrases the organ has become a second, worse copy of it.
+  tree="$(_built_with_decision)"
+  [ -n "$tree" ] || { echo "the seeded-decision fixture was not built"; false; }
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject reason~worktree'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"worktree mode B is not certified"* ]]
+  # A decision has no file line, so the ULID IS the locator -- and it is never printed bare.
+  [[ "$output" == *"(spine) "* ]]
+  [[ "$output" == *"filtered, unranked"* ]]
+  # `showing N of M` prints both numbers, so a --limit truncation cannot masquerade as the whole
+  # answer -- the confident-partial shape `--limit 0` was refused for.
+  [[ "$output" == *"showing 1 of 1 matching decision(s)"* ]]
+}
+
+@test "arc-recall: --decisions actually narrows, proven against the opposite verdict" {
+  # The assertion that fails if the filter is deleted. Without the second half, a --decisions that
+  # ignored its terms entirely would still satisfy the first half, and a --decisions that matched
+  # NOTHING would be indistinguishable from a fixture that never seeded.
+  tree="$(_built_with_decision)"
+  [ -n "$tree" ] || { echo "the seeded-decision fixture was not built"; false; }
+  run node "$RECALL" --root "$tree" --decisions 'verdict:approve'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 0 of 0 matching decision(s)"* ]]
+  [[ "$output" == *"no recorded decision matched that filter"* ]]
+  [[ "$output" == *"That is a result, not an error"* ]]
+  # ...and the very same tree DOES hold one, so the zero above is the filter working.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 1 of 1 matching decision(s)"* ]]
+  # `:` is exact and `~` is substring, and they are not the same operator: a substring value under
+  # the exact operator must MISS, or the two operators have quietly collapsed into one.
+  run node "$RECALL" --root "$tree" --decisions 'reason:worktree'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 0 of 0 matching decision(s)"* ]]
+}
+
+@test "arc-recall: the --decisions grammar refuses what it cannot honour, naming each refusal" {
+  # An accepted-but-inert term is worse than a rejected one: the operator believes it took effect.
+  # That is the `--full-text` defect from Phase 01, and this is it closed before it can recur.
+  tree="$(_built)"
+  run node "$RECALL" --root "$tree" --decisions 'sender:ashiq'; [ "$status" -eq 2 ]
+  [[ "$output" == *"is not one of: verdict, reason, decides, ulid, ts"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'reject'; [ "$status" -eq 2 ]
+  [[ "$output" == *"has no operator"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:'; [ "$status" -eq 2 ]
+  [[ "$output" == *"has an empty value"* ]]
+  run node "$RECALL" --root "$tree" --decisions ':reject'; [ "$status" -eq 2 ]
+  [[ "$output" == *"names no field"* ]]
+  # An AND over one field that can never hold twice is an operator error, not last-wins -- the
+  # same rule lanes.md sets for two --lane flags with different values.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject verdict:approve'; [ "$status" -eq 2 ]
+  [[ "$output" == *"that is an operator error"* ]]
+  # The quoted-empty-variable shape the lane rules mandate, and the flag-eats-flag shape.
+  run node "$RECALL" --root "$tree" --decisions ''; [ "$status" -eq 2 ]
+  run node "$RECALL" --root "$tree" --decisions --json; [ "$status" -eq 2 ]
+  [[ "$output" == *"which is a flag, not a value"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject' --decisions 'verdict:approve'; [ "$status" -eq 2 ]
+  [[ "$output" == *"given twice"* ]]
+}
+
+@test "arc-recall: --decisions refuses every argument it would otherwise drop in silence" {
+  tree="$(_built)"
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject' "worktree"; [ "$status" -eq 2 ]
+  [[ "$output" == *"would have been ignored in silence"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject' --grep worktree; [ "$status" -eq 2 ]
+  [[ "$output" == *"two different searches"* ]]
+  # --source can only contradict --decisions; the contradiction reads exactly like a real miss.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject' --source adr; [ "$status" -eq 2 ]
+  [[ "$output" == *"could only contradict it"* ]]
+  run node "$RECALL" --root "$tree" --full retro:1 --decisions 'verdict:reject'; [ "$status" -eq 2 ]
+  [[ "$output" == *"--full takes one id and nothing else"* ]]
+}
+
+@test "arc-recall: REQ-04 adds no event kind and opens no spine of its own" {
+  # ADR-0703: memory reads the spine through the reader library and emits nothing. A new query
+  # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so the count is
+  # MEASURED here rather than assumed.
+  vurl="$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/hq/lib/validate.mjs")).href)')"
+  [ -n "$vurl" ]
+  run node -e "import(process.argv[1]).then(m=>{ if (m.KINDS.length !== 44) { console.error(\"KINDS.length is \" + m.KINDS.length); process.exit(1); } console.log(\"KINDS \" + m.KINDS.length); })" "$vurl"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"KINDS 44"* ]]
+  # Positive control FIRST: prove this grep is reading the file it claims to read, so the absence
+  # assertion below cannot pass on a typo in the path.
+  run grep -c -- "--decisions" "$RECALL"
+  [ "$status" -eq 0 ] || { echo "grep found no --decisions in $RECALL at all"; false; }
+  [ "$output" -gt 0 ]
+  # Reader-only: the three tokens `spine-reader-lint.sh` bans must not appear in this surface.
+  run grep -nE "events/|[.]jsonl|state[.]db" "$RECALL"
+  [ "$status" -ne 0 ] || { echo "arc-recall.mjs reaches for the spine directly: $output"; false; }
 }
 
 @test "arc-recall: bats registers every test this file declares" {
