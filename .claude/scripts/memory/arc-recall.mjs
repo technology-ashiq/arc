@@ -7,9 +7,12 @@
 // for when ranking fails, and it says so rather than pretending ranking always works.
 // ADR-0707: root-mode first. `lane` is provenance metadata, so `--lane` in a tree with no lanes is
 // an empty result at exit 0, never an error.
-// ADR-0701: `--engine` is the seam the sqlite accelerator plugs into in Phase 2. Today `auto`
-// resolves to `js` and prints which engine actually ran -- a dispatch that hides its choice is a
-// dispatch nobody can audit.
+// ADR-0701 (amended 2026-08-11): the sqlite engine is CUT, on the measurement the ADR asked for --
+// Phase 01 clocked the search at 0.42ms of a 199ms wall, so it would have accelerated 0.2% of the
+// elapsed time. `--engine` remains the SEAM, and it is a real one: names come from the registry in
+// lib/engines.mjs and `auto` resolves THROUGH it, so the CLI and the equivalence harness cannot
+// drift apart. Today that registry holds one entry and the run prints which engine actually ran --
+// a dispatch that hides its choice is a dispatch nobody can audit.
 //
 // Invocation is always `node .claude/scripts/memory/arc-recall.mjs ...` from the repo root.
 //
@@ -26,9 +29,13 @@ import { search } from "./lib/bm25.mjs";
 import { sanitizeQuery, tokenize } from "./lib/tokenize.mjs";
 import { parseAliases, expand } from "./lib/aliases.mjs";
 import { recordSurfaced } from "./lib/observe.mjs";
+import { ENGINES as ENGINE_REGISTRY, resolveEngine } from "./lib/engines.mjs";
 
 export const ALIAS_FILE = "docs/memory/aliases.md";
-const ENGINES = new Set(["js", "auto"]);
+// Derived from the registry, never a second hand-kept list: two lists of engine names drift, and
+// the one that drifts is always the one the operator types against. `auto` is not an engine, it
+// is the instruction to pick one, so it is added here and nowhere else (REQ-07, ADR-0701).
+const ENGINE_NAMES = new Set([...ENGINE_REGISTRY.map((e) => e.name), "auto"]);
 const SOURCES = new Set(["retro-log", "trial-ledger", "learning-ledger", "adr", "decisions"]);
 
 class UsageError extends Error {}
@@ -141,7 +148,7 @@ export function parseArgs(argv) {
         case "--grep": o.grep = v; break;
         case "--root": o.root = v; break;
         case "--engine":
-          if (!ENGINES.has(v)) throw new UsageError(`--engine ${JSON.stringify(v)} is not one of: js, auto (sqlite arrives in Phase 2)`);
+          if (!ENGINE_NAMES.has(v)) throw new UsageError(`--engine ${JSON.stringify(v)} is not one of: ${[...ENGINE_NAMES].join(", ")}`);
           o.engine = v; break;
         // Parsed EAGERLY, so a malformed expression is exit 2 before any index is read or built.
         case "--decisions": o.decisions = parseDecisionFilter(v); o.decisionsExpr = v; break;
@@ -408,8 +415,12 @@ async function main() {
   }
   const { tokens, fired } = expand(rawTokens, aliasRows);
 
-  // The engine seam REQ-07 plugs sqlite into. `auto` resolves to `js` today and SAYS so.
-  const engine = "js";
+  // The engine seam. REQ-07's sqlite engine is CUT (ADR-0701 amendment, measured), so the
+  // registry holds one entry and `auto` resolves to it -- but it resolves THROUGH the registry the
+  // equivalence harness enumerates, so the seam is real rather than a comment promising one.
+  const chosen = resolveEngine(o.engine);
+  if (!chosen) { console.error(`arc-recall: no engine named ${JSON.stringify(o.engine)} is available`); process.exit(2); }
+  const engine = chosen.name;
   // Rank INSIDE the filtered pool. Ranking globally and filtering afterwards was the starvation
   // bug: the filter could remove every one of the global top-N and the CLI would then state
   // positively that nothing matched.

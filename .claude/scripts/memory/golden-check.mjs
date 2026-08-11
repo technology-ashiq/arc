@@ -22,6 +22,7 @@ import { indexPath } from "./memory-index.mjs";
 import { search } from "./lib/bm25.mjs";
 import { sanitizeQuery } from "./lib/tokenize.mjs";
 import { parseAliases, expand } from "./lib/aliases.mjs";
+import { checkEquivalence } from "./lib/engines.mjs";
 import { ALIAS_FILE } from "./arc-recall.mjs";
 
 export const GOLDEN = "tests/fixtures/memory/golden-queries.tsv";
@@ -142,6 +143,7 @@ function main() {
   let seenRoot = false;
   let doRank = false;
   let doGate = false;
+  let doEquiv = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--root") {
       if (seenRoot) { console.error("golden-check: --root given twice -- that is an operator error, not a last-wins override"); process.exit(2); }
@@ -156,6 +158,7 @@ function main() {
     // --gate IMPLIES --rank: a gate that could be asked to grade without ranking would exit 0
     // having graded nothing, which is the vacuous pass in its purest form.
     else if (argv[i] === "--gate") { doRank = true; doGate = true; }
+    else if (argv[i] === "--equivalence") { doEquiv = true; }
     else { console.error(`golden-check: unknown flag ${argv[i]}`); process.exit(2); }
   }
   root = resolve(root ?? process.cwd());
@@ -173,6 +176,32 @@ function main() {
   catch (e) { console.error(`golden-check: ${e.message}`); process.exit(2); }
   try { index = JSON.parse(readFileSync(idxPath, "utf8")); }
   catch (e) { console.error(`golden-check: index is unreadable: ${e.message}`); process.exit(2); }
+
+  // The equivalence harness (REQ-07, ADR-0701). Its own surface, ahead of the anchor check,
+  // because it grades ENGINES rather than the golden set's expectations: it asks whether two
+  // implementations rank identically, which is a question the expected ids play no part in.
+  if (doEquiv) {
+    const records = index.records ?? [];
+    const queries = rows.map((r) => ({ id: r.id, tokens: sanitizeQuery(r.query).tokens }));
+    const v = checkEquivalence({ index, records, queries });
+    console.log(`equivalence: tie-break is ${v.tieBreak} -- two engines agree only on the same ORDERED ids, never merely the same set`);
+    console.log(`equivalence: engine(s) available: ${v.engines.join(", ") || "(none)"}${v.unavailable.length ? `; unavailable: ${v.unavailable.join(", ")}` : ""}`);
+    if (!v.compared) {
+      // Said in as many words. A green that cannot tell "they agree" from "there was nothing to
+      // compare" is the vacuous pass wearing a gate's clothes, and REQ-07's engine is CUT, so
+      // this is the state the harness will sit in until a build trigger fires.
+      console.log(`equivalence: only ${v.engines.length} engine is registered, so NOTHING WAS COMPARED. This run proves DETERMINISM (the engine returns identical ordered ids on a second call) across all ${v.queries} golden queries -- it does not and cannot show that two engines agree.`);
+    }
+    if (v.mismatches.length) {
+      for (const m of v.mismatches) {
+        console.error(`equivalence: ${m.kind === "nondeterministic" ? "NONDETERMINISTIC" : "DISAGREEMENT"} on ${m.query} -- ${m.a} returned [${m.aIds.join(", ")}], ${m.b} returned [${m.bIds.join(", ")}]`);
+      }
+      console.error(`equivalence: FAILED -- ${v.mismatches.length} of ${v.queries} golden queries did not hold`);
+      process.exit(1);
+    }
+    console.log(`equivalence: PASSED -- ${v.queries}/${v.queries} golden queries held${v.compared ? ` across ${v.engines.length} engines` : ", as determinism only"}.`);
+    if (!doRank) return;
+  }
 
   const failures = checkAnchors(rows, index.records ?? []);
   if (failures.length) {

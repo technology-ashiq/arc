@@ -18,6 +18,7 @@
     ".claude/scripts/memory/golden-check.mjs",
     ".claude/scripts/memory/lib/aliases.mjs",
     ".claude/scripts/memory/lib/bm25.mjs",
+    ".claude/scripts/memory/lib/engines.mjs",
     ".claude/scripts/memory/lib/fields.mjs",
     ".claude/scripts/memory/lib/observe.mjs",
     ".claude/scripts/memory/lib/tokenize.mjs",

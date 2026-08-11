@@ -71,9 +71,9 @@ commit: 197b217, 723aa41
 title: ~~REQ-07 — the sqlite engine~~ **CUT 2026-08-11** (ADR-0701 amendment). Phase 01 measured the search at **0.42ms of a 199ms** wall clock, so the accelerator would accelerate 0.2% of the elapsed time. What still ships: the equivalence **contract and harness**, so a second engine would plug into a gate that already exists rather than one written to justify it — the harness asserts that any two registered engines return the **same ordered ids** for all 12 golden queries under the documented **id-ascending tie-break**, and with one engine registered it asserts that and says so rather than pretending to compare. Build trigger, written down: `index.json` past **25MB**, or a measured load over **500ms**, whichever first
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-02-spec.md
+proof: contract — `bats tests/memory-golden.bats` :: with ONE engine registered the harness says so in as many words and proves DETERMINISM rather than agreement, never printing a verdict that could be read as two engines agreeing, :: a planted second engine that disagrees on ORDER alone (same ids, different sequence) is caught, which is the whole point of the tie-break clause, :: a planted second engine that agrees passes, so the catch above is not the harness refusing everything, :: the documented tie-break is asserted to be id-ascending on equal bm25 and an engine that breaks ties differently cannot pass, and :: `arc-recall --engine` resolves through the same registry the harness enumerates, so the seam is real and not two lists that can drift. Green on CI, read per-JOB.
+tier: contract
+sources: phase-02-spec.md, docs/adr/0701-mem-b-pure-js-index-is-canonical-sqlite-is-an-accelerator.md
 decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)

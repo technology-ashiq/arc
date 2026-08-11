@@ -248,6 +248,74 @@ _set_baseline() {
   [[ "$output" != *"ok.mjs"* ]]
 }
 
+@test "equivalence: with one engine it says NOTHING WAS COMPARED, and proves determinism instead" {
+  # REQ-07's engine is CUT; the contract and harness ship. The danger with one engine is a green
+  # that reads as "two engines agree", so the harness has to say what it did and did not do.
+  t="$(_gate_tree)"
+  [ -n "$t" ] || { echo "the gate tree was not built"; false; }
+  run node "$GOLDEN" --root "$t" --equivalence
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"NOTHING WAS COMPARED"* ]]
+  [[ "$output" == *"proves DETERMINISM"* ]]
+  [[ "$output" == *"does not and cannot show that two engines agree"* ]]
+  # The tie-break is printed as the contract it is, not left as a footnote in an ADR.
+  [[ "$output" == *"id-ascending on equal bm25"* ]]
+  [[ "$output" == *"engine(s) available: js"* ]]
+  [[ "$output" == *"as determinism only"* ]]
+}
+
+@test "equivalence: a second engine that differs on ORDER ALONE is caught" {
+  # The whole reason the contract names ordered ids. Two engines returning the same SET of ids in
+  # a different sequence rank differently, and a harness comparing sets would pass them. Driven
+  # against the pure function with a planted registry, since no second engine exists to ship.
+  run node -e "
+    const u=process.argv[1];
+    import(u).then(async (m) => {
+      const canonical = m.ENGINES[0];
+      const reversed = { name: 'reversed', available: () => true,
+        run: (i, r, t, o) => canonical.run(i, r, t, o).slice().reverse() };
+      const agreeing = { name: 'twin', available: () => true, run: canonical.run };
+      const index = { postings: { terms: {}, lengths: [], avgdl: 0 } };
+      const records = [];
+      const queries = [{ id: 'Q1', tokens: ['alpha'] }];
+      // A planted disagreement must be CAUGHT...
+      const bad = m.checkEquivalence({ index, records, queries, registry: [canonical, reversed] });
+      // ...on a corpus where the two actually differ, or this proves nothing. Build one.
+      const recs = [{ id: 'a', title: 'alpha', body: 'alpha' }, { id: 'b', title: 'alpha', body: 'alpha' }];
+      const idx2 = { postings: { terms: { alpha: [[0,1],[1,1]] }, lengths: [1,1], avgdl: 1 } };
+      const bad2 = m.checkEquivalence({ index: idx2, records: recs, queries, registry: [canonical, reversed] });
+      const good = m.checkEquivalence({ index: idx2, records: recs, queries, registry: [canonical, agreeing] });
+      if (!bad2.compared) throw new Error('two engines must count as compared');
+      if (bad2.mismatches.length === 0) throw new Error('an order-only disagreement was NOT caught');
+      if (bad2.mismatches[0].kind !== 'disagreement') throw new Error('wrong kind: ' + bad2.mismatches[0].kind);
+      if (good.mismatches.length !== 0) throw new Error('an AGREEING pair was falsely flagged: the harness refuses everything');
+      if (!good.compared) throw new Error('agreeing pair not marked compared');
+      console.log('EQUIV OK caught=' + bad2.mismatches.length + ' falsePositives=' + good.mismatches.length);
+    }).catch((e) => { console.error(e.message); process.exit(1); });" \
+    "$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/memory/lib/engines.mjs")).href)')"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"EQUIV OK caught=1 falsePositives=0"* ]]
+}
+
+@test "equivalence: the CLI engine names come from the registry, not a second list" {
+  # Two hand-kept lists of engine names drift, and the one that drifts is the one the operator
+  # types against. An unknown engine must be refused, and the refusal must enumerate the registry.
+  tree="$BATS_TEST_TMPDIR/eng"
+  cp -r "$ARC_ROOT/tests/fixtures/memory/organs-good" "$tree"
+  run node "$MEM" --root "$tree" --rebuild --allow-missing-spine
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$RECALL" --root "$tree" --engine sqlite "prevention"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"is not one of: js, auto"* ]]
+  # ...and the accepted ones resolve THROUGH the registry and report which actually ran.
+  run node "$RECALL" --root "$tree" --engine auto "unanchored heading regex prose"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"engine js, requested auto"* ]]
+  run node "$RECALL" --root "$tree" --engine js "unanchored heading regex prose"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"engine js, requested js"* ]]
+}
+
 @test "golden gate: bats registers every test this file declares" {
   # MEASURED, not asserted: bats silently DROPS a @test whose name carries a non-ASCII character.
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
