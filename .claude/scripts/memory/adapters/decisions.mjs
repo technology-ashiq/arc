@@ -11,6 +11,12 @@
 // or reason cannot be read is not a decision anyone should be shown.
 
 const VERDICTS = new Set(["approve", "reject"]);
+const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+// The payload is CLOSED: decides | verdict | reason, and no other key. The first version's own
+// header said "a row missing any of the three is a named exclusion" and then checked only two --
+// `decides` was read as `?? null`, so a decision with no approval at all, or with an object where
+// the ULID belongs, was indexed as a valid decision. Extra keys were dropped in silence.
+const CLOSED = new Set(["decides", "verdict", "reason"]);
 
 /** @param events array of `{ event, day, seq }` as returned by spine.mjs query()/readAll(). */
 export function fromEvents(events) {
@@ -25,6 +31,19 @@ export function fromEvents(events) {
     const where = { kind: "malformed", line: wrapper?.seq ?? 0, text: e.id ?? "(no id)" };
 
     if (!e.id) { exclusions.push({ ...where, reason: "decision.recorded with no event id" }); continue; }
+    const extra = Object.keys(p).filter((k) => !CLOSED.has(k));
+    if (extra.length) {
+      exclusions.push({ ...where, reason: `decision.recorded payload carries key(s) outside the closed shape: ${extra.join(", ")}` });
+      continue;
+    }
+    if (typeof p.decides !== "string" || !ULID.test(p.decides)) {
+      exclusions.push({ ...where, reason: `decision.decides ${JSON.stringify(p.decides)} is not the ULID of an approval.requested` });
+      continue;
+    }
+    if (p.decides === e.id) {
+      exclusions.push({ ...where, reason: "a decision cannot decide itself" });
+      continue;
+    }
     if (!VERDICTS.has(p.verdict)) {
       exclusions.push({ ...where, reason: `verdict "${p.verdict}" is not exactly approve or reject` });
       continue;

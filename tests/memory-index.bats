@@ -9,8 +9,12 @@
 # never quietly become index input. ARC_SPINE_ROOT is read by PRESENCE, not truthiness, so it is
 # always given a real non-empty path -- ARC_SPINE_ROOT= is a recorded failure shape, not a no-op.
 #
-# @test names are ASCII-only: bats silently DROPS a test whose name carries a non-ASCII
-# character, and five such tests once ran zero times while their file stayed green.
+# Roughly half the tests below exist because two fresh adversarial agents (ADR-0708) walked past
+# the first version of this module: every test whose comment names a defect is a regression test
+# for a hole that was real, reachable and reported nothing.
+#
+# @test names are ASCII-only: bats silently DROPS a test whose name carries a non-ASCII character,
+# and five such tests once ran zero times while their file stayed green.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
@@ -31,13 +35,15 @@ _tree() {
   echo "$BATS_TEST_TMPDIR/$1"
 }
 
-# Path + LF-normalized sha per file, .claude/state excluded. Used to prove memory wrote nothing
-# outside its own derived directory.
+# Path + LF-normalized sha per file, .claude/state excluded. Proves memory wrote nothing outside
+# its own derived directory.
 _manifest_no_state() {
   ( cd "$1" && find . -type f -not -path './.claude/state/*' | LC_ALL=C sort | while IFS= read -r f; do
       printf '%s\t%s\n' "${f#./}" "$(tr -d '\r' < "$f" | _arc_sha256)"
     done )
 }
+
+# ---------- the module does what it says ----------
 
 @test "memory-index: the builder is present at its contracted path" {
   # Guards the invocation contract itself. Without this, a rename would fail every other test in
@@ -71,6 +77,76 @@ _manifest_no_state() {
   grep -q 'retro:2026-01-01#2' "$tree/.claude/state/memory/index.json"
 }
 
+@test "memory-index: a comma inside a code span is data too" {
+  # The twin-fix this lane's own pre-mortem predicted, found by a fresh agent: the pipe split was
+  # masked and the tag split one line below it was not, so a tag list containing a code span was
+  # shredded into fragments. A fix is not applied until it is attacked where it was never made.
+  tree="$(_tree organs-good)"
+  rm "$tree/memory-expect.json"   # this test adds a row on purpose; the pinned counts are not what it checks
+  printf '2026-02-01 | fixture | tags with a code span | prevent it | shell, `sed -i, awk`, parsing\n' >> "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  grep -q '"shell","`sed -i, awk`","parsing"' "$tree/.claude/state/memory/index.json"
+}
+
+@test "memory-index: every excluded row is named with its file and line" {
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"docs/retro-log.md:7  scoreboard row (9 fields)"* ]]
+  [[ "$output" == *"docs/trial-ledger.md:4  table separator row"* ]]
+  # The count is printed too, so "zero exclusions" and "exclusions never checked" cannot look
+  # alike on screen.
+  [[ "$output" == *"exclusions: 6 named, 0 malformed"* ]]
+}
+
+# ---------- nothing is silently dropped ----------
+
+@test "memory-index: a piped row that is not a lesson is NAMED, never skipped" {
+  # The worst hole the adversarial pass found. The leading-date regex was a FILTER, so anything it
+  # rejected was skipped with no record AND no exclusion: markdown's own pipe escape, one leading
+  # space, a one-digit day, a row written as a table -- each vanished at 53 records, 0 exclusions,
+  # exit 0, with N_parsed == N_indexed perfectly true. That is the "54 lessons or 53 plus a lie"
+  # this module exists to prevent, reached by a route the masking rule does not cover.
+  tree="$(_tree organs-good)"
+  printf '2026-02-02 \\| fixture \\| an escaped-pipe lesson \\| its prevention \\| tag\n' >> "$tree/docs/retro-log.md"
+  printf '  2026-02-03 | fixture | a leading-space lesson | its prevention | tag\n' >> "$tree/docs/retro-log.md"
+  printf '2026-2-4 | fixture | a one-digit-day lesson | its prevention | tag\n' >> "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # still 3 lessons, but the three rejects are now NAMED and counted as malformed
+  [[ "$output" == *"retro-log        3/3"* ]]
+  [[ "$output" == *"3 malformed"* ]]
+  [[ "$output" == *"does not begin with a YYYY-MM-DD date"* ]]
+}
+
+@test "memory-index: a documented example inside a code fence is not evidence" {
+  # These organs are markdown written by this repo ABOUT its own formats, so a fenced example row
+  # is the normal case, not an exotic one. Before fence tracking it was indexed as a recorded run.
+  tree="$(_tree organs-good)"
+  printf '\n```\n| 2026-03-01 | example-gate | run-000 | yes | no |\n```\n' >> "$tree/docs/trial-ledger.md"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"trial-ledger     2/2"* ]]
+  [[ "$output" == *"inside a fenced code block"* ]]
+}
+
+@test "memory-index: an ADR the glob would skip is named rather than made invisible" {
+  # Case-sensitive, non-recursive globbing put a whole class of ADR in neither the index nor any
+  # other list -- and on the case-insensitive windows and macOS filesystems `.MD` and `.md` are
+  # the same name to the OS, so only one of a pair was indexed.
+  tree="$(_tree organs-good)"
+  rm "$tree/memory-expect.json"   # this test adds an ADR on purpose
+  printf '# ADR 0902 -- shouty\n\n**Status:** accepted\n\nBody.\n' > "$tree/docs/adr/0902-shouty.MD"
+  mkdir -p "$tree/docs/adr/archive"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"adr              3/3"* ]]
+  [[ "$output" == *"is a directory"* ]]
+}
+
+# ---------- the two count channels ----------
+
 @test "memory-index: count-verify fails loudly when an organ under-parses" {
   # organs-53of54 removes one pattern row and leaves the expectation at 3. parsed and indexed
   # still agree with each other -- they agree on the WRONG number.
@@ -91,16 +167,48 @@ _manifest_no_state() {
   [[ "$output" == *"N_parsed 2 != N_indexed 1"* ]]
 }
 
-@test "memory-index: every excluded row is named with its file and line" {
+@test "memory-index: an organ that empties is refused" {
+  # N_parsed == N_indexed is satisfied by 0 == 0, and the live tree pins no absolute counts, so
+  # without this there is NO channel at all that notices an emptied, truncated or re-encoded organ
+  # on the real run -- which is the DoD's own live-demo command.
   tree="$(_tree organs-good)"
   run node "$MEM" --root "$tree" --rebuild
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"docs/retro-log.md:7  scoreboard row (9 fields)"* ]]
-  [[ "$output" == *"docs/trial-ledger.md:4  table separator row"* ]]
-  # The count is printed too, so "zero exclusions" and "exclusions never checked" cannot look
-  # alike on screen.
-  [[ "$output" == *"exclusions: 6 named, 0 malformed"* ]]
+  : > "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"had 3 record(s) in the previous index and has 0 now"* ]]
 }
+
+@test "memory-index: a UTF-16 organ is refused instead of reading as empty" {
+  # PowerShell 5.1 writes UTF-16LE by default, so this is one redirect away on the windows leg.
+  # Read as UTF-8 the bytes decode to NUL-interleaved mojibake, every row stops matching, and the
+  # organ reports zero records with no error and no exclusion.
+  tree="$(_tree organs-good)"
+  node -e 'const f=require("fs");const p=process.argv[1];const t=f.readFileSync(p,"utf8");f.writeFileSync(p,Buffer.concat([Buffer.from([0xff,0xfe]),Buffer.from(t,"utf16le")]));' "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"UTF-16 byte-order mark"* ]]
+}
+
+@test "memory-index: a malformed expectation file is refused, never silently disarmed" {
+  # `null`, `[]`, `{}` and `5` all used to switch off every expectation in silence -- the design's
+  # ONLY pinning channel, disabled by a one-token file from any generator or jq pipeline, taking
+  # the phase's own negative control down with it.
+  tree="$(_tree organs-53of54)"
+  for bad in 'null' '[]' '{}' '5'; do
+    printf '%s\n' "$bad" > "$BATS_TEST_TMPDIR/e.json"
+    run node "$MEM" --root "$tree" --rebuild --expect "$BATS_TEST_TMPDIR/e.json"
+    [ "$status" -eq 2 ] || { echo "input=$bad status=$status"; echo "$output"; false; }
+  done
+  # and a BOM, which PowerShell writes by default, must not crash with a raw stack
+  printf '\xEF\xBB\xBF{"retro-log":3}\n' > "$BATS_TEST_TMPDIR/bom.json"
+  run node "$MEM" --root "$tree" --rebuild --expect "$BATS_TEST_TMPDIR/bom.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"expected 3 indexed record(s), got 2"* ]]
+}
+
+# ---------- determinism and staleness ----------
 
 @test "memory-index: delete the index and rebuild yields an identical record set" {
   tree="$(_tree organs-good)"
@@ -119,15 +227,74 @@ _manifest_no_state() {
   diff "$BATS_TEST_TMPDIR/first.txt" "$BATS_TEST_TMPDIR/second.txt"
 }
 
-@test "memory-index: an empty spine reports zero AND says which spine it read" {
+@test "memory-index: the staleness manifest notices a changed organ" {
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$MEM" --root "$tree" --status
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"stale: no"* ]]
+
+  printf '2026-01-03 | fixture | a fourth pattern | a fourth prevention | delta\n' >> "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --status
+  # exit 3, not 0: `memory-index --status && use-the-index` must not proceed on a stale index.
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"stale: YES"* ]]
+  [[ "$output" == *"docs/retro-log.md changed"* ]]
+}
+
+@test "memory-index: a change that preserves the mtime is still caught" {
+  # The hash used to be consulted only INSIDE `if (mtime differs)`, while the comment beside it
+  # claimed the opposite -- a comment asserting a property the code did not have. Reachable with
+  # `touch -r`, `rsync -t`, a checkout, or any one-second-resolution filesystem.
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  node -e 'const f=require("fs");const p=process.argv[1];const st=f.statSync(p);f.writeFileSync(p,f.readFileSync(p,"utf8").replace("2026-01-01","2099-12-31"));f.utimesSync(p,st.atime,st.mtime);' "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --status
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"docs/retro-log.md changed"* ]]
+}
+
+@test "memory-index: an ADDED ADR makes the index stale" {
+  # isStale iterated the manifest, i.e. the files that existed at build time, so it could see a
+  # file change or vanish but never see one appear. Adding an ADR is the single most ordinary
+  # change this repo makes to that organ -- 140 to 150 during this lane's own kickoff.
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  printf '# ADR 0903 -- brand new\n\n**Status:** accepted\n\nBody.\n' > "$tree/docs/adr/0903-brand-new.md"
+  run node "$MEM" --root "$tree" --status
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"docs/adr/ gained or lost a file"* ]]
+}
+
+@test "memory-index: a new decision on the spine makes the index stale" {
+  # The spine is an indexed organ with no manifest entry at all, so --status could never observe
+  # a new decision and a consumer that rebuilds only when told to go stale never saw one again.
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  approval="$(bash "$EVENT" emit approval.requested --strict --payload '{"what":"a later approval","gate":"fixture"}')"
+  [ -n "$approval" ]
+  run node "$MEM" --root "$tree" --status
+  [ "$status" -eq 3 ]
+  [[ "$output" == *"spine gained or lost events"* ]]
+}
+
+# ---------- the spine ----------
+
+@test "memory-index: an empty spine reports zero AND names the spine it read" {
   # A bare 0/0 cannot distinguish an empty spine from a spine that was never opened -- L-002
-  # exactly. This phase shipped that bug and caught it: the builder was handing the reader the
-  # REPO root instead of the SPINE root and reporting 0/0 on a spine it had never looked at.
+  # exactly. This phase shipped that bug: the builder handed the reader the REPO root instead of
+  # the SPINE root and reported 0/0 on a spine it had never looked at. The first version of THIS
+  # test matched only the prefix of the sentence and so could not tell one spine from another --
+  # it asserts the actual path now.
   tree="$(_tree organs-good)"
   run node "$MEM" --root "$tree" --rebuild
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"decisions        0/0"* ]]
-  [[ "$output" == *"reader returned 0 event(s) from"* ]]
+  [[ "$output" == *"from $SPINE"* ]]
 }
 
 @test "memory-index: a seeded decision is indexed with its reason byte-exact" {
@@ -153,6 +320,60 @@ _manifest_no_state() {
   grep -q 'worktree mode B is not certified' "$tree/.claude/state/memory/index.json"
 }
 
+@test "memory-index: a build with no reachable spine fails unless told otherwise" {
+  # A build whose fifth organ was never read used to exit 0 and write a knowingly incomplete
+  # index. The `unavailable` state was honoured on stdout and nowhere else.
+  tree="$(_tree organs-good)"
+  unset ARC_SPINE_ROOT
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"NOT READ"* ]]
+  run node "$MEM" --root "$tree" --rebuild --allow-missing-spine
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"UNAVAILABLE"* ]]
+}
+
+# ---------- the operator surface ----------
+
+@test "memory-index: an empty --root is refused, not turned into the current directory" {
+  # `--root "$DIR"` with DIR unset expands to `--root ""` -- the QUOTED form .claude/rules/lanes.md
+  # mandates. An empty value used to fall through to the git toplevel and then to cwd, building an
+  # index for a directory nobody named and writing it there. Presence, not truthiness: the exact
+  # lesson spine-io.mjs was rewritten for, un-applied in the file that imports it.
+  run node "$MEM" --root "" --rebuild
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"named but is empty"* ]]
+}
+
+@test "memory-index: a value flag given twice is an operator error" {
+  # Never a last-wins override. lanes.md settled this for --lane and the reasoning is identical:
+  # silently picking one of two named values IS the never-guess failure.
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --root "$tree" --rebuild
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"given twice"* ]]
+}
+
+@test "memory-index: --status and --rebuild together are refused" {
+  # Together, --status won and nothing was built, at exit 0 -- a CI step written that way reported
+  # success having built nothing.
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$tree" --status --rebuild
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"Pick one"* ]]
+}
+
+@test "memory-index: an unreadable organ names the file it could not read" {
+  # With 150 ADRs, a bare EISDIR with no path leaves the operator nothing to act on.
+  tree="$(_tree organs-good)"
+  rm "$tree/docs/retro-log.md"
+  mkdir "$tree/docs/retro-log.md"
+  run node "$MEM" --root "$tree" --rebuild
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"docs/retro-log.md"* ]]
+  [[ "$output" == *"directory"* ]]
+}
+
 @test "memory-index: a tree missing an organ says so instead of miscounting" {
   tree="$(_tree organs-good)"
   rm "$tree/docs/trial-ledger.md"
@@ -160,21 +381,6 @@ _manifest_no_state() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"not found"* ]]
   [[ "$output" == *"trial-ledger"* ]]
-}
-
-@test "memory-index: the staleness manifest notices a changed organ" {
-  tree="$(_tree organs-good)"
-  run node "$MEM" --root "$tree" --rebuild
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  run node "$MEM" --root "$tree" --status
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"stale: no"* ]]
-
-  printf '2026-01-03 | fixture | a fourth pattern | a fourth prevention | delta\n' >> "$tree/docs/retro-log.md"
-  run node "$MEM" --root "$tree" --status
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"stale: YES"* ]]
-  [[ "$output" == *"docs/retro-log.md changed"* ]]
 }
 
 @test "memory-index: memory writes nothing outside its own state directory" {
@@ -187,7 +393,23 @@ _manifest_no_state() {
   [ "$before" = "$after" ]
 }
 
-@test "memory-index: the golden query set carries no unresolved placeholder" {
+@test "memory-index: importing the module does not run the CLI" {
+  # `endsWith("memory-index.mjs")` is a SUFFIX test, so any importer whose own filename ended in
+  # that string ran the CLI against the importer's argv and exited 2 before the wrapper's own code
+  # ran. Phase 1's arc-recall imports this module.
+  cat > "$BATS_TEST_TMPDIR/check-memory-index.mjs" <<EOF
+import { pathToFileURL } from "node:url";
+const { build } = await import(pathToFileURL("$MEM").href);
+console.log("WRAPPER OK", typeof build);
+EOF
+  run node "$BATS_TEST_TMPDIR/check-memory-index.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"WRAPPER OK function"* ]]
+}
+
+# ---------- the golden set ----------
+
+@test "memory-index: the golden query set is complete and carries no placeholder" {
   # ADR-0706: the set is committed before the thing it grades, with placeholders for the
   # content-positional ids. A leftover placeholder must FAIL rather than silently skip a row.
   file="$FIXTURES/golden-queries.tsv"
@@ -197,15 +419,28 @@ _manifest_no_state() {
   run grep -v '^#' "$file"
   [ "$status" -eq 0 ]
   [[ "$output" != *"unresolved:"* ]]
-  # every data row carries exactly four tab-separated columns
   cols="$(grep -v '^#' "$file" | awk -F'\t' '{print NF}' | LC_ALL=C sort -u)"
-  [ "$cols" = "4" ]
+  [ "$cols" = "5" ]
+}
+
+@test "memory-index: every golden anchor still resolves to the record its id names" {
+  # A retro id is content-positional, so inserting one row earlier on the same date renumbers
+  # every later id on that date. The id still EXISTS, so an id-only gate keeps passing while
+  # grading a different lesson -- verified: one back-filled 2026-08-02 row silently repointed two
+  # golden rows at unrelated lessons. The anchor is what makes that drift loud.
+  tree="$(_tree organs-good)"
+  run node "$MEM" --root "$ARC_ROOT" --rebuild --allow-missing-spine
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$ARC_ROOT/.claude/scripts/memory/golden-check.mjs" --root "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"12/12 anchors resolve"* ]]
 }
 
 @test "memory-index: this suite registers the number of tests it claims" {
   # bats silently DROPS a @test whose name carries a non-ASCII character. A suite running fewer
   # tests than it declares is indistinguishable from a suite that passes, and the only signal is
-  # the count.
+  # the count. CI reconciles declared-vs-executed TAP lines for real on every leg; this is the
+  # in-file restatement.
   count="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$count" -eq 14 ]
+  [ "$count" -eq 31 ]
 }
