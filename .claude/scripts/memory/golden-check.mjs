@@ -61,16 +61,27 @@ export function checkAnchors(rows, records) {
 }
 
 function main() {
+  // Same argv contract as memory-index, deliberately. Every rule below was a real defect there,
+  // and this lane's standing instruction is that a fix is not applied until it has been applied
+  // in the file where it was never made -- the twin-fix shape, which has already recurred once
+  // inside this phase four lines apart in one function.
   const argv = process.argv.slice(2);
   let root = null;
+  let seenRoot = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--root") {
+      if (seenRoot) { console.error("golden-check: --root given twice -- that is an operator error, not a last-wins override"); process.exit(2); }
+      seenRoot = true;
       const v = argv[++i];
-      if (v === undefined || v.trim() === "") { console.error("golden-check: --root needs a non-empty value"); process.exit(2); }
+      if (v === undefined) { console.error("golden-check: --root needs a value"); process.exit(2); }
+      // Presence, not truthiness: `--root "$DIR"` with DIR unset is the quoted form the lane
+      // rules mandate, and it must not silently become the current directory.
+      if (v.trim() === "") { console.error("golden-check: --root was named but is empty -- refusing to fall back to a directory nobody named"); process.exit(2); }
       root = v;
     } else { console.error(`golden-check: unknown flag ${argv[i]}`); process.exit(2); }
   }
   root = resolve(root ?? process.cwd());
+  if (!existsSync(root)) { console.error(`golden-check: --root ${root.split(sep).join("/")} does not exist`); process.exit(2); }
 
   const goldenPath = join(root, GOLDEN);
   if (!existsSync(goldenPath)) { console.error(`golden-check: ${GOLDEN} not found under ${root.split(sep).join("/")}`); process.exit(2); }
