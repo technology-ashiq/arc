@@ -141,7 +141,7 @@ _built() {
   run node -e '(async()=>{
     const {readFileSync,writeFileSync}=await import("node:fs");
     const {pathToFileURL}=await import("node:url");
-    const src=readFileSync(process.env.TOK.replace("file:///",""),"utf8");
+    const {fileURLToPath}=await import("node:url");const src=readFileSync(fileURLToPath(process.env.TOK),"utf8");
     const mutant=src.replace("  return { tokens, notes };","  const DROP=new Set([\"near\",\"and\",\"or\",\"not\",\"a\",\"b\",\"foo\"]);\n  return { tokens: tokens.filter(t=>!DROP.has(t)), notes };");
     if(mutant===src)throw new Error("the mutant anchor moved; this control is not controlling anything");
     writeFileSync(process.env.MUT,mutant);
