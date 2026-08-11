@@ -294,7 +294,12 @@ _manifest_no_state() {
   run node "$MEM" --root "$tree" --rebuild
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"decisions        0/0"* ]]
-  [[ "$output" == *"from $SPINE"* ]]
+  # NOT a full-path compare. The builder prints a node-side path, and on the windows leg that is
+  # `C:/Users/RUNNER~1/...` (8.3-shortened, forward slashes) while bash holds `/c/Users/...` --
+  # the two never match, and the first version of this assertion went red on windows alone.
+  # The per-test directory name is the discriminator that actually matters: it is unique to this
+  # test and can never be the repo root, which is the substitution this test exists to catch.
+  [[ "$output" == *"$(basename "$BATS_TEST_TMPDIR")/spine via ARC_SPINE_ROOT"* ]]
 }
 
 @test "memory-index: a seeded decision is indexed with its reason byte-exact" {
@@ -397,12 +402,17 @@ _manifest_no_state() {
   # `endsWith("memory-index.mjs")` is a SUFFIX test, so any importer whose own filename ended in
   # that string ran the CLI against the importer's argv and exited 2 before the wrapper's own code
   # ran. Phase 1's arc-recall imports this module.
-  cat > "$BATS_TEST_TMPDIR/check-memory-index.mjs" <<EOF
-import { pathToFileURL } from "node:url";
-const { build } = await import(pathToFileURL("$MEM").href);
+  # The module URL is computed BY NODE, from node's own cwd. Handing node the bash-side path is
+  # what broke this on windows alone: MSYS gives `/d/a/arc/arc/...`, and pathToFileURL turns that
+  # into `D:\d\a\arc\arc\...`, a path that does not exist. node resolving its own cwd is the only
+  # form that is right on all three legs.
+  MEM_URL="$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/memory/memory-index.mjs")).href);')"
+  [ -n "$MEM_URL" ]
+  cat > "$BATS_TEST_TMPDIR/check-memory-index.mjs" <<'EOF'
+const { build } = await import(process.env.MEM_URL);
 console.log("WRAPPER OK", typeof build);
 EOF
-  run node "$BATS_TEST_TMPDIR/check-memory-index.mjs"
+  MEM_URL="$MEM_URL" run node "$BATS_TEST_TMPDIR/check-memory-index.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"WRAPPER OK function"* ]]
 }

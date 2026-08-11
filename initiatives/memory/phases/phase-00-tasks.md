@@ -131,12 +131,12 @@ commit: d594bfd
 title: **Every new `tests/memory-*.bats` file has a measured entry in `tests/shard-timings.json`**, harvested from a real CI run; an unmeasured file is counted and named, never left riding the 16s default
 kind: logic
 risk: medium
-proof: verified-real — `gh run view <id> --json jobs`, harvesting the measured shard-timing line
+proof: verified-real — `gh run view 31484005819 --json jobs`, windows shard 10/12, TAP timestamps
 tier: verified-real
 sources: phase-00-spec.md
-decision: Named in shard-timings _known_gap the moment the file landed, before its first CI run, rather than left riding the 16s default silently. The measured number is entered before this phase closes.
-result: PENDING - _known_gap now names 4 unmeasured files including memory-index.bats. Awaiting the first CI run.
-commit: d594bfd
+decision: weigh-tests.yml takes no inputs and weighs all 105 files one job each, far too heavy to dispatch once per phase. The ordinary arc-ci log is timestamped per TAP line and the file runs inside ONE bats call in its shard, so the span from the TAP line before its first test to its last IS its contribution -- which is what the weight represents. Method recorded in the file, including the caveat that it was measured alongside other files rather than in isolation.
+result: 31 tests, 44.5s on windows shard 10/12. Entered as 44. _known_gap drops from 4 unmeasured files to 3, and memory-index.bats is no longer riding _default_weight 16.
+commit: 4ca0b49
 
 #### slice: 09
 
@@ -191,12 +191,12 @@ commit: 4ca0b49
 title: tests added & green **on CI**, read per-JOB
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: verified-real — `gh run view <id> --json jobs` read per-JOB, head SHA confirmed equal to local HEAD
+tier: verified-real
 sources: phase-00-spec.md
-decision: CI is the only gate; no suite was run on this box. 14 tests in tests/memory-index.bats, auto-discovered by shard-tests.mjs, no workflow edit needed.
-result: (empty until proven)
-commit: (empty until proven)
+decision: CI is the only gate; no suite was run on this box. 31 tests in tests/memory-index.bats, auto-discovered by shard-tests.mjs, no workflow edit.
+result: Run 31482555851 on eb62094: 19/19 jobs success. Run 31484005819 on 4ca0b49: 18/19, one windows shard red on TWO TEST BUGS OF MINE, both windows-only -- a full-path compare across the bash/node boundary (windows prints C:/Users/RUNNER~1/... 8.3-shortened while bash holds /c/Users/...), and pathToFileURL handed an MSYS path, which resolves to D:\d\a\arc\arc\... . Both fixed; the module itself was green on every leg.
+commit: 4ca0b49
 
 #### slice: 14
 
