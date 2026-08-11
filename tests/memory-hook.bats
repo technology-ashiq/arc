@@ -26,6 +26,17 @@ _tree_with_path_rule() {
     '2026-02-09 | fixture | a process file was edited without recompiling its command | after editing processes/ always run arc-compile before committing | processes,engine,compile' \
     >> "$t/docs/retro-log.md"
   grep -q "always run arc-compile before committing" "$t/docs/retro-log.md" || return 1
+  # organs-good pins retro-log at 3 rows in memory-expect.json, and this builder adds a 4th. The
+  # convention elsewhere is to DELETE the expectation file; bumping it is strictly stronger --
+  # count-verify stays live and now PROVES the added row was parsed, which is the whole reason a
+  # fixture builder asserts its own fixture. Both adversarial passes caught the unbumped version:
+  # the rebuild exited 1, the builder returned empty, and the two tests below -- including REQ-08's
+  # stated acceptance criterion and the ONLY assertion of the mandatory label -- never ran at all.
+  node -e "
+    const fs=require('node:fs'); const p=process.argv[1];
+    const j=JSON.parse(fs.readFileSync(p,'utf8')); j['retro-log']=4;
+    fs.writeFileSync(p, JSON.stringify(j,null,2)+'\n');" "$t/memory-expect.json" || return 1
+  grep -q '"retro-log": 4' "$t/memory-expect.json" || return 1
   node "$MEM" --root "$t" --rebuild --allow-missing-spine >/dev/null 2>&1 || return 1
   echo "$t"
 }

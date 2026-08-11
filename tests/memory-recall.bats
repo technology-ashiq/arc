@@ -56,12 +56,23 @@ _built() {
 # Every step is checked, because a fixture builder that fails quietly is a silent pass generator
 # that looks exactly like a clean run: the caller sees an empty $tree and, without the -n check
 # on the other side, a filter test would then "pass" against an empty index.
+#
+# TWO decisions with OPPOSITE verdicts, not one. Both adversarial passes killed the one-decision
+# version: flipping `terms.every` to `terms.some` -- turning the ANDed grammar into an OR -- left
+# every `--decisions` test green, because with a single seeded row an OR and an AND select the
+# same thing. A fixture that cannot tell those apart is not testing the grammar. The approve row
+# also carries a MIXED-CASE reason, so a `~` that silently became case-sensitive goes red too.
 _built_with_decision() {
-  local approval
+  local approval approval2
   approval="$(bash "$EVENT" emit approval.requested --strict --payload \
     '{"what":"seed for the REQ-04 decisions filter","gate":"fixture"}')" || return 1
   [ -n "$approval" ] || return 1
   node "$INBOX" reject "$approval" --reason "worktree mode B is not certified" >/dev/null 2>&1 || return 1
+  approval2="$(bash "$EVENT" emit approval.requested --strict --payload \
+    '{"what":"second seed, the opposite verdict","gate":"fixture"}')" || return 1
+  [ -n "$approval2" ] || return 1
+  [ "$approval2" != "$approval" ] || return 1
+  node "$INBOX" approve "$approval2" --reason "Worktree Mode A is certified" >/dev/null 2>&1 || return 1
   # Exit 0 from a writer is not evidence that anything was written. Look in BOTH places.
   [ -z "$(ls -A "$SPINE/events/_quarantine" 2>/dev/null)" ] || return 1
   [ -n "$(ls -A "$SPINE/events" 2>/dev/null)" ] || return 1
@@ -446,7 +457,7 @@ _built_with_decision() {
   [[ "$output" == *"filtered, unranked"* ]]
   # `showing N of M` prints both numbers, so a --limit truncation cannot masquerade as the whole
   # answer -- the confident-partial shape `--limit 0` was refused for.
-  [[ "$output" == *"showing 1 of 1 matching decision(s)"* ]]
+  [[ "$output" == *"showing 1 of 1 matching decision(s); 2 in the index"* ]]
 }
 
 @test "arc-recall: --decisions actually narrows, proven against the opposite verdict" {
@@ -455,15 +466,33 @@ _built_with_decision() {
   # NOTHING would be indistinguishable from a fixture that never seeded.
   tree="$(_built_with_decision)"
   [ -n "$tree" ] || { echo "the seeded-decision fixture was not built"; false; }
+  # THE AND IS REAL, and this is the assertion an OR mutant fails: the tree holds one reject and
+  # one approve, so `verdict:reject reason~worktree` must select exactly ONE. Under `some` it
+  # selects both, because the approve row matches `reason~worktree` on its own.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject reason~worktree'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 1 of 1 matching decision(s); 2 in the index"* ]]
+  [[ "$output" == *"worktree mode B is not certified"* ]]
+  [[ "$output" != *"Worktree Mode A is certified"* ]]
+  # Each verdict alone selects its own single row, so neither is unreachable.
   run node "$RECALL" --root "$tree" --decisions 'verdict:approve'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 1 of 1 matching decision(s); 2 in the index"* ]]
+  [[ "$output" == *"Worktree Mode A is certified"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 1 of 1 matching decision(s); 2 in the index"* ]]
+  # `~` is CASE-INSENSITIVE, and the approve row is the only one spelled with capitals: a `~` that
+  # silently became case-sensitive would return 0 here.
+  run node "$RECALL" --root "$tree" --decisions 'reason~worktree mode a'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"Worktree Mode A is certified"* ]]
+  # A filter that genuinely matches nothing still reads as a result.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject reason~zzznotpresent'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"showing 0 of 0 matching decision(s)"* ]]
   [[ "$output" == *"no recorded decision matched that filter"* ]]
   [[ "$output" == *"That is a result, not an error"* ]]
-  # ...and the very same tree DOES hold one, so the zero above is the filter working.
-  run node "$RECALL" --root "$tree" --decisions 'verdict:reject'
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"showing 1 of 1 matching decision(s)"* ]]
   # `:` is exact and `~` is substring, and they are not the same operator: a substring value under
   # the exact operator must MISS, or the two operators have quietly collapsed into one.
   run node "$RECALL" --root "$tree" --decisions 'reason:worktree'

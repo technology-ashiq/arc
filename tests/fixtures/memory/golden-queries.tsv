@@ -6,6 +6,7 @@
 # comment line whose first token is one as a directive, and the first draft of it was refused.)
 # @baseline-grep-top3	5
 # @baseline-corpus-records	278
+# @expected-rows	12
 #
 # baseline-grep-top3: the Phase-00 grep oracle scored 5 of these 12 queries with an expected id in
 # its top 3, measured on the live corpus on 2026-08-11 and written up in

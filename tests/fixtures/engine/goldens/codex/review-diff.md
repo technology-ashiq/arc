@@ -10,7 +10,7 @@
 
 - `BASE` — base-branch (default `main`)
 
-**This process may:** `git diff:*`, `git log:*`, `git rev-parse:*`, `bash .claude/scripts/core/review-ledger.sh:*`, `bash .claude/scripts/hq/arc-event.sh:*`, write files.
+**This process may:** `git diff:*`, `git log:*`, `git rev-parse:*`, `bash .claude/scripts/core/review-ledger.sh:*`, `bash .claude/scripts/hq/arc-event.sh:*`, `node .claude/scripts/memory/diff-recall.mjs:*`, write files.
 
 > **Delegation note.** This process declares `agent.invoke`, which has no direct
 > equivalent on this target. Perform the delegated work inline, in this same

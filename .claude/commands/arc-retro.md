@@ -34,9 +34,17 @@ improve with every project* — this command is how.
    to a new project by tag-token overlap, not vibes.) One line, no essays — the next `/arc-kickoff` reads these to seed its pre-mortem.
 
 3b. **Before each append, run the near-duplicate check (REQ-05, ADR-0705):**
+   Write the prevention text to a scratch file first, then pass the PATH — never the text:
+
    ```bash
-   node .claude/scripts/memory/conflict-check.mjs --prevention "<the prevention text>" --tags "<the tags>"
+   node .claude/scripts/memory/conflict-check.mjs --prevention-file <scratch-file> --tags "<the tags>"
    ```
+
+   **`--prevention "<text>"` is the wrong form and this step used to document it.** A prevention
+   line is prose written by a past session, and 31 rows of the live log carry backticks; inside a
+   double-quoted shell string those are command substitution. The documented form executed `/arc`
+   and `--list` as commands and then scored a mutilated string at exit 0. A path carries no
+   interpolation, so the text reaches the check as the bytes that were written.
    It fires on **≥ 2 shared tags AND jaccard ≥ 0.5** over normalized prevention tokens, and it is
    **lexical only** — it cannot see a contradiction, only a near-repeat. On a hit it **shows** the
    recorded rows with their `docs/retro-log.md:LINE` citations and **resolves nothing**: exit is 0

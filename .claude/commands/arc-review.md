@@ -1,7 +1,7 @@
 ---
 description: Review the current branch's diff with the code-reviewer subagent; findings archived to docs/reviews/.
 argument-hint: [base-branch (default main)]
-allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Task, Write
+allowed-tools: Bash(git diff:*), Bash(git log:*), Bash(git rev-parse:*), Bash(bash .claude/scripts/core/review-ledger.sh:*), Bash(bash .claude/scripts/hq/arc-event.sh:*), Bash(node .claude/scripts/memory/diff-recall.mjs:*), Task, Write
 ---
 <!-- GENERATED FILE — DO NOT EDIT.
      Source of truth: processes/review-diff.process.yaml (v1.0.0) in the arc-engine repo.

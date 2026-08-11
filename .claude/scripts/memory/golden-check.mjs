@@ -32,7 +32,12 @@ export const GOLDEN = "tests/fixtures/memory/golden-queries.tsv";
 // into a script is a number nobody diffs; a baseline in the data file makes every move a visible
 // change to the thing that records it. Missing, duplicated or non-numeric directives are refused
 // rather than defaulted -- a gate that silently defaults its own bar is grading nothing.
-export const HEADER_KEYS = Object.freeze(["baseline-grep-top3", "baseline-corpus-records"]);
+// `expected-rows` exists because of adversarial finding 4/5 (2026-08-12): deleting the golden row
+// that FAILS turns the gate from red to green, since it compares hits to the rows that happen to
+// be present. The set is the contract; shrinking it is not a way to pass. And with the set cut,
+// the comparison table printed `grep baseline 5 of 4` -- a baseline measured over 12 queries
+// re-denominated against 4, which is a fabricated number in a table whose whole job is comparison.
+export const HEADER_KEYS = Object.freeze(["baseline-grep-top3", "baseline-corpus-records", "expected-rows"]);
 
 export function parseGoldenHeader(text) {
   const out = {};
@@ -236,6 +241,15 @@ function main() {
   const baseline = header["baseline-grep-top3"];
   const corpusBaseline = header["baseline-corpus-records"];
   const corpusNow = (index.records ?? []).length;
+
+  // THE SET IS THE CONTRACT, checked before anything is compared against it. A gate that grades
+  // whatever rows it finds can be passed by deleting the row that fails, and its baseline -- a
+  // number measured over the declared set -- becomes a fabricated fraction the moment the
+  // denominator moves. Both were reproduced on 2026-08-12.
+  if (scored.length !== header["expected-rows"]) {
+    console.error(`golden-check: GATE FAILED -- the golden set holds ${scored.length} row(s) but declares @expected-rows ${header["expected-rows"]}. The set IS the contract: a query is added or removed by changing that number in the same commit, never by letting the gate grade whichever rows survive.`);
+    process.exit(1);
+  }
 
   // THE COMPARISON TABLE (ADR-0706). Both numbers are labelled and the delta is derived, never
   // retyped -- the counts-rot shape of retro-log 2026-07-22 is a hardcoded number nobody

@@ -16,6 +16,10 @@ tools:
   - shell.run:
       - "bash .claude/scripts/core/review-ledger.sh:*"
       - "bash .claude/scripts/hq/arc-event.sh:*"
+      # REQ-08's hook. Declared here because a step the harness is not permitted to run is a
+      # suggestion, not a step -- and this was the exact twin-fix that was made for /arc-retro's
+      # conflict-check and missed here, on a near-identical edit, in the same phase.
+      - "node .claude/scripts/memory/diff-recall.mjs:*"
   - agent.invoke:
       - "code-reviewer"
   - fs.write

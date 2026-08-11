@@ -100,11 +100,11 @@ export function findNearDuplicates(candidate, records, opts = {}) {
 }
 
 // ---------- argv ----------
-const VALUE_FLAGS = new Set(["--prevention", "--tags", "--root", "--threshold", "--limit"]);
+const VALUE_FLAGS = new Set(["--prevention", "--prevention-file", "--tags", "--root", "--threshold", "--limit"]);
 const BOOL_FLAGS = new Set(["--json"]);
 
 export function parseArgs(argv) {
-  const o = { prevention: null, tags: null, root: null, threshold: DEFAULT_THRESHOLD, limit: 10, json: false };
+  const o = { prevention: null, preventionFile: null, tags: null, root: null, threshold: DEFAULT_THRESHOLD, limit: 10, json: false };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -121,6 +121,12 @@ export function parseArgs(argv) {
       if (v.startsWith("--")) throw new UsageError(`${a} was given ${JSON.stringify(v)}, which is a flag, not a value -- an empty variable ate the next argument`);
       switch (a) {
         case "--prevention": o.prevention = v; break;
+        // The SAFE form, and the one /arc-retro documents. Adversarial finding 3 (2026-08-12):
+        // a prevention text pasted into `--prevention "..."` is interpreted by the shell, and 31
+        // rows of the live log carry backticks -- `/arc` and `--list` were executed as commands
+        // and the check then scored a mutilated string at exit 0. A file path carries no
+        // interpolation, so the text reaches this program as the bytes that were written.
+        case "--prevention-file": o.preventionFile = v; break;
         case "--tags": o.tags = v.split(",").map((t) => t.trim()).filter(Boolean); break;
         case "--root": o.root = v; break;
         case "--threshold": {
@@ -143,7 +149,8 @@ export function parseArgs(argv) {
     if (BOOL_FLAGS.has(a)) { o.json = true; continue; }
     throw new UsageError(`unknown argument ${JSON.stringify(a)} -- this check takes flags only`);
   }
-  if (o.prevention === null) throw new UsageError("--prevention <text> is required: the check compares the row you are about to write");
+  if (o.prevention !== null && o.preventionFile !== null) throw new UsageError("--prevention and --prevention-file are two ways to give the same text; give one");
+  if (o.prevention === null && o.preventionFile === null) throw new UsageError("--prevention-file <path> (preferred) or --prevention <text> is required: the check compares the row you are about to write");
   if (o.tags === null) throw new UsageError("--tags <a,b,c> is required: the shared-tag half of the rule cannot run without them");
   return o;
 }
@@ -169,18 +176,36 @@ function main() {
     process.exit(2);
   }
 
+  if (o.preventionFile !== null) {
+    const pf = resolve(root, o.preventionFile);
+    if (!existsSync(pf)) { console.error(`conflict-check: --prevention-file ${o.preventionFile} does not exist`); process.exit(2); }
+    // CRLF-normalised: a prevention text authored on windows must score identically to the same
+    // text on the other two legs, or T means a different thing per OS.
+    try { o.prevention = readFileSync(pf, "utf8").split("\r\n").join("\n").trim(); }
+    catch (e) { console.error(`conflict-check: --prevention-file could not be read: ${e.message}`); process.exit(2); }
+    if (!o.prevention) { console.error(`conflict-check: --prevention-file ${o.preventionFile} is empty -- refusing to compare nothing`); process.exit(2); }
+  }
+
   let parsed;
   try { parsed = parseRetroLog(readFileSync(logPath, "utf8")); }
   catch (e) { console.error(`conflict-check: ${RETRO_LOG} could not be read: ${e.message}`); process.exit(1); }
 
   const hits = findNearDuplicates({ prevention: o.prevention, tags: o.tags }, parsed.records, { threshold: o.threshold });
   const shown = hits.slice(0, o.limit);
+  // EXCLUSIONS ARE NAMED, NEVER SWALLOWED. Adversarial finding 1 (2026-08-12): a near-duplicate
+  // row the adapter classed `malformed` -- a one-digit month is enough -- is invisible to this
+  // check, which then says "no near-duplicate found. Append the row." at exit 0. That is the
+  // Phase-01 alias-exclusions defect, unapplied in the one surface whose entire job is stopping a
+  // duplicate lesson. A row this check could not read is a row it cannot vouch for.
+  const excluded = parsed.exclusions ?? [];
 
   if (o.json) {
     console.log(JSON.stringify({
       rule: `>= ${MIN_SHARED_TAGS} shared tags AND jaccard >= ${o.threshold}`,
       metric: "jaccard", threshold: o.threshold, minSharedTags: MIN_SHARED_TAGS,
       scanned: parsed.records.length, matched: hits.length, shown: shown.length, resolves: false,
+      unreadable: excluded.length,
+      unreadableRows: excluded.map((e) => ({ line: e.line, reason: e.reason })),
       candidates: shown.map((h) => ({
         citation: `${RETRO_LOG}:${h.record.line}`,
         overlap: Number(h.overlap.toFixed(4)),
@@ -199,8 +224,17 @@ function main() {
   console.log(`conflict-check -- lexical only, no semantic detection (ADR-0705)`);
   console.log(`  rule: >= ${MIN_SHARED_TAGS} shared tags AND jaccard(prevention tokens) >= ${o.threshold}`);
   console.log(`  jaccard = shared tokens / union of tokens; scanned ${parsed.records.length} recorded row(s)`);
+  // Printed on EVERY run, hit or miss, and before the verdict: an unreadable row is a row this
+  // check could not compare, so a clean result is only as clean as this number is zero.
+  if (excluded.length) {
+    console.log(`  WARNING: ${excluded.length} row(s) in ${RETRO_LOG} could NOT be read and were therefore NOT compared:`);
+    for (const e of excluded.slice(0, 10)) console.log(`    ${RETRO_LOG}:${e.line}  ${e.reason}`);
+    if (excluded.length > 10) console.log(`    (+${excluded.length - 10} more)`);
+  }
   if (hits.length === 0) {
-    console.log(`  no near-duplicate found. Append the row.`);
+    console.log(excluded.length
+      ? `  no near-duplicate found among the ${parsed.records.length} row(s) this check could read -- but ${excluded.length} row(s) above were not compared at all. Read those before appending.`
+      : `  no near-duplicate found. Append the row.`);
     return;
   }
   console.log(`  showing ${shown.length} of ${hits.length} near-duplicate(s) -- SHOWN, never resolved: proceed or merge on the record.\n`);
