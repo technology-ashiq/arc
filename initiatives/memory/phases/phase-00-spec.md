@@ -30,13 +30,13 @@ alone.
 | Adapter | Source | Record fields | Named exclusions (printed with file + line) |
 |---|---|---|---|
 | `retro-log` | `docs/retro-log.md` | date, project, pattern, prevention, tags[] (comma-split) | the 10 nine-field scoreboard rows; blank and header lines |
-| `trial-ledger` | `docs/trial-ledger.md` | date, gate, run-ref, fired, false-positive | the **7** table headers, **10** separator rows, and **31** rows belonging to the three unrelated 3-column tables (`group / why it is in trial / what would promote it`, `gate / fire data / kept WARN because`, `# / Assertion / Covers`) |
+| `trial-ledger` | `docs/trial-ledger.md` | date, gate, run-ref, fired, false-positive | the **7** table headers, **10** separator rows, and **19** rows belonging to the three unrelated 3-column tables (`group / why it is in trial / what would promote it`, `gate / fire data / kept WARN because`, `# / Assertion / Covers`) |
 | `learning-ledger` | `docs/develop/learning-ledger.md` | id (L-NNN), what-failed, why-missed, prevention, type, tags, links{adr,rule,fixture,phase,lane}, verdict | none expected; a malformed block is a named error, never a silent skip |
 | `adr` | `docs/adr/*.md` — the glob result is **sorted by filename** (i.e. by ADR number) before indexing, because directory order is not stable across the three OSes and "same order on rebuild" is a non-negotiable | number, slug, title (H1), status (`**Status:**` line), first paragraph | none; unparseable frontmatter is named and the file is indexed title-only |
 | `decisions` | spine, via reader | ulid, ts, decides, verdict, reason | quarantine is never read; non-`decision.recorded` kinds are untouched |
 
-**Measured counts this phase must reproduce exactly:** `retro-log 54/54` · `trial-ledger 37/37` ·
-`learning-ledger 4/4` · `adr 140/140` · `decisions N/N`.
+**Measured counts this phase must reproduce exactly:** `retro-log 54/54` · `trial-ledger 49/49` ·
+`learning-ledger 4/4` · `adr 150/150` (a MOVING number - see the note below) · `decisions N/N`.
 
 ### B2. How fixture content reaches the adapters (the test-injection door)
 
@@ -75,9 +75,40 @@ a way to point the builder at fabricated content. Two doors, both required:
 `--root` also gives the root-mode fixture (ADR-0707) somewhere to live: a fixture tree with no
 `initiatives/` directory is just another root.
 
-Note the trial-ledger figure: the file holds **85 pipe rows**, of which only **37** are ledger
-records. Counting all 85 would index seven headers, ten separators and three unrelated tables as
-if they were evidence.
+Note the trial-ledger figure: the file holds **85 pipe rows**, of which **49** are ledger records.
+Counting all 85 would index seven headers, ten separators and three unrelated tables as if they
+were evidence.
+
+> **Correction, 2026-08-11, made by the adapter against the kickoff.** The kickoff wrote 37
+> records and 31 non-ledger rows. The adapter measures **49 records, 7 headers, 10 separators, 19
+> non-ledger rows**, which sums to exactly 85; the kickoff's split summed to 85 only because both
+> of its wrong numbers were wrong in opposite directions. This is the **fourth** count this cycle
+> that was asserted and then had to be measured, and the reason the phase's own DoD is written
+> as an invariant (`N_parsed == N_indexed`) rather than as a list of magic numbers.
+
+### B3. Which counts are pinned, and where — the live tree pins nothing
+
+`N_parsed == N_indexed` is an **invariant** and is always enforced. The absolute per-organ
+numbers are **not** enforced against the live tree, and must not be: `docs/adr/` grew from 140 to
+**150** during this very kickoff because this lane wrote ten ADRs, so a builder carrying a pinned
+150 would fail the next time anybody records a decision. A gate that breaks on ordinary growth
+gets deleted, and a deleted gate protects nothing.
+
+Absolute counts are therefore pinned **only in fixture trees**, which are frozen by construction.
+A fixture tree may carry a `memory-expect.json` at its root (or be given one with `--expect`), and
+any deviation from it is a build FAILURE. That is the channel `organs-53of54` exercises.
+
+Two channels, two negative controls, because they fail for different reasons and one cannot cover
+the other:
+
+| Channel | What it catches | Negative control |
+|---|---|---|
+| `N_parsed == N_indexed` | the builder silently DROPPING a parsed record — today the only way that happens is an id-grammar collision, where two rows land on one id and one is overwritten | `organs-id-collision` — two retro rows crafted to collide, asserting non-zero exit |
+| `--expect` / `memory-expect.json` | an organ under-parsing, which leaves parsed and indexed equal and agreeing on the wrong number | `organs-53of54` — one pattern row removed, expectation still 54, asserting non-zero exit |
+
+The kickoff specified only the second. The first was added in-phase because without it the
+`N_parsed == N_indexed` line has no negative control at all, and an unfalsifiable check is the
+"count-verify that cannot fail" this phase's own rabbit-hole list names.
 
 ### C. Spine access (ADR-0703)
 
@@ -247,7 +278,7 @@ the diff-first step is the control.
 - **Expected failure first:** `memory-index.bats::count-verify fails loudly when an organ under-parses` fails RED before the builder exists, with node's real message — `Error: Cannot find module '<repo>/.claude/scripts/memory/memory-index.mjs'` and `code: 'MODULE_NOT_FOUND'` (observed form, not a guess) → then, once the builder exists but before count-verify is wired, the same test fails with `expected build to FAIL on a seeded 53-of-54 parse, got exit 0`. That second red is the one that matters: it proves the count-verify can actually fail, rather than proving only that a file exists. A third red guards the misclassification hole the count-verify structurally cannot see: `memory-index.bats::a pipe inside a code span is data, not a separator` fails with `expected retro-log 54/54, got 53/53 + 1 named exclusion`.
 - **Live demo scenario:**
   1. `node .claude/scripts/memory/memory-index.mjs --rebuild` on the real tree.
-  2. Read the per-organ block: it must print `retro-log 54/54`, `trial-ledger 37/37`, `learning-ledger 4/4`, `adr 140/140`, **and `decisions N/N` in the same `parsed/indexed` format** — a bare spine count with no pairing cannot prove the fifth adapter's count-verify at all.
+  2. Read the per-organ block: it must print `retro-log 54/54`, `trial-ledger 49/49`, `learning-ledger 4/4`, `adr 150/150`, **and `decisions N/N` in the same `parsed/indexed` format** — a bare spine count with no pairing cannot prove the fifth adapter's count-verify at all.
   3. Read the exclusions block: **10** scoreboard rows, each named with its file and line, and an explicit `0 malformed` — the literal-pipe row must appear as an INDEXED pattern row, not an exclusion.
   4. `rm -rf .claude/state/memory && node .claude/scripts/memory/memory-index.mjs --rebuild --dump-records` — the printed counts **and the dumped record set** (doc id + content hash, in index order) must match the first run byte-for-byte. No query is run here: ranking is Phase 1's, so Phase 0 proves the index is deterministic and Phase 1 proves the answers are.
 - **Real-system check:** run against the live `docs/retro-log.md`, `docs/trial-ledger.md`, `docs/develop/learning-ledger.md`, `docs/adr/` and the real spine via the reader. Confirm `git status` is clean afterwards — memory must have written nothing outside `.claude/state/memory/`, which is gitignored. No fakes are involved for the organs; the only faked surface this phase is the seeded spine fixture.
@@ -255,7 +286,7 @@ the diff-first step is the control.
 
 ## Rabbit holes in this phase
 
-- **Per-organ format special-casing.** trial-ledger has **one** record shape — the 5-column ledger row — and everything else in the file (7 headers, 10 separators, 31 rows of three unrelated 3-column tables) is an exclusion; §B is authoritative on this. retro-log carries two shapes (5 pattern, 9 scoreboard) **once code spans are masked** — before masking it looks like three, and the phantom third is a real lesson. Detour: mask code spans, then parse by field count, treating genuinely unknown shapes as **named exclusions**, never coercing. If any one organ needs more than ~0.5d, STOP — kill criterion 1.
+- **Per-organ format special-casing.** trial-ledger has **one** record shape — the 5-column ledger row — and everything else in the file (7 headers, 10 separators, 19 rows of three unrelated 3-column tables) is an exclusion; §B is authoritative on this. retro-log carries two shapes (5 pattern, 9 scoreboard) **once code spans are masked** — before masking it looks like three, and the phantom third is a real lesson. Detour: mask code spans, then parse by field count, treating genuinely unknown shapes as **named exclusions**, never coercing. If any one organ needs more than ~0.5d, STOP — kill criterion 1.
 - **A count-verify that cannot fail, and a count-verify that cannot see.** Detour: one negative-control fixture seeds an organ that under-parses by one row and asserts the build exits non-zero; a second asserts the literal-pipe row is indexed rather than excluded, because a row moved into the exclusion list leaves `N_parsed == N_indexed` perfectly true.
 - **CRLF on the Windows dev box.** Detour: normalize before hashing and before every fixture comparison.
 

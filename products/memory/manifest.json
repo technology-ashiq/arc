@@ -1,0 +1,21 @@
+{
+  "name": "memory",
+  "version": "1.0.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/memory/adapters/adr.mjs",
+    ".claude/scripts/memory/adapters/decisions.mjs",
+    ".claude/scripts/memory/adapters/learning-ledger.mjs",
+    ".claude/scripts/memory/adapters/retro-log.mjs",
+    ".claude/scripts/memory/adapters/trial-ledger.mjs",
+    ".claude/scripts/memory/lib/fields.mjs",
+    ".claude/scripts/memory/memory-index.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

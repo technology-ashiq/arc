@@ -69,7 +69,8 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
   gives **54 rows, 0 malformed**. The row that would have been silently discarded is the
   2026-08-02 lesson *about regex parsing bugs*. A third correction followed: `trial-ledger` holds
   **37 records inside 85 pipe rows** across seven tables, so the kickoff's "85" would have indexed
-  headers and separators as evidence.
+  headers and separators as evidence. *(That 37 was itself wrong; the adapter measured **49** on
+  the same day — see the Phase 00 log below.)*
 - **2026-08-11 — simulation gate: RED after two rounds (5 → 5). STOPPED for the owner.** Round 1's
   five blockers were fixed by adding an "Execution contracts" section to `phase-00-spec.md`
   (id grammar · per-adapter field schemas · spine reader API · the 12 golden queries · adversarial

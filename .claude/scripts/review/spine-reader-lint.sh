@@ -19,7 +19,10 @@ cd "$ROOT" || exit 0
 # `evolve` joined the scope in Cycle 7: its board is a spine CONSUMER (ADR-0302, reader-only),
 # and a consumer that lives outside this lint's file glob is a consumer nothing checks. Listing
 # the directory rather than the file keeps later evolve modules covered without editing this lint.
-FILES="$(git ls-files .claude/scripts/hq .claude/scripts/evolve 2>/dev/null | grep '\.mjs$' || true)"
+# `memory` joined for the same reason in Cycle 11 (ADR-0703): its decisions adapter is reader-only
+# by design, and a DoD line reading "spine-reader-lint stays green" would otherwise pass because
+# the file was never scanned -- a green that proves nothing is the vacuous-pass shape itself.
+FILES="$(git ls-files .claude/scripts/hq .claude/scripts/evolve .claude/scripts/memory 2>/dev/null | grep '\.mjs$' || true)"
 [ -n "$FILES" ] || exit 0
 
 # The implementation layer is ALLOWED these tokens: the reader itself, the replayer that rebuilds
