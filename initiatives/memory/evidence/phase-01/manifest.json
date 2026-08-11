@@ -1,0 +1,24 @@
+{
+  "phase": "01",
+  "commit": "f12ca3c0801482ef41f341eea0cff343bf5e0806",
+  "short": "f12ca3c",
+  "generated": "2026-08-11T14:24:12Z",
+  "files": [
+    {
+      "name": "BLOCKED-process-hooks.md",
+      "sha256": "2ce908d48c5394ea99009229a041b2b66ca4a041bf8fae8464da652b32512099"
+    },
+    {
+      "name": "adversarial-cli-os.md",
+      "sha256": "0e1a815fdba2ff3343c3a57ada50a810db539aaf1f25c3977870a78780014a22"
+    },
+    {
+      "name": "adversarial-query-logic.md",
+      "sha256": "275f5b00decbe6b19d0f9e267a31e1bb16a44e0950878f5d57def43a5affd469"
+    },
+    {
+      "name": "golden-set-and-timings.md",
+      "sha256": "5c10fa03f8cf3ef3a07a6dcd47e5de7007baa6c958db3de6eed1477f94678fe1"
+    }
+  ]
+}

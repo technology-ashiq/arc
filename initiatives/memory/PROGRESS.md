@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-memory "playbooks + recall"
 
-status: BLOCKED
+status: LIVE
 cycle: arc-memory (Cycle 11, opened 2026-08-11)
-phase: 01
+phase: 02
 appetite: 5d
-burn: 2d
-blocked-on: owner — retire the engine lane's per-file baseline proof, or accept that REQ-03 and REQ-08 do not ship this cycle
+burn: 2.75d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -35,12 +35,12 @@ depends-on: —
 | # | Capability | Appetite | REQs | Status |
 |---|---|---|---|---|
 | 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | ✅ closed 2026-08-11 |
-| 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | 🔶 REQ-02 done, REQ-03 blocked-external |
+| 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | ✅ closed 2026-08-11 |
 | 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, sqlite engine + equivalence gate | 1.25d | REQ-04..REQ-08 | ⬜ not started |
 
 ## Appetite burn
 
-**2d of 5d used (40%).** Phase 00 came in at **1d against its 1.5d appetite**. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
+**2.75d of 5d used (55%).** Phase 01 came in at **0.75d against its 1.75d appetite**. Phase 00 came in at **1d against its 1.5d appetite**. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
 conversation. 5.0d (100%) — cut or kill, never silently extend.
 
 **The appetite was raised 4d → 5d by the owner on 2026-08-11**, recorded here rather than absorbed
@@ -230,30 +230,52 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
   3/3 byte-identical, and its exact text is parked in
   `evidence/phase-01/BLOCKED-process-hooks.md`. Blocks **REQ-03** and, identically, **REQ-08**.
 
+- **2026-08-11 — PHASE 01 CLOSED.** `amendments: 1` · `reopened: n` · **0.75d against a 1.75d
+  appetite.** The owner chose to retire the engine lane's migration proof, so REQ-03 landed after
+  all: **ADR-0207** in the engine band, written by this lane with the owner's explicit approval.
+  A `baseline.retired:` field carries a date and a reason; both gates skip that file and count it
+  **apart** (`2/2 byte-identical (1 retired)`), never folded into the total, because a retirement
+  that read as a pass would be the tautology the gate exists to refuse. A negative control proves
+  the retirement must be **declared**: delete the field and the same file fails 0/1 again.
+
+  The kickoff hook then landed from the parked text unchanged — **48 insertions, 0 deletions**,
+  with the whole-file `docs/retro-log.md` read byte-untouched, because recall ranks and a
+  pre-mortem needs the unranked whole. Both compile targets recompiled; the codex golden
+  re-recorded, since a recorded output is supposed to move.
+
+  **Green on CI, run `31500294944` at head `f12ca3c`, 19/19 jobs**, and both suites confirmed to
+  have EXECUTED per leg by counting TAP lines: **26 recall + 31 index tests on all five OS×node
+  combinations**, zero failures. Measured shard weights entered for both files (44s, 60s).
+
+  The one amendment was mine and it was a windows-only defect in my own new test: I asserted a
+  forward-slash path against output that carries the platform separator, so 18 of 19 jobs were
+  green and one shard was red on the assertion added that hour.
+
 ## Now
 
-**Phase 01 is done except for its hook, and the hook is not this lane's to land.** `arc-recall`
-works, is green on all three OSes, and clears the recorded grep bar by 12/12 against 5/12. What it
-cannot do is arrive **without being asked**, because both REQ-03 and REQ-08 land in migrated
-process files whose baseline proof no cycle has yet had to retire.
+**Phases 00 and 01 are closed. Phase 02 is next, and it is the largest of the three.**
 
-**The decision, and it is the owner's:**
+What exists and is green on all three OSes: the index (278 records, count-verified, named
+exclusions, atomic rebuild), `arc-recall` (bm25, id-ascending tie-break, verbatim path-bearing
+citations, ten hostile fixtures, root-mode), `golden-check --rank`, and the additive kickoff hook.
+**Golden set 12/12 against a recorded bar of 5/12.**
 
-1. **Retire the per-file baseline proof** the first time a migrated process file legitimately
-   changes, as an engine-lane ADR — ADR-0202 already calls `--migration` a migration-window flag
-   rather than a permanent mode. Both hooks then land unchanged from the parked text.
-2. **Accept that the hooks do not ship this cycle.** Mark REQ-03 and REQ-08 blocked-external and
-   let the engine lane retire the proof on its own schedule. The module stays fully usable —
-   `arc-recall` is a command a human runs.
+**Phase 02 (REQ-04..REQ-08, 1.25d appetite) still owes:**
 
-**Recommendation: (1).** Keeping the proof means no migrated process may ever gain a step, which
-makes the whole process-file mechanism write-once, and that is a larger cost than the proof is
-now worth.
+| REQ | What | Note |
+|---|---|---|
+| 04 | `--decisions 'verdict:reject reason~worktree'` through the reader only | `KINDS.length` must stay 44 |
+| 05 | `/arc-retro` pre-append near-duplicate check, T=0.5 + 2 shared tags | surfaces, never auto-resolves |
+| 06 | the 12 golden queries as a **failing** CI gate | `golden-check --rank` already measures; Phase 02 wires it |
+| 07 | the sqlite engine behind the equivalence gate | **its speed premise is disproven** — search is 0.42ms of a 199ms wall clock. The owner funded it anyway on 2026-08-11; the gate still earns its place as the thing that catches a second engine disagreeing |
+| 08 | the review hook | lands exactly like REQ-03 did, via `baseline.retired:` on `review-diff.process.yaml` — the path is now proven |
 
-**Phase 02 remains** (REQ-04 `--decisions`, REQ-05 the write-time conflict check, REQ-06 the
-golden set as a failing CI gate, REQ-07 the sqlite engine and equivalence gate, REQ-08 the review
-hook). REQ-06 is close to done — `golden-check --rank` exists and measures; Phase 02 wires it as
-a gate. REQ-07 ships on the owner's 2026-08-11 decision to fund it, with the speed premise now
-disproven and recorded.
+**Plus, non-negotiable:** two fresh-agent adversarial passes on Phase 02's three new parser
+surfaces, and the Phase-01 defect list handed to them. That list is not short, and pre-mortem row 2
+named this phase specifically: the review hook is a near-identical edit to the kickoff hook, which
+is the twin-fix shape the retro-log records more often than any other.
+
+**Two findings still standing for the owner**, both reported and neither acted on: the alias layer
+is unearned and ships empty, and REQ-07's speed premise is disproven.
 
 PR **#162** stays a draft until the cycle closes.
