@@ -5,7 +5,10 @@
 // reads them and writes exactly one thing: `<root>/.claude/state/memory/index.json`, which is
 // gitignored, derived-only, and safe to delete at any moment.
 // ADR-0701: this is the CANONICAL engine -- pure JS, zero npm dependencies, Node >= 18 on all
-// three OSes. The node:sqlite accelerator arrives in Phase 2 and can never break this path.
+// three OSes. The node:sqlite accelerator was CUT in Phase 2 on the measurement ADR-0701 asked
+// for -- 0.42ms of a 199ms wall -- so this path is the only path. If the build trigger ever fires
+// (index.json past 25MB, or a load over 500ms), it plugs into lib/engines.mjs and can never break
+// the path it only accelerates.
 // ADR-0703: the spine is reached only through the reader library.
 //
 // Invocation is always `node .claude/scripts/memory/memory-index.mjs ...` from the repo root. It

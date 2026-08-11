@@ -15,6 +15,7 @@
     ".claude/scripts/memory/adapters/trial-ledger.mjs",
     ".claude/scripts/memory/arc-recall.mjs",
     ".claude/scripts/memory/conflict-check.mjs",
+    ".claude/scripts/memory/diff-recall.mjs",
     ".claude/scripts/memory/golden-check.mjs",
     ".claude/scripts/memory/lib/aliases.mjs",
     ".claude/scripts/memory/lib/bm25.mjs",

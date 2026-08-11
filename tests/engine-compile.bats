@@ -43,13 +43,22 @@ _procs() {
   # retirement that read as a pass would make this gate the tautology it exists to refuse.
   run node "$(CC)" --check --all --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
-  # kickoff-plan retired on 2026-08-11 when the memory lane added its recall step.
-  [[ "$output" == *"2/2 byte-identical"* ]]
-  [[ "$output" == *"(1 retired, ADR-0207)"* ]]
+  # kickoff-plan retired on 2026-08-11 (REQ-03) and review-diff on 2026-08-12 (REQ-08), both when
+  # the memory lane added its additive recall step. This tally is EXPECTED to fall as the pilots
+  # legitimately change; what must never happen is a retirement folded into the byte-identical
+  # number, so both are asserted and the sum is asserted to be the pilot count.
+  [[ "$output" == *"1/1 byte-identical"* ]]
+  [[ "$output" == *"(2 retired, ADR-0207)"* ]]
   # Separator-free: arc-compile prints the PLATFORM separator, so a forward slash here passes on
   # ubuntu and macOS and fails on windows alone -- which is exactly what it did.
   [[ "$output" == *"[retired] "* ]]
   [[ "$output" == *"kickoff-plan.process.yaml — migration proof retired"* ]]
+  [[ "$output" == *"review-diff.process.yaml — migration proof retired"* ]]
+  # 1 proven + 2 retired must equal the pilots on disk. Without this, a file that vanished from
+  # the scan entirely would leave both numbers looking healthy -- the arithmetic is the check that
+  # neither count is quietly dropping a file.
+  pilots="$(ls "$ARC_ROOT/processes"/*.process.yaml | wc -l)"
+  [ "$pilots" -eq 3 ] || { echo "expected 3 pilot process files, found $pilots"; false; }
 }
 
 @test "REQ-02: a retirement must be DECLARED, not inferred from a mismatch" {

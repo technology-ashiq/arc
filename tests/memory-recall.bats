@@ -102,7 +102,11 @@ _built_with_decision() {
   run node "$RECALL" --root "$tree" --source nope "x"; [ "$status" -eq 2 ]
   run node "$RECALL" --root "$tree" --since 11-08-2026 "x"; [ "$status" -eq 2 ]
   run node "$RECALL" --root "$tree" --engine sqlite "x"; [ "$status" -eq 2 ]
-  [[ "$output" == *"sqlite arrives in Phase 2"* ]]
+  # The message used to promise "sqlite arrives in Phase 2". REQ-07's engine was CUT on the
+  # measurement ADR-0701 asked for, so a refusal advertising it would be a promise the repo has
+  # decided not to keep. It now enumerates the REGISTRY, which cannot go stale the way a
+  # hand-written sentence just did.
+  [[ "$output" == *"is not one of: js, auto"* ]]
   run node "$RECALL" --root "$tree" --tag a --tag b "x"; [ "$status" -eq 2 ]
   [[ "$output" == *"given twice"* ]]
   run node "$RECALL" --root "$tree"; [ "$status" -eq 2 ]
