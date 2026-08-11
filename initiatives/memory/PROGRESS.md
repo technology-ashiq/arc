@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-memory "playbooks + recall"
 
-status: LIVE
+status: BLOCKED
 cycle: arc-memory (Cycle 11, opened 2026-08-11)
 phase: 01
 appetite: 5d
-burn: 1d
-blocked-on: —
+burn: 2d
+blocked-on: owner — retire the engine lane's per-file baseline proof, or accept that REQ-03 and REQ-08 do not ship this cycle
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -35,12 +35,12 @@ depends-on: —
 | # | Capability | Appetite | REQs | Status |
 |---|---|---|---|---|
 | 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | ✅ closed 2026-08-11 |
-| 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | ⬜ not started |
+| 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | 🔶 REQ-02 done, REQ-03 blocked-external |
 | 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, sqlite engine + equivalence gate | 1.25d | REQ-04..REQ-08 | ⬜ not started |
 
 ## Appetite burn
 
-**1d of 5d used (20%).** Phase 00 came in at **1d against its 1.5d appetite**. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
+**2d of 5d used (40%).** Phase 00 came in at **1d against its 1.5d appetite**. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
 conversation. 5.0d (100%) — cut or kill, never silently extend.
 
 **The appetite was raised 4d → 5d by the owner on 2026-08-11**, recorded here rather than absorbed
@@ -186,22 +186,74 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
   happened**: it fires on heavy overlap between the two passes, and 37 findings produced exactly
   one.
 
+- **2026-08-11 — Phase 01: REQ-02 shipped, REQ-03 BLOCKED on another lane's proof.**
+  `arc-recall.mjs` ships: bm25 over a tag-weighted inverted index built at index time, an
+  id-ascending tie-break, verbatim prevention-first output with a path-bearing citation on every
+  row, the `--engine js|auto` seam, ten hostile-query fixtures, a zero-lane root-mode fixture, and
+  `golden-check --rank`. **26 recall tests and 31 index tests EXECUTED and green on all five
+  OS×node combinations** (run `31489671716`, head `da0d1a0`), counted from the TAP lines per leg.
+  Measured shard weights entered for both files.
+
+  **Golden set 12/12 in the top 3 against a recorded bar of 5/12** — grep's ORACLE best case,
+  pinned in Phase 00 so it could not be renegotiated here.
+
+  **Two findings reported rather than acted on, both the owner's call.** (1) The alias layer is
+  **unearned and ships empty**: a 10-row table was written, then removed, and nothing changed —
+  not one row was load-bearing. G10's `officially` appears zero times in the corpus, the cleanest
+  vocabulary mismatch in the set, and it hits at rank 2 anyway. ADR-0709's premise is weaker than
+  the design assumed. (2) **REQ-07's speed premise is disproven**, exactly as the assumptions
+  ledger predicted: worst end-to-end 199ms against a 500ms trigger, and the search itself is
+  **0.42ms** of it — the rest is node startup, so a sqlite accelerator would be accelerating 0.2%
+  of the wall clock.
+
+  **Two fresh-agent adversarial passes: 27 findings, 23 fixed, and ZERO overlap between the two
+  surfaces.** The severest was my own Phase-00 fix over-corrected — exact URL identity for the
+  direct-invocation guard, which is false under any symlinked path because Node ESM realpaths the
+  entry module, so all three CLIs exited 0 with empty output and the entire exit map collapsed to
+  success-having-done-nothing. macOS `/tmp` is a symlink, so it was live on a CI leg.
+
+  **But the finding worth keeping is that the suite protecting this module proved nothing.** A
+  60-line stub that read no organ and imported nothing passed fifteen of its assertions, one of
+  which was the determinism proof. `.claude/rules/testing.md` states the rule that violated, and
+  the file that violated it was written the same day by the session that had just quoted that rule
+  in another suite's header. Two assertions now compare against the fixture organ's own bytes and
+  against a ranking computed independently by the library.
+
+- **2026-08-11 — BLOCKED: memory's two process-file hooks collide with the engine lane's migration
+  proof.** `arc-compile --against-baseline` renders each process file and compares it to the
+  pilot as it was at the commit that file pins, read out of git — so the first legitimate step
+  added to a migrated process file makes the proof false, correctly. All three migrated process
+  files pin the same commit and none has been edited since; this cycle is the first to try.
+  Re-pinning the sha would turn a real gate into a tautology, and hand-editing the generated
+  command is forbidden. Retiring the per-file proof is an **engine-lane** decision and this plan's
+  own no-go list forbids cross-lane edits. The hook is reverted, both engine targets are back to
+  3/3 byte-identical, and its exact text is parked in
+  `evidence/phase-01/BLOCKED-process-hooks.md`. Blocks **REQ-03** and, identically, **REQ-08**.
+
 ## Now
 
-**Phase 00 is CLOSED and Phase 01 is next: recall people can trust.** The index exists, is honest
-about what it could not read, and rebuilds identically. Nothing queries it yet — there is no
-ranking in the repo at all, which is why Phase 00 proved *index* determinism and Phase 01 owes
-*query* determinism.
+**Phase 01 is done except for its hook, and the hook is not this lane's to land.** `arc-recall`
+works, is green on all three OSes, and clears the recorded grep bar by 12/12 against 5/12. What it
+cannot do is arrive **without being asked**, because both REQ-03 and REQ-08 land in migrated
+process files whose baseline proof no cycle has yet had to retire.
 
-Phase 01 (REQ-02, REQ-03, 1.75d) ships `arc-recall.mjs`: bm25 ranking with an id-ascending
-tie-break, query sanitization that makes hostile syntax literal rather than dropping it, the
-curated alias layer, verbatim output with path-bearing citations, the `--engine js|auto` seam
-REQ-07 later plugs sqlite into, a zero-lane root-mode fixture, sub-second timings on the owner box
-and two CI legs, and the additive kickoff hook via `processes/kickoff-plan.process.yaml`.
+**The decision, and it is the owner's:**
 
-**The number Phase 01 and Phase 02 have to beat is 5 of 12, not 1 of 12.** The pinned grep method
-scores 1/12, but that is a floor artifact of grep having no ranking; the ORACLE control — grep's
-best case, given a searcher who already knows the recorder's vocabulary — scores 5/12, and that is
-recorded in `evidence/phase-00/grep-baseline.md` as the real bar.
+1. **Retire the per-file baseline proof** the first time a migrated process file legitimately
+   changes, as an engine-lane ADR — ADR-0202 already calls `--migration` a migration-window flag
+   rather than a permanent mode. Both hooks then land unchanged from the parked text.
+2. **Accept that the hooks do not ship this cycle.** Mark REQ-03 and REQ-08 blocked-external and
+   let the engine lane retire the proof on its own schedule. The module stays fully usable —
+   `arc-recall` is a command a human runs.
 
-PR **#162** stays a draft until all three phases close.
+**Recommendation: (1).** Keeping the proof means no migrated process may ever gain a step, which
+makes the whole process-file mechanism write-once, and that is a larger cost than the proof is
+now worth.
+
+**Phase 02 remains** (REQ-04 `--decisions`, REQ-05 the write-time conflict check, REQ-06 the
+golden set as a failing CI gate, REQ-07 the sqlite engine and equivalence gate, REQ-08 the review
+hook). REQ-06 is close to done — `golden-check --rank` exists and measures; Phase 02 wires it as
+a gate. REQ-07 ships on the owner's 2026-08-11 decision to fund it, with the speed premise now
+disproven and recorded.
+
+PR **#162** stays a draft until the cycle closes.
