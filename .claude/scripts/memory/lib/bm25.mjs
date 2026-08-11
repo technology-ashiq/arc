@@ -64,7 +64,7 @@ export function buildPostings(records) {
  * so exact ties are the common case rather than a curiosity. Two engines that are both correct
  * but sort ties differently would be reported as drift on every run.
  */
-export function search(postings, records, queryTokens, { limit = 10 } = {}) {
+export function search(postings, records, queryTokens, { limit = 10, allow = null } = {}) {
   const N = records.length;
   if (N === 0 || queryTokens.length === 0) return [];
   const { terms, lengths, avgdl } = postings;
@@ -78,6 +78,12 @@ export function search(postings, records, queryTokens, { limit = 10 } = {}) {
     const df = plist.length;
     const idf = Math.log(1 + (N - df + 0.5) / (df + 0.5));
     for (const [i, wtf] of plist) {
+      // The filter is applied HERE, before scoring, not after. Ranking globally and filtering the
+      // top-N afterwards let a filter starve the result set: `--source retro-log --limit 5
+      // "trial"` printed "no recorded lesson matched" while a matching retro-log record existed,
+      // because the global top-20 held none of that source. A confident zero is the worst
+      // possible wrong answer, and raising --limit as a workaround is undiscoverable.
+      if (allow && !allow.has(i)) continue;
       const norm = avgdl > 0 ? 1 - B + (B * lengths[i]) / avgdl : 1;
       scores.set(i, (scores.get(i) ?? 0) + idf * ((wtf * (K1 + 1)) / (wtf + K1 * norm)));
     }

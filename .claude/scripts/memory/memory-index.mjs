@@ -19,9 +19,9 @@
 //
 // Exit codes: 0 ok · 1 the build failed a check · 2 operator error · 3 (--status only) stale.
 
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, renameSync, existsSync, rmSync, lstatSync, unlinkSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, renameSync, existsSync, rmSync, lstatSync, unlinkSync , realpathSync } from "node:fs";
 import { join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
 
 import { canonicalize, sha256Hex } from "../hq/lib/canonical.mjs";
@@ -504,6 +504,16 @@ async function main() {
 // Exact identity, not a suffix test. `endsWith("memory-index.mjs")` matched any importer whose own
 // filename ended in that string -- `check-memory-index.mjs` ran the CLI against the wrapper's argv
 // and exited 2 before the wrapper's own code ran. Phase 1's arc-recall imports this module.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// realpath BOTH sides. Node ESM realpaths the entry module while argv[1] keeps any symlink, so
+// an exact URL compare is false under a symlinked path -- and the CLI then exits 0 having done
+// nothing, which is worse than the loose `endsWith` test it replaced. macOS `/tmp` is a symlink.
+function invokedDirectly() {
+  const argv1 = process.argv[1];
+  if (!argv1) return false;
+  const self = fileURLToPath(import.meta.url);
+  try { return realpathSync(argv1) === realpathSync(self); } catch { return resolve(argv1) === resolve(self); }
+}
+
+if (invokedDirectly()) {
   main().catch((e) => { console.error(`memory-index: ${e.stack || e.message}`); process.exit(1); });
 }

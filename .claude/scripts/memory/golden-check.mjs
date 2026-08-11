@@ -15,9 +15,9 @@
 // Usage: node .claude/scripts/memory/golden-check.mjs [--root <dir>]
 // Exit: 0 every anchor resolves · 1 at least one does not · 2 operator error.
 
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync , realpathSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { indexPath } from "./memory-index.mjs";
 import { search } from "./lib/bm25.mjs";
 import { sanitizeQuery } from "./lib/tokenize.mjs";
@@ -79,8 +79,23 @@ export function rank(rows, index, aliasRows) {
     const { tokens, fired } = expand(raw, aliasRows);
     const hits = search(index.postings ?? { terms: {}, lengths: [], avgdl: 0 }, index.records ?? [], tokens, { limit: 3 });
     const top3 = hits.map((h) => index.records[h.index].id);
-    const at = top3.findIndex((id) => row.expect.includes(id));
-    out.push({ id: row.id, query: row.query, top3, hit: at !== -1, rank: at === -1 ? null : at + 1, aliases: fired.map((f) => f.terms.join("/")) });
+    // The ranked hit must ALSO carry the anchor. Checking "expect contains this id" and
+    // "some expected id carries the anchor" separately meant the two checks never had to name
+    // the SAME record: on a multi-id row the anchor could be satisfied by one id while ranking
+    // hit another. Measured on the untouched corpus -- G06's anchor lives on trial:2026-07-19#1
+    // and trial:2026-07-28#1 while ranking hit trial:2026-07-22#1, which does not contain it --
+    // so the drift guard was bypassed for exactly the row it was written for.
+    const byId = new Map((index.records ?? []).map((r) => [r.id, r]));
+    const carries = (id) => { const r = byId.get(id); return !!r && `${r.title}\n${r.body}`.includes(row.anchor); };
+    const at = top3.findIndex((id) => row.expect.includes(id) && carries(id));
+    const looseAt = top3.findIndex((id) => row.expect.includes(id));
+    out.push({
+      id: row.id, query: row.query, top3, hit: at !== -1, rank: at === -1 ? null : at + 1,
+      // An expected id ranked but WITHOUT the anchor is the drift case, and it is reported
+      // separately rather than folded into either bucket.
+      drifted: at === -1 && looseAt !== -1 ? top3[looseAt] : null,
+      aliases: fired.map((f) => f.terms.join("/")),
+    });
   }
   return out;
 }
@@ -140,6 +155,7 @@ function main() {
     const mark = r.hit ? `HIT  @${r.rank}` : "miss   ";
     console.log(`  ${r.id} ${mark}  ${r.query}`);
     if (!r.hit) console.log(`        top3: ${r.top3.join(", ") || "(nothing matched)"}`);
+    if (r.drifted) console.log(`        DRIFT: ${r.drifted} is an expected id but no longer carries this row's anchor -- the id now names a different record`);
   }
   console.log(`golden-check: ${hits}/${scored.length} queries hit an expected id in the top 3`);
   // Phase 01 measures and REPORTS. Phase 02 turns this into a failing CI gate (REQ-06); making it
@@ -147,4 +163,14 @@ function main() {
   if (hits < scored.length) process.exitCode = 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
+// realpath BOTH sides. Node ESM realpaths the entry module while argv[1] keeps any symlink, so
+// an exact URL compare is false under a symlinked path -- and the CLI then exits 0 having done
+// nothing, which is worse than the loose `endsWith` test it replaced. macOS `/tmp` is a symlink.
+function invokedDirectly() {
+  const argv1 = process.argv[1];
+  if (!argv1) return false;
+  const self = fileURLToPath(import.meta.url);
+  try { return realpathSync(argv1) === realpathSync(self); } catch { return resolve(argv1) === resolve(self); }
+}
+
+if (invokedDirectly()) main();

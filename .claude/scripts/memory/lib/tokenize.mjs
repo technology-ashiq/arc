@@ -60,8 +60,20 @@ export function sanitizeQuery(raw) {
   const bytes = Buffer.byteLength(text, "utf8");
   if (bytes > MAX_QUERY_BYTES) {
     // Truncate on a CODE POINT boundary, not a byte one, or the tail becomes invalid UTF-8.
-    text = [...text].slice(0, MAX_QUERY_BYTES).join("");
-    notes.push(`query truncated from ${bytes} bytes to the ${MAX_QUERY_BYTES}-byte ceiling`);
+    // Cut by BYTES, on a code-point boundary. The ceiling is checked with Buffer.byteLength and
+    // used to be enforced with a code-POINT slice, so 3000 CJK characters were reported as
+    // "truncated to 4096 bytes" while 8192 bytes were retained -- a printed number false by 2x in
+    // a tool whose whole rule is that a number nobody can check is not evidence.
+    let kept = "";
+    let used = 0;
+    for (const ch of text) {
+      const w = Buffer.byteLength(ch, "utf8");
+      if (used + w > MAX_QUERY_BYTES) break;
+      kept += ch;
+      used += w;
+    }
+    text = kept;
+    notes.push(`query truncated from ${bytes} bytes to ${used} bytes (the ${MAX_QUERY_BYTES}-byte ceiling)`);
   }
 
   let tokens = tokenize(text);
