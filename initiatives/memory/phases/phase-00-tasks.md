@@ -203,9 +203,9 @@ commit: 1ff8ecb
 title: tracker updated (PROGRESS.md row ✅ + done-log)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: static — `bash .claude/scripts/plan/arc-evidence.sh verify 0 --lane memory`
+tier: static
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Phase closed via /arc-phase-done: tests green on CI read per-JOB, live demo run, every exit criterion ticked, plan-drift gate green, no assumption or ADR revisit trigger fired, evidence bundle sha256-verified.
+result: arc-evidence: bundle verified (4 artifacts + manifest.json). PROGRESS row closed, REQ-01 active -> validated, amendments 2 / reopened n / t-to-phase0 0d, 1d against a 1.5d appetite.
+commit: 28881bb
