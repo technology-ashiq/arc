@@ -270,29 +270,54 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
 
 ## Now
 
-**Phases 00 and 01 are closed. Phase 02 is next, and it is the largest of the three.**
+**Phase 02's five REQs are all built and GREEN ON CI. The phase is NOT closed, and must not be
+recorded as closed.** Latest green: run 31539953594 @ `a58d8fa`, 19/19 jobs, read per-JOB.
 
-What exists and is green on all three OSes: the index (278 records, count-verified, named
-exclusions, atomic rebuild), `arc-recall` (bm25, id-ascending tie-break, verbatim path-bearing
-citations, ten hostile fixtures, root-mode), `golden-check --rank`, and the additive kickoff hook.
-**Golden set 12/12 against a recorded bar of 5/12.**
-
-**Phase 02 (REQ-04..REQ-08, 1.25d appetite) still owes:**
-
-| REQ | What | Note |
+| REQ | What shipped | Proven at |
 |---|---|---|
-| 04 | `--decisions 'verdict:reject reason~worktree'` through the reader only | `KINDS.length` must stay 44 |
-| 05 | `/arc-retro` pre-append near-duplicate check, T=0.5 + 2 shared tags | surfaces, never auto-resolves |
-| 06 | the 12 golden queries as a **failing** CI gate | `golden-check --rank` already measures; Phase 02 wires it |
-| ~~07~~ | ~~the sqlite engine~~ **CUT** — contract + harness only | cut on the measurement; the trigger to build it is `index.json` past 25MB or a load over 500ms |
-| 08 | the review hook | lands exactly like REQ-03 did, via `baseline.retired:` on `review-diff.process.yaml` — the path is now proven |
+| 04 | `--decisions 'verdict:reject reason~worktree'`, reader-only, KINDS still 44 | `06e1837` |
+| 05 | `conflict-check.mjs` + `/arc-retro` step 3b — >= 2 shared tags AND jaccard >= 0.5, surfaces and never resolves | `e348fa1` |
+| 06 | `golden-check --gate` — 12/12 required, must BEAT the grep baseline, `@expected-rows` pins the set | `723aa41` |
+| ~~07~~ | engine CUT; the equivalence **contract + harness** ship | `cf0c4c9` |
+| 08 | `diff-recall.mjs` + `review-diff.process.yaml` step 0, landed via ADR-0207 `retired:` | `cf0c4c9` |
 
-**Plus, non-negotiable:** two fresh-agent adversarial passes on Phase 02's three new parser
-surfaces, and the Phase-01 defect list handed to them. That list is not short, and pre-mortem row 2
-named this phase specifically: the review hook is a near-identical edit to the kickoff hook, which
-is the twin-fix shape the retro-log records more often than any other.
+**The two adversarial passes ran (ADR-0708) and found 30, 9 high.** Ledgers:
+`evidence/phase-02/adversarial-decision-logic.md` and `-shell-os.md`, plus the running
+`fixed-defect-list.md` both passes were handed. The 9 highs are FIXED. The three worst were: the
+golden gate could be passed by DELETING the row that failed; `/arc-retro` step 3b executed
+retro-log content as shell (31 live rows carry backticks); and `conflict-check` silently skipped
+rows it could not parse — 10 of 64 on the live log — while reporting confidence over all of them.
 
-**Two findings still standing for the owner**, both reported and neither acted on: the alias layer
-is unearned and ships empty, and REQ-07's speed premise is disproven.
+### What Phase 02 still OWES before `/arc-phase-done 02` will pass
+
+1. **21 adversarial findings are open**, disposition `REPORTED` in both ledgers. Roughly **8 are
+   real** and should be fixed: `golden-check --root --gate` eats `--gate` so the gate silently does
+   not run; `diff-recall` never checks `--root` exists, laundering an operator typo into exit 3 —
+   the one code `/arc-review` is told to ignore; `diff-recall` runs git in the process cwd rather
+   than `--root`; the equivalence harness does not assert the tie-break it calls its contract, so
+   an inverted bm25 tie-break still passes; `--engine` is accepted and inert on `--grep`,
+   `--decisions` and `--full`; `spine-reader-lint`'s unquoted `$FILES` exits 0 on a filename with a
+   space; `golden-check` still discards alias exclusions; `--print-query` silently ignores `--json`
+   and `--limit`. The other ~13 are cosmetic and may be ACCEPTED WITH A WRITTEN REASON — but
+   accepted in writing, never dropped in silence.
+2. **Retro row + HISTORY entry** — not written. Every cut recorded with its reason (REQ-07).
+3. **This tracker's Phases table + board row** — still show Phase 02 as not started.
+
+### Debt already recorded
+
+`debt-ledger.md` D-01: REQ-06's named CI job is deferred because `.github/workflows/**` is denied
+on purpose (owner ruling 2026-08-12). The gate still bites through the suite against the real
+index and real golden set; what is deferred is per-JOB legibility. Exact YAML is in the row.
+
+### Notes for the next session
+
+- `/arc-develop next` resolves to **phase 01**, not 02: phase-01-tasks.md holds 16/16 unproven
+  slices because Phase 01 was built and closed outside the harness. The fix lives in the `develop`
+  lane and this phase's no-gos bar cross-lane edits, so the slice loop was driven by hand.
+- Spine receipts cannot be emitted from this worktree (WORKTREE_SPINE guard). `develop.started`
+  and `slice.done` for phase 02 were never emitted; emit them from the main clone at
+  `E:/Work_Hub/01_Automemory/arc` before the close, or the close will find them missing.
+- All four new memory test files are weighed in `tests/shard-timings.json` by the per-file TAP-span
+  method, measured at birth. None ever rode `_default_weight` 16.
 
 PR **#162** stays a draft until the cycle closes.
