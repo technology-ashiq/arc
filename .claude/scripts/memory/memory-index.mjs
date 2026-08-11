@@ -27,6 +27,7 @@ import { execFileSync } from "node:child_process";
 import { canonicalize, sha256Hex } from "../hq/lib/canonical.mjs";
 import { query, spineRoot } from "../hq/spine.mjs";
 import { normalize, assertDecodable } from "./lib/fields.mjs";
+import { buildPostings } from "./lib/bm25.mjs";
 import * as retroLog from "./adapters/retro-log.mjs";
 import * as trialLedger from "./adapters/trial-ledger.mjs";
 import * as learningLedger from "./adapters/learning-ledger.mjs";
@@ -225,7 +226,12 @@ export async function build(root, opts = {}) {
     push(key, organ.path, out.records, out.exclusions);
   }
 
-  return { version: 1, root: root.split(sep).join("/"), organs, records, exclusions, manifest, opts: { allowMissingSpine: !!opts.allowMissingSpine, allowEmptyOrgan: !!opts.allowEmptyOrgan } };
+  // Postings are built HERE, at index time, so a query is one pass over matched postings
+  // rather than a re-tokenisation of the whole corpus. They sit beside the records and outside
+  // every record hash, so Phase 00's determinism proof is untouched by their existence.
+  const postings = buildPostings(records);
+
+  return { version: 2, root: root.split(sep).join("/"), organs, records, exclusions, manifest, postings, opts: { allowMissingSpine: !!opts.allowMissingSpine, allowEmptyOrgan: !!opts.allowEmptyOrgan } };
 }
 
 // ---------- verification ----------

@@ -19,6 +19,10 @@ import { readFileSync, existsSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { indexPath } from "./memory-index.mjs";
+import { search } from "./lib/bm25.mjs";
+import { sanitizeQuery } from "./lib/tokenize.mjs";
+import { parseAliases, expand } from "./lib/aliases.mjs";
+import { ALIAS_FILE } from "./arc-recall.mjs";
 
 export const GOLDEN = "tests/fixtures/memory/golden-queries.tsv";
 
@@ -60,6 +64,27 @@ export function checkAnchors(rows, records) {
   return failures;
 }
 
+/**
+ * Rank mode: run each golden query through the CANONICAL engine and report the top-3 hit rate.
+ *
+ * Phase 01 MEASURES this; Phase 02 (REQ-06) wires it into CI as a failing gate. The anchor check
+ * always runs first, because a row whose id has drifted onto a different lesson would otherwise
+ * score as a hit for the wrong reason -- which is exactly how a golden set stays green while it
+ * has quietly stopped grading anything.
+ */
+export function rank(rows, index, aliasRows) {
+  const out = [];
+  for (const row of rows) {
+    const { tokens: raw } = sanitizeQuery(row.query);
+    const { tokens, fired } = expand(raw, aliasRows);
+    const hits = search(index.postings ?? { terms: {}, lengths: [], avgdl: 0 }, index.records ?? [], tokens, { limit: 3 });
+    const top3 = hits.map((h) => index.records[h.index].id);
+    const at = top3.findIndex((id) => row.expect.includes(id));
+    out.push({ id: row.id, query: row.query, top3, hit: at !== -1, rank: at === -1 ? null : at + 1, aliases: fired.map((f) => f.terms.join("/")) });
+  }
+  return out;
+}
+
 function main() {
   // Same argv contract as memory-index, deliberately. Every rule below was a real defect there,
   // and this lane's standing instruction is that a fix is not applied until it has been applied
@@ -68,6 +93,7 @@ function main() {
   const argv = process.argv.slice(2);
   let root = null;
   let seenRoot = false;
+  let doRank = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--root") {
       if (seenRoot) { console.error("golden-check: --root given twice -- that is an operator error, not a last-wins override"); process.exit(2); }
@@ -78,7 +104,8 @@ function main() {
       // rules mandate, and it must not silently become the current directory.
       if (v.trim() === "") { console.error("golden-check: --root was named but is empty -- refusing to fall back to a directory nobody named"); process.exit(2); }
       root = v;
-    } else { console.error(`golden-check: unknown flag ${argv[i]}`); process.exit(2); }
+    } else if (argv[i] === "--rank") { doRank = true; }
+    else { console.error(`golden-check: unknown flag ${argv[i]}`); process.exit(2); }
   }
   root = resolve(root ?? process.cwd());
   if (!existsSync(root)) { console.error(`golden-check: --root ${root.split(sep).join("/")} does not exist`); process.exit(2); }
@@ -101,6 +128,23 @@ function main() {
     process.exit(1);
   }
   console.log(`golden-check: ${rows.length}/${rows.length} anchors resolve`);
+  if (!doRank) return;
+
+  let aliasRows = [];
+  const aliasPath = join(root, ALIAS_FILE);
+  if (existsSync(aliasPath)) aliasRows = parseAliases(readFileSync(aliasPath, "utf8")).rows;
+
+  const scored = rank(rows, index, aliasRows);
+  const hits = scored.filter((r) => r.hit).length;
+  for (const r of scored) {
+    const mark = r.hit ? `HIT  @${r.rank}` : "miss   ";
+    console.log(`  ${r.id} ${mark}  ${r.query}`);
+    if (!r.hit) console.log(`        top3: ${r.top3.join(", ") || "(nothing matched)"}`);
+  }
+  console.log(`golden-check: ${hits}/${scored.length} queries hit an expected id in the top 3`);
+  // Phase 01 measures and REPORTS. Phase 02 turns this into a failing CI gate (REQ-06); making it
+  // fail here would gate on a number before the phase that owns the number has run.
+  if (hits < scored.length) process.exitCode = 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
