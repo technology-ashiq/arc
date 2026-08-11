@@ -38,9 +38,9 @@ risk: high
 proof: contract — `bats tests/memory-recall.bats` :: `--decisions 'verdict:reject reason~worktree'` returns the seeded decision's reason BYTE-EXACT with its ULID citation, :: the grammar refuses an unknown field, a term with no operator, an empty value and a contradictory `--source`, each naming what it refused, :: a filter that matches nothing is exit 0 with a counted line, and :: `KINDS.length` read from `.claude/scripts/hq/lib/validate.mjs` is still 44. Green on CI, read per-JOB — never on this box.
 tier: contract
 sources: phase-02-spec.md, docs/adr/0703-mem-d-reader-only-and-emit-nothing.md, .claude/scripts/memory/adapters/decisions.mjs
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: A LISTING mode, not a fourth ranked one. Ranking a filter lets the ranker starve a filter that genuinely matched — the starvation shape Phase 01 closed — and "which decisions match this" carries no relevance question to rank by. Jaccard was not needed here; the terms are exact/substring over the closed payload. First-separator-wins so a colon inside a `~` value cannot retarget the operator. `--source` is refused alongside `--decisions` rather than intersected, because any value but `decisions` yields an empty pool that reads exactly like a real miss.
+result: CI run 31526373847, head 06e1837238d31744187b55cd15218a369810efae — identical to the local commit SHA. OVERALL success; per-JOB tally 19/19 `success`, 0 failure, 0 skipped, read from `gh run view --json jobs` and not from a watcher exit code. tests/memory-recall.bats self-count test passed, so all 31 declared tests registered and ran (26 before this slice, +5 for REQ-04); `bats --count` locally agrees at 31/31. The KINDS assertion inside the suite read 44 from `.claude/scripts/hq/lib/validate.mjs` on all three OSes.
+commit: 06e1837
 
 #### slice: 02
 
