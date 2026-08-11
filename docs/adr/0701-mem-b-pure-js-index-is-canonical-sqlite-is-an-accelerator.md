@@ -133,3 +133,55 @@ install; pure-JS-only — discards a capability already measured as available fo
   it" never becomes the reason.
 - The 500ms promotion threshold is deliberately well under REQ-02's 1s budget, so the switch is
   made on a trend rather than at the moment the contract breaks.
+
+## Amendment — 2026-08-11: the sqlite engine is CUT, on the measurement this ADR asked for
+
+This ADR's revisit trigger asked for a measurement before Phase 2 opened. Phase 01 took it, on the
+real corpus (278 records, 0.43 MB index), owner box, Node v24.18.0:
+
+| | |
+|---|---|
+| the search itself, worst of all 12 golden queries | **0.42 ms** |
+| index load — parsing `index.json` | 6.9 ms |
+| node process startup | ~180 ms |
+| **end-to-end `arc-recall`, worst of 12** | **199 ms** |
+
+**The accelerator would accelerate 0.42 ms of a 199 ms wall clock — 0.2%.** No amount of
+engineering makes that visible, and the 500 ms promotion trigger above is not approached.
+
+Two corrections this amendment records, because both were stated in this cycle and both were wrong:
+
+1. **"The equivalence gate still earns its place" was circular reasoning.** The gate exists to
+   catch two engines disagreeing. With no second engine there is nothing to disagree, so the gate
+   cannot be a reason to *build* the second engine. It is good practice *given* a two-engine
+   design; it is not an argument *for* one.
+2. **The accelerator's real win was never the search.** It is the *load*: the JS engine parses the
+   whole index to answer one query, and sqlite does not. At the current 0.43 MB that costs 6.9 ms,
+   which is nothing — but it scales linearly with the corpus, and it is the number that will
+   eventually matter.
+
+### The decision
+
+**The sqlite engine is cut from this cycle.** The owner funded it on 2026-08-11 when the speed
+premise was still open, and cut it the same day once the measurement closed it. The plan's own
+pinned cut order already named REQ-07's engine as the first cut, so this follows the plan rather
+than departing from it.
+
+**What still ships:** the `--engine js|auto` dispatch seam (already live in Phase 01), and the
+equivalence **contract and test harness** — so the second engine, if it ever arrives, plugs into a
+gate that already exists rather than one written to justify it.
+
+### The trigger to build it, written down now so it is not re-argued from feel
+
+Build the sqlite engine when **either**:
+
+- `.claude/state/memory/index.json` passes **25 MB**, or
+- a measured index load exceeds **500 ms**
+
+whichever comes first. At the measured 6.9 ms per 0.43 MB, 500 ms is roughly **31 MB**, about
+**72×** today's corpus. At arc's current rate of roughly 20 records a day that is years away, and
+it is a number anyone can check with `ls -l` rather than a judgement call.
+
+**And note what the trigger is NOT about: query speed.** If `arc-recall` ever needs to feel
+faster, the fix is not a different engine — it is not paying ~180 ms of node startup per
+invocation, which no engine choice can touch.

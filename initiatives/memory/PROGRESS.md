@@ -251,6 +251,23 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
   forward-slash path against output that carries the platform separator, so 18 of 19 jobs were
   green and one shard was red on the assertion added that hour.
 
+- **2026-08-11 — REQ-07's sqlite engine CUT by the owner, on the measurement the ADR asked for.**
+  Phase 01 measured the search at **0.42ms of a 199ms** end-to-end wall clock; the rest is node
+  startup. The accelerator would accelerate **0.2%** of the elapsed time. The owner funded REQ-07
+  earlier the same day when the speed premise was still open, and cut it once the measurement
+  closed it — which is the assumptions ledger working exactly as written.
+
+  Two things this cycle said that were wrong, and are corrected in the ADR rather than quietly
+  dropped: *"the equivalence gate still earns its place"* was **circular** (the gate exists to
+  catch two engines disagreeing, so it cannot justify building the second one), and the
+  accelerator's real win was never the search — it is the **load**, because the JS engine parses
+  the whole index to answer one query and sqlite would not.
+
+  Still ships: the `--engine` seam (live since Phase 01) and the equivalence **contract and
+  harness**. Build trigger written down so it is not re-argued from feel: `index.json` past
+  **25MB**, or a measured load over **500ms** — about 72× today's corpus, checkable with `ls -l`.
+  The freed appetite goes to REQ-04, REQ-05 and REQ-06, which are user-visible.
+
 ## Now
 
 **Phases 00 and 01 are closed. Phase 02 is next, and it is the largest of the three.**
@@ -267,7 +284,7 @@ citations, ten hostile fixtures, root-mode), `golden-check --rank`, and the addi
 | 04 | `--decisions 'verdict:reject reason~worktree'` through the reader only | `KINDS.length` must stay 44 |
 | 05 | `/arc-retro` pre-append near-duplicate check, T=0.5 + 2 shared tags | surfaces, never auto-resolves |
 | 06 | the 12 golden queries as a **failing** CI gate | `golden-check --rank` already measures; Phase 02 wires it |
-| 07 | the sqlite engine behind the equivalence gate | **its speed premise is disproven** — search is 0.42ms of a 199ms wall clock. The owner funded it anyway on 2026-08-11; the gate still earns its place as the thing that catches a second engine disagreeing |
+| ~~07~~ | ~~the sqlite engine~~ **CUT** — contract + harness only | cut on the measurement; the trigger to build it is `index.json` past 25MB or a load over 500ms |
 | 08 | the review hook | lands exactly like REQ-03 did, via `baseline.retired:` on `review-diff.process.yaml` — the path is now proven |
 
 **Plus, non-negotiable:** two fresh-agent adversarial passes on Phase 02's three new parser

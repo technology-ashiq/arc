@@ -89,7 +89,7 @@ DO-NOT-EDIT banner (`arc-kickoff.md`, `arc-review.md`, `arc-commit.md`); `docs/e
 | REQ-04 | Past decisions are queryable, not archaeological | `--decisions 'verdict:reject reason~worktree'` filters `decision.recorded` via reader only; seeded fixture returns byte-exact `reason` text; `KINDS.length` unchanged at 44 | 2 | active |
 | REQ-05 | Contradicting rules meet a human, not a merge bot | `/arc-retro` pre-append check fires on `>= 2` shared tags AND token overlap `>= 0.5`; fixture: a planted near-duplicate pair surfaces before append; nothing auto-resolves | 2 | active |
 | REQ-06 | Recall quality is a number, not a vibe | The 12 golden queries + expected ids are **authored and committed in Phase 0, in their own commit, before any adapter/alias/weight tuning** (they are also Phase 0's grep-baseline input); **this phase wires them into CI as a failing gate** — red = build failure — and shows the Phase-0 grep baseline beaten, both tables in evidence | 2 | active |
-| REQ-07 | The fast engine is proven to agree with the reference | `--engine` selects js / sqlite / auto; equivalence gate asserts both engines return the **same ordered ids** for all 12 golden queries under one **documented tie-break (id-ascending on equal bm25)**; skips visibly (never silently) on the 4 OS×node combinations without `node:sqlite`, and a run where **every** leg skipped is a FAIL | 2 | active |
+| REQ-07 | The fast engine is proven to agree with the reference | `--engine` selects js / sqlite / auto; equivalence gate asserts both engines return the **same ordered ids** for all 12 golden queries under one **documented tie-break (id-ascending on equal bm25)**; skips visibly (never silently) on the 4 OS×node combinations without `node:sqlite`, and a run where **every** leg skipped is a FAIL | 2 | dropped |
 | REQ-08 | Review receives recall without being asked | `processes/review-diff.process.yaml` gains the same additive step with a diff-derived query; fixture: a changed path surfaces a path-matched rule | 2 | active |
 
 ## Appetite
@@ -106,7 +106,10 @@ kickoff's recommendation was to keep 4 days and cut REQ-07's engine first. **The
 fund the work instead of cutting it**, so the whole of option C ships: canonical JS engine, sqlite
 accelerator, and the equivalence gate between them.
 
-**Cut order, pinned — now a contingency rather than an expectation:** **REQ-07's sqlite engine
+**Cut order, pinned. REQ-07's engine was CUT on 2026-08-11** (ADR-0701 amendment) once Phase 01
+measured the search at 0.42ms of a 199ms wall clock — the cut order predicted exactly this one
+first, and the measurement is what made it a decision rather than a schedule squeeze. Remaining
+order: **REQ-07's sqlite engine
 first** (the equivalence *contract* and its test harness still ship; only the second engine's
 implementation is banked), **then REQ-05**, **then REQ-04**. REQ-07 leads because at the measured
 corpus size it buys speed nobody is waiting on, so cutting it costs the user nothing observable —
