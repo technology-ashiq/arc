@@ -179,12 +179,12 @@ commit: 98a9741
 title: **Two fresh-agent adversarial passes on the adapters** (decision logic · shell/OS boundary) per ADR-0708, findings ledgered, holes fixed and pinned as fixtures or rejected with a reason
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: verified-real — `initiatives/memory/evidence/phase-00/adversarial-decision-logic.md` and `initiatives/memory/evidence/phase-00/adversarial-shell-os.md`
+tier: verified-real
 sources: phase-00-spec.md
-decision: Both carry this lane's running list of already-fixed defects with instructions to check each one in every OTHER file - a fix is not applied until it has been attacked somewhere it was never made.
-result: (empty until proven)
-commit: (empty until proven)
+decision: Two fresh general-purpose agents in parallel, one on decision logic and one on the shell/OS boundary, neither having seen the implementation, both carrying this lane's running list of already-fixed defects with the instruction to check each one in every OTHER file.
+result: 37 findings, 35 fixed, 2 rejected with a reason. EXACTLY ONE overlapped between the two agents (staleness blind to an added ADR) -- the measured argument for two surfaces rather than one attacker with more time. Nine fixes are one sentence: a line the parser did not understand left no trace, with N_parsed == N_indexed true throughout. The twin-fix this lane's pre-mortem predicted was found four lines apart in one function: the pipe split masked, the comma split below it not.
+commit: 4ca0b49
 
 #### slice: 13
 

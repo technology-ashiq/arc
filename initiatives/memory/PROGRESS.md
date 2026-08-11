@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-memory "playbooks + recall"
 
-status: BLOCKED
+status: LIVE
 cycle: arc-memory (Cycle 11, opened 2026-08-11)
 phase: 00
 appetite: 5d
-burn: 0d
-blocked-on: owner — approval of PLAN.md before any product code (kickoff STOP gate)
+burn: 0.6d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -34,13 +34,13 @@ depends-on: —
 
 | # | Capability | Appetite | REQs | Status |
 |---|---|---|---|---|
-| 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | ⬜ not started |
+| 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | 🔨 in progress |
 | 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | ⬜ not started |
 | 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, sqlite engine + equivalence gate | 1.25d | REQ-04..REQ-08 | ⬜ not started |
 
 ## Appetite burn
 
-**0d of 5d used (0%).** Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
+**0.6d of 5d used (12%).** Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
 conversation. 5.0d (100%) — cut or kill, never silently extend.
 
 **The appetite was raised 4d → 5d by the owner on 2026-08-11**, recorded here rather than absorbed
@@ -52,8 +52,6 @@ Cut order, still pinned but now a contingency rather than the expected path: **R
 engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cut.
 
 ## Done-log
-
-*(nothing closed yet — the lane was born 2026-08-11)*
 
 - **2026-08-11** — lane born. MEM-B preflight run as the design source's first act; result forced
   a storage re-decision (ADR-0701). ADR-0700..0709 written. PLAN.md, three phase specs and this
@@ -114,7 +112,50 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
   guard refused and named the right directory) and both confirmed present in `events/` with today's
   `_quarantine/` empty — looked at, not inferred from exit 0.
 
-**Awaiting owner approval before any product code.**
+- **2026-08-11 — owner approved and Phase 00 opened.** `/arc-develop start 00`, 14 slices.
+  Commits in ADR-mandated order: the 12 golden queries first (`e8a186c`), before any adapter
+  existed; then the grep baseline (`98a9741`), measured at a commit where
+  `.claude/scripts/memory/` was not on disk; then the module (`d594bfd`).
+- **2026-08-11 — the code corrected the plan four times.** `trial-ledger` holds **49** ledger
+  records, not 37, and 19 non-ledger rows, not 31 — 49+7+10+19 = 85 exactly, which the kickoff's
+  split did not. `docs/adr/` is **150** files, not 140, because this lane wrote ten during its own
+  kickoff; that is why absolute counts are pinned only in frozen fixture trees and the live tree
+  is held to the invariant alone (spec §B3). And `decisions` reported **0/0 on a spine the builder
+  had never opened** — the reader's root is the spine root, not the repo root, and handing it the
+  wrong one returns zero events with no error at all. Against the real spine it reads **20
+  decisions out of 1004 events**.
+- **2026-08-11 — CI found two defects this box could not.** `portability.bats` refused a negated
+  letter-range bracket expression, a locale-collation trap this repo already gates against; and
+  six legs identically refused `decision.recorded`, whose idem is **welded** to the approval it
+  decides. **This phase's own spec §C carried that emit snippet**, written at kickoff from reading
+  the payload shape and never run. Both fixed; the spec is corrected in place with the refusal
+  quoted, so the next reader inherits the answer rather than the mistake. CI green 19/19 on
+  `eb62094`, read per-JOB.
+- **2026-08-11 — two fresh-agent adversarial passes (ADR-0708), inside the phase. 37 findings, 35
+  fixed, 2 rejected with a reason. Exactly ONE overlapped** between the decision-logic agent and
+  the shell/OS agent — the measured argument for two surfaces rather than one attacker given more
+  time, and the second time this repo has measured it.
+  - Nine fixes are the same sentence: **a line the parser did not understand left no trace.** The
+    leading-date regex was a filter, so markdown's own pipe escape, one leading space, a one-digit
+    day and a table-shaped row each vanished with no record and no exclusion, at exit 0, with
+    `N_parsed == N_indexed` perfectly true. The count-verify cannot see that class by construction.
+  - **The twin-fix this lane's own pre-mortem predicted happened inside this cycle** — not across
+    the two process hooks it named, but **four lines apart in one function**: the pipe split was
+    masked and the comma split below it was not.
+  - Also closed: an empty `--root` built an index for a directory nobody named; the staleness check
+    consulted the hash only when the mtime already differed, while the comment beside it claimed
+    the opposite; an ADDED file could never mark the index stale; an emptied or UTF-16-re-saved
+    organ reported 0/0 and exited 0 with no channel able to catch it on the live tree; `--root`
+    moved the organs but not the spine; a malformed expectation file silently disarmed the only
+    pinning channel; and one of the phase's own regression tests could not fail.
+  - The index now reports **2 malformed rows on the live tree, and both are real**: ADR-0006 and
+    ADR-0007 each carry two `**Status:**` lines under `## Amendment`.
+  - `golden-queries.tsv` gained an **anchor** column: a retro id is content-positional, so one
+    back-filled row renumbers every later id on that date and the gate keeps passing while grading
+    a different lesson. Demonstrated, then closed.
+
+**Phase 00 open. Slices 01–07, 09–12 proven; 08 (measured shard weight), 13 (CI green on the
+current head) and 14 (tracker) still owed.**
 
 ## Now
 
