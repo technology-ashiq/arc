@@ -1,6 +1,6 @@
 # Phase 00 — per-organ counts, named exclusions, rebuild identity
 
-Run on the live tree, 2026-08-11, at commit `d594bfd`. The spine was read through the reader
+Run on the live tree, 2026-08-11, at commit `6483522` (final Phase-00 state, after both adversarial passes). The spine was read through the reader
 against the **main clone** (`ARC_SPINE_ROOT=E:/Work_Hub/01_Automemory/arc/.claude/state/hq`),
 because this checkout is a linked git worktree and the spine deliberately refuses to resolve
 inside one.
@@ -14,12 +14,12 @@ counts (parsed/indexed):
   trial-ledger     49/49
   learning-ledger  4/4
   adr              150/150
-  decisions        20/20  (reader returned 1004 event(s) from E:/Work_Hub/01_Automemory/arc/.claude/state/hq)
-exclusions: 46 named, 0 malformed
-wrote .claude/state/memory/index.json  (277 records)
+  decisions        21/21  (reader returned 1005 event(s) from E:/Work_Hub/01_Automemory/arc/.claude/state/hq via ARC_SPINE_ROOT)
+exclusions: 48 named, 2 malformed
+wrote .claude/state/memory/index.json  (278 records)
 ```
 
-54 + 49 + 4 + 150 + 20 = **277**. The second run deleted `.claude/state/memory` first; the count
+54 + 49 + 4 + 150 + 21 = **278**. The second run deleted `.claude/state/memory` first; the count
 block and the dumped record set were identical, compared as records (doc id + content hash in
 index order), never as file bytes.
 
@@ -34,7 +34,7 @@ the adapter and the adapter is right.
 | `trial-ledger` | 37 records, 31 non-ledger rows | **49 records, 19 non-ledger rows** | 49+7+10+19 = 85 exactly. The kickoff's split summed to 85 only because its two wrong numbers were wrong in opposite directions |
 | `learning-ledger` | 4 | **4** | unchanged |
 | `adr` | 140 | **150** | this lane wrote ten ADRs during its own kickoff. See below |
-| `decisions` | N/N | **20/20 of 1004 events** | first real measurement; the kickoff had no number |
+| `decisions` | N/N | **21/21 of 1005 events** | first real measurement; the kickoff had no number. The 21st is this cycle's own approval receipt |
 
 ### Why the live tree pins no absolute number
 
@@ -45,7 +45,7 @@ gate that breaks on ordinary growth gets deleted — after which it protects not
 So the live tree is checked against an **invariant** (`N_parsed == N_indexed`) and nothing else.
 Absolute counts are pinned only in fixture trees, which are frozen by construction.
 
-## The exclusions: 46 named, 0 malformed
+## The exclusions: 48 named, 2 malformed
 
 Every one carries its file and its line. The full listing is in the build output; the shape is:
 
@@ -56,13 +56,21 @@ Every one carries its file and its line. The full listing is in the build output
 | `trial-ledger` | 10 | table separator rows |
 | `trial-ledger` | 19 | non-ledger table rows (3 columns; the ledger is 5) |
 | `learning-ledger` | 0 | none expected, and none found |
-| `adr` | 0 | 150/150 parse an H1 and a `**Status:**` line |
+| `adr` | **2** | **both real**: ADR-0006 and ADR-0007 each carry two `**Status:**` lines, the second under `## Amendment`, so an amendment recording a new status would never be read. Found by the adversarial pass, then confirmed against the live files |
 | `decisions` | 0 | every `decision.recorded` carried a valid closed payload |
 
-**`0 malformed` is printed explicitly**, so "nothing was excluded" and "exclusions were never
-checked" cannot look alike on screen. `malformed` is a flag the adapter sets when it makes the
-call — it is never re-derived by pattern-matching the exclusion's own English message, because a
-classifier that greps its own prose silently reclassifies everything the day someone rewords it.
+**The malformed count is printed explicitly on every run**, so "nothing was excluded" and
+"exclusions were never checked" cannot look alike on screen. `malformed` is a flag the adapter
+sets when it makes the call — it is never re-derived by pattern-matching the exclusion's own
+English message, because a classifier that greps its own prose silently reclassifies everything
+the day someone rewords it.
+
+The two malformed rows are worth stating plainly, because they are the whole point of the line
+existing. An earlier version of the ADR status rule also flagged the **14** live ADRs written
+`**Status:** accepted · 2026-07-09` — house style, not a defect. A gate that cries wolf on the
+normal case makes its own count worthless, and the two real findings would have been invisible in
+a list of sixteen. So the rule was narrowed to the genuine ambiguity: **two different status words
+in one line**, which is what "Accepted, superseded by ADR-0801" looks like.
 
 ## The row that proves the masking rule
 
