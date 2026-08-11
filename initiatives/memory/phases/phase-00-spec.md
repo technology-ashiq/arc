@@ -149,13 +149,28 @@ Two operational facts, both learned the hard way while emitting this kickoff's o
   ```
   APPROVAL=$(ARC_SPINE_ROOT=<scratch> bash .claude/scripts/hq/arc-event.sh emit approval.requested \
       --payload '{"what":"seed for the memory decisions fixture","gate":"fixture"}')
-  ARC_SPINE_ROOT=<scratch> bash .claude/scripts/hq/arc-event.sh emit decision.recorded \
-      --payload "{\"decides\":\"$APPROVAL\",\"verdict\":\"reject\",\"reason\":\"worktree mode B is not certified\"}"
+  ARC_SPINE_ROOT=<scratch> node .claude/scripts/hq/arc-inbox.mjs reject "$APPROVAL" \
+      --reason "worktree mode B is not certified"
   ```
 
   Both kinds are already in the closed vocabulary, so neither is a vocabulary change. Note the
   `reason` text above is chosen so the `--decisions 'verdict:reject reason~worktree'` fixture in
   Phase 2 has something real to match.
+
+> **Corrected 2026-08-11 by CI, in phase.** This snippet originally seeded the decision with a
+> raw `arc-event.sh emit decision.recorded --payload …`, and that is **refused**:
+>
+> ```
+> arc-event: REJECT BAD_DECISION -- decision.idem must be sha256("decision.recorded|"+decides)
+> -- a decision's idem is bound to the approval it decides
+> ```
+>
+> The idem is **welded** to the approval, so that a decision naming a decoy approval cannot
+> pre-claim a real one's stable key and lock it open forever (`validate.mjs`, `assertDecision`).
+> `arc-inbox reject|approve` derives that idem; a hand-rolled emit cannot, and should not.
+> The kickoff wrote the snippet from reading the payload shape and never ran it — which is
+> exactly what the macOS leg is for. **Nothing on this box would have caught it either**; the
+> refusal is in the validator, not in the platform.
 
 After seeding, **look in both `events/` and `events/_quarantine/`** and confirm where the fixture
 actually landed. Exit 0 from a fire-and-forget writer is not evidence that anything was written —

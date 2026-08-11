@@ -135,8 +135,12 @@ _manifest_no_state() {
   approval="$(bash "$EVENT" emit approval.requested --strict --payload \
     '{"what":"seed for the memory decisions fixture","gate":"fixture"}')"
   [ -n "$approval" ]
-  run bash "$EVENT" emit decision.recorded --strict --payload \
-    "{\"decides\":\"$approval\",\"verdict\":\"reject\",\"reason\":\"worktree mode B is not certified\"}"
+  # Through arc-inbox, NOT a raw emit. decision.recorded carries a WELDED idem --
+  # sha256("decision.recorded|" + decides) -- so that a decision naming a decoy approval cannot
+  # pre-claim a real one's key and lock it open forever. A raw emit is refused with BAD_DECISION,
+  # which is how CI found that this phase's own spec section C had the emit snippet wrong.
+  run node "$ARC_ROOT/.claude/scripts/hq/arc-inbox.mjs" reject "$approval" \
+    --reason "worktree mode B is not certified"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # Exit 0 from a writer is not evidence that anything was written. Look in BOTH places.
   [ -z "$(ls -A "$SPINE/events/_quarantine" 2>/dev/null)" ]

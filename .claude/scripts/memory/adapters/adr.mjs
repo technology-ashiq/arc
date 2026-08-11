@@ -60,7 +60,14 @@ export function parse(text, path) {
       line: titleLine,
       title,
       body: `${title}\n${para.join(" ")}`,
-      tags: ["adr", status.replace(/[^a-z]/gi, "").toLowerCase()].filter(Boolean),
+      // Positive match, deliberately. tests/portability.bats refuses any NEW negated
+      // letter-range bracket expression under .claude/scripts, because such a range folds
+      // differently under a non-C locale. Note the gate skips shell comments only, so this
+      // note must not spell the forbidden form out -- the retro-log records a quoting bug
+      // landing twice in one file, the second time inside the comment explaining the first.
+      // "The first run of letters" is what this actually wants to say anyway, so the positive
+      // form is also the clearer one; it strips the bold markers the Status line is written in.
+      tags: ["adr", (/[a-z]+/i.exec(status) || [""])[0].toLowerCase()].filter(Boolean),
       fields: { number, slug, title, status, summary: para.join(" ") },
     }],
     exclusions,
