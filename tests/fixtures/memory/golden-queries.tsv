@@ -1,0 +1,19 @@
+# id	query	expect	note
+# expect holds one or more comma-separated doc-ids; ANY one of them in the top 3 passes the row.
+# `unresolved:<descriptor>` is a placeholder for a row whose expected id is a retro-log or
+# trial-ledger row: those ids are content-positional (retro:<DATE>#<n>) and can only be written
+# down once the id grammar first runs. A loader MUST FAIL if any `unresolved:` token is still
+# present when this file is used as a gate (ADR-0706). Committed before any adapter exists, so
+# the set cannot be bent to flatter the results it grades.
+G01	which ADR closed the spine event kind vocabulary	adr:0026	the closed-vocabulary ADR is cited constantly and nobody remembers its number
+G02	duplicate receipts silently lost idem preimage	unresolved:retro-2026-07-28-dup-idem-quarantine	the 2026-07-28 spine row; "idem preimage" is the recorder's word, "duplicate receipts" the searcher's (ADR-0709)
+G03	can two lanes emit in parallel worktree mode B	adr:0056	mode-B certification; asked in this very kickoff and answered by reading the file
+G04	author wrote breaking inputs all caught fresh agent found holes	learn:L-001	the gate-author-cannot-be-its-attacker learning
+G05	exit 0 but receipts quarantined fire-and-forget	learn:L-002	the fire-and-forget emitter learning; this phase's own spine fixture had to honour it
+G06	appetite sum warned zero slack inverted fire	unresolved:trial-appetite-sum-rows	any appetite-sum ledger row passes; there is no single right answer, which is why expect is plural
+G07	two sessions same ADR numbers collision century	unresolved:retro-2026-08-02-adr-numbering	the collision that produced the per-lane century bands this lane's 0700 band comes from
+G08	markdown heading regex anchored line start prose mention	unresolved:retro-2026-08-02-model-policy-regex	the row whose own prevention text carries a literal pipe inside a code span — the masking fixture
+G09	apostrophe single-quoted shell embedded node broke	unresolved:retro-2026-08-03-shell-quoting	landed twice in one file, the second time inside the comment explaining the first
+G10	when is a cycle officially closed which document	adr:0071	a process question whose answer is an ADR, not a rule file
+G11	test passed while executing nothing vacuous	unresolved:retro-2026-08-03-vacuous-pass	the vacuous-pass row; shipped three times, twice inside the suites written to prevent it
+G12	who approves a learning promotion fresh agent owner	adr:0108	three recorded inputs, not a count or a streak
