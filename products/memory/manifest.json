@@ -19,6 +19,7 @@
     ".claude/scripts/memory/lib/aliases.mjs",
     ".claude/scripts/memory/lib/bm25.mjs",
     ".claude/scripts/memory/lib/fields.mjs",
+    ".claude/scripts/memory/lib/observe.mjs",
     ".claude/scripts/memory/lib/tokenize.mjs",
     ".claude/scripts/memory/memory-index.mjs"
   ],

@@ -26,6 +26,38 @@ import { ALIAS_FILE } from "./arc-recall.mjs";
 
 export const GOLDEN = "tests/fixtures/memory/golden-queries.tsv";
 
+// ---------- the @-directive header (REQ-06, ADR-0706) ----------
+// The gate compares against numbers that live in the FIXTURE, not in this file. A baseline typed
+// into a script is a number nobody diffs; a baseline in the data file makes every move a visible
+// change to the thing that records it. Missing, duplicated or non-numeric directives are refused
+// rather than defaulted -- a gate that silently defaults its own bar is grading nothing.
+export const HEADER_KEYS = Object.freeze(["baseline-grep-top3", "baseline-corpus-records"]);
+
+export function parseGoldenHeader(text) {
+  const out = {};
+  for (const [i, line] of text.replace(/\r\n/g, "\n").split("\n").entries()) {
+    if (!line.startsWith("#")) continue;
+    // A key STARTS WITH A LETTER. `[a-z0-9-]+` also matched `@-directives`, the first words of
+    // the prose comment written directly above the directives it describes -- so the file's own
+    // documentation was parsed as a malformed directive and refused the whole gate at exit 2.
+    // Found by running the gate once before writing the assertions, which is the only reason it
+    // is not a CI red. Prose beginning with `@` is now prose; a well-formed key that nobody
+    // recognises is still refused loudly, because that is a typo in a real directive.
+    const m = line.match(/^#[ \t]*@([a-z][a-z0-9-]*)[ \t]+(.*)$/);
+    if (!m) continue;
+    const key = m[1];
+    const raw = m[2].trim();
+    if (!HEADER_KEYS.includes(key)) throw new Error(`${GOLDEN}:${i + 1} declares @${key}, which is not one of: ${HEADER_KEYS.join(", ")}`);
+    if (key in out) throw new Error(`${GOLDEN}:${i + 1} declares @${key} twice -- that is an operator error, not a last-wins override`);
+    if (!/^\d+$/.test(raw)) throw new Error(`${GOLDEN}:${i + 1} @${key} is ${JSON.stringify(raw)}, not a non-negative integer`);
+    out[key] = Number(raw);
+  }
+  for (const k of HEADER_KEYS) {
+    if (!(k in out)) throw new Error(`${GOLDEN} declares no @${k} -- the gate refuses to compare against a baseline nobody wrote down`);
+  }
+  return out;
+}
+
 export function loadGolden(text) {
   const rows = [];
   for (const [i, line] of text.replace(/\r\n/g, "\n").split("\n").entries()) {
@@ -109,6 +141,7 @@ function main() {
   let root = null;
   let seenRoot = false;
   let doRank = false;
+  let doGate = false;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--root") {
       if (seenRoot) { console.error("golden-check: --root given twice -- that is an operator error, not a last-wins override"); process.exit(2); }
@@ -120,6 +153,9 @@ function main() {
       if (v.trim() === "") { console.error("golden-check: --root was named but is empty -- refusing to fall back to a directory nobody named"); process.exit(2); }
       root = v;
     } else if (argv[i] === "--rank") { doRank = true; }
+    // --gate IMPLIES --rank: a gate that could be asked to grade without ranking would exit 0
+    // having graded nothing, which is the vacuous pass in its purest form.
+    else if (argv[i] === "--gate") { doRank = true; doGate = true; }
     else { console.error(`golden-check: unknown flag ${argv[i]}`); process.exit(2); }
   }
   root = resolve(root ?? process.cwd());
@@ -130,8 +166,10 @@ function main() {
   const idxPath = indexPath(root);
   if (!existsSync(idxPath)) { console.error("golden-check: no index -- run memory-index --rebuild first"); process.exit(2); }
 
-  let rows, index;
-  try { rows = loadGolden(readFileSync(goldenPath, "utf8")); }
+  let rows, index, goldenText;
+  // Read ONCE and reuse: reading the fixture a second time later would let the rows and the
+  // @-directives come from two different reads of a file that could change between them.
+  try { goldenText = readFileSync(goldenPath, "utf8"); rows = loadGolden(goldenText); }
   catch (e) { console.error(`golden-check: ${e.message}`); process.exit(2); }
   try { index = JSON.parse(readFileSync(idxPath, "utf8")); }
   catch (e) { console.error(`golden-check: index is unreadable: ${e.message}`); process.exit(2); }
@@ -158,9 +196,51 @@ function main() {
     if (r.drifted) console.log(`        DRIFT: ${r.drifted} is an expected id but no longer carries this row's anchor -- the id now names a different record`);
   }
   console.log(`golden-check: ${hits}/${scored.length} queries hit an expected id in the top 3`);
-  // Phase 01 measures and REPORTS. Phase 02 turns this into a failing CI gate (REQ-06); making it
-  // fail here would gate on a number before the phase that owns the number has run.
-  if (hits < scored.length) process.exitCode = 0;
+  // Phase 01 measured and REPORTED. Phase 02 turns the same number into a failing gate (REQ-06),
+  // and only under --gate: `--rank` on its own stays the reporting surface it has always been.
+  if (!doGate) return;
+
+  let header;
+  try { header = parseGoldenHeader(goldenText); }
+  catch (e) { console.error(`golden-check: ${e.message}`); process.exit(2); }
+
+  const baseline = header["baseline-grep-top3"];
+  const corpusBaseline = header["baseline-corpus-records"];
+  const corpusNow = (index.records ?? []).length;
+
+  // THE COMPARISON TABLE (ADR-0706). Both numbers are labelled and the delta is derived, never
+  // retyped -- the counts-rot shape of retro-log 2026-07-22 is a hardcoded number nobody
+  // recomputes, and a comparison table is exactly where one hides.
+  console.log("");
+  console.log(`  surface           top-3 hits   of   source`);
+  console.log(`  grep baseline     ${String(baseline).padStart(10)}   ${String(scored.length).padStart(2)}   ${GOLDEN} @baseline-grep-top3`);
+  console.log(`  arc-recall (js)   ${String(hits).padStart(10)}   ${String(scored.length).padStart(2)}   measured this run`);
+  console.log(`  delta             ${String(hits - baseline).padStart(10)}        module minus grep`);
+  console.log("");
+
+  // ADR-0706's embeddings trigger is THREE conditions together. Printing one of them, or printing
+  // "trigger not met" with no values, is how a settled number decays back into folklore -- so all
+  // three are printed with their live values whether or not any of them holds.
+  const aliasFixes = aliasRows.length;
+  const c1 = hits < 10, c2 = aliasFixes >= 3, c3 = corpusNow >= 2 * corpusBaseline;
+  console.log(`  embeddings trigger (ADR-0706) needs ALL THREE:`);
+  console.log(`    top-3 precision < 10/${scored.length} .......... ${c1 ? "MET" : "not met"}  (live ${hits}/${scored.length})`);
+  console.log(`    >= 3 alias-iteration fixes ......... ${c2 ? "MET" : "not met"}  (live ${aliasFixes})`);
+  console.log(`    corpus >= 2x the recorded size ..... ${c3 ? "MET" : "not met"}  (live ${corpusNow}, recorded ${corpusBaseline}, bar ${2 * corpusBaseline})`);
+  console.log(`    => embeddings are ${c1 && c2 && c3 ? "DISCUSSABLE" : "NOT discussable"}; below the bar a miss is fixed with an alias.`);
+  console.log("");
+
+  // The gate. A POSITIVE condition: it fails for insufficiency, not merely for rule-breaking
+  // (ADR-0049 via ADR-0706). Two ways to be red, and they are reported separately because they
+  // mean different things -- one is a regression, the other says the module was never needed.
+  const red = [];
+  if (hits < scored.length) red.push(`${scored.length - hits} of ${scored.length} golden queries do not hit an expected id in the top 3`);
+  if (hits <= baseline) red.push(`the module scored ${hits}/${scored.length} against a grep baseline of ${baseline}/${scored.length} -- it did not BEAT grep, so its own premise is thin (ADR-0706 keeps that outcome reachable on purpose)`);
+  if (red.length) {
+    for (const r of red) console.error(`golden-check: GATE FAILED -- ${r}`);
+    process.exit(1);
+  }
+  console.log(`golden-check: GATE PASSED -- ${hits}/${scored.length}, beating the grep baseline of ${baseline} by ${hits - baseline}.`);
 }
 
 // realpath BOTH sides. Node ESM realpaths the entry module while argv[1] keeps any symlink, so

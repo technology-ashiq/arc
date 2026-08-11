@@ -59,9 +59,9 @@ commit: d92bda1
 title: REQ-06 — 12 golden queries wired into CI as a **failing** gate; the Phase-0 grep baseline is beaten, comparison table in evidence; surfaced→cited log seeded at `.claude/state/memory/surfaced-cited.jsonl` and barred from gating (ADR-0706)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-02-spec.md
+proof: contract — `bats tests/memory-golden.bats` :: THE NEGATIVE CONTROL FIRST — `--gate` exits 1 on a planted miss, so the gate is demonstrated failing before it is trusted, :: `--gate` exits 0 only at 12/12 and a bar below the recorded grep baseline is itself refused, :: the baseline is read as DATA from the golden TSV header and never as a literal in code, :: the embeddings trigger prints all three ADR-0706 conditions with their live values rather than one of them, :: a ranked recall appends one surfaced row to `.claude/state/memory/surfaced-cited.jsonl` and a read-only tree still answers at exit 0, and :: no gate path reads that log, proven by grep with a positive control. Plus a `memory golden set (REQ-06)` job in ci.yml whose red IS the build failure. Green on CI, read per-JOB.
+tier: contract
+sources: phase-02-spec.md, docs/adr/0706-mem-g-golden-set-gates-cited-rate-never-does.md, .github/workflows/ci.yml
 decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)

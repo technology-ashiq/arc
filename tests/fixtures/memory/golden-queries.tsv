@@ -1,4 +1,20 @@
 # id	query	expect	anchor	note
+#
+# The at-sign directives below are DATA the gate reads, never literals in code. A baseline typed
+# into a script is a number nobody diffs; here, moving one is a visible change to the fixture that
+# records it. (This sentence does not begin with the at-sign on purpose: the parser reads any
+# comment line whose first token is one as a directive, and the first draft of it was refused.)
+# @baseline-grep-top3	5
+# @baseline-corpus-records	278
+#
+# baseline-grep-top3: the Phase-00 grep oracle scored 5 of these 12 queries with an expected id in
+# its top 3, measured on the live corpus on 2026-08-11 and written up in
+# initiatives/memory/evidence/phase-01/golden-set-and-timings.md. REQ-06 requires the module to
+# BEAT it; equalling it means the module was not needed, which is the honest outcome ADR-0706
+# keeps reachable.
+# baseline-corpus-records: 278 records at that same measurement. It exists for ADR-0706's
+# embeddings trigger, whose third condition is a corpus at least twice this size.
+#
 # expect holds one or more comma-separated doc-ids; ANY one of them in the top 3 passes the row.
 #
 # anchor is a VERBATIM substring of the expected record's own text, and it is not decoration.

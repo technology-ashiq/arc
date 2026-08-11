@@ -25,6 +25,7 @@ import { indexPath, build, writeIndex, isStale, verify, readIndex } from "./memo
 import { search } from "./lib/bm25.mjs";
 import { sanitizeQuery, tokenize } from "./lib/tokenize.mjs";
 import { parseAliases, expand } from "./lib/aliases.mjs";
+import { recordSurfaced } from "./lib/observe.mjs";
 
 export const ALIAS_FILE = "docs/memory/aliases.md";
 const ENGINES = new Set(["js", "auto"]);
@@ -416,6 +417,16 @@ async function main() {
   const allow = new Set();
   for (const [i, rec] of records.entries()) if (allowed.has(rec.id)) allow.add(i);
   const results = search(index.postings ?? { terms: {}, lengths: [], avgdl: 0 }, records, tokens, { limit: o.limit, allow });
+
+  // The observational log (ADR-0706). Best effort, never throws, and NO GATE READS IT -- it is a
+  // trend answering "does anyone use what the hook surfaces", disqualified from gating forever.
+  // A zero-result recall is recorded too: "surfaced nothing" is the most interesting row there is
+  // for a module whose premise is that it surfaces the right thing.
+  recordSurfaced(root, {
+    query: queryText,
+    ids: results.map((h) => records[h.index]?.id).filter(Boolean),
+    surface: "arc-recall",
+  });
 
   if (o.json) {
     console.log(JSON.stringify({
