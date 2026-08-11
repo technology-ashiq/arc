@@ -74,9 +74,9 @@ risk: medium
 proof: contract — `bats tests/memory-golden.bats` :: with ONE engine registered the harness says so in as many words and proves DETERMINISM rather than agreement, never printing a verdict that could be read as two engines agreeing, :: a planted second engine that disagrees on ORDER alone (same ids, different sequence) is caught, which is the whole point of the tie-break clause, :: a planted second engine that agrees passes, so the catch above is not the harness refusing everything, :: the documented tie-break is asserted to be id-ascending on equal bm25 and an engine that breaks ties differently cannot pass, and :: `arc-recall --engine` resolves through the same registry the harness enumerates, so the seam is real and not two lists that can drift. Green on CI, read per-JOB.
 tier: contract
 sources: phase-02-spec.md, docs/adr/0701-mem-b-pure-js-index-is-canonical-sqlite-is-an-accelerator.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The tie-break IS the contract, so it is printed on every run rather than left in the ADR: two engines agree only on the same ORDERED ids, never merely the same set, because bm25 ties are common at this corpus size. With one engine the harness says NOTHING WAS COMPARED in those words and reports determinism instead — a green that cannot tell "they agree" from "there was nothing to compare" is the vacuous pass wearing a gate's clothes. `--engine` names derive FROM the registry, because two hand-kept lists drift and the one that drifts is the one the operator types against.
+result: CI run 31539062289, head cf0c4c94d06bc1c0f8780c0a058ac61e82b30170 — identical to the local commit SHA. OVERALL success; per-JOB tally 19/19 `success`. Driven before the assertions were written: a planted engine reversing ORDER ALONE is caught (`js ['a','b']` vs `reversed ['b','a']`, 1 mismatch, `compared: true`), and a planted agreeing twin yields 0 false positives, so the catch is not a harness that refuses everything. The live one-engine run prints `NOTHING WAS COMPARED` and `PASSED -- 12/12 ... as determinism only`. NOTE: adversarial finding 11 (decision-logic) shows an inverted bm25 tie-break still passes `--equivalence`, because a deterministic wrong tie-break is still deterministic — REPORTED, open, and the harness does not yet assert the tie-break itself.
+commit: fa956e8, 8ed7c18
 
 #### slice: 05
 
@@ -85,10 +85,10 @@ kind: logic
 risk: medium
 proof: (empty until proven)
 tier: (empty until proven)
-sources: phase-02-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+sources: phase-02-spec.md, docs/adr/0704-mem-e-hooks-are-additive-only-via-process-files.md, docs/adr/0207
+decision: The diff-derived query is a real parser in its own script, not prose in the process file, because a step with nothing to test has nothing to attack — and this phase owes two adversarial passes on exactly this surface. What the transform destroys is DECLARED: path tokens are structural, so a declared noise list is dropped and both the list and the count are printed, and a path left with nothing after filtering is reported rather than vanished. Landed via ADR-0207 `baseline.retired:`, the path REQ-03 proved 0.75d earlier.
+result: CI run 31539062289, head cf0c4c94d06bc1c0f8780c0a058ac61e82b30170. OVERALL success; 19/19 jobs. tests/memory-hook.bats ran on windows shard 4/12 as TAP `ok 175` through `ok 183` — all 9 declared tests registered and passed, 0 `not ok` in that shard. The engine tally moved 2/2 byte-identical (1 retired) -> 1/1 (2 retired) exactly as Phase 01 predicted, and the test now asserts both retirements plus proven+retired == pilots on disk. THREE prior runs were RED on this slice and every red was mine: the fixture appended a 4th retro row to a tree pinning 3 (so REQ-08's acceptance criterion and the only assertion of the mandatory label never ran); `dropped: 2` was wrong arithmetic for 6; and the two-decision fixture minted the identical ULID twice under the pinned test clock.
+commit: 8ed7c18, 667ec1c, cf0c4c9
 
 #### slice: 06
 
