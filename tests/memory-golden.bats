@@ -37,6 +37,18 @@ _gate_tree() {
   echo "$t"
 }
 
+# Rewrite the @baseline-grep-top3 directive in place. Node, not sed: `sed -i` needs a mandatory
+# backup suffix on BSD and `\t` in a sed regex is GNU-only, so a sed version of this passes on two
+# of the three legs and fails on macOS.
+_set_baseline() {
+  node -e "
+    const fs=require('node:fs'); const [p,v]=process.argv.slice(1);
+    const out=fs.readFileSync(p,'utf8').split('\n')
+      .map((l)=>l.startsWith('# @baseline-grep-top3\t') ? '# @baseline-grep-top3\t'+v : l)
+      .join('\n');
+    fs.writeFileSync(p,out);" "$1" "$2"
+}
+
 @test "golden gate: NEGATIVE CONTROL -- one planted miss turns the gate red" {
   # The gate is demonstrated FAILING before it is trusted. G01 asks about the closed event
   # vocabulary; replacing its query with a token the corpus does not contain makes exactly one
@@ -69,8 +81,11 @@ _gate_tree() {
   # pass on the miss condition instead.
   t="$(_gate_tree)"
   [ -n "$t" ] || { echo "the gate tree was not built"; false; }
-  sed -i 's/^# @baseline-grep-top3\t5$/# @baseline-grep-top3\t12/' "$t/$TSV"
-  grep -qP '^# @baseline-grep-top3\t12$' "$t/$TSV" || grep -q '@baseline-grep-top3	12' "$t/$TSV" || { echo "the baseline edit did not land"; false; }
+  # Rewritten by node, not by sed: `sed -i` takes a mandatory backup suffix on the BSD leg and
+  # `\t` in a sed regex is GNU-only, so the sed form of this line passed on ubuntu and windows
+  # and failed on macOS alone -- the exact BSD-vs-GNU class .claude/rules/testing.md names.
+  _set_baseline "$t/$TSV" 12
+  grep -q "@baseline-grep-top3	12" "$t/$TSV" || { echo "the baseline edit did not land"; false; }
   run node "$GOLDEN" --root "$t" --gate
   [ "$status" -eq 1 ] || { echo "expected exit 1, got $status"; echo "$output"; false; }
   [[ "$output" == *"did not BEAT grep"* ]]
@@ -137,8 +152,8 @@ _gate_tree() {
   grep -v '@baseline-grep-top3' "$t/keep.tsv" > "$t/$TSV"
   run node "$GOLDEN" --root "$t" --gate; [ "$status" -eq 2 ]
   [[ "$output" == *"declares no @baseline-grep-top3"* ]]
-  # non-numeric
-  sed 's/^# @baseline-grep-top3\t5$/# @baseline-grep-top3\tfive/' "$t/keep.tsv" > "$t/$TSV"
+  # non-numeric (node again, for the BSD `\t` reason above)
+  cp "$t/keep.tsv" "$t/$TSV"; _set_baseline "$t/$TSV" five
   run node "$GOLDEN" --root "$t" --gate; [ "$status" -eq 2 ]
   [[ "$output" == *"not a non-negative integer"* ]]
   # declared twice -- an operator error, never last-wins
@@ -198,6 +213,39 @@ _gate_tree() {
   [ "$output" -gt 0 ]
   run grep -nE "surfaced-cited|observe\.mjs|recordSurfaced" "$GOLDEN"
   [ "$status" -ne 0 ] || { echo "golden-check reads the observational log: $output"; false; }
+}
+
+@test "golden gate: the reader-lint sanctions the observational log at the TOKEN, not the line" {
+  # observe.mjs must carry the literal `.jsonl` -- that IS the filename ADR-0706 names -- while
+  # spine-reader-lint bans that token as a proxy for raw spine access. The sanction has to be
+  # narrow enough that a genuine bypass mentioning the same filename still trips, so BOTH halves
+  # are driven here against a throwaway repo rather than trusted to the comment in the lint.
+  local r="$BATS_TEST_TMPDIR/lintrepo"
+  mkdir -p "$r/.claude/scripts/memory"
+  cd "$r"
+  git init -q .
+  # Repo-local identity, never subshell-scoped env: a clean CI runner has no global git identity
+  # and commits there fail 128 -- green locally, red on CI.
+  git config user.email "test@example.invalid"
+  git config user.name "arc test"
+  # (a) the sanctioned shape: memory's own instance state.
+  printf 'export const P = ".claude/state/memory/surfaced-cited.jsonl";\n' \
+    > "$r/.claude/scripts/memory/ok.mjs"
+  git add -A && git commit -qm seed
+  # The lint reads TRACKED files, so assert the staging actually moved before trusting a pass.
+  [ "$(git ls-files .claude/scripts/memory | grep -c '\.mjs$')" -eq 1 ]
+  run bash "$ARC_ROOT/.claude/scripts/review/spine-reader-lint.sh"
+  [ "$status" -eq 0 ] || { echo "the sanctioned log tripped the lint:"; echo "$output"; false; }
+  # (b) a genuine bypass that MENTIONS the sanctioned name on the same line must still trip. A
+  # grep -v on the filename would have swallowed this whole line.
+  printf 'export const Q = "events/surfaced-cited.jsonl";\n' \
+    > "$r/.claude/scripts/memory/bad.mjs"
+  git add -A && git commit -qm bypass
+  [ "$(git ls-files .claude/scripts/memory | grep -c '\.mjs$')" -eq 2 ]
+  run bash "$ARC_ROOT/.claude/scripts/review/spine-reader-lint.sh"
+  [ "$status" -eq 1 ] || { echo "a real bypass passed the lint: $output"; false; }
+  [[ "$output" == *"bad.mjs"* ]]
+  [[ "$output" != *"ok.mjs"* ]]
 }
 
 @test "golden gate: bats registers every test this file declares" {

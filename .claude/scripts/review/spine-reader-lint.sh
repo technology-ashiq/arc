@@ -62,10 +62,27 @@ _strip_comments() {
 # Bypass tokens: raw event/day files, the derived db, and direct sqlite.
 PATTERN='events/|\.jsonl|state\.db|node:sqlite|DatabaseSync'
 
+# ONE sanctioned non-spine JSONL, neutralised at the TOKEN and never at the line.
+#
+# `.jsonl` is a proxy for "raw spine file access", but the token's meaning depends on WHICH
+# jsonl. `.claude/state/memory/surfaced-cited.jsonl` is memory's own instance state -- the
+# observational surfaced->cited log of ADR-0706, gitignored, beside the index, and explicitly not
+# the spine (ADR-0703: memory emits nothing and reads events only through the reader). Without
+# this, the lint reports a file that is obeying the very rule it enforces.
+#
+# Neutralised by substituting the TOKEN, not by dropping the line: a `grep -v` on the filename
+# would also mask a genuine bypass that happened to mention it on the same line, e.g.
+# `events/surfaced-cited.jsonl`. After this sed such a line still carries `events/` and still
+# trips. tests/memory-golden.bats drives both halves against a throwaway git repo.
+#
+# The substitution runs AFTER comment stripping, so line numbers stay real. `sed` here is
+# BRE with no GNU-only flags -- the macOS BSD leg is a first-class runner.
+_sanction() { sed 's#surfaced-cited\.jsonl#surfaced-cited.SANCTIONED-NON-SPINE#g'; }
+
 report="$(
   for f in $FILES; do
     _exempt "$f" && continue
-    _strip_comments "$f" | grep -nE "$PATTERN" | sed "s#^#$f:#"
+    _strip_comments "$f" | _sanction | grep -nE "$PATTERN" | sed "s#^#$f:#"
   done
 )"
 
