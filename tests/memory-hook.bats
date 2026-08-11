@@ -69,7 +69,11 @@ _tree_with_path_rule() {
   run node "$HOOK" --root "$t" --paths "a/b/thing.mjs,a/b/other.yaml" --limit 3
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"2 changed path(s)"* ]]
-  [[ "$output" == *"path-structure tokens dropped: 2"* ]]
+  # SIX, computed rather than guessed: `a` and `b` are single characters and `mjs`/`yaml` are
+  # declared noise, twice over across the two paths. The first version of this line asserted 2 and
+  # was one of the two tests that never ran, so the wrong arithmetic hid behind a red fixture.
+  [[ "$output" == *"path-structure tokens dropped: 6"* ]]
+  [[ "$output" == *"-> 2 query term(s)"* ]]
   [[ "$output" == *"extensions and the like"* ]]
   # A path left with nothing after filtering is REPORTED, never vanished.
   run node "$HOOK" --root "$t" --paths "9/1.md" --limit 3

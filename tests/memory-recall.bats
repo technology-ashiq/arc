@@ -68,10 +68,14 @@ _built_with_decision() {
     '{"what":"seed for the REQ-04 decisions filter","gate":"fixture"}')" || return 1
   [ -n "$approval" ] || return 1
   node "$INBOX" reject "$approval" --reason "worktree mode B is not certified" >/dev/null 2>&1 || return 1
-  approval2="$(bash "$EVENT" emit approval.requested --strict --payload \
+  # A DIFFERENT clock for the second emit. setup() pins ARC_SPINE_NOW and ARC_SPINE_RAND so runs
+  # are reproducible, which means two emits in the same test would mint the IDENTICAL ULID -- and
+  # a decision whose `decides` names the wrong approval is refused. Reproducibility and a second
+  # event are both wanted, so the clock is advanced deliberately rather than unpinned.
+  approval2="$(ARC_SPINE_NOW=1785000001000 bash "$EVENT" emit approval.requested --strict --payload \
     '{"what":"second seed, the opposite verdict","gate":"fixture"}')" || return 1
   [ -n "$approval2" ] || return 1
-  [ "$approval2" != "$approval" ] || return 1
+  [ "$approval2" != "$approval" ] || { echo "both approvals minted the same ULID"; return 1; }
   node "$INBOX" approve "$approval2" --reason "Worktree Mode A is certified" >/dev/null 2>&1 || return 1
   # Exit 0 from a writer is not evidence that anything was written. Look in BOTH places.
   [ -z "$(ls -A "$SPINE/events/_quarantine" 2>/dev/null)" ] || return 1
@@ -482,11 +486,17 @@ _built_with_decision() {
   run node "$RECALL" --root "$tree" --decisions 'verdict:reject'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"showing 1 of 1 matching decision(s); 2 in the index"* ]]
-  # `~` is CASE-INSENSITIVE, and the approve row is the only one spelled with capitals: a `~` that
-  # silently became case-sensitive would return 0 here.
-  run node "$RECALL" --root "$tree" --decisions 'reason~worktree mode a'
+  # `~` is CASE-INSENSITIVE. An UPPERCASE needle against two reasons that both spell the word in
+  # lower case must match BOTH; a `~` that silently became case-sensitive returns 0. Two-versus-
+  # zero is the discriminator, so this cannot pass by accident.
+  run node "$RECALL" --root "$tree" --decisions 'reason~CERTIFIED'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"Worktree Mode A is certified"* ]]
+  [[ "$output" == *"showing 2 of 2 matching decision(s); 2 in the index"* ]]
+  # A multi-word value is impossible by design -- terms split on whitespace -- and that is REFUSED
+  # loudly rather than silently truncated to the first word.
+  run node "$RECALL" --root "$tree" --decisions 'reason~worktree mode a'
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"has no operator"* ]]
   # A filter that genuinely matches nothing still reads as a result.
   run node "$RECALL" --root "$tree" --decisions 'verdict:reject reason~zzznotpresent'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
