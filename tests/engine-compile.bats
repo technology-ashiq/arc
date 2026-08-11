@@ -37,10 +37,26 @@ _procs() {
 # REQ-02 -- the proof, and that it can fail
 # ---------------------------------------------------------------------------
 
-@test "REQ-02: all 3 pilots compile byte-identical to their hand-written baselines" {
+@test "REQ-02: every pilot whose proof has not retired is byte-identical to its baseline" {
+  # ADR-0207. A migration proof retires when its file first legitimately changes, and a retired
+  # file is counted APART from the byte-identical total -- never folded into it, because a
+  # retirement that read as a pass would make this gate the tautology it exists to refuse.
   run node "$(CC)" --check --all --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3/3 byte-identical"* ]]
+  # kickoff-plan retired on 2026-08-11 when the memory lane added its recall step.
+  [[ "$output" == *"2/2 byte-identical"* ]]
+  [[ "$output" == *"(1 retired, ADR-0207)"* ]]
+  [[ "$output" == *"[retired] processes/kickoff-plan.process.yaml"* ]]
+}
+
+@test "REQ-02: a retirement must be DECLARED, not inferred from a mismatch" {
+  # The negative control for ADR-0207: without the retired: field, a changed body still fails.
+  # Otherwise "retired" would just be a nicer word for "red", and any drift would self-excuse.
+  local d; d="$(_procs)"
+  _sed_i '/^  retired:/d' "$d/processes/kickoff-plan.process.yaml"
+  run node "$(CC)" --check "$d/processes/kickoff-plan.process.yaml" --target claude-code --against-baseline --root "$ARC_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"0/1 byte-identical"* ]]
 }
 
 @test "negative control: one changed word in a canonical body fails the byte-diff, with an offset" {

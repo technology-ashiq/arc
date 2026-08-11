@@ -40,7 +40,7 @@ So a lane claims a **century**, and never numbers outside it:
 |---|---|
 | 0001–0099 | company / core / hq — `model-policy`'s Cycle 5 holds **0063–0071** inside this range |
 | 0100–0199 | `develop` |
-| 0200–0299 | `engine` — claimed at birth, 2026-08-03 (0200–0206 taken) |
+| 0200–0299 | `engine` — claimed at birth, 2026-08-03 (0200–0207 taken; **0207 written by `memory` on 2026-08-11 with the owner's approval**, because retiring a migration proof is an engine decision and memory needed it to land its hooks) |
 | 0300–0399 | `evolve` — claimed at birth, 2026-08-03 (0300–0310 taken) |
 | 0400–0499 | `leads` — claimed at birth, 2026-08-04 (0400–0413 taken) |
 | 0500–0599 | `policy` — claimed at birth, 2026-08-06 (0500–0508 taken) |

@@ -1,3 +1,22 @@
+# RESOLVED 2026-08-11 — the owner chose to retire the migration proof (ADR-0207)
+
+> **Outcome.** The owner was shown both options on 2026-08-11 and chose to retire the per-file
+> baseline proof rather than let the hooks go unshipped. **ADR-0207** records it, in the ENGINE
+> band, written by this lane with the owner's explicit approval — the plan's no-go on cross-lane
+> edits is a rule about acting unilaterally, not about acting once the owner has decided.
+>
+> A `baseline.retired:` field now carries a date and a reason; both gates skip that file and count
+> it apart, never folded into the byte-identical total. `arc-compile --against-baseline` reports
+> **2/2 byte-identical (1 retired)**, and a negative control proves a retirement must be DECLARED —
+> deleting the field makes the same file fail 0/1 again, so "retired" cannot become a nicer word
+> for "red".
+>
+> The kickoff hook has landed from the parked text below, unchanged. REQ-08 lands the same way in
+> Phase 02. **The record below is kept as written, in the present tense, because it is the argument
+> that produced the decision.**
+
+---
+
 # BLOCKED — memory's two process-file hooks collide with the engine lane's migration proof
 
 Found by CI on 2026-08-11, run `31487147860`, macOS shard 3/3. This is not a bug in either lane.

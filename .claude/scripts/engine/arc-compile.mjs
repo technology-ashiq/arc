@@ -100,6 +100,7 @@ if (!files.length) { console.error("arc-compile: nothing to compile"); process.e
 // ---------- compile ----------
 const out = [];
 let identical = 0;
+let retired = 0; // ADR-0207: counted apart from identical, never folded into it
 let failed = 0;
 
 for (const file of files) {
@@ -166,6 +167,16 @@ for (const file of files) {
 
   let want;
   if (againstBaseline) {
+    // ADR-0207: a migration proof retires when its process file first legitimately changes.
+    // The proof's claim is "this file still reproduces the hand-written command it replaced",
+    // and once the file gains a step that claim is false -- correctly. Retired files are
+    // REPORTED and counted separately, never folded into the byte-identical total, because a
+    // retirement that looked like a pass would be the tautology this refuses to become.
+    if (doc.baseline?.retired) {
+      out.push(`[retired] ${rel} — migration proof retired ${doc.baseline.retired}`);
+      retired++;
+      continue;
+    }
     // Read the pre-flip pilot from a COMMITTED FIXTURE, not from git history.
     //
     // The first version of this shelled out to `git show <commit>:<path>`, which is green on
@@ -230,5 +241,6 @@ if (mode === "write") {
   console.log(`\narc-compile: wrote ${files.length - failed} of ${files.length} file(s) for target \`${target}\``);
   process.exit(failed ? 1 : 0);
 }
-console.log(`\narc-compile: ${identical}/${files.length} byte-identical for target \`${target}\``);
+const scope = files.length - retired;
+console.log(`\narc-compile: ${identical}/${scope} byte-identical for target \`${target}\`${retired ? ` (${retired} retired, ADR-0207)` : ""}`);
 process.exit(failed ? 1 : 0);
