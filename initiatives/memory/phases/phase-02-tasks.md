@@ -47,9 +47,9 @@ commit: (empty until proven)
 title: REQ-05 — `/arc-retro` pre-append near-duplicate check (>= 2 shared tags AND overlap >= 0.5); planted near-dup pair surfaces before append; nothing auto-resolves (ADR-0705)
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-02-spec.md
+proof: contract — `bats tests/memory-conflict.bats` :: a PLANTED near-duplicate pair surfaces with its `docs/retro-log.md:LINE` citation and both scores named, :: one shared tag does not fire and two do (the AND is real, not decorative), :: overlap just under T does not fire and just over does, :: a hit is exit 0 and rewrites nothing — the log is byte-identical before and after, :: the printed formula names Jaccard rather than "overlap", and :: `/arc-retro` step 3 calls the check before the append. Green on CI, read per-JOB.
+tier: contract
+sources: phase-02-spec.md, docs/adr/0705-mem-f-conflicts-are-caught-at-the-pen-not-auto-resolved.md, .claude/commands/arc-retro.md
 decision: (empty until proven)
 result: (empty until proven)
 commit: (empty until proven)
