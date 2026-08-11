@@ -50,9 +50,9 @@ risk: medium
 proof: contract — `bats tests/memory-conflict.bats` :: a PLANTED near-duplicate pair surfaces with its `docs/retro-log.md:LINE` citation and both scores named, :: one shared tag does not fire and two do (the AND is real, not decorative), :: overlap just under T does not fire and just over does, :: a hit is exit 0 and rewrites nothing — the log is byte-identical before and after, :: the printed formula names Jaccard rather than "overlap", and :: `/arc-retro` step 3 calls the check before the append. Green on CI, read per-JOB.
 tier: contract
 sources: phase-02-spec.md, docs/adr/0705-mem-f-conflicts-are-caught-at-the-pen-not-auto-resolved.md, .claude/commands/arc-retro.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: JACCARD, and the formula is printed beside every score. ADR-0705 said "token overlap >= T" without naming a formula, and the two candidates are not close: the overlap coefficient |AnB|/min(|A|,|B|) scores 1.0 whenever a short row sits inside a longer one, which fires on every terse prevention line ever written. NO STOPLIST, deliberately — `tokenize` is this module's one normalizer and the index already uses it, so the two surfaces cannot disagree about what a word is; function words therefore count and the check is MORE eager, which is precisely what the ledger's retune trigger exists to measure. Guessing a stoplist now would pre-empt the measurement that decides T. A fourth sibling script rather than a fourth mode on the recall CLI: the score is not bm25 and the surface is a write-time check, not a query.
+result: CI run 31527262396, head e348fa1aaf43ee227b7c90b49a44be71353c7904 — identical to the local commit SHA. OVERALL success; per-JOB tally 19/19 `success`, read from `gh run view --json jobs`. tests/memory-conflict.bats ran on windows shard 11/12 as TAP `ok 190` through `ok 199` — all 10 declared tests registered and passed, and that shard logged 0 `not ok` lines. Real computed scores confirmed against the planted fixture before the assertions were written: row A jaccard 0.71 at 2 shared tags (fires), row B 0.09 at 2 shared tags (misses on text), row C 1.00 at 1 shared tag (misses on tags) and the same row fires at 1.00 once its tag set qualifies. T proven at 0.71 fires / 0.72 misses around the real 0.7142857.
+commit: d92bda1
 
 #### slice: 03
 
