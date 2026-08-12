@@ -78,8 +78,27 @@ zero matching entries in `events/_quarantine/`:**
 | `approval.requested` | `01KZVK8EMVQAE4ZEFB99HKGKBM` |
 | `decision.recorded` | `01KZVM9TR488384Q7CR8P2N271` (verdict `approve`, decides the row above) |
 
-**Next step:** Phase 00 slice 1 — the facts schema, the six cross-product fixture ventures, and the
-red tests that must STAY red until the render and the lints are built correctly.
+**Built so far (Phases 00 and 01, not yet closed against their DoD):** the bounded YAML parser,
+the total type-tagged canonicaliser, the three-tier schema with cross-field rules, the clause
+renderer, the three lints, seven authored pages, six cross-product fixture ventures, three bats
+suites and two node probes. All six ventures render all seven pages at **0 FAIL, 0 WARN**; every
+mutant negative control is RED; `kickoff-lint` and `product-lint` pass.
+
+**Five fresh attackers ran** — three text stances on the RENDERED bytes, plus decision-logic and
+shell/OS surfaces on the code. They returned roughly 70 findings between them and they were worth
+more than the code. Three converged independently on the same #1: a venture itemising other
+people's records with the flag false rendered a page listing them and promising nothing. The
+decision-logic pass found three criticals that put a false or missing legal statement on a page at
+exit 0. The shell/OS pass found why macOS was red — a lexical path compare in the entry guard,
+whose correct version already existed in the memory lane and had never been applied here.
+
+**The honest part:** CI was RED on the first Phase 00 push, on exactly the eight mutation controls.
+Every negative control for all three lints was dead — the helper ran under bats `run`, a subshell —
+which is why the three criticals survived to be found by an agent rather than by a test. Fixed.
+
+**Next step:** confirm CI green at `4904f8e` per-JOB, then close Phase 00 against its DoD before
+Phase 02 opens. Carried and unresolved: `products/legal/` is copied by NEITHER sync path, so a
+consumer repo would get the scripts and none of the templates — a Phase 02 governance fix.
 
 **Carried, not resolved:** the operator's GST-registration posture (assumptions ledger row 3).
 Fixtures cover both branches, so nothing before Phase 03 depends on the answer; Phase 03 asks it or
