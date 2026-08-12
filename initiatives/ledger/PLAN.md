@@ -348,8 +348,14 @@ and it is the type Phase 2 sums for `--reconcile-file` unchanged (ADR-1015):
   "gross": 118000, "fees": 2000, "tax": 18000, "net": 98000,
   "currency": "INR", "settled_at": "2026-09-14T10:04:11+05:30",
   "fx": { "rate": "83.20", "source": "provider-settlement", "date": "2026-09-14" },
-  "raw_ref": { "settlement_batch_id": "setl_XXXX" } }
+  "raw_ref": { "settlement_id": "setl_XXXX" } }
 ```
+
+The example above is a **razorpay** row, so its `raw_ref` carries `settlement_id`. A
+merchant-of-record row carries `settlement_batch_id` instead, and that asymmetry is the point: the
+MoR contract test asserts on the field only the MoR format supplies, so a swapped-in razorpay
+parser or a stub returning the shared type cannot pass. (An earlier draft of this appendix showed
+the batch id on a razorpay row, contradicting the External-dependencies table three sections up.)
 
 All money fields are integer minor units (ADR-1012). `fx` is present only on a non-INR row.
 `raw_ref` carries provider-specific identifiers proving the row came from that provider's real
