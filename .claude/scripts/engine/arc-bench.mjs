@@ -164,3 +164,80 @@ export function coverageVerdict(taskClass, fixtureCount) {
     ? { eligible: true, reason: null }
     : { eligible: false, reason: `NO PROPOSAL - evidence insufficient (${fixtureCount} of ${MIN_FIXTURES} fixtures)` };
 }
+
+// ---------------------------------------------------------------------------------------------
+// The fixture-repo harness (M3 / M11).
+//
+// `commit-msg-draft` declares `inputs: []`. Its real input is AMBIENT GIT STATE -- it runs
+// `git status` / `git diff` and then stages and commits. So five fixtures sharing the input `{}`
+// would be five samples of ONE case, which is the K dimension, not five cases. What has to vary
+// is the repository the driver sees.
+//
+// A state is a directory holding two trees:
+//   base/  the committed starting point
+//   work/  the uncommitted changes the process must find
+//
+// THE HARNESS DELIBERATELY DOES NOT STAGE. Staging is the process's own declared job
+// (`git.op: add:*`, `commit:*`), and a pre-staged index would do that work for it and leave the
+// model nothing to decide -- the fixture-that-measures-nothing failure this phase exists to
+// avoid. The harness builds the situation; the process acts on it.
+// ---------------------------------------------------------------------------------------------
+
+import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+function git(root, args) {
+  try {
+    return execFileSync("git", args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (e) {
+    throw new Error(`git ${args.join(" ")} failed in ${root}: ${String(e.stderr || e.message).split("\n")[0]}`);
+  }
+}
+
+/**
+ * Materialize one repo state into a throwaway directory and return its root plus a cleanup.
+ *
+ * Identity is set as REPO-LOCAL config, never through GIT_AUTHOR_* in the environment: an
+ * env-scoped identity passes on a developer box that already has a global git identity and
+ * fails 128 on a clean CI runner that does not. Committing is not optional here -- the base
+ * tree must be a real commit for `git diff` to have anything to compare against.
+ */
+export function materializeRepoState(stateDir) {
+  if (!existsSync(join(stateDir, "base"))) throw new Error(`repo state ${stateDir}: missing base/`);
+  if (!existsSync(join(stateDir, "work"))) throw new Error(`repo state ${stateDir}: missing work/`);
+
+  const root = mkdtempSync(join(tmpdir(), "arc-bench-repo-"));
+  const cleanup = () => rmSync(root, { recursive: true, force: true });
+  try {
+    cpSync(join(stateDir, "base"), root, { recursive: true });
+    git(root, ["init", "-q"]);
+    git(root, ["config", "user.name", "arc-bench fixture"]);
+    git(root, ["config", "user.email", "bench@arc.invalid"]);
+    git(root, ["config", "commit.gpgsign", "false"]);
+    git(root, ["add", "-A"]);
+    git(root, ["commit", "-q", "--no-gpg-sign", "-m", "base"]);
+    // Overlay the working changes and leave them UNSTAGED. This is the whole point.
+    cpSync(join(stateDir, "work"), root, { recursive: true });
+    return { root, cleanup };
+  } catch (e) {
+    // Never leak a temp repo on the failure path -- a harness that only cleans up when it
+    // succeeds fills the runner's disk exactly when something is already wrong.
+    cleanup();
+    throw e;
+  }
+}
+
+/**
+ * Porcelain status of the materialized repo, for asserting the index is genuinely dirty.
+ *
+ * ONLY the trailing newline is stripped -- never `.trim()`. Porcelain column 1 is the INDEX and
+ * column 2 the WORKTREE, so an unstaged modification is ` M path` with a LEADING SPACE, and
+ * trimming it turns that into `M path`, which reads as staged. The first draft of this function
+ * trimmed, and the staged-versus-unstaged assertion -- the one property this harness exists to
+ * guarantee -- silently could not be made. Caught by the test that asserts it.
+ */
+export function repoStatus(root) {
+  return git(root, ["status", "--porcelain"]).replace(/\r?\n$/, "");
+}
