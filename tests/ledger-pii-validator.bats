@@ -103,7 +103,7 @@ _pay()   { printf '%s' "$2" > "$BATS_TEST_TMPDIR/$1.json"; printf '%s' "$BATS_TE
 }
 
 @test "ledger: a bare hex digest customer_ref is refused (sha256 of an email is dictionary-attackable)" {
-  local bad='{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_0001","customer_ref":"razorpay:5d41402abc4b2a76b9719d911017c592"}'
+  local bad='{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_0001","customer_ref":"razorpay:cust_c005d41402abc4b2a76b9719d911017c592"}'
   run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
   [ "$status" -eq 2 ]
   [[ "$output" == *"BAD_LEDGER_ID"* ]]
@@ -148,4 +148,66 @@ _pay()   { printf '%s' "$2" > "$BATS_TEST_TMPDIR/$1.json"; printf '%s' "$BATS_TE
   [ "$declared" -gt 0 ] || { echo "no @test lines found -- the count itself is broken"; false; }
   [ "$registered" -eq "$declared" ] \
     || { echo "declared $declared tests but bats registered $registered -- one was dropped, check for a non-ASCII @test name"; false; }
+}
+
+# ---------- the holes the Phase-00 adversarial pass drove through ----------
+
+@test "ledger: a NAMESPACED phone, name, PAN or Aadhaar is refused" {
+  # THE TEST THAT SHOULD HAVE EXISTED. The earlier phone/name test fed UN-namespaced values, so all
+  # of them died on the missing colon and the assertion proved only that a string without a colon is
+  # refused. Every value below carries a correct `razorpay:` prefix and reached the spine before the
+  # token grammar required a provider-issued shape.
+  local i=0 ref fails=""
+  for ref in "razorpay:9876543210" \
+             "razorpay:ashiq.ahmed" \
+             "razorpay:ashiq.ahmed.1994-06-02" \
+             "razorpay:ashiq.ahmed.gmail.com" \
+             "razorpay:ABCDE1234F" \
+             "razorpay:123456789012"; do
+    i=$((i+1)); _fresh "pii-$i"
+    local bad="{\"amount\":50000,\"currency\":\"INR\",\"venture\":\"arc\",\"provider\":\"razorpay\",\"provider_payment_id\":\"razorpay:pay_0001\",\"customer_ref\":\"$ref\"}"
+    run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
+    { [ "$status" -eq 2 ] && [[ "$output" == *"BAD_LEDGER_ID"* ]] && [ "$(_lines)" = "0" ]; } \
+      || fails="$fails|[$ref] status=$status out=$output"
+  done
+  [ "$i" -eq 6 ] || { echo "expected 6 PII shapes, ran $i"; false; }
+  [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
+}
+
+@test "ledger: a phone number in the REQUIRED provider_payment_id is refused too" {
+  # The optional field got the attention; the required one took the same value.
+  local bad='{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:9876543210"}'
+  run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"BAD_LEDGER_ID"* ]]
+  [ "$(_lines)" = "0" ]
+}
+
+@test "ledger: plan and fx.source cannot smuggle a name or a phone number" {
+  local i=0 bad fails=""
+  for bad in '{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_0001","plan":"ashiq.ahmed.9876543210"}' \
+             '{"amount":5000,"currency":"USD","venture":"arc","provider":"mor","provider_payment_id":"mor:txn_0001","fx":{"rate":"83.20","source":"9876543210","date":"2026-09-14"}}'; do
+    i=$((i+1)); _fresh "smug-$i"
+    run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
+    { [ "$status" -eq 2 ] && [ "$(_lines)" = "0" ]; } || fails="$fails|[$bad] status=$status out=$output"
+  done
+  [ -z "$fails" ] || { echo "$fails" | tr '|' '\n'; false; }
+}
+
+@test "ledger: a zero fx rate is refused rather than silently annihilating the payment" {
+  # "0.0" satisfies the decimal grammar and every downstream multiply is exact and exactly zero, so
+  # a 1,000 dollar charge renders 0.00 with no flag and nothing anywhere says why.
+  local bad='{"amount":100000,"currency":"USD","venture":"arc","provider":"mor","provider_payment_id":"mor:txn_0001","fx":{"rate":"0.0","source":"provider-settlement","date":"2026-09-14"}}'
+  run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"BAD_LEDGER_FX"* ]]
+  [ "$(_lines)" = "0" ]
+}
+
+@test "ledger: a realistic provider-issued id is still accepted" {
+  # The grammar must refuse a paste without refusing the real thing.
+  local ok='{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_QX7fK2mNbT1aZ9","customer_ref":"razorpay:cust_9nQ2rT7bV1xK","plan":"pro","interval":"monthly"}'
+  run bash "$EVENT" ingest revenue.received --json "$(_pay ok "$ok")"
+  [ "$status" -eq 0 ] || { echo "the grammar refused a real provider id: $output"; false; }
+  [ "$(_lines)" = "1" ]
 }

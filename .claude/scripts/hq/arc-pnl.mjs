@@ -69,19 +69,25 @@ export function render(model) {
       const label = r.refundOf ? `refund of ${r.refundOf}` : r.paymentId;
       out.push(`${mark}    ${r.ts}  ${rupees(r.amountInr)}  ${label}${foreign}`);
     }
+    // Per-venture costs were computed and never printed, so a cost event could conjure a venture
+    // section with no revenue, no costs and no explanation of why it was on screen.
+    for (const l of v.costs.slice().sort(byTsId)) out.push(`${mark}    ${costLine(l)}`);
   }
 
   if (model.overhead.lines.length) {
     out.push("");
     out.push(`${mark}Overhead (venture: arc — never attributed to a product)`);
-    for (const l of model.overhead.lines.slice().sort(byTsId))
-      out.push(`${mark}  ${l.ts}  ${l.amount === null ? ABSENT : formatMinorUnits(l.amount, l.currency || "INR")}  ${l.source || "source unrecorded"}`);
+    for (const l of model.overhead.lines.slice().sort(byTsId)) out.push(`${mark}  ${costLine(l)}`);
   }
 
+  // TOTAL, and the event id is what makes it so. (month, venture, type) ties for four `new`
+  // transitions in one venture in one month -- and the comment that used to sit here asserted the
+  // order was total while the comparator had no fourth key.
   const t = model.mrr.transitions.slice().sort((a, b) =>
     a.month < b.month ? -1 : a.month > b.month ? 1
       : a.venture < b.venture ? -1 : a.venture > b.venture ? 1
-        : a.type < b.type ? -1 : a.type > b.type ? 1 : 0);
+        : a.type < b.type ? -1 : a.type > b.type ? 1
+          : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   if (t.length) {
     out.push("");
     out.push(`${mark}MRR transitions`);
@@ -91,7 +97,8 @@ export function render(model) {
   if (model.needsYou.length) {
     out.push("");
     out.push(`${mark}needs you (${model.needsYou.length})`);
-    for (const f of model.needsYou.slice().sort((a, b) => (a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0)))
+    for (const f of model.needsYou.slice().sort((a, b) =>
+      a.type < b.type ? -1 : a.type > b.type ? 1 : a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0))
       out.push(`${mark}  ${f.type}: ${f.detail}`);
   }
 
@@ -103,6 +110,16 @@ export function render(model) {
 // between the scan and sqlite engines.
 const byTsId = (a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 const sortRows = (rows) => rows.slice().sort(byTsId);
+
+// A cost line never throws. `formatMinorUnits` refuses a currency with no pinned minor-unit
+// exponent, and one such cost event used to abort the entire command -- on an append-only spine,
+// where the operator cannot delete the offending event, that left the P&L unreadable until someone
+// shipped a code change. Unrenderable values arrive here already nulled and flagged by the
+// derivation, and render ABSENT.
+function costLine(l) {
+  const amount = l.amount === null || l.currency === null ? ABSENT : formatMinorUnits(l.amount, l.currency);
+  return `${l.ts}  ${amount}  ${l.source || "source unrecorded"}`;
+}
 
 async function main(argv) {
   const flags = parseArgs(argv);

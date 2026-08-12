@@ -15,10 +15,15 @@
 //
 //   2. IDENTIFIERS ARE DEFINED BY A POSITIVE GRAMMAR, not by what they must not be.
 //      `provider_payment_id` and `customer_ref` must both be `<provider>:<token>` where
-//      `<provider>` is the SAME provider the payload declares. An email has no such prefix and
-//      carries an `@`; a phone number is bare digits; a personal name carries whitespace. None of
-//      them can be spelled in this grammar, so no heuristic has to judge whether a string "looks
-//      like" a name -- a judgement whose false NEGATIVES would be unrepairable here.
+//      `<provider>` is the SAME provider the payload declares, and `<token>` must have the shape a
+//      MACHINE issues rather than merely a shape a human could type. See TOKEN_RE below for what
+//      that means and for the honest limit of it.
+//
+//      An earlier version of this comment asserted that a phone number and a personal name "cannot
+//      be spelled in this grammar". They could. An adversarial pass put a mobile number, a dotted
+//      name, a PAN and an Aadhaar number on the spine through the real ingest path, and the
+//      sentence claiming otherwise is exactly why nobody looked. A grammar is only worth what it
+//      refuses, never what its comment says it refuses.
 //
 // The keyed-vs-bare hash rule is inherited from validate-leads.mjs (ADR-0410) rather than
 // re-derived: emails are low-entropy, so `sha256(email)` is dictionary-attackable by anyone with a
@@ -54,11 +59,38 @@ const ALLOWED = new Set([...REQUIRED, ...OPTIONAL]);
 const COMPONENTS = Object.freeze(["gross", "fees", "tax", "net"]);
 
 const PROVIDER_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
-const TOKEN_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{3,63}$/;
-const PLAN_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/;
+
+// THE TOKEN GRAMMAR, AND WHY IT IS SHAPED LIKE A PROVIDER ID RATHER THAN LIKE A CHARACTER CLASS.
+//
+// The first version of this was `[A-Za-z0-9][A-Za-z0-9_.-]{3,63}` and the header above claimed it
+// excluded phone numbers, personal names and emails. Two of those three claims were FALSE, and an
+// adversarial pass put all of these on the spine through the real ingest path:
+//
+//   razorpay:9876543210              a mobile number is "bare digits" AND is [A-Za-z0-9]+
+//   razorpay:ashiq.ahmed             a dotted name carries no whitespace
+//   razorpay:ashiq.ahmed.1994-06-02  name plus date of birth
+//   razorpay:ABCDE1234F              a PAN
+//   razorpay:123456789012            an Aadhaar number
+//
+// A character class cannot decide whether an opaque string encodes a person. What it CAN do is
+// require the shape a machine issues: providers mint ids as `<type>_<random>` -- `pay_QX7fK2mNbT1aZ9`,
+// `cust_9nQ2rT7bV1xK`, `txn_9f2Kd8Lm3Qp7Ts` -- and a human pasting a phone number, a name, a PAN or
+// an Aadhaar number produces none of that. So the token must carry a lowercase type prefix, an
+// underscore, and a body of at least four characters CONTAINING A DIGIT.
+//
+// HONEST LIMIT, stated rather than implied: `ashiq_ahmed1994` satisfies this. The grammar makes a
+// careless paste structurally impossible and a deliberate encoding merely inconvenient; the closed
+// schema is what bounds the blast radius, and this is the second lock, not the only one.
+const TOKEN_RE = /^[a-z][a-z0-9]{1,15}_[A-Za-z0-9]{4,48}$/;
+const TOKEN_NEEDS_DIGIT = /[0-9]/;
+// `plan` is a product tier the OPERATOR names, so it is a lowercase slug and nothing else. The
+// permissive form accepted `ashiq.ahmed.9876543210` -- a free-ish text field on a closed schema is
+// the hole the closed schema exists to prevent, reopened one field at a time.
+const PLAN_RE = /^[a-z][a-z0-9-]{0,31}$/;
 const RATE_RE = /^(0|[1-9]\d{0,8})\.\d{1,8}$/;
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-const SOURCE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+// Must START WITH A LETTER: the permissive form accepted a bare mobile number as an fx source.
+const SOURCE_RE = /^[a-z][a-z0-9-]{0,63}$/;
 // 32/40/64 lowercase or uppercase hex: md5, sha1, sha256. See the keyed-hash note above.
 const BARE_DIGEST_RE = /^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64}|[0-9A-F]{32}|[0-9A-F]{40}|[0-9A-F]{64})$/;
 // REQ-02 names quarterly explicitly ("normalized to MRR (/12, /3)"), and an earlier draft of this
@@ -106,8 +138,14 @@ function assertNamespacedId(value, field, provider) {
   const token = value.slice(colon + 1);
   if (ns !== provider)
     throw new SpineError("BAD_LEDGER_ID", `${field} is namespaced ${JSON.stringify(ns)} but the payload declares provider ${JSON.stringify(provider)}`);
-  if (!TOKEN_RE.test(token))
-    throw new SpineError("BAD_LEDGER_ID", `${field} token ${JSON.stringify(token)} must be 4-64 chars of [A-Za-z0-9_.-] -- an email, a phone number or a personal name cannot be spelled in this grammar, which is the point`);
+  if (!TOKEN_RE.test(token) || !TOKEN_NEEDS_DIGIT.test(token.slice(token.indexOf("_") + 1)))
+    throw new SpineError(
+      "BAD_LEDGER_ID",
+      `${field} token ${JSON.stringify(token)} is not a provider-issued id. Required shape: a lowercase type prefix, an underscore, ` +
+      "then 4-48 alphanumerics containing at least one digit -- like pay_QX7fK2mNbT1aZ9 or cust_9nQ2rT7bV1xK. " +
+      "A phone number, a personal name, a PAN and an Aadhaar number all fail this shape, which is the point: " +
+      "the spine is append-only and nothing written here can ever be erased.",
+    );
 }
 
 export function assertLedgerRevenue(event) {
@@ -140,8 +178,12 @@ export function assertLedgerRevenue(event) {
   assertNamespacedId(p.provider_payment_id, "provider_payment_id", p.provider);
   if ("customer_ref" in p) {
     assertNamespacedId(p.customer_ref, "customer_ref", p.provider);
+    // The BODY, after the type prefix -- `cust_5d41402abc4b2a76b9719d911017c592` satisfies the
+    // provider-id shape while being exactly the thing this rule exists to refuse. Testing the whole
+    // token would have let it through and made the digest fixture pass for the wrong reason.
     const token = p.customer_ref.slice(p.customer_ref.indexOf(":") + 1);
-    if (BARE_DIGEST_RE.test(token))
+    const body = token.slice(token.indexOf("_") + 1);
+    if (BARE_DIGEST_RE.test(body))
       throw new SpineError(
         "BAD_LEDGER_ID",
         "customer_ref token is a bare hex digest. Emails are low-entropy, so sha256(email) is " +
@@ -158,10 +200,14 @@ export function assertLedgerRevenue(event) {
       throw new SpineError("BAD_LEDGER_ID", "refund_of must not equal provider_payment_id -- an event cannot refund itself");
   }
 
-  // `amount` is re-checked here even though assertMoney already covers it: this module is imported
-  // by tests directly, and a validator whose guarantee depends on a sibling being called first is
-  // a guarantee about call order rather than about payloads.
+  // `amount` AND `currency` are re-checked here even though assertMoney already covers both: this
+  // module is imported by tests directly, and a validator whose guarantee depends on a sibling
+  // being called first is a guarantee about call order rather than about payloads. `currency` was
+  // left out of that reasoning in the first cut, so called directly this function accepted
+  // `currency: {email: "..."}` -- the principle was written down and applied to one of the two.
   assertMinorUnits(p.amount, "amount", { min: 1 });
+  if (typeof p.currency !== "string" || !/^[A-Z]{3}$/.test(p.currency))
+    throw new SpineError("BAD_LEDGER_CURRENCY", `currency ${JSON.stringify(p.currency)} must be an ISO-4217 alpha code (3 uppercase letters)`);
 
   const present = COMPONENTS.filter((k) => k in p);
   if (present.length > 0 && present.length !== COMPONENTS.length) {
@@ -207,6 +253,13 @@ export function assertLedgerRevenue(event) {
     // decimal spelling, and this value is a receipt of what a provider actually said.
     if (typeof fx.rate !== "string" || !RATE_RE.test(fx.rate))
       throw new SpineError("BAD_LEDGER_FX", `fx.rate ${JSON.stringify(fx.rate)} must be a decimal STRING like "83.20" (ADR-1012) -- a float cannot carry its own spelling`);
+    // A ZERO RATE IS NOT A RATE. `"0.0"` satisfies the grammar and silently annihilates the
+    // payment: a $1,000 charge renders as 0.00 with no flag, because every downstream multiply is
+    // exact and exactly zero. A rate is a receipt of what a provider said, and no provider says
+    // zero. Refused here rather than flagged at render, since the render has no way to tell a zero
+    // rate from a genuinely tiny one.
+    if (/^0(\.0+)?$/.test(fx.rate))
+      throw new SpineError("BAD_LEDGER_FX", `fx.rate ${JSON.stringify(fx.rate)} is zero -- a zero rate annihilates the payment silently, and no provider settles at zero`);
     if (typeof fx.source !== "string" || !SOURCE_RE.test(fx.source))
       throw new SpineError("BAD_LEDGER_FX", `fx.source ${JSON.stringify(fx.source)} must be a lowercase slug naming where the rate came from`);
     assertCalendarDate(fx.date, "fx.date");

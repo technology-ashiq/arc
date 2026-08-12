@@ -289,8 +289,8 @@ are the design source's example restated in paise: a ₹1,000 ex-tax subscriptio
 { "amount": 100000, "currency": "INR",
   "gross": 118000, "tax": 18000, "fees": 2000, "net": 98000,
   "venture": "lexos", "provider": "razorpay",
-  "provider_payment_id": "razorpay:pay_XXXX",
-  "customer_ref": "razorpay:cust_XXXX",
+  "provider_payment_id": "razorpay:pay_QX7fK2mNbT1aZ9",
+  "customer_ref": "razorpay:cust_9nQ2rT7bV1xK",
   "plan": "pro", "interval": "monthly",
   "fx": { "rate": "83.20", "source": "provider-settlement", "date": "2026-09-14" } }
 ```
@@ -311,15 +311,24 @@ PII-shaped fields" means operationally — the validator does not try to recogni
 `email` or `customer_name`, it refuses every field it was not told about. A denylist of bad field
 names is a guess about what a tired human will paste; a closed schema is not.
 
-**`customer_ref` is defined by a positive grammar, not by PII detection.** It MUST be namespaced
-exactly as `provider_payment_id` is — `provider:token`, where `token` matches
-`[A-Za-z0-9_.-]{4,64}` — and the whole value therefore contains no whitespace and no `@`. Anything
-else is a strict-mode rejection. That grammar structurally excludes an email (has `@`, no
-`provider:` prefix), a phone number (bare digits, no prefix) and a personal name (has whitespace,
-no prefix) without any heuristic having to judge whether a string "looks like" a name — a judgement
-that would have both false positives and, far worse, false negatives on the one control that cannot
-be repaired later. The adversarial PII corpus is built against this grammar, so two fresh attackers
-have a boundary they can agree on.
+**`customer_ref` and `provider_payment_id` are defined by a positive grammar, not by PII
+detection.** Both MUST be `provider:token`, namespaced to the payload's own `provider`, where
+`token` has the shape a MACHINE issues: a lowercase type prefix, an underscore, then 4–48
+alphanumerics **containing at least one digit** — `pay_QX7fK2mNbT1aZ9`, `cust_9nQ2rT7bV1xK`. A
+`customer_ref` whose body is a bare hex digest is additionally refused, because `sha256(email)` is
+dictionary-attackable and a provider does not issue you a digest of your own customer (ADR-0410,
+inherited from leads).
+
+The first version of this rule was a plain character class, and it did not work. An adversarial
+pass put a mobile number, a dotted personal name, a name-plus-date-of-birth, a PAN and an Aadhaar
+number onto the spine through the real ingest path — every one of them satisfying
+`[A-Za-z0-9_.-]{4,64}` — while the code comment beside it asserted they could not be spelled in
+that grammar. Requiring the provider-issued shape refuses all of them.
+
+**The honest limit, stated rather than implied:** `ashiq_ahmed1994` satisfies the new grammar too.
+A character rule cannot decide whether an opaque token encodes a person. What this makes impossible
+is the careless paste; what bounds the rest is the closed schema, which refuses every field the
+contract does not name. Two locks, and neither is claimed to be the whole answer.
 
 ## Appendix B — ventures.yaml v1 (normative)
 

@@ -46,10 +46,10 @@ _ing() {
 
 # A corpus with real structure: two ventures, a foreign charge, a refund, an overhead cost.
 _corpus() {
-  _ing '{"amount":100000,"currency":"INR","venture":"lexos","provider":"razorpay","provider_payment_id":"razorpay:d1","customer_ref":"razorpay:cust_1","plan":"pro","interval":"monthly","gross":118000,"tax":18000,"fees":2000,"net":98000}' --venture lexos
-  _ing '{"amount":5000,"currency":"USD","venture":"lexos","provider":"mor","provider_payment_id":"mor:d2","fx":{"rate":"83.20","source":"provider-settlement","date":"2026-07-22"}}' --venture lexos
-  _ing '{"amount":20000,"currency":"INR","venture":"lexos","provider":"razorpay","provider_payment_id":"razorpay:d3","refund_of":"razorpay:d1"}' --venture lexos
-  _ing '{"amount":75000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:d4"}'
+  _ing '{"amount":100000,"currency":"INR","venture":"lexos","provider":"razorpay","provider_payment_id":"razorpay:pay_d001","customer_ref":"razorpay:cust_c001","plan":"pro","interval":"monthly","gross":118000,"tax":18000,"fees":2000,"net":98000}' --venture lexos
+  _ing '{"amount":5000,"currency":"USD","venture":"lexos","provider":"mor","provider_payment_id":"mor:txn_d002","fx":{"rate":"83.20","source":"provider-settlement","date":"2026-07-22"}}' --venture lexos
+  _ing '{"amount":20000,"currency":"INR","venture":"lexos","provider":"razorpay","provider_payment_id":"razorpay:pay_d003","refund_of":"razorpay:pay_d001"}' --venture lexos
+  _ing '{"amount":75000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_d004"}'
 }
 
 @test "determinism: scan and sqlite render byte-identical P&L, and each leg names the engine it ran" {
@@ -91,9 +91,9 @@ _corpus() {
   # inverted, because it compared its own printed contract instead of real output. A tie-free
   # corpus cannot catch that; this one can, because only a TOTAL comparator survives it.
   _need_sqlite
-  _ing '{"amount":10000,"currency":"INR","venture":"tied","provider":"razorpay","provider_payment_id":"razorpay:z9"}' --venture tied
-  _ing '{"amount":10000,"currency":"INR","venture":"tied","provider":"razorpay","provider_payment_id":"razorpay:a1"}' --venture tied
-  _ing '{"amount":10000,"currency":"INR","venture":"tied","provider":"razorpay","provider_payment_id":"razorpay:m5"}' --venture tied
+  _ing '{"amount":10000,"currency":"INR","venture":"tied","provider":"razorpay","provider_payment_id":"razorpay:pay_z009"}' --venture tied
+  _ing '{"amount":10000,"currency":"INR","venture":"tied","provider":"razorpay","provider_payment_id":"razorpay:pay_a001"}' --venture tied
+  _ing '{"amount":10000,"currency":"INR","venture":"tied","provider":"razorpay","provider_payment_id":"razorpay:pay_m005"}' --venture tied
   node "$HQ/arc-replay.mjs" --quiet
 
   bash "$PNL" --month 2026-07 --engine scan   > "$BATS_TEST_TMPDIR/t-scan.txt"
