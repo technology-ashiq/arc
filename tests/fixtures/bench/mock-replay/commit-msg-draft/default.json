@@ -1,0 +1,8 @@
+{
+  "commits": [
+    {
+      "sha": "4936371",
+      "subject": "feat(phase-01): wire the six core factory flows to the spine"
+    }
+  ]
+}

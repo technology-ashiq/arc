@@ -56,6 +56,22 @@ Each attacker's prompt carries **this lane's running list of already-fixed defec
 instruction to check every one of them in every *other* file. Found holes are fixed and **pinned
 as fixtures**; rejected findings are recorded with a reason.
 
+**Amended 2026-08-12 (Cycle 11 retro).** Every row of that list carries a **sweep** cell alongside
+its "check it against" prose: **a command and the count it returned, filled in at fix time** — e.g.
+`grep -rn "process\.exit(" .claude/scripts/memory/` → *31 found, 31 converted, 0 remaining*. The
+prose column states an intention; the sweep column is evidence, and a blank that must hold a number
+is harder to skip than a sentence that must be remembered.
+
+The amendment exists because twin-fix has now recurred **five times across four lanes**
+(2026-08-03 engine · 08-04 evolve · 08-09 absorb · 08-10 absorb · 08-12 memory, that last one three
+times inside one phase). `CLAUDE.md` already says *grep the pattern, not the file*, and
+`docs/retro-log.md` already carries four rows of it — a fifth written line would be the fourth
+re-phrasing of a rule the log holds four copies of, which is how a log stops being read.
+
+**Its honest limit, stated rather than implied:** nothing enforces the cell, and no mechanism would
+have caught the recurrence that mattered most this cycle — a flag accepted-and-inert in three of
+four modes is not greppable at all. This raises the floor for the greppable classes and says so.
+
 Any new lint this cycle ships is born **WARN-first (TRIAL)**, per the existing trial-ledger
 promotion path.
 

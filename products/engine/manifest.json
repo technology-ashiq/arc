@@ -20,7 +20,9 @@
     ".claude/scripts/engine/drivers/codex.mjs",
     ".claude/scripts/engine/drivers/codex.sh",
     ".claude/scripts/engine/drivers/generic-api.mjs",
-    ".claude/scripts/engine/drivers/generic-api.sh"
+    ".claude/scripts/engine/drivers/generic-api.sh",
+    ".claude/scripts/engine/drivers/mock.mjs",
+    ".claude/scripts/engine/drivers/mock.sh"
   ],
   "files": [],
   "docs": []
