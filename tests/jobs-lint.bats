@@ -162,9 +162,30 @@ EOF
 }
 
 @test "jobs-lint: hostile 07 rejects a job with no budget minutes" {
-  _valid_job_body | sed '/^      min: 2$/d' | _write_jobs
+  # `budget:` with its only child deleted parses as NULL, which is the `budget` finding, not the
+  # `min` one -- so the fixture keeps budget a real mapping and removes only `min`. The first
+  # version deleted the line and asserted `budget-min`, and was red on every leg.
+  _write_jobs <<'EOF'
+version: 1
+monthly_ceiling_inr: 0
+jobs:
+  - name: ok-job
+    type: process
+    entry: kickoff-plan
+    budget:
+      inr: 0
+    policy_kind: process:ok-job
+    cadence: daily@00:15
+    enabled: true
+EOF
   _run_harness
   _assert_code budget-min
+}
+
+@test "jobs-lint: hostile 07b rejects a budget that is empty" {
+  _valid_job_body | sed '/^      min: 2$/d' | _write_jobs
+  _run_harness
+  _assert_code budget
 }
 
 @test "jobs-lint: hostile 08 rejects a rupee budget on a script job" {
@@ -581,5 +602,5 @@ EOF
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   [ "$output" -eq "$declared" ] || {
     echo "bats registered $output tests but the file declares $declared -- a non-ASCII test name silently drops one"; false; }
-  [ "$output" -eq 43 ] || { echo "test count moved: expected 43, bats registered $output"; false; }
+  [ "$output" -eq 44 ] || { echo "test count moved: expected 44, bats registered $output"; false; }
 }
