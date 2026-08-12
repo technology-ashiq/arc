@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-ledger (opened 2026-08-12)
-phase: 00
+phase: 01
 appetite: 8d
-burn: 1d
+burn: 3d
 blocked-on: —
 depends-on: —
 
@@ -18,7 +18,7 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Money math core — payload contract + PII validator, normalization, pnl math on pinned fixtures, `arc pnl` v0, 2 export parsers, twin-determinism | 3d | ⬜ not started |
+| 00 | Money math core — payload contract + PII validator, normalization, pnl math on pinned fixtures, `arc pnl` v0, 2 export parsers, twin-determinism | 3d | ✅ CLOSED 2026-08-13 |
 | 01 | Kill-distance — `ventures.yaml` schema + parser, distance / warning / crossing render, brief needs-you integration, receipt enforcement | 2d | ⬜ not started |
 | 02 | Close and costs — reconciliation gate, `month.closed` (44 to 45), cost trichotomy + Overhead, daily spend line, `--explain` if appetite holds | 2d | ⬜ not started |
 | 03 | Proof — real-spine replay rendering honest-empty, `--simulated` demo view, evidence bundle, retro | 1d | ⬜ not started |
@@ -29,7 +29,7 @@ such: the shock absorber is the pre-authorized cut order (REQ-07, then REQ-08, t
 
 ## Appetite burn
 
-**1d of 8d used (13%).** 50% tripwire at 4d: if REQ-01 and REQ-02 are not green on fixtures by then,
+**3d of 8d used (38%), Phase 00 exactly on its 3d line.** 50% tripwire at 4d: if REQ-01 and REQ-02 are not green on fixtures by then,
 cut to the pnl-math lib only and bank it. At 100% we cut or kill, never extend.
 
 ## Phase 00 adversarial pass — two fresh surfaces, 30 findings
@@ -113,9 +113,45 @@ Spine receipts on the canonical spine (main clone), both confirmed present in
 | REQ-07 Every number explains itself | 2 | active (first cut) |
 | REQ-08 Demo without lies | 3 | active (second cut) |
 
+## Phase 00 — CLOSED 2026-08-13
+
+**Green on run 31641578789, head `b65772b`, 18 of 18 selftest jobs, read per JOB and the run's
+head SHA confirmed equal to local HEAD.** The nineteenth job (`ci-tier`) failed on a docker build
+fetching trivy — `curl` exit 56, a network read failure — and passed on rerun with no code change.
+This branch touches no workflow, no Dockerfile and no tools image, which was verified rather than
+assumed: treating an infrastructure blip as a code defect is the anomaly-explained-away shape in
+reverse.
+
+**REQ-01, REQ-02 and REQ-04 green.** Shipped: `validate-ledger.mjs` wired into the emitter's own
+validation path so the PII contract cannot be bypassed · `money.mjs` (integer minor units, BigInt
+FX, half-up pinned) · `normalize.mjs` (the one place a zone conversion happens) · `pnl.mjs` ·
+`arc-pnl.mjs` and its wrapper · two export parsers over one summable row type · 16 fixtures ·
+four bats suites, 70 tests.
+
+**Five CI cycles, and every one caught something this box could not:** `product-lint` (8 files
+synced into no product — bats never ran at all), the nine MRR and determinism tests, `spine-brief`
+(hyphenated C2 ids after the grammar tightened), and the digest fixture a bulk rename had mangled.
+Four of the five were invisible locally, which is the lane's own CI-is-the-only-gate rule paying
+for itself.
+
+**Shard weights measured, not guessed** (the promise `_known_gap` was written to keep):
+money-math 47s, pii-validator 31s, parsers 30s, determinism 7s — against a default of 16.
+money-math was under-weighted nearly threefold.
+
+**Assumption FIRED — row 1.** No real provider export was obtainable offline, so both parsers are
+pinned against a documented synthetic corpus and say so at the top of each file. Real redacted
+samples remain owed before the first live ingest.
+
 ## Now
 
-**Current position:** kickoff complete and STOPPED at the approval gate. The lane exists, the plan
+**Current position:** Phase 00 CLOSED. Phase 01 (kill-distance) is next.
+
+**Next step:** `ventures.yaml` as a root company organ with its schema and parser, distance and
+80%-warning and crossing render, the brief needs-you integration computed at render with zero
+events emitted, and the `UNRECEIPTED CRITERIA CHANGE` refusal pinned as a fixture. Then the
+parser's own adversarial pass, two fresh surfaces, before its lint is promoted from WARN.
+
+**Superseded position:** kickoff complete and STOPPED at the approval gate. The lane exists, the plan
 is written, all sixteen ADRs are recorded in century 1000–1099, the four phase specs are written and
 `kickoff-lint` passes. No product code has been written and none may be until the owner approves.
 
