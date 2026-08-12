@@ -151,7 +151,20 @@ jobs:
         run: |
           set -u
           mkdir -p "$HOME/bin"
-          base=https://github.com/opengrep/opengrep/releases/latest/download
+          # PINNED, not `latest`. An unpinned scanner makes the strength of this gate whatever
+          # upstream shipped this morning: on 2026-08-12 a new opengrep release stopped flagging
+          # the planted eval() that three arc-scan tests depend on, and EVERY branch went red at
+          # once -- including main, which had been green hours earlier. Diagnosed by reproducing
+          # locally with opengrep 1.25.0 and the repo's own ruleset, which still finds it
+          # (1 finding, severity ERROR), so neither the rules nor the tests were at fault.
+          #
+          # The security half matters more than the red CI: an unpinned security scanner can
+          # silently STOP detecting a class of bug, and the only signal is a test going red. If
+          # those tests had been written to skip when the scanner finds nothing, the detection
+          # loss would have been invisible.
+          #
+          # Moving this pin is a reviewed diff that re-runs the arc-scan suite, never a bump.
+          base=https://github.com/opengrep/opengrep/releases/download/v1.25.0
           if [ "$RUNNER_OS" = "Windows" ]; then
             curl -fsSL -o "$HOME/bin/opengrep.exe" "$base/opengrep_windows_x86.exe" || echo "opengrep install skipped"
           elif [ "$RUNNER_OS" = "macOS" ]; then
