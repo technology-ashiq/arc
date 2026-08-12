@@ -13,7 +13,7 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MIN_FIXTURES, coverageVerdict, readPack, scoreAssertions, validateAssertion } from "../.claude/scripts/engine/arc-bench.mjs";
+import { MIN_FIXTURES, classCoverage, coverageVerdict, declaredFixtureCount, readPack, scoreAssertions, validateAssertion } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const DIR = join(ROOT, "tests/fixtures/engine/evals/commit-msg-draft");
@@ -86,6 +86,36 @@ for (const id of ARMED) {
   const v = coverageVerdict("review-diff", 1);
   check("review-diff still reads NO PROPOSAL", v.eligible === false);
   check("and the reason names the counts", v.reason.includes("1 of 5"));
+}
+
+// ---- slice 08: the standalone coverage gate, counted from the DECLARED list ------------------
+// Independent of Phase 2's gates-first eligibility engine, which does not exist yet. REQ-06
+// needs the other two classes to read NO PROPOSAL at Phase 0 CLOSE, and a criterion only a
+// later phase could exercise would be marked done here without ever running -- retro-log
+// 2026-08-02, an exit criterion its own verifier was structurally unable to check.
+{
+  const REPO = join(ROOT);
+  const cov = Object.fromEntries(
+    ["commit-msg-draft", "review-diff", "kickoff-plan"].map((p) => [p, classCoverage(REPO, p)]),
+  );
+
+  check("commit-msg-draft counts 6 declared fixtures", cov["commit-msg-draft"].count === 6);
+  check("commit-msg-draft is eligible", cov["commit-msg-draft"].eligible === true);
+  check("an eligible class carries no reason", cov["commit-msg-draft"].reason === null);
+
+  for (const p of ["review-diff", "kickoff-plan"]) {
+    check(`${p} counts 1 declared fixture`, cov[p].count === 1);
+    check(`${p} reads NO PROPOSAL`, cov[p].eligible === false);
+    check(`${p} reason names both counts`, cov[p].reason.includes("1 of 5"));
+    // "evidence insufficient" and "the candidate lost" must never render identically -- ADR-0906.
+    check(`${p} reason says WHY it is insufficient`, cov[p].reason.includes("evidence insufficient"));
+  }
+
+  // Counted from the declared evals list, never a directory listing: a stray file beside the
+  // pack is not part of it, and counting the directory would let a half-added fixture lift a
+  // class over the floor without anything ever running it.
+  check("the count comes from the declared evals list",
+    declaredFixtureCount(REPO, "review-diff") === 1);
 }
 
 if (failed) { console.error(`\n${failed} check(s) FAILED`); process.exit(1); }

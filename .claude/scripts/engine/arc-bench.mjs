@@ -14,6 +14,9 @@
  */
 
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { parseYamlSubset } from "./yaml-subset.mjs";
 
 /**
  * The CLOSED op set (ADR-0905 / M5). Deterministic by construction: no op may call a model,
@@ -165,6 +168,34 @@ export function coverageVerdict(taskClass, fixtureCount) {
     : { eligible: false, reason: `NO PROPOSAL - evidence insufficient (${fixtureCount} of ${MIN_FIXTURES} fixtures)` };
 }
 
+/**
+ * How many fixtures a task class actually SHIPS, read from the process's own `evals:` list.
+ *
+ * Counted from the DECLARED list, never from a directory listing: a file sitting beside the
+ * pack that nothing declares is not part of it, and counting the directory would let a stray
+ * or half-added fixture lift a class over the floor without anything running it.
+ *
+ * This is deliberately standalone -- it is the whole of the coverage gate, and it does not
+ * reach for Phase 2's gates-first eligibility engine, which does not exist yet. REQ-06 needs
+ * `review-diff` and `kickoff-plan` to read NO PROPOSAL at Phase 0 close, and a criterion that
+ * could only be exercised by a later phase would be marked done here without ever running
+ * (retro-log 2026-08-02: an exit criterion its own verifier could not check).
+ */
+export function declaredFixtureCount(root, processName) {
+  const path = join(root, "processes", `${processName}.process.yaml`);
+  const parsed = parseYamlSubset(readFileSync(path, "utf8"));
+  if (!parsed.ok) throw new Error(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
+  const evals = parsed.value?.evals;
+  if (!Array.isArray(evals)) throw new Error(`${processName}: evals is missing or not a list`);
+  return evals.length;
+}
+
+/** The coverage line a report prints for one class, counted rather than assumed. */
+export function classCoverage(root, processName) {
+  const count = declaredFixtureCount(root, processName);
+  return { taskClass: processName, count, ...coverageVerdict(processName, count) };
+}
+
 // ---------------------------------------------------------------------------------------------
 // The fixture-repo harness (M3 / M11).
 //
@@ -186,7 +217,6 @@ export function coverageVerdict(taskClass, fixtureCount) {
 import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
 /**
  * A work tree cannot express a DELETION by copying, so it marks one with a tombstone:
