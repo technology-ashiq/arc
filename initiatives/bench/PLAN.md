@@ -91,7 +91,15 @@ the same day and was wrong on five load-bearing points — those are the ADRs be
   (4) `.claude/scripts/engine/arc-bench.mjs` — bench's own new file, placed beside its siblings
   because that is where every engine-adjacent runner lives (ADR-0901).
   Plus **one line in `processes/commit-msg-draft.process.yaml`'s `evals:` list** — see No-gos for
-  why that is not a body edit. Engine is IDLE, but **three other lanes are LIVE in sibling
+  why that is not a body edit.
+  **Two mandatory companions of path (1), found by CI on 2026-08-12 and not by the simulation
+  gate:** any NEW file under `.claude/**` must be registered in its product manifest
+  (`products/engine/manifest.json`) or `product-lint` fails with *"unmapped file (synced but in
+  no product)"*, and any change to a synced file requires regenerating
+  `tests/fixtures/sync-golden/tree-manifest.txt`, which `tests/sync.bats` diffs byte-for-byte.
+  Neither is discoverable from PLAN or the phase spec — both live only in CI — which is why the
+  executor simulation could not have caught them. Regenerate the manifest as a NAMED step and
+  confirm only intended paths moved. Engine is IDLE, but **three other lanes are LIVE in sibling
   worktrees** (leads, memory, scheduler). Before committing to ANY of these five, run
   `git log origin/main --oneline -5 -- PATH` per `.claude/rules/lanes.md`; a
   touched-since-branch-point result is an in-flight merge conflict, handled now, not at merge.
