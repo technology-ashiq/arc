@@ -89,6 +89,30 @@ _blocks_on() {
   _blocks_on existence
 }
 
+# The binding is on PATH SEGMENTS, never a substring. A substring test passed ten of eleven
+# forged URLs -- the name in a query string, a fragment, userinfo, a subdomain, a lookalike
+# repository, and the attacker own truthful namespace on the same host.
+@test "BLOCK: a registry-url carrying the name outside its path" {
+  _vet oci-url-forged
+  _blocks_on existence
+}
+
+# registry is a field the CANDIDATE writes, so scoping the OCI readers behind it is opt-in
+# unless something refuses a body that is plainly not from a container registry. Flipping npm
+# to oci restored the hole the first attempt was reverted for; this is what stops that.
+@test "BLOCK: an OCI candidate recording a package-registry body" {
+  _vet oci-npm-body
+  _blocks_on existence
+}
+
+# The tags-list shape had ZERO coverage, so both mutants of its reader survived the suite.
+# Here name is the REPOSITORY and the tags live in tags, which is the OCI spec own shape.
+@test "an OCI tags-list body PASSES, and its name is not read as a tag" {
+  _vet oci-tags-list
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"PASS"* ]] || { echo "$output"; false; }
+}
+
 # ---------------------------------------------------------------------------
 # One BLOCK per condition -- asserted once per condition, never once in total
 # ---------------------------------------------------------------------------

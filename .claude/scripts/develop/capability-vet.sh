@@ -275,7 +275,15 @@ if (!manifest || typeof manifest !== "object" || Array.isArray(manifest)) {
 
 const name = manifest.name;
 const version = String(manifest.version ?? "");
-const registry = String(manifest.registry ?? "");
+// NOT String(). Coercion made `registry: ["oci"]` become the string "oci" and take the full
+// OCI path, and the lock then recorded the coerced value as though it had been declared.
+// A field that selects which rules apply is read as declared or refused.
+if (manifest.registry !== undefined && typeof manifest.registry !== "string") {
+  block("existence", "registry is not a string",
+    "a declared registry name such as npm, pypi, oci, skill or git — a coerced array or number selects which rules apply while reading as something else",
+    JSON.stringify(manifest.registry));
+}
+const registry = typeof manifest.registry === "string" ? manifest.registry : "";
 
 // --- name shape, FIRST. Everything downstream uses it as a search key, and a name carrying a
 // newline turned the allowlist check into a multi-pattern match that any one line could pass.
@@ -321,9 +329,28 @@ if (registry === "oci") {
     block("existence", `an oci candidate records no registry-url, and its response cannot name itself`,
       "`registry-url`: the URL the recorded response was fetched from — a container registry tag body carries no repository identity, so without this one response certifies any allowlisted name",
       "(absent)");
-  } else if (!url.includes(name)) {
-    block("existence", `the recorded registry-url does not contain "${name}"`,
-      `a URL naming the repository ${name}`, url);
+  } else {
+    // BIND ON THE PATH, never on the string. A substring test passed ten of eleven forged
+    // URLs: the name in a query string, in a fragment, in userinfo, in a lookalike
+    // repository, in a subdomain, in a bare non-URL, and — worst, because it involves no
+    // lie at all — the attackers OWN namespace on the same host, which truthfully contains
+    // the name. A short name made it vacuous outright: every registry URL contains /v2/.
+    let bad = null;
+    try {
+      const u = new URL(url);
+      if (u.protocol !== "https:") bad = `scheme ${u.protocol}`;
+      else if (u.username || u.password) bad = "userinfo in the URL";
+      else {
+        const segs = u.pathname.split("/").filter(Boolean);
+        const joined = "/" + segs.join("/") + "/";
+        if (!joined.includes("/" + name + "/")) bad = `path ${u.pathname}`;
+      }
+    } catch { bad = "not a URL"; }
+    if (bad) {
+      block("existence", `the recorded registry-url does not name "${name}" in its path`,
+        `an https URL whose PATH segments contain ${name} — a query string, a fragment, userinfo, a subdomain or a lookalike repository are not the repository`,
+        `${url} (${bad})`);
+    }
   }
 }
 
@@ -349,9 +376,23 @@ if (record) {
   // substring -- and it was worse, because a package name is not even a substring of a
   // version. A fresh adversarial pass caught it and the whole change was reverted.
   if (registry === "oci") {
-    collect(record.name);
-    if (Array.isArray(record.tags)) {
-      record.tags.forEach((t) => collect(typeof t === "string" ? t : t && t.name));
+    // THE RECORD MUST MATCH THE CLAIM. `registry` is a field the candidate writes, so
+    // scoping the OCI readers behind it is opt-in unless something refuses a body that is
+    // plainly not from a container registry. Without this, flipping one string from npm to
+    // oci restores the exact hole this whole change was reverted for once already: a
+    // faithful npm packument for a package NAMED like a version, admitted as a tag.
+    if (record && (record.versions || record["dist-tags"] || record.info || record.releases)) {
+      block("existence", "an oci candidate recorded a package-registry response",
+        "a container-registry response — a body carrying versions, dist-tags, releases or info is npm or PyPI, and its `name` is a PACKAGE NAME rather than a tag",
+        Object.keys(record).slice(0, 6).join(", "));
+    } else {
+      // `name` is the TAG only when the body describes ONE tag. The OCI spec /v2/NAME/tags/list,
+      // Quay and GitLab all put the REPOSITORY in `name` and the tags in `tags`, and reading
+      // `name` there is the same format-specific-assumption defect one level down.
+      if (!Array.isArray(record && record.tags)) collect(record && record.name);
+      if (Array.isArray(record && record.tags)) {
+        record.tags.forEach((t) => collect(typeof t === "string" ? t : t && t.name));
+      }
     }
   }
 }
@@ -426,14 +467,23 @@ if (!isSkill) {
       "npm dist.integrity, PyPI digests.sha256 or an OCI digest — `sha512-…` or `sha256-…`",
       hash || "(absent)");
   } else if (record) {
+    // KEY-AWARE. Matching any digest-shaped string anywhere meant publisher-controlled free
+    // text counted as "what the registry published": OCI `annotations` and config `Labels`
+    // are spec-blessed, publisher-set and present in the very responses this gate accepts,
+    // so a candidate could plant its own claimed hash and have the gate agree it was
+    // published. Only fields that ARE digests count.
     const published = [];
-    const walk = (o, depth) => {
+    const DIGEST_KEYS = new Set(["digest", "manifest_digest", "integrity", "sha256", "sha512"]);
+    const walk = (o, depth, key) => {
       if (!o || depth > 4) return;
-      if (typeof o === "string") { if (/^sha(256|512)[:-]/.test(o)) published.push(o); return; }
-      if (Array.isArray(o)) return o.forEach((x) => walk(x, depth + 1));
-      if (typeof o === "object") return Object.values(o).forEach((x) => walk(x, depth + 1));
+      if (typeof o === "string") {
+        if (DIGEST_KEYS.has(key) && /^sha(256|512)[:-]/.test(o)) published.push(o);
+        return;
+      }
+      if (Array.isArray(o)) return o.forEach((x) => walk(x, depth + 1, key));
+      if (typeof o === "object") return Object.entries(o).forEach(([k, v]) => walk(v, depth + 1, k));
     };
-    walk(record, 0);
+    walk(record, 0, "");
     if (!published.length) {
       block("hash", `${name}@${version} claims an integrity hash the recorded response does not publish`,
         "the same integrity string the registry returned",
@@ -525,6 +575,10 @@ const facts = {
   hash: hash || (isSkill ? `git ${version}` : null),
   "publisher-auth": text(manifest["publisher-auth"]),
   "build-attestation": text(manifest["build-attestation"]),
+  // Kept, because a claim that was made CHECKABLE and then discarded at the moment of
+  // decision is not checkable by anyone afterwards. --audit calls a row stale at 30 days
+  // and whoever re-verifies needs the URL that was actually fetched.
+  "registry-url": text(manifest["registry-url"]),
   checked: today,
 };
 
