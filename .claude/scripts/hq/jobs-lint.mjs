@@ -90,6 +90,13 @@ if (has("--json")) {
 }
 
 if (has("--bill")) {
+  // A FILE THAT DID NOT PARSE HAS NO BILL. `lintJobs` returns bill: null when it could not read
+  // far enough to compute one, and printing "INR 0 by construction" there is an affirmative
+  // measured claim about a file nobody read -- the same shape as an emitter reporting success
+  // for a quarantined receipt. Unknown is a different answer from zero, and it says so.
+  if (!bill) {
+    process.stdout.write("worst-case month: UNKNOWN -- this file did not parse, so no bill can be computed\n");
+  } else {
   const rows = bill?.rows ?? [];
   process.stdout.write("worst-case month (the ceiling, not an average -- a budget check that passes on a typical month is not a budget check)\n");
   if (rows.length === 0) {
@@ -100,6 +107,7 @@ if (has("--bill")) {
   }
   const declared = bill?.ceiling;
   process.stdout.write(`  ${"TOTAL".padEnd(24)} ${"".padEnd(18)} INR ${bill?.worstCaseInr ?? 0}${declared === null || declared === undefined ? "" : ` of a declared ceiling of INR ${declared}`}\n`);
+  }
 }
 
 if (findings.length === 0) {
