@@ -34,6 +34,7 @@ import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
 import { processRunArgv } from "./lib/jobs/delegate.mjs";
+import { derivePanel, needsYouLines, loadPanelInputs } from "./lib/jobs/panel.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { processNames } from "./lib/policy/subjects.mjs";
@@ -56,7 +57,7 @@ const has = (name) => argv.includes(`--${name}`);
 const die = (code, msg) => { process.stderr.write(`arc-jobs: ${msg}\n`); process.exit(code); };
 
 if (!command || command === "help" || has("help")) {
-  process.stdout.write("usage: arc-jobs list [--next N] | run <name> [--slot ISO] [--scheduled]\n");
+  process.stdout.write("usage: arc-jobs list [--next N] | run <name> [--slot ISO] [--scheduled] | catchup\n");
   process.exit(0);
 }
 
@@ -150,8 +151,91 @@ if (command === "list") {
   process.exit(0);
 }
 
+// ---------- panel ----------
+//
+// The full jobs table for one day, and the surface the brief's needs-you lines are derived from.
+// A REPLAY, not a status read: `--date D` renders the schedule against the spine AS IT STOOD on
+// D, so the same command on the same spine returns byte-identical output forever. `Date.now()`
+// is absent from the derivation rather than merely discouraged -- one wall-clock read would make
+// this untestable and the golden meaningless.
+if (command === "panel") {
+  const { doc } = loadSchedule();
+  const day = flag("date") || istDay(nowMs());
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) die(2, `--date ${JSON.stringify(day)} is not YYYY-MM-DD`);
+  const { events, observedFrom } = await loadPanelInputs(spineRoot(), day);
+  const rows = derivePanel({ day, jobs: doc.jobs || [], events, observedFrom });
+
+  process.stdout.write(`jobs ${day}\n`);
+  for (const r of rows) {
+    const last = r.lastRun || "never";
+    const next = r.nextExpected === null ? "—" : formatIst(r.nextExpected);
+    // `disabled` is printed as a STATE, never as "0 missed". A deliberate off and a job that
+    // happens to be up to date are different facts, and rendering them the same is how a
+    // deliberate off starts reading as health.
+    const state = !r.enabled ? "disabled" : (r.overdue ? `OVERDUE (${r.missed} missed)` : r.state);
+    process.stdout.write(`  ${r.name.padEnd(22)} ${state.padEnd(22)} last ${last}  next ${next}\n`);
+  }
+  const nag = needsYouLines(rows);
+  if (nag.length) {
+    process.stdout.write(`\nneeds-you (${nag.length})\n`);
+    for (const l of nag) process.stdout.write(`  ${l}\n`);
+  }
+  process.exit(0);
+}
+
+// ---------- catchup ----------
+//
+// "Run everything that is due." Implemented by SPAWNING `arc-jobs run` per job rather than by
+// calling an extracted helper, and that is a deliberate design choice rather than laziness: the
+// PLAN's non-negotiable is that every execution walks ONE path, lock -> guards -> execute ->
+// receipt. A second in-process code path would be free to drift out of agreement with the first
+// one edit at a time, and the drift would be invisible until a scheduled run and a caught-up run
+// behaved differently on the same job. Spawning the same command makes divergence impossible by
+// construction: there is nothing else to drift from.
+//
+// SCH-E round-4 fix D3: this COMMAND runs every overdue job REGARDLESS of each job's `catchup:`
+// field. That field governs only automatic late-firing by the OS. A human typing `catchup` is
+// human intent, and the receipt's actor records exactly that.
+if (command === "catchup") {
+  const { doc } = loadSchedule();
+  const spine = spineRoot();
+  let index = null;
+  try { index = readIdemIndex(spine); } catch { index = null; }
+  const lookup = (k) => (index ? (index instanceof Map ? index.get(k) : index[k]) : null);
+
+  const ran = [];
+  const upToDate = [];
+  const skipped = [];
+  const failed = [];
+
+  for (const job of doc.jobs || []) {
+    if (!job.enabled) { skipped.push(`${job.name} (disabled)`); continue; }
+    const c = parseCadence(job.cadence);
+    if (!c) { skipped.push(`${job.name} (unreadable cadence)`); continue; }
+    const due = floorSlot(c, nowMs());
+    if (due === null) { skipped.push(`${job.name} (no slot yet)`); continue; }
+    const dueIso = formatIst(due);
+
+    if (lookup(sha256Hex(`${job.name}@${dueIso}`))) { upToDate.push(`${job.name} @ ${dueIso}`); continue; }
+
+    process.stdout.write(`arc-jobs: catchup -> ${job.name} @ ${dueIso}\n`);
+    const r = spawnSync(process.execPath, [process.argv[1], "run", job.name, "--slot", dueIso], {
+      encoding: "utf8", windowsHide: true, stdio: "inherit",
+    });
+    if (r.error || r.status !== 0) failed.push(`${job.name} (${r.error ? r.error.code : `exit ${r.status}`})`);
+    else ran.push(`${job.name} @ ${dueIso}`);
+  }
+
+  process.stdout.write(
+    `arc-jobs: catchup ran=${ran.length} up_to_date=${upToDate.length} skipped=${skipped.length} failed=${failed.length}\n`,
+  );
+  for (const s of skipped) process.stdout.write(`  skipped: ${s}\n`);
+  for (const f of failed) process.stderr.write(`  failed: ${f}\n`);
+  process.exit(failed.length ? 1 : 0);
+}
+
 // ---------- run ----------
-if (command !== "run") die(2, `unknown command \`${command}\` (try: list | run)`);
+if (command !== "run") die(2, `unknown command \`${command}\` (try: list | run | catchup)`);
 
 const name = positional[0];
 if (!name) die(2, "run needs a job name");
