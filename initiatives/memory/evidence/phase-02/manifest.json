@@ -1,0 +1,32 @@
+{
+  "phase": "02",
+  "commit": "1245cb2cee31bdf914725a968283a121ed9516b1",
+  "short": "1245cb2",
+  "generated": "2026-08-12T08:44:53Z",
+  "files": [
+    {
+      "name": "adversarial-decision-logic.md",
+      "sha256": "aed90458a54daf45cc25df5e6448859a320b814796cbab03b2771942488937a7"
+    },
+    {
+      "name": "adversarial-shell-os.md",
+      "sha256": "1b863b19712e541364772de5cf0733aafd4b629519ea7f4d1568c7ff2912b130"
+    },
+    {
+      "name": "ci-receipt.md",
+      "sha256": "ca403cbde7e66a191b83a45fc0481ace8f2c8bae40da1e2a7ef3a699b9436973"
+    },
+    {
+      "name": "close-receipts.md",
+      "sha256": "f042f9778f3ee91ffaf687187344c89f57d5d8650484037b05cbe79f4c116e09"
+    },
+    {
+      "name": "fixed-defect-list.md",
+      "sha256": "60a5b6756612df5a101266256e064a9c46d61abca29216849ef5d4931df62bbf"
+    },
+    {
+      "name": "golden-gate-comparison.md",
+      "sha256": "8c84e2a08b33878d123626360e0817ee72b95f25114f9d714c3fcad8de01cc81"
+    }
+  ]
+}

@@ -11,10 +11,12 @@
 > cut from it. Attack findings mutate this plan, never the source. Trigger: the owner's **Build-out
 > Mandate, 2026-08-09** — a recorded decision, put on the spine in Phase 04 and cited by every ADR.
 >
-> **ADR band note:** engine holds 0200–0299. `0207` was taken on 2026-08-11 by a branch belonging to
-> the **memory** lane (`d1fdaab`, not on `main`), found only by checking sibling worktrees. This cycle
-> therefore numbers **0208–0219**, and the cross-band write is recorded here rather than quietly
-> worked around.
+> **ADR band note:** engine holds 0200–0299. `0207` was written on 2026-08-11 by the **memory** lane
+> (`d1fdaab`) **with the owner's approval** — retiring a migration proof is an engine decision and
+> memory needed it to land its hooks, so it is sanctioned rather than a stray. It was still invisible
+> from here: this worktree read "highest is 0206", and 0207 surfaced only by checking sibling
+> worktrees, because the band table and `wip-line` each see one worktree alone. This cycle therefore
+> numbers **0208–0219**.
 
 ## Goal
 

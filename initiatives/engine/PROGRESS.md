@@ -12,8 +12,10 @@ depends-on: —
 > (tests green + live demo + exit criteria + evidence). Evidence over assertion.
 > Cycle 6 is archived at `archive/PLAN-cycle6-2026-08-03.md` and
 > `archive/PROGRESS-cycle6-2026-08-03.md`; its phases 00–03 stay on disk and Phase 00 is carried
-> here as a parked row. This cycle claims **ADR 0208–0219** — `0207` was already taken inside
-> engine's band by a `memory`-lane branch, found by checking sibling worktrees.
+> here as a parked row. This cycle claims **ADR 0208–0219**. `0207` was written by the `memory` lane
+> on 2026-08-11 **with the owner's approval** (retiring a migration proof is an engine decision) —
+> sanctioned, not a stray — but invisible from this worktree, and it surfaced only by checking
+> sibling worktrees before numbering.
 > Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at root
 > and are never copied here (ADR-0053); evidence is lane-scoped at
 > `initiatives/engine/evidence/phase-NN/` (ADR-0055).
