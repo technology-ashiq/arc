@@ -57,7 +57,8 @@
     ".claude/hooks/PostToolUse.d/90-emit.sh",
     ".claude/hooks/PreToolUse.d/40-policy.sh",
     ".claude/hooks/PreToolUse-edit.d/40-policy.sh",
-    ".claude/hooks/policy-decide.sh"
+    ".claude/hooks/policy-decide.sh",
+    ".claude/hooks/SessionStart.d/60-jobs.sh"
   ],
   "docs": []
 }
