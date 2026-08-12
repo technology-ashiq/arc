@@ -42,7 +42,10 @@ import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 
-const DRIVERS = ["claude-code", "codex", "generic-api"];
+// `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
+// so bench's own suite runs offline and free. It is a real driver rather than an env fake
+// precisely so it can be SELECTED here and NAMED on a receipt.
+const DRIVERS = ["claude-code", "codex", "generic-api", "mock"];
 
 // ---------- CLI ----------
 const argv = process.argv.slice(2);

@@ -12,11 +12,11 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-10 — PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 20 full PLANs + 3 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 21 full PLANs + 2 BRIEFs + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
@@ -38,6 +38,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-legal-pack.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-legal-pack.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: six pages not three [the Razorpay activation superset], the `payment_model: gateway\|mor` + GST branches correcting the brief's MoR-only premise, the DPDP Rule-3 notice + fiduciary/processor two-layer clause, the value/trace/completeness lint trio, the hash-chain publish law with static-MDX routes, the production-probe checklist and the scenario-fixture completeness law exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-ops.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-ops.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the OPEN live-value REQ-05 row, the OPS-G fold-derived idem formula, the flood-control meta-incident, drill mode with real-vs-drill separation, the heartbeat + deterministic staleness line, the leads private-store PII law for tickets, injection containment with template-locked drafts, policy-enforced L1 (POL-G) + POL-I rows, canary→spine unification resolving the brief's reader-only-vs-canary-history contradiction, the ADR-0408 `metric.observed` conformance with the no-evolve-clock honesty boundary, and the scheduler-job alignment exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-trader.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-trader.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the two-zone playground/verdict-lab law, the pre-registration + attempt-family + null-monkey + regime honesty battery with the no-WIN verdict vocabulary, the spine-receipt 72h cooldown replacing wall-clock, the ANTI-CASE cooling protocol, the fifth lock condition [compliance review], the no-broker-creds credential inventory, the divergence-as-north-metric paper run and the graceful-degradation slotting exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
+| ~~`plans/BRIEF-bench.md`~~ | **MOVED → `docs/archive/`** (2026-08-12) | Superseded by `plans/PLAN-bench.md`; kept in archive for history — never feed the brief to a kickoff (two review rounds hardened the plan well past the brief: replay-determinism + the provenance tuple replaced the impossible same-config-same-scores claim, gates-first selection with the NO-PROPOSAL null result [a 70/20/10 composite rejected on the record], K-group admission-controlled budgets, the partial-run proposal bar, split quality/cost comparability with classified cost deltas, enumerated baseline re-pin causes, per-task-class MIN_FIXTURES, the zero-new-kinds spine mapping, the driver-explicit CLI and the REQ-05 preflight exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -469,6 +470,26 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     evolve's trigger feed — the ops honesty boundary). Recommended slot: LAST — after the ledger + scheduler
     lanes ship (policy C9 already live); the in-file graceful-degradation table makes any earlier slot safe.
     `BRIEF-trader.md` superseded → moved to `docs/archive/`.
+
+23. **2026-08-12:** `plans/PLAN-bench.md` added (bench runner — "the model market": deterministic
+    model comparison over the processes' own eval packs, emitting propose-only router diffs with the
+    evidence inline; v1.0, landed owner-approved 2026-08-12; decisions BEN-A…H locked over two review
+    rounds 2026-08-02 and re-grounded 2026-08-12; ADR numbers at kickoff from the century claimed per
+    `PORTFOLIO.md` — NEW lane). **Trigger NOT mandate-converted, on the record:** bench's gate is a
+    PREREQ (≥2 drivers in REAL use — the fleet arrives via `plans/PLAN-executor.md` on the engine
+    lane), not trigger-patience; a runner with no road benches nothing. Engine C6 already shipped the
+    bench handshake (task-class-tagged, revisioned fixtures · driver `--version` · MP-F `run.completed`
+    payloads · the eligible-cost rule), so bench's kickoff inherits its fuel with zero
+    re-instrumentation. Core beyond the brief: replay-determinism + the provenance tuple (fixture/input
+    SHAs · eval revision · process + driver versions · exact model id · request settings · router SHA ·
+    pricing snapshot) replacing the impossible same-config-same-scores claim, live K-run variance
+    reported as variance · gates-first selection with the `NO PROPOSAL` null result (a 70/20/10
+    weighted composite REJECTED on the record — units don't mix; the evidence table is the interface) ·
+    one candidate driver+model pair per run, driver-explicit CLI · per-task-class verdicts with the
+    MIN_FIXTURES=5 floor · K-group admission-controlled budget (reserve before start) · a partial run
+    never proposes · three-tier champion drift guard on split quality/cost comparability axes with
+    enumerated baseline re-pin causes · zero new spine kinds. Inherits MP-F (ADR-0069) and absorb's
+    ABS-D owner-judge grammar. `plans/BRIEF-bench.md` superseded → moved to `docs/archive/`.
 
 ## Provenance
 

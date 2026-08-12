@@ -1,142 +1,149 @@
-# PROGRESS.md — Cycle 6 · arc-engine "The Model-Agnostic Foundation"
+# PROGRESS.md — Cycle 7 · arc-engine "The Hired Hands"
 
-status: IDLE
-cycle: arc-engine (Cycle 6, closed 2026-08-03)
-phase: — (cycle closed, merged as b9a9e9f / PR #103)
-appetite: 14d
-burn: 2.0d
+status: LIVE
+cycle: arc-engine (Cycle 7, opened 2026-08-12)
+phase: 04
+appetite: 7.5d
+burn: 0.0d
 blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
 > (tests green + live demo + exit criteria + evidence). Evidence over assertion.
-> This lane was born by `/arc-kickoff --lane engine` on 2026-08-03 and claims **ADR band
-> 0200–0299**. Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`)
-> stay at root and are never copied here (ADR-0053); evidence is lane-scoped at
+> Cycle 6 is archived at `archive/PLAN-cycle6-2026-08-03.md` and
+> `archive/PROGRESS-cycle6-2026-08-03.md`; its phases 00–03 stay on disk and Phase 00 is carried
+> here as a parked row. This cycle claims **ADR 0208–0219**. `0207` was written by the `memory` lane
+> on 2026-08-11 **with the owner's approval** (retiring a migration proof is an engine decision) —
+> sanctioned, not a stray — but invisible from this worktree, and it surfaced only by checking
+> sibling worktrees before numbering.
+> Company organs (`docs/adr/`, `docs/retro-log.md`, `docs/trial-ledger.md`, `tests/`) stay at root
+> and are never copied here (ADR-0053); evidence is lane-scoped at
 > `initiatives/engine/evidence/phase-NN/` (ADR-0055).
-> Design source: `docs/strategy/plans/PLAN-engine-process-layer.md` (frozen — the decision record,
-> not the cycle). Model policy is inherited from `docs/adr/0069-balanced-model-policy.md`.
+> Design source: `docs/strategy/plans/PLAN-executor.md` v2.0 (frozen — the decision record, not the
+> cycle). Model policy is inherited from `docs/adr/0069-balanced-model-policy.md`, amended for
+> runtimes by ADR-0212.
 
 ## Phase table
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | The canonical layer — `processes/` format, `process-lint` with its hostile-fixture corpus and a fresh-agent adversarial pass, 3 pilots canonicalized, eval fixtures written | 4 days | ✅ done 2026-08-03 |
-| 01 | The proof — `arc-compile --target claude-code` reaches 3/3 byte-identical, source of truth flips, DO-NOT-EDIT header lands, codex target plus recorded goldens | 3 days | ✅ done 2026-08-03 |
-| 02 | The engine — `arc-run` headless with hard budgets, schema check, proposal-receipt escalation, secret scrub, 3 drivers behind one interface, `router.yaml` and `--driver auto` | 4 days | ✅ done 2026-08-03 |
-| 03 | Dogfood and seal — real runs on a non-Claude driver, the 4th-driver timing run, retro, lint promotion review | 2 days | ✅ done 2026-08-03 (REQ-08 **partial** — see Now) |
+| 00 | Steel thread — **parked, shipped in Cycle 6** (canonical process layer, `arc-run`, driver contract, `router.yaml`) | — | ✅ done 2026-08-03 |
+| 04 | The law, and proof the hands exist — mandate receipt, ADR-0212 merged, runtime installed behind a container backend, ONE live headless invocation, **or the STOP fires** | 1 day | pending |
+| 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | pending |
+| 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | pending |
+| 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
+| 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: ~2.0 of 14 days used (~14%).** Phases allocate 13 of 14 days; the 1 day of slack is
-deliberate. The design source said "2 weeks" while its own phases sum to 13 days — that only fits a
-7-day week, so the cap is written as 14 rather than left as a word that over-commits by 30%.
-
-Basis for the 2.0, so it can be audited rather than believed: one unbroken sitting on 2026-08-03,
-from kickoff through Phase 01 green on the 3-OS matrix. Two honest caveats. First, the same one the
-develop lane recorded — a single continuous session with no context switches is the most favourable
-possible condition, so the figure is real but it is not a throughput claim. Second, and more useful:
-a material share of Phase 01 went on REWORK of self-inflicted defects rather than on discovered
-complexity — a GNU-ism on the macOS leg, a fetch-depth assumption, fixtures pinning live state, a
-fix applied to one twin and not the other, an apostrophe inside a quoted block. Five CI cycles. The
-adversarial passes earned their cost; that churn did not, and it is a retro input rather than a
-number to be quietly averaged away.
-
-| phase | appetite | spent | closed on |
-|---|---|---|---|
-| 00 canonical layer | 4d | ~0.6d | CI run `30767018207`, 19/19 |
-| 01 the proof | 3d | ~0.7d | CI run `30771122029`, 19/19 |
-| 02 the engine | 4d | ~0.5d | CI run `30786...`, 19/19 |
-| 03 dogfood and seal | 2d | ~0.2d | 19/19; REQ-08 partial |
-
-**Kill checkpoint: at 8 days burned, is REQ-02 proven?** Not at 7 (50%), because Phase 00 plus
-Phase 01 sum to exactly 7 and a tripwire that fires on every on-schedule run is a tripwire that
-learns to be ignored — the shape `docs/trial-ledger.md` already records for `appetite-sum`.
+**Appetite burn: 0.0 of 7.5 days used (0%).** Phases allocate 7 of 7.5 — **93%, and the half-day of
+slack is thin**, flagged by `kickoff-lint` and left honest rather than padded. The design source's
+"1.5 weeks (8 working days)" rounds up: 1.5 weeks is 7.5 working days at a 5-day week, so the cap is
+written as the smaller, true number. Kill checkpoint is read at **day 5**, not at the 50% mark of
+3.75 — 50% falls inside Phase 06 while it is still on schedule, and a tripwire that fires on an
+on-track run is one that learns to be ignored.
 
 ## Done log
 
-- 2026-08-03 — lane born by `/arc-kickoff --lane engine`. PLAN.md, 4 phase specs, ADRs 0200–0206
-  written; `kickoff-lint` green. **No code.** Awaiting owner approval.
-- 2026-08-03 — plan APPROVED by Ashiq; approval recorded on the spine against
-  `01KZ20EG6Y327ETNZVWTEC10HC`.
-- 2026-08-03 — **Phase 00 closed** on CI run `30767018207`, 19/19 green. `processes/` format,
-  `yaml-subset.mjs` + `schema-subset.mjs` + `process-lint.mjs`, 3 pilots canonicalized (all three
-  bodies round-trip **byte-for-byte** — the proof Phase 01 rests on), 82-row two-class fixture
-  corpus, `products/engine/manifest.json`.
-  - The mandatory fresh-agent adversarial pass found **~40 real holes** in a gate whose own 36
-    author-written fixtures had all passed first try — the retro-log 2026-08-02 signature, at
-    larger scale. Full record: `evidence/phase-00/adversarial-report.md`.
-  - ADR-0200 took its one permitted subset amendment (empty flow literals `[]` / `{}`), recorded
-    in the ADR rather than coded around.
-  - Named exception to the PLAN's Do-not-touch line: `export` added to `validate.mjs`'s
-    `PROCESS_RE` so `process-lint` asserts against the spine's regex instead of a copy.
-  - Two controls that were dead on arrival and are now alive: the CRLF fixtures (git had stored
-    them with LF, so they reported CAUGHT while testing nothing) and the CI test-count floor
-    (rotted 318 → 871, because a floor only catches shrinkage).
+- 2026-08-12 — `/arc-kickoff --lane engine`. Cycle 6 archived; `PLAN.md`, 5 phase specs and **ADRs
+  0208–0219** written; `kickoff-lint` green. **No code.** Awaiting owner approval.
+  - Owner answered three forks in-session: **Hermes Agent, container-backed** (EXE-A) · **OpenRouter
+    capped key** (EXE-F) · **arc's own build-out journey** as the draft subject (REQ-07).
+  - Four agents ran before the plan was written — a codebase survey and three researchers (runtime
+    scorecard, agent-runtime supply-chain threat model, hard-capped credential landscape).
+  - **Five drift items** found against the design source's 2026-08-09 snapshot, the largest being
+    that the ENG-D exit map it calls "inherited" **does not exist** — the real contract is
+    `{ OK: 0, DRIVER_FAIL: 1, BUDGET_DECLINED: 2 }` and there is no data-boundary concept at any
+    layer, while the certification suite asserted `exit 5` twice. Resolved by ADR-0219 rather than
+    discovered in Phase 05.
+  - **The two researchers disagreed** on the chosen runtime's security record and the disagreement is
+    recorded rather than averaged: one found ≥12 aggregator CVEs with vendor silence, the other
+    fetched the vendor's advisories page live and found zero published. Recorded in ADR-0208's
+    Evidence and Confidence lines and in the rabbit holes.
+  - **Attack panel: 3 fresh agents, 21 findings, 19 accepted, 1 rejected, 1 stale.** The four that
+    mattered were ordering defects: the capped credential was provisioned a phase *after* the
+    fixtures that consume it (which could have fired the STOP for a scheduling bug rather than an
+    isolation gap); the data-boundary mechanism was certified in Phase 06 but built in Phase 08; the
+    adversarial pass was bound to the phase close rather than the shipping PR; and the pre-decided
+    cut named an artifact no spec produced. Rejected: bumping Phase 06 to 2.5d — `out-of-appetite`.
+  - **Simulation gate: 18 blockers on round 1, 6 live on round 2** (a seventh was already closed by an
+    edit the simulator did not see). Two non-zero rounds is the gate's escalation point. All six were
+    mechanical rather than judgement calls and were closed — the spine-payload contract, the vetting
+    OK format and date, the wait protocol for owner acts, the appetite clock epoch and unit, the CI
+    shard-timing and count-floor mechanics, and the STOP record location. **They are closed but NOT
+    re-verified by a third simulator round**, because the gate permits one respawn. Round-1 count for
+    the retro scoreboard: `sim-blockers-r1 18`.
+  - **One defect caught that would have quarantined a receipt:** `decision.recorded` is not a
+    standalone kind. Its payload is closed to `decides`/`verdict`/`reason`, and `decides` must be the
+    ULID of the `approval.requested` it decides. The design source, the Phase 0 description and the
+    first draft of this spec all had the mandate landing as a single `decision.recorded` — which
+    exits 0 and quarantines silently, this lane's own recorded failure.
+
+- 2026-08-12 — **pre-approval runnability recon** (no install, no execution). Verdict **RUNNABLE
+  HERE**: Windows is Tier 1 native for this runtime, no WSL needed for the headless CLI, and
+  `hermes -z` is confirmed verbatim as single-prompt-in / final-response-out with a usage sidecar
+  written even on failure. Two things changed as a result, landed as dated pre-approval amendments to
+  ADR-0208 and ADR-0209 rather than silent edits:
+  - **Tag `v2026.8.3` carries `assets: []`** — nothing attached — and the npm and PyPI channels were
+    retired in that same release, while `install.ps1` is not a tracked file at the tag and is served
+    live from the docs site defaulting to *latest*. A host `curl`-pipe install would be unpinnable
+    and the worst available shape for this runtime. **The runtime is therefore obtained as a container
+    image and the digest is the pin** — the one content-addressable handle the vendor offers.
+  - **Ollama defaults to as little as 4,096 tokens of context against the ≥64,000 this runtime
+    expects, and truncates silently rather than erroring.** Phase 04 raises it explicitly.
+- 2026-08-12 — **plan APPROVED by Ashiq.** Docker Desktop started and verified up (`29.6.1`,
+  linux/WSL2). Approval recorded on the canonical spine against `01KZTG8B82Q6HT4472Q288GCJ1`;
+  decision receipt `01KZTKAF70H19K7PNJVWBXZDT5`, verified present in `events/` and absent from
+  `_quarantine/`. Lane flips IDLE → LIVE and Phase 04 opens.
 
 ## Now
 
-**Current position: CYCLE CLOSED 2026-08-03. All four phases closed on green CI (19/19), merged as
-`b9a9e9f` / PR #103. ~2.0 of 14 days (~14%). Lane is IDLE and pulls a new cycle or nothing.**
+**Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
 
-**Closed late, and that is the first retro input.** PR #103 merged at 06:31; this header still read
-`LIVE` with `next: PR #103 — merge` for the rest of the day, so the company board was telling any
-reader to go merge a PR that was already in. `docs/HISTORY.md` said CLOSED the whole time — the
-lane files disagreed with the company log, which is precisely the drift PR #101 was written about
-and the direction ADR-0051 says must never happen. The merge is the event; the bookkeeping is a
-separate act, and nothing fires it.
+`/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
+ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:
+`kickoff.done` `01KZTG835C356GPN7452603ZZX` · `approval.requested` `01KZTG8B82Q6HT4472Q288GCJ1` ·
+`decision.recorded` `01KZTKAF70H19K7PNJVWBXZDT5`.
 
-**REQ-08 is PARTIAL and the cycle's central claim is UNPROVEN.** No non-Claude driver was
-runnable here — `codex` is not installed and no LLM endpoint or key is configured — so the
-required 3 real runs on a second model family did not happen. Two real runs were done on
-`claude-code` instead: one succeeded, one failed on a fenced-JSON bug that twenty green
-fixture tests had missed. That failure is the single best argument for this phase existing,
-and it does not substitute for the missing proof. Reported as a blocking finding per the
-phase spec's own instruction rather than waived: `evidence/phase-03/real-runs.md`.
+**All spine writes go through the canonical clone at `E:/Work_Hub/01_Automemory/arc`.** This worktree
+has its own gitignored spine and the emitter refuses to write there — a receipt written in a worktree
+is real, valid, and invisible to `arc-inbox`, which would print "no open approvals" while one sat in
+it.
 
-**Nothing was promoted.** Every gate is fixture-proven; none has the ≥3 clean dogfood runs
-`docs/trial-ledger.md` requires, so no ledger rows were written either —
-`evidence/phase-03/promotion-review.md`.
+**Phase 04 is running.** Slice 01 proven (the mandate is on the spine, two events, verified out of
+`_quarantine/`). Slice 02 (ADR-0212 to `main`) is PR #165, CI green 19/19 at `f4da3cc`, re-running
+after a merge from `main` that resolved a real `PORTFOLIO.md` collision with two lanes that landed
+mid-flight.
 
-**Retro inputs carried:** RI-1 the missing non-Claude runs · RI-2 wiring `process-lint` and
-`arc-compile --check` into CI as named steps (today only a bats file checks the three
-generated commands) · RI-3 the spine's `cost` block cannot express tokens-without-money, so
-ADR-0069 metric 1 stays uncomputable.
+**Slice 06 is BLOCKED and the reason is named.** A change was routed via `/arc-change` as a bug —
+`capability-vet.sh` advertises OCI digest support and the path is unreachable — then **written,
+attacked, and reverted** (`a1148f7` → `8f4c3d2`). The two-surface adversarial pass earned its cost
+immediately: the fix had **regressed a pinned hole** (`record.name` is the package name in
+npm/PyPI/git, so a packument publishing only `0.0.1` admitted a pin of `1.2.3`), its central
+justification was **factually wrong** (SRI is base64-44, OCI is hex-64 — a faithful re-notation
+never normalises to a match), it wrote an **unverified tag coordinate** into the production lock,
+and **four mutants of the added lines survived all 55 tests**. Reverted rather than patched, because
+the OCI path also has **no name binding** — a Docker Hub tag body carries no repository identity, so
+one recorded response certifies any allowlisted name, and closing that needs a design call.
 
-**A-01 is CLOSED AS ESCALATED, not as resolved.** The criterion read "resolved or escalated".
-It was escalated four times — at the kickoff STOP and three times since — and the owner directed
-the work forward each time without naming the trigger. That is the escalation path completing, not
-a criterion being waived: the trigger is recorded as **unstated and never inferred** (ADR-0069
-block (b)(5) — absent data is never estimated), and it stays that way in the record rather than
-being back-filled with a plausible guess. If a block-(d) amendment is ever needed, this line is
-where that starts.
+The same pass found **four criticals that predate this cycle and survive the revert**, including a
+**content-scan bypass by filename** verified on the real script: a candidate placing hostile code in
+`src/registry.json` gets `PASS — read-only`, exit 0. All filed as **issue #167**.
 
-**REQ status at close: REQ-01 through REQ-07 `validated`, REQ-08 stays `active` and is carried.**
-The seven are marked from the phase closes that proved them, not re-verified at bookkeeping time —
-each was an exit criterion of a phase that closed on evidence. REQ-08 is not marked partial and
-filed away, because its own text says the ≥3-real-runs clause **is never cut**: a REQ whose central
-clause is unmet is open, and the honest record of this cycle is that it shipped the machinery and
-did not prove the claim. Whoever pulls the next engine cycle inherits that, not a green row.
+**The runtime is therefore pinned and verified out-of-band, and NOT gate-admitted.** The allowlist
+entry and lock row were reverted with the change. Nothing is admitted that the gate cannot stand
+behind.
 
-**Next step: `/arc-kickoff --lane engine` when a new cycle pulls it.** The obvious candidate is
-REQ-08's missing proof, which needs an owner-provided LLM endpoint + key or the `codex` CLI before
-it is worth opening — the constraint is access, not appetite.
+**The capped-key ceiling figure is NOT needed yet.** Phases 04, 05 and 06 all run at zero spend
+against the local ollama endpoint; the credential is first required by certification fixtures 4 and
+10. That owner decision can wait without blocking anything.
 
-<details><summary>Pre-approval position (kept as the record)</summary>
+**Of the three owner acts that gated Phase 04, two are done and the third is deferred.** The Docker
+daemon is up (`29.6.1`, linux/WSL2, verified before the approval was recorded). The runtime is
+obtained by Phase 04 itself, as a digest-pinned container image. The capped-key ceiling figure is
+still unnamed and deliberately so — see above; nothing blocks on it until Phase 06.
 
-**The plan existed and was not yet approved. Zero days burned, zero code written.**
-
-`/arc-kickoff` has produced `PLAN.md`, `phases/phase-00-spec.md` through `phase-03-spec.md`, and
-seven ADRs (0200–0206) covering ENG-A…E plus the two forks the design source left open — the shared
-body with no per-target passthrough (0205) and the `agent.invoke` taxonomy extension (0206). An
-`approval.requested` receipt is on the spine; its ULID is the approval id.
-
-**Next step: the owner approves or amends the plan.** On approval, Phase 00 opens with
-`/arc-develop start 0 --lane engine` — the steel thread is one canonical process file that
-`process-lint` reads and rules on, entirely offline.
-
-**Open before Phase 01 closes (assumption A-01):** which ADR-0069 block-(d) trigger fired is
-recorded as **unstated**, not inferred. The one mechanically checkable trigger — a lane `PLAN.md`
-naming public release or external users — does not fire against any of the four lanes. If the
-answer is "a second runtime is genuinely needed", that trigger is absent from block (d)'s list and
-needs its amending ADR first.
-
-</details>
+**Why Phase 04 looks different from the design source's Phase 0.** The source's Phase 0 was law only
+— ADRs, the amendment, the runtime pick on paper. This lane's previous cycle closed with its central
+claim unproven for exactly one reason: nothing runnable was installed and no credential existed, and
+that was discovered at Phase 03 rather than Phase 00. So REQ-00 makes one live headless invocation a
+Phase-04 exit criterion. If the runtime cannot run on this machine, EXE-A's STOP fires at 1 day
+burned instead of 5.

@@ -42,6 +42,36 @@ returned **0 on a run whose conclusion was `failure`** — the same shape as an 
 while every receipt it wrote was quarantined. Use `gh run view <id> --json jobs` and assert on the
 conclusions themselves.
 
+**And first confirm a run EXISTS for your SHA.** A push does not always create one: on 2026-08-12
+a commit pushed to an open **draft** PR became the PR head with **no run ever created for it**,
+while every earlier push on the same branch had fired one. Nothing appears in any log; the only
+signal is that `gh run list --branch` still shows the *previous* SHA on top. Waiting on a run that
+was never created is indistinguishable from waiting on a slow one, and costs more than a red does.
+
+```bash
+gh run list --branch "$(git branch --show-current)" --limit 1 --json databaseId,headSha
+# headSha is not your HEAD -> create one; do not wait for one that will never come:
+gh workflow run arc-ci --ref "$(git branch --show-current)"
+```
+
+"Pushed" and "a run exists" are two separate facts, exactly as "merged" and "verified" are.
+
+### Regenerating the sync-golden manifest
+
+`tests/fixtures/sync-golden/tree-manifest.txt` records the **SYNCED tree**, never the repo. Hashing
+repo files instead once clobbered `.env.example`'s row, and only CI could see it. Regenerate by
+running the real sync and the suite's own helper — then check the row COUNT is unchanged and that
+**only** the files you touched moved:
+
+```bash
+bash sync-to-project.sh "$SCRATCH" >/dev/null
+source tests/test_helper.bash && _arc_tree_manifest "$SCRATCH" > tests/fixtures/sync-golden/tree-manifest.txt
+git diff -U0 tests/fixtures/sync-golden/tree-manifest.txt | grep "^+[^+]" | cut -f1
+```
+
+Do it **last**, after every code edit. A manifest regenerated mid-change is stale by the next
+commit, and its staleness is invisible until CI.
+
 ## The vacuous pass — a test that passes while executing nothing
 
 A green test proves the assertion held. It does not prove the code ran. Cycle 6 shipped this

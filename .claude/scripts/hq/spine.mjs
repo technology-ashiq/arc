@@ -28,6 +28,14 @@ import { join } from "node:path";
 
 export const STATE_DB = (root) => join(derivedDir(root), "state.db");
 
+// Re-exported so a CONSUMER can ask "where is the spine?" without importing the implementation
+// layer under lib/. Every reader function here takes a spine root -- which is `.claude/state/hq`,
+// NOT the repo root -- and a consumer that guesses wrong gets a confident empty answer rather
+// than an error. memory-index made exactly that mistake in Cycle 11 and reported `decisions 0/0`
+// on a spine it had never looked at. ADR-0030: the reader is the only public API, so the reader
+// is where the answer to that question belongs.
+export { spineRoot } from "./lib/spine-io.mjs";
+
 /** Which engine to use. `auto` prefers sqlite when it is genuinely available. */
 export function chooseEngine(root, requested) {
   const want = requested || process.env.ARC_SPINE_ENGINE || "auto";
