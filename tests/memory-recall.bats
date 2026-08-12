@@ -545,6 +545,69 @@ _built_with_decision() {
   [[ "$output" == *"could only contradict it"* ]]
   run node "$RECALL" --root "$tree" --full retro:1 --decisions 'verdict:reject'; [ "$status" -eq 2 ]
   [[ "$output" == *"--full takes one id and nothing else"* ]]
+  # Structurally identical to --source, and it was neither refused nor noted: the decisions adapter
+  # emits no `lane` field, so --lane with --decisions can NEVER match. It printed "showing 0 of 0"
+  # and blamed the --decisions expression for a zero the lane flag caused.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject' --lane memory; [ "$status" -eq 2 ]
+  [[ "$output" == *"a recorded decision carries no lane"* ]]
+  # --tag is deliberately NOT in that refusal list: decisions records really do carry tags
+  # (`decision` plus the verdict), so it is a genuine narrowing and refusing it would be wrong.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject' --tag decision; [ "$status" -eq 0 ]
+  [[ "$output" == *"matching decision(s)"* ]]
+}
+
+@test "arc-recall: verdict is a CLOSED set, so a value that can never match is refused not answered" {
+  # `verdict:Reject` and `verdict:aprove` printed "no recorded decision matched that filter. That is
+  # a result, not an error." at exit 0 -- byte-identical to a real miss, which is the exact outcome
+  # the --decisions header says this grammar exists to prevent. The closed-set rule had been applied
+  # to the field NAME and never to the one field whose VALUES are closed too, while --source and
+  # --engine both enumerate their set on refusal.
+  #
+  # The SEEDED fixture, not the bare one: the positive halves below have to match a real decision,
+  # or "still a legal query" would be proven by a zero that means nothing.
+  tree="$(_built_with_decision)"
+  [ -n "$tree" ] || { echo "the seeded-decision fixture was not built"; false; }
+  run node "$RECALL" --root "$tree" --decisions 'verdict:Reject'; [ "$status" -eq 2 ]
+  [[ "$output" == *"can never match"* ]]
+  [[ "$output" == *"closed set (approve, reject)"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:aprove'; [ "$status" -eq 2 ]
+  [[ "$output" == *"not one of them"* ]]
+  # `~` is a case-insensitive SUBSTRING, so a partial that really can match stays a legal query...
+  run node "$RECALL" --root "$tree" --decisions 'verdict~rej'; [ "$status" -eq 0 ]
+  [[ "$output" == *"showing 1 of 1 matching decision(s)"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict~REJ'; [ "$status" -eq 0 ]
+  [[ "$output" == *"showing 1 of 1 matching decision(s)"* ]]
+  # ...and one that is a substring of NEITHER member is refused, or the guard only covers `:`.
+  run node "$RECALL" --root "$tree" --decisions 'verdict~zzz'; [ "$status" -eq 2 ]
+  [[ "$output" == *"a substring of none of them"* ]]
+  # The exact operator on a REAL member is untouched, or this guard has broken the feature -- and
+  # one-versus-one against the OPPOSITE verdict, so it cannot pass by matching everything.
+  run node "$RECALL" --root "$tree" --decisions 'verdict:reject'; [ "$status" -eq 0 ]
+  [[ "$output" == *"worktree mode B is not certified"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:approve'; [ "$status" -eq 0 ]
+  [[ "$output" == *"Worktree Mode A is certified"* ]]
+}
+
+@test "arc-recall: --engine is refused by the three modes that do not rank" {
+  # P2-1 recurring inside the file where P2-1 was fixed. main()'s refusal list enumerated the
+  # positional query, --grep, --source and --full, and the suite asserting it "refuses every
+  # argument it would otherwise drop in silence" enumerated the same four -- so three of the four
+  # modes accepted --engine and did nothing: --grep reported engine "literal", --decisions "filter",
+  # --full a hardcoded "js". An accepted-but-inert flag is worse than a rejected one.
+  tree="$(_built)"
+  run node "$RECALL" --root "$tree" --grep prevention --engine js; [ "$status" -eq 2 ]
+  [[ "$output" == *"silently done nothing"* ]]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:approve' --engine js; [ "$status" -eq 2 ]
+  [[ "$output" == *"silently done nothing"* ]]
+  run node "$RECALL" --root "$tree" --full retro:1 --engine js; [ "$status" -eq 2 ]
+  [[ "$output" == *"silently done nothing"* ]]
+  # The RANKED query is the one mode the seam applies to, and it still reports which engine ran.
+  run node "$RECALL" --root "$tree" --engine js "prevention"; [ "$status" -eq 0 ]
+  [[ "$output" == *"engine js, requested js"* ]]
+  # ...and every one of those three modes is still perfectly legal WITHOUT the flag, or the refusal
+  # above has quietly broken three surfaces instead of one flag.
+  run node "$RECALL" --root "$tree" --grep prevention; [ "$status" -eq 0 ]
+  run node "$RECALL" --root "$tree" --decisions 'verdict:approve'; [ "$status" -eq 0 ]
 }
 
 @test "arc-recall: REQ-04 adds no event kind and opens no spine of its own" {

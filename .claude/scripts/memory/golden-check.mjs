@@ -12,8 +12,14 @@
 // Phase-00 adversarial pass demonstrated it: one back-filled 2026-08-02 row silently repointed
 // two golden rows at unrelated lessons and nothing complained.
 //
-// Usage: node .claude/scripts/memory/golden-check.mjs [--root <dir>]
-// Exit: 0 every anchor resolves · 1 at least one does not · 2 operator error.
+// Usage: node .claude/scripts/memory/golden-check.mjs [--root <dir>] [--rank] [--gate] [--equivalence]
+// Exit: 0 every anchor resolves · 1 a check FAILED (the message names which) · 2 operator error.
+//
+// Exit 1 is reached only by a stated verdict -- an anchor that does not resolve, a gate condition
+// that is not met, an engine disagreement. An unexpected throw also lands on 1 and says
+// `INTERNAL` in as many words, because a raw Node stack at exit 1 is indistinguishable from a real
+// gate failure to whatever reads this in CI (2026-08-12, shell/OS row 9: a DIRECTORY where
+// `aliases.md` goes produced `EISDIR` and a v24 banner at exit 1).
 
 import { readFileSync, existsSync , realpathSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
@@ -149,47 +155,87 @@ function main() {
   let doRank = false;
   let doGate = false;
   let doEquiv = false;
+  // `refuse` rather than `process.exit`: every branch below writes to stdout or stderr first, and
+  // Node's stdout AND stderr are ASYNCHRONOUS for pipes on macOS -- `bats run` and the CI log
+  // capture are both pipes -- so `process.exit()` can truncate the very evidence the exit code is
+  // reporting. Setting `exitCode` and returning lets Node flush on its own. This file was the last
+  // one under scripts/memory/ still exiting hard after a write (2026-08-12, both ledgers).
+  const refuse = (msg, code = 2) => { console.error(`golden-check: ${msg}`); process.exitCode = code; return null; };
+
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--root") {
-      if (seenRoot) { console.error("golden-check: --root given twice -- that is an operator error, not a last-wins override"); process.exit(2); }
+      if (seenRoot) return refuse("--root given twice -- that is an operator error, not a last-wins override");
       seenRoot = true;
       const v = argv[++i];
-      if (v === undefined) { console.error("golden-check: --root needs a value"); process.exit(2); }
+      if (v === undefined) return refuse("--root needs a value");
       // Presence, not truthiness: `--root "$DIR"` with DIR unset is the quoted form the lane
       // rules mandate, and it must not silently become the current directory.
-      if (v.trim() === "") { console.error("golden-check: --root was named but is empty -- refusing to fall back to a directory nobody named"); process.exit(2); }
+      if (v.trim() === "") return refuse("--root was named but is empty -- refusing to fall back to a directory nobody named");
+      // The flag-shaped value guard the three sibling CLIs already carried and this one did not:
+      // `golden-check --root --gate` ate `--gate` as the root value, so the GATE SILENTLY DID NOT
+      // RUN and the failure was a does-not-exist message that named the wrong problem. It was loud
+      // by luck, never by rule -- `--root --rank` would have been the same shape. `.claude/rules/
+      // lanes.md` names this verbatim: an unquoted empty value eats the next flag.
+      if (v.startsWith("--")) return refuse(`--root was given ${JSON.stringify(v)}, which is a flag, not a value -- an empty variable ate the next argument`);
       root = v;
     } else if (argv[i] === "--rank") { doRank = true; }
     // --gate IMPLIES --rank: a gate that could be asked to grade without ranking would exit 0
     // having graded nothing, which is the vacuous pass in its purest form.
     else if (argv[i] === "--gate") { doRank = true; doGate = true; }
     else if (argv[i] === "--equivalence") { doEquiv = true; }
-    else { console.error(`golden-check: unknown flag ${argv[i]}`); process.exit(2); }
+    else return refuse(`unknown flag ${argv[i]}`);
   }
   root = resolve(root ?? process.cwd());
-  if (!existsSync(root)) { console.error(`golden-check: --root ${root.split(sep).join("/")} does not exist`); process.exit(2); }
+  if (!existsSync(root)) return refuse(`--root ${root.split(sep).join("/")} does not exist`);
 
   const goldenPath = join(root, GOLDEN);
-  if (!existsSync(goldenPath)) { console.error(`golden-check: ${GOLDEN} not found under ${root.split(sep).join("/")}`); process.exit(2); }
+  if (!existsSync(goldenPath)) return refuse(`${GOLDEN} not found under ${root.split(sep).join("/")}`);
   const idxPath = indexPath(root);
-  if (!existsSync(idxPath)) { console.error("golden-check: no index -- run memory-index --rebuild first"); process.exit(2); }
+  if (!existsSync(idxPath)) return refuse("no index -- run memory-index --rebuild first");
 
   let rows, index, goldenText;
   // Read ONCE and reuse: reading the fixture a second time later would let the rows and the
   // @-directives come from two different reads of a file that could change between them.
   try { goldenText = readFileSync(goldenPath, "utf8"); rows = loadGolden(goldenText); }
-  catch (e) { console.error(`golden-check: ${e.message}`); process.exit(2); }
+  catch (e) { return refuse(e.message); }
   try { index = JSON.parse(readFileSync(idxPath, "utf8")); }
-  catch (e) { console.error(`golden-check: index is unreadable: ${e.message}`); process.exit(2); }
+  catch (e) { return refuse(`index is unreadable: ${e.message}`); }
+
+  // Aliases are read HERE, ahead of both surfaces, because the equivalence harness needs the same
+  // query tokens the product actually ranks -- see the expansion note in the doEquiv block below.
+  let aliasRows = [];
+  let aliasExclusions = [];
+  const aliasPath = join(root, ALIAS_FILE);
+  if (existsSync(aliasPath)) {
+    // Guarded, because "the path exists" is not "the path is a readable file": a DIRECTORY named
+    // aliases.md produced a raw EISDIR stack at exit 1, the same code a real anchor failure uses.
+    let aliasText;
+    try { aliasText = readFileSync(aliasPath, "utf8"); }
+    catch (e) { return refuse(`${ALIAS_FILE} exists under ${root.split(sep).join("/")} but could not be read: ${e.message}`); }
+    const parsed = parseAliases(aliasText);
+    aliasRows = parsed.rows;
+    aliasExclusions = parsed.exclusions ?? [];
+  }
 
   // The equivalence harness (REQ-07, ADR-0701). Its own surface, ahead of the anchor check,
   // because it grades ENGINES rather than the golden set's expectations: it asks whether two
   // implementations rank identically, which is a question the expected ids play no part in.
   if (doEquiv) {
     const records = index.records ?? [];
-    const queries = rows.map((r) => ({ id: r.id, tokens: sanitizeQuery(r.query).tokens }));
+    // ALIAS-EXPANDED, exactly as `rank()` and the CLI expand them. This graded the raw sanitized
+    // tokens while both real ranking paths grade the expanded ones, so two engines would have been
+    // certified as agreeing on a query path the product never runs -- `["worktree","mode","b"]`
+    // against `["worktree","mode","b","parallel"]`. Latent only because aliases.md ships empty,
+    // which is precisely the condition that would have changed the day it stopped being empty
+    // (2026-08-12, decision-logic ledger, "one gap worth naming").
+    const queries = rows.map((r) => ({ id: r.id, tokens: expand(sanitizeQuery(r.query).tokens, aliasRows).tokens }));
     const v = checkEquivalence({ index, records, queries });
     console.log(`equivalence: tie-break is ${v.tieBreak} -- two engines agree only on the same ORDERED ids, never merely the same set`);
+    // ASSERTED, and the assertion's own result printed beside the claim. Printing the contract
+    // without checking it is what let an inverted comparator pass this gate on 2026-08-12.
+    for (const t of v.tieBreakChecked) {
+      console.log(`equivalence: tie-break probe on ${t.engine}: ${t.ok ? "HELD" : "BROKEN"} -- returned [${t.ids.join(", ")}], contract says [${t.expected.join(", ")}]${t.error ? ` (${t.error})` : ""}`);
+    }
     console.log(`equivalence: engine(s) available: ${v.engines.join(", ") || "(none)"}${v.unavailable.length ? `; unavailable: ${v.unavailable.join(", ")}` : ""}`);
     if (!v.compared) {
       // Said in as many words. A green that cannot tell "they agree" from "there was nothing to
@@ -198,13 +244,15 @@ function main() {
       console.log(`equivalence: only ${v.engines.length} engine is registered, so NOTHING WAS COMPARED. This run proves DETERMINISM (the engine returns identical ordered ids on a second call) across all ${v.queries} golden queries -- it does not and cannot show that two engines agree.`);
     }
     if (v.mismatches.length) {
+      const label = { nondeterministic: "NONDETERMINISTIC", "tie-break": "TIE-BREAK BROKEN" };
       for (const m of v.mismatches) {
-        console.error(`equivalence: ${m.kind === "nondeterministic" ? "NONDETERMINISTIC" : "DISAGREEMENT"} on ${m.query} -- ${m.a} returned [${m.aIds.join(", ")}], ${m.b} returned [${m.bIds.join(", ")}]`);
+        console.error(`equivalence: ${label[m.kind] ?? "DISAGREEMENT"} on ${m.query} -- ${m.a} returned [${m.aIds.join(", ")}], ${m.b} returned [${m.bIds.join(", ")}]`);
       }
-      console.error(`equivalence: FAILED -- ${v.mismatches.length} of ${v.queries} golden queries did not hold`);
-      process.exit(1);
+      console.error(`equivalence: FAILED -- ${v.mismatches.length} check(s) did not hold across ${v.queries} golden queries plus the tie-break probe`);
+      process.exitCode = 1;
+      return;
     }
-    console.log(`equivalence: PASSED -- ${v.queries}/${v.queries} golden queries held${v.compared ? ` across ${v.engines.length} engines` : ", as determinism only"}.`);
+    console.log(`equivalence: PASSED -- ${v.queries}/${v.queries} golden queries held${v.compared ? ` across ${v.engines.length} engines` : ", as determinism only"}, and the tie-break probe HELD on ${v.tieBreakChecked.length} engine(s).`);
     if (!doRank) return;
   }
 
@@ -212,14 +260,21 @@ function main() {
   if (failures.length) {
     for (const f of failures) console.error(`golden-check: FAIL ${f}`);
     console.error(`golden-check: ${rows.length - failures.length}/${rows.length} anchors resolve`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(`golden-check: ${rows.length}/${rows.length} anchors resolve`);
   if (!doRank) return;
 
-  let aliasRows = [];
-  const aliasPath = join(root, ALIAS_FILE);
-  if (existsSync(aliasPath)) aliasRows = parseAliases(readFileSync(aliasPath, "utf8")).rows;
+  // NAMED, never dropped. `parseAliases` returns exclusions and this caller took `.rows` and let
+  // them fall on the floor -- the identical Phase-01 defect, fixed in `arc-recall` and never made
+  // in the second caller, which is the one that FEEDS A GATE. ADR-0706's second trigger condition
+  // is counted off this list, so a refused row silently lowers a number the gate then reports as
+  // measured. Twin-fix, third recurrence in this lane (2026-08-12, decision-logic row 8).
+  if (aliasExclusions.length) {
+    console.log(`  ${ALIAS_FILE}: ${aliasExclusions.length} row(s) could NOT be read and are excluded from the alias count below:`);
+    for (const x of aliasExclusions) console.log(`    line ${x.line}: ${x.reason}`);
+  }
 
   const scored = rank(rows, index, aliasRows);
   const hits = scored.filter((r) => r.hit).length;
@@ -236,7 +291,7 @@ function main() {
 
   let header;
   try { header = parseGoldenHeader(goldenText); }
-  catch (e) { console.error(`golden-check: ${e.message}`); process.exit(2); }
+  catch (e) { return refuse(e.message); }
 
   const baseline = header["baseline-grep-top3"];
   const corpusBaseline = header["baseline-corpus-records"];
@@ -248,7 +303,8 @@ function main() {
   // denominator moves. Both were reproduced on 2026-08-12.
   if (scored.length !== header["expected-rows"]) {
     console.error(`golden-check: GATE FAILED -- the golden set holds ${scored.length} row(s) but declares @expected-rows ${header["expected-rows"]}. The set IS the contract: a query is added or removed by changing that number in the same commit, never by letting the gate grade whichever rows survive.`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   // THE COMPARISON TABLE (ADR-0706). Both numbers are labelled and the delta is derived, never
@@ -281,7 +337,8 @@ function main() {
   if (hits <= baseline) red.push(`the module scored ${hits}/${scored.length} against a grep baseline of ${baseline}/${scored.length} -- it did not BEAT grep, so its own premise is thin (ADR-0706 keeps that outcome reachable on purpose)`);
   if (red.length) {
     for (const r of red) console.error(`golden-check: GATE FAILED -- ${r}`);
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
   console.log(`golden-check: GATE PASSED -- ${hits}/${scored.length}, beating the grep baseline of ${baseline} by ${hits - baseline}.`);
 }
@@ -296,4 +353,11 @@ function invokedDirectly() {
   try { return realpathSync(argv1) === realpathSync(self); } catch { return resolve(argv1) === resolve(self); }
 }
 
-if (invokedDirectly()) main();
+if (invokedDirectly()) {
+  // The wrapper the three sibling CLIs all carried and this one did not. `parseAliases`,
+  // `checkAnchors` and `rank` sat outside every try, so an unusable input reached the operator as
+  // a v24 banner and an `errno: -4068` at exit 1 -- the same code a genuine gate failure uses. The
+  // word INTERNAL is what makes the two distinguishable to whatever reads this in CI.
+  try { main(); }
+  catch (e) { console.error(`golden-check: INTERNAL -- ${e.stack || e.message}`); process.exitCode = 1; }
+}

@@ -316,6 +316,160 @@ _set_baseline() {
   [[ "$output" == *"engine js, requested js"* ]]
 }
 
+@test "equivalence: NEGATIVE CONTROL -- the tie-break is ASSERTED, and an engine that inverts it is caught" {
+  # For one commit `TIE_BREAK` was a string the harness PRINTED and nothing compared against.
+  # Inverting bm25's comparator to id-DESCENDING left `--equivalence` AND `--gate` green at exit 0,
+  # because with one engine determinism holds under any total order and the only assertion in this
+  # file was that the sentence appeared. A contract nothing tests is a comment.
+  run node -e "
+    const u=process.argv[1];
+    import(u).then(async (m) => {
+      const canonical = m.ENGINES[0];
+      // Same ids, wrong ORDER: the probe corpus is all-ties by construction, so order is the
+      // only thing this engine gets wrong -- exactly the mutant that used to pass.
+      const inverted = { name: 'inverted', available: () => true,
+        run: (i, r, t, o) => canonical.run(i, r, t, o).slice().reverse() };
+      const clean = m.checkTieBreak([canonical]);
+      const broken = m.checkTieBreak([inverted]);
+      if (clean.length !== 1 || !clean[0].ok) throw new Error('the canonical engine FAILED its own tie-break probe: ' + JSON.stringify(clean));
+      if (broken.length !== 1 || broken[0].ok) throw new Error('an inverted tie-break was NOT caught');
+      // ...and it reaches the verdict object the CLI branches on, not just the helper.
+      const idx = { postings: { terms: {}, lengths: [], avgdl: 0 } };
+      const v = m.checkEquivalence({ index: idx, records: [], queries: [], registry: [inverted] });
+      const ok = m.checkEquivalence({ index: idx, records: [], queries: [], registry: [canonical] });
+      if (v.tieBreakHeld !== false) throw new Error('tieBreakHeld should be false');
+      if (!v.mismatches.some((x) => x.kind === 'tie-break')) throw new Error('no tie-break mismatch was reported: ' + JSON.stringify(v.mismatches));
+      if (ok.tieBreakHeld !== true || ok.mismatches.length !== 0) throw new Error('the clean engine was falsely flagged: ' + JSON.stringify(ok.mismatches));
+      // The probe really is all-ties: three ids returned, and sorted order is NOT build order.
+      const p = m.tieBreakProbe();
+      if (p.expected.length !== 3) throw new Error('the probe corpus is not 3 records');
+      if (JSON.stringify(p.expected) === JSON.stringify(m.TIE_BREAK_PROBE_IDS)) throw new Error('the probe cannot tell id-order from build-order: they are the same list');
+      console.log('TIEBREAK OK caught=1 falsePositives=0');
+    }).catch((e) => { console.error(e.message); process.exit(1); });" \
+    "$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/memory/lib/engines.mjs")).href)')"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"TIEBREAK OK caught=1 falsePositives=0"* ]]
+  # ...and the CLI prints the assertion's RESULT beside the claim, not the claim alone.
+  t="$(_gate_tree)"
+  [ -n "$t" ] || { echo "the gate tree was not built"; false; }
+  run node "$GOLDEN" --root "$t" --equivalence
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"tie-break probe on js: HELD"* ]]
+  [[ "$output" == *"the tie-break probe HELD on 1 engine(s)"* ]]
+}
+
+@test "equivalence: auto resolves to the CANONICAL engine, never to whatever was registered last" {
+  # `auto` returned `avail[avail.length - 1]` under the words "prefers the fastest available",
+  # which encoded SPEED AS REGISTRATION ORDER: appending an engine would have made it the default
+  # for every auto caller before any measurement said it was faster. ADR-0701's whole point is that
+  # the accelerator earns its place on a number.
+  run node -e "
+    const u=process.argv[1];
+    import(u).then(async (m) => {
+      const js = m.ENGINES[0];
+      const slow = { name: 'slow', available: () => true, run: js.run };
+      const measured = { name: 'measured', available: () => true, fasterThanCanonical: true, run: js.run };
+      const a = m.resolveEngine('auto', [js, slow]);
+      const b = m.resolveEngine('auto', [slow, js]);
+      if (a.name !== 'js' || b.name !== 'js') throw new Error('auto followed registration order: ' + a.name + '/' + b.name);
+      // A MEASURED claim, and only a measured one, may take the default.
+      const c = m.resolveEngine('auto', [js, measured]);
+      if (c.name !== 'measured') throw new Error('a declared fasterThanCanonical engine was ignored');
+      // An unavailable engine is never chosen, and auto still cannot resolve to nothing.
+      const gone = { name: 'gone', available: () => { throw new Error('no module'); }, run: js.run };
+      const d = m.resolveEngine('auto', [js, gone]);
+      if (d.name !== 'js') throw new Error('auto chose an unavailable engine: ' + d.name);
+      console.log('AUTO OK canonical-first');
+    }).catch((e) => { console.error(e.message); process.exit(1); });" \
+    "$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/memory/lib/engines.mjs")).href)')"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"AUTO OK canonical-first"* ]]
+}
+
+@test "golden gate: a flag-shaped --root is refused, so --gate cannot be eaten as its value" {
+  # `golden-check --root --gate` consumed `--gate` as the root value, so THE GATE SILENTLY DID NOT
+  # RUN and the failure named the wrong problem. It was loud by luck, never by rule. The three
+  # sibling CLIs all carried this guard and this one did not -- twin-fix, again.
+  run node "$GOLDEN" --root --gate
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status"; echo "$output"; false; }
+  [[ "$output" == *"which is a flag, not a value"* ]]
+  [[ "$output" == *"ate the next argument"* ]]
+  # ...and the same shape with a flag that is not --gate, so the fix is the RULE and not one case.
+  run node "$GOLDEN" --root --rank
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"which is a flag, not a value"* ]]
+}
+
+@test "golden gate: an unusable alias file is operator error, not a raw node stack at the gate's own exit code" {
+  # A DIRECTORY where docs/memory/aliases.md goes produced `errno: -4068, code: EISDIR` and a v24
+  # banner at exit 1 -- and exit 1 is the code a REAL gate failure uses, so CI could not tell a
+  # crash from a verdict. `parseAliases`, `checkAnchors` and `rank` all sat outside every try.
+  t="$(_gate_tree)"
+  [ -n "$t" ] || { echo "the gate tree was not built"; false; }
+  rm -f "$t/docs/memory/aliases.md"
+  mkdir -p "$t/docs/memory/aliases.md"
+  [ -d "$t/docs/memory/aliases.md" ] || { echo "the EISDIR fixture was not built"; false; }
+  run node "$GOLDEN" --root "$t" --gate
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status"; echo "$output"; false; }
+  [[ "$output" == *"could not be read"* ]]
+  # The Node banner and the errno must NOT be what the operator is shown...
+  [[ "$output" != *"errno"* ]]
+  # ...paired with a positive, because a crash would satisfy a bare does-not-contain.
+  [[ "$output" == *"aliases.md"* ]]
+}
+
+@test "golden gate: an alias row it could not read is NAMED, never dropped into the count" {
+  # ADR-0706's second embeddings trigger is counted off `parseAliases().rows`, and this caller took
+  # `.rows` and let `.exclusions` fall on the floor -- the identical Phase-01 defect, fixed in
+  # arc-recall and never made in the caller that FEEDS A GATE. A refused row silently lowers a
+  # number the gate then reports as measured.
+  t="$(_gate_tree)"
+  [ -n "$t" ] || { echo "the gate tree was not built"; false; }
+  printf '\n| four | cells | here | extra |\n' >> "$t/docs/memory/aliases.md"
+  grep -q "extra" "$t/docs/memory/aliases.md" || { echo "the broken alias row was not planted"; false; }
+  run node "$GOLDEN" --root "$t" --gate
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"could NOT be read and are excluded from the alias count"* ]]
+  [[ "$output" == *"alias row has 4 columns"* ]]
+}
+
+@test "reader-lint: a filename with a space is SCANNED, and a file it cannot read is not called clean" {
+  # `for f in $FILES` word-split on whitespace, so a planted bypass inside `bad file.mjs` reached
+  # awk as two nonexistent paths and the lint exited 0 -- the pipeline's status was never read,
+  # because an empty report was taken to mean clean. `.claude/rules/lanes.md` names the unquoted
+  # shape verbatim; here it was the loop rather than a flag.
+  local r="$BATS_TEST_TMPDIR/space"
+  mkdir -p "$r/.claude/scripts/memory" "$r/.claude/scripts/review"
+  cp "$ARC_ROOT/.claude/scripts/review/spine-reader-lint.sh" "$r/.claude/scripts/review/"
+  printf 'export const Q = "events/a.jsonl";\n' > "$r/.claude/scripts/memory/bad file.mjs"
+  [ -f "$r/.claude/scripts/memory/bad file.mjs" ] || { echo "the spaced-filename fixture was not built"; false; }
+  git -C "$r" init -q .
+  git -C "$r" config user.email "fixture@arc.test"
+  git -C "$r" config user.name "arc fixture"
+  git -C "$r" add -A
+  git -C "$r" commit -qm fixture
+  [ -n "$(git -C "$r" ls-files)" ] || { echo "nothing was tracked, so the lint would exit 0 on an empty glob"; false; }
+  run bash -c "cd '$r' && bash .claude/scripts/review/spine-reader-lint.sh"
+  [ "$status" -eq 1 ] || { echo "the planted bypass was not caught, status $status"; echo "$output"; false; }
+  [[ "$output" == *"bad file.mjs"* ]]
+
+  # COULD NOT SCAN is a different answer from SCANNED CLEAN, and both used to be exit 0.
+  local g="$BATS_TEST_TMPDIR/gone"
+  mkdir -p "$g/.claude/scripts/memory" "$g/.claude/scripts/review"
+  cp "$ARC_ROOT/.claude/scripts/review/spine-reader-lint.sh" "$g/.claude/scripts/review/"
+  printf 'export const OK = 1;\n' > "$g/.claude/scripts/memory/gone.mjs"
+  git -C "$g" init -q .
+  git -C "$g" config user.email "fixture@arc.test"
+  git -C "$g" config user.name "arc fixture"
+  git -C "$g" add -A
+  git -C "$g" commit -qm fixture
+  mv "$g/.claude/scripts/memory/gone.mjs" "$g/.claude/scripts/memory/gone.moved"
+  [ ! -f "$g/.claude/scripts/memory/gone.mjs" ] || { echo "the unreadable fixture was not built"; false; }
+  run bash -c "cd '$g' && bash .claude/scripts/review/spine-reader-lint.sh"
+  [ "$status" -eq 1 ] || { echo "an unscannable file was reported clean, status $status"; echo "$output"; false; }
+  [[ "$output" == *"could not be scanned at all"* ]]
+}
+
 @test "golden gate: bats registers every test this file declares" {
   # MEASURED, not asserted: bats silently DROPS a @test whose name carries a non-ASCII character.
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"

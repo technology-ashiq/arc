@@ -9,15 +9,24 @@
 // WHAT THE TRANSFORM DESTROYS, stated rather than hidden. Path tokens are structural, not prose:
 // every `.mjs` diff would otherwise carry `mjs` as a query term and every diff would rank the
 // same handful of rules about JavaScript. So a declared list of path-structure tokens is dropped,
-// the list is PRINTED, and the dropped count is printed with it. A normalisation whose removed
-// signal is invisible is how `font-family: Arial !important` judged a whole cycle of designs with
-// their typography deleted.
+// THE TOKENS THAT WERE ACTUALLY DROPPED ARE PRINTED WITH THE REASON EACH ONE WENT, and the count
+// is printed with them. A normalisation whose removed signal is invisible is how `font-family:
+// Arial !important` judged a whole cycle of designs with their typography deleted.
 //
-// Exit codes: 0 ran (ZERO RESULTS IS A RESULT) · 1 internal · 2 bad usage · 3 index unavailable
-// (the CALLER treats 3 as a WARN, per ADR-0704).
+// That printing was itself the defect for one commit: `dropped` was computed, returned, and never
+// printed anywhere, while the operator was shown a STATIC 8-of-21 preview of `PATH_NOISE` labelled
+// "extensions and the like". On `docs/adr/0705-mem-f-....md` the three real casualties were `0705`,
+// `f` and `md` -- the ADR NUMBER, the primary identifier of 151 of 258 records, reported to the
+// operator as an extension (2026-08-12, decision-logic row 12).
+//
+// Exit codes: 0 ran (ZERO RESULTS IS A RESULT) · 1 internal · 2 bad usage · 3 the hook could not
+// run through no fault of the operator -- no index, an unreadable index, or a base git cannot
+// resolve. The CALLER treats 3 as a WARN and never a block (ADR-0704), so anything environmental
+// belongs on 3: a shallow CI checkout or a repo whose default branch is `master` is not an
+// operator error, and reporting it as one hands the review agent a problem it is told to fix.
 
 import { readFileSync, existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { realpathSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -56,10 +65,13 @@ export function deriveQuery(paths, opts = {}) {
     if (!p) continue;
     let contributed = 0;
     for (const t of tokenize(p)) {
-      // A single character carries no meaning as a query term, and a pure number is a version or
-      // an index. Both are dropped SILENTLY-BUT-COUNTED, like everything else here.
-      if (t.length < 2 || /^\d+$/.test(t)) { dropped.push(t); continue; }
-      if (noise.has(t)) { dropped.push(t); continue; }
+      // A single character carries no meaning as a query term, and a pure number is usually a
+      // version or an index. Each drop carries WHY, because the three reasons are not the same
+      // claim and only one of them is "an extension": `0705` goes as a pure number and the
+      // operator has to be able to see that it went, and on what grounds.
+      if (t.length < 2) { dropped.push({ token: t, why: "single character" }); continue; }
+      if (/^\d+$/.test(t)) { dropped.push({ token: t, why: "pure number" }); continue; }
+      if (noise.has(t)) { dropped.push({ token: t, why: "declared path noise" }); continue; }
       if (seen.has(t)) continue;
       seen.add(t);
       tokens.push(t);
@@ -77,15 +89,24 @@ export function deriveQuery(paths, opts = {}) {
   return { tokens: tokens.slice(0, limit), dropped, truncated, pathsWithNothing, paths: (paths ?? []).length };
 }
 
-function changedPaths(base) {
+/**
+ * The changed paths, read from git IN THE TREE THE INDEX CAME FROM.
+ *
+ * `cwd` is mandatory and load-bearing. Without it `execFileSync` inherits `process.cwd()` while the
+ * index comes from `--root`, so the diff and the corpus could be two different repositories: a run
+ * pointed at an empty tmp dir printed THIS repo's derived query at exit 0, with nothing said
+ * (2026-08-12, shell/OS row 7).
+ */
+function changedPaths(base, cwd) {
+  const opts = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd };
   // `<base>...HEAD` is the three-dot form the review command already uses: the diff against the
   // MERGE BASE, not against the tip of base, so another lane's merges do not appear as this
   // branch's changes.
-  const out = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  const out = execFileSync("git", ["diff", "--name-only", `${base}...HEAD`], opts);
   const paths = out.split("\n").map((s) => s.trim()).filter(Boolean);
   if (paths.length) return paths;
   // A clean branch reviews its STAGED diff, matching /arc-review's own fallback.
-  return execFileSync("git", ["diff", "--name-only", "--cached"], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
+  return execFileSync("git", ["diff", "--name-only", "--cached"], opts)
     .split("\n").map((s) => s.trim()).filter(Boolean);
 }
 
@@ -107,7 +128,14 @@ export function parseArgs(argv) {
       switch (a) {
         case "--base": o.base = v; break;
         // Newline-separated too, so `--paths "$(git diff --name-only)"` is not silently one path.
-        case "--paths": o.paths = v.split(/[,\n]/).map((s) => s.trim()).filter(Boolean); break;
+        case "--paths":
+          o.paths = v.split(/[,\n]/).map((s) => s.trim()).filter(Boolean);
+          // A value that is not empty but FILTERS to nothing -- `",,,"`, a line of blanks -- named
+          // no path at all. The `v.trim() === ""` guard above does not cover it, so the operator
+          // was handed "0 changed path(s) ... that is a result, not an error" where a refusal
+          // belongs: exactly the `--grep ""` shape this file refuses two lines up.
+          if (o.paths.length === 0) throw new UsageError(`--paths ${JSON.stringify(v)} names no path at all after splitting on commas and newlines -- refusing to report a zero that is really a typo`);
+          break;
         case "--root": o.root = v; break;
         case "--limit":
           if (!/^\d+$/.test(v)) throw new UsageError(`--limit ${JSON.stringify(v)} is not a non-negative integer`);
@@ -118,33 +146,69 @@ export function parseArgs(argv) {
       }
       continue;
     }
-    if (BOOL_FLAGS.has(a)) { if (a === "--print-query") o.printQuery = true; else o.json = true; continue; }
+    if (BOOL_FLAGS.has(a)) {
+      if (a === "--print-query") { if (seen.has(a)) throw new UsageError("--print-query given twice -- that is an operator error, not a last-wins override"); o.printQuery = true; }
+      else { if (seen.has(a)) throw new UsageError("--json given twice -- that is an operator error, not a last-wins override"); o.json = true; }
+      seen.add(a);
+      continue;
+    }
     throw new UsageError(`unknown argument ${JSON.stringify(a)} -- this hook takes flags only`);
   }
   // Both would be a silent choice between two sources of truth about what changed.
   if (o.paths && seen.has("--base")) throw new UsageError("--base and --paths are two different ways to say what changed; give one");
+  // `--print-query` returns before both the --json branch and the search, so --json and --limit
+  // were ACCEPTED AND INERT: `--print-query --json` printed bare text on stdout at exit 0, which
+  // this lane's own parseArgs comment calls "what the --json contract forbids outright". Refusing
+  // is the only honest option -- honouring them would change what --print-query means. Same rule,
+  // same reason as arc-recall's refusal list (2026-08-12, decision-logic row 10).
+  if (o.printQuery && seen.has("--json")) throw new UsageError("--print-query prints the derived query as plain text and returns before any search; --json would have been accepted and silently done nothing");
+  if (o.printQuery && seen.has("--limit")) throw new UsageError("--print-query prints the derived query and never ranks, so --limit would have been accepted and silently done nothing");
   return o;
 }
 
 function main() {
   let o;
   try { o = parseArgs(process.argv.slice(2)); }
-  catch (e) { console.error(`diff-recall: ${e.message}`); process.exit(2); }
+  catch (e) { console.error(`diff-recall: ${e.message}`); process.exitCode = 2; return; }
 
   const root = resolve(o.root ?? process.cwd());
+  // The three sibling CLIs all refuse a nonexistent --root at exit 2 and this one never checked at
+  // all, so an operator typo was laundered into exit 3 -- THE ONE CODE /arc-review IS INSTRUCTED TO
+  // IGNORE -- and the review proceeded believing recall had found nothing. A typo must not be able
+  // to buy silence (2026-08-12, shell/OS row 6). Path normalised like the siblings, so Windows does
+  // not print a lone `C:\...` in a message every other surface prints with forward slashes.
+  if (!existsSync(root)) { console.error(`diff-recall: --root ${root.split(sep).join("/")} does not exist`); process.exitCode = 2; return; }
+
   let paths = o.paths;
   if (!paths) {
-    try { paths = changedPaths(o.base); }
-    catch (e) { console.error(`diff-recall: could not read the diff against ${JSON.stringify(o.base)}: ${String(e.message).split("\n")[0]}`); process.exit(2); }
+    // Exit 3, not 2. Whether `main` resolves is a property of the CHECKOUT -- shallow CI clone,
+    // a `master`-default repo, a fresh clone with no local main -- not of what the operator typed,
+    // and ADR-0704 says this step must never be able to stop a review.
+    try { paths = changedPaths(o.base, root); }
+    catch (e) {
+      console.error(`diff-recall: could not read the diff against ${JSON.stringify(o.base)} in ${root.split(sep).join("/")}: ${String(e.message).split("\n")[0]} -- treating it as an unavailable diff (ADR-0704: the caller treats this as a WARN, never a block)`);
+      process.exitCode = 3; return;
+    }
   }
 
   const d = deriveQuery(paths);
   if (o.printQuery) { console.log(d.tokens.join(" ")); return; }
 
-  // Every number labelled, and the destroyed signal named.
+  // Every number labelled, and the destroyed signal named -- BY ITS ACTUAL TOKENS, grouped by the
+  // reason each one went. A static preview of the noise list told the operator that an ADR number
+  // was an extension.
+  const byWhy = new Map();
+  for (const x of d.dropped) {
+    const seenTokens = byWhy.get(x.why) ?? [];
+    if (!seenTokens.includes(x.token)) seenTokens.push(x.token);
+    byWhy.set(x.why, seenTokens);
+  }
+  const droppedDetail = d.dropped.length
+    ? [...byWhy].map(([why, tokens]) => `${why}: ${tokens.join(", ")}`).join("; ")
+    : "none";
   const head = [
     `diff-recall: ${d.paths} changed path(s) -> ${d.tokens.length} query term(s)`,
-    `  path-structure tokens dropped: ${d.dropped.length} (extensions and the like: ${PATH_NOISE.slice(0, 8).join(", ")}, ...)`,
+    `  path-structure tokens dropped: ${d.dropped.length} (${droppedDetail})`,
   ];
   if (d.pathsWithNothing) head.push(`  ${d.pathsWithNothing} path(s) contributed NO query term at all after filtering`);
   if (d.truncated) head.push(`  (+${d.truncated} more term(s) not queried -- the token cap is ${MAX_TOKENS})`);
@@ -159,18 +223,21 @@ function main() {
   const p = indexPath(root);
   if (!existsSync(p)) {
     console.error(`diff-recall: no index at ${p} -- run memory-index --rebuild first (ADR-0704: the caller treats this as a WARN, never a block)`);
-    process.exit(3);
+    process.exitCode = 3; return;
   }
   let index;
   try { index = JSON.parse(readFileSync(p, "utf8")); }
-  catch (e) { console.error(`diff-recall: the index is unreadable: ${e.message}`); process.exit(3); }
+  catch (e) { console.error(`diff-recall: the index is unreadable: ${e.message}`); process.exitCode = 3; return; }
 
   const records = index.records ?? [];
   const hits = search(index.postings ?? { terms: {}, lengths: [], avgdl: 0 }, records, d.tokens, { limit: o.limit });
 
   if (o.json) {
     console.log(JSON.stringify({
-      paths: d.paths, tokens: d.tokens, dropped: d.dropped.length, truncated: d.truncated,
+      paths: d.paths, tokens: d.tokens,
+      // The COUNT and the tokens themselves. A count with no list cannot tell an operator that
+      // the identifier they were searching for is the thing that got removed.
+      dropped: d.dropped.length, droppedTokens: d.dropped, truncated: d.truncated,
       pathsWithNothing: d.pathsWithNothing,
       results: hits.map((h) => ({ ...records[h.index], score: h.score })),
     }, null, 2));

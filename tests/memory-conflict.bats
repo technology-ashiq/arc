@@ -41,8 +41,47 @@ EOF
   echo "$BATS_TEST_TMPDIR/tree"
 }
 
+# Its own tree, so the counts the tests above assert against are untouched. Every tag in `_log`
+# and in every --tags argument is already lowercase, so `normalizeTags` was asserted by NOTHING:
+# replacing its body with `String(t)` left all ten tests green. It is not inert -- a row recorded
+# `Shell, QUOTING` against a candidate typed `shell,quoting,lanes` fires today and would miss
+# under that mutant (2026-08-12, decision-logic row 9).
+_log_mixed_case() {
+  local d="$BATS_TEST_TMPDIR/case/docs"
+  mkdir -p "$d"
+  cat > "$d/retro-log.md" <<'EOF'
+# Retro log -- fixture
+
+> Format: `YYYY-MM-DD | project | pattern | prevention | tags`
+2026-03-01 | fixture | the same lesson recorded under differently-cased tags | always quote the flag value | Shell,QUOTING
+EOF
+  [ -s "$d/retro-log.md" ] || return 1
+  [ "$(grep -c '^2026-' "$d/retro-log.md")" -eq 1 ] || return 1
+  grep -q 'Shell,QUOTING' "$d/retro-log.md" || return 1
+  echo "$BATS_TEST_TMPDIR/case"
+}
+
 @test "conflict-check: the checker is present at its contracted path" {
   [ -f "$CHECK" ]
+}
+
+@test "conflict-check: CI and ci are one tag, so a differently-cased recording still collides" {
+  # The function's own docstring, finally asserted. Text overlap is 1.00 here, so the ONLY thing
+  # that can stop this pair firing is tag normalization -- which makes this test go red the moment
+  # normalizeTags stops normalizing.
+  tree="$(_log_mixed_case)"
+  [ -n "$tree" ] || { echo "the mixed-case fixture was not built"; false; }
+  run node "$CHECK" --root "$tree" --prevention "always quote the flag value" --tags "shell,quoting,lanes"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"showing 1 of 1 near-duplicate(s)"* ]]
+  # Both halves reported, and the shared tags printed in their NORMALIZED form.
+  [[ "$output" == *"shared tags: shell, quoting"* ]]
+  [[ "$output" == *"jaccard 1.00"* ]]
+  # ...and the negative half from the same fixture: one shared tag after normalization is not two,
+  # so the AND still has to hold. Without this, "normalize everything to the empty string" passes.
+  run node "$CHECK" --root "$tree" --prevention "always quote the flag value" --tags "shell,ci,lanes"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"no near-duplicate found"* ]]
 }
 
 @test "conflict-check: a planted near-duplicate surfaces with its citation and both scores" {

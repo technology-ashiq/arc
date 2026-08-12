@@ -41,8 +41,72 @@ _tree_with_path_rule() {
   echo "$t"
 }
 
+# A throwaway git repo with a REAL diff between two commits. This is the only way to exercise
+# `changedPaths`, which is the ONLY path /arc-review actually uses -- the compiled command passes
+# `--base`, never `--paths`. Deleting that function's whole body and returning [] once left this
+# suite byte-identical, so the git subprocess, the three-dot merge-base form and the working
+# directory it runs in were all unexercised.
+#
+# Identity is set REPO-LOCAL, never through subshell-scoped GIT_AUTHOR_* env: a clean CI runner
+# with no global identity fails `git commit` with 128, which is green locally and red on CI.
+_git_tree() {
+  local t="$BATS_TEST_TMPDIR/gitdiff"
+  mkdir -p "$t" || return 1
+  git init -q "$t" || return 1
+  git -C "$t" config user.email "fixture@arc.test" || return 1
+  git -C "$t" config user.name "arc fixture" || return 1
+  mkdir -p "$t/docs" || return 1
+  printf 'seed\n' > "$t/docs/seed.md"
+  git -C "$t" add -A >/dev/null || return 1
+  git -C "$t" commit -qm seed >/dev/null || return 1
+  git -C "$t" branch -M fixture-base >/dev/null 2>&1 || return 1
+  git -C "$t" checkout -qb fixture-work >/dev/null 2>&1 || return 1
+  mkdir -p "$t/processes" || return 1
+  printf 'name: review-diff\n' > "$t/processes/review-diff.process.yaml"
+  git -C "$t" add -A >/dev/null || return 1
+  git -C "$t" commit -qm change >/dev/null || return 1
+  # A fixture builder asserts its own fixture. An empty diff would make the assertions below pass
+  # against a query derived from nothing.
+  [ -n "$(git -C "$t" diff --name-only fixture-base...HEAD)" ] || return 1
+  echo "$t"
+}
+
 @test "diff-recall: the hook is present at its contracted path" {
   [ -f "$HOOK" ]
+}
+
+@test "diff-recall: the query comes from GIT, in the tree --root names and not the one we stand in" {
+  # No --paths anywhere: this is the code /arc-review runs, and the only test that goes red if the
+  # subprocess is deleted.
+  t="$(_git_tree)"
+  [ -n "$t" ] || { echo "the git fixture was not built"; false; }
+  run node "$HOOK" --root "$t" --base fixture-base --print-query
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -n "$output" ] || { echo "the git subprocess produced no query at all"; false; }
+  # Derived from the CHANGED PATH, which nobody typed.
+  [[ "$output" == *"processes"* ]]
+  [[ "$output" == *"review"* ]]
+  # ...and read from THAT repo. `execFileSync` used to inherit process.cwd() while the index came
+  # from --root, so the diff and the corpus could be two different repositories at exit 0 with
+  # nothing said. arc's own tree would put `scripts` and `claude` in this query; the fixture cannot.
+  [[ "$output" != *"scripts"* ]]
+  [[ "$output" != *"claude"* ]]
+}
+
+@test "diff-recall: a base git cannot resolve is exit 3, the WARN, never exit 2" {
+  # An environmental condition -- a shallow CI checkout, a master-default repo, a fresh clone with
+  # no local main -- arrived as exit 2, "bad usage": an error the review agent is told to FIX, in a
+  # step ADR-0704 says must never be able to stop a review.
+  t="$(_git_tree)"
+  [ -n "$t" ] || { echo "the git fixture was not built"; false; }
+  run node "$HOOK" --root "$t" --base does-not-exist-branch
+  [ "$status" -eq 3 ] || { echo "expected exit 3, got $status"; echo "$output"; false; }
+  [[ "$output" == *"never a block"* ]]
+  # ...while a --root that does not exist stays exit 2. A typo must NOT be laundered into the one
+  # code the caller is instructed to ignore, or recall goes silent and the review believes it ran.
+  run node "$HOOK" --root "$BATS_TEST_TMPDIR/no-such-tree" --paths "processes/review-diff.process.yaml"
+  [ "$status" -eq 2 ] || { echo "expected exit 2, got $status"; echo "$output"; false; }
+  [[ "$output" == *"does not exist"* ]]
 }
 
 @test "diff-recall: a changed path surfaces a path-matched rule, under the mandatory label" {
@@ -74,7 +138,18 @@ _tree_with_path_rule() {
   # was one of the two tests that never ran, so the wrong arithmetic hid behind a red fixture.
   [[ "$output" == *"path-structure tokens dropped: 6"* ]]
   [[ "$output" == *"-> 2 query term(s)"* ]]
-  [[ "$output" == *"extensions and the like"* ]]
+  # THE TOKENS THEMSELVES, with the reason each one went. The previous assertion matched a STATIC
+  # preview of PATH_NOISE labelled "extensions and the like" while `dropped` was computed, returned
+  # and printed nowhere -- so on docs/adr/0705-....md the operator was told the ADR NUMBER was an
+  # extension. A count with no list cannot tell anyone that the identifier they searched for is the
+  # thing that got removed.
+  [[ "$output" == *"single character: a, b"* ]]
+  [[ "$output" == *"declared path noise: mjs, yaml"* ]]
+  # ...and a pure number is its own reason, not folded into the extensions.
+  run node "$HOOK" --root "$t" --paths "docs/adr/0705-mem-f-conflicts.md" --limit 3
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"pure number: 0705"* ]]
+  [[ "$output" == *"declared path noise: md"* ]]
   # A path left with nothing after filtering is REPORTED, never vanished.
   run node "$HOOK" --root "$t" --paths "9/1.md" --limit 3
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -118,6 +193,20 @@ _tree_with_path_rule() {
   [[ "$output" == *"indistinguishable from a real miss"* ]]
   run node "$HOOK" --paths "a/b.mjs" nonsense; [ "$status" -eq 2 ]
   [[ "$output" == *"unknown argument"* ]]
+  # A value that is not empty but FILTERS to nothing named no path at all, and was answered with
+  # "0 changed path(s) ... that is a result, not an error" -- a refusal reported as a measurement.
+  run node "$HOOK" --paths ",,,"; [ "$status" -eq 2 ]
+  [[ "$output" == *"names no path at all"* ]]
+  # --print-query returns before both the --json branch and the search, so these two were ACCEPTED
+  # AND INERT -- and --print-query --json printed bare text on stdout at exit 0, which this file's
+  # own parseArgs comment calls what the --json contract forbids outright.
+  run node "$HOOK" --paths "a/b.mjs" --print-query --json; [ "$status" -eq 2 ]
+  [[ "$output" == *"silently done nothing"* ]]
+  run node "$HOOK" --paths "a/b.mjs" --print-query --limit 3; [ "$status" -eq 2 ]
+  [[ "$output" == *"silently done nothing"* ]]
+  # ...and each of them alone is still perfectly legal, or the refusal above is just a broken flag.
+  run node "$HOOK" --paths "a/b.mjs" --print-query; [ "$status" -eq 0 ]
+  [ -n "$output" ] || { echo "--print-query alone produced nothing"; false; }
 }
 
 @test "diff-recall: --paths splits on newlines, so a piped git list is not one giant path" {

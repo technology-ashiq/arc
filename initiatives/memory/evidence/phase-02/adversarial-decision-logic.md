@@ -69,3 +69,28 @@ is an open finding.
 
 **REPORTED (open):** every other row. They are real and reproduced; they are not fixed in this
 commit, and the phase close must either fix them or record why not.
+
+## Dispositions, second pass — 2026-08-12, before the phase close
+
+Every row above is now **FIXED**. Nothing from this ledger is carried into the close as open, and
+nothing was accepted-with-a-reason: each one turned out to be a small, testable change, and the
+cost of arguing for keeping it exceeded the cost of closing it.
+
+| # | what changed | the test that goes red if it is undone |
+|---|---|---|
+| 6 | `DECISION_ENUMS` in `arc-recall.mjs`: `verdict` is a closed set, so `verdict:Reject` / `verdict:aprove` are exit 2 naming the set, while `verdict~rej` stays a real query and `verdict~zzz` (a substring of neither member) is refused | `memory-recall.bats` — *verdict is a CLOSED set*, which asserts both refusals AND both positives one-versus-one against the opposite verdict |
+| 7 | `--lane` is refused alongside `--decisions`, like `--source`. **The `--tag` half of this row was WRONG and is corrected here rather than silently dropped:** decisions records really do carry `tags: ["decision", verdict]`, so `--tag` is a genuine narrowing and refusing it would have removed a working filter | `memory-recall.bats` — the refusal, plus a positive asserting `--tag decision` is still accepted |
+| 8 | `golden-check` surfaces `parseAliases().exclusions` instead of taking `.rows` and dropping them | `memory-golden.bats` — *an alias row it could not read is NAMED*, driven by a planted 4-column row |
+| 9 | `_log_mixed_case` fixture: a row recorded `Shell,QUOTING` against a candidate typed `shell,quoting,lanes`. Text overlap is 1.00, so tag normalization is the only thing that can make it fire | `memory-conflict.bats` — *CI and ci are one tag*; the `String(t)` mutant now goes red, and the negative half (one shared tag is not two) keeps "normalize to empty" from passing |
+| 10 | `--print-query` refuses `--json` and `--limit` rather than accepting them inert | `memory-hook.bats` — both refusals plus a positive that each flag alone is still legal |
+| 11 | `checkTieBreak` + `tieBreakProbe` in `lib/engines.mjs`: an all-ties synthetic corpus whose build order is deliberately not its sorted order. `checkEquivalence` reports a `tie-break` mismatch and the CLI prints HELD/BROKEN beside the claim | `memory-golden.bats` — *NEGATIVE CONTROL: the tie-break is ASSERTED*. Verified against the real mutant too: inverting `bm25.mjs`'s comparator to id-DESCENDING now exits 1 where it exited 0 |
+| 12 | `deriveQuery` records WHY each token was dropped (single character / pure number / declared path noise) and `diff-recall` prints the actual tokens grouped by reason, plus `droppedTokens` in `--json` | `memory-hook.bats` — asserts `pure number: 0705` and `declared path noise: md`, so the ADR number can no longer be reported as an extension |
+| 13 | every `process.exit` in `golden-check` is `process.exitCode = N; return` | covered by the exit-code assertions already in `memory-golden.bats`; the class fix is recorded under shell/OS row 10 |
+| 14 | `--root` gets the `v.startsWith("--")` guard the three siblings carried | `memory-golden.bats` — *a flag-shaped --root is refused*, asserted for `--gate` AND `--rank` so the fix is the rule and not one case |
+| 15 | `resolveEngine("auto")` returns the CANONICAL engine, or one declaring a measured `fasterThanCanonical`; never `avail[avail.length - 1]` | `memory-golden.bats` — *auto resolves to the CANONICAL engine*, asserted from both registration orders |
+
+**The "gap worth naming" is also closed.** `checkEquivalence` graded `sanitizeQuery(row.query).tokens`
+while `rank()` and the CLI both grade the alias-**expanded** tokens, so two engines would have been
+certified on a query path the product never runs. `golden-check` now reads the alias table before
+the equivalence block and expands there too. It was latent only while `aliases.md` ships empty —
+which is exactly the condition that would have ended the day the table stopped being empty.

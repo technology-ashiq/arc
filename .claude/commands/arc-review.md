@@ -14,8 +14,13 @@ Run a code review on `git diff ${1:-main}...HEAD` (or the staged diff if the bra
    Before spawning the reviewer, run:
 
    ```bash
-   node .claude/scripts/memory/diff-recall.mjs --base ${1:-main} --limit 8
+   node .claude/scripts/memory/diff-recall.mjs --base "${1:-main}" --limit 8
    ```
+
+   The quotes around the base are not decoration. `.claude/rules/lanes.md` is explicit that a
+   flag's value is always quoted: unquoted, `/arc-review "release 2"` reached the hook as
+   `--base release` plus a stray positional `2` and was refused at exit 2 — a review stopped by
+   its own recall step, which ADR-0704 forbids outright.
 
    It derives its query from the CHANGED PATHS, so a rule about the files in front of you
    surfaces without anyone remembering to look for it. Pass its output to the `code-reviewer`

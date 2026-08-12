@@ -51,3 +51,25 @@ is an open finding.
 
 **REPORTED (open):** every other row. They are real and reproduced; they are not fixed in this
 commit, and the phase close must either fix them or record why not.
+
+## Dispositions, second pass — 2026-08-12, before the phase close
+
+Every row above is now **FIXED**. Row 15 was a clean negative control and never a finding.
+
+| # | what changed | the test that goes red if it is undone |
+|---|---|---|
+| 2 | `_git_tree` in `memory-hook.bats`: a throwaway repo with a real two-commit diff, driven through `--base` with no `--paths` anywhere — the only code path `/arc-review` runs. Identity is set **repo-local**, never through subshell-scoped `GIT_AUTHOR_*`, because a clean CI runner with no global identity fails `git commit` with 128 | `memory-hook.bats` — *the query comes from GIT*. Emptying `changedPaths` now leaves the derived query empty and both positive assertions fail |
+| 5 | `spine-reader-lint.sh`: `while IFS= read -r` instead of `for f in $FILES`; each file's strip is run and its **status checked**; an unreadable or unscannable file is its own FAIL with its own message. The stripped text now goes through a **file** rather than `$(...)`, which also removes the bash NUL-byte warning `.claude/scripts/evolve/board.mjs:166` printed on every single run | `memory-golden.bats` — *a filename with a space is SCANNED*, driven by a planted bypass inside `bad file.mjs` in a throwaway git repo, plus a tracked-but-missing file for the could-not-scan half |
+| 6 | `diff-recall` refuses a nonexistent `--root` at exit 2, path-normalised like the siblings | `memory-hook.bats` — asserted **beside** the exit-3 case, so the two codes are pinned against each other rather than separately |
+| 7 | `changedPaths(base, cwd)` — `cwd` is mandatory and comes from `--root` | `memory-hook.bats` — the same test asserts the query carries the fixture's tokens and **not** arc's own (`scripts`, `claude`), which is what a cwd-inherited git would have produced |
+| 8 | a base git cannot resolve is exit **3**, the WARN, not exit 2 | `memory-hook.bats` — *a base git cannot resolve is exit 3* |
+| 9 | `golden-check` guards the alias read (exit 2, named) and carries the `try/catch` wrapper its three siblings had; an unexpected throw says `INTERNAL` in as many words so CI can tell a crash from a verdict | `memory-golden.bats` — *an unusable alias file is operator error*, which also asserts `errno` is **not** what the operator is shown, paired with a positive |
+| 10 | **all 31 remaining `process.exit(N)` sites** across `arc-recall`, `conflict-check`, `diff-recall` and `memory-index` are now `process.exitCode = N; return` — the twin-fix rule applied by grepping the pattern rather than the file, including `memory-index`, which the row called "all four CLIs" and is the fifth | every exit-code assertion in all four memory suites; each CLI's exit codes were re-verified end to end after the conversion |
+| 11 | same fix as decision-logic row 14 | `memory-golden.bats` — *a flag-shaped --root is refused* |
+| 12 | `--engine` is refused by `--grep`, `--decisions` and `--full`, tracked by `engineGiven` so the `auto` default is not mistaken for an operator asking | `memory-recall.bats` — *--engine is refused by the three modes that do not rank*, with a positive for the ranked query and for each mode **without** the flag |
+| 13 | `--paths ",,,"` is exit 2, naming the shape | `memory-hook.bats` — in the refusals test |
+| 14 | `processes/review-diff.process.yaml` quotes the base; both compiled targets regenerated, so the codex golden carries `"${BASE:-main}"` too | `engine-compile.bats` byte-identity against the regenerated goldens |
+
+**Nothing from this ledger is carried into the close as open**, and nothing was accepted with a
+written reason instead of a fix. The count that matters: **30 findings across the two surfaces, 30
+fixed** — 9 in the first pass, 21 here.

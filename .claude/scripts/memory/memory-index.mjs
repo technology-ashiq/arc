@@ -438,17 +438,17 @@ async function main() {
   const cwd = process.cwd();
   let opts;
   try { opts = parseArgs(process.argv.slice(2)); }
-  catch (e) { console.error(`memory-index: ${e.message}`); process.exit(2); }
+  catch (e) { console.error(`memory-index: ${e.message}`); process.exitCode = 2; return; }
 
   const root = resolve(opts.root ?? gitToplevel());
-  if (!existsSync(root)) { console.error(`memory-index: --root ${opts.root} does not exist`); process.exit(2); }
+  if (!existsSync(root)) { console.error(`memory-index: --root ${opts.root} does not exist`); process.exitCode = 2; return; }
 
   if (opts.status) {
     const s = await isStaleAsync(root);
     console.log(`index: ${existsSync(indexPath(root)) ? rel(root, indexPath(root)) : "(absent)"}`);
     console.log(`stale: ${s.stale ? "YES" : "no"} (${s.why})`);
     // Exit 3 on stale, so `memory-index --status && use-the-index` cannot proceed on a stale one.
-    process.exit(s.stale ? 3 : 0);
+    process.exitCode = s.stale ? 3 : 0; return;
   }
 
   let expect, index;
@@ -456,13 +456,13 @@ async function main() {
     expect = loadExpect(cwd, root, opts);
   } catch (e) {
     console.error(`memory-index: ${e.message}`);
-    process.exit(2);
+    process.exitCode = 2; return;
   }
   const prior = readIndex(root);
   try { index = await build(root, opts); }
   catch (e) {
     console.error(`memory-index: ${e instanceof OperatorError ? e.message : e.stack || e.message}`);
-    process.exit(e instanceof OperatorError ? 2 : 1);
+    process.exitCode = e instanceof OperatorError ? 2 : 1; return;
   }
 
   console.log(`root: ${root.split(sep).join("/")}`);
@@ -490,12 +490,12 @@ async function main() {
   const failures = verify(index, expect, prior, opts);
   if (failures.length) {
     for (const f of failures) console.error(`memory-index: FAIL ${f}`);
-    process.exit(1);
+    process.exitCode = 1; return;
   }
 
   let written;
   try { written = writeIndex(root, index); }
-  catch (e) { console.error(`memory-index: ${e.message}`); process.exit(2); }
+  catch (e) { console.error(`memory-index: ${e.message}`); process.exitCode = 2; return; }
   console.log(`wrote ${rel(root, written)}  (${index.records.length} records)`);
 
   if (opts.dumpRecords) {
@@ -518,5 +518,5 @@ function invokedDirectly() {
 }
 
 if (invokedDirectly()) {
-  main().catch((e) => { console.error(`memory-index: ${e.stack || e.message}`); process.exit(1); });
+  main().catch((e) => { console.error(`memory-index: ${e.stack || e.message}`); process.exitCode = 1; return; });
 }

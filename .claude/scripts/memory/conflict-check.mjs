@@ -167,28 +167,28 @@ function gitToplevel() {
 function main() {
   let o;
   try { o = parseArgs(process.argv.slice(2)); }
-  catch (e) { console.error(`conflict-check: ${e.message}`); process.exit(2); }
+  catch (e) { console.error(`conflict-check: ${e.message}`); process.exitCode = 2; return; }
 
   const root = resolve(o.root ?? gitToplevel());
   const logPath = join(root, RETRO_LOG);
   if (!existsSync(logPath)) {
     console.error(`conflict-check: no ${RETRO_LOG} under ${root} -- there is nothing to compare against`);
-    process.exit(2);
+    process.exitCode = 2; return;
   }
 
   if (o.preventionFile !== null) {
     const pf = resolve(root, o.preventionFile);
-    if (!existsSync(pf)) { console.error(`conflict-check: --prevention-file ${o.preventionFile} does not exist`); process.exit(2); }
+    if (!existsSync(pf)) { console.error(`conflict-check: --prevention-file ${o.preventionFile} does not exist`); process.exitCode = 2; return; }
     // CRLF-normalised: a prevention text authored on windows must score identically to the same
     // text on the other two legs, or T means a different thing per OS.
     try { o.prevention = readFileSync(pf, "utf8").split("\r\n").join("\n").trim(); }
-    catch (e) { console.error(`conflict-check: --prevention-file could not be read: ${e.message}`); process.exit(2); }
-    if (!o.prevention) { console.error(`conflict-check: --prevention-file ${o.preventionFile} is empty -- refusing to compare nothing`); process.exit(2); }
+    catch (e) { console.error(`conflict-check: --prevention-file could not be read: ${e.message}`); process.exitCode = 2; return; }
+    if (!o.prevention) { console.error(`conflict-check: --prevention-file ${o.preventionFile} is empty -- refusing to compare nothing`); process.exitCode = 2; return; }
   }
 
   let parsed;
   try { parsed = parseRetroLog(readFileSync(logPath, "utf8")); }
-  catch (e) { console.error(`conflict-check: ${RETRO_LOG} could not be read: ${e.message}`); process.exit(1); }
+  catch (e) { console.error(`conflict-check: ${RETRO_LOG} could not be read: ${e.message}`); process.exitCode = 1; return; }
 
   const hits = findNearDuplicates({ prevention: o.prevention, tags: o.tags }, parsed.records, { threshold: o.threshold });
   const shown = hits.slice(0, o.limit);

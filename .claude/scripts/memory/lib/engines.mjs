@@ -11,13 +11,16 @@
 // same ORDERED ids; bm25 ties are common on a corpus this size, so "same set of ids" is not
 // agreement and a harness that compared sets would pass two engines that rank differently. Ties
 // break by **id ascending**, which is a total, stable order that is a property of the data rather
-// than of how the index happened to be read.
+// than of how the index happened to be read. And it is ASSERTED against a synthetic all-ties
+// corpus (`checkTieBreak`), not merely printed: for one commit `TIE_BREAK` was a string this file
+// exported and nothing compared against, so inverting bm25's comparator to id-DESCENDING left both
+// `--equivalence` and `--gate` green.
 //
 // One engine is registered today. The harness says so ITSELF rather than printing a green that
 // could be read as "two engines agree" -- a pass condition that cannot distinguish "they agree"
 // from "there is nothing to compare" is the vacuous pass wearing a gate's clothes.
 
-import { search } from "./bm25.mjs";
+import { search, buildPostings } from "./bm25.mjs";
 
 /** The documented, asserted tie-break. Changing this string is changing the contract. */
 export const TIE_BREAK = "id-ascending on equal bm25";
@@ -52,11 +55,69 @@ export function availableEngines(registry = ENGINES) {
 export function resolveEngine(requested, registry = ENGINES) {
   const avail = availableEngines(registry);
   if (requested === "auto") {
-    // `auto` prefers the fastest AVAILABLE engine, which today is the only one. The canonical
-    // engine is the floor: auto can never resolve to nothing.
-    return avail[avail.length - 1] ?? registry.find((e) => e.canonical) ?? null;
+    // `auto` resolves to the CANONICAL engine unless another one carries a MEASURED speed claim.
+    //
+    // It used to return `avail[avail.length - 1]` under the words "prefers the fastest available",
+    // which encoded speed as REGISTRATION ORDER: appending a second engine to `ENGINES` would have
+    // made it the default for every `auto` caller before any measurement said it was faster, and
+    // ADR-0701's whole point is that the accelerator earns its place on a number. There is no speed
+    // field in this registry, so `auto` picks the reference rather than pretending to rank. A future
+    // engine becomes the auto default by declaring `fasterThanCanonical: true` with the ADR-0701
+    // measurement recorded beside it -- a claim someone has to write down, not a position in a list.
+    return avail.find((e) => e.fasterThanCanonical === true)
+      ?? avail.find((e) => e.canonical)
+      ?? avail[0]
+      ?? registry.find((e) => e.canonical)
+      ?? null;
   }
   return avail.find((e) => e.name === requested) ?? null;
+}
+
+// ---------- the tie-break, ASSERTED rather than printed ----------
+//
+// `TIE_BREAK` above was a string the harness PRINTED and never a property it checked. Inverting
+// bm25's comparator to id-DESCENDING left `--equivalence` and `--gate` both passing at exit 0,
+// because with one engine determinism holds under any total order and the golden suite only
+// asserted that the sentence appeared. A contract nothing tests is a comment (2026-08-12,
+// adversarial decision-logic row 11).
+//
+// Registration order deliberately is NOT sorted order, so "returned them in the order I built
+// them" and "returned them id-ascending" are different answers to this probe.
+export const TIE_BREAK_PROBE_IDS = Object.freeze(["probe:c", "probe:a", "probe:b"]);
+
+/** The synthetic corpus the tie-break is asserted against. Pure, and built from the same
+ *  `buildPostings` the real index uses, so the probe cannot pass under a scoring rule the
+ *  product does not run. Every record carries byte-identical searchable text, so bm25 MUST
+ *  score them equally and the returned ORDER is decided by the tie-break alone. */
+export function tieBreakProbe() {
+  const records = TIE_BREAK_PROBE_IDS.map((id) => ({
+    id, organ: "probe", path: "(probe)", line: 0,
+    title: "tie break probe", body: "tie break probe", tags: ["probe"],
+  }));
+  return {
+    index: { postings: buildPostings(records), records },
+    records,
+    tokens: ["probe"],
+    expected: [...TIE_BREAK_PROBE_IDS].sort(),
+  };
+}
+
+/**
+ * Does every available engine really break ties the way `TIE_BREAK` says?
+ *
+ * Returns one row per engine. An engine that throws on the probe is a FAILURE, not a skip: an
+ * engine that cannot rank the reference corpus cannot be certified as agreeing with one that can.
+ */
+export function checkTieBreak(registry = ENGINES) {
+  const { index, records, tokens, expected } = tieBreakProbe();
+  const out = [];
+  for (const e of availableEngines(registry)) {
+    let ids;
+    try { ids = e.run(index, records, tokens, { limit: expected.length }); }
+    catch (err) { out.push({ engine: e.name, ok: false, ids: [], expected, error: String(err?.message ?? err) }); continue; }
+    out.push({ engine: e.name, ok: JSON.stringify(ids) === JSON.stringify(expected), ids, expected, error: null });
+  }
+  return out;
 }
 
 /**
@@ -74,6 +135,17 @@ export function checkEquivalence({ index, records, queries, limit = 3, registry 
   const unavailable = registry.filter((e) => !engines.includes(e)).map((e) => e.name);
   const mismatches = [];
   const opts = { limit };
+
+  // The tie-break is checked FIRST and counts as a mismatch like any other. It is the one property
+  // this harness claims to own, and until 2026-08-12 it was the one property it never looked at.
+  const tieBreak = checkTieBreak(registry);
+  for (const t of tieBreak) {
+    if (t.ok) continue;
+    mismatches.push({
+      query: "(tie-break probe)", kind: "tie-break", a: t.engine, b: `the contract (${TIE_BREAK})`,
+      aIds: t.ids, bIds: t.expected,
+    });
+  }
 
   for (const q of queries) {
     const runs = engines.map((e) => ({ name: e.name, ids: e.run(index, records, q.tokens, opts) }));
@@ -99,6 +171,9 @@ export function checkEquivalence({ index, records, queries, limit = 3, registry 
 
   return {
     tieBreak: TIE_BREAK,
+    // The probe's verdict per engine, so a caller prints an ASSERTED result and not a slogan.
+    tieBreakChecked: tieBreak,
+    tieBreakHeld: tieBreak.every((t) => t.ok),
     engines: engines.map((e) => e.name),
     unavailable,
     // FALSE with one engine. The word "compared" is load-bearing: it is what stops a green here

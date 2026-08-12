@@ -65,6 +65,15 @@ const BOOL_FLAGS = new Set(["--json", "--rebuild"]);
 // effect. Reader-only: this filters records the index already holds, and opens no spine of its own.
 export const DECISION_FIELDS = new Set(["verdict", "reason", "decides", "ulid", "ts"]);
 
+// `verdict` is a CLOSED enum in the adapter (`adapters/decisions.mjs`: a payload whose verdict is
+// not exactly `approve` or `reject` is a named EXCLUSION, never a record). So `verdict:Reject` and
+// `verdict:aprove` can never match anything -- and they printed "no recorded decision matched that
+// filter. That is a result, not an error." at exit 0, byte-identical to a real miss, which is the
+// exact outcome this grammar's header says it exists to prevent. The closed-set rule had been
+// applied to the field NAME and never to the one field whose VALUES are closed too, while
+// `--source` and `--engine` both enumerate their sets on refusal (2026-08-12, decision-logic row 6).
+export const DECISION_ENUMS = Object.freeze({ verdict: Object.freeze(["approve", "reject"]) });
+
 export function parseDecisionFilter(expr) {
   const raw = String(expr ?? "").trim();
   // Unreachable through argv -- the empty-value guard in parseArgs fires first -- but this
@@ -88,6 +97,19 @@ export function parseDecisionFilter(expr) {
     // A repeated field is an AND that usually cannot match at all (`verdict:reject verdict:approve`
     // is always zero). Same rule as a repeated value flag: an operator error, never last-wins.
     if (seenField.has(field)) throw new UsageError(`--decisions names ${JSON.stringify(field)} twice -- that is an operator error, not a last-wins override`);
+    // A term against a closed-enum field that can never match ANY member is refused, not answered
+    // with a confident zero. `:` must name a member exactly; `~` is a case-insensitive substring,
+    // so it is refused only when it is a substring of no member at all -- `verdict~rej` is a real
+    // query and stays one.
+    const closed = DECISION_ENUMS[field];
+    if (closed) {
+      const ok = op === ":"
+        ? closed.includes(value)
+        : closed.some((m) => m.includes(value.toLowerCase()));
+      if (!ok) {
+        throw new UsageError(`--decisions ${JSON.stringify(term)} can never match: ${field} is a closed set (${closed.join(", ")}) and ${JSON.stringify(value)} is ${op === ":" ? "not one of them" : "a substring of none of them"} -- a filter that quietly matches nothing is byte-identical to a real miss`);
+      }
+    }
     seenField.add(field);
     terms.push({ field, op, value });
   }
@@ -104,7 +126,7 @@ export function matchesDecision(r, terms) {
 }
 
 export function parseArgs(argv) {
-  const o = { query: [], tag: null, source: null, since: null, lane: null, limit: 5, full: null, grep: null, root: null, engine: "auto", json: false, rebuild: false, decisions: null, decisionsExpr: null };
+  const o = { query: [], tag: null, source: null, since: null, lane: null, limit: 5, full: null, grep: null, root: null, engine: "auto", engineGiven: false, json: false, rebuild: false, decisions: null, decisionsExpr: null };
   const seen = new Set();
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -149,7 +171,10 @@ export function parseArgs(argv) {
         case "--root": o.root = v; break;
         case "--engine":
           if (!ENGINE_NAMES.has(v)) throw new UsageError(`--engine ${JSON.stringify(v)} is not one of: ${[...ENGINE_NAMES].join(", ")}`);
-          o.engine = v; break;
+          // Recorded as GIVEN, separately from its value: `auto` is the default, so `o.engine`
+          // alone cannot tell "the operator asked for auto" from "nobody said anything", and the
+          // refusal below has to know which.
+          o.engine = v; o.engineGiven = true; break;
         // Parsed EAGERLY, so a malformed expression is exit 2 before any index is read or built.
         case "--decisions": o.decisions = parseDecisionFilter(v); o.decisionsExpr = v; break;
       }
@@ -281,10 +306,10 @@ function renderRow(r, i, o) {
 async function main() {
   let o;
   try { o = parseArgs(process.argv.slice(2)); }
-  catch (e) { console.error(`arc-recall: ${e.message}`); process.exit(2); }
+  catch (e) { console.error(`arc-recall: ${e.message}`); process.exitCode = 2; return; }
 
   const root = resolve(o.root ?? gitToplevel());
-  if (!existsSync(root)) { console.error(`arc-recall: --root ${o.root} does not exist`); process.exit(2); }
+  if (!existsSync(root)) { console.error(`arc-recall: --root ${o.root} does not exist`); process.exitCode = 2; return; }
 
   // Flags that would have been silently discarded. `--full` returned before the filters ran and
   // `--grep` returned before ranking, so a mistyped flag produced a plausible answer to a
@@ -292,33 +317,55 @@ async function main() {
   // those two modes mean.
   if (o.full && (o.grep !== null || o.decisions !== null || o.query.length || o.tag || o.source || o.since || o.lane)) {
     console.error("arc-recall: --full takes one id and nothing else; the other arguments would have been ignored in silence");
-    process.exit(2);
+    process.exitCode = 2; return;
   }
   if (o.grep !== null && o.query.length) {
     console.error("arc-recall: --grep and a positional query are two different searches; the positional one would have been ignored in silence");
-    process.exit(2);
+    process.exitCode = 2; return;
   }
   // Same refusal, same reason, for the third listing mode. --decisions selects its own organ and
   // does not rank, so a positional query or a --grep alongside it would be dropped without a word.
   if (o.decisions !== null && o.query.length) {
     console.error("arc-recall: --decisions and a positional query are two different searches; the positional one would have been ignored in silence");
-    process.exit(2);
+    process.exitCode = 2; return;
   }
   if (o.decisions !== null && o.grep !== null) {
     console.error("arc-recall: --decisions and --grep are two different searches; give one of them");
-    process.exit(2);
+    process.exitCode = 2; return;
   }
   // --source cannot narrow --decisions, only contradict it: any value but `decisions` yields an
   // empty pool that reads exactly like "no decision matched your filter".
   if (o.decisions !== null && o.source) {
     console.error(`arc-recall: --decisions already selects the decisions organ; --source ${JSON.stringify(o.source)} could only contradict it`);
-    process.exit(2);
+    process.exitCode = 2; return;
+  }
+  // Structurally identical to --source, and it was neither refused nor noted. The decisions adapter
+  // emits `fields: {ulid, ts, decides, verdict, reason}` and NO lane, so `--lane <anything>` with
+  // `--decisions` can never match: the run printed "showing 0 of 0" and attributed the zero to the
+  // --decisions expression. `--tag` is deliberately NOT refused here -- decisions records really do
+  // carry tags (`decision` plus the verdict), so it is a genuine narrowing, not a dead flag
+  // (2026-08-12, decision-logic row 7).
+  if (o.decisions !== null && o.lane) {
+    console.error(`arc-recall: --decisions cannot be narrowed by --lane ${JSON.stringify(o.lane)}: a recorded decision carries no lane, so this could only ever return zero and blame the filter`);
+    process.exitCode = 2; return;
+  }
+  // P2-1 recurring inside the file where P2-1 was fixed. `main()`'s refusal list enumerated the
+  // positional query, --grep, --source and --full, and the suite asserting it "refuses every
+  // argument it would otherwise drop in silence" enumerated the same four -- so three of the four
+  // modes accepted `--engine` and did nothing with it: --grep reports `engine: "literal"`,
+  // --decisions reports `engine: "filter"`, --full reports a hardcoded `engine: "js"`. An
+  // accepted-but-inert flag is worse than a rejected one; the operator believes it took effect
+  // (2026-08-12, shell/OS row 12).
+  if (o.engineGiven && (o.grep !== null || o.decisions !== null || o.full)) {
+    const mode = o.full ? "--full" : o.grep !== null ? "--grep" : "--decisions";
+    console.error(`arc-recall: ${mode} does not rank, so --engine ${JSON.stringify(o.engine)} would have been accepted and silently done nothing; the engine seam applies to the ranked query only`);
+    process.exitCode = 2; return;
   }
 
   const queryText = o.query.join(" ");
   if (!queryText && !o.full && o.grep === null && o.decisions === null && !o.rebuild) {
     console.error("arc-recall: nothing to look up -- give a query, --full <id>, --grep <text>, --decisions <filter>, or --rebuild");
-    process.exit(2);
+    process.exitCode = 2; return;
   }
 
   let loaded;
@@ -329,7 +376,7 @@ async function main() {
     // cannot be resolved is an unavailable index, not a bug in this program.
     const code = e.exitCode ?? (/ARC_SPINE_ROOT|spine/i.test(e.message) ? 3 : 1);
     console.error(`arc-recall: ${e.message}`);
-    process.exit(code);
+    process.exitCode = code; return;
   }
   const { index, rebuilt, why, warnings = [] } = loaded;
   const records = index.records ?? [];
@@ -419,7 +466,7 @@ async function main() {
   // registry holds one entry and `auto` resolves to it -- but it resolves THROUGH the registry the
   // equivalence harness enumerates, so the seam is real rather than a comment promising one.
   const chosen = resolveEngine(o.engine);
-  if (!chosen) { console.error(`arc-recall: no engine named ${JSON.stringify(o.engine)} is available`); process.exit(2); }
+  if (!chosen) { console.error(`arc-recall: no engine named ${JSON.stringify(o.engine)} is available`); process.exitCode = 2; return; }
   const engine = chosen.name;
   // Rank INSIDE the filtered pool. Ranking globally and filtering afterwards was the starvation
   // bug: the filter could remove every one of the global top-N and the CLI would then state

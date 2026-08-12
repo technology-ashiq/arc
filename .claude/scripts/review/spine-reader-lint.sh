@@ -79,14 +79,64 @@ PATTERN='events/|\.jsonl|state\.db|node:sqlite|DatabaseSync'
 # BRE with no GNU-only flags -- the macOS BSD leg is a first-class runner.
 _sanction() { sed 's#surfaced-cited\.jsonl#surfaced-cited.SANCTIONED-NON-SPINE#g'; }
 
-report="$(
-  for f in $FILES; do
-    _exempt "$f" && continue
-    _strip_comments "$f" | _sanction | grep -nE "$PATTERN" | sed "s#^#$f:#"
-  done
-)"
+# SCANNED CLEAN and COULD NOT SCAN are different answers, and this loop used to give the same one.
+#
+# `for f in $FILES` word-split on whitespace, so a tracked `.../bad file.mjs` reached awk as two
+# nonexistent paths; awk printed `fatal: cannot open file` and the pipeline's exit status was never
+# read, because an empty `report` was taken to mean clean. A planted bypass in that file passed at
+# exit 0. Reproduced a second way with awk stubbed to `exit 127`: same silent pass. A gate that
+# cannot tell "I looked and found nothing" from "I never looked" is the exact shape this lint
+# exists to prevent (2026-08-12, shell/OS row 5).
+#
+# `while IFS= read -r` preserves every character in the name, and each file's strip is run and its
+# status CHECKED before anything is matched against it. `grep` exiting 1 on no-match is normal and
+# stays out of the failure path -- only the reader is allowed to fail loudly.
+#
+# The here-doc is deliberate: a pipe would run the loop in a subshell on bash-3.2 and the two
+# accumulators would come back empty, which is this same defect one layer down.
+# The stripped text goes through a FILE, never through `$(...)`. A command substitution silently
+# drops NUL bytes and warns on stderr about it, and `.claude/scripts/evolve/board.mjs:166` really
+# does carry one -- a NUL is its composite map-key separator -- so every single run of this lint
+# printed a bash warning to stderr while quietly scanning altered content. A gate that mutates what
+# it measures has to say what the mutation destroys; not mutating it is better.
+TMPF="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/spine-reader-lint.$$")"
+trap 'rm -f "$TMPF"' EXIT
+
+report=""
+unscanned=""
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  _exempt "$f" && continue
+  if [ ! -r "$f" ]; then
+    unscanned="$unscanned$f: not readable
+"
+    continue
+  fi
+  if ! _strip_comments "$f" > "$TMPF" 2>/dev/null; then
+    unscanned="$unscanned$f: the comment stripper exited non-zero -- this file was NOT scanned
+"
+    continue
+  fi
+  hit="$(_sanction < "$TMPF" | grep -nE "$PATTERN" | sed "s#^#$f:#")"
+  if [ -n "$hit" ]; then
+    report="$report$hit
+"
+  fi
+done <<EOF
+$FILES
+EOF
+
+# Reported BEFORE the violations and on its own exit, because an unscanned file is not a clean file
+# and the operator has to be told which files the verdict below does not cover.
+if [ -n "$unscanned" ]; then
+  printf '%s' "$unscanned" >&2
+  echo "spine-reader-lint: FAIL -- file(s) above could not be scanned at all, so this run cannot report them clean." >&2
+  [ -n "$report" ] && printf '%s' "$report" >&2
+  exit 1
+fi
 
 if [ -n "$report" ]; then
+  report="$(printf '%s' "$report")"
   EVIDENCE="$ROOT/.claude/state/spine-lint/violations.txt"
   mkdir -p "$(dirname "$EVIDENCE")" 2>/dev/null || true
   printf '%s\n' "$report" > "$EVIDENCE" 2>/dev/null || true
