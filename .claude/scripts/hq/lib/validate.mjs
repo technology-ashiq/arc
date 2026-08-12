@@ -9,6 +9,7 @@ import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearMiss, isAdoptionProposal, assertAdoptionProposal } from "./validate-absorb.mjs";
+import { isLedgerRevenueKind, assertLedgerRevenue } from "./validate-ledger.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -343,6 +344,12 @@ export function validateEvent(event) {
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
+  // ADR-1002 / LED-C. Deliberately AFTER assertMoney, which already establishes that `amount` is a
+  // positive integer in minor units -- so this runs on a payload whose core money field is known
+  // good and adds the closed schema, the namespaced-id grammar and the cross-field invariant.
+  // There is no ledger ingest CLI: this placement is what makes the PII contract unskippable,
+  // because every path onto the spine goes through validateEvent.
+  if (isLedgerRevenueKind(event.kind)) assertLedgerRevenue(event);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (event.kind === "constitution.adopted") assertConstitution(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);

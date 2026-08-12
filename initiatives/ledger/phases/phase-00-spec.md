@@ -55,10 +55,11 @@ whether these files are in the sync set at all — see PLAN's Do-not-touch note.
       over-refund needs-you flag (compared in the original charge currency, before FX conversion,
       so rate movement between a charge and its refund cannot fire or suppress it), natural-key
       duplicate flagged as needs-you and excluded from totals rather than netted or auto-picked
-      (ADR-1010), the 23:59 IST boundary, cross-currency, **a zero-amount revenue event** (a
-      100%-coupon sale is legitimately 0, which is not the same as absent), and **a payment whose
-      fees exceed its gross**, rendering a negative net rather than crashing or clamping to 0
-      (REQ-02, ADR-1007)
+      (ADR-1010), the 23:59 IST boundary, cross-currency, **a zero-amount revenue event asserted as
+      a REJECTION** (`assertMoney` requires `amount >= 1`, so a 100%-coupon sale cannot be recorded
+      as revenue at all — the fixture pins that refusal rather than a rendered zero row), and **a
+      payment whose fees exceed its gross**, which the `net == gross - tax - fees` invariant admits
+      as a negative net rather than crashing or clamping to 0 (REQ-02, ADR-1007)
 - [ ] `arc pnl` v0 renders per-venture rows plus a separate Overhead section for `venture: arc`,
       reading only through `spine.mjs` — `spine-reader-lint.sh` reports 0 violations (ADR-1000)
 - [ ] Two export parsers (razorpay, merchant-of-record) returning one typed, summable list of
@@ -77,6 +78,9 @@ whether these files are in the sync set at all — see PLAN's Do-not-touch note.
       deliberately unlike the comparator's sorted order. Retro 2026-08-12 (arc-memory) found an
       equivalence gate that stayed green at exit 0 with its comparator inverted, because the gate
       compared its own printed contract instead of real output
+- [ ] Refunds land as linked events carrying `refund_of`, never negative amounts and never a
+      supersede (ADR-1016): over-refund, refund-without-charge and refund-currency-mismatch each
+      raise a needs-you item and none is ever silently netted
 - [ ] Money data lives only on the spine — no `costs.yaml`, no second store anywhere in the diff
       (ADR-1001)
 - [ ] `arc pnl` is a CLI under `.claude/scripts/hq/` with no new slash command (ADR-1009)
