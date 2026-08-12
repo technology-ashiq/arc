@@ -48,17 +48,17 @@ tier: verified-real
 sources: phase-04-spec.md, code:grep-fallback(1348; no .codegraph/), adrs(22), learning(3), retro(24), churn(870)
 decision: Two events, never one. A lone decision.recorded fails the closed payload shape and quarantines while the emitter still exits 0. Emitted from E:/Work_Hub/01_Automemory/arc because this worktree has its own gitignored spine and the emitter refuses to write there.
 result: PROOF PASSED. approval 01KZTM2DYQXXYHVBJZC462D982 kind=approval.requested file=2026-08-12.jsonl / decision 01KZTM348858PDH44K4HA64CVA verdict=approve file=2026-08-12.jsonl / payload keys exactly decides,reason,verdict / live 1021, quarantined 241 / quarantined entries MENTIONING this approval: 1 (BAD_DECISION). The raw emit FAILED first: decision.idem must be sha256("decision.recorded|"+decides), welded to the approval, which arc-event.sh does not compute -- arc-inbox approve does. The spec said raw emit and was WRONG; corrected in this commit. The proof asserts on event IDs not on a ULID grep, because the rejected attempt contains the ULID and a substring check would have failed a correct spine.
-commit: (empty until proven)
+commit: b94078c
 
 #### slice: 02
 
 title: **ADR-0212 is merged to `main`.** The file already exists at `docs/adr/0212-exe-e-an-agent-runtime-occupies-the-model-seat-amending-adr-0069.md` and its `**Status:**` line already reads `accepted` — *accepted* is the decision's status, recorded at kickoff; *merged* is this phase's act of landing it on `main` through a reviewed PR. The two are not the same and neither implies the other. **This is the cycle's first act: it lands before any `router.yaml` row exists**, because a routing row for a runtime is meaningless until the policy says what a runtime is.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-04-spec.md
-decision: (empty until proven)
+proof: after the PR merges, fetch origin and assert BOTH halves: (a) docs/adr/0212-*.md exists on origin/main via git cat-file -e, and (b) engine/router.yaml on origin/main still carries NO runtime row and none of cap:/hosted:/judge:/review_by: — the amendment must land BEFORE any routing row, so proving only (a) would miss the ordering this slice is actually about
+tier: contract
+sources: phase-04-spec.md, code:grep-fallback(1349; no .codegraph/), adrs(22), learning(3), retro(21), churn(871)
+decision: ADR-0212 rides PR #165, so merging that PR IS this slice. CI must be green read per-JOB and the run head SHA must equal the pushed HEAD before merging, because the API can lag a fresh push and merge a tree nobody tested.
 result: (empty until proven)
 commit: (empty until proven)
 
