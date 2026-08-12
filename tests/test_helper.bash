@@ -163,7 +163,47 @@ _arc_json() {
 
 # Skip guards for tests that need a real scanner (keeps CI green + honest when a
 # runner cannot install a tool; local runs with tools present always execute).
-_arc_need_semgrep()  { command -v opengrep >/dev/null 2>&1 || command -v semgrep >/dev/null 2>&1 || skip "semgrep/opengrep not installed"; }
+# Installed is not the same as WORKING, and the adapter cannot tell the difference: it ends its
+# scan line with `|| true` (adapters/semgrep.sh:57,62), so a tool that crashes produces an empty
+# SARIF and reads as a clean codebase. A guard that only checks `command -v` therefore lets a
+# broken scanner turn into "your adapter is wrong".
+#
+# Measured 2026-08-12: arc-scan.bats, baseline.bats and arc-profile.bats fail in ISOLATION on
+# windows on main AND on every branch (weigh-tests runs 31625002487 and 31627029442, identical
+# rc=1). They pass in arc-ci only when the sharder happens to co-locate them with
+# arc-tools-image.bats, which prepares the docker image the adapter falls back to -- an
+# undeclared inter-file dependency that any change to the shard plan revokes.
+#
+# So probe the TOOL directly, without the adapter's `|| true`, on a canary the arc-min rules are
+# known to flag. Tool broken or ruleless -> skip, visibly, naming why. Tool fine but the adapter
+# disagrees -> the test FAILS, which is the real bug it exists to catch. The probe runs once per
+# bats invocation and caches its answer.
+_arc_need_semgrep() {
+  local bin
+  bin="$(command -v opengrep 2>/dev/null || command -v semgrep 2>/dev/null)" \
+    || skip "semgrep/opengrep not installed"
+
+  local marker="${BATS_RUN_TMPDIR:-${TMPDIR:-/tmp}}/arc-semgrep-canary"
+  if [ ! -f "$marker" ]; then
+    local d rules rc=0
+    d="$(mktemp -d)"
+    rules="$ARC_SCAN_SRC/rules/arc-min.yaml"
+    printf 'function h(req){ return eval(req.query.q); }\n' > "$d/canary.js"
+    "$bin" scan --config "$rules" --sarif-output="$d/c.sarif" \
+      --disable-version-check --quiet "$d/canary.js" >/dev/null 2>&1 || rc=$?
+    if [ "$rc" -eq 0 ] && [ -s "$d/c.sarif" ] \
+       && grep -q '"ruleId"' "$d/c.sarif" 2>/dev/null; then
+      printf 'ok\n' > "$marker"
+    else
+      printf 'no rc=%s\n' "$rc" > "$marker"
+    fi
+    rm -rf "$d"
+  fi
+  case "$(cat "$marker")" in
+    ok) : ;;
+    *) skip "$(basename "$bin") cannot flag the arc-min canary on this runner ($(cat "$marker")) -- the scanner is not functional here, so these assertions would measure the runner rather than the adapter" ;;
+  esac
+}
 _arc_need_gitleaks() { command -v gitleaks >/dev/null 2>&1 || skip "gitleaks not installed"; }
 
 # Portable sha256 of stdin -> hex (GNU sha256sum / BSD-macOS shasum / openssl).
