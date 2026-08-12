@@ -97,12 +97,12 @@ commit: 5c00094
 title: **`process-lint.mjs` still validates all 3 processes unchanged** after the `pack.json` addition — **proven by running it**. `pack.json` is a sibling file precisely so the frozen `TOP_LEVEL_KEYS` (`process-lint.mjs:65-67`) is never touched. **`process-lint.mjs` itself** contains a literal control byte and so reads as binary to `grep` — use `grep -a` when searching that script.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: node .claude/scripts/engine/process-lint.mjs --all -- all checks passed (3 file(s)), exit 0; pinned as a regression test in tests/bench-assertions.bats; CI 19/19 per-JOB on 27f35ca (run for cc8bec1 also 19/19)
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: RUN the lint rather than trust the No-go sentence that claims the schema is additive. retro-log 2026-08-02: twice in one cycle a control the process had already decided on turned out not to exist, and both were found by running the artifact rather than reading it. The reason it passes is pinned too -- process-lint contains ZERO references to pack.json, because the manifest is a sibling of the fixtures precisely so the frozen TOP_LEVEL_KEYS never grows a key. The schema is additive because it lives outside the schema it would otherwise have had to change. The guard asserts the lint RAN and reached its verdict (all checks passed, 3 file(s)), never merely that it printed no error -- that shape is satisfied by a crash.
+result: process-lint: all checks passed (3 file(s)), exit 0. Regression test added to tests/bench-assertions.bats (now 6 tests). Note for future searches: process-lint.mjs carries a literal control byte, so grep reads it as binary and silently matches nothing without -a -- itself a retro-log entry (2026-08-09), from the file that guards against control characters. Landed via a clean cherry-pick onto main as 27f35ca after the original branch accumulated a squash-merge conflict against every prior merge.
+commit: 27f35ca
 
 #### slice: 06
 
