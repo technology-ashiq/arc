@@ -39,6 +39,13 @@ the pre-planned cut order (decided at kickoff, not at 6pm on day 8).
   written. PLAN.md, 5 phase specs and this tracker created. Attack panel ×3 returned 21
   findings: 20 accepted as PLAN mutations, 1 rejected (`unsupported`). Kickoff verification
   falsified five of the design source's inherited premises — see § Kickoff findings below.
+  **Simulation gate CLOSED at 0 blockers**, trajectory **10 → 4 → 2 → 0** across four rounds.
+  Round 3's two findings were the valuable ones: both were self-contradictions in this plan —
+  it required writing `arc-bench.mjs` and registering `mock` in `arc-run.mjs` while authorizing
+  neither path, and it required appending to `commit-msg-draft`'s `evals:` list while forbidding
+  edits to pilot processes. Round 3 also caught that the mock selected its recording by input
+  hash, which would have handed all five fixtures the same response, since that process declares
+  `inputs: []`. CI green 19/19 at `97faea9`.
 
 ## Kickoff findings — read before starting Phase 0
 

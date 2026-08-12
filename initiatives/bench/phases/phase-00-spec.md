@@ -21,10 +21,15 @@ rather than from a stated preference.
 node .claude/scripts/engine/arc-run.mjs --process PROCESS --driver DRIVER --input @FILE --budget inr=REMAINING
 ```
 
-with `ARC_ROOT` set to the materialized fixture repo (M3) and `ARC_DRIVER_MODEL` set to the
-candidate model id. **The run-level remainder is threaded by bench**: it computes `REMAINING`
-before each attempt and passes it down, so `arc-run`'s per-invocation `--budget` becomes the
-mechanism rather than a competing budget (REQ-04).
+Three env vars are set per attempt, and this is the complete list: **`ARC_ROOT`** = the
+materialized fixture repo (M3) · **`ARC_DRIVER_MODEL`** = the candidate model id ·
+**`ARC_MOCK_FIXTURE`** = the fixture id, which the mock uses to pick its recording (M2).
+`ARC_MOCK_FIXTURE` and `repo_state` and the `repo-states/` directory name are **all the same
+identifier** — one FIXTURE-ID per fixture, used in three places.
+
+**The run-level remainder is threaded by bench**: it computes `REMAINING` before each attempt and
+passes it down, so `arc-run`'s per-invocation `--budget` becomes the mechanism rather than a
+competing budget (REQ-04).
 
 **M2 · Where the mock's pinned bytes live, and how it picks one.** `ARC_MOCK_DIR` (default
 `tests/fixtures/bench/mock-replay/`). The mock resolves **`PROCESS/FIXTURE-ID.json`**, where
@@ -147,8 +152,9 @@ the fixtures themselves.
       clock or touch the network.
 - [ ] **`process-lint.mjs` still validates all 3 processes unchanged** after the `pack.json`
       addition — **proven by running it**. `pack.json` is a sibling file precisely so the frozen
-      `TOP_LEVEL_KEYS` (`process-lint.mjs:65-67`) is never touched. That file contains a literal
-      control byte and reads as binary to `grep`; use `grep -a`.
+      `TOP_LEVEL_KEYS` (`process-lint.mjs:65-67`) is never touched. **`process-lint.mjs` itself**
+      contains a literal control byte and so reads as binary to `grep` — use `grep -a` when
+      searching that script.
 - [ ] **The fixture-repo harness exists** per **M3**, because `commit-msg-draft` declares
       `inputs: []` and its real input is ambient git state. Five flat repo states is the whole
       scope; a general git-fixture framework is a declared rabbit hole.
@@ -177,8 +183,9 @@ the fixtures themselves.
       `tests/fixtures/engine/evals/**` · `.claude/scripts/engine/arc-run.mjs` (one-line `DRIVERS`
       registration) · `.claude/scripts/engine/arc-bench.mjs` (new file) ·
       `processes/commit-msg-draft.process.yaml` (`evals:` list only, per PLAN § No-gos).
-      `git log origin/main --oneline -5 -- PATH` for each, output recorded. Engine is IDLE but
-      leads, memory and scheduler are LIVE in sibling worktrees.
+      `git log origin/main --oneline -5 -- PATH` for each, **output recorded to
+      `initiatives/bench/evidence/phase-00/cross-lane-check.md`**. Engine is IDLE but leads,
+      memory and scheduler are LIVE in sibling worktrees.
 - [ ] tests added and **green on CI** (never run the suite on this box) —
       `.github/workflows/ci.yml`, read per JOB via `gh run view --json jobs`, never `gh run watch
       --exit-status`, which has already exited 0 on a run whose conclusion was `failure`. Confirm
