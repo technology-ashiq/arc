@@ -277,7 +277,7 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
 ## Now
 
 **Phase 02's five REQs are all built and GREEN ON CI. The phase is NOT closed, and must not be
-recorded as closed.** Latest green: run **31573674899 @ `95ed6e1`, 19/19 jobs, read per-JOB** -- the commit that closes all 30 adversarial findings.
+recorded as closed.** Latest green: run **31574476402 @ `5a0e6e0`, 19/19 jobs, read per-JOB** -- branch tip, with all 30 adversarial findings closed and the four grown suites re-weighed.
 
 | REQ | What shipped | Proven at |
 |---|---|---|
