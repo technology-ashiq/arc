@@ -111,6 +111,27 @@ function resolveToken(expr, ctx) {
     return bulletList(v.map(escapeValue));
   }
 
+  if (expr === "table.pricing") {
+    // The one paired rendering in the set. Parallel arrays are the shape ADR-1012 chose, and
+    // this is the single place they are zipped -- so a length mismatch has exactly one way to
+    // reach a page, and the schema has already refused it before we get here. The belt is kept
+    // anyway: a renderer that trusts an upstream check is a renderer that ships whatever the
+    // check missed.
+    const names = getPath(facts, "pricing.plan_names");
+    const amounts = getPath(facts, "pricing.plan_amounts_inr");
+    const period = getPath(facts, "pricing.period");
+    if (!Array.isArray(names) || !Array.isArray(amounts))
+      throw new TemplateError("NOT_A_LIST", "pricing.plan_names and pricing.plan_amounts_inr must both be lists");
+    if (names.length !== amounts.length)
+      throw new TemplateError("PLAN_MISMATCH", `${names.length} plan name(s) against ${amounts.length} amount(s); the page will not pair a price with the wrong plan`);
+    const periodLabel = ((vocab.labels || {})["pricing.period"] || {})[period];
+    if (!periodLabel) throw new TemplateError("NO_LABEL", `vocab.json has no label for pricing.period.${period}`);
+    ctx.used.add(expr);
+    return names
+      .map((n, i) => `- **${escapeValue(n)}** ${escapeValue(String(amounts[i]))} INR ${escapeValue(periodLabel)}`)
+      .join("\n");
+  }
+
   if (expr.startsWith("window.")) {
     const key = expr.slice(7);
     if (!(key in windows)) throw new TemplateError("UNKNOWN_WINDOW", `${expr} is not one of ${Object.keys(windows).join(", ")}`);

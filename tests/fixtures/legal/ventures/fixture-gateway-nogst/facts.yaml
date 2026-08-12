@@ -1,7 +1,7 @@
-# Fixture venture: payment_model=gateway, gst_registered=false.
+# Fixture venture: payment_model=gateway, gst_registered=false, stores_third_party_client_data=false.
 # One of six covering the full payment_model x gst_registered cross product. Invented
-# operator, invented address, invented contacts -- no real person's details live in a test
-# fixture, and no real venture's facts become permanent public test data.
+# operator, invented address, invented contacts, invented GSTIN -- no real person's
+# details live in a test fixture, and no real venture's facts become public test data.
 venture: fixture-gateway-nogst
 site_url: "https://gateway-nogst.example"
 effective_date: 2026-08-13
@@ -18,7 +18,7 @@ support:
   phone: "+91 44 4000 1000"
 
 grievance:
-  name: "Meera Raghavan"
+  name: "Devika Suresh"
   email: "grievance@gateway-nogst.example"
   address: "Grievance Officer, 4th Floor, 12 Anna Salai, Chennai 600002, India"
 
@@ -29,8 +29,6 @@ data_categories:
   - billing
   - device-and-log
   - support-correspondence
-  - client-matter-content
-  - uploaded-documents
 
 purposes:
   - provide-the-service
@@ -54,3 +52,28 @@ refund_window_days: 7
 gst_registered: false
 
 stores_third_party_client_data: false
+sub_processors:
+  - "Amazon Web Services India (hosting, Mumbai region)"
+  - "Postmark (transactional email)"
+  - "Razorpay (payment processing)"
+
+pricing:
+  plan_names:
+    - "Growth"
+    - "Pro"
+  plan_amounts_inr:
+    - 2999
+    - 5999
+  period: month
+
+delivery:
+  access_within_hours: 1
+
+commitments:
+  refund_decision_days: 5
+  deletion_live_days: 7
+  deletion_backup_days: 35
+  renewal_notice_days: 7
+  price_notice_days: 30
+  breach_notice_hours: 72
+  payment_failure_grace_days: 7

@@ -1,5 +1,5 @@
 {
-  "_comment": "The enum-to-clause map (ADR-1002). One key per BRANCHING field. Trace-lint reads this in two directions: a clause emitted but listed under no branch of the field that selected it is a trace FAIL; a clause listed under a branch that was NOT selected but present in the rendered bytes is a branch-mismatch FAIL. Six ordered leaks across payment_model are fixture-pinned, plus both gst_registered directions.",
+  "_comment": "The enum-to-clause map (ADR-1002). One key per BRANCHING field. Trace-lint reads it in three directions: a clause emitted but declared by no template block is a FAIL; a clause mapped under some branch and emitted when a DIFFERENT branch was selected is a branch mismatch; and a template guard naming a branch this map does not list is map drift. Keys beginning `derived.` are computed in arc-legal.mjs, not authored -- a `when=` guard is a single field=value equality by design, so a clause that depends on a COMBINATION gets that combination computed for it rather than an expression language added to the templates.",
   "payment_model": {
     "gateway": [
       "TERMS.FEES.GATEWAY",
@@ -10,20 +10,31 @@
     "mor": [
       "TERMS.FEES.MOR",
       "REFUND.MOR",
+      "REFUND.PROCESSING.MOR",
       "REFUND.DISPUTE.MOR"
     ],
     "none": [
       "TERMS.FEES.OFFLINE",
       "REFUND.OFFLINE",
+      "REFUND.PROCESSING.OFFLINE",
       "REFUND.DISPUTE.OFFLINE"
     ]
   },
-  "gst_registered": {
-    "true": ["REFUND.GST_INVOICE", "PRICING.GSTIN"],
-    "false": ["REFUND.NO_GST", "PRICING.NO_GST"]
+  "derived.invoice_kind": {
+    "gst": ["REFUND.GST_INVOICE", "PRICING.GSTIN"],
+    "no-gst": ["REFUND.NO_GST", "PRICING.NO_GST"],
+    "provider": ["REFUND.MOR_INVOICE"]
+  },
+  "derived.autorenew": {
+    "yes": ["CANCEL.AUTORENEW"],
+    "no": []
+  },
+  "derived.subprocessors": {
+    "yes": ["PRIVACY.SUBPROCESSORS"],
+    "no": []
   },
   "stores_third_party_client_data": {
-    "true": ["PRIVACY.PROCESSOR", "PRIVACY.SUBPROCESSORS", "TERMS.PROCESSOR_ROLE"],
+    "true": ["PRIVACY.PROCESSOR", "TERMS.PROCESSOR_ROLE", "ABOUT.PROCESSOR_ROLE"],
     "false": []
   }
 }

@@ -39,9 +39,35 @@ That means there is no card reversal to wait on, and no processing window impose
 {{#clause id=REFUND.PROCESSING when=payment_model=gateway}}
 ## How long a refund takes
 
-We start the refund within 2 working days of agreeing it.
+**We tell you yes or no within {{ facts.commitments.refund_decision_days }} working day(s) of your asking**, and inside the window above the answer is yes. We start the refund within 2 working days of that.
 
 After that, how long it takes to appear is the bank's part, not ours: with {{ label.payment_provider }} it is usually 5 to 7 working days, and it can be longer for some cards. If it has not arrived after 10 working days, write to us and we will chase it with the provider and tell you what they say.
+{{/clause}}
+
+{{#clause id=REFUND.PROCESSING.MOR when=payment_model=mor}}
+## How long a refund takes
+
+**We tell you yes or no within {{ facts.commitments.refund_decision_days }} working day(s) of your asking**, and inside the window above the answer is yes.
+
+We instruct {{ label.payment_provider }} within 2 working days of that. If the money has not reached you within 10 working days of our instruction, write to us: we will chase them, tell you what they say, and if it is still not with you we will pay you directly rather than leave you waiting on someone you never contracted with.
+{{/clause}}
+
+{{#clause id=REFUND.PROCESSING.OFFLINE when=payment_model=none}}
+## How long a refund takes
+
+**We tell you yes or no within {{ facts.commitments.refund_decision_days }} working day(s) of your asking**, and inside the window above the answer is yes.
+
+We send the transfer within 2 working days of that. There is no provider in the middle, so there is nobody for us to blame if it is late — it usually lands the same or the next working day.
+{{/clause}}
+
+{{#clause id=REFUND.BILLING_ERROR}}
+## If we charged you wrongly
+
+**A billing error is not a refund request, and the window above does not apply to it.**
+
+If we charge you twice for the same thing, charge you after you cancelled or turned renewal off, or charge you an amount you never agreed to, that is our mistake. Tell us whenever you notice it, however long afterwards, and we refund it in full.
+
+You do not have to argue the window with us. Write to {{ facts.support.email }}.
 {{/clause}}
 
 {{#clause id=REFUND.HOW_TO_REQUEST}}
@@ -64,10 +90,12 @@ You can cancel from inside your account, in the billing section.
 You can also cancel by writing to {{ facts.support.email }}. We will action it and confirm.
 {{/clause}}
 
-{{#clause id=CANCEL.AUTORENEW}}
+{{#clause id=CANCEL.AUTORENEW when=derived.autorenew=yes}}
 ## Automatic renewal
 
-If your plan renews automatically, we tell you the **amount** and the **date** before we charge you, not after.
+If your plan renews automatically, we email you the **amount** and the **date** **at least {{ facts.commitments.renewal_notice_days }} day(s) before we take the payment**. Not on the day, and not after.
+
+If we fail to send that notice and you did not want the renewal, we refund it in full — the window above does not apply.
 
 You can turn renewal off at any time from the billing section. Turning it off does not end your current period — you keep what you have paid for until it runs out.
 {{/clause}}
@@ -77,22 +105,24 @@ You can turn renewal off at any time from the billing section. Turning it off do
 
 We will not put a retention offer between you and the cancel button.
 
-We will not require a phone call, a chat session, or a reason. We will not ask you the same question three times in different words. We will not hide the final step behind a page that looks like it already finished.
+We will not require a phone call, a chat session, or a reason. **We ask you nothing on the way out** — not once, not in different words. We will not hide the final step behind a page that looks like it already finished.
 
-If you want to leave, the page you are on now is the whole of what stands in your way.
+Cancelling is done in the billing section of your account. Nothing else stands in your way, and if you would rather not use the account at all, an email to {{ facts.support.email }} does the same thing.
 {{/clause}}
 
 {{#clause id=CANCEL.EFFECT}}
 ## What happens after you cancel
 
-Your access continues until the end of the period you have paid for. We do not cut it off the moment you cancel.
+Your access continues until the end of the period you have paid for. We do not cut it off the moment you cancel, and we do not refund the unused part of a period you chose to leave early.
+
+**A refund is the other choice, not an extra one.** If we refund a payment in full, the access it bought ends when we make the refund. You cannot keep both, and we would rather say so here than surprise you later.
 
 Before it ends, export what you want to keep. After it ends, what we hold and for how long is set out in the [Privacy Policy]({{ facts.routes.privacy }}), and you can ask us to delete it at {{ facts.deletion_route.mailbox }}.
 
 Cancelling is not the same as deleting. If you want both, say so, and we will do both.
 {{/clause}}
 
-{{#clause id=REFUND.GST_INVOICE when=gst_registered=true}}
+{{#clause id=REFUND.GST_INVOICE when=derived.invoice_kind=gst}}
 ## Invoices and tax
 
 We are registered for GST. Our GSTIN is **{{ facts.gstin }}**, and it appears on every invoice we issue.
@@ -102,7 +132,7 @@ Ask at {{ facts.support.email }} for an invoice for any payment and we will send
 What the tax treatment of your purchase means for your own filings is a question for your accountant, not for this page.
 {{/clause}}
 
-{{#clause id=REFUND.NO_GST when=gst_registered=false}}
+{{#clause id=REFUND.NO_GST when=derived.invoice_kind=no-gst}}
 ## Invoices and tax
 
 **We are not registered for GST**, so our invoices carry no GSTIN and no GST is charged on them.
@@ -110,6 +140,16 @@ What the tax treatment of your purchase means for your own filings is a question
 Ask at {{ facts.support.email }} for an invoice for any payment and we will send it.
 
 What that means for your own filings is a question for your accountant, not for this page.
+{{/clause}}
+
+{{#clause id=REFUND.MOR_INVOICE when=derived.invoice_kind=provider}}
+## Invoices and tax
+
+**Your receipt comes from {{ label.payment_provider }}, not from us.** They sell you the subscription as the merchant of record, so they issue the tax document and they handle any tax on your purchase. Our own GST registration does not appear on it, because we are not the seller of that transaction.
+
+If you need a copy of that receipt, ask us at {{ facts.support.email }} and we will get it for you rather than sending you to them.
+
+What the tax treatment means for your own filings is a question for your accountant, not for this page.
 {{/clause}}
 
 {{#clause id=REFUND.DISPUTE.GATEWAY when=payment_model=gateway}}

@@ -10,12 +10,12 @@ CLI() { echo "$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs"; }
 
 teardown() { _arc_legal_teardown; }
 
-@test "legal render: a fixture facts file renders the three core pages" {
+@test "legal render: a fixture facts file renders the whole page set" {
   run node "$(CLI)" render --venture "fixture-gateway-gst" --out "$BATS_TEST_TMPDIR/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" ls-pages "$BATS_TEST_TMPDIR/out"
   [ "$status" -eq 0 ]
-  [ "$output" = "privacy.mdx refund-cancellation.mdx terms.mdx" ]
+  [ "$output" = "about.mdx contact.mdx pricing.mdx privacy.mdx refund-cancellation.mdx shipping-delivery.mdx terms.mdx" ]
 }
 
 @test "legal render: the sidecar records the engine, the set and the facts hash" {
@@ -115,13 +115,16 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" == *"usage: arc-legal render"* ]]
 }
 
-@test "legal render: pages not yet authored are reported by name, never skipped silently" {
+@test "legal render: every page in the set has a template, so nothing is reported unauthored" {
+  # An absent page and a complete one are the one thing a broken renderer and a healthy one
+  # would otherwise agree on, so the renderer names what it skipped. With the set complete,
+  # that list must be EMPTY -- and the positive control above (seven files on disk) is what
+  # stops this passing on a run that rendered nothing at all.
   run node "$(CLI)" render --venture "fixture-gateway-gst" --out "$BATS_TEST_TMPDIR/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" field "$BATS_TEST_TMPDIR/out/_run.json" not_authored
   [ "$status" -eq 0 ]
-  [[ "$output" == *"shipping-delivery"* ]]
-  [[ "$output" == *"pricing"* ]]
+  [ "$output" = "[]" ]
 }
 
 @test "legal render: the transform list is recorded on every page" {

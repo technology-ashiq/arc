@@ -31,6 +31,7 @@
     "statutory-period",
     "fixed-months"
   ],
+  "pricing_period": ["month", "year", "one-time"],
   "payment_model": ["gateway", "mor", "none"],
   "payment_provider": ["razorpay", "none"],
   "operator_type": ["individual", "entity"],
@@ -74,6 +75,11 @@
     "operator.type": {
       "individual": "an individual",
       "entity": "a registered entity"
+    },
+    "pricing.period": {
+      "month": "per month",
+      "year": "per year",
+      "one-time": "one time"
     }
   }
 }

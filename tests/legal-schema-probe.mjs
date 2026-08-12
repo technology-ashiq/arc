@@ -40,6 +40,18 @@ function base() {
     refund_window_days: 14,
     gst_registered: false,
     stores_third_party_client_data: false,
+    sub_processors: ["Amazon Web Services India (hosting)", "Razorpay (payment processing)"],
+    pricing: { plan_names: ["Growth"], plan_amounts_inr: [2999], period: "month" },
+    delivery: { access_within_hours: 1 },
+    commitments: {
+      refund_decision_days: 5,
+      deletion_live_days: 7,
+      deletion_backup_days: 35,
+      renewal_notice_days: 7,
+      price_notice_days: 30,
+      breach_notice_hours: 72,
+      payment_failure_grace_days: 7,
+    },
   };
 }
 
@@ -57,6 +69,10 @@ const cases = {
   "quoted-int": (f) => { f.refund_window_days = "14"; return f; },
   "bad-enum": (f) => { f.retention = "forever"; return f; },
   "impossible-date": (f) => { f.effective_date = "2026-02-30"; return f; },
+  "third-party-data-denied": (f) => { f.data_categories = ["identity", "client-matter-content"]; f.stores_third_party_client_data = false; return f; },
+  "third-party-data-declared": (f) => { f.data_categories = ["identity", "client-matter-content"]; f.stores_third_party_client_data = true; return f; },
+  "provider-not-disclosed": (f) => { f.sub_processors = ["Amazon Web Services India (hosting)"]; return f; },
+  "plan-arrays-mismatched": (f) => { f.pricing.plan_names = ["Growth", "Pro"]; f.pricing.plan_amounts_inr = [2999]; return f; },
   "bad-route": (f) => { f.routes = { terms: "legal/terms" }; return f; },
   "good-route": (f) => { f.routes = { terms: "/legal/terms" }; return f; },
   "http-site-url": (f) => { f.site_url = "http://probe.example"; return f; },

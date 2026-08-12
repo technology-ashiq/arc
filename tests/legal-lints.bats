@@ -1,18 +1,27 @@
 #!/usr/bin/env bats
-# legal Phase 00 -- the three lints, each proven by a mutant that RUNS.
+# legal Phase 00/01 -- the three lints, each proven by a mutant that RUNS.
 #
 # A guard whose negative control is a grep has no negative control: arc-evolve 2026-08-04
 # shipped a propose-only guard that a mutant module walked straight past. Every lint here is
 # attacked by a patched copy of the engine or the data, executed, and asserted RED.
+#
+# NOTE ON `run`. The mutation helpers are called DIRECTLY, never under bats `run`. `run`
+# executes its command in a SUBSHELL, so a helper that sets SANDBOX or MUTANT_STATUS sets them
+# in a process that then exits -- every assertion afterwards reads an empty variable and the
+# test fails for a reason that has nothing to do with the lint. The first cut of this file did
+# exactly that, and it failed on every leg at once.
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 teardown() { _arc_legal_teardown; }
 
-# Render the sandbox after N mutations and leave the sidecar at $SANDBOX/out/_run.json.
+# Build a sandbox, apply N mutations, render. Sets SANDBOX, ARC_LEGAL_CLI and MUTANT_STATUS.
+# Call directly. Returns nonzero only if the SETUP failed -- a render that exits 2 is a
+# legitimate outcome under mutation and is reported through MUTANT_STATUS.
 _mutate_and_render() {
   local venture="$1"; shift
-  _arc_legal_sandbox
+  _arc_legal_sandbox || return 1
+  local kind
   for kind in "$@"; do
     node "$ARC_ROOT/tests/legal-probe.mjs" mutate "$SANDBOX" "$kind" >/dev/null || return 1
   done
@@ -26,8 +35,7 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
 @test "legal lints: a page with zero mandatory clauses fails completeness, not provenance" {
   # Every clause that IS present traces perfectly, because none is present. Provenance alone
   # cannot pass an empty page (retro-log 2026-07-30: PASS defined as an absence).
-  run _mutate_and_render "fixture-gateway-gst" empty-page
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-gateway-gst" empty-page
   [ -f "$SANDBOX/out/_run.json" ]
 
   run _fails completeness
@@ -35,12 +43,13 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   [ "$output" -gt 0 ]
 
   run node "$ARC_ROOT/tests/legal-probe.mjs" finding-clauses "$SANDBOX/out/_run.json" completeness FAIL
+  [ "$status" -eq 0 ]
   [[ "$output" == *"PRIVACY.GRIEVANCE"* ]]
 }
 
 @test "legal lints: a compliance claim in authored prose is caught in the rendered output" {
-  run _mutate_and_render "fixture-gateway-gst" claim-in-template
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-gateway-gst" claim-in-template
+  [ -f "$SANDBOX/out/_run.json" ]
   run _fails value
   [ "$status" -eq 0 ]
   [ "$output" -gt 0 ]
@@ -50,8 +59,8 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   # The pair is the proof. With the list, the claim is caught; with the list emptied, it is
   # not. Either half alone proves nothing: a clean page with an emptied list is green because
   # there was nothing to catch, which is how this control passed vacuously on its first run.
-  run _mutate_and_render "fixture-gateway-gst" claim-in-template denylist-bypass
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-gateway-gst" claim-in-template denylist-bypass
+  [ -f "$SANDBOX/out/_run.json" ]
   run _fails value
   [ "$status" -eq 0 ]
   [ "$output" -eq 0 ]
@@ -61,8 +70,8 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   # Observed from a venture that takes no gateway payments at all. Rendering the same mutant
   # against the gateway fixture is GREEN and correct -- a leak is only visible from the branch
   # that was not chosen, which is why the first version of this control could not fail.
-  run _mutate_and_render "fixture-none-nogst" branch-leak
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-none-nogst" branch-leak
+  [ -f "$SANDBOX/out/_run.json" ]
   run _fails trace
   [ "$status" -eq 0 ]
   [ "$output" -gt 0 ]
@@ -72,23 +81,24 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
 }
 
 @test "legal lints: the same leak is caught from the mor side too" {
-  run _mutate_and_render "fixture-mor-gst" branch-leak
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-mor-gst" branch-leak
+  [ -f "$SANDBOX/out/_run.json" ]
   run _fails trace
+  [ "$status" -eq 0 ]
   [ "$output" -gt 0 ]
 }
 
 @test "legal lints: a clause-map that has drifted from the templates is a trace FAIL" {
-  run _mutate_and_render "fixture-gateway-gst" map-drift
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-gateway-gst" map-drift
+  [ -f "$SANDBOX/out/_run.json" ]
   run _fails trace
   [ "$status" -eq 0 ]
   [ "$output" -gt 0 ]
 }
 
 @test "legal lints: a mandatory clause dropped from the template is a completeness FAIL" {
-  run _mutate_and_render "fixture-gateway-gst" drop-required-clause
-  [ "$status" -eq 0 ]
+  _mutate_and_render "fixture-gateway-gst" drop-required-clause
+  [ -f "$SANDBOX/out/_run.json" ]
   run _fails completeness
   [ "$status" -eq 0 ]
   [ "$output" -gt 0 ]
@@ -97,13 +107,13 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
 }
 
 @test "legal lints: a grievance window with no source_url refuses the whole render" {
-  # This one is not a finding, it is a refusal: a legal number with no evidence link is the
-  # exact thing this module exists to refuse, so it fails closed rather than warning.
-  run _mutate_and_render "fixture-gateway-gst" strip-window-source
-  [ "$status" -eq 0 ]
+  # Not a finding -- a refusal. A legal number with no evidence link is the exact thing this
+  # module exists to refuse, so it fails closed rather than warning.
+  _mutate_and_render "fixture-gateway-gst" strip-window-source
   [ "$MUTANT_STATUS" -eq 2 ]
   [ ! -f "$SANDBOX/out/_run.json" ]
   run cat "$SANDBOX/err.txt"
+  [ "$status" -eq 0 ]
   [[ "$output" == *"source_url"* ]]
 }
 
@@ -112,6 +122,7 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   run node "$ARC_LEGAL_CLI" render --venture "fixture-gateway-gst" --out "$SANDBOX/out"
   [ "$status" -eq 0 ]
   run node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.json" any FAIL
+  [ "$status" -eq 0 ]
   [ "$output" = "0" ]
 }
 
@@ -166,11 +177,32 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   [ "$output" = "rejected" ]
 }
 
+@test "legal lints: holding other peoples records while denying it is rejected" {
+  # Three independent text-attack panels made this their number one finding, reading the
+  # RENDERED pages: a venture that itemises client records and sets the flag false renders a
+  # page that lists them and then promises nothing about them at all.
+  run node "$ARC_ROOT/tests/legal-schema-probe.mjs" third-party-data-denied
+  [ "$status" -eq 0 ]
+  [ "$output" = "rejected" ]
+}
+
+@test "legal lints: a payment provider missing from the sub-processor list is rejected" {
+  run node "$ARC_ROOT/tests/legal-schema-probe.mjs" provider-not-disclosed
+  [ "$status" -eq 0 ]
+  [ "$output" = "rejected" ]
+}
+
+@test "legal lints: mismatched plan names and amounts are rejected" {
+  run node "$ARC_ROOT/tests/legal-schema-probe.mjs" plan-arrays-mismatched
+  [ "$status" -eq 0 ]
+  [ "$output" = "rejected" ]
+}
+
 @test "legal lints: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"
   [ "$status" -eq 0 ]
-  local declared="$output"
+  declared="$output"
   run bats --count "$BATS_TEST_FILENAME"
   [ "$status" -eq 0 ]
   [ "$declared" -eq "$output" ]

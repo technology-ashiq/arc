@@ -1,5 +1,5 @@
 {
-  "_comment": "Completeness lint input (ADR-1009). A mandatory clause absent from the RENDERED bytes is a MISSING-CLAUSE finding, even when every clause that IS present traces perfectly -- provenance alone cannot pass an empty page. `when` is a single field=value equality against the facts, or absent for always-required. Only pages whose templates exist are checked; a page not yet authored is reported as NOT-AUTHORED, never as complete.",
+  "_comment": "Completeness lint input (ADR-1009). A mandatory clause absent from the RENDERED bytes is a MISSING-CLAUSE finding, even when every clause that IS present traces perfectly -- provenance alone cannot pass an empty page. `when` is a single field=value equality against the facts (including the derived ones), or absent for always-required.",
   "terms": [
     { "id": "TERMS.PARTIES" },
     { "id": "TERMS.SERVICE" },
@@ -30,21 +30,54 @@
     { "id": "PRIVACY.ANALYTICS" },
     { "id": "PRIVACY.SECURITY" },
     { "id": "PRIVACY.CHANGES" },
-    { "id": "PRIVACY.SUBPROCESSORS", "when": "stores_third_party_client_data=true" },
+    { "id": "PRIVACY.SUBPROCESSORS", "when": "derived.subprocessors=yes" },
     { "id": "PRIVACY.PROCESSOR", "when": "stores_third_party_client_data=true" }
   ],
   "refund-cancellation": [
     { "id": "REFUND.SCOPE" },
     { "id": "REFUND.HOW_TO_REQUEST" },
+    { "id": "REFUND.BILLING_ERROR" },
     { "id": "CANCEL.PATH" },
-    { "id": "CANCEL.AUTORENEW" },
     { "id": "CANCEL.NO_MAZE" },
     { "id": "CANCEL.EFFECT" },
     { "id": "REFUND.CONTACT" },
+    { "id": "CANCEL.AUTORENEW", "when": "derived.autorenew=yes" },
     { "id": "REFUND.WINDOW", "when": "payment_model=gateway" },
+    { "id": "REFUND.PROCESSING", "when": "payment_model=gateway" },
     { "id": "REFUND.MOR", "when": "payment_model=mor" },
+    { "id": "REFUND.PROCESSING.MOR", "when": "payment_model=mor" },
     { "id": "REFUND.OFFLINE", "when": "payment_model=none" },
-    { "id": "REFUND.GST_INVOICE", "when": "gst_registered=true" },
-    { "id": "REFUND.NO_GST", "when": "gst_registered=false" }
+    { "id": "REFUND.PROCESSING.OFFLINE", "when": "payment_model=none" },
+    { "id": "REFUND.GST_INVOICE", "when": "derived.invoice_kind=gst" },
+    { "id": "REFUND.NO_GST", "when": "derived.invoice_kind=no-gst" },
+    { "id": "REFUND.MOR_INVOICE", "when": "derived.invoice_kind=provider" }
+  ],
+  "shipping-delivery": [
+    { "id": "DELIVERY.NATURE" },
+    { "id": "DELIVERY.WHEN" },
+    { "id": "DELIVERY.WHERE" },
+    { "id": "DELIVERY.FAILURE" },
+    { "id": "DELIVERY.CONTACT" }
+  ],
+  "contact": [
+    { "id": "CONTACT.WHO" },
+    { "id": "CONTACT.HOW" },
+    { "id": "CONTACT.GRIEVANCE" },
+    { "id": "CONTACT.DELETION" }
+  ],
+  "pricing": [
+    { "id": "PRICING.PLANS" },
+    { "id": "PRICING.CHANGES" },
+    { "id": "PRICING.WHAT_YOU_PAY_WITH" },
+    { "id": "PRICING.CONTACT" },
+    { "id": "PRICING.GSTIN", "when": "derived.invoice_kind=gst" },
+    { "id": "PRICING.NO_GST", "when": "derived.invoice_kind=no-gst" }
+  ],
+  "about": [
+    { "id": "ABOUT.WHO" },
+    { "id": "ABOUT.WHAT" },
+    { "id": "ABOUT.HOW_TO_REACH" },
+    { "id": "ABOUT.NO_CLAIMS" },
+    { "id": "ABOUT.PROCESSOR_ROLE", "when": "stores_third_party_client_data=true" }
   ]
 }

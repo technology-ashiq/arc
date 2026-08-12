@@ -3,7 +3,7 @@
 
 **{{ facts.operator.legal_name }}**, trading as **{{ facts.operator.trade_name }}**, at {{ facts.geographic_address }}.
 
-We decide what personal data this service collects and why. That makes us the Data Fiduciary for it under India's Digital Personal Data Protection Act, 2023.
+We decide what personal data this service collects and why. When the relevant provisions of India's Digital Personal Data Protection Act, 2023 commence, that will make us the Data Fiduciary for it. We are describing the role we already play, not a status we already hold — see the next section.
 
 For anything on this page, write to {{ facts.support.email }}.
 {{/clause}}
@@ -27,7 +27,7 @@ We collect:
 
 {{ label.data_categories }}
 
-We collect nothing else. If that list needs to grow, this page changes first, and its effective date changes with it.
+That is the list, and it includes the counts and logs behind the analytics section below. If it needs to grow, this page changes first, and its effective date changes with it.
 {{/clause}}
 
 {{#clause id=PRIVACY.NOTICE.PURPOSES}}
@@ -43,20 +43,20 @@ We do not sell it. We do not rent it. We do not hand it to anyone for advertisin
 {{#clause id=PRIVACY.PROCESSOR when=stores_third_party_client_data=true}}
 ## The records you hold about other people
 
-This service is built to hold records about the people you serve. Those records are **yours**. In respect of them, you are the Data Fiduciary and we act only on your instructions.
+This service is built to hold records about the people you serve. Those records are **yours**. In respect of them, you are the one who decides — and once the DPDP Act commences, you will be the Data Fiduciary for them. We act only on your instructions either way.
 
 Concretely, that means:
 
 - **We act on your instructions.** We do not decide what goes in, and we do not use those records for any purpose of our own.
 - **We keep them confidential.** Access is limited to the people who need it to run or repair the service, and it is logged.
-- **We do not train on them.** No model of ours, and no model of anybody else's, is trained or fine-tuned on what you store here. We do not send those records to a third-party model.
+- **We do not train on them.** We do not train or fine-tune any model on what you store here, and we do not send those records to a third-party model. Our contracts with the providers listed further down forbid them doing it either — that is a contractual commitment we can show you, not a claim about what is happening inside someone else's company.
 - **You can take them out.** You can export them at any time while your account is open.
 - **You can have them removed.** When you close your account, you can require their deletion, and we will delete them on the schedule set out below.
 
 If the records you hold are subject to a professional duty of confidence, that duty is yours and we are built not to get in its way.
 {{/clause}}
 
-{{#clause id=PRIVACY.SUBPROCESSORS when=stores_third_party_client_data=true}}
+{{#clause id=PRIVACY.SUBPROCESSORS when=derived.subprocessors=yes}}
 ## Who else touches the data
 
 These are the other organisations that process data for us in order to run the service:
@@ -71,7 +71,7 @@ Each of them is bound to use the data only to provide their part of the service.
 
 We keep your personal data {{ label.retention }}.
 
-Backups roll off on their own schedule, which can lag a deletion by a short period. After that, the copy is gone from the backups too.
+**Two things outlive that, and we would rather you heard it here.** Invoices and payment records, which tax law requires us to keep whether or not you ask us to delete them — those we keep and nothing else. And backups, which roll off on their own schedule: within {{ facts.commitments.deletion_backup_days }} days of a deletion, the copy is gone from those too.
 {{/clause}}
 
 {{#clause id=PRIVACY.DELETION}}
@@ -81,7 +81,9 @@ Write to **{{ facts.deletion_route.mailbox }}** and ask. That mailbox is monitor
 
 Tell us the account the request is about. We may ask you to confirm you control it, because deleting on the word of someone who does not would be its own kind of failure.
 
-We will confirm when it is done, and say what was kept and why, if anything was.
+**We delete live data within {{ facts.commitments.deletion_live_days }} days of confirming the request, and backups within {{ facts.commitments.deletion_backup_days }} days.** We confirm when both are done, and say what was kept and why, if anything was.
+
+If you owe us money, that does not stop a deletion and we will not hold your data to collect it. We keep the invoice, because the law says we must, and nothing else.
 {{/clause}}
 
 {{#clause id=PRIVACY.RIGHTS}}
@@ -94,7 +96,9 @@ You can ask us to:
 - erase it, where we do not have to keep it for a legal reason;
 - nominate someone to exercise these rights for you if you die or become unable to.
 
-Ask at {{ facts.support.email }}. We do not charge for any of this.
+Ask at {{ facts.support.email }} — except erasure, which goes to {{ facts.deletion_route.mailbox }}, the one route named in *Deleting your data* below. If you write to the wrong address we forward it, and the clock starts the day you wrote, not the day it arrived in the right inbox.
+
+We do not charge for any of this.
 {{/clause}}
 
 {{#clause id=PRIVACY.WITHDRAW}}
@@ -113,17 +117,19 @@ Our grievance officer is **{{ facts.grievance.name }}**.
 - Email: {{ facts.grievance.email }}
 - Post: {{ facts.grievance.address }}
 
-**We acknowledge within {{ window.ack_hours }} hours and resolve within {{ window.resolve_days }} days.** Those are the tightest windows across the rules that bind us today ({{ window.instruments }}), and we print the tightest rather than the most convenient.
+**We acknowledge within {{ window.ack_hours }} hours and resolve within {{ window.resolve_days }} days.**
 
-If a rule with a shorter window starts to apply to us, this page changes and the number here comes down.
+That is what {{ window.instruments }} requires of us, and it is the tightest of the windows we have checked. We are not claiming to have surveyed every rule that could ever apply — if we learn that a shorter window binds us, this page changes and the number here comes down.
 {{/clause}}
 
 {{#clause id=PRIVACY.COMPLAINT.BOARD}}
 ## Going above us
 
-If we do not resolve your complaint, you can complain to the Data Protection Board of India once the relevant provisions commence and the Board is able to receive complaints.
+For anything about money or the service itself, you do not have to wait for anything: you can take a complaint to the consumer commission for your district, including online through the e-Daakhil portal, or call the National Consumer Helpline on 1915. Those routes are open today.
 
-We would rather you did not have to. Write to our grievance officer first, and give us the chance to fix it.
+For a complaint about your personal data specifically, the Data Protection Board of India is the route once the relevant provisions commence and the Board is able to receive complaints. It cannot take one yet.
+
+We would rather you did not need either. Write to our grievance officer first, and give us the chance to fix it.
 {{/clause}}
 
 {{#clause id=PRIVACY.LANGUAGE}}
@@ -149,7 +155,7 @@ We do not run advertising trackers on this site, and we do not build a profile o
 
 Access is limited to the people who need it. Data is encrypted in transit. Access to production systems is logged.
 
-We cannot promise that any system is fully secure, and we would not trust a page that told you otherwise. What we can tell you is what we do, and what we will do if it goes wrong: if a breach affects your personal data, we will tell you what happened, what was affected, and what you can do — and we will tell you as soon as we know, not once it is tidy.
+We cannot promise that any system is fully secure, and we would not trust a page that told you otherwise. What we can tell you is what we do, and what we will do if it goes wrong: if a breach affects your personal data, we will tell you what happened, what was affected, and what you can do — and we will tell you within {{ facts.commitments.breach_notice_hours }} hours of finding out, even if we do not yet know the full extent, and we will keep telling you as we learn more. Not once it is tidy.
 {{/clause}}
 
 {{#clause id=PRIVACY.CHANGES}}

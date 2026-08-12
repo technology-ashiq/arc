@@ -11,7 +11,7 @@ Where these terms say "we" or "us", they mean {{ facts.operator.legal_name }}. W
 
 The service is the software made available at {{ facts.site_url }}, together with any part of it you reach after signing in.
 
-We may change how the service works. If a change removes something you were relying on, we will say so on this page and give you the choice to stop paying before the change takes effect.
+We may change how the service works. If a change removes something you were relying on, we will email you before it takes effect and give you the choice to stop paying — the same notice we give for a change to these terms, because it is the same kind of loss.
 {{/clause}}
 
 {{#clause id=TERMS.ELIGIBILITY}}
@@ -55,11 +55,11 @@ You are responsible for having a lawful basis to hold those records and for tell
 {{#clause id=TERMS.FEES.GATEWAY when=payment_model=gateway}}
 ## Fees and payment
 
-You pay the fee shown on the pricing page for the plan you choose. Fees are in Indian Rupees.
+You pay the fee shown on the [pricing page]({{ facts.routes.pricing }}) for the plan you choose. Fees are in Indian Rupees and the figure shown is the whole amount — nothing is added at checkout. **If we raise the price of a plan you are on, we tell you at least {{ facts.commitments.price_notice_days }} days before your next renewal, and you may cancel at the old price until then.**
 
 We are the merchant for these payments. Card and bank payments are processed for us by {{ label.payment_provider }}; we do not store your full card number.
 
-Payment is due before the period it covers. If a payment fails, we will tell you and give you a chance to fix it before access is affected.
+Payment is due before the period it covers. **If a payment fails we email you and keep your access for {{ facts.commitments.payment_failure_grace_days }} days.** After that we suspend it, and you can still export what you put in for 30 days more.
 
 How refunds and cancellation work is set out on the [Cancellation and Refunds page]({{ facts.routes.refund-cancellation }}).
 {{/clause}}
@@ -67,7 +67,7 @@ How refunds and cancellation work is set out on the [Cancellation and Refunds pa
 {{#clause id=TERMS.FEES.MOR when=payment_model=mor}}
 ## Fees and payment
 
-You pay the fee shown on the pricing page for the plan you choose.
+You pay the fee shown on the [pricing page]({{ facts.routes.pricing }}) for the plan you choose. Fees are in Indian Rupees and the figure shown is the whole amount — nothing is added at checkout. **If we raise the price of a plan you are on, we tell you at least {{ facts.commitments.price_notice_days }} days before your next renewal, and you may cancel at the old price until then.**
 
 Your payment is taken by {{ label.payment_provider }}, which sells the subscription to you as the merchant of record and issues your receipt. Your contract for the payment itself is with them; your contract for the service is with us.
 
@@ -79,7 +79,7 @@ How refunds and cancellation work is set out on the [Cancellation and Refunds pa
 {{#clause id=TERMS.FEES.OFFLINE when=payment_model=none}}
 ## Fees and payment
 
-You pay the fee shown on the pricing page for the plan you choose. Fees are in Indian Rupees.
+You pay the fee shown on the [pricing page]({{ facts.routes.pricing }}) for the plan you choose. Fees are in Indian Rupees and the figure shown is the whole amount — nothing is added at checkout. **If we raise the price of a plan you are on, we tell you at least {{ facts.commitments.price_notice_days }} days before your next renewal, and you may cancel at the old price until then.**
 
 **We do not take payments through a payment gateway on this site.** We invoice you directly and you pay by bank transfer or by another method we agree with you in writing. There is no card payment page here, and this site will never ask you for card details.
 
@@ -101,6 +101,8 @@ You may stop using the service at any time. How to cancel, and what happens to y
 
 We may end your access if you seriously break these terms, or if we stop offering the service. Except where you have broken these terms in a way that puts others at risk, we will give you notice and a way to take your material with you before access ends.
 
+**If we stop offering the service we give you at least 60 days notice, keep exports working for all of it, and refund the unused part of anything you have prepaid.** A company winding down is exactly when a promise like this gets forgotten, so it is written here rather than left to goodwill.
+
 When the arrangement ends, you can export what you put in. After that, what we keep and for how long is set out in the [Privacy Policy]({{ facts.routes.privacy }}).
 {{/clause}}
 
@@ -113,7 +115,7 @@ We are responsible to you for loss we cause by failing to take reasonable care. 
 
 Where the law says a liability cannot be excluded, nothing here excludes it.
 
-Our total liability to you in any twelve-month period is limited to what you paid us in that period.
+Our total liability to you is limited to the fees you paid us in the twelve months before the event that caused the loss.
 {{/clause}}
 
 {{#clause id=TERMS.GOVERNING_LAW}}

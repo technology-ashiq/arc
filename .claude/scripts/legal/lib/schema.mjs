@@ -63,8 +63,73 @@ export const FIELDS = [
   { path: "stores_third_party_client_data", tier: "BOOL", type: "bool", required: true },
   { path: "sub_processors", tier: "FREE-TEXT", type: "freetext[]", max: 80, requiredWhen: "stores_third_party_client_data=true", minItemsWhen: 1 },
 
+  // Phase 1 -- the remaining four pages.
+  { path: "pricing.plan_names", tier: "FREE-TEXT", type: "freetext[]", max: 40, required: true, minItems: 1 },
+  { path: "pricing.plan_amounts_inr", tier: "INT", type: "int[]", min: 0, max: 10000000, required: true, minItems: 1 },
+  { path: "pricing.period", tier: "ENUM", type: "enum", vocab: "pricing_period", required: true },
+  { path: "delivery.access_within_hours", tier: "INT", type: "int", min: 0, max: 168, required: true },
+
+  // Every promise the pages make with a NUMBER in it. Each text-attack panel found the same
+  // shape independently: a commitment with no clock ("as soon as we know", "before we charge
+  // you", "on the schedule set out below") is a commitment nobody can hold the operator to.
+  // Making them facts means the venture chooses them and the page cannot print a promise the
+  // venture never made.
+  { path: "commitments.refund_decision_days", tier: "INT", type: "int", min: 1, max: 30, required: true },
+  { path: "commitments.deletion_live_days", tier: "INT", type: "int", min: 1, max: 90, required: true },
+  { path: "commitments.deletion_backup_days", tier: "INT", type: "int", min: 1, max: 365, required: true },
+  { path: "commitments.renewal_notice_days", tier: "INT", type: "int", min: 1, max: 90, required: true },
+  { path: "commitments.price_notice_days", tier: "INT", type: "int", min: 7, max: 180, required: true },
+  { path: "commitments.breach_notice_hours", tier: "INT", type: "int", min: 1, max: 168, required: true },
+  { path: "commitments.payment_failure_grace_days", tier: "INT", type: "int", min: 1, max: 60, required: true },
+
   { path: "routes", tier: "FORMAT", type: "routes", required: false },
 ];
+
+/**
+ * Cross-field rules -- the ones no single field can express. Kept separate from FIELDS so that
+ * "this field is well-formed" and "these fields agree with each other" are visibly different
+ * questions; a schema that only ever checks one field at a time cannot see a pair that has
+ * drifted apart.
+ */
+function crossFieldErrors(facts, errs) {
+  const names = getPath(facts, "pricing.plan_names");
+  const amounts = getPath(facts, "pricing.plan_amounts_inr");
+  if (Array.isArray(names) && Array.isArray(amounts) && names.length !== amounts.length) {
+    errs.push(
+      `pricing: ${names.length} plan name(s) but ${amounts.length} amount(s). Parallel arrays that have drifted apart would pair the wrong price with the wrong plan -- a false money statement arriving through the shape of the data rather than through a branch (ADR-1012).`,
+    );
+  }
+
+  // A venture that collects other people's records but declares it holds none renders a page
+  // that itemises `client-matter-content` and then carries NO processor clause, no
+  // confidentiality commitment and no no-training promise -- while collecting exactly the same
+  // data as the venture that does. Found by the hostile-customer text panel reading two
+  // rendered ventures side by side; no per-field rule could see it.
+  const cats = getPath(facts, "data_categories");
+  const stores = getPath(facts, "stores_third_party_client_data");
+  const THIRD_PARTY_CATEGORIES = ["client-matter-content", "uploaded-documents"];
+  if (Array.isArray(cats) && stores === false) {
+    const held = cats.filter((c) => THIRD_PARTY_CATEGORIES.includes(c));
+    if (held.length)
+      errs.push(
+        `data_categories lists ${held.join(" and ")} but stores_third_party_client_data is false. Those categories ARE other people's records: either set the flag true, so the page carries the processor and confidentiality clauses, or stop collecting them. A page that itemises them and promises nothing about them is the worst of both.`,
+      );
+  }
+
+  // The terms name the payment provider as handling card data; the privacy page's
+  // sub-processor list is framed as complete. If the provider is missing from it, the two
+  // pages disagree about who touches the customer's money data.
+  const model = getPath(facts, "payment_model");
+  const provider = getPath(facts, "payment_provider");
+  const subs = getPath(facts, "sub_processors");
+  if (model !== "none" && provider && provider !== "none" && Array.isArray(subs)) {
+    const named = subs.some((s) => String(s).toLowerCase().includes(String(provider).toLowerCase()));
+    if (!named)
+      errs.push(
+        `sub_processors does not name "${provider}", but payment_model is "${model}", so the terms page tells the reader that provider handles their payment. A sub-processor list presented as complete must contain it.`,
+      );
+  }
+}
 
 export function getPath(obj, dotted) {
   let cur = obj;
@@ -175,6 +240,17 @@ export function validateFacts(facts, vocab) {
         else if (value < field.min || value > field.max)
           errs.push(`${field.path}: ${value} is outside ${field.min}..${field.max}`);
         break;
+      case "int[]": {
+        if (!Array.isArray(value)) { errs.push(`${field.path}: must be a \`- \` sequence`); break; }
+        if (field.minItems && value.length < field.minItems) errs.push(`${field.path}: needs at least ${field.minItems} entry`);
+        value.forEach((item, i) => {
+          if (typeof item !== "number" || !Number.isInteger(item))
+            errs.push(`${field.path}[${i}]: must be a bare integer (a quoted "2999" is text, not a number)`);
+          else if (item < field.min || item > field.max)
+            errs.push(`${field.path}[${i}]: ${item} is outside ${field.min}..${field.max}`);
+        });
+        break;
+      }
       case "bool":
         if (typeof value !== "boolean") errs.push(`${field.path}: must be bare true or false`);
         break;
@@ -199,5 +275,6 @@ export function validateFacts(facts, vocab) {
     }
   }
 
+  crossFieldErrors(facts, errs);
   return errs;
 }

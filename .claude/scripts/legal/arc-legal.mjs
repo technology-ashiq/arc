@@ -154,7 +154,32 @@ export function renderVenture({ ventureName, outDir }) {
   // default never silently becomes part of the venture's own signed facts.
   const effectiveRoutes = {};
   for (const p of pagesDoc.pages) effectiveRoutes[p.id] = (facts.routes && facts.routes[p.id]) || p.default_route;
-  const factsView = { ...facts, routes: effectiveRoutes };
+
+  // DERIVED facts. A `when=` guard is a single field=value equality by design -- no negation,
+  // no conjunction, because an expression language between a facts file and a legal sentence is
+  // exactly what ADR-1009 refuses. Some clauses genuinely depend on a COMBINATION, and the
+  // answer is to compute the combination HERE, in code, and let the templates keep asking one
+  // simple question.
+  //
+  // Every one of these exists because a text attack panel found a page contradicting itself:
+  //   invoice_issuer  -- the merchant-of-record render said Razorpay issues the receipt and
+  //                      then printed the operator's own GSTIN on "every invoice we issue".
+  //   subprocessors   -- the "who else touches your data" section was gated on whether the
+  //                      CUSTOMER stores client records, so a venture with a host and an email
+  //                      provider disclosed neither. Two independent attackers found this one.
+  //   autorenew       -- the auto-renewal clause rendered for a venture that takes no gateway
+  //                      payments at all and invoices by hand.
+  // Derived values are NOT hashed: `facts` is what the receipt binds, and a derivation must
+  // never quietly become part of a venture's signed facts.
+  const derived = {
+    // THREE states, not two. The merchant-of-record render said Razorpay issues the receipt
+    // and then printed the operator's own GSTIN on "every invoice we issue" -- the regulator
+    // panel's worst finding, and a two-value flag could not express the difference.
+    invoice_kind: facts.payment_model === "mor" ? "provider" : (facts.gst_registered ? "gst" : "no-gst"),
+    autorenew: facts.payment_model === "none" ? "no" : "yes",
+    subprocessors: Array.isArray(facts.sub_processors) && facts.sub_processors.length ? "yes" : "no",
+  };
+  const factsView = { ...facts, routes: effectiveRoutes, derived };
 
   const pages = [];
   const findings = [];
