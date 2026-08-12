@@ -29,6 +29,7 @@ import { validateEvent } from "./lib/validate.mjs";
 import { experimentIdem, isExperimentKind } from "./lib/validate-experiment.mjs";
 import { leadsIdem, isLeadsKind } from "./lib/validate-leads.mjs";
 import { policyIdem, isPolicyKind } from "./lib/validate-policy.mjs";
+import { contentIdem, isContentKind } from "./lib/validate-content.mjs";
 import { scanSecrets } from "./lib/redact.mjs";
 import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
@@ -106,6 +107,15 @@ function safeExperimentIdem(kind, payload, venture, supersedes) {
 // operator sees the real field error from validateEvent rather than a hashing stack trace.
 function safeLeadsIdem(kind, payload) {
   try { return leadsIdem(kind, payload); } catch { return null; }
+}
+
+// And for `content.published` (ADR-1001). This branch exists because of the comment on the policy
+// branch below: that vocabulary shipped with validators, payload builders and tests, and NOTHING
+// could write one to the spine, because the derivation was missing HERE. Every policy receipt was
+// rejected and quarantined, and it was invisible for a cycle because every test drove the modules
+// directly and none drove the emitter.
+function safeContentIdem(kind, payload) {
+  try { return contentIdem(kind, payload); } catch { return null; }
 }
 
 // And for the four authority receipts (ADR-0508). Same reason, same shape.
@@ -194,6 +204,13 @@ function synthesize(kind, flags, { deriveIdem }) {
     if (flags.idem !== undefined)
       throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
     idem = safePolicyIdem(kind, payload) ?? sha256Hex(`${contentPre}|${ms}`);
+  } else if (isContentKind(kind)) {
+    // `--idem` is REFUSED for the same anti-preclaim reason as the three branches above. It bites
+    // harder here than anywhere: a decoy that pre-claims a real article's key does not just lose a
+    // receipt, it makes the site's provenance chain lie about which bytes were published.
+    if (flags.idem !== undefined)
+      throw new SpineError("BAD_IDEM", `--idem is refused on ${kind}: the idem is the total preimage over that kind's identity fields, derived, never supplied`);
+    idem = safeContentIdem(kind, payload) ?? sha256Hex(`${contentPre}|${ms}`);
   } else {
     idem = deriveIdem ? sha256Hex(contentPre) : (flags.idem ?? sha256Hex(`${contentPre}|${ms}`));
   }

@@ -31,6 +31,7 @@
     ".claude/scripts/hq/lib/redact.mjs",
     ".claude/scripts/hq/lib/spine-io.mjs",
     ".claude/scripts/hq/lib/validate-absorb.mjs",
+    ".claude/scripts/hq/lib/validate-content.mjs",
     ".claude/scripts/hq/lib/validate-experiment.mjs",
     ".claude/scripts/hq/lib/validate-leads.mjs",
     ".claude/scripts/hq/lib/validate-policy.mjs",

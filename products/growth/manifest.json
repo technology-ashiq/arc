@@ -1,0 +1,13 @@
+{
+  "name": "growth",
+  "version": "1.0.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "agents": [],
+  "scripts": [
+    ".claude/scripts/growth/lib/deploy.mjs"
+  ]
+}

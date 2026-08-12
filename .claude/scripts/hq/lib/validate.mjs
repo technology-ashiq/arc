@@ -7,6 +7,7 @@
 import { SpineError, ULID_RE, canonicalize, formatIst, nowMs, MAX_EVENT_BYTES, sha256Hex, IST_TS_RE } from "./canonical.mjs";
 import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate-experiment.mjs";
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
+import { CONTENT_KINDS, assertContent, isContentKind } from "./validate-content.mjs";
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearMiss, isAdoptionProposal, assertAdoptionProposal } from "./validate-absorb.mjs";
 
@@ -50,6 +51,11 @@ export const KINDS = Object.freeze([
   // law would itself quarantine as UNKNOWN_KIND. It is a company organ (ADR-0053), so its shape
   // lives here inline beside decision.recorded and the council pair, not in a lane module.
   "constitution.adopted",
+  // 44 -> 45 by ADR-1001 (growth). The one receipt that makes "every publish is on the spine"
+  // true; before it, an emit quarantined as UNKNOWN_KIND while the command still exited 0, which
+  // is the 2026-08-02 retro entry verbatim. Its validator lives in its own module rather than
+  // here because this file is a company organ three live lanes are editing this week.
+  ...CONTENT_KINDS,
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -339,7 +345,7 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400/0508)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400/0508/1001)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
@@ -348,6 +354,7 @@ export function validateEvent(event) {
   if (isExperimentKind(event.kind)) assertExperiment(event);
   if (event.kind === "council.verdict" || event.kind === "council.outcome") assertCouncil(event);
   if (isLeadsKind(event.kind)) assertLeads(event);
+  if (isContentKind(event.kind)) assertContent(event);
   if (isPolicyKind(event.kind)) assertPolicy(event);
   // A PROFILE, not a kind: approval.requested stays generic for every other gate in the repo,
   // and only a payload declaring subject: "policy.promotion" is held to the strict shape.
