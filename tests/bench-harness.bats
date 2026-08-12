@@ -51,7 +51,17 @@ PROBE() { echo "$ARC_ROOT/tests/bench-harness-probe.mjs"; }
   [[ "$output" == *"ok a refused materialization leaks no temp repo"* ]]
 }
 
+@test "a work tree can express a DELETION, and it lands unstaged" {
+  # Slice 07's delete-and-add fixture is the one case where a draft built only from ADDED lines
+  # describes half the change. Copying cannot remove a file, so work/ marks one with a
+  # `<path>.arc-deleted` tombstone that the harness honours.
+  run node "$(PROBE)"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok the tombstoned file is gone from the work tree"* ]]
+  [[ "$output" == *"ok the deletion is visible and unstaged"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 6 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 7 ]
 }

@@ -1,0 +1,53 @@
+{
+  "note": "Armed fixture (ADR-0905). A file is deleted and another added. A draft built only from added lines describes half the change, so this is the one fixture where a deletion has to be noticed. Input is {} because commit-msg-draft declares inputs: [] -- the varying thing is repo_state, materialized by the harness (M3).",
+  "repo_state": "delete-and-add",
+  "input": {},
+  "expected": {
+    "commits": [
+      {
+        "sha": "4936371",
+        "subject": "refactor(total): replace legacy-total with a reduce-based total"
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "id": "A-01",
+      "path": "commits.0.sha",
+      "op": "matches",
+      "value": "^[0-9a-f]{7,40}$"
+    },
+    {
+      "id": "A-02",
+      "path": "commits.0.subject",
+      "op": "matches",
+      "value": "^(feat|fix|chore|docs|refactor|test|perf)(\\([a-z0-9-]+\\))?: .+"
+    },
+    {
+      "id": "A-03",
+      "path": "commits.0.subject",
+      "op": "matches",
+      "value": "^refactor"
+    },
+    {
+      "id": "A-04",
+      "path": "commits.0.subject",
+      "op": "length_between",
+      "value": [
+        12,
+        72
+      ]
+    },
+    {
+      "id": "A-05",
+      "path": "commits.0.subject",
+      "op": "matches",
+      "value": "[^.]$"
+    },
+    {
+      "id": "A-06",
+      "path": "commits.1",
+      "op": "absent"
+    }
+  ]
+}

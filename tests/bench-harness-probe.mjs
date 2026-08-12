@@ -59,6 +59,23 @@ try {
 }
 check("cleanup removes the root", !existsSync(root));
 
+// ---- tombstones: a work tree can express a DELETION --------------------------------------------
+// `delete-and-add` is the one fixture where a draft built only from ADDED lines describes half
+// the change. Copying cannot remove a file, so work/ marks one with `<path>.arc-deleted`.
+{
+  const del = materializeRepoState(join(ROOT, "tests/fixtures/engine/evals/commit-msg-draft/repo-states/delete-and-add"));
+  try {
+    check("the tombstoned file is gone from the work tree", !existsSync(join(del.root, "src/legacy-total.mjs")));
+    check("the tombstone marker itself is gone too", !existsSync(join(del.root, "src/legacy-total.mjs.arc-deleted")));
+    check("the added file is present", existsSync(join(del.root, "src/total.mjs")));
+    const st = repoStatus(del.root);
+    // Porcelain shows a worktree deletion as ` D` and an untracked add as `??`. Both must be
+    // visible and UNSTAGED, or the process has nothing to stage and nothing to describe.
+    check("the deletion is visible and unstaged", st.split("\n").some((l) => l.startsWith(" D") && l.includes("legacy-total.mjs")));
+    check("the addition is visible as untracked", st.split("\n").some((l) => l.startsWith("??") && l.includes("total.mjs")));
+  } finally { del.cleanup(); }
+}
+
 // ---- refusals ---------------------------------------------------------------------------------
 check("a state with no base/ is refused", threw(() => materializeRepoState(join(ROOT, "tests/fixtures/bench/bad-state/no-base"))) !== null);
 check("a state with no work/ is refused", threw(() => materializeRepoState(join(ROOT, "tests/fixtures/bench/bad-state/no-work"))) !== null);

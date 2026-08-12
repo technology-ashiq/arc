@@ -183,10 +183,38 @@ export function coverageVerdict(taskClass, fixtureCount) {
 // avoid. The harness builds the situation; the process acts on it.
 // ---------------------------------------------------------------------------------------------
 
-import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+/**
+ * A work tree cannot express a DELETION by copying, so it marks one with a tombstone:
+ * `path/to/file.arc-deleted`. After the overlay, each tombstone removes its target and then
+ * itself, leaving the deletion visible to `git status` exactly as a real one would be.
+ *
+ * This exists because `delete-and-add` is the one fixture where a draft built only from ADDED
+ * lines describes half the change. Without a way to delete, that case could not be posed at all.
+ *
+ * The walk is hand-rolled rather than `readdirSync(dir, { recursive: true })`: that option
+ * landed in Node 18.17 and CI runs an 18 leg, so the convenient call would fail on exactly one
+ * of the three legs -- the class of failure this repo keeps paying for.
+ */
+function applyTombstones(root) {
+  const SUFFIX = ".arc-deleted";
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== ".git") walk(p); continue; }
+      if (!e.name.endsWith(SUFFIX)) continue;
+      const target = p.slice(0, -SUFFIX.length);
+      if (!existsSync(target)) throw new Error(`tombstone ${p} names no existing file -- the base tree never had ${target}`);
+      rmSync(target, { force: true });
+      rmSync(p, { force: true });
+    }
+  };
+  walk(root);
+}
 
 function git(root, args) {
   try {
@@ -220,6 +248,7 @@ export function materializeRepoState(stateDir) {
     git(root, ["commit", "-q", "--no-gpg-sign", "-m", "base"]);
     // Overlay the working changes and leave them UNSTAGED. This is the whole point.
     cpSync(join(stateDir, "work"), root, { recursive: true });
+    applyTombstones(root);
     return { root, cleanup };
   } catch (e) {
     // Never leak a temp repo on the failure path -- a harness that only cleans up when it

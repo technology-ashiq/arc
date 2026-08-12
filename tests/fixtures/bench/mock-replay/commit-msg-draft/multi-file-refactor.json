@@ -1,0 +1,8 @@
+{
+  "commits": [
+    {
+      "sha": "4936371",
+      "subject": "refactor(sum): extract the shared reduce into one helper"
+    }
+  ]
+}

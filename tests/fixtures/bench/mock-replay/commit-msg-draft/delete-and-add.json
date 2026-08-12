@@ -1,0 +1,8 @@
+{
+  "commits": [
+    {
+      "sha": "4936371",
+      "subject": "refactor(total): replace legacy-total with a reduce-based total"
+    }
+  ]
+}
