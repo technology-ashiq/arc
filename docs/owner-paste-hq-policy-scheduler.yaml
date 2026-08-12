@@ -1,0 +1,184 @@
+# hq.policy.yaml -- the human-declared CEILING (POL-A, ADR-0500..0507).
+#
+# This file is law. `policy-lint` FAILS FROM BIRTH on any violation: it is a validator, not an
+# advisory lint, because a policy file that parses when it should not is a grant nobody
+# authorised.
+#
+# Changing a ceiling here is a REPO EDIT in a reviewed diff -- never an agent action. The other
+# key, the event-earned cap, is folded from the spine and can only rise by a human
+# `policy.level.changed` citing trial-ledger evidence. effective = min(ceiling, cap).
+#
+# Every pair is born at L1. Nothing in this file grants execution by itself.
+
+version: 1
+
+# The adopted text this file quotes. policy-lint verifies the hash FIRST and only then parses
+# E2 out of it -- a strict prose parser is safe exactly because its input is byte-pinned.
+constitution:
+  version: "1.0"
+  sha256: "233a64961dc0a028ceca6b113405ead699f9185b39342924c32c05f9786b6ee6"
+  receipt: "01KZ9V0QXNNMB3ZH18MSH8DKH3"
+
+# The canonical semantics live HERE, not in a doc that describes them (POL-A: one source of
+# truth). L4 is a parse error, superseding docs/strategy/arc-full-architecture.md:61,217.
+levels:
+  L0: "denied -- the capability is unavailable; no call is attempted"
+  L1: "propose -- prepared and recorded, never executed; the birth level of every pair"
+  L2: "bounded -- executes only within the bound declared in this grant"
+  L3: "unbounded within the capability; human-granted only; never on a kind with a non-empty e2"
+
+# Constitution E2, verbatim. Checked element-for-element against CONSTITUTION.md after its
+# sha256 above is verified. A drifted quote fails the file.
+ungrantable_actions:
+  - "moving money"
+  - "killing a venture"
+  - "changing prices"
+  - "unlocking real-money trading"
+  - "publishing under Ashiq's name"
+
+# E2's twin for TARGETS (ADR-0502). Excluded from every write grant AND every file-mutating
+# shell grant, at every level, enforced by filesystem identity rather than string prefix --
+# a hardlink has no canonical path for realpath to resolve to.
+ungrantable_resources:
+  - ".claude/settings.json"
+  - ".claude/settings.local.json"
+  - ".claude/hooks/**"
+  - "hq.policy.yaml"
+  # The engine's OWN SOURCE. An adversarial pass pointed ADR-0502's own sentence back at it --
+  # "a backstop that the thing it binds can delete is not a backstop" -- and the guard's code
+  # was not on the list while `.claude/scripts/**` was a write root. Latent only because the
+  # birth cap is L1: the first legitimate write promotion would have handed an agent its own
+  # decision function.
+  - ".claude/scripts/hq/lib/policy/**"
+  - ".claude/scripts/hq/policy-lint.mjs"
+  - ".claude/scripts/hq/policy-matrix.mjs"
+
+# Closed enums for the capabilities that have no live consumer yet. Empty is the honest state:
+# a grammar written for a capability nobody calls is stale on arrival.
+targets:
+  message: []
+  publish: []
+  deploy: []
+
+# ADR-0507 -- what each permitted program can REPRODUCE. "*" is the SEVEN non-shell
+# capabilities; `shell` may never appear in a reproduces list, or effective(shell) would be
+# defined in terms of itself. An argv0 in a kind's allowlist but absent from this table is a
+# lint error, never an implicit narrow.
+argv0_classes:
+  node: { class: interpreter, reproduces: ["*"] }
+  python: { class: interpreter, reproduces: ["*"] }
+  python3: { class: interpreter, reproduces: ["*"] }
+  bash: { class: interpreter, reproduces: ["*"] }
+  sh: { class: interpreter, reproduces: ["*"] }
+  pwsh: { class: interpreter, reproduces: ["*"] }
+  npm: { class: interpreter, reproduces: ["*"] }
+  npx: { class: interpreter, reproduces: ["*"] }
+  # bats executes arbitrary bash from the file it is handed. It was classed `narrow` here and
+  # in the spec's own worked example; an adversarial pass ran `bats tests/evil.bats` straight
+  # through an uncapped L2 grant, and `session:interactive` may write `tests/**`, so
+  # write-then-run was a complete arbitrary-code path. It is an interpreter.
+  bats: { class: interpreter, reproduces: ["*"] }
+  # git -c alias.x=!cmd, -c core.pager=, --exec-path make git a general machine. Distinguishing
+  # `git diff` from `git checkout` needs subcommand parsing, which is the named rabbit hole, so
+  # git is modelled by what it CAN do.
+  git: { class: interpreter, reproduces: ["*"] }
+  gh: { class: vcs, reproduces: ["write", "network", "publish", "deploy"] }
+  curl: { class: fetcher, reproduces: ["network"] }
+  wget: { class: fetcher, reproduces: ["network"] }
+  jq: { class: narrow, reproduces: [] }
+  diff: { class: narrow, reproduces: [] }
+  sha256sum: { class: narrow, reproduces: [] }
+
+# The subject set. `process:NAME` resolves against processes/*.process.yaml; a kind absent from
+# here is read-only at L1 and nothing else (POL-B). Nothing is granted above L1 today: the
+# climb is event-earned, one human decision at a time, and this file is the ceiling those
+# decisions may not exceed.
+kinds:
+  # NOTE on every `shell` grant below sitting at L1. With ADR-0507's derivation, a shell grant
+  # is capped at the minimum of every capability its programs can reproduce -- and every program
+  # anyone actually needs (node, git, bats, npm) is a general machine, so shell can only exceed
+  # L1 for a kind whose write, network and spend are ALL already that high. Since spend can
+  # never exceed L1 in v1, shell above L1 is unreachable today, and `policy-lint` now says so
+  # rather than letting a grant claim L2 and derive L0. That is the rule working, not a
+  # limitation to route around: a process that needs `node` is asking for unbounded everything.
+  "session:interactive":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: ["initiatives/**", "docs/**", "tests/**"] }
+    shell: { level: L1 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  "process:kickoff-plan":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: ["initiatives/**", "docs/adr/**"] }
+    shell: { level: L1 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  "process:review-diff":
+    e2: []
+    read: { level: L3 }
+    write: { level: L1 }
+    shell: { level: L1 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  "process:commit-msg-draft":
+    e2: []
+    read: { level: L3 }
+    write: { level: L0 }
+    shell: { level: L1 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  # --- scheduler lane, Cycle 12 (ADR-0802) --------------------------------------------------
+  # Two scheduled script-jobs. They authorize as `process:` subjects because ADR-0504 closes the
+  # subject set to `session:interactive` or `process:NAME` where NAME is the filename stem of a
+  # real processes/*.process.yaml -- a `job:` prefix fails policy-lint by design. Each stem
+  # exists as processes/<stem>.process.yaml carrying `job_stub: true`, and arc-run refuses to
+  # execute a job stub before it selects a driver.
+  #
+  # ORDERING: apply this file only AFTER those two process files are on the tree. policy-lint
+  # FAILs a row naming a process that does not exist -- the subject set is a directory listing.
+  #
+  # `network` is L0 on purpose. Neither job touches the network, and declaring less than the
+  # sibling rows is the honest narrowing POL-D asks for. `shell` stays at L1 because
+  # day-close-roll shells out to `arc-event close-day`, whose argv0 is node.
+  #
+  # Both jobs sit at the L1 birth cap regardless of these ceilings (effective = min(ceiling,
+  # cap)), which is all `authorizeRun` needs: it blocks on L0, not on anything below execute.
+  "process:brief-materialize":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/hq/**"] }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  "process:day-close-roll":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/hq/**"] }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
