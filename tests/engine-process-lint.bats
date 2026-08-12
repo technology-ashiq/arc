@@ -206,6 +206,9 @@ _sed_i() { sed "$1" "$2" > "$2.tmp" && mv "$2.tmp" "$2"; }
         for (const [re, to] of subs) want = want.replace(re, to);
         const p = parseYamlSubset(readFileSync(root + "/processes/" + proc + ".process.yaml", "utf8"));
         if (!p.ok) { console.error(proc + ": parse failed: " + p.error.what); bad++; continue; }
+        // ADR-0207: a file whose migration proof has retired no longer claims to reproduce the
+        // pre-flip body, so comparing it to that body asserts something nobody believes.
+        if (p.value.baseline && p.value.baseline.retired) { console.log(proc + ": migration proof retired " + p.value.baseline.retired + " (ADR-0207), round-trip not asserted"); continue; }
         if (p.value.body !== want) { console.error(proc + ": body differs (" + p.value.body.length + " vs " + want.length + ")"); bad++; }
       }
       process.exit(bad ? 1 : 0);

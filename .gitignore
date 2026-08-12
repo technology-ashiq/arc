@@ -44,6 +44,12 @@ test-results/
 # Hook scratch state (PreCompact snapshots, graphify lock/log)
 .claude/state/
 
+# The same rule at ANY depth. `.claude/state/` above carries a middle separator, so git anchors
+# it to the repo root only -- and memory's builder takes `--root <dir>`, so pointing it at a
+# fixture tree under tests/ writes a derived index into a TRACKED directory that the line above
+# does not cover. Verified with `git check-ignore` in Cycle 11: it did not match.
+**/.claude/state/
+
 # arc-registry.json is a per-INSTALL artifact written into consumer targets, never the mold
 # itself (Phase 02, REQ-08). It's excluded from the golden + tree-diff gates by design, so
 # ignore it here too — a stray one can never be silently committed into the mold's .claude/.

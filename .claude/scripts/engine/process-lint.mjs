@@ -73,7 +73,10 @@ const INPUT_KEYS = Object.freeze(["name", "type", "required", "default", "descri
 // flip would fail forever, because the generated file now carries a DO-NOT-EDIT header the
 // 7abeda1 pin predates. What replaces it is not nothing: `arc-compile --check` becomes the
 // ongoing gate, which is also ADR-0201's hand-edit detection.
-const BASELINE_KEYS = Object.freeze(["target", "path", "commit", "sha256", "migrated"]);
+// `retired` (ADR-0207) marks the moment the file first legitimately changed, after which the
+// proof no longer claims to reproduce the pre-flip command -- and that claim being false is the
+// point, not a defect. Both baseline gates skip a retired file and count it apart.
+const BASELINE_KEYS = Object.freeze(["target", "path", "commit", "sha256", "migrated", "retired"]);
 const BASELINE_REQUIRED = Object.freeze(["target", "path", "commit", "sha256"]);
 
 // Which live file each PILOT process is canonical for. Without this binding, `baseline`
