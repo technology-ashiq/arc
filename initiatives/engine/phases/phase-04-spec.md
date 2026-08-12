@@ -40,13 +40,20 @@ act arc does not perform.
       says what a runtime is.
 - [ ] **The owner starts Docker Desktop** and the daemon reports healthy (`docker info` returns a
       server version rather than the pipe error it returns today).
-- [ ] **Hermes Agent is installed at pinned tag `v2026.8.3`.** The install method is **not** written
-      here on purpose: it is read from the project's own current documentation at
-      `https://hermes-agent.nousresearch.com/docs` and the canonical repository
-      `https://github.com/NousResearch/hermes-agent`, and the **exact command actually used is
-      recorded** in the evidence bundle as `install-method.md`. Guessing an install command into a
-      spec is how a fabricated package name enters a repository; reading it from the vendor and
-      writing down what was run is the honest form.
+- [ ] **Hermes Agent is obtained as a CONTAINER IMAGE, pinned by digest — never via the host
+      installer.** Tag `v2026.8.3` carries **no release assets**, its npm and PyPI channels were
+      retired in that very release, and the `install.ps1` / `install.sh` scripts are not tracked files
+      at that tag — they are served live from the docs site and default to *latest*. So a
+      `curl`-piped host install would be both unpinnable and the riskiest available shape for a
+      runtime with a contested security record. The image digest is the one content-addressable handle
+      the vendor offers (ADR-0209 amendment). The **exact image reference and the resolved digest** are
+      read from the vendor's current documentation at
+      `https://hermes-agent.nousresearch.com/docs` / `https://github.com/NousResearch/hermes-agent`
+      and **recorded** in the evidence bundle as `install-method.md`, together with the exact command
+      run. Guessing an install command into a spec is how a fabricated artifact enters a repository;
+      reading it from the vendor and writing down what was run is the honest form. **If no container
+      channel exists, that is an EXE-A finding and the STOP fires** — an unpinnable runtime is refused
+      by a pin-required class.
 - [ ] **A container-backed execution backend is configured, and the bare `local` backend is not
       used.** Which backends exist and how one is selected is likewise read from the vendor docs
       above; the chosen backend, the exact config file path, and its content hash are recorded in the
@@ -70,8 +77,13 @@ act arc does not perform.
       instruction whose answer is a small JSON object, pinned so the run is repeatable and so nobody
       re-types it. **The run targets the local `ollama` endpoint already serving on
       `http://localhost:11434`** — zero spend, no credential, and no uncapped key is ever used. The
-      flag or config key that points the runtime at a local OpenAI-compatible endpoint is read from
-      the vendor docs and recorded in `backend-config.md`. **If the runtime cannot target a local
+      documented config is `model.provider: custom` with
+      `model.base_url: http://localhost:11434/v1` — **the `/v1` suffix is required** — and from inside
+      a container the host endpoint is reached as `host.docker.internal` rather than `localhost`.
+      **Ollama must also be restarted with `OLLAMA_CONTEXT_LENGTH=64000`**: it defaults to as little
+      as 4,096 tokens while this runtime expects ≥64,000, and the failure mode is silent truncation
+      rather than an error — a smoke run that looks green while the model never saw its whole prompt.
+      All of it is confirmed against the vendor docs at run time and recorded in `backend-config.md`. **If the runtime cannot target a local
       endpoint**, this criterion instead names the credential it does use, and that credential is the
       capped key provisioned below — never an uncapped one.
 - [ ] **The invocation's exit code is recorded as observed** and compared against the real three-code

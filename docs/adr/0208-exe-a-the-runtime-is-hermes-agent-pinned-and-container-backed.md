@@ -78,6 +78,29 @@ drained by litigation this month. SuperAGI — stalled, unaddressed vulnerabilit
 drifting to a paywalled platform, muddying self-hostability. Letta — a stateful-memory SDK, not a
 runtime of this class, and mid-deprecation of its own V1 server.
 
+## Amendment, 2026-08-12 (pre-approval, from the runnability recon)
+
+Three facts checked against primary sources before this decision is acted on, none of which change
+the pick and one of which changes how it is obtained:
+
+- **Windows is a Tier-1 native platform** for this runtime — CLI, gateway, scheduler, browser tool and
+  local-model support all documented as working natively, no WSL required. The one documented gap is
+  the desktop dashboard's embedded terminal pane, which needs a POSIX PTY. Irrelevant here: this cycle
+  uses the headless CLI only.
+- **`hermes -z` is confirmed verbatim** as "single prompt in, final response text out, nothing else on
+  stdout or stderr", with `--usage-file` written *even when the run fails*. **But the documentation is
+  silent on whether the process is guaranteed to exit on its own**, and that is precisely the property
+  the rejected candidate failed on. Phase 04 therefore records the observed exit as evidence rather
+  than assuming it, and a process that answers and then hangs is recorded as a serious divergence.
+- **Obtained as a container image, not via the host installer** — see ADR-0209's amendment. The tag
+  carries no release assets and the installer is a live-fetched script defaulting to latest.
+
+Independently re-verified: issue #4170 is **open**, titled *"No network egress filtering — terminal
+commands have unrestricted internet access"*, and scoped to the **`local` backend**. Two further
+Windows-specific defects (#16425, #16426, empty terminal output) are scoped to the same backend, one
+of them closed as not planned. All three are evidence *for* the container-only clause above rather
+than against the pick.
+
 ## Consequences
 
 **Easier.** `hermes -z` plus a `--usage-file` sidecar maps almost one-to-one onto ADR-0203's

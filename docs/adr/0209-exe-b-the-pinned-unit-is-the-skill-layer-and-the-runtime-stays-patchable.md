@@ -71,6 +71,31 @@ unfrozen, which is a live tradeoff rather than a settled one.
 gateway and authentication bugs, which is the worse of the two risks for a young, fast-moving
 codebase. Freeze-nothing — leaves the one layer with a documented mass-compromise uncontrolled.
 
+## Amendment, 2026-08-12 (pre-approval, from the runnability recon)
+
+A reconnaissance pass against the vendor's own release API found something this decision has to
+account for: **tag `v2026.8.3` carries `"assets": []`.** Nothing is attached to it. The release notes
+for that very version record that the **npm and PyPI channels were retired**, and `install.ps1` /
+`install.sh` are **not tracked files** in the repository tree at that tag — they are served
+dynamically from the docs site and default to installing *latest*, not the pinned tag.
+
+So the ordinary pin has nothing to grip. There is no registry entry whose `dist.integrity` or
+`digests.sha256` can be read the way ADR-0110 requires, and a `curl`-piped installer fetched live from
+a website is the single worst install shape available for a runtime with a contested security record —
+it is the exact "fetched, not installed" hazard ADR-0110 was written about, one layer earlier.
+
+**The runtime is therefore obtained as a container image, and the image digest is the pin.** A digest
+is content-addressable by construction: it is the one handle this vendor offers that names an exact
+artifact rather than a moving label. The exact image reference is read from the vendor's current
+documentation at install time and **recorded** in Phase 04's `install-method.md` alongside the
+resolved digest, in the same read-it-and-write-down-what-you-ran discipline the rest of that phase
+uses. This also removes the host from the blast radius entirely, and it converges with ADR-0208's
+container-backed requirement instead of sitting beside it.
+
+The host PowerShell installer is **not** used. If the container channel turns out not to exist for
+this runtime, that is an EXE-A finding and it fires the Phase-04 STOP — an unpinnable runtime is
+refused by a pin-required class, which is this ADR's own rule applied to the runtime itself.
+
 ## Consequences
 
 **Easier.** No new vetting mechanism, no second lockfile format, no parallel allowlist. The runtime
