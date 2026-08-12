@@ -1,0 +1,4 @@
+{
+  "note": "Hostile fixture: a pack manifest missing its revision. readPack must REFUSE this rather than default it, because an eval-pack revision is what makes champion and candidate comparable (BEN-A gate 6) -- a defaulted revision would silently declare two different fixture sets comparable.",
+  "task_class": "commit-msg-draft"
+}
