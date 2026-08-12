@@ -159,6 +159,8 @@
 .claude/scripts/hq/arc-event.mjs	ec0f4ee6505b3d22747bd822934d2f2a48bd3224e298a7343b389be7b7ff5e22
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	70403b5dbd606de7ac767ac96e791d7798fe077590d88659d9dd11ae426c90f7
+.claude/scripts/hq/arc-jobs.mjs	fce9ca5226aab51465c2a041449bf6a9b25ce871d4f59572f20633de784e1edc
+.claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/jobs-lint.mjs	a2a20449af587abda3734cb22184aa73ce6f0b14f9b881d6ab5c8180d4bb77b8
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
@@ -182,7 +184,7 @@
 .claude/scripts/hq/lib/policy/tool-capabilities.json	f0c1cdd0dac19d7127c327fc251f3a3572eb0817a6be94cd6f8d5a57dd5f8f24
 .claude/scripts/hq/lib/policy/yaml.mjs	43908a3e8bf5ed5f1ea199fd6d9a6beba1a3e63b60a226a9c4f87373794520f7
 .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314
-.claude/scripts/hq/lib/spine-io.mjs	d2d7457e3c4a349bde162c0818f25d97151910295e75ec4e7c839dc64e514e7b
+.claude/scripts/hq/lib/spine-io.mjs	b8aa18ed070a68c29b9a4c16b4add3a70452130393a81b91379f960ffda470d7
 .claude/scripts/hq/lib/validate-absorb.mjs	2b404b96f3ff5b3b3dd6d21d51b6d871040f8addd4914d5c5ca1cf17507ef14b
 .claude/scripts/hq/lib/validate-experiment.mjs	21ad45d162632f47308962ef5282a814f1951685b45d99e4ba73fba6f9d54597
 .claude/scripts/hq/lib/validate-leads.mjs	0f5cf51a91a9ec91857f433169149bfed7f35bd89f78c3ba9e5accc7bdfa2709

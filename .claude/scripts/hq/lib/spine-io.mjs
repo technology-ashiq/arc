@@ -144,10 +144,20 @@ function sleepSync(ms) {
  * else, the original holder's release deleted the NEW holder's lock -- and three processes
  * ended up inside the critical section at once.
  */
-export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = ".lock" } = {}) {
   const dir = eventsDir(root);
   ensureDir(dir);
-  const lock = join(dir, ".lock");
+  // `lockName` is ADDITIVE and defaults to the one spine-wide lock, so every existing caller is
+  // byte-identical in behaviour. It exists for the scheduler's PER-JOB overlap lock (SCH-C):
+  // two different jobs firing in the same minute are legal, and only a job overlapping ITSELF
+  // is blocked, so they cannot share one lock. The alternative was a second hand-rolled lock,
+  // which is banned outright -- this token-ownership discipline took three defects to get right
+  // (a stale-breaker deleting a live holder's lock, an unconditional-unlink release handing the
+  // critical section to three processes at once, and EPERM/EACCES on Windows delete-pending
+  // meaning contention rather than failure), and none of that is worth reproducing badly.
+  if (typeof lockName !== "string" || !/^\.[a-z0-9.-]+$/.test(lockName))
+    throw new SpineError("LOCK_FAILED", `lockName ${JSON.stringify(lockName)} is not a safe lock filename`);
+  const lock = join(dir, lockName);
   const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
   const deadline = Date.now() + timeoutMs;
   let fd = null;

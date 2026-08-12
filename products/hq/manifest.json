@@ -11,6 +11,8 @@
     ".claude/scripts/hq/arc-event.mjs",
     ".claude/scripts/hq/arc-event.sh",
     ".claude/scripts/hq/arc-inbox.mjs",
+    ".claude/scripts/hq/arc-jobs.mjs",
+    ".claude/scripts/hq/arc-jobs.sh",
     ".claude/scripts/hq/arc-replay.mjs",
     ".claude/scripts/hq/jobs-lint.mjs",
     ".claude/scripts/hq/jobs/brief-materialize.mjs",
