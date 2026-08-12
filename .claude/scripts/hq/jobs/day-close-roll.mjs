@@ -61,22 +61,43 @@ function main() {
       result.already_sealed.push(day);
       continue;
     }
-    // argv array, never a shell string: a day string is interpolated into this command, and a
-    // shell string is where interpolation becomes injection. There is no shell in this path.
-    const r = spawnSync(process.execPath, [ARC_EVENT, "close-day", "--date", day], {
+    // `--strict` IS LOAD-BEARING, NOT DECORATION. arc-event runs in hook mode by default and
+    // exits 0 on EVERY failure -- it writes `SKIP <code>` to stderr and returns success, so a
+    // lock timeout, a torn append, a validation failure and a bad date all looked identical to
+    // a sealed day. Measured: `close-day --date not-a-date` exits 0. Without this flag the job
+    // reported `sealed=N failed=0` while sealing nothing, and the wrapper wrote a receipt
+    // saying the books were closed. That is not a benign misread; it is failure reported as
+    // success, on the one job whose entire purpose is tamper-evidence.
+    //
+    // argv array, never a shell string: a day is interpolated here, and a shell string is where
+    // interpolation becomes injection. There is no shell in this path.
+    const r = spawnSync(process.execPath, [ARC_EVENT, "close-day", "--date", day, "--strict"], {
       encoding: "utf8",
       windowsHide: true,
     });
+
+    // The spawn itself can fail without ever producing a status: ENOENT, EACCES, EMFILE, or a
+    // maxBuffer overflow all arrive as `r.error` with `status === null`.
+    if (r.error) {
+      result.failed.push({ day, status: null, stderr: `spawn failed: ${r.error.code || r.error.message}` });
+      continue;
+    }
+
     const stderr = String(r.stderr || "");
-    if (r.status === 0) {
+    // THE VERDICT COMES FROM THE FILESYSTEM, NOT FROM THE CHILD'S STDERR. A close marker either
+    // exists afterwards or it does not; classifying on a stderr pattern means a legitimate
+    // failure whose message happens to contain the token is filed as benign. Read the artifact,
+    // do not parse the report about it.
+    const closedNow = isDayClosed(root, day);
+    if (r.status === 0 && closedNow) {
       result.sealed.push(day);
-    } else if (/DAY_CLOSED/.test(stderr)) {
-      // Raced with another sealer between the check above and the call. Benign, and counted as
-      // what it is rather than folded into success.
+    } else if (closedNow) {
+      // Raced with another sealer between the check above and this call: it is closed, and this
+      // process is not the one that closed it. Benign, and counted as what it is.
       result.already_sealed.push(day);
     } else if (/NO_DAY/.test(stderr)) {
-      // A day file that vanished between listDays and here. A day with no events never had a
-      // file and so was never in the list at all -- it is not a day that needs sealing.
+      // The day file vanished between listDays and here. A day with no events never had a file
+      // and so was never in the list -- it is not a day that needs sealing.
       result.empty.push(day);
     } else {
       result.failed.push({ day, status: r.status, stderr: stderr.trim().slice(0, 400) });

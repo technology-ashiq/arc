@@ -93,7 +93,26 @@ root = resolve(root || gitToplevel() || ".");
 if (all) {
   const dir = join(root, "processes");
   if (!existsSync(dir)) { console.error(`arc-compile: no processes/ directory under ${root}`); process.exit(1); }
-  for (const f of readdirSync(dir).sort()) if (f.endsWith(".process.yaml")) files.push(join(dir, f));
+  for (const f of readdirSync(dir).sort()) {
+    if (!f.endsWith(".process.yaml")) continue;
+    // JOB STUBS ARE NOT COMPILABLE (scheduler ADR-0802). A stub exists only so a scheduled job
+    // has a policy subject -- ADR-0504 closes that set to a real stem in this directory -- and
+    // it declares no engine contract, no output schema and no baseline command to be byte-diffed
+    // against. Compiling one asks it for all three and reports a drift that is really an absence.
+    //
+    // Detected by reading the file rather than by name, so renaming a stub cannot smuggle it back
+    // into the compile set. Keyed on PRESENCE of the marker, matching process-lint and arc-run:
+    // the frozen subset parses `yes`/`on`/`True`/`"true"` as strings, so `=== true` would let
+    // those spellings through into the compiler.
+    let text = null;
+    try { text = readFileSync(join(dir, f), "utf8"); } catch { text = null; }
+    if (text !== null) {
+      const parsed = parseYamlSubset(text);
+      if (parsed.ok && parsed.value && typeof parsed.value === "object"
+          && Object.prototype.hasOwnProperty.call(parsed.value, "job_stub")) continue;
+    }
+    files.push(join(dir, f));
+  }
 }
 if (!files.length) { console.error("arc-compile: nothing to compile"); process.exit(2); }
 

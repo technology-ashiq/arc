@@ -64,8 +64,23 @@ export function istWeekday(ms) {
   return new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
 }
 
-/** Does this cadence fire on this IST day at all? weekdays = Mon..Fri. */
+/** `YYYY-MM-DD`, and a real date. `2026-02-31` parses digit-wise and is not a day. */
+export function isDayString(day) {
+  if (typeof day !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const [y, mo, d] = day.split("-").map(Number);
+  const t = new Date(Date.UTC(y, mo - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === mo - 1 && t.getUTCDate() === d;
+}
+
+/**
+ * Does this cadence fire on this IST day at all? weekdays = Mon..Fri.
+ *
+ * A malformed day THROWS rather than answering. It used to return `true` for `daily` and
+ * `false` for `weekdays` -- two opposite answers to the same garbage, neither of them a
+ * refusal, and both of them a confident wrong answer to "should this job have run".
+ */
 export function firesOnDay(cadence, day) {
+  if (!isDayString(day)) throw new Error(`cadence: ${JSON.stringify(day)} is not a YYYY-MM-DD day`);
   if (cadence.kind === "daily") return true;
   const [y, mo, d] = day.split("-").map(Number);
   const dow = new Date(Date.UTC(y, mo - 1, d)).getUTCDay();
@@ -133,12 +148,20 @@ export function nextSlots(cadence, ms, count) {
  * Every slot in [fromMs, toMs], oldest first. The gap audit and the overdue derivation both
  * need "what SHOULD have run", which silence cannot tell them.
  */
+const WALK_LIMIT = 4000;
+
 export function slotsBetween(cadence, fromMs, toMs) {
+  // A non-finite bound is REFUSED, never folded into an empty range. Both consumers ask "what
+  // should have run"; answering [] for a missing or corrupt bound says "nothing was expected",
+  // which makes a dead job read healthy -- the failure this whole module exists to detect.
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs))
+    throw new Error(`cadence: slotsBetween needs two finite instants, got ${fromMs}..${toMs}`);
   const out = [];
-  if (!(fromMs <= toMs)) return out;
+  if (fromMs > toMs) return out;
   let day = istDay(fromMs);
   const lastDay = istDay(toMs);
-  for (let guard = 0; guard <= 4000; guard++) {
+  let guard = 0;
+  for (; guard <= WALK_LIMIT; guard++) {
     if (firesOnDay(cadence, day)) {
       const t = slotMs(day, cadence.hh, cadence.mm);
       if (t >= fromMs && t <= toMs) out.push(t);
@@ -146,14 +169,32 @@ export function slotsBetween(cadence, fromMs, toMs) {
     if (day === lastDay) break;
     day = addDays(day, 1);
   }
+  // Truncating here would return a list that reads as complete and stops years early. Measured
+  // before this throw existed: a walk from epoch 0 returned exactly 4000 slots ending in 1980,
+  // with no error and no flag.
+  if (guard > WALK_LIMIT)
+    throw new Error(
+      `cadence: the range ${istDay(fromMs)}..${istDay(toMs)} is longer than the ${WALK_LIMIT}-day walk -- ` +
+        `a truncated slot list reads as a complete one, so this refuses rather than shortens`,
+    );
   return out;
 }
 
 /**
- * The nominal gap between consecutive fires, in ms -- the unit SCH-F's "overdue > 2x cadence"
- * is measured in. `weekdays` uses one day rather than the real 3-day weekend gap: taking the
- * weekend as the cadence would make a job that died on Monday look healthy until Thursday.
+ * How many scheduled slots have passed unserved since `lastRunMs`. This is the unit SCH-F's
+ * "overdue > 2x cadence" is really measured in, and it replaces a nominal 24h constant.
+ *
+ * WHY THE CONSTANT WAS WRONG. A fixed 24h interval makes every healthy `weekdays` job overdue
+ * every Monday: Friday 09:00 to Monday 08:00 is 71 hours, which is over 2x24h, so the job that
+ * missed nothing gets a needs-you line every single week. Pre-mortem row 5 names trust collapse
+ * from needs-you spam as a top-5 failure, and a guaranteed weekly false alarm is that failure on
+ * a timer -- it then hides the real one. Counting SLOTS instead is exact in both directions: a
+ * healthy Monday counts 0, and a job that skipped three weekday slots counts 3.
+ *
+ * `lastRunMs + 1` is deliberate: the slot that already ran is not a missed one.
  */
-export function cadenceIntervalMs(cadence) {
-  return 86_400_000;
+export function missedSlots(cadence, lastRunMs, nowMs) {
+  if (!Number.isFinite(lastRunMs) || !Number.isFinite(nowMs))
+    throw new Error(`cadence: missedSlots needs two finite instants, got ${lastRunMs}..${nowMs}`);
+  return slotsBetween(cadence, lastRunMs + 1, nowMs).length;
 }

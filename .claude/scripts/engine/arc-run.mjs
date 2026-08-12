@@ -94,7 +94,11 @@ const doc = parsed.value;
 // been selected would already have consulted the router, and refusing after the run would have
 // spent money. `job_stub` is read from the parsed document rather than inferred from the name,
 // so a job renamed tomorrow stays refused.
-if (doc && doc.job_stub === true) {
+// Keyed on PRESENCE, never on `=== true`. The frozen subset parses `yes`, `on`, `True`, `TRUE`
+// and `"true"` as STRINGS and `1` as a number, so an equality check let every one of those
+// spellings walk past this guard and reach driver selection -- on a document whose own body
+// says NOT AN ENGINE PROCESS. `job_stub: false` is the one spelling that means "compile me".
+if (doc && Object.prototype.hasOwnProperty.call(doc, "job_stub") && doc.job_stub !== false) {
   console.error(`arc-run: \`${processName}\` is a scheduled-job stub, not a runnable process.`);
   console.error(`         It exists so the job has a policy subject (ADR-0802/ADR-0504). Its work lives in`);
   console.error(`         .claude/scripts/hq/jobs/ and is run by: node .claude/scripts/hq/arc-jobs.mjs run ${processName}`);

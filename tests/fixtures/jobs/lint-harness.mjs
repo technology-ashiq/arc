@@ -33,9 +33,19 @@ const rootIdx = rest.indexOf("--root");
 const root = rootIdx >= 0 && rest[rootIdx + 1] ? rest[rootIdx + 1] : process.cwd();
 
 const text = readFileSync(jobsPath, "utf8");
-const policy = JSON.parse(readFileSync(policyPath, "utf8"));
 
-const { findings, bill } = lintJobs(text, { root, policy, processNames: policy.__processNames ?? null });
+// The literal `NONE` injects NO policy at all, so the corpus can assert that a validator which
+// cannot read its own law refuses rather than passes. That case has no file to point at.
+const policy = policyPath === "NONE" ? null : JSON.parse(readFileSync(policyPath, "utf8"));
+
+// `__processNames` absent means null -- "cannot check" -- which is a DIFFERENT world from `[]`,
+// "checked, there are none". subjects.mjs states that contract in its own header and the first
+// version of schema.mjs conflated them.
+const processNames = policy && Object.prototype.hasOwnProperty.call(policy, "__processNames")
+  ? policy.__processNames
+  : null;
+
+const { findings, bill } = lintJobs(text, { root, policy, processNames });
 
 for (const f of findings) process.stdout.write(`CODE:${f.code}\n`);
 if (bill) process.stdout.write(`BILL:${bill.worstCaseInr}\n`);

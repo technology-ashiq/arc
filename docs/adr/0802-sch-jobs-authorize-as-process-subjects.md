@@ -102,3 +102,44 @@ fails at commit time rather than at 06:00.
 **What we would revisit if this goes wrong.** If the `arc-run` refusal guard proves leaky under
 the adversarial pass, option 2 becomes the cheaper answer and the stubs are deleted rather than
 patched — a leaky guard on an execution path is not worth defending twice.
+
+## Amendment 1 — 2026-08-12, the engine exception is THREE files, not one
+
+The decision stands. Its price does not: this ADR and the plan both said the cost was **one**
+scoped change to `arc-run.mjs`. The Phase-0 adversarial pass billed the rest.
+
+A `processes/*.process.yaml` file is read by three engine gates, not one, and two of them
+correctly refused a stub as a broken process:
+
+- `process-lint.mjs` — `job_stub` was not in its closed top-level key set, so each stub produced
+  five findings (`unknown-key`, `permissions-invalid`, `schema-shape`, `evals-path`,
+  `baseline-drift`) and `--all` exited 1.
+- `arc-compile.mjs` — `--check --all --against-baseline` reported `3/5 byte-identical` and exited
+  1, because a stub has no baseline command to be byte-diffed against.
+
+Both were **already CI-red on all three legs** at the commit that introduced the stubs, against
+two committed tests asserting the opposite. So the exception is now stated correctly:
+
+> `arc-run.mjs` gains the job-stub refusal guard; `process-lint.mjs` gains a job-stub document
+> class with its own closed key set (`output`, `evals` and `baseline` FORBIDDEN, not optional —
+> carrying one is a claim to be compiled); `arc-compile.mjs` skips job stubs when enumerating
+> `--all`. Nothing else in the engine is touched, and SCH-K's `--actor` passthrough stays
+> deferred.
+
+**Neither existing test's expectation was edited.** `process-lint --all` passes with 5 files and
+`arc-compile` reports `3/3` again, because stubs leave the compile set rather than the count
+being adjusted to accommodate them. A gate whose expected value moves to match new code is not a
+gate.
+
+**One design change fell out of it, and it is the more interesting half.** The guard was written
+as `doc.job_stub === true`. The frozen subset parses `yes`, `on`, `True`, `TRUE` and `"true"` as
+**strings** and `1` as a number, so every one of those spellings walked past the guard and
+reached driver selection — on a document whose own body says NOT AN ENGINE PROCESS. All three
+gates now key on **presence** (`"job_stub" in doc && doc.job_stub !== false`), and `process-lint`
+additionally refuses a `job_stub` that is not the boolean. A marker that can be spelled six ways
+and recognised in one is not a marker.
+
+**Consequence for the revisit trigger.** Option 2's cost was quoted as three owner pastes against
+option 1's one. That comparison held on owner effort and understated engine surface: option 1
+touches three engine files, option 2 touches two policy files plus an ADR. If a third job class
+ever appears, the trigger at the top of this file should be weighed knowing that.

@@ -17,7 +17,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spineRoot } from "../lib/spine-io.mjs";
@@ -35,8 +35,18 @@ function main() {
   const r = spawnSync(process.execPath, [ARC_BRIEF, "--date", day], {
     encoding: "utf8",
     windowsHide: true,
+    // A brief grows with the spine, and spawnSync truncates at 1MB by default -- reporting the
+    // overflow as `status: null` with `error.code === "ENOBUFS"`, which reads as "exited null".
+    maxBuffer: 32 * 1024 * 1024,
   });
 
+  // `r.error` is the ONLY signal for ENOENT, EACCES, EMFILE and a maxBuffer overflow: all four
+  // arrive with `status === null`, so a bare status check reports "exited null" for four very
+  // different problems and names none of them.
+  if (r.error) {
+    process.stderr.write(`brief-materialize: could not run arc-brief: ${r.error.code || r.error.message}\n`);
+    process.exit(1);
+  }
   if (r.status !== 0) {
     process.stderr.write(`brief-materialize: arc-brief exited ${r.status}: ${String(r.stderr || "").trim().slice(0, 400)}\n`);
     process.exit(1);
@@ -53,10 +63,26 @@ function main() {
   const dir = join(root, "briefs");
   mkdirSync(dir, { recursive: true });
   const out = join(dir, `${day}.txt`);
-  writeFileSync(out, text, "utf8");
 
-  process.stdout.write(`brief-materialize: wrote ${text.length} bytes to ${out}\n`);
-  process.stdout.write(`${JSON.stringify({ day, bytes: text.length, path: out })}\n`);
+  // WRITTEN ATOMICALLY: temp file, then rename onto the target. A bare writeFileSync truncates
+  // first and writes second, so a kill or a suspend between the two leaves a half-rendered
+  // brief that the morning read cannot tell from a complete one. This job fires at 06:00 on a
+  // Modern-Standby-only machine (ADR-0804), which makes a mid-write suspend the expected case
+  // rather than the exotic one. Rename within a directory is atomic on all three platforms.
+  const tmp = `${out}.tmp`;
+  writeFileSync(tmp, text, "utf8");
+  renameSync(tmp, out);
+
+  // Read the size back off the ARTIFACT. The emptiness guard above checked the CHILD'S stdout,
+  // which says nothing about the bytes that actually landed.
+  const landed = statSync(out).size;
+  if (landed === 0) {
+    process.stderr.write(`brief-materialize: ${out} is zero bytes after the write -- refusing to report a brief that is not there\n`);
+    process.exit(1);
+  }
+
+  process.stdout.write(`brief-materialize: wrote ${landed} bytes to ${out}\n`);
+  process.stdout.write(`${JSON.stringify({ day, bytes: landed, path: out })}\n`);
   process.exit(0);
 }
 

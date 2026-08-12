@@ -41,12 +41,18 @@ a two-fresh-agent adversarial pass before they are trusted · tests run on CI, n
 `ungrantable_resources` (ADR-0502). **Zero policy-engine code** (ADR-0802) and `docs/evidence/**`
 / `docs/archive/**` frozen.
 
-Engine code: **one named, scoped exception, and nothing else.** `arc-run.mjs` gains the job-stub
-refusal guard ADR-0802 owes — a single check on its existing entry-resolution path that reads
-`job_stub: true` from the process file and refuses with a non-zero exit before any driver is
-selected. The diff is that check alone. SCH-K's `--actor` passthrough stays deferred to the first
+Engine code: **three named, scoped changes, and nothing else** (ADR-0802 Amendment 1). A
+`processes/` file is read by three gates, so a stub that only `arc-run` knows about is CI-red in
+the other two — which it was, on all three legs, at the commit that introduced it.
+`arc-run.mjs` refuses a job stub before any driver is selected · `process-lint.mjs` gains a
+job-stub document class with its own closed key set · `arc-compile.mjs` skips stubs when
+enumerating `--all`. All three key on the marker's **presence**, never on `=== true`: the frozen
+subset parses `yes`, `on`, `True` and `"true"` as strings, and an equality check let every one of
+those walk past. No existing test expectation was edited — `arc-compile` reports `3/3` again
+because stubs leave the compile set. SCH-K's `--actor` passthrough stays deferred to the first
 LIVE process-job. Naming this exception is the correction of a contradiction in this plan's first
-draft, which forbade all engine code while making the guard a Phase-0 exit criterion.
+draft, which forbade all engine code while making the guard a Phase-0 exit criterion; the first
+correction under-counted it at one file.
 
 ## Success requirements
 
