@@ -24,9 +24,12 @@ act arc does not perform.
          carries the Build-out Mandate of 2026-08-09 as what is being authorised. `approval.requested`
          is generic except for a few reserved `subject:` values, so a plain descriptive payload is
          accepted. Capture the printed ULID.
-      2. `bash .claude/scripts/hq/arc-event.sh emit decision.recorded --payload JSON` with exactly
-         `{"decides":"<that ULID>","verdict":"approve","reason":"..."}` and **no other keys** — an
-         unknown key is rejected.
+      2. `node .claude/scripts/hq/arc-inbox.mjs approve THAT_ULID --reason "..."` — **not** the raw
+         emitter. Beyond the closed payload shape, the validator enforces
+         `decision.idem == sha256("decision.recorded|" + decides)`: the idem is **welded** to the
+         approval it decides, and `arc-event.sh emit` does not compute it. A raw emit is rejected
+         `BAD_DECISION` and quarantined. `arc-inbox approve` computes the welded idem and is the only
+         supported path.
       **Then verify both landed**: each ULID must appear in a file under `.claude/state/hq/events/`
       and **not** under `.claude/state/hq/events/_quarantine/`. Exit 0 from the emitter is not
       evidence. Record both ULIDs in the evidence bundle as `mandate-ulid.txt` — Phase 07's router-row
