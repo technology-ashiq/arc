@@ -19,7 +19,7 @@ EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
 # free `source` field, which a closed schema refuses by construction -- that is the point, since a
 # free field is where a customer email eventually lands on an append-only log. The reject cases
 # below are UNCHANGED and still assert on AMOUNT / CURRENCY, because assertMoney still runs first.
-VALID='{"amount":50000,"currency":"INR","venture":"arc","provider":"manual","provider_payment_id":"manual:pay-0001"}'
+VALID='{"amount":50000,"currency":"INR","venture":"arc","provider":"manual","provider_payment_id":"manual:pay_0001"}'
 
 setup() {
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE"

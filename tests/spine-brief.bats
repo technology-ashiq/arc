@@ -21,7 +21,7 @@ _brief() { node "$BRIEF" --date 2026-07-22 "$@"; }
 
 @test "brief: groups events into needs-you / money / progress / background, money from minor units" {
   _emit approval.requested --payload '{"what":"deploy prod"}'
-  _emit revenue.received   --payload '{"amount":50000,"currency":"INR","venture":"venturemind","provider":"manual","provider_payment_id":"manual:pay-0003"}' --venture venturemind
+  _emit revenue.received   --payload '{"amount":50000,"currency":"INR","venture":"venturemind","provider":"manual","provider_payment_id":"manual:pay_0003"}' --venture venturemind
   _emit phase.closed       --payload '{"phase":"01"}'
   _emit review.completed   --payload '{"verdict":"ship"}'
   _emit qa.completed       --payload '{"bugs":0}'
