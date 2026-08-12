@@ -9,12 +9,14 @@
 // from a real file to an accepted receipt is proven end to end rather than assumed.
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const libDir = join(here, "..", ".claude", "scripts", "hq", "lib", "ledger");
-const url = (p) => new URL(`file://${p.replace(/\\/g, "/")}`);
+// pathToFileURL, never a hand-built `file://` string: the hand-built form truncates a path at the
+// first `#` or `?`, turning a real module into a missing one.
+const url = (p) => pathToFileURL(p);
 
 const [provider, file, venture, ...rest] = process.argv.slice(2);
 if (!provider || !file || !venture) {

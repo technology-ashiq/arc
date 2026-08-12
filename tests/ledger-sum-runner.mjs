@@ -8,7 +8,7 @@
 // which is deliberate.
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -20,10 +20,20 @@ if (!provider || !file) {
   process.exit(2);
 }
 
+// Load and read failures exit 2, so they can never be mistaken for a parse rejection (exit 1).
+let fn, text;
 try {
-  const mod = await import(new URL(`file://${join(parsersDir, provider + ".mjs").replace(/\\/g, "/")}`));
-  const fn = provider === "razorpay" ? mod.parseRazorpayExport : mod.parseMorExport;
-  const rows = fn(readFileSync(file, "utf8"));
+  const mod = await import(pathToFileURL(join(parsersDir, provider + ".mjs")));
+  fn = provider === "razorpay" ? mod.parseRazorpayExport : mod.parseMorExport;
+  if (typeof fn !== "function") throw new Error(`parser ${provider} exports no callable entry point`);
+  text = readFileSync(file, "utf8");
+} catch (err) {
+  process.stderr.write(`LOAD_ERROR ${err && err.message ? err.message : String(err)}\n`);
+  process.exit(2);
+}
+
+try {
+  const rows = fn(text);
   let net = 0;
   for (const r of rows) {
     if (!Number.isSafeInteger(r.net)) {

@@ -133,6 +133,15 @@ function splitRecords(text) {
     if (inQuotes) {
       if (ch !== '"') { field += ch; continue; }
       if (text[i + 1] === '"') { field += '"'; i += 1; continue; }
+      // The quote CLOSES the field, so the only thing that may follow is a delimiter, a line
+      // terminator, or end of input. Without this, everything after the closing quote was appended
+      // to the value: `"49"00` parsed as 4900 minor units where 49.00 was written -- a 100x error
+      // that leaves `net == gross - tax - fees` intact and therefore passes every other check in
+      // the lane. Found in razorpay.mjs by the Phase-00 adversarial pass and applied here in the
+      // same change: a fix is not applied until it has been made where it was never found.
+      const after = text[i + 1];
+      if (after !== undefined && after !== "," && after !== "\n" && after !== "\r")
+        fail(n, `data follows a closing quote in column ${fields.length + 1} -- a closed quoted field must be followed by a delimiter or a line ending, never by more characters`);
       inQuotes = false;
       continue;
     }

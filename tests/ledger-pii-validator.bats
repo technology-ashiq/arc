@@ -133,3 +133,19 @@ _pay()   { printf '%s' "$2" > "$BATS_TEST_TMPDIR/$1.json"; printf '%s' "$BATS_TE
   [ "$status" -eq 0 ] || { echo "ledger validation leaked onto note.logged: $output"; false; }
   [ "$(_lines)" = "1" ]
 }
+
+@test "this suite registers every test it declares" {
+  # bats SILENTLY DROPS a @test whose name carries a non-ASCII character: five tests once vanished
+  # from a suite in this repo, never ran, never failed, and the file stayed green -- the only signal
+  # was the count falling. So the count is checked.
+  #
+  # DERIVED on both sides, never pinned to a literal. Retro 2026-08-12 (arc-memory) recorded a suite
+  # that pinned its registered count as a literal and went red for the crime of adding a test, while
+  # the suite next door derived it. Comparing declared against registered catches a dropped test and
+  # stays quiet when the suite legitimately grows.
+  declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
+  registered=${#BATS_TEST_NAMES[@]}
+  [ "$declared" -gt 0 ] || { echo "no @test lines found -- the count itself is broken"; false; }
+  [ "$registered" -eq "$declared" ] \
+    || { echo "declared $declared tests but bats registered $registered -- one was dropped, check for a non-ASCII @test name"; false; }
+}

@@ -199,7 +199,9 @@ _lines() { cat "$SPINE"/events/*.jsonl 2>/dev/null | sed '/^$/d' | wc -l | tr -d
   run bash "$PNL" --venture lexos --month 2026-07
   [ "$status" -eq 0 ]
   [[ "$output" == *"cash-in 5,000.00"* ]]
-  [[ "$output" == *"MRR "*"—"* ]] || { echo "a one_time payment produced an MRR: $output"; false; }
+  # The exact cell, not "an em dash somewhere later in the render": the loose glob was satisfied by
+  # any em dash anywhere in the output, so it would keep passing if the MRR cell stopped being one.
+  [[ "$output" == *"cash-in 5,000.00   MRR —"* ]] || { echo "a one_time payment produced an MRR: $output"; false; }
 }
 
 # ---------- real vs simulated (REQ-01) ----------
@@ -237,4 +239,20 @@ _lines() { cat "$SPINE"/events/*.jsonl 2>/dev/null | sed '/^$/d' | wc -l | tr -d
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ -n "$output" ]
   [[ "$output" == *"no real revenue yet"* ]] || { echo "$output"; false; }
+}
+
+@test "this suite registers every test it declares" {
+  # bats SILENTLY DROPS a @test whose name carries a non-ASCII character: five tests once vanished
+  # from a suite in this repo, never ran, never failed, and the file stayed green -- the only signal
+  # was the count falling. So the count is checked.
+  #
+  # DERIVED on both sides, never pinned to a literal. Retro 2026-08-12 (arc-memory) recorded a suite
+  # that pinned its registered count as a literal and went red for the crime of adding a test, while
+  # the suite next door derived it. Comparing declared against registered catches a dropped test and
+  # stays quiet when the suite legitimately grows.
+  declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
+  registered=${#BATS_TEST_NAMES[@]}
+  [ "$declared" -gt 0 ] || { echo "no @test lines found -- the count itself is broken"; false; }
+  [ "$registered" -eq "$declared" ] \
+    || { echo "declared $declared tests but bats registered $registered -- one was dropped, check for a non-ASCII @test name"; false; }
 }
