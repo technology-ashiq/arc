@@ -245,10 +245,39 @@ addrow() {
   [ "$status" -eq 0 ]; [[ "$output" == *"[pre-mortem-cite]"*"[trial]"* ]]
 }
 
-@test "[appetite-sum] phase appetites over total warns (trial)" {
+@test "[appetite-sum] phase appetites over total FAILS a v3 plan -- promoted out of trial" {
+  # PROMOTED 2026-08-12 (Cycle 11 retro). This test is the negative control for the promotion:
+  # it asserted `status -eq 0` and the `[trial]` suffix while the gate was advisory, so if the
+  # flip had not taken effect it would still pass here and nothing would say so.
   sedi 's/^\*\*Appetite:\*\* 3 days$/**Appetite:** 3 weeks/' "$TMP/phases/phase-01-spec.md"
   run $LINT_CMD "$TMP"
-  [ "$status" -eq 0 ]; [[ "$output" == *"[appetite-sum]"*"over-commits"* ]]
+  [ "$status" -ne 0 ] || { echo "over-commit did not fail a v3 plan -- the promotion did not take"; echo "$output"; false; }
+  # FAIL, not WARN, asserted on the appetite-sum LINE ITSELF. A bare
+  # `[[ "$output" != *"[trial]"* ]]` would be satisfied by the other eight trial gates' lines
+  # anywhere in the output, which is a negative assertion a crash could also satisfy.
+  echo "$output" | grep -q "^FAIL  \[appetite-sum\].*over-commits" \
+    || { echo "expected a FAIL line for appetite-sum, got:"; echo "$output"; false; }
+  echo "$output" | grep -q "^WARN  \[appetite-sum\].*over-commits" \
+    && { echo "appetite-sum still reports over-commit as a WARN -- it is still in TRIAL"; echo "$output"; false; }
+  true
+}
+
+@test "[appetite-sum] the zero-slack branch stays a WARN, promotion or not" {
+  # The half `warn()` makes permanent. `TRIAL` cannot reach it, so a plan that merely has thin
+  # slack must still exit 0 -- the two leaning-false rows in the trial ledger sit on this branch,
+  # and the promotion was only defensible because it cannot touch them.
+  # Arithmetic, computed from the fixture rather than guessed: PLAN total is "2 weeks" = 10d,
+  # phase-00 is 2d, so 8d here sums to exactly 10d. `sum > total` is FALSE at equality, and
+  # `sum > 0.8 * total` is TRUE -- the zero-slack branch, and only it.
+  sedi 's/^\*\*Appetite:\*\* 3 days$/**Appetite:** 8 days/' "$TMP/phases/phase-01-spec.md"
+  run $LINT_CMD "$TMP"
+  [ "$status" -eq 0 ] || { echo "the zero-slack branch failed a plan; it must only ever warn"; echo "$output"; false; }
+  echo "$output" | grep -q "^WARN  \[appetite-sum\].*zero slack" \
+    || { echo "expected a WARN line for the zero-slack branch, got:"; echo "$output"; false; }
+  # ...and the over-commit branch must NOT have fired, or this test is proving the other half.
+  echo "$output" | grep -q "over-commits" \
+    && { echo "the over-commit branch fired; this fixture no longer isolates zero-slack"; echo "$output"; false; }
+  true
 }
 
 @test "[appetite-sum] unparseable PLAN appetite warns, never fails" {

@@ -165,8 +165,15 @@ const v3check = isV3 ? fail : warn;
 
 // v3.5 WARN-first trial set — remove a group to promote it to the v3check path (FAIL on
 // v3 plans). Promote only after /arc-retro reviews the gate's first-build usefulness.
+// `appetite-sum` was PROMOTED out of this set on 2026-08-12 (Cycle 11 retro, owner approved as the
+// second reader Cycle 10 asked for) -- the first substance gate to go live since the set was
+// created. It promotes only the OVER-COMMIT branch below (line ~327, `gate(...)`): the zero-slack
+// branch calls `warn()` directly and is therefore a WARN by construction, which is why the two
+// leaning-false rows in docs/trial-ledger.md -- both on that branch -- are untouched by this flip.
+// Evidence and the re-adjudication of 2026-07-28 are in the ledger; all ten PLANs (nine lanes plus
+// root-mode) were run through the gate first and none trips the over-commit branch.
 const TRIAL = new Set([
-  "pre-mortem-cite", "appetite-sum", "adr-wired", "adr-confidence",
+  "pre-mortem-cite", "adr-wired", "adr-confidence",
   "architecture", "current-state-structure", "nonneg-drift", "verify-red",
   "birth-rule",
 ]);
