@@ -1,11 +1,11 @@
 # PROGRESS.md — Cycle 7 · arc-engine "The Hired Hands"
 
-status: BLOCKED
+status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
-phase: 04 (not started — plan awaiting approval)
+phase: 04
 appetite: 7.5d
 burn: 0.0d
-blocked-on: owner approval of PLAN.md (kickoff STOP — no code until it lands)
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -75,34 +75,49 @@ on-track run is one that learns to be ignored.
     first draft of this spec all had the mandate landing as a single `decision.recorded` — which
     exits 0 and quarantines silently, this lane's own recorded failure.
 
+- 2026-08-12 — **pre-approval runnability recon** (no install, no execution). Verdict **RUNNABLE
+  HERE**: Windows is Tier 1 native for this runtime, no WSL needed for the headless CLI, and
+  `hermes -z` is confirmed verbatim as single-prompt-in / final-response-out with a usage sidecar
+  written even on failure. Two things changed as a result, landed as dated pre-approval amendments to
+  ADR-0208 and ADR-0209 rather than silent edits:
+  - **Tag `v2026.8.3` carries `assets: []`** — nothing attached — and the npm and PyPI channels were
+    retired in that same release, while `install.ps1` is not a tracked file at the tag and is served
+    live from the docs site defaulting to *latest*. A host `curl`-pipe install would be unpinnable
+    and the worst available shape for this runtime. **The runtime is therefore obtained as a container
+    image and the digest is the pin** — the one content-addressable handle the vendor offers.
+  - **Ollama defaults to as little as 4,096 tokens of context against the ≥64,000 this runtime
+    expects, and truncates silently rather than erroring.** Phase 04 raises it explicitly.
+- 2026-08-12 — **plan APPROVED by Ashiq.** Docker Desktop started and verified up (`29.6.1`,
+  linux/WSL2). Approval recorded on the canonical spine against `01KZTG8B82Q6HT4472Q288GCJ1`;
+  decision receipt `01KZTKAF70H19K7PNJVWBXZDT5`, verified present in `events/` and absent from
+  `_quarantine/`. Lane flips IDLE → LIVE and Phase 04 opens.
+
 ## Now
 
-**Current position, 2026-08-12: the plan exists and is NOT yet approved. Zero days burned, zero code
-written, nothing installed, no credential provisioned.**
+**Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
 
-`/arc-kickoff` has produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and
-twelve ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate.
+`/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
+ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:
+`kickoff.done` `01KZTG835C356GPN7452603ZZX` · `approval.requested` `01KZTG8B82Q6HT4472Q288GCJ1` ·
+`decision.recorded` `01KZTKAF70H19K7PNJVWBXZDT5`.
 
-**The approval id is `01KZTG8B82Q6HT4472Q288GCJ1`** (`kickoff.done` is `01KZTG835C356GPN7452603ZZX`).
-Both were emitted from the canonical clone at `E:/Work_Hub/01_Automemory/arc` — this worktree has its
-own gitignored spine and the emitter refuses to write there, because a receipt written in a worktree
-is real, valid and invisible to `arc-inbox`. Both verified present in `events/` and absent from
-`_quarantine/`. To record the decision:
+**All spine writes go through the canonical clone at `E:/Work_Hub/01_Automemory/arc`.** This worktree
+has its own gitignored spine and the emitter refuses to write there — a receipt written in a worktree
+is real, valid, and invisible to `arc-inbox`, which would print "no open approvals" while one sat in
+it.
 
-```
-cd E:/Work_Hub/01_Automemory/arc && arc-inbox approve 01KZTG8B82Q6HT4472Q288GCJ1 --reason "..."
-```
+**Next step: `/arc-develop start 4 --lane engine`.** Its first act is the ADR-0212 amendment merging
+*before* any routing row exists, because a `router.yaml` row for a runtime is meaningless until the
+policy it implements says what a runtime is.
 
-**Next step: the owner approves or amends the plan.** On approval, Phase 04 opens with
-`/arc-develop start 4 --lane engine` — and its first act is the ADR-0212 amendment merging *before*
-any routing row exists, because a `router.yaml` row for a runtime is meaningless until the policy it
-implements says what a runtime is.
+**The capped-key ceiling figure is NOT needed yet.** Phases 04, 05 and 06 all run at zero spend
+against the local ollama endpoint; the credential is first required by certification fixtures 4 and
+10. That owner decision can wait without blocking anything.
 
-**Three owner acts gate Phase 04, and none of them is code.** The Docker daemon must be running (it
-is installed and currently down); the runtime must be installed at tag `v2026.8.3`; and an OpenRouter
-capped key needs a **ceiling figure the owner names** — deliberately not invented here, following
-ADR-0069 block (d)'s own refusal to fabricate a spend threshold. The key itself is not needed until
-Phase 07, but the first two are Phase 04's exit criteria.
+**Of the three owner acts that gated Phase 04, two are done and the third is deferred.** The Docker
+daemon is up (`29.6.1`, linux/WSL2, verified before the approval was recorded). The runtime is
+obtained by Phase 04 itself, as a digest-pinned container image. The capped-key ceiling figure is
+still unnamed and deliberately so — see above; nothing blocks on it until Phase 06.
 
 **Why Phase 04 looks different from the design source's Phase 0.** The source's Phase 0 was law only
 — ADRs, the amendment, the runtime pick on paper. This lane's previous cycle closed with its central
