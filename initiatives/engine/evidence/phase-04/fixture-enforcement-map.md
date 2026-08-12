@@ -39,11 +39,37 @@ config against the pin, fail loud on drift. Pure `config`, no infrastructure.
   threat research was blunt that claiming network-level enforcement without it is exactly the
   unprovable-fixture trap.
 
-**So REQ-02 meets a decision in Phase 06 that is worth naming now:** is fixture 7 satisfied by the
-config-pin arm plus *binary* egress proof, or does the domain-granular arm fire the STOP? The plan
-as written says an unprovable boundary is a no. The honest reading is that the *strong* form is
-unprovable and a *weaker but real* form is provable, and choosing between them is an owner call, not
-something a fixture can settle.
+### DECIDED 2026-08-12, and the deciding evidence is a measurement, not an argument
+
+Three probes were run against the real image rather than reasoned about:
+
+| Topology | Reach the internet | Reach host ollama |
+|---|---|---|
+| default bridge network | **HTTP 200 — unrestricted** | yes (this is what the smoke run used) |
+| `docker network create --internal` | **blocked** | **also blocked** |
+
+The middle option I expected — internal network for the container, model still on the host — **does
+not exist**. `--internal` severs the host route as well as the internet route. Assuming it worked
+would have surfaced in Phase 06 as a certification that could not run.
+
+**What that leaves, and the decision:**
+
+- **Domain-granular egress** (allow a named set of internet hosts, refuse the rest): **UNPROVABLE**
+  without an egress proxy. Confirmed, not merely suspected. Recorded out of scope for this cycle,
+  with a named re-open trigger: **the day a job requires the runtime to browse.** This cycle REQ-07
+  job does not — arc assembles the context pack and hands it in.
+- **Zero-internet egress: PROVABLE, at config level, with no infrastructure** — but only in a
+  topology where the model endpoint sits **inside the same internal network** as the runtime. Two
+  containers, one `--internal` network, no route out.
+
+**The STOP does NOT fire.** Fixture 7 is satisfiable, and the config-pin arm plus a behavioural arm
+asserting zero internet reachability is a real boundary rather than a promise.
+
+**The consequence Phase 06 inherits is a topology change, and it is not free:** the model endpoint
+moves off the host and onto the internal network beside the runtime. That means an ollama container
+and its model layer pulled again inside it (`llama3.1:8b` is ~4.9 GB). Phase 06 pays that, and it is
+cheaper than the alternative, which is certifying an isolation claim the smoke topology cannot
+support — **the smoke run had full unrestricted internet**, and nothing about it was egress-controlled.
 
 **This is not hypothetical.** The residue the pre-mortem already accepts — side-channel exfiltration
 through an allowed egress path — is exactly what domain-granular egress would narrow and binary
