@@ -38,7 +38,11 @@ _run_case() {
   echo "$output" | grep -q '"StopIfGoingOnBatteries":false'     || { echo "$output"; false; }
   echo "$output" | grep -q '"StartWhenAvailable":true'          || { echo "$output"; false; }
   echo "$output" | grep -q '"WakeToRun":false'                  || { echo "$output"; false; }
-  echo "$output" | grep -q '"LogonType":"S4U"'                  || { echo "$output"; false; }
+  # Interactive, not S4U. ADR-0803 pinned S4U on documented grounds; the first real registration
+  # failed HRESULT 0x80070005 because S4U needs elevation, and Interactive succeeded with
+  # everything else held constant (Amendment 1). The cost is stated rather than hidden: these
+  # jobs run only while the user is logged on.
+  echo "$output" | grep -q '"LogonType":"Interactive"'          || { echo "$output"; false; }
   echo "$output" | grep -q '"RunLevel":"Limited"'               || { echo "$output"; false; }
 }
 
@@ -77,6 +81,28 @@ _run_case() {
   echo "$output" | grep -q '^IDENTICAL:true$' || { echo "$output"; false; }
   echo "$output" | grep -q '"--budget","inr=40,min=5"' || { echo "budget flags not passed through:"; echo "$output"; false; }
   echo "$output" | grep -q '"--driver","auto"' || { echo "$output"; false; }
+}
+
+@test "scheduler-os: the REAL implementation refuses what the fake refuses" {
+  # If only the fake enforced the six settings, the contract would be a property of the test
+  # double rather than of the system, and the production path could register a task carrying an
+  # inherited battery default -- the silent-death bug this whole rule exists to prevent.
+  #
+  # The harness makes `spawn` throw if it is ever reached, so this also proves the refusal
+  # happens in the NODE layer, before anything is handed to PowerShell.
+  _run_case real-enforces-settings
+  echo "$output" | grep -q '"code":"INCOMPLETE_SETTINGS"' || { echo "$output"; false; }
+  echo "$output" | grep -q '"reachedSpawn":false' || { echo "the check ran too late -- it reached the OS:"; echo "$output"; false; }
+}
+
+@test "scheduler-os: the fake reports the same never-run code the real OS did" {
+  # 0x41303 = 267011 = SCHED_S_TASK_HAS_NOT_RUN. The Phase-02 smoke read exactly this off Windows
+  # before the task fired, and 0 after. A fake that returned null instead would make "has not run
+  # yet" and "ran and returned nothing" the same reading -- the one distinction the smoke needs.
+  _run_case real-and-fake-agree
+  echo "$output" | grep -q "^FAKE_NEVER_RUN:267011$" || { echo "$output"; false; }
+  # Pinned logon is Interactive, not S4U: S4U cannot be registered unelevated (ADR-0803 Amd 1).
+  echo "$output" | grep -q '^PINNED_LOGON:"Interactive"$' || { echo "$output"; false; }
 }
 
 @test "jobs-contract: bats registers every test this file declares" {

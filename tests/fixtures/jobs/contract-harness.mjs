@@ -13,7 +13,7 @@
  *   delegate     -- prints the scheduled and manual argv for one process-job
  */
 
-import { makeFakeScheduler, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs";
+import { makeFakeScheduler, makeWindowsScheduler, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs";
 import { processRunArgv, manualRunArgv } from "../../../.claude/scripts/hq/lib/jobs/delegate.mjs";
 
 const CASE = process.argv[2];
@@ -63,6 +63,36 @@ try {
     out("MANUAL", manual);
     out("IDENTICAL", JSON.stringify(scheduled) === JSON.stringify(manual));
     out("PINNED", PINNED_SETTINGS);
+  } else if (CASE === "real-enforces-settings") {
+    // THE REAL IMPLEMENTATION MUST REFUSE WHAT THE FAKE REFUSES. If only the fake enforced the
+    // six settings, the contract would be a property of the test double rather than of the
+    // system -- and the production path would be free to register a task with an inherited
+    // battery default, which is the silent-death bug the whole rule exists to prevent.
+    //
+    // `spawn` throws if it is ever reached: the refusal must happen BEFORE anything is handed to
+    // PowerShell, so this proves the check is in the Node layer rather than relying on the OS to
+    // complain. No task is created and no OS is touched.
+    const os = makeWindowsScheduler({
+      scriptPath: "unused.ps1",
+      spawn: () => { throw new Error("REACHED-SPAWN"); },
+    });
+    const reg = registrationFor(scriptJob, REG);
+    delete reg.settings.DisallowStartIfOnBatteries;
+    try {
+      os.register(reg.name, reg);
+      out("REFUSED", false);
+    } catch (e) {
+      out("REFUSED", { code: e.code, reachedSpawn: /REACHED-SPAWN/.test(String(e.message)) });
+    }
+  } else if (CASE === "real-and-fake-agree") {
+    // Both implementations answer the same question the same way about the never-run code, which
+    // is what makes the Phase-0 fake a stand-in rather than a separate story. 0x41303 is
+    // SCHED_S_TASK_HAS_NOT_RUN, and the real OS returned exactly this in the Phase-02 smoke.
+    const s = makeFakeScheduler();
+    const reg = registrationFor(scriptJob, REG);
+    s.register(reg.name, reg);
+    out("FAKE_NEVER_RUN", s.query(scriptJob.name).lastTaskResult);
+    out("PINNED_LOGON", PINNED_SETTINGS.LogonType);
   } else {
     process.stderr.write(`unknown case ${CASE}\n`);
     process.exit(64);

@@ -42,7 +42,17 @@ export const PINNED_SETTINGS = Object.freeze({
   StopIfGoingOnBatteries: false,
   StartWhenAvailable: true,
   WakeToRun: false,
-  LogonType: "S4U",
+  // Interactive, NOT S4U -- and this was measured rather than chosen. ADR-0803 pinned S4U on the
+  // documented grounds that it runs unattended with no stored password; registering it on this
+  // machine fails `HRESULT 0x80070005` (access denied) because S4U needs elevation, while the
+  // same registration under Interactive succeeds. See ADR-0803 Amendment 1.
+  //
+  // The honest consequence, stated rather than buried: these jobs run only while the user is
+  // LOGGED ON. On this machine that costs less than it sounds -- it is Modern-Standby-only and is
+  // never woken for a slot (ADR-0804), so it is asleep whenever nobody is at it, and
+  // StartWhenAvailable plus `catchup: run` is already the mechanism that makes a missed slot
+  // land later rather than vanish.
+  LogonType: "Interactive",
   RunLevel: "Limited",
 });
 
@@ -129,6 +139,71 @@ export function makeFakeScheduler() {
       if (!t) throw new SchedulerError("NO_TASK", `no task named ${name}`);
       t.lastRunTime = lastRunTime;
       t.lastTaskResult = lastTaskResult;
+    },
+  };
+}
+
+/**
+ * The REAL Windows implementation, behind the identical surface the fake presents.
+ *
+ * Everything Windows-facing lives in `scheduler-task.ps1` and is invoked with `-File` plus typed
+ * parameters. Nothing is interpolated into a command line: a program embedded in a shell string
+ * carries no apostrophes, PowerShell is full of them, and this repo has shipped that bug twice
+ * in one file -- the second time inside the comment explaining the first.
+ *
+ * `schtasks.exe` is deliberately not used. Its documented parameter table has NO switch for
+ * battery, wake, or run-when-missed, so the settings that decide whether a job ever fires cannot
+ * be expressed through it at all.
+ */
+export function makeWindowsScheduler({ psBin = "powershell", scriptPath, spawn } = {}) {
+  if (!scriptPath) throw new SchedulerError("BAD_CONFIG", "the Windows scheduler needs the path to scheduler-task.ps1");
+  const run = (args) => {
+    const r = spawn(psBin, ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath, ...args], {
+      encoding: "utf8", windowsHide: true, maxBuffer: 8 * 1024 * 1024,
+    });
+    if (r.error) throw new SchedulerError("SPAWN_FAILED", `${psBin}: ${r.error.code || r.error.message}`);
+    if (r.status !== 0)
+      throw new SchedulerError("PS_FAILED", String(r.stderr || r.stdout || "").trim().slice(0, 600));
+    const out = String(r.stdout || "").trim();
+    // A PowerShell command that printed nothing has NOT succeeded quietly -- it has failed to
+    // report, and treating that as an empty success is how a registration nobody made reads as
+    // a registration that exists.
+    if (!out) throw new SchedulerError("NO_OUTPUT", "the PowerShell side returned no JSON at all");
+    try { return JSON.parse(out.split("\n").pop()); }
+    catch { throw new SchedulerError("BAD_OUTPUT", `unparseable output: ${out.slice(0, 300)}`); }
+  };
+
+  return {
+    kind: "windows",
+
+    register(name, { command, args = [], cwd, settings, trigger, logPath }) {
+      assertTaskName(name);
+      // The SAME refusal the fake makes, on the same six names. If only the fake enforced it, the
+      // contract would be a property of the test double rather than of the system.
+      assertSettings(settings);
+      if (typeof command !== "string" || !command) throw new SchedulerError("BAD_COMMAND", "register needs an absolute command");
+      if (typeof cwd !== "string" || !cwd) throw new SchedulerError("BAD_CWD", "register needs an explicit working directory");
+      if (typeof trigger !== "string" || !trigger) throw new SchedulerError("BAD_TRIGGER", "register needs a trigger");
+      return run([
+        "-Action", "register", "-TaskName", name, "-Command", command,
+        "-Arguments", args.join(" "), "-WorkingDir", cwd, "-Trigger", trigger,
+        ...(logPath ? ["-LogPath", logPath] : []),
+      ]);
+    },
+
+    unregister(name) {
+      assertTaskName(name);
+      return run(["-Action", "unregister", "-TaskName", name]);
+    },
+
+    query(name) {
+      assertTaskName(name);
+      return run(["-Action", "query", "-TaskName", name]);
+    },
+
+    list() {
+      const r = run(["-Action", "list"]);
+      return Array.isArray(r.tasks) ? r.tasks : [];
     },
   };
 }

@@ -34,11 +34,13 @@ import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
 import { processRunArgv } from "./lib/jobs/delegate.mjs";
+import { makeWindowsScheduler, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "./lib/jobs/scheduler-os.mjs";
 import { derivePanel, needsYouLines, loadPanelInputs } from "./lib/jobs/panel.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { processNames } from "./lib/policy/subjects.mjs";
 import { policyRoot, authorizeRun } from "./lib/policy/run-gate.mjs";
+import { authorizeAction } from "./lib/policy/authorize.mjs";
 
 const HERE = new URL(".", import.meta.url).pathname;
 const ARC_EVENT = resolve(process.platform === "win32" ? HERE.slice(1) : HERE, "arc-event.mjs");
@@ -57,7 +59,10 @@ const has = (name) => argv.includes(`--${name}`);
 const die = (code, msg) => { process.stderr.write(`arc-jobs: ${msg}\n`); process.exit(code); };
 
 if (!command || command === "help" || has("help")) {
-  process.stdout.write("usage: arc-jobs list [--next N] | run <name> [--slot ISO] [--scheduled] | catchup\n");
+  process.stdout.write(
+    "usage: arc-jobs list [--next N] | panel [--date D] | run <name> [--slot ISO] [--scheduled]\n" +
+    "                    | catchup | register [name] | unregister [name]\n",
+  );
   process.exit(0);
 }
 
@@ -147,6 +152,115 @@ if (command === "list") {
       for (const t of nextSlots(cadence, now, n))
         process.stdout.write(`  ${formatIst(t)}\n`);
     }
+  }
+  process.exit(0);
+}
+
+// ---------- the unattended surface, and the gate in front of it ----------
+//
+// SCH-G: `register` is the moment arc stops being attended, so it is the moment the policy
+// interlock has to be VERIFIED rather than assumed. If policy were ever rolled back or its
+// enforcement broken, the heartbeat's unattended half turns itself OFF rather than running
+// unpoliced -- which is the only safe direction for a gate whose subject is unattended
+// execution.
+//
+// WHAT "ENFORCEMENT GREEN" MEANS HERE, and why it is not "the policy file parses". A file that
+// parses proves a parser works. These three prove the engine is still DECIDING:
+//   1. `policy-lint` exits 0 -- the law is valid, hashes and E2 quotes intact.
+//   2. Deny-by-default is ALIVE: a subject nobody declared must be refused. This is the live
+//      negative control, and it is the one that catches an engine that has been reduced to
+//      returning execute unconditionally -- a mutation an adversarial pass actually performed
+//      on this repo in Cycle 9.
+//   3. This job's own row still authorizes it.
+// Any of the three failing refuses the registration.
+function policyEnforcementGreen(jobName) {
+  const fails = [];
+
+  const lint = spawnSync(process.execPath, [join(root, ".claude/scripts/hq/policy-lint.mjs")], {
+    encoding: "utf8", windowsHide: true, cwd: root,
+  });
+  if (lint.error || lint.status !== 0)
+    fails.push(`policy-lint exited ${lint.error ? lint.error.code : lint.status}`);
+
+  try {
+    const policy = parsePolicyYaml(readFileSync(join(root, "hq.policy.yaml"), "utf8"));
+    // The negative control: a subject that exists nowhere must be denied WRITE. If this comes
+    // back permitted, the engine is not enforcing and nothing below it can be trusted.
+    const v = authorizeAction(
+      { kind: "process:__no_such_subject_ever__", capability: "write", resource: "docs/x.md" },
+      { policy, events: [], root },
+    );
+    if (v.decision !== "deny")
+      fails.push(`deny-by-default is NOT enforcing: an undeclared subject got "${v.decision}"`);
+  } catch (e) {
+    fails.push(`the policy engine could not decide at all: ${e?.message || e}`);
+  }
+
+  const stub = processDoc(jobName);
+  const verdict = authorizeRun({ processName: jobName, doc: stub, root });
+  if (!verdict.mayInvoke)
+    fails.push(`${jobName} is not authorized: ${verdict.denials.map((d) => `${d.capability}:${d.level}`).join(", ")}`);
+
+  return fails;
+}
+
+function osScheduler() {
+  if (process.platform !== "win32")
+    die(2, "registration targets Windows Task Scheduler; POSIX cron is documented for consumer repos, not automated here (SCH-A)");
+  return makeWindowsScheduler({
+    scriptPath: join(root, ".claude/scripts/hq/lib/jobs/scheduler-task.ps1"),
+    spawn: spawnSync,
+  });
+}
+
+if (command === "register" || command === "unregister") {
+  const { doc } = loadSchedule();
+  const only = positional[0] || null;
+  const targets = (doc.jobs || []).filter((j) => (only ? j.name === only : j.enabled));
+  if (only && targets.length === 0) die(2, `no job named \`${only}\` in hq.jobs.yaml`);
+  if (!only && targets.length === 0) die(2, "no enabled jobs to act on");
+
+  const os = osScheduler();
+
+  if (command === "unregister") {
+    // The OFF SWITCH. It must work on jobs the schedule no longer lists, or a job removed from
+    // the file would keep firing forever with nothing left to name it -- so this also sweeps
+    // anything under the arc task folder that the schedule does not claim.
+    const removed = [];
+    for (const job of targets) {
+      const r = os.unregister(job.name);
+      removed.push(`${job.name}${r.existed ? "" : " (was not registered)"}`);
+    }
+    if (!only) {
+      const known = new Set((doc.jobs || []).map((j) => j.name));
+      for (const t of os.list()) if (!known.has(t)) { os.unregister(t); removed.push(`${t} (orphan)`); }
+    }
+    for (const r of removed) process.stdout.write(`arc-jobs: unregistered ${r}\n`);
+    const left = os.list();
+    process.stdout.write(`arc-jobs: ${left.length} arc task(s) remain${left.length ? `: ${left.join(", ")}` : " -- the heartbeat is off"}\n`);
+    process.exit(0);
+  }
+
+  for (const job of targets) {
+    const fails = policyEnforcementGreen(job.name);
+    if (fails.length) {
+      for (const f of fails) process.stderr.write(`arc-jobs: policy gate: ${f}\n`);
+      die(2, `refusing to register ${job.name} -- the unattended surface does not open while policy enforcement is unproven (SCH-G, fail-closed)`);
+    }
+  }
+
+  const nodePath = process.execPath;
+  const logDir = join(spineRoot(), "job-logs");
+  for (const job of targets) {
+    const reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
+    os.register(reg.name, reg);
+    const back = os.query(reg.name);
+    // READ THE SETTINGS BACK OFF THE OS. Asserting what we sent proves only that we sent it.
+    const wrong = REQUIRED_SETTINGS.filter((k) => String(back?.settings?.[k]) !== String(PINNED_SETTINGS[k]));
+    if (!back.exists) die(2, `${reg.name} registered but the OS does not report it`);
+    if (wrong.length)
+      process.stderr.write(`arc-jobs: WARN ${reg.name} settings differ after readback: ${wrong.map((k) => `${k}=${back.settings[k]} (wanted ${PINNED_SETTINGS[k]})`).join(", ")}\n`);
+    process.stdout.write(`arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}\n`);
   }
   process.exit(0);
 }

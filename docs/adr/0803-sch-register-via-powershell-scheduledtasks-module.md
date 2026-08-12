@@ -93,3 +93,48 @@ API and PowerShell module are not edition-gated; no Home-specific API limit was 
 **What we would revisit if this goes wrong.** If S4U cannot reach the repo path, the logon model
 moves to `Interactive` and the jobs become "runs only while logged on" — which is honest, and
 weaker, and would need saying out loud in the brief panel.
+
+## Amendment 1 — 2026-08-12: LogonType is `Interactive`. S4U needs elevation.
+
+The revisit trigger above fired on the first real registration, for a reason it did not predict.
+
+**Measured, not inferred.** `Register-ScheduledTask` with `-LogonType S4U` fails
+`HRESULT 0x80070005` (access denied) on this machine, unelevated. The identical registration with
+the default interactive principal succeeds. The two were isolated against each other rather than
+concluded from one failure: S4U removed, everything else held constant, registration succeeds.
+
+So S4U is not merely unable to reach the repo — it cannot be *registered* without elevation. The
+research that recommended it was right about what it does and silent about what it costs to
+create, which is the gap a live registration exists to find.
+
+**The pin changes:**
+
+```
+LogonType = Interactive      # was S4U
+```
+
+**The honest consequence, stated rather than buried:** these jobs run only while the user is
+LOGGED ON. That is strictly weaker than what this ADR originally claimed.
+
+On this machine it costs less than it sounds, and the reason is ADR-0804's finding rather than
+optimism. The host is Modern-Standby-only and is deliberately never woken for a slot, so it is
+asleep whenever nobody is at it — S4U's "runs while logged off" would have bought a window that
+is mostly unavailable anyway. `StartWhenAvailable = true` plus `catchup: run` on the day-close
+job is already the mechanism that makes a missed slot land later rather than vanish, and that
+mechanism now carries more of the weight than it was designed to.
+
+**What the first real smoke proved, end to end:** a next-minute task registered, fired at its
+slot, wrote its marker, and reported `LastTaskResult = 0`. Before firing it reported `267011`
+(`0x41303`, SCHED_S_TASK_HAS_NOT_RUN) — the exact value the Phase-0 fake was written to return,
+so the fake and the real OS agree on the one code that distinguishes "has not run yet" from "ran
+and returned nothing". Unregister then removed it and `list` returned empty.
+
+**One more defect worth recording, because it reads like a caller error and is not.** The
+PowerShell script assigned its task-action object to `$action`, and PowerShell variable names are
+**case-insensitive** — so it overwrote the `$Action` parameter, whose `ValidateSet` then rejected
+it with *"MSFT_TaskExecAction is not a valid value for the Action variable"*. The message names
+the parameter, not the assignment, so it presents as a bad argument from the Node side. The local
+is `$taskAction` now.
+
+**Revisit trigger for this amendment:** a job is needed while nobody is logged in — then the
+choice is an elevated one-time registration under S4U, taken deliberately, not a default.

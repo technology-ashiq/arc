@@ -22,6 +22,7 @@
     ".claude/scripts/hq/lib/jobs/delegate.mjs",
     ".claude/scripts/hq/lib/jobs/panel.mjs",
     ".claude/scripts/hq/lib/jobs/scheduler-os.mjs",
+    ".claude/scripts/hq/lib/jobs/scheduler-task.ps1",
     ".claude/scripts/hq/lib/jobs/schema.mjs",
     ".claude/scripts/hq/lib/policy/authorize.mjs",
     ".claude/scripts/hq/lib/policy/constitution.mjs",
