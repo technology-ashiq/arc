@@ -61,12 +61,12 @@ commit: 6b537de
 title: **The mock swaps the RESPONSE, never the code path** — proven, not asserted, by the **M9** negative control. It does **not** hold today: `common.mjs:180-191` returns inside the fake branch before `await produce()` ever runs, while `tests/engine-driver-contract.bats:6-8` claims the opposite. **Bench reports that engine defect and does not fix it.**
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
-sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+proof: bats tests/bench-driver-contract.bats -- 7/7 green (3 new); test 4 RED first on a wrong premise, see decision
+tier: contract
+sources: phase-00-spec.md, code:grep-fallback(1330; no .codegraph/), adrs(18), learning(3), retro(23), churn(749)
+decision: Prove it by DISCRIMINATION, not by patching. M9 proposed copying drivers/ to tmp and patching the copy to throw inside produce(); that needs an in-place edit, and sed -i is a GNU-ism BSD sed reads as a backup suffix (retro-log 2026-08-03 killed the macOS leg once), while a copied tree only proves things about the copy. Instead: an empty recording dir makes mock exit 1, and only code inside mock produce() can raise that; the SAME empty dir plus ARC_DRIVER_FAKE flips it to exit 0 because common.mjs:180-191 returns before produce runs. That pair is the control, and it patches nothing. The fake test is a CANARY -- if engine repairs the short-circuit it goes red, and that red is the good news.
+result: ok 4 mock runs the shared budget path, so an unparseable budget fails before any replay / ok 5 mock reaches produce: an empty recording dir fails the run / ok 6 ARC_DRIVER_FAKE does NOT reach produce -- the engine defect this driver exists to avoid. Test 4 first asserted foo=1 would fail; it does not, because parseBudget accepts ANY lowercase key (common.mjs:37) and the closed inr/min set is enforced a layer up at arc-run.mjs:128. The test had been asserting a rule that lives elsewhere -- fixed to an unparseable value (inr=abc).
+commit: da0d888
 
 #### slice: 03
 
