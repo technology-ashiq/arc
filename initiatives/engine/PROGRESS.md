@@ -113,11 +113,24 @@ it.
 after a merge from `main` that resolved a real `PORTFOLIO.md` collision with two lanes that landed
 mid-flight.
 
-**One change was routed in mid-phase via `/arc-change`, classified a bug:** `capability-vet.sh`
-advertises OCI digest support in its own help text and cannot admit any OCI candidate — proven by
-running it. `offered` reads only npm/PyPI/git shapes, and the hash regex takes only the SRI hyphen
-form while OCI registries return the colon form. It blocks slice 06, it is a security gate, and it
-gets a red-first test plus the two-surface adversarial pass before its PR merges.
+**Slice 06 is BLOCKED and the reason is named.** A change was routed via `/arc-change` as a bug —
+`capability-vet.sh` advertises OCI digest support and the path is unreachable — then **written,
+attacked, and reverted** (`a1148f7` → `8f4c3d2`). The two-surface adversarial pass earned its cost
+immediately: the fix had **regressed a pinned hole** (`record.name` is the package name in
+npm/PyPI/git, so a packument publishing only `0.0.1` admitted a pin of `1.2.3`), its central
+justification was **factually wrong** (SRI is base64-44, OCI is hex-64 — a faithful re-notation
+never normalises to a match), it wrote an **unverified tag coordinate** into the production lock,
+and **four mutants of the added lines survived all 55 tests**. Reverted rather than patched, because
+the OCI path also has **no name binding** — a Docker Hub tag body carries no repository identity, so
+one recorded response certifies any allowlisted name, and closing that needs a design call.
+
+The same pass found **four criticals that predate this cycle and survive the revert**, including a
+**content-scan bypass by filename** verified on the real script: a candidate placing hostile code in
+`src/registry.json` gets `PASS — read-only`, exit 0. All filed as **issue #167**.
+
+**The runtime is therefore pinned and verified out-of-band, and NOT gate-admitted.** The allowlist
+entry and lock row were reverted with the change. Nothing is admitted that the gate cannot stand
+behind.
 
 **The capped-key ceiling figure is NOT needed yet.** Phases 04, 05 and 06 all run at zero spend
 against the local ollama endpoint; the credential is first required by certification fixtures 4 and
