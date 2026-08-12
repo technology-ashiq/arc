@@ -1,8 +1,8 @@
 # PROGRESS.md — arc-memory "playbooks + recall"
 
-status: LIVE
-cycle: arc-memory (Cycle 11, opened 2026-08-11)
-phase: 02
+status: IDLE
+cycle: arc-memory (Cycle 11, closed 2026-08-12)
+phase: — (cycle closed 2026-08-12, 3/3 phases, 7/8 REQ validated + 1 cut; PR #162 pending merge)
 appetite: 5d
 burn: 3.75d
 blocked-on: —
@@ -36,7 +36,7 @@ depends-on: —
 |---|---|---|---|---|
 | 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | ✅ closed 2026-08-11 |
 | 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | ✅ closed 2026-08-11 |
-| 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, equivalence contract + harness (**engine CUT**) | 1.25d | REQ-04..REQ-08 | 🟡 built + green, close pending |
+| 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, equivalence contract + harness (**engine CUT**) | 1.25d | REQ-04..REQ-08 | ✅ closed 2026-08-12 |
 
 ## Appetite burn
 
@@ -274,93 +274,90 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
   **25MB**, or a measured load over **500ms** — about 72× today's corpus, checkable with `ls -l`.
   The freed appetite goes to REQ-04, REQ-05 and REQ-06, which are user-visible.
 
+- **2026-08-12 — PHASE 02 CLOSED. Cycle 11 closed with it: 02 was the last phase.**
+  Shipped: `--decisions` (REQ-04), the write-time near-duplicate check (REQ-05), the golden-set
+  gate (REQ-06), the equivalence contract + harness (REQ-07 **cut**, engine only), and the review
+  hook (REQ-08). **1.0d against a 1.25d appetite.** `amendments: 0` (/arc-change) · `reopened: n`.
+  Tests **+14 this phase**: recall 31→33, golden 14→19, hook 9→11, conflict 10→11 — 74 memory
+  tests, EXECUTED on all five OS×node combinations, 0 `not ok` on any leg. Closed on run
+  **31575423877 @ `1245cb2`, 19/19 jobs**, read per-JOB. Evidence bundle verifies at 5 artifacts.
+- **2026-08-12 — the two adversarial passes returned 30, and all 30 are fixed.** Nine highs landed
+  in `cf0c4c9`; the remaining 21 in `b7ade04`, with a test each and **nothing accepted with a
+  written reason instead of a fix** — each one turned out smaller than the argument for keeping it.
+  The three that mattered were gates that could not see their own failure: `TIE_BREAK` was a string
+  the harness printed and nothing compared against, so inverting bm25's comparator to id-DESCENDING
+  left `--equivalence` AND `--gate` green at exit 0; `spine-reader-lint` could not tell SCANNED
+  CLEAN from COULD NOT SCAN, so a planted bypass inside a filename with a space exited 0; and
+  `golden-check --root --gate` ate `--gate` as the root value, so the gate silently did not run.
+  **Three of the 21 were P2-1, P2-2 and P2-7 recurring in the file next door** — the third twin-fix
+  recurrence in this lane — so the fixes were applied by grepping the PATTERN, not the file: all 31
+  remaining `process.exit(N)` sites across the four CLIs became `exitCode`+`return`, `memory-index`
+  included, which the finding called *all four CLIs* and is the fifth. **Two findings were about
+  the TESTS**: deleting `diff-recall`'s whole git subprocess left its suite byte-identical (every
+  test passed `--paths`; the compiled command passes `--base`), and `conflict-check`'s
+  `normalizeTags` mutant passed all ten tests because every fixture tag was already lowercase.
+  **One finding was WRONG and is corrected rather than dropped:** `--tag` alongside `--decisions`
+  is a real narrowing, since decisions records do carry tags; only the `--lane` half was impossible.
+- **2026-08-12 — the fix pass cost two reds, and both were mine.** An old assertion indexed
+  `mismatches[0]` and asserted its kind, which stopped being true once the tie-break check ran
+  first; and my own new assertion was satisfiable by an *empty* query, because `a/b.mjs` derives
+  nothing by design. Then the comment written to explain the first fix put the probe function's
+  name **in backticks inside a double-quoted shell string**, so bash tried to run it — the CLAUDE.md
+  rule about programs in shell strings, one quote over, landing inside the comment explaining the
+  previous fix. That is the Cycle-6 shape exactly, and it is recorded here rather than smoothed out.
+
 ## Now
 
-**Phase 02's five REQs are all built and GREEN ON CI. The phase is NOT closed, and must not be
-recorded as closed.** Latest green: run **31574476402 @ `5a0e6e0`, 19/19 jobs, read per-JOB** -- branch tip, with all 30 adversarial findings closed and the four grown suites re-weighed.
+**PHASE 02 CLOSED 2026-08-12. Cycle 11 (arc-memory) is CLOSED — 02 was the last phase.**
+
+Closed on run **31575423877 @ `1245cb2`, 19/19 jobs `success`, read per-JOB**. All four memory
+suites EXECUTED on all five OS×node combinations (recall 33, golden 19, hook 11, conflict 11),
+counted from the TAP lines per leg rather than inferred from the absence of a failure. Zero
+`not ok` on any leg.
 
 | REQ | What shipped | Proven at |
 |---|---|---|
-| 04 | `--decisions 'verdict:reject reason~worktree'`, reader-only, KINDS still 44 | `06e1837` |
+| 04 | `--decisions` reader-only filter; `verdict` refused as a closed set; `KINDS` still 44 | `06e1837` |
 | 05 | `conflict-check.mjs` + `/arc-retro` step 3b — >= 2 shared tags AND jaccard >= 0.5, surfaces and never resolves | `e348fa1` |
 | 06 | `golden-check --gate` — 12/12 required, must BEAT the grep baseline, `@expected-rows` pins the set | `723aa41` |
-| ~~07~~ | engine CUT; the equivalence **contract + harness** ship | `cf0c4c9` |
+| ~~07~~ | engine CUT on its own measurement; the equivalence **contract + harness** ship, tie-break ASSERTED | `cf0c4c9` |
 | 08 | `diff-recall.mjs` + `review-diff.process.yaml` step 0, landed via ADR-0207 `retired:` | `cf0c4c9` |
+| — | all 30 adversarial findings closed, with a test each | `b7ade04` … `5a0e6e0` |
 
-**The two adversarial passes ran (ADR-0708) and found 30, 9 high.** Ledgers:
-`evidence/phase-02/adversarial-decision-logic.md` and `-shell-os.md`, plus the running
-`fixed-defect-list.md` both passes were handed. The 9 highs are FIXED. The three worst were: the
-golden gate could be passed by DELETING the row that failed; `/arc-retro` step 3b executed
-retro-log content as shell (31 live rows carry backticks); and `conflict-check` silently skipped
-rows it could not parse — 10 of 64 on the live log — while reporting confidence over all of them.
+**The close itself, against the refined Verification plan (V1..V14):** every row run and its output
+pasted. `KINDS.length = 44`. `GATE PASSED -- 12/12`, beating the recorded grep baseline of 5 by 7.
+Equivalence says `NOTHING WAS COMPARED` in as many words and the tie-break probe reports `HELD`.
+`arc-compile --check` 3/3 byte-identical on **both** targets. `spine-reader-lint` exit 0. The
+evidence bundle verifies at 5 artifacts, including the comparison table and the CI receipt.
 
-### All 30 adversarial findings are FIXED, in `b7ade04`
+**Every assumption trigger was ADJUDICATED BY RUNNING ITS MEASUREMENT, not by reading it** — the
+arc-policy lesson applied. T=0.5 fired on 0 of the 4 real appends this phase made; the alias file
+holds 0 rows against a bar of 200 and no golden miss needed an alias edit; the surfaced→cited
+trigger is NOT YET DUE because the module has not shipped to a consumer repo. **0 of 7 FIRED, 3
+not evaluable, and the three are named rather than scored green.**
 
-The 21 that were carried as `REPORTED` are closed, with a test each, and **nothing was accepted
-with a written reason instead of a fix** — every one turned out smaller than the argument for
-keeping it. Both ledgers carry a per-row disposition table naming the fix and the test that goes
-red if it is undone. The three that mattered:
+### What is open, in writing
 
-- **`TIE_BREAK` was a string the harness printed and nothing compared against.** Inverting bm25's
-  comparator to id-DESCENDING left `--equivalence` AND `--gate` green at exit 0. `checkTieBreak`
-  now asserts it against an all-ties synthetic corpus whose build order is deliberately not its
-  sorted order; the real mutant now exits 1, verified by applying and reverting it.
-- **`spine-reader-lint` could not tell SCANNED CLEAN from COULD NOT SCAN.** An unquoted
-  `for f in $FILES` fed awk two nonexistent paths, the pipeline status was never read, and a
-  planted bypass in `bad file.mjs` exited 0.
-- **`golden-check --root --gate` ate `--gate` as the root value**, so the gate silently did not
-  run. Loud by luck, never by rule: the three sibling CLIs all carried the guard and this one did
-  not.
+- **D-01** — REQ-06's *named* CI job is deferred; `.github/workflows/**` is denied on purpose
+  (owner ruling 2026-08-12). The gate is live and red-capable through the suite; what is deferred
+  is per-JOB legibility. The exact YAML block to add is in the row.
+- **D-02** — phase 02 has **no `develop.started` / `slice.done` receipts**, and they were **not
+  backfilled**. Owner ruled 2026-08-12 to close with the row open. `/arc-develop next` resolves to
+  phase 01 because `findLedger` returns the lowest tasks-file holding any unproven slice, and
+  phase-01 was built outside the harness; the fix lives in the `develop` lane, which this phase's
+  no-gos bar. The reason it was not backfilled is in the row and is the more important half.
+- **The alias layer ships EMPTY and unearned** — ten rows were written, then removed, and nothing
+  measurable changed. Reported to the owner in Phase 01 and still true. It is not a defect; it is
+  a feature with no evidence behind it yet, and ADR-0706's trigger is what would earn it.
 
-Three of the 21 were **P2-1, P2-2 and P2-7 recurring in the file next door** — the third twin-fix
-recurrence in this lane — so the fixes were applied by grepping the PATTERN: all 31 remaining
-`process.exit(N)` sites across the four CLIs are now `exitCode`+`return`, including `memory-index`,
-which the finding called "all four CLIs" and is the fifth. Two findings were about the TESTS, not
-the code: deleting `diff-recall`'s whole git subprocess left `memory-hook.bats` byte-identical, and
-`conflict-check`'s `normalizeTags` mutant passed all ten tests. One finding was WRONG and is
-corrected rather than dropped — `--tag` alongside `--decisions` is a real narrowing, because
-decisions records do carry tags; only the `--lane` half was structurally impossible.
+### For whoever opens this lane next
 
-`fixed-defect-list.md` grew ten new classes (P2-11..P2-20) for the next pass in this lane.
-
-### What Phase 02 still OWES before `/arc-phase-done 02` will pass
-
-1. **Spine receipts.** `develop.started` and `slice.done` for phase 02 were never emitted — this
-   worktree is blocked by the WORKTREE_SPINE guard. They must be emitted from the main clone at
-   `E:/Work_Hub/01_Automemory/arc`, from a checkout that is current, or the close finds them
-   missing (and a stale checkout rejects a newly merged kind as `UNKNOWN_KIND`).
-2. **The close ceremony itself** — `/arc-phase-done 02`, and with it the cycle stat line in
-   `docs/retro-log.md` and the Cycle 11 entry in `docs/HISTORY.md`. HISTORY takes ONE entry per
-   INITIATIVE by its own rule 2, and Phase 02 is the last phase, so that entry is due AT the close
-   and not before it.
-3. **PR #162** leaves draft once the cycle closes.
-
-### Debt already recorded
-
-`debt-ledger.md` D-01: REQ-06's named CI job is deferred because `.github/workflows/**` is denied
-on purpose (owner ruling 2026-08-12). The gate still bites through the suite against the real
-index and real golden set; what is deferred is per-JOB legibility. Exact YAML is in the row.
-
-### Notes for the next session
-
-- **Four retro rows were appended to `docs/retro-log.md` on 2026-08-12**, each run through this
-  lane's own `conflict-check --prevention-file` first (REQ-05 dogfooded on the file it was written
-  for): no near-duplicate among the 54 readable rows, and the 10 scoreboard rows it cannot read
-  were NAMED rather than silently skipped, which is the first-pass fix holding on live data. The
-  adapter now parses **58/58** retro rows. PLAN's REQ-01 counts are annotated as a dated
-  measurement rather than edited: the invariant that gates is `N_parsed == N_indexed`, never a
-  literal.
-- `/arc-develop next` resolves to **phase 01**, not 02: phase-01-tasks.md holds 16/16 unproven
-  slices because Phase 01 was built and closed outside the harness. The fix lives in the `develop`
-  lane and this phase's no-gos bar cross-lane edits, so the slice loop was driven by hand.
-- Spine receipts cannot be emitted from this worktree (WORKTREE_SPINE guard). `develop.started`
-  and `slice.done` for phase 02 were never emitted; emit them from the main clone at
-  `E:/Work_Hub/01_Automemory/arc` before the close, or the close will find them missing.
-- All four memory test suites are weighed in `tests/shard-timings.json` by the per-file TAP-span
-  method, and were RE-MEASURED on 2026-08-12 from run 31573674899 after this pass grew every one
-  of them: recall 80->94, golden 25->46, hook 14->32, conflict 21->22. Three moved by more than a
-  third of their own old weight and golden nearly doubled, so carrying the old numbers would have
-  under-weighted one shard by 84s. None ever rode `_default_weight` 16. Sharding re-verified: 112
-  files, each assigned exactly once across 12 shards.
-
-PR **#162** stays a draft until the cycle closes.
+- `/arc-develop next` will hand you **phase 01's** slices, not the current phase. See D-02.
+- Spine receipts cannot be emitted from this worktree (WORKTREE_SPINE guard) — use the main clone
+  at `E:/Work_Hub/01_Automemory/arc`, and `git pull` it first, because a stale checkout rejects a
+  newly merged kind as `UNKNOWN_KIND`.
+- All four memory suites are weighed in `tests/shard-timings.json` by the per-file TAP-span method
+  and were re-measured 2026-08-12 (recall 94, golden 46, hook 32, conflict 22). Re-measure any of
+  them in the next full weigh-tests pass; re-measure immediately if a file grows.
+- The module has **never run in a consumer repo**. Everything above is proven on arc's own corpus.
+  That is the honest limit of this cycle's evidence.
