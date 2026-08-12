@@ -37,10 +37,38 @@ _procs() {
 # REQ-02 -- the proof, and that it can fail
 # ---------------------------------------------------------------------------
 
-@test "REQ-02: all 3 pilots compile byte-identical to their hand-written baselines" {
+@test "REQ-02: every pilot whose proof has not retired is byte-identical to its baseline" {
+  # ADR-0207. A migration proof retires when its file first legitimately changes, and a retired
+  # file is counted APART from the byte-identical total -- never folded into it, because a
+  # retirement that read as a pass would make this gate the tautology it exists to refuse.
   run node "$(CC)" --check --all --target claude-code --against-baseline --root "$ARC_ROOT"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"3/3 byte-identical"* ]]
+  # kickoff-plan retired on 2026-08-11 (REQ-03) and review-diff on 2026-08-12 (REQ-08), both when
+  # the memory lane added its additive recall step. This tally is EXPECTED to fall as the pilots
+  # legitimately change; what must never happen is a retirement folded into the byte-identical
+  # number, so both are asserted and the sum is asserted to be the pilot count.
+  [[ "$output" == *"1/1 byte-identical"* ]]
+  [[ "$output" == *"(2 retired, ADR-0207)"* ]]
+  # Separator-free: arc-compile prints the PLATFORM separator, so a forward slash here passes on
+  # ubuntu and macOS and fails on windows alone -- which is exactly what it did.
+  [[ "$output" == *"[retired] "* ]]
+  [[ "$output" == *"kickoff-plan.process.yaml — migration proof retired"* ]]
+  [[ "$output" == *"review-diff.process.yaml — migration proof retired"* ]]
+  # 1 proven + 2 retired must equal the pilots on disk. Without this, a file that vanished from
+  # the scan entirely would leave both numbers looking healthy -- the arithmetic is the check that
+  # neither count is quietly dropping a file.
+  pilots="$(ls "$ARC_ROOT/processes"/*.process.yaml | wc -l)"
+  [ "$pilots" -eq 3 ] || { echo "expected 3 pilot process files, found $pilots"; false; }
+}
+
+@test "REQ-02: a retirement must be DECLARED, not inferred from a mismatch" {
+  # The negative control for ADR-0207: without the retired: field, a changed body still fails.
+  # Otherwise "retired" would just be a nicer word for "red", and any drift would self-excuse.
+  local d; d="$(_procs)"
+  _sed_i '/^  retired:/d' "$d/processes/kickoff-plan.process.yaml"
+  run node "$(CC)" --check "$d/processes/kickoff-plan.process.yaml" --target claude-code --against-baseline --root "$ARC_ROOT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"0/1 byte-identical"* ]]
 }
 
 @test "negative control: one changed word in a canonical body fails the byte-diff, with an offset" {

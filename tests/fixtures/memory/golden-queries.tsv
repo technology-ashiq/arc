@@ -1,0 +1,43 @@
+# id	query	expect	anchor	note
+#
+# The at-sign directives below are DATA the gate reads, never literals in code. A baseline typed
+# into a script is a number nobody diffs; here, moving one is a visible change to the fixture that
+# records it. (This sentence does not begin with the at-sign on purpose: the parser reads any
+# comment line whose first token is one as a directive, and the first draft of it was refused.)
+# @baseline-grep-top3	5
+# @baseline-corpus-records	278
+# @expected-rows	12
+#
+# baseline-grep-top3: the Phase-00 grep oracle scored 5 of these 12 queries with an expected id in
+# its top 3, measured on the live corpus on 2026-08-11 and written up in
+# initiatives/memory/evidence/phase-01/golden-set-and-timings.md. REQ-06 requires the module to
+# BEAT it; equalling it means the module was not needed, which is the honest outcome ADR-0706
+# keeps reachable.
+# baseline-corpus-records: 278 records at that same measurement. It exists for ADR-0706's
+# embeddings trigger, whose third condition is a corpus at least twice this size.
+#
+# expect holds one or more comma-separated doc-ids; ANY one of them in the top 3 passes the row.
+#
+# anchor is a VERBATIM substring of the expected record's own text, and it is not decoration.
+# A retro/trial id is content-positional (retro:<DATE>#<n>), so inserting one row earlier on the
+# same date renumbers every later id on that date. The id still EXISTS, so a gate that checks
+# only the id keeps passing while grading a different lesson. Verified during the Phase-00
+# adversarial pass: one back-filled 2026-08-02 row silently repointed both G07 and G08 at
+# unrelated lessons. The gate therefore asserts the resolved record CONTAINS its anchor, so id
+# drift fails loudly instead of quietly grading the wrong thing.
+#
+# Committed before any adapter existed (ADR-0706), so the set cannot be bent to flatter the
+# results it grades. The five content-positional ids carried `unresolved:` placeholders until
+# the id grammar first ran; a loader MUST FAIL on a leftover placeholder rather than skip a row.
+G01	which ADR closed the spine event kind vocabulary	adr:0026	Closed event-kind vocabulary	the closed-vocabulary ADR is cited constantly and nobody remembers its number
+G02	duplicate receipts silently lost idem preimage	retro:2026-07-28#1	an instrument anomaly was explained away	the 2026-07-28 spine row; "idem preimage" is the recorder's word, "duplicate receipts" the searcher's (ADR-0709)
+G03	can two lanes emit in parallel worktree mode B	adr:0056	two execution modes	mode-B certification; asked in this very kickoff and answered by reading the file
+G04	author wrote breaking inputs all caught fresh agent found holes	learn:L-001	wrote 26 adversarial inputs	the gate-author-cannot-be-its-attacker learning
+G05	exit 0 but receipts quarantined fire-and-forget	learn:L-002	reported success while every receipt	the fire-and-forget emitter learning; this phase's own spine fixture had to honour it
+G06	appetite sum warned zero slack inverted fire	trial:2026-07-19#1,trial:2026-07-22#1,trial:2026-07-28#1	over-commit branch	any appetite-sum ledger row passes; there is no single right answer, which is why expect is plural
+G07	two sessions same ADR numbers collision century	retro:2026-08-02#9	two sessions numbering ADRs in parallel	the collision that produced the per-lane century bands this lane's 0700 band comes from
+G08	markdown heading regex anchored line start prose mention	retro:2026-08-02#6	the same markdown-contract regex class bit from the OPPOSITE direction	the row whose own prevention text carries a literal pipe inside a code span — the masking fixture
+G09	apostrophe single-quoted shell embedded node broke	retro:2026-08-03#10	an apostrophe inside a node program	landed twice in one file, the second time inside the comment explaining the first
+G10	when is a cycle officially closed which document	adr:0071	a cycle is CLOSED when	a process question whose answer is an ADR, not a rule file
+G11	test passed while executing nothing vacuous	retro:2026-08-03#7	a test PASSED while executing nothing	the vacuous-pass row; shipped three times, twice inside the suites written to prevent it
+G12	who approves a learning promotion fresh agent owner	adr:0108	graded by an agent that	three recorded inputs, not a count or a streak
