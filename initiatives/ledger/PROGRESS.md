@@ -4,8 +4,8 @@ status: LIVE
 cycle: arc-ledger (opened 2026-08-12)
 phase: 00
 appetite: 8d
-burn: 0d
-blocked-on: owner — approval of PLAN.md before any Phase 0 code
+burn: 1d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -29,7 +29,7 @@ such: the shock absorber is the pre-authorized cut order (REQ-07, then REQ-08, t
 
 ## Appetite burn
 
-**0d of 8d used (0%).** 50% tripwire at 4d: if REQ-01 and REQ-02 are not green on fixtures by then,
+**1d of 8d used (13%).** 50% tripwire at 4d: if REQ-01 and REQ-02 are not green on fixtures by then,
 cut to the pnl-math lib only and bank it. At 100% we cut or kill, never extend.
 
 ## Done log

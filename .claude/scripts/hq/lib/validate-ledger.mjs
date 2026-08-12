@@ -61,7 +61,10 @@ const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const SOURCE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 // 32/40/64 lowercase or uppercase hex: md5, sha1, sha256. See the keyed-hash note above.
 const BARE_DIGEST_RE = /^(?:[0-9a-f]{32}|[0-9a-f]{40}|[0-9a-f]{64}|[0-9A-F]{32}|[0-9A-F]{40}|[0-9A-F]{64})$/;
-const INTERVALS = new Set(["monthly", "annual", "one_time"]);
+// REQ-02 names quarterly explicitly ("normalized to MRR (/12, /3)"), and an earlier draft of this
+// set omitted it -- which would have refused a real quarterly plan at ingest, permanently, on an
+// append-only log.
+const INTERVALS = new Set(["monthly", "quarterly", "annual", "one_time"]);
 const MAX_MINOR_UNITS = 1e12;
 
 const isPlainObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
