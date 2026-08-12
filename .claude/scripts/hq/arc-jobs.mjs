@@ -33,6 +33,7 @@ import { spineRoot, withLock, readIdemIndex } from "./lib/spine-io.mjs";
 import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
+import { processRunArgv } from "./lib/jobs/delegate.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { processNames } from "./lib/policy/subjects.mjs";
@@ -255,9 +256,10 @@ try {
       return { r, timedOut: r.error && r.error.code === "ETIMEDOUT" };
     }
     // A process-job delegates to arc-run with the SAME budget flags a manual run of the same
-    // kind would carry -- a scheduled job can never exceed what a human could ask for.
-    const args = [ARC_RUN, "--process", job.entry, "--driver", "auto",
-      "--budget", `inr=${job.budget.inr},min=${job.budget.min}`];
+    // kind would carry -- a scheduled job can never exceed what a human could ask for. The argv
+    // is built by the shared builder rather than inline, so REQ-02 can compare the scheduled and
+    // manual forms without spawning a driver to do it.
+    const args = processRunArgv(job, { arcRunPath: ARC_RUN });
     const r = spawnSync(process.execPath, args, {
       encoding: "utf8", windowsHide: true, maxBuffer: 32 * 1024 * 1024, cwd: root,
     });

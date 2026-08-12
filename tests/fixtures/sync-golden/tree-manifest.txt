@@ -159,7 +159,7 @@
 .claude/scripts/hq/arc-event.mjs	ec0f4ee6505b3d22747bd822934d2f2a48bd3224e298a7343b389be7b7ff5e22
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	70403b5dbd606de7ac767ac96e791d7798fe077590d88659d9dd11ae426c90f7
-.claude/scripts/hq/arc-jobs.mjs	696a0dbe8e457ea33f16bea72c258eff315ce77c469dcf5d53ff0b60c44065b9
+.claude/scripts/hq/arc-jobs.mjs	b6c6e17f664311bf4a3262f5e5f01097782c5c6d7dc1966ffc875b55bf0dff26
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc
@@ -167,6 +167,8 @@
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523
 .claude/scripts/hq/lib/canonical.mjs	8208e649624d433923086bac533d3563d0f73a50897d371ad6317a8e3c58bf4f
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
+.claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
+.claude/scripts/hq/lib/jobs/scheduler-os.mjs	e5ffaac0d6ecf8a07f3a04a7f105d29da2591e19f855906249bf41e149769fba
 .claude/scripts/hq/lib/jobs/schema.mjs	312a3ae673b8e6141b689d8029679f4e45cac386dc6c341753a147fad03491fb
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
