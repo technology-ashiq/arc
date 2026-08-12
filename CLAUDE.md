@@ -36,10 +36,13 @@
 - Comments explain *why*, not *what*, and stay short.
 - Reuse an existing component before creating a new one.
 - **A program embedded in a shell string carries no apostrophes and no single quotes — in code
-  OR in comments.** One apostrophe closes the single-quoted string and the shell expands the
-  rest. This landed twice in one file in Cycle 6, the second time inside the comment explaining
-  the first, and again in the engine lane. The moment the embedded program wants an apostrophe,
-  it belongs in its own file.
+  OR in comments — and inside a DOUBLE-quoted string, the same is true of a backtick and of `$`.**
+  One apostrophe closes the single-quoted string and the shell expands the rest; one backtick
+  opens a command substitution the shell then runs. This landed twice in one file in Cycle 6, the
+  second time inside the comment explaining the first, again in the engine lane, and again on
+  2026-08-12 in the memory lane — that last one a backtick, in the comment explaining the previous
+  fix, which made bash try to execute the function the comment was naming. The moment the embedded
+  program wants any of those three characters, it belongs in its own file.
 - Code review ALWAYS runs through the `code-reviewer` agent (Task `subagent_type: code-reviewer`),
   never ad-hoc `general-purpose` reviewers — that agent is where the scanners + review method live.
 - Impact questions (callers, dependents, schema-dependent queries): query the **Graphify
