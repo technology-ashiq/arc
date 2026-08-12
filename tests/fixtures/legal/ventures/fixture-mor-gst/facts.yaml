@@ -1,0 +1,60 @@
+# Fixture venture: payment_model=mor, gst_registered=true.
+# One of six covering the full payment_model x gst_registered cross product. Invented
+# operator, invented address, invented contacts -- no real person's details live in a test
+# fixture, and no real venture's facts become permanent public test data.
+venture: fixture-mor-gst
+site_url: "https://mor-gst.example"
+effective_date: 2026-08-13
+
+operator:
+  type: entity
+  legal_name: "Fernhill Digital Private Limited"
+  trade_name: "Fernhill"
+
+geographic_address: "4th Floor, 12 Anna Salai, Chennai 600002, Tamil Nadu, India"
+
+support:
+  email: "support@mor-gst.example"
+  phone: "+91 44 4000 1000"
+
+grievance:
+  name: "Meera Raghavan"
+  email: "grievance@mor-gst.example"
+  address: "Grievance Officer, 4th Floor, 12 Anna Salai, Chennai 600002, India"
+
+data_categories:
+  - identity
+  - contact
+  - account-credentials
+  - billing
+  - device-and-log
+  - support-correspondence
+  - client-matter-content
+  - uploaded-documents
+
+purposes:
+  - provide-the-service
+  - authenticate-and-secure
+  - billing-and-invoicing
+  - support-and-communication
+  - legal-and-regulatory
+
+analytics:
+  - first-party-only
+
+retention: until-account-deletion
+
+deletion_route:
+  mailbox: "delete@mor-gst.example"
+
+payment_model: mor
+payment_provider: razorpay
+refund_window_days: 30
+
+gst_registered: true
+gstin: 33AABCN1234M1Z5
+
+stores_third_party_client_data: true
+sub_processors:
+  - "Amazon Web Services India (hosting, Mumbai region)"
+  - "Postmark (transactional email)"

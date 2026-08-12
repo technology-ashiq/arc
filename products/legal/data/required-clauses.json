@@ -1,0 +1,50 @@
+{
+  "_comment": "Completeness lint input (ADR-1009). A mandatory clause absent from the RENDERED bytes is a MISSING-CLAUSE finding, even when every clause that IS present traces perfectly -- provenance alone cannot pass an empty page. `when` is a single field=value equality against the facts, or absent for always-required. Only pages whose templates exist are checked; a page not yet authored is reported as NOT-AUTHORED, never as complete.",
+  "terms": [
+    { "id": "TERMS.PARTIES" },
+    { "id": "TERMS.SERVICE" },
+    { "id": "TERMS.ELIGIBILITY" },
+    { "id": "TERMS.ACCOUNT" },
+    { "id": "TERMS.ACCEPTABLE_USE" },
+    { "id": "TERMS.IP" },
+    { "id": "TERMS.TERMINATION" },
+    { "id": "TERMS.LIABILITY" },
+    { "id": "TERMS.GOVERNING_LAW" },
+    { "id": "TERMS.CHANGES" },
+    { "id": "TERMS.CONTACT" },
+    { "id": "TERMS.NOT_LEGAL_ADVICE" },
+    { "id": "TERMS.PROCESSOR_ROLE", "when": "stores_third_party_client_data=true" }
+  ],
+  "privacy": [
+    { "id": "PRIVACY.IDENTITY" },
+    { "id": "PRIVACY.NOTICE.STATUS" },
+    { "id": "PRIVACY.NOTICE.ITEMISED" },
+    { "id": "PRIVACY.NOTICE.PURPOSES" },
+    { "id": "PRIVACY.RIGHTS" },
+    { "id": "PRIVACY.WITHDRAW" },
+    { "id": "PRIVACY.COMPLAINT.BOARD" },
+    { "id": "PRIVACY.LANGUAGE" },
+    { "id": "PRIVACY.GRIEVANCE" },
+    { "id": "PRIVACY.RETENTION" },
+    { "id": "PRIVACY.DELETION" },
+    { "id": "PRIVACY.ANALYTICS" },
+    { "id": "PRIVACY.SECURITY" },
+    { "id": "PRIVACY.CHANGES" },
+    { "id": "PRIVACY.SUBPROCESSORS", "when": "stores_third_party_client_data=true" },
+    { "id": "PRIVACY.PROCESSOR", "when": "stores_third_party_client_data=true" }
+  ],
+  "refund-cancellation": [
+    { "id": "REFUND.SCOPE" },
+    { "id": "REFUND.HOW_TO_REQUEST" },
+    { "id": "CANCEL.PATH" },
+    { "id": "CANCEL.AUTORENEW" },
+    { "id": "CANCEL.NO_MAZE" },
+    { "id": "CANCEL.EFFECT" },
+    { "id": "REFUND.CONTACT" },
+    { "id": "REFUND.WINDOW", "when": "payment_model=gateway" },
+    { "id": "REFUND.MOR", "when": "payment_model=mor" },
+    { "id": "REFUND.OFFLINE", "when": "payment_model=none" },
+    { "id": "REFUND.GST_INVOICE", "when": "gst_registered=true" },
+    { "id": "REFUND.NO_GST", "when": "gst_registered=false" }
+  ]
+}

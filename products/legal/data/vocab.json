@@ -1,0 +1,79 @@
+{
+  "_comment": "Closed vocabularies for ENUM-tier facts fields (ADR-1002). Extended only by reviewed diff. An unknown value is a parse error, never a passthrough.",
+  "data_categories": [
+    "identity",
+    "contact",
+    "account-credentials",
+    "billing",
+    "usage-analytics",
+    "device-and-log",
+    "support-correspondence",
+    "client-matter-content",
+    "uploaded-documents"
+  ],
+  "purposes": [
+    "provide-the-service",
+    "authenticate-and-secure",
+    "billing-and-invoicing",
+    "support-and-communication",
+    "legal-and-regulatory",
+    "service-improvement"
+  ],
+  "analytics": [
+    "none",
+    "first-party-only",
+    "plausible",
+    "posthog",
+    "google-analytics"
+  ],
+  "retention": [
+    "until-account-deletion",
+    "statutory-period",
+    "fixed-months"
+  ],
+  "payment_model": ["gateway", "mor", "none"],
+  "payment_provider": ["razorpay", "none"],
+  "operator_type": ["individual", "entity"],
+  "labels": {
+    "_comment": "Human-readable phrasing for each enum value. The renderer NEVER prints a raw enum token into a sentence; it prints the label. A value with no label is a render error, so adding a vocabulary entry forces someone to write its words. KEYED BY FIELD PATH (`operator.type`), not by vocabulary name (`operator_type`) -- the template asks for `label.<field path>`, and two keying schemes in one file is how a lookup silently returns nothing.",
+    "data_categories": {
+      "identity": "your name and the identity details you give us",
+      "contact": "your email address, phone number and postal address",
+      "account-credentials": "your login credentials and authentication records",
+      "billing": "your billing details and payment records",
+      "usage-analytics": "how you use the service, in aggregate",
+      "device-and-log": "your device and connection details, and server logs",
+      "support-correspondence": "the messages you send us for support",
+      "client-matter-content": "the records you upload about the people you serve",
+      "uploaded-documents": "the documents and files you upload"
+    },
+    "purposes": {
+      "provide-the-service": "to give you the service you signed up for",
+      "authenticate-and-secure": "to sign you in and keep the account secure",
+      "billing-and-invoicing": "to bill you and issue invoices",
+      "support-and-communication": "to answer you when you contact us",
+      "legal-and-regulatory": "to meet a legal or regulatory obligation",
+      "service-improvement": "to find and fix problems with the service"
+    },
+    "analytics": {
+      "none": "We run no analytics on this service.",
+      "first-party-only": "We count page visits ourselves and share nothing with a third party.",
+      "plausible": "Plausible Analytics, which does not use cookies and does not track you across sites.",
+      "posthog": "PostHog, for product analytics.",
+      "google-analytics": "Google Analytics."
+    },
+    "retention": {
+      "until-account-deletion": "for as long as your account exists, and until you delete it",
+      "statutory-period": "for the period the law requires us to keep it, and no longer",
+      "fixed-months": "for a fixed period stated in your account settings, and no longer"
+    },
+    "payment_provider": {
+      "razorpay": "Razorpay",
+      "none": "no payment provider"
+    },
+    "operator.type": {
+      "individual": "an individual",
+      "entity": "a registered entity"
+    }
+  }
+}

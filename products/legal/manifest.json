@@ -1,0 +1,19 @@
+{
+  "name": "legal",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "scripts": [
+    ".claude/scripts/legal/arc-legal.mjs",
+    ".claude/scripts/legal/lib/yaml.mjs",
+    ".claude/scripts/legal/lib/canonical.mjs",
+    ".claude/scripts/legal/lib/schema.mjs",
+    ".claude/scripts/legal/lib/template.mjs",
+    ".claude/scripts/legal/lib/lints.mjs"
+  ],
+  "files": [],
+  "docs": []
+}

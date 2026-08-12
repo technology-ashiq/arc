@@ -861,3 +861,58 @@ _arc_run_lint() {
   rm -f "$_errf" 2>/dev/null || :
   return 0
 }
+
+# ---------------------------------------------------------------------------
+# legal lane (Cycle 14). arc-legal resolves its product tree three levels up from
+# .claude/scripts/legal/, so a sandbox MIRRORS the real layout rather than flattening it --
+# a flat copy passes while the real layout is broken (the arc-scan lesson, above).
+# ---------------------------------------------------------------------------
+
+_arc_legal_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-legal.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts" "$SANDBOX/products" "$SANDBOX/tests/fixtures/legal"
+  cp -r "$ARC_ROOT/.claude/scripts/legal"         "$SANDBOX/.claude/scripts/"
+  cp -r "$ARC_ROOT/products/legal"                "$SANDBOX/products/"
+  cp -r "$ARC_ROOT/tests/fixtures/legal/ventures" "$SANDBOX/tests/fixtures/legal/"
+  cp    "$ARC_ROOT/tests/legal-probe.mjs"         "$SANDBOX/tests/"
+  ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
+  # A sandbox that did not actually copy is a silent pass generator: every "no findings"
+  # assertion downstream would hold against a tree with no engine in it.
+  [ -f "$ARC_LEGAL_CLI" ] || { echo "legal sandbox did not copy the CLI" >&2; return 1; }
+}
+
+_arc_legal_teardown() {
+  ARC_LEGAL_CLI=""
+  [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX" 2>/dev/null || true
+}
+
+# Render one fixture venture into a fresh directory. Sets ARC_LEGAL_OUT.
+# Call under bats `run` when the exit code is the subject; the sidecar is read from disk either
+# way, because a lint whose findings are scraped from stdout is a lint tested through its
+# formatting rather than through its behaviour.
+_arc_legal_render() {
+  local _cli="${ARC_LEGAL_CLI:-$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs}"
+  local _venture="$1"
+  ARC_LEGAL_OUT="${BATS_TEST_TMPDIR}/out-${_venture}"
+  node "$_cli" render --venture "$_venture" --out "$ARC_LEGAL_OUT"
+}
+
+_arc_legal_run_json() { echo "$ARC_LEGAL_OUT/_run.json"; }
+
+# Count findings in the sidecar for a group and level. Prints a number, always -- "0" and
+# "could not read the sidecar" must never be the same output.
+_arc_legal_findings() {
+  local _group="$1" _level="$2"
+  node "$ARC_ROOT/tests/legal-probe.mjs" findings "$(_arc_legal_run_json)" "$_group" "$_level"
+}
+
+# Every @test name in a bats file must be 7-bit ASCII. bats silently DROPS a @test whose title
+# carries a non-ASCII character -- five tests once vanished that way and the file stayed green
+# (arc-evolve 2026-08-04). Returns 1 if any offending line is found, and prints it.
+_arc_ascii_test_names() {
+  local _file="$1" _bad
+  _bad="$(LC_ALL=C grep -n '^@test' "$_file" | LC_ALL=C grep '[^ -~]' || true)"
+  [ -z "$_bad" ] && return 0
+  echo "$_bad" >&2
+  return 1
+}

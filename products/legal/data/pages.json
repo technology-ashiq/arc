@@ -1,0 +1,54 @@
+{
+  "_comment": "The page set (ADR-1001): the VERIFIED Razorpay activation superset. Five rows are provider-required in the default activation flow; two are provider-conditional (the additional-site / e-commerce tab) and are independently useful under the Consumer Protection (E-Commerce) Rules 2020 entity disclosures. `phase` records which build phase authors the template -- a page whose template does not exist yet is skipped by the renderer with a named reason, never silently.",
+  "pages": [
+    {
+      "id": "terms",
+      "title": "Terms and Conditions",
+      "default_route": "/legal/terms",
+      "provider": "required",
+      "phase": 0
+    },
+    {
+      "id": "privacy",
+      "title": "Privacy Policy",
+      "default_route": "/legal/privacy",
+      "provider": "required",
+      "phase": 0
+    },
+    {
+      "id": "refund-cancellation",
+      "title": "Cancellation and Refunds",
+      "default_route": "/legal/refunds",
+      "provider": "required",
+      "phase": 0
+    },
+    {
+      "id": "shipping-delivery",
+      "title": "Shipping and Delivery",
+      "default_route": "/legal/shipping",
+      "provider": "required",
+      "phase": 1
+    },
+    {
+      "id": "contact",
+      "title": "Contact Us",
+      "default_route": "/contact",
+      "provider": "required",
+      "phase": 1
+    },
+    {
+      "id": "pricing",
+      "title": "Pricing",
+      "default_route": "/pricing",
+      "provider": "conditional",
+      "phase": 1
+    },
+    {
+      "id": "about",
+      "title": "About Us",
+      "default_route": "/about",
+      "provider": "conditional",
+      "phase": 1
+    }
+  ]
+}

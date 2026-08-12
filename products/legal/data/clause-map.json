@@ -1,0 +1,29 @@
+{
+  "_comment": "The enum-to-clause map (ADR-1002). One key per BRANCHING field. Trace-lint reads this in two directions: a clause emitted but listed under no branch of the field that selected it is a trace FAIL; a clause listed under a branch that was NOT selected but present in the rendered bytes is a branch-mismatch FAIL. Six ordered leaks across payment_model are fixture-pinned, plus both gst_registered directions.",
+  "payment_model": {
+    "gateway": [
+      "TERMS.FEES.GATEWAY",
+      "REFUND.WINDOW",
+      "REFUND.PROCESSING",
+      "REFUND.DISPUTE.GATEWAY"
+    ],
+    "mor": [
+      "TERMS.FEES.MOR",
+      "REFUND.MOR",
+      "REFUND.DISPUTE.MOR"
+    ],
+    "none": [
+      "TERMS.FEES.OFFLINE",
+      "REFUND.OFFLINE",
+      "REFUND.DISPUTE.OFFLINE"
+    ]
+  },
+  "gst_registered": {
+    "true": ["REFUND.GST_INVOICE", "PRICING.GSTIN"],
+    "false": ["REFUND.NO_GST", "PRICING.NO_GST"]
+  },
+  "stores_third_party_client_data": {
+    "true": ["PRIVACY.PROCESSOR", "PRIVACY.SUBPROCESSORS", "TERMS.PROCESSOR_ROLE"],
+    "false": []
+  }
+}

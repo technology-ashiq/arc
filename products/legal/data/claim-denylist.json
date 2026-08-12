@@ -1,0 +1,43 @@
+{
+  "_comment": "Compliance-claim denylist (ADR-1002, Constitution E3). Checked case-insensitively against the RENDERED bytes, never against the input value -- an input-side check is defeated by any encoding the renderer later undoes. Extending this list is a reviewed diff.",
+  "tokens": [
+    "certified",
+    "certification",
+    "compliant",
+    "compliance guaranteed",
+    "fully compliant",
+    "government approved",
+    "govt approved",
+    "iso 27001",
+    "iso27001",
+    "soc 2",
+    "soc2",
+    "gdpr compliant",
+    "dpdp compliant",
+    "dpdpa compliant",
+    "reviewed by counsel",
+    "vetted by a lawyer",
+    "legal advice",
+    "legally binding advice",
+    "bank grade",
+    "bank-grade",
+    "military grade",
+    "military-grade",
+    "100% secure",
+    "fully secure",
+    "unhackable",
+    "guaranteed",
+    "risk free",
+    "risk-free"
+  ],
+  "allowed_in_context": {
+    "_comment": "Phrases that CONTAIN a denylisted token but are the honest negation of it. The lint matches these first and, on a match, does not fire for that occurrence. Each entry exists because the page needs to SAY the true thing, and a denylist with no escape hatch teaches authors to write vaguer sentences rather than truer ones.",
+    "phrases": [
+      "this is not legal advice",
+      "we do not give legal advice",
+      "nothing here is legal advice",
+      "no system is 100% secure",
+      "we cannot promise that any system is fully secure"
+    ]
+  }
+}
