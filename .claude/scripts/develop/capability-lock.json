@@ -10,9 +10,7 @@
       "checked": "2026-08-03",
       "source": "npm:madge@8.0.0, fetched and not retained",
       "class": "write-capable (human OK recorded: ashiq 2026-08-03)"
-    }
-  ],
-  "refusals": [
+    },
     {
       "name": "nousresearch/hermes-agent",
       "registry": "oci",
@@ -21,8 +19,10 @@
       "publisher-auth": "Docker Hub namespace nousresearch; the vendor CI workflow docker.yml pushes to this exact namespace gated on github.repository == NousResearch/hermes-agent, from a protected container-publish environment",
       "build-attestation": "SLSA Provenance v1 in-toto attestation present in the image index (predicate-type https://slsa.dev/provenance/v1, decoded directly). No cosign signature and no SBOM attestation found.",
       "checked": "2026-08-12",
-      "refused-on": "allowlist, version, hash",
-      "why": "\"nousresearch/hermes-agent\" is not on the allowlist"
+      "source": "oci:nousresearch/hermes-agent@2026.8.3, fetched and not retained",
+      "class": "write-capable (human OK recorded: ashiq 2026-08-12)",
+      "previously-refused-on": "allowlist, version, hash"
     }
-  ]
+  ],
+  "refusals": []
 }

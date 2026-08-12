@@ -304,7 +304,14 @@ if (!record) {
 
 // Versions, read STRUCTURALLY. `1.2.3` used to match a registry offering only `1.2.31`.
 const offered = new Set();
-const collect = (v) => { if (typeof v === "string") offered.add(v); };
+const collect = (v) => {
+  if (typeof v !== "string") return;
+  offered.add(v);
+  // An OCI registry names the TAG, and a release tag conventionally carries a leading `v`
+  // that the pinned semver does not (`v2026.8.3` names version `2026.8.3`). Stripped only
+  // when a digit follows, so a package legitimately named `vault` is untouched.
+  if (/^v[0-9]/.test(v)) offered.add(v.slice(1));
+};
 if (record) {
   if (Array.isArray(record.versions)) record.versions.forEach(collect);
   else if (record.versions && typeof record.versions === "object") Object.keys(record.versions).forEach(collect);
@@ -312,6 +319,12 @@ if (record) {
   if (record["dist-tags"] && typeof record["dist-tags"] === "object") Object.values(record["dist-tags"]).forEach(collect);
   if (Array.isArray(record.commits)) record.commits.forEach(collect);
   collect(record.commit);
+  // OCI. A registry response for one tag names it in `name` and publishes no `versions`
+  // array at all, so every reader above returns nothing and the candidate was refused with
+  // "the response lists no versions" -- an advertised path (the OCI digest named in the help
+  // text at the top of this file) that no candidate could ever walk.
+  collect(record.name);
+  if (Array.isArray(record.tags)) record.tags.forEach((t) => collect(typeof t === "string" ? t : t && t.name));
 }
 
 // --- allowlist. Read as LINES and compared as strings; entries trimmed, BOM stripped,
@@ -361,7 +374,11 @@ if (isSkill) {
 // real skill unpassable except by fabricating a value nothing verified.
 const hash = text(manifest.hash);
 if (!isSkill) {
-  if (!hash || !/^sha(256|512)-[A-Za-z0-9+/=]{16,}$/.test(hash)) {
+  // `sha256-…` is Subresource Integrity, which npm and PyPI speak. `sha256:…` is the OCI
+  // descriptor form, which every container registry speaks and which this gate claimed to
+  // accept while rejecting outright. Both separators are admitted; the value is still
+  // COMPARED below, never merely shape-checked.
+  if (!hash || !/^sha(256|512)[:-][A-Za-z0-9+/=]{16,}$/.test(hash)) {
     block("hash", `no usable integrity hash for ${name}@${version}`,
       "npm dist.integrity, PyPI digests.sha256 or an OCI digest — `sha512-…` or `sha256-…`",
       hash || "(absent)");
@@ -369,16 +386,21 @@ if (!isSkill) {
     const published = [];
     const walk = (o, depth) => {
       if (!o || depth > 4) return;
-      if (typeof o === "string") { if (/^sha(256|512)-/.test(o)) published.push(o); return; }
+      if (typeof o === "string") { if (/^sha(256|512)[:-]/.test(o)) published.push(o); return; }
       if (Array.isArray(o)) return o.forEach((x) => walk(x, depth + 1));
       if (typeof o === "object") return Object.values(o).forEach((x) => walk(x, depth + 1));
     };
     walk(record, 0);
+    // One digest written two ways is one digest. The separator is notation, the hex is the
+    // claim, so compare on the normalised form -- otherwise a candidate quoting the registry
+    // faithfully in the other notation reads as a mismatch, which is a false BLOCK rather
+    // than a caught lie. The RAW strings are still what gets reported.
+    const normHash = (s) => s.replace(/^sha(256|512)[:-]/, "sha$1-");
     if (!published.length) {
       block("hash", `${name}@${version} claims an integrity hash the recorded response does not publish`,
         "the same integrity string the registry returned",
         "the recorded response publishes no sha256/sha512 value at all");
-    } else if (!published.includes(hash)) {
+    } else if (!published.map(normHash).includes(normHash(hash))) {
       block("hash", `the claimed hash for ${name}@${version} is not the one the registry published`,
         published[0],
         hash);

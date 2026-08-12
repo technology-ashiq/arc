@@ -1,0 +1,10 @@
+{
+  "_comment": "Differs from oci-clean in exactly ONE way: the hash is a well-formed sha256 colon-form digest that the recorded response does not publish. Accepting the colon form must not degrade into accepting any colon-shaped string -- this is the negative control that proves the widened regex still COMPARES rather than merely shape-checks.",
+  "name": "oci-tool",
+  "registry": "oci",
+  "version": "2026.8.3",
+  "hash": "sha256:deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+  "publisher-auth": "Docker Hub namespace oci-tools, push gated on the upstream repository identity",
+  "build-attestation": "SLSA Provenance v1 in-toto attestation present in the image index",
+  "registry-record": "registry.json"
+}

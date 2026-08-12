@@ -1,0 +1,18 @@
+{
+  "_comment": "The SHAPE a real OCI registry returns, not an npm response wearing an OCI label. Docker Hub names the tag in `name` (with the leading v the git tag carries), puts the index digest in `digest`, and lists per-architecture digests under `images` -- there is no `versions` array and no `dist.integrity`, which is exactly why the npm-shaped reader could never admit one. Captured from hub.docker.com/v2/repositories/.../tags/v2026.8.3 on 2026-08-12.",
+  "name": "v2026.8.3",
+  "digest": "sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e",
+  "images": [
+    {
+      "digest": "sha256:c0cab4e3711bcb27a312be1b3776254fc06fd50d5f7a6b8017915fc7171cb39e",
+      "architecture": "amd64",
+      "os": "linux"
+    },
+    {
+      "digest": "sha256:153a021a0c59f28c1c230b201c8b819403da2a01969b9ffd939f1a429b7af2cd",
+      "architecture": "arm64",
+      "os": "linux"
+    }
+  ],
+  "fetched": "2026-08-12"
+}

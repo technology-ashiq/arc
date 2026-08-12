@@ -49,6 +49,30 @@ _blocks_on() {
   [[ "$output" == *"write-capable"* ]] || { echo "the class was not stated: $output"; false; }
 }
 
+# The gate's own help text offers "npm dist.integrity, PyPI digests.sha256 or an OCI digest",
+# and before this test no OCI candidate could pass it -- the OCI path was unreachable code, an
+# advertised capability nothing ever exercised. Two independent reasons, both real:
+#   version  `offered` was built only from npm/PyPI/git shapes (versions, dist-tags, commits),
+#            so a registry response naming its tag in `name` yielded "lists no versions".
+#   hash     the regex took only the SRI hyphen form sha256-, and every OCI registry returns
+#            the colon form sha256:.
+# This is a PASS test on purpose. The refusal tests below cannot detect a gate that refuses
+# everything, which is this file's own stated principle, and an unreachable branch refuses
+# everything by construction.
+@test "an OCI candidate satisfying every condition PASSES" {
+  _vet oci-clean
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"PASS"* ]] || { echo "$output"; false; }
+}
+
+# The negative control for the pair above: accepting the colon form must not mean accepting
+# ANY colon-shaped string. A digest the recorded response does not publish still BLOCKs, or
+# the fix has widened the hole it was meant to close.
+@test "BLOCK: an OCI digest the registry did not publish" {
+  _vet oci-wrong-digest
+  _blocks_on hash
+}
+
 # ---------------------------------------------------------------------------
 # One BLOCK per condition -- asserted once per condition, never once in total
 # ---------------------------------------------------------------------------
@@ -295,7 +319,11 @@ JSON
       for (const k of ["name", "registry", "version", "hash", "publisher-auth", "build-attestation", "checked"]) {
         if (!r[k]) { console.log(r.name + " is missing " + k); process.exit(1); }
       }
-      if (!/^sha(256|512)-/.test(r.hash)) { console.log(r.name + " hash is not a registry integrity string"); process.exit(1); }
+      // Both separators. `sha256-` is Subresource Integrity (npm, PyPI); `sha256:` is the OCI
+      // descriptor form every container registry returns. This assertion carried the same
+      // npm-only assumption the gate did, so widening one without the other would have failed
+      // a correct lock row -- the test protecting the rule needed the same fix as the rule.
+      if (!/^sha(256|512)[:-]/.test(r.hash)) { console.log(r.name + " hash is not a registry integrity string"); process.exit(1); }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(r.checked)) { console.log(r.name + " checked date is not ISO"); process.exit(1); }
     }
     console.log("decisions: " + rows.map((r) => r.name + "@" + r.version).join(", "));
