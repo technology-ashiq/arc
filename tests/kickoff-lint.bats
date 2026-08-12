@@ -755,7 +755,21 @@ version: 1
 # bats silently DROPS a test whose @test name is not ASCII, and a dropped test is invisible
 # except as a shrinking count. Assert the registered count from BATS_TEST_NAMES -- what bats
 # actually registered -- rather than grepping the file, which counts lines bats ignored.
+#
+# The expected number is DERIVED from this file, not pinned. It was pinned at 71, and adding one
+# test on 2026-08-12 turned it red with nothing broken -- which is verbatim the defect
+# `tests/develop-lint.bats` documents in its own comment ("a test that asserts one snapshot value
+# measures the calendar", retro-log 2026-08-02). The lesson was written down in one suite and never
+# applied to this one: the same twin-fix shape, found by the commit that added a twin-fix mechanism.
+#
+# `grep -c '^@test '` counts what the FILE declares; `BATS_TEST_NAMES` counts what bats REGISTERED.
+# The whole point is that those two numbers can differ, so the test compares them against each
+# other and stays a real check rather than becoming a tautology.
 @test "kickoff-lint suite registers every test it defines" {
+  local declared registered
+  declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered=${#BATS_TEST_NAMES[@]}
-  [ "$registered" -eq 71 ] || { echo "registered $registered tests, expected 71"; false; }
+  [ "$registered" -eq "$declared" ] || { echo "declared $declared tests, bats registered $registered"; false; }
+  # A floor, so the pair cannot both collapse to zero and agree.
+  [ "$declared" -gt 60 ] || { echo "only $declared tests declared -- the suite shrank unnoticed"; false; }
 }
