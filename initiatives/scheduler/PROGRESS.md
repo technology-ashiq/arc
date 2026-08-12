@@ -79,11 +79,13 @@ Scheduler with ADR-0803's six settings written explicitly, the next-minute smoke
 policy gate, and the rehearsed off-switch. The interface and its fake already exist and are
 contract-tested from Phase 00; Phase 02 puts the real implementation behind the same contract.
 
-**Owner action outstanding, ONE, not blocking today:** copy
-`docs/owner-paste-sessionstart-jobs-nudge.sh` to `.claude/hooks/SessionStart.d/60-jobs.sh`.
-`.claude/hooks/**` is refused by both `ungrantable_resources` and `permissions.deny`, and that is
-the rule working: a hook runs on every session start, so an agent that could write one could
-arrange to run anything, forever, unattended.
+**Owner action DONE 2026-08-13:** the SessionStart nudge is installed at
+`.claude/hooks/SessionStart.d/60-jobs.sh`, verified by running it — it calls `panel`, executes no
+job, and printed the two derived needs-you lines with correct slot counts.
+
+**Owner action OUTSTANDING, and it blocks every lane rather than only this one:** apply
+`docs/owner-paste-ci-pin-opengrep.yml` over `.github/workflows/ci.yml`. It pins opengrep to
+v1.25.0 instead of `latest`. `.github/workflows/**` is agent-denied, so this is a paste.
 
 **WIP note (informational, ADR-0052 — never a gate):** four lanes are live as of 2026-08-12 —
 `leads`, `bench`, `engine` and this one — against a guideline of 2. `wip-line.sh` cannot see all

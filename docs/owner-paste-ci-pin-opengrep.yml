@@ -1,0 +1,324 @@
+name: arc-ci
+
+# ADR-0007 (+ macOS amendment): arc's self-tests run on ubuntu + windows (Git Bash)
+# + macos-latest. Red = no merge. The macOS leg exercises BSD userland (sed/stat/date
+# differ from GNU); bash-3.2 syntax is enforced by a static audit (no mapfile / assoc
+# arrays). Scanner-dependent tests skip (visibly) when a tool doesn't install, so CI is
+# honest and never flaky on a tool hiccup.
+#
+# CI runs ONCE per change, on the PULL REQUEST -- not again on the merge to main. The
+# earlier `push: branches:[main]` trigger re-ran the whole 6-job matrix on every merge, a
+# third pass over a tree the PR had already proven green ("stop paying for it twice",
+# d53daed). The `pull_request` trigger already covers every push to an open PR (opened +
+# synchronize), so a fix pushed to a red PR re-runs; a clean merge does not. This matches
+# the repo's own branch-then-PR rule (CLAUDE.md) -- nothing lands on main except through a
+# PR that CI has already gated.
+# NOTE (owner action, GitHub UI): turn on branch protection for `main` with "require the
+# arc-ci checks to pass" + "require branches to be up to date before merging". The second
+# option closes the one gap this leaves -- if main moves between a PR going green and its
+# merge, it forces the PR to re-run against the new base, so the merged tree is always a
+# tested tree. On a solo repo main rarely moves mid-merge, so the gap is small, but the
+# setting makes it zero. I cannot set branch protection from here.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Three OSes on one Node, plus two Node legs on ubuntu. Cycle 2 needs the version
+        # dimension: node:sqlite exists only on Node 22+, and ADR-0024 makes it an OPTIONAL
+        # accelerator behind an equivalence gate. Both halves of that promise need a runner:
+        # Node 18 proves the canonical JSONL-scan path stands alone (REQ-04(b)), Node 22
+        # proves the accelerator is byte-identical to it. A full 3x3 matrix would be nine
+        # jobs to establish something two ubuntu jobs already settle.
+        #
+        # WINDOWS AND MACOS ARE SHARDED, UBUNTU IS NOT. Windows costs 1585s against ~145s on
+        # every ubuntu leg and 234s on macos, for the same 563 tests -- 2.82s per test against
+        # 0.26s, because every bats `run` spawns a process and windows process creation is
+        # dear. The cost is SPREAD, not concentrated (the ten heaviest files are 64% of it), so
+        # there is no slow file to fix and the honest response is to split.
+        #
+        # THERE IS NO WINDOWS-SIDE SAVING LEFT TO FIND. Measured 2026-07-31 (run 30611012771):
+        # excluding the workspace and bats' binaries from Microsoft Defender moved nothing --
+        # 121s vs 119s on a one-file shard and 186s vs 193s on a five-file shard, both inside
+        # the spread between repetitions of the same variant. The verification step explains
+        # why: the runner image ALREADY ships with realtime protection off and both drives
+        # excluded, so the lever had been pulled before we reached for it. `bats --jobs` was
+        # not measurable either -- it needs GNU parallel, which Git Bash does not ship and the
+        # download did not land.
+        #
+        # THE SHAPE OF THE ANSWER IS SET BY TWO CEILINGS, both measured, not assumed:
+        #
+        #   The heaviest single FILE. design-steel-thread.bats is 141s and one file cannot be
+        #   split across two runners, so from 12 shards on the heaviest shard IS that file and
+        #   a 13th buys nothing. Going below it means splitting the file itself, or making one
+        #   job run several bats processes at once (measure-windows-cost.yml asks that).
+        #
+        #   ~20 concurrent jobs on GitHub Free. Measured: a 25-job run left exactly five
+        #   queueing (150s, 85s, 71s, 55s, 43s). Past the cap the excess runs as a second wave
+        #   and the wall clock roughly doubles, so a shard count is a budget, not a free knob.
+        #
+        # 12 + 3 + 3 + ci-tier = 19 jobs, one under the cap. Windows lands at ~169s and is the
+        # binding leg; ubuntu is ~160s unsharded. Sharding ubuntu would cost three jobs (one per
+        # node version, all three run the full suite) and force windows down to 11, which comes
+        # out slower -- so it stays whole.
+        #
+        # MACOS GETS A THIRD SHARD FOR A REASON WORTH WRITING DOWN. It is sharded with WINDOWS
+        # weights, which is wrong in kind: the 2-shard split was predicted at 797/796 and ran
+        # 77s/161s, because the process-spawn cost that dominates windows does not dominate
+        # macOS. A third shard makes that error small. It does not fix it. At 238s total macOS
+        # is not the binding leg, so it does not earn a weights table of its own yet -- if it
+        # ever becomes binding, weigh it on macos-latest rather than adding shards.
+        #
+        # Minutes are free (public repo). The only currency being spent is wall clock.
+        #
+        # No test is dropped: all 563 still run on windows and on macos, just across more
+        # runners. `shard-tests.mjs` refuses loudly if any file would land in no shard, and the
+        # run step reconciles TAP lines emitted against @test lines declared -- silently
+        # skipping one would turn a green tick into a lie.
+        include:
+          - { os: ubuntu-latest,  node: '20', shard: 1, shards: 1 }
+          - { os: ubuntu-latest,  node: '18', shard: 1, shards: 1 }
+          - { os: ubuntu-latest,  node: '22', shard: 1, shards: 1 }
+          - { os: macos-latest,   node: '20', shard: 1, shards: 3 }
+          - { os: macos-latest,   node: '20', shard: 2, shards: 3 }
+          - { os: macos-latest,   node: '20', shard: 3, shards: 3 }
+          - { os: windows-latest, node: '20', shard: 1,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 2,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 3,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 4,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 5,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 6,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 7,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 8,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 9,  shards: 12 }
+          - { os: windows-latest, node: '20', shard: 10, shards: 12 }
+          - { os: windows-latest, node: '20', shard: 11, shards: 12 }
+          - { os: windows-latest, node: '20', shard: 12, shards: 12 }
+    name: selftest (${{ matrix.os }}, ${{ matrix.node }}${{ matrix.shards > 1 && format(', shard {0}/{1}', matrix.shard, matrix.shards) || '' }})
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash          # Git Bash on windows-latest -- matches the target runtime
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Install bats
+        run: npm install -g bats
+
+      - name: Install jq (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Install jq (Windows)
+        if: runner.os == 'Windows'
+        run: choco install jq -y --no-progress
+
+      - name: Install jq (macOS)
+        if: runner.os == 'macOS'
+        run: command -v jq >/dev/null 2>&1 || brew install jq
+
+      - name: Install gitleaks (best-effort)
+        run: |
+          set -u
+          VER=8.30.1
+          mkdir -p "$HOME/bin"
+          arch=x64; [ "$(uname -m)" = "arm64" ] && arch=arm64
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            curl -fsSL -o gl.zip "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_windows_x64.zip" \
+              && unzip -o gl.zip gitleaks.exe -d "$HOME/bin" || echo "gitleaks install skipped"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_darwin_${arch}.tar.gz" \
+              && tar -xzf gl.tgz -C "$HOME/bin" gitleaks || echo "gitleaks install skipped"
+          else
+            curl -fsSL -o gl.tgz "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
+              && tar -xzf gl.tgz -C "$HOME/bin" gitleaks || echo "gitleaks install skipped"
+          fi
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Install opengrep (best-effort)
+        run: |
+          set -u
+          mkdir -p "$HOME/bin"
+          # PINNED, not `latest`. An unpinned scanner makes the strength of this gate whatever
+          # upstream shipped this morning: on 2026-08-12 a new opengrep release stopped flagging
+          # the planted eval() that three arc-scan tests depend on, and EVERY branch went red at
+          # once -- including main, which had been green hours earlier. Diagnosed by reproducing
+          # locally with opengrep 1.25.0 and the repo's own ruleset, which still finds it
+          # (1 finding, severity ERROR), so neither the rules nor the tests were at fault.
+          #
+          # The security half matters more than the red CI: an unpinned security scanner can
+          # silently STOP detecting a class of bug, and the only signal is a test going red. If
+          # those tests had been written to skip when the scanner finds nothing, the detection
+          # loss would have been invisible.
+          #
+          # Moving this pin is a reviewed diff that re-runs the arc-scan suite, never a bump.
+          base=https://github.com/opengrep/opengrep/releases/download/v1.25.0
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            curl -fsSL -o "$HOME/bin/opengrep.exe" "$base/opengrep_windows_x86.exe" || echo "opengrep install skipped"
+          elif [ "$RUNNER_OS" = "macOS" ]; then
+            asset=opengrep_osx_x86; [ "$(uname -m)" = "arm64" ] && asset=opengrep_osx_arm64
+            curl -fsSL -o "$HOME/bin/opengrep" "$base/$asset" \
+              && chmod +x "$HOME/bin/opengrep" || echo "opengrep install skipped"
+          else
+            curl -fsSL -o "$HOME/bin/opengrep" "$base/opengrep_manylinux_x86" \
+              && chmod +x "$HOME/bin/opengrep" || echo "opengrep install skipped"
+          fi
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Tool banner
+        run: |
+          echo "jq:       $(command -v jq       || echo MISSING)"
+          echo "bats:     $(command -v bats     || echo MISSING)"
+          echo "gitleaks: $(command -v gitleaks || echo MISSING)"
+          echo "opengrep: $(command -v opengrep || echo MISSING)"
+
+      - name: Version gate
+        run: bash .claude/scripts/review/arc-scan/version-gate.sh
+
+      - name: Product manifests lint
+        # Had no CI step at all, so REQ-03's gate only ever ran against tests/fixtures/ --
+        # "product-lint green" was in the Phase-03 checkpoint contract but unenforced.
+        run: node .claude/scripts/core/product-lint.mjs
+
+      - name: Run bats self-tests
+        # Unsharded legs keep `-r tests/`. -r is kept although ADR-0021 decided tests stay
+        # centralised in tests/: bats does not recurse without it, and on a directory holding
+        # no *.bats it prints 1..0 and exits 0 -- a moved-away suite would vanish from a green
+        # CI without a word.
+        #
+        # Sharded legs get an explicit file list instead, which removes that particular safety
+        # net -- so the sharder carries its own: it packs every discovered file and exits
+        # non-zero if any would land in no shard, rather than quietly emitting a short list.
+        # `set -o pipefail` is not enough here; the list is captured first so a sharder refusal
+        # fails the step instead of running bats over an empty argument list.
+        run: |
+          # ---- executed-vs-declared reconciliation (em-dash incident, 2026-07-30) ----
+          # A U+2014 in two `@test` NAMES made bats fail to encode them into shell function
+          # identifiers under the C locale, so those two tests were never executed. bats
+          # reported it as a `# bats warning:` COMMENT among 91 `ok` lines: the step was red,
+          # but the reason was invisible and reads as flake. Counting the TAP lines bats
+          # actually emitted against the `@test` lines the files declare turns ANY
+          # non-execution into an annotation -- mangled name, unparseable `@test`, or a file
+          # bats could not load -- and it does so on every leg, not just the one that broke.
+          # This subsumes bats' own validator: for a `@test` whose brace is on the next line
+          # the plan header shrinks along with the parse, so bats sees no mismatch and this
+          # still does. Skips count as executed, correctly.
+          _tap=./.bats-tap.log
+          _reconcile() {
+            local declared="$1" executed
+            executed="$(grep -cE '^(ok|not ok) ' "$_tap" || true)"
+            echo "reconcile: declared $declared, executed $executed"
+            if [ "$declared" -ne "$executed" ]; then
+              echo "::error::$(( declared - executed )) declared test(s) never executed -- a test that does not run is indistinguishable from one that passes"
+              grep -nE '^# bats warning:' "$_tap" || true
+              return 1
+            fi
+            if grep -qE '^# bats warning:' "$_tap"; then
+              echo "::error::bats emitted a warning; treating as non-execution"
+              grep -nE '^# bats warning:' "$_tap"
+              return 1
+            fi
+            return 0
+          }
+          _declared() { grep -hcE '^[[:blank:]]*@test[[:blank:]]' "$@" | awk '{s+=$1} END{print s+0}'; }
+
+          if [ "${{ matrix.shards }}" -gt 1 ]; then
+            files="$(node .github/scripts/shard-tests.mjs --index ${{ matrix.shard }} --total ${{ matrix.shards }})" || exit 1
+            [ -n "$files" ] || { echo "::error::shard ${{ matrix.shard }}/${{ matrix.shards }} resolved to no files"; exit 1; }
+            echo "shard ${{ matrix.shard }}/${{ matrix.shards }} runs $(printf '%s\n' "$files" | wc -l | tr -d ' ') file(s)"
+            # The file list and the elapsed seconds are printed so tests/shard-timings.json can
+            # be recalibrated from REAL runs instead of a throwaway measurement job. The first
+            # measurement was taken by timing each file in its own `bats` call, and it turned
+            # out to understate a grouped shard by ~2.2x while matching a single-file shard
+            # exactly -- so the only trustworthy source for these weights is the invocation CI
+            # actually performs. Grep a run for "shard-timing:" to harvest them.
+            printf 'shard-timing: files %s\n' "$(printf '%s ' $files)"
+            _t0=$(date +%s)
+            set +e; bats --print-output-on-failure $files 2>&1 | tee "$_tap"; _rc=${PIPESTATUS[0]}; set -e
+            printf 'shard-timing: shard %s/%s elapsed %ss rc=%s\n' \
+              "${{ matrix.shard }}" "${{ matrix.shards }}" "$(( $(date +%s) - _t0 ))" "$_rc"
+            set +e; _reconcile "$(_declared $files)"; _rrc=$?; set -e
+            rm -f "$_tap"
+            [ "$_rc" -eq 0 ] || exit "$_rc"
+            exit "$_rrc"
+          else
+            set +e; bats -r --print-output-on-failure tests/ 2>&1 | tee "$_tap"; _rc=${PIPESTATUS[0]}; set -e
+            set +e; _reconcile "$(_declared $(find tests -name '*.bats'))"; _rrc=$?; set -e
+            rm -f "$_tap"
+            [ "$_rc" -eq 0 ] || exit "$_rc"
+            exit "$_rrc"
+          fi
+
+      - name: Test-count floor
+        # A suite that silently shrinks is the failure mode -r alone cannot catch. Raise this
+        # number when tests are added; never lower it to make a red build green.
+        # Counted by grep, not `bats -r --count`: measured on the windows leg that call cost
+        # 67s (it loads and parses every file through bats itself) for a number grep produces
+        # in 157ms. A gate must not cost more than what it guards.
+        shell: bash
+        run: |
+          n="$(grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}')"
+          echo "discovered $n test(s)"
+          # Raised 318 -> 891 (engine Cycle 6, Phase 00). The floor had rotted by 550: it was
+          # last touched when the suite held 318 tests and nothing failed as the suite tripled,
+          # because a floor only catches SHRINKAGE. That is the counts-rot shape of retro-log
+          # 2026-07-22 -- a hardcoded number nobody recomputes. Derive it, never retype it:
+          #   grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}'
+          # Raise it to match reality; never lower it to make a red build green.
+          [ "$n" -ge 911 ] || { echo "::error::test count $n fell below the floor of 911"; exit 1; }
+
+  # CI tier (ADR-0006): the pinned arc-tools image runs the heavy verifiers.
+  # Linux-only (docker; ZAP later is linux-only too). Proves the trivy docker
+  # rung against the REAL image -- a genuinely vulnerable dependency must be
+  # caught (the native rung + the fake-docker rung are covered by bats).
+  ci-tier:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Build the arc-tools image
+        run: bash .claude/scripts/review/arc-tools-image.sh build
+
+      - name: Verify trivy runs inside the image
+        run: bash .claude/scripts/review/arc-tools-image.sh verify
+
+      - name: Trivy docker rung catches a real vulnerable dependency
+        run: |
+          set -euo pipefail
+          REF="$(bash .claude/scripts/review/arc-tools-image.sh ref)"
+          fx="$(mktemp -d)"
+          # PyYAML 5.1 -> CVE-2020-1747 (well-known, stable in the trivy DB).
+          printf 'PyYAML==5.1\n' > "$fx/requirements.txt"
+          # The image runs as non-root (uid 10001); mktemp -d is 0700, so make the
+          # mounted fixture world-readable or the container user can't read /src.
+          # (Real repo checkouts are already world-readable -- fixture-only fix.)
+          chmod -R a+rX "$fx"
+          out="$(mktemp)"
+          ARC_DOCKER_IMAGE="$REF" ARC_FORCE_RUNTIME=docker ROOT="$fx" \
+            bash .claude/scripts/review/arc-scan/adapters/trivy.sh /dev/null "$out"
+          n="$(jq '[.runs[].results[]?] | length' "$out")"
+          echo "trivy (real image) reported $n vulnerability finding(s)"
+          if [ "$n" -eq 0 ]; then
+            echo "::warning::0 findings -- mount/readability diagnostic:"
+            docker run --rm -v "$fx:/src:ro" "$REF" sh -c 'id; ls -la /src; cat /src/requirements.txt || echo CANNOT-READ-SRC' || true
+          fi
+          jq -r '.runs[].results[]?.ruleId' "$out" | sort -u | head
+          [ "$n" -gt 0 ] || { echo "expected >=1 finding from a vulnerable dep"; exit 1; }
