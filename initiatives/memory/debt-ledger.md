@@ -49,3 +49,42 @@
 record — all 12 name an adr/retro/learn/trial id. If a golden row ever names one, this flag stops
 being safe and the gate says so by going red on a missing expected id, which is the correct
 failure.
+
+## D-02 — Phase 02 has NO `develop.started` / `slice.done` receipts, and they were not backfilled
+
+- **What.** The two develop receipts for phase 02 do not exist on the spine and will not be
+  created. `/arc-phase-done 02` will report them missing, and that report is correct.
+- **Where.** `.claude/state/hq/events/<date>.jsonl` in the main clone at
+  `E:/Work_Hub/01_Automemory/arc` (this worktree is blocked by the WORKTREE_SPINE guard).
+  The emitter is `.claude/scripts/hq/arc-event.sh`; both kinds are live in the closed 44
+  (`lib/validate.mjs:38`), so this is not a vocabulary problem — nothing was ever emitted.
+- **Why it happened.** `/arc-develop next` resolves to **phase 01**, not 02: `findLedger` returns
+  the lowest tasks-file holding any unproven slice, and `phase-01-tasks.md` holds 16/16 unproven
+  because Phase 01 was built and closed outside the harness. The fix lives in the `develop` lane
+  and this phase's no-gos bar cross-lane edits, so the slice loop was driven by hand — and the
+  harness is the only thing that emits these receipts.
+- **Why accepted rather than backfilled — the part worth reading.** Both ways of manufacturing
+  them are worse than the gap:
+  - **Emit now, at `ts = now`.** `develop.started` and `slice.done` land seconds apart, so
+    `timeToFirstProven` (`.claude/scripts/develop/metrics.mjs:157`) records phase 02 at **~0
+    minutes** and averages it into the company mean. That function has a declared plausibility
+    CEILING (90 days, added after one receipt with a wrong year produced 26,297,340 minutes) and
+    **no floor**, so nothing would catch it. A false number that looks real is worse than an
+    absent one — the whole reason that ceiling exists.
+  - **Emit with `ARC_SPINE_NOW` pinned to the slice commit times.** That is a test door used to
+    make fixtures reproducible, and using it to write a past timestamp into an append-only
+    company log is forging a receipt. This repo's own rule is that *a certification is not a
+    memory of a green run*; a receipt is not a memory of having worked.
+  The spine is append-only, so a wrong event cannot be deleted, only superseded. A named absence
+  is recoverable; a false record is not.
+- **Cost of leaving it.** Phase 02 contributes nothing to `time-to-first-proven-slice` or to any
+  develop-lane metric derived from these two kinds, and the phase's slice lineage lives only in
+  `phase-02-tasks.md` and the commit SHAs it names (`06e1837`, `e348fa1`, `723aa41`, `cf0c4c9`,
+  `b7ade04`). Those are real evidence and they are not on the spine. Nothing else depends on it.
+- **Pay-down trigger.** The `develop` lane fixing `findLedger` so `next` resolves to the correct
+  phase. At that point the harness emits these receipts for every future phase and the gap stops
+  growing. **It does not retro-fill phase 02, and this row is why.**
+- **Owner call outstanding.** Whether `/arc-phase-done 02` may close with this row open is
+  Ashiq's, not this session's. The recommendation is **yes, close with D-02 recorded**: the
+  receipts prove that the harness ran, and the harness demonstrably did not — recording that
+  truthfully is the point of having a ledger.

@@ -205,8 +205,11 @@ _git_tree() {
   run node "$HOOK" --paths "a/b.mjs" --print-query --limit 3; [ "$status" -eq 2 ]
   [[ "$output" == *"silently done nothing"* ]]
   # ...and each of them alone is still perfectly legal, or the refusal above is just a broken flag.
-  run node "$HOOK" --paths "a/b.mjs" --print-query; [ "$status" -eq 0 ]
+  # A path that really derives terms: `a/b.mjs` is two single characters and a declared extension,
+  # so it correctly derives NOTHING and would have proven the refusal by proving an empty query.
+  run node "$HOOK" --paths "processes/review-diff.process.yaml" --print-query; [ "$status" -eq 0 ]
   [ -n "$output" ] || { echo "--print-query alone produced nothing"; false; }
+  run node "$HOOK" --paths "processes/review-diff.process.yaml" --limit 3 --print-query; [ "$status" -eq 2 ]
 }
 
 @test "diff-recall: --paths splits on newlines, so a piped git list is not one giant path" {

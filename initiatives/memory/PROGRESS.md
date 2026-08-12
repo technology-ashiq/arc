@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-memory (Cycle 11, opened 2026-08-11)
 phase: 02
 appetite: 5d
-burn: 2.75d
+burn: 3.75d
 blocked-on: —
 depends-on: —
 
@@ -36,12 +36,18 @@ depends-on: —
 |---|---|---|---|---|
 | 00 | The index exists and is honest — 5 adapters, count-verified, named exclusions, atomic rebuild, golden set committed, grep baseline recorded | 1.5d | REQ-01 | ✅ closed 2026-08-11 |
 | 01 | Recall people can trust — CLI, sanitization, aliases, citations, `<1s` on 3 OSes, root-mode fixture, kickoff hook | 1.75d | REQ-02, REQ-03 | ✅ closed 2026-08-11 |
-| 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, sqlite engine + equivalence gate | 1.25d | REQ-04..REQ-08 | ⬜ not started |
+| 02 | Decisions, conflicts, proof — `--decisions`, write-time conflict check, review hook, golden set in CI, equivalence contract + harness (**engine CUT**) | 1.25d | REQ-04..REQ-08 | 🟡 built + green, close pending |
 
 ## Appetite burn
 
-**2.75d of 5d used (55%).** Phase 01 came in at **0.75d against its 1.75d appetite**. Phase 00 came in at **1d against its 1.5d appetite**. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
-conversation. 5.0d (100%) — cut or kill, never silently extend.
+**3.75d of 5d used (75%).** Phase 01 came in at **0.75d against its 1.75d appetite**. Phase 00 came in at **1d against its 1.5d appetite**. **Phase 02 came in at 1.0d against its 1.25d appetite** — built 2026-08-11 evening through 2026-08-12 midday, including two adversarial passes and the 30 fixes they produced. Tripwires: 2.5d (50%) — if Phase 00 is not closed, mandatory scope-cut
+conversation; Phase 00 closed 2026-08-11, so that one is SATISFIED rather than waived. 5.0d (100%) — cut or kill, never silently extend.
+
+**The 55% that stood here until 2026-08-12 was stale, not wrong when written**: it was set before
+Phase 02 was built and never re-derived afterwards. Recorded as a correction rather than overwritten
+in silence, because a burn figure nobody recomputes is the counts-rot shape this repo has now logged
+twice. All three phases came in UNDER their line, and the cycle sits at 75% with its last phase
+built — so no extension conversation is due, and none is being had.
 
 **The appetite was raised 4d → 5d by the owner on 2026-08-11**, recorded here rather than absorbed
 silently. Option C (ADR-0701) added REQ-07 to an already-committed cycle; the kickoff recommended
@@ -288,20 +294,46 @@ golden gate could be passed by DELETING the row that failed; `/arc-retro` step 3
 retro-log content as shell (31 live rows carry backticks); and `conflict-check` silently skipped
 rows it could not parse — 10 of 64 on the live log — while reporting confidence over all of them.
 
+### All 30 adversarial findings are FIXED, in `b7ade04`
+
+The 21 that were carried as `REPORTED` are closed, with a test each, and **nothing was accepted
+with a written reason instead of a fix** — every one turned out smaller than the argument for
+keeping it. Both ledgers carry a per-row disposition table naming the fix and the test that goes
+red if it is undone. The three that mattered:
+
+- **`TIE_BREAK` was a string the harness printed and nothing compared against.** Inverting bm25's
+  comparator to id-DESCENDING left `--equivalence` AND `--gate` green at exit 0. `checkTieBreak`
+  now asserts it against an all-ties synthetic corpus whose build order is deliberately not its
+  sorted order; the real mutant now exits 1, verified by applying and reverting it.
+- **`spine-reader-lint` could not tell SCANNED CLEAN from COULD NOT SCAN.** An unquoted
+  `for f in $FILES` fed awk two nonexistent paths, the pipeline status was never read, and a
+  planted bypass in `bad file.mjs` exited 0.
+- **`golden-check --root --gate` ate `--gate` as the root value**, so the gate silently did not
+  run. Loud by luck, never by rule: the three sibling CLIs all carried the guard and this one did
+  not.
+
+Three of the 21 were **P2-1, P2-2 and P2-7 recurring in the file next door** — the third twin-fix
+recurrence in this lane — so the fixes were applied by grepping the PATTERN: all 31 remaining
+`process.exit(N)` sites across the four CLIs are now `exitCode`+`return`, including `memory-index`,
+which the finding called "all four CLIs" and is the fifth. Two findings were about the TESTS, not
+the code: deleting `diff-recall`'s whole git subprocess left `memory-hook.bats` byte-identical, and
+`conflict-check`'s `normalizeTags` mutant passed all ten tests. One finding was WRONG and is
+corrected rather than dropped — `--tag` alongside `--decisions` is a real narrowing, because
+decisions records do carry tags; only the `--lane` half was structurally impossible.
+
+`fixed-defect-list.md` grew ten new classes (P2-11..P2-20) for the next pass in this lane.
+
 ### What Phase 02 still OWES before `/arc-phase-done 02` will pass
 
-1. **21 adversarial findings are open**, disposition `REPORTED` in both ledgers. Roughly **8 are
-   real** and should be fixed: `golden-check --root --gate` eats `--gate` so the gate silently does
-   not run; `diff-recall` never checks `--root` exists, laundering an operator typo into exit 3 —
-   the one code `/arc-review` is told to ignore; `diff-recall` runs git in the process cwd rather
-   than `--root`; the equivalence harness does not assert the tie-break it calls its contract, so
-   an inverted bm25 tie-break still passes; `--engine` is accepted and inert on `--grep`,
-   `--decisions` and `--full`; `spine-reader-lint`'s unquoted `$FILES` exits 0 on a filename with a
-   space; `golden-check` still discards alias exclusions; `--print-query` silently ignores `--json`
-   and `--limit`. The other ~13 are cosmetic and may be ACCEPTED WITH A WRITTEN REASON — but
-   accepted in writing, never dropped in silence.
-2. **Retro row + HISTORY entry** — not written. Every cut recorded with its reason (REQ-07).
-3. **This tracker's Phases table + board row** — still show Phase 02 as not started.
+1. **Spine receipts.** `develop.started` and `slice.done` for phase 02 were never emitted — this
+   worktree is blocked by the WORKTREE_SPINE guard. They must be emitted from the main clone at
+   `E:/Work_Hub/01_Automemory/arc`, from a checkout that is current, or the close finds them
+   missing (and a stale checkout rejects a newly merged kind as `UNKNOWN_KIND`).
+2. **The close ceremony itself** — `/arc-phase-done 02`, and with it the cycle stat line in
+   `docs/retro-log.md` and the Cycle 11 entry in `docs/HISTORY.md`. HISTORY takes ONE entry per
+   INITIATIVE by its own rule 2, and Phase 02 is the last phase, so that entry is due AT the close
+   and not before it.
+3. **PR #162** leaves draft once the cycle closes.
 
 ### Debt already recorded
 
@@ -311,6 +343,13 @@ index and real golden set; what is deferred is per-JOB legibility. Exact YAML is
 
 ### Notes for the next session
 
+- **Four retro rows were appended to `docs/retro-log.md` on 2026-08-12**, each run through this
+  lane's own `conflict-check --prevention-file` first (REQ-05 dogfooded on the file it was written
+  for): no near-duplicate among the 54 readable rows, and the 10 scoreboard rows it cannot read
+  were NAMED rather than silently skipped, which is the first-pass fix holding on live data. The
+  adapter now parses **58/58** retro rows. PLAN's REQ-01 counts are annotated as a dated
+  measurement rather than edited: the invariant that gates is `N_parsed == N_indexed`, never a
+  literal.
 - `/arc-develop next` resolves to **phase 01**, not 02: phase-01-tasks.md holds 16/16 unproven
   slices because Phase 01 was built and closed outside the harness. The fix lives in the `develop`
   lane and this phase's no-gos bar cross-lane edits, so the slice loop was driven by hand.

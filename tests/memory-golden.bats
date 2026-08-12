@@ -287,7 +287,11 @@ _set_baseline() {
       const good = m.checkEquivalence({ index: idx2, records: recs, queries, registry: [canonical, agreeing] });
       if (!bad2.compared) throw new Error('two engines must count as compared');
       if (bad2.mismatches.length === 0) throw new Error('an order-only disagreement was NOT caught');
-      if (bad2.mismatches[0].kind !== 'disagreement') throw new Error('wrong kind: ' + bad2.mismatches[0].kind);
+      // PRESENT, not first. `checkTieBreak` now runs ahead of the per-query comparison, and an
+      // engine that reverses every result also breaks the tie-break -- correctly -- so it reports
+      // BOTH kinds and this used to index [0] blindly. Asserting the kind is present keeps what
+      // this test is actually for: that an order-only disagreement is caught as a disagreement.
+      if (!bad2.mismatches.some((x) => x.kind === 'disagreement')) throw new Error('no disagreement reported, kinds: ' + bad2.mismatches.map((x) => x.kind).join(','));
       if (good.mismatches.length !== 0) throw new Error('an AGREEING pair was falsely flagged: the harness refuses everything');
       if (!good.compared) throw new Error('agreeing pair not marked compared');
       console.log('EQUIV OK caught=' + bad2.mismatches.length + ' falsePositives=' + good.mismatches.length);
