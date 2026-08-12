@@ -47,10 +47,23 @@ denial behaves exactly as it does for a normal run: no driver process starts, an
 `incident.raised` receipt is emitted, and the run terminates with `reason: "policy"` — and a
 policy denial never triggers the fallback driver chain.
 
-**Option 3 is a declared no-go for this lane**, stated here because it is the shortest path and
-would be invisible in review: a runner that spawns `drivers/<name>.sh` itself, bypassing the
-gate, is an unpoliced spend path wearing a test harness. Phase 3's adversarial pass includes a
-mutant bench that spawns a driver directly, and the suite must reject it.
+**Option 3 is a declared no-go for this lane** — but the reason is narrower than it first looks,
+and the correction is worth recording because getting it wrong in either direction is a lie about
+a control.
+
+**Verified 2026-08-12: a direct driver spawn is NOT unpoliced.** `common.mjs:156-168` carries a
+second policy gate inside `runDriver()` — the function every driver core funnels through — and
+its own comment says why: *"arc-run is not the only way to start a driver… a gate with one call
+site is only sole-entry if nothing else can call the thing it guards."* It calls
+`driverPolicyDenial(processName)` and a check that throws DENIES. So `arc-run`'s gate is the
+early, better-reported copy, not the only one.
+
+The rule that bench never spawns a driver itself therefore stands on **operational integrity**,
+not on being the only policy check. A direct spawn would bypass the run-level budget remainder
+(REQ-04), the `run.completed` receipt, and the contract-retry ladder — three things the second
+gate knows nothing about. Phase 4's mutant must therefore assert it was rejected **for the reason
+under test**, since a mutant caught by the driver-level policy gate would look like a pass while
+proving nothing about bench's budget or receipt discipline.
 
 **One honest consequence recorded rather than routed around:** because the policy subject is
 the underlying process, benching a class whose process has no row would run **read-only at L1**

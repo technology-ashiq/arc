@@ -12,10 +12,16 @@ The simulation gate returned 10 blockers against the first draft of this spec. E
 here, verified against the tree, so the executor never guesses.
 
 **M1 · How bench invokes a driver.** Bench **shells out to `arc-run.mjs` once per attempt** — it
-never spawns `drivers/NAME.sh` itself. That is what makes ADR-0912 true rather than aspirational:
-the policy gate lives inside `arc-run`, so routing every call through it means bench cannot be a
-policy bypass, and the Phase-4 mutant that spawns a driver directly is deviating from a real path
-rather than from a stated preference.
+never spawns `drivers/NAME.sh` itself.
+
+**Why, stated accurately.** Policy is NOT the reason: `common.mjs:156-168` carries a second gate
+inside `runDriver()`, so a direct spawn is already policed (that comment block explains it —
+*"a gate with one call site is only sole-entry if nothing else can call the thing it guards"*).
+The reason is operational: a direct spawn bypasses the **run-level budget remainder** (REQ-04),
+the **`run.completed` receipt**, and the **contract-retry ladder**, none of which the driver-level
+gate knows about. Phase 4's mutant must therefore be rejected *for that reason*, not merely
+rejected — a mutant stopped by the policy gate would prove nothing about bench's budget or
+receipt discipline.
 
 ```
 node .claude/scripts/engine/arc-run.mjs --process PROCESS --driver DRIVER --input @FILE --budget inr=REMAINING

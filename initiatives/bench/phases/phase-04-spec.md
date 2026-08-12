@@ -16,13 +16,17 @@ evidence rather than assertion.
       mutant, never a grep**: retro-log 2026-08-04 records a grep-based propose-only guard that
       a mutant overwriting the canonical file, deleting the champion, committing and spawning a
       deploy walked straight past.
-- [ ] **The policy-bypass mutant is REJECTED.** Bench adds no policy subject of its own
-      (ADR-0912): every driver invocation resolves as `process:THE-PROCESS-BEING-BENCHED` and
-      passes the same gate `arc-run` uses, so a runner that spawns a driver itself is an
-      unpoliced spend path. A mutant bench that spawns `drivers/NAME.sh`
-      directly, bypassing the policy gate, is run, and the suite rejects it. Held to the
-      identical parse-plus-mutant standard, because a driver spawn hides behind `child_process`
-      exactly as a file write hides behind `fs/promises`.
+- [ ] **The direct-spawn mutant is REJECTED, and for the RIGHT reason.** Bench adds no policy
+      subject of its own (ADR-0912): every invocation resolves as
+      `process:THE-PROCESS-BEING-BENCHED`. **Note the correction recorded in ADR-0912:** a direct
+      spawn is *not* unpoliced — `common.mjs:156-168` carries a second policy gate inside
+      `runDriver()`. So a mutant bench that spawns `drivers/NAME.sh` directly may well be stopped
+      by that gate, and **being stopped there is NOT a passing negative control**: it proves
+      nothing about what the direct spawn actually breaks, which is the run-level budget
+      remainder, the `run.completed` receipt and the contract-retry ladder. The test must assert
+      the rejection names **bench's own** rule. Held to the parse-plus-running-mutant standard,
+      because a driver spawn hides behind `child_process` exactly as a file write hides behind
+      `fs/promises`.
 - [ ] **Each rejection is attributable to the specific guard under test** — a mutant that
       crashes on an unrelated fault (bad arg, missing env) before reaching its target behaviour
       is **NOT** a passing negative control, and the test asserts the recorded reason names the
