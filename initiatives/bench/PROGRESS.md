@@ -1,0 +1,99 @@
+# PROGRESS.md — arc-bench "the model market"
+
+status: LIVE
+cycle: arc-bench (Cycle 13, opened 2026-08-12)
+phase: 00
+appetite: 8d
+burn: 0d
+blocked-on: —
+depends-on: —
+
+> Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
+> (tests green on CI + live demo + exit criteria + evidence). Evidence over assertion.
+> Evidence is lane-scoped at `initiatives/bench/evidence/phase-NN/` (ADR-0055). ADRs, the
+> retro-log, HISTORY and the trial-ledger stay at repo root (ADR-0053). This lane holds ADR
+> century **0900–0999**; ADR-0900..0914 are locked there.
+
+## Phases
+
+| Phase | Capability | Appetite | Status |
+|---|---|---|---|
+| 00 | The road + steel thread — `drivers/mock`, `version` verb, assertion schema, fixture-repo harness, `commit-msg-draft` armed to 5, one fixture end to end | 3.0d | ⬜ not started |
+| 01 | Bench core — full run, K=3 sequential, K-group admission control, provenance, total encoder, replay proof | 1.5d | ⬜ not started |
+| 02 | Router proposal — three artifacts, gates-first eligibility, `NO PROPOSAL` with reason, `approval.requested` | 0.75d | ⬜ not started |
+| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ⬜ not started |
+| 04 | Seal + retro — two mutants, two adversarial surfaces, redaction sweep, runbook, production count from the spine | 1.0d | ⬜ not started |
+
+Phases sum to **7.25d**; the remaining **0.75d is named reserve, not unallocated scope**.
+
+## Appetite burn
+
+**0 of 8 days used.** 50% tripwire at 4d — see `PLAN.md` § Appetite for the kill criteria and
+the pre-planned cut order (decided at kickoff, not at 6pm on day 8).
+
+## Done-log
+
+*(nothing closed yet — this lane was born 2026-08-12)*
+
+- **2026-08-12 — kickoff.** Lane `bench` born. Century 0900–0999 claimed; ADR-0900..0914
+  written. PLAN.md, 5 phase specs and this tracker created. Attack panel ×3 returned 21
+  findings: 20 accepted as PLAN mutations, 1 rejected (`unsupported`). Kickoff verification
+  falsified five of the design source's inherited premises — see § Kickoff findings below.
+  **Simulation gate CLOSED at 0 blockers**, trajectory **10 → 4 → 2 → 0** across four rounds.
+  Round 3's two findings were the valuable ones: both were self-contradictions in this plan —
+  it required writing `arc-bench.mjs` and registering `mock` in `arc-run.mjs` while authorizing
+  neither path, and it required appending to `commit-msg-draft`'s `evals:` list while forbidding
+  edits to pilot processes. Round 3 also caught that the mock selected its recording by input
+  hash, which would have handed all five fixtures the same response, since that process declares
+  `inputs: []`. CI green 19/19 at `97faea9`.
+
+## Kickoff findings — read before starting Phase 0
+
+The design source `docs/strategy/plans/PLAN-bench.md` v1.0 described a handshake that was never
+shipped. Verified in-tree 2026-08-12:
+
+1. **1 driver in real use, not ≥2.** Only `claude-code` has produced a real receipt; `codex` is
+   not installed, `generic-api` has no credentials. Engine's own Phase 03 evidence already said
+   so: *"NOT MET, and it is not close… remains UNPROVEN"*.
+2. **3 eval fixtures, one per class, against a floor of 5 — and zero assertions anywhere.**
+   "Quality = assertion pass-rate" had no substrate at all.
+3. **`drivers/mock` does not exist**, and **no driver implements `--version`** — both were
+   recorded as shipped in `docs/strategy/plans/README.md:42`.
+4. **`arc engine bench` has never existed** — no `arc` binary, no dispatcher (ADR-0901).
+5. **No pricing snapshot exists**, so the ₹500/₹100 caps could not be "re-priced against the
+   then-current snapshot" (ADR-0904).
+
+**Still-open engine defect bench must not inherit:** `common.mjs:180-191` returns inside the
+`ARC_DRIVER_FAKE` branch **before `await produce()` runs**, while
+`tests/engine-driver-contract.bats:6-8` asserts the opposite — so *"every driver satisfies the
+same contract"* is vacuous for all three drivers today. This is the 2026-08-03 retro-log finding,
+still open. Bench reports it and builds `drivers/mock` correctly; repairing engine's fake is
+engine's work.
+
+**Board correction made in the same commit:** `PORTFOLIO.md`'s band table said `0700–0799 | next
+lane to be born`. It was stale — `memory` holds 0700–0709 and `scheduler` holds 0800–0806, both
+in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **0900**.
+
+## Now
+
+**Current position, 2026-08-12: kickoff COMPLETE and APPROVED. Phase 00 NOT STARTED.**
+
+`PLAN.md`, `phases/phase-00-spec.md` … `phase-04-spec.md`, ADR-0900..0914 and this tracker are
+written and committed as `97faea9` on `technology-ashiq/arc-bench` (**PR #164**).
+`node .claude/scripts/plan/kickoff-lint.mjs --lane bench` exits 0.
+
+**Approval chain, all three receipts on the canonical spine, verified in
+`events/2026-08-12.jsonl` and absent from `_quarantine/`:**
+`kickoff.done` `01KZTHF6XHJ65TT4669WWW4PSQ` → `approval.requested` (gate `kickoff`)
+`01KZTHF786HGE40C4CSYFSN6DW` → `decision.recorded` **approve**, owner ruling of 2026-08-12
+recorded with its reason.
+
+**Next step:** Phase 00, first slice — `drivers/mock` plus the M9 swap-the-response negative
+control. That control is the one test that must stay RED until the mock is built correctly: a
+mock that short-circuits `produce()` leaves the contract suite green, so a green suite there is
+the defect, not the proof. Start it with `/arc-develop start 00 --lane bench`.
+
+**Carried into Phase 00 as a known, unfixed engine defect:** `common.mjs:180-191` returns inside
+the `ARC_DRIVER_FAKE` branch before `await produce()` runs, while
+`tests/engine-driver-contract.bats:6-8` asserts the opposite. Bench reports it; engine owns the
+repair.

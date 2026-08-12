@@ -2,7 +2,7 @@
 
 status: IDLE
 cycle: arc-memory (Cycle 11, closed 2026-08-12)
-phase: — (cycle closed 2026-08-12, 3/3 phases, 7/8 REQ validated + 1 cut; PR #162 pending merge)
+phase: — (cycle closed 2026-08-12, 3/3 phases, 7/8 REQ validated + 1 cut; merged to `main` 2026-08-12 as `9581011`)
 appetite: 5d
 burn: 3.75d
 blocked-on: —
