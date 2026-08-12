@@ -9,13 +9,14 @@
 > Row order **is** the priority order. There is no priority column, no owner, no ETA and
 > no health field: a number nobody recomputes is a number that starts lying.
 
-Updated: 2026-08-11
+Updated: 2026-08-12
 
 ## Active initiatives
 
 | lane | status | cycle | position | appetite/burn | blocked-on / depends-on | next |
 |---|---|---|---|---|---|---|
 | absorb | IDLE | arc-absorb (Cycle 10, closed 2026-08-10) | — (cycle closed, merged as 30dc9a9 / PR #138 and 6850250 / PR #151, 8 of 8 REQ) | 8d / 6.5d | — | **CLOSED 2026-08-10 — 5/5 phases, 8/8 REQ, 1.5d unspent.** The technique loop ran end to end on a real source: read-only study of gstack `/review` (license NOT FOUND → zero copying) → extraction report → 1 ABSORB / 2 SKIP / 1 ROUTE → rebuild on **ADR-0602 Amendment 1s own route 2**, no allowlist widening → 3-fixture A/B whose pass condition was committed BEFORE the harness existed → sealed-blind pick → adoption. **THREE RECEIPTS POINTING THREE WAYS, ALL KEPT:** the harness cleared its condition (claimed class 3/3; main-report precision **-2.1 pts**, since 6 of 9 demoted findings are TRUE), the blind pick chose the OLD way, the adoption decision overruled a *retire* recommendation. 32 adversarial findings, every one of the cycles 15 defect classes recurring, CI green before any of them. Tests 2022 → 2216. `/arc-kickoff --lane absorb` when a trigger arm actually fires — ADR-0074s waiver was for ONE cycle |
+| bench | BLOCKED | arc-bench (Cycle 13, opened 2026-08-12) | 00 | 8d / 0d | owner approval of `initiatives/bench/PLAN.md` before any Phase 0 code | **Born 2026-08-12 under the owner's build-out ruling (ADR-0900), which supersedes bench's unfired pull-trigger.** Kickoff verification falsified five of the design source's inherited premises: **1 driver in real use, not ≥2** (engine's own Phase 03 evidence already said *"NOT MET, and it is not close"*) · **3 eval fixtures against a floor of 5, with zero assertions anywhere**, so "quality = assertion pass-rate" had no substrate · **`drivers/mock` and driver `--version` do not exist** though `plans/README.md:42` recorded them shipped · **`arc engine bench` has never existed** (no `arc` binary at all) · **no pricing snapshot exists**, so the ₹500/₹100 caps could not be re-priced. So this cycle builds the road as well as the runner: appetite 8d (raised from 4d), one class (`commit-msg-draft`) armed to 5 fixtures over distinct repo states, the other two honestly at `NO PROPOSAL`. ADR century **0900–0999** claimed — the board's `0700 = next lane` row was stale (memory holds 0700s, scheduler 0800s, both unmerged), the third occurrence of that pattern. Attack panel ×3: 20 findings accepted, 1 rejected. **Next: owner approves via `arc-inbox`, then Phase 00 slice 1** |
 | develop | IDLE | arc-develop (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as 17473e7 / PR #100) | 7d / 2.1d | — | `/arc-kickoff --lane develop` when a new cycle pulls it |
 | engine | IDLE | arc-engine (Cycle 6, closed 2026-08-03) | — (cycle closed, merged as b9a9e9f / PR #103) | 14d / 2.0d | — | `/arc-kickoff --lane engine` when a new cycle pulls it |
 | evolve | IDLE | arc-evolve (Cycle 7, closed 2026-08-04) | — (cycle closed, merged as 8e80927 / PR #108; fixture-proven, unexercised) | 7d / 7.0d | — | `/arc-kickoff --lane evolve` when a real client names a surface |
@@ -44,7 +45,10 @@ So a lane claims a **century**, and never numbers outside it:
 | 0400–0499 | `leads` — claimed at birth, 2026-08-04 (0400–0413 taken) |
 | 0500–0599 | `policy` — claimed at birth, 2026-08-06 (0500–0508 taken) |
 | 0600–0699 | `absorb` — claimed at birth, 2026-08-09 (0600–0606 taken) |
-| 0700–0799 | next lane to be born |
+| 0700–0799 | `memory` — claimed at birth, 2026-08-11 (0700–0709 taken). **Recorded here from an UNMERGED branch** (`technology-ashiq/arc-memory`), which is why there is no board row yet: ADR-0061 gives a lane a row only once `initiatives/memory/` exists on this tree. The band is claimed the moment the ADRs are written, not the moment they merge — a table that only sees merged branches cannot prevent the collision it exists to prevent, and it nearly sent `scheduler` into the 0700s on 2026-08-12 |
+| 0800–0899 | `scheduler` — claimed at birth, 2026-08-12 (0800–0806 taken). Also unmerged (`feat/arc-scheduler-cycle-12`, local only — not even on `origin`), so it is invisible to anyone who checks remotes alone |
+| 0900–0999 | `bench` — claimed at birth, 2026-08-12 (0900–0914 taken) |
+| 1000–1099 | next lane to be born |
 
 `/arc-kickoff` assigns the next free century when it creates a lane, and `kickoff-lint`'s
 `[adr-dup]` check FAILs when two files claim one number — so a forgotten band is caught by CI
