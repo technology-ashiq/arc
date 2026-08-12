@@ -26,8 +26,12 @@ _spine() {
   export ARC_SPINE_ROOT="$SPINE"
 }
 
-# Count receipts of a kind that actually landed in the canonical log.
-_landed() { grep -rho '"kind":"content.published"' "$SPINE/events" 2>/dev/null | wc -l | tr -d ' '; }
+# Count receipts of a kind that actually landed in the canonical log. The KIND IS AN ARGUMENT
+# rather than a hardcoded `content.published`: the first version of this helper hardcoded it, so
+# the unregistered-kind test below grepped for a kind it never emitted and would have passed while
+# `content.retracted` sat in the canonical log. A test that cannot observe the failure it names is
+# the vacuous pass this suite exists to avoid.
+_landed() { grep -rho "\"kind\":\"${1:-content.published}\"" "$SPINE/events" 2>/dev/null | wc -l | tr -d ' '; }
 # Anything at all in quarantine. A receipt here is the silent-failure case, not a pass.
 _quarantined() { find "$SPINE" -path "*_quarantine*" -name "*.jsonl" -exec cat {} + 2>/dev/null | grep -c . || true; }
 
@@ -85,5 +89,9 @@ _quarantined() { find "$SPINE" -path "*_quarantine*" -name "*.jsonl" -exec cat {
   # why the assertion is on the DISK and not on the status. This is the 2026-08-02 retro verbatim.
   _spine unknownkind
   run bash "$(EVENT)" emit content.retracted --payload "$PAYLOAD"
-  [ "$(_landed)" = "0" ] || { echo "an undeclared kind landed in the canonical log"; false; }
+  [ "$(_landed content.retracted)" = "0" ] || { echo "an undeclared kind landed in the canonical log"; false; }
+  # And the negative control for the assertion itself: a kind that IS declared must still land
+  # through this same helper, so a helper that can never find anything cannot pass this file.
+  run bash "$(EVENT)" emit content.published --payload "$PAYLOAD"
+  [ "$(_landed content.published)" = "1" ] || { echo "the helper cannot observe a receipt that did land -- every other assertion in this file is therefore worthless"; false; }
 }

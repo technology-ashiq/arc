@@ -8,6 +8,7 @@
   "commands": [],
   "agents": [],
   "scripts": [
+    ".claude/scripts/growth/lib/content-sha.mjs",
     ".claude/scripts/growth/lib/deploy.mjs"
   ]
 }
