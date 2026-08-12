@@ -32,6 +32,39 @@ such: the shock absorber is the pre-authorized cut order (REQ-07, then REQ-08, t
 **1d of 8d used (13%).** 50% tripwire at 4d: if REQ-01 and REQ-02 are not green on fixtures by then,
 cut to the pnl-math lib only and bank it. At 100% we cut or kill, never extend.
 
+## Phase 00 adversarial pass — two fresh surfaces, 30 findings
+
+Run 2026-08-13, two agents, neither having seen the implementation written. Their findings
+overlapped on **nothing**, which is the two-surface rule earning its keep (retro 2026-08-03:
+7 passes, 77 holes, near-disjoint by surface).
+
+**Decision logic — the PII control did not work.** Through the real ingest path, a mobile number,
+a dotted personal name, a name-plus-date-of-birth, a PAN and an Aadhaar number all reached the
+spine, as did a mobile number in the *required* `provider_payment_id`. The comment beside the
+grammar asserted they could not be spelled in it; two of its three claims were false. Tokens now
+need the shape a machine issues, and the residual limit (`ashiq_ahmed1994` still passes) is
+written down rather than implied.
+
+**And the suite could not have caught it.** 34 of 37 fixture ids were rejected by the lane's own
+grammar, so the whole MRR section and 3 of 5 determinism tests died at the validator before
+reaching the code they test. **CI confirmed this independently** on run 31633673658: `not ok`
+817-821 plus the four determinism tests, exactly the nine the attacker predicted, and nothing else
+in the repo. Nothing in this lane had ever exercised MRR — which is why four money defects were
+sitting behind it (MRR in native currency rendered as rupees, the all-time view counting every
+subscription that ever existed, a refund booked to the wrong venture, a fully refunded charge
+still reporting MRR).
+
+**Shell and byte boundary — a file git could not diff.** A literal NUL byte in `pnl.mjs` made git
+classify the money core as binary: `0 insertions, 0 deletions` on a 1473-byte change, invisible to
+ripgrep, and silently exempt from the repo's LF policy. Separately, data after a closing quote was
+concatenated onto the value, so `"1180"00` became 118000 minor units — 100x, while leaving
+`net == gross - tax - fees` intact so every other check passed it.
+
+**Three of my own tests were vacuous**, each green with the implementation deleted: the runner
+could not tell a missing parser from a rejected input; the CRLF test asserted `rows=*`, which a
+header-only file satisfies; and half the PII cross-assertions named a column their fixture never
+had. All four suites now assert their own registered count, derived rather than pinned.
+
 ## Done log
 
 Nothing closed yet. `/arc-kickoff` completed 2026-08-12: PLAN.md, ADR-1000..1015 and
