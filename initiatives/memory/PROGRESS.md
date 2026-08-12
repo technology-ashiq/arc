@@ -277,7 +277,7 @@ engine → REQ-05 → REQ-04.** REQ-01/02/03 are the module and are never the cu
 ## Now
 
 **Phase 02's five REQs are all built and GREEN ON CI. The phase is NOT closed, and must not be
-recorded as closed.** Latest green: run 31539953594 @ `a58d8fa`, 19/19 jobs, read per-JOB.
+recorded as closed.** Latest green: run **31573674899 @ `95ed6e1`, 19/19 jobs, read per-JOB** -- the commit that closes all 30 adversarial findings.
 
 | REQ | What shipped | Proven at |
 |---|---|---|
@@ -356,7 +356,11 @@ index and real golden set; what is deferred is per-JOB legibility. Exact YAML is
 - Spine receipts cannot be emitted from this worktree (WORKTREE_SPINE guard). `develop.started`
   and `slice.done` for phase 02 were never emitted; emit them from the main clone at
   `E:/Work_Hub/01_Automemory/arc` before the close, or the close will find them missing.
-- All four new memory test files are weighed in `tests/shard-timings.json` by the per-file TAP-span
-  method, measured at birth. None ever rode `_default_weight` 16.
+- All four memory test suites are weighed in `tests/shard-timings.json` by the per-file TAP-span
+  method, and were RE-MEASURED on 2026-08-12 from run 31573674899 after this pass grew every one
+  of them: recall 80->94, golden 25->46, hook 14->32, conflict 21->22. Three moved by more than a
+  third of their own old weight and golden nearly doubled, so carrying the old numbers would have
+  under-weighted one shard by 84s. None ever rode `_default_weight` 16. Sharding re-verified: 112
+  files, each assigned exactly once across 12 shards.
 
 PR **#162** stays a draft until the cycle closes.
