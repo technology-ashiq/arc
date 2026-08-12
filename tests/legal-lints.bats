@@ -25,8 +25,12 @@ _mutate_and_render() {
   for kind in "$@"; do
     node "$ARC_ROOT/tests/legal-probe.mjs" mutate "$SANDBOX" "$kind" >/dev/null || return 1
   done
-  node "$ARC_LEGAL_CLI" render --venture "$venture" --out "$SANDBOX/out" >/dev/null 2>"$SANDBOX/err.txt"
-  MUTANT_STATUS=$?
+  # bats runs tests under `set -eET`, and this helper is called directly (not under `run`),
+  # so errexit is LIVE inside it. An unguarded simple command that exits 2 aborts the function
+  # before MUTANT_STATUS is ever assigned -- which killed the one test asserting a refusal, the
+  # lane's only fail-closed control.
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" render --venture "$venture" --out "$SANDBOX/out" >/dev/null 2>"$SANDBOX/err.txt" || MUTANT_STATUS=$?
   return 0
 }
 
@@ -121,6 +125,10 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   _arc_legal_sandbox
   run node "$ARC_LEGAL_CLI" render --venture "fixture-gateway-gst" --out "$SANDBOX/out"
   [ "$status" -eq 0 ]
+  # Assert it RAN, not merely that it exited 0. Exit 0 is the DEFAULT exitCode, so a
+  # module that loaded and never reached main() produces it too -- which is exactly what a
+  # symlinked sandbox path did on macOS, silently, while this assertion passed.
+  [[ "$output" == *"rendered "*" page(s) for "* ]]
   run node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.json" any FAIL
   [ "$status" -eq 0 ]
   [ "$output" = "0" ]

@@ -13,7 +13,7 @@
  *      parse error, canonicaliser refusal, or a FAIL in a group promoted out of TRIAL.
  *   3  could not run at all: unknown venture, unreadable facts, missing template set.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync, realpathSync } from "node:fs";
 import { join, dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -297,8 +297,27 @@ function main(argv) {
   return run.exit_code;
 }
 
-const invokedDirectly = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (invokedDirectly) {
+/**
+ * REALPATH BOTH SIDES. Node resolves symlinks for the ESM entry module but leaves
+ * `process.argv[1]` exactly as typed, and `path.resolve` is purely lexical -- so under any
+ * symlinked path the two never match, `main()` never runs, and the CLI EXITS 0 HAVING DONE
+ * NOTHING. macOS `mktemp -d` returns `/var/folders/...` and `/var` is a symlink to
+ * `/private/var`, so every sandbox test on that leg rendered nothing and then asserted
+ * `status -eq 0` on the no-op and passed.
+ *
+ * This exact defect is already closed in `.claude/scripts/memory/arc-recall.mjs`, comment and
+ * all. It was never applied here -- the twin-fix pattern, fifth recurrence in this repo, found
+ * by an attacker carrying the running fixed-defect list into a file no row named.
+ */
+function invokedDirectly() {
+  const argv1 = process.argv[1];
+  if (!argv1) return false;
+  const self = fileURLToPath(import.meta.url);
+  try { return realpathSync(argv1) === realpathSync(self); }
+  catch { return resolve(argv1) === resolve(self); }
+}
+
+if (invokedDirectly()) {
   try {
     process.exitCode = main(process.argv.slice(2));
   } catch (e) {

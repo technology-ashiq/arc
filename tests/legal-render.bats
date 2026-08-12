@@ -161,6 +161,10 @@ teardown() { _arc_legal_teardown; }
   _arc_legal_sandbox
   run node "$ARC_LEGAL_CLI" render --venture "fixture-gateway-gst" --out "$SANDBOX/out"
   [ "$status" -eq 0 ]
+  # Assert it RAN, not merely that it exited 0. Exit 0 is the DEFAULT exitCode, so a
+  # module that loaded and never reached main() produces it too -- which is exactly what a
+  # symlinked sandbox path did on macOS, silently, while this assertion passed.
+  [[ "$output" == *"rendered "*" page(s) for "* ]]
   run node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.json" any FAIL
   [ "$output" = "0" ]
 }

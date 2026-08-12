@@ -121,6 +121,9 @@
     "council-lint-outcome-anchor.bats": 8,
     "spine-golden-dryrun.bats": 8,
     "spine-cursor.bats": 7,
-    "spine-equivalence.bats": 7
+    "spine-equivalence.bats": 7,
+    "legal-render.bats": 55,
+    "legal-lints.bats": 95,
+    "legal-hash.bats": 60
   }
 }

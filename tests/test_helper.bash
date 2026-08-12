@@ -877,8 +877,17 @@ _arc_legal_sandbox() {
   cp    "$ARC_ROOT/tests/legal-probe.mjs"         "$SANDBOX/tests/"
   ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
   # A sandbox that did not actually copy is a silent pass generator: every "no findings"
-  # assertion downstream would hold against a tree with no engine in it.
-  [ -f "$ARC_LEGAL_CLI" ] || { echo "legal sandbox did not copy the CLI" >&2; return 1; }
+  # assertion downstream would hold against a tree with no engine in it. FOUR copies run, so
+  # all four roots are asserted -- checking one of them left a partial sandbox surfacing as a
+  # render failure rather than as the copy that actually failed.
+  local _p
+  for _p in "$ARC_LEGAL_CLI" \
+            "$SANDBOX/products/legal/templates/v1" \
+            "$SANDBOX/products/legal/data" \
+            "$SANDBOX/tests/fixtures/legal/ventures" \
+            "$SANDBOX/tests/legal-probe.mjs"; do
+    [ -e "$_p" ] || { echo "legal sandbox incomplete: $_p" >&2; return 1; }
+  done
 }
 
 _arc_legal_teardown() {
@@ -911,6 +920,13 @@ _arc_legal_findings() {
 # (arc-evolve 2026-08-04). Returns 1 if any offending line is found, and prints it.
 _arc_ascii_test_names() {
   local _file="$1" _bad
+  # Assert it LOOKED before asserting what it saw. The first cut discarded the reading grep's
+  # status and tested only that the result was empty, so a missing file, a renamed suite or a
+  # file with zero tests all returned success -- a helper reporting clean because it could not
+  # scan, which is the one thing a broken scanner and a healthy tree agree on.
+  local _names
+  _names="$(LC_ALL=C grep -c '^@test' "$_file")" || { echo "cannot read $_file" >&2; return 1; }
+  [ "$_names" -gt 0 ] || { echo "$_file declares no @test lines" >&2; return 1; }
   _bad="$(LC_ALL=C grep -n '^@test' "$_file" | LC_ALL=C grep '[^ -~]' || true)"
   [ -z "$_bad" ] && return 0
   echo "$_bad" >&2
