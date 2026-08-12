@@ -103,7 +103,10 @@ _pay()   { printf '%s' "$2" > "$BATS_TEST_TMPDIR/$1.json"; printf '%s' "$BATS_TE
 }
 
 @test "ledger: a bare hex digest customer_ref is refused (sha256 of an email is dictionary-attackable)" {
-  local bad='{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_0001","customer_ref":"razorpay:cust_c005d41402abc4b2a76b9719d911017c592"}'
+  # The body must be EXACTLY a 32/40/64-char hex digest. A bulk rename once mangled this value into
+  # `cust_c005d41402...` -- 35 chars, no longer a digest, so the check never fired and the test
+  # asserted nothing. CI caught it, which is the only reason it is not still sitting here green.
+  local bad='{"amount":50000,"currency":"INR","venture":"arc","provider":"razorpay","provider_payment_id":"razorpay:pay_0001","customer_ref":"razorpay:cust_5d41402abc4b2a76b9719d911017c592"}'
   run bash "$EVENT" ingest revenue.received --json "$(_pay p "$bad")"
   [ "$status" -eq 2 ]
   [[ "$output" == *"BAD_LEDGER_ID"* ]]
