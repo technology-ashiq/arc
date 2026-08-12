@@ -108,9 +108,16 @@ has its own gitignored spine and the emitter refuses to write there — a receip
 is real, valid, and invisible to `arc-inbox`, which would print "no open approvals" while one sat in
 it.
 
-**Next step: `/arc-develop start 4 --lane engine`.** Its first act is the ADR-0212 amendment merging
-*before* any routing row exists, because a `router.yaml` row for a runtime is meaningless until the
-policy it implements says what a runtime is.
+**Phase 04 is running.** Slice 01 proven (the mandate is on the spine, two events, verified out of
+`_quarantine/`). Slice 02 (ADR-0212 to `main`) is PR #165, CI green 19/19 at `f4da3cc`, re-running
+after a merge from `main` that resolved a real `PORTFOLIO.md` collision with two lanes that landed
+mid-flight.
+
+**One change was routed in mid-phase via `/arc-change`, classified a bug:** `capability-vet.sh`
+advertises OCI digest support in its own help text and cannot admit any OCI candidate — proven by
+running it. `offered` reads only npm/PyPI/git shapes, and the hash regex takes only the SRI hyphen
+form while OCI registries return the colon form. It blocks slice 06, it is a security gate, and it
+gets a red-first test plus the two-surface adversarial pass before its PR merges.
 
 **The capped-key ceiling figure is NOT needed yet.** Phases 04, 05 and 06 all run at zero spend
 against the local ollama endpoint; the credential is first required by certification fixtures 4 and
