@@ -287,14 +287,21 @@ _set_baseline() {
       const good = m.checkEquivalence({ index: idx2, records: recs, queries, registry: [canonical, agreeing] });
       if (!bad2.compared) throw new Error('two engines must count as compared');
       if (bad2.mismatches.length === 0) throw new Error('an order-only disagreement was NOT caught');
-      // PRESENT, not first. `checkTieBreak` now runs ahead of the per-query comparison, and an
+      // PRESENT, not first. The tie-break probe now runs ahead of the per-query comparison, and an
       // engine that reverses every result also breaks the tie-break -- correctly -- so it reports
       // BOTH kinds and this used to index [0] blindly. Asserting the kind is present keeps what
       // this test is actually for: that an order-only disagreement is caught as a disagreement.
-      if (!bad2.mismatches.some((x) => x.kind === 'disagreement')) throw new Error('no disagreement reported, kinds: ' + bad2.mismatches.map((x) => x.kind).join(','));
+      //
+      // NO BACKTICKS ANYWHERE IN THIS PROGRAM, in code OR in comments. It is embedded in a
+      // DOUBLE-quoted shell string, where a backtick is command substitution: naming the probe
+      // function in backticks here made bash try to RUN it, and the run reached its assertion
+      // through a shell error. The CLAUDE.md rule is written about apostrophes in single-quoted
+      // strings; this is the same rule, the other quote.
+      const disagreements = bad2.mismatches.filter((x) => x.kind === 'disagreement');
+      if (disagreements.length === 0) throw new Error('no disagreement reported, kinds: ' + bad2.mismatches.map((x) => x.kind).join(','));
       if (good.mismatches.length !== 0) throw new Error('an AGREEING pair was falsely flagged: the harness refuses everything');
       if (!good.compared) throw new Error('agreeing pair not marked compared');
-      console.log('EQUIV OK caught=' + bad2.mismatches.length + ' falsePositives=' + good.mismatches.length);
+      console.log('EQUIV OK caught=' + disagreements.length + ' falsePositives=' + good.mismatches.length);
     }).catch((e) => { console.error(e.message); process.exit(1); });" \
     "$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/memory/lib/engines.mjs")).href)')"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
