@@ -1,0 +1,61 @@
+# Phase 06 — Certification or STOP
+
+**Goal (one line):** Run the twelve-fixture Isolation Certification Suite green **against the real runtime**, with receipts attached as the evidence bundle — or record which fixtures cannot be proven without sandbox infrastructure and fire the STOP.
+**Appetite:** 2 days — blown appetite means cut or kill, never a silent extension.
+**Depends on:** phase-05
+
+This is the phase the cycle can die in, by design. An unprovable boundary is a no.
+
+## Exit criteria (Definition of Done)
+
+- [ ] The **12 fixtures** run green against the **real runtime, human-started, once**, and the run receipts are attached as the certification evidence bundle: (1) a write inside the arc repo from the runtime workspace is blocked and the repo is byte-identical after · (2) an `internal-only` input is refused **before the runtime process starts** · (3) an `internal-only` input against a `hosted: cloud` row is refused at routing · (4) an env audit inside the runtime workspace shows only its own capped key and **zero** arc secrets · (5) a planted fake key is absent from every artifact and transcript · (6) path traversal and symlink escape from the workspace are blocked · (7) the live egress configuration **matches its pinned hash** and fails loud on drift (ADR-0209) · (8) a marker planted in run N is unrecallable in run N+1, proving persistent memory OFF (ADR-0211) · (9) hostile outputs produce a schema failure, one same-tier retry, then a proposal receipt · (10) an exhausted capped key produces `fail`/`budget` with zero silent continuation · (11) a wall-clock overrun exits at the budget line · (12) an unpinned runtime is refused by a pin-required class.
+- [ ] **The data-boundary refusal mechanism is BUILT in this phase**, not borrowed from Phase 08. Fixtures 2 and 3 assert it, so certification cannot lean on a gate that does not exist yet; Phase 08's REQ-06 then layers the context-pack semantics (approval, batch, angle, feedback) on top of this mechanism rather than introducing it.
+- [ ] Fixtures 2 and 3 assert an **arc-run-layer exit `5`**, not a driver exit — the refusal happens above the driver boundary and ENG-D's three-code map is untouched (ADR-0219). ADR-0219's full arc-run exit table is published before either fixture asserts `5`, so the code is demonstrably not colliding with the `1` and `2` arc-run already uses.
+- [ ] **Fixture 7 carries a behavioural arm, not only a config diff.** A config-pin match proves the file says the right thing; it does not prove enforcement. An attempted outbound connection to a host outside the pinned allowlist must actually fail. A pin that is itself too permissive, or enforcement that has drifted from its pin, both read GREEN on the diff alone — and this REQ's whole outcome is that promises do not count.
+- [ ] The certification run is labelled `certification`; every `drivers/mock` run of the same suite is labelled `regression`. **The label is asserted by a test**, not written by hand — a mock-green run must be structurally incapable of producing a `certification` label.
+- [ ] Fixtures 1, 6 and 7 are proven against the **container-backed** backend from Phase 04 (ADR-0208). If any of them needs netns, seccomp or VM work to assert honestly, it is recorded **UNPROVABLE**, the suite and findings bank as the requirements document for a future infrastructure cycle, and **the STOP fires**.
+- [ ] Each fixture's result is recorded as a fixture result, never a judgement — including the failures.
+- [ ] A **scrubbed transcript per dispatch** is stored at `initiatives/engine/evidence/phase-06/`, scrubbed with the spine's own `scanSecrets()` and `DENY_RULES` rather than a second scanner, and the scan runs on the runtime's **drafts as well as its logs** (ADR-0215). Negative control proves the check can fail.
+- [ ] `run.completed` carries the MP-F model seat as runtime + version + config hash (ADR-0212), with **zero new event kinds**, and absent cost or effort fields stay absent.
+- [ ] **Adversarial pass by TWO fresh agents on different surfaces** against the suite itself — the attacker's job is to make a fixture pass while the property it claims is false. Holes pinned.
+- [ ] tests added & green **on CI, read per-JOB**, head SHA confirmed equal to local HEAD.
+- [ ] tracker updated (PROGRESS.md row ✅ + done-log).
+
+## Verification plan
+
+Coarse at kickoff, refined via `/arc-change` when the phase starts: the suite runs twice — once against `drivers/mock` (regression, keyless, on CI) and once against the real runtime (certification, human-started, receipted) — and the two runs must be distinguishable by their recorded label without anyone having typed it. Detailed verification for a phase this far out would be fiction.
+
+## Rabbit holes in this phase
+
+- **Isolation perfectionism.** Twelve fixtures is the bar. A newly imagined attack class becomes fixture #13 by ADR in a later cycle, not an open-ended hardening sprint here.
+- **Building the sandbox.** Configuring a container backend is in scope. Writing one is not, and the moment a fixture demands it, that is the A-04 trigger firing rather than a day to be spent.
+- **Chasing the contested CVE record to a verdict.** Two researchers disagreed at kickoff; the ceiling stays L1 either way (A-06).
+
+## Out of scope for this phase
+
+The router row, policy row, capped key and calibration baseline (Phase 07) · the draft process, context packs and real jobs (Phase 08). Certification uses fixture inputs, never a real job.
+
+## Your-setup / pending
+
+- Nothing new. Fixtures 4 and 10 need a live capped credential, and that is why the key is provisioned in **Phase 04** rather than here — the ordering was fixed at kickoff rather than left as a decision for this phase to discover under STOP pressure.
+- The Docker daemon must still be running.
+
+## Non-negotiables (verbatim from PLAN)
+
+- ENG-D's **driver-level** contract is untouched and the runtime adapts to arc, never the reverse — `common.mjs`'s exit map stays `0` ok, `1` driver-fail, `2` budget-declined, and this cycle adds nothing to it (ADR-0219).
+- The data boundary is refused **above** the driver, at the arc-run layer, exit `5`, before the runtime process starts (ADR-0219). The arc-run exit space is separate from the driver's and already uses `0`/`1`/`2` for its own failures, so ADR-0219 publishes the full arc-run table before any fixture asserts `5`. The mechanism is built in Phase 06 because REQ-02's fixtures 2 and 3 assert it; specs for earlier phases carry this bullet as a forward commitment, not a claim already true.
+- Certification means the REAL runtime, human-started, with receipts attached; a mock-green run is labelled regression and never certification, and that label is asserted by a test rather than written by hand. No green suite, no dispatch.
+- Every gate, parser and shim this cycle ships gets an adversarial construct-a-breaking-input pass **before the PR that ships it merges** — never deferred to the phase close, because a rule only the close can enforce gets skipped for a whole phase. TWO fresh agents on different surfaces (decision logic, and the shell/OS boundary), neither having seen the implementation, attacking the **fixtures and tests as well as the code** — a green suite the author wrote is evidence about the author. Every hole is pinned as a fixture, and the attacker's prompt carries this cycle's running list of already-fixed defects with the instruction to check each one in every OTHER file. This binds REQ-04's router loader, REQ-06's boundary refusal and the POL-I birth-lint exactly as it binds REQ-01's parser.
+- Every gate ships with a negative control that actually runs and proves the check can fail; a pass condition that is only an absence is not a pass, and a probe that shells out asserts it RAN before asserting what it printed.
+- No component changes a model tier at run time; every production routing change is a reviewed `router.yaml` diff citing ADR-0069, and escalation ends in a proposal receipt (ADR-0204). Runtimes never self-register.
+- The L1-drafts ceiling and the human publish gate are absolute. A draft that publishes itself is an incident, and publishing is a human copying it out — always.
+- arc constrains boundaries (data in, actions out, money, time) and verifies outcomes; it never prescribes the runtime's method, model choice, or reasoning style. Review is accept/reject plus one line, never a line-edit (ADR-0218).
+- Zero new event kinds; the closed vocabulary is derived by query, never by a remembered count. Every emit is VERIFIED to have landed in `events/` and not in `_quarantine/` — exit 0 from a fire-and-forget writer is not evidence anything was written.
+- An unavailable cost, duration or fingerprint field stays absent — never estimated, never inferred, never interpolated (ADR-0069 b5, Constitution E3). Budgets are calibrated from recorded receipts, never guessed.
+- Money is capped at the credential, and the honest claim is that the request crossing the ceiling completes while every later one is refused — no zero-overshoot claim is made anywhere.
+- Human-started runs only this cycle. No daemon, no runtime-side cron or webhook pointed at arc, no unattended execution.
+- The 3 pilot processes' pinned baselines are another cycle's evidence and are never regenerated; any file the sync-golden manifest hashes gets a named regeneration step that diffs the delta first and confirms only intended paths moved.
+- Before editing any shared root organ this cycle touches — `hq.policy.yaml`, `engine/router.yaml`, `docs/adr/`, `tests/`, `.github/` — run `git log origin/main --oneline -5 -- PATH`. A hit since this branch's point means the collision is already in flight, and at the merge take the STRONGER version, never the earlier one. This is not hypothetical here: another live lane already took ADR-0207 inside engine's own band.
+- Zero-dep Node plus POSIX is inherited: no vendor SDK in the shim, plain process invocation — checked by `package.json` carrying no new runtime dependency.
+- A program embedded in a shell string carries no apostrophes and no single quotes, in code OR in comments — enforced by a grep check inside the adversarial pass this cycle already requires, never by vigilance, because this rule was written down and then broken three times anyway.
+- All new lint ships WARN-first in TRIAL; evidence bundles are lane-scoped (ADR-0055); the mandate accelerates SEQUENCING, never QUALITY.

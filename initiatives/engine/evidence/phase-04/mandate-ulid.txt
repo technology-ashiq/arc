@@ -1,0 +1,32 @@
+Phase 04, slice 01 — the Build-out Mandate on the spine
+Recorded 2026-08-12 on the CANONICAL clone, E:/Work_Hub/01_Automemory/arc
+
+approval.requested   01KZTM2DYQXXYHVBJZC462D982
+decision.recorded    01KZTM348858PDH44K4HA64CVA   verdict=approve
+
+Phase 07's runtime row in engine/router.yaml cites the DECISION ulid
+(01KZTM348858PDH44K4HA64CVA) as the mandate half of ADR-0217's two-ULID comment.
+The hire half is a separate decision recorded in Phase 07 itself.
+
+Verified, not assumed
+---------------------
+Both events found in .claude/state/hq/events/2026-08-12.jsonl.
+Neither event id appears in _quarantine/.
+decision payload keys are exactly: decides, reason, verdict.
+Live events 1021, quarantined 241.
+
+One quarantined entry MENTIONS 01KZTM2DYQXXYHVBJZC462D982 with code BAD_DECISION.
+That is a rejected first attempt, not a lost receipt, and it is the reason this proof
+asserts on EVENT IDS rather than on a grep for the ULID: the string appears inside the
+rejected entry too, so a substring check would have reported failure on a correct spine.
+
+What the rejected attempt taught
+--------------------------------
+decision.recorded cannot be emitted with `arc-event.sh emit`. Beyond the closed payload
+shape (decides / verdict / reason), the emitter enforces:
+
+    decision.idem must be sha256("decision.recorded|" + decides)
+
+The idem is WELDED to the approval it decides, and the raw emitter does not compute it.
+`arc-inbox approve <id> --reason ...` does. The phase-04 spec said to use the raw emitter
+and was wrong; it has been corrected in the same commit as this file.

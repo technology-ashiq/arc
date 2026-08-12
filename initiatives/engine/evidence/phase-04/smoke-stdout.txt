@@ -1,0 +1,8 @@
+Syncing bundled skills into ~/.hermes/skills/ ...
+
+Done: 0 new, 0 updated, 71 unchanged. 71 total bundled.
+[stage2] Found agent-browser Chromium binary: /opt/hermes/.playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell
+[stage2] Setup complete; starting user services
+[supervise-perms] chowned supervise/ trees for static s6-rc services
+reconcile: profile=default prior_state=None action=registered
+{"ok": true, "runtime": "hermes"}
