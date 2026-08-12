@@ -1,4 +1,3 @@
 safe-tool
 writer-tool
 madge
-oci-tool
