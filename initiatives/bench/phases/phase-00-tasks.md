@@ -85,12 +85,12 @@ commit: 650cf47
 title: **The ADR-0905 assertion schema exists and is versioned from birth:** `tests/fixtures/engine/evals/CLASS/pack.json` = `{ "revision": "SEMVER", "task_class": "NAME" }`, and a fixture may carry `assertions: [{ "id": "A-01", "path": "...", "op": "...", "value": ... }]` with path syntax **M4** and value shapes **M5**. **The op set is closed:** `equals` · `matches` · `contains` · `absent` · `length_between`. The registry **refuses** any op outside it rather than skipping, and no op may call a model, read the clock or touch the network.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: CI run 31599742774 -- 19/19 green, per-JOB, incl. bats tests/bench-assertions.bats; node tests/bench-assertions-probe.mjs -- 28 checks, exit 0
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Land the substrate in arc-bench.mjs as importable pure functions so scoring is testable without spawning anything. Closed op set enforced at a REGISTRY rather than trusted to fixture authors, and an unknown op is REFUSED not skipped -- regex is the plausible near-miss for matches, and a skipped op reports a perfect rate on a fixture that checked nothing. Value shape validated per op: absent takes NO value, length_between takes two ordered ints, matches must compile. Paths are dot notation with numeric indices only; a path language grows into an expression language, and an expression language in a fixture is a program nobody reviews. readPack refuses a missing revision rather than defaulting it, because the revision is what makes champion and candidate comparable (BEN-A gate 6). Checks live in their own .mjs probe, not inline in bats, because they need apostrophes, backticks and $ -- CLAUDE.md forbids all three in a shell-embedded program.
+result: 28 probe checks held, exit 0; CI green 19/19 on 5c00094 with the bats wrapper running the probe. The zero-denominator rule is pinned by its own test: a fixture with no assertions contributes 0 and reports rate ABSENT, never 100% (retro-log 2026-07-30 -- a pass condition that is only an absence cannot detect mediocrity). Placement recorded not assumed: arc-bench.mjs sits in the ENGINE product manifest per ADR-0901, so it ships to engine consumers; a products/bench/ split is a later decision. Sync golden regenerated last, 270 -> 271 rows, only arc-bench.mjs moved.
+commit: 5c00094
 
 #### slice: 05
 

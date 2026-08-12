@@ -46,7 +46,23 @@ PROBE() { echo "$ARC_ROOT/tests/bench-assertions-probe.mjs"; }
   [[ "$output" == *"ok unknown op is refused"* ]]
 }
 
+@test "process-lint still validates all three processes after the pack.json addition" {
+  # Slice 05. The No-gos claim the assertion schema is additive and leaves process-lint
+  # untouched. retro-log 2026-08-02: a stated control is not a control until something asserts
+  # it -- so this RUNS the lint rather than trusting the claim.
+  #
+  # pack.json is a SIBLING of the fixtures precisely so the frozen TOP_LEVEL_KEYS
+  # (process-lint.mjs:65-67) never grows a key. process-lint contains a literal control byte
+  # and reads as binary to grep, so searching it needs `grep -a`.
+  run node "$ARC_ROOT/.claude/scripts/engine/process-lint.mjs" --all
+  [ "$status" -eq 0 ]
+  # Assert it RAN and reached its verdict, not merely that it printed no error: an assertion
+  # shaped "output does not contain X" is satisfied by a crash (.claude/rules/testing.md).
+  [[ "$output" == *"all checks passed"* ]]
+  [[ "$output" == *"3 file(s)"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 5 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 6 ]
 }
