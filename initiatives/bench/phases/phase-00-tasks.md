@@ -138,7 +138,7 @@ tier: unit
 sources: phase-00-spec.md
 decision: Count from the DECLARED evals list in the process YAML, never from a directory listing: a stray or half-added file beside the pack is not part of it, and counting the directory would let it lift a class over the floor without anything ever running it. The gate is deliberately standalone and does not reach for Phase 2 gates-first eligibility engine, which does not exist yet -- REQ-06 needs the other two classes to read NO PROPOSAL at Phase 0 CLOSE, and a criterion only a later phase could exercise would be marked done here without ever running (retro-log 2026-08-02, an exit criterion its own verifier could not check).
 result: commit-msg-draft 6 declared fixtures -> ELIGIBLE, reason null. review-diff and kickoff-plan 1 each -> NO PROPOSAL - evidence insufficient (1 of 5 fixtures). The reason names both counts AND says WHY, so evidence-insufficient and candidate-lost never render identically (ADR-0906).
-commit: PENDING
+commit: f0a0cbd
 
 #### slice: 09
 
