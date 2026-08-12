@@ -70,6 +70,12 @@ await runDriver("claude-code", async ({ processName, input }) => {
     },
     model: pinnedModel() ?? "unpinned",
   };
+}, {
+  // The DRIVER's version, not the CLI's (ADR-0902 / BEN-B). What varies the output of this
+  // driver is its own adapter code; which model answered is the MP-F fingerprint's job, and
+  // shelling out to `claude --version` would make an offline provenance field depend on a
+  // binary that is not installed on any CI leg. Bump this when this file's behaviour changes.
+  version: () => "claude-code@1.0.0",
 });
 
 settle();

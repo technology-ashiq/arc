@@ -73,12 +73,12 @@ commit: da0d888
 title: **`version` verb** answered by `claude-code` and `mock` only (ADR-0902); `codex` and `generic-api` are out of scope. The dispatch edit is at `common.mjs:152` (**M8**).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: bats tests/bench-driver-contract.bats -- 11/11 green (tests 7-9 RED first); bats tests/engine-driver-contract.bats -- 1..20, NOT-OK COUNT 0
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Make the verb OPT-IN: runDriver takes an optional version provider, and a driver that passes none keeps the original refusal byte-for-byte. That scopes it to claude-code and mock (ADR-0902) without a per-driver allowlist, and a test asserts codex and generic-api STILL reject it so it cannot spread by drift. A driver version is WHAT WOULD CHANGE ITS OUTPUT: claude-code@1.0.0 is its own adapter code, mock@sha is its recording set (the recordings decide mock output; the code only reads them), and a test asserts the mock version MOVES when the recordings move. Deliberately not the provider CLI version -- which model answered is MP-F fingerprint territory, and shelling out to claude --version would make an offline provenance field depend on a binary no CI leg installs.
+result: ok 7 mock answers the version verb with its recording-dir identity / ok 8 mock version changes when the recordings change / ok 9 claude-code answers the version verb / ok 10 codex and generic-api still reject every verb but run. common.mjs is shared, so the engine contract suite is the regression surface: 20 tests, 0 failures. Sync golden regenerated as a named step with the delta checked first -- 3 files moved, 0 added, 0 removed; product-lint clean.
+commit: 650cf47
 
 #### slice: 04
 

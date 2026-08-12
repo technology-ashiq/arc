@@ -60,13 +60,16 @@ function fixtureDirSha(dir) {
   return h.digest("hex").slice(0, 12);
 }
 
+// Confinement root for every recording lookup, and the thing the version digests.
+const BASE = resolve(MOCK_DIR);
+
 await runDriver("mock", async ({ processName }) => {
   const id = process.env.ARC_MOCK_FIXTURE || "default";
 
   // Confine the resolved path to MOCK_DIR. `processName` and the fixture id both arrive from
   // outside this function, and a `..` in either would otherwise read an arbitrary file and
   // replay it as a model response.
-  const base = resolve(MOCK_DIR);
+  const base = BASE;
   const path = resolve(join(base, processName, `${id}.json`));
   if (path !== base && !path.startsWith(base + sep)) {
     throw new Error(`recording path escapes ARC_MOCK_DIR: ${processName}/${id}.json`);
@@ -84,6 +87,12 @@ await runDriver("mock", async ({ processName }) => {
 
   const output = parseModelJson(raw, `the mock recording ${processName}/${id}`);
   return { output, model: `mock@${fixtureDirSha(base)}` };
+}, {
+  // This driver's version is its RECORDING SET, not its source, because the recordings are
+  // what determine its output -- the code merely reads them. A version pinned to the source
+  // would stay constant while the answers changed underneath it, which is a constant wearing
+  // a version's label.
+  version: () => `mock@${fixtureDirSha(BASE)}`,
 });
 
 settle();

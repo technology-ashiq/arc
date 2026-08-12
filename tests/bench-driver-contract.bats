@@ -92,9 +92,55 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+# ---------------------------------------------------------------------------
+# slice 03 -- the `version` verb, on claude-code and mock ONLY (ADR-0902).
+#
+# BEN-B makes "driver name + version" a mandatory provenance field, and no driver answers it
+# today: common.mjs:152 rejects every verb but `run`. codex and generic-api are deliberately
+# out of scope -- neither is installed or credentialed, so neither produces a receipt this
+# cycle, and adding the verb to two unreachable drivers would only widen bench's diff on a
+# tree it does not own.
+# ---------------------------------------------------------------------------
+
+@test "mock answers the version verb with its recording-dir identity" {
+  run bash "$(MOCKSH)" version
+  [ "$status" -eq 0 ]
+  # mock@<sha> so a replay run can never be read as a provider run.
+  [[ "$output" == mock@* ]]
+}
+
+@test "mock version changes when the recordings change" {
+  run bash "$(MOCKSH)" version
+  local first="$output"
+  export ARC_MOCK_DIR="$BATS_TEST_TMPDIR/other"
+  mkdir -p "$ARC_MOCK_DIR/commit-msg-draft"
+  printf '{"commits":[]}\n' > "$ARC_MOCK_DIR/commit-msg-draft/default.json"
+  run bash "$(MOCKSH)" version
+  [ "$status" -eq 0 ]
+  # A version that never moves is a constant wearing a version's label -- it would let a
+  # changed recording set ride an unchanged provenance field.
+  [ "$output" != "$first" ]
+}
+
+@test "claude-code answers the version verb" {
+  run bash "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.sh" version
+  [ "$status" -eq 0 ]
+  [[ "$output" == claude-code@* ]]
+}
+
+@test "codex and generic-api still reject every verb but run" {
+  # Out of scope by ADR-0902, and asserted so that "we added it everywhere" cannot happen by
+  # drift. The usage message is the shared refusal from common.mjs:152.
+  for d in codex generic-api; do
+    run bash "$ARC_ROOT/.claude/scripts/engine/drivers/$d.sh" version
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"usage:"* ]]
+  done
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
   # Five such tests never ran, never failed, and the file was green. A suite running fewer tests
   # than it declares is indistinguishable from a suite that passes, so it asserts its own count.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 7 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ]
 }
