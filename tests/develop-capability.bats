@@ -49,6 +49,46 @@ _blocks_on() {
   [[ "$output" == *"write-capable"* ]] || { echo "the class was not stated: $output"; false; }
 }
 
+# The help text offers "npm dist.integrity, PyPI digests.sha256 or an OCI digest", and no OCI
+# candidate could pass -- an advertised capability nothing ever exercised. A PASS test on
+# purpose: the refusal tests below cannot detect a gate that refuses everything, which is
+# this file's own stated principle, and an unreachable branch refuses everything.
+@test "an OCI candidate satisfying every condition PASSES" {
+  _vet oci-clean
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"PASS"* ]] || { echo "$output"; false; }
+}
+
+# Negative control for the DIGEST half. Accepting the colon notation must not decay into
+# accepting any colon-shaped string: the value is still compared to what was published.
+@test "BLOCK: an OCI digest the registry did not publish" {
+  _vet oci-wrong-digest
+  _blocks_on hash
+}
+
+# Negative control for the VERSION half, which had none. Four mutants of the version code
+# survived the entire suite because the only control added was for the hash.
+@test "BLOCK: an OCI version the recorded response never names" {
+  _vet oci-wrong-version
+  _blocks_on version
+}
+
+# The C1 regression guard, and the reason the first attempt at OCI support was reverted.
+# record.name is the TAG only for a container registry; for npm it is the PACKAGE NAME. A
+# faithful packument for a package called v1.2.3 publishing only 0.0.1 then admitted a pin
+# of 1.2.3 -- not even a substring of a version. This must BLOCK forever.
+@test "BLOCK: an npm package NAME is never a version, however tag-shaped it looks" {
+  _vet npm-name-as-version
+  _blocks_on version
+}
+
+# A container registry tag body carries no repository identity, so one faithfully recorded
+# response certifies ANY allowlisted name unless the candidate binds itself to a fetched URL.
+@test "BLOCK: an OCI candidate whose registry-url does not name it" {
+  _vet oci-name-unbound
+  _blocks_on existence
+}
+
 # ---------------------------------------------------------------------------
 # One BLOCK per condition -- asserted once per condition, never once in total
 # ---------------------------------------------------------------------------
@@ -295,7 +335,11 @@ JSON
       for (const k of ["name", "registry", "version", "hash", "publisher-auth", "build-attestation", "checked"]) {
         if (!r[k]) { console.log(r.name + " is missing " + k); process.exit(1); }
       }
-      if (!/^sha(256|512)-/.test(r.hash)) { console.log(r.name + " hash is not a registry integrity string"); process.exit(1); }
+      // Both notations. `sha256-` is Subresource Integrity (npm, PyPI); `sha256:` is the OCI
+      // descriptor form every container registry returns. This assertion carried the same
+      // npm-only assumption the gate did, so widening one without the other fails a correct
+      // lock row -- the test protecting the rule needed the same fix as the rule.
+      if (!/^sha(256|512)[:-]/.test(r.hash)) { console.log(r.name + " hash is not a registry integrity string"); process.exit(1); }
       if (!/^\d{4}-\d{2}-\d{2}$/.test(r.checked)) { console.log(r.name + " checked date is not ISO"); process.exit(1); }
     }
     console.log("decisions: " + rows.map((r) => r.name + "@" + r.version).join(", "));

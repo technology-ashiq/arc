@@ -1,0 +1,9 @@
+{
+  "_comment": "Differs from oci-clean in ONE way: the registry-url names a DIFFERENT repository. A container registry tag body carries no repository identity, so without this binding one faithfully recorded response certifies any allowlisted name -- an attacker records their own repo response and claims to be something already on the allowlist.",
+  "name": "oci-tool", "registry": "oci", "version": "v2026.8.3",
+  "hash": "sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e",
+  "registry-record": "registry.json",
+  "registry-url": "https://hub.docker.example/v2/repositories/attacker-owned-repo/tags/v2026.8.3",
+  "publisher-auth": "registry namespace oci-tools, push gated on the upstream repository identity",
+  "build-attestation": "SLSA Provenance v1 in-toto attestation present in the image index"
+}

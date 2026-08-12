@@ -302,6 +302,31 @@ if (!record) {
     fs.existsSync(path.join(candidateDir, RECORD)) ? "present but does not parse" : "absent");
 }
 
+// NAME BINDING, and it exists because OCI cannot supply one from the response body.
+//
+// The header promises the record "names this name at this version". For npm and PyPI the
+// response carries the package name and the existing checks lean on it. A container
+// registry tag response carries NO repository identity at all -- it names the tag and the
+// digests and nothing else -- so one faithfully recorded response certifies ANY allowlisted
+// name. An adversarial pass demonstrated exactly that: the committed fixture response for
+// one image admitted a candidate calling itself something else entirely.
+//
+// So an OCI candidate records the URL it fetched, and the repository must appear in it. The
+// URL is candidate-supplied and therefore not trusted as proof of anything by itself -- what
+// it does is make the claim CHECKABLE and make a lie a visible forgery rather than an
+// omission the format made unavoidable.
+if (registry === "oci") {
+  const url = text(manifest["registry-url"]);
+  if (!url) {
+    block("existence", `an oci candidate records no registry-url, and its response cannot name itself`,
+      "`registry-url`: the URL the recorded response was fetched from — a container registry tag body carries no repository identity, so without this one response certifies any allowlisted name",
+      "(absent)");
+  } else if (!url.includes(name)) {
+    block("existence", `the recorded registry-url does not contain "${name}"`,
+      `a URL naming the repository ${name}`, url);
+  }
+}
+
 // Versions, read STRUCTURALLY. `1.2.3` used to match a registry offering only `1.2.31`.
 const offered = new Set();
 const collect = (v) => { if (typeof v === "string") offered.add(v); };
@@ -312,6 +337,23 @@ if (record) {
   if (record["dist-tags"] && typeof record["dist-tags"] === "object") Object.values(record["dist-tags"]).forEach(collect);
   if (Array.isArray(record.commits)) record.commits.forEach(collect);
   collect(record.commit);
+  // OCI, and ONLY OCI. A container registry response for one tag names it in `name` and
+  // publishes no `versions` array at all, so every reader above returns nothing and the
+  // candidate was refused with "the response lists no versions" -- an advertised path (the
+  // OCI digest named in the help text at the top of this file) that no candidate could walk.
+  //
+  // SCOPED DELIBERATELY. A first attempt fed record.name into offered for EVERY registry,
+  // and in npm, PyPI and git `name` is the PACKAGE NAME: a faithful packument for a package
+  // called v1.2.3 that publishes only 0.0.1 then admitted a pin of 1.2.3. That re-opened the
+  // hole this gate already records -- a pinned version must be OFFERED, not merely a
+  // substring -- and it was worse, because a package name is not even a substring of a
+  // version. A fresh adversarial pass caught it and the whole change was reverted.
+  if (registry === "oci") {
+    collect(record.name);
+    if (Array.isArray(record.tags)) {
+      record.tags.forEach((t) => collect(typeof t === "string" ? t : t && t.name));
+    }
+  }
 }
 
 // --- allowlist. Read as LINES and compared as strings; entries trimmed, BOM stripped,
@@ -346,7 +388,15 @@ if (isSkill) {
       "the pinned commit present in the recorded response", [...offered].slice(0, 3).join(", ") || "(none)");
   }
 } else {
-  if (!/^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$/.test(version)) {
+  // An OCI pin is the TAG, recorded exactly as the registry names it -- leading v included.
+  // A first attempt stripped the v so that v2026.8.3 also offered 2026.8.3, and wrote the
+  // stripped form into the lock. Container tags are mutable and independent: v1.2.3 and
+  // 1.2.3 can be different images, so that lock row named a coordinate nobody had verified,
+  // and re-verifying it would pull something else or 404. Record what was checked.
+  const semver = registry === "oci"
+    ? /^v?[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$/
+    : /^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$/;
+  if (!semver.test(version)) {
     block("version", `version "${version || "(absent)"}" is not an exact pin`,
       "an exact version such as 1.2.3 — a range, a tag or `latest` moves under you", version || "(absent)");
   } else if (record && !offered.has(version)) {
@@ -361,7 +411,17 @@ if (isSkill) {
 // real skill unpassable except by fabricating a value nothing verified.
 const hash = text(manifest.hash);
 if (!isSkill) {
-  if (!hash || !/^sha(256|512)-[A-Za-z0-9+/=]{16,}$/.test(hash)) {
+  // Two notations, both real. `sha256-` is Subresource Integrity, base64, what npm and PyPI
+  // publish. `sha256:` is the OCI descriptor form, hex, what every container registry
+  // returns. The gate claimed to accept an OCI digest and rejected it on this line.
+  //
+  // The separator is NOT normalised before comparison, and that is deliberate. A first
+  // attempt did normalise, on the reasoning that one digest written two ways is one digest.
+  // That reasoning is FALSE: SRI is base64 of 32 bytes (44 characters) and an OCI digest is
+  // 64 hex, so a faithful re-notation never normalises onto a match. Normalising bought
+  // nothing real and weakened EQUAL-to-what-the-registry-published into equal-modulo-one-
+  // character. The value below is still compared byte-for-byte against the recorded response.
+  if (!hash || !/^sha(256|512)[:-][A-Za-z0-9+/=]{16,}$/.test(hash)) {
     block("hash", `no usable integrity hash for ${name}@${version}`,
       "npm dist.integrity, PyPI digests.sha256 or an OCI digest — `sha512-…` or `sha256-…`",
       hash || "(absent)");
@@ -369,7 +429,7 @@ if (!isSkill) {
     const published = [];
     const walk = (o, depth) => {
       if (!o || depth > 4) return;
-      if (typeof o === "string") { if (/^sha(256|512)-/.test(o)) published.push(o); return; }
+      if (typeof o === "string") { if (/^sha(256|512)[:-]/.test(o)) published.push(o); return; }
       if (Array.isArray(o)) return o.forEach((x) => walk(x, depth + 1));
       if (typeof o === "object") return Object.values(o).forEach((x) => walk(x, depth + 1));
     };
