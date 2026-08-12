@@ -475,3 +475,62 @@ promoted it has had no second reader.
 **The other seven stayed silent across two full cycles.** Ten phase closes, two kickoffs, zero fires.
 Silence is not evidence of correctness — `[trial-status]` has reported `0 live, 9 in trial` since
 Cycle 3, and a gate that has never fired on a real plan has never been tested by one either.
+
+---
+
+## Cycle 11 · arc-memory — 2026-08-12
+
+| date | gate | run-ref | fired? | false-positive? |
+|---|---|---|---|---|
+| 2026-08-12 | `appetite-sum` (**zero-slack** branch) | arc-memory Cycle 11, every run cycle-long | **yes, every run** — 4.5d = 90% of 5d | **leaning false** — the cycle closed at **75% of 5d**, so the slack it warned was missing was in fact there. Same shape as 07-22 and 08-04 |
+| 2026-08-12 | `appetite-sum` (**over-commit** branch) | arc-memory Cycle 11, every run cycle-long | **no** — 4.5d <= 5d, correctly silent | **no** — a clean run |
+| 2026-08-12 | `birth-rule(kickoff-lint)` | arc-memory Cycle 11, every run | **no** — 3 processes checked against `hq.policy.yaml`, 0 ungoverned | **no** — a clean run |
+
+### The finding that settles `appetite-sum`, and it is not the adjudication
+
+Cycle 10's retro left three lookups as the smallest remaining piece of work. Doing them turned up
+something the ledger had been missing for three cycles: **`appetite-sum` is two gates, and only one
+of them is promotable.**
+
+```
+kickoff-lint.mjs:327   if (sumDays > totalDays)        gate("appetite-sum", "... over-commits ...")
+kickoff-lint.mjs:329   else if (sumDays > 0.8*total)   warn("appetite-sum", "... zero slack ...")
+```
+
+Line 327 goes through `gate()`, which consults `TRIAL`. **Line 329 calls `warn()` directly**, so the
+zero-slack branch is a WARN *by construction* — removing the group from `TRIAL` cannot touch it, now
+or ever. The two branches have been logged under one name since 2026-07-19, and every argument about
+promotion has been conducted as though a single gate were being flipped.
+
+Sorting the three doubtful rows by branch:
+
+| row | branch | recorded outcome | adjudication |
+|---|---|---|---|
+| 2026-07-22 (92% of 30d) | **zero-slack** | closed ~20–22% | leaning false stands — **and promotion cannot affect it** |
+| 2026-08-04 (evolve, 100% declared) | **zero-slack** | C7 closed at **100% of 7d** | the gate was RIGHT: a cycle landing on exactly 100% had no margin, which is what it said — **and promotion cannot affect it either** |
+| 2026-07-28 (14.5d > 12.5d) | **over-commit** | C2 closed at ~40% of 12.5d | **re-adjudicated: TRUE POSITIVE** — see below |
+
+**2026-07-28 was scored against the wrong question, and the ledger contradicts itself on it.** The
+2026-07-19 venturemind row is the identical shape on the identical branch (16d > 15d) and is recorded
+as a *"verified TRUE positive"*. 07-28 was judged by outcome — *the overrun never happened* — while
+07-19 was judged by arithmetic. **The over-commit branch does not predict an overrun.** It says the
+declared phases do not fit inside the declared appetite, which is a defect in the document, not a
+forecast about the work. That defect was real on 2026-07-28 and is still real in the archived plan.
+Scoring the same shape two ways is the inconsistency; fixing it is not judgement, it is arithmetic.
+
+**Over-commit branch, after adjudication:** two fires (07-19, 07-28), **both TRUE**, zero false
+positives, plus a clean silent run this cycle and on every cycle since. Fixture-proven at
+`tests/kickoff-lint.bats` — the over-commit payload is asserted, and an unparseable appetite is proven
+never to fail. **Both criteria hold on the branch that promotion actually moves.**
+
+**Checked before proposing, because a promotion that breaks a live lane is worse than no promotion:**
+every one of the nine lane PLANs plus the root-mode PLAN was run through the gate first. **Zero trip
+the over-commit branch** (`over-commit=0` on all ten), so the flip changes no lane's exit code today.
+
+**Net: FLIP — `appetite-sum` leaves `TRIAL`**, on the owner's approval as the second reader, which is
+the condition Cycle 10 named. The zero-slack branch keeps warning forever and keeps its two
+leaning-false rows, because `warn()` is what it calls. `[trial-status]` goes to **1 live, 8 in trial** —
+the first substance gate to go live since the set was created in Cycle 3.
+
+**The other eight stayed silent again.** Eleven phase closes now, three kickoffs, zero fires. Silence
+is still not evidence of correctness.
