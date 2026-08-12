@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-bench "the model market"
 
-status: BLOCKED
+status: LIVE
 cycle: arc-bench (Cycle 13, opened 2026-08-12)
 phase: 00
 appetite: 8d
 burn: 0d
-blocked-on: owner approval of `initiatives/bench/PLAN.md` before any Phase 0 code
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -69,17 +69,24 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
-**Current position, 2026-08-12: kickoff COMPLETE, Phase 00 NOT STARTED — blocked on owner
-approval.**
+**Current position, 2026-08-12: kickoff COMPLETE and APPROVED. Phase 00 NOT STARTED.**
 
 `PLAN.md`, `phases/phase-00-spec.md` … `phase-04-spec.md`, ADR-0900..0914 and this tracker are
-written. `kickoff-lint --lane bench` passes and the Tier-M simulation gate has run.
+written and committed as `97faea9` on `technology-ashiq/arc-bench` (**PR #164**).
+`node .claude/scripts/plan/kickoff-lint.mjs --lane bench` exits 0.
 
-An `approval.requested` receipt (gate `kickoff`) is on the spine. **No Phase 0 code may be
-written until the owner records a decision** via `arc-inbox approve <ULID> --reason "…"` — run
-from the main clone at `E:/Work_Hub/01_Automemory/arc`, because the canonical spine is
-gitignored and each worktree has its own.
+**Approval chain, all three receipts on the canonical spine, verified in
+`events/2026-08-12.jsonl` and absent from `_quarantine/`:**
+`kickoff.done` `01KZTHF6XHJ65TT4669WWW4PSQ` → `approval.requested` (gate `kickoff`)
+`01KZTHF786HGE40C4CSYFSN6DW` → `decision.recorded` **approve**, owner ruling of 2026-08-12
+recorded with its reason.
 
-**Next step after approval:** Phase 00, first slice — `drivers/mock` and the
-swap-the-response negative control, which is the one test that must stay RED until the mock is
-built correctly.
+**Next step:** Phase 00, first slice — `drivers/mock` plus the M9 swap-the-response negative
+control. That control is the one test that must stay RED until the mock is built correctly: a
+mock that short-circuits `produce()` leaves the contract suite green, so a green suite there is
+the defect, not the proof. Start it with `/arc-develop start 00 --lane bench`.
+
+**Carried into Phase 00 as a known, unfixed engine defect:** `common.mjs:180-191` returns inside
+the `ARC_DRIVER_FAKE` branch before `await produce()` runs, while
+`tests/engine-driver-contract.bats:6-8` asserts the opposite. Bench reports it; engine owns the
+repair.

@@ -26,26 +26,42 @@ candidate model id. **The run-level remainder is threaded by bench**: it compute
 before each attempt and passes it down, so `arc-run`'s per-invocation `--budget` becomes the
 mechanism rather than a competing budget (REQ-04).
 
-**M2 · Where the mock's pinned bytes live.** `ARC_MOCK_DIR` (default
-`tests/fixtures/bench/mock-replay/`). The mock resolves `PROCESS/INPUT-SHA12.json`, falling back
-to `PROCESS/default.json`. **A missing recording is `exit 1` naming the path it looked for** —
-never a silent empty response, which would make an unreachable fixture look like a passing one.
+**M2 · Where the mock's pinned bytes live, and how it picks one.** `ARC_MOCK_DIR` (default
+`tests/fixtures/bench/mock-replay/`). The mock resolves **`PROCESS/FIXTURE-ID.json`**, where
+`FIXTURE-ID` comes from **`ARC_MOCK_FIXTURE`**, set by bench before each attempt; with that env
+unset it falls back to `PROCESS/default.json`. **A missing recording is `exit 1` naming the path
+it looked for** — never a silent empty response, which would make an unreachable fixture look
+like a passing one.
+
+Selection is by fixture id and **not** by hashing the input, because `commit-msg-draft` declares
+`inputs: []` — every one of its fixtures has the identical input `{}`, so an input hash would
+collide across all five and hand the same recorded response to every one of them. The varying
+thing is the repo state (M3), which the input never sees.
 
 **M3 · What a synthetic repo state is.** A directory
-`tests/fixtures/engine/evals/commit-msg-draft/repo-states/FIXTURE-ID/` holding a `files/` tree and
-a `staged.txt` listing the paths to stage. The harness: `mkdtemp` → copy `files/` → `git init` →
-**set `user.name`/`user.email` as repo-local config, never via env** (a subshell-scoped
-`GIT_AUTHOR_*` passes locally and fails 128 on a clean CI runner) → commit a base → `git add` the
-paths in `staged.txt` → export `ARC_ROOT` to that temp dir. The fixture JSON names its state by
+`tests/fixtures/engine/evals/commit-msg-draft/repo-states/FIXTURE-ID/` holding two trees:
+`base/` (the committed starting point) and `work/` (the uncommitted changes the process must
+find). The harness: `mkdtemp` → copy `base/` → `git init` → **set `user.name`/`user.email` as
+repo-local config, never via env** (a subshell-scoped `GIT_AUTHOR_*` passes locally and fails 128
+on a clean CI runner) → `git add -A` and commit the base → **copy `work/` over the top and leave
+it UNSTAGED** → export `ARC_ROOT` to that temp dir. The fixture JSON names its state by
 `repo_state: "FIXTURE-ID"`. Temp dirs are removed on exit, including on failure.
+
+**The harness deliberately does NOT stage.** `commit-msg-draft`'s whole job is *"Stage related
+changes and write a conventional commit"* (M11) — it holds `git.op: add:*` and `commit:*`. A
+harness that pre-staged would do the process's work for it and leave a clean-index repo in which
+the model has nothing to decide, which is exactly the fixture-that-measures-nothing failure this
+phase exists to avoid. The harness builds the situation; the process acts on it.
 
 **M4 · Assertion `path` syntax.** Dot notation with numeric indices only — `commits.0.subject`.
 No JSONPath, no wildcards, no filters. A path that does not resolve makes the assertion **FAIL**
 (not error); `absent` is the op that asserts a path is missing.
 
-**M5 · `length_between` value shape.** `"value": [MIN, MAX]`, inclusive, both integers. Every
-other op takes a scalar. The op registry validates the value shape per op and **refuses** a
-mismatch rather than coercing it.
+**M5 · Value shape per op.** `length_between` takes `"value": [MIN, MAX]`, inclusive, both
+integers. `equals`, `matches` and `contains` take a scalar. **`absent` takes NO `value` key at
+all**, and the registry refuses an `absent` assertion that carries one — a value there means the
+author expected something other than "this path must not exist". The registry validates the
+value shape per op and **refuses** a mismatch rather than coercing it.
 
 **M6 · How bench emits.** The same way `arc-run` does (`arc-run.mjs:250-265`):
 
@@ -90,6 +106,18 @@ list — the pattern already in the tree (`commit-msg-draft.process.yaml:36-37` 
 today). Each file carries `note`, `input` (`{}` — the process declares no inputs), `expected`,
 `repo_state` and `assertions[]`. `pack.json` sits beside them holding only `revision` and
 `task_class`.
+**M13 · `arc-bench.mjs`'s own contract.** It lives at `.claude/scripts/engine/arc-bench.mjs`
+(authorized path 4 in PLAN's touch-with-care list) and mirrors `arc-run.mjs`'s conventions: a
+**closed flag set** — `--driver`, `--model`, `--budget`, `--champion`, `--propose`, `--dry-run` —
+and `exit 2` naming any unknown option. Exit codes: **0** the run completed and every selected
+fixture was scored · **1** the run completed but at least one class is `partial` or
+budget-aborted · **2** operator error (bad flag, unknown driver, unreadable fixture). Phase 0
+asserts only exit 0 on the happy path and exit 2 on an unknown flag; the `partial` path arrives
+with Phase 1's admission control. The printed scorecard's exact layout is an implementation
+choice this phase — **no test asserts its shape**, because pinning a human-readable table before
+the numbers exist would freeze the wrong thing. The machine-readable manifest, which IS pinned,
+is Phase 2 (ADR-0907).
+
 **A clarification the round-2 gate was right to demand:** `TOP_LEVEL_KEYS`
 (`process-lint.mjs:65-67`) governs the **process YAML's** top-level keys, NOT the fixture JSON's.
 Fixture files are free-form apart from `expected`, which `arc-run.mjs:184-186` requires — so a
@@ -144,10 +172,13 @@ the fixtures themselves.
       `node .claude/scripts/plan/kickoff-lint.mjs --lane bench` still exits 0, and that **no file
       outside `0900–0999` was written by this lane**. Phase 0 authors no ADR unless a finding
       contradicts one.
-- [ ] **Cross-lane check performed and recorded** before the first commit touching
-      `.claude/scripts/engine/drivers/**` or `tests/fixtures/engine/evals/**`:
-      `git log origin/main --oneline -5 -- PATH` for each. Engine is IDLE but leads, memory and
-      scheduler are LIVE in sibling worktrees.
+- [ ] **Cross-lane check performed and recorded** before the first commit touching **any of the
+      five authorized paths**: `.claude/scripts/engine/drivers/**` ·
+      `tests/fixtures/engine/evals/**` · `.claude/scripts/engine/arc-run.mjs` (one-line `DRIVERS`
+      registration) · `.claude/scripts/engine/arc-bench.mjs` (new file) ·
+      `processes/commit-msg-draft.process.yaml` (`evals:` list only, per PLAN § No-gos).
+      `git log origin/main --oneline -5 -- PATH` for each, output recorded. Engine is IDLE but
+      leads, memory and scheduler are LIVE in sibling worktrees.
 - [ ] tests added and **green on CI** (never run the suite on this box) —
       `.github/workflows/ci.yml`, read per JOB via `gh run view --json jobs`, never `gh run watch
       --exit-status`, which has already exited 0 on a run whose conclusion was `failure`. Confirm

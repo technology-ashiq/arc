@@ -83,11 +83,17 @@ the same day and was wrong on five load-bearing points — those are the ADRs be
 - **Do-not-touch:** `docs/evidence/**` and `docs/archive/**` (frozen) · `.claude/commands/*.md`
   (regenerated from `processes/*.process.yaml`) · `tests/fixtures/sync-golden/tree-manifest.txt`
   (byte-identity CI gate) · `engine/router.yaml` (bench has no write path, ever).
-- **Touch-with-care — engine-owned company organs bench DOES edit:**
-  `.claude/scripts/engine/drivers/**` (landing `mock`, adding the `version` verb) and
-  `tests/fixtures/engine/evals/**` (arming a class). Engine is IDLE, but **three other lanes
-  are LIVE in sibling worktrees** (leads, memory, scheduler). Before any commit to either
-  tree run `git log origin/main --oneline -5 -- PATH` per `.claude/rules/lanes.md`; a
+- **Touch-with-care — the engine-owned paths bench DOES write, and NOTHING else.** Exactly four:
+  (1) `.claude/scripts/engine/drivers/**` — landing `mock`, adding the `version` verb;
+  (2) `tests/fixtures/engine/evals/**` — arming a class;
+  (3) `.claude/scripts/engine/arc-run.mjs` — **one line only**, registering `mock` in the
+  `DRIVERS` array at `:45`, so `--driver mock` routes;
+  (4) `.claude/scripts/engine/arc-bench.mjs` — bench's own new file, placed beside its siblings
+  because that is where every engine-adjacent runner lives (ADR-0901).
+  Plus **one line in `processes/commit-msg-draft.process.yaml`'s `evals:` list** — see No-gos for
+  why that is not a body edit. Engine is IDLE, but **three other lanes are LIVE in sibling
+  worktrees** (leads, memory, scheduler). Before committing to ANY of these five, run
+  `git log origin/main --oneline -5 -- PATH` per `.claude/rules/lanes.md`; a
   touched-since-branch-point result is an in-flight merge conflict, handled now, not at merge.
 
 ## Success requirements
@@ -230,8 +236,15 @@ and nothing else under `.claude/scripts/engine/drivers/` may be touched · no `v
 cron work · no eval-framework rewrite (`process-lint.mjs`'s frozen `TOP_LEVEL_KEYS` is not
 modified; `pack.json` is a sibling file) · no arming `review-diff` or `kickoff-plan` this cycle
 · no benching interactive sessions · no parallel fixture execution · no amending ADR-0069 from
-inside this cycle · no `arc NOUN VERB` dispatcher · no repo-wide pricing snapshot · no edits
-to the three pilot process bodies, which are engine's pinned evidence.
+inside this cycle · no `arc NOUN VERB` dispatcher · no repo-wide pricing snapshot · **no edits to
+the three pilot process BODIES, which are engine's pinned evidence** — with one named exception:
+**appending fixture paths to `commit-msg-draft`'s `evals:` list is permitted**, because `evals`
+is a pointer list and not the body. `process-lint.mjs` checks `body-drift` and `baseline-drift`
+as separate rules from `evals-path`, the `baseline` block pins the compiled command file, and the
+compiled `.claude/commands/arc-commit.md` contains **zero** references to eval paths — so adding
+an entry cannot move the pinned hash. Phase 0 proves this by running `process-lint --all` after
+the edit rather than asserting it. The `body:`, `intent:`, `tools:`, `output:` and `baseline:`
+keys stay untouched.
 
 ## Rabbit holes
 
