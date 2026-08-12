@@ -11,6 +11,7 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 ROLL="$ARC_ROOT/.claude/scripts/hq/jobs/day-close-roll.mjs"
+JOBS="$ARC_ROOT/.claude/scripts/hq/arc-jobs.mjs"
 EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
 RUN="$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"
 
@@ -127,6 +128,49 @@ process.stdout.write('ENTRIES-OK '+entries.length);
 " "$ARC_ROOT"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   echo "$output" | grep -q "ENTRIES-OK 2" || { echo "$output"; false; }
+}
+
+@test "arc-jobs: a run leaves a receipt carrying the slot it claims" {
+  _seed_day 2026-08-01
+  run node "$JOBS" run day-close-roll
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The receipt is the deliverable, so assert it is ON THE SPINE rather than trusting exit 0.
+  run grep -h '"kind":"run.completed"' "$SPINE/events/"*.jsonl
+  [ "$status" -eq 0 ] || { echo "no run.completed on the spine"; false; }
+  echo "$output" | grep -q '"job":"day-close-roll"' || { echo "$output"; false; }
+  # The idem is hashed to the spine's wire format, so the human-readable slot lives in the
+  # payload. Without it a receipt names a hash nobody can invert.
+  echo "$output" | grep -q '"idem_preimage":"day-close-roll@' || { echo "$output"; false; }
+}
+
+@test "arc-jobs: a double fire at the same slot is prevented, not merely noticed" {
+  _seed_day 2026-08-01
+  run node "$JOBS" run day-close-roll
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run node "$JOBS" run day-close-roll
+  [ "$status" -eq 0 ] || { echo "second fire should exit 0, got $status"; echo "$output"; false; }
+  echo "$output" | grep -q "already has a receipt" || { echo "$output"; false; }
+  # EXACTLY ONE receipt. Asserting the message alone would pass even if the job re-executed and
+  # its duplicate were quarantined -- which is a different, weaker guarantee.
+  local n
+  n="$(grep -ho '"kind":"run.completed"' "$SPINE/events/"*.jsonl | wc -l | tr -d ' ')"
+  [ "$n" -eq 1 ] || { echo "expected exactly 1 run.completed, found $n"; false; }
+}
+
+@test "arc-jobs: a scheduled fire is distinguishable from an attended one by actor" {
+  # This is what makes REQ-06's zero-manual-starts a spine QUERY rather than a diary claim.
+  _seed_day 2026-08-01
+  run node "$JOBS" run day-close-roll --scheduled
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  run grep -h '"kind":"run.completed"' "$SPINE/events/"*.jsonl
+  [ "$status" -eq 0 ] || { echo "no receipt"; false; }
+  echo "$output" | grep -q '"actor":"scheduler:day-close-roll"' || { echo "$output"; false; }
+}
+
+@test "arc-jobs: refuses to run anything from an illegal schedule" {
+  # The runner enforces the SAME rule set as the committer. Otherwise the validator is advice.
+  run node "$JOBS" run no-such-job
+  [ "$status" -eq 2 ] || { echo "wanted exit 2, got $status"; echo "$output"; false; }
 }
 
 @test "jobs-run: bats registers every test this file declares" {

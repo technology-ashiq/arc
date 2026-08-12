@@ -144,3 +144,41 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  # --- scheduler lane, Cycle 12 (ADR-0802) --------------------------------------------------
+  # Two scheduled script-jobs. They authorize as `process:` subjects because ADR-0504 closes the
+  # subject set to `session:interactive` or `process:NAME` where NAME is the filename stem of a
+  # real processes/*.process.yaml -- a `job:` prefix fails policy-lint by design. Each stem
+  # exists as processes/<stem>.process.yaml carrying `job_stub: true`, and arc-run refuses to
+  # execute a job stub before it selects a driver.
+  #
+  # ORDERING: apply this file only AFTER those two process files are on the tree. policy-lint
+  # FAILs a row naming a process that does not exist -- the subject set is a directory listing.
+  #
+  # `network` is L0 on purpose. Neither job touches the network, and declaring less than the
+  # sibling rows is the honest narrowing POL-D asks for. `shell` stays at L1 because
+  # day-close-roll shells out to `arc-event close-day`, whose argv0 is node.
+  #
+  # Both jobs sit at the L1 birth cap regardless of these ceilings (effective = min(ceiling,
+  # cap)), which is all `authorizeRun` needs: it blocks on L0, not on anything below execute.
+  "process:brief-materialize":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/hq/**"] }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
+
+  "process:day-close-roll":
+    e2: []
+    read: { level: L3 }
+    write: { level: L2, roots: [".claude/state/hq/**"] }
+    shell: { level: L1 }
+    network: { level: L0 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }

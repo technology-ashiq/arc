@@ -159,7 +159,7 @@
 .claude/scripts/hq/arc-event.mjs	ec0f4ee6505b3d22747bd822934d2f2a48bd3224e298a7343b389be7b7ff5e22
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	70403b5dbd606de7ac767ac96e791d7798fe077590d88659d9dd11ae426c90f7
-.claude/scripts/hq/arc-jobs.mjs	fce9ca5226aab51465c2a041449bf6a9b25ce871d4f59572f20633de784e1edc
+.claude/scripts/hq/arc-jobs.mjs	696a0dbe8e457ea33f16bea72c258eff315ce77c469dcf5d53ff0b60c44065b9
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-replay.mjs	3155f9859c5be9f22643d46ae043f7e20839b586ddaa57fc1a58372e82179874
 .claude/scripts/hq/jobs-lint.mjs	e56966056b2374199fecae01851e55927b78d802fa951510e90684fd19fdeedc

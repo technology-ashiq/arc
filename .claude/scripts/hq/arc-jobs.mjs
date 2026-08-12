@@ -29,8 +29,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
-import { spineRoot, withLock } from "./lib/spine-io.mjs";
-import { formatIst, nowMs } from "./lib/canonical.mjs";
+import { spineRoot, withLock, readIdemIndex } from "./lib/spine-io.mjs";
+import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
@@ -183,7 +183,13 @@ if (!job.enabled) {
 
 const scheduled = has("scheduled");
 const actor = scheduled ? `scheduler:${name}` : (process.env.ARC_SPINE_ACTOR || "session");
-const idem = `${name}@${slotIso}`;
+
+// SCH-E's identity is `<job>@<slot>`; the SPINE's wire format for an idem is lowercase sha256
+// hex, and it rejects anything else outright (BAD_IDEM). So the semantic key is hashed, not
+// written raw. The preimage is kept verbatim in the payload so a human reading a receipt can
+// still see which slot it claims -- a hash nobody can invert is a poor thing to debug with.
+const idemPreimage = `${name}@${slotIso}`;
+const idem = sha256Hex(idemPreimage);
 
 // --- guard: the tree ---
 const blocked = gitStateBlocked();
@@ -213,6 +219,29 @@ const startedIso = formatIst(started);
 // lock nobody else takes, which is a lock that locks nothing. `spineRoot()` also refuses inside
 // a linked worktree, which is the correct place for a scheduled job to stop.
 const spine = spineRoot();
+
+// DOUBLE-FIRE IS PREVENTED HERE, not merely noticed afterwards. Task Scheduler wake quirks fire
+// the same slot twice, and SCH-E's rule is "never a silent second run" -- but letting the second
+// run EXECUTE and relying on the receipt to be quarantined only makes it non-silent, not
+// prevented. Both v1 jobs happen to be idempotent; the next one may not be, and by then this
+// would be a bug nobody thinks to look for.
+//
+// The idem index is the spine's own dedup structure, so this asks the same question the emitter
+// will ask, one step earlier. It is a fast path, not the guarantee: the emitter's DUP_IDEM
+// remains the backstop for a genuine race between this read and that write.
+try {
+  const index = readIdemIndex(spine);
+  const already = index && (index instanceof Map ? index.get(idem) : index[idem]);
+  if (already) {
+    process.stdout.write(
+      `arc-jobs: ${name} slot ${slotIso} already has a receipt (${already}) -- this is a double fire, and the second run is skipped rather than re-executed\n`,
+    );
+    process.exit(0);
+  }
+} catch {
+  // An unreadable index is not a reason to refuse: the emitter still enforces DUP_IDEM, so the
+  // worst case is the slower path, never a duplicate.
+}
 
 let result;
 try {
@@ -254,14 +283,40 @@ const payload = {
   duration_ms: durationMs,
   outcome,
   type: job.type,
+  idem_preimage: idemPreimage,
 };
 if (timedOut) payload.timed_out_after_min = Number(job.budget.min);
 if (r.error) payload.spawn_error = r.error.code || r.error.message;
 if (r.status !== null && r.status !== undefined) payload.exit_code = r.status;
 
 const receipt = emit("run.completed", payload, { actor, idem, outcome });
-if (!receipt.ok)
-  process.stderr.write(`arc-jobs: WARN the run finished but its receipt did not land: ${receipt.why}\n`);
+
+// AN UNRECEIPTED RUN IS A FAILED RUN, and the first version of this file reported it as `ok`
+// with a WARN on stderr -- which is the exact failure class this whole cycle exists to close.
+// The work may well have succeeded; that is not the point. The receipt is what the brief reads,
+// what the gap audit counts, and what REQ-06's actor query proves zero-manual-starts from. A
+// job that runs forever and receipts nothing is INDISTINGUISHABLE from a dead one, so reporting
+// success here would disable the very detector this module is built to feed.
+//
+// The two facts are reported separately rather than merged: the work outcome, and the receipt
+// outcome. Collapsing them in either direction lies.
+if (!receipt.ok) {
+  if (r.stdout) process.stdout.write(r.stdout);
+  // DUP_IDEM IS THE SYSTEM WORKING; ANY OTHER FAILURE IS THE SYSTEM BROKEN. Collapsing the two
+  // was the first version's mistake: it told a benign double fire that it "left no receipt and
+  // is indistinguishable from a job that never ran", which is false -- that slot HAS a receipt,
+  // written by the run that got there first, and the duplicate is correctly quarantined.
+  if (/DUP_IDEM/.test(receipt.why)) {
+    process.stdout.write(
+      `arc-jobs: ${name} slot ${slotIso} was already receipted; this duplicate is quarantined, not lost -- a double fire, surfaced rather than silent\n`,
+    );
+    process.exit(0);
+  }
+  emit("incident.raised", { job: name, scheduled_for: slotIso, class: "receipt-write-failure", detail: receipt.why },
+    { actor, outcome: "fail" });
+  process.stderr.write(`arc-jobs: the WORK ${outcome === "ok" ? "succeeded" : "failed"}, but its RECEIPT did not land: ${receipt.why}\n`);
+  die(2, `${name} left no receipt -- an unreceipted run is invisible to the brief and to the gap audit, which makes it indistinguishable from a job that never ran`);
+}
 
 if (r.stdout) process.stdout.write(r.stdout);
 if (outcome !== "ok") {
