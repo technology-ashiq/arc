@@ -96,7 +96,44 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
-**Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
+**Current position, 2026-08-12: Phase 04 RUNNING, its work essentially done, the ceremony not.**
+
+### HANDOFF — read this first if you are resuming
+
+Everything is committed and pushed. Branch `technology-ashiq/arc-executor`, HEAD **`c852b64`**,
+**PR #172 open**. Nothing lives only in a session.
+
+**Where Phase 04 actually is.** Slices 01–08 and 10–11 are built and evidenced under
+`evidence/phase-04/` (`smoke-run.json`, `smoke-stdout.txt`, `smoke-result.md`, `install-method.md`,
+`backend-config.md`, `fixture-enforcement-map.md`, `mandate-ulid.txt`). What remains is bookkeeping:
+fill the slice ledger in `phases/phase-04-tasks.md` — the harness enumerates 15 slices and the work
+was done in a different order — then `/arc-develop handoff 4 --lane engine`, then
+`/arc-phase-done 4 --lane engine`.
+
+**CI, and the two live threads.**
+
+1. Run **31632767132** was dispatched **by hand** for `c852b64`, because the push created **no run at
+   all**. Confirm a run exists for the SHA before waiting on one:
+   `gh workflow run arc-ci --ref technology-ashiq/arc-executor`.
+2. **`arc-scan: starter profile downgrades block to advisory` fails on windows shard 12 only.**
+   Nothing in this cycle touches arc-scan. Working hypothesis, **unconfirmed**: adding
+   `tests/engine-hermes-smoke.bats` reshuffled the shard assignment (it has no measured entry and
+   rides `_default_weight` 16) and that test reads ambient repo state, so it was passing on shard
+   luck. If so it is a latent defect this cycle **exposed** rather than caused, and the fix is either
+   a measured timing entry or removing the ambient read. **Verify before acting.**
+
+**The gate went through two adversarial rounds and both found real holes.** Round 1 forced a full
+revert; round 2 found **five surviving mutants**, one of them the reverted hole itself. All fixed,
+61/61 green locally — but **a third round was never run**, and each round found more than the one
+before, so a clean third round is not a formality. Findings that predate this cycle are filed as
+**issue #167** and are untouched: a content-scan bypass by filename, a discarded grep exit status, a
+non-atomic lock, and an unreadable directory reading as clean.
+
+**Two owner acts outstanding, neither blocking.** The CI test-count floor is `911` against **2366**
+discovered, so it catches nothing short of catastrophic shrinkage — `.github/` is outside the
+assistant permission scope. And the money path is settled as **free models plus an unfunded key**:
+fixture 10 proves the refusal by pointing a $0-balance key at a paid model and asserting the real
+HTTP 402, which costs nothing and still certifies REQ-05.
 
 `/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
 ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:
