@@ -46,6 +46,8 @@ function enc(value, path, seen) {
       throw new CanonError("NON_FINITE", path, `${String(value)} cannot be represented; a hash preimage may not contain it. If a field is deliberately disabled, say so with null or a flag, not with a non-finite number.`);
     if (!Number.isInteger(value))
       throw new CanonError("NON_INTEGER", path, `${value} is not an integer. This schema has no fractional fields, and a float's decimal form is platform-dependent.`);
+    if (!Number.isSafeInteger(value))
+      throw new CanonError("UNSAFE_INTEGER", path, `${value} is past Number.MAX_SAFE_INTEGER, so two different written values already collapsed to one double before the hash saw them`);
     if (Object.is(value, -0)) return "i:0";
     return "i:" + String(value);
   }
@@ -64,8 +66,15 @@ function enc(value, path, seen) {
     seen.add(value);
     let out;
     if (Array.isArray(value)) {
-      const parts = value.map((v, i) => enc(v, `${path}[${i}]`, seen));
+      // map() SKIPS holes, so [ ,1] encoded as if the hole were not there while [undefined,1]
+      // correctly threw. A total encoder does not have two answers for the same absence.
+      const parts = [];
+      for (let i = 0; i < value.length; i++) {
+        if (!(i in value)) throw new CanonError("ARRAY_HOLE", `${path}[${i}]`, "the array has a hole; an absent element has no canonical form");
+        parts.push(enc(value[i], `${path}[${i}]`, seen));
+      }
       out = "a:" + parts.length + ":[" + parts.join(",") + "]";
+    // eslint-disable-next-line no-empty
     } else {
       const proto = Object.getPrototypeOf(value);
       if (proto !== Object.prototype && proto !== null)

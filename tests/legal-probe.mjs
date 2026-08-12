@@ -205,8 +205,8 @@ switch (cmd) {
         // Emit a clause marker the pinned template never declared.
         patch(
           join(root, ".claude", "scripts", "legal", "lib", "template.mjs"),
-          "out.push(`<!-- clause:${id} -->\\n${bodyText.trim()}\\n<!-- /clause:${id} -->\\n`);",
-          "out.push(`<!-- clause:${id} -->\\n${bodyText.trim()}\\n<!-- /clause:${id} -->\\n<!-- clause:GHOST.INJECTED -->\\nghost\\n<!-- /clause:GHOST.INJECTED -->\\n`);",
+          "out.push(`<!-- clause:${id} -->\\n${trimmed}\\n<!-- /clause:${id} -->\\n`);",
+          "out.push(`<!-- clause:${id} -->\\n${trimmed}\\n<!-- /clause:${id} -->\\n<!-- clause:GHOST.INJECTED -->\\nghost\\n<!-- /clause:GHOST.INJECTED -->\\n`);",
         );
         break;
       case "empty-page":

@@ -152,6 +152,7 @@ function resolveToken(expr, ctx) {
 export function renderTemplate(source, ctx) {
   const out = [];
   const clauses = [];
+  const bodies = {};
   const skipped = [];
   let rest = source;
 
@@ -175,8 +176,10 @@ export function renderTemplate(source, ctx) {
 
     if (conditionHolds(ctx.facts, when)) {
       const bodyText = inner.replace(/\{\{\s*([^#/}][^}]*?)\s*\}\}/g, (_, expr) => resolveToken(expr.trim(), ctx));
+      const trimmed = bodyText.trim();
       clauses.push(id);
-      out.push(`<!-- clause:${id} -->\n${bodyText.trim()}\n<!-- /clause:${id} -->\n`);
+      bodies[id] = trimmed.length;
+      out.push(`<!-- clause:${id} -->\n${trimmed}\n<!-- /clause:${id} -->\n`);
     } else {
       skipped.push({ id, when });
     }
@@ -188,7 +191,7 @@ export function renderTemplate(source, ctx) {
   // a `gateway` render differ in their CLAUSES and not in their whitespace. Deterministic
   // output must not encode which branches were skipped.
   body = body.split("\r\n").join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
-  return { body, clauses, skipped };
+  return { body, clauses, bodies, skipped };
 }
 
 /** The transforms this renderer applies, named so a reader can check what they destroy. */

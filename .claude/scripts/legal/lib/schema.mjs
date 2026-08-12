@@ -148,13 +148,30 @@ export function condValue(v) {
   return String(v);
 }
 
-export function conditionHolds(facts, cond) {
+/**
+ * Three answers, not two: true, false, and NULL for "this condition cannot be evaluated".
+ *
+ * The two-answer version failed CLOSED in the renderer (an unevaluable guard meant the clause
+ * was not emitted) and OPEN in the completeness lint (an unevaluable guard meant the check was
+ * skipped). So a one-character typo in a `when` field name silently disabled a mandatory-clause
+ * check while the clause it guarded also vanished from the page. Callers now choose their own
+ * polarity, deliberately.
+ */
+export function conditionVerdict(facts, cond) {
   if (!cond) return true;
   const eq = cond.indexOf("=");
-  if (eq < 0) return false;
+  if (eq < 0) return null;
   const field = cond.slice(0, eq).trim();
   const want = cond.slice(eq + 1).trim();
-  return condValue(getPath(facts, field)) === want;
+  if (!field || !want) return null;
+  const value = getPath(facts, field);
+  if (value === undefined) return null;
+  return condValue(value) === want;
+}
+
+/** Renderer-facing: an unevaluable condition means DO NOT EMIT. */
+export function conditionHolds(facts, cond) {
+  return conditionVerdict(facts, cond) === true;
 }
 
 function checkFreeText(value, field, errs) {

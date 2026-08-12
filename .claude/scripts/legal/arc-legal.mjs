@@ -60,6 +60,11 @@ function parseArgs(argv) {
       const key = a.slice(2);
       const val = argv[i + 1];
       if (val === undefined || val.startsWith("--")) throw new Fail(2, `flag ${a} has no value`);
+      // Two values for one flag is an OPERATOR ERROR, not a last-wins override. The lanes rule
+      // already says so for --lane ("silently picking one of two named values is precisely the
+      // never-guess failure"); it had never been applied to the other flag parser in the repo.
+      if (Object.prototype.hasOwnProperty.call(out, key))
+        throw new Fail(2, `flag --${key} given twice (${out[key]} and ${val}). Pick one.`);
       out[key] = val;
       i++;
       continue;
@@ -223,6 +228,8 @@ export function renderVenture({ ventureName, outDir }) {
       required,
       denylist,
       templateClauses: clauseDeclarationsIn(source),
+      bodies: rendered.bodies,
+      ownHost: facts.site_url,
     });
     findings.push(...pageFindings);
 

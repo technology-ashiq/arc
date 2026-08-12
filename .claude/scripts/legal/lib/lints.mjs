@@ -14,7 +14,7 @@
  * regardless; the TRIAL flag decides only whether the process exit code moves. Asserting on
  * the exit code alone would be a test that passes whatever the lint does.
  */
-import { conditionHolds } from "./schema.mjs";
+import { conditionHolds, conditionVerdict } from "./schema.mjs";
 
 export const GROUPS = ["value", "trace", "completeness"];
 // Nothing has been promoted yet. Promotion is /arc-retro's act against docs/trial-ledger.md,
@@ -36,9 +36,19 @@ export function markersIn(text) {
   return ids;
 }
 
-export function valueLint(page, text, denylist) {
+/**
+ * Collapse every run of separator characters to one space. The denylist matched raw lowercased
+ * bytes, so "ISO 27001" fired and "ISO-27001" did not -- and the whole exploit was a FREE-TEXT
+ * value the charset already permits, needing no code or template access at all. Adding more
+ * tokens is not the fix: a token list can never enumerate separator variants.
+ */
+function flatten(s) {
+  return s.toLowerCase().replace(/[-/_.\s]+/g, " ");
+}
+
+export function valueLint(page, text, denylist, ownHost) {
   const out = [];
-  const lower = text.toLowerCase();
+  const lower = flatten(text);
 
   // Phrases that legitimately CONTAIN a denylisted token because they are its honest
   // negation. Matched first; an occurrence inside one of them does not fire.
@@ -46,16 +56,21 @@ export function valueLint(page, text, denylist) {
   for (const phrase of (denylist.allowed_in_context || {}).phrases || []) {
     let from = 0;
     for (;;) {
-      const at = lower.indexOf(phrase.toLowerCase(), from);
+      const flat = flatten(phrase);
+      const at = lower.indexOf(flat, from);
       if (at < 0) break;
-      exempt.push([at, at + phrase.length]);
+      // The RANGE must be measured in the flattened string too. Measuring the span with the
+      // raw phrase length shifted every exemption window, so "this is not legal advice" stopped
+      // exempting the token it exists to exempt -- a fix introducing a false positive in the
+      // check it was fixing.
+      exempt.push([at, at + flat.length]);
       from = at + 1;
     }
   }
   const inExempt = (i) => exempt.some(([a, b]) => i >= a && i < b);
 
   for (const token of denylist.tokens || []) {
-    const t = token.toLowerCase();
+    const t = flatten(token);
     let from = 0;
     for (;;) {
       const at = lower.indexOf(t, from);
@@ -74,8 +89,21 @@ export function valueLint(page, text, denylist) {
     out.push(finding("value", page, "-", "FAIL", "an unresolved {{ }} interpolation survived into the output"));
   if (/<script|<iframe|javascript:/i.test(text))
     out.push(finding("value", page, "-", "FAIL", "the rendered page contains active markup"));
-  // A raw URL in the body that is not one of the evidence links: a link smuggled through a
-  // value would have failed the input charset, so this catches the template author instead.
+
+  // The check this comment used to only DESCRIBE. A vocab label, a window value or template
+  // prose never passes the FREE-TEXT charset, so a markdown link can be introduced through any
+  // of them -- and a gate that states its contract and compares against nothing is the
+  // arc-memory 2026-08-12 defect recurring in a different file.
+  const links = text.match(/\]\((https?:)?\/\/[^)]*\)/g) || [];
+  for (const l of links)
+    out.push(finding("value", page, "-", "FAIL", `the rendered page contains an EXTERNAL link ${l.slice(0, 60)}. Policy pages link only to the venture's own routes; an outbound link is a claim about somebody else's page.`));
+  // The venture's OWN site is not an outbound claim -- the pages name it on purpose. Anything
+  // else is a link to somebody else's page, which a policy document should not carry.
+  const bare = (text.match(/(?<![(\w])https?:\/\/[^\s)]+/g) || [])
+    .filter((u) => !ownHost || !u.replace(/[.,;:]+$/, "").toLowerCase().startsWith(ownHost.toLowerCase()));
+  for (const b of bare)
+    out.push(finding("value", page, "-", "FAIL", `the rendered page contains a bare URL ${b.slice(0, 60)} outside a link. If it is evidence, it belongs in the run record, not in the prose.`));
+
   return out;
 }
 
@@ -150,32 +178,59 @@ export function traceLint(page, text, clauseMap, facts, templateClauses) {
   return out;
 }
 
-export function completenessLint(page, text, required, facts) {
+export function completenessLint(page, text, required, facts, bodies) {
   const out = [];
   const emitted = new Set(markersIn(text));
+
+  // A page that emitted NOTHING is its own, louder finding, and it is checked BEFORE the
+  // missing-list early return. It used to sit after it, which made it unreachable for exactly
+  // the page it was written for -- an authored page with no required-clause entry rendered to
+  // a heading and one line of prose and reported a single WARN.
+  if (emitted.size === 0)
+    out.push(finding("completeness", page, "-", "FAIL", "the page emitted ZERO clauses"));
+
+  // PRESENCE IS MEASURED IN BYTES, NOT IN MARKERS. A clause emptied to
+  // `{{#clause id=X}}{{/clause}}` still emits its marker, so the whole liability limitation
+  // could disappear from a page while completeness reported it present. Found by an adversarial
+  // pass, ranked critical, and it is the purest form of the failure this lint exists to catch:
+  // provenance perfect, page empty.
+  const MIN_BODY = 40;
+  if (bodies) {
+    for (const [id, len] of Object.entries(bodies)) {
+      if (len < MIN_BODY)
+        out.push(finding("completeness", page, id, "FAIL", `this clause rendered ${len} byte(s) of body. A marker is not a clause -- presence is measured in bytes, or an emptied block passes as present.`));
+    }
+  }
+
   const rows = required[page];
   if (!rows) {
-    out.push(finding("completeness", page, "-", "WARN", "no required-clause list exists for this page"));
+    out.push(finding("completeness", page, "-", "FAIL", "this page has a template but no required-clause list, so nothing checks what it must contain. An authored page with no list is a data gap, not a warning."));
     return out;
   }
   for (const row of rows) {
-    if (row.when && !conditionHolds(facts, row.when)) continue;
+    // conditionHolds fails CLOSED in the renderer (clause not emitted) and used to fail OPEN
+    // here (check skipped), so a one-character typo in a `when` field name silently disabled a
+    // mandatory-clause check. "Condition is false" and "condition is unevaluable" are now
+    // different answers.
+    if (row.when) {
+      const verdict = conditionVerdict(facts, row.when);
+      if (verdict === null) {
+        out.push(finding("completeness", page, row.id, "FAIL", `the required-clause condition "${row.when}" names a field that does not exist, or has no "=". An unevaluable condition disables the check it guards.`));
+        continue;
+      }
+      if (verdict === false) continue;
+    }
     if (!emitted.has(row.id))
       out.push(finding("completeness", page, row.id, "FAIL", `mandatory clause missing${row.when ? ` (required when ${row.when})` : ""}. Provenance alone cannot pass an empty page.`));
   }
-  // A page that emitted nothing at all is its own, louder finding: without this, a template
-  // that rendered to whitespace produces one finding per required clause and reads like a
-  // list of small problems rather than one total one.
-  if (emitted.size === 0)
-    out.push(finding("completeness", page, "-", "FAIL", "the page emitted ZERO clauses"));
   return out;
 }
 
-export function runAllLints({ page, text, facts, clauseMap, required, denylist, templateClauses }) {
+export function runAllLints({ page, text, facts, clauseMap, required, denylist, templateClauses, bodies, ownHost }) {
   return [
-    ...valueLint(page, text, denylist),
+    ...valueLint(page, text, denylist, ownHost),
     ...traceLint(page, text, clauseMap, facts, templateClauses),
-    ...completenessLint(page, text, required, facts),
+    ...completenessLint(page, text, required, facts, bodies),
   ];
 }
 
