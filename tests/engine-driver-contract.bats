@@ -156,7 +156,13 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   mkdir -p "$d/processes" "$d/engine" "$d/docs/adr" "$d/tests/fixtures/engine/evals/commit-msg-draft" "$d/.claude/commands"
   cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$d/processes/"
   cp "$ARC_ROOT/docs/adr/0069-balanced-model-policy.md" "$d/docs/adr/"
-  cp "$ARC_ROOT/tests/fixtures/engine/evals/commit-msg-draft/basic.json" "$d/tests/fixtures/engine/evals/commit-msg-draft/"
+  # Copy the WHOLE eval directory, never one named fixture. process-lint checks that every path
+  # in `evals:` exists, so a sandbox that mirrors the process file but only one of its fixtures
+  # fails the clean-first assertion below for the wrong reason. That is not hypothetical: the
+  # bench lane armed this class to five fixtures on 2026-08-12 and this test went red on all
+  # three OS legs, because the sandbox still copied only basic.json. Copying the directory means
+  # adding a fixture never breaks it again.
+  cp -r "$ARC_ROOT/tests/fixtures/engine/evals/commit-msg-draft/." "$d/tests/fixtures/engine/evals/commit-msg-draft/"
   cp "$ARC_ROOT/.claude/commands/arc-commit.md" "$d/.claude/commands/"
   # clean first, so the failure below is attributable to the tier and nothing else
   cp "$ARC_ROOT/engine/router.yaml" "$d/engine/"
