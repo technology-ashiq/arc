@@ -33,7 +33,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -403,19 +403,48 @@ function verifyLanded(id) {
     console.error("arc-run: WARN the emitter returned no event id — the receipt was NOT sealed (check events/_quarantine/)");
     return false;
   }
-  const day = new Date().toISOString().slice(0, 10);
   // The emitter resolves ARC_SPINE_ROOT first (spine-io.mjs); hardcoding the repo path made
   // every isolated run print a false "NOT in events/" alarm while the receipt sat sealed and
   // correct elsewhere. A verifier that cries wolf on every green run is a verifier people mute.
   const spineRoot = process.env.ARC_SPINE_ROOT || join(root, ".claude/state/hq");
-  const events = join(spineRoot, "events", `${day}.jsonl`);
-  const quarantine = join(spineRoot, "events/_quarantine");
-  const inEvents = existsSync(events) && readFileSync(events, "utf8").includes(id);
-  if (inEvents) return true;
-  let q = "";
-  try { q = existsSync(quarantine) ? execFileSync("bash", ["-c", `grep -rl ${id} ${JSON.stringify(quarantine)} 2>/dev/null | head -1`], { encoding: "utf8" }).trim() : ""; }
-  catch { /* grep found nothing */ }
-  console.error(`arc-run: WARN receipt ${id} is NOT in events/${day}.jsonl${q ? ` — it is QUARANTINED at ${q}` : " and not in _quarantine/ either"}`);
+  const eventsDir = join(spineRoot, "events");
+  const quarantine = join(eventsDir, "_quarantine");
+
+  // NO DAY IS DERIVED HERE, AND THAT IS THE FIX RATHER THAN A SIMPLIFICATION.
+  //
+  // This asked `new Date().toISOString()` for the day -- UTC -- while the spine names its file
+  // from an IST timestamp (`canonical.mjs` IST_OFFSET_MIN -> `spine-io.mjs` day = event.ts.slice(0,10)).
+  // IST is never behind UTC, so from 18:30 UTC the two disagree by one day and this looked in a
+  // file that does not exist yet. It cried wolf for 22.9% of every day.
+  //
+  // That was survivable while nobody read it. It stopped being survivable the moment the WARN
+  // below reached a CONSUMER: `arc-bench.mjs:701` takes the LAST line of arc-run's stderr as the
+  // failure reason (`.pop()`), so this false alarm displaced the real one and turned 20 bench-core
+  // assertions red on main -- green at 17:14 UTC, red at 20:25 UTC, same commit.
+  //
+  // Re-deriving the day in a SECOND place is the defect; porting the IST arithmetic here would
+  // keep two implementations that can drift, which is this repo's recorded "validate one read,
+  // compare another" shape. So the question "did it land?" is answered by looking for the id in
+  // the event log, whichever day file holds it -- which is what the question actually means, and
+  // is immune to midnight, timezone and clock skew alike.
+  const landedIn = (dir) => {
+    let names = [];
+    try { names = readdirSync(dir).filter((n) => n.endsWith(".jsonl")); } catch { return ""; }
+    for (const n of names) {
+      try { if (readFileSync(join(dir, n), "utf8").includes(id)) return n; } catch { /* unreadable file is not a match */ }
+    }
+    return "";
+  };
+
+  if (landedIn(eventsDir)) return true;
+
+  // The quarantine scan was a `bash -c` STRING interpolating a path. `JSON.stringify` is not shell
+  // quoting: it leaves `$` and backticks alone and bash expands both inside double quotes, so a
+  // path component was executed rather than searched (a real `C:\$Recycle.Bin` shape). It is now
+  // the same plain directory read as above -- no shell, nothing to quote, and one code path
+  // instead of two that answer the same question differently.
+  const q = landedIn(quarantine);
+  console.error(`arc-run: WARN receipt ${id} is NOT in events/${q ? ` — it is QUARANTINED at ${join("_quarantine", q)}` : " and not in _quarantine/ either"}`);
   return false;
 }
 
