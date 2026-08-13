@@ -23,8 +23,12 @@ setup_file() {
   # Redirected to a file and the status captured separately: a probe piped anywhere reports the
   # exit code of the LAST stage, and a masked red suite is worse than no suite
   # (.claude/rules/testing.md).
+  # set +e: bats runs setup_file under errexit, so a non-zero probe would abort it before the
+  # status line is written and the file would fail with a shell trace instead of the assertion.
+  set +e
   node "$ARC_ROOT/tests/bench-core-probe.mjs" > "$BATS_FILE_TMPDIR/core.out" 2>&1
   echo "$?" > "$BATS_FILE_TMPDIR/core.status"
+  set -e
 }
 
 CORE() { cat "$BATS_FILE_TMPDIR/core.out"; }

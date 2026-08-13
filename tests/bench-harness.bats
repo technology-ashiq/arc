@@ -32,8 +32,14 @@ setup_file() {
   export ARC_SPINE_ROOT="$BATS_FILE_TMPDIR/file-spine"
   # Status captured to its own file: a probe piped anywhere reports the exit code of the LAST
   # stage, and a masked red suite is worse than no suite (.claude/rules/testing.md).
+  # set +e around it, deliberately. bats runs setup_file under errexit, so a probe that exits
+  # non-zero ABORTS setup_file before the status line is ever written -- the whole file then fails
+  # with a shell trace instead of the assertion that was supposed to report it. The status is
+  # captured and asserted; nothing is swallowed.
+  set +e
   node "$ARC_ROOT/tests/bench-steel-probe.mjs" > "$BATS_STEEL_OUT" 2>&1
   echo "$?" > "$BATS_FILE_TMPDIR/steel.status"
+  set -e
 }
 
 STEEL() { cat "$BATS_FILE_TMPDIR/steel.out"; }
@@ -91,7 +97,10 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
   [[ "$(STEEL)" == *"ok an unknown driver is exit 2 and names the installed set"* ]]
   # A budget dimension nothing reads is not a bound: `rupees=1` parses and enforces nothing.
   [[ "$(STEEL)" == *'ok parseArgs refuses "--driver mock --budget rupees=1"'* ]]
+  # `--propose` alone is refused for a SHARPER reason since Phase 02: there is no proposal
+  # without an incumbent, because every gate past the first is a comparison against it.
   [[ "$(STEEL)" == *'ok parseArgs refuses "--driver mock --budget inr=1 --propose"'* ]]
+  [[ "$(STEEL)" == *"ok --champion alone is now the drift guard, not a refusal"* ]]
 }
 
 @test "the fixture-repo harness probe passes every check" {

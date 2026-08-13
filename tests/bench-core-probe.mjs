@@ -333,7 +333,11 @@ function recordingsWithCost(name, inr) {
   };
   bad(["--replay", "x", "--driver", "mock"], "meaningless with --replay");
   bad(["--replay", "x", "--budget", "inr=1"], "meaningless with --replay");
-  bad(["--replay", "x", "--propose"], "refused rather than ignored");
+  // `--propose` is now checked for its own pairing before the replay branch is reached, so the
+  // sentence names the missing half rather than the mode clash. Either way it is refused.
+  bad(["--replay", "x", "--propose"], "needs --champion");
+  bad(["--replay", "x", "--propose", "--champion", "c", "--out", "o"], "different jobs");
+  bad(["--replay", ""], "EMPTY value");
   const ok = parseArgs(["--replay", "x", "--out", "y"]);
   check("replay needs neither a driver nor a budget", ok.replay === "x" && ok.out === "y");
 }

@@ -75,21 +75,31 @@ function eventsOn(spine) {
   // A harness that leaks a temp repo per attempt fills the runner disk exactly when something is
   // already wrong. Counted around the SAME run rather than in a fourth one -- a probe that spawns
   // a full bench run per property is a probe nobody can afford to keep in a Windows shard.
-  const tempBefore = readdirSync(tmpdir()).filter((n) => n.startsWith("arc-bench-")).length;
-  const r = bench(["--driver", "mock", "--model", "claude-opus-5", "--budget", "inr=10,min=5"], { ARC_SPINE_ROOT: spine });
-  const tempAfter = readdirSync(tmpdir()).filter((n) => n.startsWith("arc-bench-")).length;
-  check("a full run leaks no temp repositories", tempAfter === tempBefore, `${tempBefore} -> ${tempAfter}`);
+  // A PRIVATE TMPDIR, so the answer is ATTRIBUTABLE. This started as a count, which another probe
+  // running beside it moved (4 -> 2, read as a leak); a set difference fixed that and still saw a
+  // concurrent probe's LIVE directory as new. Neither is wrong about the number -- both are asking
+  // a shared directory a question only a private one can answer. Every `arc-bench-*` inside this
+  // one belongs to this run and nothing else, so a survivor is a leak by construction.
+  const privateTmp = join(scratch, "tmp");
+  mkdirSync(privateTmp, { recursive: true });
+  const r = bench(["--driver", "mock", "--model", "claude-opus-5", "--budget", "inr=10,min=5"],
+    { ARC_SPINE_ROOT: spine, TMPDIR: privateTmp, TEMP: privateTmp, TMP: privateTmp });
+  const leaked = readdirSync(privateTmp).filter((n) => n.startsWith("arc-bench-"));
+  check("a full run leaks no temp repositories", leaked.length === 0, leaked.join(","));
 
   check("the steel thread exits 0", r.status === EXIT.OK, `status ${r.status}: ${r.stderr.trim().split("\n")[0] || ""}`);
   check("it names the driver version from the version verb", /driver mock \(mock@[0-9a-f]{12}\)/.test(r.stdout), r.stdout.split("\n")[0]);
-  check("all five armed fixtures were scored", /5\/5 fixtures scored/.test(r.stdout));
-  check("every assertion passed against the pinned recordings", /assertions 30\/30 = 100\.0%/.test(r.stdout));
+  // K=3 SINCE PHASE 01: five fixtures x three attempts x six assertions = 90. The steel thread
+  // was written against a K=1 runner and these numbers moved when the runner did -- updating them
+  // rather than loosening them keeps the assertion exact.
+  check("all five armed fixtures were scored, three times each", (r.stdout.match(/K=\[6\/6 6\/6 6\/6\]/g) || []).length === 5, r.stdout);
+  check("every assertion passed against the pinned recordings", /assertions 90\/90 = 100\.0%/.test(r.stdout), r.stdout);
   check("the eval pack revision is on the scorecard", /commit-msg-draft @ 1\.0\.0/.test(r.stdout));
   check("the fixture that declares no repo_state is NAMED, not silently dropped",
     /basic\.json: not selected -- declares no repo_state/.test(r.stdout));
   check("the other two classes still read NO PROPOSAL",
     /review-diff: NO PROPOSAL/.test(r.stdout) && /kickoff-plan: NO PROPOSAL/.test(r.stdout));
-  check("spend is reported UNMEASURED, never as zero", /inr spent UNMEASURED/.test(r.stdout));
+  check("the caps and what was committed against them are reported", /caps run \d+ \/ process \d+ . K=3/.test(r.stdout), r.stdout.split("\n")[2]);
 
   // The receipt, looked for rather than assumed.
   const all = eventsOn(spine);
@@ -104,20 +114,25 @@ function eventsOn(spine) {
 
   if (mine.length === 1) {
     const p = mine[0].payload;
-    check("the receipt names the driver and its version", p.driver === "mock" && /^mock@[0-9a-f]{12}$/.test(p.driver_version || ""));
-    check("the receipt records the model REQUESTED", p.model_requested === "claude-opus-5");
+    // The provenance moved into SIBLING blocks in Phase 01 (ADR-0903): the driver is bench's
+    // and lives in `subject`, the model identity is MP-F's and lives in `fingerprint`.
+    check("the receipt names the driver and its version", p.subject.driver === "mock" && /^mock@[0-9a-f]{12}$/.test(p.subject.driver_version || ""));
+    check("the receipt records the model REQUESTED", p.fingerprint.model_requested === "claude-opus-5");
     // The load-bearing one: a run must never claim a model it did not apply.
     check("and records that NO model was applied", p.model_applied === null);
     check("the receipt carries the per-class scores",
-      Array.isArray(p.classes) && p.classes.some((c) => c.task_class === "commit-msg-draft" && c.scored === 5));
-    check("the receipt says spend was unmeasured rather than zero", p.budget && p.budget.inr_spent === null);
+      Array.isArray(p.classes) && p.classes.some((c) => c.task_class === "commit-msg-draft" && c.assertions.total === 90));
+    // The CAPS moved to provenance in Phase 01 -- a ceiling never enters an emitted payload
+    // (ADR-0904) -- so what the receipt carries is the scorecard identity, not the budget.
+    check("the receipt carries the scorecard hash and NO caps",
+      typeof p.scorecard_sha === "string" && p.scorecard_sha.length === 64 && !("budget" in p));
     check("the outcome is ok", p.outcome === "ok" && mine[0].outcome === "ok");
   }
 
   // arc-run emits its own receipt per attempt; bench emits exactly one for the run. Both live on
   // the same spine, so the count is a fact worth pinning rather than an assumption.
   const runs = all.filter((e) => e.kind === "run.completed" && e.process !== "bench@0.1.0");
-  check("arc-run emitted one receipt per attempt, beside bench's one", runs.length === 5, `saw ${runs.length}`);
+  check("arc-run emitted one receipt per attempt, beside bench's one", runs.length === 15, `saw ${runs.length}`);
 
   // MEASURED FINDING 2: ARC_DRIVER_MODEL does not survive arc-run. Bench set it to
   // `claude-opus-5` above, and arc-run's OWN receipt still reads `unpinned` -- because with an
@@ -157,9 +172,9 @@ function eventsOn(spine) {
   const r = bench(["--driver", "mock", "--budget", "inr=10,min=5"], { ARC_SPINE_ROOT: spine, ARC_MOCK_DIR: empty });
 
   check("a run with no usable recordings exits 1, not 0", r.status === EXIT.PARTIAL, `status ${r.status}`);
-  check("and every attempt is reported NOT SCORED", (r.stdout.match(/NOT SCORED/g) || []).length === 5,
+  check("and every fixture is reported NOT SCORED", (r.stdout.match(/NOT SCORED/g) || []).length === 5,
     `${(r.stdout.match(/NOT SCORED/g) || []).length} of 5`);
-  check("the scorecard shows zero of five scored", /0\/5 fixtures scored/.test(r.stdout));
+  check("the scorecard shows every fixture unscored", (r.stdout.match(/K=\[-- -- --\]/g) || []).length === 5, r.stdout);
   // The rule the whole substrate exists to protect: an empty denominator is ABSENT, not 100%.
   check("with nothing scored the assertion rate is ABSENT, never 100 percent",
     /assertions 0\/0 = ABSENT/.test(r.stdout), r.stdout);
@@ -176,7 +191,7 @@ function eventsOn(spine) {
     // \U`. The one receipt that mattered -- the one reporting a failure -- was the only one that
     // could not be written. Reaching the emitter through --payload-file is what fixes it, and
     // this asserts the message ARRIVED rather than merely that something was sealed.
-    const first = (mine[0].payload.classes || []).flatMap((c) => c.fixtures || []).find((f) => f && f.ok === false);
+    const first = (mine[0].payload.classes || []).flatMap((c) => c.failures || [])[0];
     check("the driver reason reached the receipt intact, path separators and all",
       Boolean(first) && /no recording for commit-msg-draft\//.test(first.why || ""),
       first ? first.why : "no failed fixture on the receipt");
@@ -228,8 +243,14 @@ function eventsOn(spine) {
   // the dimensions as well as the grammar.
   bad(["--driver", "mock", "--budget", "rupees=1"], "no dimension");
   bad(["--driver", "mock", "--budget", "inrr=10"], "no dimension");
-  bad(["--driver", "mock", "--budget", "inr=1", "--champion", "x"], "refused rather than ignored");
-  bad(["--driver", "mock", "--budget", "inr=1", "--propose"], "refused rather than ignored");
+  // These two were "refused rather than ignored" at Phase 00, when neither flag did anything yet.
+  // Phase 02 gave `--propose` its job and Phase 03 gave `--champion` its own (the drift guard), so
+  // the contract they are held to moved with them: `--champion` alone is now VALID, and
+  // `--propose` alone is refused for a SHARPER reason -- there is no proposal without an
+  // incumbent, because every gate past the first is a comparison.
+  bad(["--driver", "mock", "--budget", "inr=1", "--propose"], "needs --champion");
+  check("--champion alone is now the drift guard, not a refusal",
+    parseArgs(["--driver", "mock", "--budget", "inr=1", "--champion", "x"]).champion === "x");
 
   const ok = parseArgs(["--driver", "mock", "--model", "m", "--budget", "inr=10,min=5", "--dry-run"]);
   check("a well-formed command parses", ok.driver === "mock" && ok.model === "m" && ok.dryRun === true);
