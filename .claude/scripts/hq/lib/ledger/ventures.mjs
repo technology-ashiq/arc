@@ -231,12 +231,19 @@ export function parseVentures(text) {
     const rest = trimmed.slice(colon + 1);
     if (key === "")
       fail("BAD_VENTURES_SYNTAX", lineNo, raw, "the key is empty");
-    // A POSITIVE test, not a negated bracket range. `tests/portability.bats` refuses any NEW
-    // `[^a-z...]` / `[!a-z...]` range in this tree because a shell glob's letter range is decided by
-    // the locale's collation, and this repo has been bitten by it. A JS regex is code-point based
-    // and would have been safe -- but the gate is a blanket grep and cannot know that, and arguing
-    // with a portability gate one exception at a time is how the gate stops meaning anything. The
+    // A POSITIVE test, never a negated character range. `tests/portability.bats` refuses any NEW
+    // negated letter range in this tree, because a shell glob resolves one through the locale's
+    // collation and this repo has been bitten by exactly that. A JS regex is code-point based and
+    // would have been safe -- but the gate is a blanket grep and cannot know that, and arguing with
+    // a portability gate one exception at a time is how the gate stops meaning anything. The
     // positive form is also what this lane already prefers for identifiers.
+    //
+    // THIS COMMENT IS PROSE ON PURPOSE. The first version of it QUOTED the offending form to
+    // explain the fix, and the gate fired on the explanation -- it strips shell comments before
+    // grepping and this is a .mjs file, so a `//` comment is scanned as code. That is the exact
+    // recurrence CLAUDE.md records from Cycle 6, where a fix was reintroduced inside the comment
+    // explaining the previous one. Reported rather than patched around: the gate's own comment says
+    // "only code counts", and for .mjs files it currently counts comments too.
     if (!/^[A-Za-z0-9_-]+$/.test(key))
       fail("BAD_VENTURES_SYNTAX", lineNo, raw, `key ${JSON.stringify(key)} carries a character no key in this document can hold`);
 

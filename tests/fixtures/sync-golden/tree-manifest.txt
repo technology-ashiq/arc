@@ -175,7 +175,7 @@
 .claude/scripts/hq/lib/ledger/parsers/razorpay.mjs	881cd6ee4a31000222176221de59485448a72c7c20660ed660992a77ab38a6b4
 .claude/scripts/hq/lib/ledger/pnl.mjs	73ee415d14a54e084745e827ce5f5cf7fbafe3d29617b5b62a61fbbdf2f23d2d
 .claude/scripts/hq/lib/ledger/reconcile.mjs	ba148b3bddf9516b026dcae34992de5707bb8b24034791b5c9c6b23f8456260b
-.claude/scripts/hq/lib/ledger/ventures.mjs	823ad7e62ce47de73c8bf567aab0b0f8c9c906619f8a86752e9f0c4873535d60
+.claude/scripts/hq/lib/ledger/ventures.mjs	a61b52d3c2cf7efa9133749993bb175aba67924cbd63973be1a5d7b249b400db
 .claude/scripts/hq/lib/policy/authorize.mjs	993b72bcde4c99721535b15ca5ec2ee155610308ceadd517716ab8cb67d66b78
 .claude/scripts/hq/lib/policy/constitution.mjs	c2dd14eb505cce4a9dd131b33ad29cc1388ba37a7428be39e599d7474c642f3f
 .claude/scripts/hq/lib/policy/encode.mjs	436c17ed6bd3269e8ce39383803706da27064531b112f2f43feb10bf5487bcb1
