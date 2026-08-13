@@ -149,9 +149,65 @@ that is red for some unrelated reason would satisfy every red case in the file.
 and after every register, and the line is **derived from `PINNED_SETTINGS.LogonType`** — so if the
 pin ever moves back to S4U the disclosure stops claiming a limit that no longer applies.
 
-## Not yet done, and why
+## 8. The two real jobs, registered — from the canonical clone, after the merge
 
-The two REAL jobs are not registered from this worktree. `spineRoot()` refuses inside a linked
-git worktree by design, so a task registered from here would point at a checkout whose spine does
-not exist — every run would fail, and the receipts that prove the proving week would land nowhere.
-Registration belongs to the canonical clone, after the merge.
+Not from this worktree: `spineRoot()` refuses inside a linked git worktree by design, so a task
+registered from here would point at a checkout whose spine does not exist. Every run would fail
+and the receipts that prove the proving week would land nowhere.
+
+```
+E:\Work_Hub\01_Automemory\arc  (main @ 4b7410b)
+
+$ node .claude/scripts/hq/arc-jobs.mjs register
+arc-jobs: registered brief-materialize  weekdays@06:00  lastTaskResult=267011  cwd E:\Work_Hub\01_Automemory\arc
+arc-jobs: registered day-close-roll     daily@00:15     lastTaskResult=267011  cwd E:\Work_Hub\01_Automemory\arc
+arc-jobs: logon model Interactive -- scheduled jobs fire ONLY while you are logged on; a slot
+          falling while you are signed out is caught up late by StartWhenAvailable, not run on time
+```
+
+**`weekdays@06:00` is the line that matters.** That is the exact registration the adversarial pass
+found could never succeed, and it succeeding here — against the live Task Scheduler, not a fake —
+is what closes that finding.
+
+Read back off the OS, not asserted from what was sent:
+
+```
+$ scheduler-task.ps1 -Action query -TaskName brief-materialize
+state          Ready
+nextRunTime    2026-08-14T06:00:00+05:30      <- Friday, a weekday
+cwd            E:\Work_Hub\01_Automemory\arc
+command        cmd.exe
+arguments      /c "if not exist "...\.claude\state\hq\job-logs" md "...\job-logs"
+                & "C:\Program Files\nodejs\node.exe" "...\arc-jobs.mjs" "run"
+                  "brief-materialize" "--scheduled" >> "...\job-logs\brief-materialize.log" 2>&1"
+settings       DisallowStartIfOnBatteries=false  StopIfGoingOnBatteries=false
+               StartWhenAvailable=true           WakeToRun=false
+               LogonType=Interactive             RunLevel=Limited
+lastTaskResult 267011                            <- 0x41303, has not run yet
+
+$ scheduler-task.ps1 -Action query -TaskName day-close-roll
+nextRunTime    2026-08-14T00:15:00+05:30
+... identical settings, identical shape
+
+$ scheduler-task.ps1 -Action list
+{"tasks":["brief-materialize","day-close-roll"]}
+```
+
+Three things this transcript proves that the earlier smoke could not, because the smoke registered
+a hand-typed `daily@23:33` task running `cmd.exe`:
+
+1. **The trigger a real job turns into is accepted by the OS.** Both kinds, from `registrationFor`.
+2. **The action carries its own log directory creation and its redirect**, spelled exactly as
+   `taskActionLine` builds it — the readback would have refused anything else and rolled the task
+   back off the machine.
+3. **The working directory is the canonical clone**, so the spine these runs write to is the one
+   every reader reads.
+
+`E:` also has a space nowhere in its path, which is worth stating rather than relying on: the
+space-handling fix is proven by the fixture on the Windows CI leg, not by this registration.
+
+## Not yet observed, and it is the whole of Phase 03
+
+No job has fired yet — `lastTaskResult` is `has not run yet` for both, by design, because the
+first slot is 2026-08-14T00:15. Everything above proves the heartbeat is **installed**. Whether it
+**beats** is a seven-day question, and it starts now.
