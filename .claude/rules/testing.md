@@ -54,15 +54,24 @@ gh run list --branch "$(git branch --show-current)" --limit 1 --json databaseId,
 gh workflow run arc-ci --ref "$(git branch --show-current)"
 ```
 
-**If it happens twice on the same branch, stop dispatching and fix the cause.** On a DRAFT PR it is
-not intermittent — it is every push, forever, and dispatching each time hides that behind a minute
-of waiting per cycle. The ledger lane paid that toll four times before checking. The branch has to
-leave draft before it can merge anyway:
+**If it happens twice on the same branch, stop dispatching and find the cause.** It is not
+intermittent — it is every push until the cause is fixed, and dispatching each time hides that
+behind a minute of waiting per cycle. The ledger lane paid that toll five times before checking.
 
 ```bash
-gh pr view --json isDraft --jq .isDraft   # true -> every push here creates no run
-gh pr ready <n>
+gh pr view --json isDraft,mergeable --jq '.'
 ```
+
+**`mergeable: CONFLICTING` is the usual answer, and it is the one worth knowing.** The
+`pull_request` trigger runs against `refs/pull/N/merge`, and git cannot build that ref while the
+branch conflicts with base — so GitHub creates no run at all and reports nothing. The signal looks
+identical to a slow queue. A conflict means another lane has landed on a file you also touched, so
+the fix is the merge you already owe (`.claude/rules/lanes.md`, shared organs), not a dispatch.
+
+`isDraft: true` blocks a run only where the workflow filters on `pull_request` types; this repo's
+`on: pull_request` has no `types:` filter, so a draft still fires. Check both, and believe the one
+that is actually true rather than the first plausible story — this note originally named the draft
+as the cause and was wrong.
 
 "Pushed" and "a run exists" are two separate facts, exactly as "merged" and "verified" are.
 

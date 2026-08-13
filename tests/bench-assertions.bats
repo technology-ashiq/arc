@@ -59,7 +59,18 @@ PROBE() { echo "$ARC_ROOT/tests/bench-assertions-probe.mjs"; }
   # Assert it RAN and reached its verdict, not merely that it printed no error: an assertion
   # shaped "output does not contain X" is satisfied by a crash (.claude/rules/testing.md).
   [[ "$output" == *"all checks passed"* ]]
-  [[ "$output" == *"3 file(s)"* ]]
+  # The count is DERIVED from the tree, never typed. It was `3` when this was written, and the
+  # scheduler lane had already added two job stubs on an unmerged branch -- ADR-0802 gives a
+  # scheduled job a policy subject by putting a stub in processes/, so that directory stopped
+  # being three files the moment another lane's branch existed. A typed count is a cross-lane
+  # tripwire that fires on whoever merges second, for a change neither lane got wrong.
+  #
+  # What this test is actually for survives intact: process-lint RUNS and validates EVERY process
+  # file on the tree, whatever their number. kickoff-lint.bats derives its equivalent count the
+  # same way and cites ADR-0107 for it.
+  local n; n="$(ls "$ARC_ROOT/processes"/*.process.yaml | wc -l | tr -d ' ')"
+  [ "$n" -ge 3 ] || { echo "expected at least the 3 pilots, found $n"; false; }
+  [[ "$output" == *"$n file(s)"* ]] || { echo "process-lint saw a different number than the tree holds:"; echo "$output"; false; }
 }
 
 # ---------------------------------------------------------------------------

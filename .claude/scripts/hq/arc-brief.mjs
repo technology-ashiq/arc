@@ -20,6 +20,8 @@ import { spineRoot } from "./lib/spine-io.mjs";
 import { query } from "./spine.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
 import { dailySpend, renderSpendLine } from "./lib/ledger/costs.mjs";
+import { derivePanel, needsYouLines, loadJobs, loadPanelInputs } from "./lib/jobs/panel.mjs";
+import { policyRoot } from "./lib/policy/run-gate.mjs";
 
 const VALUE_FLAGS = new Set(["date", "venture", "engine"]);
 const BOOL_FLAGS = new Set(["full"]);
@@ -157,12 +159,26 @@ function parseArgs(argv) {
   return flags;
 }
 
-// `killCrossings` are NOT events and never will be (ADR-1000): a crossing is a fact about data the
-// spine already holds, computed at render. Recording one would make the meter part of the history
-// it measures. They arrive here as a pre-computed array so this file does no deriving of its own,
-// and they land in needs-you because REQ-03 says a crossing needs a human -- a warning does not,
-// and a warning in this group would train the reader to skim the group that must never be skimmed.
-export function render(day, events, torn, { full = false, killCrossings = [], killNotice = null, spendLine = null } = {}) {
+/**
+ * THREE KINDS OF DERIVED needs-you LINE now arrive here, from two lanes, and they share one
+ * property worth stating once: none of them corresponds to an event, and none of them ever will.
+ *
+ * `jobLines` (scheduler SCH-F) — silence emits nothing. A job that died writes no receipt, so the
+ * only way it can appear in a brief is for the reader to derive it from the schedule against the
+ * spine. Only OVERDUE jobs produce a line, so a healthy schedule adds nothing and a lane adding a
+ * job to hq.jobs.yaml cannot disturb anybody else's pinned output.
+ *
+ * `killCrossings` and `killNotice` (ledger REQ-03, ADR-1000) — a crossing is a fact about data the
+ * spine already holds, computed at render; recording it would make the meter part of the history it
+ * measures. Crossings land in needs-you because a crossing needs a human; a WARNING deliberately
+ * does not, because a needs-you that fires before anything has happened trains the reader to skim
+ * the one group that must never be skimmed. `killNotice` says the panel could not be evaluated at
+ * all, which is the state a moved goalpost produces.
+ *
+ * All three arrive PRE-COMPUTED so this file does no deriving of its own.
+ */
+export function render(day, events, torn,
+  { full = false, jobLines = [], killCrossings = [], killNotice = null, spendLine = null } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -228,6 +244,14 @@ export function render(day, events, torn, { full = false, killCrossings = [], ki
     const out = [`brief ${day}`];
     for (const [g] of GROUPS) {
       const gl = groupLines(g);
+      // Derived job lines ride WITH needs-you rather than in a group of their own: a job that
+      // has gone silent is the same class of fact as an approval waiting on a human, and giving
+      // it a separate heading is how it becomes a section people learn to scroll past.
+      if (g === "needs-you" && jobLines.length) {
+        if (gl.length) out.push("", ...gl, ...jobLines.map((l) => `  ${l}`));
+        else out.push("", `needs-you (${jobLines.length})`, ...jobLines.map((l) => `  ${l}`));
+        continue;
+      }
       if (gl.length) out.push("", ...gl);
       // THE DAILY SPEND LINE (REQ-06), under money and only when there is spend. Deliberately NOT
       // folded into groupLines' `extra`: that feeds the group's head COUNT, and this line summarises
@@ -295,7 +319,24 @@ async function main(argv) {
   // record rather than quietly reporting no spend on a day full of it -- which is the kill-panel
   // scar this lane already has, in the same shape.
   const spendLine = renderSpendLine(dailySpend(events.map((r) => r.event), { day }));
-  process.stdout.write(render(day, events, torn, { full: flags.full === true, killCrossings, killNotice, spendLine }));
+
+  // The jobs panel is DERIVED, never queried: silence emits nothing, so a job that has gone
+  // quiet appears here only because the schedule was read against the spine. Failure to derive
+  // it must not take the brief down with it -- a brief that refuses to render because a
+  // schedule file is malformed is strictly worse than a brief with no jobs in it, and
+  // `jobs-lint` is the gate that makes a malformed schedule loud in the place it belongs.
+  let jobLines = [];
+  try {
+    const jobs = loadJobs(policyRoot());
+    if (jobs.length) {
+      const { events: runs, observedFrom } = await loadPanelInputs(root, day);
+      const rows = derivePanel({ day, jobs, events: runs, observedFrom });
+      jobLines = needsYouLines(rows);
+    }
+  } catch { jobLines = []; }
+
+  process.stdout.write(render(day, events, torn,
+    { full: flags.full === true, jobLines, killCrossings, killNotice, spendLine }));
   return 0;
 }
 
