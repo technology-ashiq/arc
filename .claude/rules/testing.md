@@ -91,6 +91,30 @@ git diff -U0 tests/fixtures/sync-golden/tree-manifest.txt | grep "^+[^+]" | cut 
 Do it **last**, after every code edit. A manifest regenerated mid-change is stale by the next
 commit, and its staleness is invisible until CI.
 
+## When you change a shared binary, find its callers MECHANICALLY
+
+"Grep the pattern, not the file" is the rule, and it failed three times in one cycle (ledger,
+2026-08-13) because the pattern is easy to state and hard to remember at the moment of the fix.
+The misses were all the same shape: a change to `arc-pnl` or `arc-brief` behaviour, and a suite in
+a DIFFERENT phase that invokes the same binary and was never looked at. One of them cost 24 red
+tests; another cost three.
+
+So do not rely on remembering. Before pushing a change to any binary under `.claude/scripts/hq/`,
+list what calls it and open each one:
+
+```bash
+grep -ln 'arc-pnl\|arc-brief' tests/*.bats     # every suite that drives that binary
+git grep -l 'deriveKillPanel\|derivePnl'       # every module that imports the thing you changed
+```
+
+The list is short and reading it takes a minute. What it catches is the case the rule was written
+for and does not prevent: **your fix is correct, and a test one phase away pinned the behaviour you
+just corrected.** That test is not wrong to fail — it is the only thing that noticed.
+
+The same applies across LANES, and there it is sharper still: a test asserting the ABSENCE of a
+shared group (`needs-you` in the brief) passes only while your lane is the sole writer. Name the
+LINE that must be absent, never the group.
+
 ## The vacuous pass — a test that passes while executing nothing
 
 A green test proves the assertion held. It does not prove the code ran. Cycle 6 shipped this
