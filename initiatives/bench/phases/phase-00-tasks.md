@@ -145,69 +145,69 @@ commit: f0a0cbd
 title: **Steel thread demonstrated end to end:** `arc-bench.mjs --driver mock --model MODEL --budget inr=10` discovers fixtures → materializes ONE fixture's repo state → invokes `arc-run` per **M1** → scores → emits one `run.completed` per **M6**. **The receipt is verified present in `events/` and absent from `events/_quarantine/`** — exit 0 from a fire-and-forget writer is not evidence anything was written.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: node tests/bench-steel-probe.mjs -- 45 checks, exit 0 (read from a file, never through a pipe); live run: 5/5 fixtures scored, assertions 30/30, receipt 01KZWV9Y95VBGHJ99C26DR4FT7 verified in events/ and absent from _quarantine/; bats tests/bench-harness.bats 14 tests
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The probe runs ONCE in setup_file and every test reads the cached output: it spawns two full bench runs and each run shells out to arc-run five times, so running it per-test would put roughly ten minutes of a Windows shard into one file, and it also means every test asserts on the SAME run rather than on its own. NO new .bats file, because the shard plan is computed from the file list -- the slice 06 lesson. The budget remainder is threaded for the ONE dimension bench can observe: min is wall-clock, which bench measures itself and genuinely decrements, while inr is passed down unchanged as a ceiling and reported UNMEASURED, because no driver reports spend on arc-run stdout and inventing a figure to subtract would be an estimate wearing a measurement clothes (ADR-0904). The receipt verifier scans the events DIRECTORY rather than a day file derived from the clock -- arc-run own verifier keys on UTC while the spine keys on IST, so on either side of midnight it looks in a file the receipt was never written to.
+result: Four defects, every one of them found by RUNNING it rather than reading it. (1) ARC_ROOT does not survive arc-run: pointed at a directory holding no recordings, the run still replayed the right bytes, which it could only do by resolving from arc-run own root -- so the fixture-repo harness cannot reach a real driver, and commit-msg-draft holds add:* and commit:*, which means a real driver today would stage and commit INSIDE THE ARC REPO. (2) ARC_DRIVER_MODEL does not survive either: arc-run receipt read model: unpinned while bench had set claude-opus-5, so bench cannot vary the model, which is the whole premise of a model market. (3) A payload carrying a Windows path cannot go through bash argv: the emitter returned REJECT BAD_JSON -- invalid escape backslash-U, so the ONE receipt that mattered, the one reporting a failure, was the only one that could not be written; bench reaches the emitter through --payload-file, and arc-run.mjs:257 still passes --payload inline with the identical latent bug. (4) --budget rupees=1 parsed and bounded nothing, because the grammar is [a-z]+=N -- the dimensions are now checked separately from the grammar. arc-run.mjs is a one-line-only path for this lane, so 1 to 3 are REPORTED, not fixed, and M1 is amended in the phase spec with the measured evidence rather than left standing wrong.
+commit: c6e14bf
 
 #### slice: 10
 
 title: **The kickoff ADRs are VERIFIED here, not authored here.** ADR-0900..0914 were written at kickoff and are `accepted`. Phase 0 confirms all 15 files exist, that `node .claude/scripts/plan/kickoff-lint.mjs --lane bench` still exits 0, and that **no file outside `0900–0999` was written by this lane**. Phase 0 authors no ADR unless a finding contradicts one.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: ls docs/adr | grep ^09 -- 15 files, 0900 through 0914, no gaps; git log origin/main --name-only 7b00a63^..origin/main -- docs/adr/* returned nothing outside the band; node .claude/scripts/plan/kickoff-lint.mjs --lane bench exits 0
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: VERIFIED here, not authored here. Phase 0 writes no ADR unless a finding contradicts one -- and the slice 09 findings contradict a phase-spec NON-NEGOTIABLE (M1), not an ADR, so the correct route was an amendment to M1 carrying the measured evidence rather than a sixteenth ADR. An ADR would have implied a decision was reversed; nothing was reversed, the tree simply is not what M1 said it was.
+result: All 15 present and accounted for. Nothing was written outside 0900-0999 by this lane, which is the check that matters -- the century bands exist because highest-plus-one collided for real on 2026-08-02. kickoff-lint still exits 0 with one WARN it has carried since kickoff (phase appetites sum to 91% of the total, which is the named-reserve position, not drift).
+commit: c6e14bf
 
 #### slice: 11
 
 title: **Cross-lane check performed and recorded** before the first commit touching **any of the five authorized paths**: `.claude/scripts/engine/drivers/**` · `tests/fixtures/engine/evals/**` · `.claude/scripts/engine/arc-run.mjs` (one-line `DRIVERS` registration) · `.claude/scripts/engine/arc-bench.mjs` (new file) · `processes/commit-msg-draft.process.yaml` (`evals:` list only, per PLAN § No-gos). `git log origin/main --oneline -5 -- PATH` for each, **output recorded to `initiatives/bench/evidence/phase-00/cross-lane-check.md`**. Engine is IDLE but leads, memory and scheduler are LIVE in sibling worktrees.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: initiatives/bench/evidence/phase-00/cross-lane-check.md -- git log origin/main --oneline -5 for all five authorized paths plus four shared organs, and git log origin/main..BRANCH across all eight live sibling branches
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Recorded BESIDE the 2026-08-12 run, never over it. The first run is what was true before slice 01 touched anything, and overwriting it would delete the only record of the state that authorized those commits -- evidence accumulates. The check was also widened past the five authorized paths to the four SHARED ORGANS this phase actually writes (shard-timings.json, the sync-golden manifest, the product manifest, the bats file), because those are the ones two lanes collide on and the five authorized paths are bench own.
+result: The five authorized paths are CLEAN -- every touch since engine Cycle 6 is bench own, and engine is IDLE. The shared organs are NOT: feat/arc-scheduler-cycle-12 carries 14 shared-organ commits and 11 bats touches, feat/arc-growth-cycle-14 carries 2 and 6. Nothing to handle today, because none of them has landed on origin/main and merging against a tree that does not exist is not a merge. What it obliges is recorded instead: shard-timings is a MEASURED table, so if either lands first the merge invalidates BOTH copies and weigh-tests must be re-run on the merged tree rather than reconciled by hand; the byte-identity manifest cannot be merged at all, only regenerated; and unmeasured entries must surface as a COUNT, never absorbed into the default weight.
+commit: c6e14bf
 
 #### slice: 12
 
 title: tests added and **green on CI** (never run the suite on this box) — `.github/workflows/ci.yml`, read per JOB via `gh run view --json jobs`, never `gh run watch --exit-status`, which has already exited 0 on a run whose conclusion was `failure`. Confirm the run's head SHA is the local HEAD.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: gh run view 31673195412 --json headSha,jobs -- 19 of 19 jobs conclusion success, headSha c6e14bf30b2a77f2ccc9ba0fe304e3122df1c40c, equal to the local HEAD
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Read per JOB, never the watcher exit code, and the head SHA confirmed equal to local HEAD before the result was believed. gh run watch --exit-status has already returned 0 on a run whose conclusion was failure -- the same shape as an emitter exiting 0 while every receipt it wrote was quarantined. The run was also confirmed to EXIST for the pushed SHA rather than assumed: a push to an open draft PR once became the PR head with no run ever created, and waiting on a run that will never come is indistinguishable from waiting on a slow one.
+result: 19/19 green on the first attempt for this branch -- no red, no re-run, no transient. Slices 06 and 07 each cost a CI cycle to a defect this phase then fixed at the root (the semgrep guard and the eval-directory sandbox), and neither recurred here.
+commit: c6e14bf
 
 #### slice: 13
 
 title: every new test file asserts its own registered test count from `BATS_TEST_NAMES`, every `@test` name is ASCII-only, every file sets a throwaway `ARC_SPINE_ROOT` (**M7**), and the shard timing table is regenerated per **M10**
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: per-file audit of all three bench bats files: 12/12, 11/11 and 14/14 declared-versus-registered, zero non-ASCII @test names, ARC_SPINE_ROOT now set in all three
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The audit is the point, not the fix. bench-assertions.bats had NO ARC_SPINE_ROOT and nothing in it emits TODAY -- but that is a property of the current tests, not of the file, and the isolation door has to be shut before something walks through it. M7 says every bench bats file, and the count of files that satisfied it was two of three.
+result: All three files now set a throwaway ARC_SPINE_ROOT in setup(), all three self-assert their registered count from BATS_TEST_NAMES, and no @test name carries a non-ASCII character -- the failure that silently DROPPED five tests in Cycle 7 and left the file green. bench-harness.bats went 7 to 14 tests, so its weight moves substantially and the shard table is re-measured per M10 rather than left to a stale entry.
+commit: c6e14bf
 
 #### slice: 14
 
 title: tracker updated: the Phases-table row in `initiatives/bench/PROGRESS.md` flips to ✅, a dated line is appended to `## Done-log`, and `## Now` is rewritten. The machine header's `phase:` and `burn:` move in the same edit, because `PORTFOLIO.md` derives from it.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: initiatives/bench/PROGRESS.md -- phases row 00 flipped to done, a dated Done-log entry, ## Now rewritten, and the machine header moved phase 00 -> 01 and burn 0d -> 3d in the same edit
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: The machine header moves in the SAME edit as the table, because PORTFOLIO.md derives every value it shows from this header (ADR-0051) -- a table that says done beside a header that still says phase 00 makes the board lie, and the board is what gets read first. Burn is recorded at the phase appetite of 3.0d rather than at a guess: the phase neither ran under nor over it.
+result: Phase 00 CLOSED at 19/19 green per JOB on c6e14bf. The Done-log entry carries the four engine defects the phase found by running rather than reading, and ## Now names the one that BLOCKS PHASE 03 -- bench cannot vary the model through arc-run, so one real model to a recorded verdict has no mechanism. It is recorded as an engine-lane /arc-change rather than reached across the fence, and Phases 01 and 02 do not need it.
+commit: PENDING

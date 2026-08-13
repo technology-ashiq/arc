@@ -1,0 +1,4 @@
+﻿row_type,transaction_id,settlement_batch_id,settled_at,currency,gross,tax,fees,net,fx_rate,fx_source,fx_rate_date,buyer_email,product_name
+sale,txn_5tG3pQ8wN2vB6k,setl_batch_20260915,2026-09-15T03:00:00+00:00,USD,29.00,0.00,1.45,27.55,83.05,provider-settlement,2026-09-15,ops@example.invalid,"Windows-authored export, CRLF"
+sale,txn_1zX9cV4mB7nJ2q,setl_batch_20260915,2026-09-15T07:41:22+00:00,USD,29.00,5.80,1.45,21.75,83.05,provider-settlement,2026-09-15,vat@example.invalid,Same price with EU VAT
+batch_total,,setl_batch_20260915,,USD,58.00,5.80,2.90,49.30,,,,,

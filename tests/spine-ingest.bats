@@ -14,7 +14,12 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 EVENT="$ARC_ROOT/.claude/scripts/hq/arc-event.sh"
-VALID='{"amount":50000,"currency":"INR","source":"manual"}'
+# ADR-1002 (ledger LED-C) TIGHTENED this contract on 2026-08-13: the revenue payload schema is now
+# CLOSED and `venture` / `provider` / `provider_payment_id` are required. The old shape carried a
+# free `source` field, which a closed schema refuses by construction -- that is the point, since a
+# free field is where a customer email eventually lands on an append-only log. The reject cases
+# below are UNCHANGED and still assert on AMOUNT / CURRENCY, because assertMoney still runs first.
+VALID='{"amount":50000,"currency":"INR","venture":"arc","provider":"manual","provider_payment_id":"manual:pay_0001"}'
 
 setup() {
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE"

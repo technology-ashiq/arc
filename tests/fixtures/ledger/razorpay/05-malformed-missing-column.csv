@@ -1,0 +1,2 @@
+settled_at,record_type,customer_email,payment_id,currency,fee,gross_amount,net_amount,settlement_id,description
+2026-09-14T10:04:11+05:30,payment,priya@example.invalid,pay_QX7fK2mNbT1aZ9,INR,20.00,1180.00,980.00,setl_9nQ2rT7bV1xK,No tax column at all
