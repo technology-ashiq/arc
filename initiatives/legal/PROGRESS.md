@@ -96,9 +96,45 @@ whose correct version already existed in the memory lane and had never been appl
 Every negative control for all three lints was dead — the helper ran under bats `run`, a subshell —
 which is why the three criticals survived to be found by an agent rather than by a test. Fixed.
 
-**Next step:** confirm CI green at `4904f8e` per-JOB, then close Phase 00 against its DoD before
-Phase 02 opens. Carried and unresolved: `products/legal/` is copied by NEITHER sync path, so a
-consumer repo would get the scripts and none of the templates — a Phase 02 governance fix.
+**CI IS GREEN.** Run `31672005249` at `dae95d5` — 19 of 19 jobs `success`, read per-JOB. It took
+three runs: the first was the dead mutation controls, the second was two real defects (a product
+on disk with no `CATALOG` entry, and a test asserting the wrong law).
+
+**Correction to what this file said yesterday.** It reported Phases 00 and 01 as "built, not yet
+closed". That was true of Phase 00 and **wrong about Phase 01**, which is roughly half built. Two
+fresh spec-fidelity passes, reading only each spec and its diff, returned Phase 01 at **2 criteria
+MET, 5 PARTIAL, 7 NOT MET**. The seven pages and the render side are done; the entire
+receipts/approval/publish half is not:
+
+| Phase 01 criterion | State |
+|---|---|
+| four remaining pages authored | MET |
+| text attack panel on the four new pages | **MET this session** — 3 stances, 68 findings, all UNSOUND |
+| scenario fixture set, own commit, before the lint | **MET this session** — 36 rows, `db5f896` |
+| completeness reports MISSING and UNANSWERED | **MET this session** — `547d3f9`, 4 running controls |
+| routes from FORMAT-tier facts, no URL constants | MET |
+| `tree-manifest` regenerated for the new shipped files | **NOT MET — unsatisfiable as written.** `products/legal/` is outside `.claude/`, the only tree either sync path copies, so the manifest has zero rows for it |
+| CI check that `targets.publish` stays empty, with a mutant | NOT MET |
+| `approval.requested` strict payload, unknown keys rejected | NOT MET |
+| owner decision via `arc-inbox` → `decision.recorded` | NOT MET |
+| every emit verified by id in `events/` and `_quarantine/` | NOT MET |
+| publish refuses a hash mismatch · TOCTOU fixture · backdating fixture | NOT MET |
+| re-publish semantic diff | NOT MET |
+| two-surface adversarial pass on the **receipt/approval** path | NOT MET — two surfaces ran, on render/lint/CLI. Same ceremony, different subject, and the subject was the point |
+
+`tests/legal-pages.bats`, `legal-scenarios.bats` and `legal-receipts.bats` were the verification
+plan's three suites. Only `legal-scenarios.bats` now exists.
+
+**A non-negotiable is breached and the owner should see it.** ADR-1007 fires the kill-criteria
+path when a panel calls the DPDP clause unsound. `privacy.mdx` says *"The DPDP Act **gives you**
+the option…"* in the present tense, eight sections after saying those provisions have not
+commenced — so the page denies and asserts the same duty. ADR-1006 is the decision it breaks. The
+fix is one sentence; the reason it survived four reads is that it sits inside the clause everyone
+had already approved, and **no lint in this lane compares two clauses on one page**.
+
+**Next step:** repair the 68 panel findings against the recorded list, then build the
+receipt/approval half. Carried: `products/legal/` reaches no consumer, and `gstin` is FORMAT-tier
+with no checksum, so an unverifiable GSTIN passes every gate here.
 
 **Carried, not resolved:** the operator's GST-registration posture (assumptions ledger row 3).
 Fixtures cover both branches, so nothing before Phase 03 depends on the answer; Phase 03 asks it or
