@@ -151,7 +151,7 @@ jobs:
         run: |
           set -u
           mkdir -p "$HOME/bin"
-          base=https://github.com/opengrep/opengrep/releases/latest/download
+          base=https://github.com/opengrep/opengrep/releases/download/v1.26.0
           if [ "$RUNNER_OS" = "Windows" ]; then
             curl -fsSL -o "$HOME/bin/opengrep.exe" "$base/opengrep_windows_x86.exe" || echo "opengrep install skipped"
           elif [ "$RUNNER_OS" = "macOS" ]; then
