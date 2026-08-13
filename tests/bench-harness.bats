@@ -46,7 +46,10 @@ STEEL() { cat "$BATS_FILE_TMPDIR/steel.out"; }
 STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
 
 @test "the steel thread probe passes every check" {
-  [ "$(STEEL_STATUS)" -eq 0 ]
+  # PRINT THE PROBE ON FAILURE. The tests read a cached file, so without this a red probe on CI
+  # shows only a failed comparison and none of the reason -- the diagnosis then costs a whole
+  # extra cycle, which is exactly what happened on 2026-08-13.
+  [ "$(STEEL_STATUS)" -eq 0 ] || { STEEL; false; }
   [[ "$(STEEL)" == *"all checks held"* ]]
 }
 

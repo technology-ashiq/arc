@@ -32,7 +32,10 @@ PROP() { cat "$BATS_FILE_TMPDIR/prop.out"; }
 PROP_STATUS() { cat "$BATS_FILE_TMPDIR/prop.status"; }
 
 @test "the proposal probe passes every check" {
-  [ "$(PROP_STATUS)" -eq 0 ]
+  # PRINT THE PROBE ON FAILURE. The tests read a cached file, so without this a red probe on CI
+  # shows only a failed comparison and none of the reason -- the diagnosis then costs a whole
+  # extra cycle, which is exactly what happened on 2026-08-13.
+  [ "$(PROP_STATUS)" -eq 0 ] || { PROP; false; }
   [[ "$(PROP)" == *"all checks held"* ]]
 }
 

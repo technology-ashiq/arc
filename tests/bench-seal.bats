@@ -31,7 +31,10 @@ S() { cat "$BATS_FILE_TMPDIR/seal.out"; }
 S_STATUS() { cat "$BATS_FILE_TMPDIR/seal.status"; }
 
 @test "the seal probe passes every check" {
-  [ "$(S_STATUS)" -eq 0 ]
+  # PRINT THE PROBE ON FAILURE. The tests read a cached file, so without this a red probe on CI
+  # shows only a failed comparison and none of the reason -- the diagnosis then costs a whole
+  # extra cycle, which is exactly what happened on 2026-08-13.
+  [ "$(S_STATUS)" -eq 0 ] || { S; false; }
   [[ "$(S)" == *"all checks held"* ]]
 }
 

@@ -28,7 +28,10 @@ D() { cat "$BATS_FILE_TMPDIR/drift.out"; }
 D_STATUS() { cat "$BATS_FILE_TMPDIR/drift.status"; }
 
 @test "the drift probe passes every check" {
-  [ "$(D_STATUS)" -eq 0 ]
+  # PRINT THE PROBE ON FAILURE. The tests read a cached file, so without this a red probe on CI
+  # shows only a failed comparison and none of the reason -- the diagnosis then costs a whole
+  # extra cycle, which is exactly what happened on 2026-08-13.
+  [ "$(D_STATUS)" -eq 0 ] || { D; false; }
   [[ "$(D)" == *"all checks held"* ]]
 }
 

@@ -35,7 +35,10 @@ CORE() { cat "$BATS_FILE_TMPDIR/core.out"; }
 CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
 
 @test "the bench core probe passes every check" {
-  [ "$(CORE_STATUS)" -eq 0 ]
+  # PRINT THE PROBE ON FAILURE. The tests read a cached file, so without this a red probe on CI
+  # shows only a failed comparison and none of the reason -- the diagnosis then costs a whole
+  # extra cycle, which is exactly what happened on 2026-08-13.
+  [ "$(CORE_STATUS)" -eq 0 ] || { CORE; false; }
   # A positive end marker the probe prints only after the last check, so a crash part-way through
   # cannot read as a pass.
   [[ "$(CORE)" == *"all checks held"* ]]

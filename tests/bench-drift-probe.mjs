@@ -27,6 +27,11 @@ import {
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BENCH = join(ROOT, ".claude/scripts/engine/arc-bench.mjs");
 
+// Printed first, always. When this probe goes red on a CI leg that cannot be reproduced
+// locally, the platform, the runtime and the temp root are the three facts the diagnosis starts
+// from -- and a probe that omits them costs a whole extra cycle to ask for them.
+console.log(`# env ${process.platform} node ${process.version} tmp ${tmpdir()}`);
+
 let failed = 0;
 const check = (name, ok, detail = "") => {
   if (!ok) { console.error(`FAIL ${name}${detail ? ` -- ${detail}` : ""}`); failed++; }
