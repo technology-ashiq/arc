@@ -5,36 +5,63 @@
       "TERMS.FEES.GATEWAY",
       "REFUND.WINDOW",
       "REFUND.PROCESSING",
-      "REFUND.DISPUTE.GATEWAY"
+      "REFUND.DISPUTE.GATEWAY",
+      "PRICING.WHAT_YOU_PAY_WITH"
     ],
     "mor": [
       "TERMS.FEES.MOR",
       "REFUND.MOR",
       "REFUND.PROCESSING.MOR",
-      "REFUND.DISPUTE.MOR"
+      "REFUND.DISPUTE.MOR",
+      "PRICING.WHAT_YOU_PAY_WITH.MOR"
     ],
     "none": [
       "TERMS.FEES.OFFLINE",
       "REFUND.OFFLINE",
       "REFUND.PROCESSING.OFFLINE",
-      "REFUND.DISPUTE.OFFLINE"
+      "REFUND.DISPUTE.OFFLINE",
+      "PRICING.WHAT_YOU_PAY_WITH.OFFLINE"
     ]
   },
   "derived.invoice_kind": {
-    "gst": ["REFUND.GST_INVOICE", "PRICING.GSTIN"],
-    "no-gst": ["REFUND.NO_GST", "PRICING.NO_GST"],
-    "provider": ["REFUND.MOR_INVOICE"]
+    "gst": [
+      "REFUND.GST_INVOICE",
+      "PRICING.GSTIN"
+    ],
+    "no-gst": [
+      "REFUND.NO_GST",
+      "PRICING.NO_GST"
+    ],
+    "provider": [
+      "REFUND.MOR_INVOICE"
+    ]
   },
   "derived.autorenew": {
-    "yes": ["CANCEL.AUTORENEW"],
+    "yes": [
+      "CANCEL.AUTORENEW"
+    ],
     "no": []
   },
   "derived.subprocessors": {
-    "yes": ["PRIVACY.SUBPROCESSORS"],
+    "yes": [
+      "PRIVACY.SUBPROCESSORS"
+    ],
     "no": []
   },
   "stores_third_party_client_data": {
-    "true": ["PRIVACY.PROCESSOR", "TERMS.PROCESSOR_ROLE", "ABOUT.PROCESSOR_ROLE"],
+    "true": [
+      "PRIVACY.PROCESSOR",
+      "TERMS.PROCESSOR_ROLE",
+      "ABOUT.PROCESSOR_ROLE"
+    ],
     "false": []
+  },
+  "derived.payment_is_automatic": {
+    "yes": [
+      "DELIVERY.WHEN"
+    ],
+    "no": [
+      "DELIVERY.WHEN.OFFLINE"
+    ]
   }
 }

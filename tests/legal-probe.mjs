@@ -12,6 +12,13 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+// This file lives at <repo>/tests/, so the repo root is two levels up. Imported through
+// pathToFileURL rather than a bare path: on Windows a drive-letter path is not a valid ESM
+// specifier and `await import("C:\\...")` fails with ERR_UNSUPPORTED_ESM_URL_SCHEME -- on
+// exactly one of the three CI legs, which is where this repo's invisible failures live.
+const ARC_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 
 const [, , cmd, ...rest] = process.argv;
 
@@ -243,6 +250,27 @@ switch (cmd) {
           writeFileSync(p, JSON.stringify(rows, null, 2), "utf8");
         }
         break;
+      case "claim-anchor-missing":
+        // Point a cross-page claim at a facts field nothing sets. The claim then has no value to
+        // look for, and the tempting implementation skips it -- which passes every page while
+        // checking none of them.
+        {
+          const p = join(dataDir, "cross-page-claims.json");
+          const doc = JSON.parse(readFileSync(p, "utf8"));
+          doc.claims[0].fact = "commitments.no_such_field";
+          writeFileSync(p, JSON.stringify(doc, null, 2), "utf8");
+        }
+        break;
+      case "cross-page-drift":
+        // Put the pricing page back to the vague promise the reader panels caught: the same
+        // commitment as the terms page, with the NUMBER taken out. Every per-page lint stays
+        // green -- the page is well-formed, every clause traces, nothing mandatory is missing,
+        // and the scenario asking "what are the plans and what do they cost" is still answered.
+        // Only a cross-page check can see it, which is the whole argument for ADR-1013.
+        patch(join(tmplDir, "pricing.tmpl.md"),
+          "**If we raise the price of a plan you are on, we tell you at least {{ facts.commitments.price_notice_days }} days before your next renewal, and you may cancel at the old price until then.** The new price applies from that renewal.",
+          "If we change what a plan costs, we tell you before your next payment, and the change applies from the payment after that.");
+        break;
       case "orphan-scenario":
         // Rename a clause the scenario set names. This is the template edit ADR-1009 says must
         // fail: the page still renders, still traces, still carries a clause in that position --
@@ -313,6 +341,32 @@ switch (cmd) {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, text.join(" ") + "\n", "utf8");
     console.log("wrote:" + file);
+    break;
+  }
+
+  /** groups -> the lint groups the engine declares, space separated, sorted */
+  case "groups": {
+    const { GROUPS } = await import(pathToFileURL(join(ARC_ROOT, ".claude", "scripts", "legal", "lib", "lints.mjs")).href);
+    if (!Array.isArray(GROUPS) || !GROUPS.length) die("lints.mjs declares no GROUPS");
+    console.log([...GROUPS].sort().join(" "));
+    break;
+  }
+
+  /**
+   * groups-reported <run.json> -> exit 0 iff every DECLARED group is one the run reports on.
+   *
+   * A group can otherwise be added to GROUPS, never wired into runAllLints, and report zero
+   * findings forever -- indistinguishable from a group that ran and found nothing. Comparing the
+   * declaration against `trial_groups` in the sidecar is two derived lists, never a literal.
+   */
+  case "groups-reported": {
+    const [file] = rest;
+    const run = JSON.parse(readFileSync(file, "utf8"));
+    const { GROUPS } = await import(pathToFileURL(join(ARC_ROOT, ".claude", "scripts", "legal", "lib", "lints.mjs")).href);
+    const reported = new Set(run.trial_groups || []);
+    const missing = GROUPS.filter((g) => !reported.has(g));
+    if (missing.length) die(`declared but not reported in trial_groups: ${missing.join(", ")}`);
+    console.log(`${GROUPS.length} group(s) declared and reported`);
     break;
   }
 

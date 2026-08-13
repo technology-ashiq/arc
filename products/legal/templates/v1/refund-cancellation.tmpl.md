@@ -70,6 +70,16 @@ If we charge you twice for the same thing, charge you after you cancelled or tur
 You do not have to argue the window with us. Write to {{ facts.support.email }}.
 {{/clause}}
 
+{{#clause id=REFUND.DELIVERY_FAILURE}}
+## Failure of delivery
+
+**A failure of delivery is not a refund request either, and the window above does not apply to it.**
+
+If we cannot give you access to what you paid for — the service is down, your account was never opened, or your own network or jurisdiction blocks it — we refund the part of the period you could not use, however long after the payment you tell us. A failed delivery is never counted as a used period.
+
+This is the commitment the [Shipping and Delivery page]({{ facts.routes.shipping-delivery }}) points at. Both pages are mandatory disclosures, so they are written to agree: that page used to grant an entitlement this one refused, which meant a reader was told yes on one page and no on the page cited as its authority.
+{{/clause}}
+
 {{#clause id=REFUND.HOW_TO_REQUEST}}
 ## How to ask for a refund
 

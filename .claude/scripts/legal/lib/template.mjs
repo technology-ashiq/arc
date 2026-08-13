@@ -191,6 +191,7 @@ export function renderTemplate(source, ctx) {
   // a `gateway` render differ in their CLAUSES and not in their whitespace. Deterministic
   // output must not encode which branches were skipped.
   body = body.split("\r\n").join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+  body = pluralise(body);
   return { body, clauses, bodies, skipped };
 }
 
@@ -200,4 +201,31 @@ export const TRANSFORMS = [
   "nfc-normalise-on-hash",
   "html-escape-interpolated-values",
   "collapse-blank-line-runs",
+  "pluralise-counted-nouns",
 ];
+
+/**
+ * `1 hour(s)` -> `1 hour`; `5 working day(s)` -> `5 working days`.
+ *
+ * A template cannot know whether a facts value will be 1 or 14, so it writes `hour(s)` and the
+ * plural is resolved here, against the number actually rendered.
+ *
+ * WHAT THIS TRANSFORM DESTROYS (the disclosure the retro-log requires of any gate that changes
+ * what it measures): a LITERAL `(s)` that was meant to survive -- `form(s)`, `SMS(s)` -- is
+ * rewritten if a bare number precedes it. No authored page relies on that today, and the pattern
+ * requires a digit, a space and a word immediately before, so prose like "see clause 3 (s)" is
+ * untouched.
+ *
+ * Why it is a render-time transform and not a `plural.` namespace: the namespace would be a
+ * fourth interpolation surface, and the executor contract pins the template language at two
+ * constructs. This changes no template syntax at all.
+ *
+ * All three reader panels flagged the leaked `(s)` independently, and the competitor's lawyer put
+ * it best: a visible un-pluralised placeholder is documentary proof the pages were generated and
+ * published without a human reading them -- which is the rebuttal to the about page's promise
+ * that every claim on it is one the operator checked.
+ */
+function pluralise(text) {
+  return text.replace(/(\b\d+) ([A-Za-z]+(?: [A-Za-z]+)*)\(s\)/g, (_m, n, noun) =>
+    Number(n) === 1 ? `${n} ${noun}` : `${n} ${noun}s`);
+}

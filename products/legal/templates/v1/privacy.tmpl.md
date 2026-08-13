@@ -96,7 +96,7 @@ You can ask us to:
 - erase it, where we do not have to keep it for a legal reason;
 - nominate someone to exercise these rights for you if you die or become unable to.
 
-Ask at {{ facts.support.email }} — except erasure, which goes to {{ facts.deletion_route.mailbox }}, the one route named in *Deleting your data* below. If you write to the wrong address we forward it, and the clock starts the day you wrote, not the day it arrived in the right inbox.
+Ask at {{ facts.support.email }} — except erasure, which goes to {{ facts.deletion_route.mailbox }}, the one route named in *Deleting your data* above. If you write to the wrong address we forward it, and the clock starts the day you wrote, not the day it arrived in the right inbox.
 
 We do not charge for any of this.
 {{/clause}}
@@ -137,7 +137,7 @@ We would rather you did not need either. Write to our grievance officer first, a
 
 This notice is published in English.
 
-The DPDP Act gives you the option of receiving it in any language listed in the Eighth Schedule to the Constitution. If you want it in one of those, write to {{ facts.support.email }} naming the language, and we will provide it.
+When section 5(3) of the Digital Personal Data Protection Act, 2023 commences, it will give you the option of receiving this notice in any language listed in the Eighth Schedule to the Constitution. That section has not commenced yet. **We are offering that option now anyway, voluntarily and ahead of it becoming a duty** — write to {{ facts.support.email }} naming the language, and we will provide it.
 
 We have not pre-translated it into all twenty-two. We would rather send you an accurate translation you asked for than publish twenty-two we have not checked.
 {{/clause}}

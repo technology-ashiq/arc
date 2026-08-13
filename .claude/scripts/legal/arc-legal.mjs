@@ -21,7 +21,7 @@ import { parseFactsYaml, YamlError } from "./lib/yaml.mjs";
 import { canonicalHash, bytesHash, templateSetHash, CanonError, PREIMAGE_VERSION } from "./lib/canonical.mjs";
 import { validateFacts } from "./lib/schema.mjs";
 import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./lib/template.mjs";
-import { runAllLints, scenarioSetLint, findingsAreFatal, TRIAL } from "./lib/lints.mjs";
+import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL } from "./lib/lints.mjs";
 
 export const ENGINE_VERSION = "arc-legal/0.1.0";
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -138,6 +138,7 @@ export function renderVenture({ ventureName, outDir }) {
   // The answerability fixture (ADR-1009). Read here rather than inside the lint so a missing or
   // unparseable file is a loud refusal at load time, not a per-page finding repeated seven times.
   const scenarioSet = readJson(join(PRODUCT, "data", "scenarios.json"));
+  const crossClaims = readJson(join(PRODUCT, "data", "cross-page-claims.json"));
   if (!scenarioSet || !Array.isArray(scenarioSet.scenarios) || !scenarioSet.scenarios.length)
     throw new Fail(3, "scenarios.json holds no scenarios. The answerability check is the only lint class that fails for insufficiency; running without it is not a degraded run, it is a different gate.");
 
@@ -188,6 +189,13 @@ export function renderVenture({ ventureName, outDir }) {
     invoice_kind: facts.payment_model === "mor" ? "provider" : (facts.gst_registered ? "gst" : "no-gst"),
     autorenew: facts.payment_model === "none" ? "no" : "yes",
     subprocessors: Array.isArray(facts.sub_processors) && facts.sub_processors.length ? "yes" : "no",
+    // Is there a machine event that tells us a payment succeeded? With a gateway or a
+    // merchant-of-record there is; with a bank transfer there is not, and a human must reconcile
+    // it. Three reader panels independently found the delivery page promising access "within 1
+    // hour of a successful payment ... you do not have to wait for anyone to approve anything by
+    // hand" to a venture whose ONLY payment route is a transfer somebody has to look at. The
+    // clause was written for a gateway and survived into the branch that has none.
+    payment_is_automatic: facts.payment_model === "none" ? "no" : "yes",
   };
   const factsView = { ...facts, routes: effectiveRoutes, derived };
 
@@ -259,6 +267,11 @@ export function renderVenture({ ventureName, outDir }) {
   // renders is invisible to the per-page pass -- the loop that would catch it never runs for a
   // page that does not exist, so the check is disabled by exactly the condition it detects.
   findings.push(...scenarioSetLint(scenarioSet.scenarios, pages.map((p) => p.page)));
+
+  // Cross-page consistency (ADR-1013), also once. A contradiction BETWEEN two pages is invisible
+  // to every per-page lint by construction, and that is where three reader panels independently
+  // put their worst findings.
+  findings.push(...crossPageLint(pages, crossClaims, factsView));
 
   const run = {
     engine_version: ENGINE_VERSION,

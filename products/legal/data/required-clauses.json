@@ -1,83 +1,248 @@
 {
   "_comment": "Completeness lint input (ADR-1009). A mandatory clause absent from the RENDERED bytes is a MISSING-CLAUSE finding, even when every clause that IS present traces perfectly -- provenance alone cannot pass an empty page. `when` is a single field=value equality against the facts (including the derived ones), or absent for always-required.",
   "terms": [
-    { "id": "TERMS.PARTIES" },
-    { "id": "TERMS.SERVICE" },
-    { "id": "TERMS.ELIGIBILITY" },
-    { "id": "TERMS.ACCOUNT" },
-    { "id": "TERMS.ACCEPTABLE_USE" },
-    { "id": "TERMS.IP" },
-    { "id": "TERMS.TERMINATION" },
-    { "id": "TERMS.LIABILITY" },
-    { "id": "TERMS.GOVERNING_LAW" },
-    { "id": "TERMS.CHANGES" },
-    { "id": "TERMS.CONTACT" },
-    { "id": "TERMS.NOT_LEGAL_ADVICE" },
-    { "id": "TERMS.PROCESSOR_ROLE", "when": "stores_third_party_client_data=true" }
+    {
+      "id": "TERMS.PARTIES"
+    },
+    {
+      "id": "TERMS.SERVICE"
+    },
+    {
+      "id": "TERMS.ELIGIBILITY"
+    },
+    {
+      "id": "TERMS.ACCOUNT"
+    },
+    {
+      "id": "TERMS.ACCEPTABLE_USE"
+    },
+    {
+      "id": "TERMS.IP"
+    },
+    {
+      "id": "TERMS.TERMINATION"
+    },
+    {
+      "id": "TERMS.LIABILITY"
+    },
+    {
+      "id": "TERMS.GOVERNING_LAW"
+    },
+    {
+      "id": "TERMS.CHANGES"
+    },
+    {
+      "id": "TERMS.CONTACT"
+    },
+    {
+      "id": "TERMS.NOT_LEGAL_ADVICE"
+    },
+    {
+      "id": "TERMS.PROCESSOR_ROLE",
+      "when": "stores_third_party_client_data=true"
+    }
   ],
   "privacy": [
-    { "id": "PRIVACY.IDENTITY" },
-    { "id": "PRIVACY.NOTICE.STATUS" },
-    { "id": "PRIVACY.NOTICE.ITEMISED" },
-    { "id": "PRIVACY.NOTICE.PURPOSES" },
-    { "id": "PRIVACY.RIGHTS" },
-    { "id": "PRIVACY.WITHDRAW" },
-    { "id": "PRIVACY.COMPLAINT.BOARD" },
-    { "id": "PRIVACY.LANGUAGE" },
-    { "id": "PRIVACY.GRIEVANCE" },
-    { "id": "PRIVACY.RETENTION" },
-    { "id": "PRIVACY.DELETION" },
-    { "id": "PRIVACY.ANALYTICS" },
-    { "id": "PRIVACY.SECURITY" },
-    { "id": "PRIVACY.CHANGES" },
-    { "id": "PRIVACY.SUBPROCESSORS", "when": "derived.subprocessors=yes" },
-    { "id": "PRIVACY.PROCESSOR", "when": "stores_third_party_client_data=true" }
+    {
+      "id": "PRIVACY.IDENTITY"
+    },
+    {
+      "id": "PRIVACY.NOTICE.STATUS"
+    },
+    {
+      "id": "PRIVACY.NOTICE.ITEMISED"
+    },
+    {
+      "id": "PRIVACY.NOTICE.PURPOSES"
+    },
+    {
+      "id": "PRIVACY.RIGHTS"
+    },
+    {
+      "id": "PRIVACY.WITHDRAW"
+    },
+    {
+      "id": "PRIVACY.COMPLAINT.BOARD"
+    },
+    {
+      "id": "PRIVACY.LANGUAGE"
+    },
+    {
+      "id": "PRIVACY.GRIEVANCE"
+    },
+    {
+      "id": "PRIVACY.RETENTION"
+    },
+    {
+      "id": "PRIVACY.DELETION"
+    },
+    {
+      "id": "PRIVACY.ANALYTICS"
+    },
+    {
+      "id": "PRIVACY.SECURITY"
+    },
+    {
+      "id": "PRIVACY.CHANGES"
+    },
+    {
+      "id": "PRIVACY.SUBPROCESSORS",
+      "when": "derived.subprocessors=yes"
+    },
+    {
+      "id": "PRIVACY.PROCESSOR",
+      "when": "stores_third_party_client_data=true"
+    }
   ],
   "refund-cancellation": [
-    { "id": "REFUND.SCOPE" },
-    { "id": "REFUND.HOW_TO_REQUEST" },
-    { "id": "REFUND.BILLING_ERROR" },
-    { "id": "CANCEL.PATH" },
-    { "id": "CANCEL.NO_MAZE" },
-    { "id": "CANCEL.EFFECT" },
-    { "id": "REFUND.CONTACT" },
-    { "id": "CANCEL.AUTORENEW", "when": "derived.autorenew=yes" },
-    { "id": "REFUND.WINDOW", "when": "payment_model=gateway" },
-    { "id": "REFUND.PROCESSING", "when": "payment_model=gateway" },
-    { "id": "REFUND.MOR", "when": "payment_model=mor" },
-    { "id": "REFUND.PROCESSING.MOR", "when": "payment_model=mor" },
-    { "id": "REFUND.OFFLINE", "when": "payment_model=none" },
-    { "id": "REFUND.PROCESSING.OFFLINE", "when": "payment_model=none" },
-    { "id": "REFUND.GST_INVOICE", "when": "derived.invoice_kind=gst" },
-    { "id": "REFUND.NO_GST", "when": "derived.invoice_kind=no-gst" },
-    { "id": "REFUND.MOR_INVOICE", "when": "derived.invoice_kind=provider" }
+    {
+      "id": "REFUND.SCOPE"
+    },
+    {
+      "id": "REFUND.HOW_TO_REQUEST"
+    },
+    {
+      "id": "REFUND.BILLING_ERROR"
+    },
+    {
+      "id": "CANCEL.PATH"
+    },
+    {
+      "id": "CANCEL.NO_MAZE"
+    },
+    {
+      "id": "CANCEL.EFFECT"
+    },
+    {
+      "id": "REFUND.CONTACT"
+    },
+    {
+      "id": "CANCEL.AUTORENEW",
+      "when": "derived.autorenew=yes"
+    },
+    {
+      "id": "REFUND.WINDOW",
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "REFUND.PROCESSING",
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "REFUND.MOR",
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "REFUND.PROCESSING.MOR",
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "REFUND.OFFLINE",
+      "when": "payment_model=none"
+    },
+    {
+      "id": "REFUND.PROCESSING.OFFLINE",
+      "when": "payment_model=none"
+    },
+    {
+      "id": "REFUND.GST_INVOICE",
+      "when": "derived.invoice_kind=gst"
+    },
+    {
+      "id": "REFUND.NO_GST",
+      "when": "derived.invoice_kind=no-gst"
+    },
+    {
+      "id": "REFUND.MOR_INVOICE",
+      "when": "derived.invoice_kind=provider"
+    },
+    {
+      "id": "REFUND.DELIVERY_FAILURE"
+    }
   ],
   "shipping-delivery": [
-    { "id": "DELIVERY.NATURE" },
-    { "id": "DELIVERY.WHEN" },
-    { "id": "DELIVERY.WHERE" },
-    { "id": "DELIVERY.FAILURE" },
-    { "id": "DELIVERY.CONTACT" }
+    {
+      "id": "DELIVERY.NATURE"
+    },
+    {
+      "id": "DELIVERY.WHEN",
+      "when": "derived.payment_is_automatic=yes"
+    },
+    {
+      "id": "DELIVERY.WHEN.OFFLINE",
+      "when": "derived.payment_is_automatic=no"
+    },
+    {
+      "id": "DELIVERY.WHERE"
+    },
+    {
+      "id": "DELIVERY.FAILURE"
+    },
+    {
+      "id": "DELIVERY.CONTACT"
+    }
   ],
   "contact": [
-    { "id": "CONTACT.WHO" },
-    { "id": "CONTACT.HOW" },
-    { "id": "CONTACT.GRIEVANCE" },
-    { "id": "CONTACT.DELETION" }
+    {
+      "id": "CONTACT.WHO"
+    },
+    {
+      "id": "CONTACT.HOW"
+    },
+    {
+      "id": "CONTACT.GRIEVANCE"
+    },
+    {
+      "id": "CONTACT.DELETION"
+    }
   ],
   "pricing": [
-    { "id": "PRICING.PLANS" },
-    { "id": "PRICING.CHANGES" },
-    { "id": "PRICING.WHAT_YOU_PAY_WITH" },
-    { "id": "PRICING.CONTACT" },
-    { "id": "PRICING.GSTIN", "when": "derived.invoice_kind=gst" },
-    { "id": "PRICING.NO_GST", "when": "derived.invoice_kind=no-gst" }
+    {
+      "id": "PRICING.PLANS"
+    },
+    {
+      "id": "PRICING.CHANGES"
+    },
+    {
+      "id": "PRICING.WHAT_YOU_PAY_WITH",
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "PRICING.WHAT_YOU_PAY_WITH.MOR",
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "PRICING.WHAT_YOU_PAY_WITH.OFFLINE",
+      "when": "payment_model=none"
+    },
+    {
+      "id": "PRICING.CONTACT"
+    },
+    {
+      "id": "PRICING.GSTIN",
+      "when": "derived.invoice_kind=gst"
+    },
+    {
+      "id": "PRICING.NO_GST",
+      "when": "derived.invoice_kind=no-gst"
+    }
   ],
   "about": [
-    { "id": "ABOUT.WHO" },
-    { "id": "ABOUT.WHAT" },
-    { "id": "ABOUT.HOW_TO_REACH" },
-    { "id": "ABOUT.NO_CLAIMS" },
-    { "id": "ABOUT.PROCESSOR_ROLE", "when": "stores_third_party_client_data=true" }
+    {
+      "id": "ABOUT.WHO"
+    },
+    {
+      "id": "ABOUT.WHAT"
+    },
+    {
+      "id": "ABOUT.HOW_TO_REACH"
+    },
+    {
+      "id": "ABOUT.NO_CLAIMS"
+    },
+    {
+      "id": "ABOUT.PROCESSOR_ROLE",
+      "when": "stores_third_party_client_data=true"
+    }
   ]
 }

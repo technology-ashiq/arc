@@ -128,10 +128,31 @@
       "when": "derived.invoice_kind=gst"
     },
     {
-      "id": "SCN.PRICE.TOTAL",
-      "question": "What will actually leave my bank account, and in what currency, with nothing added at checkout?",
+      "id": "SCN.PRICE.TOTAL.GATEWAY",
+      "question": "What will actually leave my bank account, how do I pay, and does it repeat on its own?",
       "page": "pricing",
-      "answered_by": ["PRICING.PLANS", "PRICING.WHAT_YOU_PAY_WITH"]
+      "answered_by": ["PRICING.WHAT_YOU_PAY_WITH"],
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "SCN.PRICE.TOTAL.MOR",
+      "question": "Whose name appears on my statement, and does the charge repeat on its own?",
+      "page": "pricing",
+      "answered_by": ["PRICING.WHAT_YOU_PAY_WITH.MOR"],
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "SCN.PRICE.TOTAL.OFFLINE",
+      "question": "There is no checkout here. How do I actually pay you, and will anything be charged automatically?",
+      "page": "pricing",
+      "answered_by": ["PRICING.WHAT_YOU_PAY_WITH.OFFLINE"],
+      "when": "payment_model=none"
+    },
+    {
+      "id": "SCN.PRICE.PLANS",
+      "question": "What are the plans and what does each cost?",
+      "page": "pricing",
+      "answered_by": ["PRICING.PLANS"]
     },
     {
       "id": "SCN.PRICE.CHANGES",
@@ -217,9 +238,29 @@
     },
     {
       "id": "SCN.DELIVERY",
-      "question": "I have paid. When do I get access, and how does it reach me?",
+      "question": "How does what I bought reach me at all?",
       "page": "shipping-delivery",
-      "answered_by": ["DELIVERY.NATURE", "DELIVERY.WHEN"]
+      "answered_by": ["DELIVERY.NATURE"]
+    },
+    {
+      "id": "SCN.DELIVERY.WHEN.AUTOMATIC",
+      "question": "I have paid by card. When exactly does access appear?",
+      "page": "shipping-delivery",
+      "answered_by": ["DELIVERY.WHEN"],
+      "when": "derived.payment_is_automatic=yes"
+    },
+    {
+      "id": "SCN.DELIVERY.WHEN.MANUAL",
+      "question": "I sent the bank transfer this morning. When does access appear, and how do you even know I paid?",
+      "page": "shipping-delivery",
+      "answered_by": ["DELIVERY.WHEN.OFFLINE"],
+      "when": "derived.payment_is_automatic=no"
+    },
+    {
+      "id": "SCN.DELIVERY.REFUND",
+      "question": "You could not give me access at all, and it is well past the refund window. Do I get my money back?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.DELIVERY_FAILURE"]
     },
     {
       "id": "SCN.DELIVERY.FAILURE",

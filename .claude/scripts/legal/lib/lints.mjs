@@ -14,12 +14,12 @@
  * regardless; the TRIAL flag decides only whether the process exit code moves. Asserting on
  * the exit code alone would be a test that passes whatever the lint does.
  */
-import { conditionHolds, conditionVerdict } from "./schema.mjs";
+import { conditionHolds, conditionVerdict, getPath } from "./schema.mjs";
 
-export const GROUPS = ["value", "trace", "completeness"];
+export const GROUPS = ["value", "trace", "completeness", "consistency"];
 // Nothing has been promoted yet. Promotion is /arc-retro's act against docs/trial-ledger.md,
 // never this cycle's convenience (ADR-1009).
-export const TRIAL = new Set(["value", "trace", "completeness"]);
+export const TRIAL = new Set(["value", "trace", "completeness", "consistency"]);
 
 const MARKER = /<!--\s*clause:([A-Z][A-Z0-9_.]*)\s*-->/g;
 
@@ -279,6 +279,65 @@ export function completenessLint(page, text, required, facts, bodies, scenarios,
     }
   }
 
+  return out;
+}
+
+/**
+ * CROSS-PAGE consistency (ADR-1013), run once over every rendered page.
+ *
+ * Every other lint here reads a single page's bytes, and that is where the pages were worst:
+ * three reader panels, blind to each other, each put a cross-page contradiction in their top
+ * four findings. Pricing, terms and refunds stated three different price-rise rules; shipping
+ * granted a refund entitlement the refunds page refused.
+ *
+ * The check is deliberately narrow, because a general prose-contradiction detector is not a
+ * thing that exists. A CLAIM is a numeric commitment stated on more than one page; wherever a
+ * listed page makes it, the rendered value of the SAME facts field must appear on it.
+ *
+ * That catches the vague half, which is the half that actually bit: pricing said "we tell you
+ * before your next payment" -- no number, so nothing could disagree with it numerically, and it
+ * was the page read before paying.
+ */
+export function crossPageLint(rendered, claims, facts) {
+  const out = [];
+  if (!claims || !Array.isArray(claims.claims)) {
+    out.push(finding("consistency", "-", "-", "FAIL", "cross-page-claims.json is missing or unreadable, so no cross-page check ran at all"));
+    return out;
+  }
+  const byPage = new Map(rendered.map((p) => [p.page, p.text]));
+
+  for (const claim of claims.claims) {
+    if (claim.when) {
+      const verdict = conditionVerdict(facts, claim.when);
+      // Same three-answer rule as everywhere else in this file: unevaluable is a FAILURE, not a
+      // skip. A guard nobody can evaluate excuses the claim it guards, silently.
+      if (verdict === null) {
+        out.push(finding("consistency", "-", claim.id, "FAIL", `the claim guard "${claim.when}" names a field that does not exist, or has no "=".`));
+        continue;
+      }
+      if (verdict === false) continue;
+    }
+
+    const value = getPath(facts, claim.fact);
+    if (value === undefined || value === null || value === "") {
+      out.push(finding("consistency", "-", claim.id, "FAIL", `this claim is anchored to "${claim.fact}", which the facts do not set. A cross-page check with nothing to compare passes every page and proves nothing.`));
+      continue;
+    }
+    const needle = String(value);
+
+    for (const page of claim.pages) {
+      const text = byPage.get(page);
+      if (text === undefined) {
+        out.push(finding("consistency", page, claim.id, "FAIL", `this claim names page "${page}", which the pinned set does not render.`));
+        continue;
+      }
+      // Word-bounded so 14 does not match inside 140, and so a page stating the right commitment
+      // with the wrong number is caught rather than passing on a substring.
+      const hit = new RegExp(`(?<![0-9])${needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![0-9])`).test(text);
+      if (!hit)
+        out.push(finding("consistency", page, claim.id, "FAIL", `this page is required to state ${claim.what} as a number, and "${needle}" (from ${claim.fact}) does not appear on it. Another page states it; a reader who reads only this one gets the vaguer promise.`));
+    }
+  }
   return out;
 }
 
