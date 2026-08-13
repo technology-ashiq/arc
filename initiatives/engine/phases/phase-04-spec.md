@@ -166,16 +166,33 @@ act arc does not perform.
       **already pass `--strict`**. The only files missing it are `develop/develop.mjs`,
       `develop/stuck.mjs` and **`arc-run.mjs`, whose three sites pass neither flag**. That is a missed
       lane rather than a design difference, and it is recorded as such so the retro can count it.
-- [ ] **`arc-run` emits `run.completed` with `--strict`, so a rejected receipt is a failed run.**
-      Today the emit at line 278 omits `--strict` (supported at `.claude/scripts/hq/arc-event.sh:27`).
-      `verifyLanded()` is **not** blind — it checks `events/` and `_quarantine/` and warns — but it
-      warns to stderr and **`arc-run` still exits 0**, so a quarantined receipt is a green run. That
-      stands against this cycle's own non-negotiable: *exit 0 from a fire-and-forget writer is not
-      evidence anything was written*. Proof: a fixture emitting a deliberately invalid payload makes
-      `arc-run` exit non-zero, and the assertion checks the emit **ran** before checking what it
-      printed (`.claude/rules/testing.md` § the vacuous pass). **Expect existing receipts to start
-      failing loudly** — that is the criterion working, and each one found is recorded rather than
-      quietly repaired.
+- [ ] **`arc-run` emits with `--strict`, so a rejected receipt is REPORTED rather than silently
+      quarantined.** The emit omitted `--strict` (supported at `.claude/scripts/hq/arc-event.sh:27`),
+      so in hook mode invalid input was quarantined with a SKIP to stderr and exit 0. With it, the
+      same input exits 2 and arc-run names the failure. Adding it also forced a real repair:
+      `--strict` raises the emitter's spine-lock wait from 2s to **15s**, inside arc-run's unchanged
+      **10s** SIGKILL — so the parent killed a *healthy* child, and because `arc-event.sh` runs node
+      as a child rather than exec-ing it, the grandchild survived and sealed the receipt **after**
+      arc-run reported it lost. The kill budget is now 20s.
+- [ ] **The receipt GATE — making an unsealed receipt fail the run — is DEFERRED, and this is the
+      tracked home for it.** It was written, attacked and backed out on 2026-08-13 rather than
+      shipped. Three reasons, all found by the adversarial pass and all verified:
+      1. `verifyLanded` derives the day in **UTC** while the spine names its file from an **IST**
+         timestamp (`canonical.mjs:135`, `spine-io.mjs:318`) — the wrong file for **22.9% of every
+         day**. Wiring that to the exit code makes correct runs red on a timer. CI passed only
+         because it ran at 14:22 UTC, outside the window.
+      2. `verifyLanded` re-derives the spine root by a different rule than the emitter's `spineRoot()`,
+         so a **correct** receipt is reported missing; and with `ARC_SPINE_ROOT` unset it throws in any
+         linked **git worktree**, which is a working mode here.
+      3. Its quarantine scan interpolates into a `bash -c` string with `$` and backticks unescaped —
+         a path component was demonstrably **executed**. This violates the standing shell-string rule.
+      Two further blockers independent of those: ADR-0219 publishes `0` as *"produced an accepted
+      answer"* and every cause of `1` as pre-dispatch, so failing on a good answer is an **ADR
+      amendment**, not a bug fix; and `arc-bench.mjs:699` treats non-zero as failure, discarding
+      stdout and recording `measuredInr: null` — a run that spent real money logged as spending none.
+      **The gate lands only after `verifyLanded` is repaired and ADR-0219 is amended**, in its own PR.
+      `tests/engine-emit-path.bats` pins `exit 0` deliberately so that PR's arrival is a visible test
+      failure rather than a silent behaviour change.
 - [ ] tracker updated: the Phase 04 row in `initiatives/engine/PROGRESS.md`'s phase table flips to ✅,
       a dated entry is appended to its `## Done log` section, and its `## Now` block is rewritten to
       point at Phase 05.

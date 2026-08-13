@@ -181,6 +181,22 @@ that was discovered at Phase 03 rather than Phase 00. So REQ-00 makes one live h
 Phase-04 exit criterion. If the runtime cannot run on this machine, EXE-A's STOP fires at 1 day
 burned instead of 5.
 
+**2026-08-13, the adversarial pass earned its cost before merge.** Two fresh agents on different
+surfaces attacked PR #184 while CI was green on all 19 jobs. They overlapped on almost nothing.
+The shell/OS attacker **reproduced** the motivating failure rather than trusting it (inline
+`--payload` + a Windows path → `REJECT BAD_JSON -- invalid escape \U`; `--payload-file` → sealed),
+so the payload half shipped. **The gate half was backed out**: `verifyLanded` turned out to carry
+three independent defects — a UTC/IST day mismatch making it wrong for 22.9% of the clock, a
+spine-root rule that disagrees with the emitter, and a `bash -c` scan that **executed** a path
+component. All three were survivable as a warning and none as a gate. **CI was green only because
+it ran at 14:22 UTC, outside the bad window** — the tests passed by clock luck, which is exactly
+what an adversarial pass exists to catch and a green suite cannot.
+Also found and fixed: `--strict` had put the emitter's 15s lock wait inside a 10s SIGKILL, orphaning
+a node grandchild that sealed the receipt *after* arc-run reported it lost; `mkdtempSync` sat outside
+its `try`, so a bad TMPDIR inverted the fail-closed policy denial into a stack trace; and three of the
+nine test guards **could not fail** — one attacker wrote a mutant reverting half the change that
+passed 9/9.
+
 **Next action (2026-08-13).** Two tracks, deliberately separate so the cycle clock stays honest:
 
 1. **In Phase 04, on this cycle's clock** — build the two emit-path fixes now in
