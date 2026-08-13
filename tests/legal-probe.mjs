@@ -243,6 +243,28 @@ switch (cmd) {
           writeFileSync(p, JSON.stringify(rows, null, 2), "utf8");
         }
         break;
+      case "drop-subprocessors":
+        // Take the sub-processor list OFF a venture that is not required to have one, and the
+        // disclosure clause must vanish with it. This is the negative half of the
+        // `derived.subprocessors` guard, and no fixture carries it: all six name at least a
+        // host and a mailer, so every rendered page proved the clause could appear and none
+        // proved it could be withheld. A guard only ever seen saying yes is not a guard.
+        // The key is REMOVED rather than emptied on purpose -- the bounded YAML subset has no
+        // flow collections, so `[]` is a parse error, and a bare `sub_processors:` would test
+        // the parser's empty-value handling instead of the render branch.
+        {
+          const p = join(root, "tests", "fixtures", "legal", "ventures", "fixture-none-nogst", "facts.yaml");
+          const src = readFileSync(p, "utf8");
+          const lines = src.split(/\r?\n/);
+          const at = lines.findIndex((l) => l.startsWith("sub_processors:"));
+          if (at < 0) die(`mutation anchor not found in ${p}: sub_processors:`);
+          let end = at + 1;
+          while (end < lines.length && /^\s+-\s/.test(lines[end])) end++;
+          if (end === at + 1) die(`sub_processors in ${p} has no list items to remove`);
+          lines.splice(at, end - at);
+          writeFileSync(p, lines.join("\n"), "utf8");
+        }
+        break;
       default:
         die(`unknown mutation: ${kind}`);
     }

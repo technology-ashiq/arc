@@ -82,14 +82,58 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" != *"REFUND.GST_INVOICE"* ]]
 }
 
-@test "legal render: a venture holding no third-party records omits the processor clauses" {
+@test "legal render: a venture holding no third-party records omits the processor-role clauses" {
+  # THREE pages carry a processor-role clause, each guarded separately, so all three are
+  # asserted. The first cut of this test checked two clauses on ONE page and bundled
+  # PRIVACY.SUBPROCESSORS in with them -- two different questions. Holding records ABOUT OTHER
+  # PEOPLE is what the processor role turns on; having vendors is not. The fixture holds no
+  # client records and still uses a host and a mailer, so it must disclose them, and the test
+  # that said otherwise was wrong about the law rather than the code. The sub-processor guard
+  # gets its own test below, with both directions.
   run node "$(CLI)" render --venture "fixture-none-nogst" --out "$BATS_TEST_TMPDIR/out"
   [ "$status" -eq 0 ]
-  run node "$ARC_ROOT/tests/legal-probe.mjs" clauses "$BATS_TEST_TMPDIR/out/_run.json" privacy
+  for triple in "privacy:PRIVACY.RIGHTS:PRIVACY.PROCESSOR" \
+                "terms:TERMS.PARTIES:TERMS.PROCESSOR_ROLE" \
+                "about:ABOUT.WHO:ABOUT.PROCESSOR_ROLE"; do
+    page="${triple%%:*}"
+    rest="${triple#*:}"
+    present="${rest%%:*}"
+    absent="${rest##*:}"
+    run node "$ARC_ROOT/tests/legal-probe.mjs" clauses "$BATS_TEST_TMPDIR/out/_run.json" "$page"
+    [ "$status" -eq 0 ]
+    # Positive control first: a page that rendered nothing at all would satisfy the absence
+    # assertion on its own.
+    [[ "$output" == *"$present"* ]]
+    [[ "$output" != *"$absent"* ]]
+  done
+}
+
+@test "legal render: the sub-processor list is disclosed when the venture names any, withheld when it names none" {
+  # Both directions of the derived.subprocessors guard. The fixture set only ever exercised
+  # the yes side -- all six ventures name a host and a mailer -- so nothing proved the clause
+  # could be WITHHELD, and a guard only ever observed saying yes is not a guard.
+  #
+  # The no side runs through a sandbox mutation that removes the list from a venture the
+  # schema does not require to have one, so the tree stays valid and the render stays green.
+  _arc_legal_sandbox
+  run node "$ARC_LEGAL_CLI" render --venture "fixture-none-nogst" --out "$SANDBOX/before"
   [ "$status" -eq 0 ]
-  # Positive control first: the page really did render its ordinary clauses.
+  run node "$ARC_ROOT/tests/legal-probe.mjs" clauses "$SANDBOX/before/_run.json" privacy
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"PRIVACY.SUBPROCESSORS"* ]]
+
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate "$SANDBOX" drop-subprocessors
+  [ "$status" -eq 0 ]
+
+  run node "$ARC_LEGAL_CLI" render --venture "fixture-none-nogst" --out "$SANDBOX/after"
+  [ "$status" -eq 0 ]
+  # Still CLEAN, not merely different: dropping an optional list must not read as a
+  # completeness FAIL, or the withheld branch could never be reached from a green tree.
+  run node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/after/_run.json" any FAIL
+  [ "$output" = "0" ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" clauses "$SANDBOX/after/_run.json" privacy
+  [ "$status" -eq 0 ]
   [[ "$output" == *"PRIVACY.RIGHTS"* ]]
-  [[ "$output" != *"PRIVACY.PROCESSOR"* ]]
   [[ "$output" != *"PRIVACY.SUBPROCESSORS"* ]]
 }
 
