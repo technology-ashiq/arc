@@ -102,6 +102,18 @@ export async function derivePnl(root, { mode = "real", venture = null, month = n
 
   const refundedByCharge = new Map();
   const linkedRefunds = new Set();
+  // THE LINKAGE, PUBLISHED AS A FACT (additive, for the month-close gate -- ADR-1005 / LED-F).
+  //
+  // Five rules decide whether a refund links: its charge is on the spine, that charge is not itself
+  // a refund, same venture, same currency, and it is not dated before its charge. They are applied
+  // exactly ONCE -- here -- and `reconcile.mjs` reads this list instead of re-deriving them. A
+  // second copy of five rules is a second thing to keep in step, which is the twin-fix defect this
+  // lane has already paid for twice.
+  //
+  // UNFILTERED BY MONTH AND VENTURE ON PURPOSE. This is the linkage itself, not a view of it; every
+  // filtering decision belongs to the consumer, and the close buckets a refund by the month it was
+  // RECORDED in (ADR-1004: a closed month never restates) rather than by its charge's month.
+  const refundLinks = [];
   for (const r of refunds) {
     const target = r.payload.refund_of;
     const charge = chargeById.get(target);
@@ -142,6 +154,20 @@ export async function derivePnl(root, { mode = "real", venture = null, month = n
       continue;
     }
     linkedRefunds.add(r.id);
+    // `amount` stays the POSITIVE magnitude refunded, exactly as recorded (ADR-1016 / LED-Q). The
+    // render negates it for its own row; a consumer doing arithmetic wants the number the spine
+    // carries, not the sign one view chose. `venture` is the CHARGE's venture, which is the one a
+    // refund belongs to.
+    refundLinks.push({
+      id: r.id,
+      ts: r.ts,
+      provider: r.payload.provider,
+      currency: r.payload.currency,
+      amount: r.payload.amount,
+      paymentId: r.payload.provider_payment_id,
+      refundOf: target,
+      venture: charge.payload.venture,
+    });
     const prior = refundedByCharge.get(target) || { total: 0, events: [] };
     prior.total += r.payload.amount;
     prior.events.push(r);
@@ -255,6 +281,9 @@ export async function derivePnl(root, { mode = "real", venture = null, month = n
     mrr,
     needsYou: scopedFlags,
     counts: { revenue: revenue.length, charges: charges.length, refunds: refunds.length, costs: costs.length },
+    // Read by reconcile.mjs and by nothing that renders. Additive: no existing field moved, no
+    // existing number re-derived, and the P&L text is byte-identical with and without it.
+    refundLinks,
   };
 }
 

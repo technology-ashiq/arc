@@ -12,6 +12,7 @@ import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearM
 import {
   isLedgerRevenueKind, assertLedgerRevenue,
   isCriteriaChange, assertCriteriaChange, isNearMissCriteriaChange, assertNotNearMissCriteria,
+  assertMonthClosed,
 } from "./validate-ledger.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
@@ -54,6 +55,20 @@ export const KINDS = Object.freeze([
   // law would itself quarantine as UNKNOWN_KIND. It is a company organ (ADR-0053), so its shape
   // lives here inline beside decision.recorded and the council pair, not in a lane module.
   "constitution.adopted",
+  // 44 -> 45 by ADR-1004 (LED-E). The ONE kind the ledger lane adds, and it is spent here rather
+  // than on Phase 01's criteria receipt precisely so this slot was still free: that receipt rides an
+  // approval.requested PROFILE instead (ADR-1017), which costs zero kinds.
+  //
+  // A month closing is a distinct, terminal, human-run fact -- not a derivation. Everything else in
+  // this lane is computed at render and stored nowhere (ADR-1000); a close is the one thing that
+  // must survive as a receipt, because "this month was reconciled against the provider and frozen"
+  // cannot be re-derived from the payments themselves.
+  //
+  // ADDING A KIND HERE OBLIGES A `GROUPS` ROW IN arc-brief.mjs IN THE SAME COMMIT.
+  // `tests/policy-brief.bats` derives its coverage list from THIS array and asserts
+  // `all-<KINDS.length>-grouped`, so a kind with no section fails that suite shut rather than
+  // rendering into a catch-all nobody reads.
+  "month.closed",
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -359,6 +374,7 @@ export function validateEvent(event) {
   // one slot it has already committed to month.closed.
   if (isCriteriaChange(event)) assertCriteriaChange(event);
   if (isNearMissCriteriaChange(event)) assertNotNearMissCriteria(event);
+  if (event.kind === "month.closed") assertMonthClosed(event);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (event.kind === "constitution.adopted") assertConstitution(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);

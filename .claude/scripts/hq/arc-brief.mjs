@@ -68,8 +68,13 @@ const GROUPS = [
   // already paise (`validate-leads.mjs:307`), so that is a field-name gap in the leads lane's own
   // ADR band, not a semantic one. A visibly incomplete money line announces the gap; a
   // correctly-formatted progress line would hide it while under-ranking the event.
+  // `month.closed` (ADR-1004) lands in MONEY rather than progress, and the choice is load-bearing
+  // in one direction: money never collapses to a count. A close is at most twelve events a year, so
+  // it costs this section nothing, and it is the one line that says a month's numbers are now
+  // frozen and reconciled against the provider. Filed under progress it would collapse on any busy
+  // day, which is exactly the day a close is most likely to have happened.
   ["money",     ["revenue.received", "revenue.simulated", "cost.incurred",
-                 "spend.reserved", "spend.released", "deal.won"]],
+                 "spend.reserved", "spend.released", "deal.won", "month.closed"]],
   // `experiment.rolled_back` is here rather than in needs-you because ADR-0305 makes the machine
   // propose-only in both directions: its payload carries a `commit_ref`, which exists only
   // because a human already merged. The part that needed eyes fired earlier as `incident.raised`.

@@ -279,6 +279,89 @@ const hasControlChar = (s) => {
 };
 
 // ---------------------------------------------------------------------------------------------
+// THE MONTH CLOSE (ADR-1004 / LED-E) -- the one event kind this lane spends.
+//
+// A close is the only thing in the ledger that is STORED rather than derived. Everything else is
+// computed at render from the payments themselves (ADR-1000); "this month was reconciled against
+// what the provider actually says it settled, and frozen" cannot be recomputed from the payments,
+// because the provider's number is not on the spine anywhere else.
+//
+// THE SHAPE IS CLOSED, and the invariant below is the whole point of the receipt: a rail may only
+// appear here with spine_minor === provider_minor. A close exists ONLY behind a green gate, so a
+// `month.closed` carrying a mismatch would be a receipt of a reconciliation that failed -- a
+// permanent, append-only record asserting a month was reconciled when it was not. Refused at the
+// door rather than checked by whoever reads it later, because on an append-only log there is no
+// later.
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const RAIL_KEYS = Object.freeze(["provider", "currency", "spine_minor", "provider_minor", "source", "input_sha"]);
+const CLOSE_KEYS = Object.freeze(["month", "rails", "payment_count"]);
+const RECONCILE_SOURCES = new Set(["file", "total"]);
+
+export function assertMonthClosed(event) {
+  const p = event.payload;
+  if (!isPlainObject(p)) throw new SpineError("BAD_MONTH_CLOSE", "month.closed payload must be an object");
+  for (const k of Object.keys(p))
+    if (!CLOSE_KEYS.includes(k))
+      throw new SpineError("BAD_MONTH_CLOSE", `month.closed has unknown key ${JSON.stringify(k)} (the shape is closed to ${CLOSE_KEYS.join("|")})`);
+  for (const k of CLOSE_KEYS)
+    if (!(k in p)) throw new SpineError("BAD_MONTH_CLOSE", `month.closed is missing ${JSON.stringify(k)}`);
+
+  if (typeof p.month !== "string" || !MONTH_RE.test(p.month))
+    throw new SpineError("BAD_MONTH_CLOSE", `month.closed.month ${JSON.stringify(p.month)} must be YYYY-MM`);
+  if (!Number.isSafeInteger(p.payment_count) || p.payment_count < 0)
+    throw new SpineError("BAD_MONTH_CLOSE", `month.closed.payment_count ${JSON.stringify(p.payment_count)} must be a non-negative integer`);
+
+  // AT LEAST ONE RAIL. A close with an empty rails array reconciles nothing and would render
+  // identically to a real one -- "no rail had input" and "every rail matched" must never look the
+  // same, which is the same rule the gate enforces upstream, restated where it cannot be skipped.
+  if (!Array.isArray(p.rails) || p.rails.length === 0)
+    throw new SpineError("BAD_MONTH_CLOSE", "month.closed.rails must be a non-empty array -- a close reconciling zero rails is a close that checked nothing");
+
+  const seen = new Set();
+  for (const [i, r] of p.rails.entries()) {
+    if (!isPlainObject(r)) throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}] must be an object`);
+    for (const k of Object.keys(r))
+      if (!RAIL_KEYS.includes(k))
+        throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}] has unknown key ${JSON.stringify(k)} (closed to ${RAIL_KEYS.join("|")})`);
+    for (const k of RAIL_KEYS)
+      if (!(k in r)) throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}] is missing ${JSON.stringify(k)}`);
+    if (typeof r.provider !== "string" || !PROVIDER_RE.test(r.provider))
+      throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}].provider ${JSON.stringify(r.provider)} must be a lowercase slug`);
+    if (typeof r.currency !== "string" || !/^[A-Z]{3}$/.test(r.currency))
+      throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}].currency ${JSON.stringify(r.currency)} must be an ISO-4217 alpha code`);
+    for (const k of ["spine_minor", "provider_minor"]) {
+      const v = r[k];
+      // ZERO IS LEGAL and negative is not: a rail that genuinely settled nothing in a month closes
+      // at 0 on both sides, which is a real and reportable fact. A negative total is an upstream
+      // arithmetic bug wearing a receipt.
+      if (!Number.isSafeInteger(v) || v < 0 || v > MAX_MINOR_UNITS)
+        throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}].${k} ${JSON.stringify(v)} must be a non-negative integer in minor units`);
+    }
+    if (r.spine_minor !== r.provider_minor)
+      throw new SpineError("BAD_MONTH_CLOSE",
+        `month.closed.rails[${i}] (${r.provider}/${r.currency}) has spine_minor ${r.spine_minor} against provider_minor ${r.provider_minor} -- a close is only ever written behind a GREEN gate, so a receipt carrying a mismatch is a permanent record asserting a reconciliation that did not happen`);
+    if (!RECONCILE_SOURCES.has(r.source))
+      throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}].source ${JSON.stringify(r.source)} is outside ${[...RECONCILE_SOURCES].join("|")}`);
+    if (typeof r.input_sha !== "string" || !HEX64_RE.test(r.input_sha))
+      throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails[${i}].input_sha must be a lowercase sha256 of the reconciliation input -- naming a number without pinning the bytes it came from is a receipt of nothing`);
+    // ONE RAIL PER (provider, currency). Two rows for the same rail would let one matching row and
+    // one mismatching row coexist, and every reader would have to guess which is the rail.
+    const key = `${r.provider}|${r.currency}`;
+    if (seen.has(key))
+      throw new SpineError("BAD_MONTH_CLOSE", `month.closed.rails names ${key} twice -- a rail is one provider account settling into one currency, and it reconciles once`);
+    seen.add(key);
+  }
+
+  // A MONTH CLOSES ONCE. The idem is welded to the month for the same reason the decision idem is
+  // welded to its approval: the emit path honours a caller-supplied --idem, so without this a
+  // second close of the same month could be sealed under a different key and both would stand,
+  // leaving two contradictory receipts and no rule for which is the close.
+  const want = sha256Hex(`month.closed|${p.month}`);
+  if (event.idem !== want)
+    throw new SpineError("BAD_MONTH_CLOSE", `month.closed.idem must be sha256("month.closed|"+month) -- a month closes exactly once`);
+}
+
+// ---------------------------------------------------------------------------------------------
 // THE CRITERIA RECEIPT (ADR-1017 / LED-R)
 //
 // A PROFILE, not a kind. ADR-1008 requires that a `ventures.yaml` edit is honored only with a

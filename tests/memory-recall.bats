@@ -614,11 +614,19 @@ _built_with_decision() {
   # ADR-0703: memory reads the spine through the reader library and emits nothing. A new query
   # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so the count is
   # MEASURED here rather than assumed.
+  # 44 -> 45 on 2026-08-13, by ADR-1004 (LED-E): the ledger lane spent one kind on `month.closed`.
+  #
+  # WORTH KNOWING WHEN THIS FIRES AGAIN: this pin is an ABSOLUTE count, so it catches ANY lane
+  # growing the vocabulary, not only memory's own surfaces. That is arguably the feature -- ADR-0026
+  # closes the vocabulary and every addition should cost a deliberate edit somewhere visible -- but
+  # the failure message reads as "memory added a kind" when the real cause was another lane
+  # entirely. If a third lane trips it, the sharper form of this assertion is "the set of kinds
+  # reachable from memory's own modules is empty", which stays true no matter who else adds one.
   vurl="$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/hq/lib/validate.mjs")).href)')"
   [ -n "$vurl" ]
-  run node -e "import(process.argv[1]).then(m=>{ if (m.KINDS.length !== 44) { console.error(\"KINDS.length is \" + m.KINDS.length); process.exit(1); } console.log(\"KINDS \" + m.KINDS.length); })" "$vurl"
+  run node -e "import(process.argv[1]).then(m=>{ if (m.KINDS.length !== 45) { console.error(\"KINDS.length is \" + m.KINDS.length); process.exit(1); } console.log(\"KINDS \" + m.KINDS.length); })" "$vurl"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"KINDS 44"* ]]
+  [[ "$output" == *"KINDS 45"* ]]
   # Positive control FIRST: prove this grep is reading the file it claims to read, so the absence
   # assertion below cannot pass on a typo in the path.
   run grep -c -- "--decisions" "$RECALL"

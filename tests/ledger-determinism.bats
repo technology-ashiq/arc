@@ -27,7 +27,10 @@ EVENT="$HQ/arc-event.sh"
 PNL="$HQ/arc-pnl.sh"
 JUL=1784736000000
 
+
+
 setup() {
+  arc_leave_the_repo || return 1
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE"
   export ARC_SPINE_ROOT="$SPINE"
   export ARC_SPINE_RAND="ledger-seed"

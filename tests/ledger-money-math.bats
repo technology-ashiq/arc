@@ -15,7 +15,10 @@ JUL=1784736000000
 AUG=1787414400000
 SEP=1790092800000
 
+
+
 setup() {
+  arc_leave_the_repo || return 1
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE"
   export ARC_SPINE_ROOT="$SPINE"
   export ARC_SPINE_RAND="00112233445566778899"

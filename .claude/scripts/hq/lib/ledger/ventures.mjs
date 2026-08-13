@@ -231,7 +231,13 @@ export function parseVentures(text) {
     const rest = trimmed.slice(colon + 1);
     if (key === "")
       fail("BAD_VENTURES_SYNTAX", lineNo, raw, "the key is empty");
-    if (/[^A-Za-z0-9_-]/.test(key))
+    // A POSITIVE test, not a negated bracket range. `tests/portability.bats` refuses any NEW
+    // `[^a-z...]` / `[!a-z...]` range in this tree because a shell glob's letter range is decided by
+    // the locale's collation, and this repo has been bitten by it. A JS regex is code-point based
+    // and would have been safe -- but the gate is a blanket grep and cannot know that, and arguing
+    // with a portability gate one exception at a time is how the gate stops meaning anything. The
+    // positive form is also what this lane already prefers for identifiers.
+    if (!/^[A-Za-z0-9_-]+$/.test(key))
       fail("BAD_VENTURES_SYNTAX", lineNo, raw, `key ${JSON.stringify(key)} carries a character no key in this document can hold`);
 
     let value = null;
