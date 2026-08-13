@@ -103,7 +103,28 @@ ARMED() { echo "$ARC_ROOT/tests/bench-armed-probe.mjs"; }
   [[ "$output" == *"ok review-diff still reads NO PROPOSAL"* ]]
 }
 
+@test "the coverage gate counts DECLARED fixtures, not files on disk" {
+  # Slice 08. A stray or half-added file beside the pack is not part of it; counting the
+  # directory would let it lift a class over the floor without anything ever running it.
+  run node "$(ARMED)"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok the count comes from the declared evals list"* ]]
+  [[ "$output" == *"ok commit-msg-draft counts 6 declared fixtures"* ]]
+}
+
+@test "review-diff and kickoff-plan read NO PROPOSAL, and the reason says why" {
+  # REQ-06's other half, and it is checked HERE rather than left to Phase 2's eligibility
+  # engine: a criterion only a later phase could exercise would be marked done at Phase 0 close
+  # without ever running (retro-log 2026-08-02).
+  run node "$(ARMED)"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok review-diff reads NO PROPOSAL"* ]]
+  [[ "$output" == *"ok kickoff-plan reads NO PROPOSAL"* ]]
+  # "evidence insufficient" and "the candidate lost" must never render identically (ADR-0906).
+  [[ "$output" == *"ok review-diff reason says WHY it is insufficient"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ]
 }
