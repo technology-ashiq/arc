@@ -1,0 +1,10 @@
+version: 1
+ventures:
+  lexos:
+    kill:
+      days_without_revenue: 90
+      traffic_floor_monthly: 100
+  arc:
+    kill:
+      days_without_revenue: 30
+      traffic_floor_monthly: 500

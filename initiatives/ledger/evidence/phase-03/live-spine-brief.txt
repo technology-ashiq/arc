@@ -1,0 +1,14 @@
+brief 2026-08-13
+
+needs-you (2)
+  approval.requested
+  approval.requested
+
+progress (7)
+  kickoff.done
+  decision.recorded
+  decision.recorded
+  decision.recorded
+  phase.closed
+  phase.closed
+  decision.recorded

@@ -1,0 +1,2 @@
+row_type,transaction_id,settlement_batch_id,settled_at,currency,gross,tax,fees,net,fx_rate,fx_source,fx_rate_date,buyer_email,product_name
+sale,txn_9f2Kd8Lm3Qp7Ts,setl_batch_20260914,2026-09-14T04:34:11+00:00,USD,49.005,0.00,2.45,46.555,83.20,provider-settlement,2026-09-14,buyer@example.invalid,A value finer than a cent

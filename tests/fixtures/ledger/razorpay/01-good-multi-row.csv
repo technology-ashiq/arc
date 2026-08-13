@@ -1,0 +1,6 @@
+settled_at,record_type,customer_email,payment_id,currency,fee,gross_amount,tax,net_amount,settlement_id,description,fx_rate,fx_source,fx_rate_date
+2026-09-14T10:04:11+05:30,payment,priya@example.invalid,pay_QX7fK2mNbT1aZ9,INR,20.00,1180.00,180.00,980.00,setl_9nQ2rT7bV1xK,"LexOS Pro, monthly, invoice #4471",,,
+2026-09-14T10:04:12+05:30,payment,r.kumar@example.invalid,pay_7Hs3vN9pL2wR4d,INR,40.00,2360.00,360.00,1960.00,setl_9nQ2rT7bV1xK,"LexOS Pro (annual), ""founding"" price",,,
+2026-09-14T11:20:00+05:30,payment,anita@example.invalid,pay_M4kZ1xQ8tB6nJ0,INR,11.81,590.50,90.08,488.61,setl_9nQ2rT7bV1xK,LexOS Starter,,,
+2026-09-14T23:59:59+05:30,payment,dev@example.invalid,pay_D2fY6cH0sV3mL8,INR,2.00,100.00,0.00,98.00,setl_9nQ2rT7bV1xK,"Top-up, no GST",,,
+,settlement_total,,,INR,73.81,4230.50,630.08,3526.61,,,,,
