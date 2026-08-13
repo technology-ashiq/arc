@@ -164,17 +164,33 @@ bash .claude/scripts/hq/arc-inbox.sh approve ULID --reason "..."   # or: reject
 ## Replay: re-checking a number without spending anything
 
 ```bash
-node .claude/scripts/engine/arc-bench.mjs --replay DIR/capture --out SOMEWHERE
+node .claude/scripts/engine/arc-bench.mjs --replay DIR            # the bundle root
+node .claude/scripts/engine/arc-bench.mjs --replay DIR/capture    # or the capture dir
 ```
+
+Either path works, deliberately: a live run writes captures to `<out>/capture/` and its scorecard
+to `<out>/`, so pointing `--replay` at the only directory that holds the attempts could never find
+the baseline beside them. It looked in one place and the comparison was skipped on every honestly
+produced bundle.
 
 Re-scoring the captured bytes produces a **byte-identical** scorecard. That is what makes a
 disputed figure re-checkable for free. It works because the scorecard is a function of the
 captured bytes alone — timings, costs, temp paths and the router SHA live in `provenance.json`,
 which replay is not expected to reproduce.
 
-- `MATCHES byte for byte` → exit 0.
-- `MISMATCH` → exit 1. Something changed that should not have.
-- `STALE-FORMAT` → exit 3. The normalizer moved; re-score the champion before comparing.
+- `MATCHES byte for byte` → **exit 0**.
+- `MISMATCH` → **exit 1**. Something changed that should not have.
+- `STALE-FORMAT` → **exit 3**. The normalizer moved; re-score the champion before comparing.
+- **no `scorecard.json` to compare against** → **exit 2**. *"I could not compare"* does not share
+  an exit code with *"it matched"* — otherwise deleting one file converts a detected mismatch into
+  a pass.
+- **the bundle holds no captured attempts** → **exit 2**. An empty directory is not a passing
+  replay.
+
+A capture bundle is also **validated before it is believed**: attempt files must be exactly
+`0.json … n-1.json`, with no gaps, duplicates or leading zeros (`00.json` sorted to rank 0 as a
+distinct file and silently made K=4), and a record claiming `schema: true` on an attempt that
+produced no output is refused outright.
 
 ---
 
