@@ -109,7 +109,21 @@ S_STATUS() { cat "$BATS_FILE_TMPDIR/seal.status"; }
   [[ "$(S)" == *"ok and the sweep covered the scorecard, the provenance and the captures"* ]]
 }
 
+@test "invoking bench through a symlink still runs it" {
+  # THE macOS FAILURE OF 2026-08-13, pinned. `import.meta.url` is always the REAL path because
+  # Node resolves ESM modules through symlinks; `process.argv[1]` is whatever the caller typed and
+  # `resolve()` does not follow one. The main guard compared the two, so an invocation through a
+  # symlink made them differ, `main()` never ran, and the CLI EXITED 0 HAVING DONE NOTHING.
+  #
+  # On macOS `os.tmpdir()` is `/var/folders/...`, a symlink to `/private/var/folders/...`, so every
+  # sandboxed invocation on that leg was a silent no-op and this whole file went red with nothing
+  # in the log to say why. The probe asserts on OUTPUT, never on the exit code -- the bug produced
+  # exit 0, so an exit-code check would have walked straight past it.
+  [ "$(S_STATUS)" -eq 0 ]
+  [[ "$(S)" == *"invoking bench through a SYMLINK still runs it"* || "$(S)" == *"SKIPPED the symlink guard pin"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 12 ]
 }

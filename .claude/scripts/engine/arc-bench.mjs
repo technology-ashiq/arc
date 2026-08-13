@@ -416,7 +416,7 @@ export function repoStatus(root) {
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -2316,6 +2316,29 @@ function main() {
   process.exit(report.outcome === "ok" && receipt.landed ? EXIT.OK : EXIT.PARTIAL);
 }
 
-// Windows argv[1] arrives however the caller typed it, so both sides are resolved before the
-// comparison -- an unresolved relative path never matches and the CLI silently does nothing.
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main();
+/**
+ * THE MAIN GUARD, AND WHY IT COMPARES REALPATHS.
+ *
+ * Node resolves an ESM module's URL through symlinks, so `import.meta.url` is always the REAL
+ * path. `process.argv[1]` is whatever the caller typed. `resolve()` normalises separators and
+ * relative segments but does NOT follow a symlink -- so invoking this file through one made the
+ * two sides differ, `main()` never ran, and the CLI **exited 0 having done nothing at all**.
+ *
+ * That is not hypothetical and it is not a corner: on macOS `os.tmpdir()` is `/var/folders/...`,
+ * which is a symlink to `/private/var/folders/...`, so every sandboxed invocation on that leg was
+ * a silent no-op. Reproduced on Windows through a directory junction before it was believed.
+ *
+ * A silent success is the worst failure shape there is: the suite saw exit 0, the artifacts were
+ * simply absent, and nothing anywhere said why.
+ */
+function invokedDirectly() {
+  if (!process.argv[1]) return false;
+  const asked = resolve(process.argv[1]);
+  const self = fileURLToPath(import.meta.url);
+  if (asked === self) return true;
+  // realpath BOTH sides: the caller's path may be symlinked, and on a case-insensitive volume the
+  // two can also differ only by case, which realpath normalises.
+  try { return realpathSync(asked) === realpathSync(self); } catch { return false; }
+}
+
+if (invokedDirectly()) main();

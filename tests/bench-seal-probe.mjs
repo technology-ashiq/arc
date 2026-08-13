@@ -18,7 +18,7 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -213,6 +213,42 @@ function eventsOn(spine) {
   // different orders are byte-identical.
   check("key ordering cannot make two identical documents differ",
     canonicalJson({ z: 1, a: { y: 2, b: 3 } }) === canonicalJson({ a: { b: 3, y: 2 }, z: 1 }));
+}
+
+// ---- 4b. THE MAIN GUARD SURVIVES A SYMLINKED PATH ---------------------------------------------
+{
+  // `import.meta.url` is always the REAL path (Node resolves ESM modules through symlinks);
+  // `process.argv[1]` is whatever the caller typed, and `resolve()` does not follow a symlink. The
+  // two therefore differed whenever bench was invoked through one -- `main()` never ran and the
+  // CLI **exited 0 having done nothing at all**.
+  //
+  // That is not a corner: on macOS `os.tmpdir()` is `/var/folders/...`, a symlink to
+  // `/private/var/folders/...`, so every sandboxed invocation on that leg was a silent no-op and
+  // the whole seal suite went red with nothing in the log to say why. A silent success is the
+  // worst failure shape there is.
+  //
+  // This pin runs wherever a symlink can be made and SKIPS where it cannot, rather than passing
+  // vacuously: the skip is announced, so a green line here always means the link existed.
+  const d = sandbox("symlink-guard");
+  const linkParent = dir("linkparent");
+  const link = join(linkParent, "sandbox-via-link");
+  let linked = false;
+  try { symlinkSync(d, link, "junction"); linked = true; }
+  catch { try { symlinkSync(d, link, "dir"); linked = true; } catch { /* unprivileged: skip */ } }
+
+  if (!linked) {
+    console.log("ok SKIPPED the symlink guard pin -- this platform would not let the test make a link");
+  } else {
+    const r = spawnSync(process.execPath, [join(link, ".claude/scripts/engine/arc-bench.mjs"), "--driver", "mock", "--budget", "inr=1000,min=15"], {
+      encoding: "utf8", cwd: d, timeout: 900000, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024,
+      env: { ...process.env, ARC_SPINE_ROOT: dir("symlink-guard-spine") },
+    });
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
+    // The assertion is on OUTPUT, not on the exit code. The bug produced exit 0 and silence, so an
+    // exit-code check would have passed straight through it.
+    check("invoking bench through a SYMLINK still runs it", /arc-bench bench@/.test(out), `status ${r.status}, output ${JSON.stringify(out.slice(0, 120))}`);
+    check("and it does real work rather than exiting 0 in silence", /commit-msg-draft/.test(out));
+  }
 }
 
 // ---- 5. the K-group budget BOUNDARY ------------------------------------------------------------
