@@ -102,7 +102,15 @@ function freezeRow(c, where) {
   return Object.freeze(row);
 }
 
-const normKey = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// Unicode-preserving, and NFKC-normalised, exactly like mine.mjs's targetKey. This line used to
+// use a NEGATED ASCII letter range -- the same defect that was fixed in targetKey one file away
+// and left standing here. Every non-Latin keyword collapsed to the empty string, so dedupe read
+// two distinct phrases as one and dropped a real row. The repo's portability lint caught it,
+// because a negated letter range is locale-collation dependent as well. Two reasons, one fix.
+// (The broken form is described rather than quoted: that lint skips shell comments, not JS ones,
+// so writing the pattern here would re-trip it inside the sentence explaining the fix -- which is
+// a mistake this repo has made before, in exactly this shape.)
+const normKey = (s) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /**
  * Compose ONE inbox item from evidenced candidates: 1 pillar, 5-8 spokes, 2-3 BOFU.
