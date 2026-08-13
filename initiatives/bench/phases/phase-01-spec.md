@@ -50,6 +50,42 @@ byte-identically.
 - [ ] every new test file asserts its own registered test count; every `@test` name is ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## Amendments made while building (2026-08-13)
+
+Four, each recorded rather than slipped in.
+
+1. **The closed flag set grows by exactly two: `--out DIR` and `--replay DIR`** — and the exit
+   codes by one, **`3` = stale-format**. Phase 00's **M13** fixed a closed six-flag set, and this
+   phase's DoD requires *"re-scoring captured outputs yields a byte-identical scorecard"*. There
+   is no way to say *score these captured bytes* in six flags that were all written for a live
+   run. `--out` is what makes the bundle exist to replay at all; defaulting it to a fixed path
+   instead would make every test write to one shared directory. `3` is separate from `1` because
+   a normalizer bump invalidates every stored scorecard **by construction** (ADR-0913) and
+   reporting that as a mismatch sends someone hunting a corruption that never happened.
+2. **One test file, `tests/bench-core.bats`, not the two the verification plan names.** The checks
+   live in one probe that spawns a full K=3 run; splitting them across `bench-budget.bats` and
+   `bench-replay.bats` would run that probe twice for no additional coverage, and each extra file
+   also reshuffles the shard plan. Same assertions, same probe, one file.
+3. **`ARC_BENCH_CEILINGS`, a test-only door** with the same contract as `ARC_SPINE_ROOT`:
+   honoured on PRESENCE, so an empty value cannot fall through to the real file. Admission control
+   cannot be exercised at all without it — every interesting case needs caps the shipped file does
+   not have, and editing the shipped ceilings from a test would leave the repo's real safety bound
+   as test scaffolding.
+4. **The ceiling keys on the model that will be APPLIED, never the one requested.** A bound exists
+   to cover what an invocation will really spend, and `--model` does not reach the driver at all
+   (phase-00 spec, M1 amendment) — so keying on the request would look up a ceiling for a pair
+   that is never invoked. The applied model is `null` until the engine grows a model seam, at
+   which point this lookup starts refusing real pairs that have no entry, which is what it should
+   do. `subject.ceiling_key` records **which row** bounded the run; the number itself never
+   leaves `provenance.json`.
+
+**One DoD item cannot be met as written, and it is not this phase's to fix.** *"The provenance
+tuple … with `subject` … and `request_settings`"* — bench has no channel through `arc-run` to set
+temperature or any other provider knob, so `request_settings` is an **absent key**. Declaring
+`temperature: 0` would record a setting nothing applied, which is precisely what ADR-0069 b(5)
+forbids. Same root cause as the model seam: `arc-run` rebuilds the driver environment and
+overwrites what bench sets.
+
 ## Verification plan
 
 - **Test command:** `bats tests/bench-budget.bats` then `bats tests/bench-replay.bats` — one
