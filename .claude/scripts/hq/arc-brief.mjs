@@ -156,7 +156,7 @@ function parseArgs(argv) {
 // it measures. They arrive here as a pre-computed array so this file does no deriving of its own,
 // and they land in needs-you because REQ-03 says a crossing needs a human -- a warning does not,
 // and a warning in this group would train the reader to skim the group that must never be skimmed.
-export function render(day, events, torn, { full = false, killCrossings = [] } = {}) {
+export function render(day, events, torn, { full = false, killCrossings = [], killNotice = null } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -175,7 +175,17 @@ export function render(day, events, torn, { full = false, killCrossings = [] } =
     .slice()
     .sort((a, b) => (a.venture < b.venture ? -1 : a.venture > b.venture ? 1
       : a.criterion < b.criterion ? -1 : a.criterion > b.criterion ? 1 : 0))
-    .map((c) => `  kill line CROSSED  ${c.venture}  ${c.criterion} ${c.value} of ${c.threshold}`);
+    .map((c) => `  kill line CROSSED  ${c.venture}  ${c.criterion} ${c.value} of ${c.threshold} ${c.unit || ""}`.trimEnd());
+  // AN UNEVALUATED PANEL SAYS SO. `arc pnl` already refuses loudly when the criteria file is
+  // unreceipted, and this file used to fall back to an empty crossings array on the strength of
+  // that -- which only helps someone who runs `arc pnl`. An adversarial pass took a genuinely
+  // crossed line, nudged the threshold by one (still crossed), and the daily brief went from
+  // naming the crossing to saying nothing at all, exit 0, zero bytes of warning. Moving a goalpost
+  // is thus a one-line way to make the alarm stop, on the surface a human actually reads daily.
+  //
+  // This is arc-pnl's own rule -- ABSENT rows are printed, never dropped -- applied one file over,
+  // which is where this lane's twin-fix defects keep being found.
+  if (killNotice) killLines.push(`  ${killNotice}`);
 
   const groupLines = (g) => {
     const evs = buckets.get(g);
@@ -257,7 +267,10 @@ async function main(argv) {
   // trust, and `arc pnl` is the surface that refuses loudly.
   const panel = await deriveKillPanel(root, { engine: flags.engine });
   const killCrossings = panel.present && panel.receipted ? panel.crossings : [];
-  process.stdout.write(render(day, events, torn, { full: flags.full === true, killCrossings }));
+  const killNotice = panel.present && !panel.receipted
+    ? `kill lines NOT EVALUATED -- ventures.yaml is unreceipted (digest ${panel.digest}); run arc-pnl for the full refusal`
+    : null;
+  process.stdout.write(render(day, events, torn, { full: flags.full === true, killCrossings, killNotice }));
   return 0;
 }
 

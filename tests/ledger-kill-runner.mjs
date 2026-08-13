@@ -102,9 +102,13 @@ if (mode === "eval") {
   const value = parseJsonArg("value", valueText);
   try {
     const r = kd.evaluateCriterion({ criterion, threshold, value });
+    // `unit` is printed on its own line like every other field, so a test can assert it by EQUALITY
+    // rather than by hunting for the word "days" somewhere in a sentence. It was declared in
+    // POLARITY and never returned for the whole of Phase 01, which left arc-pnl reading `c.unit`
+    // as undefined and printing every distance as a bare number.
     process.stdout.write(
       `criterion=${orDash(r.criterion)}\nstatus=${orDash(r.status)}\nthreshold=${orDash(r.threshold)}\n` +
-      `value=${orDash(r.value)}\ndistance=${orDash(r.distance)}\nreason=${orDash(r.reason)}\n`);
+      `value=${orDash(r.value)}\ndistance=${orDash(r.distance)}\nunit=${orDash(r.unit)}\nreason=${orDash(r.reason)}\n`);
     // Printed LAST and only here: a probe that asserts on a field name alone cannot tell a complete
     // answer from a half-written one, and a crash mid-write leaves a plausible-looking prefix.
     process.stdout.write("EVAL_OK\n");
@@ -127,7 +131,7 @@ if (mode === "venture") {
     // One line per criterion, in the module's own order, so a row that VANISHED from the result is
     // visible as a missing line rather than as a number that happens to still look plausible.
     for (const c of v.criteria)
-      process.stdout.write(`row criterion=${orDash(c.criterion)} status=${orDash(c.status)} distance=${orDash(c.distance)} reason=${orDash(c.reason)}\n`);
+      process.stdout.write(`row criterion=${orDash(c.criterion)} status=${orDash(c.status)} distance=${orDash(c.distance)} unit=${orDash(c.unit)} reason=${orDash(c.reason)}\n`);
     process.stdout.write("VENTURE_OK\n");
     process.exit(0);
   } catch (err) {

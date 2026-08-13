@@ -11,7 +11,13 @@
 #                    than drop them. A list that silently omits what it could not compute is
 #                    shorter, greener and indistinguishable from a healthy venture (ADR-1018).
 #   THE BRIEF        a CROSSED line is a needs-you item; a WARNING is not. A warning in the one
-#                    group that must never be skimmed is how a reader learns to skim it.
+#                    group that must never be skimmed is how a reader learns to skim it. Both
+#                    surfaces raise the item, so both surfaces are asserted -- "closed in one file,
+#                    left open in its twin" is this lane's recorded scar.
+#
+# THREE OF THESE TESTS ARE RED FIXTURES FOR DEFECTS THE ADVERSARIAL PASS FOUND, and each names the
+# defect in its own body rather than here: a future-dated revenue event erasing a crossing, `unit`
+# declared and never returned, and a crossing computed and then discarded before needs-you.
 #
 # BOUNDARIES ARE PINNED ON BOTH POLARITIES, at the exact unit. `days_without_revenue` is a CEILING
 # climbed toward from below and `traffic_floor_monthly` is a FLOOR sunk toward from above, and the
@@ -66,6 +72,20 @@ _revenue() {
   [ -n "$id" ] || { echo "no revenue was sealed for $venture -- every kill clock below would count from nothing"; return 1; }
 }
 
+# Revenue dated AFTER every render in this file. Emitted through the ordinary clock door
+# (ARC_SPINE_NOW) rather than hand-written, because that is exactly how it happens for real: a box
+# with a skewed clock, and `revenue.received` needs no approval from anyone.
+# DAY0 + 400 days is 2027-08-26, comfortably past every `asOf` here.
+_future_revenue() {
+  local venture="$1" tag="$2" id
+  _tick=$((_tick+1))
+  printf '{"amount":250000,"currency":"INR","venture":"%s","provider":"razorpay","provider_payment_id":"razorpay:pay_%s"}' \
+    "$venture" "$tag" > "$BATS_TEST_TMPDIR/rev-$_tick.json"
+  id="$(ARC_SPINE_NOW=$((DAY0 + 400*DAY)) bash "$EVENT" ingest revenue.received \
+        --json "$BATS_TEST_TMPDIR/rev-$_tick.json" --venture "$venture" | tr -d '\r')"
+  [ -n "$id" ] || { echo "the future-dated revenue event was never sealed -- the exclusion below would be testing nothing"; return 1; }
+}
+
 _cost() {
   local venture="$1" id
   _tick=$((_tick+1))
@@ -86,6 +106,12 @@ _cost() {
 # The digest comes from `arc pnl --criteria-digest`, i.e. from the code under test rather than from
 # a literal pasted into this file: a pinned digest would go stale the first time the fixture changed
 # and the suite would then be proving that an unreceipted file refuses.
+#
+# ARC_VENTURES_FILE is exported here and every CLI test in this file goes through this builder --
+# which matters since `venturesPath()` stopped returning null for a named spine and now walks up
+# from cwd for the repo's own `ventures.yaml`. A CLI test that skipped this builder would silently
+# be reading arc's real criteria file against a scratch spine, find it unreceipted, and exit 3 with
+# an EMPTY stdout that satisfies every "does not contain" assertion in the file.
 _criteria() {
   local venture="$1" days="$2" traffic="$3" digest idem id
   printf 'version: 1\nventures:\n  %s:\n    kill:\n      days_without_revenue: %s\n      traffic_floor_monthly: %s\n' \
@@ -94,6 +120,8 @@ _criteria() {
 
   digest="$(ARC_SPINE_NOW=$DAY0 bash "$PNL" --criteria-digest | tr -d '\r')"
   [ -n "$digest" ] || { echo "arc-pnl printed no criteria digest -- the criteria fixture is empty"; return 1; }
+  # Published for the tests that assert the panel names its own criteria. Deliberately NOT local.
+  CRITERIA_DIGEST="$digest"
 
   idem="$(printf '%s' "ledger.criteria|$digest" | _arc_sha256 | tr -d '\r')"
   printf '{"subject":"ledger.criteria","digest":"%s","what":"kill-distance suite fixture"}' "$digest" \
@@ -298,6 +326,48 @@ ROWS
   [[ "$output" != *"status=OK"* ]] || { echo "a missing line rendered as a pass: $output"; false; }
 }
 
+@test "kill: unit rides on every row, absent rows included, and reaches the rendered panel" {
+  # `unit` was declared in POLARITY and never RETURNED, so arc-pnl's `${c.unit ?? ""}` was dead from
+  # the day it was written and every distance rendered as a bare number: "999776 to the line", of
+  # what. Asserted at all three construction sites, because a row built by one path and a row built
+  # by another are exactly where a field goes missing from one of them.
+  local out
+  # 1. an EVALUATED row
+  run node "$KD" eval days_without_revenue 90 224
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"EVAL_OK"* ]] || { echo "$output"; false; }
+  [ "$(_kd_field unit "$output")" = "days" ] || { echo "an evaluated row carries no unit: $output"; false; }
+
+  # 2. an ABSENT row from a null OBSERVATION -- the row the renderer reaches most often, since
+  #    traffic is absent on every render in this lane
+  run node "$KD" eval traffic_floor_monthly 500 null
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_kd_field status "$output")" = "ABSENT" ] || { echo "$output"; false; }
+  [ "$(_kd_field unit "$output")" = "visits/month" ] || { echo "an ABSENT row lost its unit: $output"; false; }
+
+  # 3. an ABSENT row from an UNDECLARED LINE -- a different early return, and the one that would
+  #    have to thread the unit through by hand
+  run node "$KD" eval days_without_revenue null 5
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$(_kd_field status "$output")" = "ABSENT" ] || { echo "$output"; false; }
+  [ "$(_kd_field unit "$output")" = "days" ] || { echo "an undeclared-line row lost its unit: $output"; false; }
+
+  # 4. and through evaluateVenture, which is what the panel actually calls
+  run node "$KD" venture lexos '{"days_without_revenue":90,"traffic_floor_monthly":500}' '{"lexos":{"days_without_revenue":5,"traffic_floor_monthly":null}}'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"row criterion=days_without_revenue status=OK distance=85 unit=days"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"row criterion=traffic_floor_monthly status=ABSENT distance=- unit=visits/month"* ]] || { echo "$output"; false; }
+
+  # 5. AND IT REACHES THE RENDER. Every assertion above is about a field on an object; this is the
+  #    one that fails if the renderer stops reading it, which is the state this whole test found.
+  _revenue lexos u0001
+  _criteria lexos 90 500
+  run _pnl_at $((DAY0 + 5*DAY))
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"days_without_revenue  5 of 90 days  85 to the line"* ]] \
+    || { echo "the unit never reached the rendered panel line: $output"; false; }
+}
+
 @test "kill: ABSENT criteria are counted and never fold into the venture worst" {
   # absentCount exists so a caller can print "2 criteria could not be evaluated" instead of a
   # shorter, healthier-looking list. And ABSENT is deliberately NOT ranked in the severity scale:
@@ -334,14 +404,85 @@ ROWS
   [ -n "$output" ]
   # The panel rendered at all, and the criteria receipt held (an unreceipted file exits 3 with an
   # EMPTY stdout, which would satisfy every "does not contain" below).
-  [[ "$output" == *"kill lines (as of 2026-07-27)"* ]] || { echo "no kill panel was rendered: $output"; false; }
-  # The measurable criterion is there with its exact figures -- so the absent row below is an
-  # ADDITION to a working list, not the only thing the panel managed to print.
-  [[ "$output" == *"days_without_revenue  5 of 90"* ]] || { echo "the observable criterion is wrong or missing: $output"; false; }
+  [[ "$output" == *"kill lines (as of 2026-07-27)  criteria $CRITERIA_DIGEST"* ]] || { echo "no kill panel was rendered: $output"; false; }
+  # The measurable criterion is there with its exact figures AND its unit -- so the absent row below
+  # is an ADDITION to a working list, not the only thing the panel managed to print. The trailing
+  # `days` is load-bearing: `unit` was declared and never returned, so this line read `5 of 90` and
+  # the distance read `85 to the line` -- 85 of what.
+  [[ "$output" == *"days_without_revenue  5 of 90 days  85 to the line"* ]] || { echo "the observable criterion is wrong or missing: $output"; false; }
   # And the unmeasurable one is there too, carrying its reason.
   [[ "$output" == *"traffic_floor_monthly"* ]] || { echo "the criterion that could not be evaluated was DROPPED from the panel: $output"; false; }
   [[ "$output" == *"not evaluated: ledger has no traffic data source"* ]] || { echo "the absent row carries no reason: $output"; false; }
   [[ "$output" == *"1 criterion could not be evaluated"* ]] || { echo "the absent count is not surfaced: $output"; false; }
+}
+
+@test "kill: a crossing is a needs-you item in arc pnl and the panel names its criteria digest" {
+  # `crossings`, `warnings` and `worst` were all computed and DISCARDED: a crossed kill line exited
+  # 0, raised nothing, and was findable only by string-matching the middle of the P&L body. The
+  # brief had the item; its twin one file over did not.
+  _revenue lexos n0001
+  _criteria lexos 30 500
+
+  run _pnl_at $((DAY0 + 40*DAY))
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"needs you (1)"* ]] || { echo "a crossed kill line raised no needs-you item: $output"; false; }
+  [[ "$output" == *"kill line CROSSED: lexos days_without_revenue 40 of 30 days"* ]] \
+    || { echo "the needs-you item does not name the crossing: $output"; false; }
+
+  # THE DIGEST, NOT THE PATH. A path is different bytes on ubuntu, macos and windows and this
+  # stdout is compared against a golden on all three; the digest identifies the criteria exactly
+  # and is identical everywhere. Asserted as the SAME digest the receipt was written against, so a
+  # panel that printed some other file's criteria fails here.
+  [[ "$output" == *"kill lines (as of 2026-08-31)  criteria $CRITERIA_DIGEST"* ]] \
+    || { echo "the panel header does not name its criteria digest: $output"; false; }
+  # The basename, not "$VENTURES": a scratch path is spelled differently by bash and by node on
+  # windows, so comparing the variable would pass on that leg no matter what was printed.
+  ! [[ "$output" == *"ventures.yaml"* ]] \
+    || { echo "the criteria PATH reached stdout, which is byte-compared on three operating systems: $output"; false; }
+
+  # And the path IS available -- on stderr, under the same debug flag the engine name uses. The two
+  # streams go to files rather than through `run`, which merges them: a test that cannot tell the
+  # streams apart cannot assert that the path is on one and not the other.
+  local dbg_rc=0
+  ( export ARC_SPINE_DEBUG=1; _pnl_at $((DAY0 + 40*DAY)) ) \
+    > "$BATS_TEST_TMPDIR/dbg.out" 2> "$BATS_TEST_TMPDIR/dbg.err" || dbg_rc=$?
+  [ "$dbg_rc" -eq 0 ] || { echo "the debug render exited $dbg_rc: $(cat "$BATS_TEST_TMPDIR/dbg.err")"; false; }
+  [ -s "$BATS_TEST_TMPDIR/dbg.out" ] || { echo "the debug render produced no P&L at all"; false; }
+  grep -q "ventures.yaml" "$BATS_TEST_TMPDIR/dbg.err" \
+    || { echo "the criteria path is on neither stream: $(cat "$BATS_TEST_TMPDIR/dbg.err")"; false; }
+  grep -q "digest=$CRITERIA_DIGEST" "$BATS_TEST_TMPDIR/dbg.err" \
+    || { echo "stderr names a path but not the digest it belongs to: $(cat "$BATS_TEST_TMPDIR/dbg.err")"; false; }
+}
+
+@test "kill: a future-dated revenue event cannot erase a crossing, and its exclusion is visible" {
+  # THE SHARPEST OF THE THREE. The clock took the MAX revenue day and nulled the observation when it
+  # was ahead of today, so ONE event dated 2027 turned a venture past its line from CROSSED into
+  # ABSENT -- printing "this venture has no revenue event on the spine" directly beneath a P&L
+  # listing that venture's revenue rows. `revenue.received` needs no approval, so ordinary clock
+  # skew does this.
+  _revenue lexos c0001                 # 2026-07-22, the day the clock counts from
+  _future_revenue lexos f0002          # 2027-08-26, ahead of every render below
+  _criteria lexos 30 500
+
+  run _pnl_at $((DAY0 + 40*DAY))
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+
+  # HALF ONE -- the crossing SURVIVES, measured from the newest NON-future revenue day.
+  [[ "$output" == *"days_without_revenue  40 of 30 days  CROSSED"* ]] \
+    || { echo "a future-dated event erased the crossing: $output"; false; }
+  [[ "$output" == *"kill line CROSSED: lexos days_without_revenue 40 of 30 days"* ]] \
+    || { echo "the crossing survived the panel but not the needs-you group: $output"; false; }
+  # The exact self-contradiction the bug produced: that reason, printed under those revenue rows.
+  [[ "$output" == *"2027-08-26"* ]] || { echo "the future-dated revenue row is not in the P&L, so this fixture is not the one: $output"; false; }
+  ! [[ "$output" == *"days_without_revenue  —  not evaluated"* ]] \
+    || { echo "the panel says this venture has no revenue while listing its revenue: $output"; false; }
+
+  # HALF TWO -- the exclusion is VISIBLE. Without this the test passes just as well on an
+  # implementation that quietly ignores every future-dated event, which is a different wrong
+  # answer: an operator whose clock is skewed would never learn that a receipt is being skipped.
+  [[ "$output" == *"revenue dated in the future: lexos has 1 revenue event(s) after today, excluded from the days-without-revenue clock"* ]] \
+    || { echo "the excluded event went silent: $output"; false; }
+  [[ "$output" == *"needs you (2)"* ]] || { echo "want both the crossing and the exclusion in needs-you: $output"; false; }
 }
 
 # ---------- C. degenerate inputs are refused, not clamped ----------
@@ -476,7 +617,7 @@ ROWS
 
   run _pnl_at $((DAY0 + 5*DAY))
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"kill lines (as of"* ]] || { echo "the plain render produced no panel: $output"; false; }
+  [[ "$output" == *"kill lines (as of"*"  criteria $CRITERIA_DIGEST"* ]] || { echo "the plain render produced no panel: $output"; false; }
 
   run _pnl_at $((DAY0 + 5*DAY)) --venture lexos
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -511,22 +652,27 @@ ROWS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"brief 2026-07-22"* ]] || { echo "the brief did not render: $output"; false; }
   [[ "$output" == *"needs-you"* ]] || { echo "no needs-you group at all: $output"; false; }
-  [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30"* ]] \
+  [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30 days"* ]] \
     || { echo "the crossing is not a needs-you item: $output"; false; }
 }
 
-@test "kill: a WARNING is never a needs-you item in arc brief" {
-  # A warning in the one group that must never be skimmed is how a reader learns to skim it.
+@test "kill: a WARNING is never a needs-you item, in arc pnl or in arc brief" {
+  # A warning in the one group that must never be skimmed is how a reader learns to skim it. BOTH
+  # surfaces are asserted in one test on purpose: "closed in one file, left open in its twin" is
+  # this lane's recorded scar, and the crossing twin of this rule lives in two separate tests.
   _revenue lexos w0001
   _criteria lexos 50 500          # 40 days later, 40 of 50 is exactly the 80% band: WARNING
 
-  # POSITIVE FIRST: the warning genuinely exists on this spine. Without this the two absence
-  # assertions below are satisfied by a spine with no criteria file, a refused render, or no
+  # POSITIVE FIRST: the warning genuinely exists on this spine. Without this every absence
+  # assertion below is satisfied by a spine with no criteria file, a refused render, or no
   # revenue at all.
   run _pnl_at $((DAY0 + 40*DAY))
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"days_without_revenue  40 of 50  WARNING 10 to the line"* ]] \
+  [[ "$output" == *"days_without_revenue  40 of 50 days  WARNING 10 to the line"* ]] \
     || { echo "the fixture does not produce a WARNING, so nothing below is being tested: $output"; false; }
+  # ARC PNL: the panel row above is the whole of a warning's reach. No needs-you item.
+  [[ "$output" != *"needs you"* ]] || { echo "a WARNING opened the arc-pnl needs-you group: $output"; false; }
+  [[ "$output" != *"kill line CROSSED"* ]] || { echo "a WARNING was reported as a crossing: $output"; false; }
 
   # The brief on the revenue day DOES render needs-you -- the criteria approval is one -- and the
   # warning still did not join it. That pairing is what makes the absence meaningful: the group is
@@ -557,7 +703,7 @@ ROWS
   # needs-you is non-empty anyway.
   [[ "$output" != *"money ("* ]] || { echo "2026-08-31 is not the quiet day this test needs: $output"; false; }
   [[ "$output" == *"needs-you (1)"* ]] || { echo "needs-you vanished on a day with no events: $output"; false; }
-  [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30 days"* ]] || { echo "$output"; false; }
 }
 
 @test "kill: this suite registers every test it declares" {

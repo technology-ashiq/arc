@@ -47,20 +47,36 @@ export function spineRoot() {
       );
     return resolve(named);
   }
+  const dir = repoRoot();
+  if (dir === null)
+    throw new SpineError(
+      "NO_ROOT",
+      "no repository with .claude/ and .git/ at or above cwd -- refusing to guess a spine location (set ARC_SPINE_ROOT to be explicit)",
+    );
+  assertNotLinkedWorktree(dir);
+  return join(dir, ".claude", "state", "hq");
+}
+
+/**
+ * The REPOSITORY root -- the directory holding both `.claude/` and `.git/` -- or null.
+ *
+ * Extracted from `spineRoot` so the walk exists ONCE. It is deliberately separate from the spine:
+ * `ARC_SPINE_ROOT` points the SPINE somewhere, and a caller that conflated the two read a repo file
+ * out of a scratch directory and silently found nothing there (ledger Phase 01, finding 1) -- the
+ * kill-criteria file vanished and, with it, the refusal that guards it.
+ *
+ * No worktree assertion here, unlike `spineRoot`. That refusal exists because `.claude/state/` is
+ * gitignored and every worktree gets its own empty one; a TRACKED file is present and identical in
+ * every worktree, so refusing to find one would be a rule with no failure behind it.
+ */
+export function repoRoot() {
   let dir = process.cwd();
   for (;;) {
-    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git"))) {
-      assertNotLinkedWorktree(dir);
-      return join(dir, ".claude", "state", "hq");
-    }
+    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git"))) return dir;
     const up = dirname(dir);
-    if (up === dir) break;
+    if (up === dir) return null;
     dir = up;
   }
-  throw new SpineError(
-    "NO_ROOT",
-    "no repository with .claude/ and .git/ at or above cwd -- refusing to guess a spine location (set ARC_SPINE_ROOT to be explicit)",
-  );
 }
 
 /**

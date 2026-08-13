@@ -11,7 +11,7 @@
 // So stdout is the P&L and nothing else, and the engine is announced on stderr under
 // ARC_SPINE_DEBUG, exactly as spine.mjs already does it. The test reads both streams.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { SpineError } from "./lib/canonical.mjs";
 import { spineRoot } from "./spine.mjs";
 import { derivePnl } from "./lib/ledger/pnl.mjs";
@@ -31,6 +31,9 @@ function parseArgs(argv) {
     const eq = a.indexOf("=");
     if (eq !== -1) {
       const name = a.slice(2, eq);
+      // A KNOWN flag given a value it does not take must say THAT, not "unknown flag". The old
+      // message sent the reader looking for a typo in a flag that is spelled correctly.
+      if (BOOL_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `flag --${name} takes no value`);
       if (!VALUE_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
       flags[name] = a.slice(eq + 1);
       continue;
@@ -40,6 +43,13 @@ function parseArgs(argv) {
     if (!VALUE_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
     const next = argv[i + 1];
     if (next === undefined) throw new SpineError("BAD_ARGS", `flag --${name} needs a value`);
+    // A VALUE THAT IS ITSELF A FLAG IS AN UNQUOTED EMPTY VARIABLE, and this repo has the scar:
+    // `.claude/rules/lanes.md` records an unquoted empty value eating the next flag. Here
+    // `--venture $EMPTY --simulated` consumed `--simulated` as the venture name, so a SIMULATED
+    // render came out with no watermark on it at all -- real-looking kill lines in a view that
+    // exists to be obviously fake. `--month` survived only because a regex happened to catch it.
+    if (typeof next === "string" && next.startsWith("--"))
+      throw new SpineError("BAD_ARGS", `flag --${name} was given ${JSON.stringify(next)}, which is another flag -- an unquoted empty variable swallows the flag after it, and this one changes what the output MEANS`);
     flags[name] = next;
     i++;
   }
@@ -97,10 +107,22 @@ export function render(model, panel = null) {
     for (const x of t) out.push(`${mark}  ${x.month}  ${x.venture}  ${x.type}  ${rupees(x.from || 0)} -> ${rupees(x.to)}`);
   }
 
-  if (model.needsYou.length) {
+  // A CROSSING IS A NEEDS-YOU ITEM HERE TOO, not only in the brief. The first version computed
+  // `crossings`, `warnings` and `worst` and discarded all three: a crossed kill line exited 0,
+  // raised nothing, and was detectable only by string-matching the middle of the P&L body. A
+  // WARNING is deliberately NOT here -- it is on its own line in the panel, and a needs-you that
+  // fires before anything has happened is how the group stops being read.
+  const kill = (panel && panel.receipted ? panel.crossings : []).map((c) =>
+    ({ type: "kill line CROSSED", detail: `${c.venture} ${c.criterion} ${c.value} of ${c.threshold} ${c.unit || ""}`.trimEnd() }));
+  // A future-dated revenue event cannot be allowed to go quiet: it is excluded from the age clock
+  // (it would otherwise erase a crossing), so the exclusion itself has to be visible.
+  const future = (panel && panel.receipted ? panel.futureRevenue || [] : []).map((f) =>
+    ({ type: "revenue dated in the future", detail: `${f.venture} has ${f.count} revenue event(s) after today, excluded from the days-without-revenue clock` }));
+  const needsYou = [...model.needsYou, ...kill, ...future];
+  if (needsYou.length) {
     out.push("");
-    out.push(`${mark}needs you (${model.needsYou.length})`);
-    for (const f of model.needsYou.slice().sort((a, b) =>
+    out.push(`${mark}needs you (${needsYou.length})`);
+    for (const f of needsYou.slice().sort((a, b) =>
       a.type < b.type ? -1 : a.type > b.type ? 1 : a.detail < b.detail ? -1 : a.detail > b.detail ? 1 : 0))
       out.push(`${mark}  ${f.type}: ${f.detail}`);
   }
@@ -117,7 +139,16 @@ export function render(model, panel = null) {
 // shorter and greener than the truth, and indistinguishable from a healthy venture (ADR-1018).
 export function renderKill(panel, mark = "") {
   if (!panel || !panel.present || !panel.receipted) return [];
-  const out = ["", `${mark}kill lines (as of ${panel.asOf})`];
+  // PROVENANCE ON THE SUCCESS PATH, not only on the refusal. The refusal named the file and the
+  // digest; a successful render named neither, so two renders on one box against two different
+  // criteria files produced panels indistinguishable in origin -- which is what made a vanished
+  // panel invisible rather than merely possible.
+  //
+  // THE DIGEST, NOT THE PATH. A path is different bytes on ubuntu, macos and windows, and REQ-01
+  // compares this stdout against a golden on all three; the digest identifies the criteria exactly
+  // and is identical everywhere. The path is announced on stderr under ARC_SPINE_DEBUG, which is
+  // the same split the engine name already uses and for the same reason.
+  const out = ["", `${mark}kill lines (as of ${panel.asOf})  criteria ${panel.digest}`];
   for (const v of panel.ventures) {
     out.push(`${mark}  ${v.venture}`);
     for (const c of v.criteria) {
@@ -165,14 +196,28 @@ async function main(argv) {
   // command you run BEFORE the receipt exists, and a version of it that needed a green receipt to
   // print the digest that would make the receipt green could never be run for the first edit.
   if (flags["criteria-digest"] === true) {
-    const path = venturesPath(spineRoot());
+    const path = venturesPath();
     if (path === null) throw new SpineError("NO_VENTURES", "no ventures.yaml resolvable -- set ARC_VENTURES_FILE to name one");
+    // Guarded rather than left to readFileSync, which reported ENOENT and EISDIR as `ERROR INTERNAL`
+    // -- a raw errno and a machine path presented to the operator as an internal fault, when the
+    // actual situation is an ordinary configuration mistake with a name.
+    if (!existsSync(path))
+      throw new SpineError("NO_VENTURES", `no criteria file at ${path}`);
+    if (!statSync(path).isFile())
+      throw new SpineError("NO_VENTURES", `${path} is not a regular file`);
     process.stdout.write(`${parseVentures(readFileSync(path, "utf8")).digest}\n`);
     return 0;
   }
 
   if (flags.month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(flags.month))
     throw new SpineError("BAD_ARGS", `--month "${flags.month}" is not YYYY-MM`);
+  // AN UNKNOWN ENGINE NAME MUST NOT FALL BACK TO `scan`. This file's own header explains why the
+  // engine is announced at all: a box without sqlite would otherwise run scan twice, compare a
+  // thing to itself, and report the equivalence gate green. A typo'd `--engine sqlite3` produced
+  // exactly that -- two scan legs, byte-identical by construction, gate green -- because the value
+  // was silently ignored. The announcement existed; nothing refused the bad value.
+  if (flags.engine !== undefined && flags.engine !== "scan" && flags.engine !== "sqlite")
+    throw new SpineError("BAD_ARGS", `--engine ${JSON.stringify(flags.engine)} is neither "scan" nor "sqlite" -- an unrecognised engine used to fall back to scan silently, which is how an equivalence gate compares a thing to itself and passes`);
 
   const root = spineRoot();
   const model = await derivePnl(root, {
@@ -197,7 +242,12 @@ async function main(argv) {
     return 3;
   }
 
-  if (process.env.ARC_SPINE_DEBUG) process.stderr.write(`arc-pnl: engine=${model.engine} process=${PROCESS_ID}\n`);
+  if (process.env.ARC_SPINE_DEBUG) {
+    process.stderr.write(`arc-pnl: engine=${model.engine} process=${PROCESS_ID}\n`);
+    // The path lives here rather than on stdout: it is machine-specific bytes, and stdout is
+    // compared against a golden on three operating systems.
+    if (panel.present) process.stderr.write(`arc-pnl: criteria=${panel.path} digest=${panel.digest}\n`);
+  }
   process.stdout.write(render(model, panel));
   return 0;
 }

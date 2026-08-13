@@ -103,6 +103,16 @@ function refuseFeatures(table, text, lineNo, raw) {
 // structure depends on the editor that opens it. NUL is named on its own because a raw 0x00
 // recently made another file in this lane binary to git, which hid its entire diff.
 // JSON.stringify escapes the offender, so the message stays printable in a terminal.
+//
+// HONEST LIMIT OF THE C1 BRANCH (0x80-0x9f), stated rather than implied, because an earlier version
+// of this comment implied more than the code does. The check runs on the DECODED string, and the
+// caller decodes with utf8, which maps every invalid byte sequence to U+FFFD before this ever sees
+// it. So a raw latin-1 or cp1252 high byte -- the realistic way a C1 byte reaches a YAML file at
+// all -- arrives here as U+FFFD (above 0x9f) and does NOT trip this branch; only a properly encoded
+// C1 code point such as U+0085 does. The residual is bounded rather than dangerous: mojibake
+// survives only inside a comment, since the same byte in a key, a venture name or a value is
+// refused by the grammar (BAD_VENTURES_SYNTAX / BAD_VENTURES_VALUE), and a comment cannot move the
+// digest. A grammar is worth what it refuses, never what its comment says it refuses.
 function assertNoControlChars(text) {
   for (let i = 0; i < text.length; i++) {
     const c = text.charCodeAt(i);
@@ -186,10 +196,21 @@ export function parseVentures(text) {
     if (/ $/.test(raw))
       fail("BAD_VENTURES_SYNTAX", lineNo, raw, "trailing whitespace after a value; an edit nobody can see must not be an edit this parser accepts");
 
-    // In THIS subset a `#` always starts a comment, because there is no quoting anywhere in the
-    // grammar for one to hide inside. Real YAML would not say that -- `a: "b#c"` keeps the hash --
-    // and the difference is safe only because no legal value here can contain one.
-    const hash = raw.indexOf("#");
+    // A `#` STARTS A COMMENT ONLY WHEN WHITESPACE PRECEDES IT -- which is real YAML's rule, and is
+    // here for a reason found by attacking the version that dropped it.
+    //
+    // That version truncated at the FIRST `#` anywhere, and defended the divergence from YAML with
+    // "safe because no legal value can contain one". That reasons about a value that WANTS a hash.
+    // The dangerous case is a value whose truncation leaves a DIFFERENT LEGAL VALUE:
+    //
+    //   days_without_revenue: 90#000      accepted as 90        (PyYAML reads the string "90#000")
+    //   traffic_floor_monthly: 1#00000    accepted as 1         a floor of one visit a month
+    //
+    // Both passed INTEGER_RE, because the regex was applied AFTER the truncation, and both slipped
+    // under MAX_CRITERION_VALUE -- the ceiling built precisely to catch trailing-zero slips -- for
+    // the same reason. Every other YAML reader, and every editor's syntax highlighting, disagrees
+    // with the parser about those bytes, so the file a human reviews is not the file this arms.
+    const hash = raw.search(/(?:^|[ \t])#/);
     const code = (hash < 0 ? raw : raw.slice(0, hash)).replace(/ +$/, "");
     const indent = code.match(/^ */)[0].length;
     const trimmed = code.slice(indent);

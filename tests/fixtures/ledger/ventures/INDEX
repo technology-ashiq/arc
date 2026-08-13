@@ -1,0 +1,21 @@
+# ventures.yaml corpus (Phase 01, ADR-1008 / LED-I). One line per fixture: <file> — <what it proves>
+#
+# THE RULE THIS DIRECTORY IS SMALL BY. Only documents whose BYTES are the thing under test are
+# committed here. Every other criteria document in `tests/ledger-ventures-parser.bats` is built
+# inside the test that uses it, next to the assertion it feeds, because a fixture two directories
+# away from its assertion is a fixture nobody re-reads when the assertion changes.
+#
+# 02-crlf-bom.yaml IS ITS BYTES, and so is 03-tab-indent.yaml. `.gitattributes` carries
+# `tests/fixtures/ledger/** -text`, and without it `* text=auto eol=lf` rewrites both on add and
+# they go green while testing nothing — the seventh occurrence of that class in this repo (see the
+# .gitattributes history). The suite counts the CRs and the TAB rather than trusting the rule, and
+# the byte counts were also verified against the STAGED BLOB rather than the worktree, because the
+# worktree is not what CI checks out.
+#
+# The digest is over the PARSED VALUES and never the file bytes (ADR-1017), so 01 and 02 must
+# produce the SAME digest despite differing by 9 CRs and a BOM. That equality is the point of
+# having both.
+
+01-baseline.yaml — the canonical document, LF endings, trailing newline, one venture with both v1 criteria. The digest reference every byte-level fixture is compared against.
+02-crlf-bom.yaml — a leading UTF-8 BOM, CRLF endings and NO trailing final newline, on otherwise identical data. Proves all three are cosmetic to the digest, and that git stored them verbatim.
+03-tab-indent.yaml — one literal TAB used as indentation. Refused as BAD_VENTURES_INDENT. A tab renders at whatever width the reader configured, so a tab-indented block is a document whose structure depends on the editor that opens it — and this file exists because the refusal is only real if git preserved the tab.

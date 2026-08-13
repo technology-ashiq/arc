@@ -19,6 +19,10 @@ import { SpineError, ULID_RE, sha256Hex } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { isPromotionRequest } from "./lib/validate-policy.mjs";
 import { isAbJudgement } from "./lib/validate-absorb.mjs";
+import { isCriteriaChange } from "./lib/validate-ledger.mjs";
+import { venturesPath } from "./lib/ledger/kill-panel.mjs";
+import { parseVentures } from "./lib/ledger/ventures.mjs";
+import { existsSync, readFileSync } from "node:fs";
 import { query } from "./spine.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -72,8 +76,47 @@ async function listInbox(root) {
         `    absorb  candidate ${p.candidate}  pick one of: ${(p.labels || []).join(" | ")}\n` +
         `            ${(p.fixtures || []).length} fixtures: ${(p.fixtures || []).join(", ")}\n` +
         `            evidence ${p.evidence_path}  (sealed; the mapping is revealed only after you decide)\n`);
+    // A KILL-LINE CHANGE is the third approval whose sentence is not enough to decide on, and it
+    // was the one left without a branch here. An adversarial pass moved a 90-day line to 1000000
+    // days and dropped a traffic floor to 1, under the sentence "whitespace only: align the kill
+    // block indentation, no threshold touched" -- and the entire decision surface was that
+    // sentence. `what` is validated for length and control characters only; nothing binds it to
+    // the digest it rides on. ADR-1008 exists because the author and the approver are the same
+    // person, and a control that records only THAT a decision was made, while guaranteeing nothing
+    // about WHAT was decided, is worse than the rubber stamp its revisit trigger warns about: it
+    // is a deceived stamp carrying the owner's signature.
+    if (isCriteriaChange(e.event)) process.stdout.write(criteriaDetail(p.digest));
   }
   return 0;
+}
+
+// The numbers themselves, read from the file on disk, plus whether the digest being approved IS
+// that file. Both halves matter: the thresholds are what the human is actually deciding about, and
+// the match line is what stops a stale approval for some other document being waved through.
+function criteriaDetail(digest) {
+  const head = `    ledger  criteria digest ${digest}\n`;
+  let path = null;
+  try {
+    path = venturesPath();
+    if (path === null || !existsSync(path))
+      return head + "            no ventures.yaml resolvable from here -- the thresholds cannot be shown, so DO NOT approve this blind\n";
+    const parsed = parseVentures(readFileSync(path, "utf8"));
+    const out = [head, `            ${path}\n`];
+    if (parsed.digest !== digest)
+      out.push(`            THIS DIGEST IS NOT THE FILE ON DISK (disk is ${parsed.digest}) -- approving this does NOT honor what you are about to read\n`);
+    else
+      out.push("            this digest IS the file on disk, and these are the lines it arms:\n");
+    for (const name of Object.keys(parsed.ventures).sort()) {
+      const kill = parsed.ventures[name].kill;
+      const shown = Object.keys(kill).sort().map((k) => `${k}=${kill[k]}`).join("  ");
+      out.push(`              ${name}  ${shown}\n`);
+    }
+    return out.join("");
+  } catch (err) {
+    // Never let an unreadable criteria file take the whole inbox down: the other approvals waiting
+    // in it are unrelated, and an inbox that refuses to list is an inbox nobody can act on.
+    return head + `            ventures.yaml could not be read (${err && err.code ? err.code : "ERROR"}): ${err && err.message ? err.message : err}\n`;
+  }
 }
 
 async function decide(root, verdict, id, reason) {

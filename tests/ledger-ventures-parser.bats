@@ -84,11 +84,16 @@ _doc() {
   [ -s "$DOC" ] || { echo "the builder produced an EMPTY document for $1 -- the heredoc never reached its stdin"; return 1; }
 }
 
+# A one-venture document with BOTH criterion values supplied verbatim. The hash-truncation cases
+# below need to attack the traffic line as well as the days line, and a builder that can only reach
+# one of them is how a fix gets pinned on one criterion and left open on the other.
+_with_criteria() {
+  printf 'version: 1\nventures:\n  lexos:\n    kill:\n      days_without_revenue: %s\n      traffic_floor_monthly: %s\n' "$1" "$2"
+}
+
 # The canonical document with ONE criterion value replaced. Everything else is exactly the baseline,
 # so a refusal can only be about the value under test.
-_with_value() {
-  printf 'version: 1\nventures:\n  lexos:\n    kill:\n      days_without_revenue: %s\n      traffic_floor_monthly: 100\n' "$1"
-}
+_with_value() { _with_criteria "$1" 100; }
 
 # The canonical document with ONE venture name replaced.
 _with_venture() {
@@ -159,15 +164,52 @@ _revenue() {
   [[ "$id" =~ ^[0-9A-HJKMNP-TV-Z]{26}$ ]] || { echo "the revenue event did not seal: $id"; return 1; }
 }
 
-# Run the REAL CLI with stdout and stderr kept APART. bats `run` merges them, and the ADR-1008
-# refusal is a claim about stdout SPECIFICALLY -- merged streams cannot express "stdout is empty".
-_pnl() {
+# Run the REAL CLI from a NAMED cwd, with stdout and stderr kept APART.
+#
+# Two reasons for each half. Streams: bats `run` merges them, and the ADR-1008 refusal is a claim
+# about stdout SPECIFICALLY -- merged streams cannot express "stdout is empty". CWD: `venturesPath()`
+# now walks UP FROM CWD for the repository when ARC_VENTURES_FILE is unset, so cwd is load-bearing
+# and must never be inherited from wherever bats happened to be invoked. The subshell's exit status
+# reaches `||` in this shell, so PNL_STATUS is still set here rather than lost in the subshell.
+_pnl_in() {
+  local dir="$1"; shift
   PNL_OUT="$BATS_TEST_TMPDIR/pnl.out"; PNL_ERR="$BATS_TEST_TMPDIR/pnl.err"
   PNL_STATUS=0
-  ARC_SPINE_NOW="$T_RENDER" node "$PNL" "$@" > "$PNL_OUT" 2> "$PNL_ERR" || PNL_STATUS=$?
+  ( cd "$dir" && ARC_SPINE_NOW="$T_RENDER" exec node "$PNL" "$@" ) > "$PNL_OUT" 2> "$PNL_ERR" || PNL_STATUS=$?
   return 0
 }
+# The default cwd is the repo, which is where an operator runs this command.
+_pnl() { _pnl_in "$ARC_ROOT" "$@"; }
 _pnl_bytes() { wc -c < "$PNL_OUT" | tr -d ' \r'; }
+
+# Assert that NO git repository sits at or above <dir>.
+#
+# The precondition for the no-criteria-file branch, and it is checked rather than assumed. Since the
+# adversarial pass, `venturesPath()` walks up from cwd for a directory holding BOTH `.claude/` and
+# `.git/` -- so if a checkout existed anywhere above the temp dir, that branch would be handed a real
+# `ventures.yaml`, would go on passing, and would silently be a second copy of the OTHER branch
+# rather than the code path it names.
+#
+# Checking for `.git` ALONE is deliberately STRICTER than the walk's own rule: it also fails on a
+# checkout that carries no `.claude/` yet, which is exactly the state a fresh clone made under TMPDIR
+# would be in. The wrong answer here is a quiet pass, so the guard is the loud one.
+_assert_no_repo_above() {
+  local d up seen=""
+  [ -d "$1" ] || { echo "the chosen cwd $1 is not a directory"; return 1; }
+  d="$(cd "$1" && pwd)"
+  while : ; do
+    if [ -e "$d/.git" ]; then seen="$seen $d"; fi
+    up="$(dirname "$d")"
+    if [ "$up" = "$d" ]; then break; fi
+    d="$up"
+  done
+  [ -z "$seen" ] || {
+    echo "a git repository sits at or above the chosen cwd --$seen"
+    echo "so the no-criteria-file branch would find THAT repo's ventures.yaml instead of finding none,"
+    echo "and would pass while measuring the other branch. Run bats from outside any checkout."
+    return 1
+  }
+}
 
 # The refusal, asserted whole: non-zero exit, the named reason on stderr, and NOTHING on stdout.
 # The stderr string is what stops a crash satisfying this -- a command that died on import also
@@ -245,6 +287,49 @@ YAML
   done
   [ "$i" -eq 8 ] || { echo "expected 8 value shapes, ran $i"; false; }
   [ -z "$fails" ] || { echo "refused wrongly:$fails" | tr '|' '\n'; false; }
+}
+
+@test "ventures: an inline hash no longer truncates a value into a legal but different one" {
+  # RED FIXTURE for adversarial finding 3. A `#` starts a comment ONLY when whitespace precedes it,
+  # which is real YAML's rule. The version that truncated at the FIRST `#` anywhere defended itself
+  # with "safe because no legal value can contain one" -- reasoning about a value that WANTS a hash.
+  #
+  # THE CLASS IS NOT THE HASH, IT IS THE TRUNCATION LEAVING A DIFFERENT LEGAL VALUE. Every case below
+  # was ACCEPTED before the fix, silently, as a number nobody wrote:
+  #
+  #   days_without_revenue: 90#000     -> 90     while every YAML reader and every editor sees 90#000
+  #   traffic_floor_monthly: 1#00000   -> 1      a floor of one visit a month, wearing 100000
+  #   days_without_revenue: 9#999999   -> 9      and MAX_CRITERION_VALUE never saw the written digits
+  #
+  # The third is the ceiling case specifically: the ceiling exists to catch a trailing-zero slip, and
+  # it was being applied to the POST-truncation text, so it could not see the slip it was built for.
+  local i=0 p fails=""
+  local pairs=("90#000|100" "90|1#00000" "9#999999|100")
+  for i in 0 1 2; do
+    p="$BATS_TEST_TMPDIR/hash-$i.yaml"
+    _with_criteria "${pairs[$i]%%|*}" "${pairs[$i]##*|}" > "$p"
+    _expect_code BAD_VENTURES_VALUE "$p" "inline hash in ${pairs[$i]}" || fails="$fails|${pairs[$i]}"
+  done
+  [ "${#pairs[@]}" -eq 3 ] || { echo "expected 3 truncation shapes, listed ${#pairs[@]}"; false; }
+  [ -z "$fails" ] || { echo "accepted a truncated value:$fails" | tr '|' '\n'; false; }
+
+  # AND THE OTHER HALF, without which the fix above is just "hashes are banned": a GENUINE trailing
+  # comment must still parse, and must still leave the digest where it was. A rule that fired on a
+  # comment would revoke a receipt for an annotation, which is how a control gets muted.
+  local commented plain
+  _doc trailing-comment <<'YAML'
+version: 1
+ventures:
+  lexos:
+    kill:
+      days_without_revenue: 90  # was 60, raised after the Q3 review
+      traffic_floor_monthly: 100
+YAML
+  commented="$(_digest "$DOC")"
+  _with_criteria 90 100 > "$BATS_TEST_TMPDIR/hash-plain.yaml"
+  plain="$(_digest "$BATS_TEST_TMPDIR/hash-plain.yaml")"
+  [ "$commented" = "$plain" ] \
+    || { echo "a genuine trailing comment moved the digest: $commented vs $plain"; false; }
 }
 
 @test "ventures: a tab indent and a three-space indent are refused as BAD_VENTURES_INDENT" {
@@ -695,6 +780,51 @@ YAML
 
 # ---------- C. the receipt gate, through the real CLI ----------
 
+@test "ventures: a scratch ARC_SPINE_ROOT does not suppress the panel or the refusal" {
+  # RED FIXTURE for adversarial finding 1, the worst of the four. venturesPath() used to derive the
+  # repo from the SPINE root and return null whenever ARC_SPINE_ROOT was set, on the premise that a
+  # named spine has no repo above it. With a scratch spine the panel AND the refusal both vanished at
+  # exit 0 -- and inside a LINKED WORKTREE, where the bare invocation refuses outright, pointing the
+  # spine elsewhere was the ONLY way to run this command at all. The kill switch was off by default
+  # in the checkout it was written in.
+  #
+  # So: scratch spine, NO ARC_VENTURES_FILE, cwd inside the repo. The repo's own ventures.yaml must
+  # be found, and must be unreceipted against a spine that has never seen a criteria approval.
+  unset ARC_VENTURES_FILE
+  [ -f "$ARC_ROOT/ventures.yaml" ] \
+    || { echo "the repo carries no ventures.yaml, so this test cannot make its claim -- it would pass on the consumer branch instead"; false; }
+  local repo_digest
+  repo_digest="$(_digest "$ARC_ROOT/ventures.yaml")"
+
+  _pnl_in "$ARC_ROOT" --month 2026-07
+  _assert_refused "a scratch spine root"
+  [ "$PNL_STATUS" -eq 3 ] \
+    || { echo "expected the ADR-1008 refusal (exit 3), got exit $PNL_STATUS:"; cat "$PNL_ERR"; false; }
+  # The digest is matched rather than the path: the message prints a native path, and a test that
+  # grepped for one would pass on two CI legs and fail on the third for a backslash.
+  grep -qF "$repo_digest" "$PNL_ERR" \
+    || { echo "the refusal is not about the repo's own criteria file:"; cat "$PNL_ERR"; false; }
+}
+
+@test "ventures: a directory at the criteria path is refused by name as NO_VENTURES" {
+  # RED FIXTURE for adversarial finding 7. This used to surface as `ERROR INTERNAL -- EISDIR`, which
+  # is outside the SpineError vocabulary and therefore indistinguishable from a crash -- and an
+  # assertion shaped "stdout does not contain X" scores a crash as a PASS. So the CODE is asserted,
+  # not merely a non-zero exit, and INTERNAL is asserted absent alongside it.
+  local d="$BATS_TEST_TMPDIR/isadir.yaml"
+  mkdir -p "$d"
+  [ -d "$d" ] || { echo "the directory fixture was not created"; false; }
+  export ARC_VENTURES_FILE="$d"
+
+  _pnl --month 2026-07
+  [ "$PNL_STATUS" -ne 0 ] || { echo "a directory at the criteria path rendered a P&L:"; cat "$PNL_OUT"; false; }
+  grep -qF "NO_VENTURES" "$PNL_ERR" || { echo "the refusal is not named NO_VENTURES:"; cat "$PNL_ERR"; false; }
+  [ "$(_pnl_bytes)" = "0" ] || { echo "the refusal still wrote to stdout:"; cat "$PNL_OUT"; false; }
+  if grep -qF "INTERNAL" "$PNL_ERR"; then
+    echo "the directory case regressed to an unclassified crash:"; cat "$PNL_ERR"; false
+  fi
+}
+
 @test "ventures: with a criteria file and no receipt, arc pnl refuses and writes NOTHING to stdout" {
   cp "$FIX/01-baseline.yaml" "$VY"
   export ARC_VENTURES_FILE="$VY"
@@ -816,9 +946,11 @@ YAML
   # company organ and is NOT in the sync set, so every consumer install has none. Refusing to render
   # a P&L because a file that was never shipped is missing would break all of them.
   #
-  # BOTH ways of having none are checked, because they take different branches: venturesPath returns
-  # null when ARC_VENTURES_FILE is unset under a pinned spine root, and returns a resolved path that
-  # existsSync then denies when it names a file that is not there. A fix applied to one is not a fix.
+  # BOTH ways of having none are checked, because they take different branches, and the second one
+  # MOVED under the adversarial pass. venturesPath() no longer returns null merely because
+  # ARC_SPINE_ROOT is set -- it walks up from cwd for the repository -- so "unset" now means "unset,
+  # AND standing somewhere with no repository above it". Branch A still names a path that exists()
+  # denies. A fix applied to one branch is not a fix.
   _revenue
 
   # `absent` is asserted with an `if`, never `grep ... && { ...; false; }`: that second form returns
@@ -839,12 +971,79 @@ YAML
   grep -qF "razorpay:pay_0001" "$PNL_OUT" || { echo "the P&L rendered without its revenue row:"; cat "$PNL_OUT"; false; }
   _no_panel "named but missing"
 
+  # Branch B is run FROM A CWD WITH NO REPOSITORY ABOVE IT, and that precondition is asserted rather
+  # than assumed -- see _assert_no_repo_above. Run from inside this checkout it would find the repo's
+  # own ventures.yaml, unreceipted against the scratch spine, and exit 3.
   unset ARC_VENTURES_FILE
-  _pnl --month 2026-07
-  [ "$PNL_STATUS" -eq 0 ] || { echo "an unset ARC_VENTURES_FILE broke the render:"; cat "$PNL_ERR"; false; }
+  _assert_no_repo_above "$BATS_TEST_TMPDIR"
+  _pnl_in "$BATS_TEST_TMPDIR" --month 2026-07
+  [ "$PNL_STATUS" -eq 0 ] || { echo "an unset ARC_VENTURES_FILE outside any repo broke the render:"; cat "$PNL_ERR"; false; }
   grep -qF "P&L" "$PNL_OUT" || { echo "no P&L rendered:"; cat "$PNL_OUT"; false; }
+  # The spine is named by ARC_SPINE_ROOT and is read from anywhere, so moving cwd must not lose the
+  # revenue -- only the criteria file. Asserting the row is what separates "rendered" from "rendered
+  # an empty shell because it could no longer find anything at all".
   grep -qF "razorpay:pay_0001" "$PNL_OUT" || { echo "the P&L rendered without its revenue row:"; cat "$PNL_OUT"; false; }
   _no_panel "not named at all"
+}
+
+@test "ventures: the inbox shows the approver the thresholds the digest actually arms" {
+  # RED FIXTURE for adversarial finding 4, and the sentence below IS the finding. An adversary moved
+  # a 90-day line to 1000000 -- the ceiling itself, a switch off for 2,700 years -- under the `what`
+  # string "whitespace only: align the kill block indentation, no threshold touched", and THAT
+  # SENTENCE WAS THE ENTIRE DECISION SURFACE. The approver saw prose written by the person asking.
+  #
+  # So the numbers are now read from disk and printed where the decision is made. The same `what`
+  # string is used here on purpose: it must no longer be the only thing on screen.
+  cp "$FIX/01-baseline.yaml" "$VY"
+  export ARC_VENTURES_FILE="$VY"
+  local aid dg
+  dg="$(_digest "$VY")"
+  aid="$(_seal "$VY" "whitespace only: align the kill block indentation, no threshold touched")" \
+    || { echo "the approval could not be sealed"; false; }
+
+  run node "$INBOX" inbox
+  [ "$status" -eq 0 ] || { echo "the inbox could not be read: $output"; false; }
+  [[ "$output" == *"$aid"* ]] || { echo "the approval is not listed: $output"; false; }
+  [[ "$output" == *"$dg"* ]] || { echo "the inbox does not show the digest: $output"; false; }
+  [[ "$output" == *"this digest IS the file on disk"* ]] \
+    || { echo "the inbox does not confirm the digest is the file on disk: $output"; false; }
+  # THE VALUES, not the word "digest". A test that only looked for a header would be satisfied by the
+  # old behaviour plus one more line, and the whole finding was that the numbers were never shown.
+  [[ "$output" == *"lexos  days_without_revenue=90  traffic_floor_monthly=100"* ]] \
+    || { echo "the lexos thresholds are not on screen: $output"; false; }
+  [[ "$output" == *"arc  days_without_revenue=30  traffic_floor_monthly=500"* ]] \
+    || { echo "the arc thresholds are not on screen: $output"; false; }
+}
+
+@test "ventures: the inbox flags an approval whose digest is NOT the file on disk" {
+  # The other half of finding 4. A stale or decoy digest must be called out, because the thresholds
+  # printed underneath are the FILE'S -- so without the flag the approver reads real numbers and
+  # approves a different document, which is worse than showing nothing at all.
+  cp "$FIX/01-baseline.yaml" "$VY"
+  export ARC_VENTURES_FILE="$VY"
+  local decoy="$BATS_TEST_TMPDIR/decoy.yaml" aid disk_digest decoy_digest
+  # The adversary's actual move: 90 -> 1000000, the ceiling, dressed as a whitespace edit.
+  _with_criteria 1000000 100 > "$decoy"
+  decoy_digest="$(_digest "$decoy")"
+  disk_digest="$(_digest "$VY")"
+  [ "$decoy_digest" != "$disk_digest" ] \
+    || { echo "the decoy shares the disk digest, so this test measures nothing"; false; }
+
+  aid="$(_seal "$decoy" "whitespace only: align the kill block indentation, no threshold touched")" \
+    || { echo "the decoy approval could not be sealed"; false; }
+
+  run node "$INBOX" inbox
+  [ "$status" -eq 0 ] || { echo "the inbox could not be read: $output"; false; }
+  [[ "$output" == *"$aid"* ]] || { echo "the decoy approval is not listed: $output"; false; }
+  [[ "$output" == *"THIS DIGEST IS NOT THE FILE ON DISK"* ]] \
+    || { echo "a decoy digest was presented as if it were the file: $output"; false; }
+  [[ "$output" == *"$disk_digest"* ]] || { echo "the inbox does not name the disk digest: $output"; false; }
+  # The thresholds shown are the DISK'S, never the decoy's. Paired with the positive assertion, so
+  # the absence cannot be satisfied by a crash or by an empty listing.
+  [[ "$output" == *"lexos  days_without_revenue=90"* ]] \
+    || { echo "the inbox is not showing the file on disk: $output"; false; }
+  [[ "$output" != *"days_without_revenue=1000000"* ]] \
+    || { echo "the inbox printed the decoy's own thresholds as if they were on disk: $output"; false; }
 }
 
 @test "ventures: this suite registers every test it declares" {

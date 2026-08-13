@@ -150,7 +150,13 @@ function checkValue(criterion, value) {
 }
 
 function absent(criterion, threshold, reason) {
-  return { criterion, status: STATUS.ABSENT, threshold, value: null, distance: null, reason };
+  // `unit` rides on EVERY row, absent ones included: a renderer that has to ask POLARITY for it
+  // is a second reader of this table, and the first version of this shape omitted the field
+  // entirely while the renderer read `c.unit` -- so every distance printed as a bare number.
+  // Read from POLARITY here rather than taking it as a parameter: every caller of `absent` would
+  // otherwise have to thread it through, and the one that forgot would emit a row whose unit is
+  // undefined -- which is the exact shape being fixed, reintroduced one layer down.
+  return { criterion, status: STATUS.ABSENT, threshold, value: null, distance: null, unit: criterionRow(criterion).unit, reason };
 }
 
 /**
@@ -208,7 +214,7 @@ export function evaluateCriterion({ criterion, threshold, value }) {
   // Crossing is tested first and wins: at 100% of the way to the line both predicates are true, and
   // reporting that as a warning would under-report the one status that needs a human.
   const status = crossed ? STATUS.CROSSED : warning ? STATUS.WARNING : STATUS.OK;
-  return { criterion, status, threshold: line, value, distance, reason: null };
+  return { criterion, status, threshold: line, value, distance, unit: row.unit, reason: null };
 }
 
 /**
