@@ -743,7 +743,13 @@ ROWS
   # The day carries no events at all -- proven by the absence of every event-bearing group -- and
   # needs-you is non-empty anyway.
   [[ "$output" != *"money ("* ]] || { echo "2026-08-31 is not the quiet day this test needs: $output"; false; }
-  [[ "$output" == *"needs-you (1)"* ]] || { echo "needs-you vanished on a day with no events: $output"; false; }
+  # THE GROUP, NOT ITS COUNT. This spine spans forty days, so the scheduler lane's derived job
+  # lines land in the same group and the number is not this lane's to own -- exactly the shape
+  # `.claude/rules/testing.md` names ("a test asserting the ABSENCE of a shared group passes only
+  # while your lane is the sole writer"), in the positive direction. The claim here is that
+  # needs-you is non-empty on a day with no events, and the crossing line below is what proves
+  # WHICH line put it there.
+  [[ "$output" == *"needs-you ("* ]] || { echo "needs-you vanished on a day with no events: $output"; false; }
   [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30 days"* ]] || { echo "$output"; false; }
 }
 
@@ -775,7 +781,10 @@ ROWS
   # PRESENT and ABSENT asserted in the same breath. The notice alone is satisfied by an
   # implementation that prints it unconditionally; the missing crossing alone is satisfied by a
   # crash. Only the pair says "it stopped vouching for the line AND it told you".
-  [[ "$output" == *"needs-you (1)"* ]] || { echo "the notice did not land in the needs-you group: $output"; false; }
+  # The GROUP, not its count -- see the note above: this spine spans forty days, so another lane
+  # writes derived lines into needs-you too and the number is not this lane's to pin. The notice
+  # line asserted immediately below is what proves the group is non-empty for the right reason.
+  [[ "$output" == *"needs-you ("* ]] || { echo "the notice did not land in the needs-you group: $output"; false; }
   [[ "$output" == *"kill lines NOT EVALUATED -- ventures.yaml is unreceipted (digest $CRITERIA_DIGEST_NEW)"* ]] \
     || { echo "an unreceipted criteria file produced no notice at all: $output"; false; }
   [[ "$output" != *"kill line CROSSED"* ]] \

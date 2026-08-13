@@ -63,23 +63,72 @@ export async function loadRunEventsUpTo(spineDir, day) {
  * which is the correct amount of confidence in both cases.
  */
 export async function loadPanelInputs(spineDir, day) {
-  // READ THROUGH THE SPINE'S OWN READER, never by walking events/*.jsonl. SPINE-G (ADR-0030)
-  // makes the spine the only public API, and a second reader is not a shortcut -- it is a second
-  // opinion about torn lines, quarantine and ordering, which would let the panel and the brief
-  // disagree about the same day while both looked correct.
+  const { events, observedFrom } = await loadSpineEvents(spineDir, day);
+  return { events: events.filter((e) => e.kind === "run.completed"), observedFrom };
+}
+
+/**
+ * EVERY event the spine holds, unwrapped, optionally cut at a day -- and the earliest day it can
+ * speak to.
+ *
+ * The panel wants only `run.completed`; the audit needs incidents and skip notes too, because an
+ * "explained absence" is precisely a slot that has one of those instead of a run. Both go through
+ * this one reader rather than each walking the spine its own way.
+ *
+ * READ THROUGH THE SPINE'S OWN READER, never by walking events/*.jsonl. SPINE-G (ADR-0030) makes
+ * the spine the only public API, and a second reader is not a shortcut -- it is a second opinion
+ * about torn lines, quarantine and ordering, which would let the panel, the brief and the audit
+ * disagree about the same day while all three looked correct.
+ */
+export async function loadSpineEvents(spineDir, day = null) {
   const { events } = await query(spineDir, {});
-  const runs = [];
+  const out = [];
   let observedFrom = null;
   for (const wrapped of events) {
     // The reader yields wrapped records; the event itself is what carries kind and ts.
     const e = wrapped && wrapped.event ? wrapped.event : wrapped;
     if (!e || typeof e.ts !== "string") continue;
-    const d = e.ts.slice(0, 10);
-    if (d > day) continue;
+    const d = istDayOf(e);
+    if (d === null) continue;
+    if (day !== null && d > day) continue;
     if (observedFrom === null || d < observedFrom) observedFrom = d;
-    if (e.kind === "run.completed") runs.push(e);
+    out.push(e);
   }
-  return { events: runs, observedFrom };
+  return { events: out, observedFrom };
+}
+
+/**
+ * The IST day an event belongs to, PARSED -- never the leading ten characters of its timestamp.
+ *
+ * Slots live in IST and every day comparison in this module and in the audit is a comparison of
+ * IST days, so reading the prefix only works while every producer happens to render IST. A
+ * receipt stamped in UTC puts a 00:15+05:30 event on the PREVIOUS day, and neither reader would
+ * say so: the panel's observed window would start a day early and the audit would drop the event
+ * out of its range entirely, where a dropped run reads not as an error but as a MISSED SLOT.
+ *
+ * It lives HERE, in the lower module, and the audit imports it -- because the same fix applied in
+ * one file and not the other is how this repo has now produced a twin-fix recurrence three times.
+ */
+export function istDayOf(e) {
+  const at = Date.parse(String(e?.ts ?? ""));
+  return Number.isFinite(at) ? istDay(at) : null;
+}
+
+/**
+ * The outcome of a receipt, read the SAME way by every consumer.
+ *
+ * The wrapper writes it in two places -- the envelope and the payload -- and the panel already
+ * read `e.outcome ?? e.payload.outcome` while the audit read only the envelope. Two instruments
+ * over one spine reaching opposite conclusions about the same receipt is exactly the
+ * "validate one read, compare another" defect this lane has paid for repeatedly, and the fix is
+ * one function rather than two careful copies.
+ *
+ * An outcome that is neither `ok` nor `fail` comes back as `null`, which callers must treat as
+ * UNKNOWN rather than quietly folding into either.
+ */
+export function outcomeOf(e) {
+  const raw = e?.outcome ?? (e?.payload && e.payload.outcome) ?? null;
+  return raw === "ok" || raw === "fail" ? raw : null;
 }
 
 /**
@@ -142,7 +191,7 @@ export function derivePanel({ day, jobs, events, observedFrom = null }) {
     const last = runs[0] || null;
     if (last) {
       row.lastRun = String(last.ts);
-      row.lastOutcome = last.outcome ?? (last.payload && last.payload.outcome) ?? null;
+      row.lastOutcome = outcomeOf(last);
     }
 
     row.nextExpected = (() => {

@@ -159,11 +159,11 @@
 .claude/scripts/evolve/canon.mjs	c601c49d46f2fe5d45e1b830d2bc4776bb198fcde3532b97c186de306540186b
 .claude/scripts/evolve/lineage.mjs	ccb4621f21c6a3bef8cf6f5a3bfb557d35cd7158fc5158d011c0f35283c564b9
 .claude/scripts/evolve/verdict.mjs	a9a3eec17baf206b20ddedd4bd8a7cc6244c5764bdcbb7ab2d17b9a6fa0ebb1d
-.claude/scripts/hq/arc-brief.mjs	cec53989f0931f32eb533a89c3d52f5bcb1f426fbd5cbd4e8244200cc857991f
+.claude/scripts/hq/arc-brief.mjs	586712c672179af0bddba01c94709c16c544770570412bde24e6dd176cfbea8e
 .claude/scripts/hq/arc-event.mjs	ec0f4ee6505b3d22747bd822934d2f2a48bd3224e298a7343b389be7b7ff5e22
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	8943ba0e1351e7c003526356daf33f9f5fe5d1249d652b121a105c28f8ec7c79
-.claude/scripts/hq/arc-jobs.mjs	68e8208589a41b356751ed9053cd4a03217d5da2b41a401b9e643b3c5c5b81b0
+.claude/scripts/hq/arc-jobs.mjs	a2fb7b377de98e6684e3e84b4eda673eb696e2ed946e0e73a96377a731232a3f
 .claude/scripts/hq/arc-jobs.sh	ac0dd934e1c6959f512e283d9411382a29bd3671bc4542ba05b74371d204323b
 .claude/scripts/hq/arc-pnl.mjs	3f73fe4f282f826b3d01a98c03c69b74bc6cab4b25aead5ea190e9055864a072
 .claude/scripts/hq/arc-pnl.sh	a90ec8a57d367b82dea236abaa64f98bff9e39d85f5872b74683b45c1b31f23b
@@ -172,9 +172,10 @@
 .claude/scripts/hq/jobs/brief-materialize.mjs	8cc3ed1625f6d8e92aaf8c68e470db3012b2e41f70a6f5602da273085e53f099
 .claude/scripts/hq/jobs/day-close-roll.mjs	cf47ce763a261eba34350385555119025b29a1050469606dc728994996628523
 .claude/scripts/hq/lib/canonical.mjs	760067e8ea262f772d3c68dda1e5800fd4a1405005376bdbc7624f60f1b9a466
+.claude/scripts/hq/lib/jobs/audit.mjs	f44b1a1ea933ff7e80f4cf7429307b636342f6658b22360fddb602957416f8fd
 .claude/scripts/hq/lib/jobs/cadence.mjs	b6373ced54530a19858148308f54daccea88c4474a51f7b3fa07301ea97642bb
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
-.claude/scripts/hq/lib/jobs/panel.mjs	f48d911b0784231ab2cb758c195b2baaf0f2fa6955a53e1a5474ab1c217c2aa8
+.claude/scripts/hq/lib/jobs/panel.mjs	5acc0e9c062b47e052202d024d94cb49a11787076072ad5e0909badcd0a7e2b9
 .claude/scripts/hq/lib/jobs/policy-gate.mjs	b0bd307fb4a9e87ac9a88aaa3af306fb765aee071902c3dbe6e7492411930a17
 .claude/scripts/hq/lib/jobs/scheduler-os.mjs	e76d264f8da04e0793ef017f704d6237df8076822aebf6942f0b67505b619c46
 .claude/scripts/hq/lib/jobs/scheduler-task.ps1	f18b06fb9a4167778ef515c5ee917139e1af248a92bf4db6ea55e3d32c9dd3fb
