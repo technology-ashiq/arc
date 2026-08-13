@@ -19,9 +19,9 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Money math core — payload contract + PII validator, normalization, pnl math on pinned fixtures, `arc pnl` v0, 2 export parsers, twin-determinism | 3d | ✅ CLOSED 2026-08-13 |
-| 01 | Kill-distance — `ventures.yaml` schema + parser, distance / warning / crossing render, brief needs-you integration, receipt enforcement | 2d | ⬜ not started |
-| 02 | Close and costs — reconciliation gate, `month.closed` (44 to 45), cost trichotomy + Overhead, daily spend line, `--explain` if appetite holds | 2d | ⬜ not started |
-| 03 | Proof — real-spine replay rendering honest-empty, `--simulated` demo view, evidence bundle, retro | 1d | ⬜ not started |
+| 01 | Kill-distance — `ventures.yaml` schema + parser, distance / warning / crossing render, brief needs-you integration, receipt enforcement | 2d | ✅ CLOSED 2026-08-13 |
+| 02 | Close and costs — reconciliation gate, `month.closed` (44 to 45), cost trichotomy + Overhead, daily spend line, `--explain` if appetite holds | 2d | 🟨 green on CI, adversarial pass running |
+| 03 | Proof — real-spine replay rendering honest-empty, `--simulated` demo view, evidence bundle, retro | 1d | 🟨 live-spine proof captured, retro pending |
 
 Phases sum to **8d against an 8d cap — there is no reserve.** That is deliberate and is recorded as
 such: the shock absorber is the pre-authorized cut order (REQ-07, then REQ-08, then REQ-03's

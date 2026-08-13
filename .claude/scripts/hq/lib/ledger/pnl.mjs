@@ -300,7 +300,13 @@ export function deriveMrr(charges, { month = null, venture = null, refundedByCha
     if (latestMonth === null || m > latestMonth) latestMonth = m;
     if (!("customer_ref" in p)) continue;         // no identity, no subscription: cash only
     if (p.interval === undefined) continue;       // an unlabelled payment is not asserted recurring
-    const divisor = INTERVAL_DIVISOR[p.interval];
+    // OWN-PROPERTY ONLY. `INTERVAL_DIVISOR["constructor"]` returns Object off the prototype chain,
+    // which is neither null nor undefined, so the guard below did not fire and the MRR became NaN.
+    // Unreachable today because `INTERVALS` refuses those spellings at ingest -- which means this
+    // is a defect one validator change away from being live, in a lane where the same class was
+    // already fixed in kill-distance.mjs and costs.mjs. Fixed where it is, not where it was found.
+    const divisor = Object.prototype.hasOwnProperty.call(INTERVAL_DIVISOR, p.interval)
+      ? INTERVAL_DIVISOR[p.interval] : undefined;
     if (divisor === null || divisor === undefined) continue;  // one_time is cash, never MRR
 
     // A charge refunded in full is not recurring revenue. The refund total was collected here and

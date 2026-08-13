@@ -268,7 +268,16 @@ export function render(day, events, torn, { full = false, killCrossings = [], ki
 async function main(argv) {
   const flags = parseArgs(argv);
   const day = flags.date ?? dayOf(formatIst(nowMs()));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new SpineError("BAD_ARGS", `--date "${day}" is not YYYY-MM-DD`);
+  // A REAL DAY, not merely the shape. The loose form accepted `2026-13-45` and rendered an empty
+  // brief for it at exit 0, so a typo'd date reported a quiet day instead of refusing -- and "the
+  // day looks quiet" versus "you asked for a day that does not exist" is exactly the distinction
+  // this file's torn-line handling exists to preserve. arc-pnl's --month already refuses the same
+  // class; this is its twin, and it was left open.
+  const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!dm) throw new SpineError("BAD_ARGS", `--date "${day}" is not YYYY-MM-DD`);
+  const probe = new Date(Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3])));
+  if (probe.getUTCFullYear() !== Number(dm[1]) || probe.getUTCMonth() !== Number(dm[2]) - 1 || probe.getUTCDate() !== Number(dm[3]))
+    throw new SpineError("BAD_ARGS", `--date "${day}" is not a real calendar date`);
 
   const root = spineRoot();
   const { events, torn } = await query(root, { date: day, venture: flags.venture, engine: flags.engine });

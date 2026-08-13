@@ -1,0 +1,19 @@
+spine    E:/Work_Hub/01_Automemory/arc/.claude/state/hq
+day files 17   raw lines 1040   unparseable 0
+engine    scan
+
+ok   the instrument is ALIVE: the reader returns a non-zero event count  reader=1040
+ok   raw and reader agree on the TOTAL event count  raw=1040 reader=1040
+ok   raw and reader agree on EVERY kind's count  11 kinds compared
+
+MONEY SIDE, both counts:
+ok   revenue.received   raw=0 reader=0
+ok   revenue.simulated  raw=0 reader=0
+ok   cost.incurred      raw=0 reader=0
+ok   month.closed       raw=0 reader=0
+
+THE ZERO IS REAL: no money event of any kind is on this spine, corroborated two independent ways,
+by an instrument proven alive on 1040 events of 11 other kinds.
+
+month.closed on this spine: 0
+PROOF HOLDS
