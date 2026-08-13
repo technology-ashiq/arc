@@ -12,7 +12,7 @@ depends-on: —
 > (tests green on CI + live demo + exit criteria + evidence). Evidence over assertion.
 > Evidence is lane-scoped at `initiatives/ledger/evidence/phase-NN/` (ADR-0055). ADRs, the
 > retro-log, HISTORY and the trial-ledger stay at repo root (ADR-0053). This lane holds ADR
-> century **1000–1099**; ADR-1000..1015 are locked there.
+> century **1000–1099**; ADR-1000..1018 are locked there — 1016..1018 were written DURING the build, each because the implementation contradicted a decision made before it.
 
 ## Phases
 
