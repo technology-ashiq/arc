@@ -73,72 +73,72 @@ commit: da0d888
 title: **`version` verb** answered by `claude-code` and `mock` only (ADR-0902); `codex` and `generic-api` are out of scope. The dispatch edit is at `common.mjs:152` (**M8**).
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: bats tests/bench-driver-contract.bats -- 11/11 green (tests 7-9 RED first); bats tests/engine-driver-contract.bats -- 1..20, NOT-OK COUNT 0
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Make the verb OPT-IN: runDriver takes an optional version provider, and a driver that passes none keeps the original refusal byte-for-byte. That scopes it to claude-code and mock (ADR-0902) without a per-driver allowlist, and a test asserts codex and generic-api STILL reject it so it cannot spread by drift. A driver version is WHAT WOULD CHANGE ITS OUTPUT: claude-code@1.0.0 is its own adapter code, mock@sha is its recording set (the recordings decide mock output; the code only reads them), and a test asserts the mock version MOVES when the recordings move. Deliberately not the provider CLI version -- which model answered is MP-F fingerprint territory, and shelling out to claude --version would make an offline provenance field depend on a binary no CI leg installs.
+result: ok 7 mock answers the version verb with its recording-dir identity / ok 8 mock version changes when the recordings change / ok 9 claude-code answers the version verb / ok 10 codex and generic-api still reject every verb but run. common.mjs is shared, so the engine contract suite is the regression surface: 20 tests, 0 failures. Sync golden regenerated as a named step with the delta checked first -- 3 files moved, 0 added, 0 removed; product-lint clean.
+commit: 650cf47
 
 #### slice: 04
 
 title: **The ADR-0905 assertion schema exists and is versioned from birth:** `tests/fixtures/engine/evals/CLASS/pack.json` = `{ "revision": "SEMVER", "task_class": "NAME" }`, and a fixture may carry `assertions: [{ "id": "A-01", "path": "...", "op": "...", "value": ... }]` with path syntax **M4** and value shapes **M5**. **The op set is closed:** `equals` · `matches` · `contains` · `absent` · `length_between`. The registry **refuses** any op outside it rather than skipping, and no op may call a model, read the clock or touch the network.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: CI run 31599742774 -- 19/19 green, per-JOB, incl. bats tests/bench-assertions.bats; node tests/bench-assertions-probe.mjs -- 28 checks, exit 0
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Land the substrate in arc-bench.mjs as importable pure functions so scoring is testable without spawning anything. Closed op set enforced at a REGISTRY rather than trusted to fixture authors, and an unknown op is REFUSED not skipped -- regex is the plausible near-miss for matches, and a skipped op reports a perfect rate on a fixture that checked nothing. Value shape validated per op: absent takes NO value, length_between takes two ordered ints, matches must compile. Paths are dot notation with numeric indices only; a path language grows into an expression language, and an expression language in a fixture is a program nobody reviews. readPack refuses a missing revision rather than defaulting it, because the revision is what makes champion and candidate comparable (BEN-A gate 6). Checks live in their own .mjs probe, not inline in bats, because they need apostrophes, backticks and $ -- CLAUDE.md forbids all three in a shell-embedded program.
+result: 28 probe checks held, exit 0; CI green 19/19 on 5c00094 with the bats wrapper running the probe. The zero-denominator rule is pinned by its own test: a fixture with no assertions contributes 0 and reports rate ABSENT, never 100% (retro-log 2026-07-30 -- a pass condition that is only an absence cannot detect mediocrity). Placement recorded not assumed: arc-bench.mjs sits in the ENGINE product manifest per ADR-0901, so it ships to engine consumers; a products/bench/ split is a later decision. Sync golden regenerated last, 270 -> 271 rows, only arc-bench.mjs moved.
+commit: 5c00094
 
 #### slice: 05
 
 title: **`process-lint.mjs` still validates all 3 processes unchanged** after the `pack.json` addition — **proven by running it**. `pack.json` is a sibling file precisely so the frozen `TOP_LEVEL_KEYS` (`process-lint.mjs:65-67`) is never touched. **`process-lint.mjs` itself** contains a literal control byte and so reads as binary to `grep` — use `grep -a` when searching that script.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: node .claude/scripts/engine/process-lint.mjs --all -- all checks passed (3 file(s)), exit 0; pinned as a regression test in tests/bench-assertions.bats; CI 19/19 per-JOB on 27f35ca (run for cc8bec1 also 19/19)
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: RUN the lint rather than trust the No-go sentence that claims the schema is additive. retro-log 2026-08-02: twice in one cycle a control the process had already decided on turned out not to exist, and both were found by running the artifact rather than reading it. The reason it passes is pinned too -- process-lint contains ZERO references to pack.json, because the manifest is a sibling of the fixtures precisely so the frozen TOP_LEVEL_KEYS never grows a key. The schema is additive because it lives outside the schema it would otherwise have had to change. The guard asserts the lint RAN and reached its verdict (all checks passed, 3 file(s)), never merely that it printed no error -- that shape is satisfied by a crash.
+result: process-lint: all checks passed (3 file(s)), exit 0. Regression test added to tests/bench-assertions.bats (now 6 tests). Note for future searches: process-lint.mjs carries a literal control byte, so grep reads it as binary and silently matches nothing without -a -- itself a retro-log entry (2026-08-09), from the file that guards against control characters. Landed via a clean cherry-pick onto main as 27f35ca after the original branch accumulated a squash-merge conflict against every prior merge.
+commit: 27f35ca
 
 #### slice: 06
 
 title: **The fixture-repo harness exists** per **M3**, because `commit-msg-draft` declares `inputs: []` and its real input is ambient git state. Five flat repo states is the whole scope; a general git-fixture framework is a declared rabbit hole.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: node tests/bench-harness-probe.mjs -- 19 checks, exit 0 (read WITHOUT a pipe); bats tests/bench-harness.bats 7 tests; CI 19/19 per-JOB on 29c3066, main verified on 7b00a63
+tier: contract
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: A state is base/ (committed) plus work/ (uncommitted), and the harness DOES NOT STAGE -- staging is the process own declared job (git.op add/commit), and a pre-staged index leaves the model nothing to decide. Identity is repo-local config, never GIT_AUTHOR_* in the env, which passes on a box with a global identity and fails 128 on a clean runner. Deletions need a tombstone because copying cannot remove a file. The M9 negative control is proved by DISCRIMINATION rather than by patching a copied tree: sed -i is a GNU-ism BSD sed reads as a backup suffix, and a copied tree only proves things about the copy.
+result: A real bug the test caught: repoStatus first did .trim() on git porcelain, and column 1 is the INDEX while column 2 is the WORKTREE -- so an unstaged ` M path` became `M path`, which reads as STAGED, and the one property this harness exists to guarantee silently could not be asserted. Now only the trailing newline is stripped. CI also went red on this slice: two new test files reshuffled the shard plan and exposed three unrelated scanner tests that pass only by shard luck. Root cause was measured, not guessed -- weigh-tests runs each file ALONE, and those three come back rc=1 in isolation on main AND on the branch, identically. Fixed by strengthening _arc_need_semgrep to probe the TOOL directly (the adapter ends its scan with || true, so a crashed scanner reads as a clean codebase) and by weighing every file: shard-timings 109 -> 115 entries.
+commit: 29c3066
 
 #### slice: 07
 
 title: **`commit-msg-draft` armed to 5 fixtures** laid out per **M12** and each over a DISTINCT repo state, carrying real assertions against the driver's output `{commits: [{sha, subject}]}` per **M11** — `sha` matching `^[0-9a-f]{7,40}$`, `subject` matching a conventional-commit grammar pinned in the fixture itself. All 5 paths are added to the process's `evals:` list. A fixture with no `assertions` key contributes **0** to the assertion denominator and is never a pass.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: node tests/bench-armed-probe.mjs -- 49 checks, exit 0; node tests/bench-harness-probe.mjs -- 19 checks; CI 19/19 per-JOB on dbaa2c2, main verified on 9b843f6
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Five DISTINCT repo states, not five inputs: commit-msg-draft declares inputs: [] so five fixtures sharing {} would be five samples of one case. Each state separates something specific -- an untracked file catches a draft that reads only git diff; a docs-only change catches a model that types everything feat; a deletion catches a draft built from added lines alone. Six assertions each: sha shape, conventional-commit grammar, the RIGHT type prefix, length 12-72, no trailing period, exactly one commit. NO new .bats file: the shard plan is computed from the file list, so a new file reshuffles it -- which is exactly what turned CI red on slice 06.
+result: All five score 6/6 against their OWN expected -- the self-consistency check, without which a fixture could assert something nobody can pass and read as a permanent model failure. All five work trees verified to differ. CI went red once: engine-driver-contract REQ-06 builds a sandbox and copied only basic.json, while process-lint checks that EVERY declared eval path exists, so its clean-first assertion failed. That control did its job -- it exists precisely to stop a later failure being blamed on the wrong cause. Fixed at the root: the sandbox now copies the eval DIRECTORY, so adding a fixture can never break it again.
+commit: dbaa2c2
 
 #### slice: 08
 
 title: **`review-diff` and `kickoff-plan` read `NO PROPOSAL — evidence insufficient (1 of 5 fixtures)`** from a **standalone MIN_FIXTURES=5 count check**, independent of Phase 2's eligibility engine, which does not exist yet. Without this, REQ-06 could be marked done at Phase-0 close with half its text never exercised.
 kind: logic
 risk: medium
-proof: (empty until proven)
-tier: (empty until proven)
+proof: node tests/bench-armed-probe.mjs -- 61 checks, exit 0 (12 new); bats tests/bench-assertions.bats 12 tests
+tier: unit
 sources: phase-00-spec.md
-decision: (empty until proven)
-result: (empty until proven)
-commit: (empty until proven)
+decision: Count from the DECLARED evals list in the process YAML, never from a directory listing: a stray or half-added file beside the pack is not part of it, and counting the directory would let it lift a class over the floor without anything ever running it. The gate is deliberately standalone and does not reach for Phase 2 gates-first eligibility engine, which does not exist yet -- REQ-06 needs the other two classes to read NO PROPOSAL at Phase 0 CLOSE, and a criterion only a later phase could exercise would be marked done here without ever running (retro-log 2026-08-02, an exit criterion its own verifier could not check).
+result: commit-msg-draft 6 declared fixtures -> ELIGIBLE, reason null. review-diff and kickoff-plan 1 each -> NO PROPOSAL - evidence insufficient (1 of 5 fixtures). The reason names both counts AND says WHY, so evidence-insufficient and candidate-lost never render identically (ADR-0906).
+commit: f0a0cbd
 
 #### slice: 09
 

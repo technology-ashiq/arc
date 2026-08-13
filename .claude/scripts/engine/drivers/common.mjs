@@ -145,9 +145,25 @@ async function driverPolicyDenial(processName) {
  * decline, the fake path, the cost sidecar and the exit discipline, so a new driver is
  * genuinely one `produce()` function -- which is the north-star REQ-08 times.
  */
-export async function runDriver(name, produce) {
+export async function runDriver(name, produce, opts = {}) {
   const [verb, processName, inputJson, budgetStr] = process.argv.slice(2);
   const die = (code, msg) => { process.stderr.write(`${name}: ${msg}\n`); process.exitCode = code; };
+
+  // `version` is OPT-IN, and deliberately so (ADR-0902, bench lane). BEN-B makes driver name +
+  // version a mandatory provenance field, but only the drivers bench actually exercises answer
+  // it: `codex` is not installed and `generic-api` is uncredentialed, so neither produces a
+  // receipt, and giving them the verb would widen bench's diff on a tree it does not own for
+  // nothing exercised. A driver that passes no `version` keeps the original refusal exactly.
+  //
+  // A driver's version is WHAT WOULD CHANGE ITS OUTPUT -- its own code for a real driver, its
+  // recording set for the replay driver. It is not the provider CLI's version: that belongs to
+  // the model identity (MP-F), not to the driver, and asking a CLI that may not be installed
+  // would make an offline provenance field depend on a network-era dependency.
+  if (verb === "version" && typeof opts.version === "function") {
+    process.stdout.write(`${opts.version()}\n`);
+    process.exitCode = EXIT.OK;
+    return;
+  }
 
   if (verb !== "run") {
     die(EXIT.DRIVER_FAIL, `usage: ${name}.sh run <process> <input-json> <budget>`);

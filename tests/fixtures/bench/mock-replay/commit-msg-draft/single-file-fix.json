@@ -1,0 +1,8 @@
+{
+  "commits": [
+    {
+      "sha": "4936371",
+      "subject": "fix(total): return 0 for non-array input instead of throwing"
+    }
+  ]
+}
