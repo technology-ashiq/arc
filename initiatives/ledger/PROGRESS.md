@@ -104,10 +104,10 @@ Spine receipts on the canonical spine (main clone), both confirmed present in
 
 | REQ | Phase | Status |
 |---|---|---|
-| REQ-01 P&L is true and reproducible | 0 | active |
-| REQ-02 MRR math survives its edge cases | 0 | active |
+| REQ-01 P&L is true and reproducible | 0 | validated |
+| REQ-02 MRR math survives its edge cases | 0 | validated |
 | REQ-03 Kill-distance is visible and tamper-evident | 1 | active |
-| REQ-04 Currency honesty | 0 | active |
+| REQ-04 Currency honesty | 0 | validated |
 | REQ-05 A month closes only behind a green reconciliation | 2 | active |
 | REQ-06 Costs are honest three ways | 2 | active |
 | REQ-07 Every number explains itself | 2 | active (first cut) |
