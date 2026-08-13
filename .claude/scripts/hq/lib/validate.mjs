@@ -12,7 +12,7 @@ import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearM
 import {
   isLedgerRevenueKind, assertLedgerRevenue,
   isCriteriaChange, assertCriteriaChange, isNearMissCriteriaChange, assertNotNearMissCriteria,
-  assertMonthClosed,
+  assertMonthClosed, assertCostIncurred,
 } from "./validate-ledger.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
@@ -375,6 +375,10 @@ export function validateEvent(event) {
   if (isCriteriaChange(event)) assertCriteriaChange(event);
   if (isNearMissCriteriaChange(event)) assertNotNearMissCriteria(event);
   if (event.kind === "month.closed") assertMonthClosed(event);
+  // Money is money wherever it lands. Nothing claimed cost.incurred until now, so a STRING amount
+  // reached the spine unquarantined -- a direct breach of ADR-1012 in the kind that carries the
+  // whole cost side of the P&L.
+  if (event.kind === "cost.incurred") assertCostIncurred(event);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (event.kind === "constitution.adopted") assertConstitution(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);

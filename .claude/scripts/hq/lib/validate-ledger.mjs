@@ -279,6 +279,51 @@ const hasControlChar = (s) => {
 };
 
 // ---------------------------------------------------------------------------------------------
+// COST MONEY IS MONEY (ADR-1012 / LED-M), and until now nothing checked it.
+//
+// `assertMoney` and `assertLedgerRevenue` cover the two `revenue.*` kinds. NOTHING claimed
+// `cost.incurred`, so its payload was entirely unvalidated -- a Phase 02 probe put
+// `{"amount":"12.50","currency":"INR","source":"measured"}` on the spine, unquarantined, with the
+// amount as a STRING. That is a direct breach of this lane's own non-negotiable: money is integer
+// minor units end to end, and a non-integer monetary value is rejected, never rounded.
+//
+// (`assertCost` in validate.mjs is a different thing entirely: it governs `event.cost`, the envelope
+// field describing what the AGENT RUN that emitted the event cost. Its closed set is
+// measured|estimated|manual and it never sees the money the event records.)
+//
+// THE SCHEMA IS DELIBERATELY NOT CLOSED, unlike every other shape in this file. `cost.incurred` is
+// a COMPANY kind that this lane does not own: `lib/policy/spend.mjs` folds it as the settlement half
+// of a reservation and reads `action_kind` off it. Closing the schema here would refuse another
+// lane's field on this lane's authority, which is not a call this lane gets to make. What is
+// enforced is exactly what ADR-1012 already decided, and no more.
+//
+// `source` is likewise NOT enforced here. The trichotomy vocabulary (measured|declared|allocated)
+// is real, but an unrecognised spelling renders as its own labelled block with a flag rather than
+// being normalized away (costs.mjs) -- visible and honest. Closing that vocabulary at ingest is a
+// cross-lane decision and belongs in a routed change, not in a validator this lane wrote alone.
+export function assertCostIncurred(event) {
+  const p = event.payload;
+  if (!isPlainObject(p)) throw new SpineError("BAD_LEDGER_COST", "cost.incurred payload must be an object");
+  // ABSENT STAYS ABSENT. A cost with no amount is a real and reportable state (MP-F, ADR-1006) and
+  // renders as ABSENT with its source still shown -- so absence is allowed and a WRONG TYPE is not.
+  if ("amount" in p && p.amount !== null) {
+    if (!Number.isSafeInteger(p.amount) || p.amount < 0 || p.amount > MAX_MINOR_UNITS)
+      throw new SpineError("BAD_LEDGER_COST",
+        `cost.incurred.amount ${JSON.stringify(p.amount)} must be a non-negative integer in minor units (ADR-1012) -- "12.50" and 12.5 are both refused rather than rounded, because a rounding step at ingest is permanent on an append-only log`);
+  }
+  if ("currency" in p && p.currency !== null) {
+    if (typeof p.currency !== "string" || !CURRENCY_RE_LEDGER.test(p.currency))
+      throw new SpineError("BAD_LEDGER_COST", `cost.incurred.currency ${JSON.stringify(p.currency)} must be an ISO-4217 alpha code (3 uppercase letters)`);
+  }
+  // An amount without a currency is a number nobody can render, and a currency without an amount is
+  // the absent case, which is legal. Only the first direction is refused.
+  if ("amount" in p && p.amount !== null && (!("currency" in p) || p.currency === null))
+    throw new SpineError("BAD_LEDGER_COST", "cost.incurred carries an amount with no currency -- minor units are meaningless without the currency that defines them");
+}
+
+const CURRENCY_RE_LEDGER = /^[A-Z]{3}$/;
+
+// ---------------------------------------------------------------------------------------------
 // THE MONTH CLOSE (ADR-1004 / LED-E) -- the one event kind this lane spends.
 //
 // A close is the only thing in the ledger that is STORED rather than derived. Everything else is

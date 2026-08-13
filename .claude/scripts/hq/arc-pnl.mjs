@@ -18,10 +18,22 @@ import { derivePnl } from "./lib/ledger/pnl.mjs";
 import { formatMinorUnits, renderComponent, ABSENT } from "./lib/ledger/money.mjs";
 import { deriveKillPanel, venturesPath, UNRECEIPTED } from "./lib/ledger/kill-panel.mjs";
 import { parseVentures } from "./lib/ledger/ventures.mjs";
+import { deriveCosts, renderSectionTotal, COST_CLASSES, UNCLASSIFIED } from "./lib/ledger/costs.mjs";
+import { deriveRails, reconcile, closePayload, inputSha, canonicalTotalText } from "./lib/ledger/reconcile.mjs";
+import { parseRazorpayExport } from "./lib/ledger/parsers/razorpay.mjs";
+import { parseMorExport } from "./lib/ledger/parsers/mor.mjs";
+
+// Provider -> its export parser. A rail whose provider is not here can still be reconciled with
+// `--reconcile-total`; what it must NOT do is fall through to some default parser and produce a
+// number from a format nobody claimed to understand.
+const EXPORT_PARSERS = Object.freeze({ razorpay: parseRazorpayExport, mor: parseMorExport });
 
 const PROCESS_ID = "arc-pnl@1.0.0";
-const VALUE_FLAGS = new Set(["venture", "month", "engine"]);
+const VALUE_FLAGS = new Set(["venture", "month", "engine", "close", "reconcile-file", "reconcile-total"]);
 const BOOL_FLAGS = new Set(["simulated", "help", "criteria-digest"]);
+// `--reconcile-file` and `--reconcile-total` are REPEATABLE: a month has one rail per provider
+// account, and a close reconciles all of them at once. Everything else is last-wins as before.
+const REPEATABLE_FLAGS = new Set(["reconcile-file", "reconcile-total"]);
 
 function parseArgs(argv) {
   const flags = {};
@@ -35,7 +47,10 @@ function parseArgs(argv) {
       // message sent the reader looking for a typo in a flag that is spelled correctly.
       if (BOOL_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `flag --${name} takes no value`);
       if (!VALUE_FLAGS.has(name)) throw new SpineError("BAD_ARGS", `unknown flag --${name}`);
-      flags[name] = a.slice(eq + 1);
+      // The `=` spelling accumulates too. Two spellings of one flag that disagree about whether it
+      // repeats is how `--reconcile-file=a --reconcile-file=b` silently reconciles only b.
+      if (REPEATABLE_FLAGS.has(name)) (flags[name] = flags[name] || []).push(a.slice(eq + 1));
+      else flags[name] = a.slice(eq + 1);
       continue;
     }
     const name = a.slice(2);
@@ -50,7 +65,8 @@ function parseArgs(argv) {
     // exists to be obviously fake. `--month` survived only because a regex happened to catch it.
     if (typeof next === "string" && next.startsWith("--"))
       throw new SpineError("BAD_ARGS", `flag --${name} was given ${JSON.stringify(next)}, which is another flag -- an unquoted empty variable swallows the flag after it, and this one changes what the output MEANS`);
-    flags[name] = next;
+    if (REPEATABLE_FLAGS.has(name)) (flags[name] = flags[name] || []).push(next);
+    else flags[name] = next;
     i++;
   }
   return flags;
@@ -58,7 +74,7 @@ function parseArgs(argv) {
 
 const rupees = (minor) => formatMinorUnits(minor, "INR");
 
-export function render(model, panel = null) {
+export function render(model, panel = null, costs = null) {
   const out = [];
   const scope = model.month ? `${model.month}` : "all time";
   const title = model.mode === "simulated" ? `P&L — ${scope} — SIMULATED` : `P&L — ${scope}`;
@@ -72,7 +88,25 @@ export function render(model, panel = null) {
     out.push(`${mark}no ${model.mode === "simulated" ? "simulated" : "real"} revenue yet`);
   }
 
-  for (const v of model.ventures) {
+  // THE UNION of ventures with revenue and ventures with only costs, in code-unit order. Iterating
+  // the P&L's own list alone drops a venture whose only cost is in an unpinned currency: pnl.mjs
+  // skips that bucket before it exists, so the very section that says the cost could not be
+  // rendered would itself vanish -- absent hiding its own absence.
+  const costOf = new Map((costs ? costs.ventures : []).map((c) => [c.venture, c]));
+  const names = [...new Set([...model.ventures.map((v) => v.venture), ...costOf.keys()])]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const revenueOf = new Map(model.ventures.map((v) => [v.venture, v]));
+
+  for (const name of names) {
+    const v = revenueOf.get(name);
+    if (!v) {
+      // Costs and no revenue is a real month for a venture that has not sold anything yet. It gets
+      // its name and its cost sections, and no fabricated zero revenue row.
+      out.push("");
+      out.push(`${mark}${name}`);
+      out.push(...costSections(costOf.get(name), "    ", mark));
+      continue;
+    }
     out.push("");
     out.push(`${mark}${v.venture}`);
     out.push(`${mark}  gross ${renderComponent(v.gross, "INR")}   fees ${renderComponent(v.fees, "INR")}   tax ${renderComponent(v.tax, "INR")}   net ${renderComponent(v.net, "INR")}`);
@@ -82,15 +116,20 @@ export function render(model, panel = null) {
       const label = r.refundOf ? `refund of ${r.refundOf}` : r.paymentId;
       out.push(`${mark}    ${r.ts}  ${rupees(r.amountInr)}  ${label}${foreign}`);
     }
-    // Per-venture costs were computed and never printed, so a cost event could conjure a venture
-    // section with no revenue, no costs and no explanation of why it was on screen.
-    for (const l of v.costs.slice().sort(byTsId)) out.push(`${mark}    ${costLine(l)}`);
+    // The cost side comes from costs.mjs when it is available, which is where the trichotomy lives.
+    // pnl.mjs's own flat cost list is the fallback for a caller that did not derive costs -- it
+    // renders the same lines without the class labels rather than nothing at all.
+    if (costs) out.push(...costSections(costOf.get(name), "    ", mark));
+    else for (const l of v.costs.slice().sort(byTsId)) out.push(`${mark}    ${costLine(l)}`);
   }
 
-  if (model.overhead.lines.length) {
+  const overheadLines = costs
+    ? costSections(costs.overhead, "  ", mark)
+    : model.overhead.lines.slice().sort(byTsId).map((l) => `${mark}  ${costLine(l)}`);
+  if (overheadLines.length) {
     out.push("");
     out.push(`${mark}Overhead (venture: arc — never attributed to a product)`);
-    for (const l of model.overhead.lines.slice().sort(byTsId)) out.push(`${mark}  ${costLine(l)}`);
+    out.push(...overheadLines);
   }
 
   // TOTAL, and the event id is what makes it so. (month, venture, type) ties for four `new`
@@ -118,7 +157,7 @@ export function render(model, panel = null) {
   // (it would otherwise erase a crossing), so the exclusion itself has to be visible.
   const future = (panel && panel.receipted ? panel.futureRevenue || [] : []).map((f) =>
     ({ type: "revenue dated in the future", detail: `${f.venture} has ${f.count} revenue event(s) after today, excluded from the days-without-revenue clock` }));
-  const needsYou = [...model.needsYou, ...kill, ...future];
+  const needsYou = [...model.needsYou, ...(costs ? costs.needsYou : []), ...kill, ...future];
   if (needsYou.length) {
     out.push("");
     out.push(`${mark}needs you (${needsYou.length})`);
@@ -137,6 +176,25 @@ export function render(model, panel = null) {
 //
 // ABSENT rows are PRINTED, never dropped. A list that silently omits what it could not evaluate is
 // shorter and greener than the truth, and indistinguishable from a healthy venture (ADR-1018).
+// The cost trichotomy (REQ-06, ADR-1006). Three sources, each its own labelled block with its own
+// subtotal, and there is NO code path that adds two of them together -- the model keeps them in
+// separate named fields and every subtotal is per currency, so summing across classes would first
+// require an exchange rate the cost payload does not carry (ADR-1003 forbids looking one up).
+// `unclassified` renders beside the three rather than being folded into any of them: a cost whose
+// source nobody recognises is a fact about the data, and normalizing it away would hide it.
+function costSections(bucket, indent, mark) {
+  const out = [];
+  if (!bucket) return out;
+  for (const cls of [...COST_CLASSES, UNCLASSIFIED]) {
+    const s = bucket[cls];
+    if (!s || !s.lines || s.lines.length === 0) continue;
+    out.push(`${mark}${indent}costs (${s.source})`);
+    for (const l of s.lines.slice().sort(byTsId)) out.push(`${mark}${indent}  ${costLine(l)}`);
+    out.push(`${mark}${indent}  subtotal ${s.source} ${renderSectionTotal(s)}`);
+  }
+  return out;
+}
+
 export function renderKill(panel, mark = "") {
   if (!panel || !panel.present || !panel.receipted) return [];
   // PROVENANCE ON THE SUCCESS PATH, not only on the refusal. The refusal named the file and the
@@ -185,10 +243,80 @@ function costLine(l) {
   return `${l.ts}  ${amount}  ${l.source || "source unrecorded"}`;
 }
 
+// `PROVIDER:CURRENCY=VALUE` for both input flags. One spelling, because two spellings of "which
+// rail" is two things to keep in step -- and a rail named one way in the file flag and another way
+// in the total flag would surface as INPUT-CONFLICT on rails that are actually the same one.
+const RAIL_SPEC_RE = /^([a-z0-9][a-z0-9-]{0,31}):([A-Z]{3})=(.+)$/;
+
+function parseReconcileInputs(flags) {
+  const inputs = [];
+  const add = (spec, kind) => {
+    const m = RAIL_SPEC_RE.exec(spec);
+    if (!m) throw new SpineError("BAD_ARGS", `--reconcile-${kind} ${JSON.stringify(spec)} must be PROVIDER:CURRENCY=${kind === "file" ? "PATH" : "MINOR_UNITS"} (lowercase provider, ISO-4217 currency)`);
+    const [, provider, currency, value] = m;
+    if (kind === "file") {
+      if (!existsSync(value)) throw new SpineError("BAD_ARGS", `--reconcile-file names ${value}, and there is no file there`);
+      const bytes = readFileSync(value);
+      const parser = EXPORT_PARSERS[provider];
+      if (!parser)
+        throw new SpineError("BAD_ARGS", `--reconcile-file has no export parser for provider ${JSON.stringify(provider)} (have ${Object.keys(EXPORT_PARSERS).sort().join(", ")}) -- use --reconcile-total for a rail whose export nothing here can read, rather than having the gate guess at a format`);
+      const rows = parser(bytes.toString("utf8"));
+      // SUM THE SAME QUANTITY INGEST WOULD HAVE PUT ON THE SPINE, so file-vs-spine is an identity
+      // check on the ingest rather than a comparison between two different definitions of revenue.
+      // normalize.mjs owns that definition (`amount` = gross - tax); it is not exported, so the one
+      // line is repeated here and this comment is the reason a reader should suspect drift if the
+      // two ever disagree. Rows whose currency is not this rail's are excluded rather than added:
+      // an export covering two currencies is two rails, and summing across them would compare a
+      // number to a total that includes a conversion nobody made.
+      let total_minor = 0;
+      let counted = 0;
+      for (const r of rows) {
+        if (r.currency !== currency) continue;
+        total_minor += r.gross - r.tax;
+        counted += 1;
+      }
+      if (counted === 0)
+        throw new SpineError("BAD_ARGS", `--reconcile-file ${value} has ${rows.length} row(s) and NONE in ${currency} -- an empty sum would reconcile as a real zero, which is the shape that closes a month against nothing`);
+      // The sha is over the FILE BYTES, so the receipt pins the document rather than a number
+      // someone read out of it.
+      inputs.push({ provider, currency, source: "file", total_minor, input_sha: inputSha(bytes) });
+      return;
+    }
+    // Integer minor units, refused rather than parsed loosely: "1180.50" is the shape that becomes
+    // a 100x error, and this lane has already shipped one of those.
+    if (!/^(0|[1-9]\d*)$/.test(value))
+      throw new SpineError("BAD_ARGS", `--reconcile-total ${JSON.stringify(spec)} must end in a non-negative INTEGER of minor units (ADR-1012) -- a decimal here is the 100x error this lane has already paid for once`);
+    const total_minor = Number(value);
+    if (!Number.isSafeInteger(total_minor)) throw new SpineError("BAD_ARGS", `--reconcile-total ${value} is outside the safe integer range`);
+    inputs.push({ provider, currency, source: "total", total_minor, input_sha: inputSha(canonicalTotalText(total_minor)) });
+  };
+  for (const spec of flags["reconcile-file"] || []) add(spec, "file");
+  for (const spec of flags["reconcile-total"] || []) add(spec, "total");
+  return inputs;
+}
+
+function renderClose(month, derived, verdict) {
+  const out = [`close ${month}  ${verdict.ok ? "GREEN" : "BLOCKED"}`];
+  for (const r of verdict.rails) {
+    const prov = r.provider_minor === null ? ABSENT : String(r.provider_minor);
+    out.push(`  ${r.provider}/${r.currency}  spine ${r.net_minor === undefined ? r.spine_minor : r.net_minor}  provider ${prov}  ${r.status}`);
+  }
+  if (verdict.blockers.length) {
+    out.push("");
+    out.push(`blocked (${verdict.blockers.length})`);
+    // The blocker's own fields, rendered as they are. A prose summary here would be a second
+    // spelling of the gate's verdict, and the fields are what a human acts on.
+    for (const b of verdict.blockers) out.push(`  ${b.kind}  ${JSON.stringify(b)}`);
+  }
+  return out.join("\n") + "\n";
+}
+
 async function main(argv) {
   const flags = parseArgs(argv);
   if (flags.help) {
-    process.stdout.write("usage: arc-pnl [--venture V] [--month YYYY-MM] [--simulated] [--engine scan|sqlite] [--criteria-digest]\n");
+    process.stdout.write(
+      "usage: arc-pnl [--venture V] [--month YYYY-MM] [--simulated] [--engine scan|sqlite] [--criteria-digest]\n" +
+      "       arc-pnl --close YYYY-MM (--reconcile-file PROVIDER:CURRENCY=PATH | --reconcile-total PROVIDER:CURRENCY=MINOR)...\n");
     return 0;
   }
 
@@ -211,6 +339,10 @@ async function main(argv) {
 
   if (flags.month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(flags.month))
     throw new SpineError("BAD_ARGS", `--month "${flags.month}" is not YYYY-MM`);
+  // Reconciliation input only means anything against a close. Silently ignoring it would let
+  // `arc-pnl --reconcile-total ...` (the --close forgotten) look like it did the work.
+  if (flags.close === undefined && (flags["reconcile-file"] || flags["reconcile-total"]))
+    throw new SpineError("BAD_ARGS", "--reconcile-file/--reconcile-total are reconciliation input for --close, and there is no --close here");
   // AN UNKNOWN ENGINE NAME MUST NOT FALL BACK TO `scan`. This file's own header explains why the
   // engine is announced at all: a box without sqlite would otherwise run scan twice, compare a
   // thing to itself, and report the equivalence gate green. A typo'd `--engine sqlite3` produced
@@ -220,6 +352,30 @@ async function main(argv) {
     throw new SpineError("BAD_ARGS", `--engine ${JSON.stringify(flags.engine)} is neither "scan" nor "sqlite" -- an unrecognised engine used to fall back to scan silently, which is how an equivalence gate compares a thing to itself and passes`);
 
   const root = spineRoot();
+
+  // THE MONTH CLOSE (REQ-05). It renders the gate's verdict and NOTHING ELSE -- it never emits.
+  // Month-close is human-run, always (a lane non-negotiable): this command tells you whether the
+  // month MAY be closed and prints the exact receipt to seal, and a human seals it. Wiring the
+  // emission in here is how a gate becomes a daemon by accident.
+  if (flags.close !== undefined) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(flags.close))
+      throw new SpineError("BAD_ARGS", `--close "${flags.close}" is not YYYY-MM`);
+    const inputs = parseReconcileInputs(flags);
+    const derived = await deriveRails(root, { month: flags.close, engine: flags.engine });
+    const verdict = reconcile({ rails: derived.rails, inputs });
+    process.stdout.write(renderClose(flags.close, derived, verdict));
+    if (!verdict.ok) return 4;
+    // The payload a human seals. Printed rather than emitted, and printed to STDOUT so it can be
+    // piped straight into `arc-event emit month.closed --payload-file -`.
+    const payload = closePayload({ month: flags.close, rails: verdict.rails, paymentCount: derived.paymentCount });
+    process.stdout.write(`\n${JSON.stringify(payload)}\n`);
+    process.stderr.write(
+      `arc-pnl: gate GREEN for ${flags.close}. Seal it with:\n` +
+      `  arc-event emit month.closed --payload-file <the JSON above> ` +
+      `--idem $(node -e 'import("./.claude/scripts/hq/lib/canonical.mjs").then(m=>process.stdout.write(m.sha256Hex("month.closed|${flags.close}")))') --strict --outcome ok\n`);
+    return 0;
+  }
+
   const model = await derivePnl(root, {
     mode: flags.simulated === true ? "simulated" : "real",
     venture: flags.venture ?? null,
@@ -248,7 +404,16 @@ async function main(argv) {
     // compared against a golden on three operating systems.
     if (panel.present) process.stderr.write(`arc-pnl: criteria=${panel.path} digest=${panel.digest}\n`);
   }
-  process.stdout.write(render(model, panel));
+  // There is no `cost.simulated` kind, so a simulated P&L has no cost side at all. Derived only for
+  // the real view, and the simulated view says so out loud below rather than showing nothing --
+  // "no cost section" would otherwise read as "costs are zero".
+  const costs = flags.simulated === true ? null : await deriveCosts(root, {
+    month: flags.month ?? null, venture: flags.venture ?? null, engine: flags.engine,
+  });
+  const body = render(model, panel, costs);
+  process.stdout.write(flags.simulated === true
+    ? body.replace(/\n$/, "\nSIMULATED costs are not simulated -- there is no cost.simulated kind; run without --simulated for the cost side\n")
+    : body);
   return 0;
 }
 

@@ -19,6 +19,7 @@ import { SpineError, dayOf, formatIst, nowMs } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { query } from "./spine.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
+import { dailySpend, renderSpendLine } from "./lib/ledger/costs.mjs";
 
 const VALUE_FLAGS = new Set(["date", "venture", "engine"]);
 const BOOL_FLAGS = new Set(["full"]);
@@ -161,7 +162,7 @@ function parseArgs(argv) {
 // it measures. They arrive here as a pre-computed array so this file does no deriving of its own,
 // and they land in needs-you because REQ-03 says a crossing needs a human -- a warning does not,
 // and a warning in this group would train the reader to skim the group that must never be skimmed.
-export function render(day, events, torn, { full = false, killCrossings = [], killNotice = null } = {}) {
+export function render(day, events, torn, { full = false, killCrossings = [], killNotice = null, spendLine = null } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -228,6 +229,12 @@ export function render(day, events, torn, { full = false, killCrossings = [], ki
     for (const [g] of GROUPS) {
       const gl = groupLines(g);
       if (gl.length) out.push("", ...gl);
+      // THE DAILY SPEND LINE (REQ-06), under money and only when there is spend. Deliberately NOT
+      // folded into groupLines' `extra`: that feeds the group's head COUNT, and this line summarises
+      // the very events that count already covers -- it would report one more event than the day
+      // holds. `spendLine` is non-null only when a cost.incurred is in the day, so the money group
+      // is non-empty by construction; the gl.length guard makes that explicit rather than assumed.
+      if (g === "money" && spendLine && gl.length) out.push(spendLine);
     }
     // A damaged line is reported in the brief itself: "the day looks quiet" and "the day is
     // unreadable" must never render the same.
@@ -275,7 +282,11 @@ async function main(argv) {
   const killNotice = panel.present && !panel.receipted
     ? `kill lines NOT EVALUATED -- ventures.yaml is unreceipted (digest ${panel.digest}); run arc-pnl for the full refusal`
     : null;
-  process.stdout.write(render(day, events, torn, { full: flags.full === true, killCrossings, killNotice }));
+  // `.map(r => r.event)` is load-bearing: the reader returns RECORDS, and dailySpend THROWS on a
+  // record rather than quietly reporting no spend on a day full of it -- which is the kill-panel
+  // scar this lane already has, in the same shape.
+  const spendLine = renderSpendLine(dailySpend(events.map((r) => r.event), { day }));
+  process.stdout.write(render(day, events, torn, { full: flags.full === true, killCrossings, killNotice, spendLine }));
   return 0;
 }
 
