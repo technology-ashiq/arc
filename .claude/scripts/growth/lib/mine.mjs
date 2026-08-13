@@ -104,31 +104,47 @@ export const enabledSources = (cfg) => cfg.sources.filter((s) => s.enabled);
 export function assertCandidate(c) {
   if (c === null || typeof c !== "object" || Array.isArray(c))
     throw new MineError("BAD_CANDIDATE", "candidate must be an object");
+
+  // ONE read per field, taken up front through an OWN-property descriptor, validated as the local
+  // copy, and returned as the local copy. Two confirmed attacks made this necessary:
+  //   - the closed-key loop used Object.keys (own) while the presence loop used `in` (inherited),
+  //     so an object with NO own properties whose prototype carried all five fields passed;
+  //   - fields were read 2-6 times, so a getter could answer the validation reads with a real URL
+  //     and hand the consumer an invented one.
+  // Validating one value and shipping another is this lane's recurring defect. Returning `frozen`
+  // rather than `c` is the half that actually closes it.
+  const frozen = {};
+  for (const k of CANDIDATE_KEYS) {
+    const d = Object.getOwnPropertyDescriptor(c, k);
+    if (d === undefined) throw new MineError("BAD_CANDIDATE", `candidate is missing ${k}`);
+    // A getter is refused outright rather than read once: its value is not a property of the
+    // object, it is a function of when you asked.
+    if (!("value" in d)) throw new MineError("BAD_CANDIDATE", `candidate ${k} is an accessor, not a value`);
+    frozen[k] = d.value;
+  }
   for (const k of Object.keys(c))
     if (!CANDIDATE_KEYS.includes(k))
       throw new MineError("BAD_CANDIDATE", `candidate has unknown key ${JSON.stringify(k)} (shape is closed to ${CANDIDATE_KEYS.join("|")})`);
-  for (const k of CANDIDATE_KEYS)
-    if (!(k in c)) throw new MineError("BAD_CANDIDATE", `candidate is missing ${k}`);
   for (const k of CANDIDATE_KEYS) {
-    if (typeof c[k] !== "string") throw new MineError("BAD_CANDIDATE", `candidate ${k} must be a string`);
-    if (hasControlChar(c[k])) throw new MineError("BAD_CANDIDATE", `candidate ${k} contains a control character`);
+    if (typeof frozen[k] !== "string") throw new MineError("BAD_CANDIDATE", `candidate ${k} must be a string`);
+    if (hasControlChar(frozen[k])) throw new MineError("BAD_CANDIDATE", `candidate ${k} contains a control character`);
   }
-  const kw = c.keyword.trim();
+  const kw = frozen.keyword.trim();
   if (kw === "") throw new MineError("BAD_CANDIDATE", "candidate keyword is empty");
-  if (kw !== c.keyword) throw new MineError("BAD_CANDIDATE", "candidate keyword has leading or trailing whitespace");
+  if (kw !== frozen.keyword) throw new MineError("BAD_CANDIDATE", "candidate keyword has leading or trailing whitespace");
   if (kw.length > MAX_KEYWORD_LEN)
     throw new MineError("BAD_CANDIDATE", `candidate keyword is ${kw.length} chars, ceiling is ${MAX_KEYWORD_LEN}`);
-  if (!INTENTS.includes(c.intent))
-    throw new MineError("BAD_CANDIDATE", `candidate intent ${JSON.stringify(c.intent)} is outside ${INTENTS.join("|")}`);
+  if (!INTENTS.includes(frozen.intent))
+    throw new MineError("BAD_CANDIDATE", `candidate intent ${JSON.stringify(frozen.intent)} is outside ${INTENTS.join("|")}`);
   // The evidence URL is the whole claim. An absent or non-http one is refused HERE, structurally,
   // so criterion 5 is not a warning printed by something downstream that a caller can ignore.
-  if (!HTTPS_RE.test(c.evidence_url))
-    throw new MineError("NO_EVIDENCE", `candidate ${JSON.stringify(c.keyword)} has no resolvable-shaped evidence_url (${JSON.stringify(c.evidence_url)})`);
-  if (!SOURCE_ID_RE.test(c.source_id))
-    throw new MineError("BAD_CANDIDATE", `candidate source_id ${JSON.stringify(c.source_id)} is not a lowercase slug`);
-  if (c.gap_note.length > MAX_GAP_NOTE_LEN)
-    throw new MineError("BAD_CANDIDATE", `candidate gap_note is ${c.gap_note.length} chars, ceiling is ${MAX_GAP_NOTE_LEN}`);
-  return c;
+  if (!HTTPS_RE.test(frozen.evidence_url))
+    throw new MineError("NO_EVIDENCE", `candidate ${JSON.stringify(frozen.keyword)} has no resolvable-shaped evidence_url (${JSON.stringify(frozen.evidence_url)})`);
+  if (!SOURCE_ID_RE.test(frozen.source_id))
+    throw new MineError("BAD_CANDIDATE", `candidate source_id ${JSON.stringify(frozen.source_id)} is not a lowercase slug`);
+  if (frozen.gap_note.length > MAX_GAP_NOTE_LEN)
+    throw new MineError("BAD_CANDIDATE", `candidate gap_note is ${frozen.gap_note.length} chars, ceiling is ${MAX_GAP_NOTE_LEN}`);
+  return Object.freeze(frozen);
 }
 
 /**
@@ -138,9 +154,17 @@ export function assertCandidate(c) {
  * target, and treating them as different is how a site ends up competing with itself.
  */
 export function targetKey(s) {
+  // UNICODE-PRESERVING. The first version stripped everything outside [a-z0-9], so every
+  // non-Latin keyword collapsed to the empty string: two distinct CJK phrases became the same
+  // key, dedupe silently dropped one, and a single em-dash slug in the sitemap excluded EVERY
+  // non-Latin candidate at once. The adapter deliberately keeps \p{L}\p{N}, so the two halves of
+  // the pipeline were running contradictory unicode policies -- and losing rows to that is
+  // MISSING read as zero, which this lane treats as a defect rather than a rough edge.
+  // NFKC first so accented and decomposed forms of the same word agree.
   const tokens = String(s)
+    .normalize("NFKC")
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim()
     .split(/\s+/)
     .filter(Boolean);
@@ -153,8 +177,18 @@ export function targetKey(s) {
  * first time someone publishes without updating it.
  */
 export function excludeOwnPages(candidates, ownTargets) {
-  const own = new Set([...ownTargets].map(targetKey));
-  return candidates.filter((c) => !own.has(targetKey(c.keyword)));
+  // A Set or an array -- not a string. Spreading a string yields its CHARACTERS, so a caller
+  // passing "abc" silently excluded on single letters instead of erroring.
+  if (typeof ownTargets === "string" || !(ownTargets instanceof Set || Array.isArray(ownTargets)))
+    throw new MineError("BAD_INPUT", "ownTargets must be a Set or an array of slugs");
+  // The empty key is dropped from BOTH sides. targetKey can legitimately return "" (a slug of
+  // pure punctuation), and one such entry would otherwise match every candidate whose keyword
+  // also reduced to "" -- an unbounded, silent exclusion driven by one junk sitemap row.
+  const own = new Set([...ownTargets].map(targetKey).filter((k) => k !== ""));
+  return candidates.filter((c) => {
+    const k = targetKey(c.keyword);
+    return k === "" || !own.has(k);
+  });
 }
 
 /** Drop exact-duplicate keywords, keeping the first (append order = discovery order). */
@@ -179,6 +213,11 @@ export function dedupeCandidates(candidates) {
  * the failure mode that makes an empty result look like a quiet market.
  */
 export async function mine({ cfg, adapters, ownTargets = new Set() }) {
+  // "Official APIs only" was enforced ONLY in loadSources, while mine() re-derived the enabled
+  // list from whatever object it was handed -- so the non-negotiable was a call-order convention
+  // rather than a property of the code. A cfg that never passed the door is re-run through it
+  // here; loadSources is pure and cheap, and a structural guarantee beats a remembered one.
+  cfg = loadSources(typeof cfg === "string" ? cfg : JSON.stringify(cfg));
   const enabled = enabledSources(cfg);
   if (enabled.length === 0)
     throw new MineError("NO_SOURCES", "no source is enabled, so this run could only invent keywords");

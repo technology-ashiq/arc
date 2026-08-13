@@ -65,30 +65,59 @@ export function httpResolver({
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       if (attempt > 0 || pauseMs > 0) await sleep(attempt === 0 ? pauseMs : Math.min(8000, pauseMs * 2 ** attempt));
       for (const method of ["HEAD", "GET"]) {
-        const ac = new AbortController();
-        const timer = setTimeout(() => ac.abort(), timeoutMs);
-        try {
-          const res = await fetchImpl(url, {
-            method,
-            redirect: "follow",
-            signal: ac.signal,
-            headers: method === "GET" ? { Range: "bytes=0-0" } : undefined,
-          });
-          if (res.status === 405 && method === "HEAD") continue;
-          if (res.status >= 200 && res.status < 400) return { state: EV_LIVE, status: res.status };
-          if (DEAD_STATUSES.has(res.status)) return { state: EV_DEAD, status: res.status };
-          last = { state: EV_UNKNOWN, status: res.status };
-          if (res.status === 429) {
-            const ra = Number(res.headers && res.headers.get ? res.headers.get("retry-after") : NaN);
-            if (Number.isFinite(ra) && ra > 0) await sleep(Math.min(30000, ra * 1000));
+        // Redirects are followed BY HAND so that MAX_REDIRECTS actually bounds something. With
+        // `redirect: "follow"` the constant was declared and never referenced -- the real bound
+        // was the platform default of 20 -- which is a guard that cannot fire.
+        let target = url;
+        let hops = 0;
+        let settled = null;
+        while (settled === null) {
+          const ac = new AbortController();
+          const timer = setTimeout(() => ac.abort(), timeoutMs);
+          try {
+            const res = await fetchImpl(target, {
+              method,
+              redirect: "manual",
+              signal: ac.signal,
+              headers: method === "GET" ? { Range: "bytes=0-0" } : undefined,
+            });
+            const status = res.status;
+            const location = res.headers && res.headers.get ? res.headers.get("location") : null;
+            if (status >= 300 && status < 400 && location) {
+              if (++hops > MAX_REDIRECTS) { settled = { state: EV_UNKNOWN, status }; break; }
+              let next;
+              try { next = new URL(location, target).toString(); } catch { settled = { state: EV_UNKNOWN, status }; break; }
+              // A catch-all redirect to the site root is a SOFT 404: the page does not exist and
+              // the server said so with a 200 somewhere else. Calling that live would let a
+              // fabricated evidence_url pass verification, which is the one thing this module
+              // exists to prevent.
+              try {
+                if (new URL(next).pathname === "/" && new URL(url).pathname !== "/") {
+                  settled = { state: EV_UNKNOWN, status };
+                  break;
+                }
+              } catch { /* an unparseable next is handled on the following hop */ }
+              target = next;
+              continue;
+            }
+            if (status === 405 && method === "HEAD") { settled = "try-get"; break; }
+            if (status >= 200 && status < 300) { settled = { state: EV_LIVE, status }; break; }
+            if (DEAD_STATUSES.has(status)) { settled = { state: EV_DEAD, status }; break; }
+            if (status === 429) {
+              const ra = Number(res.headers && res.headers.get ? res.headers.get("retry-after") : NaN);
+              if (Number.isFinite(ra) && ra > 0) await sleep(Math.min(30000, ra * 1000));
+            }
+            settled = { state: EV_UNKNOWN, status };
+          } catch {
+            settled = { state: EV_UNKNOWN, status: 0 };
+          } finally {
+            clearTimeout(timer);
           }
-          break; // retryable: go round the outer loop rather than trying GET on the same failure
-        } catch {
-          last = { state: EV_UNKNOWN, status: 0 };
-          if (method === "GET") break;
-        } finally {
-          clearTimeout(timer);
         }
+        if (settled === "try-get") continue;
+        if (settled.state === EV_LIVE || settled.state === EV_DEAD) return settled;
+        last = settled;
+        break; // retryable: go round the outer loop rather than trying GET on the same failure
       }
     }
     return last;
@@ -106,21 +135,34 @@ export async function partitionByEvidence(candidates, resolve) {
   const unknown = [];
   // The whole URL list is handed to every call so a source-native verifier can answer the batch
   // in one request instead of one per row. Computed once, outside the loop.
-  const allUrls = candidates.map((c) => c.evidence_url);
+  // Everything that can throw is INSIDE the loop's try. Building this list outside it, and
+  // reading r.status outside it, meant one null candidate or one throwing getter rejected the
+  // whole function -- losing every row at once, which looks exactly like a thin market and is the
+  // failure this function's own contract says it prevents.
+  const allUrls = [];
+  for (const c of candidates) allUrls.push(c === null || typeof c !== "object" ? "" : c.evidence_url);
+
   for (const c of candidates) {
-    let r;
+    let state = EV_UNKNOWN;
+    let status = 0;
     try {
       // The candidate is passed too, so a caller can dispatch to the SOURCE's own verifier. A
       // source knows how to confirm its own evidence without abusing a human-facing page -- the
       // first real run learned that by rate-limiting itself into 38 unverifiable rows.
-      r = await resolve(c.evidence_url, c, allUrls);
+      const r = await resolve(c.evidence_url, c, allUrls);
+      // ONE read of each field. Reading r.state twice let an injected resolver answer "dead" to
+      // the classification and "live" to the branch, putting a 404 row into the live bucket.
+      const s = r === null || typeof r !== "object" ? undefined : r.state;
+      const st = r === null || typeof r !== "object" ? undefined : r.status;
+      state = s === EV_LIVE || s === EV_DEAD || s === EV_UNKNOWN ? s : EV_UNKNOWN;
+      status = Number.isFinite(st) ? st : 0;
     } catch {
-      r = { state: EV_UNKNOWN, status: 0 };
+      state = EV_UNKNOWN;
+      status = 0;
     }
-    const state = r && r.state ? r.state : EV_UNKNOWN;
     if (state === EV_LIVE) live.push(c);
-    else if (state === EV_DEAD) dead.push({ ...c, _status: r.status });
-    else unknown.push({ ...c, _status: r ? r.status : 0 });
+    else if (state === EV_DEAD) dead.push({ ...c, _status: status });
+    else unknown.push({ ...c, _status: status });
   }
   return { live, dead, unknown };
 }
@@ -136,6 +178,11 @@ const LOC_RE = /<loc>\s*([^<]+?)\s*<\/loc>/gi;
 export function parseSitemap(xml) {
   if (typeof xml !== "string" || xml.trim() === "")
     throw new EvidenceError("BAD_SITEMAP", "sitemap is empty");
+  // COMMENTS ARE STRIPPED FIRST. A bare regex honoured a <loc> inside an XML comment, so one
+  // injected comment -- anywhere a sitemap is generated from CMS or user content -- adds an
+  // own-page target and silently excludes whatever keyword it names. That is a denial-of-content
+  // attack with no error and no log line.
+  xml = xml.replace(/<!--[\s\S]*?-->/g, "");
   const urls = [];
   for (const m of xml.matchAll(LOC_RE)) {
     const raw = m[1]
@@ -171,6 +218,13 @@ export function ownTargetsFromSitemap(xml) {
     if (segs.length === 0) continue; // the homepage targets nothing in particular
     out.add(segs[segs.length - 1].replace(/\.[a-z0-9]+$/i, ""));
   }
+  // parseSitemap refuses a file with zero <loc> so the exclusion is never silently switched off.
+  // This function could still hand back an empty Set from a sitemap that parsed fine -- a site of
+  // nothing but the homepage, or of unparseable <loc> values -- which switches it off one layer
+  // further up, where nothing was watching. Same defect, one layer over.
+  if (out.size === 0)
+    throw new EvidenceError("BAD_SITEMAP",
+      "the sitemap parsed but yielded no own-page targets, which would switch the exclusion off silently -- pass no sitemap deliberately instead");
   return out;
 }
 

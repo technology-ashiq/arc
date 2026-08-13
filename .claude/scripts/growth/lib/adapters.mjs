@@ -8,6 +8,17 @@
 import { readFileSync } from "node:fs";
 import { MineError } from "./mine.mjs";
 
+/**
+ * Release a response whose body we are not going to read. Under undici an unconsumed body keeps
+ * the socket checked out, which can stall process exit on a long run -- and a miner that has
+ * printed its result but will not exit reads as a hang.
+ */
+async function drain(res) {
+  try {
+    if (res && res.body && typeof res.body.cancel === "function") await res.body.cancel();
+  } catch { /* releasing a socket must never be the thing that fails a run */ }
+}
+
 const HN_ENDPOINT = "https://hn.algolia.com/api/v1/search";
 const HN_ITEM = "https://news.ycombinator.com/item?id=";
 const MAX_KEYWORD_LEN = 120;
@@ -20,7 +31,12 @@ const COMMERCIAL = /\b(best|top|review|reviews|comparison|compare|tool|tools|pla
 
 /** Title -> a keyword phrase. Strips the HN prefixes and punctuation people put in titles. */
 export function titleToKeyword(title) {
+  // TRUNCATE FIRST. `/\s*[--|]\s*.*$/` backtracks quadratically on long whitespace runs: 40k
+  // chars took 3.3s and 160k took 35s. The 120-char cap used to be applied at the END, after
+  // every regex had already run, so it protected nothing. This function is exported, so the
+  // bound cannot rely on HN's own title limits.
   const s = String(title)
+    .slice(0, 512)
     .replace(/^\s*(show|ask|tell)\s+hn\s*:\s*/i, "")
     .replace(/\s*[–—|]\s*.*$/, "") // drop a trailing dash/pipe subtitle
     .replace(/["'`(){}[\]]/g, " ")
@@ -53,7 +69,10 @@ export function hnAlgoliaAdapter({ offline = false, fetchImpl = globalThis.fetch
       let json;
       try {
         const res = await fetchImpl(url, { headers: { accept: "application/json" } });
-        if (!res.ok) throw new MineError("SOURCE_HTTP", `${source.id} returned ${res.status} for ${JSON.stringify(q)}`);
+        if (!res.ok) {
+          await drain(res);
+          throw new MineError("SOURCE_HTTP", `${source.id} returned ${res.status} for ${JSON.stringify(q)}`);
+        }
         json = await res.json();
       } catch (e) {
         // A source that fails is an ERROR, not an empty result. Swallowing it here would turn a
@@ -61,8 +80,12 @@ export function hnAlgoliaAdapter({ offline = false, fetchImpl = globalThis.fetch
         // to prevent -- MISSING is never zero.
         throw e instanceof MineError ? e : new MineError("SOURCE_UNREACHABLE", `${source.id} unreachable: ${e.message}`);
       }
-      for (const hit of Array.isArray(json.hits) ? json.hits : []) {
-        if (!hit.objectID) continue; // no id means no evidence link, so no row
+      // Same shape check, same reason: a 200 whose body is not a hits array is a broken
+      // integration, and returning [] for it turns that into "the market is quiet".
+      if (json === null || typeof json !== "object" || !Array.isArray(json.hits))
+        throw new MineError("SOURCE_SHAPE", `${source.id} answered 200 with no hits array for ${JSON.stringify(q)}`);
+      for (const hit of json.hits) {
+        if (!hit || !hit.objectID) continue; // no id means no evidence link, so no row
         out.push({ title: hit.title ?? "", objectID: String(hit.objectID), query: q });
       }
     }
@@ -132,20 +155,26 @@ export function attestedCandidates(items, sourceId, { minAttestations = 2, minN 
   for (const [phrase, rec] of seen) {
     if (rec.ids.size < minAttestations) continue;
     if (redundant.has(phrase)) continue;
+    // The count is CARRIED, not re-parsed. Sorting used to run a regex back over the prose in
+    // gap_note to recover the number it had just written there -- which throws the day anyone
+    // rewords the sentence, and is the same validate-one-read-use-another shape as the rest.
     out.push({
-      keyword: phrase,
-      evidence_url: HN_ITEM + encodeURIComponent(rec.evidence),
-      intent: classifyIntent(phrase),
-      gap_note: `attested in ${rec.ids.size} independent HN stories; evidence link is one of them; found via query ${JSON.stringify(rec.query)}`,
-      source_id: sourceId,
+      n: rec.ids.size,
+      cand: {
+        keyword: phrase,
+        evidence_url: HN_ITEM + encodeURIComponent(rec.evidence),
+        intent: classifyIntent(phrase),
+        gap_note: `attested in ${rec.ids.size} independent HN stories; evidence link is one of them; found via query ${JSON.stringify(rec.query)}`,
+        source_id: sourceId,
+      },
     });
   }
   // Most-attested first, so the pillar chooser sees the broadest topics at the top.
-  return out.sort((a, b) => {
-    const an = Number(/attested in (\d+)/.exec(a.gap_note)[1]);
-    const bn = Number(/attested in (\d+)/.exec(b.gap_note)[1]);
-    return bn - an || a.keyword.localeCompare(b.keyword);
-  });
+  // Deterministic tiebreak, NOT localeCompare. localeCompare follows the host locale, so the same
+  // candidates could order differently on another machine -- and candidate order picks the pillar,
+  // which changes the plan, which changes the plan_sha the approval is bound to. A gate keyed on a
+  // hash cannot have a locale-dependent input.
+  return out.sort((a, b) => b.n - a.n || (a.cand.keyword < b.cand.keyword ? -1 : a.cand.keyword > b.cand.keyword ? 1 : 0)).map((x) => x.cand);
 }
 
 /**
@@ -177,9 +206,22 @@ export function hnAlgoliaVerifier({ fetchImpl = globalThis.fetch, timeoutMs = 15
       const timer = setTimeout(() => ac.abort(), timeoutMs);
       try {
         const res = await fetchImpl(url, { headers: { accept: "application/json" }, signal: ac.signal });
-        if (!res.ok) { reachable = false; return; }
+        if (!res.ok) {
+          reachable = false;
+          // Every id in this slice is marked asked-and-unknown so the caller does not then fire
+          // one fresh request per remaining candidate -- which is the per-candidate hammering
+          // this batching exists to remove, returning through the failure path.
+          await drain(res);
+          return;
+        }
         const json = await res.json();
-        for (const hit of Array.isArray(json.hits) ? json.hits : []) known.add(String(hit.objectID));
+        // A 200 carrying something that is not a hits array is a BROKEN ANSWER, not an empty one.
+        // Treating it as empty marked every id in the slice asked-and-absent while `reachable`
+        // stayed true, so the verifier reported live stories DEAD and the run exited 0 with a
+        // quietly thinner proposal. The !res.ok and catch paths both set reachable=false; this
+        // path did not -- the same fix, missing from one of its three sites.
+        if (json === null || typeof json !== "object" || !Array.isArray(json.hits)) { reachable = false; return; }
+        for (const hit of json.hits) known.add(String(Number(hit && hit.objectID)));
         for (const id of slice) asked.add(id);
       } catch {
         reachable = false;
@@ -191,20 +233,33 @@ export function hnAlgoliaVerifier({ fetchImpl = globalThis.fetch, timeoutMs = 15
   }
 
   let primed = null;
+  // The URL must actually BE an HN item URL. Matching /[?&]id=(\d+)/ against any string meant a
+  // link on a domain guaranteed not to exist was certified LIVE because the number after `id=`
+  // happened to be a real HN story -- an invented evidence link passing the one check that exists
+  // to make invented evidence impossible. The host is the claim; check it.
+  const isHnItem = (u) => {
+    if (typeof u !== "string" || !u.startsWith(HN_ITEM)) return null;
+    const m = /^https:\/\/news\.ycombinator\.com\/item\?id=(\d+)$/.exec(u);
+    // Leading zeros are stripped: "?id=044" and "?id=44" are the same story, and a string compare
+    // against the returned set reported the padded form dead.
+    return m ? String(Number(m[1])) : null;
+  };
+
   return async (url, _c, allUrls) => {
-    const m = /[?&]id=(\d+)/.exec(url);
+    const id = isHnItem(url);
     // Not an HN item URL at all -- say UNKNOWN rather than guessing. The caller falls back.
-    if (!m) return { state: "unknown", status: 0 };
-    const id = m[1];
+    if (id === null) return { state: "unknown", status: 0 };
     if (!primed) {
-      const ids = (Array.isArray(allUrls) ? allUrls : [url])
-        .map((u) => /[?&]id=(\d+)/.exec(u))
-        .filter(Boolean)
-        .map((x) => x[1]);
+      // Only OUR urls are batched. Scraping an id out of every candidate's link regardless of
+      // host sent other sources' identifiers to Algolia and burned hitsPerPage slots on them.
+      const ids = (Array.isArray(allUrls) ? allUrls : [url]).map(isHnItem).filter((x) => x !== null);
       primed = lookup(ids.length ? ids : [id]);
     }
     await primed;
-    if (!asked.has(id)) await lookup([id]);
+    // Only retry a single id if the batch actually SUCCEEDED and simply did not cover this one.
+    // Retrying while `reachable` is false reopens the request-per-candidate storm on the exact
+    // path -- a failing upstream -- where it hurts most.
+    if (!asked.has(id) && reachable) await lookup([id]);
     if (known.has(id)) return { state: "live", status: 200 };
     // Absence is only meaningful if the lookup actually succeeded. If Algolia was unreachable,
     // "not in the set" says nothing at all -- and calling that dead is the same MISSING-as-zero

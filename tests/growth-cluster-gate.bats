@@ -61,7 +61,9 @@ const gate = (events, over = {}) => C.assertClusterApproved({ events, clusterId:
   [ "$output" = "NO_EVIDENCE" ]
 }
 
-@test "gate: too few spokes or too few BOFU refuses rather than proposing a thin cluster" {
+@test "gate: too small a candidate pool refuses rather than proposing a thin cluster" {
+  # Named for what it actually exercises: both inputs trip the POOL check, not the spoke floor.
+  # The earlier name claimed coverage of a guard these inputs never reach.
   run _node "$PRE
     const thin = [c(1), c(2), c(90, 'transactional'), c(91, 'transactional')];
     const noBofu = [...Array(9).keys()].map((i) => c(i));
@@ -161,13 +163,57 @@ const gate = (events, over = {}) => C.assertClusterApproved({ events, clusterId:
 }
 
 @test "gate: an inherited cluster_id cannot answer for a real one" {
-  # These objects come from JSON.parse, so a payload carrying __proto__ must not be able to make
-  # a prototype property look like an own approval field.
+  # The first version of this test used JSON.parse with a __proto__ key -- which creates an OWN
+  # property and never touches the prototype, so the test stayed green even with the own-property
+  # guard replaced by a plain read. It was testing nothing. A REAL inherited property is
+  # Object.create, and this now fails if `own()` is weakened.
   run _node "$PRE
-    const polluted = JSON.parse('{\"id\":\"' + REQ + '\",\"kind\":\"approval.requested\",\"payload\":{\"__proto__\":{\"cluster_id\":\"c-001\",\"plan_sha\":\"' + SHA + '\"}}}');
-    console.log(err(() => gate([polluted, dec()])));"
+    const proto = { cluster_id: 'c-001', plan_sha: SHA, gate: 'cluster' };
+    const inherited = { id: REQ, kind: 'approval.requested', payload: Object.create(proto) };
+    // Positive control: the same fields as OWN properties must approve, or this test would pass
+    // simply because the fixture is broken.
+    const ownVersion = { id: REQ, kind: 'approval.requested', payload: { ...proto } };
+    console.log(err(() => gate([inherited, dec()])) + ' ' + (gate([ownVersion, dec()]) === REQ ? 'own-works' : 'FIXTURE-BROKEN'));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "NOT_APPROVED own-works" ]
+}
+
+@test "gate: an approval raised for a DIFFERENT gate does not authorise generation" {
+  # A human answering "may I publish this" must not be recorded as having answered "may I
+  # generate this cluster", even when the ids and the plan hash line up.
+  run _node "$PRE
+    console.log(err(() => gate([req({ payload: { gate: 'publish' } }), dec()])));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "NOT_APPROVED" ]
+}
+
+@test "gate: a request with no usable id is not decided by a decision with no decides" {
+  # The hole an adversarial pass found: both sides read undefined for a missing key, and
+  # undefined === undefined, so a decision naming NOTHING approved a request named NOTHING.
+  run _node "$PRE
+    const noId  = { kind: 'approval.requested', payload: { gate: 'cluster', cluster_id: 'c-001', plan_sha: SHA } };
+    const noDec = { kind: 'decision.recorded', payload: { verdict: 'approve', reason: 'r' } };
+    console.log(err(() => gate([noId, noDec])));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "NOT_APPROVED" ]
+}
+
+@test "gate: two DIFFERENT plans cannot hash the same" {
+  # planSha binds the approval to the plan bytes. A hand-rolled stable-stringify ignored
+  # non-enumerable keys, Map/Set/Date, NaN and -0, so a plan could carry a field the human never
+  # saw and hash identically. It now goes through the spine's hardened canonicaliser, which
+  # REFUSES those shapes rather than flattening them.
+  run _node "$PRE
+    const hidden = JSON.parse(JSON.stringify(PLAN));
+    Object.defineProperty(hidden, 'publish_target', { value: 'https://attacker.example/', enumerable: false });
+    const sameSha = C.planSha(hidden) === SHA ? 'COLLIDES' : 'distinct-or-refused';
+    const nan = err(() => C.planSha({ ...PLAN, n: NaN }));
+    const date = err(() => C.planSha({ ...PLAN, d: new Date(0) }));
+    console.log([sameSha, nan, date].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The hidden-key plan still hashes the same (it is invisible to any serialiser), but the shapes
+  # that used to FLATTEN into a false match are now coded refusals.
+  [ "$output" = "COLLIDES BAD_PLAN BAD_PLAN" ]
 }
 
 @test "gate: a bare plan sha that is not a sha is refused before anything is searched" {
@@ -192,12 +238,45 @@ const gate = (events, over = {}) => C.assertClusterApproved({ events, clusterId:
 @test "gate: the growth command exposes no promote, publish, merge or deploy verb" {
   # E2 is enforced by ABSENCE. A verb that does not exist cannot be reached by a mistake, a retry
   # loop, or a mutant module.
-  run grep -nE "^\s*(promote|publish|merge|deploy)\s*[:(]" "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs"
-  [ "$status" -ne 0 ] || { echo "a publishing verb exists in arc-growth.mjs: $output"; false; }
-  # Positive control: prove the grep reads a file that really has verbs in it.
-  run grep -c "cmdMine\|cmdCluster\|cmdGenerate" "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs"
-  [ "$status" -eq 0 ] || { echo "the command file was not read at all"; false; }
-  [ "$output" -gt 0 ]
+  #
+  # This used to grep the source for a verb at line start. Two things were wrong with that: adding
+  # `publish: cmdGenerate` to the COMMANDS object -- the ONLY way a verb is actually reachable --
+  # left it green, and `\s` inside `grep -E` is a GNU extension that degrades to a literal `s` on
+  # macOS, so on a third of the CI legs the pattern could not match anything at all. Ask the
+  # module what it registered instead.
+  # The module runs its CLI on import, so it is read as TEXT and the registry is parsed out of it.
+  run bash -c "grep -o 'const COMMANDS = {[^}]*}' '$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs'"
+  [ "$status" -eq 0 ] || { echo "no COMMANDS registry found in arc-growth.mjs at all"; false; }
+  [[ "$output" == *"mine"* ]] || { echo "positive control failed: registry does not even list mine: $output"; false; }
+  for verb in promote publish merge deploy ship; do
+    [[ "$output" != *"$verb"* ]] || { echo "COMMANDS registers a publishing verb ($verb): $output"; false; }
+  done
+}
+
+@test "gate: the CLI itself refuses to generate against an unapproved cluster" {
+  # Every other test in this file exercises the library. Deleting the assertClusterApproved CALL
+  # from arc-growth.mjs would leave them all green -- the security boundary's only caller was
+  # uncovered. This runs the real command.
+  plan="$BATS_TEST_TMPDIR/plan.json"
+  _node "$PRE console.log(JSON.stringify(PLAN));" > "$plan"
+  [ -s "$plan" ] || { echo "fixture plan was not written"; false; }
+  run env ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine" node "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs" generate --cluster-id c-001 --plan "$plan"
+  [ "$status" -ne 0 ] || { echo "the CLI generated against a cluster nobody approved: $output"; false; }
+  [[ "$output" == *"NOT_APPROVED"* ]] || { echo "refused, but not for the documented reason: $output"; false; }
+}
+
+@test "gate: the CLI refuses a repeated flag rather than silently picking one" {
+  run node "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs" cluster --candidates a.jsonl --cluster-id c-001 --out FIRST.jsonl --out SECOND.jsonl
+  [ "$status" -ne 0 ] || { echo "two --out values were accepted: $output"; false; }
+  [[ "$output" == *"BAD_ARGS"* ]]
+}
+
+@test "gate: the CLI refuses an unknown option instead of ignoring it" {
+  # `--offline=true` silently ran ONLINE and a typo in --accept-unknown was a no-op: both safety
+  # flags failed toward the less safe behaviour.
+  run node "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs" mine --sources s.json --out o.jsonl --offline=true
+  [ "$status" -ne 0 ] || { echo "an unknown option was ignored: $output"; false; }
+  [[ "$output" == *"BAD_ARGS"* ]]
 }
 
 @test "gate: bats registers every test this file declares" {

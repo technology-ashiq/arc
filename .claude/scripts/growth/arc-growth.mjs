@@ -12,7 +12,7 @@
 // cluster. The generation itself lands in Phase 03 behind the same door.
 
 import { readFileSync, writeFileSync } from "node:fs";
-import { loadSources, mine, MineError } from "./lib/mine.mjs";
+import { loadSources, mine, assertCandidate, MineError } from "./lib/mine.mjs";
 import {
   fakeResolver, httpResolver, partitionByEvidence,
   ownTargetsFromSitemap, httpSitemapReader, EvidenceError,
@@ -23,28 +23,80 @@ import { hnAlgoliaAdapter, manualAdapter, hnAlgoliaVerifier } from "./lib/adapte
 const argv = process.argv.slice(2);
 const verb = argv[0];
 
+const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan"];
+const BARE_FLAGS = ["offline", "accept-unknown"];
+
 function flag(name, fallback = undefined) {
-  const i = argv.indexOf(`--${name}`);
-  if (i === -1) return fallback;
-  const v = argv[i + 1];
+  const hits = [];
+  for (let i = 0; i < argv.length; i++) if (argv[i] === `--${name}`) hits.push(i);
+  if (hits.length === 0) return fallback;
+  // Two values for one flag is an OPERATOR ERROR, not a last-wins or first-wins override.
+  // `.claude/rules/lanes.md` settled this: silently picking one of two named values is the
+  // "never guess" failure. Taking the FIRST was worse than either -- the file the operator named
+  // last was not the file written.
+  if (hits.length > 1)
+    die("BAD_ARGS", `--${name} given ${hits.length} times; pick one (values: ${hits.map((i) => JSON.stringify(argv[i + 1])).join(", ")})`);
+  const v = argv[hits[0] + 1];
   // A flag whose value is the next flag has swallowed it. `.claude/rules/lanes.md` records this
   // exact bug costing a lane its evidence path, so it is refused rather than accepted as empty.
   if (v === undefined || v.startsWith("--"))
     die("BAD_ARGS", `--${name} needs a value (got ${v === undefined ? "end of args" : JSON.stringify(v)})`);
+  // An EMPTY value is an unset shell variable that was correctly quoted. Accepting it made
+  // `--sitemap-file ""` disable the own-page exclusion while the run printed "no sitemap given",
+  // which is a lie about what the operator asked for.
+  if (v.trim() === "") die("BAD_ARGS", `--${name} was given an empty value (an unset shell variable?)`);
   return v;
 }
 const has = (name) => argv.includes(`--${name}`);
+
+/** Anything unrecognised is refused. `--offline=true` silently ran ONLINE, and a typo in
+ *  `--accept-unknown` was a no-op: both safety flags failed toward the less safe behaviour. */
+function assertKnownFlags() {
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) continue;
+    const name = a.slice(2);
+    if (BARE_FLAGS.includes(name)) continue;
+    if (VALUE_FLAGS.includes(name)) { i++; continue; }
+    die("BAD_ARGS", `unknown option ${JSON.stringify(a)} (known: ${[...VALUE_FLAGS.map((f) => "--" + f), ...BARE_FLAGS.map((f) => "--" + f)].join(" ")})`);
+  }
+}
 
 function die(code, message) {
   process.stderr.write(`arc-growth: ${code} -- ${message}\n`);
   process.exit(2);
 }
 
+// Windows resolves a trailing dot or space away and maps these names to devices, while Node's
+// long-path semantics happily create them -- so `--out nul` made a file no ordinary tool can read
+// and `--out a.jsonl.` made one that every other program resolves to `a.jsonl`. A downstream
+// reader then silently gets the previous file.
+const WIN_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
+function assertWritablePath(p, what) {
+  const base = p.split(/[\\/]/).pop() ?? "";
+  if (base === "") die("BAD_ARGS", `--${what} names a directory, not a file`);
+  if (WIN_RESERVED.test(base))
+    die("BAD_ARGS", `--${what} ${JSON.stringify(p)} is a Windows reserved device name`);
+  if (/[. ]$/.test(base))
+    die("BAD_ARGS", `--${what} ${JSON.stringify(p)} ends in a dot or space, which Windows silently strips`);
+  return p;
+}
+
 function readOrDie(path, what) {
   try {
-    return readFileSync(path, "utf8");
+    // A BOM is what PowerShell Out-File and Notepad write by default on the primary platform,
+    // and it made JSON.parse fail with an invisible character in the message.
+    return readFileSync(path, "utf8").replace(/^﻿/, "");
   } catch (e) {
     die("NO_FILE", `cannot read ${what} at ${path}: ${e.message}`);
+  }
+}
+
+function parseJsonOrDie(text, what) {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    die("BAD_JSON", `${what} is not valid JSON: ${e.message}`);
   }
 }
 
@@ -52,6 +104,7 @@ async function cmdMine() {
   const sourcesPath = flag("sources");
   const outPath = flag("out");
   if (!sourcesPath || !outPath) die("BAD_ARGS", "mine needs --sources F and --out F");
+  assertWritablePath(outPath, "out");
   const cfg = loadSources(readOrDie(sourcesPath, "source list"));
 
   let ownTargets = new Set();
@@ -79,8 +132,13 @@ async function cmdMine() {
   // Dispatch to the source's own verifier where it has one, falling back to a plain HTTP check.
   const perSource = { "hn-algolia": hnAlgoliaVerifier() };
   const fallback = httpResolver();
+  // OFFLINE DOES NOT MEAN VERIFIED. The first version handed the fake resolver a map that marked
+  // every candidate live, so `--offline` printed "0 gone; 0 unverifiable" and wrote a candidates
+  // file indistinguishable from a checked one -- criterion 5 turned into a no-op by a flag. An
+  // empty map means everything comes back UNKNOWN, which is the truth, and the STOP below then
+  // forces the operator to say --accept-unknown out loud.
   const resolve = offline
-    ? fakeResolver(Object.fromEntries(candidates.map((c) => [c.evidence_url, true])))
+    ? fakeResolver({})
     : (url, c, allUrls) => (perSource[c && c.source_id] ?? fallback)(url, c, allUrls);
   const { live, dead, unknown } = await partitionByEvidence(candidates, resolve);
   for (const d of dead)
@@ -95,6 +153,13 @@ async function cmdMine() {
   // that lost them to "this page is gone", and continuing as though it were is how a thin market
   // gets manufactured out of a rate limit. The run stops and says so; --accept-unknown is the
   // explicit, recorded way to proceed without them.
+  // An EMPTY candidates file with exit 0 is the worst of all outcomes: `cluster` then reports
+  // THIN_CLUSTER "have 0" and blames the market for what was actually a broken run.
+  if (live.length === 0) {
+    process.stderr.write(`arc-growth: STOP -- the run produced NO usable candidates (${dead.length} gone, ${unknown.length} unverifiable). That is a broken run, not a quiet market.\n`);
+    process.exit(4);
+  }
+
   if (unknown.length > 0 && !has("accept-unknown")) {
     process.stderr.write(
       `arc-growth: STOP -- ${unknown.length} candidate(s) could not be verified either way. ` +
@@ -110,12 +175,25 @@ function cmdCluster() {
   const clusterId = flag("cluster-id");
   const outPath = flag("out");
   if (!candPath || !clusterId || !outPath) die("BAD_ARGS", "cluster needs --candidates F --cluster-id c-NNN --out F");
+  assertWritablePath(outPath, "out");
   const lines = readOrDie(candPath, "candidates").split("\n").filter((l) => l.trim() !== "");
+  // THE CLI IS A DOOR, so it validates. cluster.mjs documented that every candidate reaching it
+  // had already passed assertCandidate -- and this path handed straight-from-JSON.parse rows to
+  // the plan builder, so the claim was false exactly where a hand-edited competitor-gap file
+  // enters. A row missing a field also used to produce a plan whose sha at cluster time differed
+  // from its sha at generate time, dead-locking the gate with a message telling the operator to
+  // re-approve, which could never work.
   const candidates = lines.map((l, i) => {
+    let row;
     try {
-      return JSON.parse(l);
+      row = JSON.parse(l);
     } catch (e) {
       die("BAD_CANDIDATES", `line ${i + 1} of ${candPath} is not JSON: ${e.message}`);
+    }
+    try {
+      return assertCandidate(row);
+    } catch (e) {
+      die(e.code || "BAD_CANDIDATES", `line ${i + 1} of ${candPath}: ${e.message}`);
     }
   });
   const plan = buildClusterPlan({ candidates, clusterId });
@@ -140,7 +218,7 @@ async function cmdGenerate() {
   const clusterId = flag("cluster-id");
   const planPath = flag("plan");
   if (!clusterId || !planPath) die("BAD_ARGS", "generate needs --cluster-id c-NNN and --plan F");
-  const plan = JSON.parse(readOrDie(planPath, "cluster plan"));
+  const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
   const sha = planSha(plan);
 
   // Reader-only: the spine is read through its public query API, never by opening a day file.
@@ -156,12 +234,17 @@ async function cmdGenerate() {
 const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate };
 
 async function main() {
-  const fn = COMMANDS[verb];
-  if (!fn) die("BAD_ARGS", `unknown command ${JSON.stringify(verb ?? "")} (mine | cluster | generate)`);
+  const fn = Object.hasOwn(COMMANDS, verb) ? COMMANDS[verb] : undefined;
+  if (typeof fn !== "function") die("BAD_ARGS", `unknown command ${JSON.stringify(verb ?? "")} (${Object.keys(COMMANDS).join(" | ")})`);
+  assertKnownFlags();
   await fn();
 }
 
 main().catch((e) => {
   if (e instanceof MineError || e instanceof EvidenceError || e instanceof ClusterError) die(e.code, e.message);
+  // A SpineError carries its own code and a message written for a human -- the worktree guard's
+  // message even names the directory to run from. Dumping it as UNEXPECTED with a raw stack
+  // buried the one instruction the operator needed under a trace of our own internals.
+  if (e && typeof e.code === "string" && typeof e.message === "string") die(e.code, e.message);
   die("UNEXPECTED", e && e.stack ? e.stack : String(e));
 });

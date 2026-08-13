@@ -58,10 +58,10 @@
       "source_id": "hn-algolia"
     },
     {
-      "keyword": "driven development",
+      "keyword": "multi-agent ai coding workflows",
       "intent": "informational",
-      "evidence_url": "https://news.ycombinator.com/item?id=504453",
-      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"receipts driven development\"",
+      "evidence_url": "https://news.ycombinator.com/item?id=47690236",
+      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"AI coding agent workflow\"",
       "source_id": "hn-algolia"
     }
   ],
