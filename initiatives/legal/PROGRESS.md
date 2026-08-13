@@ -132,9 +132,48 @@ commenced — so the page denies and asserts the same duty. ADR-1006 is the deci
 fix is one sentence; the reason it survived four reads is that it sits inside the clause everyone
 had already approved, and **no lint in this lane compares two clauses on one page**.
 
-**Next step:** repair the 68 panel findings against the recorded list, then build the
-receipt/approval half. Carried: `products/legal/` reaches no consumer, and `gstin` is FORMAT-tier
-with no checksum, so an unverifiable GSTIN passes every gate here.
+### Since that correction was written
+
+| Criterion | Now |
+|---|---|
+| CI check that `targets.publish` stays empty, with a mutant | **MET** — `publish-gate.mjs`, three mutants (inline list, block list, key deleted). See the honest gap below. |
+| completeness reports MISSING and UNANSWERED | MET |
+| scenario fixture set | MET — 42 rows |
+| text panel on the four new pages | MET — 68 findings, 8 of the worst closed, 8 named as open |
+
+**The kill-criteria sentence is fixed.** `privacy` now says s.5(3) has not commenced and that the
+option is offered voluntarily, ahead of the duty. Grepped the pattern across all seven templates:
+every other DPDP reference was already future-tense.
+
+**ADR-1013 adds a fourth lint, `consistency`**, because three reader stances independently put a
+contradiction BETWEEN two pages in their top four findings — and every one of those pages passed
+all three existing lints, which each read a single page. The negative control is the argument:
+`mutate cross-page-drift` scores value 0 · trace 0 · completeness 0 · **consistency 1**.
+
+**A GSTIN pattern was standing in for validation.** All three gst fixtures carried structurally
+perfect numbers whose statutory Mod-36 check digit was wrong. Found by the regulator stance, not
+by any test here.
+
+**Honest gaps, named rather than left to be found:**
+
+- `publish-gate.mjs` should be its own CI step. `.github/` is write-denied in this workspace, so
+  it runs inside the bats step instead — a publish target still turns the build red; what is lost
+  is the clear failure label, not the coverage.
+- `products/legal/` still reaches no consumer: `templates/` and `data/` sit outside `.claude/`,
+  the only tree either sync path copies.
+- Eight panel findings remain open, listed in the evidence file. None asserts an untruth; each is
+  a page less complete or more absolute than it should be.
+
+**Still NOT built — the receipts half of Phase 01:** `publish` with hash-chain enforcement, the
+TOCTOU and backdating fixtures, `approval.requested` with its strict payload, the `arc-inbox`
+decision, re-publish semantic diff, and the two-surface adversarial pass on that path. Phases 02
+and 03 are untouched.
+
+**CI:** last green was `dae95d5` (19/19). `0d79056` went red on the sync byte-identity tests —
+the golden manifest was regenerated mid-change instead of last, a rule already written in
+`.claude/rules/testing.md` (defect-list row 19). Fixed at `97060bf`, and every commit since
+regenerates it last. Runs for `97060bf`, `4e9d2c0` and `1db8407` are queued behind a saturated
+runner pool and **have not yet reported** — nothing after `dae95d5` is proven green.
 
 **Carried, not resolved:** the operator's GST-registration posture (assumptions ledger row 3).
 Fixtures cover both branches, so nothing before Phase 03 depends on the answer; Phase 03 asks it or
