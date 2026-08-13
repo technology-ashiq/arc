@@ -16,6 +16,22 @@
     ".claude/scripts/legal/publish-gate.mjs",
     ".claude/scripts/legal/lib/receipts.mjs"
   ],
-  "files": [],
+  "files": [
+    "products/legal/templates/v1/about.tmpl.md",
+    "products/legal/templates/v1/contact.tmpl.md",
+    "products/legal/templates/v1/pricing.tmpl.md",
+    "products/legal/templates/v1/privacy.tmpl.md",
+    "products/legal/templates/v1/refund-cancellation.tmpl.md",
+    "products/legal/templates/v1/shipping-delivery.tmpl.md",
+    "products/legal/templates/v1/terms.tmpl.md",
+    "products/legal/data/claim-denylist.json",
+    "products/legal/data/clause-map.json",
+    "products/legal/data/cross-page-claims.json",
+    "products/legal/data/grievance-windows.json",
+    "products/legal/data/pages.json",
+    "products/legal/data/required-clauses.json",
+    "products/legal/data/scenarios.json",
+    "products/legal/data/vocab.json"
+  ],
   "docs": []
 }

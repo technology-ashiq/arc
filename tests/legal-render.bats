@@ -213,6 +213,42 @@ teardown() { _arc_legal_teardown; }
   [ "$output" = "0" ]
 }
 
+@test "legal render: an INSTALLED legal product renders in a consumer tree" {
+  # The defect this pins was open for two phases: `products/legal/templates` and `data` sit
+  # outside `.claude/`, and the manifest declared only the scripts -- so `sync-to-project.sh
+  # --products legal` delivered six scripts and no templates, and the consumer's very first
+  # render died with "template set v1 is missing". The product was undeliverable and every test
+  # in this repo passed, because they all run against the source tree.
+  #
+  # So this test installs for real and renders THERE. Asserting the manifest lists the files
+  # would be asserting the fix rather than the effect.
+  local target="$BATS_TEST_TMPDIR/consumer"
+  mkdir -p "$target"
+  run bash "$ARC_ROOT/sync-to-project.sh" "$target" --products legal
+  [ "$status" -eq 0 ]
+
+  [ -f "$target/.claude/scripts/legal/arc-legal.mjs" ]
+  [ -f "$target/products/legal/templates/v1/terms.tmpl.md" ]
+  [ -f "$target/products/legal/data/scenarios.json" ]
+
+  # A venture's facts live in the CONSUMER's repo, not in the shipped product, so the install
+  # cannot carry one -- supply it the way a real consumer would.
+  mkdir -p "$target/tests/fixtures/legal/ventures"
+  cp -r "$ARC_ROOT/tests/fixtures/legal/ventures/fixture-gateway-gst" "$target/tests/fixtures/legal/ventures/"
+
+  run node "$target/.claude/scripts/legal/arc-legal.mjs" render --venture "fixture-gateway-gst" --out "$target/out"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"rendered "*" page(s) for "* ]]
+
+  run node "$ARC_ROOT/tests/legal-probe.mjs" ls-pages "$target/out"
+  [ "$status" -eq 0 ]
+  [ "$output" = "about.mdx contact.mdx pricing.mdx privacy.mdx refund-cancellation.mdx shipping-delivery.mdx terms.mdx" ]
+
+  run node "$ARC_ROOT/tests/legal-probe.mjs" findings "$target/out/_run.json" any FAIL
+  [ "$status" -eq 0 ]
+  [ "$output" = "0" ]
+}
+
 @test "legal render: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"
