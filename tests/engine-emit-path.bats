@@ -75,20 +75,32 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
 # arc-run: the three call sites, and what an unsealed receipt now costs
 # ---------------------------------------------------------------------------
 
-@test "arc-run: no inline --payload call site remains in arc-run.mjs" {
-  # The twin-fix assertion. Grep the PATTERN, not the file: this is the check that fails if
-  # a fourth emit is added later built the old way.
-  run grep -c -- '"--payload"' "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"
-  [ "$output" = "0" ] || { echo "an inline --payload call site is back in arc-run.mjs"; false; }
+@test "arc-run: no inline payload flag in any spelling remains in arc-run.mjs" {
+  # BROADENED after an attacker defeated the first version of this guard. It matched only the
+  # double-quoted literal, so re-introducing the defect as '--payload' in single quotes counted
+  # zero and passed. The alternation below covers both quote styles and the = form; --payload-file
+  # is excluded by requiring a quote or = immediately after the flag name.
+  run grep -cE -- "['\"]--payload['\"]|--payload=" "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"
+  [ "$output" = "0" ] || { echo "an inline payload flag is back in arc-run.mjs"; false; }
 }
 
-@test "arc-run: every emit goes through the one helper" {
-  # Three call sites, one choke point. If a future edit reintroduces a direct arc-event.sh
-  # invocation for an emit, this fails.
-  run grep -c "emitEvent(" "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"
+@test "arc-run: exactly ONE place in the file invokes the emitter" {
+  # THE REAL CHOKE-POINT ASSERTION. The previous version counted emitEvent( with a >= floor,
+  # which cannot fail: a fourth direct invocation leaves the count at 4 or more. Counting the
+  # emitter PATH is the assertion that actually holds -- it goes to 2 the moment anyone emits
+  # around the helper, and it is an equality, so it can fail in both directions.
+  run grep -c 'hq/arc-event.sh"' "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"
+  [ "$output" = "1" ] || { echo "expected exactly 1 emitter invocation, found $output -- something emits around the helper"; false; }
+}
+
+@test "arc-run: emitEvent passes both flags at the single call site" {
+  # Pairs with the above: one invocation, and it carries both flags. Deleting either one from
+  # the helper fails here, which is the property tests 1-3 do NOT have (they drive arc-event.sh
+  # directly and pass unchanged on the parent commit).
+  run grep -A3 'hq/arc-event.sh"' "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"
   [ "$status" -eq 0 ]
-  # 1 definition + 3 call sites
-  [ "$output" -ge 4 ] || { echo "expected the helper plus three call sites, found $output"; false; }
+  [[ "$output" == *"--payload-file"* ]] || { echo "the single emitter invocation does not pass --payload-file"; false; }
+  [[ "$output" == *"--strict"* ]] || { echo "the single emitter invocation does not pass --strict"; false; }
 }
 
 @test "arc-run: a normal run still exits 0 and still seals a receipt" {
@@ -101,9 +113,9 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   [ "$status" -eq 0 ] || { echo "the run.completed receipt was not sealed"; false; }
 }
 
-@test "arc-run: an unsealed receipt makes the run exit non-zero" {
-  # THE POINT OF THE WHOLE CHANGE. A spine root that is a FILE cannot hold events/, so the
-  # emit fails for a reason that is real on every OS rather than simulated by a flag.
+@test "arc-run: an unsealed receipt is REPORTED, and the run still exits 0 for now" {
+  # A spine root that is a FILE cannot hold events/, so the emit fails for a reason that is
+  # real on every OS rather than simulated by a flag.
   broken="$BATS_TEST_TMPDIR/spine-is-a-file"
   printf 'not a directory' > "$broken"
   [ -s "$broken" ] || { echo "fixture is empty"; false; }
@@ -111,11 +123,17 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
   ARC_SPINE_ROOT="$broken" ARC_DRIVER_FAKE="$(FAKE good)" \
     run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$ARC_ROOT"
 
-  [ "$status" -ne 0 ] || { echo "the receipt could not land and the run STILL reported success"; false; }
+  # The reporting half IS shipped: --strict turns a silent quarantine into a caught, named
+  # failure. Assert it RAN and reached the emit rather than dying earlier.
+  [[ "$output" == *"NOT recorded"* ]] || { echo "the emit failure was not reported: $output"; false; }
 
-  # Assert it RAN and reached the emit, rather than dying somewhere earlier and satisfying
-  # the status check by accident.
-  [[ "$output" == *"NOT recorded"* ]] || { echo "the run failed, but not at the emit: $output"; false; }
+  # THIS PIN IS DELIBERATE AND IS EXPECTED TO CHANGE. Failing the run on an unsealed receipt
+  # was written, attacked and backed out: verifyLanded has three defects that make it unfit to
+  # gate on, and exit 1 on a good answer contradicts ADR-0219's published table and breaks
+  # arc-bench. Pinning exit 0 states today's honest behaviour instead of leaving it unasserted,
+  # and this test failing is the SIGNAL that the follow-up gate has landed -- at which point it
+  # is updated, not deleted.
+  [ "$status" -eq 0 ] || { echo "exit changed to $status -- if the receipt gate landed, update this test and ADR-0219"; false; }
 }
 
 @test "arc-run: the answer is still printed when the receipt cannot land" {
@@ -138,8 +156,18 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
 # tests that way and the file stayed green. A suite that IS the proof of a rule asserts its
 # own registered total, so a dropped test fails loudly instead of vanishing.
 
-@test "suite: all 9 tests in this file are registered" {
-  run grep -c "^@test " "$BATS_TEST_FILENAME"
-  [ "$status" -eq 0 ]
-  [ "$output" = "9" ] || { echo "expected 9 registered tests, found $output -- a test was dropped or added without updating this count"; false; }
+@test "suite: all 10 tests in this file are REGISTERED, not merely declared" {
+  # FIXED after an attacker defeated the first version. It counted `^@test ` lines in the
+  # SOURCE -- the declared count. A test that bats drops at preprocess time leaves its source
+  # line intact, so the number never moved and the guard stayed green while a test did not run.
+  # That is the precise defect this guard was written to catch, and it could not catch it.
+  #
+  # `bats --count` reports what bats actually REGISTERED, which is the only number that answers
+  # the question. Assert both, and that they agree: the pair catches a drop (registered falls)
+  # and a silent removal (declared falls).
+  declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
+  registered="$(bats --count "$BATS_TEST_FILENAME")"
+
+  [ "$registered" = "10" ] || { echo "expected 10 REGISTERED tests, bats registered $registered"; false; }
+  [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

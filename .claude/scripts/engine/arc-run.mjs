@@ -272,10 +272,15 @@ function costArgs(cost) {
   };
 }
 
-// Set by any emit that did not seal an event. Read once, at the end of the success path:
-// a run whose receipt never landed is NOT a green run, and saying so is the whole point of
-// the "exit 0 is not evidence" non-negotiable.
-let receiptFailed = false;
+// The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS);
+// hook mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent
+// SIGKILLs a HEALTHY child that is still legitimately waiting -- and because arc-event.sh runs
+// node as a CHILD rather than exec-ing it, the grandchild survives the kill and seals the
+// receipt AFTER arc-run has already reported it lost. Demonstrated against a held lock: arc-run
+// exited saying "NOT recorded" at 10.4s and the receipt appeared on the spine 6s later, which is
+// the ledger-disagrees-with-the-caller defect this file exists to prevent, running backwards.
+// 10000 was safe before --strict and stopped being safe the moment it was added.
+const EMIT_TIMEOUT_MS = 20000;
 
 /**
  * THE ONE WAY THIS FILE EMITS. Every spine write in arc-run goes through here.
@@ -297,23 +302,32 @@ let receiptFailed = false;
  *    arc-run was one of only two lanes still missing this -- `hq/arc-jobs.mjs`,
  *    `hq/lib/policy/incident.mjs` and `hq/arc-inbox.mjs` all already pass it.
  *
- * Never throws: the caller decides what an unsealed receipt costs, and an emit failure must
- * not become a second failure path that masks the first.
+ * Never throws, and that is a CONTRACT rather than a hope: `invoke`'s policy arm calls this
+ * before `return { code: 77 }`, so an escape here would skip the fail-closed denial code and
+ * turn a refusal into a stack trace. `mkdtempSync` therefore sits INSIDE the try -- it was
+ * outside, where a bad TMPDIR inverted exactly that contract.
  */
 function emitEvent(kind, payloadObj, extraArgs = []) {
-  const dir = mkdtempSync(join(tmpdir(), "arc-run-emit-"));
+  let dir = "";
   try {
+    dir = mkdtempSync(join(tmpdir(), "arc-run-emit-"));
     const file = join(dir, "payload.json");
     writeFileSync(file, JSON.stringify(payloadObj), "utf8");
     const id = execFileSync("bash",
       [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", kind,
         "--payload-file", file, "--strict", ...extraArgs],
-      { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
+      { encoding: "utf8", cwd: root, timeout: EMIT_TIMEOUT_MS, killSignal: "SIGKILL" }).trim();
     return { ok: true, id, error: "" };
   } catch (e) {
     return { ok: false, id: "", error: String(e.message).split("\n")[0] };
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    // A throw from `finally` REPLACES the return value above, so a Windows EBUSY/EPERM on a
+    // transient handle would discard a receipt that was already sealed. `force` only swallows
+    // ENOENT. A stale temp dir is never worth losing a sealed receipt over.
+    if (dir) {
+      try { rmSync(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); }
+      catch { /* deliberately ignored -- see above */ }
+    }
   }
 }
 
@@ -331,7 +345,6 @@ function emitRun(payload) {
 
   const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}) }, extra);
   if (!r.ok) {
-    receiptFailed = true;
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
     console.error("         The run is NOT recorded. Under --strict the emitter rejects rather than quarantining.");
     return;
@@ -340,7 +353,17 @@ function emitRun(payload) {
   // (retro-log 2026-08-02: an emitter reported success while every receipt was quarantined).
   // LOOK in both places and say where it actually landed. --strict catches a REJECTED event;
   // this catches an ACCEPTED one that still did not reach today's log.
-  if (!verifyLanded(r.id)) receiptFailed = true;
+  //
+  // ITS VERDICT IS DELIBERATELY NOT WIRED TO THE EXIT CODE YET, and that is the whole reason
+  // this landed as two changes instead of one. An adversarial pass found `verifyLanded` carries
+  // three independent defects -- it derives the day in UTC while the spine names its file from
+  // an IST timestamp (wrong file for 22.9% of the clock), it re-derives the spine root by a
+  // different rule than the emitter uses, and its quarantine scan interpolates into a `bash -c`
+  // string. All three were survivable while this was a warning. None is survivable as a gate:
+  // wiring them to the exit code turned every one into a red build on a correct run, which is
+  // the "verifier that cries wolf" failure the comment below already warns about. The gate lands
+  // once the verifier is trustworthy, in the PR that repairs it.
+  verifyLanded(r.id);
 }
 
 /** Returns TRUE only if the receipt is provably in today's log. The boolean is the point:
@@ -432,6 +455,13 @@ function invoke(name) {
       // because the paperwork failed would invert the fail-closed contract this gate exists for.
       console.error(`arc-run: WARN could not emit incident.raised: ${inc.error}`);
       console.error("         The DENIAL STANDS and is unaffected; only its receipt is missing.");
+    } else {
+      // The twin-fix, at the site built to prevent twin-fixes. This arm had the flags unified
+      // with the other two and the POLICY left behind: `--strict` only catches a REJECTED
+      // event, so a denial receipt that was ACCEPTED and then quarantined landed nowhere with
+      // nothing anywhere reporting it -- silent, which is the one thing an enforcement receipt
+      // must never be.
+      verifyLanded(inc.id);
     }
     return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true };
   }
@@ -563,15 +593,20 @@ if (a.verdict === "schema") {
       ? `the process is not self-consistent: ${selfCheck.why} — no driver is being blamed`
       : `retried once on the same tier and the output still failed the contract: ${retry.why}`,
   };
-  const prop = emitEvent("approval.requested", proposal);
+  // The identity flags were MISSING here while the other two call sites carried them, so a
+  // rung-2 proposal was attributed to `arc-event@1.0.0` (the emitter's own fallback) instead of
+  // the process it proposes escalating, and inherited the default `outcome: ok` for a run that
+  // STOPPED. A receipt that misreports whose decision it is, is the append-only-ledger version
+  // of the false claim this file refuses to make about models.
+  const prop = emitEvent("approval.requested", proposal,
+    ["--process", `${doc.name}@${doc.version}`, "--outcome", "fail"]);
   const id = prop.ok ? prop.id : "";
   if (!prop.ok) {
     // The ladder TERMINATES here either way (ADR-0204): a proposal that could not be written
     // must never fall through to an escalation, because the receipt IS the proposal.
     console.error(`arc-run: WARN could not emit the escalation proposal: ${prop.error}`);
-    receiptFailed = true;
-  } else if (!verifyLanded(id)) {
-    receiptFailed = true;
+  } else {
+    verifyLanded(id);
   }
 
   console.error(`arc-run: STOPPED. A tier-change PROPOSAL was recorded${id ? ` as ${id}` : ""}; nothing was escalated.`);
@@ -592,17 +627,21 @@ function succeed(r) {
   scrub("the spine payload", payload, r.output);
   console.log(payload);
   emitRun({ outcome: "ok", driver, attempts: attemptsMade, cost: r.cost ?? undefined, fault_hint: "unknown", model: pinnedModel ?? "unpinned" });
-  // AN UNRECORDED RUN IS NOT A GREEN RUN. The answer is already on stdout and stays there --
-  // the caller gets the output AND a non-zero status, which is the honest pair: "here is the
-  // result, and it is not in the ledger." Exiting 0 here is precisely the defect the
-  // "exit 0 from a fire-and-forget writer is not evidence" non-negotiable names.
+  // STILL EXIT 0 ON AN UNRECORDED RECEIPT -- for now, and on purpose.
   //
-  // Code 1 ("cannot proceed") is REUSED rather than a new one claimed. ADR-0219 publishes
-  // arc-run's table and marks 3 and 4 "unused and reserved; absence is deliberate" -- an exit
-  // code is a published interface, so taking one is a one-way change that needs its own ADR,
-  // not a side effect of a bug fix. The cost of reusing 1 is real and worth writing down: a
-  // fixture cannot yet distinguish "unrecorded receipt" from "unknown process" by status
-  // alone, and must read stderr. That is the same argument ADR-0219 used to justify exit 5,
-  // so if this distinction is ever asserted by a fixture, it earns a code through an ADR.
-  process.exit(receiptFailed ? 1 : 0);
+  // Failing the run here is the obvious other half of "exit 0 is not evidence". It WAS written,
+  // then attacked, then backed out rather than shipped, for two measured reasons:
+  //
+  // 1. `verifyLanded` is not yet trustworthy enough to fail a build on -- see emitRun above.
+  //    A gate is only as good as the check behind it, and that check is currently wrong for
+  //    22.9% of the clock.
+  // 2. ADR-0219 publishes arc-run's exit table: `0` means "produced an accepted answer" and
+  //    every enumerated cause of `1` is PRE-dispatch. Returning 1 on a good answer changes what
+  //    a published code MEANS, which is an ADR amendment rather than a side effect of a bug
+  //    fix. `arc-bench.mjs:699` is a live consumer that treats non-zero as failure: it never
+  //    parses stdout and records `measuredInr: null`, so a run that spent real money would be
+  //    logged as having spent none.
+  //
+  // Both are fixable; neither is fixable in a payload-encoding fix. The gate is owed and tracked.
+  process.exit(0);
 }
