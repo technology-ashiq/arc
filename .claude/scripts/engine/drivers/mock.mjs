@@ -85,8 +85,31 @@ await runDriver("mock", async ({ processName }) => {
     throw new Error(`no recording for ${processName}/${id} at ${path}`);
   }
 
-  const output = parseModelJson(raw, `the mock recording ${processName}/${id}`);
-  return { output, model: `mock@${fixtureDirSha(base)}` };
+  const doc = parseModelJson(raw, `the mock recording ${processName}/${id}`);
+
+  // A recording MAY declare a cost, and it is stripped from the output before it is returned.
+  //
+  // Without this there is no offline way to exercise post-call reconciliation or the overrun
+  // case at all -- the ARC_DRIVER_FAKE path already supports `__cost`, but that path short-
+  // circuits `produce()` entirely, so it proves nothing about the real one. A recording with no
+  // `__cost` stays ABSENT rather than zero: no provider was called, so there is no measurement,
+  // and a confident 0 would put a number where none was taken (ADR-0069 b5 / ADR-0904).
+  //
+  // Stripped, not passed through: the process output schemas are `additionalProperties: false`,
+  // so leaving the key in would make every costed recording fail its own contract.
+  const { __cost, ...output } = doc;
+  if (__cost) {
+    // REFUSE HERE, LOUDLY, rather than let the spine refuse it silently later. `writeCost` makes
+    // `source` mandatory but never checks it against the spine's closed set, and `arc-run` emits
+    // `run.completed` WITHOUT `--strict` -- so a free-text source came back `BAD_COST` in hook
+    // mode, which exits 0 and quarantines. Fifteen receipts vanished that way and the run
+    // reported success. Found by this lane's own probe expecting a cost that never arrived.
+    const SOURCES = ["measured", "estimated", "manual"];
+    if (!SOURCES.includes(__cost.source)) {
+      throw new Error(`recording ${processName}/${id} declares __cost.source ${JSON.stringify(__cost.source)}, outside ${SOURCES.join("|")} -- the spine would quarantine this receipt and the run would still exit 0`);
+    }
+  }
+  return { output, ...(__cost ? { cost: __cost } : {}) };
 }, {
   // This driver's version is its RECORDING SET, not its source, because the recordings are
   // what determine its output -- the code merely reads them. A version pinned to the source

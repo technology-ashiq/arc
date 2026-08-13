@@ -338,8 +338,9 @@ export function repoStatus(root) {
 // ---------------------------------------------------------------------------------------------
 
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { createHash } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { parseBudget } from "./drivers/common.mjs";
@@ -347,13 +348,27 @@ import { parseBudget } from "./drivers/common.mjs";
 /** The `--process` identity on bench's own receipts (M6). Bench is a runner, never a process. */
 export const BENCH_ID = "bench@0.1.0";
 
-/** M13. 0 = every selected fixture was scored · 1 = partial or budget-aborted · 2 = operator. */
-export const EXIT = Object.freeze({ OK: 0, PARTIAL: 1, OPERATOR: 2 });
+/**
+ * M13. 0 = every selected fixture was scored · 1 = partial, budget-aborted, or a replay MISMATCH
+ * · 2 = operator error · **3 = stale-format**, which Phase 1 adds.
+ *
+ * Stale-format is not a mismatch and must not share its code. A normalizer bump invalidates every
+ * stored scorecard by construction (ADR-0913), and reporting that as a mismatch sends someone
+ * hunting a corruption that never happened.
+ */
+export const EXIT = Object.freeze({ OK: 0, PARTIAL: 1, OPERATOR: 2, STALE: 3 });
 
 /** Anything the operator can fix by retyping the command. Never a scoring outcome. */
 export class OperatorError extends Error {}
 
-const VALUE_FLAGS = Object.freeze({ "--driver": "driver", "--model": "model", "--budget": "budget", "--champion": "champion" });
+/**
+ * M13 fixed a closed SIX-flag set. Phase 1 adds exactly two, and the amendment is recorded rather
+ * than slipped in: its DoD requires *"re-scoring captured outputs yields a byte-identical
+ * scorecard"*, and there is no way to say "score these captured bytes" in six flags that were all
+ * written for a live run. `--out` is what makes the capture bundle exist to replay at all, and
+ * giving it a default instead would make every test write to one shared path.
+ */
+const VALUE_FLAGS = Object.freeze({ "--driver": "driver", "--model": "model", "--budget": "budget", "--champion": "champion", "--out": "out", "--replay": "replay" });
 const BOOL_FLAGS = Object.freeze({ "--propose": "propose", "--dry-run": "dryRun" });
 
 /**
@@ -376,7 +391,7 @@ export function budgetString(b) {
  * no creation rights was thereby made to report `create`.
  */
 export function parseArgs(argv) {
-  const out = { driver: "", model: "", budget: "", champion: "", propose: false, dryRun: false };
+  const out = { driver: "", model: "", budget: "", champion: "", out: "", replay: "", propose: false, dryRun: false };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (Object.prototype.hasOwnProperty.call(BOOL_FLAGS, a)) { out[BOOL_FLAGS[a]] = true; continue; }
@@ -387,6 +402,21 @@ export function parseArgs(argv) {
     if (v === undefined || v.startsWith("--")) throw new OperatorError(`${a} needs a value`);
     out[VALUE_FLAGS[a]] = v;
     i++;
+  }
+  // Parsed-and-ignored is worse than refused: a flag that quietly does nothing reads, on a
+  // scorecard, exactly like a flag that worked. Checked BEFORE the replay branch below, or
+  // `--replay DIR --propose` would slip past on the early return.
+  if (out.champion) throw new OperatorError("--champion names the incumbent to beat and arrives with Phase 2's proposal -- it is refused rather than ignored");
+  if (out.propose) throw new OperatorError("--propose writes a swap proposal and arrives with Phase 2 -- it is refused rather than ignored");
+  // Replay invokes nothing and spends nothing, so demanding a driver and a budget for it would be
+  // asking the operator to name things the run will never use -- and a required field nobody
+  // reads teaches people to type anything into it.
+  if (out.replay) {
+    for (const [flag, key] of [["--driver", "driver"], ["--budget", "budget"], ["--model", "model"]]) {
+      if (out[key]) throw new OperatorError(`${flag} is meaningless with --replay, which re-scores captured bytes and invokes nothing`);
+    }
+    if (out.dryRun) throw new OperatorError("--dry-run is meaningless with --replay");
+    return out;
   }
   if (!out.driver) throw new OperatorError("--driver is required");
   if (!out.budget) throw new OperatorError("--budget is required -- a run with no ceiling is unbounded spend");
@@ -399,10 +429,6 @@ export function parseArgs(argv) {
   const unknown = Object.keys(parsedBudget).filter((k) => !BUDGET_DIMENSIONS.includes(k));
   if (unknown.length) throw new OperatorError(`--budget has no dimension \`${unknown[0]}\` (bench enforces ${BUDGET_DIMENSIONS.join(", ")}) -- a bound nothing reads is not a bound`);
   if (!Object.keys(parsedBudget).length) throw new OperatorError("--budget names no dimension at all");
-  // Parsed-and-ignored is worse than refused: a flag that quietly does nothing reads, on a
-  // scorecard, exactly like a flag that worked. Both arrive with their own phase.
-  if (out.champion) throw new OperatorError("--champion selects the incumbent to beat and arrives with Phase 1 admission control -- it is refused rather than ignored");
-  if (out.propose) throw new OperatorError("--propose writes a swap proposal and arrives with Phase 2 -- it is refused rather than ignored");
   return out;
 }
 
@@ -457,7 +483,10 @@ export function loadClass(root, processName) {
   // process YAML's top-level keys, so the eval-pack revision cannot live there.
   const packPath = join(fixtures[0].dir, "pack.json");
   const pack = existsSync(packPath) ? readPack(packPath) : null;
-  return { processName, fixtures, pack };
+  // The process VERSION is part of the provenance tuple (ADR-0913): the same fixtures scored
+  // against a different revision of the process are not comparable numbers.
+  const version = typeof parsed.value?.version === "string" ? parsed.value.version : null;
+  return { processName, fixtures, pack, version };
 }
 
 /** Every class this tree declares, each carrying its coverage verdict. */
@@ -481,6 +510,9 @@ export function runAttempt(root, { processName, fixture, driver, model, budget, 
   const state = materializeRepoState(stateDir);
   const tmp = mkdtempSync(join(tmpdir(), "arc-bench-in-"));
   const started = Date.now();
+  // Snapshot BEFORE the spawn: the receipt arc-run is about to write is how bench learns whether
+  // a failure was the schema, the driver, the budget or policy -- four outcomes that share exit 1.
+  const spineBefore = spineOffsets(root);
   try {
     const inputFile = join(tmp, "input.json");
     writeFileSync(inputFile, JSON.stringify(fixture.doc.input ?? {}), "utf8");
@@ -513,24 +545,252 @@ export function runAttempt(root, { processName, fixture, driver, model, budget, 
     // which is itself the evidence that no driver ever reached it.
     const after = repoStatus(state.root);
 
+    // arc-run's own receipt for THIS attempt: the structured verdict, and the only place a
+    // measured cost is visible to bench at all.
+    const appended = spineSince(root, spineBefore).filter((e) => e.kind === "run.completed" && e.process !== BENCH_ID);
+    const receipt = appended.length ? appended[appended.length - 1] : null;
+    const reason = receipt?.payload?.reason ?? null;
+    // ALL-OR-NOTHING, and absent stays absent: the spine writes a `cost` block only when a real
+    // rupee figure exists. Token counts ride in the payload and are not a cost.
+    const measuredInr = Number.isFinite(receipt?.cost?.inr_estimate) ? receipt.cost.inr_estimate : null;
+
     if (res.error && res.error.code === "ETIMEDOUT") {
-      return { ok: false, verdict: "budget", why: "arc-run exceeded the attempt timeout", elapsedMs, after };
+      return { ok: false, verdict: "budget", why: "arc-run exceeded the attempt timeout", elapsedMs, after, schema: null, measuredInr, reason: "budget" };
     }
     const status = res.status ?? 1;
     if (status !== 0) {
       const line = String(res.stderr || "").trim().split("\n").filter(Boolean).pop() || `arc-run exited ${status}`;
-      return { ok: false, verdict: "run", why: line, elapsedMs, after };
+      // SCHEMA IS ONLY EVALUATED WHERE AN OUTPUT EXISTED. A driver that never answered leaves the
+      // schema question unasked, and counting that as a schema failure would blame the process
+      // for a fault arc-run has already attributed elsewhere (ADR-0204).
+      const schema = reason === "schema" ? false : null;
+      return { ok: false, verdict: reason || "run", why: line, elapsedMs, after, schema, measuredInr, reason };
     }
     let output;
     try { output = JSON.parse(res.stdout); }
-    catch (e) { return { ok: false, verdict: "run", why: `arc-run stdout is not JSON: ${e.message}`, elapsedMs, after }; }
+    catch (e) { return { ok: false, verdict: "run", why: `arc-run stdout is not JSON: ${e.message}`, elapsedMs, after, schema: null, measuredInr, reason }; }
 
     const score = scoreAssertions(output, fixture.doc.assertions, fixture.id);
-    return { ok: true, verdict: "ok", output, score, elapsedMs, after };
+    // arc-run validates the output against the process schema before it ever prints it
+    // (arc-run.mjs:184-186), so an exit-0 attempt is a schema PASS by construction.
+    return { ok: true, verdict: "ok", output, score, elapsedMs, after, schema: true, measuredInr, reason: null };
   } finally {
     rmSync(tmp, { recursive: true, force: true });
     state.cleanup();
   }
+}
+
+// =============================================================================================
+// Phase 01 -- bench core.
+// =============================================================================================
+
+// ---- the canonical encoder (ADR-0913) --------------------------------------------------------
+
+/**
+ * Bumping this invalidates every stored scorecard, which is precisely why it lives INSIDE each
+ * one: a replay against a scorecard written by a different normalizer must report
+ * **stale-format**, not tamper. They are different facts and they get different exit codes.
+ */
+export const NORMALIZER_VERSION = "1.0.0";
+
+/** A value the encoder refuses. Distinct from OperatorError: the operator did not type this. */
+export class EncodeError extends Error {}
+
+/**
+ * A TOTAL, TYPE-TAGGED encoding. Total means every input either encodes or REFUSES -- it never
+ * coerces. `JSON.stringify` is neither: it folds `undefined` out of objects, turns `NaN` and
+ * `±Infinity` into `null`, and throws only on `BigInt` and cycles. Each of those silently
+ * produces a hash that collides with a genuinely different document.
+ *
+ * Type-tagged means `1` and `"1"` cannot encode alike, and strings are LENGTH-PREFIXED so
+ * `{a: "b:c"}` cannot collide with a different shape that happens to serialize the same runs of
+ * characters. Object keys are sorted by UTF-16 code unit, which is `Array#sort`'s own default
+ * and therefore identical on all three CI legs -- `localeCompare` is not.
+ */
+export function canonicalString(value, path = "$", seen = new Set()) {
+  const t = typeof value;
+  if (value === null) return "z";
+  if (t === "boolean") return value ? "b:1" : "b:0";
+  if (t === "number") {
+    if (Number.isNaN(value)) throw new EncodeError(`${path}: NaN is refused, not folded to null`);
+    if (!Number.isFinite(value)) throw new EncodeError(`${path}: ${value > 0 ? "Infinity" : "-Infinity"} is refused, not folded to null`);
+    // -0 and 0 are different bit patterns that String() renders identically. Encoding them alike
+    // would make two distinct documents hash the same, which is the one thing this must not do.
+    return `n:${Object.is(value, -0) ? "-0" : String(value)}`;
+  }
+  if (t === "string") return `s:${value.length}:${value}`;
+  if (t === "bigint") throw new EncodeError(`${path}: BigInt is refused -- it has no JSON form and coercing it loses precision`);
+  if (t === "undefined") throw new EncodeError(`${path}: undefined is refused -- an absent field is an absent KEY, never a present undefined`);
+  if (t === "function" || t === "symbol") throw new EncodeError(`${path}: ${t} is refused`);
+  if (seen.has(value)) throw new EncodeError(`${path}: cycle -- this value already appears on the path to itself`);
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return `a:${value.length}:[${value.map((v, i) => canonicalString(v, `${path}[${i}]`, seen)).join(",")}]`;
+    }
+    const keys = Object.keys(value).sort();
+    const parts = keys.map((k) => `${k.length}:${k}=${canonicalString(value[k], `${path}.${k}`, seen)}`);
+    return `o:${keys.length}:{${parts.join(",")}}`;
+  } finally {
+    // Removed on the way OUT, so a value repeated as a SIBLING is fine and only a value on the
+    // path to itself is a cycle. A plain WeakSet that never cleared would refuse `[x, x]`.
+    seen.delete(value);
+  }
+}
+
+/** The identity of a document, for comparing two runs without diffing them by eye. */
+export function canonicalHash(value) {
+  return createHash("sha256").update(canonicalString(value), "utf8").digest("hex");
+}
+
+/**
+ * Deterministic pretty JSON: sorted keys, 2-space indent, a single trailing newline, and `\n`
+ * line endings on every platform. This is what makes the scorecard BYTE-identical rather than
+ * merely equal -- `JSON.stringify` preserves insertion order, so two runs that built the same
+ * object in a different order would produce different bytes and a `diff` nobody could explain.
+ *
+ * It refuses exactly what `canonicalString` refuses, by running it first. A writer that was more
+ * permissive than the hasher would let a document be stored that could never be verified.
+ */
+export function canonicalJson(value) {
+  canonicalString(value);
+  const render = (v, indent) => {
+    if (v === null || typeof v !== "object") return JSON.stringify(v);
+    const pad = "  ".repeat(indent + 1);
+    const close = "  ".repeat(indent);
+    if (Array.isArray(v)) {
+      if (!v.length) return "[]";
+      return `[\n${v.map((x) => `${pad}${render(x, indent + 1)}`).join(",\n")}\n${close}]`;
+    }
+    const keys = Object.keys(v).sort();
+    if (!keys.length) return "{}";
+    return `{\n${keys.map((k) => `${pad}${JSON.stringify(k)}: ${render(v[k], indent + 1)}`).join(",\n")}\n${close}}`;
+  };
+  return `${render(value, 0)}\n`;
+}
+
+// ---- ceilings and K-group admission control (ADR-0904 / ADR-0909) ----------------------------
+
+/**
+ * The ceiling file. Hand-authored, dated, and the ONLY input to the reservation.
+ *
+ * A MISSING entry is a REFUSAL, never a default. A default ceiling would be a number nobody
+ * measured doing the work of a bound, and the direction of that error is unrecoverable: it
+ * admits a group it should have refused. Refusing to spend is the recoverable direction.
+ */
+export function readCeilings(root) {
+  // A TEST-ONLY door, the same shape and the same contract as `ARC_SPINE_ROOT`: honoured on
+  // PRESENCE so an empty value cannot fall through to the real file, and deliberate enough that
+  // a reviewer sees it in a diff. Admission control cannot be exercised at all without it --
+  // every interesting case needs caps the shipped file does not have, and editing the shipped
+  // ceilings from a test would leave the repo's real safety bound as test scaffolding.
+  const named = "ARC_BENCH_CEILINGS" in process.env ? String(process.env.ARC_BENCH_CEILINGS) : "";
+  if ("ARC_BENCH_CEILINGS" in process.env && !named.trim()) {
+    throw new OperatorError("ARC_BENCH_CEILINGS is set but empty -- refusing to fall back to a ceiling file nobody named");
+  }
+  const path = named ? resolve(named) : join(root, "initiatives/bench/ceilings.json");
+  let doc;
+  try { doc = JSON.parse(readFileSync(path, "utf8")); }
+  catch (e) { throw new OperatorError(`ceilings: ${path} is unreadable (${String(e.message).split("\n")[0]})`); }
+  for (const k of ["as_of", "run_cap_inr", "process_cap_inr", "k", "worst_case_inr_per_invocation"]) {
+    if (!Object.prototype.hasOwnProperty.call(doc, k)) throw new OperatorError(`ceilings: missing \`${k}\``);
+  }
+  if (!Number.isInteger(doc.k) || doc.k < 1) throw new OperatorError("ceilings: `k` must be a positive integer");
+  for (const k of ["run_cap_inr", "process_cap_inr"]) {
+    if (!Number.isFinite(doc[k]) || doc[k] < 0) throw new OperatorError(`ceilings: \`${k}\` must be a non-negative number`);
+  }
+  return doc;
+}
+
+/** The declared worst case for one driver+model pair, or null when the file does not declare one. */
+export function worstCaseFor(ceilings, driver, model) {
+  const byDriver = ceilings.worst_case_inr_per_invocation?.[driver];
+  if (!byDriver) return null;
+  const key = model || "(unpinned)";
+  const v = Object.prototype.hasOwnProperty.call(byDriver, key) ? byDriver[key] : undefined;
+  return Number.isFinite(v) ? v : null;
+}
+
+/**
+ * The run's budget state: ONE remainder, threaded through every attempt, retry and fallback hop.
+ *
+ * retro-log 2026-08-03 (arc-engine): *a bound was enforced per-ATTEMPT while being described
+ * per-RUN -- fallback hops and the retry each received a fresh full budget (4x the stated cap),
+ * and a timeout was classified a driver fault so budget exhaustion TRIGGERED the fallback that
+ * spent it again.* Hence: exhaustion is a TERMINAL outcome here and has no path to a retry.
+ */
+export function newBudgetState(ceilings, cliCeilingInr) {
+  // The CLI ceiling, when given, may only TIGHTEN the file's run cap. A flag that could raise it
+  // would make the declared cap advisory.
+  const runCap = Number.isFinite(cliCeilingInr) ? Math.min(cliCeilingInr, ceilings.run_cap_inr) : ceilings.run_cap_inr;
+  return {
+    runCap,
+    processCap: ceilings.process_cap_inr,
+    k: ceilings.k,
+    runCommitted: 0,
+    perProcessCommitted: new Map(),
+    exhausted: false,
+    reasons: [],
+  };
+}
+
+/**
+ * Reserve a whole K-group before the fixture starts, against BOTH caps.
+ *
+ * The unit is the GROUP, not the invocation: stopping mid-group leaves a fixture with 2 of 3
+ * attempts, which the completeness gate disqualifies anyway, so the spend bought nothing. A
+ * per-invocation reservation under-reserves a K=3 group by 3x and strands fixtures mid-group.
+ */
+export function admitGroup(state, processName, worstCase) {
+  if (worstCase === null) {
+    return { admitted: false, reason: "no ceiling is declared for this driver and model -- a missing ceiling is a refusal, never a default" };
+  }
+  const need = state.k * worstCase;
+  const usedByProcess = state.perProcessCommitted.get(processName) ?? 0;
+  if (state.runCommitted + need > state.runCap) {
+    return { admitted: false, reason: `the run remainder cannot cover a K=${state.k} group (needs ${need}, ${state.runCap - state.runCommitted} left of ${state.runCap})` };
+  }
+  if (usedByProcess + need > state.processCap) {
+    return { admitted: false, reason: `the ${processName} sub-cap cannot cover a K=${state.k} group (needs ${need}, ${state.processCap - usedByProcess} left of ${state.processCap})` };
+  }
+  state.runCommitted += need;
+  state.perProcessCommitted.set(processName, usedByProcess + need);
+  return { admitted: true, reserved: need, reason: null };
+}
+
+/**
+ * Replace a group's reservation with what the drivers actually reported.
+ *
+ * ONLY where a driver reported. An absent measurement cannot replace a reservation: the
+ * reservation stays, because it is the only bound left. Where the measurement EXCEEDS the
+ * reservation the remainder takes the real figure, so every later group is admitted off the
+ * corrected remainder rather than off a stale reservation that has already been overspent.
+ */
+export function reconcileGroup(state, processName, reserved, measuredInr) {
+  if (measuredInr === null) return { applied: false, delta: 0 };
+  const delta = measuredInr - reserved;
+  state.runCommitted += delta;
+  state.perProcessCommitted.set(processName, (state.perProcessCommitted.get(processName) ?? 0) + delta);
+  if (state.runCommitted >= state.runCap || (state.perProcessCommitted.get(processName) ?? 0) >= state.processCap) {
+    state.exhausted = true;
+    state.reasons.push(`measured spend reached a cap after reconciling ${processName}`);
+  }
+  return { applied: true, delta };
+}
+
+// ---- statistics that do not collapse K -------------------------------------------------------
+
+/**
+ * The median WITH its spread. K attempts are never collapsed into one per-fixture verdict: a
+ * 2-of-3 fixture and a 1-of-3 fixture must not report as the same number, and a bare median
+ * makes them identical whenever the median lands on the same value.
+ */
+export function medianWithSpread(values) {
+  const xs = values.filter((v) => typeof v === "number" && Number.isFinite(v)).slice().sort((a, b) => a - b);
+  if (!xs.length) return { median: null, min: null, max: null, n: 0 };
+  const mid = Math.floor(xs.length / 2);
+  const median = xs.length % 2 ? xs[mid] : (xs[mid - 1] + xs[mid]) / 2;
+  return { median, min: xs[0], max: xs[xs.length - 1], n: xs.length };
 }
 
 // ---- the receipt, and proving it landed ------------------------------------------------------
@@ -575,6 +835,44 @@ export function findReceipt(root, id) {
 }
 
 /**
+ * A byte-offset snapshot of every sealed day file, so the events appended by ONE attempt can be
+ * read back without re-parsing the whole log or guessing at ordering.
+ *
+ * This is how bench attributes a fault. `arc-run` already writes a structured verdict --
+ * `payload.reason` is one of schema | driver | budget | policy -- and reading that receipt is
+ * strictly better than scraping its stderr for a phrase. It also keeps schema pass-rate and
+ * assertion pass-rate genuinely separate, which is a REQ-01 requirement and not something that
+ * can be inferred from an exit code alone: exit 1 covers all four reasons.
+ */
+export function spineOffsets(root) {
+  const { events } = spinePaths(root);
+  const out = new Map();
+  if (!existsSync(events)) return out;
+  for (const e of readdirSync(events, { withFileTypes: true })) {
+    if (!e.isFile() || !e.name.endsWith(".jsonl")) continue;
+    out.set(e.name, readFileSync(join(events, e.name), "utf8").length);
+  }
+  return out;
+}
+
+/** Every event appended since the snapshot, in file order. Unparseable lines are skipped. */
+export function spineSince(root, before) {
+  const { events } = spinePaths(root);
+  const out = [];
+  if (!existsSync(events)) return out;
+  for (const e of readdirSync(events, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
+    if (!e.isFile() || !e.name.endsWith(".jsonl")) continue;
+    const text = readFileSync(join(events, e.name), "utf8");
+    const from = before.get(e.name) ?? 0;
+    for (const line of text.slice(from).split("\n")) {
+      if (!line.trim()) continue;
+      try { out.push(JSON.parse(line)); } catch { /* a torn line is not an event */ }
+    }
+  }
+  return out;
+}
+
+/**
  * Emit bench's one receipt, the way arc-run does (M6). Bench NEVER writes to `events/` itself.
  *
  * `--strict` is first-party (ADR-0031/0032): without it the emitter runs in hook mode, exits 0
@@ -612,132 +910,322 @@ export function emitRunCompleted(root, payload, outcome) {
     rmSync(tmp, { recursive: true, force: true });
   }
 }
-
 // ---- the run ---------------------------------------------------------------------------------
 
+/** The SHA of the router, so a propose-only run can prove it changed nothing. */
+export function routerSha(root) {
+  const p = join(root, "engine", "router.yaml");
+  return existsSync(p) ? createHash("sha256").update(readFileSync(p)).digest("hex") : null;
+}
+
+/** The SHA of a fixture's input, for the provenance tuple (ADR-0913). */
+function inputSha(input) {
+  return createHash("sha256").update(canonicalString(input ?? {}), "utf8").digest("hex");
+}
+
 /**
- * The whole thread. Returns a report; printing and exiting are `main`'s job, so this is callable
- * from a test without a subprocess.
- *
- * THE BUDGET REMAINDER IS THREADED FOR THE DIMENSION BENCH CAN OBSERVE, AND ONLY THAT ONE.
- * `min` is wall-clock, which bench measures itself, so it genuinely decrements and a run that
- * exhausts it stops. `inr` cannot: no driver reports spend on arc-run's stdout, the cost sidecar
- * is consumed inside arc-run, and inventing a figure to subtract would be an estimate wearing a
- * measurement's clothes (ADR-0904 -- a ceiling bounds spend, it never reports it). So `inr` is
- * passed down unchanged as a CEILING and reported as unmeasured, never as zero.
+ * Score one fixture's K captured outputs. This is the PURE half of the run (ADR-0913): it takes
+ * bytes and fixtures and returns numbers, touching no clock, no network and no subprocess. It is
+ * what makes a disputed figure re-checkable for free, and what the replay proof re-runs.
  */
-export function runBench(root, { driver, model, budget, dryRun = false }) {
-  const ceiling = parseBudget(budget);
-  const remaining = { ...ceiling };
+export function scoreCaptured(fixture, records) {
+  const attempts = records.map((rec, k) => {
+    // The SCHEMA VERDICT IS CAPTURED, NEVER RECOMPUTED. arc-run decides it at run time
+    // (arc-run.mjs:184-186) and it is not derivable from the output bytes alone, so a replay that
+    // re-derived it would report a different measurement under the same name. Capturing it is
+    // what lets the scorecard carry both rates AND still replay byte-identically.
+    const schema = rec && Object.prototype.hasOwnProperty.call(rec, "schema") ? rec.schema : null;
+    if (!rec || !rec.scored) {
+      return { k, scored: false, schema, passed: 0, total: 0, rate: null, failed: [], why: rec?.why ?? "not scored in the captured run", verdict: rec?.verdict ?? "unknown" };
+    }
+    const s = scoreAssertions(rec.output, fixture.doc.assertions, `${fixture.id}#${k}`);
+    return { k, scored: true, schema, passed: s.passed, total: s.total, rate: s.rate, failed: s.results.filter((r) => !r.pass).map((r) => r.id) };
+  });
+  // K IS NEVER COLLAPSED. Every attempt contributes to the denominator individually, so a
+  // 2-of-3 fixture and a 1-of-3 fixture cannot report as the same number.
+  const passed = attempts.reduce((a, x) => a + x.passed, 0);
+  const total = attempts.reduce((a, x) => a + x.total, 0);
+  return {
+    id: fixture.id,
+    input_sha: inputSha(fixture.doc.input),
+    attempts,
+    assertions: { passed, total, rate: total ? passed / total : null },
+    spread: medianWithSpread(attempts.map((a) => a.rate)),
+  };
+}
+
+/**
+ * Fold a fixture's scored attempts into its class totals. Shared by the live run and the replay
+ * so the two cannot drift: a scorecard that two code paths build differently is a scorecard whose
+ * byte-identity proves nothing about either of them.
+ */
+function foldFixture(entry, scored) {
+  entry.fixtures.push(scored);
+  entry.assertions.passed += scored.assertions.passed;
+  entry.assertions.total += scored.assertions.total;
+  for (const a of scored.attempts) {
+    if (a.schema === true) { entry.schema.passed += 1; entry.schema.evaluated += 1; }
+    else if (a.schema === false) { entry.schema.evaluated += 1; }
+  }
+}
+
+/** Close a class: the rates, the spread, and the NO PROPOSAL verdict a partial run earns. */
+function closeClass(entry) {
+  entry.assertions.rate = entry.assertions.total ? entry.assertions.passed / entry.assertions.total : null;
+  entry.schema.rate = entry.schema.evaluated ? entry.schema.passed / entry.schema.evaluated : null;
+  entry.spread = medianWithSpread(entry.fixtures.filter((f) => !f.dry_run).map((f) => f.assertions.rate));
+  // A partial class proposes NOTHING, and the reason travels with the verdict (ADR-0906).
+  const anyUnscored = entry.fixtures.some((f) => (f.attempts || []).some((a) => !a.scored));
+  const anyRefused = entry.unselected.some((u) => u.reason.startsWith("failure: budget") || u.reason.includes("exhausted"));
+  if (anyUnscored || anyRefused) entry.proposal = "NO PROPOSAL - partial run";
+}
+
+/** A class row, before anything has been scored into it. One shape, one place. */
+function emptyClassEntry(cov) {
+  return {
+    task_class: cov.taskClass,
+    declared: cov.count,
+    eligible: cov.eligible,
+    reason: cov.reason,
+    selected: 0,
+    unselected: [],
+    fixtures: [],
+    assertions: { passed: 0, total: 0, rate: null },
+    schema: { passed: 0, evaluated: 0, rate: null },
+  };
+}
+
+/**
+ * The deterministic artifact. Everything in here is a function of the captured bytes and the
+ * repository, and NOTHING in here is a function of the clock, a temp path or a wall-clock
+ * duration -- those live in `provenance.json`, which replay is not expected to reproduce.
+ * Mixing the two is how a "byte-identical" claim becomes untestable.
+ */
+export function buildScorecard({ classes, packRevisions, processVersions }) {
+  return {
+    normalizer_version: NORMALIZER_VERSION,
+    eval_pack_revisions: packRevisions,
+    process_versions: processVersions,
+    classes,
+  };
+}
+
+/**
+ * The whole run. Returns a report; printing, writing and exiting are `main`'s job, so this is
+ * callable from a test without a subprocess.
+ *
+ * THE BUDGET IS A PROPERTY OF THE RUN. One remainder, reserved per K-group before the group
+ * starts, reconciled after it against measured spend, and **exhaustion is terminal** -- it
+ * returns, and there is deliberately no path from here into a retry or a fallback.
+ */
+export function runBench(root, { driver, model, budget, dryRun = false, capture = null }) {
+  const cliBudget = parseBudget(budget);
+  const remaining = { ...cliBudget };
+  const ceilings = readCeilings(root);
+  const state = newBudgetState(ceilings, cliBudget.inr);
+  // THE CEILING KEYS ON THE MODEL THAT WILL ACTUALLY BE APPLIED, never the one requested. A
+  // bound exists to cover what the invocation will really spend, and `--model` does not reach
+  // the driver at all today (phase-00-spec M1 amendment) -- so keying on the request would look
+  // up a ceiling for a pair that is never invoked. `appliedModel` is null until the engine grows
+  // a model seam, at which point this lookup starts refusing real pairs that have no entry,
+  // which is exactly what it should do.
+  const appliedModel = null;
+  const ceilingKey = appliedModel || "(unpinned)";
+  const worstCase = worstCaseFor(ceilings, driver, appliedModel);
   const identity = driverIdentity(root, driver);
+  const shaBefore = routerSha(root);
+
   const classes = [];
+  const packRevisions = {};
+  const processVersions = {};
+  const reconciliations = [];
   let attempts = 0;
   let partial = false;
 
   for (const cov of discoverClasses(root)) {
-    const entry = {
-      task_class: cov.taskClass,
-      declared: cov.count,
-      eligible: cov.eligible,
-      reason: cov.reason,
-      revision: null,
-      selected: 0,
-      unselected: [],
-      scored: 0,
-      assertions: { passed: 0, total: 0, rate: null },
-      fixtures: [],
-    };
+    const entry = emptyClassEntry(cov);
     classes.push(entry);
     if (!cov.eligible) continue;
 
     const loaded = loadClass(root, cov.taskClass);
-    entry.revision = loaded.pack ? loaded.pack.revision : null;
+    packRevisions[cov.taskClass] = loaded.pack ? loaded.pack.revision : null;
+    processVersions[cov.taskClass] = loaded.version;
 
     for (const fx of loaded.fixtures) {
-      // A fixture with no `repo_state` cannot be POSED: `commit-msg-draft` declares `inputs: []`,
-      // so the repository is the only thing that varies. It is named here rather than dropped --
-      // a silent skip is how a class loses coverage without the count ever moving.
       if (!fx.id) { entry.unselected.push({ file: fx.file, reason: "declares no repo_state -- the case cannot be posed" }); continue; }
       entry.selected += 1;
       if (dryRun) { entry.fixtures.push({ id: fx.id, dry_run: true }); continue; }
 
+      if (state.exhausted) {
+        partial = true;
+        entry.unselected.push({ file: fx.file, reason: "the run cap was exhausted before this group" });
+        continue;
+      }
       if ("min" in remaining && remaining.min <= 0) {
         partial = true;
-        entry.unselected.push({ file: fx.file, reason: "the run-level minute budget was exhausted before this attempt" });
+        entry.unselected.push({ file: fx.file, reason: "the run-level minute budget was exhausted before this group" });
         continue;
       }
 
-      const perAttempt = { ...remaining };
-      const timeoutMs = "min" in perAttempt ? Math.max(1000, Math.floor(perAttempt.min * 60000)) : 10 * 60000;
-      let r;
-      try { r = runAttempt(root, { processName: cov.taskClass, fixture: fx, driver, model, budget: perAttempt, timeoutMs }); }
-      catch (e) { r = { ok: false, verdict: "harness", why: String(e.message).split("\n")[0], elapsedMs: 0, after: null }; }
-      attempts += 1;
-      if ("min" in remaining) remaining.min = Math.max(0, remaining.min - r.elapsedMs / 60000);
-
-      if (!r.ok) {
+      // ADMISSION FIRST, and for the whole K-group. A group that cannot be covered NEVER STARTS:
+      // a fixture with 2 of 3 attempts is disqualified by the completeness gate anyway, so the
+      // spend would have bought nothing (ADR-0909).
+      const seat = admitGroup(state, cov.taskClass, worstCase);
+      if (!seat.admitted) {
         partial = true;
-        entry.fixtures.push({ id: fx.id, ok: false, verdict: r.verdict, why: r.why });
+        entry.unselected.push({ file: fx.file, reason: `failure: budget -- ${seat.reason}` });
         continue;
       }
-      entry.scored += 1;
-      entry.assertions.passed += r.score.passed;
-      entry.assertions.total += r.score.total;
-      entry.fixtures.push({
-        id: fx.id,
-        ok: true,
-        passed: r.score.passed,
-        total: r.score.total,
-        // ABSENT, never 100%: a fixture that asserts nothing must not be the cheapest way to
-        // look perfect (ADR-0905).
-        rate: r.score.rate,
-        failed: r.score.results.filter((x) => !x.pass).map((x) => x.id),
-        repo_untouched: r.after !== null,
+
+      const records = [];
+      let measured = null;
+      for (let k = 0; k < state.k; k++) {
+        const perAttempt = { ...remaining };
+        const timeoutMs = "min" in perAttempt ? Math.max(1000, Math.floor(perAttempt.min * 60000)) : 10 * 60000;
+        let r;
+        try { r = runAttempt(root, { processName: cov.taskClass, fixture: fx, driver, model, budget: perAttempt, timeoutMs }); }
+        catch (e) { r = { ok: false, verdict: "harness", why: String(e.message).split("\n")[0], elapsedMs: 0, schema: null, measuredInr: null }; }
+        attempts += 1;
+        if ("min" in remaining) remaining.min = Math.max(0, remaining.min - r.elapsedMs / 60000);
+        if (r.measuredInr !== null) measured = (measured ?? 0) + r.measuredInr;
+        if (!r.ok) partial = true;
+
+        // THE CAPTURE RECORD, not the bare output. It carries the schema verdict and the failure
+        // reason as well, because neither is derivable from output bytes -- and a replay that
+        // re-derived them would report a different measurement under the same name. It carries
+        // NO timing, NO path and NO cost: those belong to the run, not to the evidence.
+        const record = r.ok
+          ? { scored: true, schema: r.schema, output: r.output }
+          : { scored: false, schema: r.schema ?? null, verdict: r.verdict, why: r.why };
+        records.push(record);
+        if (capture) {
+          const dir = join(capture, cov.taskClass, fx.id);
+          mkdirSync(dir, { recursive: true });
+          writeFileSync(join(dir, `${k}.json`), canonicalJson(record), "utf8");
+        }
+      }
+
+      // POST-CALL RECONCILIATION. Where nothing was measured the reservation stands, because an
+      // absent measurement cannot replace a bound -- it is the only bound left (ADR-0904). The
+      // result goes to PROVENANCE, never to the scorecard: budget accounting is a fact about the
+      // run, and putting it in the scorecard would make the replay proof unprovable by design.
+      const rec = reconcileGroup(state, cov.taskClass, seat.reserved, measured);
+      reconciliations.push({
+        task_class: cov.taskClass, fixture: fx.id,
+        reserved_inr: seat.reserved,
+        measured_inr: rec.applied ? measured : null,
+        delta: rec.delta,
       });
+      foldFixture(entry, scoreCaptured(fx, records));
     }
-    entry.assertions.rate = entry.assertions.total ? entry.assertions.passed / entry.assertions.total : null;
+    closeClass(entry);
   }
 
+  const shaAfter = routerSha(root);
+
   return {
-    bench: BENCH_ID,
-    driver,
-    driver_version: identity,
-    model_requested: model || null,
-    // Measured, not assumed: with an explicit `--driver`, arc-run hands the driver an empty
-    // ARC_DRIVER_MODEL and its own receipt reads `model: unpinned`. Saying so on bench's receipt
-    // keeps a run from claiming a model it never applied.
-    model_applied: null,
-    budget: {
-      ceiling,
-      min_remaining: "min" in remaining ? Number(remaining.min.toFixed(4)) : null,
-      inr_spent: null,
-      inr_spent_note: "unmeasured -- no driver reports spend on arc-run stdout; the ceiling bounds it, it never reports it (ADR-0904)",
+    scorecard: buildScorecard({ classes, packRevisions, processVersions }),
+    provenance: {
+      bench: BENCH_ID,
+      // subject and fingerprint are SIBLINGS, never nested (ADR-0903). MP-F's nine fields stay
+      // MP-F's; the driver is bench's, and absent fields are ABSENT KEYS rather than null.
+      subject: {
+        driver,
+        ...(identity ? { driver_version: identity } : {}),
+        ...(shaBefore ? { router_sha: shaBefore } : {}),
+        ceiling_file: "initiatives/bench/ceilings.json",
+        ceilings_as_of: ceilings.as_of,
+        // WHICH ceiling row bounded this run, not what it contained. The key is provenance; the
+        // number is a ceiling and never enters a record (ADR-0904).
+        ceiling_key: `${driver}/${ceilingKey}`,
+      },
+      fingerprint: {
+        // `model_id`, `provider`, `effort` and `statusline_cost` are ABSENT on purpose: with an
+        // explicit --driver, arc-run hands the driver an empty ARC_DRIVER_MODEL and its own
+        // receipt reads `unpinned`, so there is no model identity to record. Writing the
+        // REQUESTED id here would claim a model that was never applied.
+        ...(model ? { model_requested: model } : {}),
+      },
+      model_applied: null,
+      // request_settings is absent for the same reason: bench has no channel through arc-run to
+      // set temperature or any other provider knob, so declaring `temperature: 0` would record a
+      // setting nothing applied.
+      router_unchanged: shaBefore === shaAfter,
+      budget: {
+        run_cap_inr: state.runCap,
+        process_cap_inr: state.processCap,
+        k: state.k,
+        committed_inr: state.runCommitted,
+        min_remaining: "min" in remaining ? Number(remaining.min.toFixed(4)) : null,
+        reconciliations,
+      },
+      attempts,
     },
-    attempts,
-    classes,
-    outcome: partial ? "partial" : "ok",
+    outcome: partial || !state ? "partial" : "ok",
   };
 }
 
+/**
+ * Re-score a capture bundle. Pure: it reads bytes and fixtures and touches nothing else, so the
+ * scorecard it produces must be byte-identical to the one the live run wrote.
+ */
+export function replayBench(root, captureDir) {
+  if (!existsSync(captureDir)) throw new OperatorError(`--replay ${captureDir} does not exist`);
+  const classes = [];
+  const packRevisions = {};
+  const processVersions = {};
+
+  for (const cov of discoverClasses(root)) {
+    const entry = emptyClassEntry(cov);
+    classes.push(entry);
+    if (!cov.eligible) continue;
+
+    const loaded = loadClass(root, cov.taskClass);
+    packRevisions[cov.taskClass] = loaded.pack ? loaded.pack.revision : null;
+    processVersions[cov.taskClass] = loaded.version;
+
+    for (const fx of loaded.fixtures) {
+      if (!fx.id) { entry.unselected.push({ file: fx.file, reason: "declares no repo_state -- the case cannot be posed" }); continue; }
+      const dir = join(captureDir, cov.taskClass, fx.id);
+      if (!existsSync(dir)) { entry.unselected.push({ file: fx.file, reason: "no captured attempts in this bundle" }); continue; }
+      entry.selected += 1;
+      // Sorted NUMERICALLY, not lexically: `10.json` sorts before `2.json` as a string, and K
+      // would silently reorder the moment it went past nine.
+      const files = readdirSync(dir).filter((f) => /^\d+\.json$/.test(f)).sort((a, b) => Number(a.split(".")[0]) - Number(b.split(".")[0]));
+      const records = files.map((f) => JSON.parse(readFileSync(join(dir, f), "utf8")));
+      // The SAME fold and the SAME close as the live run. Two code paths building one artifact
+      // differently is an artifact whose byte-identity proves nothing about either of them.
+      foldFixture(entry, scoreCaptured(fx, records));
+    }
+    closeClass(entry);
+  }
+  return buildScorecard({ classes, packRevisions, processVersions });
+}
+
 /** The scorecard. Human-readable and deliberately unpinned -- no test asserts its shape (M13). */
-function printReport(report) {
+function printReport(scorecard, provenance) {
   const out = [];
-  out.push(`arc-bench ${report.bench} -- driver ${report.driver}${report.driver_version ? ` (${report.driver_version})` : " (version: ABSENT)"}`);
-  out.push(`model requested ${report.model_requested ?? "(none)"} -- applied: NONE (arc-run pins a model only via --driver auto + a router row)`);
-  for (const c of report.classes) {
+  const s = provenance.subject;
+  out.push(`arc-bench ${provenance.bench} -- driver ${s.driver}${s.driver_version ? ` (${s.driver_version})` : " (version: ABSENT)"} -- normalizer ${scorecard.normalizer_version}`);
+  out.push(`model requested ${provenance.fingerprint.model_requested ?? "(none)"} -- applied: NONE (arc-run pins a model only via --driver auto + a router row)`);
+  out.push(`router ${provenance.router_unchanged ? "UNCHANGED" : "CHANGED -- propose-only was violated"} · caps run ${provenance.budget.run_cap_inr} / process ${provenance.budget.process_cap_inr} · K=${provenance.budget.k}`);
+  for (const c of scorecard.classes) {
     if (!c.eligible) { out.push(`  ${c.task_class}: ${c.reason}`); continue; }
     const a = c.assertions;
     const rate = a.rate === null ? "ABSENT" : `${(a.rate * 100).toFixed(1)}%`;
-    out.push(`  ${c.task_class} @ ${c.revision ?? "(no pack)"}: ${c.scored}/${c.selected} fixtures scored, assertions ${a.passed}/${a.total} = ${rate}`);
+    const sch = c.schema.rate === null ? "ABSENT" : `${(c.schema.rate * 100).toFixed(1)}%`;
+    const sp = c.spread && c.spread.median !== null ? ` median ${(c.spread.median * 100).toFixed(1)}% spread ${(c.spread.min * 100).toFixed(1)}-${(c.spread.max * 100).toFixed(1)}%` : "";
+    out.push(`  ${c.task_class} @ ${scorecard.eval_pack_revisions[c.task_class] ?? "(no pack)"}: assertions ${a.passed}/${a.total} = ${rate} · schema ${c.schema.passed}/${c.schema.evaluated} = ${sch}${sp}`);
+    if (c.proposal) out.push(`    ${c.proposal}`);
     for (const f of c.fixtures) {
       if (f.dry_run) { out.push(`    - ${f.id}: would run`); continue; }
-      out.push(f.ok
-        ? `    - ${f.id}: ${f.passed}/${f.total}${f.failed.length ? ` FAILED ${f.failed.join(",")}` : ""}`
-        : `    - ${f.id}: NOT SCORED (${f.verdict}) ${f.why}`);
+      const per = f.attempts.map((x) => (x.scored ? `${x.passed}/${x.total}` : "--")).join(" ");
+      const bad = f.attempts.filter((x) => !x.scored);
+      out.push(`    - ${f.id}: K=[${per}]${bad.length ? ` ${bad.length} NOT SCORED (${bad[0].verdict}: ${bad[0].why})` : ""}`);
     }
     for (const u of c.unselected) out.push(`    - ${u.file}: not selected -- ${u.reason}`);
   }
-  out.push(`  budget: ceiling ${budgetString(report.budget.ceiling)} · inr spent ${report.budget.inr_spent ?? "UNMEASURED"}${report.budget.min_remaining === null ? "" : ` · minutes left ${report.budget.min_remaining}`}`);
+  out.push(`  committed against the cap: ${provenance.budget.committed_inr}${provenance.budget.min_remaining === null ? "" : ` · minutes left ${provenance.budget.min_remaining}`}`);
   console.log(out.join("\n"));
 }
 
@@ -750,29 +1238,89 @@ function main() {
   // from the file rather than from cwd: bench is invoked from wherever, and a runner that
   // resolved its own repo from the caller cwd would score whichever tree it happened to land in.
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+  // ---- replay: pure re-scoring, no driver, no receipt ----
+  if (args.replay) {
+    let fresh;
+    try { fresh = replayBench(root, resolve(args.replay)); }
+    catch (e) { console.error(`arc-bench: ${e.message}`); process.exit(e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL); }
+    const bytes = canonicalJson(fresh);
+    if (args.out) { mkdirSync(resolve(args.out), { recursive: true }); writeFileSync(join(resolve(args.out), "scorecard.json"), bytes, "utf8"); }
+    const prior = join(resolve(args.replay), "scorecard.json");
+    if (!existsSync(prior)) { console.log(bytes); process.exit(EXIT.OK); }
+    const priorBytes = readFileSync(prior, "utf8");
+    let priorDoc = null;
+    try { priorDoc = JSON.parse(priorBytes); } catch { /* an unparseable scorecard is a mismatch */ }
+    // STALE-FORMAT AND TAMPER ARE DIFFERENT FACTS. A normalizer bump invalidates every stored
+    // scorecard by construction, and reporting that as a mismatch would send someone hunting a
+    // corruption that never happened.
+    if (priorDoc && priorDoc.normalizer_version !== fresh.normalizer_version) {
+      console.error(`arc-bench: STALE-FORMAT -- the stored scorecard was written by normalizer ${priorDoc.normalizer_version}, this is ${fresh.normalizer_version}`);
+      process.exit(EXIT.STALE);
+    }
+    if (priorBytes === bytes) { console.log(`arc-bench: replay MATCHES byte for byte (${bytes.length} bytes, sha ${canonicalHash(fresh).slice(0, 12)})`); process.exit(EXIT.OK); }
+    console.error(`arc-bench: replay MISMATCH -- stored ${canonicalHash(priorDoc ?? {}).slice(0, 12)}, re-scored ${canonicalHash(fresh).slice(0, 12)}`);
+    process.exit(EXIT.PARTIAL);
+  }
+
   const drivers = knownDrivers(root);
   if (!drivers.includes(args.driver)) {
     console.error(`arc-bench: unknown driver \`${args.driver}\` (installed: ${drivers.join(", ")})`);
     process.exit(EXIT.OPERATOR);
   }
 
+  const outDir = args.out ? resolve(args.out) : null;
+  const capture = outDir && !args.dryRun ? join(outDir, "capture") : null;
   let report;
-  try { report = runBench(root, { driver: args.driver, model: args.model, budget: args.budget, dryRun: args.dryRun }); }
+  try { report = runBench(root, { driver: args.driver, model: args.model, budget: args.budget, dryRun: args.dryRun, capture }); }
   catch (e) {
     console.error(`arc-bench: ${e.message}`);
     process.exit(e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL);
   }
 
-  printReport(report);
+  printReport(report.scorecard, report.provenance);
+
+  if (outDir) {
+    mkdirSync(outDir, { recursive: true });
+    writeFileSync(join(outDir, "scorecard.json"), canonicalJson(report.scorecard), "utf8");
+    writeFileSync(join(outDir, "provenance.json"), canonicalJson(report.provenance), "utf8");
+    console.log(`arc-bench: scorecard and provenance written to ${relative(root, outDir) || outDir}`);
+  }
+
   if (args.dryRun) { console.log("arc-bench: --dry-run, nothing was invoked and no receipt was emitted"); process.exit(EXIT.OK); }
 
-  const receipt = emitRunCompleted(root, report, report.outcome === "ok" ? "ok" : "fail");
+  // A CEILING NEVER ENTERS AN EMITTED PAYLOAD (ADR-0904). The receipt carries what was measured
+  // and what was committed; the caps stay in provenance, which is a local artifact and not a
+  // claim on the append-only ledger.
+  const payload = {
+    scorecard_sha: canonicalHash(report.scorecard),
+    normalizer_version: report.scorecard.normalizer_version,
+    subject: report.provenance.subject,
+    fingerprint: report.provenance.fingerprint,
+    model_applied: null,
+    router_unchanged: report.provenance.router_unchanged,
+    attempts: report.provenance.attempts,
+    outcome: report.outcome,
+    classes: report.scorecard.classes.map((c) => ({
+      task_class: c.task_class,
+      eligible: c.eligible,
+      ...(c.reason ? { reason: c.reason } : {}),
+      ...(c.proposal ? { proposal: c.proposal } : {}),
+      assertions: c.assertions,
+      schema: c.schema,
+    })),
+  };
+  const receipt = emitRunCompleted(root, payload, report.outcome === "ok" ? "ok" : "fail");
   if (receipt.landed) {
     console.log(`arc-bench: receipt ${receipt.id} is in events/ and not in _quarantine/`);
   } else if (receipt.quarantined) {
     console.error(`arc-bench: receipt ${receipt.id} was QUARANTINED at ${receipt.quarantined} -- quarantine is not success (ADR-0032)`);
   } else {
     console.error(`arc-bench: NO receipt was sealed${receipt.why ? ` -- ${receipt.why}` : ""}`);
+  }
+  if (!report.provenance.router_unchanged) {
+    console.error("arc-bench: the router SHA CHANGED across this run -- propose-only was violated and this run is not evidence of anything");
+    process.exit(EXIT.PARTIAL);
   }
   // A run whose receipt did not land is not a clean run, however well it scored: an unrecorded
   // result cannot be audited later, and the whole point of the thread is the record.
