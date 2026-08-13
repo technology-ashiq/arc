@@ -76,6 +76,15 @@ const cases = {
   "bad-route": (f) => { f.routes = { terms: "legal/terms" }; return f; },
   "good-route": (f) => { f.routes = { terms: "/legal/terms" }; return f; },
   "http-site-url": (f) => { f.site_url = "http://probe.example"; return f; },
+  // GSTIN check digit. The "bad" value here is the one all three gst fixtures actually carried
+  // until the Phase 01 regulator panel computed the Mod-36 and found it could not exist -- it is
+  // structurally perfect and passes the pattern, which is exactly why a pattern is not
+  // validation. The "good" value is the same number with the correct digit.
+  "gstin-bad-checksum": (f) => { f.gst_registered = true; f.gstin = "33AABCN1234M1Z5"; return f; },
+  "gstin-good-checksum": (f) => { f.gst_registered = true; f.gstin = "33AABCN1234M1ZO"; return f; },
+  // The canonical published reference. If this ever fails, the algorithm has drifted and every
+  // verdict it gives is suspect -- including the ones that look like they caught something.
+  "gstin-canonical-reference": (f) => { f.gst_registered = true; f.gstin = "27AAPFU0939F1ZV"; return f; },
 };
 
 const name = process.argv[2];

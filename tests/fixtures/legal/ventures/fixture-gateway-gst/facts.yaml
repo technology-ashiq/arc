@@ -52,7 +52,7 @@ payment_provider: razorpay
 refund_window_days: 14
 
 gst_registered: true
-gstin: 33AABCN1234M1Z5
+gstin: 33AABCN1234M1ZO
 
 stores_third_party_client_data: true
 sub_processors:

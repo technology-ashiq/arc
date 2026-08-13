@@ -131,6 +131,37 @@ function crossFieldErrors(facts, errs) {
   }
 }
 
+/**
+ * GSTIN check digit, the statutory Mod-36 over the first 14 characters.
+ *
+ * A pattern match is not validation here. All THREE gst-registered fixtures carried a
+ * structurally perfect GSTIN with a wrong check digit and every gate in this lane passed them --
+ * found by the regulator stance of the Phase 01 text panel, which validated its own routine
+ * against the canonical reference `27AAPFU0939F1ZV` before reporting. This implementation
+ * reproduces that reference, and `legal-schema-probe.mjs` pins it so the algorithm cannot drift.
+ *
+ * Weights alternate 1,2 from the first character; each product contributes its quotient and
+ * remainder mod 36, and the digit is what makes the total a multiple of 36.
+ */
+const GSTIN_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+export function gstinCheckDigit(gstin) {
+  let sum = 0;
+  for (let i = 0; i < 14; i++) {
+    const v = GSTIN_ALPHABET.indexOf(gstin[i]);
+    if (v < 0) return null; // not in the alphabet at all; the pattern check reports that
+    const p = v * (i % 2 === 0 ? 1 : 2);
+    sum += Math.floor(p / 36) + (p % 36);
+  }
+  return GSTIN_ALPHABET[(36 - (sum % 36)) % 36];
+}
+
+export function gstinChecksumOk(gstin) {
+  if (typeof gstin !== "string" || gstin.length !== 15) return false;
+  const want = gstinCheckDigit(gstin);
+  return want !== null && want === gstin[14];
+}
+
 export function getPath(obj, dotted) {
   let cur = obj;
   for (const part of dotted.split(".")) {
@@ -250,6 +281,8 @@ export function validateFacts(facts, vocab) {
       case "format":
         if (typeof value !== "string" || !field.pattern.test(value))
           errs.push(`${field.path}: "${String(value)}" does not match ${field.pattern}`);
+        else if (field.path === "gstin" && !gstinChecksumOk(value))
+          errs.push(`gstin: "${value}" is well-formed but its check digit is wrong (should be "${gstinCheckDigit(value)}"). A published GSTIN that cannot exist is not a typo -- a registered buyer relying on it fails GSTR-2A/2B reconciliation and loses input tax credit. Verify it at the GST portal before publishing.`);
         break;
       case "int":
         if (typeof value !== "number" || !Number.isInteger(value))

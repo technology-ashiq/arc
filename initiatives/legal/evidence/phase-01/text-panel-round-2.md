@@ -99,10 +99,50 @@ And one that is simply a bug, found by reading: `privacy` says the erasure route
   scale, and a payment aggregator processes KYC and AML data as a controller in its own right, not
   "only to provide their part of the service". *(competitor's lawyer)*
 
-## Triage
+## Repair status
 
-**Not yet fixed.** These findings are recorded before any repair so the repair can be checked
-against them rather than summarised by whoever made it.
+Recorded before any repair, then updated. The list above is unedited — a finding is never
+rewritten to match what was done to it.
+
+### Closed
+
+| Finding | How |
+|---|---|
+| DPDP present tense (kill-criteria) | Rewritten to name s.5(3), say it has not commenced, and state the offer is voluntary and ahead of the duty. Grepped the pattern across all seven templates: every other DPDP reference was already future-tense. |
+| Price-rise: three rules | One rule, one fact (`commitments.price_notice_days`), stated on both pages — and now enforced by the `consistency` lint (ADR-1013) rather than by care. |
+| Shipping grants a refund the refunds page refuses | `REFUND.DELIVERY_FAILURE` added, saying a delivery failure is not a change of mind and the window does not limit it. Shipping points at that clause instead of at a window that excludes it. |
+| Venture B told about card storage on a site taking no cards | `PRICING.WHAT_YOU_PAY_WITH` split three ways on `payment_model`. The `none` branch states the real route, that nothing auto-charges, and that a card will never be asked for. |
+| B's "1 hour, no human approval" delivery | New `derived.payment_is_automatic`; `DELIVERY.WHEN.OFFLINE` says access opens within one working day of the money landing, and why we cannot see it sooner. |
+| "No geographic restriction from our side" | We do not impose them; host, payment provider and sanctions law can, and we do not control those. |
+| `hour(s)` / `day(s)` in published bytes | `pluralise-counted-nouns`, a declared transform with its destruction documented. |
+| "Deleting your data below" pointing up | One word. |
+
+### Open, and named rather than quietly dropped
+
+- **`about` vs `privacy` on who decides.** The processor-role framing on `about` and "we decide
+  what personal data this service collects and why" on `privacy` are both defensible in isolation
+  and read as a contradiction together. The honest repair splits the statement — instruction-only
+  for uploaded client records, controller for account and billing data — and it is prose work on
+  a clause that carries real legal weight, not a wording tweak.
+- **Claims about what AWS, Postmark and Razorpay are contractually bound to do.** "Our contracts
+  forbid them doing it either — that is a commitment we can show you" asserts a bespoke,
+  producible instrument. At this scale these are non-negotiable standard terms, and a payment
+  aggregator processes KYC and AML data as a controller in its own right.
+- **`gstin` has no checksum.** FORMAT-tier with no Mod-36 validation, so an unverifiable GSTIN
+  passes every gate here. The fixture's own number fails the check.
+- **Grievance officer designation** is absent on all fourteen pages; rule 4(5) enumerates three
+  items and two are supplied. Needs a new facts field.
+- **The grievance officer being the proprietor** is disclosed nowhere, and the refunds page holds
+  that route out as the substitute for chargeback arbitration.
+- **"We reply within 48 hours"** carries no clock definition and no consequence.
+- **`about` denies intermediary status** while describing intermediary conduct.
+- **No CIN** for a private limited company.
+
+The eight in the closed table are the ones where a page stated something FALSE or contradicted
+another page. The open list is real and none of it is cosmetic, but every item is a page being
+less complete or more absolute than it should be — not a page asserting an untruth.
+
+## Why the cross-page class needed its own lint
 
 The shape of the fix is already visible and it is not "reword eight sentences":
 

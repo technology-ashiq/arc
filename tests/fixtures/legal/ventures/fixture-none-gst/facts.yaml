@@ -52,7 +52,7 @@ payment_provider: none
 refund_window_days: 21
 
 gst_registered: true
-gstin: 27AAECS4321Q1Z8
+gstin: 27AAECS4321Q1ZZ
 
 stores_third_party_client_data: true
 sub_processors:

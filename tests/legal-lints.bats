@@ -165,6 +165,36 @@ _fails() { node "$ARC_ROOT/tests/legal-probe.mjs" findings "$SANDBOX/out/_run.js
   [ "$output" = "rejected" ]
 }
 
+@test "legal lints: a GSTIN with a wrong check digit is rejected, however well-formed" {
+  # All three gst-registered fixtures carried this exact value and every gate in this lane passed
+  # it. State code, PAN structure and the Z in position 14 are all correct; only the statutory
+  # Mod-36 check digit is wrong, so the number cannot exist. A registered buyer relying on it
+  # fails GSTR-2A/2B reconciliation and loses input tax credit.
+  #
+  # Found by the regulator stance of the Phase 01 text panel, not by any test here -- a pattern
+  # match had been standing in for validation.
+  run node "$ARC_ROOT/tests/legal-schema-probe.mjs" gstin-bad-checksum
+  [ "$status" -eq 0 ]
+  [ "$output" = "rejected" ]
+}
+
+@test "legal lints: the same GSTIN with the right check digit is accepted" {
+  # The control for the rejection above: a checksum that refused everything would pass that test
+  # and be useless. Same fifteen characters, one digit different.
+  run node "$ARC_ROOT/tests/legal-schema-probe.mjs" gstin-good-checksum
+  [ "$status" -eq 0 ]
+  [ "$output" = "accepted" ]
+}
+
+@test "legal lints: the GSTIN algorithm reproduces the canonical published reference" {
+  # 27AAPFU0939F1ZV is the reference the check was validated against before it was trusted. If
+  # this goes red the algorithm has drifted, and every verdict it gives is suspect -- including
+  # the ones that look like they caught something real.
+  run node "$ARC_ROOT/tests/legal-schema-probe.mjs" gstin-canonical-reference
+  [ "$status" -eq 0 ]
+  [ "$output" = "accepted" ]
+}
+
 @test "legal lints: an ordinary trade name is accepted" {
   # The negative control for the three rejections above: a rule set that rejects everything
   # would pass all of them and be useless.
