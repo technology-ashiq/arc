@@ -18,6 +18,8 @@
 import { SpineError, dayOf, formatIst, nowMs } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { query } from "./spine.mjs";
+import { derivePanel, needsYouLines, loadJobs, loadPanelInputs } from "./lib/jobs/panel.mjs";
+import { policyRoot } from "./lib/policy/run-gate.mjs";
 
 const VALUE_FLAGS = new Set(["date", "venture", "engine"]);
 const BOOL_FLAGS = new Set(["full"]);
@@ -150,7 +152,16 @@ function parseArgs(argv) {
   return flags;
 }
 
-export function render(day, events, torn, { full = false } = {}) {
+/**
+ * `jobLines` (scheduler SCH-F) carries DERIVED needs-you lines that correspond to no event,
+ * because silence emits nothing: a job that died writes no receipt, so the only way it can
+ * appear in a brief is for the reader to derive it from the schedule against the spine.
+ *
+ * Only OVERDUE jobs produce a line. A healthy schedule adds nothing at all, which is why this
+ * cannot quietly rewrite an existing brief -- and why a lane adding a job to hq.jobs.yaml does
+ * not disturb anybody else's pinned output.
+ */
+export function render(day, events, torn, { full = false, jobLines = [] } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -189,6 +200,14 @@ export function render(day, events, torn, { full = false } = {}) {
     const out = [`brief ${day}`];
     for (const [g] of GROUPS) {
       const gl = groupLines(g);
+      // Derived job lines ride WITH needs-you rather than in a group of their own: a job that
+      // has gone silent is the same class of fact as an approval waiting on a human, and giving
+      // it a separate heading is how it becomes a section people learn to scroll past.
+      if (g === "needs-you" && jobLines.length) {
+        if (gl.length) out.push("", ...gl, ...jobLines.map((l) => `  ${l}`));
+        else out.push("", `needs-you (${jobLines.length})`, ...jobLines.map((l) => `  ${l}`));
+        continue;
+      }
       if (gl.length) out.push("", ...gl);
     }
     // A damaged line is reported in the brief itself: "the day looks quiet" and "the day is
@@ -227,7 +246,23 @@ async function main(argv) {
 
   const root = spineRoot();
   const { events, torn } = await query(root, { date: day, venture: flags.venture, engine: flags.engine });
-  process.stdout.write(render(day, events, torn, { full: flags.full === true }));
+
+  // The jobs panel is DERIVED, never queried: silence emits nothing, so a job that has gone
+  // quiet appears here only because the schedule was read against the spine. Failure to derive
+  // it must not take the brief down with it -- a brief that refuses to render because a
+  // schedule file is malformed is strictly worse than a brief with no jobs in it, and
+  // `jobs-lint` is the gate that makes a malformed schedule loud in the place it belongs.
+  let jobLines = [];
+  try {
+    const jobs = loadJobs(policyRoot());
+    if (jobs.length) {
+      const { events: runs, observedFrom } = await loadPanelInputs(root, day);
+      const rows = derivePanel({ day, jobs, events: runs, observedFrom });
+      jobLines = needsYouLines(rows);
+    }
+  } catch { jobLines = []; }
+
+  process.stdout.write(render(day, events, torn, { full: flags.full === true, jobLines }));
   return 0;
 }
 
