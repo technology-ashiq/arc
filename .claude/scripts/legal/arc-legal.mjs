@@ -22,6 +22,7 @@ import { canonicalHash, bytesHash, templateSetHash, CanonError, PREIMAGE_VERSION
 import { validateFacts } from "./lib/schema.mjs";
 import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./lib/template.mjs";
 import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL, GROUPS_RUN } from "./lib/lints.mjs";
+import { buildChecklist, renderChecklist } from "./lib/checklist.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
   backdatingErrors, semanticDiff, APPROVAL_SUBJECT,
@@ -49,6 +50,7 @@ function usage() {
     "       arc-legal propose --venture NAME --out DIR",
     "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
     "       arc-legal verify  --venture NAME --dir DIR",
+    "       arc-legal checklist --venture NAME [--out FILE] [--evidence FILE]",
     "",
     "  --venture NAME   a fixture venture under tests/fixtures/legal/ventures/",
     "  --out DIR        where the rendered pages are written",
@@ -334,6 +336,8 @@ export function renderVenture({ ventureName, outDir }) {
     template_set: TEMPLATE_SET,
     template_set_sha: set.sha,
     venture: ventureName,
+    // Carried so the checklist can decide activation applicability without re-parsing facts.
+    payment_model: facts.payment_model,
     facts_sha256: factsSha,
     effective_date: facts.effective_date,
     grievance_windows: windows,
@@ -514,6 +518,43 @@ function publishMain(args) {
  * 3 UNVERIFIABLE. Three codes because there are three answers, and "could not check" must never
  * wear the same one as "checked and clean".
  */
+/**
+ * checklist -- what the payment provider will look for, and what anyone has actually checked.
+ *
+ * Exit 0 rendered - exit 2 the checklist could not be built honestly - exit 3 could not run.
+ * Note that FAIL and NOT-CHECKED rows do NOT move the exit code: the checklist reports a
+ * position, it does not gate on one. A renderer that refused to print an unchecked row would
+ * push an operator toward recording something to make it go away.
+ */
+function checklistMain(args) {
+  if (!args.venture) { console.error(`checklist needs --venture NAME\n\n${usage()}`); return 2; }
+
+  const { run } = renderVenture({ ventureName: args.venture, outDir: null });
+  const providerPages = renderInputs().data["provider-pages.json"];
+  if (!providerPages) throw new Fail(3, "products/legal/data/provider-pages.json is missing");
+
+  const evidence = args.evidence ? readJson(args.evidence) : {};
+  const routes = {};
+  for (const p of run.pages) routes[p.page] = p.route;
+
+  const { rows, errs } = buildChecklist({
+    providerPages,
+    facts: { payment_model: run.payment_model },
+    routes,
+    evidence,
+  });
+
+  if (errs.length) {
+    console.error("the checklist could not be built:\n  - " + errs.join("\n  - "));
+    return 2;
+  }
+
+  const text = renderChecklist({ rows, venture: run.venture });
+  if (args.out) { mkdirSync(dirname(args.out), { recursive: true }); writeFileSync(args.out, text, "utf8"); }
+  process.stdout.write(text);
+  return 0;
+}
+
 function verifyMain(args) {
   if (!args.venture) { console.error(`verify needs --venture NAME
 
@@ -541,6 +582,7 @@ function main(argv) {
   if (verb === "propose") return proposeMain(args);
   if (verb === "publish") return publishMain(args);
   if (verb === "verify") return verifyMain(args);
+  if (verb === "checklist") return checklistMain(args);
   if (verb !== "render") { console.error(`unknown verb "${verb}"\n\n${usage()}`); return 2; }
   if (!args.venture) { console.error(`render needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`render needs --out DIR\n\n${usage()}`); return 2; }
