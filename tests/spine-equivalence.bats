@@ -31,7 +31,7 @@ _need_sqlite() {
   _need_sqlite
   bash "$EVENT" emit note.logged --payload '{"note":"one"}' --strict >/dev/null
   bash "$EVENT" emit commit.done --payload '{"sha":"abc123"}' --strict >/dev/null
-  bash "$EVENT" emit revenue.simulated --payload '{"amount":100,"currency":"INR"}' --strict >/dev/null
+  bash "$EVENT" emit revenue.simulated --payload '{"amount":100,"currency":"INR","venture":"arc","provider":"manual","provider_payment_id":"manual:sim_0001"}' --strict >/dev/null
   node "$HQ/arc-replay.mjs" --quiet
 
   node "$HQ/arc-brief.mjs" --date 2026-07-22 --engine scan   > "$BATS_TEST_TMPDIR/scan.txt"

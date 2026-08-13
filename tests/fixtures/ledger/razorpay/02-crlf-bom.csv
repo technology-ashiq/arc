@@ -1,0 +1,4 @@
+﻿settled_at,record_type,customer_email,payment_id,currency,fee,gross_amount,tax,net_amount,settlement_id,description,fx_rate,fx_source,fx_rate_date
+2026-09-15T09:00:00+05:30,payment,sunil@example.invalid,pay_B8nW2qE5rY7uI1,INR,10.00,500.00,76.27,413.73,setl_3kL8mP1cX9vB,"Windows-authored export, CRLF",,,
+2026-09-15T09:30:00+05:30,payment,meera@example.invalid,pay_C1vT6yU3iO9pA5,INR,5.00,250.00,38.14,206.86,setl_3kL8mP1cX9vB,Half of the row above,,,
+,settlement_total,,,INR,15.00,750.00,114.41,620.59,,,,,

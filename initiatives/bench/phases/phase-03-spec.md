@@ -40,6 +40,49 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## STATUS AT CLOSE (2026-08-13): the guard half is built; the real-event half is BLOCKED
+
+This phase has two halves and they have different fates. Recorded here rather than left for a
+reader to discover from a half-ticked list.
+
+**BUILT AND PROVEN — the drift guard.** `--champion` alone re-runs against the incumbent and
+compares on **two split axes**; every cost delta is classified into exactly one of provider-rate ·
+token-use · unknown-mixed; all three tiers fire from their own fixtures, with **tier 3 report-only
+at any size**; classes below the fixture floor are **muted and named**; the re-pin cause list is
+closed at two and **a score movement alone never re-pins**; a clean guard run emits **only**
+`run.completed` and says so, and a drifting one creates exactly one `approval.requested` with gate
+`drift`. `tests/bench-drift.bats`, 13 tests over a 49-check probe.
+
+**BLOCKED — the real event.** Four DoD items cannot be met from this lane, and none of them is a
+bench change:
+
+1. **"ONE real model benched end to end (ADR-0914: a second model id under `claude-code`)."**
+   `arc-run` rebuilds the driver environment (`arc-run.mjs:378-381`) and overwrites
+   `ARC_DRIVER_MODEL` with `pinnedModel ?? ""`. With an explicit `--driver` there is no tier, so a
+   model can **only** be pinned through `--driver auto` plus a `classes.NAME` row in
+   `engine/router.yaml` — and that file is **do-not-touch for this lane, permanently** (PLAN
+   § No-gos). **Bench cannot vary the model at all**, which is the premise of a model market.
+   Measured, not read: `tests/bench-steel-probe.mjs` asserts the receipt reads `model: unpinned`
+   while bench set `claude-opus-5`.
+2. **"The candidate is proven REACHED — a receipt carrying a real model id and a non-zero token
+   count."** Unreachable for the same reason: there is no channel through which a model id could
+   arrive on that receipt.
+3. **"REQ-05 preflight recorded before the real run."** A preflight for a run that cannot be
+   configured would be a form filled in for nothing.
+4. **The human verdict** (`arc-inbox approve|reject ULID --reason`) is an owner keystroke that no
+   agent may perform, and the run it would judge spends real money.
+
+**The fix is an ENGINE change, and it is router-shaped.** `arc-run` needs a seam that lets a
+caller name the model for one invocation without editing the router — or the router needs a row
+bench may propose against. Either is a reviewed diff citing ADR-0069, in the **engine** lane, via
+`/arc-change`. Reaching across the fence to make it here is precisely the scope breach the fence
+exists to stop, and the same rebuild also blocks the fixture-repo harness from reaching a real
+driver (phase-00 spec, M1 amendment) — one seam closes both.
+
+**Until then `--driver mock` is the only honest driver**, because `commit-msg-draft` holds
+`git.op: add:*` and `commit:*`: a real driver run today would stage and commit **inside the arc
+repo itself**.
+
 ## Verification plan
 
 Coarse at kickoff, refined via `/arc-change --lane bench` when the phase starts: drive each

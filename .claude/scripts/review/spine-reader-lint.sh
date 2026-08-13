@@ -26,12 +26,33 @@ FILES="$(git ls-files .claude/scripts/hq .claude/scripts/evolve .claude/scripts/
 [ -n "$FILES" ] || exit 0
 
 # The implementation layer is ALLOWED these tokens: the reader itself, the replayer that rebuilds
-# state.db from the JSONL, and everything under lib/ (spine-io owns raw file + sqlite access).
-# Everything else is a consumer and must go through the reader.
+# state.db from the JSONL, and the lib modules that own raw file and sqlite access.
+#
+# `lib/*` USED TO BE THE WHOLE EXEMPTION, and a shell case glob's `*` crosses `/`, so every module
+# in every lib SUBDIRECTORY was exempt too -- 33 of 63 tracked files never scanned. An adversarial
+# pass planted a real `events/<day>.jsonl` bypass in `lib/ledger/kill-panel.mjs` and this lint
+# exited 0 on it, while the identical token in a non-lib file was caught. That file's own header
+# asserts it "is subject to" this lint. A DoD line reading "spine-reader-lint stays green" was
+# passing over files it had never opened, which is the vacuous-pass shape the comment above warns
+# about, one directory deeper.
+#
+# So the exemption is now the FLAT lib directory only -- where spine-io.mjs and canonical.mjs
+# actually live -- and every lib SUBDIRECTORY (ledger/, policy/, ...) is scanned like any other
+# consumer, because none of them owns raw access and none of them should.
 _exempt() {
   case "$1" in
     .claude/scripts/hq/spine.mjs)      return 0 ;;
     .claude/scripts/hq/arc-replay.mjs) return 0 ;;
+    # EXPOSED BY THE NARROWING, 2026-08-13, and exempted rather than silently changed or silently
+    # buried. `lib/policy/run-gate.mjs` reads the day files directly, deliberately: it is the
+    # policy REDUCER, it folds `decision.recorded` across days to resolve a promotion chain, and it
+    # re-validates and sha-checks every line it accepts. That is implementation-layer work by the
+    # same argument spine.mjs and arc-replay.mjs are exempt for -- but it belongs to the POLICY
+    # lane, not this one, and rerouting another lane's authority reducer through the reader is that
+    # lane's call to make with its own tests in front of it. Recorded here so the next policy-lane
+    # reader sees it, instead of being hidden by a `lib/*` glob that never scanned the file at all.
+    .claude/scripts/hq/lib/policy/run-gate.mjs) return 0 ;;
+    .claude/scripts/hq/lib/*/*)        return 1 ;;
     .claude/scripts/hq/lib/*)          return 0 ;;
     *)                                 return 1 ;;
   esac

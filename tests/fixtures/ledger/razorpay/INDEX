@@ -1,0 +1,21 @@
+# Razorpay settlement-export corpus (Phase 00, ADR-1015). One line per fixture: <file> — <what it proves>
+#
+# THE HEADER BELOW IS PINNED FROM THESE FIXTURES, NOT FROM A LIVE PROVIDER EXPORT — assumptions-ledger
+# row 1 (provider exports obtainable) is FIRED until a real file is redacted and pinned. Required:
+# record_type, payment_id, settlement_id, gross_amount, fee, tax, net_amount, currency, settled_at.
+# Optional: fx_rate, fx_source, fx_rate_date (this is the INR rail, so FX is per-row, not per-file).
+# Every other column is DROPPED by construction (ADR-1002) — customer_email and description are in
+# the good fixture precisely so the drop is proven rather than asserted. The email addresses use the
+# reserved .invalid TLD: no real person's address is committed here, and none ever will be.
+#
+# 02-crlf-bom.csv IS ITS BYTES. `.gitattributes` needs `tests/fixtures/ledger/** -text` in the same
+# commit, or `* text=auto eol=lf` rewrites it on add and the fixture goes green while testing nothing
+# — the seventh occurrence of that class in this repo (see the .gitattributes history).
+
+01-good-multi-row.csv — the happy path: 4 INR payments plus the file's own settlement_total, columns in an order unlike Appendix C so resolution must be BY NAME, a quoted description carrying commas, a doubled-quote escape, non-round paise (590.50/90.08/11.81), a zero-tax row, the 23:59:59 IST boundary, LF endings and a trailing newline. Sum of net = 352661 paise = the declared total.
+02-crlf-bom.csv — UTF-8 BOM + CRLF endings + NO trailing final newline, on otherwise valid data. Byte-level fixture: git must not normalize it.
+03-malformed-net-mismatch.csv — row 3 breaks net = gross - tax - fees by one paise. The throw names row 3; nothing is repaired and no partial list is returned.
+04-malformed-three-decimals.csv — row 2 states 1180.505, finer than a paise. Refused rather than rounded: rounding money at parse time is the float defect class this lane exists to prevent (ADR-1012).
+05-malformed-missing-column.csv — the header omits `tax` entirely. Refused at header time, before a single row is read, and the message lists what is missing.
+06-malformed-total-mismatch.csv — two payment rows under a settlement_total that totals three. The export disagrees with itself, which is exactly what a missed ingest looks like.
+07-malformed-fx-on-inr-row.csv — an INR row carrying fx_rate/fx_source/fx_rate_date. Refused: an INR row must not record a conversion nobody performed (ADR-1003).

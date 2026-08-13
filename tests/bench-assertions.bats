@@ -13,6 +13,14 @@ load 'test_helper'
 
 PROBE() { echo "$ARC_ROOT/tests/bench-assertions-probe.mjs"; }
 
+setup() {
+  # M7, and it was missing from this file until slice 13 audited all three. Nothing here emits
+  # TODAY -- but "this file happens not to write a receipt" is a property of the current tests,
+  # not of the file, and the isolation door has to be shut before something walks through it.
+  # Honoured on PRESENCE, not truthiness (spine-io.mjs:41).
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+}
+
 @test "the assertion substrate probe passes every check" {
   run node "$(PROBE)"
   [ "$status" -eq 0 ]

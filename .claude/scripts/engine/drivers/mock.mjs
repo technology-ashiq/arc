@@ -24,8 +24,8 @@
  */
 
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve, sep } from "node:path";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 import { parseModelJson, runDriver, settle } from "./common.mjs";
 
@@ -50,9 +50,15 @@ function fixtureDirSha(dir) {
     }
   };
   walk(dir);
+  // SORTED ON THE NORMALISED RELATIVE PATH, not the native absolute one. Sorting absolute paths
+  // puts the platform separator inside the comparison, so `a/b.json` and `a1b.json` order one way
+  // under `/` (0x2F) and the other under `\\` (0x5C) -- one recording set, two digests, and
+  // `driver_version` is a provenance field that then reports a champion recorded on another CI leg
+  // as not comparable. The content was already normalised; the ORDER was not.
   const h = createHash("sha256");
-  for (const f of files.sort()) {
-    h.update(relative(dir, f).split(sep).join("/"));
+  const rel = new Map(files.map((f) => [f, relative(dir, f).split(sep).join("/")]));
+  for (const f of files.sort((a, b) => (rel.get(a) < rel.get(b) ? -1 : rel.get(a) > rel.get(b) ? 1 : 0))) {
+    h.update(rel.get(f));
     h.update("\0");
     h.update(readFileSync(f));
     h.update("\0");
@@ -63,14 +69,38 @@ function fixtureDirSha(dir) {
 // Confinement root for every recording lookup, and the thing the version digests.
 const BASE = resolve(MOCK_DIR);
 
+/**
+ * `realpathSync` on whatever part of the path exists, falling back to the lexical form.
+ *
+ * A path that does not exist yet cannot be resolved through the filesystem, and refusing on that
+ * basis would turn "no recording here" into "this path is hostile" -- two different answers. So
+ * the deepest existing ancestor is resolved and the remainder is appended.
+ */
+function realpathish(p) {
+  let head = p;
+  const tail = [];
+  for (;;) {
+    try { return tail.length ? join(realpathSync(head), ...tail) : realpathSync(head); }
+    catch { /* keep walking up */ }
+    const up = dirname(head);
+    if (up === head) return p;
+    tail.unshift(head.slice(up.length + 1));
+    head = up;
+  }
+}
+
 await runDriver("mock", async ({ processName }) => {
   const id = process.env.ARC_MOCK_FIXTURE || "default";
 
   // Confine the resolved path to MOCK_DIR. `processName` and the fixture id both arrive from
   // outside this function, and a `..` in either would otherwise read an arbitrary file and
-  // replay it as a model response.
-  const base = BASE;
-  const path = resolve(join(base, processName, `${id}.json`));
+  // replay it as a model response. REALPATH, NOT LEXICAL. A junction or symlink inside the recording directory pointed at an
+  // arbitrary tree and the lexical check happily allowed it -- which is precisely "read an
+  // arbitrary file and replay it as a model response", the thing this check exists to stop.
+  // Both sides are resolved through the filesystem before they are compared.
+  const base = realpathish(BASE);
+  const wanted = resolve(join(BASE, processName, `${id}.json`));
+  const path = realpathish(wanted);
   if (path !== base && !path.startsWith(base + sep)) {
     throw new Error(`recording path escapes ARC_MOCK_DIR: ${processName}/${id}.json`);
   }
@@ -85,8 +115,31 @@ await runDriver("mock", async ({ processName }) => {
     throw new Error(`no recording for ${processName}/${id} at ${path}`);
   }
 
-  const output = parseModelJson(raw, `the mock recording ${processName}/${id}`);
-  return { output, model: `mock@${fixtureDirSha(base)}` };
+  const doc = parseModelJson(raw, `the mock recording ${processName}/${id}`);
+
+  // A recording MAY declare a cost, and it is stripped from the output before it is returned.
+  //
+  // Without this there is no offline way to exercise post-call reconciliation or the overrun
+  // case at all -- the ARC_DRIVER_FAKE path already supports `__cost`, but that path short-
+  // circuits `produce()` entirely, so it proves nothing about the real one. A recording with no
+  // `__cost` stays ABSENT rather than zero: no provider was called, so there is no measurement,
+  // and a confident 0 would put a number where none was taken (ADR-0069 b5 / ADR-0904).
+  //
+  // Stripped, not passed through: the process output schemas are `additionalProperties: false`,
+  // so leaving the key in would make every costed recording fail its own contract.
+  const { __cost, ...output } = doc;
+  if (__cost) {
+    // REFUSE HERE, LOUDLY, rather than let the spine refuse it silently later. `writeCost` makes
+    // `source` mandatory but never checks it against the spine's closed set, and `arc-run` emits
+    // `run.completed` WITHOUT `--strict` -- so a free-text source came back `BAD_COST` in hook
+    // mode, which exits 0 and quarantines. Fifteen receipts vanished that way and the run
+    // reported success. Found by this lane's own probe expecting a cost that never arrived.
+    const SOURCES = ["measured", "estimated", "manual"];
+    if (!SOURCES.includes(__cost.source)) {
+      throw new Error(`recording ${processName}/${id} declares __cost.source ${JSON.stringify(__cost.source)}, outside ${SOURCES.join("|")} -- the spine would quarantine this receipt and the run would still exit 0`);
+    }
+  }
+  return { output, ...(__cost ? { cost: __cost } : {}) };
 }, {
   // This driver's version is its RECORDING SET, not its source, because the recordings are
   // what determine its output -- the code merely reads them. A version pinned to the source
