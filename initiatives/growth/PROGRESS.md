@@ -130,39 +130,70 @@ one real article renders at a real URL.
 
 ## Now
 
-**Current position:** approved by the owner (`01KZTM...` decision recorded 2026-08-13) and building.
-Phase 00's contract half is written, pushed and smoke-verified; the road half exists as a real site
-serving a real article. The cycle PR is **#177**, open and deliberately unmerged until every phase
-closes.
+**Session handed off 2026-08-14.** Read this section and the Owner queue below; nothing else needs
+re-deriving.
 
-**Phase 02 is built and pushed** (`882cb13`), with a real mining run behind it and gate 1 enforced
-in code. Two fresh attackers and the code-reviewer are running against it now; their findings are
-fixed before the phase closes, not after.
+**Current position.** Phase 00 contract done and pushed. Phase 02 BUILT — miner, cluster proposal
+and gate 1 — survived three adversarial passes and is green on CI. Phase 01 and 06 PARKED
+(ADR-1115). Phases 03, 04, 05 are the remaining build, and none of them needs the domain.
 
-**Also fixed this session:** CI was **red on every commit after the kickoff one**, on all three OS
-legs — four distinct failures, all caused by `KINDS` going 44 → 45. Three of them were in files
-belonging to other lanes (`memory-recall.bats` pinned the global total, `arc-brief.mjs` groups every
-kind, `arc-products.mjs` needs a CATALOG entry). Phase 02's own non-negotiable warns that adding to
-`KINDS` breaks other lanes' *measured* assertions; that line was written at kickoff and then walked
-into anyway.
+**The domain now exists.** `arc.automemory.ai` resolves, serves the site, and is deliberately
+`noindex` + `Disallow: /`. The owner chose the subdomain over the root on 2026-08-13 because
+`automemory.ai` is the company and arc is one part of it, so the root and `blog.` stay free.
+**This does NOT un-park Phase 01 by itself** — the entry gate also wants a verified Search Console
+property, which is item 4 in the owner queue.
 
-**Shape of the cycle changed on 2026-08-13 (ADR-1115).** Assumption A-07 fired: there is no domain
-and no live site. The owner's call is that growth ships as a **standing capability** — build the
-machine to completion, park it, switch it on when a site exists. So Phases 03, 04 and 05 build to
-completion (none needs a domain) and Phases 01 and 06 are PARKED with their specs intact. The cycle
-will close as **"machine ready, clock not started"** — never as measured.
+**State of the two PRs.**
 
-The honest cost, recorded rather than discovered later: evolve's four-week clock does not start
-this cycle, Search Console does not backfill, and REQ-10's real-article run cannot happen without
-the site — so Phases 03–05 ship **fixture-proven, not live-validated**, which is the exact failure
-mode pre-mortem row 6 names. That is accepted deliberately, and the close says so in those words.
+| PR | Where | State |
+|---|---|---|
+| arc **#177** | this repo, `feat/arc-growth-cycle-14` | MERGEABLE and CLEAN after the main merge. Deliberately unmerged until every phase closes |
+| arc-site **#1** | `technology-ashiq/arc-site`, `feat/noindex-until-domain` | MERGEABLE and CLEAN. Carries the noindex work AND the canonical fix. **Waiting on the owner's click** — the machine does not merge a publish (E2, ADR-1102) |
 
-**Next step:** Phase 03 (generator + lints).
+**CI.** Run for `a56be3d` came back GREEN on all jobs, all three OS legs, verified per-JOB rather
+than by the run's exit code. A run for the merge commit `8ac10fa` was queued at handoff and has
+NOT been read yet — read it per-JOB before trusting the merge.
 
-**Blocked on:** nothing that stops work. Two things remain the owner's, neither urgent now:
-1. **arc-site PR #1** — the human merge. E2 is Tier E and ADR-1102 puts this merge with the human;
-   the machine will not take it, and Phase 00 cannot close without it.
-2. **The domain + Search Console property** (Phase 01's entry gate). Every day it stays open is a day
-   subtracted from evolve's four-week clock, one for one, and it is not recoverable later.
+**The three-lane ADR collision, resolved here and still open elsewhere.** `ledger`, `legal` and
+`growth` all claimed century 1000–1099 in the same week. Ledger merged first and keeps it; growth
+renumbered to **1100–1199** (ADRs 1100–1115). `legal` still holds 1000–1013 colliding with
+ledger's on an unmerged branch, and **1200–1299 is reserved for it** in `PORTFOLIO.md`. That
+renumber belongs to legal's own session — see the Owner queue.
 
-Nothing else waits on anyone.
+The mechanism failed, not the lanes: all three ran the "scan every sibling worktree" check the band
+table says prevents this, and the check cannot see what three other sessions are about to write.
+Worth a company-level fix in a retro rather than a fourth lane paying for it.
+
+**Next step:** Phase 03 — the generator, its negative-only lints, and the voice exemplars. Start by
+reading `initiatives/growth/phases/phase-03-spec.md`. Note the phase's own requirement that the
+lints be attacked by TWO fresh agents on different surfaces before the phase closes; Phase 02's
+three passes found 3 CRITICAL holes and roughly twenty more, so budget for that, not for a rubber
+stamp.
+
+## Owner queue — 4 items, deferred to a later session on 2026-08-14
+
+Ordered by how much each unblocks. None of them blocks Phase 03.
+
+1. **Vercel → arc-site → Settings → Git → connect `technology-ashiq/arc-site`.** Confirmed NOT
+   connected: only two API-created deployments exist and a push produced none. Until this is done,
+   merging deploys nothing and there are no per-PR preview URLs — which **Phase 04's review pack is
+   specified as invalid without**.
+2. **Merge arc-site PR #1.** One click. Phase 00 cannot close without it, and it also ships the
+   canonical fix.
+3. **Cloudflare → the `arc` record → grey cloud (DNS only).** It is currently proxied, and
+   Cloudflare is injecting its own managed `robots.txt` block containing `Allow: /` directly
+   above our `Disallow: /`. Two conflicting groups for the same user-agent. We are still safe
+   because the `noindex` meta tag does the real work — safe by accident, not by design.
+4. **Search Console → Domain property for `automemory.ai`** (not URL-prefix). One TXT record in
+   Cloudflare. Domain form covers the root and every subdomain, so it is done once.
+
+Plus one paste job, not an arc task: **legal's session must renumber its ADRs 1000–1013 to
+1200–1213**, scoping the rewrite by file ownership rather than by pattern, because `validate.mjs`,
+`arc-brief.mjs` and `arc-pnl.mjs` cite ledger's ADRs at the same numbers.
+
+**Not yet, and not to be done on anyone's initiative:**
+
+- **Approving cluster `c-001`** — gate 1. Only needed when Phase 03's generator is ready to run.
+- **Making the site indexable** — a separate one-line PR flipping `INDEXABLE` in
+  `src/lib/site.mjs`. It is a committed constant rather than an env var precisely so this is a
+  reviewed diff a human merges. It needs the owner to look at the live site and say go.
