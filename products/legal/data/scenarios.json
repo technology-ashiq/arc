@@ -1,0 +1,261 @@
+{
+  "version": 1,
+  "note": [
+    "The answerability fixture (ADR-1009 / LEG-I). Each row is a real situation a reader arrives",
+    "with, and the clause ids that must be PRESENT on the named rendered page for that situation",
+    "to have an answer. An unanswered row is a completeness FAILURE -- the finding class that",
+    "fails for insufficiency rather than for rule-breaking, which is the thing arc-design-cycle3",
+    "2026-07-30 said a quality gate must have and did not.",
+    "",
+    "Committed in its own commit BEFORE the lint that reads it exists, per ADR-1009: a pass",
+    "condition written after the numbers are visible is chosen to flatter (arc-absorb 2026-08-10).",
+    "",
+    "`answered_by` is ALL-of, not any-of. A row listing two clauses is asserting that neither one",
+    "alone answers the question, and a page carrying only one of them has half an answer -- which",
+    "reads to a lint as a pass and to a reader as a dead end.",
+    "",
+    "`when` is the same single-equality guard vocabulary the templates use, evaluated by the same",
+    "`conditionVerdict`. A row whose guard does not hold is NOT APPLICABLE to that venture and is",
+    "not counted against it. A row whose guard is MALFORMED is a failure, never a skip: a typo",
+    "that silently disables a mandatory check is the exact defect the decision-logic attacker",
+    "found in the clause path (fixed-defect-list row 11), and it is not being re-introduced here.",
+    "",
+    "The refund rows name both sides of the window in one question on purpose. A clause that",
+    "states a boundary answers day N and day N+1 together; a clause that gestures at",
+    "`a reasonable period` answers neither, and splitting that into two rows would let a vague",
+    "clause score two passes instead of one failure."
+  ],
+  "scenarios": [
+    {
+      "id": "SCN.REFUND.WINDOW.GATEWAY",
+      "question": "I paid 6 days ago and I want my money back. Do I get it, and would the answer be different on day 15?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.WINDOW"],
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "SCN.REFUND.WINDOW.MOR",
+      "question": "I paid 6 days ago through the reseller and I want my money back. Do I get it, and would day 15 differ?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.MOR"],
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "SCN.REFUND.WINDOW.OFFLINE",
+      "question": "I paid you by bank transfer 6 days ago and I want my money back. Do I get it, and would day 15 differ?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.OFFLINE"],
+      "when": "payment_model=none"
+    },
+    {
+      "id": "SCN.REFUND.TIMING.GATEWAY",
+      "question": "You approved my refund. When does the money actually reach my account?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.PROCESSING"],
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "SCN.REFUND.TIMING.MOR",
+      "question": "The reseller approved my refund. When does the money actually reach my account?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.PROCESSING.MOR"],
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "SCN.REFUND.TIMING.OFFLINE",
+      "question": "You agreed to refund my bank transfer. When does the money actually reach my account?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.PROCESSING.OFFLINE"],
+      "when": "payment_model=none"
+    },
+    {
+      "id": "SCN.REFUND.BILLING_ERROR",
+      "question": "You charged me twice for the same month. That is not a refund request, it is your mistake -- what happens?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.BILLING_ERROR"]
+    },
+    {
+      "id": "SCN.REFUND.HOW",
+      "question": "I have decided I want a refund. What do I actually do, and who do I send it to?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.HOW_TO_REQUEST", "REFUND.CONTACT"]
+    },
+    {
+      "id": "SCN.CANCEL.PATH",
+      "question": "I want to cancel. What are the exact steps, and will I be put through a retention maze to do it?",
+      "page": "refund-cancellation",
+      "answered_by": ["CANCEL.PATH", "CANCEL.NO_MAZE"]
+    },
+    {
+      "id": "SCN.CANCEL.AUTORENEW",
+      "question": "My plan renews on its own. If I cancel mid-period, am I charged again at the next renewal?",
+      "page": "refund-cancellation",
+      "answered_by": ["CANCEL.AUTORENEW"],
+      "when": "derived.autorenew=yes"
+    },
+    {
+      "id": "SCN.CANCEL.EFFECT",
+      "question": "I cancelled. Do I lose access immediately, or at the end of the period I already paid for?",
+      "page": "refund-cancellation",
+      "answered_by": ["CANCEL.EFFECT"]
+    },
+    {
+      "id": "SCN.INVOICE.GST",
+      "question": "My accountant needs a GST invoice with your GSTIN on it. Can I have one?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.GST_INVOICE"],
+      "when": "derived.invoice_kind=gst"
+    },
+    {
+      "id": "SCN.INVOICE.NO_GST",
+      "question": "My accountant needs a GST invoice. Why does the receipt not show GST?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.NO_GST"],
+      "when": "derived.invoice_kind=no-gst"
+    },
+    {
+      "id": "SCN.INVOICE.PROVIDER",
+      "question": "My accountant needs an invoice, and the charge on my statement is not your name. Who issues it?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.MOR_INVOICE"],
+      "when": "derived.invoice_kind=provider"
+    },
+    {
+      "id": "SCN.INVOICE.GSTIN_ON_PRICING",
+      "question": "Before I buy: is the price on this page inclusive of GST, and what is your GSTIN?",
+      "page": "pricing",
+      "answered_by": ["PRICING.PLANS", "PRICING.GSTIN"],
+      "when": "derived.invoice_kind=gst"
+    },
+    {
+      "id": "SCN.PRICE.TOTAL",
+      "question": "What will actually leave my bank account, and in what currency, with nothing added at checkout?",
+      "page": "pricing",
+      "answered_by": ["PRICING.PLANS", "PRICING.WHAT_YOU_PAY_WITH"]
+    },
+    {
+      "id": "SCN.PRICE.CHANGES",
+      "question": "If you raise the price, do I find out before I am charged the new amount?",
+      "page": "pricing",
+      "answered_by": ["PRICING.CHANGES"]
+    },
+    {
+      "id": "SCN.DISPUTE.GATEWAY",
+      "question": "You have refused my refund and I do not accept that. Where do I take it next?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.DISPUTE.GATEWAY"],
+      "when": "payment_model=gateway"
+    },
+    {
+      "id": "SCN.DISPUTE.MOR",
+      "question": "The reseller has refused my refund and I do not accept that. Where do I take it next?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.DISPUTE.MOR"],
+      "when": "payment_model=mor"
+    },
+    {
+      "id": "SCN.DISPUTE.OFFLINE",
+      "question": "You have refused to return my bank transfer. Where do I take it next?",
+      "page": "refund-cancellation",
+      "answered_by": ["REFUND.DISPUTE.OFFLINE"],
+      "when": "payment_model=none"
+    },
+    {
+      "id": "SCN.DELETION",
+      "question": "Delete everything you hold about me. How do I ask, and what actually happens to it?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.DELETION", "PRIVACY.RIGHTS"]
+    },
+    {
+      "id": "SCN.DELETION.CONTACT",
+      "question": "Who exactly do I send a deletion request to?",
+      "page": "contact",
+      "answered_by": ["CONTACT.DELETION"]
+    },
+    {
+      "id": "SCN.WITHDRAW",
+      "question": "I agreed to this when I signed up and I have changed my mind. Can I take that back, and what breaks if I do?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.WITHDRAW"]
+    },
+    {
+      "id": "SCN.RETENTION",
+      "question": "I closed my account six months ago. Do you still have my data?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.RETENTION"]
+    },
+    {
+      "id": "SCN.TERMINATION.WITH_CLIENT_DATA",
+      "question": "I am closing my account and the records I keep here are my clients' files, not mine. What happens to them, and can I get them out first?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.PROCESSOR", "PRIVACY.RETENTION", "PRIVACY.DELETION"],
+      "when": "stores_third_party_client_data=true"
+    },
+    {
+      "id": "SCN.GRIEVANCE",
+      "question": "I have complained and nobody has come back to me. Who is the named person, by when must they answer, and who do I escalate to?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.GRIEVANCE", "PRIVACY.COMPLAINT.BOARD"]
+    },
+    {
+      "id": "SCN.GRIEVANCE.CONTACT",
+      "question": "I want the grievance officer's actual contact details, not a web form.",
+      "page": "contact",
+      "answered_by": ["CONTACT.GRIEVANCE"]
+    },
+    {
+      "id": "SCN.NOTICE.LANGUAGE",
+      "question": "I do not read English comfortably. Can I have this notice in my own language?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.LANGUAGE"]
+    },
+    {
+      "id": "SCN.NOTICE.ITEMISED",
+      "question": "Exactly which pieces of information about me are you collecting, and what is each one for?",
+      "page": "privacy",
+      "answered_by": ["PRIVACY.NOTICE.ITEMISED", "PRIVACY.NOTICE.PURPOSES"]
+    },
+    {
+      "id": "SCN.DELIVERY",
+      "question": "I have paid. When do I get access, and how does it reach me?",
+      "page": "shipping-delivery",
+      "answered_by": ["DELIVERY.NATURE", "DELIVERY.WHEN"]
+    },
+    {
+      "id": "SCN.DELIVERY.FAILURE",
+      "question": "I paid and nothing arrived. What now?",
+      "page": "shipping-delivery",
+      "answered_by": ["DELIVERY.FAILURE"]
+    },
+    {
+      "id": "SCN.CONTACT.HUMAN",
+      "question": "Who am I actually dealing with, and how do I reach a person?",
+      "page": "contact",
+      "answered_by": ["CONTACT.WHO", "CONTACT.HOW"]
+    },
+    {
+      "id": "SCN.IDENTITY",
+      "question": "Who is the legal entity behind this service, and where are they registered?",
+      "page": "about",
+      "answered_by": ["ABOUT.WHO"]
+    },
+    {
+      "id": "SCN.LIABILITY",
+      "question": "If your service loses my work, what are you actually on the hook for?",
+      "page": "terms",
+      "answered_by": ["TERMS.LIABILITY"]
+    },
+    {
+      "id": "SCN.GOVERNING_LAW",
+      "question": "If this ends up in a court, which country's law applies and which court hears it?",
+      "page": "terms",
+      "answered_by": ["TERMS.GOVERNING_LAW"]
+    },
+    {
+      "id": "SCN.TERMINATION.BY_YOU",
+      "question": "Can you close my account on me, and do I get warning?",
+      "page": "terms",
+      "answered_by": ["TERMS.TERMINATION"]
+    }
+  ]
+}
