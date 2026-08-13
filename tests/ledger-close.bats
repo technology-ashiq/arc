@@ -55,17 +55,32 @@ RZP="$ARC_ROOT/tests/fixtures/ledger/razorpay/01-good-multi-row.csv"
 
 # The clock, pinned at every end. Every timestamp in this file derives from these, so a month
 # boundary is an arithmetic fact rather than a distance from whatever today happens to be.
-#   JUL  2026-07-22T21:30:00+05:30   the month that gets closed
+#   JUL  2026-07-22T21:30:00+05:30   the month most closes in this file are taken over
 #   AUG  2026-08-11T21:30:00+05:30   the month a post-close correction lands in
 #   JUN  2026-06-17T21:30:00+05:30   the month a charge sits in while its refund lands in JUL
-#   NOW  2026-08-14T21:30:00+05:30   after every fixture event, so no render is mid-stream
+#   SEP  2026-09-14T10:00:00+05:30   the day the committed export settles -- see EXPORT_MONTH
+#   NOW  2026-10-05T10:00:00+05:30   after every fixture event, so no render is mid-stream
 DAY=86400000
 JUL=1784736000000
 AUG=$((JUL + 20 * DAY))
 JUN=$((JUL - 35 * DAY))
-NOW=$((AUG + 3 * DAY))
+SEP=1789360200000
+NOW=$((SEP + 21 * DAY))
 
-# `--reconcile-file razorpay:INR=$RZP` sums `gross - tax` over the INR rows of that fixture:
+# THE MONTH THE COMMITTED EXPORT ACTUALLY COVERS. Every row of `01-good-multi-row.csv` settles
+# 2026-09-14, and the gate now checks that: `--reconcile-file` skips rows whose `settled_at` month is
+# not the close month and refuses when nothing is left.
+#
+# THIS CONSTANT IS WHY, AND IT IS DELIBERATELY NOT A LITERAL AT EACH CALL SITE. Before the check
+# existed, this suite closed 2026-07 with a September document and the gate said GREEN -- the repo's
+# own fixture closing the wrong month, with the receipt then pinning a September file as July's
+# evidence, permanently, on an append-only log. The close month and the export month were two
+# independent literals, and nothing made them agree. Now they are one name: a file test cannot
+# silently drift onto a month the document does not cover, because there is only one month to spell.
+EXPORT_MONTH=2026-09
+
+# `--reconcile-file razorpay:INR=$RZP` sums `gross - tax` over the rows of that fixture that are
+# both INR and settled in EXPORT_MONTH:
 #   1180.00-180.00 + 2360.00-360.00 + 590.50-90.08 + 100.00-0.00
 #   = 100000 + 200000 + 50042 + 10000 paise
 # It is pinned rather than recomputed here on purpose -- recomputing it would be a second copy of
@@ -245,12 +260,31 @@ _both_listings() {
   cat "$SPINE"/events/_quarantine/*.jsonl 2>/dev/null || true
 }
 
-# The four charges that make the razorpay/INR rail sum to exactly the committed export's own total.
+# The four charges that make the razorpay/INR rail sum to exactly the committed export's own total,
+# DATED INTO THE MONTH THAT EXPORT COVERS. Both halves matter: the amounts make the two sides equal,
+# and the clock makes them equal in the same month. A rail built in one month and reconciled against
+# a document from another is the shape that used to close GREEN.
 _rail_matching_the_export() {
-  _charge lexos 00001 100000 $JUL
-  _charge lexos 00002 200000 $JUL
-  _charge lexos 00003 50042  $JUL
-  _charge lexos 00004 10000  $JUL
+  _charge lexos 00001 100000 $SEP
+  _charge lexos 00002 200000 $SEP
+  _charge lexos 00003 50042  $SEP
+  _charge lexos 00004 10000  $SEP
+}
+
+# A close whose OUTCOME is a refusal before any verdict exists. `_close` cannot be used: it treats an
+# empty stdout as a crash, and here an empty stdout is the assertion -- nothing downstream may
+# consume a partial answer. The "it RAN" guard is inverted to match: stderr must be non-empty, so a
+# command that produced neither stream fails here rather than satisfying an absence.
+_close_refused() { # <tag> <month> [flags...]  -> CLOSE_RC / CLOSE_ERR / CLOSE_FILE
+  local tag="$1" month="$2"; shift 2
+  CLOSE_FILE="$BATS_TEST_TMPDIR/$tag.out"
+  CLOSE_RC=0
+  ARC_SPINE_NOW=$NOW node "$PNL" --close "$month" "$@" \
+    > "$CLOSE_FILE" 2> "$BATS_TEST_TMPDIR/$tag.err" || CLOSE_RC=$?
+  CLOSE_ERR="$(tr -d '\r' < "$BATS_TEST_TMPDIR/$tag.err")"
+  [ -n "$CLOSE_ERR" ] \
+    || { echo "arc-pnl --close $month printed NOTHING on either stream (exit $CLOSE_RC) -- a refusal that says nothing is indistinguishable from a command that never ran"; return 1; }
+  return 0
 }
 
 # ===============================================================================================
@@ -263,9 +297,9 @@ _rail_matching_the_export() {
   # longer say yes.
   _rail_matching_the_export
 
-  _close green 2026-07 --reconcile-total "razorpay:INR=$FILE_SUM"
+  _close green "$EXPORT_MONTH" --reconcile-total "razorpay:INR=$FILE_SUM"
   [ "$CLOSE_RC" -eq 0 ] || { echo "an exactly-matching month did not close (exit $CLOSE_RC): $CLOSE_OUT $CLOSE_ERR"; false; }
-  [[ "$CLOSE_OUT" == *"close 2026-07  GREEN"* ]] || { echo "$CLOSE_OUT"; false; }
+  [[ "$CLOSE_OUT" == *"close $EXPORT_MONTH  GREEN"* ]] || { echo "$CLOSE_OUT"; false; }
   [[ "$CLOSE_OUT" == *"razorpay/INR  spine 360042  provider 360042  MATCHED"* ]] \
     || { echo "the rail line does not show both sides matching: $CLOSE_OUT"; false; }
   # Absence, paired with the two positives above.
@@ -274,7 +308,7 @@ _rail_matching_the_export() {
   # THE PAYLOAD IS PRINTED, NOT EMITTED. Month-close is human-run, always -- the gate says whether
   # the month MAY close and prints the exact receipt; a human seals it.
   _payload "$CLOSE_FILE"
-  grep -q '"month":"2026-07"' "$PAYLOAD"        || { echo "$(cat "$PAYLOAD")"; false; }
+  grep -q "\"month\":\"$EXPORT_MONTH\"" "$PAYLOAD" || { echo "$(cat "$PAYLOAD")"; false; }
   grep -q '"payment_count":4' "$PAYLOAD"        || { echo "the payload does not count the four payments it closed: $(cat "$PAYLOAD")"; false; }
   grep -q '"spine_minor":360042,"provider_minor":360042' "$PAYLOAD" \
     || { echo "the payload does not carry both sides of the rail: $(cat "$PAYLOAD")"; false; }
@@ -291,9 +325,9 @@ _rail_matching_the_export() {
   # hold for the rail, which is precisely the left-hand side of the diff that finds them.
   _rail_matching_the_export
 
-  _close short 2026-07 --reconcile-total razorpay:INR=400000
+  _close short "$EXPORT_MONTH" --reconcile-total razorpay:INR=400000
   [ "$CLOSE_RC" -eq 4 ] || { echo "a shortfall did not block with exit 4 (got $CLOSE_RC): $CLOSE_OUT"; false; }
-  [[ "$CLOSE_OUT" == *"close 2026-07  BLOCKED"* ]] || { echo "$CLOSE_OUT"; false; }
+  [[ "$CLOSE_OUT" == *"close $EXPORT_MONTH  BLOCKED"* ]] || { echo "$CLOSE_OUT"; false; }
   [[ "$CLOSE_OUT" == *"razorpay/INR  spine 360042  provider 400000  SHORTFALL"* ]] || { echo "$CLOSE_OUT"; false; }
   [[ "$CLOSE_OUT" == *"blocked (1)"* ]] || { echo "$CLOSE_OUT"; false; }
   [[ "$CLOSE_OUT" == *'"kind":"SHORTFALL"'* ]] || { echo "the blocker is not a SHORTFALL: $CLOSE_OUT"; false; }
@@ -382,7 +416,7 @@ _rail_matching_the_export() {
   # and the operator would never learn which of the two they got.
   _rail_matching_the_export
 
-  _close conflict 2026-07 --reconcile-file "razorpay:INR=$RZP" --reconcile-total razorpay:INR=999999
+  _close conflict "$EXPORT_MONTH" --reconcile-file "razorpay:INR=$RZP" --reconcile-total razorpay:INR=999999
   [ "$CLOSE_RC" -eq 4 ] || { echo "two disagreeing inputs did not block (exit $CLOSE_RC): $CLOSE_OUT"; false; }
   [[ "$CLOSE_OUT" == *'"kind":"INPUT-CONFLICT"'* ]] || { echo "$CLOSE_OUT"; false; }
   # BOTH numbers on screen, and the file number is the EXPORT PARSER's own sum -- which is what
@@ -458,11 +492,17 @@ _rail_matching_the_export() {
   # `input_sha`, where a typed total is a number a human retyped from one.
   _rail_matching_the_export
 
-  _close filegreen 2026-07 --reconcile-file "razorpay:INR=$RZP"
+  _close filegreen "$EXPORT_MONTH" --reconcile-file "razorpay:INR=$RZP"
   [ "$CLOSE_RC" -eq 0 ] \
-    || { echo "the export sum did not match the spine (exit $CLOSE_RC) -- if $RZP or the parser moved, both numbers are on this line: $CLOSE_OUT"; false; }
-  [[ "$CLOSE_OUT" == *"close 2026-07  GREEN"* ]] || { echo "$CLOSE_OUT"; false; }
+    || { echo "the export sum did not match the spine (exit $CLOSE_RC) -- if $RZP or the parser moved, both numbers are on this line: $CLOSE_OUT $CLOSE_ERR"; false; }
+  [[ "$CLOSE_OUT" == *"close $EXPORT_MONTH  GREEN"* ]] || { echo "$CLOSE_OUT"; false; }
   [[ "$CLOSE_OUT" == *"razorpay/INR  spine $FILE_SUM  provider $FILE_SUM  MATCHED"* ]] || { echo "$CLOSE_OUT"; false; }
+
+  # EVERY ROW COUNTED. The gate announces on stderr when it skipped rows settled outside the close
+  # month, so its silence here says all four rows were in scope -- which is what makes the matching
+  # sum above a fact about the whole document rather than about whatever slice happened to survive.
+  [[ "$CLOSE_ERR" != *"settled outside"* ]] \
+    || { echo "rows were excluded from a sum this test treats as the whole export: $CLOSE_ERR"; false; }
 
   _payload "$CLOSE_FILE"
   grep -q '"source":"file"' "$PAYLOAD" \
@@ -473,6 +513,99 @@ _rail_matching_the_export() {
   sha="$(sed -n 's/.*"input_sha":"\([0-9a-f]*\)".*/\1/p' "$PAYLOAD" | head -n1 | tr -d '\r')"
   [ ${#sha} -eq 64 ] || { echo "input_sha is ${#sha} bytes, not a 64-char sha256: $(cat "$PAYLOAD")"; false; }
   case "$sha" in *[!0123456789abcdef]*) echo "input_sha is not lowercase hex: $sha"; false;; esac
+}
+
+@test "close: an export settled outside the close month is refused rather than summed" {
+  # THE WORST FINDING OF THE PHASE 02 ADVERSARIAL PASS, pinned with the exact document that produced
+  # it. The gate used to sum every row matching the currency and never look at `settled_at`, so THIS
+  # REPO'S OWN FIXTURE -- every row settled 2026-09-14 -- closed 2026-07 GREEN. The receipt would
+  # then have pinned a September document as July's evidence, permanently, on an append-only log.
+  #
+  # That is a gate that can detect a MISSING input and not a WRONG one, which is the distinction the
+  # whole file is built around: "no input" and "matches" must never render the same, and neither may
+  # "the wrong month" and "matches".
+  #
+  # The spine is deliberately built in the month being closed, so the ONLY thing wrong is the
+  # document's period. Without those charges the refusal could equally be about an empty rail.
+  _charge lexos 00001 100000 $JUL
+  _charge lexos 00002 200000 $JUL
+  _charge lexos 00003 50042  $JUL
+  _charge lexos 00004 10000  $JUL
+
+  _close_refused wrongmonth 2026-07 --reconcile-file "razorpay:INR=$RZP"
+  [ "$CLOSE_RC" -eq 2 ] \
+    || { echo "a September export was accepted as July evidence (exit $CLOSE_RC): $CLOSE_ERR"; false; }
+  [[ "$CLOSE_ERR" == *"ERROR BAD_ARGS"* ]] || { echo "the refusal carries no code: $CLOSE_ERR"; false; }
+  # THE PHRASE AND THE COUNTS. A bare "it refused" would be satisfied by any of the half-dozen other
+  # BAD_ARGS in this command -- an unreadable path, an unknown provider, a malformed rail spec -- so
+  # the message has to say it was the PERIOD, and say how many rows fell where.
+  [[ "$CLOSE_ERR" == *"NONE that are both INR and settled in 2026-07"* ]] \
+    || { echo "the refusal does not name the period as the reason: $CLOSE_ERR"; false; }
+  [[ "$CLOSE_ERR" == *"(0 in another currency, 4 in another month)"* ]] \
+    || { echo "the refusal does not account for where the rows went: $CLOSE_ERR"; false; }
+  # NOTHING DOWNSTREAM MAY CONSUME A PARTIAL ANSWER. Asserted as a byte count, which is the half
+  # that actually proves it.
+  [ ! -s "$CLOSE_FILE" ] \
+    || { echo "the gate refused and still printed a verdict: $(cat "$CLOSE_FILE")"; false; }
+
+  # AND THE SAME DOCUMENT REACHES THE GATE FOR ITS OWN MONTH. Without this the test above passes
+  # equally well against a gate that refuses every file it is handed, which is a different bug
+  # wearing the same exit code.
+  #
+  # `_close`, not `_close_refused`: this one is a VERDICT, so it has a stdout and no stderr at all --
+  # which is also why the "settled in" absence below has to be read off a stream that is empty by
+  # construction, and why it is paired with the NO-SPINE-RAIL positive rather than standing alone.
+  _close rightmonth "$EXPORT_MONTH" --reconcile-file "razorpay:INR=$RZP"
+  [ "$CLOSE_RC" -eq 4 ] \
+    || { echo "the export did not reach the gate for its own month (exit $CLOSE_RC): $CLOSE_OUT $CLOSE_ERR"; false; }
+  # Exit 4 rather than 2 because these charges are dated in JULY: the file parsed, the sum was taken,
+  # and the September rail has no spine side at all. A reconciliation verdict is precisely the proof
+  # that the document was READ rather than rejected on its period.
+  [[ "$CLOSE_OUT" == *"NO-SPINE-RAIL"* ]] \
+    || { echo "the export produced no rail verdict, so it never reached the gate: $CLOSE_OUT"; false; }
+  [[ "$CLOSE_OUT" == *"razorpay/INR  spine null  provider $FILE_SUM  NO-SPINE-RAIL"* ]] \
+    || { echo "the export was read but did not sum to $FILE_SUM: $CLOSE_OUT"; false; }
+  [[ "$CLOSE_ERR" != *"settled in"* ]] \
+    || { echo "the period refusal fired on the month the document covers: $CLOSE_ERR"; false; }
+}
+
+@test "close: an export whose rows have no ex-tax amount is refused rather than closing a zero rail" {
+  # THE COUNTED-ROWS-NOT-MONEY HOLE. The empty-sum guard counted ROWS, and a row with gross == tax
+  # parses cleanly (net = gross - tax - fees still holds, at 0) while being a row ingest would
+  # refuse -- `normalize.mjs` requires a POSITIVE ex-tax amount. So a file of nothing but such rows
+  # summed to 0, made the count non-zero, and closed a net-zero rail GREEN carrying the FILE
+  # receipt: the input this gate prefers precisely because it is meant to be the stronger evidence.
+  #
+  # The fixture is built here rather than committed to the parser corpus: its bytes are not the thing
+  # under test (the parser accepts it, correctly), and tests/fixtures/ledger/razorpay/ is a documented
+  # corpus whose INDEX describes every file in it. The builder asserts its own output.
+  local zero="$BATS_TEST_TMPDIR/zero-ex-tax.csv"
+  {
+    printf 'settled_at,record_type,payment_id,currency,fee,gross_amount,tax,net_amount,settlement_id\n'
+    printf '2026-09-14T10:04:11+05:30,payment,pay_zero001,INR,0.00,180.00,180.00,0.00,setl_zero01\n'
+    printf '2026-09-14T10:04:12+05:30,payment,pay_zero002,INR,0.00,240.00,240.00,0.00,setl_zero01\n'
+    printf ',settlement_total,,INR,0.00,420.00,420.00,0.00,\n'
+  } > "$zero"
+  [ -s "$zero" ] || { echo "the zero-ex-tax export was never written"; false; }
+
+  # A rail that nets to zero on the spine as well -- the exact pairing that used to close GREEN,
+  # because a file summing to 0 matched a spine summing to 0 and both sides were "evidence".
+  _charge lexos 00001 50000 $SEP
+  _refund lexos 00001 50000 $((SEP + 2 * DAY)) 00001
+
+  _close_refused zeroextax "$EXPORT_MONTH" --reconcile-file "razorpay:INR=$zero"
+  [ "$CLOSE_RC" -eq 2 ] \
+    || { echo "a file of rows ingest would refuse was accepted as evidence (exit $CLOSE_RC): $CLOSE_ERR"; false; }
+  [[ "$CLOSE_ERR" == *"ERROR BAD_RECONCILE_FILE"* ]] \
+    || { echo "the refusal carries the wrong code -- an empty-sum BAD_ARGS would mean the rows were never counted: $CLOSE_ERR"; false; }
+  [[ "$CLOSE_ERR" == *"NOT ONE with a positive ex-tax amount"* ]] \
+    || { echo "the refusal does not name money as what was missing: $CLOSE_ERR"; false; }
+  # The rows WERE in scope -- 2 of them, in this currency and this month. That is what separates this
+  # refusal from the period one above, and it is the whole point of counting money instead of rows.
+  [[ "$CLOSE_ERR" == *"has 2 row(s) in INR/$EXPORT_MONTH"* ]] \
+    || { echo "the refusal does not say the rows were in scope: $CLOSE_ERR"; false; }
+  [ ! -s "$CLOSE_FILE" ] \
+    || { echo "the gate refused and still printed a verdict a human could seal: $(cat "$CLOSE_FILE")"; false; }
 }
 
 # ===============================================================================================
@@ -541,14 +674,27 @@ _rail_matching_the_export() {
   _close seal 2026-07 --reconcile-total razorpay:INR=300000
   [ "$CLOSE_RC" -eq 0 ] || { echo "$CLOSE_OUT $CLOSE_ERR"; false; }
   _payload "$CLOSE_FILE"
-  # The gate also prints the exact seal instruction, and it names the same derivation the runner
-  # uses. If those two ever diverge, a human following the printed instruction seals a receipt the
-  # validator refuses.
-  [[ "$CLOSE_ERR" == *'sha256Hex("month.closed|2026-07")'* ]] \
-    || { echo "the gate does not tell the human which idem to seal with: $CLOSE_ERR"; false; }
 
   _idem 2026-07
   local jul_idem="$IDEM"
+
+  # THE PRINTED INSTRUCTION MUST BE ONE A HUMAN CAN RUN, and it is asserted by VALUE rather than by
+  # formula. It used to print the literal `sha256Hex("month.closed|2026-07")` for the operator to
+  # evaluate, and the surrounding instruction did not work at all: it said to pipe stdout into
+  # `arc-event --payload-file -`, and arc-event has no stdin path, and stdout carries the verdict
+  # table above the JSON. Matching the formula string could never have caught that.
+  #
+  # Requiring the DERIVED hex to appear is strictly stronger: it fails the moment the printed idem
+  # and the one `assertMonthClosed` will demand diverge, which is the thing this assertion is for.
+  # The emit below then seals with that same derived value, so the instruction and the act agree.
+  [[ "$CLOSE_ERR" == *"--idem $jul_idem "* ]] \
+    || { echo "the gate does not print the idem VALUE the validator will demand ($jul_idem): $CLOSE_ERR"; false; }
+  [[ "$CLOSE_ERR" == *"| tail -1 > /tmp/close.json"* ]] \
+    || { echo "the seal instruction no longer separates the JSON from the verdict table above it: $CLOSE_ERR"; false; }
+  # The broken form, named so it cannot come back: arc-event has no stdin path at all.
+  [[ "$CLOSE_ERR" != *"--payload-file -"* ]] \
+    || { echo "the instruction tells the operator to pipe into a stdin path arc-event does not have: $CLOSE_ERR"; false; }
+
   local before_events before_q id
   before_events="$(_events_lines)"
   before_q="$(_quarantine_lines)"

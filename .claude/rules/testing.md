@@ -54,6 +54,16 @@ gh run list --branch "$(git branch --show-current)" --limit 1 --json databaseId,
 gh workflow run arc-ci --ref "$(git branch --show-current)"
 ```
 
+**If it happens twice on the same branch, stop dispatching and fix the cause.** On a DRAFT PR it is
+not intermittent — it is every push, forever, and dispatching each time hides that behind a minute
+of waiting per cycle. The ledger lane paid that toll four times before checking. The branch has to
+leave draft before it can merge anyway:
+
+```bash
+gh pr view --json isDraft --jq .isDraft   # true -> every push here creates no run
+gh pr ready <n>
+```
+
 "Pushed" and "a run exists" are two separate facts, exactly as "merged" and "verified" are.
 
 ### Regenerating the sync-golden manifest
