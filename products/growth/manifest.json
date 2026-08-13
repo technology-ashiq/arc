@@ -8,7 +8,12 @@
   "commands": [],
   "agents": [],
   "scripts": [
+    ".claude/scripts/growth/arc-growth.mjs",
+    ".claude/scripts/growth/lib/adapters.mjs",
+    ".claude/scripts/growth/lib/cluster.mjs",
     ".claude/scripts/growth/lib/content-sha.mjs",
-    ".claude/scripts/growth/lib/deploy.mjs"
+    ".claude/scripts/growth/lib/deploy.mjs",
+    ".claude/scripts/growth/lib/evidence.mjs",
+    ".claude/scripts/growth/lib/mine.mjs"
   ]
 }
