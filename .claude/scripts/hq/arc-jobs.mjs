@@ -33,7 +33,7 @@ import { fileURLToPath } from "node:url";
 import { spineRoot, withLock, readIdemIndex } from "./lib/spine-io.mjs";
 import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
-import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
+import { parseCadence, floorSlot, nextSlots, slotMs, istDay, isDayString } from "./lib/jobs/cadence.mjs";
 import { processRunArgv } from "./lib/jobs/delegate.mjs";
 import { makeWindowsScheduler, registerVerified, registrationFor, PINNED_SETTINGS, SchedulerError } from "./lib/jobs/scheduler-os.mjs";
 import { derivePanel, needsYouLines, loadPanelInputs, loadSpineEvents } from "./lib/jobs/panel.mjs";
@@ -57,10 +57,46 @@ const ARC_RUN = resolve(HERE, "..", "engine", "arc-run.mjs");
 // ---------- args ----------
 const argv = process.argv.slice(2);
 const command = argv[0];
-const positional = argv.slice(1).filter((a) => !a.startsWith("--"));
+
+// THE FLAGS THAT TAKE A VALUE, NAMED. Without this list a flag's VALUE counts as a positional
+// argument -- `run x --slot ISO` read as two positionals and only worked because nothing looked
+// at the second, and `audit --to 2026-08-09` read as a stray positional the moment anything did.
+// Naming them is also what lets an unknown flag be caught instead of ignored.
+const VALUE_FLAGS = new Set(["next", "date", "slot", "from", "to"]);
+const BOOL_FLAGS = new Set(["scheduled", "json", "partial", "help"]);
+
+const positional = (() => {
+  const out = [];
+  for (let i = 1; i < argv.length; i++) {
+    const a = argv[i];
+    if (a.startsWith("--")) {
+      const name = a.slice(2).split("=")[0];
+      if (VALUE_FLAGS.has(name) && !a.includes("=")) i++; // its value belongs to it, not here
+      continue;
+    }
+    out.push(a);
+  }
+  return out;
+})();
+// A FLAG THAT WAS TYPED AND NOT UNDERSTOOD IS AN ERROR, NEVER A DEFAULT.
+//
+// The first version answered `null` for every malformed spelling -- `--to=D`, a trailing `--to`,
+// `--to --partial`, `--to ""` -- and the caller then fell through to its default. So an operator
+// who asked for one window got a confident verdict about a different one, with nothing in the
+// output saying so. `.claude/rules/lanes.md` already rules this exact shape out in writing ("an
+// unquoted empty value silently eats the next flag"), and it bans last-wins on a repeated flag
+// for the same reason: silently picking one of two typed values is the "never guess" failure.
 const flag = (name) => {
-  const i = argv.indexOf(`--${name}`);
-  return i >= 0 && i + 1 < argv.length && !argv[i + 1].startsWith("--") ? argv[i + 1] : null;
+  const eq = argv.find((a) => a.startsWith(`--${name}=`));
+  if (eq) die(2, `write --${name} <value>, not ${eq} -- the = form is not parsed and would have been ignored`);
+  const hits = argv.reduce((n, a, i) => (a === `--${name}` ? [...n, i] : n), []);
+  if (hits.length > 1) die(2, `--${name} given ${hits.length} times -- that is an operator error, not a last-wins override`);
+  if (!hits.length) return null;
+  const i = hits[0];
+  const v = i + 1 < argv.length ? argv[i + 1] : undefined;
+  if (v === undefined || v === "" || v.startsWith("--"))
+    die(2, `--${name} needs a value${v === "" ? " (it was given an empty one)" : ""}`);
+  return v;
 };
 const has = (name) => argv.includes(`--${name}`);
 
@@ -70,7 +106,7 @@ if (!command || command === "help" || has("help")) {
   process.stdout.write(
     "usage: arc-jobs list [--next N] | panel [--date D] | run <name> [--slot ISO] [--scheduled]\n" +
     "                    | catchup | register [name] | unregister [name]\n" +
-    "                    | audit [--from D] [--to D] [--json]\n",
+    "                    | audit [--from D] [--to D] [--json] [--partial]\n",
   );
   process.exit(0);
 }
@@ -379,6 +415,51 @@ if (command === "panel") {
   process.exit(0);
 }
 
+/**
+ * THE VERDICT RULES, in ONE place, so the human rendering and `--json` cannot drift.
+ *
+ * They are deliberately a list of failures rather than a score. Every entry is a fact somebody
+ * must go and look at; there is no threshold to argue about and nothing to weight.
+ */
+function auditFailures(t) {
+  const fails = [];
+  if (t.unexplainedGaps > 0) fails.push(`${t.unexplainedGaps} unexplained gap(s)`);
+  // A WEEK IN WHICH EVERY RUN CRASHED IS NOT A CLEAN WEEK. Failed runs used to be filed as
+  // "explained gaps" -- a name that reads as health -- and appeared in no verdict rule at all, so
+  // seven consecutive crashes graded CLEAN. The scheduler firing correctly is only half of what
+  // the proving week is proving.
+  if (t.failedSlots > 0) fails.push(`${t.failedSlots} slot(s) where the run FAILED`);
+  if (t.incidents > 0) fails.push(`${t.incidents} incident(s) raised`);
+  if (t.manualStarts > 0) fails.push(`${t.manualStarts} manual start(s) of a scheduled job`);
+  if (t.spendInr !== 0) fails.push(`INR ${t.spendInr} spent by a job that must not spend`);
+  if (t.badCosts > 0) fails.push(`${t.badCosts} cost field(s) that are negative, non-finite or not a number`);
+  const undeclared = Object.keys(t.unknownIncidentClasses || {});
+  if (undeclared.length) fails.push(`${undeclared.length} undeclared incident class(es)`);
+  if (t.unknownOutcomes > 0) fails.push(`${t.unknownOutcomes} receipt(s) whose outcome is neither ok nor fail`);
+  // A receipt that ran and cannot be placed against a slot is a finding in BOTH directions: its
+  // slot may read as silence, and the run itself is unaccounted for.
+  if (t.unmatchableReceipts > 0) fails.push(`${t.unmatchableReceipts} receipt(s) with no readable scheduled_for`);
+  if (t.undatedEvents > 0) fails.push(`${t.undatedEvents} event(s) with an unreadable timestamp`);
+  if (t.driftUnparsed > 0) fails.push(`${t.driftUnparsed} run(s) whose started_at could not be believed`);
+  return fails;
+}
+
+/**
+ * The schedule for a HISTORICAL read: parsed, never judged.
+ *
+ * Same reasoning as the off switch. `loadSchedule` refuses on a missing policy file or any
+ * jobs-lint finding, which is right for anything that runs and wrong for a report about a week
+ * that has already happened -- it would make the proving week's evidence unobtainable at exactly
+ * the moment someone edits the schedule.
+ */
+function jobsForAudit() {
+  const path = join(root, "hq.jobs.yaml");
+  if (!existsSync(path)) die(2, `no hq.jobs.yaml at ${path} -- there is no schedule to audit against`);
+  const parsed = parseYamlSubset(readFileSync(path, "utf8"));
+  if (!parsed.ok) die(2, `hq.jobs.yaml does not parse, so the audit has no schedule to measure against: ${parsed.error.what}`);
+  return parsed.value.jobs || [];
+}
+
 // ---------- audit ----------
 //
 // The proving week's instrument. Written BEFORE the week had any data in it, because a
@@ -386,7 +467,8 @@ if (command === "panel") {
 // anyone meaning to. Everything below comes from the spine and from the schedule; the OS is never
 // asked anything, so `--from D --to D` is a replay that returns the same answer forever.
 if (command === "audit") {
-  const { doc } = loadSchedule();
+  if (positional.length)
+    die(2, `audit takes no positional arguments; got ${positional.map((p) => JSON.stringify(p)).join(", ")} -- use --from and --to`);
 
   // ONLY COMPLETE DAYS ARE AUDITABLE, and the default window ends YESTERDAY.
   //
@@ -400,52 +482,95 @@ if (command === "audit") {
   // stays pure and simply measures the range it is given, so `--from D --to D` remains a replay.
   const today = istDay(nowMs());
   const yesterday = istDay(slotMs(today, 12, 0) - 86_400_000);
-  const to = flag("to") || yesterday;
-  const from = flag("from") || istDay(slotMs(to, 12, 0) - 6 * 86_400_000);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to))
-    die(2, `--from/--to must be YYYY-MM-DD, got ${from}..${to}`);
+
+  // VALIDATE BEFORE COMPUTING. `from` derives from `to` through `slotMs`, which THROWS on a day it
+  // cannot place -- so validating afterwards meant `--to garbage` escaped as an uncaught exception
+  // and exit 1, which is this command's "measured, and not clean" code. A malformed argument
+  // reading as a failed proving week is worse than either.
+  //
+  // And the check is `isDayString`, not the shape regex: `2026-02-30` matches YYYY-MM-DD and
+  // `slotMs` silently rolls it to 2026-03-02, so expected slots would be computed for one day
+  // while events were filtered by the string of another -- phantom MISSED slots and a NOT CLEAN
+  // verdict for a week that ran perfectly. That is "validate one read, compare another", the
+  // defect this lane has now paid for four times.
+  const rawTo = flag("to");
+  if (rawTo !== null && !isDayString(rawTo)) die(2, `--to ${JSON.stringify(rawTo)} is not a real calendar day (YYYY-MM-DD)`);
+  const to = rawTo || yesterday;
+  const rawFrom = flag("from");
+  if (rawFrom !== null && !isDayString(rawFrom)) die(2, `--from ${JSON.stringify(rawFrom)} is not a real calendar day (YYYY-MM-DD)`);
+  const from = rawFrom || istDay(slotMs(to, 12, 0) - 6 * 86_400_000);
+  if (from > to) die(2, `--from ${from} is after --to ${to}`);
+
   if (to >= today && !has("partial"))
     die(2,
-      `--to ${to} is today or later, and a day that has not finished cannot be audited: every slot ` +
-      `still to come would be counted MISSED. Audit up to ${yesterday}, or pass --partial to measure ` +
+      `--to ${to} is today (${today}) or later, and a day that has not finished cannot be audited: every ` +
+      `slot still to come would be counted MISSED. Audit up to ${yesterday}, or pass --partial to measure ` +
       `an incomplete day on purpose.`);
 
-  // Uncut: the audit needs to see runs on BOTH sides of the window, so it can tell "no run yet"
-  // apart from "ran outside the range". The window is applied inside the derivation, once.
-  const { events: allEvents, observedFrom } = await loadSpineEvents(spineRoot());
-  const jobs = doc.jobs || [];
+  // THE SCHEDULE IS READ WITHOUT BEING JUDGED, and for the same reason the off switch is.
+  // `loadSchedule` refuses on a missing policy file or any jobs-lint finding -- correct for
+  // anything that RUNS, and wrong here: this is a historical read of a week that already
+  // happened, and the present legality of the schedule has no bearing on it. Gating it that way
+  // would make the proving week's evidence unobtainable at exactly the moment someone edits the
+  // schedule.
+  const jobs = jobsForAudit();
+
+  // EVERY OPERATIONAL FAILURE EXITS 2. Exit 1 means one thing only -- the pack was computed and is
+  // not clean -- because that code is what a wrapper grading the proving week will branch on. A
+  // spine that cannot be read, a schedule that cannot be parsed, or any uncaught throw reading as
+  // "the week failed" would be the instrument inventing the result it exists to measure.
   let pack;
   let history;
   try {
+    const { events: allEvents, observedFrom } = await loadSpineEvents(spineRoot());
     pack = deriveAudit({ from, to, jobs, events: allEvents, observedFrom });
     history = needsYouHistory({ from, to, jobs, events: allEvents, observedFrom, derivePanel });
   } catch (e) {
-    die(2, `audit refused: ${e?.message || e}`);
+    die(2, `audit could not be computed: ${e?.message || e}`);
   }
 
+  // The verdict is computed ONCE and shared by both renderings. Leaving `--json` to re-derive it
+  // would let the machine-readable answer and the human one drift apart, and a consumer forced to
+  // re-implement four rules will implement three.
+  const fails = auditFailures(pack.totals);
+
   if (has("json")) {
-    process.stdout.write(`${JSON.stringify({ ...pack, needsYouHistory: history }, null, 2)}\n`);
-    process.exit(0);
+    process.stdout.write(`${JSON.stringify({
+      ...pack,
+      needsYouHistory: history,
+      verdict: { clean: fails.length === 0, fails },
+    }, null, 2)}\n`);
+    process.exit(fails.length ? 1 : 0);
   }
 
   const t = pack.totals;
   const ms = (v) => (v === null ? "n/a" : `${v}ms`);
-  process.stdout.write(`jobs audit ${from}..${to}  (${t.windowDays} days, spine observed from ${t.observedFrom ?? "never"})\n\n`);
+  process.stdout.write(`jobs audit ${from}..${to}  (${t.windowDays} days, spine observed from ${t.observedFrom ?? "never"})\n`);
+  // WHEN THE CALENDAR IS OVERRIDDEN, SAY SO. `nowMs()` honours `ARC_SPINE_NOW`, which twenty test
+  // files export -- so "today", the entire basis of the complete-days guard, is settable from the
+  // environment. That is correct for a replayable test and dangerous in a real reading, and the
+  // difference between the two is whether anyone can tell. A disarmed guard must never be silent.
+  if (process.env.ARC_SPINE_NOW)
+    process.stdout.write(`  NOTE: ARC_SPINE_NOW is set, so "today" here is ${today}, not the wall clock\n`);
+  process.stdout.write("\n");
   for (const r of pack.perJob) {
     const head = r.unreadableCadence ? "UNREADABLE CADENCE" : (r.enabled ? r.cadence : `${r.cadence} (disabled)`);
     process.stdout.write(`  ${r.name.padEnd(22)} ${head}\n`);
     process.stdout.write(`    expected ${r.expected}  completed ${r.completed}  failed ${r.failed}  drift p50 ${ms(r.driftP50Ms)}\n`);
-    process.stdout.write(`    gaps: ${r.unexplainedGaps.length} unexplained, ${r.explainedGaps.length} explained\n`);
+    process.stdout.write(`    gaps: ${r.unexplainedGaps.length} unexplained, ${r.explainedGaps.length} explained, ${r.failedSlots.length} failed\n`);
     for (const g of r.unexplainedGaps) process.stdout.write(`      MISSED ${g}\n`);
-    for (const g of r.explainedGaps) process.stdout.write(`      (ok)   ${g.slot}  -- ${g.why}\n`);
+    for (const g of r.failedSlots) process.stdout.write(`      FAILED ${g}\n`);
+    for (const g of r.explainedGaps) process.stdout.write(`      (ok)   ${g.slot}  -- ${g.why} (by ${g.by})\n`);
     for (const u of r.unscheduledRuns) process.stdout.write(`      extra  ${u.slot}  x${u.count} (not an expected slot)\n`);
     for (const m of r.manualStarts) process.stdout.write(`      MANUAL ${m.slot ?? m.ts}  actor ${m.actor}\n`);
+    for (const m of r.unmatchableReceipts) process.stdout.write(`      UNPLACED ${m.ts}  scheduled_for ${JSON.stringify(m.scheduled_for)}\n`);
+    for (const m of r.unknownOutcomes) process.stdout.write(`      UNKNOWN-OUTCOME ${m.ts}  ${JSON.stringify(m.outcome)}\n`);
   }
 
   // The pre-declared pack, in the PLAN's own order, so it cannot be reordered into a better story.
   process.stdout.write("\nmetric pack\n");
-  process.stdout.write(`  attempted ${t.completed + t.failed}  completed ${t.completed}  missed ${t.unexplainedGaps}\n`);
-  process.stdout.write(`  drift p50                 ${ms(t.driftP50Ms)}\n`);
+  process.stdout.write(`  attempted ${t.completed + t.failed}  completed ${t.completed}  failed ${t.failed}  missed ${t.unexplainedGaps}\n`);
+  process.stdout.write(`  drift p50                 ${ms(t.driftP50Ms)}${t.driftUnparsed ? `  (${t.driftUnparsed} unbelievable)` : ""}\n`);
   process.stdout.write(`  manual starts (target 0)  ${t.manualStarts}\n`);
   process.stdout.write(`  incidents                 ${Object.entries(t.incidentsByClass).map(([k, v]) => `${k}=${v}`).join(" ")}\n`);
   const unknown = Object.entries(t.unknownIncidentClasses);
@@ -458,11 +583,6 @@ if (command === "audit") {
 
   // A VERDICT, not just numbers. A pack that only ever prints figures leaves the reading of them
   // to whoever wants a particular answer, which is the failure the pre-declaration exists to stop.
-  const fails = [];
-  if (t.unexplainedGaps > 0) fails.push(`${t.unexplainedGaps} unexplained gap(s)`);
-  if (t.manualStarts > 0) fails.push(`${t.manualStarts} manual start(s) of a scheduled job`);
-  if (t.spendInr !== 0) fails.push(`INR ${t.spendInr} spent by a job that must not spend`);
-  if (unknown.length) fails.push(`${unknown.length} undeclared incident class(es)`);
   process.stdout.write(`\n${fails.length ? `NOT CLEAN: ${fails.join("; ")}` : "CLEAN against the pre-declared pack"}\n`);
   process.exit(fails.length ? 1 : 0);
 }
