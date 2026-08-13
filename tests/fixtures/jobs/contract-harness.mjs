@@ -13,7 +13,7 @@
  *   delegate     -- prints the scheduled and manual argv for one process-job
  */
 
-import { makeFakeScheduler, makeWindowsScheduler, registerVerified, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs";
+import { makeFakeScheduler, makeWindowsScheduler, registerVerified, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS, TRIGGER_KINDS } from "../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs";
 import { processRunArgv, manualRunArgv } from "../../../.claude/scripts/hq/lib/jobs/delegate.mjs";
 
 const CASE = process.argv[2];
@@ -103,6 +103,42 @@ try {
     out("KEPT", s.list());
     out("EXISTS", back.exists);
     out("LOGON_BACK", back.settings.LogonType);
+  } else if (CASE === "trigger-grammar") {
+    // What `registrationFor` emits for the two cadences this repo actually schedules, plus what
+    // it does with a kind the PowerShell side would refuse. The old version emitted
+    // `weekly:MON,TUE,WED,THU,FRI@HH:MM`, which the .ps1 rejects -- so no weekdays job could be
+    // registered at all -- and mapped every unknown kind silently onto `daily`.
+    const mk = (cadence) => registrationFor({ name: "day-close-roll", type: "script", cadence, budget: { min: 2 } }, REG);
+    out("KINDS", TRIGGER_KINDS);
+    out("DAILY", mk("daily@00:15").trigger);
+    out("WEEKDAYS", mk("weekdays@06:00").trigger);
+    for (const bad of ["weekly", "hourly", "monthly", "", "daily@bad"]) {
+      try { out(`ACCEPTED_${bad || "empty"}`, mk(`${bad}@06:00`).trigger); }
+      catch (e) { out(`REFUSED_${bad || "empty"}`, e.code); }
+    }
+  } else if (CASE === "verify-action-drift" || CASE === "verify-cwd-drift") {
+    // The registration is FOUR things, and only the settings used to be verified. A truncated
+    // argument line runs a path that does not exist; a dropped redirect throws away the only
+    // evidence a failing run leaves; a wrong working directory runs the job somewhere with no
+    // repo in it. All three read back GREEN before this.
+    const inner = makeFakeScheduler();
+    const mutate = CASE === "verify-action-drift"
+      ? (q) => ({ ...q, arguments: String(q.arguments).replace(/ >> .*$/, "") })   // the log redirect gone
+      : (q) => ({ ...q, cwd: "/somewhere/else" });
+    const s = { ...inner, query(name) { const q = inner.query(name); return q.exists ? mutate(q) : q; } };
+    const reg = registrationFor(scriptJob, REG);
+    try { registerVerified(s, reg.name, reg); out("REFUSED", false); }
+    catch (e) { out("REFUSED", { code: e.code, rolledBack: e.rolledBack === true }); }
+    out("LEFT_BEHIND", inner.list());
+  } else if (CASE === "verify-unpinned-send") {
+    // The caller sent the wrong settings and the OS honoured them exactly. Comparing the readback
+    // against PINNED_SETTINGS would blame the OS; the fault is the registration itself.
+    const s = makeFakeScheduler();
+    const reg = registrationFor(scriptJob, REG);
+    reg.settings.StartWhenAvailable = false;
+    try { registerVerified(s, reg.name, reg); out("REFUSED", false); }
+    catch (e) { out("REFUSED", { code: e.code }); }
+    out("LEFT_BEHIND", s.list());
   } else if (CASE === "verify-drift" || CASE === "verify-missing" || CASE === "verify-unseen") {
     // A scheduler that ACCEPTS the registration and then reports something else back. This is the
     // failure the readback exists for: the OS is entitled to apply its own value, and a task that

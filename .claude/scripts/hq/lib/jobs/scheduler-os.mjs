@@ -56,8 +56,54 @@ export const PINNED_SETTINGS = Object.freeze({
   RunLevel: "Limited",
 });
 
+/**
+ * The trigger kinds `scheduler-task.ps1` accepts, named here so the Node side cannot emit a spec
+ * the PowerShell side will refuse. Both halves are pinned together by a fixture that reads the
+ * accepted kinds back OUT of the .ps1 -- a constant copied by hand into two files is a constant
+ * that will disagree with itself eventually, and this one already did.
+ */
+export const TRIGGER_KINDS = Object.freeze(["daily", "weekdays"]);
+
 export class SchedulerError extends Error {
   constructor(code, message) { super(message); this.code = code; }
+}
+
+const winPath = (p) => String(p).replace(/\//g, "\\");
+const quoted = (s) => `"${String(s)}"`;
+
+/**
+ * THE TASK ACTION, BUILT IN ONE PLACE -- here, in Node, where it can be tested without an OS.
+ *
+ * It used to be assembled inside `scheduler-task.ps1` from a pre-joined argument string, and that
+ * split cost three separate defects:
+ *
+ *   - `args.join(" ")` flattened the argv, so a repo path containing a SPACE registered a task
+ *     that ran a truncated path every slot forever. Each argument is quoted individually now.
+ *   - `cmd.exe` interprets `&`, `%VAR%`, `^`, `<`, `>` and `|`; a path carrying one of them could
+ *     run a second command. `registrationFor` refuses those characters outright, and this
+ *     function quotes everything it does accept.
+ *   - the log directory was created at REGISTER time only. Delete it afterwards and cmd fails
+ *     opening the redirect BEFORE the job starts -- exit 1, no log, no receipt, and Task
+ *     Scheduler discards the reason. The mechanism added to make failures visible was the one
+ *     making that failure invisible. The action now creates the directory each run.
+ *
+ * The PowerShell side is correspondingly dumber: it registers the execute/argument pair it is
+ * handed and builds no command line of its own.
+ */
+export function taskActionLine({ command, args = [], logPath } = {}) {
+  if (typeof command !== "string" || !command)
+    throw new SchedulerError("BAD_COMMAND", "a task action needs an absolute command");
+  const argv = (args || []).map((a) => quoted(winPath(a))).join(" ");
+  if (!logPath) return { execute: command, argument: argv };
+
+  const dir = winPath(String(logPath)).replace(/\\[^\\]*$/, "");
+  const prog = `${quoted(winPath(command))}${argv ? ` ${argv}` : ""}`;
+  return {
+    execute: "cmd.exe",
+    // `if not exist ... md` rather than plain `md`, which errors on an existing directory and
+    // would take the run down with it.
+    argument: `/c "if not exist ${quoted(dir)} md ${quoted(dir)} & ${prog} >> ${quoted(winPath(logPath))} 2>&1"`,
+  };
 }
 
 function assertTaskName(name) {
@@ -89,7 +135,8 @@ export function makeFakeScheduler() {
   return {
     kind: "fake",
 
-    register(name, { command, args = [], cwd, settings, trigger }) {
+    register(name, reg) {
+      const { command, args = [], cwd, settings, trigger, logPath } = reg || {};
       assertTaskName(name);
       assertSettings(settings);
       if (typeof command !== "string" || !command)
@@ -98,10 +145,16 @@ export function makeFakeScheduler() {
         throw new SchedulerError("BAD_CWD", "register needs an explicit working directory -- a task inheriting one runs somewhere nobody chose");
       if (typeof trigger !== "string" || !trigger)
         throw new SchedulerError("BAD_TRIGGER", "register needs a trigger");
-      // Idempotent by overwrite, which is what `Register-ScheduledTask -Force` does. A register
-      // that appended would leave two tasks firing the same job at the same minute.
+      // THE FAKE STORES WHAT THE OS WOULD STORE: the built action line, not the argv. Task
+      // Scheduler has no memory of an argument array -- it keeps one command line -- so a fake
+      // that echoed the argv back would let `registerVerified`'s action check pass against the
+      // double and fail against the machine, which is the exact drift the fake exists to prevent.
+      const action = taskActionLine({ command, args, logPath });
       tasks.set(name, {
-        name, command, args: [...args], cwd, trigger,
+        name, cwd, trigger,
+        command: action.execute,
+        args: [...args],
+        argumentLine: action.argument,
         settings: { ...settings },
         lastRunTime: null,
         lastTaskResult: 0x41303, // SCHED_S_TASK_HAS_NOT_RUN, exactly as the real API reports it
@@ -122,6 +175,9 @@ export function makeFakeScheduler() {
       return {
         exists: true,
         command: t.command,
+        // `arguments`, spelled the way `Get-ScheduledTask` spells it. The array is kept too, for
+        // tests that want to look at the argv, but the string is what the contract compares.
+        arguments: t.argumentLine,
         args: [...t.args],
         cwd: t.cwd,
         trigger: t.trigger,
@@ -184,10 +240,11 @@ export function makeWindowsScheduler({ psBin = "powershell", scriptPath, spawn }
       if (typeof command !== "string" || !command) throw new SchedulerError("BAD_COMMAND", "register needs an absolute command");
       if (typeof cwd !== "string" || !cwd) throw new SchedulerError("BAD_CWD", "register needs an explicit working directory");
       if (typeof trigger !== "string" || !trigger) throw new SchedulerError("BAD_TRIGGER", "register needs a trigger");
+      const action = taskActionLine({ command, args, logPath });
       return run([
-        "-Action", "register", "-TaskName", name, "-Command", command,
-        "-Arguments", args.join(" "), "-WorkingDir", cwd, "-Trigger", trigger,
-        ...(logPath ? ["-LogPath", logPath] : []),
+        "-Action", "register", "-TaskName", name,
+        "-Command", action.execute, "-Arguments", action.argument,
+        "-WorkingDir", cwd, "-Trigger", trigger,
       ]);
     },
 
@@ -203,7 +260,13 @@ export function makeWindowsScheduler({ psBin = "powershell", scriptPath, spawn }
 
     list() {
       const r = run(["-Action", "list"]);
-      return Array.isArray(r.tasks) ? r.tasks : [];
+      // A shape that is not a list is a FAILED READ, never an empty machine. Coercing it to `[]`
+      // made `arc-jobs unregister` print "0 arc task(s) remain -- the heartbeat is off" on a read
+      // that had told it nothing: the same shape as `arc-event` exiting 0 on failure, which this
+      // lane already paid for once.
+      if (!Array.isArray(r?.tasks))
+        throw new SchedulerError("BAD_OUTPUT", `list returned no task array: ${JSON.stringify(r).slice(0, 200)}`);
+      return r.tasks;
     },
   };
 }
@@ -227,12 +290,26 @@ export function makeWindowsScheduler({ psBin = "powershell", scriptPath, spawn }
  * test drive THIS, not two copies of it.
  */
 export function registerVerified(os, name, reg) {
+  // The settings we SENT must themselves be the pinned six. Comparing the readback straight
+  // against PINNED_SETTINGS would validate one thing and compare another: a caller that sent the
+  // wrong settings and an OS that honoured them exactly would be reported as OS drift, and the
+  // real fault -- the caller -- would never be named.
+  const sent = reg?.settings || {};
+  const mis = REQUIRED_SETTINGS.filter((k) => String(sent[k]) !== String(PINNED_SETTINGS[k]));
+  if (mis.length)
+    throw new SchedulerError(
+      "UNPINNED_REGISTRATION",
+      `refusing to register ${name}: the registration itself carries ${mis.join(", ")} differing from the pinned values`,
+    );
+
   os.register(name, reg);
 
   const undo = (code, message) => {
     let removed = false;
-    try { removed = os.unregister(name).existed === true; } catch { removed = false; }
-    const err = new SchedulerError(code, message);
+    let why = "";
+    try { removed = os.unregister(name).existed === true; }
+    catch (e) { removed = false; why = ` (rollback failed: ${e?.code || ""} ${e?.message || e})`; }
+    const err = new SchedulerError(code, message + why);
     err.rolledBack = removed;
     throw err;
   };
@@ -247,8 +324,8 @@ export function registerVerified(os, name, reg) {
   // String() on both sides: the PowerShell boundary hands back JSON booleans, and a setting that
   // came back MISSING stringifies to "undefined", which is a mismatch rather than a pass.
   const wrong = REQUIRED_SETTINGS
-    .filter((k) => String(back.settings?.[k]) !== String(PINNED_SETTINGS[k]))
-    .map((k) => `${k}=${back.settings?.[k]} (wanted ${PINNED_SETTINGS[k]})`);
+    .filter((k) => String(back.settings?.[k]) !== String(sent[k]))
+    .map((k) => `${k}=${back.settings?.[k]} (wanted ${sent[k]})`);
   if (wrong.length)
     undo(
       "SETTINGS_DRIFT",
@@ -256,6 +333,39 @@ export function registerVerified(os, name, reg) {
         `running with a setting nobody chose, because a job that looks scheduled and never fires is the one ` +
         `failure mode this readback exists to catch`,
     );
+
+  // A REGISTRATION IS FOUR THINGS, NOT ONE. Verifying only the settings left the other three
+  // unchecked, and each of them kills the job just as quietly:
+  //   - a truncated argument line runs `arc-jobs.mjs` at a path that does not exist
+  //   - a wrong working directory runs the job somewhere with no repo in it
+  //   - a dropped log redirect throws away the only evidence a failing run leaves behind
+  // The OS already returns all three from `query`; ignoring them was the omission.
+  //
+  // CONTAINMENT, not equality, and deliberately so: the action is wrapped in `cmd.exe /c` to get
+  // the redirect, so what comes back is the wrapper's command line rather than the argv we sent.
+  // Asserting equality against a string we did not construct here would pin this check to the
+  // exact shape of that wrapper and break on the next honest change to it.
+  // SEPARATORS ARE NORMALISED ON BOTH SIDES, and this is not cosmetic. `taskActionLine` writes
+  // Windows separators into the command line because cmd.exe needs them, while `reg.args` carry
+  // the forward slashes Node produced -- so a raw `includes` compares two spellings of the same
+  // path and reports drift on every correct registration. The first version of this check did
+  // exactly that, and it is the same "validate one read, compare another" shape the lane has
+  // already paid for twice.
+  const norm = (p) => String(p ?? "").replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
+  const argline = norm(back.arguments ?? "");
+  const missing = [];
+  for (const a of reg.args || []) if (!argline.includes(norm(a))) missing.push(String(a));
+  if (reg.logPath && !argline.includes(norm(reg.logPath))) missing.push(`the log redirect to ${reg.logPath}`);
+  if (missing.length)
+    undo(
+      "ACTION_DRIFT",
+      `${name} came back off the OS with an action missing ${missing.join(", ")} -- read back as ${JSON.stringify(String(back.arguments ?? "")).slice(0, 200)}`,
+    );
+
+  // Task Scheduler echoes back a Windows working directory even when it was handed a
+  // forward-slash one, so this is compared normalised too.
+  if (norm(back.cwd) !== norm(reg.cwd))
+    undo("CWD_DRIFT", `${name} came back with working directory ${JSON.stringify(back.cwd)}, sent ${JSON.stringify(reg.cwd)}`);
 
   return back;
 }
@@ -267,12 +377,53 @@ export function registerVerified(os, name, reg) {
  */
 export function registrationFor(job, { repoRoot, nodePath, logDir }) {
   const [kind, hhmm] = String(job.cadence).split("@");
+
+  // THE TRIGGER GRAMMAR IS CLOSED ON BOTH SIDES OF THE BOUNDARY, and this line is why.
+  //
+  // It used to emit `weekly:MON,TUE,WED,THU,FRI@HH:MM` for a weekdays job. `scheduler-task.ps1`
+  // splits the spec on `@` and matches the part before it against exactly `daily` and `weekdays`,
+  // so that string threw -- meaning NO weekdays job could ever be registered, and since
+  // `arc-jobs register` with no name walks the enabled jobs in file order and the first one is
+  // `brief-materialize`, the whole unattended surface was unregisterable.
+  //
+  // It survived a real-OS smoke because the smoke hand-typed `-Trigger daily@23:33` and never
+  // went through this function, and it survived the contract test because that test asserted the
+  // wrong string back. Two green checks, both looking away from the join.
+  //
+  // The other half of the old bug: `kind === "weekdays" ? ... : daily` mapped EVERY other kind
+  // silently onto daily, so an unknown cadence became a plausible-looking wrong schedule instead
+  // of a refusal.
+  if (!TRIGGER_KINDS.includes(kind))
+    throw new SchedulerError(
+      "BAD_TRIGGER",
+      `cadence kind ${JSON.stringify(kind)} is outside the closed grammar (${TRIGGER_KINDS.join(" | ")}) -- ` +
+        `scheduler-task.ps1 refuses anything else, so emitting it here would fail at the OS boundary`,
+    );
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(String(hhmm)))
+    throw new SchedulerError("BAD_TRIGGER", `cadence time ${JSON.stringify(hhmm)} is not HH:MM`);
+
+  // The task action is handed to `cmd.exe /c` on the PowerShell side so stdout and stderr can be
+  // redirected -- Task Scheduler discards both otherwise, and there is no capture feature. That
+  // makes cmd's metacharacters live: `&` would run a second command, `%VAR%` would be expanded,
+  // and a `"` would end the quoting early. None of them can appear in a path we accept.
+  for (const [label, value] of [["repoRoot", repoRoot], ["nodePath", nodePath], ["logDir", logDir]]) {
+    if (typeof value !== "string" || !value)
+      throw new SchedulerError("BAD_CONFIG", `registrationFor needs a ${label}`);
+    const bad = String(value).match(/["%&^<>|\r\n]/);
+    if (bad)
+      throw new SchedulerError(
+        "UNSAFE_PATH",
+        `${label} contains ${JSON.stringify(bad[0])}, which cmd.exe would interpret rather than pass through -- ` +
+          `refusing to build a task action around it`,
+      );
+  }
+
   return {
     name: job.name,
     command: nodePath,
     args: [`${repoRoot}/.claude/scripts/hq/arc-jobs.mjs`, "run", job.name, "--scheduled"],
     cwd: repoRoot,
-    trigger: kind === "weekdays" ? `weekly:MON,TUE,WED,THU,FRI@${hhmm}` : `daily@${hhmm}`,
+    trigger: `${kind}@${hhmm}`,
     settings: { ...PINNED_SETTINGS },
     // Task Scheduler DISCARDS stdout and stderr unless the action redirects them; there is no
     // capture feature. Without this a failing job's only trace is an exit code.

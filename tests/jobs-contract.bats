@@ -69,9 +69,36 @@ _run_case() {
   echo "$output" | grep -q "^AFTER:0$" || { echo "$output"; false; }
 }
 
-@test "scheduler-os: a weekdays cadence becomes a Mon-Fri trigger, not a daily one" {
-  _run_case roundtrip
-  echo "$output" | grep -q 'WEEKDAY_TRIGGER:"weekly:MON,TUE,WED,THU,FRI@06:00"' || { echo "$output"; false; }
+@test "scheduler-os: the trigger a job becomes is INSIDE the grammar the PowerShell side accepts" {
+  # THE BUG THIS TEST USED TO PIN. It asserted `weekly:MON,TUE,WED,THU,FRI@06:00`, which is what
+  # registrationFor emitted -- and scheduler-task.ps1 splits the spec on @ and matches the part
+  # before it against exactly `daily` and `weekdays`, so that string throws. No weekdays job could
+  # ever be registered, and since `arc-jobs register` with no name walks the enabled jobs in file
+  # order and brief-materialize is first, the entire unattended surface was unregisterable.
+  #
+  # Two green checks looked away from it: the real-OS smoke hand-typed `-Trigger daily@23:33` and
+  # never went through registrationFor, and this test asserted the wrong string back. A test that
+  # pins the implementation instead of the contract is a test that certifies the bug.
+  _run_case trigger-grammar
+  echo "$output" | grep -q -F 'DAILY:"daily@00:15"' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'WEEKDAYS:"weekdays@06:00"' || { echo "$output"; false; }
+  # And nothing outside the grammar is quietly mapped onto daily, which is what the old ternary did.
+  for bad in weekly hourly monthly empty; do
+    echo "$output" | grep -q "REFUSED_${bad}:\"BAD_TRIGGER\"" || { echo "kind ${bad} was not refused:"; echo "$output"; false; }
+  done
+}
+
+@test "scheduler-os: the Node grammar and the PowerShell grammar are the SAME grammar" {
+  # The two halves of a closed grammar living in two files WILL disagree eventually -- this pair
+  # already did, and it cost the whole registration surface. So the accepted kinds are read back
+  # OUT of the .ps1 and compared with what Node exports, rather than both being maintained by hand.
+  _run_case trigger-grammar
+  local ps_kinds node_kinds
+  ps_kinds="$(grep -o 'if ($kind -eq "[a-z]*")' "$ARC_ROOT/.claude/scripts/hq/lib/jobs/scheduler-task.ps1" \
+    | sed 's/.*"\(.*\)".*/\1/' | sort | tr '\n' ' ')"
+  node_kinds="$(echo "$output" | sed -n 's/^KINDS:\(.*\)$/\1/p' | tr -d '[]"' | tr ',' '\n' | sort | tr '\n' ' ')"
+  [ -n "$ps_kinds" ] || { echo "read no kinds out of the .ps1 -- the extraction broke, not the code"; false; }
+  [ "$ps_kinds" = "$node_kinds" ] || { echo "ps1 accepts [$ps_kinds], node emits [$node_kinds]"; false; }
 }
 
 @test "delegate: a scheduled process-job carries the same argv a manual run would" {
@@ -139,6 +166,55 @@ _run_case() {
   _run_case verify-unseen
   echo "$output" | grep -q '"code":"NOT_REPORTED"' || { echo "$output"; false; }
   echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "$output"; false; }
+}
+
+@test "registerVerified: a dropped log redirect is drift, and the task comes off the machine" {
+  # A registration is four things, and only the settings used to be verified. Task Scheduler
+  # discards stdout and stderr, so the redirect IS the evidence a failing run leaves behind --
+  # losing it silently means the first unattended failure has no trace at all.
+  _run_case verify-action-drift
+  echo "$output" | grep -q '"code":"ACTION_DRIFT"' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "$output"; false; }
+}
+
+@test "registerVerified: a wrong working directory is drift too" {
+  # A task that runs in the wrong directory finds no repo, no spine and no schedule -- and reports
+  # a perfectly healthy registration while doing it.
+  _run_case verify-cwd-drift
+  echo "$output" | grep -q '"code":"CWD_DRIFT"' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "$output"; false; }
+}
+
+@test "registerVerified: settings that were WRONG WHEN SENT blame the caller, not the OS" {
+  # Comparing the readback straight against PINNED_SETTINGS validates one thing and compares
+  # another: an OS that honoured a bad registration exactly would be reported as OS drift while
+  # the real fault -- the caller -- was never named. And nothing reaches the machine.
+  _run_case verify-unpinned-send
+  echo "$output" | grep -q '"code":"UNPINNED_REGISTRATION"' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "$output"; false; }
+}
+
+@test "task action: the line this repo would register RUNS, on a path containing a space" {
+  # Windows only, and it registers nothing -- it runs the built command line the way Task
+  # Scheduler runs it (one concatenated command line, verbatim) and checks what happens.
+  #
+  # Two shipped defects live here. The argv used to be joined with spaces into one unquoted
+  # string, so a repo under a path with a space ran a truncated path every slot forever. And the
+  # log directory used to be created at REGISTER time only -- delete it and cmd fails opening the
+  # redirect BEFORE the job starts, so the job never runs and the mechanism added to make failures
+  # visible is the one hiding this one.
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) : ;;
+    *) skip "cmd.exe only exists on the Windows leg" ;;
+  esac
+  run node "$ARC_ROOT/tests/fixtures/jobs/action-line-harness.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q "HARNESS-DONE" || { echo "harness never finished:"; echo "$output"; false; }
+  echo "$output" | grep -q '^LOGDIR_BEFORE:false$' || { echo "the harness did not start from a missing log dir:"; echo "$output"; false; }
+  echo "$output" | grep -q '^EXIT:0$' || { echo "the action line did not run:"; echo "$output"; false; }
+  echo "$output" | grep -q '^LOGDIR_AFTER:true$' || { echo "the action did not create its own log dir:"; echo "$output"; false; }
+  # The marker proves the PROGRAM ran, not merely that cmd exited 0.
+  echo "$output" | grep -q '^LOG_BODY:"hi"$' || { echo "no program output reached the log:"; echo "$output"; false; }
 }
 
 @test "jobs-contract: bats registers every test this file declares" {

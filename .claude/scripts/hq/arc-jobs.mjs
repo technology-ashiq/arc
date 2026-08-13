@@ -28,13 +28,14 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { spineRoot, withLock, readIdemIndex } from "./lib/spine-io.mjs";
 import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
 import { processRunArgv } from "./lib/jobs/delegate.mjs";
-import { makeWindowsScheduler, registerVerified, registrationFor, PINNED_SETTINGS } from "./lib/jobs/scheduler-os.mjs";
+import { makeWindowsScheduler, registerVerified, registrationFor, PINNED_SETTINGS, SchedulerError } from "./lib/jobs/scheduler-os.mjs";
 import { derivePanel, needsYouLines, loadPanelInputs } from "./lib/jobs/panel.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
@@ -42,9 +43,15 @@ import { processNames } from "./lib/policy/subjects.mjs";
 import { policyRoot, authorizeRun } from "./lib/policy/run-gate.mjs";
 import { policyEnforcementGreen } from "./lib/jobs/policy-gate.mjs";
 
-const HERE = new URL(".", import.meta.url).pathname;
-const ARC_EVENT = resolve(process.platform === "win32" ? HERE.slice(1) : HERE, "arc-event.mjs");
-const ARC_RUN = resolve(process.platform === "win32" ? HERE.slice(1) : HERE, "..", "engine", "arc-run.mjs");
+// `fileURLToPath`, NOT `new URL(...).pathname`. A URL path is PERCENT-ENCODED, so a repo under
+// `C:\My Repos\arc` produced `...\My%20Repos\...\arc-event.mjs`, every spawn returned ENOENT, and
+// every scheduled run died reporting "left no receipt" -- including the incident receipt for its
+// own failure. Thirteen other files in this directory already used `fileURLToPath`; this was the
+// one that did not. Same defect shape as the `file://` URL built from a shell variable that Git
+// Bash rejected: a POSIX-looking path is not a URL.
+const HERE = dirname(fileURLToPath(import.meta.url));
+const ARC_EVENT = resolve(HERE, "arc-event.mjs");
+const ARC_RUN = resolve(HERE, "..", "engine", "arc-run.mjs");
 
 // ---------- args ----------
 const argv = process.argv.slice(2);
@@ -99,6 +106,31 @@ function loadSchedule() {
   const parsed = parseYamlSubset(text);
   if (!parsed.ok) die(2, `hq.jobs.yaml does not parse: ${parsed.error.what}`);
   return { doc: parsed.value, policy, known };
+}
+
+/**
+ * THE OFF SWITCH READS THE SCHEDULE WITHOUT JUDGING IT.
+ *
+ * `loadSchedule` refuses on a missing policy file, an unparseable one, or any jobs-lint finding --
+ * correct for anything that RUNS, and catastrophic for `unregister`, which used to go through it
+ * too. Delete `hq.policy.yaml`, or remove a job's row from it, and the tasks stayed registered and
+ * firing with no CLI path left to remove them: a gate holding the machine hostage rather than
+ * protecting it.
+ *
+ * So this reads names best-effort and returns an empty list rather than dying. Nothing here
+ * decides whether anything may run; it only helps name what to take away, and `os.list()` is the
+ * authority on what is actually on the machine.
+ */
+function jobNamesBestEffort() {
+  try {
+    const path = join(root, "hq.jobs.yaml");
+    if (!existsSync(path)) return [];
+    const parsed = parseYamlSubset(readFileSync(path, "utf8"));
+    if (!parsed.ok) return [];
+    return (parsed.value.jobs || [])
+      .map((j) => ({ name: String(j?.name ?? ""), enabled: j?.enabled === true }))
+      .filter((j) => /^[a-z][a-z0-9-]*$/.test(j.name));
+  } catch { return []; }
 }
 
 // ---------- guards ----------
@@ -173,10 +205,17 @@ if (command === "list") {
 //
 // DERIVED from the pin, never a hardcoded sentence: if the logon model ever moves back to S4U,
 // this line stops claiming a limit that no longer applies instead of quietly lying about one.
+// Derived from a SET, not from `=== "S4U"`. Password and ServiceAccount also run while logged
+// off, so the binary test would have made the panel announce a limitation that did not exist --
+// the exact inverse of the property this line carries. Anything not on the list is treated as the
+// weaker guarantee, which is the safe direction for a disclosure.
+const UNATTENDED_LOGON = new Set(["S4U", "Password", "ServiceAccount"]);
+
 function logonNote() {
-  return PINNED_SETTINGS.LogonType === "S4U"
-    ? "logon model S4U -- scheduled jobs fire whether or not you are logged on"
-    : `logon model ${PINNED_SETTINGS.LogonType} -- scheduled jobs fire ONLY while you are logged on; ` +
+  const t = PINNED_SETTINGS.LogonType;
+  return UNATTENDED_LOGON.has(t)
+    ? `logon model ${t} -- scheduled jobs fire whether or not you are logged on`
+    : `logon model ${t} -- scheduled jobs fire ONLY while you are logged on; ` +
       "a slot falling while you are signed out is caught up late by StartWhenAvailable, not run on time";
 }
 
@@ -189,12 +228,76 @@ function osScheduler() {
   });
 }
 
-if (command === "register" || command === "unregister") {
+// THE OFF SWITCH, and it is a SEPARATE command block from `register` on purpose.
+//
+// It shared one block with register and therefore shared `loadSchedule()`, which refuses on a
+// missing or unparseable `hq.policy.yaml` and on any jobs-lint finding. So deleting the policy
+// file -- or removing one job's row from it -- left the OS tasks registered and firing with no CLI
+// path left to remove them. The one surface required to work when everything else is broken was
+// the one thing a broken repo could disable.
+//
+// It now reads names best-effort, accepts any name matching the task grammar (a job RENAMED in
+// the schedule must still be removable by its old name), and treats `os.list()` as the authority
+// on what is actually on the machine.
+if (command === "unregister") {
+  const only = positional[0] || null;
+  if (only && !/^[a-z][a-z0-9-]*$/.test(only)) die(2, `\`${only}\` is not a task name`);
+
+  const os = osScheduler();
+  const removed = [];
+  const stuck = [];
+
+  const sweep = (name, label) => {
+    // ONE FAILURE MUST NOT END THE SWEEP. `unregister` re-validates the name, and a single
+    // foreign or capitalised task under the arc folder used to throw mid-loop and leave every
+    // remaining task registered -- the off switch broken by a neighbour it does not own.
+    try {
+      const r = os.unregister(name);
+      removed.push(`${name}${label}${r.existed ? "" : " (was not registered)"}`);
+    } catch (e) {
+      stuck.push(`${name}: ${e?.code || ""} ${e?.message || e}`);
+    }
+  };
+
+  if (only) {
+    sweep(only, "");
+  } else {
+    // Everything under the arc task folder that is not an ENABLED job goes, plus every enabled
+    // job. A job set `enabled: false` while its task is still registered is precisely the case
+    // that used to survive the sweep and keep firing into a wrapper that refuses to run it --
+    // exiting 0, leaving no receipt, and rendering as `disabled` in the panel.
+    const enabled = new Set(jobNamesBestEffort().filter((j) => j.enabled).map((j) => j.name));
+    for (const n of enabled) sweep(n, "");
+    let onMachine = [];
+    try { onMachine = os.list(); }
+    catch (e) { die(2, `cannot read the task list, so the sweep cannot be complete: ${e?.message || e}`); }
+    for (const t of onMachine) if (!enabled.has(t)) sweep(t, " (not an enabled job)");
+  }
+
+  for (const r of removed) process.stdout.write(`arc-jobs: unregistered ${r}\n`);
+  for (const s of stuck) process.stderr.write(`arc-jobs: COULD NOT REMOVE ${s}\n`);
+
+  let left = [];
+  try { left = os.list(); }
+  catch (e) { die(2, `unregister ran but the task list cannot be read back, so the heartbeat state is UNKNOWN: ${e?.message || e}`); }
+  process.stdout.write(`arc-jobs: ${left.length} arc task(s) remain${left.length ? `: ${left.join(", ")}` : " -- the heartbeat is off"}\n`);
+  process.exit(stuck.length || left.length ? 2 : 0);
+}
+
+if (command === "register") {
   const { doc } = loadSchedule();
   const only = positional[0] || null;
   const targets = (doc.jobs || []).filter((j) => (only ? j.name === only : j.enabled));
   if (only && targets.length === 0) die(2, `no job named \`${only}\` in hq.jobs.yaml`);
   if (!only && targets.length === 0) die(2, "no enabled jobs to act on");
+
+  // A DISABLED JOB IS NOT REGISTERABLE, even by name. Naming one used to schedule it anyway, and
+  // the task then fired every slot into a wrapper that refuses to run a disabled job: exit 0, no
+  // receipt, and a panel row reading `disabled` -- so the overdue detector stayed silent by
+  // design while the machine ran a task nobody could see.
+  const off = targets.filter((j) => j.enabled !== true).map((j) => j.name);
+  if (off.length)
+    die(2, `refusing to register ${off.join(", ")} -- disabled in hq.jobs.yaml; enable it there rather than scheduling it here`);
 
   // THE POLICY GATE RUNS BEFORE THE OS IS EVEN LOOKED UP, and the order is load-bearing rather
   // than tidy. Asked the other way round, every non-Windows machine refuses at the platform check
@@ -202,57 +305,37 @@ if (command === "register" || command === "unregister") {
   // without the gate having run at all -- a vacuous pass sitting exactly on top of the rule it
   // claims to protect. Refusing on policy first also states the right reason: this surface is
   // closed because enforcement is unproven, not because the OS is the wrong one.
-  //
-  // UNREGISTER IS DELIBERATELY NOT GATED. The off switch has to work when things are broken; a
-  // policy failure that could also prevent turning the heartbeat OFF would be a gate holding the
-  // machine hostage rather than protecting it.
-  if (command === "register") {
-    for (const job of targets) {
-      const fails = policyEnforcementGreen(job.name, { root });
-      if (fails.length) {
-        for (const f of fails) process.stderr.write(`arc-jobs: policy gate: ${f}\n`);
-        die(2, `refusing to register ${job.name} -- the unattended surface does not open while policy enforcement is unproven (SCH-G, fail-closed)`);
-      }
+  for (const job of targets) {
+    const fails = policyEnforcementGreen(job.name, { root });
+    if (fails.length) {
+      for (const f of fails) process.stderr.write(`arc-jobs: policy gate: ${f}\n`);
+      die(2, `refusing to register ${job.name} -- the unattended surface does not open while policy enforcement is unproven (SCH-G, fail-closed)`);
     }
   }
 
   const os = osScheduler();
-
-  if (command === "unregister") {
-    // The OFF SWITCH. It must work on jobs the schedule no longer lists, or a job removed from
-    // the file would keep firing forever with nothing left to name it -- so this also sweeps
-    // anything under the arc task folder that the schedule does not claim.
-    const removed = [];
-    for (const job of targets) {
-      const r = os.unregister(job.name);
-      removed.push(`${job.name}${r.existed ? "" : " (was not registered)"}`);
-    }
-    if (!only) {
-      const known = new Set((doc.jobs || []).map((j) => j.name));
-      for (const t of os.list()) if (!known.has(t)) { os.unregister(t); removed.push(`${t} (orphan)`); }
-    }
-    for (const r of removed) process.stdout.write(`arc-jobs: unregistered ${r}\n`);
-    const left = os.list();
-    process.stdout.write(`arc-jobs: ${left.length} arc task(s) remain${left.length ? `: ${left.join(", ")}` : " -- the heartbeat is off"}\n`);
-    process.exit(0);
-  }
-
   const nodePath = process.execPath;
   const logDir = join(spineRoot(), "job-logs");
   for (const job of targets) {
-    const reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
-    // Register, read the settings back OFF THE OS, and unregister again if they disagree -- all
-    // of it inside `registerVerified`, so the CLI and the contract fixture exercise one function
-    // rather than two hopefully-identical copies of the same care.
+    // Register, read the whole registration back OFF THE OS, and unregister again if any part of
+    // it disagrees -- all inside `registerVerified`, so the CLI and the contract fixture exercise
+    // one function rather than two hopefully-identical copies of the same care.
     let back;
     try {
+      const reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
       back = registerVerified(os, reg.name, reg);
+      process.stdout.write(
+        `arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}  cwd ${back.cwd}\n`,
+      );
     } catch (e) {
-      if (e?.code === "SETTINGS_DRIFT" || e?.code === "NOT_REPORTED" || e?.code === "READBACK_FAILED")
-        die(2, `${e.message}${e.rolledBack === false ? " -- AND THE ROLLBACK ALSO FAILED, so remove it by hand" : ""}`);
+      // EVERY SchedulerError becomes a stated refusal with exit 2. Only three codes used to be
+      // handled; the rest escaped as an unhandled rejection -- a raw stack trace and exit 1, which
+      // is indistinguishable from a dozen unrelated failures and says nothing about which jobs did
+      // and did not land.
+      if (e instanceof SchedulerError)
+        die(2, `${job.name}: [${e.code}] ${e.message}${e.rolledBack === false ? " -- AND THE ROLLBACK ALSO FAILED, so remove it by hand" : ""}`);
       throw e;
     }
-    process.stdout.write(`arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}\n`);
   }
   process.stdout.write(`arc-jobs: ${logonNote()}\n`);
   process.exit(0);

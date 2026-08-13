@@ -130,6 +130,36 @@ _seed_run() {
   [ "$(printf '%s\n' "$output" | grep -c 'state=disabled')" -eq 2 ] || { echo "$output"; false; }
 }
 
+@test "panel: the weaker logon guarantee is STATED, and derived from the pin" {
+  # ADR-0803 pinned S4U so the jobs would fire whether or not anyone was logged on. Amendment 1
+  # moved the pin to Interactive because S4U cannot be registered unelevated on this machine --
+  # a real reduction in what the heartbeat promises, and the ADR itself wrote down that it "would
+  # need saying out loud in the brief panel". It lived only in the ADR until this test existed.
+  #
+  # The panel prints it on EVERY render, healthy or not: a limit that only appears once something
+  # is already wrong is a limit nobody learns in time to plan around.
+  _seed 2026-08-01
+  run node "$JOBS" panel --date 2026-08-12
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q "logon model Interactive" || { echo "the panel does not state the logon model:"; echo "$output"; false; }
+  echo "$output" | grep -q "ONLY while you are logged on" || { echo "the cost is not stated:"; echo "$output"; false; }
+
+  # DERIVED, not a hardcoded sentence: the string the panel prints must be the value the module
+  # pins. A footer welded to "Interactive" would keep claiming this limit after a future move back
+  # to S4U removed it -- the exact inverse of the property the line exists to carry.
+  #
+  # The pin is read through the existing harness rather than by building a file:// URL from a
+  # shell variable: Git Bash hands node a POSIX path, node refuses it as not absolute, and that
+  # failure has already cost this suite once.
+  local panel="$output" pinned
+  run node "$ARC_ROOT/tests/fixtures/jobs/contract-harness.mjs" real-and-fake-agree
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  pinned="$(printf '%s\n' "$output" | sed -n 's/^PINNED_LOGON:"\(.*\)"$/\1/p')"
+  [ -n "$pinned" ] || { echo "could not read PINNED_SETTINGS.LogonType out of the harness"; echo "$output"; false; }
+  printf '%s\n' "$panel" | grep -q "logon model $pinned" \
+    || { echo "the panel says something other than the pin ($pinned):"; printf '%s\n' "$panel"; false; }
+}
+
 @test "brief: an overdue job appears in needs-you, derived from silence" {
   _seed 2026-08-01
   _seed 2026-08-10

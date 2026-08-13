@@ -13,6 +13,8 @@
  *   no-policy    -- a throwaway root with no policy file at all
  *   lint-red     -- policy-lint made to exit non-zero, everything else real
  *   no-root      -- called without a root
+ *   control-fires-- a deliberately WRONG expectation, proving the positive control is live
+ *   no-controls  -- the positive controls emptied, which must itself be a failure
  */
 
 import { mkdtempSync } from "node:fs";
@@ -47,6 +49,18 @@ try {
     }));
   } else if (CASE === "no-root") {
     out("FAILS", policyEnforcementGreen(JOB, { env: {} }));
+  } else if (CASE === "control-fires") {
+    // THE NEGATIVE CONTROL FOR THE POSITIVE CONTROL. The engine really does answer `propose` for
+    // this pair; demanding `execute` must therefore FAIL. Without this, a positive control that
+    // could never fire would be indistinguishable from one that works -- and the whole reason it
+    // exists is that an over-granting engine (BIRTH_CAP raised from L1) turns exactly this answer
+    // from `propose` into `execute` while every deny-by-default check stays green.
+    out("FAILS", policyEnforcementGreen(JOB, {
+      root: REPO, env: {},
+      controls: [{ capability: "write", resource: "docs/x.md", expect: "execute" }],
+    }));
+  } else if (CASE === "no-controls") {
+    out("FAILS", policyEnforcementGreen(JOB, { root: REPO, env: {}, controls: [] }));
   } else {
     process.stderr.write(`unknown case ${CASE}\n`);
     process.exit(64);

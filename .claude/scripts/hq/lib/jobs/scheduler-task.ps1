@@ -26,8 +26,7 @@ param(
   [string]$Command = "",
   [string]$Arguments = "",
   [string]$WorkingDir = "",
-  [string]$Trigger = "",          # daily@HH:MM | weekdays@HH:MM
-  [string]$LogPath = ""
+  [string]$Trigger = ""           # daily@HH:MM | weekdays@HH:MM
 )
 
 $ErrorActionPreference = "Stop"
@@ -37,6 +36,15 @@ $ErrorActionPreference = "Stop"
 $TaskPath = "\arc\"
 
 function Write-Json($obj) { $obj | ConvertTo-Json -Compress -Depth 6 }
+
+# THE NAME GRAMMAR IS ENFORCED HERE TOO, not only in Node. This file's own banner calls itself the
+# only place this repo talks to Task Scheduler, and `Unregister-ScheduledTask -TaskName` accepts
+# WILDCARDS -- so a caller that reached this script directly with `-TaskName *` would remove every
+# task under \arc\ at once. A guard that lives only in the caller is a guard the boundary does not
+# have. Same grammar as assertTaskName in scheduler-os.mjs.
+function Assert-ArcTaskName([string]$n) {
+  if ($n -notmatch "^[a-z][a-z0-9-]*$") { throw "task name $n is not a job name" }
+}
 
 function New-ArcTrigger([string]$spec) {
   $parts = $spec.Split("@")
@@ -56,6 +64,7 @@ switch ($Action) {
 
   "register" {
     if (-not $TaskName)   { throw "register needs -TaskName" }
+    Assert-ArcTaskName $TaskName
     if (-not $Command)    { throw "register needs -Command" }
     if (-not $WorkingDir) { throw "register needs -WorkingDir: a task that inherits one runs somewhere nobody chose" }
     if (-not $Trigger)    { throw "register needs -Trigger" }
@@ -67,17 +76,13 @@ switch ($Action) {
     # variable". Measured on the first real registration attempt: the failure names the parameter,
     # not the assignment, so it reads like a bad argument from the caller.
     #
-    # Task Scheduler DISCARDS stdout and stderr; there is no capture feature. Without the
-    # redirection below a failing job leaves nothing behind but an exit code.
-    $inner = $Arguments
-    if ($LogPath) {
-      $logDir = Split-Path -Parent $LogPath
-      if ($logDir -and -not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
-      $inner = "$Arguments >> `"$LogPath`" 2>&1"
-      $taskAction = New-ScheduledTaskAction -Execute "cmd.exe" -Argument "/c `"`"$Command`" $inner`"" -WorkingDirectory $WorkingDir
-    } else {
-      $taskAction = New-ScheduledTaskAction -Execute $Command -Argument $Arguments -WorkingDirectory $WorkingDir
-    }
+    # THIS SCRIPT NO LONGER BUILDS A COMMAND LINE. `-Execute` and `-Arguments` arrive already
+    # assembled by `taskActionLine` in scheduler-os.mjs -- including the cmd.exe wrapper, the
+    # per-argument quoting and the log redirect -- because a command line built here could only be
+    # tested by registering a real task on a real machine. Three defects came out of the old
+    # split: an argv flattened with spaces, cmd metacharacters in a path, and a log directory that
+    # existed at register time and not at run time. One builder, in the language with the tests.
+    $taskAction = New-ScheduledTaskAction -Execute $Command -Argument $Arguments -WorkingDirectory $WorkingDir
 
     $trg = New-ArcTrigger $Trigger
 
@@ -113,6 +118,7 @@ switch ($Action) {
 
   "unregister" {
     if (-not $TaskName) { throw "unregister needs -TaskName" }
+    Assert-ArcTaskName $TaskName
     $existing = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
     if ($null -eq $existing) { Write-Json @{ ok = $true; existed = $false }; break }
     Unregister-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -Confirm:$false
@@ -121,6 +127,7 @@ switch ($Action) {
 
   "query" {
     if (-not $TaskName) { throw "query needs -TaskName" }
+    Assert-ArcTaskName $TaskName
     $t = Get-ScheduledTask -TaskName $TaskName -TaskPath $TaskPath -ErrorAction SilentlyContinue
     if ($null -eq $t) { Write-Json @{ exists = $false }; break }
     $info = Get-ScheduledTaskInfo -TaskName $TaskName -TaskPath $TaskPath
