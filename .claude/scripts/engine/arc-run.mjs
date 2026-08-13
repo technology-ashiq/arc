@@ -272,39 +272,86 @@ function costArgs(cost) {
   };
 }
 
+// Set by any emit that did not seal an event. Read once, at the end of the success path:
+// a run whose receipt never landed is NOT a green run, and saying so is the whole point of
+// the "exit 0 is not evidence" non-negotiable.
+let receiptFailed = false;
+
+/**
+ * THE ONE WAY THIS FILE EMITS. Every spine write in arc-run goes through here.
+ *
+ * Two defects are closed at this single choke point rather than at three call sites that
+ * would drift (the REQ-06 confinement principle, applied to the emit path):
+ *
+ * 1. THE PAYLOAD IS A FILE, NEVER AN ARGV STRING. `--payload-file` is read with
+ *    `readJsonFile` (arc-event.mjs:118) and takes precedence over `--payload`. Passing the
+ *    JSON inline instead sends it through a bash argv hop, where a Windows path inside the
+ *    payload comes back as `REJECT BAD_JSON -- invalid escape \U`. The consequence is not a
+ *    lost field -- it is that the ONLY receipt the run can write is one reporting its own
+ *    failure. Found by the bench lane on its own emit path, fixed there, and left standing
+ *    here in all three places: the twin-fix shape this repo keeps re-learning.
+ *
+ * 2. `--strict` MAKES A REJECTED RECEIPT A FAILED EMIT. Without it the emitter runs in hook
+ *    mode, where anything invalid is quarantined, a SKIP goes to stderr, and the exit code
+ *    is ALWAYS 0 (arc-event.mjs:4-6). With it, the same input exits 2 and we find out.
+ *    arc-run was one of only two lanes still missing this -- `hq/arc-jobs.mjs`,
+ *    `hq/lib/policy/incident.mjs` and `hq/arc-inbox.mjs` all already pass it.
+ *
+ * Never throws: the caller decides what an unsealed receipt costs, and an emit failure must
+ * not become a second failure path that masks the first.
+ */
+function emitEvent(kind, payloadObj, extraArgs = []) {
+  const dir = mkdtempSync(join(tmpdir(), "arc-run-emit-"));
+  try {
+    const file = join(dir, "payload.json");
+    writeFileSync(file, JSON.stringify(payloadObj), "utf8");
+    const id = execFileSync("bash",
+      [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", kind,
+        "--payload-file", file, "--strict", ...extraArgs],
+      { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
+    return { ok: true, id, error: "" };
+  } catch (e) {
+    return { ok: false, id: "", error: String(e.message).split("\n")[0] };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 function emitRun(payload) {
   const { cost, ...rest } = payload;
   const { flag, tokens } = costArgs(cost);
-  const args = ["emit", "run.completed",
-    "--payload", JSON.stringify({ process: processName, ...rest, ...(tokens ? { tokens } : {}) }),
-    "--process", `${doc.name}@${doc.version}`,
+  const extra = ["--process", `${doc.name}@${doc.version}`,
     "--outcome", payload.outcome === "ok" ? "ok" : "fail"];
-  if (flag) args.push("--cost", flag);
+  if (flag) extra.push("--cost", flag);
   // The receipt records the model that was ACTUALLY used, never the tier label. A label
   // here asserted a routing decision nothing had applied -- a false claim in an append-only
   // ledger, which is worse than an absent one (ADR-0069 b5 / Constitution E3).
-  if (pinnedModel) args.push("--model", pinnedModel);
-  else if (tier) args.push("--model", "unpinned");
-  let id = "";
-  try {
-    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), ...args], { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
-  } catch (e) {
-    console.error(`arc-run: WARN could not emit run.completed: ${String(e.message).split("\n")[0]}`);
+  if (pinnedModel) extra.push("--model", pinnedModel);
+  else if (tier) extra.push("--model", "unpinned");
+
+  const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}) }, extra);
+  if (!r.ok) {
+    receiptFailed = true;
+    console.error(`arc-run: could not emit run.completed: ${r.error}`);
+    console.error("         The run is NOT recorded. Under --strict the emitter rejects rather than quarantining.");
     return;
   }
   // Exit 0 from a fire-and-forget writer is not evidence that anything was written
   // (retro-log 2026-08-02: an emitter reported success while every receipt was quarantined).
-  // LOOK in both places and say where it actually landed.
-  verifyLanded(id);
+  // LOOK in both places and say where it actually landed. --strict catches a REJECTED event;
+  // this catches an ACCEPTED one that still did not reach today's log.
+  if (!verifyLanded(r.id)) receiptFailed = true;
 }
 
+/** Returns TRUE only if the receipt is provably in today's log. The boolean is the point:
+ *  a verifier whose answer nobody reads is a verifier that cannot fail the run. */
 function verifyLanded(id) {
   if (!id) {
     // An empty id means the emitter did NOT seal an event -- in hook mode it exits 0 and
     // quarantines, printing only to stderr. Returning quietly here is how "the receipt was
     // written" becomes an assumption; retro-log 2026-08-02 is exactly this failure.
     console.error("arc-run: WARN the emitter returned no event id — the receipt was NOT sealed (check events/_quarantine/)");
-    return;
+    return false;
   }
   const day = new Date().toISOString().slice(0, 10);
   // The emitter resolves ARC_SPINE_ROOT first (spine-io.mjs); hardcoding the repo path made
@@ -314,11 +361,12 @@ function verifyLanded(id) {
   const events = join(spineRoot, "events", `${day}.jsonl`);
   const quarantine = join(spineRoot, "events/_quarantine");
   const inEvents = existsSync(events) && readFileSync(events, "utf8").includes(id);
-  if (inEvents) return;
+  if (inEvents) return true;
   let q = "";
   try { q = existsSync(quarantine) ? execFileSync("bash", ["-c", `grep -rl ${id} ${JSON.stringify(quarantine)} 2>/dev/null | head -1`], { encoding: "utf8" }).trim() : ""; }
   catch { /* grep found nothing */ }
   console.error(`arc-run: WARN receipt ${id} is NOT in events/${day}.jsonl${q ? ` — it is QUARANTINED at ${q}` : " and not in _quarantine/ either"}`);
+  return false;
 }
 
 // ---------- the run ----------
@@ -374,15 +422,16 @@ function invoke(name) {
     // consequences, not an implementation detail. Tracked as the open half of phase 02.
     const detail = `policy denied ${processName}: ${blocked.reason}`;
     console.error(`arc-run: ${detail}`);
-    try {
-      execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "incident.raised",
-        "--payload", JSON.stringify({ what: detail, severity: "high", source: "arc-run policy gate" }),
-        "--process", `${doc.name}@${doc.version}`, "--outcome", "fail"],
-        { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" });
-    } catch (e) {
+    const inc = emitEvent("incident.raised",
+      { what: detail, severity: "high", source: "arc-run policy gate" },
+      ["--process", `${doc.name}@${doc.version}`, "--outcome", "fail"]);
+    if (!inc.ok) {
       // A receipt we could not write is reported, never swallowed -- but it does not un-deny
-      // the action. Quarantine is not enforcement success (ADR-0106/0032).
-      console.error(`arc-run: WARN could not emit incident.raised: ${String(e.message).split("\n")[0]}`);
+      // the action. Quarantine is not enforcement success (ADR-0106/0032). The denial still
+      // returns 77 below: an unrecorded denial is still a denial, and downgrading enforcement
+      // because the paperwork failed would invert the fail-closed contract this gate exists for.
+      console.error(`arc-run: WARN could not emit incident.raised: ${inc.error}`);
+      console.error("         The DENIAL STANDS and is unaffected; only its receipt is missing.");
     }
     return { code: 77, stdout: "", stderr: detail, cost: null, policyDenied: true };
   }
@@ -514,11 +563,16 @@ if (a.verdict === "schema") {
       ? `the process is not self-consistent: ${selfCheck.why} — no driver is being blamed`
       : `retried once on the same tier and the output still failed the contract: ${retry.why}`,
   };
-  let id = "";
-  try {
-    id = execFileSync("bash", [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "approval.requested", "--payload", JSON.stringify(proposal)], { encoding: "utf8", cwd: root, timeout: 10000, killSignal: "SIGKILL" }).trim();
-    verifyLanded(id);
-  } catch (e) { console.error(`arc-run: WARN could not emit the escalation proposal: ${String(e.message).split("\n")[0]}`); }
+  const prop = emitEvent("approval.requested", proposal);
+  const id = prop.ok ? prop.id : "";
+  if (!prop.ok) {
+    // The ladder TERMINATES here either way (ADR-0204): a proposal that could not be written
+    // must never fall through to an escalation, because the receipt IS the proposal.
+    console.error(`arc-run: WARN could not emit the escalation proposal: ${prop.error}`);
+    receiptFailed = true;
+  } else if (!verifyLanded(id)) {
+    receiptFailed = true;
+  }
 
   console.error(`arc-run: STOPPED. A tier-change PROPOSAL was recorded${id ? ` as ${id}` : ""}; nothing was escalated.`);
   console.error("         Acting on it means editing engine/router.yaml in a reviewed diff citing ADR-0069.");
@@ -538,5 +592,17 @@ function succeed(r) {
   scrub("the spine payload", payload, r.output);
   console.log(payload);
   emitRun({ outcome: "ok", driver, attempts: attemptsMade, cost: r.cost ?? undefined, fault_hint: "unknown", model: pinnedModel ?? "unpinned" });
-  process.exit(0);
+  // AN UNRECORDED RUN IS NOT A GREEN RUN. The answer is already on stdout and stays there --
+  // the caller gets the output AND a non-zero status, which is the honest pair: "here is the
+  // result, and it is not in the ledger." Exiting 0 here is precisely the defect the
+  // "exit 0 from a fire-and-forget writer is not evidence" non-negotiable names.
+  //
+  // Code 1 ("cannot proceed") is REUSED rather than a new one claimed. ADR-0219 publishes
+  // arc-run's table and marks 3 and 4 "unused and reserved; absence is deliberate" -- an exit
+  // code is a published interface, so taking one is a one-way change that needs its own ADR,
+  // not a side effect of a bug fix. The cost of reusing 1 is real and worth writing down: a
+  // fixture cannot yet distinguish "unrecorded receipt" from "unknown process" by status
+  // alone, and must read stderr. That is the same argument ADR-0219 used to justify exit 5,
+  // so if this distinction is ever asserted by a fixture, it earns a code through an ADR.
+  process.exit(receiptFailed ? 1 : 0);
 }
