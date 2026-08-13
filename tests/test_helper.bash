@@ -170,9 +170,25 @@ _arc_json() {
 #
 # Measured 2026-08-12: arc-scan.bats, baseline.bats and arc-profile.bats fail in ISOLATION on
 # windows on main AND on every branch (weigh-tests runs 31625002487 and 31627029442, identical
-# rc=1). They pass in arc-ci only when the sharder happens to co-locate them with
-# arc-tools-image.bats, which prepares the docker image the adapter falls back to -- an
-# undeclared inter-file dependency that any change to the shard plan revokes.
+# rc=1).
+#
+# THE CAUSE IS NOW ESTABLISHED, AND THE SHARD-LUCK EXPLANATION THAT USED TO SIT HERE WAS WRONG.
+# It is not an inter-file dependency on arc-tools-image.bats: red run 31622490938 put
+# arc-tools-image.bats, arc-scan.bats and baseline.bats in the SAME shard and they still failed,
+# and arc-tools-image.bats states at its own line 3 that it runs static offline checks and
+# builds nothing.
+#
+# It is a CLOCK, not a shard plan. opengrep is pulled UNPINNED from releases/latest
+# (.github/workflows/ci.yml:154), and v1.27.0 was published 2026-08-12T14:55:32Z. Main SHA
+# 6792091c ran arc-ci twice across that instant -- run 31604575944 at 14:02 GREEN, run
+# 31622490938 at 17:24 RED -- identical commit, identical shard file list, identical runner. The
+# windows binary in v1.27.0 exits 2, which is semgrep's FATAL code, on every leg. ubuntu and
+# macOS stay green on the same version, so it is the windows packaging and not the invocation.
+# Both weigh-tests runs cited above ran AFTER 14:55:32Z, so "chronically red, not new" described
+# a two-hour-old regression.
+#
+# The durable fix is to PIN opengrep the way gitleaks directly above it is already pinned. Until
+# that lands, this canary is what keeps a broken scanner from reading as a clean codebase.
 #
 # So probe the TOOL directly, without the adapter's `|| true`, on a canary the arc-min rules are
 # known to flag. Tool broken or ruleless -> skip, visibly, naming why. Tool fine but the adapter
