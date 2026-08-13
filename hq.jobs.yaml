@@ -1,0 +1,58 @@
+# hq.jobs.yaml -- the schedule (SCH-B, ADR-0802). Git-tracked, closed schema, hostile lint.
+#
+# `jobs-lint` is a VALIDATOR and exits 2 from birth: an illegal schedule is a job nobody
+# authorised running unattended on a timer, so there is no advisory mode.
+#
+# BLOCK STYLE ONLY. This file is parsed by the SAME frozen subset the engine uses
+# (`engine/yaml-subset.mjs`, ADR-0200) so that arc never grows a second YAML parser class --
+# and that subset REJECTS non-empty flow collections by name. `budget: { min: 2 }` does not
+# parse here. The design source's worked example used exactly that shape; it was written
+# against the policy file's parser, which is a different one.
+#
+# Cadences are IST and the grammar is closed to two forms, `daily@HH:MM` and `weekdays@HH:MM`.
+# The spine's timestamps are +05:30 by schema, so there is deliberately no timezone knob.
+#
+# `policy_kind` names a SUBJECT in the live `hq.policy.yaml`, not an action. ADR-0504 closes
+# that set to `session:interactive` or `process:NAME` where NAME is a real processes/ stem, so
+# each job here has a matching `processes/<name>.process.yaml` carrying `job_stub: true`.
+# Deny-by-default: no row in the policy file, no job.
+
+version: 1
+
+# v1 is all script-jobs, so the worst case is INR 0 BY CONSTRUCTION rather than by restraint.
+# Raising this is a reviewed diff, and it may only be raised when a process-job actually enters
+# the file -- `jobs-lint --bill` prints the worst-case month the ceiling is checked against.
+monthly_ceiling_inr: 0
+
+defaults:
+  catchup: skip
+
+jobs:
+  # The morning read, made zero-effort. Renders today's brief into instance state, never into
+  # the repo: a brief is a view of the spine at a moment, and committing one would make it a
+  # second truth that drifts.
+  - name: brief-materialize
+    type: script
+    entry: .claude/scripts/hq/jobs/brief-materialize.mjs
+    budget:
+      min: 2
+    policy_kind: process:brief-materialize
+    cadence: weekdays@06:00
+    enabled: true
+
+  # The heartbeat's first duty is sealing the books. At 00:15 the previous day's events are
+  # complete, and `catchup: run` plus an idempotent multi-day roll means a slept-through night
+  # is caught up rather than skipped -- which matters more here than anywhere, because this
+  # machine is Modern Standby only and is never woken for a slot (ADR-0804).
+  #
+  # The roll lives in the job, not the CLI: `arc-event close-day` closes exactly one day, throws
+  # on a day already closed, and REFUSES a day with no events at all (ADR-0805).
+  - name: day-close-roll
+    type: script
+    entry: .claude/scripts/hq/jobs/day-close-roll.mjs
+    budget:
+      min: 2
+    policy_kind: process:day-close-roll
+    cadence: daily@00:15
+    enabled: true
+    catchup: run
