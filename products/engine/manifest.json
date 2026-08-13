@@ -23,7 +23,10 @@
     ".claude/scripts/engine/drivers/generic-api.mjs",
     ".claude/scripts/engine/drivers/generic-api.sh",
     ".claude/scripts/engine/drivers/mock.mjs",
-    ".claude/scripts/engine/drivers/mock.sh"
+    ".claude/scripts/engine/drivers/mock.sh",
+    ".claude/scripts/engine/drivers/hermes.mjs",
+    ".claude/scripts/engine/drivers/hermes.sh",
+    ".claude/scripts/engine/drivers/type-tagged-hash.mjs"
   ],
   "files": [],
   "docs": []

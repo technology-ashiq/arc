@@ -45,7 +45,9 @@ import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
 // precisely so it can be SELECTED here and NAMED on a receipt.
-const DRIVERS = ["claude-code", "codex", "generic-api", "mock"];
+// `hermes` is the agent-runtime shim (ADR-0208/0219, engine Cycle 7). It is one more driver and
+// not a special guest: same argv contract, same three-code exit map, same cost sidecar.
+const DRIVERS = ["claude-code", "codex", "generic-api", "hermes", "mock"];
 
 // ---------- CLI ----------
 const argv = process.argv.slice(2);
@@ -377,7 +379,22 @@ function invoke(name) {
     // blamed on the driver.
     maxBuffer: 64 * 1024 * 1024,
     killSignal: "SIGKILL",
-    env: { ...process.env, ARC_DRIVER_COST_FILE: costFile, ARC_ROOT: root, ARC_DRIVER_MODEL: pinnedModel ?? "" },
+    env: {
+      ...process.env,
+      ARC_DRIVER_COST_FILE: costFile,
+      ARC_ROOT: root,
+      ARC_DRIVER_MODEL: pinnedModel ?? "",
+      // The RUN's deadline, as an ABSOLUTE epoch millisecond, so a driver that must impose its
+      // own timeout on a subprocess cannot accidentally start a fresh budget. `budgetStr` is
+      // the ORIGINAL allowance and is passed unchanged for reporting; a driver reading `min`
+      // from it and using it as a timeout would hand every driver in the fallback chain a full
+      // budget again -- the defect this file already records at the timeout arm below. An
+      // absolute instant has the time already burned subtracted, and cannot be un-subtracted.
+      //
+      // Absent (no `min` bound) means NO deadline, not a zero one: an unbounded run must not be
+      // declined by a driver reading an empty string as 0.
+      ...(timeoutMs === undefined ? {} : { ARC_DRIVER_DEADLINE_EPOCH_MS: String(Date.now() + timeoutMs) }),
+    },
   });
   let cost = null;
   if (existsSync(costFile)) {

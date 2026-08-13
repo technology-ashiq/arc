@@ -212,7 +212,17 @@ export async function runDriver(name, produce, opts = {}) {
     process.stdout.write(`${JSON.stringify(output)}\n`);
     process.exitCode = EXIT.OK;
   } catch (e) {
-    die(EXIT.DRIVER_FAIL, e.message);
+    // A REAL driver could not decline for budget, and that was a hole in the shared contract
+    // rather than a missing feature of any one driver. The fake path has always been able to
+    // (`__decline_budget` above), so an offline recording could exercise exit 2 while nothing
+    // that actually talks to a runtime ever could -- which makes "the budget arm is covered" a
+    // statement about the fixture and not about the code.
+    //
+    // CLOSED, AND CLOSED NARROWLY: only BUDGET_DECLINED may be requested this way. The exit map
+    // is 0/1/2 and this cycle adds nothing to it (ADR-0219), so an `arcExit` naming anything
+    // else is a driver trying to widen the contract and is ignored rather than obeyed.
+    const asked = e && e.arcExit;
+    die(asked === EXIT.BUDGET_DECLINED ? EXIT.BUDGET_DECLINED : EXIT.DRIVER_FAIL, e.message);
   }
 }
 
