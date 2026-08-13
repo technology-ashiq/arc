@@ -37,6 +37,52 @@ identifier** — one FIXTURE-ID per fixture, used in three places.
 passes it down, so `arc-run`'s per-invocation `--budget` becomes the mechanism rather than a
 competing budget (REQ-04).
 
+> **M1 · AMENDMENT (slice 09, 2026-08-13) — two of those three env vars do not survive `arc-run`,
+> and the remainder is threadable for one dimension, not two.** The paragraphs above stand as
+> bench's instruction; what follows is what running it actually produced. Measured, not read.
+>
+> `arc-run.mjs:378-381` rebuilds the driver's environment as `{ ...process.env,
+> ARC_DRIVER_COST_FILE, ARC_ROOT: root, ARC_DRIVER_MODEL: pinnedModel ?? "" }`. Only
+> **`ARC_MOCK_FIXTURE`** passes through untouched.
+>
+> - **`ARC_ROOT`** — pointed at a directory holding no recordings at all; the run still succeeded
+>   and replayed the correct bytes, which it could only do by resolving the recording directory
+>   from `arc-run`'s own root. Bench cannot hand a driver the materialized fixture repo.
+> - **`ARC_DRIVER_MODEL`** — set to `claude-opus-5`; `arc-run`'s own receipt came back
+>   `payload.model: "unpinned"`. With an explicit `--driver`, `tier` is null, so `pinnedModel` is
+>   null and the driver receives the empty string. **A model can only be pinned through
+>   `--driver auto` plus a `classes.NAME` row in `engine/router.yaml`** — which is do-not-touch
+>   for this lane, permanently (PLAN § No-gos).
+>
+> Three consequences, all of them Phase 1's to resolve and none of them fixable here, because
+> `arc-run.mjs` is a **one-line-only** path for this lane (PLAN touch-with-care 3):
+>
+> 1. **The fixture-repo harness cannot reach a real driver.** `arc-run` spawns every driver with
+>    `cwd` and `ARC_ROOT` set to the arc repo, so there is no target-repo seam. Worse than inert:
+>    `commit-msg-draft` holds `git.op: add:*` and `commit:*`, so running it on a real driver today
+>    would stage and commit **inside the arc repo itself**. Same class as the `ARC_DRIVER_FAKE`
+>    short-circuit this phase already reports and does not fix.
+> 2. **Bench cannot vary the model**, which is the entire premise of a model market. Phase 1 needs
+>    an engine seam, and it is a router-shaped decision, not a bench-shaped one.
+> 3. **The `inr` remainder cannot be threaded**, only the `min` one. No driver reports spend on
+>    `arc-run`'s stdout and the cost sidecar is consumed inside `arc-run`, so bench passes `inr`
+>    down unchanged as a ceiling and reports spend as **unmeasured, never zero** (ADR-0904 — a
+>    ceiling bounds spend, it never reports it). `min` is wall-clock, which bench measures itself,
+>    so that one genuinely decrements and a run that exhausts it stops.
+>
+> Bench still sets all three exactly as instructed, because the instruction is the thing under
+> test: `tests/bench-steel-probe.mjs` asserts the MEASURED behaviour, so the day the engine grows
+> a seam these assertions fail loudly instead of a stale comment going quietly wrong.
+>
+> **A fourth finding, from the same slice, about the emitter rather than the driver.** M6's
+> command line passes the payload inline as `--payload JSON`. A not-scored attempt records the
+> driver's own message, which names a path — and `C:\Users\...` does not survive the trip through
+> `spawnSync` → the Windows command line → `bash` → `node`: the emitter returned
+> `REJECT BAD_JSON -- --payload: invalid escape \U`, so **the one receipt that mattered, the one
+> reporting a failure, was the only one that could not be written**. Bench reaches the emitter
+> through **`--payload-file`** instead. `arc-run.mjs:257` still passes `--payload` inline and
+> carries the identical latent bug; that is engine's to fix and bench reports it.
+
 **M2 · Where the mock's pinned bytes live, and how it picks one.** `ARC_MOCK_DIR` (default
 `tests/fixtures/bench/mock-replay/`). The mock resolves **`PROCESS/FIXTURE-ID.json`**, where
 `FIXTURE-ID` comes from **`ARC_MOCK_FIXTURE`**, set by bench before each attempt; with that env

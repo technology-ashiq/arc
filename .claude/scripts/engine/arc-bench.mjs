@@ -300,3 +300,485 @@ export function materializeRepoState(stateDir) {
 export function repoStatus(root) {
   return git(root, ["status", "--porcelain"]).replace(/\r?\n$/, "");
 }
+
+// ---------------------------------------------------------------------------------------------
+// The runner -- the steel thread (slice 09).
+//
+// Discover the declared classes -> gate each on the fixture floor -> materialize a fixture's repo
+// state (M3) -> shell out to `arc-run` ONCE per attempt (M1) -> score the produced document
+// against that fixture's assertions -> emit ONE `run.completed` (M6) -> and then LOOK for that
+// receipt in `events/` and in `events/_quarantine/`, because exit 0 from a fire-and-forget writer
+// is not evidence anything was written (retro-log 2026-08-02).
+//
+// TWO OF M1's THREE ENV VARS DO NOT SURVIVE `arc-run`, and this was MEASURED rather than read.
+// M1 says bench sets `ARC_ROOT` (the materialized repo), `ARC_DRIVER_MODEL` and
+// `ARC_MOCK_FIXTURE` per attempt. `arc-run.mjs:378-381` builds the driver's environment as
+// `{ ...process.env, ARC_DRIVER_COST_FILE, ARC_ROOT: root, ARC_DRIVER_MODEL: pinnedModel ?? "" }`,
+// so it OVERWRITES the first two and only `ARC_MOCK_FIXTURE` passes through untouched.
+//
+//   ARC_ROOT          pointed at a directory holding no recordings at all; the run still
+//                     succeeded and replayed the right bytes, which it could only do by
+//                     resolving the recording dir from arc-run's root instead.
+//   ARC_DRIVER_MODEL  set to `claude-opus-5`; arc-run's own receipt came back
+//                     `payload.model: "unpinned"`. With an explicit `--driver`, `tier` is null,
+//                     so `pinnedModel` is null and the driver is handed the empty string. A model
+//                     can ONLY be pinned through `--driver auto` plus a router row -- and
+//                     `engine/router.yaml` is do-not-touch for this lane, permanently.
+//
+// Bench sets all three anyway, exactly as M1 instructs, because the instruction is the thing
+// under test: the tests below assert the MEASURED behaviour, so the day the engine grows a
+// target-repo seam the assertions fail loudly instead of a stale comment going quietly wrong.
+//
+// The consequence is a REPORTED ENGINE GAP, not a bench fix: `arc-run` spawns every driver with
+// `cwd` and `ARC_ROOT` set to the arc repo, so there is no seam through which the materialized
+// fixture repo can reach a real driver. `arc-run.mjs` is a one-line-only path for this lane
+// (PLAN touch-with-care 3), so widening it here would be the scope breach the fence exists to
+// stop. It is the same class as the `ARC_DRIVER_FAKE` short-circuit this phase already reports
+// and does not fix, and Phase 1 cannot compare two real models until one of them is closed.
+// ---------------------------------------------------------------------------------------------
+
+import { spawnSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+import { parseBudget } from "./drivers/common.mjs";
+
+/** The `--process` identity on bench's own receipts (M6). Bench is a runner, never a process. */
+export const BENCH_ID = "bench@0.1.0";
+
+/** M13. 0 = every selected fixture was scored · 1 = partial or budget-aborted · 2 = operator. */
+export const EXIT = Object.freeze({ OK: 0, PARTIAL: 1, OPERATOR: 2 });
+
+/** Anything the operator can fix by retyping the command. Never a scoring outcome. */
+export class OperatorError extends Error {}
+
+const VALUE_FLAGS = Object.freeze({ "--driver": "driver", "--model": "model", "--budget": "budget", "--champion": "champion" });
+const BOOL_FLAGS = Object.freeze({ "--propose": "propose", "--dry-run": "dryRun" });
+
+/**
+ * The budget dimensions bench ACTUALLY enforces. `min` is wall-clock, which bench measures
+ * itself and genuinely decrements; `inr` is a ceiling it passes down and cannot observe (ADR-0904).
+ * Anything else is refused rather than accepted-and-ignored.
+ */
+export const BUDGET_DIMENSIONS = Object.freeze(["inr", "min"]);
+
+/** Render a parsed budget back into the wire grammar `inr=N,min=M`. */
+export function budgetString(b) {
+  return Object.entries(b).map(([k, v]) => `${k}=${v}`).join(",");
+}
+
+/**
+ * The closed flag set (M13), and `exit 2` naming anything outside it.
+ *
+ * A flag whose value is missing must never swallow the NEXT flag. `.claude/rules/lanes.md`
+ * records that exact failure: an unquoted empty value ate the following flag, and a surface with
+ * no creation rights was thereby made to report `create`.
+ */
+export function parseArgs(argv) {
+  const out = { driver: "", model: "", budget: "", champion: "", propose: false, dryRun: false };
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (Object.prototype.hasOwnProperty.call(BOOL_FLAGS, a)) { out[BOOL_FLAGS[a]] = true; continue; }
+    if (!Object.prototype.hasOwnProperty.call(VALUE_FLAGS, a)) {
+      throw new OperatorError(`unknown option ${a} -- the closed set is ${[...Object.keys(VALUE_FLAGS), ...Object.keys(BOOL_FLAGS)].join(" ")}`);
+    }
+    const v = argv[i + 1];
+    if (v === undefined || v.startsWith("--")) throw new OperatorError(`${a} needs a value`);
+    out[VALUE_FLAGS[a]] = v;
+    i++;
+  }
+  if (!out.driver) throw new OperatorError("--driver is required");
+  if (!out.budget) throw new OperatorError("--budget is required -- a run with no ceiling is unbounded spend");
+  // The GRAMMAR is common.mjs's; the DIMENSIONS are bench's, and they are checked separately.
+  // `--budget rupees=1` parses perfectly -- `[a-z]+=N` -- and then bounds nothing at all, so a
+  // typo like `inrr=10` reads on the scorecard as a budget and enforces none. Found by this
+  // slice's own probe, which expected a refusal and got an acceptance.
+  let parsedBudget;
+  try { parsedBudget = parseBudget(out.budget); } catch (e) { throw new OperatorError(e.message); }
+  const unknown = Object.keys(parsedBudget).filter((k) => !BUDGET_DIMENSIONS.includes(k));
+  if (unknown.length) throw new OperatorError(`--budget has no dimension \`${unknown[0]}\` (bench enforces ${BUDGET_DIMENSIONS.join(", ")}) -- a bound nothing reads is not a bound`);
+  if (!Object.keys(parsedBudget).length) throw new OperatorError("--budget names no dimension at all");
+  // Parsed-and-ignored is worse than refused: a flag that quietly does nothing reads, on a
+  // scorecard, exactly like a flag that worked. Both arrive with their own phase.
+  if (out.champion) throw new OperatorError("--champion selects the incumbent to beat and arrives with Phase 1 admission control -- it is refused rather than ignored");
+  if (out.propose) throw new OperatorError("--propose writes a swap proposal and arrives with Phase 2 -- it is refused rather than ignored");
+  return out;
+}
+
+/** The drivers this tree actually ships, read from disk rather than from a second hardcoded list. */
+export function knownDrivers(root) {
+  return readdirSync(join(root, ".claude/scripts/engine/drivers"))
+    .filter((f) => f.endsWith(".sh"))
+    .map((f) => f.slice(0, -3))
+    .sort();
+}
+
+/**
+ * The driver's own identity, from the opt-in `version` verb (ADR-0902/0903).
+ *
+ * It rides BESIDE the model fingerprint and never replaces it. A driver that does not answer the
+ * verb leaves this ABSENT -- never "unknown", never the driver's bare name, because a provenance
+ * field that is always populated stops distinguishing a driver that reported from one that did
+ * not (ADR-0069 b5: recorded, estimated and fabricated are three different things).
+ *
+ * `produce()`'s returned `model` is NOT a channel for this: `runDriver` destructures only
+ * `{ output, cost }` (common.mjs:210), so the mock's returned `model` is discarded and the verb
+ * is the only path that reaches a caller.
+ */
+export function driverIdentity(root, driver) {
+  const sh = join(root, ".claude/scripts/engine/drivers", `${driver}.sh`);
+  if (!existsSync(sh)) return null;
+  const res = spawnSync("bash", [sh, "version"], { encoding: "utf8", cwd: root, timeout: 30000, killSignal: "SIGKILL" });
+  if (res.status !== 0) return null;
+  return (res.stdout || "").trim() || null;
+}
+
+/**
+ * One class: its declared fixtures and its eval pack, both read from the DECLARED `evals:` list
+ * rather than from a directory listing, for the reason `declaredFixtureCount` states.
+ */
+export function loadClass(root, processName) {
+  const canon = join(root, "processes", `${processName}.process.yaml`);
+  const parsed = parseYamlSubset(readFileSync(canon, "utf8"));
+  if (!parsed.ok) throw new OperatorError(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
+  const evals = parsed.value?.evals;
+  if (!Array.isArray(evals) || evals.length === 0) throw new OperatorError(`${processName}: evals is missing or empty`);
+
+  const fixtures = evals.map((rel) => {
+    const p = resolve(root, rel);
+    let doc;
+    try { doc = JSON.parse(readFileSync(p, "utf8")); }
+    catch (e) { throw new OperatorError(`${processName}: eval fixture ${rel} is unreadable: ${String(e.message).split("\n")[0]}`); }
+    return { id: typeof doc.repo_state === "string" && doc.repo_state ? doc.repo_state : null, file: rel, dir: dirname(p), doc };
+  });
+
+  // The pack is a SIBLING of the fixtures (ADR-0905): `process-lint.mjs:65-67` freezes the
+  // process YAML's top-level keys, so the eval-pack revision cannot live there.
+  const packPath = join(fixtures[0].dir, "pack.json");
+  const pack = existsSync(packPath) ? readPack(packPath) : null;
+  return { processName, fixtures, pack };
+}
+
+/** Every class this tree declares, each carrying its coverage verdict. */
+export function discoverClasses(root) {
+  return readdirSync(join(root, "processes"))
+    .filter((f) => f.endsWith(".process.yaml"))
+    .map((f) => f.slice(0, -".process.yaml".length))
+    .sort()
+    .map((name) => classCoverage(root, name));
+}
+
+/**
+ * ONE attempt: materialize, invoke `arc-run` once (M1), score, and clean up on every path.
+ *
+ * The materialized repo is torn down in a `finally`, including when the attempt throws -- a
+ * harness that only cleans up on success fills the runner disk exactly when something is already
+ * wrong, which is the moment the next diagnosis needs the disk.
+ */
+export function runAttempt(root, { processName, fixture, driver, model, budget, timeoutMs }) {
+  const stateDir = join(fixture.dir, "repo-states", fixture.id);
+  const state = materializeRepoState(stateDir);
+  const tmp = mkdtempSync(join(tmpdir(), "arc-bench-in-"));
+  const started = Date.now();
+  try {
+    const inputFile = join(tmp, "input.json");
+    writeFileSync(inputFile, JSON.stringify(fixture.doc.input ?? {}), "utf8");
+
+    // `--root` is passed EXPLICITLY and is not in M1's command line. Without it, arc-run resolves
+    // its root from `ARC_ROOT` -- which bench has just pointed at the materialized fixture repo,
+    // where `processes/` does not exist -- and the run dies with "no such process". The env var
+    // and the flag answer two different questions and only the flag answers arc-run's.
+    const args = [
+      join(root, ".claude/scripts/engine/arc-run.mjs"),
+      "--process", processName,
+      "--driver", driver,
+      "--input", `@${inputFile}`,
+      "--budget", budgetString(budget),
+      "--root", root,
+    ];
+    const res = spawnSync(process.execPath, args, {
+      encoding: "utf8",
+      cwd: root,
+      timeout: timeoutMs,
+      // arc-run already raised its own driver ceiling to 64 MiB after Node's 1 MiB default
+      // truncated a large but valid answer and the driver was blamed for it. Same reasoning here.
+      maxBuffer: 64 * 1024 * 1024,
+      killSignal: "SIGKILL",
+      env: { ...process.env, ARC_ROOT: state.root, ARC_DRIVER_MODEL: model, ARC_MOCK_FIXTURE: fixture.id },
+    });
+
+    const elapsedMs = Date.now() - started;
+    // Read the repo BEFORE cleanup. With a replay driver this comes back exactly as materialized,
+    // which is itself the evidence that no driver ever reached it.
+    const after = repoStatus(state.root);
+
+    if (res.error && res.error.code === "ETIMEDOUT") {
+      return { ok: false, verdict: "budget", why: "arc-run exceeded the attempt timeout", elapsedMs, after };
+    }
+    const status = res.status ?? 1;
+    if (status !== 0) {
+      const line = String(res.stderr || "").trim().split("\n").filter(Boolean).pop() || `arc-run exited ${status}`;
+      return { ok: false, verdict: "run", why: line, elapsedMs, after };
+    }
+    let output;
+    try { output = JSON.parse(res.stdout); }
+    catch (e) { return { ok: false, verdict: "run", why: `arc-run stdout is not JSON: ${e.message}`, elapsedMs, after }; }
+
+    const score = scoreAssertions(output, fixture.doc.assertions, fixture.id);
+    return { ok: true, verdict: "ok", output, score, elapsedMs, after };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+    state.cleanup();
+  }
+}
+
+// ---- the receipt, and proving it landed ------------------------------------------------------
+
+/** Where the spine actually is. `ARC_SPINE_ROOT` wins on PRESENCE, matching `spine-io.mjs:41`. */
+export function spinePaths(root) {
+  const base = "ARC_SPINE_ROOT" in process.env && String(process.env.ARC_SPINE_ROOT).trim()
+    ? resolve(String(process.env.ARC_SPINE_ROOT))
+    : join(root, ".claude/state/hq");
+  return { events: join(base, "events"), quarantine: join(base, "events", "_quarantine") };
+}
+
+/**
+ * Look for the receipt in BOTH places, and scan EVERY day file rather than today's.
+ *
+ * arc-run's own verifier derives the day from `new Date().toISOString()` (UTC) while the spine
+ * keys its files on IST, so on either side of midnight it looks in a file the receipt was never
+ * written to and reports a false alarm. Scanning the directory removes the clock from the answer
+ * entirely -- and a verifier that cries wolf on a green run is a verifier people mute.
+ */
+export function findReceipt(root, id) {
+  const { events, quarantine } = spinePaths(root);
+  let inEvents = false;
+  if (existsSync(events)) {
+    for (const e of readdirSync(events, { withFileTypes: true })) {
+      if (!e.isFile() || !e.name.endsWith(".jsonl")) continue;
+      if (readFileSync(join(events, e.name), "utf8").includes(id)) { inEvents = true; break; }
+    }
+  }
+  let quarantined = null;
+  const walk = (d) => {
+    if (quarantined || !existsSync(d)) return;
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) { walk(p); continue; }
+      if (!e.isFile()) continue;
+      try { if (readFileSync(p, "utf8").includes(id)) { quarantined = p; return; } } catch { /* unreadable is not found */ }
+    }
+  };
+  walk(quarantine);
+  return { inEvents, quarantined, landed: inEvents && !quarantined };
+}
+
+/**
+ * Emit bench's one receipt, the way arc-run does (M6). Bench NEVER writes to `events/` itself.
+ *
+ * `--strict` is first-party (ADR-0031/0032): without it the emitter runs in hook mode, exits 0
+ * and quarantines, so a failure to record would read as a success.
+ */
+export function emitRunCompleted(root, payload, outcome) {
+  // THE PAYLOAD GOES THROUGH A FILE, NEVER THROUGH ARGV, and this was found by running it rather
+  // than by reading it. A not-scored attempt records the driver's own message, which on Windows
+  // names a path -- and `C:\Users\...` survives `JSON.stringify` as `\\U`, then does NOT survive
+  // the trip through `spawnSync -> Windows command line -> bash -> node`. The emitter came back
+  // `REJECT BAD_JSON -- --payload: invalid escape \U`, so the ONE receipt that mattered (the one
+  // reporting the failure) was the one that could not be written. It is the same rule CLAUDE.md
+  // states for shell-embedded programs: the moment the text wants a backslash, it belongs in a
+  // file. `arc-run.mjs:257` still passes `--payload` inline and carries the identical latent bug;
+  // that is engine's to fix, and bench reports it rather than widening its one-line diff there.
+  const tmp = mkdtempSync(join(tmpdir(), "arc-bench-emit-"));
+  try {
+    const payloadFile = join(tmp, "payload.json");
+    writeFileSync(payloadFile, JSON.stringify(payload), "utf8");
+    const args = [
+      join(root, ".claude/scripts/hq/arc-event.sh"), "emit", "run.completed",
+      "--payload-file", payloadFile,
+      "--process", BENCH_ID,
+      "--outcome", outcome,
+      "--strict",
+    ];
+    const res = spawnSync("bash", args, { encoding: "utf8", cwd: root, timeout: 30000, killSignal: "SIGKILL" });
+    const id = String(res.stdout || "").trim();
+    if (res.status !== 0 || !id) {
+      const why = String(res.stderr || "").trim().split("\n").filter(Boolean)[0] || `the emitter exited ${res.status}`;
+      return { id: null, landed: false, inEvents: false, quarantined: null, why };
+    }
+    return { id, why: null, ...findReceipt(root, id) };
+  } finally {
+    rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
+// ---- the run ---------------------------------------------------------------------------------
+
+/**
+ * The whole thread. Returns a report; printing and exiting are `main`'s job, so this is callable
+ * from a test without a subprocess.
+ *
+ * THE BUDGET REMAINDER IS THREADED FOR THE DIMENSION BENCH CAN OBSERVE, AND ONLY THAT ONE.
+ * `min` is wall-clock, which bench measures itself, so it genuinely decrements and a run that
+ * exhausts it stops. `inr` cannot: no driver reports spend on arc-run's stdout, the cost sidecar
+ * is consumed inside arc-run, and inventing a figure to subtract would be an estimate wearing a
+ * measurement's clothes (ADR-0904 -- a ceiling bounds spend, it never reports it). So `inr` is
+ * passed down unchanged as a CEILING and reported as unmeasured, never as zero.
+ */
+export function runBench(root, { driver, model, budget, dryRun = false }) {
+  const ceiling = parseBudget(budget);
+  const remaining = { ...ceiling };
+  const identity = driverIdentity(root, driver);
+  const classes = [];
+  let attempts = 0;
+  let partial = false;
+
+  for (const cov of discoverClasses(root)) {
+    const entry = {
+      task_class: cov.taskClass,
+      declared: cov.count,
+      eligible: cov.eligible,
+      reason: cov.reason,
+      revision: null,
+      selected: 0,
+      unselected: [],
+      scored: 0,
+      assertions: { passed: 0, total: 0, rate: null },
+      fixtures: [],
+    };
+    classes.push(entry);
+    if (!cov.eligible) continue;
+
+    const loaded = loadClass(root, cov.taskClass);
+    entry.revision = loaded.pack ? loaded.pack.revision : null;
+
+    for (const fx of loaded.fixtures) {
+      // A fixture with no `repo_state` cannot be POSED: `commit-msg-draft` declares `inputs: []`,
+      // so the repository is the only thing that varies. It is named here rather than dropped --
+      // a silent skip is how a class loses coverage without the count ever moving.
+      if (!fx.id) { entry.unselected.push({ file: fx.file, reason: "declares no repo_state -- the case cannot be posed" }); continue; }
+      entry.selected += 1;
+      if (dryRun) { entry.fixtures.push({ id: fx.id, dry_run: true }); continue; }
+
+      if ("min" in remaining && remaining.min <= 0) {
+        partial = true;
+        entry.unselected.push({ file: fx.file, reason: "the run-level minute budget was exhausted before this attempt" });
+        continue;
+      }
+
+      const perAttempt = { ...remaining };
+      const timeoutMs = "min" in perAttempt ? Math.max(1000, Math.floor(perAttempt.min * 60000)) : 10 * 60000;
+      let r;
+      try { r = runAttempt(root, { processName: cov.taskClass, fixture: fx, driver, model, budget: perAttempt, timeoutMs }); }
+      catch (e) { r = { ok: false, verdict: "harness", why: String(e.message).split("\n")[0], elapsedMs: 0, after: null }; }
+      attempts += 1;
+      if ("min" in remaining) remaining.min = Math.max(0, remaining.min - r.elapsedMs / 60000);
+
+      if (!r.ok) {
+        partial = true;
+        entry.fixtures.push({ id: fx.id, ok: false, verdict: r.verdict, why: r.why });
+        continue;
+      }
+      entry.scored += 1;
+      entry.assertions.passed += r.score.passed;
+      entry.assertions.total += r.score.total;
+      entry.fixtures.push({
+        id: fx.id,
+        ok: true,
+        passed: r.score.passed,
+        total: r.score.total,
+        // ABSENT, never 100%: a fixture that asserts nothing must not be the cheapest way to
+        // look perfect (ADR-0905).
+        rate: r.score.rate,
+        failed: r.score.results.filter((x) => !x.pass).map((x) => x.id),
+        repo_untouched: r.after !== null,
+      });
+    }
+    entry.assertions.rate = entry.assertions.total ? entry.assertions.passed / entry.assertions.total : null;
+  }
+
+  return {
+    bench: BENCH_ID,
+    driver,
+    driver_version: identity,
+    model_requested: model || null,
+    // Measured, not assumed: with an explicit `--driver`, arc-run hands the driver an empty
+    // ARC_DRIVER_MODEL and its own receipt reads `model: unpinned`. Saying so on bench's receipt
+    // keeps a run from claiming a model it never applied.
+    model_applied: null,
+    budget: {
+      ceiling,
+      min_remaining: "min" in remaining ? Number(remaining.min.toFixed(4)) : null,
+      inr_spent: null,
+      inr_spent_note: "unmeasured -- no driver reports spend on arc-run stdout; the ceiling bounds it, it never reports it (ADR-0904)",
+    },
+    attempts,
+    classes,
+    outcome: partial ? "partial" : "ok",
+  };
+}
+
+/** The scorecard. Human-readable and deliberately unpinned -- no test asserts its shape (M13). */
+function printReport(report) {
+  const out = [];
+  out.push(`arc-bench ${report.bench} -- driver ${report.driver}${report.driver_version ? ` (${report.driver_version})` : " (version: ABSENT)"}`);
+  out.push(`model requested ${report.model_requested ?? "(none)"} -- applied: NONE (arc-run pins a model only via --driver auto + a router row)`);
+  for (const c of report.classes) {
+    if (!c.eligible) { out.push(`  ${c.task_class}: ${c.reason}`); continue; }
+    const a = c.assertions;
+    const rate = a.rate === null ? "ABSENT" : `${(a.rate * 100).toFixed(1)}%`;
+    out.push(`  ${c.task_class} @ ${c.revision ?? "(no pack)"}: ${c.scored}/${c.selected} fixtures scored, assertions ${a.passed}/${a.total} = ${rate}`);
+    for (const f of c.fixtures) {
+      if (f.dry_run) { out.push(`    - ${f.id}: would run`); continue; }
+      out.push(f.ok
+        ? `    - ${f.id}: ${f.passed}/${f.total}${f.failed.length ? ` FAILED ${f.failed.join(",")}` : ""}`
+        : `    - ${f.id}: NOT SCORED (${f.verdict}) ${f.why}`);
+    }
+    for (const u of c.unselected) out.push(`    - ${u.file}: not selected -- ${u.reason}`);
+  }
+  out.push(`  budget: ceiling ${budgetString(report.budget.ceiling)} · inr spent ${report.budget.inr_spent ?? "UNMEASURED"}${report.budget.min_remaining === null ? "" : ` · minutes left ${report.budget.min_remaining}`}`);
+  console.log(out.join("\n"));
+}
+
+function main() {
+  let args;
+  try { args = parseArgs(process.argv.slice(2)); }
+  catch (e) { console.error(`arc-bench: ${e.message}`); process.exit(EXIT.OPERATOR); }
+
+  // This file lives at `<root>/.claude/scripts/engine/`, so the root is three levels up. Derived
+  // from the file rather than from cwd: bench is invoked from wherever, and a runner that
+  // resolved its own repo from the caller cwd would score whichever tree it happened to land in.
+  const root = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+  const drivers = knownDrivers(root);
+  if (!drivers.includes(args.driver)) {
+    console.error(`arc-bench: unknown driver \`${args.driver}\` (installed: ${drivers.join(", ")})`);
+    process.exit(EXIT.OPERATOR);
+  }
+
+  let report;
+  try { report = runBench(root, { driver: args.driver, model: args.model, budget: args.budget, dryRun: args.dryRun }); }
+  catch (e) {
+    console.error(`arc-bench: ${e.message}`);
+    process.exit(e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL);
+  }
+
+  printReport(report);
+  if (args.dryRun) { console.log("arc-bench: --dry-run, nothing was invoked and no receipt was emitted"); process.exit(EXIT.OK); }
+
+  const receipt = emitRunCompleted(root, report, report.outcome === "ok" ? "ok" : "fail");
+  if (receipt.landed) {
+    console.log(`arc-bench: receipt ${receipt.id} is in events/ and not in _quarantine/`);
+  } else if (receipt.quarantined) {
+    console.error(`arc-bench: receipt ${receipt.id} was QUARANTINED at ${receipt.quarantined} -- quarantine is not success (ADR-0032)`);
+  } else {
+    console.error(`arc-bench: NO receipt was sealed${receipt.why ? ` -- ${receipt.why}` : ""}`);
+  }
+  // A run whose receipt did not land is not a clean run, however well it scored: an unrecorded
+  // result cannot be audited later, and the whole point of the thread is the record.
+  process.exit(report.outcome === "ok" && receipt.landed ? EXIT.OK : EXIT.PARTIAL);
+}
+
+// Windows argv[1] arrives however the caller typed it, so both sides are resolved before the
+// comparison -- an unresolved relative path never matches and the CLI silently does nothing.
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) main();
