@@ -875,13 +875,20 @@ _arc_legal_sandbox() {
   cp -r "$ARC_ROOT/products/legal"                "$SANDBOX/products/"
   cp -r "$ARC_ROOT/tests/fixtures/legal/ventures" "$SANDBOX/tests/fixtures/legal/"
   cp    "$ARC_ROOT/tests/legal-probe.mjs"         "$SANDBOX/tests/"
+  # hq.policy.yaml comes too, so the REQ-06 publish gate can be run against a MUTATED policy
+  # without touching the real one. The gate resolves its repo root from its own location, so a
+  # copy under $SANDBOX reads $SANDBOX/hq.policy.yaml and nothing else.
+  cp    "$ARC_ROOT/hq.policy.yaml"                "$SANDBOX/"
   ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
+  ARC_LEGAL_PUBLISH_GATE="$SANDBOX/.claude/scripts/legal/publish-gate.mjs"
   # A sandbox that did not actually copy is a silent pass generator: every "no findings"
   # assertion downstream would hold against a tree with no engine in it. FOUR copies run, so
   # all four roots are asserted -- checking one of them left a partial sandbox surfacing as a
   # render failure rather than as the copy that actually failed.
   local _p
   for _p in "$ARC_LEGAL_CLI" \
+            "$ARC_LEGAL_PUBLISH_GATE" \
+            "$SANDBOX/hq.policy.yaml" \
             "$SANDBOX/products/legal/templates/v1" \
             "$SANDBOX/products/legal/data" \
             "$SANDBOX/tests/fixtures/legal/ventures" \

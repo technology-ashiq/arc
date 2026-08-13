@@ -12,7 +12,8 @@
     ".claude/scripts/legal/lib/canonical.mjs",
     ".claude/scripts/legal/lib/schema.mjs",
     ".claude/scripts/legal/lib/template.mjs",
-    ".claude/scripts/legal/lib/lints.mjs"
+    ".claude/scripts/legal/lib/lints.mjs",
+    ".claude/scripts/legal/publish-gate.mjs"
   ],
   "files": [],
   "docs": []

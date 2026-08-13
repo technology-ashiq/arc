@@ -250,6 +250,22 @@ switch (cmd) {
           writeFileSync(p, JSON.stringify(rows, null, 2), "utf8");
         }
         break;
+      // ---- REQ-06 publish-gate mutants. Three shapes, because a grep for `publish: []` passes
+      // two of them: an inline list, a block list, and the key deleted outright.
+      case "publish-target-inline":
+        patch(join(root, "hq.policy.yaml"), "  publish: []", '  publish: ["legal.publish"]');
+        break;
+      case "publish-target-block":
+        patch(join(root, "hq.policy.yaml"), "  publish: []", "  publish:\n    - legal.publish");
+        break;
+      case "publish-key-deleted":
+        {
+          const p = join(root, "hq.policy.yaml");
+          const src = readFileSync(p, "utf8");
+          if (!src.includes("  publish: []")) die(`mutation anchor not found in ${p}: publish: []`);
+          writeFileSync(p, src.split(/\r?\n/).filter((l) => l !== "  publish: []").join("\n"), "utf8");
+        }
+        break;
       case "claim-anchor-missing":
         // Point a cross-page claim at a facts field nothing sets. The claim then has no value to
         // look for, and the tempting implementation skips it -- which passes every page while
