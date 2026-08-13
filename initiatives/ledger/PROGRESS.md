@@ -1,7 +1,7 @@
 # PROGRESS.md — arc-ledger "the money brain"
 
-status: LIVE
-cycle: arc-ledger (opened 2026-08-12)
+status: IDLE
+cycle: arc-ledger (opened 2026-08-12, closed 2026-08-13)
 phase: 03
 appetite: 8d
 burn: 7d
@@ -21,7 +21,7 @@ depends-on: —
 | 00 | Money math core — payload contract + PII validator, normalization, pnl math on pinned fixtures, `arc pnl` v0, 2 export parsers, twin-determinism | 3d | ✅ CLOSED 2026-08-13 |
 | 01 | Kill-distance — `ventures.yaml` schema + parser, distance / warning / crossing render, brief needs-you integration, receipt enforcement | 2d | ✅ CLOSED 2026-08-13 |
 | 02 | Close and costs — reconciliation gate, `month.closed` (44 to 45), cost trichotomy + Overhead, daily spend line, `--explain` CUT | 2d | ✅ CLOSED 2026-08-13 |
-| 03 | Proof — real-spine replay rendering honest-empty, `--simulated` demo view, evidence bundle, retro | 1d | 🟨 proof captured, retro + close pending |
+| 03 | Proof — real-spine replay rendering honest-empty, `--simulated` demo view, evidence bundle, retro | 1d | ✅ CLOSED 2026-08-13 |
 
 Phases sum to **8d against an 8d cap — there is no reserve.** That is deliberate and is recorded as
 such: the shock absorber is the pre-authorized cut order (REQ-07, then REQ-08, then REQ-03's
@@ -77,7 +77,14 @@ had. All four suites now assert their own registered count, derived rather than 
 
 ## Done log
 
-Nothing closed yet. `/arc-kickoff` completed 2026-08-12: PLAN.md, ADR-1000..1015 and
+**2026-08-13 — ALL FOUR PHASES CLOSED, cycle closed.** 00 (money math core, REQ-01/02/04) ·
+01 (kill-distance, REQ-03) · 02 (close and costs, REQ-05/06) · 03 (the live-spine proof, REQ-08).
+Green on run 31691123814, head `cf724d0`, 19 of 19 jobs read per JOB with the head SHA confirmed;
+that run carries scheduler's Cycle 12 merge, so it is a fact about the merged tree. Evidence at
+`initiatives/ledger/evidence/phase-03/`. Retro in `docs/retro-log.md`, four entries, each naming a
+recurrence and the mechanism now in the tree that answers it. ADRs 1000–1018.
+
+**2026-08-12** — `/arc-kickoff` completed: PLAN.md, ADR-1000..1015 and
 phases/phase-00..03-spec.md written; `kickoff-lint` green (one WARN, the zero-slack line, kept
 deliberately); `board-lint` clean.
 
@@ -118,8 +125,8 @@ Spine receipts on the canonical spine (main clone), both confirmed present in
 | REQ-02 MRR math survives its edge cases | 0 | validated |
 | REQ-03 Kill-distance is visible and tamper-evident | 1 | validated |
 | REQ-04 Currency honesty | 0 | validated |
-| REQ-05 A month closes only behind a green reconciliation | 2 | active |
-| REQ-06 Costs are honest three ways | 2 | active |
+| REQ-05 A month closes only behind a green reconciliation | 2 | validated |
+| REQ-06 Costs are honest three ways | 2 | validated |
 | REQ-07 Every number explains itself | 2 | **DROPPED — the first pre-authorized cut, taken** |
 | REQ-08 Demo without lies | 3 | validated |
 
@@ -215,17 +222,46 @@ The genesis criteria receipt is on the canonical spine — `approval.requested[l
 `arc-brief` print NOT EVALUATED repo-wide; the worktree hid that because its spine guard fires
 first. Evidence: `initiatives/ledger/evidence/phase-03/`.
 
+## Assumption-ledger audit, 2026-08-13 — every count read from the live spine, not assumed
+
+**2 VALIDATED · 3 NOT EVALUABLE · 1 FIRED · 1 HELD.** Full output in
+`evidence/phase-03/assumption-audit.txt`. The three NOT EVALUABLE rows are dogfood-gated and are
+recorded that way rather than as VALIDATED, which is the DoD's own wording and the harder half of
+this step:
+
+- **LexOS pricing lands subscription-shaped** — `revenue.received = 0`. The MRR path is
+  fixture-proven only.
+- **Fixture volumes are representative** — the spine holds 1040 events of all kinds and 0 revenue.
+  No render can be near the 5s trigger until there is volume.
+- **`month.closed` is accepted by the live validator** — `month.closed` on the live spine is **0**.
+  The trigger is specifically "the first emission lands in `_quarantine` with `UNKNOWN_KIND`", and
+  there has been no first emission. So this is UNTESTED IN PRODUCTION, not passing. Retro 2026-08-10
+  records an engine shipping with four kinds and zero real emissions; this row is that number said
+  out loud instead of discovered later.
+
+**FIRED — provider exports obtainable.** No real export was reachable offline, so both parsers and
+the `--reconcile-file` sum are pinned to a documented synthetic corpus and say so at the top of each
+file. Real redacted samples are owed before the first live ingest.
+
+Noted in passing, not this lane's to fix: the live spine's `events/_quarantine/` holds **241
+records**. Retro 2026-07-28 records 22 quarantine entries that turned out to be 100 lost real
+receipts, so the number is worth somebody's eyes.
+
 ## Now
 
-**Current position:** Phase 01 CLOSED. Phase 02's code and Phase 03's live-spine proof are both
-done and pushed; Phase 02's adversarial fixes are on CI now (run 31687487999, head `2f22174`).
-Burn 7d of 8d, inside the cap, with REQ-07 taken as the declared first cut rather than overrun.
+**CYCLE CLOSED 2026-08-13. Mechanism proven, live value pending.**
 
-**Next step:** read run 31687487999 PER JOB with its head SHA confirmed against local HEAD. On
-green, close Phases 02 and 03 in ONE commit — the two rows, a dated Done-log entry, the lane's
-`status:` machine header moved off LIVE, the `ledger` row in `PORTFOLIO.md` and `docs/HISTORY.md`
-all together, because retro 2026-08-03 records a lane left LIVE all day after its merge with the
-board still advertising a PR that was already in. Then `/arc-retro`, then merge.
+All four phases closed. 7 of 8 REQs validated; REQ-07 (`--explain`) taken as the declared first
+pre-authorized cut, against the cap rather than after an overrun. Burn 7d of 8d.
+
+Green on run 31691123814, head `cf724d0`, **19 of 19 jobs**, read per JOB with the head SHA
+confirmed — that run carries the scheduler merge, so the number is a fact about the MERGED tree
+rather than about this lane in isolation.
+
+**What is owed next, and it is not a gate on this closure:** the first real month closed behind a
+green reconciliation, expected around September or October 2026 when LexOS earns. Real redacted
+provider exports before the first live ingest. Both are live-value milestones, and the whole lane
+was built so that neither has to be faked in the meantime.
 
 **Closure language, verbatim and deliberate: mechanism proven, live value pending.** Every gate in
 this lane has been exercised against fixtures and against the real spine, and not one rupee has

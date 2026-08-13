@@ -1,0 +1,24 @@
+ASSUMPTION-LEDGER AUDIT -- every count below was READ from the live spine just now
+
+FIRED          Provider settlement exports are obtainable as CSV or JSON
+               no real export was obtainable offline; both parsers and the --reconcile-file sum are pinned to a documented synthetic corpus and say so at the top of each file. Real redacted samples are owed before the first live ingest.
+
+NOT EVALUABLE  LexOS pricing lands subscription-shaped
+               needs revenue to test and there is none: revenue.received=0. The MRR path is fixture-proven only.
+
+VALIDATED      Integer minor-unit arithmetic keeps the two engines byte-identical
+               the equivalence gate runs in CI from Phase 0 and is green on 3 OSes; no golden moved on accumulation order alone.
+
+NOT EVALUABLE  Fixture volumes are representative at thousands of events per month
+               the live spine holds 1040 events of ALL kinds and 0 revenue events. No render has ever been near 5s, and it cannot be until there is volume.
+
+NOT EVALUABLE  month.closed is accepted by the live validator once added to KINDS
+               month.closed on the live spine = 0. The trigger is specifically "the first emission lands in _quarantine with UNKNOWN_KIND" -- there has been no first emission, so this is UNTESTED IN PRODUCTION, not passing. Quarantine currently holds 241 record(s).
+
+VALIDATED      ventures.yaml's venture set matches PORTFOLIO.md's Venture passports
+               both hold exactly one venture, lexos. Checked by reading both files this pass, not assumed.
+
+HELD           No real revenue arrives during the build
+               revenue.received=0 and revenue.simulated=0 on the live spine. The assumption held, which is why the Phase 3 proof is honest-empty rather than live.
+
+2 VALIDATED · 3 NOT EVALUABLE · 1 FIRED · 1 HELD
