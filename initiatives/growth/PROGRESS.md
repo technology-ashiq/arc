@@ -14,12 +14,12 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Contract + the road + steel thread | 2.0d | **IN PROGRESS** — contract done, site built; steel-thread emit waits on the human merge |
-| 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | NOT STARTED — entry gate: owner names the domain |
+| 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | **PARKED** (ADR-1015) — no domain exists; un-parks unchanged when one does |
 | 02 | Miner + cluster gate | 1.0d | **BUILT, awaiting CI + attack pass** — real run done, 7 exit criteria met, gate 1 enforced in code |
 | 03 | Generator + lints | 1.5d | NOT STARTED |
 | 04 | Publish path + A/B + GEO | 1.5d | NOT STARTED |
 | 05 | The EVO-H0 feed | 1.5d | NOT STARTED |
-| 06 | Real week | 1.25d | NOT STARTED (≥7 elapsed days) |
+| 06 | Real week | 1.25d | **PARKED** (ADR-1015) — needs 7 elapsed days of a live, indexable site; both halves absent |
 
 Phases sum to **9.75d** of a **10d** cap = **97.5% allocated**. **0.25d named reserve.** That is thin
 and it is stated rather than dressed up: C4 was 100% allocated and closed at ~112%. Pre-planned cut
@@ -146,9 +146,20 @@ kind, `arc-products.mjs` needs a CATALOG entry). Phase 02's own non-negotiable w
 `KINDS` breaks other lanes' *measured* assertions; that line was written at kickoff and then walked
 into anyway.
 
-**Next step:** Phase 03 (generator + lints) once the attack findings on Phase 02 are closed.
+**Shape of the cycle changed on 2026-08-13 (ADR-1015).** Assumption A-07 fired: there is no domain
+and no live site. The owner's call is that growth ships as a **standing capability** — build the
+machine to completion, park it, switch it on when a site exists. So Phases 03, 04 and 05 build to
+completion (none needs a domain) and Phases 01 and 06 are PARKED with their specs intact. The cycle
+will close as **"machine ready, clock not started"** — never as measured.
 
-**Blocked on:** exactly two things, both the owner's and both one click or one form:
+The honest cost, recorded rather than discovered later: evolve's four-week clock does not start
+this cycle, Search Console does not backfill, and REQ-10's real-article run cannot happen without
+the site — so Phases 03–05 ship **fixture-proven, not live-validated**, which is the exact failure
+mode pre-mortem row 6 names. That is accepted deliberately, and the close says so in those words.
+
+**Next step:** Phase 03 (generator + lints).
+
+**Blocked on:** nothing that stops work. Two things remain the owner's, neither urgent now:
 1. **arc-site PR #1** — the human merge. E2 is Tier E and ADR-1002 puts this merge with the human;
    the machine will not take it, and Phase 00 cannot close without it.
 2. **The domain + Search Console property** (Phase 01's entry gate). Every day it stays open is a day

@@ -262,7 +262,7 @@ arms for a signal that cannot exist at five articles per arm.
 | A-04 | The export's date range is machine-readable, so the range-match guard is buildable | Phase 5 finds no date-range metadata in the export → the guard degrades to an operator-confirmed echo, recorded as a **named weakening**, never dropped silently | 5 |
 | A-05 | 1 pillar + ≥5 spokes is the right cluster shape for arc's subject matter | The first cluster proposal has spokes that only restate the pillar → the shape is wrong for this material and ADR-1011's revisit trigger fires | 2 |
 | A-06 | Machine-drafted exemplars can anchor a voice they are also imitating | The first cluster's drafts read generic, or every draft reads like the exemplars and like nothing else → fallback is the owner supplying real writing (ADR-1014) | 3 |
-| A-07 | The owner can name a domain and verify a GSC property inside Phase 1's window | Phase 1 opens and the gate is unmet → the cycle **continues on the preview URL** and Phase 5 reports zero COMPLETE windows with the reason recorded; the lane does not stall | 1 |
+| A-07 | The owner can name a domain and verify a GSC property inside Phase 1's window | **FIRED 2026-08-13.** No domain and no live site, and the owner ruled that growth ships as a standing capability instead (ADR-1015). The ledgered fallback — "continue on the preview URL" — turned out to be **unworkable, not merely weak**: Phase 00 closed the accidental-publication incident by serving `noindex` + `Disallow: /` on every non-domain host, so the preview URL is invisible to Google *by our own design* and could not yield one Search Console row. Phases 01 and 06 are PARKED; 03–05 build to completion; the cycle closes as "machine ready, clock not started" | 1 |
 
 ## External dependencies
 
