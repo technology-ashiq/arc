@@ -214,7 +214,14 @@ export function render(day, events, torn,
     // needs-you may be non-empty on crossings alone. The old guard returned early on zero EVENTS,
     // which would have dropped every crossing on a quiet day -- exactly the day a crossed kill line
     // is most likely to be the only thing that matters.
-    const extra = g === "needs-you" ? killLines : [];
+    // BOTH lanes' derived lines ride here, and both are counted by the head below.
+    //
+    // They arrived separately: `jobLines` (scheduler) was special-cased down in `assemble`, and
+    // `killLines` (ledger) was added here where the count is computed. Neither side knew about the
+    // other, so once both were live the head read `needs-you (1)` above three lines -- the exact
+    // shared-organ collision `.claude/rules/lanes.md` warns about, and invisible to either lane
+    // alone because each one's own tests only ever produce its own kind of line.
+    const extra = g === "needs-you" ? [...killLines, ...jobLines.map((l) => `  ${l}`)] : [];
     if (!evs.length && !extra.length) return [];
     if (collapsed.has(g)) {
       // needs-you never collapses, which is the ONLY reason the count branch below can ignore
@@ -243,15 +250,14 @@ export function render(day, events, torn,
   const assemble = () => {
     const out = [`brief ${day}`];
     for (const [g] of GROUPS) {
-      const gl = groupLines(g);
       // Derived job lines ride WITH needs-you rather than in a group of their own: a job that
       // has gone silent is the same class of fact as an approval waiting on a human, and giving
       // it a separate heading is how it becomes a section people learn to scroll past.
-      if (g === "needs-you" && jobLines.length) {
-        if (gl.length) out.push("", ...gl, ...jobLines.map((l) => `  ${l}`));
-        else out.push("", `needs-you (${jobLines.length})`, ...jobLines.map((l) => `  ${l}`));
-        continue;
-      }
+      //
+      // They are folded into `groupLines`' own `extra` now rather than appended here, so the
+      // group's head COUNTS them. Appending after the fact is what made the count wrong the moment
+      // a second lane started writing into the same group.
+      const gl = groupLines(g);
       if (gl.length) out.push("", ...gl);
       // THE DAILY SPEND LINE (REQ-06), under money and only when there is spend. Deliberately NOT
       // folded into groupLines' `extra`: that feeds the group's head COUNT, and this line summarises
