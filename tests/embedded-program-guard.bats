@@ -60,16 +60,40 @@ BROKEN() { echo "$ARC_ROOT/tests/fixtures/develop/embedded-program"; }
   # The control needs its own control. A fixture silently rewritten -- by a linter, by a merge,
   # by an editor stripping the character -- would make the test above pass for the wrong reason
   # or fail confusingly, and nothing else in this file would notice.
-  local f
+  local f apos
   f="$(BROKEN)/apostrophe-in-comment.sh"
   [ -f "$f" ] || { echo "missing: $f"; false; }
   [ -s "$f" ] || { echo "empty: $f"; false; }
-  run grep -c "doesn'"'"'t" "$f"
+  # THE APOSTROPHE IS BUILT, NEVER TYPED. Written literally, the escape idiom needed to get one
+  # inside a double-quoted string in a @test body defeated bats own preprocessor: it reported
+  # `unexpected EOF while looking for matching "` and the whole FILE failed to gather, which took
+  # its entire shard down with it -- 2434 declared tests never executed. printf and an octal
+  # code point have no such problem, in this file or in any tool that reads it.
+  apos="$(printf '\047')"
+  run grep -cF "doesn${apos}t" "$f"
   [ "$status" -eq 0 ] || { echo "the fixture no longer carries the apostrophe it exists for"; false; }
+}
+
+@test "every bats file in tests/ survives a shell parse, the way gather reads it" {
+  # A .bats file that bats cannot GATHER takes its whole shard with it. One unbalanced quote in
+  # this very file produced `unexpected EOF while looking for matching "` and the reconcile step
+  # reported 2434 declared tests never executed -- the entire shard, silent except for one line.
+  # bats itself catches it, but only on CI and only after a full matrix; this catches it here.
+  #
+  # `@test NAME {` is not valid bash, so each declaration is rewritten to a plain function header
+  # before parsing. That is what bats does too, and it is the only transformation applied.
+  local bad=0 f
+  for f in "$ARC_ROOT"/tests/*.bats; do
+    if ! sed 's/^@test .*{$/__t() {/' "$f" | bash -n 2>/dev/null; then
+      echo "does not parse as shell: $f"
+      bad=$((bad + 1))
+    fi
+  done
+  [ "$bad" -eq 0 ] || { echo "$bad bats file(s) would fail to gather"; false; }
 }
 
 @test "this file registers every test it declares" {
   local n
   n="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$n" -eq 5 ] || { echo "declared $n tests, expected 5 - a test was added or silently dropped"; false; }
+  [ "$n" -eq 6 ] || { echo "declared $n tests, expected 6 - a test was added or silently dropped"; false; }
 }
