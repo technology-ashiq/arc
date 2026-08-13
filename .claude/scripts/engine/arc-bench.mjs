@@ -14,6 +14,9 @@
  */
 
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { parseYamlSubset } from "./yaml-subset.mjs";
 
 /**
  * The CLOSED op set (ADR-0905 / M5). Deterministic by construction: no op may call a model,
@@ -165,6 +168,34 @@ export function coverageVerdict(taskClass, fixtureCount) {
     : { eligible: false, reason: `NO PROPOSAL - evidence insufficient (${fixtureCount} of ${MIN_FIXTURES} fixtures)` };
 }
 
+/**
+ * How many fixtures a task class actually SHIPS, read from the process's own `evals:` list.
+ *
+ * Counted from the DECLARED list, never from a directory listing: a file sitting beside the
+ * pack that nothing declares is not part of it, and counting the directory would let a stray
+ * or half-added fixture lift a class over the floor without anything running it.
+ *
+ * This is deliberately standalone -- it is the whole of the coverage gate, and it does not
+ * reach for Phase 2's gates-first eligibility engine, which does not exist yet. REQ-06 needs
+ * `review-diff` and `kickoff-plan` to read NO PROPOSAL at Phase 0 close, and a criterion that
+ * could only be exercised by a later phase would be marked done here without ever running
+ * (retro-log 2026-08-02: an exit criterion its own verifier could not check).
+ */
+export function declaredFixtureCount(root, processName) {
+  const path = join(root, "processes", `${processName}.process.yaml`);
+  const parsed = parseYamlSubset(readFileSync(path, "utf8"));
+  if (!parsed.ok) throw new Error(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
+  const evals = parsed.value?.evals;
+  if (!Array.isArray(evals)) throw new Error(`${processName}: evals is missing or not a list`);
+  return evals.length;
+}
+
+/** The coverage line a report prints for one class, counted rather than assumed. */
+export function classCoverage(root, processName) {
+  const count = declaredFixtureCount(root, processName);
+  return { taskClass: processName, count, ...coverageVerdict(processName, count) };
+}
+
 // ---------------------------------------------------------------------------------------------
 // The fixture-repo harness (M3 / M11).
 //
@@ -183,10 +214,37 @@ export function coverageVerdict(taskClass, fixtureCount) {
 // avoid. The harness builds the situation; the process acts on it.
 // ---------------------------------------------------------------------------------------------
 
-import { cpSync, existsSync, mkdtempSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+
+/**
+ * A work tree cannot express a DELETION by copying, so it marks one with a tombstone:
+ * `path/to/file.arc-deleted`. After the overlay, each tombstone removes its target and then
+ * itself, leaving the deletion visible to `git status` exactly as a real one would be.
+ *
+ * This exists because `delete-and-add` is the one fixture where a draft built only from ADDED
+ * lines describes half the change. Without a way to delete, that case could not be posed at all.
+ *
+ * The walk is hand-rolled rather than `readdirSync(dir, { recursive: true })`: that option
+ * landed in Node 18.17 and CI runs an 18 leg, so the convenient call would fail on exactly one
+ * of the three legs -- the class of failure this repo keeps paying for.
+ */
+function applyTombstones(root) {
+  const SUFFIX = ".arc-deleted";
+  const walk = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name);
+      if (e.isDirectory()) { if (e.name !== ".git") walk(p); continue; }
+      if (!e.name.endsWith(SUFFIX)) continue;
+      const target = p.slice(0, -SUFFIX.length);
+      if (!existsSync(target)) throw new Error(`tombstone ${p} names no existing file -- the base tree never had ${target}`);
+      rmSync(target, { force: true });
+      rmSync(p, { force: true });
+    }
+  };
+  walk(root);
+}
 
 function git(root, args) {
   try {
@@ -220,6 +278,7 @@ export function materializeRepoState(stateDir) {
     git(root, ["commit", "-q", "--no-gpg-sign", "-m", "base"]);
     // Overlay the working changes and leave them UNSTAGED. This is the whole point.
     cpSync(join(stateDir, "work"), root, { recursive: true });
+    applyTombstones(root);
     return { root, cleanup };
   } catch (e) {
     // Never leak a temp repo on the failure path -- a harness that only cleans up when it
