@@ -4,8 +4,8 @@ status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 04
 appetite: 7.5d
-burn: 0.0d
-blocked-on: —
+burn: 2.0d
+blocked-on: the hire decision (a spine receipt this worktree cannot emit) and the capped-key ceiling figure — see ## Now
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -96,91 +96,91 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
-**Current position, 2026-08-12: Phase 04 RUNNING, its work essentially done, the ceremony not.**
+**Current position, 2026-08-13: Phases 04 and 05 built and CI-green; 06 and 07 partly built; the
+rows that need a spine receipt or a credential are named below and are NOT counted as done.**
 
 ### HANDOFF — read this first if you are resuming
 
-Everything is committed and pushed. Branch `technology-ashiq/arc-executor`, HEAD **`c852b64`**,
-**PR #172 open**. Nothing lives only in a session.
+Everything is committed and pushed. Branch `technology-ashiq/arc-executor`, **PR #172 open**.
+Nothing lives only in a session.
 
-**Where Phase 04 actually is.** Slices 01–08 and 10–11 are built and evidenced under
-`evidence/phase-04/` (`smoke-run.json`, `smoke-stdout.txt`, `smoke-result.md`, `install-method.md`,
-`backend-config.md`, `fixture-enforcement-map.md`, `mandate-ulid.txt`). What remains is bookkeeping:
-fill the slice ledger in `phases/phase-04-tasks.md` — the harness enumerates 15 slices and the work
-was done in a different order — then `/arc-develop handoff 4 --lane engine`, then
-`/arc-phase-done 4 --lane engine`.
+**CI IS GREEN, AND THAT IS A REAL GREEN.** Run on `4cae3f8`: **19/19 jobs**, read per-JOB. The
+three windows tests that had been red for two days — `arc-scan`, `baseline`, `arc-profile` — now
+report `ok`, **not skip**. That distinction matters and was checked: a canary in
+`tests/test_helper.bash` makes them SKIP when the scanner cannot flag its own known-positive, so
+a green run had to be inspected to tell passing from skipping.
 
-**CI, and the two live threads.**
+**The two-day CI failure was an UNPINNED opengrep, and neither of the two explanations previously
+written down was right.** Main SHA `6792091c` ran arc-ci twice across 2026-08-12T14:55:32Z — run
+`31604575944` at 14:02 GREEN, run `31622490938` at 17:24 RED — identical commit, identical shard
+list, identical runner. opengrep v1.27.0 published in between and its windows binary exits 2
+(semgrep's FATAL code). `adapters/semgrep.sh` had discarded that status for its whole life
+(`>/dev/null 2>&1 || true`), which is why nobody could see the reason. The owner applied the pin
+to v1.26.0 across four workflow files; `.github/` is outside the assistant write scope.
 
-1. Run **31632767132** was dispatched **by hand** for `c852b64`, because the push created **no run at
-   all**. Confirm a run exists for the SHA before waiting on one:
-   `gh workflow run arc-ci --ref technology-ashiq/arc-executor`.
-2. **`arc-scan: starter profile downgrades block to advisory` fails on windows shard 12 only.**
-   Nothing in this cycle touches arc-scan. Working hypothesis, **unconfirmed**: adding
-   `tests/engine-hermes-smoke.bats` reshuffled the shard assignment (it has no measured entry and
-   rides `_default_weight` 16) and that test reads ambient repo state, so it was passing on shard
-   luck. If so it is a latent defect this cycle **exposed** rather than caused, and the fix is either
-   a measured timing entry or removing the ambient read. **Verify before acting.**
+### What is built and green
 
-**The gate went through two adversarial rounds and both found real holes.** Round 1 forced a full
-revert; round 2 found **five surviving mutants**, one of them the reverted hole itself. All fixed,
-61/61 green locally — but **a third round was never run**, and each round found more than the one
-before, so a clean third round is not a formality. Findings that predate this cycle are filed as
-**issue #167** and are untouched: a content-scan bypass by filename, a discarded grep exit status, a
-non-atomic lock, and an unreadable directory reading as clean.
+- **Phase 04** — runtime installed digest-pinned, one live headless invocation, evidence bundle,
+  slice ledger filled (13 slices; slice 09, the capped key, recorded CARRIED to Phase 06).
+- **Phase 05** — `drivers/hermes` on the real 3-code contract, `drivers/type-tagged-hash`,
+  47 contract tests. `drivers/mock` and the `version` verb were REUSED from the bench lane, not
+  rebuilt — the pre-edit collision check caught that before a line was written.
+- **Phase 06 (part)** — `cert-label.mjs`: the certification label is DERIVED, and a mock run is
+  structurally incapable of producing one. `data-boundary.mjs`: the boundary is refused ABOVE the
+  driver at arc-run exit 5, ONE confinement function with a test asserting exactly one call site.
+  `engine-isolation-cert.bats`: the regression arm, fixtures 1, 2+3, 5, 11, 12.
+- **Phase 07 (part)** — `router-row.mjs`: `cap`/`hosted`/`judge`/`review_by` all mandatory on a
+  runtime row, enforced at router LOAD, with the full 16-cell hostile matrix (four malformed
+  shapes per field) and a tenure boundary check whose clock is a parameter.
 
-**Two owner acts outstanding, neither blocking.** The CI test-count floor is `911` against **2366**
-discovered, so it catches nothing short of catastrophic shrinkage — `.github/` is outside the
-assistant permission scope. And the money path is settled as **free models plus an unfunded key**:
-fixture 10 proves the refusal by pointing a $0-balance key at a paid model and asserting the real
-HTTP 402, which costs nothing and still certifies REQ-05.
+### Four adversarial passes ran. They found 60 holes.
 
-`/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
-ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:
-`kickoff.done` `01KZTG835C356GPN7452603ZZX` · `approval.requested` `01KZTG8B82Q6HT4472Q288GCJ1` ·
-`decision.recorded` `01KZTKAF70H19K7PNJVWBXZDT5`.
+Round 3 on `capability-vet.sh`: 24 holes, 16 surviving mutants, two CRITICAL.
+Round 4 on the hermes shim: 36 holes, 18 surviving mutants, three CRITICAL. The two surfaces
+overlapped on almost nothing, which is the structural-blind-spot claim measured rather than
+asserted. All fixed and pinned as fixtures.
 
-**All spine writes go through the canonical clone at `E:/Work_Hub/01_Automemory/arc`.** This worktree
-has its own gitignored spine and the emitter refuses to write there — a receipt written in a worktree
-is real, valid, and invisible to `arc-inbox`, which would print "no open approvals" while one sat in
-it.
+**The three that matter most, because none was findable by reading the code:**
+- `settle()` discarded queued stdout and exited **0** — 8 MiB written, 458752 received. macOS
+  only, because node's stdout-to-a-pipe is async there and synchronous on the other two legs.
+  This was in `common.mjs` and affected **all five drivers**.
+- The container command line was asserted by NOTHING: a driver mutated to run
+  `--privileged -v /:/host` with the model input never passed was byte-identical green.
+- Three parse holes returned an attacker-chosen or simply wrong document, including a
+  pretty-printed answer yielding a nested FRAGMENT — the likeliest of all to fire in production.
 
-**Phase 04 is running.** Slice 01 proven (the mandate is on the spine, two events, verified out of
-`_quarantine/`). Slice 02 (ADR-0212 to `main`) is PR #165, CI green 19/19 at `f4da3cc`, re-running
-after a merge from `main` that resolved a real `PORTFOLIO.md` collision with two lanes that landed
-mid-flight.
+**Five comments in this cycle's own code asserted things the code did not do.** Each is corrected
+in place and named in the commit that corrected it. That is worth more than the fixes.
 
-**Slice 06 is BLOCKED and the reason is named.** A change was routed via `/arc-change` as a bug —
-`capability-vet.sh` advertises OCI digest support and the path is unreachable — then **written,
-attacked, and reverted** (`a1148f7` → `8f4c3d2`). The two-surface adversarial pass earned its cost
-immediately: the fix had **regressed a pinned hole** (`record.name` is the package name in
-npm/PyPI/git, so a packument publishing only `0.0.1` admitted a pin of `1.2.3`), its central
-justification was **factually wrong** (SRI is base64-44, OCI is hex-64 — a faithful re-notation
-never normalises to a match), it wrote an **unverified tag coordinate** into the production lock,
-and **four mutants of the added lines survived all 55 tests**. Reverted rather than patched, because
-the OCI path also has **no name binding** — a Docker Hub tag body carries no repository identity, so
-one recorded response certifies any allowlisted name, and closing that needs a design call.
+### OWED, and not counted as done
 
-The same pass found **four criticals that predate this cycle and survive the revert**, including a
-**content-scan bypass by filename** verified on the real script: a candidate placing hostile code in
-`src/registry.json` gets `PASS — read-only`, exit 0. All filed as **issue #167**.
+1. **The runtime ROW in `engine/router.yaml`.** ADR-0217 requires it to cite the decision that
+   made the hire, and that decision is a spine receipt this worktree cannot emit — the emitter
+   refuses by design, and a receipt written here is real, valid and invisible to `arc-inbox`.
+   Writing a row citing a ULID that does not exist would be a fabricated reference. **Emit the
+   hire decision from `E:/Work_Hub/01_Automemory/arc`, then the row lands with its ULID.** The
+   `hq.policy.yaml` row and the termination spec ride the SAME change.
+2. **The capped key** (REQ-05, and Phase 06 fixtures 4 and 10). Settled path: free models plus an
+   UNFUNDED key, so fixture 10 asserts the provider's real HTTP 402 at zero spend. Needs the
+   owner to name the ceiling figure BEFORE issuance (ADR-0213 / A-05).
+3. **Phase 06 fixtures 4, 6, 7, 8, 10** — a live credential, a real container, real egress
+   control, two consecutive real runs. Fixture 7 is already recorded PARTIAL: domain-granular
+   egress is UNPROVABLE without netns or a proxy sidecar.
+4. **The scrubbed transcript per dispatch** (REQ-03) and `run.completed` carrying the MP-F seat.
+5. **An adversarial pass on the certification SUITE itself** — the attacker's job is to make a
+   fixture pass while the property it claims is false. Phase 06 lists it as an exit criterion.
+6. **Phase 08 entirely** — the draft process, context packs, and >=3 real runs with verdicts.
+7. **The three arc-scan weights in `tests/shard-timings.json` are FAILING-time, not run-time** —
+   both weigh runs they came from ran after opengrep broke. Re-measure now that the pin has
+   landed.
 
-**The runtime is therefore pinned and verified out-of-band, and NOT gate-admitted.** The allowlist
-entry and lock row were reverted with the change. Nothing is admitted that the gate cannot stand
-behind.
+### Two things a resuming session should not re-learn the hard way
 
-**The capped-key ceiling figure is NOT needed yet.** Phases 04, 05 and 06 all run at zero spend
-against the local ollama endpoint; the credential is first required by certification fixtures 4 and
-10. That owner decision can wait without blocking anything.
+**A test seam must run on all three legs.** The red corpus started as a `.sh` and failed on
+ubuntu and macOS with EACCES (mode 100644) and on windows because Node cannot execute a shebang
+script there at all. All 33 tests, all three OSes, one cause — and the local check that passed
+beforehand had run the fixture through `bash` rather than through the driver.
 
-**Of the three owner acts that gated Phase 04, two are done and the third is deferred.** The Docker
-daemon is up (`29.6.1`, linux/WSL2, verified before the approval was recorded). The runtime is
-obtained by Phase 04 itself, as a digest-pinned container image. The capped-key ceiling figure is
-still unnamed and deliberately so — see above; nothing blocks on it until Phase 06.
-
-**Why Phase 04 looks different from the design source's Phase 0.** The source's Phase 0 was law only
-— ADRs, the amendment, the runtime pick on paper. This lane's previous cycle closed with its central
-claim unproven for exactly one reason: nothing runnable was installed and no credential existed, and
-that was discovered at Phase 03 rather than Phase 00. So REQ-00 makes one live headless invocation a
-Phase-04 exit criterion. If the runtime cannot run on this machine, EXE-A's STOP fires at 1 day
-burned instead of 5.
+**A bats file that fails to GATHER takes its whole shard with it.** One unbalanced quote produced
+`declared 2435, executed 1` on nine jobs, and the only signal was that count. There is now a test
+that shell-parses every `tests/*.bats` the way gather does.
