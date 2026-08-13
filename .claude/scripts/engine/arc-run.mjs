@@ -47,6 +47,23 @@ import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 // precisely so it can be SELECTED here and NAMED on a receipt.
 const DRIVERS = ["claude-code", "codex", "generic-api", "mock"];
 
+// The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS); hook
+// mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent SIGKILLs
+// a HEALTHY child that is still legitimately waiting -- and because arc-event.sh runs node as a
+// CHILD rather than exec-ing it, the grandchild survives the kill and seals the receipt AFTER
+// arc-run has already reported it lost. Demonstrated against a held lock: arc-run exited saying
+// "NOT recorded" at 10.4s and the receipt appeared 6s later. 10000 was safe before --strict and
+// stopped being safe the moment it was added.
+//
+// IT LIVES AT THE TOP OF THE FILE, NOT NEXT TO ITS USE, AND THAT PLACEMENT IS LOAD-BEARING.
+// `fail()` runs during top-level execution -- the `--budget inr=0` arm calls it at module line
+// ~183 -- and reaches emitEvent from there. A `const` beside emitEvent sits in the temporal dead
+// zone at that moment, so the earliest exit path in the file died with
+// "Cannot access EMIT_TIMEOUT_MS before initialization" and wrote NO receipt at all. Function
+// declarations hoist; their constants do not. Introducing a named constant is not a free
+// refactor when the function can run before the module finishes.
+const EMIT_TIMEOUT_MS = 20000;
+
 // ---------- CLI ----------
 const argv = process.argv.slice(2);
 let processName = "";
@@ -271,16 +288,6 @@ function costArgs(cost) {
     tokens: null,
   };
 }
-
-// The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS);
-// hook mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent
-// SIGKILLs a HEALTHY child that is still legitimately waiting -- and because arc-event.sh runs
-// node as a CHILD rather than exec-ing it, the grandchild survives the kill and seals the
-// receipt AFTER arc-run has already reported it lost. Demonstrated against a held lock: arc-run
-// exited saying "NOT recorded" at 10.4s and the receipt appeared on the spine 6s later, which is
-// the ledger-disagrees-with-the-caller defect this file exists to prevent, running backwards.
-// 10000 was safe before --strict and stopped being safe the moment it was added.
-const EMIT_TIMEOUT_MS = 20000;
 
 /**
  * THE ONE WAY THIS FILE EMITS. Every spine write in arc-run goes through here.
