@@ -34,13 +34,13 @@ import { formatIst, nowMs, sha256Hex } from "./lib/canonical.mjs";
 import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
 import { processRunArgv } from "./lib/jobs/delegate.mjs";
-import { makeWindowsScheduler, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "./lib/jobs/scheduler-os.mjs";
+import { makeWindowsScheduler, registerVerified, registrationFor, PINNED_SETTINGS } from "./lib/jobs/scheduler-os.mjs";
 import { derivePanel, needsYouLines, loadPanelInputs } from "./lib/jobs/panel.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { processNames } from "./lib/policy/subjects.mjs";
 import { policyRoot, authorizeRun } from "./lib/policy/run-gate.mjs";
-import { authorizeAction } from "./lib/policy/authorize.mjs";
+import { policyEnforcementGreen } from "./lib/jobs/policy-gate.mjs";
 
 const HERE = new URL(".", import.meta.url).pathname;
 const ARC_EVENT = resolve(process.platform === "win32" ? HERE.slice(1) : HERE, "arc-event.mjs");
@@ -159,49 +159,25 @@ if (command === "list") {
 // ---------- the unattended surface, and the gate in front of it ----------
 //
 // SCH-G: `register` is the moment arc stops being attended, so it is the moment the policy
-// interlock has to be VERIFIED rather than assumed. If policy were ever rolled back or its
-// enforcement broken, the heartbeat's unattended half turns itself OFF rather than running
-// unpoliced -- which is the only safe direction for a gate whose subject is unattended
-// execution.
+// interlock has to be VERIFIED rather than assumed. The gate itself lives in
+// `lib/jobs/policy-gate.mjs` -- extracted so it can be handed a throwaway root and asked what it
+// decides, instead of being testable only by breaking this repo's real policy file. THIS caller
+// passes its own `policyRoot()` and never an argument.
+
+// THE WEAKER GUARANTEE, SAID OUT LOUD. ADR-0803 pinned S4U so the jobs would fire whether or not
+// anyone was logged on, and Amendment 1 moved the pin to `Interactive` because S4U cannot be
+// registered without elevation on this machine. That is a real reduction in what the heartbeat
+// promises, and the ADR itself wrote down that it "would need saying out loud in the brief panel"
+// -- so it is printed on the panel and on every register rather than living only in an ADR nobody
+// reads at 06:00.
 //
-// WHAT "ENFORCEMENT GREEN" MEANS HERE, and why it is not "the policy file parses". A file that
-// parses proves a parser works. These three prove the engine is still DECIDING:
-//   1. `policy-lint` exits 0 -- the law is valid, hashes and E2 quotes intact.
-//   2. Deny-by-default is ALIVE: a subject nobody declared must be refused. This is the live
-//      negative control, and it is the one that catches an engine that has been reduced to
-//      returning execute unconditionally -- a mutation an adversarial pass actually performed
-//      on this repo in Cycle 9.
-//   3. This job's own row still authorizes it.
-// Any of the three failing refuses the registration.
-function policyEnforcementGreen(jobName) {
-  const fails = [];
-
-  const lint = spawnSync(process.execPath, [join(root, ".claude/scripts/hq/policy-lint.mjs")], {
-    encoding: "utf8", windowsHide: true, cwd: root,
-  });
-  if (lint.error || lint.status !== 0)
-    fails.push(`policy-lint exited ${lint.error ? lint.error.code : lint.status}`);
-
-  try {
-    const policy = parsePolicyYaml(readFileSync(join(root, "hq.policy.yaml"), "utf8"));
-    // The negative control: a subject that exists nowhere must be denied WRITE. If this comes
-    // back permitted, the engine is not enforcing and nothing below it can be trusted.
-    const v = authorizeAction(
-      { kind: "process:__no_such_subject_ever__", capability: "write", resource: "docs/x.md" },
-      { policy, events: [], root },
-    );
-    if (v.decision !== "deny")
-      fails.push(`deny-by-default is NOT enforcing: an undeclared subject got "${v.decision}"`);
-  } catch (e) {
-    fails.push(`the policy engine could not decide at all: ${e?.message || e}`);
-  }
-
-  const stub = processDoc(jobName);
-  const verdict = authorizeRun({ processName: jobName, doc: stub, root });
-  if (!verdict.mayInvoke)
-    fails.push(`${jobName} is not authorized: ${verdict.denials.map((d) => `${d.capability}:${d.level}`).join(", ")}`);
-
-  return fails;
+// DERIVED from the pin, never a hardcoded sentence: if the logon model ever moves back to S4U,
+// this line stops claiming a limit that no longer applies instead of quietly lying about one.
+function logonNote() {
+  return PINNED_SETTINGS.LogonType === "S4U"
+    ? "logon model S4U -- scheduled jobs fire whether or not you are logged on"
+    : `logon model ${PINNED_SETTINGS.LogonType} -- scheduled jobs fire ONLY while you are logged on; ` +
+      "a slot falling while you are signed out is caught up late by StartWhenAvailable, not run on time";
 }
 
 function osScheduler() {
@@ -219,6 +195,26 @@ if (command === "register" || command === "unregister") {
   const targets = (doc.jobs || []).filter((j) => (only ? j.name === only : j.enabled));
   if (only && targets.length === 0) die(2, `no job named \`${only}\` in hq.jobs.yaml`);
   if (!only && targets.length === 0) die(2, "no enabled jobs to act on");
+
+  // THE POLICY GATE RUNS BEFORE THE OS IS EVEN LOOKED UP, and the order is load-bearing rather
+  // than tidy. Asked the other way round, every non-Windows machine refuses at the platform check
+  // first, so a fixture asserting "a red gate exits 2" would pass on two of the three CI legs
+  // without the gate having run at all -- a vacuous pass sitting exactly on top of the rule it
+  // claims to protect. Refusing on policy first also states the right reason: this surface is
+  // closed because enforcement is unproven, not because the OS is the wrong one.
+  //
+  // UNREGISTER IS DELIBERATELY NOT GATED. The off switch has to work when things are broken; a
+  // policy failure that could also prevent turning the heartbeat OFF would be a gate holding the
+  // machine hostage rather than protecting it.
+  if (command === "register") {
+    for (const job of targets) {
+      const fails = policyEnforcementGreen(job.name, { root });
+      if (fails.length) {
+        for (const f of fails) process.stderr.write(`arc-jobs: policy gate: ${f}\n`);
+        die(2, `refusing to register ${job.name} -- the unattended surface does not open while policy enforcement is unproven (SCH-G, fail-closed)`);
+      }
+    }
+  }
 
   const os = osScheduler();
 
@@ -241,27 +237,24 @@ if (command === "register" || command === "unregister") {
     process.exit(0);
   }
 
-  for (const job of targets) {
-    const fails = policyEnforcementGreen(job.name);
-    if (fails.length) {
-      for (const f of fails) process.stderr.write(`arc-jobs: policy gate: ${f}\n`);
-      die(2, `refusing to register ${job.name} -- the unattended surface does not open while policy enforcement is unproven (SCH-G, fail-closed)`);
-    }
-  }
-
   const nodePath = process.execPath;
   const logDir = join(spineRoot(), "job-logs");
   for (const job of targets) {
     const reg = registrationFor(job, { repoRoot: root, nodePath, logDir });
-    os.register(reg.name, reg);
-    const back = os.query(reg.name);
-    // READ THE SETTINGS BACK OFF THE OS. Asserting what we sent proves only that we sent it.
-    const wrong = REQUIRED_SETTINGS.filter((k) => String(back?.settings?.[k]) !== String(PINNED_SETTINGS[k]));
-    if (!back.exists) die(2, `${reg.name} registered but the OS does not report it`);
-    if (wrong.length)
-      process.stderr.write(`arc-jobs: WARN ${reg.name} settings differ after readback: ${wrong.map((k) => `${k}=${back.settings[k]} (wanted ${PINNED_SETTINGS[k]})`).join(", ")}\n`);
+    // Register, read the settings back OFF THE OS, and unregister again if they disagree -- all
+    // of it inside `registerVerified`, so the CLI and the contract fixture exercise one function
+    // rather than two hopefully-identical copies of the same care.
+    let back;
+    try {
+      back = registerVerified(os, reg.name, reg);
+    } catch (e) {
+      if (e?.code === "SETTINGS_DRIFT" || e?.code === "NOT_REPORTED" || e?.code === "READBACK_FAILED")
+        die(2, `${e.message}${e.rolledBack === false ? " -- AND THE ROLLBACK ALSO FAILED, so remove it by hand" : ""}`);
+      throw e;
+    }
     process.stdout.write(`arc-jobs: registered ${reg.name}  ${reg.trigger}  lastTaskResult=${back.lastTaskResult}\n`);
   }
+  process.stdout.write(`arc-jobs: ${logonNote()}\n`);
   process.exit(0);
 }
 
@@ -289,6 +282,10 @@ if (command === "panel") {
     const state = !r.enabled ? "disabled" : (r.overdue ? `OVERDUE (${r.missed} missed)` : r.state);
     process.stdout.write(`  ${r.name.padEnd(22)} ${state.padEnd(22)} last ${last}  next ${next}\n`);
   }
+  // Printed on EVERY panel, healthy or not. It is a standing property of the heartbeat rather
+  // than an incident, and a limit that only appears when something is already wrong is a limit
+  // nobody learns in time to plan around.
+  process.stdout.write(`  ${logonNote()}\n`);
   const nag = needsYouLines(rows);
   if (nag.length) {
     process.stdout.write(`\nneeds-you (${nag.length})\n`);

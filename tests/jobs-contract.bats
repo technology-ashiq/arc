@@ -105,6 +105,42 @@ _run_case() {
   echo "$output" | grep -q '^PINNED_LOGON:"Interactive"$' || { echo "$output"; false; }
 }
 
+@test "registerVerified: a correct readback is KEPT, not rolled back" {
+  # The negative control for the three drift tests below. A registerVerified that unregistered
+  # unconditionally would pass every one of them and leave the machine with no heartbeat -- the
+  # rollback has to be a response to drift, not a habit.
+  _run_case verify-ok
+  echo "$output" | grep -q -F 'KEPT:["day-close-roll"]' || { echo "the good registration did not survive:"; echo "$output"; false; }
+  echo "$output" | grep -q '^EXISTS:true$' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LOGON_BACK:"Interactive"' || { echo "$output"; false; }
+}
+
+@test "registerVerified: a setting that DRIFTS on readback unregisters the task" {
+  # The OS is entitled to apply its own value. A task carrying an inherited
+  # DisallowStartIfOnBatteries=true appears healthy in every listing and simply never fires on
+  # battery -- so refusing loudly is not enough; the wrong task must not be left standing.
+  _run_case verify-drift
+  echo "$output" | grep -q '"code":"SETTINGS_DRIFT"' || { echo "$output"; false; }
+  echo "$output" | grep -q '"rolledBack":true' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "a wrong task was left on the machine:"; echo "$output"; false; }
+}
+
+@test "registerVerified: a setting MISSING from the readback is drift, not a pass" {
+  # An absent key must not compare equal to anything. This is the case a shape check waves
+  # through: the object came back, it just no longer says whether the job catches up a missed run.
+  _run_case verify-missing
+  echo "$output" | grep -q '"code":"SETTINGS_DRIFT"' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "$output"; false; }
+}
+
+@test "registerVerified: a task the OS will not report is rolled back too" {
+  # register said ok and query says it does not exist. Something is wrong that neither call
+  # admitted, and the safe reading of a disagreement about whether the heartbeat exists is OFF.
+  _run_case verify-unseen
+  echo "$output" | grep -q '"code":"NOT_REPORTED"' || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'LEFT_BEHIND:[]' || { echo "$output"; false; }
+}
+
 @test "jobs-contract: bats registers every test this file declares" {
   run bats --count "$BATS_TEST_FILENAME"
   [ "$status" -eq 0 ] || { echo "$output"; false; }

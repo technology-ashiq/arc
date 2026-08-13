@@ -82,6 +82,73 @@ The message names the PARAMETER, so it presents as a bad argument from the Node 
 than as a collision inside the script. The local is `$taskAction` now, with the reason written
 beside it.
 
+## 6. AV and OneDrive on the canonical drive — measured, and one part left open on purpose
+
+The DoD asks for this because a scheduled task that a scanner delays or a placeholder file that
+never hydrates both present as the same symptom: a job that is registered, fires, and does
+nothing.
+
+```
+$ powershell -NoProfile -Command "..."
+ONEDRIVE_ENV=C:\Users\ashiq\OneDrive
+CANONICAL_EXISTS=True                       # E:\Work_Hub\01_Automemory\arc
+DRIVE_TYPE=Fixed  FS=NTFS
+REALTIME=False                              # Defender
+EXCLUSION_PATHS=                            # none
+AV=Windows Defender  state=0x60100
+AV=McAfee            state=0x41000
+AMSERVICE=False  ANTIVIRUS=False  TAMPER=False
+```
+
+**OneDrive is settled: it is not in the picture.** The OneDrive root is `C:\Users\ashiq\OneDrive`
+and the canonical clone is on `E:`, a fixed NTFS volume outside it. No Files-On-Demand
+placeholders, no reparse points to hydrate, so ADR-0803's open question about S4U and file
+hydration is moot twice over — once because the path is not synced, and once because Amendment 1
+moved the logon model to `Interactive`, which has the user's own token and network access anyway.
+
+**AV is NOT fully settled, and saying so is the point.** Defender's antimalware service is OFF on
+this machine; the registered real-time scanner is **McAfee**, whose exclusions cannot be
+enumerated through `Get-MpPreference` — that cmdlet reports Defender only. So "no exclusion paths"
+above says nothing about the scanner that is actually running, and reading it as an all-clear
+would be exactly the kind of green tick this lane keeps refusing.
+
+What IS proven: a real scheduled task on this machine fired at its slot and the OS recorded exit
+`0` (§3 above). What is NOT yet proven: that **node** launched by Task Scheduler against the repo
+on `E:` runs unmolested — the smoke ran `cmd.exe` writing a marker, which is a lighter thing for a
+scanner to look at than a Node process opening a git tree.
+
+That gap is not closable by another five-minute smoke; it is closed by the two real jobs running
+for a week, which is Phase 03. It is therefore carried forward as a **named watch item** rather
+than a checked box: if a run is ever recorded late or missing with no receipt, the first
+hypothesis is scanner interference on first-launch of `node.exe` from the task host, and the check
+is the per-job log at `<spine>/job-logs/<name>.log`, which exists precisely because Task Scheduler
+discards stdout and stderr.
+
+## 7. The gaps this phase closed after the smoke
+
+Three DoD items were still open when the smoke passed, and each turned out to be a real hole
+rather than paperwork.
+
+**A drifted readback was a WARNING.** `register` read the settings back off the OS and, if they
+disagreed, printed `WARN` and exited 0 — leaving a task on the machine carrying a setting nobody
+chose. That is the worst of the three possible outcomes, because a heartbeat that looks on and is
+dead is the failure the whole settings rule exists to prevent, and a warning on an unattended
+surface is a thing nobody reads at 00:15. It is now `registerVerified`, which **unregisters the
+task again** and exits 2, and both the CLI and the contract fixture drive that one function.
+
+**The fail-closed gate had no fixture, and the obvious one would have been vacuous.** `register`
+exits 2 on a non-Windows machine anyway, at the platform check — so a fixture asserting "a red
+gate exits 2" would have passed on two of the three CI legs *without the gate having run*. Two
+changes make it real: the policy gate is now evaluated **before** the platform check, and the
+assertions read the REASON out of stderr rather than the exit code. `tests/jobs-register.bats`
+opens with the negative control — the gate is green against this repo, unforced — because a gate
+that is red for some unrelated reason would satisfy every red case in the file.
+
+**The weaker logon guarantee was in an ADR and nowhere else.** ADR-0803 itself said moving to
+`Interactive` "would need saying out loud in the brief panel". It now is, on every panel render
+and after every register, and the line is **derived from `PINNED_SETTINGS.LogonType`** — so if the
+pin ever moves back to S4U the disclosure stops claiming a limit that no longer applies.
+
 ## Not yet done, and why
 
 The two REAL jobs are not registered from this worktree. `spineRoot()` refuses inside a linked

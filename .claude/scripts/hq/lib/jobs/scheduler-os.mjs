@@ -209,6 +209,58 @@ export function makeWindowsScheduler({ psBin = "powershell", scriptPath, spawn }
 }
 
 /**
+ * REGISTER, THEN READ THE SETTINGS BACK OFF THE OS -- and if they disagree, take the task away
+ * again. Asserting what we SENT would prove only that we sent it.
+ *
+ * The rollback is the point, and it is the fail-closed direction for this surface. Three outcomes
+ * are possible after a register, and they are not equally bad:
+ *
+ *   registered and correct   -- the heartbeat is on
+ *   not registered at all    -- the heartbeat is off, and visibly so
+ *   registered and WRONG     -- the heartbeat looks on and is dead
+ *
+ * The third is the silent-death bug the whole settings rule exists to prevent, so a drifted
+ * readback must not be left standing on the machine with a warning printed next to it. A warning
+ * on an unattended surface is a thing nobody reads at 00:15.
+ *
+ * Both callers get the same behaviour because there is one function: the CLI and the contract
+ * test drive THIS, not two copies of it.
+ */
+export function registerVerified(os, name, reg) {
+  os.register(name, reg);
+
+  const undo = (code, message) => {
+    let removed = false;
+    try { removed = os.unregister(name).existed === true; } catch { removed = false; }
+    const err = new SchedulerError(code, message);
+    err.rolledBack = removed;
+    throw err;
+  };
+
+  let back;
+  try { back = os.query(name); }
+  catch (e) { undo("READBACK_FAILED", `${name} was registered and could not be read back: ${e?.message || e}`); }
+
+  if (!back || back.exists !== true)
+    undo("NOT_REPORTED", `${name} was registered and the OS does not report it -- a registration nobody can see is not a registration`);
+
+  // String() on both sides: the PowerShell boundary hands back JSON booleans, and a setting that
+  // came back MISSING stringifies to "undefined", which is a mismatch rather than a pass.
+  const wrong = REQUIRED_SETTINGS
+    .filter((k) => String(back.settings?.[k]) !== String(PINNED_SETTINGS[k]))
+    .map((k) => `${k}=${back.settings?.[k]} (wanted ${PINNED_SETTINGS[k]})`);
+  if (wrong.length)
+    undo(
+      "SETTINGS_DRIFT",
+      `${name} came back off the OS with ${wrong.join(", ")} -- the task has been UNREGISTERED rather than left ` +
+        `running with a setting nobody chose, because a job that looks scheduled and never fires is the one ` +
+        `failure mode this readback exists to catch`,
+    );
+
+  return back;
+}
+
+/**
  * The registration a job turns into. Pure, so the contract test can compare it byte-for-byte
  * without an OS anywhere near it -- and so Phase 2's real implementation is handed exactly the
  * same object the fake was.

@@ -13,7 +13,7 @@
  *   delegate     -- prints the scheduled and manual argv for one process-job
  */
 
-import { makeFakeScheduler, makeWindowsScheduler, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs";
+import { makeFakeScheduler, makeWindowsScheduler, registerVerified, registrationFor, REQUIRED_SETTINGS, PINNED_SETTINGS } from "../../../.claude/scripts/hq/lib/jobs/scheduler-os.mjs";
 import { processRunArgv, manualRunArgv } from "../../../.claude/scripts/hq/lib/jobs/delegate.mjs";
 
 const CASE = process.argv[2];
@@ -93,6 +93,45 @@ try {
     s.register(reg.name, reg);
     out("FAKE_NEVER_RUN", s.query(scriptJob.name).lastTaskResult);
     out("PINNED_LOGON", PINNED_SETTINGS.LogonType);
+  } else if (CASE === "verify-ok") {
+    // THE NEGATIVE CONTROL for every drift case below. A `registerVerified` that rolled back
+    // unconditionally would satisfy all of them and leave the machine with no heartbeat at all,
+    // so the honest readback must be shown to SURVIVE.
+    const s = makeFakeScheduler();
+    const reg = registrationFor(scriptJob, REG);
+    const back = registerVerified(s, reg.name, reg);
+    out("KEPT", s.list());
+    out("EXISTS", back.exists);
+    out("LOGON_BACK", back.settings.LogonType);
+  } else if (CASE === "verify-drift" || CASE === "verify-missing" || CASE === "verify-unseen") {
+    // A scheduler that ACCEPTS the registration and then reports something else back. This is the
+    // failure the readback exists for: the OS is entitled to apply its own value, and a task that
+    // exists with an inherited `DisallowStartIfOnBatteries = true` looks perfectly healthy in
+    // every list and simply never fires on battery.
+    const inner = makeFakeScheduler();
+    const mutate = {
+      "verify-drift": (q) => ({ ...q, settings: { ...q.settings, DisallowStartIfOnBatteries: true } }),
+      "verify-missing": (q) => {
+        const settings = { ...q.settings };
+        delete settings.StartWhenAvailable;
+        return { ...q, settings };
+      },
+      "verify-unseen": () => ({ exists: false }),
+    }[CASE];
+    const s = {
+      ...inner,
+      query(name) { const q = inner.query(name); return q.exists ? mutate(q) : q; },
+    };
+    const reg = registrationFor(scriptJob, REG);
+    try {
+      registerVerified(s, reg.name, reg);
+      out("REFUSED", false);
+    } catch (e) {
+      out("REFUSED", { code: e.code, rolledBack: e.rolledBack === true });
+    }
+    // The assertion that matters. Refusing loudly while leaving the wrong task standing would be
+    // the worst of the three outcomes: a heartbeat that looks on and is dead.
+    out("LEFT_BEHIND", inner.list());
   } else {
     process.stderr.write(`unknown case ${CASE}\n`);
     process.exit(64);
