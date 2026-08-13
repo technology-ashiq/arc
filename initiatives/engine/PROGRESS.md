@@ -94,9 +94,42 @@ on-track run is one that learns to be ignored.
   decision receipt `01KZTKAF70H19K7PNJVWBXZDT5`, verified present in `events/` and absent from
   `_quarantine/`. Lane flips IDLE → LIVE and Phase 04 opens.
 
+- 2026-08-13 — **`/arc-change --lane engine`: bench cannot vary the model through `arc-run`.** Raised by
+  the `bench` lane after Cycle 13 merged (`15a61c7`). Triaged as **three items, not one**, and the
+  claims were verified against `arc-run.mjs` directly rather than carried from the report.
+  - **The seam → ADR-0220, ruled OUT-OF-CYCLE by the owner.** `arc-run.mjs:402` rebuilds the driver env
+    and overwrites two caller-set variables. `ARC_DRIVER_MODEL` is clobbered **on purpose** (lines
+    140–145: the env var *was* the model knob, and that was "an un-reviewed tier change of exactly the
+    kind ADR-0069 b1 forbids"), so this is a decision, not a bug — the naive fix reopens a closed hole.
+    The only surviving pin path needs an `engine/router.yaml` row, and **bench has no write path to the
+    router ever** (its own REQ-02 asserts the SHA unchanged before and after every run). `ARC_ROOT` is a
+    second defect on the same line: `root` conflates *where arc's machinery lives* with *where the
+    driver works*, so a benched `commit-msg-draft` (`git.op: add:*` + `commit:*`) would stage and commit
+    **inside the arc repo**. ADR-0069 **(g)** is the door — trials may use any model when isolated and
+    receipted. Ships as its own PR, **not charged to this cycle's 7.5 days**, so the day-5 kill
+    checkpoint keeps measuring only the hire.
+  - **Two `arc-run` emit-path BUGS → charged here, added to `phases/phase-04-spec.md`.** `:279` passes
+    `--payload` inline where `arc-event.sh:29` already accepts `--payload-file` — a **twin-fix**, bench
+    met the identical defect and closed it on its own path. On Windows a path in a payload returns
+    `REJECT BAD_JSON -- invalid escape \U`, so only a failure receipt can be written. And `:278` emits
+    `run.completed` without `--strict` (`arc-event.sh:27`): `verifyLanded()` does detect quarantine but
+    only **warns to stderr while arc-run exits 0**, so a quarantined receipt reads as a green run —
+    a live violation of this plan's "exit 0 is not evidence" non-negotiable.
+  - Band check done before claiming `0220`: `technology-ashiq/arc-engine` @ `424f24e` is a stale
+    **Cycle 6** branch topping out at `0206`, so `main` was the truth and `0219` the real high-water
+    mark. Next engine cycle starts at **0221**.
+
 ## Now
 
 **Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
+
+> ⚠ **The `burn: 0.0d` in the machine header above is STALE, and it is the STOP clock.** Phase 04
+> opened 2026-08-12; slices 01 and 02 are proven and slice 06 was written, attacked and reverted since.
+> That is not zero days. Phase 04's STOP is specified as *"one working day of burn **as recorded in
+> `initiatives/engine/PROGRESS.md`**"*, so a clock reading 0.0 means the STOP cannot fire on schedule.
+> **No number is invented here** (ADR-0069 b5 / Constitution E3 — absent beats estimated), and
+> `board-lint` cross-checks this field against `PORTFOLIO.md`, so the two move together or not at all.
+> The session that burned the days records the real figure.
 
 `/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
 ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:
@@ -147,3 +180,15 @@ claim unproven for exactly one reason: nothing runnable was installed and no cre
 that was discovered at Phase 03 rather than Phase 00. So REQ-00 makes one live headless invocation a
 Phase-04 exit criterion. If the runtime cannot run on this machine, EXE-A's STOP fires at 1 day
 burned instead of 5.
+
+**Next action (2026-08-13).** Two tracks, deliberately separate so the cycle clock stays honest:
+
+1. **In Phase 04, on this cycle's clock** — build the two emit-path fixes now in
+   `phases/phase-04-spec.md`: `--payload-file` and `--strict`. Both are wiring to flags
+   `arc-event.sh` already supports. They carry a **bounded** adversarial pass on the emit path before
+   their PR merges (not the full two-surface panel), and the twin-fix instruction is to grep the
+   pattern across every **other** emit call site in this lane and record the count checked.
+2. **Off the clock, its own PR** — ADR-0220's per-invocation model/root seam. Unblocks four `bench`
+   Phase 03 DoD items: one real model benched end to end · candidate proven REACHED (real model id,
+   non-zero tokens) · REQ-05 preflight · human verdict. `tests/bench-steel-probe.mjs` already pins both
+   failures and **must go red** when the seam lands — it passes today for the wrong reasons.

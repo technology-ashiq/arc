@@ -17,6 +17,14 @@
 > from here: this worktree read "highest is 0206", and 0207 surfaced only by checking sibling
 > worktrees, because the band table and `wip-line` each see one worktree alone. This cycle therefore
 > numbers **0208–0219**.
+>
+> **`0220` is taken, and it is NOT this cycle's.** Routed via `/arc-change --lane engine` on
+> 2026-08-13 and ruled **out-of-cycle** by the owner the same day: the per-invocation model/root seam
+> in `arc-run` serves `bench`'s model market, not the Hermes hire, and is built as its own PR outside
+> this cycle's 7.5-day appetite. It is numbered in engine's band because engine owns
+> `.claude/scripts/engine/arc-run.mjs`. The next engine cycle starts at **0221**. Sibling worktrees
+> were checked before claiming it — `technology-ashiq/arc-engine` @ `424f24e` is a stale **Cycle 6**
+> branch topping out at `0206`, so `main` is the truth and `0219` was the real high-water mark.
 
 ## Goal
 
@@ -129,6 +137,19 @@ that is caught only by the day-5 checkpoint. **The 3 real runs are never cut**, 
 adversarial pass; they are the only two things in this cycle that test the work outside its own
 fixtures.
 
+**One change was routed in and deliberately kept OFF this clock (2026-08-13).** `bench` raised that
+`arc-run` has no per-invocation model seam, blocking four of its Phase 03 DoD items. Engine owns the
+file, so the work is engine's — but the work serves the **model market**, not the Hermes hire. Charging
+it here would spend a margin already at 93% on another lane's outcome, and worse, it would inflate the
+**day-5 kill checkpoint** with days that bought REQ-02 nothing. This plan already names that exact
+failure as the worst outcome it can produce — REQ-02 moved the capped key to Phase 04 precisely so a
+STOP could not fire "for a scheduling bug rather than a real isolation gap". A tripwire read against a
+burn number padded by another lane's work is the same defect wearing a different hat. So: **ADR-0220 is
+written, the seam ships as its own PR, and this cycle's 7.5 days still measure only the hire.** The two
+`arc-run` emit-path bug fixes that came in with it *are* charged here (Phase 04) — they are defects in
+a path Phase 04's own receipts ride on, and one of them closes a live violation of this plan's
+"exit 0 is not evidence" non-negotiable.
+
 ## Architecture (C4 concepts, Mermaid flowchart)
 
 ```mermaid
@@ -196,6 +217,7 @@ flowchart TB
 | 0217 | EXE-J — a hire is a receipt, and the row cites the decision that made it | accepted |
 | 0218 | EXE-K — arc verifies outcomes and never prescribes the contractor's process | accepted |
 | 0219 | The data boundary is refused above the driver, and ENG-D's three-code exit map stands | accepted |
+| 0220 | The model is a per-invocation trial seam, separate from production routing — **out-of-cycle, not charged to this appetite** (see Appetite) | accepted |
 
 ## Non-negotiables
 

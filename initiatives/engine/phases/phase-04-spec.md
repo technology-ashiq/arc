@@ -138,6 +138,44 @@ act arc does not perform.
         `grep -rhc '^@test ' tests/ --include='*.bats' | awk '{s+=$1} END{print s}'` and raise the
         `[ "$n" -ge NNN ]` comparison to match. Raise it to reality; never lower it to make a red
         build green, and never hand-type a count without re-deriving it.
+- [ ] **`arc-run` emits its payload through `--payload-file`, never inline on the command line.**
+      `.claude/scripts/engine/arc-run.mjs:279` builds `emit run.completed` with
+      `"--payload", JSON.stringify(...)`. `.claude/scripts/hq/arc-event.sh:29` already accepts
+      `--payload-file`, so this is wiring, not new emitter support. **This is a twin-fix**: `bench` met
+      the identical defect on its own emit path and moved to `--payload-file`; engine's copy was left
+      inline. The failure is not theoretical on this machine — a Windows path inside a payload reaches
+      the validator as `REJECT BAD_JSON -- invalid escape \U`, which means the **only** receipt that can
+      be written is one reporting failure. Phase 04's own mandate and smoke receipts ride this path.
+      Proof: a fixture emitting a payload containing a real Windows path (`C:\Users\...`) lands in
+      `events/` and not `_quarantine/`, plus a **negative control** — the same payload forced back
+      through the inline path — showing the check can fail.
+      **Twin-fix grep RUN 2026-08-13, and it found the defect is REPO-WIDE, not engine's alone.**
+      Counted across `.claude/scripts/**`: **8 inline `--payload` call sites in 6 files** — every emit
+      path in arc passes its payload inline, including `hq/arc-inbox.mjs:147`, which is the approval
+      path **this very spec's mandate criterion depends on**. `arc-run.mjs` owns **three** of the 8:
+      `:279` (`run.completed`, the reported one), `:379` (`incident.raised`, policy-gate denial) and
+      `:519` (`approval.requested`, escalation proposal).
+      **This phase fixes only `arc-run.mjs`'s three**, through ONE helper rather than three copies that
+      can drift (REQ-06's confinement principle on the emit path). The other five sit in `hq/` company
+      organs and the `develop`/`design` lanes and are **reported, never edited from here** — the
+      cross-lane rule. If the fixture below proves the Windows-path failure is real, that report becomes
+      a company-organ issue in its own right, because it would mean the approval path itself is
+      unreliable on this OS.
+- [ ] **The `--strict` gap is narrower than the payload gap, and engine is one of only two lanes in it.**
+      Counted the same day: `hq/arc-inbox.mjs`, `hq/arc-jobs.mjs` and `hq/lib/policy/incident.mjs` all
+      **already pass `--strict`**. The only files missing it are `develop/develop.mjs`,
+      `develop/stuck.mjs` and **`arc-run.mjs`, whose three sites pass neither flag**. That is a missed
+      lane rather than a design difference, and it is recorded as such so the retro can count it.
+- [ ] **`arc-run` emits `run.completed` with `--strict`, so a rejected receipt is a failed run.**
+      Today the emit at line 278 omits `--strict` (supported at `.claude/scripts/hq/arc-event.sh:27`).
+      `verifyLanded()` is **not** blind — it checks `events/` and `_quarantine/` and warns — but it
+      warns to stderr and **`arc-run` still exits 0**, so a quarantined receipt is a green run. That
+      stands against this cycle's own non-negotiable: *exit 0 from a fire-and-forget writer is not
+      evidence anything was written*. Proof: a fixture emitting a deliberately invalid payload makes
+      `arc-run` exit non-zero, and the assertion checks the emit **ran** before checking what it
+      printed (`.claude/rules/testing.md` § the vacuous pass). **Expect existing receipts to start
+      failing loudly** — that is the criterion working, and each one found is recorded rather than
+      quietly repaired.
 - [ ] tracker updated: the Phase 04 row in `initiatives/engine/PROGRESS.md`'s phase table flips to ✅,
       a dated entry is appended to its `## Done log` section, and its `## Now` block is rewritten to
       point at Phase 05.
@@ -190,7 +228,9 @@ act arc does not perform.
 
 ## Out of scope for this phase
 
-The shim itself (Phase 05) · the certification suite's fixtures, which are only *classified* here, never built (Phase 06) · the router row and policy row (Phase 07) · the draft process and any real job (Phase 08). No adversarial pass is owed by this phase: it ships no parser, gate or shim of its own.
+The shim itself (Phase 05) · the certification suite's fixtures, which are only *classified* here, never built (Phase 06) · the router row and policy row (Phase 07) · the draft process and any real job (Phase 08). **The per-invocation model/root seam is NOT in this phase** — it is ADR-0220, ruled out-of-cycle on 2026-08-13 and shipped as its own PR outside this appetite; only the two emit-path bug fixes above belong here.
+
+**One adversarial obligation is owed, and it is scoped.** This phase originally shipped no parser, gate or shim — but the `--strict` criterion above **changes failure semantics** (a warn becomes a non-zero exit), which is gate-shaped, and the `--payload-file` criterion moves a payload across a process boundary. So the two emit-path fixes carry a **bounded** construct-a-breaking-input pass on the emit path alone, before the PR that ships them merges — not the full two-surface panel the cycle's non-negotiable binds to REQ-01's parser, REQ-04's router loader and REQ-06's boundary. The attacker's prompt carries this lane's running defect list, including the twin-fix instruction to check the pattern in every **other** emit call site.
 
 ## Your-setup / pending
 
