@@ -139,6 +139,7 @@
 .claude/scripts/engine/arc-bench.mjs	28fc4b1c558c3fb0a6be649ecb29bb3fdb3a300d86068f542fc7c5b3aed1c1d2
 .claude/scripts/engine/arc-compile.mjs	ab7e75f946caf8934897d0f419c804d26be939f93f9d1e3b3c147a42bc5db989
 .claude/scripts/engine/arc-run.mjs	c075e3f729fb354ce095fc07e4d522aa450413b5ea0a13c8cdf892c856fd57b5
+.claude/scripts/engine/cert-label.mjs	c7247c0f4bb45e17acd159eaef4e5bf4e910909167fe04a863c8824098853858
 .claude/scripts/engine/drivers/claude-code.mjs	d8586735c4359247383936833eacd8d7af21c66bf6374304980ad3fc65658142
 .claude/scripts/engine/drivers/claude-code.sh	c85ad83beaf07d4a7aa13228e30e3598944fe0eb98f0160b2d93bd437f42b1f7
 .claude/scripts/engine/drivers/codex.mjs	5d6c44d2c87593387aae80734a58fd377192c0b00b2e6d3085b2a3ce12c69f7e
