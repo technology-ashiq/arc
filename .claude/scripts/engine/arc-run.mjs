@@ -42,6 +42,7 @@ import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
+import { routerFaults } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -95,6 +96,16 @@ function loadRouter() {
   if (!existsSync(p)) return null;
   const r = parseYamlSubset(readFileSync(p, "utf8"));
   if (!r.ok) { console.error(`arc-run: engine/router.yaml does not parse: ${r.error.what}`); process.exit(1); }
+  // AT LOAD, NOT AT DISPATCH (REQ-04, ADR-0216). A row that only fails when someone happens to
+  // route through it sits wrong for as long as nobody uses it, and the first person to use it is
+  // the one who discovers the hire was never bounded. Every fault is reported, not the first:
+  // fixing a four-field row one refusal at a time is four round trips.
+  const faults = routerFaults(r.value);
+  if (faults.length) {
+    console.error(`arc-run: engine/router.yaml has ${faults.length} row fault(s) and will not load:`);
+    for (const f of faults) console.error(`arc-run:   ${f}`);
+    process.exit(1);
+  }
   return r.value;
 }
 
