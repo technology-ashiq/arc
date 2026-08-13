@@ -71,6 +71,8 @@ You pay the fee shown on the [pricing page]({{ facts.routes.pricing }}) for the 
 
 Your payment is taken by {{ label.payment_provider }}, which sells the subscription to you as the merchant of record and issues your receipt. Your contract for the payment itself is with them; your contract for the service is with us.
 
+**If a payment fails we email you and keep your access for {{ facts.commitments.payment_failure_grace_days }} days.** After that we suspend it, and you can still export what you put in for 30 days more. That is our commitment whoever collects the money.
+
 Any tax on your purchase is handled by the merchant of record and appears on the receipt they issue.
 
 How refunds and cancellation work is set out on the [Cancellation and Refunds page]({{ facts.routes.refund-cancellation }}).
@@ -84,6 +86,8 @@ You pay the fee shown on the [pricing page]({{ facts.routes.pricing }}) for the 
 **We do not take payments through a payment gateway on this site.** We invoice you directly and you pay by bank transfer or by another method we agree with you in writing. There is no card payment page here, and this site will never ask you for card details.
 
 Because there is no gateway in the middle, there is no card refund route: any refund is made by the same bank route the payment came in on. That is set out on the [Cancellation and Refunds page]({{ facts.routes.refund-cancellation }}).
+
+**If an invoice goes unpaid we send a reminder and keep your access for {{ facts.commitments.payment_failure_grace_days }} days.** After that we suspend it, and you can still export what you put in for 30 days more. Nothing is deleted without telling you first, and we restore everything the moment the transfer lands. This is the arrangement where late payment is most likely — you have to action a transfer by hand — so it is the one that most needed saying.
 {{/clause}}
 
 {{#clause id=TERMS.IP}}

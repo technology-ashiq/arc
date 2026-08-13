@@ -80,11 +80,23 @@ teardown() { _arc_legal_teardown; }
   [ "$MUTANT_STATUS" -eq 3 ]
 }
 
-@test "legal publish gate: the engine still ships no publish verb at all" {
-  # Belt and braces on the same non-negotiable from the other side: the policy could stay empty
-  # while the CLI grew a publish path. Any verb but `render` must be refused.
-  run node "$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs" publish --venture "fixture-gateway-gst" --out "$BATS_TEST_TMPDIR/out"
+@test "legal publish gate: publish refuses without a human decision, citing REQ-06" {
+  # This test used to claim "the engine still ships no publish verb at all", which stopped being
+  # true the moment `publish` was built -- and it passed for the wrong reason: it invoked publish
+  # with `--out` instead of `--dir`, so the exit 2 it observed was an argument error. It would
+  # have stayed green if publish published freely. Fixed-defect row 16, `test-asserts-the-wrong-law`,
+  # on a second file.
+  #
+  # What IS non-negotiable is asserted instead: a well-formed publish with no decision refuses.
+  run node "$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs" publish --venture "fixture-gateway-gst" --dir "$BATS_TEST_TMPDIR"
   [ "$status" -eq 2 ]
+  [[ "$output" == *"REQ-06"* ]]
+}
+
+@test "legal publish gate: an unknown verb is refused rather than treated as render" {
+  run node "$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs" deploy --venture "fixture-gateway-gst" --out "$BATS_TEST_TMPDIR/out"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"unknown verb"* ]]
   [ ! -f "$BATS_TEST_TMPDIR/out/terms.mdx" ]
 }
 

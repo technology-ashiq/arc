@@ -422,6 +422,73 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * stale-published <dir> -- relabel a published record as written under an OLDER preimage
+   * version, and break its facts hash.
+   *
+   * This is the format-upgrade case, and it is also the attack: a tamperer who can edit the
+   * record can also relabel it. `verify` must therefore classify by whether THIS BUILD can
+   * re-derive the claimed algorithm, never by believing the label -- and page bytes, which the
+   * preimage version does not govern, must still come back TAMPERED.
+   */
+  /** json-del <file> <key> -- remove a top-level key. The falsy-skip lever. */
+  case "json-del": {
+    const [file, key] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    if (!(key in doc)) die(`${file} has no key "${key}" to delete; a mutation that changes nothing is not a control`);
+    delete doc[key];
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("deleted:" + key);
+    break;
+  }
+
+  /** json-set <file> <key> <value> -- forge a top-level value. */
+  case "json-set": {
+    const [file, key, value] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    if (doc[key] === value) die(`${file}.${key} is already "${value}"; that is not a mutation`);
+    doc[key] = value;
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("set:" + key);
+    break;
+  }
+
+  /**
+   * stray-page <dir> <name> -- drop an unapproved page into the publish directory.
+   *
+   * It carries a false certification claim and a refund denial on purpose: this is what an
+   * unapproved file actually costs, and the gate reported success on it.
+   */
+  case "stray-page": {
+    const [dir, name] = rest;
+    writeFileSync(join(dir, `${name}.mdx`), "# Terms\n\nWe are ISO 27001 certified and refunds are never given.\n", "utf8");
+    console.log("stray:" + name);
+    break;
+  }
+
+  /** data-edit <sandbox> <file> <from> <to> -- edit a pinned DATA file, not a template. */
+  case "data-edit": {
+    const [sandbox, file, from, to] = rest;
+    const p = join(sandbox, "products", "legal", "data", file);
+    const src = readFileSync(p, "utf8");
+    if (!src.includes(from)) die(`anchor not found in ${p}: ${from}`);
+    writeFileSync(p, src.split(from).join(to), "utf8");
+    console.log("edited:" + file);
+    break;
+  }
+
+  case "stale-published": {
+    const [dir] = rest;
+    const p = join(dir, "_published.json");
+    const doc = JSON.parse(readFileSync(p, "utf8"));
+    if (!doc.run) die(`${p} has no run block to relabel`);
+    doc.run.preimage_version = "arc-legal-canon/0";
+    doc.facts_sha256 = "0".repeat(64);
+    writeFileSync(p, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("staled:arc-legal-canon/0");
+    break;
+  }
+
   case "tamper-page": {
     const [dir, page] = rest;
     const file = join(dir, `${page}.mdx`);
@@ -460,7 +527,7 @@ switch (cmd) {
     const [file] = rest;
     const run = JSON.parse(readFileSync(file, "utf8"));
     const { GROUPS } = await import(pathToFileURL(join(ARC_ROOT, ".claude", "scripts", "legal", "lib", "lints.mjs")).href);
-    const reported = new Set(run.trial_groups || []);
+    const reported = new Set(run.groups_run || []);
     const missing = GROUPS.filter((g) => !reported.has(g));
     if (missing.length) die(`declared but not reported in trial_groups: ${missing.join(", ")}`);
     console.log(`${GROUPS.length} group(s) declared and reported`);

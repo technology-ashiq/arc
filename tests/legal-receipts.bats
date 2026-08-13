@@ -146,6 +146,10 @@ _publish() {
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
     --decision "$SANDBOX/d.json" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
   [ "$PUBLISH_STATUS" -eq 2 ]
+  # Asserting the exit code ALONE was a hole: any unexpected crash maps to 2, so a TypeError
+  # satisfied this test. The message pins which refusal it was.
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"--request ULID"* ]]
 }
 
 @test "legal receipts: BACKDATING -- an effective date before the decision is refused" {
@@ -180,6 +184,163 @@ _publish() {
   node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/empty" \
     --decision "$SANDBOX/nope.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || PUBLISH_STATUS=$?
   [ "$PUBLISH_STATUS" -eq 3 ]
+}
+
+# ---------------------------------------------------------------------------------------------
+# The five CRITICALs a fresh decision-logic attacker reproduced end to end. Every one of them
+# PUBLISHED at exit 0 before the fix. Each is pinned here, because a fix without a fixture is a
+# fix that comes back.
+# ---------------------------------------------------------------------------------------------
+
+@test "legal receipts: editing a pinned DATA file after approval is refused" {
+  # The worst of the five. `grievance-windows.json` is interpolated into the rendered prose but
+  # was outside the pinned hash, so editing it rewrote a grievance commitment from 48 hours and
+  # 30 days to 720 hours and 90 days -- published under a decision taken about the other number,
+  # at exit 0, with facts_sha256 and the set hash both IDENTICAL and no error printed.
+  _proposed
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" data-edit "$SANDBOX" grievance-windows.json '"ack_hours": 48' '"ack_hours": 720'
+  [ "$status" -eq 0 ]
+  _publish "$SANDBOX/d.json"
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"TEMPLATES_CHANGED"* ]]
+}
+
+@test "legal receipts: a decision with no recorded_at is refused, not waved through" {
+  # The same receipt refused when dated 2099 and PUBLISHED when the key was deleted -- and the
+  # CLI printed "recorded (no timestamp)" as it went. Naming the missing evidence and proceeding
+  # anyway is the worst available behaviour.
+  _proposed
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" json-del "$SANDBOX/d.json" recorded_at
+  [ "$status" -eq 0 ]
+  _publish "$SANDBOX/d.json"
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"DECISION_UNDATED"* ]]
+}
+
+@test "legal receipts: a forged effective_date in the approval file is refused" {
+  # The one recorded value the chain trusted, in a module whose header says it trusts none.
+  # Editing it alone -- facts hash untouched -- published a record claiming a date the rendered
+  # page never carried, and it was the forged value both backdating guards then evaluated.
+  _proposed
+  run node "$ARC_ROOT/tests/legal-probe.mjs" json-set "$SANDBOX/out/_approval.json" effective_date "2099-12-31"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  _publish "$SANDBOX/d.json"
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"EFFECTIVE_DATE_CHANGED"* ]]
+}
+
+@test "legal receipts: an unapproved page FILE in the publish directory is refused" {
+  # The existing PAGE_EXTRA check walked the RUN's page list while its own message said
+  # "publishing it would put an unapproved page on the site" -- and the thing published is the
+  # DIRECTORY. A hand-written page carrying a false certification claim and a refund denial sat
+  # there, in no receipt, and the gate reported success.
+  _proposed
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" stray-page "$SANDBOX/out" terms-v2
+  [ "$status" -eq 0 ]
+  _publish "$SANDBOX/d.json"
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"PAGE_UNAPPROVED_FILE"* ]]
+}
+
+@test "legal receipts: a decision whose facts hash is not the published one is refused" {
+  # The probe's `decision` fake grew --facts and --set overrides so a wrong-hash receipt COULD be
+  # minted, and no test ever passed either flag. Deleting the two comparisons in verifyDecision
+  # left the whole suite green: the TOCTOU test mutates the facts AFTER minting, so the receipt
+  # agreed with the payload there and only verifyChain fired.
+  _proposed
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z" --facts "0000000000000000000000000000000000000000000000000000000000000000"
+  [ "$status" -eq 0 ]
+  _publish "$SANDBOX/d.json"
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"facts_sha256 is not the one being published"* ]]
+}
+
+_published() {
+  _proposed || return 1
+  node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z" >/dev/null || return 1
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    --decision "$SANDBOX/d.json" --request "$REQ" >/dev/null 2>&1 || return 1
+  [ -f "$SANDBOX/out/_published.json" ] || { echo "publish wrote no _published.json" >&2; return 1; }
+  return 0
+}
+
+_verify() {
+  VERIFY_STATUS=0
+  node "$ARC_LEGAL_CLI" verify --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    >"$SANDBOX/vfy.txt" 2>&1 || VERIFY_STATUS=$?
+  return 0
+}
+
+@test "legal receipts: verify says INTACT on an untouched published directory" {
+  _published
+  _verify
+  [ "$VERIFY_STATUS" -eq 0 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: INTACT"* ]]
+}
+
+@test "legal receipts: verify says TAMPERED when a published page is edited" {
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" tamper-page "$SANDBOX/out" terms
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -eq 2 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: TAMPERED"* ]]
+  [[ "$output" == *"page:terms"* ]]
+}
+
+@test "legal receipts: a STALE FORMAT is UNVERIFIABLE, never TAMPERED" {
+  # The distinction the verb exists for. When the preimage version moves, every previously
+  # recorded hash stops matching -- and a verifier that calls those tampering cries wolf across
+  # the whole estate on upgrade day, after which nobody reads its output. Exit 3, not 2.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" stale-published "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -eq 3 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: UNVERIFIABLE"* ]]
+  # And it must not quietly read as fine either. Unknown is its own answer.
+  [[ "$output" != *"verdict: INTACT"* ]]
+}
+
+@test "legal receipts: relabelling a record as stale does NOT excuse edited page bytes" {
+  # The attack on the classifier. Whoever can edit the record can also relabel it, so if the
+  # verdict came from the declared version, a tamperer would downgrade TAMPERED to UNVERIFIABLE
+  # by editing one string. Page bytes are hashed directly and the preimage version does not
+  # govern them, so they stay TAMPERED whatever the label claims.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" tamper-page "$SANDBOX/out" terms
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" stale-published "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -eq 2 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: TAMPERED"* ]]
+}
+
+@test "legal receipts: verify on a directory with nothing published exits 3" {
+  _arc_legal_sandbox
+  mkdir -p "$SANDBOX/out"
+  VERIFY_STATUS=0
+  node "$ARC_LEGAL_CLI" verify --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    >"$SANDBOX/vfy.txt" 2>&1 || VERIFY_STATUS=$?
+  [ "$VERIFY_STATUS" -eq 3 ]
 }
 
 @test "legal receipts: this suite registers every test it declares" {

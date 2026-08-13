@@ -87,7 +87,14 @@ export function validateApprovalPayload(payload) {
         if (!p || typeof p !== "object") { errs.push("a page entry is not an object"); continue; }
         for (const k of Object.keys(p))
           if (!PAGE_KEYS.includes(k)) errs.push(`unknown key "${k}" in a page entry`);
+        // The page id is JOINED INTO A FILESYSTEM PATH downstream, so it is constrained here,
+        // with the same charset the venture-name confinement uses. `factsPathFor` in the CLI
+        // carries a comment saying "one confinement function, every path through it" -- and this
+        // path was never put through it. Today a `../terms` id is refused by check ORDER
+        // (PAGE_MISSING fires before the read); reordering two lines would make it read outside
+        // the publish directory. Order is not a security property.
         if (typeof p.page !== "string" || !p.page) errs.push("a page entry has no page id");
+        else if (!/^[a-z][a-z0-9-]{0,63}$/.test(p.page)) errs.push(`page id "${p.page}" is not a page name (lowercase letters, digits and hyphens). It is joined into a file path.`);
         else if (seen.has(p.page)) errs.push(`page "${p.page}" appears twice in the approval`);
         else seen.add(p.page);
         if (!/^[0-9a-f]{64}$/.test(String(p.output_sha256)))
@@ -105,11 +112,19 @@ export function validateApprovalPayload(payload) {
  * Every comparison is against a value computed in this call. Reading `_run.json` and trusting its
  * `facts_sha256` would make the whole chain a check that the file agrees with itself.
  */
-export function verifyChain({ approved, fresh, dir }) {
+export function verifyChain({ approved, fresh, dir, dirEntries }) {
   const errs = [];
 
   if (approved.venture !== fresh.venture)
     errs.push(`VENTURE_MISMATCH: the approval is for "${approved.venture}" and this run is "${fresh.venture}"`);
+
+  // The effective date was the ONE recorded value this module trusted, and its own header says
+  // nothing here trusts a recorded value because it is recorded. Editing `effective_date` in
+  // `_approval.json` alone -- facts hash untouched -- published a record claiming a date the
+  // rendered page never carried, and it was the forged value that both backdating guards then
+  // evaluated. Re-derived and compared like everything else.
+  if (approved.effective_date !== fresh.effective_date)
+    errs.push(`EFFECTIVE_DATE_CHANGED: the approval says ${approved.effective_date} and the facts render ${fresh.effective_date}. The approval file has been edited, or the facts have.`);
 
   if (approved.facts_sha256 !== fresh.facts_sha256)
     errs.push(`FACTS_CHANGED: the facts file has moved since it was approved (approved ${approved.facts_sha256.slice(0, 12)}..., now ${fresh.facts_sha256.slice(0, 12)}...). The decision approved specific bytes, so it does not carry over.`);
@@ -136,6 +151,31 @@ export function verifyChain({ approved, fresh, dir }) {
     if (!approvedPages.has(page))
       errs.push(`PAGE_EXTRA: this run produces "${page}", which the approval does not cover. Publishing it would put an unapproved page on the site.`);
 
+  // ...and the DIRECTORY, which is the thing actually published. The loop above walks the RUN's
+  // page list, so its own message ("publishing it would put an unapproved page on the site") was
+  // checking the wrong set: a hand-written `terms-v2.mdx` dropped into the publish directory --
+  // carrying a false certification claim and a refund denial -- published at exit 0, in no
+  // receipt, with the gate reporting success. Both checks stay; they catch different things.
+  // A missing listing is an ERROR, not a skipped check. `if (Array.isArray(dirEntries))` made a
+  // security check optional by omission -- a caller that forgot the argument got a silently
+  // weaker verifyChain that still returned clean, three lines below this function's own
+  // "could-not-check is not a pass".
+  if (!Array.isArray(dirEntries)) {
+    errs.push("DIRECTORY_NOT_LISTED: verifyChain was given no directory listing, so unapproved files in the publish directory could not be checked for.");
+  } else {
+    for (const entry of dirEntries) {
+      // Case-INSENSITIVE. Windows and macOS default filesystems are case-preserving but
+      // case-insensitive, so `terms-v2.MDX` occupies the same name as `.mdx` and is served
+      // identically by any static host -- and a case-sensitive suffix test skips it, on exactly
+      // the two legs where it matters most.
+      const lower = entry.toLowerCase();
+      if (!lower.endsWith(".mdx")) continue;
+      const page = lower.slice(0, -4);
+      if (!approvedPages.has(page))
+        errs.push(`PAGE_UNAPPROVED_FILE: "${entry}" is in the publish directory and is in no receipt. Every .mdx there is published, whether or not this run produced it.`);
+    }
+  }
+
   return errs;
 }
 
@@ -152,8 +192,18 @@ export function verifyDecision(decision, payload, requestId) {
     errs.push(`the receipt is kind "${decision.kind}", not "decision.recorded"`);
   if (decision.verdict !== "approve")
     errs.push(`VERDICT_NOT_APPROVE: the recorded verdict is "${decision.verdict}". Only "approve" publishes; a rejected or deferred decision with an otherwise intact hash chain must still refuse.`);
-  if (requestId && decision.decides !== requestId)
+  // The falsy-skip class again, in an EXPORTED function, on the very check whose earlier vacuous
+  // version is the cautionary tale in the comment above it. A caller passing null disabled it.
+  if (!requestId) errs.push("no request id was supplied to bind this decision to, so DECIDES_MISMATCH cannot be evaluated. A binding check with nothing to bind to is not a check.");
+  else if (decision.decides !== requestId)
     errs.push(`DECIDES_MISMATCH: this decision decides "${decision.decides}", not the approval request "${requestId}" for these bytes. A decision taken about a different request is not a decision about this one.`);
+
+  // A receipt with no timestamp used to disable the backdating guard silently: the SAME receipt
+  // refused when dated 2099 and published when the key was deleted, with the CLI even printing
+  // "recorded (no timestamp)" as it went. Naming the missing evidence and proceeding anyway is
+  // the worst available behaviour.
+  if (!decision.recorded_at || !/^\d{4}-\d{2}-\d{2}/.test(String(decision.recorded_at)))
+    errs.push(`DECISION_UNDATED: the receipt has no usable recorded_at ("${decision.recorded_at}"). Without it the backdating check cannot run, and a check that cannot run must refuse rather than pass.`);
   if (decision.subject !== APPROVAL_SUBJECT)
     errs.push(`the decision's subject is "${decision.subject}", not "${APPROVAL_SUBJECT}"`);
 
@@ -168,6 +218,87 @@ export function verifyDecision(decision, payload, requestId) {
 }
 
 /**
+ * verify -- is what is on disk still what was published, and if not, WHY not?
+ *
+ * The distinction this exists for: **a stale format is not tampering.** When the canonicaliser's
+ * preimage version moves, every previously recorded hash stops matching, and a verifier that
+ * reports those as tampering cries wolf across the whole estate on the day of an upgrade -- after
+ * which nobody reads its output, which is worse than not having it.
+ *
+ * And the classification is made by RE-DERIVING, never by trusting the declared version. A
+ * `preimage_version` field is written by the same process whose honesty is in question; treating
+ * it as the answer means an attacker relabels a tampered record as stale and the verifier agrees.
+ *
+ * So there are THREE verdicts, not two:
+ *
+ *   INTACT       re-derived under the current algorithm and it matches
+ *   TAMPERED     re-derived under the current algorithm, it does not match, and the record
+ *                claims the SAME algorithm -- so the bytes moved, not the rules
+ *   UNVERIFIABLE the record claims an algorithm this build cannot compute. NOT tampering and
+ *                NOT intact: it is unknown, and saying so is the only honest answer.
+ *
+ * UNVERIFIABLE is deliberately not folded into either neighbour. Folding it into INTACT publishes
+ * unchecked bytes; folding it into TAMPERED is the false alarm above. A gate that cannot check
+ * must say it cannot check.
+ */
+export const VERIFY_INTACT = "INTACT";
+export const VERIFY_TAMPERED = "TAMPERED";
+export const VERIFY_UNVERIFIABLE = "UNVERIFIABLE";
+
+export function verifyPublished({ published, fresh, dir, currentPreimage }) {
+  const out = [];
+  const recordedPreimage = published?.run?.preimage_version ?? published?.preimage_version ?? null;
+
+  // The version question is asked FIRST and answered by capability, not by the label. "Can this
+  // build compute the algorithm the record claims?" -- if not, nothing below can be classified.
+  const canRederive = recordedPreimage === currentPreimage;
+
+  const cmp = (what, was, now) => {
+    if (was === now) return { what, verdict: VERIFY_INTACT };
+    if (!canRederive)
+      return {
+        what,
+        verdict: VERIFY_UNVERIFIABLE,
+        detail: `the record was written under preimage "${recordedPreimage}" and this build computes "${currentPreimage}". A hash that does not match across a format change is expected, so this is NOT evidence of tampering -- and it is not evidence of integrity either. Re-publish under the current format to get a verifiable record.`,
+      };
+    return {
+      what,
+      verdict: VERIFY_TAMPERED,
+      detail: `recorded ${String(was).slice(0, 12)}..., re-derived ${String(now).slice(0, 12)}... under the SAME preimage version, so the bytes moved rather than the rules.`,
+    };
+  };
+
+  out.push(cmp("facts", published?.facts_sha256, fresh.facts_sha256));
+  out.push(cmp("template_set", published?.template_set_sha, fresh.template_set_sha));
+
+  for (const p of published?.pages ?? []) {
+    const file = join(dir, `${p.page}.mdx`);
+    if (!existsSync(file)) {
+      out.push({ what: `page:${p.page}`, verdict: VERIFY_UNVERIFIABLE, detail: `${file} is gone. A missing page cannot be compared, and an absent file is not a clean one.` });
+      continue;
+    }
+    let onDisk;
+    try { onDisk = bytesHash(readFileSync(file, "utf8")); }
+    catch (e) { out.push({ what: `page:${p.page}`, verdict: VERIFY_UNVERIFIABLE, detail: `unreadable (${e.message})` }); continue; }
+    // Page bytes are hashed directly and are NOT affected by the canonicaliser's preimage
+    // version -- that governs the facts preimage only. So a page mismatch is tampering whatever
+    // the format label says, and routing it through `cmp` would let a relabelled record excuse
+    // edited page bytes as "stale format".
+    out.push(onDisk === p.output_sha256
+      ? { what: `page:${p.page}`, verdict: VERIFY_INTACT }
+      : { what: `page:${p.page}`, verdict: VERIFY_TAMPERED, detail: `the published file has been edited since it was approved (recorded ${String(p.output_sha256).slice(0, 12)}..., on disk ${onDisk.slice(0, 12)}...)` });
+  }
+
+  const worst = out.some((r) => r.verdict === VERIFY_TAMPERED)
+    ? VERIFY_TAMPERED
+    : out.some((r) => r.verdict === VERIFY_UNVERIFIABLE)
+      ? VERIFY_UNVERIFIABLE
+      : VERIFY_INTACT;
+
+  return { verdict: worst, results: out };
+}
+
+/**
  * Backdating. An effective date earlier than the decision says the page took effect before
  * anybody agreed to it, and a re-publish that moves the date backwards rewrites when a
  * commitment started.
@@ -177,19 +308,29 @@ export function verifyDecision(decision, payload, requestId) {
  * effective date is a calendar day, and coercing either into the other's type invents precision.
  * Only the DAY of the decision is used.
  */
-export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveDate }) {
+export function backdatingErrors({ effectiveDate, decisionAt, previousEffectiveDate, hadPrevious }) {
   const errs = [];
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(effectiveDate)))
     return [`effective_date "${effectiveDate}" is not an ISO date`];
 
-  if (decisionAt) {
+  // No early return when the timestamp is absent: verifyDecision refuses an undated receipt, and
+  // this refuses too rather than relying on the other one having run.
+  if (!decisionAt) {
+    errs.push("DECISION_UNDATED: no decision timestamp was supplied, so backdating cannot be checked.");
+  } else {
     const day = String(decisionAt).slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) errs.push(`the decision timestamp "${decisionAt}" has no ISO date in it`);
     else if (effectiveDate < day)
       errs.push(`BACKDATED: effective_date ${effectiveDate} is earlier than the decision (${day}). The page would claim to have been in force before anyone approved it.`);
   }
 
-  if (previousEffectiveDate) {
+  // `previousEffectiveDate === null` means "nothing published before", which is legitimate.
+  // `hadPrevious` distinguishes that from "something was published and its date is unreadable" --
+  // stripping the key from the published record made a backwards re-publish go green, the same
+  // falsy-skip class as the undated receipt above.
+  if (hadPrevious && !previousEffectiveDate)
+    errs.push("PREVIOUS_UNREADABLE: a previous publish is on record for this venture but its effective_date could not be read, so monotonicity cannot be checked. Unknown is not the same as none.");
+  else if (previousEffectiveDate) {
     if (effectiveDate < previousEffectiveDate)
       errs.push(`NON_MONOTONIC: effective_date ${effectiveDate} is earlier than the version already published (${previousEffectiveDate}). A re-publish may move the date forward or leave it, never back -- moving it back rewrites when a commitment started.`);
   }

@@ -366,12 +366,27 @@ export function scenarioSetLint(scenarios, renderedPageIds) {
   return out;
 }
 
+/**
+ * The groups a run ACTUALLY executed, accumulated as each lint is invoked.
+ *
+ * The first coverage check compared `GROUPS` against `trial_groups` -- two literal arrays
+ * declared three lines apart in this file -- while its own docstring claimed "two derived lists,
+ * never a literal". An attacker added a `phantom` group to both, wired it into no lint at all,
+ * and the check reported "5 group(s) declared and reported" at exit 0. It could not detect a
+ * lint whose body had been deleted, which is the only thing it existed for.
+ *
+ * This set is written by the dispatcher below, so a group that is declared and never invoked is
+ * visibly absent from it.
+ */
+export const GROUPS_RUN = new Set();
+
 export function runAllLints({ page, text, facts, clauseMap, required, denylist, templateClauses, bodies, ownHost, scenarios }) {
-  return [
-    ...valueLint(page, text, denylist, ownHost),
-    ...traceLint(page, text, clauseMap, facts, templateClauses),
-    ...completenessLint(page, text, required, facts, bodies, scenarios, templateClauses),
-  ];
+  const out = [];
+  const invoke = (group, fn) => { GROUPS_RUN.add(group); out.push(...fn()); };
+  invoke("value", () => valueLint(page, text, denylist, ownHost));
+  invoke("trace", () => traceLint(page, text, clauseMap, facts, templateClauses));
+  invoke("completeness", () => completenessLint(page, text, required, facts, bodies, scenarios, templateClauses));
+  return out;
 }
 
 /** Does this finding set move the exit code? Only a FAIL in a group promoted OUT of trial. */

@@ -21,10 +21,11 @@ import { parseFactsYaml, YamlError } from "./lib/yaml.mjs";
 import { canonicalHash, bytesHash, templateSetHash, CanonError, PREIMAGE_VERSION } from "./lib/canonical.mjs";
 import { validateFacts } from "./lib/schema.mjs";
 import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./lib/template.mjs";
-import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL } from "./lib/lints.mjs";
+import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL, GROUPS_RUN } from "./lib/lints.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
   backdatingErrors, semanticDiff, APPROVAL_SUBJECT,
+  verifyPublished, VERIFY_INTACT, VERIFY_TAMPERED,
 } from "./lib/receipts.mjs";
 
 export const ENGINE_VERSION = "arc-legal/0.1.0";
@@ -47,6 +48,7 @@ function usage() {
     "usage: arc-legal render  --venture NAME --out DIR",
     "       arc-legal propose --venture NAME --out DIR",
     "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
+    "       arc-legal verify  --venture NAME --dir DIR",
     "",
     "  --venture NAME   a fixture venture under tests/fixtures/legal/ventures/",
     "  --out DIR        where the rendered pages are written",
@@ -103,16 +105,52 @@ function factsPathFor(name) {
   return path;
 }
 
-function loadTemplateSet() {
-  const dir = join(PRODUCT, "templates", TEMPLATE_SET);
-  if (!existsSync(dir)) throw new Fail(3, `template set ${TEMPLATE_SET} is missing at ${dir}`);
+/**
+ * The pinned RENDER INPUT set -- templates AND the data files the pages interpolate.
+ *
+ * This used to hash `*.tmpl.md` only, and an adversarial pass turned that into a published
+ * falsehood: editing `grievance-windows.json` between approval and publish rewrote a
+ * grievance commitment from "48 hours / 30 days" to "720 hours / 90 days" on the rendered page
+ * while `facts_sha256` and the set hash both stayed IDENTICAL. The decision approved one number
+ * and the site got the other, at exit 0, with no error printed. `TEMPLATES_CHANGED` could not
+ * fire, because the templates genuinely had not moved.
+ *
+ * `vocab.json`, `clause-map.json`, `required-clauses.json`, `grievance-windows.json`,
+ * `scenarios.json`, `claim-denylist.json`, `cross-page-claims.json` and `pages.json` are all
+ * render or lint inputs. Every one of them is now inside the hash, and they are read THROUGH
+ * this function so a data file added later cannot land outside it -- the previous arrangement
+ * failed exactly because adding a file was the easy path and extending the hash was not.
+ *
+ * The field is still reported as `template_set_sha` for continuity, but it covers the whole
+ * input set; `renderInputs()` is the name that tells the truth.
+ */
+function renderInputs() {
+  const tdir = join(PRODUCT, "templates", TEMPLATE_SET);
+  if (!existsSync(tdir)) throw new Fail(3, `template set ${TEMPLATE_SET} is missing at ${tdir}`);
   const files = {};
-  for (const f of readdirSync(dir).sort()) {
+  for (const f of readdirSync(tdir).sort()) {
     if (!f.endsWith(".tmpl.md")) continue;
-    files[f] = readFileSync(join(dir, f), "utf8").split("\r\n").join("\n");
+    files[`templates/${TEMPLATE_SET}/${f}`] = readFileSync(join(tdir, f), "utf8").split("\r\n").join("\n");
   }
   if (!Object.keys(files).length) throw new Fail(3, `template set ${TEMPLATE_SET} holds no .tmpl.md files`);
-  return { dir, files, sha: templateSetHash(files) };
+
+  const ddir = join(PRODUCT, "data");
+  if (!existsSync(ddir)) throw new Fail(3, `the legal data directory is missing at ${ddir}`);
+  const data = {};
+  for (const f of readdirSync(ddir).sort()) {
+    if (!f.endsWith(".json")) continue;
+    const text = readFileSync(join(ddir, f), "utf8").split("\r\n").join("\n");
+    files[`data/${f}`] = text;
+    data[f] = JSON.parse(text);
+  }
+  if (!Object.keys(data).length) throw new Fail(3, `the legal data directory holds no .json files`);
+
+  // The templates alone, for the renderer, which keys them by bare filename.
+  const templates = {};
+  for (const [k, v] of Object.entries(files))
+    if (k.startsWith("templates/")) templates[k.slice(`templates/${TEMPLATE_SET}/`.length)] = v;
+
+  return { dir: tdir, files: templates, data, sha: templateSetHash(files) };
 }
 
 /**
@@ -142,16 +180,20 @@ export function renderVenture({ ventureName, outDir }) {
     throw e;
   }
 
-  const vocab = readJson(join(PRODUCT, "data", "vocab.json"));
-  const clauseMap = readJson(join(PRODUCT, "data", "clause-map.json"));
-  const required = readJson(join(PRODUCT, "data", "required-clauses.json"));
-  const denylist = readJson(join(PRODUCT, "data", "claim-denylist.json"));
-  const pagesDoc = readJson(join(PRODUCT, "data", "pages.json"));
-  const windowRows = readJson(join(PRODUCT, "data", "grievance-windows.json"));
+  // Read from the HASHED set, never from disk again. A second read is a second chance for the
+  // bytes to differ from the ones the pin covers.
+  const set = renderInputs();
+  const need = (f) => { const d = set.data[f]; if (d === undefined) throw new Fail(3, `products/legal/data/${f} is missing`); return d; };
+  const vocab = need("vocab.json");
+  const clauseMap = need("clause-map.json");
+  const required = need("required-clauses.json");
+  const denylist = need("claim-denylist.json");
+  const pagesDoc = need("pages.json");
+  const windowRows = need("grievance-windows.json");
   // The answerability fixture (ADR-1009). Read here rather than inside the lint so a missing or
   // unparseable file is a loud refusal at load time, not a per-page finding repeated seven times.
-  const scenarioSet = readJson(join(PRODUCT, "data", "scenarios.json"));
-  const crossClaims = readJson(join(PRODUCT, "data", "cross-page-claims.json"));
+  const scenarioSet = need("scenarios.json");
+  const crossClaims = need("cross-page-claims.json");
   if (!scenarioSet || !Array.isArray(scenarioSet.scenarios) || !scenarioSet.scenarios.length)
     throw new Fail(3, "scenarios.json holds no scenarios. The answerability check is the only lint class that fails for insufficiency; running without it is not a degraded run, it is a different gate.");
 
@@ -169,7 +211,6 @@ export function renderVenture({ ventureName, outDir }) {
     throw e;
   }
 
-  const set = loadTemplateSet();
   const windows = strictestWindow(windowRows, facts.effective_date);
 
   // Routes are a FACTS field with pinned defaults (ADR-1010 item 7). The templates cross-link
@@ -284,6 +325,7 @@ export function renderVenture({ ventureName, outDir }) {
   // Cross-page consistency (ADR-1013), also once. A contradiction BETWEEN two pages is invisible
   // to every per-page lint by construction, and that is where three reader panels independently
   // put their worst findings.
+  GROUPS_RUN.add("consistency");
   findings.push(...crossPageLint(pages, crossClaims, factsView));
 
   const run = {
@@ -299,6 +341,9 @@ export function renderVenture({ ventureName, outDir }) {
     not_authored: notAuthored,
     findings,
     trial_groups: [...TRIAL].sort(),
+    // Which groups actually RAN, accumulated by the dispatcher as it invoked each lint. NOT a
+    // copy of the declaration -- that was the vacuous version.
+    groups_run: [...GROUPS_RUN].sort(),
     exit_code: findingsAreFatal(findings) ? 2 : 0,
   };
 
@@ -395,15 +440,36 @@ function publishMain(args) {
     return 2;
   }
 
+  // propose refuses on fatal findings and publish did not. The comment on the propose check even
+  // says it was written early "because that is the moment nobody will remember to add it" -- and
+  // the other half was forgotten in the same file. Latent only while every group is in TRIAL.
+  if (findingsAreFatal(fresh.findings)) {
+    console.error("publish REFUSED: the fresh render has FAIL findings in a group that is out of TRIAL.");
+    for (const f of fresh.findings.filter((x) => x.level === "FAIL"))
+      console.error("  - " + f.group + ":" + f.page + ":" + f.clause + " " + f.message);
+    return 2;
+  }
+
+  // The publish LEDGER is keyed by VENTURE, not by the directory the publisher happened to pass.
+  // Monotonicity used to read <--dir>/_published.json, so proposing into a FRESH directory walked
+  // straight past it and re-published a BACKWARDS effective date at exit 0. A guard keyed to a
+  // caller-chosen location is a guard the caller can move out from under.
+  const ledgerDir = join(REPO_ROOT, ".claude", "state", "legal-published");
+  const ledgerFile = join(ledgerDir, args.venture + ".json");
+  const hadPrevious = existsSync(ledgerFile);
+  const previous = hadPrevious ? readJson(ledgerFile) : null;
+
   const problems = [
     ...verifyDecision(decision, approved, args.request),
-    ...verifyChain({ approved, fresh, dir: args.dir }),
+    ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: readdirSync(args.dir) }),
     ...backdatingErrors({
-      effectiveDate: approved.effective_date,
+      // The RE-DERIVED date, never the one recorded in the approval file. That value was
+      // forgeable -- editing it alone, facts hash untouched, published a record claiming a date
+      // the rendered page never carried -- and it was what both backdating guards evaluated.
+      effectiveDate: fresh.effective_date,
       decisionAt: decision.recorded_at,
-      previousEffectiveDate: existsSync(join(args.dir, "_published.json"))
-        ? readJson(join(args.dir, "_published.json")).effective_date
-        : null,
+      previousEffectiveDate: previous ? previous.effective_date : null,
+      hadPrevious,
     }),
   ];
 
@@ -413,11 +479,9 @@ function publishMain(args) {
     return 2;
   }
 
-  const prevFile = join(args.dir, "_published.json");
   let diff = null;
-  if (existsSync(prevFile)) {
-    const prev = readJson(prevFile);
-    diff = semanticDiff(prev.run || prev, fresh);
+  if (previous && previous.run && Array.isArray(previous.run.pages)) {
+    diff = semanticDiff(previous.run, fresh);
     console.log("this is a RE-publish. What changed:");
     console.log(`  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`);
     for (const c of diff.clause_changes)
@@ -428,7 +492,7 @@ function publishMain(args) {
   writeFileSync(join(args.dir, "_published.json"), JSON.stringify({
     subject: APPROVAL_SUBJECT,
     venture: fresh.venture,
-    effective_date: approved.effective_date,
+    effective_date: fresh.effective_date,
     facts_sha256: fresh.facts_sha256,
     template_set_sha: fresh.template_set_sha,
     decision: { id: decision.id ?? null, decides: decision.decides ?? null, recorded_at: decision.recorded_at ?? null },
@@ -437,9 +501,36 @@ function publishMain(args) {
     run: fresh,
   }, null, 2) + "\n", "utf8");
 
+  mkdirSync(ledgerDir, { recursive: true });
+  writeFileSync(ledgerFile, readFileSync(join(args.dir, "_published.json"), "utf8"), "utf8");
+
   console.log(`published ${approved.pages.length} page(s) for ${fresh.venture}`);
   console.log(`bound to decision ${decision.id ?? "(no id)"} recorded ${decision.recorded_at ?? "(no timestamp)"}`);
   return 0;
+}
+
+/**
+ * verify -- is the published directory still what was published? Exit 0 INTACT, 2 TAMPERED,
+ * 3 UNVERIFIABLE. Three codes because there are three answers, and "could not check" must never
+ * wear the same one as "checked and clean".
+ */
+function verifyMain(args) {
+  if (!args.venture) { console.error(`verify needs --venture NAME
+
+${usage()}`); return 2; }
+  if (!args.dir) { console.error(`verify needs --dir DIR
+
+${usage()}`); return 2; }
+  const publishedFile = join(args.dir, "_published.json");
+  if (!existsSync(publishedFile)) { console.error(`nothing published at ${publishedFile}`); return 3; }
+
+  const published = readJson(publishedFile);
+  const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null });
+  const { verdict, results } = verifyPublished({ published, fresh, dir: args.dir, currentPreimage: PREIMAGE_VERSION });
+
+  for (const r of results) console.log(`${r.verdict.padEnd(12)} ${r.what}${r.detail ? " -- " + r.detail : ""}`);
+  console.log(`verdict: ${verdict}`);
+  return verdict === VERIFY_INTACT ? 0 : verdict === VERIFY_TAMPERED ? 2 : 3;
 }
 
 function main(argv) {
@@ -449,6 +540,7 @@ function main(argv) {
   const verb = args._[0];
   if (verb === "propose") return proposeMain(args);
   if (verb === "publish") return publishMain(args);
+  if (verb === "verify") return verifyMain(args);
   if (verb !== "render") { console.error(`unknown verb "${verb}"\n\n${usage()}`); return 2; }
   if (!args.venture) { console.error(`render needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`render needs --out DIR\n\n${usage()}`); return 2; }

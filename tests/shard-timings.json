@@ -128,6 +128,6 @@
     "legal-scenarios.bats": 70,
     "legal-consistency.bats": 55,
     "legal-publish-gate.bats": 45,
-    "legal-receipts.bats": 85
+    "legal-receipts.bats": 130
   }
 }
