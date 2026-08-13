@@ -1,0 +1,8 @@
+{
+  "commits": [
+    {
+      "sha": "4936371",
+      "subject": "docs(readme): document what total does with non-array input"
+    }
+  ]
+}

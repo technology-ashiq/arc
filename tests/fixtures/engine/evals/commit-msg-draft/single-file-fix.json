@@ -1,0 +1,53 @@
+{
+  "note": "Armed fixture (ADR-0905). One function gains a guard clause. The narrowest real change there is, and the type is unambiguous: it fixes a crash on non-array input. Input is {} because commit-msg-draft declares inputs: [] -- the varying thing is repo_state, materialized by the harness (M3).",
+  "repo_state": "single-file-fix",
+  "input": {},
+  "expected": {
+    "commits": [
+      {
+        "sha": "4936371",
+        "subject": "fix(total): return 0 for non-array input instead of throwing"
+      }
+    ]
+  },
+  "assertions": [
+    {
+      "id": "A-01",
+      "path": "commits.0.sha",
+      "op": "matches",
+      "value": "^[0-9a-f]{7,40}$"
+    },
+    {
+      "id": "A-02",
+      "path": "commits.0.subject",
+      "op": "matches",
+      "value": "^(feat|fix|chore|docs|refactor|test|perf)(\\([a-z0-9-]+\\))?: .+"
+    },
+    {
+      "id": "A-03",
+      "path": "commits.0.subject",
+      "op": "matches",
+      "value": "^fix"
+    },
+    {
+      "id": "A-04",
+      "path": "commits.0.subject",
+      "op": "length_between",
+      "value": [
+        12,
+        72
+      ]
+    },
+    {
+      "id": "A-05",
+      "path": "commits.0.subject",
+      "op": "matches",
+      "value": "[^.]$"
+    },
+    {
+      "id": "A-06",
+      "path": "commits.1",
+      "op": "absent"
+    }
+  ]
+}
