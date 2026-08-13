@@ -127,7 +127,7 @@
     "legal-hash.bats": 60,
     "legal-scenarios.bats": 70,
     "legal-consistency.bats": 55,
-    "legal-publish-gate.bats": 45,
+    "legal-publish-gate.bats": 75,
     "legal-receipts.bats": 130
   }
 }

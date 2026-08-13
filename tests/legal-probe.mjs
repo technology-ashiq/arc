@@ -266,6 +266,28 @@ switch (cmd) {
           writeFileSync(p, src.split(/\r?\n/).filter((l) => l !== "  publish: []").join("\n"), "utf8");
         }
         break;
+      /**
+       * publish-shape-<n> -- the five YAML spellings of a LIVE publish target that the
+       * hand-rolled reader passed at exit 0. The gate caught only the indented dash, which was
+       * the shape its own mutant used: the mutants had been derived from the implementation.
+       * These are the attacker's, not the author's.
+       */
+      case "publish-shape-decoy":
+        patch(join(root, "hq.policy.yaml"), "  publish: []", "  legacy:\n    publish: []\n  publish:\n    - legal.publish");
+        break;
+      case "publish-shape-same-indent":
+        // The most idiomatic YAML of the five.
+        patch(join(root, "hq.policy.yaml"), "  publish: []", "  publish:\n  - legal.publish");
+        break;
+      case "publish-shape-duplicate-key":
+        patch(join(root, "hq.policy.yaml"), "  publish: []", "  publish: []\n  publish:\n    - legal.publish");
+        break;
+      case "publish-shape-tab":
+        patch(join(root, "hq.policy.yaml"), "  publish: []", "  publish:\n  -\tlegal.publish");
+        break;
+      case "publish-shape-no-value":
+        patch(join(root, "hq.policy.yaml"), "  publish: []", "  publish:");
+        break;
       case "claim-anchor-missing":
         // Point a cross-page claim at a facts field nothing sets. The claim then has no value to
         // look for, and the tempting implementation skips it -- which passes every page while

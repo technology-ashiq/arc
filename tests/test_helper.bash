@@ -879,6 +879,12 @@ _arc_legal_sandbox() {
   # without touching the real one. The gate resolves its repo root from its own location, so a
   # copy under $SANDBOX reads $SANDBOX/hq.policy.yaml and nothing else.
   cp    "$ARC_ROOT/hq.policy.yaml"                "$SANDBOX/"
+  # publish-gate.mjs imports the AUTHORITATIVE policy parser rather than hand-rolling one, so the
+  # sandbox needs it too. Without it the gate exits 3 ("could not check") for every case and all
+  # four mutant tests fail for a reason that has nothing to do with what they test -- which is
+  # exactly what happened on CI the first time the gate switched parsers.
+  mkdir -p "$SANDBOX/.claude/scripts/hq/lib"
+  cp -r "$ARC_ROOT/.claude/scripts/hq/lib/policy"  "$SANDBOX/.claude/scripts/hq/lib/"
   ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
   ARC_LEGAL_PUBLISH_GATE="$SANDBOX/.claude/scripts/legal/publish-gate.mjs"
   # A sandbox that did not actually copy is a silent pass generator: every "no findings"
@@ -889,6 +895,7 @@ _arc_legal_sandbox() {
   for _p in "$ARC_LEGAL_CLI" \
             "$ARC_LEGAL_PUBLISH_GATE" \
             "$SANDBOX/hq.policy.yaml" \
+            "$SANDBOX/.claude/scripts/hq/lib/policy/yaml.mjs" \
             "$SANDBOX/products/legal/templates/v1" \
             "$SANDBOX/products/legal/data" \
             "$SANDBOX/tests/fixtures/legal/ventures" \

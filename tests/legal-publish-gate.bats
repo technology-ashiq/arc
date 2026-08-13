@@ -63,6 +63,29 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" == *"not present"* ]]
 }
 
+@test "legal publish gate: five ATTACKER YAML shapes of a live publish target all refuse" {
+  # These are the attacker's shapes, not the author's. The hand-rolled reader this gate started
+  # with passed every one of them at exit 0, printing its success banner -- and caught only the
+  # indented dash, which was the shape its OWN mutant used, because the mutants had been derived
+  # from the implementation. `gate-author-cannot-be-its-attacker`, one commit after the gate.
+  #
+  # The assertion is "not 0", because these split legitimately between exit 2 (a target is there)
+  # and exit 3 (the strict parser refuses the file outright: duplicate keys and tabs are outside
+  # its subset). Both are safe; only 0 is not. Each shape is asserted separately so a single fix
+  # cannot appear to cover all five.
+  local shape
+  for shape in publish-shape-decoy publish-shape-same-indent publish-shape-duplicate-key \
+               publish-shape-tab publish-shape-no-value; do
+    _arc_legal_sandbox
+    run node "$ARC_ROOT/tests/legal-probe.mjs" mutate "$SANDBOX" "$shape"
+    [ "$status" -eq 0 ]
+    MUTANT_STATUS=0
+    node "$ARC_LEGAL_PUBLISH_GATE" >"$SANDBOX/out.txt" 2>&1 || MUTANT_STATUS=$?
+    [ "$MUTANT_STATUS" -ne 0 ] || { echo "shape $shape PASSED the gate" >&2; false; }
+    _arc_legal_teardown
+  done
+}
+
 @test "legal publish gate: the unmutated sandbox passes, so the mutants above can fail" {
   _arc_legal_sandbox
   run node "$ARC_LEGAL_PUBLISH_GATE"
