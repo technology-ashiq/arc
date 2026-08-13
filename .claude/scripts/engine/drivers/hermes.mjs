@@ -56,7 +56,9 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync, statSync } from "node:fs";
+import { pathToFileURL } from "node:url";
 
 import { EXIT, pinnedModel, runDriver, settle } from "./common.mjs";
 import { taggedSha256 } from "./type-tagged-hash.mjs";
@@ -95,9 +97,16 @@ const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
 // that the branch works because it looks right -- is the vacuous pass this repo keeps paying
 // for. The override is bounded: a value that is not a positive finite number is IGNORED rather
 // than obeyed, so a malformed environment cannot silently shrink the ceiling to nothing.
+const HARD_CEILING = 64 * 1024 * 1024;
 const MAX_BUFFER = (() => {
-  const raw = Number(process.env.ARC_HERMES_MAX_BUFFER);
-  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : 64 * 1024 * 1024;
+  // FLOOR FIRST, THEN TEST, AND CLAMP ABOVE. The previous form tested `raw > 0` and floored
+  // afterwards, so `ARC_HERMES_MAX_BUFFER=0.5` passed the guard and became `maxBuffer: 0` --
+  // which Node reads as UNLIMITED. The comment here claimed a malformed environment could not
+  // silently shrink the ceiling to nothing; what it actually did was LIFT it entirely, which is
+  // the opposite failure and the worse one. `1e30` did the same from the other end.
+  const n = Math.floor(Number(process.env.ARC_HERMES_MAX_BUFFER));
+  if (!Number.isFinite(n) || n <= 0) return HARD_CEILING;
+  return Math.min(n, HARD_CEILING);
 })();
 
 // Room to tear the container down before arc-run SIGKILLs this process. Without it a timeout
@@ -107,70 +116,138 @@ const TEARDOWN_GRACE_MS = 3000;
 /**
  * Strip ANSI escape sequences.
  *
- * EVERY ESCAPE HERE IS SPELLED \u001b AND IS NEVER WRITTEN AS A LITERAL BYTE. A literal 0x1b in
- * a source file is invisible in every diff, every review and every terminal that renders this
- * file, and any tool that normalises it away silently turns these patterns into ordinary text
- * matches -- at which point the OSC pattern below would eat from the first close-bracket in
- * the output to the end of the stream, deleting the very answer this parser exists to find.
- * The first draft of this function was written with literal bytes and lost them exactly that
- * way, so the rule is written down here rather than remembered.
+ * EVERY ESCAPE IS SPELLED \u001b AND NEVER WRITTEN AS A LITERAL BYTE. A literal 0x1b is invisible
+ * in every diff and every review, and a tool that normalises it away turns these patterns into
+ * ordinary text matches. This file has already lost them once that way.
  *
- * Three families, stripped in this order for a reason: an OSC payload may itself contain an
- * open-bracket, so removing OSC first stops the CSI pattern from cutting an OSC sequence in
- * half and leaving its tail behind as content.
+ * FOUR FAMILIES, and the first three were added by an adversarial pass that got an
+ * attacker-chosen document returned as the answer:
+ *
+ * STRING SEQUENCES (DCS, APC, PM, SOS) carry a PAYLOAD between an introducer and a terminator.
+ * The old patterns stripped the two-byte introducer and the terminator and left the payload
+ * behind as ordinary content -- so `\u001bP {"ok":true,"pwned":"..."} \u001b\` won the backwards
+ * scan and was returned, exit 0, invisible in any terminal because nothing renders these.
+ *
+ * OSC IS BOUNDED TO ONE LINE. `[\s\S]*?` crossed newlines to the first terminator anywhere
+ * downstream, so an unterminated OSC in boot output swallowed the answer -- reported as "no
+ * output on stdout at all", which is a false diagnosis -- or, worse, swallowed only as far as a
+ * later terminator and left a STALE earlier line to be returned as the answer with exit 0. The
+ * unbounded form was also super-quadratic: 1 MB took 237ms, 4 MB took 7.7s, and it runs AFTER
+ * spawnSync returns, where no timeout can reach it.
+ *
+ * CSI CARRIES NO INTERMEDIATE-BYTE CLASS. `[ -/]*` let `\u001b[` plus spaces consume the next
+ * printable byte, so `\u001b[  {"ok":true}` lost its opening brace. Leaving a tail behind is
+ * survivable -- the line simply fails to parse -- but eating real content silently changes the
+ * answer, and between those two this takes the survivable one.
  */
-const ANSI_OSC = /\u001b\][\s\S]*?(?:\u0007|\u001b\\)/g;  // title/hyperlink, BEL- or ST-terminated
-const ANSI_CSI = /\u001b\[[0-9;:?]*[ -\/]*[@-~]/g;        // colour, cursor movement
-const ANSI_SOLO = /\u001b[@-Z\\-_]/g;                     // two-character escapes
+const ANSI_STRING_SEQ = /\u001b[P^_X][^\u001b\u0007\n]*(?:\u0007|\u001b\\)?/g;
+const ANSI_OSC = /\u001b\][^\u001b\u0007\n]*(?:\u0007|\u001b\\)?/g;
+const ANSI_CSI = /\u001b\[[0-9;:?]*[@-~]/g;
+const ANSI_SOLO = /\u001b[@-Z\\-_]/g;
 
 function stripAnsi(s) {
-  return String(s).replace(ANSI_OSC, "").replace(ANSI_CSI, "").replace(ANSI_SOLO, "");
+  return String(s)
+    .replace(ANSI_STRING_SEQ, "")
+    .replace(ANSI_OSC, "")
+    .replace(ANSI_CSI, "")
+    .replace(ANSI_SOLO, "");
 }
+
 /**
  * The answer, extracted from a stream that carries boot output. Returns the parsed document.
- * Throws with the reason NAMED -- "not JSON" and "nothing on stdout" are different operator
- * problems and reporting them identically costs a debugging session.
+ *
+ * TWO PASSES, IN THIS ORDER, and the order is the fix for the likeliest production failure:
+ *
+ *   1. A BALANCED DOCUMENT, taken from the EARLIEST line-starting opener that parses through to
+ *      the last closer. A pretty-printed answer -- which is ordinary model behaviour -- has its
+ *      own nested objects on their own lines, and a line scan finds the innermost one first and
+ *      returns a FRAGMENT as the whole document. Preferring the earliest opener returns the
+ *      outermost document, which is the one the model meant.
+ *   2. A SINGLE LINE, scanned backwards. This is the measured shape: boot output, then the
+ *      answer on one line.
+ *
+ * WHY BACKWARDS AT ALL: a warning printed after the answer takes a naive last-line reader off
+ * the end. WHY AN OBJECT OR ARRAY AND NEVER A SCALAR: JSON.parse accepts 42, true and null, so a
+ * boot line reading 0 would be returned as the model answer and the run would go green having
+ * reported nothing.
+ *
+ * THE DOCUMENT IS VERIFIED AGAINST THE ORIGINAL BYTES. Stripping runs over the whole stream, so
+ * an escape INSIDE a JSON string value was being deleted before the parse -- the driver silently
+ * rewrote the answer, which is exactly what this file's own rule forbids, because a driver that
+ * rewrites the answer destroys the evidence of an attack rather than surfacing it. Any candidate
+ * whose text does not appear VERBATIM in the original stream had content removed from inside it,
+ * and is refused by name rather than returned.
  */
 export function extractAnswer(rawStdout) {
-  const cleaned = stripAnsi(rawStdout).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  if (!cleaned.trim()) {
+  const original = String(rawStdout).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  if (!original.trim()) {
     throw new Error("the runtime produced no output on stdout at all — that is a runtime failure, not an unparseable answer");
   }
+  const cleaned = stripAnsi(original);
 
+  let rewritten = null;
+  const accept = (text) => {
+    let parsed;
+    try { parsed = JSON.parse(text); } catch { return null; }
+    if (parsed === null || typeof parsed !== "object") return null;
+    if (!original.includes(text)) { rewritten = text.slice(0, 120); return null; }
+    return { parsed };
+  };
+
+  // Pass 1 — the outermost balanced document.
+  const lastClose = Math.max(cleaned.lastIndexOf("}"), cleaned.lastIndexOf("]"));
+  if (lastClose >= 0) {
+    const opener = /^[ \t]*([{[])/gm;
+    let m;
+    while ((m = opener.exec(cleaned)) !== null) {
+      const at = m.index + m[0].length - 1;
+      if (at > lastClose) break;
+      const got = accept(cleaned.slice(at, lastClose + 1));
+      if (got) return got.parsed;
+    }
+  }
+
+  // Pass 2 — the last single line that is a whole document.
   const lines = cleaned.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
-    if (!line) continue;
-    // A cheap shape check before parsing. It is not a security boundary -- JSON.parse is the
-    // decision -- it exists so a 60 MB stream of prose is not handed to the parser line by line.
-    if (!(line.startsWith("{") || line.startsWith("["))) continue;
-    let parsed;
-    try {
-      parsed = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    // Redundant with the prefix check today, and kept deliberately: the two conditions answer
-    // different questions, and a later relaxation of the fast path must not silently admit a
-    // scalar.
-    if (parsed === null || typeof parsed !== "object") continue;
-    return parsed;
+    if (!line || !(line.startsWith("{") || line.startsWith("["))) continue;
+    const got = accept(line);
+    if (got) return got.parsed;
   }
 
+  if (rewritten) {
+    throw new Error(`the only parseable document required removing escape sequences from INSIDE it, so returning it would rewrite the answer: ${rewritten}`);
+  }
   const preview = cleaned.trim().split("\n").slice(-3).join(" / ").slice(0, 200);
   throw new Error(`no line of the runtime output parsed as a JSON object or array (last lines: ${preview})`);
 }
 
-/** sha256 of a file's BYTES, or an explicit absence marker. Absence is never silence. */
+/**
+ * sha256 of a file's BYTES, or an explicit absence marker. Absence is never silence.
+ *
+ * THE BYTES, AND THIS TIME ACTUALLY THE BYTES. The previous form read the file with `"utf8"` and
+ * hashed the resulting STRING, so every byte sequence that is not valid UTF-8 decoded to the same
+ * replacement character: config files differing only in their invalid bytes hashed IDENTICALLY,
+ * and a pinned config hash reported "unchanged" across a real change. The doc comment already
+ * said BYTES; the code did not.
+ *
+ * The read also sat OUTSIDE the try, so an existing, regular, unreadable file (EACCES, EPERM,
+ * EBUSY) threw out of configPreimage and crashed `version` — in a function whose entire design is
+ * that absence is reported rather than raised. All three syscalls are now in one try, which also
+ * closes the check-then-use race between them.
+ */
 function fileComponent(label, path) {
   if (!path) return { named: false, reason: `${label} was not configured for this run` };
-  if (!existsSync(path)) return { named: true, present: false, path, reason: "configured but the file does not exist" };
   try {
     if (!statSync(path).isFile()) return { named: true, present: false, path, reason: "configured but the path is not a file" };
+    const bytes = readFileSync(path);
+    return { named: true, present: true, path, sha256: createHash("sha256").update(bytes).digest("hex") };
   } catch (e) {
-    return { named: true, present: false, path, reason: `configured but unreadable: ${String(e.message).split("\n")[0]}` };
+    const code = (e && e.code) || "";
+    const reason = code === "ENOENT" ? "configured but the file does not exist" : `configured but unreadable: ${code || String(e.message).split("\n")[0]}`;
+    return { named: true, present: false, path, reason };
   }
-  return { named: true, present: true, path, sha256: taggedSha256(readFileSync(path, "utf8")) };
 }
 
 /**
@@ -211,24 +288,54 @@ export function versionString() {
 /** The remaining run time, as an absolute deadline arc-run set. Never derived from the budget. */
 function msUntilDeadline() {
   const raw = process.env.ARC_DRIVER_DEADLINE_EPOCH_MS;
-  if (!raw) return undefined;
-  const at = Number(raw);
-  if (!Number.isFinite(at)) return undefined;
-  return at - Date.now();
+  if (raw === undefined || raw === "") return undefined;   // absent means no deadline
+  // PRESENT-BUT-UNPARSEABLE IS AN ERROR, NOT SILENCE. This returned undefined for any non-finite
+  // value, so `1e400` and `Infinity` meant NO CLOCK AT ALL and the shim ran unbounded under a
+  // caller that believed it had set a deadline -- and `"   "` became Number 0, declining every
+  // run with "0ms left". MAX_BUFFER above validates and falls back to a SAFE value; this one
+  // validated and fell back to NO GUARD. Twin readers of the same rule, one failing closed and
+  // one failing open, which is the defect this cycle has now hit four times.
+  if (!/^\d+$/.test(String(raw).trim())) {
+    const e = new Error(`ARC_DRIVER_DEADLINE_EPOCH_MS is ${JSON.stringify(raw)}, which is not an epoch millisecond — refusing to run without the clock the caller believes it set`);
+    e.arcDeadlineMalformed = true;
+    throw e;
+  }
+  return Number(String(raw).trim()) - Date.now();
 }
 
 function removeContainer(name) {
-  try {
-    const { cmd, argv } = dockerArgv(["rm", "-f", name]);
-    spawnSync(cmd, argv, { encoding: "utf8", timeout: 10_000 });
-  } catch {
-    // Best effort by design: the run is already over and a failed cleanup must not replace the
-    // outcome the caller needs to see. It is reported on stderr, which is never parsed.
-    process.stderr.write(`hermes: WARN could not remove container ${name}\n`);
+  // THE RESULT IS INSPECTED, NOT A `catch`. spawnSync REPORTS failures on the returned object --
+  // it does not throw -- so the catch block that used to be here was dead code, both `error` and
+  // `status` were discarded, and the comment claiming the failure "is reported on stderr" was
+  // false: a failed `docker rm -f` was completely silent and the container stayed up.
+  //
+  // The timeout was also 10s inside a 3s grace, so a wedged daemon meant arc-run SIGKILLed the
+  // shim mid-cleanup and the container leaked anyway. It is now bounded by the grace it was
+  // actually given, with a signal that a wedged docker CLI cannot ignore.
+  const { cmd, argv } = dockerArgv(["rm", "-f", name]);
+  const res = spawnSync(cmd, argv, {
+    encoding: "utf8",
+    timeout: Math.max(500, TEARDOWN_GRACE_MS - 500),
+    killSignal: "SIGKILL",
+  });
+  if (res.error || res.status !== 0) {
+    const why = res.error ? res.error.code || res.error.message : `exit ${res.status}`;
+    process.stderr.write(`hermes: WARN could not remove container ${name} (${why}) — it may still be running\n`);
   }
 }
 
-await runDriver("hermes", async ({ processName, input }) => {
+/**
+ * RUN ONLY WHEN THIS FILE IS THE ENTRY POINT.
+ *
+ * `await runDriver(...)` at module top level meant that importing this module to reach the
+ * exported `extractAnswer` EXECUTED the driver -- an adversarial pass trying to unit-test the
+ * parser got `hermes: usage: ...` instead. Every parser assertion therefore had to go through a
+ * subprocess, which is why several of its rules (the scalar guard among them) had no direct test
+ * at all and why a mutant deleting one of them survived.
+ */
+const isEntryPoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   if (!IMAGE) {
     throw new Error("ARC_HERMES_IMAGE is not set — the runtime image is not configured (see .env.example)");
   }
@@ -330,4 +437,4 @@ await runDriver("hermes", async ({ processName, input }) => {
   return { output, cost, model: pinnedModel() ?? "unpinned" };
 }, { version: versionString });
 
-settle();
+if (isEntryPoint) settle();

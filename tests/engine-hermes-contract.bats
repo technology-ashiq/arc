@@ -309,8 +309,165 @@ drive() {
   # A typo in a case name would otherwise arrive at the parser as an empty-stdout fixture and
   # pass the wrong test for the wrong reason. This is the negative control for every drive()
   # call in this file.
-  run env ARC_HERMES_FAKE_CASE=not-a-real-case bash "$(FAKE)"
+  #
+  # RUN WITH node, NOT bash. It ran the .mjs through bash for its whole life -- a leftover from
+  # when the corpus was a shell script -- so bash read JavaScript as shell and exited 2 for EVERY
+  # case, valid or invalid. It could not discriminate at all, and it was RED on a pristine tree.
+  # The negative control for every other test in this file had never once passed.
+  run env ARC_HERMES_FAKE_CASE=not-a-real-case node "$(FAKE)"
   [ "$status" -eq 64 ] || { echo "an unknown case did not fail loudly: status=$status"; false; }
+  # And it must ACCEPT a real one, or "refuses the unknown" is satisfied by refusing everything.
+  run env ARC_HERMES_FAKE_CASE=clean node "$(FAKE)"
+  [ "$status" -eq 0 ] || { echo "a valid case was refused: status=$status"; false; }
+}
+
+# ---------------------------------------------------------------------------------------------
+# The corpus the two adversarial passes landed. Every one of these returned a WRONG document, or
+# no document, before the fix.
+# ---------------------------------------------------------------------------------------------
+
+@test "hermes: a DCS payload does not become the answer" {
+  # ESC P <payload> ESC \ . The old strip removed the introducer and terminator and left the
+  # payload as ordinary content, so an attacker-chosen document won the backwards scan and was
+  # returned with exit 0 — invisible in any terminal, because nothing renders these.
+  drive dcs-payload
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [ "$output" = '{"ok":true,"runtime":"hermes"}' ] || { echo "an attacker-chosen document was returned: [$output]"; false; }
+}
+
+@test "hermes: an APC payload does not become the answer" {
+  drive apc-payload
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [ "$output" = '{"ok":true,"runtime":"hermes"}' ] || { echo "[$output]"; false; }
+}
+
+@test "hermes: an unterminated OSC does not swallow the answer" {
+  # The old pattern crossed newlines to the first terminator anywhere downstream and deleted the
+  # answer with it — then reported "no output on stdout at all", which is a false diagnosis.
+  drive osc-swallow
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [ "$output" = '{"ok":true,"runtime":"hermes"}' ] || { echo "[$output]"; false; }
+}
+
+@test "hermes: an unterminated OSC does not leave a STALE line to be returned as the answer" {
+  # The worse half of the same bug: exit 0 with a wrong document rather than a loud failure.
+  drive osc-stale
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [[ "$output" != *"stale-boot-echo"* ]] || { echo "a stale line was returned as the answer: [$output]"; false; }
+}
+
+@test "hermes: a pretty-printed answer returns the WHOLE document, not a nested fragment" {
+  # Pretty-printing is ordinary model behaviour, so of everything the passes found this is the
+  # likeliest to fire in production. A line scan finds the inner object first.
+  drive pretty-nested
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [[ "$output" == *'"runtime":"hermes"'* ]] || { echo "a fragment was returned: [$output]"; false; }
+  [[ "$output" == *'"inner"'* ]] || { echo "the outer document is incomplete: [$output]"; false; }
+}
+
+@test "hermes: an escape INSIDE a JSON string is refused, never silently stripped" {
+  # Stripping it before the parse rewrites the answer, and a driver that rewrites the answer
+  # destroys the evidence of an attack rather than surfacing it — this file's own rule.
+  drive escape-in-string
+  [ "$status" -eq 1 ] || { echo "the answer was rewritten and returned: status=$status out=[$output]"; false; }
+  [[ "$stderr" == *"rewrite the answer"* ]] || { echo "wrong reason: [$stderr]"; false; }
+}
+
+@test "hermes: a lone-CR progress bar does not hide the answer" {
+  drive cr-progress
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [ "$output" = '{"ok":true,"runtime":"hermes"}' ] || { echo "[$output]"; false; }
+}
+
+# ---------------------------------------------------------------------------------------------
+# The invocation itself. Until these existed, EIGHT mutants of the docker command line survived.
+# ---------------------------------------------------------------------------------------------
+
+@test "hermes: the container command line is what it claims to be" {
+  # A driver mutated to run --privileged -v /:/host, with no --rm, no --name, no data mount, a
+  # wrong flag, and THE MODEL INPUT NEVER PASSED, was byte-identical green against this suite.
+  # A suite that cannot see the command it runs is testing the fixture, not the driver.
+  local argvf="$BATS_TEST_TMPDIR/argv.jsonl"
+  drive clean ARC_HERMES_FAKE_ARGV_FILE="$argvf"
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [ -s "$argvf" ] || { echo "the fixture recorded no invocation at all"; false; }
+  local a; a="$(cat "$argvf")"
+  [[ "$a" == *'"--rm"'* ]]        || { echo "no --rm: $a"; false; }
+  [[ "$a" == *'"--name"'* ]]      || { echo "no --name: $a"; false; }
+  [[ "$a" == *"arc-hermes-"* ]]   || { echo "the container is unnamed: $a"; false; }
+  [[ "$a" == *'"-v"'* ]]          || { echo "no volume mount: $a"; false; }
+  [[ "$a" == *"/opt/data"* ]]     || { echo "the data volume is not mounted at /opt/data: $a"; false; }
+  [[ "$a" == *"$PINNED"* ]]       || { echo "the pinned image is not the one run: $a"; false; }
+  [[ "$a" == *'"-z"'* ]]          || { echo "no -z: $a"; false; }
+  # The dangerous flags, asserted ABSENT — this is the mutant that mounted host root privileged.
+  [[ "$a" != *"privileged"* ]]    || { echo "the container ran privileged: $a"; false; }
+  [[ "$a" != *"/var/run/docker.sock"* ]] || { echo "the docker socket was mounted: $a"; false; }
+  [[ "$a" != *"--network host"* ]] || { echo "host networking: $a"; false; }
+}
+
+@test "hermes: the model actually receives the input document" {
+  # A mutant that replaced the input with a placeholder passed the whole suite, because nothing
+  # asserted that the process input reached the runtime at all.
+  local argvf="$BATS_TEST_TMPDIR/argv.jsonl"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR" \
+    ARC_HERMES_FAKE_ARGV_FILE="$argvf" \
+    bash "$(DRIVER)" run "$PROC" '{"marker":"e2f4a1c9"}' ''
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  grep -q "e2f4a1c9" "$argvf" || { echo "the input never reached the runtime: $(cat "$argvf")"; false; }
+}
+
+@test "hermes: a timed-out run REAPS its container" {
+  # The container outlives the CLI that started it, so --rm alone does not clean up after a kill.
+  # A mutant deleting removeContainer() from the timeout arm survived: the fixture answered
+  # `docker rm` all along, and no test ever asserted the call had happened.
+  local argvf="$BATS_TEST_TMPDIR/argv.jsonl"
+  local deadline=$(( $(date +%s) * 1000 + 6000 ))
+  drive hang ARC_DRIVER_DEADLINE_EPOCH_MS="$deadline" ARC_HERMES_FAKE_ARGV_FILE="$argvf"
+  [ "$status" -eq 2 ] || { echo "status=$status err=[$stderr]"; false; }
+  grep -q '"rm"' "$argvf" || { echo "the container was never reaped: $(cat "$argvf")"; false; }
+}
+
+@test "hermes: a malformed deadline is a named failure, not a silently absent clock" {
+  # MAX_BUFFER validates and falls back to a SAFE value; this one validated and fell back to NO
+  # GUARD, so `1e400` meant the shim ran unbounded under a caller that believed it set a
+  # deadline. Twin readers of one rule, one failing closed and one failing open.
+  drive clean ARC_DRIVER_DEADLINE_EPOCH_MS="1e400"
+  [ "$status" -eq 1 ] || { echo "a malformed deadline was ignored: status=$status"; false; }
+  [[ "$stderr" == *"not an epoch millisecond"* ]] || { echo "wrong reason: [$stderr]"; false; }
+}
+
+@test "hermes: a fractional buffer ceiling does not LIFT the ceiling" {
+  # `0.5` passed the old positive-finite guard and floored to 0, which Node reads as unlimited.
+  # The comment claimed a malformed environment could not shrink the ceiling; it removed it.
+  drive huge ARC_HERMES_MAX_BUFFER=0.5
+  [ "$status" -eq 0 ] || { echo "status=$status err=[$stderr]"; false; }
+  [ "$output" = '{"ok":true,"runtime":"hermes"}' ] || { echo "[$output]"; false; }
+}
+
+@test "hermes: the config hash distinguishes two files that differ only in invalid UTF-8" {
+  # fileComponent read with "utf8" and hashed the STRING, so every invalid byte decoded to the
+  # same replacement character and two different configs hashed identically — a pinned config
+  # hash reporting unchanged across a real change. Its own comment already said BYTES.
+  local a="$BATS_TEST_TMPDIR/a.yaml" b="$BATS_TEST_TMPDIR/b.yaml"
+  printf 'm:\xff' > "$a"
+  printf 'm:\xfe' > "$b"
+  run env ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_CONFIG="$a" bash "$(DRIVER)" version
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  local first="$output"
+  run env ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_CONFIG="$b" bash "$(DRIVER)" version
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$first" != "$output" ] || { echo "two different configs hash the same: $first"; false; }
+}
+
+@test "encoder: a lone surrogate is REFUSED, and the replacement character still hashes" {
+  # "\uD800", "\uDC00" and "\uFFFD" produced the SAME digest: Buffer.byteLength reports 3 for a
+  # value with no well-formed UTF-8 encoding, and update(s,"utf8") re-encodes it to EF BF BD.
+  # Three distinct values, one encoding — the collision class this file exists to prevent.
+  run node "$(PROBE)" surrogates
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"SURROGATES_REFUSED"* ]] || { echo "$output"; false; }
 }
 
 @test "this file registers every test it declares" {
@@ -318,5 +475,5 @@ drive() {
   # vanished from a green file and the only signal was the count falling on CI.
   local n
   n="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$n" -eq 33 ] || { echo "declared $n tests, expected 33 - a test was added or silently dropped"; false; }
+  [ "$n" -eq 47 ] || { echo "declared $n tests, expected 47 - a test was added or silently dropped"; false; }
 }

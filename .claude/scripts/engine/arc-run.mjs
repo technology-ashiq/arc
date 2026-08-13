@@ -393,7 +393,14 @@ function invoke(name) {
       //
       // Absent (no `min` bound) means NO deadline, not a zero one: an unbounded run must not be
       // declined by a driver reading an empty string as 0.
-      ...(timeoutMs === undefined ? {} : { ARC_DRIVER_DEADLINE_EPOCH_MS: String(Date.now() + timeoutMs) }),
+      //
+      // SET TO undefined, NOT OMITTED. `...process.env` is spread above, so a spread that only
+      // ADDS the key can never remove one the caller already has — and a stale
+      // ARC_DRIVER_DEADLINE_EPOCH_MS in the ambient environment then made every UNBUDGETED run
+      // decline before any driver started, reported as `budget`, which is precisely the promise
+      // the comment above makes and the code did not keep. Node drops an env key whose value is
+      // undefined, so this both sets and clears.
+      ARC_DRIVER_DEADLINE_EPOCH_MS: timeoutMs === undefined ? undefined : String(Date.now() + timeoutMs),
     },
   });
   let cost = null;
@@ -402,7 +409,17 @@ function invoke(name) {
   }
   rmSync(tmp, { recursive: true, force: true });
   const timedOut = res.error && res.error.code === "ETIMEDOUT";
-  return { code: timedOut ? 124 : (res.status ?? 1), stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut };
+  // ARC-RUN'S OWN CEILING IS NOT A DRIVER FAULT. Only ETIMEDOUT was ever inspected, so a
+  // maxBuffer overflow -- which arrives as `status: null, signal: SIGKILL, error.code: ENOBUFS`
+  // -- fell through `res.status ?? 1` to a plain 1 and was reported as `verdict: driver`. The
+  // fallback chain then re-ran every remaining driver, spending real budget on each, and the
+  // receipt said the driver had exited 1 while never mentioning the buffer. It is OUR limit that
+  // stopped the run, and the receipt has to say so.
+  const overflowed = res.error && res.error.code === "ENOBUFS";
+  return {
+    code: timedOut ? 124 : overflowed ? 125 : (res.status ?? 1),
+    stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut, overflowed,
+  };
 }
 
 function attempt(name) {
@@ -418,6 +435,10 @@ function attempt(name) {
   // budget again, per driver -- and made the receipt read `reason: driver`, so the promise
   // that an over-budget run "reports a budget outcome" was false.
   if (r.timedOut) return { ...r, verdict: "budget", why: `exceeded the ${budget.min}-minute budget for the RUN` };
+  // Same reasoning one line down: our own output ceiling is arc-run's limit, not the driver's
+  // misbehaviour, and falling back to another driver cannot help — the next one produces the
+  // same volume and hits the same wall, having spent the budget to get there.
+  if (r.overflowed) return { ...r, verdict: "harness", why: `the driver produced more output than arc-run's ${64 * 1024 * 1024}-byte ceiling` };
   if (r.code === 2) return { ...r, verdict: "budget", why: r.stderr.trim() || "driver declined for budget" };
   // POLICY BEFORE DRIVER, and for exactly the reason the budget arm above exists. A denial fell
   // through to `verdict: "driver"`, so ONE denial produced three high-severity incidents as the

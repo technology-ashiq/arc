@@ -58,6 +58,27 @@ function isPlainObject(v) {
   return proto === Object.prototype || proto === null;
 }
 
+/**
+ * String.prototype.isWellFormed is Node 20+. Falling back rather than requiring it, because the
+ * CI matrix still runs an ubuntu-18 leg and a driver that throws on an older Node would report a
+ * driver failure for every run rather than for the one malformed input.
+ */
+function isWellFormedString(s) {
+  if (typeof s.isWellFormed === "function") return s.isWellFormed();
+  // A lone surrogate is one not paired: high must be followed by low, low must follow high.
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const n = s.charCodeAt(i + 1);
+      if (!(n >= 0xdc00 && n <= 0xdfff)) return false;
+      i += 1;
+    } else if (c >= 0xdc00 && c <= 0xdfff) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function part(tag, body) {
   // The byte length, not the character length: a multi-byte character would otherwise let two
   // different strings claim the same span.
@@ -80,7 +101,17 @@ function encodeValue(v, path, seen) {
     return part(TAG.NUMBER, String(v));
   }
 
-  if (t === "string") return part(TAG.STRING, v);
+  if (t === "string") {
+    // A LONE SURROGATE HAS NO WELL-FORMED UTF-8 ENCODING, and both the length prefix and the
+    // hash quietly lied about it: `Buffer.byteLength("\uD800", "utf8")` reports 3, and
+    // `createHash().update(s, "utf8")` re-encodes it to EF BF BD -- so "\uD800", "\uDC00" and
+    // "�" produced the SAME digest. Three distinct values, one encoding, which is precisely
+    // the collision class this file exists to prevent, sitting inside it.
+    if (/[\uD800-\uDFFF]/.test(v) && !isWellFormedString(v)) {
+      throw new UnrepresentableValue(path, "the string carries a lone surrogate, which has no well-formed UTF-8 encoding");
+    }
+    return part(TAG.STRING, v);
+  }
 
   if (t === "undefined") throw new UnrepresentableValue(path, "undefined is absence, not a value — encode absence explicitly");
   if (t === "bigint") throw new UnrepresentableValue(path, "bigint has no agreed encoding here — convert it at the call site and say so");

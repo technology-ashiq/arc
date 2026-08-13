@@ -233,5 +233,30 @@ export async function runDriver(name, produce, opts = {}) {
  * drain naturally, and keep a ref'd backstop for the case where it does not.
  */
 export function settle() {
-  setTimeout(() => process.exit(process.exitCode ?? 0), 250).unref();
+  // AND NEVER WHILE BYTES ARE STILL QUEUED. The unref'd timer does not HOLD the loop open, but it
+  // still FIRES while the loop is alive for another reason -- and a large answer draining into a
+  // slow reader is exactly such a reason. `process.exit()` then discards everything queued.
+  //
+  // Measured across a real process boundary: 8 MiB written, 458752 bytes received, truncated,
+  // and the writer exited **0**. 94.5% of the answer lost while the run reported success. arc-run
+  // then reads the truncated document as a schema failure, spends a retry, and emits an
+  // escalation proposal blaming the driver for output the driver produced correctly.
+  //
+  // WHY NO LEG COULD CATCH IT: node's stdout-to-a-pipe is SYNCHRONOUS on Windows and Linux and
+  // ASYNCHRONOUS on macOS. ubuntu and windows are structurally immune; only the macOS leg can
+  // see it, and only with an answer big enough to outrun the reader.
+  //
+  // A GIVE-UP IS NOT A SUCCESS. If the queue never drains we still have to exit, but exiting 0
+  // with bytes pending is the lie this whole comment is about -- so the give-up path reports a
+  // driver failure instead, and arc-run treats a truncated answer as one.
+  const deadline = Date.now() + 30_000;
+  const tick = () => {
+    if (process.stdout.writableLength > 0) {
+      if (Date.now() < deadline) { setTimeout(tick, 25).unref(); return; }
+      process.exitCode = EXIT.DRIVER_FAIL;
+      process.stderr.write("arc-driver: stdout did not drain within 30s — the answer is incomplete, reporting a driver failure rather than a truncated success\n");
+    }
+    process.exit(process.exitCode ?? 0);
+  };
+  setTimeout(tick, 250).unref();
 }

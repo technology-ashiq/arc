@@ -120,7 +120,29 @@ function shape() {
   done("SHAPE_PRINTED");
 }
 
-const table = { refusals, collisions, ordering, "negative-control": negativeControl, shape };
+/**
+ * Lone surrogates. Found by an adversarial pass, and it is the collision class this whole file
+ * claims to prevent, sitting inside it: `taggedSha256` re-encodes a lone surrogate to the
+ * replacement character before hashing, so three distinct values shared one digest. The length
+ * prefix lied too — `Buffer.byteLength("\uD800", "utf8")` reports 3 for a value that has no
+ * well-formed 3-byte encoding.
+ */
+function surrogates() {
+  const lone = ["\uD800", "\uDC00", "\uD800a", "a\uDFFF"];
+  const accepted = [];
+  for (const s of lone) {
+    try { taggedSha256(s); accepted.push(JSON.stringify(s)); } catch { /* refused, as required */ }
+  }
+  // The legitimate replacement character and a real surrogate PAIR must still hash — refusing
+  // everything would pass this test while breaking every ordinary config.
+  let wellFormedOk = true;
+  try { taggedSha256("�"); taggedSha256("😀"); } catch { wellFormedOk = false; }
+  say("lone_accepted", accepted.join(",") || "none");
+  say("well_formed_still_hashes", wellFormedOk);
+  done(!accepted.length && wellFormedOk ? "SURROGATES_REFUSED" : "SURROGATE_HOLE_OPEN");
+}
+
+const table = { refusals, collisions, ordering, "negative-control": negativeControl, shape, surrogates };
 const fn = table[cmd];
 if (!fn) {
   process.stderr.write(`unknown probe: ${cmd} (want ${Object.keys(table).join(", ")})\n`);

@@ -34,8 +34,21 @@ const out = (s) => process.stdout.write(s);
 const line = (s) => process.stdout.write(s + "\n");
 const ANSWER = '{"ok":true,"runtime":"hermes"}';
 
+// EVERY INVOCATION IS RECORDED, and this is not a convenience.
+//
+// Until it existed, this fixture read argv only to answer `rm`, so the ARGUMENTS were never
+// asserted by anything -- and a driver mutated to run `--privileged -v /:/host`, with no `--rm`,
+// no `--name`, no data mount, a wrong flag, a relaxed digest check, and THE MODEL INPUT NEVER
+// PASSED, was byte-identical green against its own contract suite. Eight mutants, one result.
+// A suite that cannot see the command it runs is testing the fixture, not the driver.
+if (process.env.ARC_HERMES_FAKE_ARGV_FILE) {
+  const { appendFileSync } = await import("node:fs");
+  appendFileSync(process.env.ARC_HERMES_FAKE_ARGV_FILE, `${JSON.stringify(process.argv.slice(2))}\n`, "utf8");
+}
+
 // The shim calls `docker rm -f <name>` to clean up after a timeout. That is not a scan; answer it
-// quietly so a cleanup can never be mistaken for a run.
+// quietly so a cleanup can never be mistaken for a run -- but it IS recorded above, because
+// "the container was reaped" is a property a test has to be able to assert.
 if (process.argv[2] === "rm") process.exit(0);
 
 const boot = () => {
@@ -132,6 +145,65 @@ switch (kase) {
   // is what a shared volume and a text-mode pipe produce together.
   case "crlf":
     out(`[stage2] Setup complete\r\n${ANSWER}\r\n`);
+    break;
+
+  // A lone CR, which is what a progress bar rewriting its own line emits. Ordinary container
+  // output, and a mutant that removed lone-CR normalisation survived the whole suite because
+  // nothing here produced one.
+  case "cr-progress":
+    out(`downloading 10%\rdownloading 55%\rdownloading 100%\r\n${ANSWER}\n`);
+    break;
+
+  // ---- the corpus the two adversarial passes landed ----
+
+  // DCS: a payload between an introducer and a terminator. The old strip removed the two-byte
+  // introducer and the terminator and left the PAYLOAD as ordinary content, so an
+  // attacker-chosen document won the backwards scan and was returned with exit 0 -- invisible in
+  // any terminal, because nothing renders these sequences.
+  case "dcs-payload":
+    line(ANSWER);
+    out(`${ESC}P{"ok":true,"pwned":"attacker chose this document"}${ESC}\\\n`);
+    break;
+
+  case "apc-payload":
+    line(ANSWER);
+    out(`${ESC}_{"ok":true,"pwned":"attacker chose this document"}${ESC}\\\n`);
+    break;
+
+  // An OSC with no terminator on its line. The old pattern crossed newlines to the first
+  // terminator anywhere downstream and swallowed the answer with it.
+  case "osc-swallow":
+    out(`${ESC}]0;hermes agent\n`);
+    line("[stage2] Setup complete");
+    line(ANSWER);
+    line(`done${BEL}`);
+    break;
+
+  // The same, with an earlier JSON line present: the swallow deleted the real answer and left a
+  // STALE one to be returned, exit 0 — a silent wrong answer rather than a loud failure.
+  case "osc-stale":
+    out(`${ESC}]0;t\n`);
+    line('{"ok":true,"runtime":"hermes","which":"stale-boot-echo"}');
+    line(ANSWER);
+    line(`done${BEL}`);
+    break;
+
+  // A pretty-printed answer with a nested object on its own line. A line scan finds the INNER
+  // one first and returns a fragment as the whole document. Pretty-printing is ordinary model
+  // behaviour, so of everything here this is the likeliest to fire in production.
+  case "pretty-nested":
+    line("[stage2] Setup complete");
+    line("{");
+    line('  "ok": true,');
+    line('  "runtime": "hermes",');
+    line('  "inner": {"fragment":"only this survives"}');
+    line("}");
+    break;
+
+  // An escape INSIDE a JSON string value. Stripping it before the parse rewrites the answer,
+  // which is exactly what this driver forbids itself from doing.
+  case "escape-in-string":
+    line(`{"ok":true,"runtime":"hermes","secret":"AB${ESC}[31mCD"}`);
     break;
 
   default:
