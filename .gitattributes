@@ -58,3 +58,17 @@ tests/fixtures/engine/hostile/** -text
 # Applied in the same commit that creates the directory, per the rule above.
 tests/fixtures/leads/replies/** -text
 tests/fixtures/leads/replies-hostile/** -text
+
+# Cycle 7, engine Phase 04/05: capability-vet's fixture corpus. SEVENTH occurrence, and this one
+# was found by an adversarial pass rather than by git warning first -- the directory has carried
+# byte-level cases since it was created and never got this line, so the rule stated at the fifth
+# occurrence ("any fixture directory whose cases attack at the byte level gets -text in the same
+# commit that creates it") was written down and then not applied to the next directory created.
+#
+# The NUL fixtures survived only because git auto-detects them as binary, which is luck rather
+# than policy. The BOM and CRLF manifests added alongside this line are exactly the cases
+# `* text=auto eol=lf` would flatten: a 3-byte BOM on a package.json defeats the lifecycle-hook
+# reader while npm still runs the hook, and a fixture that proves it is worthless if git strips
+# the bytes on the way in. Verified before writing this: `git hash-object --path <case>` gave the
+# CRLF and LF forms the SAME blob. OVERRIDES `* text=auto eol=lf`.
+tests/fixtures/develop/capability/** -text
