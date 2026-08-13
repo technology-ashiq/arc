@@ -1,8 +1,8 @@
 {
   "_comment": "registry is a field the CANDIDATE writes, so scoping the OCI readers behind it is opt-in unless something refuses a body that is plainly not from a container registry. Flipping npm to oci restored the reverted hole; this fixture is what stops that.",
-  "name": "oci-tool", "registry": "oci", "version": "1.2.3",
+  "name": "acme/oci-tool", "registry": "oci", "version": "1.2.3",
   "hash": "sha512-EVILEVILEVILEVILEVILEVILEVILEVILEVILEVILEVIL",
   "registry-record": "registry.json",
-  "registry-url": "https://hub.docker.example/v2/repositories/oci-tool/tags/1.2.3",
+  "registry-url": "https://hub.docker.com/v2/repositories/acme/oci-tool/tags/1.2.3",
   "publisher-auth": "registry namespace oci-tools", "build-attestation": "none published"
 }

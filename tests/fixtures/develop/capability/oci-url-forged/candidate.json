@@ -1,8 +1,8 @@
 {
   "_comment": "The name appears in a QUERY STRING, not in the path. A substring binding passed ten of eleven forged URLs including this one, a subdomain, userinfo, a lookalike repo and the attackers own truthful namespace.",
-  "name": "oci-tool", "registry": "oci", "version": "v2026.8.3",
+  "name": "acme/oci-tool", "registry": "oci", "version": "v2026.8.3",
   "hash": "sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e",
   "registry-record": "registry.json",
-  "registry-url": "https://hub.docker.example/v2/repositories/attacker-owned/tags/v2026.8.3?ref=oci-tool",
+  "registry-url": "https://hub.docker.com/v2/repositories/attacker-owned/tags/v2026.8.3?ref=oci-tool",
   "publisher-auth": "registry namespace oci-tools", "build-attestation": "none published"
 }

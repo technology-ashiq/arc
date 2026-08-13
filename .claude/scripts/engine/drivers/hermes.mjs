@@ -61,7 +61,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 import { EXIT, pinnedModel, runDriver, settle } from "./common.mjs";
-import { taggedSha256 } from "./type-tagged-hash.mjs";
+import { taggedSha256 } from "../type-tagged-hash.mjs";
 
 const DOCKER = process.env.ARC_HERMES_DOCKER || "docker";
 
@@ -95,8 +95,8 @@ const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
 // OVERRIDABLE ONLY SO THE REFUSAL BRANCH CAN BE PROVEN TO RUN. Emitting 64 MB in CI to reach
 // one `if` is a minute of runner time for no extra information, and the alternative -- trusting
 // that the branch works because it looks right -- is the vacuous pass this repo keeps paying
-// for. The override is bounded: a value that is not a positive finite number is IGNORED rather
-// than obeyed, so a malformed environment cannot silently shrink the ceiling to nothing.
+// for. The override is bounded in BOTH directions: it can only ever lower the ceiling, never
+// raise it, and a value that does not floor to a positive integer is ignored.
 const HARD_CEILING = 64 * 1024 * 1024;
 const MAX_BUFFER = (() => {
   // FLOOR FIRST, THEN TEST, AND CLAMP ABOVE. The previous form tested `raw > 0` and floored

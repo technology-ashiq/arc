@@ -26,7 +26,7 @@
     ".claude/scripts/engine/drivers/mock.sh",
     ".claude/scripts/engine/drivers/hermes.mjs",
     ".claude/scripts/engine/drivers/hermes.sh",
-    ".claude/scripts/engine/drivers/type-tagged-hash.mjs",
+    ".claude/scripts/engine/type-tagged-hash.mjs",
     ".claude/scripts/engine/cert-label.mjs"
   ],
   "files": [],

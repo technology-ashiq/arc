@@ -13,7 +13,7 @@
  * mistaken for a probe that ran and found nothing.
  */
 
-import { encodeTagged, taggedSha256, UnrepresentableValue } from "../.claude/scripts/engine/drivers/type-tagged-hash.mjs";
+import { encodeTagged, taggedSha256, UnrepresentableValue } from "../.claude/scripts/engine/type-tagged-hash.mjs";
 
 const [, , cmd] = process.argv;
 const out = [];

@@ -1,4 +1,4 @@
 safe-tool
 writer-tool
 madge
-oci-tool
+acme/oci-tool

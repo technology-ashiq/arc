@@ -64,14 +64,14 @@ PROBE() { echo "$ARC_ROOT/tests/engine-cert-label-probe.mjs"; }
   [[ "$output" == *"CERTIFICATION"* ]] || { echo "a failing real run was downgraded: $output"; false; }
 }
 
-@test "cert-label: the label cannot be ASSERTED — every assertion key is refused, not ignored" {
+@test "cert-label: the label cannot be ASSERTED -- every assertion key is refused, not ignored" {
   # Ignoring an asserted label would let a caller believe it had said something. Refusing says so.
   run node "$(PROBE)" asserted
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"ALL_REFUSED"* ]] || { echo "an assertion key was accepted: $output"; false; }
 }
 
-@test "cert-label: NEGATIVE CONTROL — the probe reports a failure when one is present" {
+@test "cert-label: NEGATIVE CONTROL -- the probe reports a failure when one is present" {
   # Without this, every assertion above is satisfied by a probe that prints REGRESSION always.
   run node "$(PROBE)" self-check
   [ "$status" -eq 1 ] || { echo "the probe cannot fail, so it proves nothing: status=$status"; false; }
