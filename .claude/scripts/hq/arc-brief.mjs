@@ -18,6 +18,7 @@
 import { SpineError, dayOf, formatIst, nowMs } from "./lib/canonical.mjs";
 import { spineRoot } from "./lib/spine-io.mjs";
 import { query } from "./spine.mjs";
+import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
 
 const VALUE_FLAGS = new Set(["date", "venture", "engine"]);
 const BOOL_FLAGS = new Set(["full"]);
@@ -150,7 +151,12 @@ function parseArgs(argv) {
   return flags;
 }
 
-export function render(day, events, torn, { full = false } = {}) {
+// `killCrossings` are NOT events and never will be (ADR-1000): a crossing is a fact about data the
+// spine already holds, computed at render. Recording one would make the meter part of the history
+// it measures. They arrive here as a pre-computed array so this file does no deriving of its own,
+// and they land in needs-you because REQ-03 says a crossing needs a human -- a warning does not,
+// and a warning in this group would train the reader to skim the group that must never be skimmed.
+export function render(day, events, torn, { full = false, killCrossings = [] } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -163,10 +169,27 @@ export function render(day, events, torn, { full = false } = {}) {
   }
   const collapsed = new Set();
 
+  // Rendered kill crossings, deterministic by venture then criterion -- the brief is compared
+  // byte-for-byte across a rebuild and across engines, so an array's arrival order is not an order.
+  const killLines = killCrossings
+    .slice()
+    .sort((a, b) => (a.venture < b.venture ? -1 : a.venture > b.venture ? 1
+      : a.criterion < b.criterion ? -1 : a.criterion > b.criterion ? 1 : 0))
+    .map((c) => `  kill line CROSSED  ${c.venture}  ${c.criterion} ${c.value} of ${c.threshold}`);
+
   const groupLines = (g) => {
     const evs = buckets.get(g);
-    if (!evs.length) return [];
+    // needs-you may be non-empty on crossings alone. The old guard returned early on zero EVENTS,
+    // which would have dropped every crossing on a quiet day -- exactly the day a crossed kill line
+    // is most likely to be the only thing that matters.
+    const extra = g === "needs-you" ? killLines : [];
+    if (!evs.length && !extra.length) return [];
     if (collapsed.has(g)) {
+      // needs-you never collapses, which is the ONLY reason the count branch below can ignore
+      // `extra`. Asserted rather than assumed: if a later change ever makes this group collapsible,
+      // a crossed kill line would vanish into a count silently, and the group it vanished from is
+      // the one the whole budget mechanism exists to protect.
+      if (extra.length) throw new Error(`arc-brief: group "${g}" carries ${extra.length} rendered line(s) that are not events and must never be collapsed into a count`);
       const c = new Map();
       for (const ev of evs) c.set(ev.kind, (c.get(ev.kind) || 0) + 1);
       const parts = [...c.keys()].sort().map((k) => `${k} ${c.get(k)}`).join(" · ");
@@ -181,8 +204,8 @@ export function render(day, events, torn, { full = false } = {}) {
     // puzzle; this is an instruction.
     const head = g === "ungrouped"
       ? `ungrouped (${evs.length})  — no group assigned in arc-brief.mjs`
-      : `${g} (${evs.length})`;
-    return [head, ...evs.map((ev) => eventLine(ev, g))];
+      : `${g} (${evs.length + extra.length})`;
+    return [head, ...evs.map((ev) => eventLine(ev, g)), ...extra];
   };
 
   const assemble = () => {
@@ -227,7 +250,14 @@ async function main(argv) {
 
   const root = spineRoot();
   const { events, torn } = await query(root, { date: day, venture: flags.venture, engine: flags.engine });
-  process.stdout.write(render(day, events, torn, { full: flags.full === true }));
+  // Kill crossings are scoped to the WHOLE spine, not to `day`: a line crossed on the 3rd is still
+  // crossed on the 9th, and a needs-you item that appeared for one day and then went quiet is
+  // indistinguishable from one that was dealt with. An unreceipted criteria file yields no panel
+  // and therefore no crossings -- the brief says nothing rather than reporting lines it cannot
+  // trust, and `arc pnl` is the surface that refuses loudly.
+  const panel = await deriveKillPanel(root, { engine: flags.engine });
+  const killCrossings = panel.present && panel.receipted ? panel.crossings : [];
+  process.stdout.write(render(day, events, torn, { full: flags.full === true, killCrossings }));
   return 0;
 }
 

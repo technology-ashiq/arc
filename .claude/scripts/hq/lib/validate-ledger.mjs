@@ -36,7 +36,7 @@
 // invention; what this module adds is the cross-field invariant that makes the four derived
 // components consistent with it.
 
-import { SpineError } from "./canonical.mjs";
+import { SpineError, sha256Hex } from "./canonical.mjs";
 
 export const LEDGER_REVENUE_KINDS = Object.freeze(["revenue.received", "revenue.simulated"]);
 const LEDGER_REVENUE_SET = new Set(LEDGER_REVENUE_KINDS);
@@ -264,4 +264,91 @@ export function assertLedgerRevenue(event) {
       throw new SpineError("BAD_LEDGER_FX", `fx.source ${JSON.stringify(fx.source)} must be a lowercase slug naming where the rate came from`);
     assertCalendarDate(fx.date, "fx.date");
   }
+}
+
+// Written as a codepoint scan rather than a regex character class: a class spelled with LITERAL
+// control characters puts those bytes into THIS file, which is exactly how a raw NUL got into
+// pnl.mjs and made the money core binary to git. A check for control characters must not contain
+// one. C0 plus DEL; the callers here never legitimately carry either.
+const hasControlChar = (s) => {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return true;
+  }
+  return false;
+};
+
+// ---------------------------------------------------------------------------------------------
+// THE CRITERIA RECEIPT (ADR-1017 / LED-R)
+//
+// A PROFILE, not a kind. ADR-1008 requires that a `ventures.yaml` edit is honored only with a
+// `decision.recorded` receipt naming the change -- but `decision.recorded`'s payload is CLOSED to
+// `decides|verdict|reason` and its idem is welded to `decides`, so a criteria digest has nowhere to
+// live inside it except free prose. Matching a digest inside prose is a substring search, and this
+// repo has already had one control that was a grep and one mutant that walked past it.
+//
+// So the digest rides on the `approval.requested` instead, exactly as `policy.promotion`
+// (validate-policy.mjs) and `absorb.ab-judgement` (ADR-0603) already do, and the ordinary
+// `decision.recorded` decides it by ULID. The closed vocabulary gains ZERO kinds -- which matters,
+// because Phase 02 has already committed the next slot to `month.closed`.
+export const CRITERIA_SUBJECT = "ledger.criteria";
+const CRITERIA_KEYS = Object.freeze(["subject", "digest", "what"]);
+const HEX64_RE = /^[0-9a-f]{64}$/;
+// `what` is read by a human deciding whether to approve. 512 bytes is prose, not a document.
+const MAX_WHAT_BYTES = 512;
+
+export const isCriteriaChange = (event) =>
+  Boolean(event) && event.kind === "approval.requested" && isPlainObject(event.payload) &&
+  event.payload.subject === CRITERIA_SUBJECT;
+
+// A subject differing only by case or surrounding whitespace is REFUSED, never normalized and never
+// exempt -- the near-miss rule absorb learned the hard way. `" Ledger.Criteria "` must not slip past
+// `isCriteriaChange` and land as an unvalidated generic approval that the render then trusts.
+export const isNearMissCriteriaChange = (event) =>
+  Boolean(event) && event.kind === "approval.requested" && isPlainObject(event.payload) &&
+  typeof event.payload.subject === "string" &&
+  event.payload.subject !== CRITERIA_SUBJECT &&
+  event.payload.subject.trim().toLowerCase() === CRITERIA_SUBJECT;
+
+export function assertNotNearMissCriteria(event) {
+  throw new SpineError("BAD_LEDGER_CRITERIA",
+    `approval.requested subject ${JSON.stringify(event.payload.subject)} differs from ${JSON.stringify(CRITERIA_SUBJECT)} only by case or whitespace -- a near-miss subject is refused, never normalized, because normalizing it would let an unvalidated payload wear a validated subject`);
+}
+
+export function assertCriteriaChange(event) {
+  const p = event.payload;
+  for (const k of Object.keys(p))
+    if (!CRITERIA_KEYS.includes(k))
+      throw new SpineError("BAD_LEDGER_CRITERIA",
+        `approval.requested[${CRITERIA_SUBJECT}] has unknown key ${JSON.stringify(k)} (the profile is closed to ${CRITERIA_KEYS.join("|")})`);
+  for (const k of CRITERIA_KEYS)
+    if (!(k in p))
+      throw new SpineError("BAD_LEDGER_CRITERIA", `approval.requested[${CRITERIA_SUBJECT}] is missing ${JSON.stringify(k)}`);
+
+  // Lowercase hex only. An uppercase or mixed-case spelling of the same digest would compare unequal
+  // to the render-side digest and silently read as UNRECEIPTED -- one spelling per digest, refused
+  // at the door rather than normalized at every comparison site.
+  if (typeof p.digest !== "string" || !HEX64_RE.test(p.digest))
+    throw new SpineError("BAD_LEDGER_CRITERIA",
+      `approval.requested[${CRITERIA_SUBJECT}].digest ${JSON.stringify(p.digest)} must be a lowercase sha256 hex digest of the CANONICALIZED criteria (never of the file bytes -- see ADR-1017)`);
+
+  if (typeof p.what !== "string" || p.what.length === 0)
+    throw new SpineError("BAD_LEDGER_CRITERIA", `approval.requested[${CRITERIA_SUBJECT}].what must be a non-empty string naming the change`);
+  const whatBytes = Buffer.byteLength(p.what, "utf8");
+  if (whatBytes > MAX_WHAT_BYTES)
+    throw new SpineError("BAD_LEDGER_CRITERIA", `approval.requested[${CRITERIA_SUBJECT}].what is ${whatBytes} bytes, ceiling is ${MAX_WHAT_BYTES}`);
+  // Control characters would smuggle terminal escapes into the brief and the inbox, both of which
+  // print this string verbatim to a human who is about to approve a kill-line change.
+  if (hasControlChar(p.what))
+    throw new SpineError("BAD_LEDGER_CRITERIA", `approval.requested[${CRITERIA_SUBJECT}].what contains a control character`);
+
+  // WELD THE MECHANICAL KEY TO THE SEMANTIC ONE, for the reason assertDecision spells out: the emit
+  // path honours a caller-supplied --idem, so without this an attacker could seal a criteria
+  // approval whose digest is a DECOY while its idem pre-claims the stable key of the real digest.
+  // The real approval then collides on DUP_IDEM and can never be emitted, while the render keeps
+  // reporting the criteria unreceipted and everyone learns to ignore the refusal.
+  const want = sha256Hex(`${CRITERIA_SUBJECT}|${p.digest}`);
+  if (event.idem !== want)
+    throw new SpineError("BAD_LEDGER_CRITERIA",
+      `approval.requested[${CRITERIA_SUBJECT}].idem must be sha256("${CRITERIA_SUBJECT}|"+digest) -- a criteria approval's idem is bound to the digest it approves`);
 }

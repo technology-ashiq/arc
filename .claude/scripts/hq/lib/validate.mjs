@@ -9,7 +9,10 @@ import { EXPERIMENT_KINDS, assertExperiment, isExperimentKind } from "./validate
 import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearMiss, isAdoptionProposal, assertAdoptionProposal } from "./validate-absorb.mjs";
-import { isLedgerRevenueKind, assertLedgerRevenue } from "./validate-ledger.mjs";
+import {
+  isLedgerRevenueKind, assertLedgerRevenue,
+  isCriteriaChange, assertCriteriaChange, isNearMissCriteriaChange, assertNotNearMissCriteria,
+} from "./validate-ledger.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -350,6 +353,12 @@ export function validateEvent(event) {
   // There is no ledger ingest CLI: this placement is what makes the PII contract unskippable,
   // because every path onto the spine goes through validateEvent.
   if (isLedgerRevenueKind(event.kind)) assertLedgerRevenue(event);
+  // The third instance of the approval PROFILE pattern (ADR-1017 / LED-R), after policy.promotion
+  // and absorb.ab-judgement: ledger's criteria receipt rides an approval.requested declaring
+  // subject "ledger.criteria", so the closed vocabulary gains ZERO kinds and Phase 02 keeps the
+  // one slot it has already committed to month.closed.
+  if (isCriteriaChange(event)) assertCriteriaChange(event);
+  if (isNearMissCriteriaChange(event)) assertNotNearMissCriteria(event);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (event.kind === "constitution.adopted") assertConstitution(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);

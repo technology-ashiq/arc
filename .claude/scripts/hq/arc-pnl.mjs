@@ -11,14 +11,17 @@
 // So stdout is the P&L and nothing else, and the engine is announced on stderr under
 // ARC_SPINE_DEBUG, exactly as spine.mjs already does it. The test reads both streams.
 
+import { readFileSync } from "node:fs";
 import { SpineError } from "./lib/canonical.mjs";
 import { spineRoot } from "./spine.mjs";
 import { derivePnl } from "./lib/ledger/pnl.mjs";
 import { formatMinorUnits, renderComponent, ABSENT } from "./lib/ledger/money.mjs";
+import { deriveKillPanel, venturesPath, UNRECEIPTED } from "./lib/ledger/kill-panel.mjs";
+import { parseVentures } from "./lib/ledger/ventures.mjs";
 
 const PROCESS_ID = "arc-pnl@1.0.0";
 const VALUE_FLAGS = new Set(["venture", "month", "engine"]);
-const BOOL_FLAGS = new Set(["simulated", "help"]);
+const BOOL_FLAGS = new Set(["simulated", "help", "criteria-digest"]);
 
 function parseArgs(argv) {
   const flags = {};
@@ -45,7 +48,7 @@ function parseArgs(argv) {
 
 const rupees = (minor) => formatMinorUnits(minor, "INR");
 
-export function render(model) {
+export function render(model, panel = null) {
   const out = [];
   const scope = model.month ? `${model.month}` : "all time";
   const title = model.mode === "simulated" ? `P&L — ${scope} — SIMULATED` : `P&L — ${scope}`;
@@ -102,7 +105,37 @@ export function render(model) {
       out.push(`${mark}  ${f.type}: ${f.detail}`);
   }
 
+  out.push(...renderKill(panel, mark));
+
   return out.join("\n") + "\n";
+}
+
+// The kill panel (REQ-03). Rendered under the P&L, in the same watermarked stream, because a
+// simulated view must not be able to show a real kill line without the mark on it.
+//
+// ABSENT rows are PRINTED, never dropped. A list that silently omits what it could not evaluate is
+// shorter and greener than the truth, and indistinguishable from a healthy venture (ADR-1018).
+export function renderKill(panel, mark = "") {
+  if (!panel || !panel.present || !panel.receipted) return [];
+  const out = ["", `${mark}kill lines (as of ${panel.asOf})`];
+  for (const v of panel.ventures) {
+    out.push(`${mark}  ${v.venture}`);
+    for (const c of v.criteria) {
+      if (c.status === "ABSENT") {
+        out.push(`${mark}    ${c.criterion}  ${ABSENT}  not evaluated: ${c.reason}`);
+        continue;
+      }
+      const line = `${mark}    ${c.criterion}  ${c.value} of ${c.threshold} ${c.unit ?? ""}`.trimEnd();
+      if (c.status === "CROSSED") out.push(`${line}  CROSSED`);
+      else if (c.status === "WARNING") out.push(`${line}  WARNING ${c.distance} to the line`);
+      else out.push(`${line}  ${c.distance} to the line`);
+    }
+  }
+  // A count, not a silence. "2 criteria could not be evaluated" is the sentence that stops a reader
+  // concluding the panel is complete.
+  if (panel.absentCount > 0)
+    out.push(`${mark}  ${panel.absentCount} criteri${panel.absentCount === 1 ? "on" : "a"} could not be evaluated`);
+  return out;
 }
 
 // A TOTAL order. ULIDs are unique, so (ts, id) never ties -- and a comparator that can tie is a
@@ -124,20 +157,48 @@ function costLine(l) {
 async function main(argv) {
   const flags = parseArgs(argv);
   if (flags.help) {
-    process.stdout.write("usage: arc-pnl [--venture V] [--month YYYY-MM] [--simulated] [--engine scan|sqlite]\n");
+    process.stdout.write("usage: arc-pnl [--venture V] [--month YYYY-MM] [--simulated] [--engine scan|sqlite] [--criteria-digest]\n");
     return 0;
   }
+
+  // The digest a criteria receipt has to carry. Deliberately does NOT read the spine: it is the
+  // command you run BEFORE the receipt exists, and a version of it that needed a green receipt to
+  // print the digest that would make the receipt green could never be run for the first edit.
+  if (flags["criteria-digest"] === true) {
+    const path = venturesPath(spineRoot());
+    if (path === null) throw new SpineError("NO_VENTURES", "no ventures.yaml resolvable -- set ARC_VENTURES_FILE to name one");
+    process.stdout.write(`${parseVentures(readFileSync(path, "utf8")).digest}\n`);
+    return 0;
+  }
+
   if (flags.month !== undefined && !/^\d{4}-(0[1-9]|1[0-2])$/.test(flags.month))
     throw new SpineError("BAD_ARGS", `--month "${flags.month}" is not YYYY-MM`);
 
-  const model = await derivePnl(spineRoot(), {
+  const root = spineRoot();
+  const model = await derivePnl(root, {
     mode: flags.simulated === true ? "simulated" : "real",
     venture: flags.venture ?? null,
     month: flags.month ?? null,
     engine: flags.engine,
   });
+  const panel = await deriveKillPanel(root, { engine: flags.engine });
+
+  // THE REFUSAL, and it refuses the WHOLE render rather than the panel alone (ADR-1008). A P&L that
+  // still printed while the kill lines were unreceipted would be the goalpost moved and the report
+  // carrying on as if nothing had, which is the exact thing the receipt requirement exists to make
+  // impossible. stdout stays EMPTY so nothing downstream can consume a partial answer.
+  if (panel.present && !panel.receipted) {
+    process.stderr.write(
+      `arc-pnl: ${UNRECEIPTED} -- ${panel.path} has criteria digest ${panel.digest}, and no approved ` +
+      `approval.requested[ledger.criteria] on the spine carries it.\n` +
+      `  A kill line may not move without a receipt (ADR-1008 / ADR-1017). To honor the current file:\n` +
+      `    1. emit approval.requested with subject "ledger.criteria" and digest ${panel.digest}\n` +
+      `    2. approve it through arc-inbox\n`);
+    return 3;
+  }
+
   if (process.env.ARC_SPINE_DEBUG) process.stderr.write(`arc-pnl: engine=${model.engine} process=${PROCESS_ID}\n`);
-  process.stdout.write(render(model));
+  process.stdout.write(render(model, panel));
   return 0;
 }
 
