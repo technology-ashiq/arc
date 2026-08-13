@@ -137,6 +137,24 @@ _criteria() {
     || { echo "the criteria approval was never decided -- a request is not a receipt"; return 1; }
 }
 
+# MOVE THE GOALPOST WITHOUT A RECEIPT. Rewrites ventures.yaml and takes the new digest, and emits
+# NO approval and NO decision -- which is the whole point: the file on disk no longer matches
+# anything the spine has approved.
+#
+# It asserts the digest actually MOVED. If the edit left the digest where it was, the original
+# receipt would still cover the file, every assertion downstream would be exercising the receipted
+# path, and the test would report a green unreceipted-behaviour gate that never saw one.
+_criteria_unreceipted() {
+  local venture="$1" days="$2" traffic="$3"
+  [ -n "${CRITERIA_DIGEST:-}" ] || { echo "no receipted digest to move away from -- call _criteria first"; return 1; }
+  printf 'version: 1\nventures:\n  %s:\n    kill:\n      days_without_revenue: %s\n      traffic_floor_monthly: %s\n' \
+    "$venture" "$days" "$traffic" > "$VENTURES"
+  CRITERIA_DIGEST_NEW="$(ARC_SPINE_NOW=$DAY0 bash "$PNL" --criteria-digest | tr -d '\r')"
+  [ -n "$CRITERIA_DIGEST_NEW" ] || { echo "arc-pnl printed no digest for the edited criteria file"; return 1; }
+  [ "$CRITERIA_DIGEST_NEW" != "$CRITERIA_DIGEST" ] \
+    || { echo "the edit did not move the digest, so the original receipt still covers this file and nothing below is unreceipted"; return 1; }
+}
+
 _pnl_at()   { local now="$1"; shift; ARC_SPINE_NOW="$now" bash "$PNL" "$@"; }
 _brief_at() { local now="$1"; shift; ARC_SPINE_NOW="$now" node "$BRIEF" "$@"; }
 _lines()    { cat "$SPINE"/events/*.jsonl 2>/dev/null | sed '/^$/d' | wc -l | tr -d ' '; }
@@ -472,10 +490,16 @@ ROWS
     || { echo "a future-dated event erased the crossing: $output"; false; }
   [[ "$output" == *"kill line CROSSED: lexos days_without_revenue 40 of 30 days"* ]] \
     || { echo "the crossing survived the panel but not the needs-you group: $output"; false; }
-  # The exact self-contradiction the bug produced: that reason, printed under those revenue rows.
+  # THE EXACT SELF-CONTRADICTION the bug produced: the days-criterion absent reason, printed
+  # directly beneath the venture's own revenue rows. Pinned by that reason's own words rather than
+  # by the em-dash cell, so the assertion is ASCII and cannot turn on how a runner decodes the file.
   [[ "$output" == *"2027-08-26"* ]] || { echo "the future-dated revenue row is not in the P&L, so this fixture is not the one: $output"; false; }
-  ! [[ "$output" == *"days_without_revenue  —  not evaluated"* ]] \
+  ! [[ "$output" == *"this venture has no revenue event on the spine"* ]] \
     || { echo "the panel says this venture has no revenue while listing its revenue: $output"; false; }
+  # Paired positive: the not-evaluated machinery IS working on this render -- it is the days
+  # criterion specifically that must not be using it.
+  [[ "$output" == *"traffic_floor_monthly"*"not evaluated: ledger has no traffic data source"* ]] \
+    || { echo "the absent row is missing, so the assertion above proves nothing: $output"; false; }
 
   # HALF TWO -- the exclusion is VISIBLE. Without this the test passes just as well on an
   # implementation that quietly ignores every future-dated event, which is a different wrong
@@ -704,6 +728,55 @@ ROWS
   [[ "$output" != *"money ("* ]] || { echo "2026-08-31 is not the quiet day this test needs: $output"; false; }
   [[ "$output" == *"needs-you (1)"* ]] || { echo "needs-you vanished on a day with no events: $output"; false; }
   [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30 days"* ]] || { echo "$output"; false; }
+}
+
+@test "kill: moving a kill line without a receipt makes the brief say so instead of going quiet" {
+  # THE FINDING. With the criteria file PRESENT but UNRECEIPTED, arc-brief fell back to an empty
+  # crossings array and said nothing at all -- exit 0, zero bytes of warning. The adversary took a
+  # genuinely crossed line and nudged the threshold by one: still crossed, only the receipt broken,
+  # and the brief went from naming the crossing to silence. Moving a goalpost was a one-line way to
+  # make the alarm stop, on the surface a human actually reads daily.
+  _revenue lexos b0001
+  _criteria lexos 30 500
+
+  # BEFORE: receipted, and the brief names the crossing. Without this the silence below is
+  # indistinguishable from a fixture that was never crossed in the first place.
+  run _brief_at $((DAY0 + 40*DAY)) --date 2026-08-31
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"kill line CROSSED  lexos  days_without_revenue 40 of 30 days"* ]] \
+    || { echo "the fixture is not crossed to begin with, so nothing below is being tested: $output"; false; }
+
+  # NUDGE THE LINE BY ONE AND KEEP IT CROSSED: 40 days is still past a 31-day line. An edit that
+  # also un-crossed the line would make this test pass for the wrong reason -- and keep passing if
+  # somebody restored the silent-drop behaviour.
+  _criteria_unreceipted lexos 31 500
+
+  run _brief_at $((DAY0 + 40*DAY)) --date 2026-08-31
+  # STILL EXIT 0: the brief is a daily read, not a gate. It reports; it does not refuse.
+  [ "$status" -eq 0 ] || { echo "the brief exited $status instead of reporting: $output"; false; }
+  [[ "$output" == *"brief 2026-08-31"* ]] || { echo "the brief did not render: $output"; false; }
+  # PRESENT and ABSENT asserted in the same breath. The notice alone is satisfied by an
+  # implementation that prints it unconditionally; the missing crossing alone is satisfied by a
+  # crash. Only the pair says "it stopped vouching for the line AND it told you".
+  [[ "$output" == *"needs-you (1)"* ]] || { echo "the notice did not land in the needs-you group: $output"; false; }
+  [[ "$output" == *"kill lines NOT EVALUATED -- ventures.yaml is unreceipted (digest $CRITERIA_DIGEST_NEW)"* ]] \
+    || { echo "an unreceipted criteria file produced no notice at all: $output"; false; }
+  [[ "$output" != *"kill line CROSSED"* ]] \
+    || { echo "the brief reported a crossing it cannot vouch for: $output"; false; }
+
+  # THE OTHER SURFACE, ON THE SAME STATE. The finding is that these two disagreed and only one of
+  # them was loud, so both are pinned here rather than one per file -- which is how the twin got
+  # left open in the first place. Streams to files, because the refusal is on stderr while the
+  # emptiness being asserted is on stdout.
+  local pnl_rc=0
+  _pnl_at $((DAY0 + 40*DAY)) > "$BATS_TEST_TMPDIR/unrec.out" 2> "$BATS_TEST_TMPDIR/unrec.err" || pnl_rc=$?
+  [ "$pnl_rc" -eq 3 ] || { echo "arc-pnl exited $pnl_rc on an unreceipted file, want 3: $(cat "$BATS_TEST_TMPDIR/unrec.err")"; false; }
+  [ ! -s "$BATS_TEST_TMPDIR/unrec.out" ] \
+    || { echo "arc-pnl printed a partial P&L while refusing, which is exactly what downstream must not be able to consume: $(cat "$BATS_TEST_TMPDIR/unrec.out")"; false; }
+  grep -q "UNRECEIPTED CRITERIA CHANGE" "$BATS_TEST_TMPDIR/unrec.err" \
+    || { echo "arc-pnl refused without naming why: $(cat "$BATS_TEST_TMPDIR/unrec.err")"; false; }
+  grep -q "$CRITERIA_DIGEST_NEW" "$BATS_TEST_TMPDIR/unrec.err" \
+    || { echo "the refusal does not name the digest that needs a receipt: $(cat "$BATS_TEST_TMPDIR/unrec.err")"; false; }
 }
 
 @test "kill: this suite registers every test it declares" {

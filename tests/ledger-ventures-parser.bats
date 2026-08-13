@@ -22,7 +22,7 @@
 #      asserted at zero, which is the half that actually proves it.
 #
 # THE NEGATIVE CONTROL is `ventures: the right digest approved through arc-inbox renders the P&L and
-# the kill panel`. It pins the exact panel line `days_without_revenue  10 of 90  80 to the line`,
+# the kill panel`. It pins the exact panel line `days_without_revenue  10 of 90 days  80 to the line`,
 # which no crash, no empty output and no absent panel can produce -- rip out parseVentures,
 # deriveKillPanel or the receipt fold and that test dies rather than passing on a stack trace. The
 # refusal tests are crash-proofed the same way: each asserts the SPECIFIC stderr string
@@ -56,7 +56,7 @@ INBOX="$HQ/arc-inbox.mjs"
 
 # The clock is pinned at BOTH ends, because the panel prints a distance measured between them.
 # Ingest at T_INGEST (2026-07-22T21:30:00+05:30), render at T_RENDER (2026-08-01) -- ten days later,
-# which is what makes `10 of 90  80 to the line` a fixed string rather than a moving one.
+# which is what makes `10 of 90 days  80 to the line` a fixed string rather than a moving one.
 T_INGEST=1784736000000
 T_RENDER=1785600000000
 
@@ -886,14 +886,15 @@ YAML
 
 @test "ventures: the right digest approved through arc-inbox renders the P&L and the kill panel" {
   # THE NEGATIVE CONTROL FOR THIS SUITE. Every string pinned below is derived from the criteria file
-  # and the spine together: `10 of 90` is the distance between the pinned ingest clock and the pinned
-  # render clock measured against a threshold read out of the fixture. Delete parseVentures,
+  # and the spine together: `10 of 90 days` is the distance between the pinned ingest clock and the
+  # pinned render clock measured against a threshold read out of the fixture. Delete parseVentures,
   # deriveKillPanel or the receipt fold and this test fails -- it cannot be satisfied by a crash, by
   # empty output, or by a panel that silently omits what it could not evaluate.
   _revenue
   cp "$FIX/01-baseline.yaml" "$VY"
   export ARC_VENTURES_FILE="$VY"
-  local aid
+  local aid dg
+  dg="$(_digest "$VY")"
   aid="$(_seal "$VY" "adopt the v1 kill lines")" || { echo "the approval could not be sealed"; false; }
   _approve "$aid"
 
@@ -901,7 +902,13 @@ YAML
   [ "$PNL_STATUS" -eq 0 ] || { echo "arc-pnl refused a receipted file (exit $PNL_STATUS):"; cat "$PNL_ERR"; false; }
   [ "$(_pnl_bytes)" -gt 0 ] || { echo "arc-pnl exited 0 and rendered nothing at all"; false; }
   grep -qF "kill lines (as of 2026-08-01)" "$PNL_OUT" || { echo "no kill panel:"; cat "$PNL_OUT"; false; }
-  grep -qF "days_without_revenue  10 of 90  80 to the line" "$PNL_OUT" \
+  # PROVENANCE ON THE SUCCESS PATH. The panel header names the digest it rendered, so two renders on
+  # one box against two different criteria files are distinguishable in origin -- which is what made
+  # a vanished panel invisible rather than merely possible. The DIGEST and not the path: a path is
+  # different bytes on ubuntu, macos and windows, and this stdout is compared across all three.
+  grep -qF "criteria $dg" "$PNL_OUT" \
+    || { echo "the panel does not name the criteria it rendered:"; cat "$PNL_OUT"; false; }
+  grep -qF "days_without_revenue  10 of 90 days  80 to the line" "$PNL_OUT" \
     || { echo "the kill distance is not the pinned one:"; cat "$PNL_OUT"; false; }
   # ABSENT rows are PRINTED and counted, never dropped: a list that omits what it could not evaluate
   # is shorter, greener and indistinguishable from a healthy venture.
@@ -927,7 +934,7 @@ YAML
   # a receipt that never held, and the test would pass over a permanently broken gate.
   _pnl --month 2026-07
   [ "$PNL_STATUS" -eq 0 ] || { echo "the receipt did not hold before the edit:"; cat "$PNL_ERR"; false; }
-  grep -qF "days_without_revenue  10 of 90  80 to the line" "$PNL_OUT" \
+  grep -qF "days_without_revenue  10 of 90 days  80 to the line" "$PNL_OUT" \
     || { echo "the receipted render is not the pinned one:"; cat "$PNL_OUT"; false; }
 
   # 90 -> 120, written whole rather than patched in place: `sed -i` needs an argument on BSD sed and
@@ -946,44 +953,74 @@ YAML
   # company organ and is NOT in the sync set, so every consumer install has none. Refusing to render
   # a P&L because a file that was never shipped is missing would break all of them.
   #
-  # BOTH ways of having none are checked, because they take different branches, and the second one
-  # MOVED under the adversarial pass. venturesPath() no longer returns null merely because
-  # ARC_SPINE_ROOT is set -- it walks up from cwd for the repository -- so "unset" now means "unset,
-  # AND standing somewhere with no repository above it". Branch A still names a path that exists()
-  # denies. A fix applied to one branch is not a fix.
+  # SILENT ABSENCE IS NOW ONLY THE UNSET CASE, and both of its branches are checked because they are
+  # different lines: venturesPath() returns null when there is no repository above cwd, and returns a
+  # resolved path that existsSync then denies when the repository simply carries no ventures.yaml.
+  # A fix applied to one is not a fix. NAMING a path that is not there is no longer this case at all
+  # -- it is an operator error and it is loud, pinned in its own test below.
   _revenue
 
   # `absent` is asserted with an `if`, never `grep ... && { ...; false; }`: that second form returns
   # the grep's own non-zero status on the GOOD path, which under bats' set -e fails the test for
-  # passing. And the absence never stands alone -- it is paired above with the P&L header and the
+  # passing. And the absence never stands alone -- it is paired below with the P&L header and the
   # revenue row, because "output does not contain kill lines" is satisfied by a crash.
   _no_panel() {
     if grep -qF "kill lines" "$PNL_OUT"; then
       echo "[$1] a kill panel appeared with no criteria file:"; cat "$PNL_OUT"; return 1
     fi
   }
+  _renders_clean() {
+    [ "$PNL_STATUS" -eq 0 ] || { echo "[$1] the render broke (exit $PNL_STATUS):"; cat "$PNL_ERR"; return 1; }
+    grep -qF "P&L" "$PNL_OUT" || { echo "[$1] no P&L rendered:"; cat "$PNL_OUT"; return 1; }
+    # The spine is named by ARC_SPINE_ROOT and is read from anywhere, so moving cwd must not lose the
+    # revenue -- only the criteria file. Asserting the row is what separates "rendered" from
+    # "rendered an empty shell because it could no longer find anything at all".
+    grep -qF "razorpay:pay_0001" "$PNL_OUT" || { echo "[$1] the P&L lost its revenue row:"; cat "$PNL_OUT"; return 1; }
+    _no_panel "$1"
+  }
 
-  export ARC_VENTURES_FILE="$BATS_TEST_TMPDIR/there-is-no-such-file.yaml"
-  [ ! -e "$ARC_VENTURES_FILE" ] || { echo "the absent-file case is not absent"; false; }
-  _pnl --month 2026-07
-  [ "$PNL_STATUS" -eq 0 ] || { echo "a named-but-missing criteria file broke the render:"; cat "$PNL_ERR"; false; }
-  grep -qF "P&L" "$PNL_OUT" || { echo "no P&L rendered:"; cat "$PNL_OUT"; false; }
-  grep -qF "razorpay:pay_0001" "$PNL_OUT" || { echo "the P&L rendered without its revenue row:"; cat "$PNL_OUT"; false; }
-  _no_panel "named but missing"
-
-  # Branch B is run FROM A CWD WITH NO REPOSITORY ABOVE IT, and that precondition is asserted rather
-  # than assumed -- see _assert_no_repo_above. Run from inside this checkout it would find the repo's
-  # own ventures.yaml, unreceipted against the scratch spine, and exit 3.
+  # BRANCH A -- no repository above cwd at all, so there is nowhere for a criteria file to be. The
+  # precondition is ASSERTED, not assumed: run from inside this checkout it would find the repo's own
+  # ventures.yaml, exit 3, and this test would pass only because it had become a different test.
   unset ARC_VENTURES_FILE
   _assert_no_repo_above "$BATS_TEST_TMPDIR"
   _pnl_in "$BATS_TEST_TMPDIR" --month 2026-07
-  [ "$PNL_STATUS" -eq 0 ] || { echo "an unset ARC_VENTURES_FILE outside any repo broke the render:"; cat "$PNL_ERR"; false; }
-  grep -qF "P&L" "$PNL_OUT" || { echo "no P&L rendered:"; cat "$PNL_OUT"; false; }
-  # The spine is named by ARC_SPINE_ROOT and is read from anywhere, so moving cwd must not lose the
-  # revenue -- only the criteria file. Asserting the row is what separates "rendered" from "rendered
-  # an empty shell because it could no longer find anything at all".
-  grep -qF "razorpay:pay_0001" "$PNL_OUT" || { echo "the P&L rendered without its revenue row:"; cat "$PNL_OUT"; false; }
-  _no_panel "not named at all"
+  _renders_clean "no repository above cwd"
+
+  # BRANCH B -- THE ACTUAL CONSUMER: a real repository (`.claude/` and `.git/`, which is exactly what
+  # the walk looks for) that simply has no ventures.yaml, because the file is arc's own organ and is
+  # not in the sync set. Both halves of the walk's condition are asserted present, so this branch
+  # cannot quietly degrade into branch A by failing to be a repository at all.
+  local fake="$BATS_TEST_TMPDIR/consumer-install"
+  mkdir -p "$fake/.claude" "$fake/.git"
+  [ -d "$fake/.claude" ] && [ -d "$fake/.git" ] \
+    || { echo "the synthetic consumer install is not a repository, so this branch is a copy of the one above"; false; }
+  [ ! -e "$fake/ventures.yaml" ] || { echo "the synthetic consumer install has a ventures.yaml"; false; }
+  _pnl_in "$fake" --month 2026-07
+  _renders_clean "a repository carrying no ventures.yaml"
+}
+
+@test "ventures: a criteria file that is NAMED but missing is an operator error, not an absence" {
+  # The sibling of the directory case, and the same class: a mistyped ARC_VENTURES_FILE -- a typo, a
+  # trailing newline out of `$(cat ...)`, a relative path read from the wrong cwd, a case difference
+  # that resolves on Windows and not on Linux -- used to take the SAME branch as "this consumer has
+  # no criteria file", and disarmed the entire kill panel at exit 0 with zero bytes on stderr. The
+  # output was a clean, healthy-looking P&L with the panel simply gone.
+  #
+  # venturesPath's own refusal text already said it would not "fall back to a criteria file nobody
+  # named"; naming one that is not there was getting exactly the treatment it refuses for the empty
+  # string. So the CODE is asserted, and INTERNAL is asserted absent beside it.
+  _revenue
+  export ARC_VENTURES_FILE="$BATS_TEST_TMPDIR/there-is-no-such-file.yaml"
+  [ ! -e "$ARC_VENTURES_FILE" ] || { echo "the named-but-missing case is not missing"; false; }
+
+  _pnl --month 2026-07
+  [ "$PNL_STATUS" -ne 0 ] || { echo "a mistyped criteria path rendered a clean P&L:"; cat "$PNL_OUT"; false; }
+  grep -qF "NO_VENTURES" "$PNL_ERR" || { echo "the refusal is not named NO_VENTURES:"; cat "$PNL_ERR"; false; }
+  [ "$(_pnl_bytes)" = "0" ] || { echo "the refusal still wrote to stdout:"; cat "$PNL_OUT"; false; }
+  if grep -qF "INTERNAL" "$PNL_ERR"; then
+    echo "the named-but-missing case is an unclassified crash:"; cat "$PNL_ERR"; false
+  fi
 }
 
 @test "ventures: the inbox shows the approver the thresholds the digest actually arms" {
