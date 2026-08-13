@@ -13,7 +13,8 @@
     ".claude/scripts/legal/lib/schema.mjs",
     ".claude/scripts/legal/lib/template.mjs",
     ".claude/scripts/legal/lib/lints.mjs",
-    ".claude/scripts/legal/publish-gate.mjs"
+    ".claude/scripts/legal/publish-gate.mjs",
+    ".claude/scripts/legal/lib/receipts.mjs"
   ],
   "files": [],
   "docs": []

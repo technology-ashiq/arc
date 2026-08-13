@@ -360,6 +360,87 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * decision <approval.json> <out.json> [verdict] [recorded_at] [--facts SHA] [--set SHA]
+   *
+   * Mint a decision receipt bound to an approval payload. This is the offline FAKE for the spine
+   * (CLAUDE.md: every external dependency gets an interface, a fake and a real impl) -- the real
+   * receipt is written by `arc-inbox approve` on the canonical clone, which no test can reach:
+   * the spine is gitignored, so a worktree has its own and CI has none at all.
+   *
+   * It takes overrides on purpose. A fake that can only produce VALID receipts cannot test a
+   * gate whose entire job is refusing invalid ones.
+   */
+  case "decision": {
+    const [approvalFile, outFile, verdict = "approve", recordedAt = "2026-08-13T00:00:00Z", ...flags] = rest;
+    const approval = JSON.parse(readFileSync(approvalFile, "utf8"));
+    const at = (name, fallback) => {
+      const i = flags.indexOf(name);
+      return i >= 0 && flags[i + 1] !== undefined ? flags[i + 1] : fallback;
+    };
+    const receipt = {
+      kind: "decision.recorded",
+      id: "01TESTDECISION0000000000000",
+      decides: "01TESTREQUEST00000000000000",
+      subject: approval.subject,
+      verdict,
+      recorded_at: recordedAt,
+      facts_sha256: at("--facts", approval.facts_sha256),
+      template_set_sha: at("--set", approval.template_set_sha),
+    };
+    mkdirSync(dirname(outFile), { recursive: true });
+    writeFileSync(outFile, JSON.stringify(receipt, null, 2) + "\n", "utf8");
+    console.log("decision:" + receipt.verdict);
+    break;
+  }
+
+  /**
+   * tamper-page <dir> <page> -- change a rendered page's bytes AFTER it was approved.
+   *
+   * This is the case a hash chain exists for and the one a re-render cannot catch: the approval
+   * and the fresh render agree perfectly, and the file that would actually be published is a
+   * different file. Hashing the run record's copy of the text instead of the bytes on disk
+   * passes this.
+   */
+  /**
+   * mutate-facts <sandbox> <venture> <key> <value> -- change one top-level scalar in a venture's
+   * facts file. The TOCTOU lever: it is what someone editing their own facts after approval
+   * actually does, and the resulting tree is entirely VALID -- which is why only the chain, and
+   * never a lint, can catch it.
+   */
+  case "mutate-facts": {
+    const [sandbox, venture, key, value] = rest;
+    const p = join(sandbox, "tests", "fixtures", "legal", "ventures", venture, "facts.yaml");
+    const lines = readFileSync(p, "utf8").split(/\r?\n/);
+    const at = lines.findIndex((l) => l.startsWith(`${key}:`));
+    if (at < 0) die(`no top-level key "${key}" in ${p}`);
+    const before = lines[at];
+    lines[at] = `${key}: ${value}`;
+    if (before === lines[at]) die(`"${key}" is already ${value}; a mutation that changes nothing is not a control`);
+    writeFileSync(p, lines.join("\n"), "utf8");
+    console.log(`mutated:${key}`);
+    break;
+  }
+
+  case "tamper-page": {
+    const [dir, page] = rest;
+    const file = join(dir, `${page}.mdx`);
+    const src = readFileSync(file, "utf8");
+    writeFileSync(file, src + "\n<!-- inserted after approval -->\n", "utf8");
+    console.log("tampered:" + file);
+    break;
+  }
+
+  /** approval-unknown-key <approval.json> -- add a key the closed profile does not allow. */
+  case "approval-unknown-key": {
+    const [file] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    doc.force = true;
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("added:force");
+    break;
+  }
+
   /** groups -> the lint groups the engine declares, space separated, sorted */
   case "groups": {
     const { GROUPS } = await import(pathToFileURL(join(ARC_ROOT, ".claude", "scripts", "legal", "lib", "lints.mjs")).href);

@@ -22,6 +22,10 @@ import { canonicalHash, bytesHash, templateSetHash, CanonError, PREIMAGE_VERSION
 import { validateFacts } from "./lib/schema.mjs";
 import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./lib/template.mjs";
 import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL } from "./lib/lints.mjs";
+import {
+  approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
+  backdatingErrors, semanticDiff, APPROVAL_SUBJECT,
+} from "./lib/receipts.mjs";
 
 export const ENGINE_VERSION = "arc-legal/0.1.0";
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -40,12 +44,21 @@ function readJson(path) {
 
 function usage() {
   return [
-    "usage: arc-legal render --venture NAME --out DIR",
+    "usage: arc-legal render  --venture NAME --out DIR",
+    "       arc-legal propose --venture NAME --out DIR",
+    "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
     "",
     "  --venture NAME   a fixture venture under tests/fixtures/legal/ventures/",
     "  --out DIR        where the rendered pages are written",
+    "  --dir DIR        an already-rendered directory to publish from",
+    "  --decision FILE  the human decision receipt that approved those exact bytes",
+    "  --request ULID   the approval.requested event that decision decides",
     "",
-    "exit 0 rendered - exit 2 refused - exit 3 could not run",
+    "render  produces pages and lints them; it publishes nothing.",
+    "propose renders and writes the approval request for a HUMAN to decide (REQ-06).",
+    "publish re-derives every hash and refuses unless the decision approved these bytes.",
+    "",
+    "exit 0 done - exit 2 refused - exit 3 could not run",
   ].join("\n");
 }
 
@@ -298,11 +311,144 @@ export function renderVenture({ ventureName, outDir }) {
   return { run, pages };
 }
 
+/**
+ * propose -- render, then write the approval request a HUMAN decides on.
+ *
+ * It emits nothing to the spine itself. REQ-06 makes the human gate permanent, and a verb that
+ * both requests approval and could record it is one refactor away from doing both. It writes the
+ * payload and prints the exact `arc-inbox` command, which is run by a person, from the canonical
+ * clone -- the spine is gitignored, so a worktree has its own and a failed approve leaves no
+ * trace anywhere anyone would look.
+ */
+function proposeMain(args) {
+  if (!args.venture) { console.error(`propose needs --venture NAME\n\n${usage()}`); return 2; }
+  if (!args.out) { console.error(`propose needs --out DIR\n\n${usage()}`); return 2; }
+
+  const { run } = renderVenture({ ventureName: args.venture, outDir: args.out });
+
+  // A page that failed a promoted lint is not a page to ask a human to approve. In TRIAL nothing
+  // is promoted yet, so this is currently unreachable -- and it is written now rather than when
+  // the first group is promoted, because that is the moment nobody will remember to add it.
+  if (findingsAreFatal(run.findings)) {
+    console.error("propose refuses: this render has FAIL findings in a group that is out of TRIAL.");
+    return 2;
+  }
+
+  const payload = approvalPayload(run);
+  const errs = validateApprovalPayload(payload);
+  if (errs.length) {
+    console.error("the approval payload this build produced is itself invalid:\n  - " + errs.join("\n  - "));
+    return 2;
+  }
+
+  const file = join(args.out, "_approval.json");
+  writeFileSync(file, JSON.stringify(payload, null, 2) + "\n", "utf8");
+
+  console.log(`approval request written to ${file}`);
+  console.log(`subject ${APPROVAL_SUBJECT} - venture ${payload.venture} - ${payload.pages.length} page(s)`);
+  console.log(`facts ${payload.facts_sha256}`);
+  console.log(`set ${payload.template_set}@${payload.template_set_sha}`);
+  console.log("");
+  console.log("A HUMAN decides this. From the CANONICAL clone, not a worktree:");
+  console.log(`  bash .claude/scripts/hq/arc-inbox.sh approve --id <REQUEST_ULID> --reason "<why>"`);
+  console.log("Then publish with the recorded decision:");
+  console.log(`  node .claude/scripts/legal/arc-legal.mjs publish --venture ${payload.venture} --dir ${args.out} --decision <DECISION_FILE>`);
+  return 0;
+}
+
+/**
+ * publish -- the gate. Re-derives everything from the tree as it stands NOW and refuses unless
+ * the human decision approved exactly these bytes.
+ *
+ * The fresh render is the whole point. Reading `_run.json` and checking it against itself would
+ * pass every TOCTOU case there is: edit the facts, re-render, and the sidecar agrees with the
+ * facts perfectly while disagreeing with what anybody approved.
+ */
+function publishMain(args) {
+  if (!args.venture) { console.error(`publish needs --venture NAME\n\n${usage()}`); return 2; }
+  if (!args.dir) { console.error(`publish needs --dir DIR\n\n${usage()}`); return 2; }
+  if (!args.decision) { console.error(`publish needs --decision FILE. There is no publish without a recorded human decision (REQ-06).\n\n${usage()}`); return 2; }
+
+  const approvalFile = join(args.dir, "_approval.json");
+  if (!existsSync(approvalFile)) { console.error(`no approval request at ${approvalFile}. Run propose first.`); return 3; }
+  if (!existsSync(args.decision)) { console.error(`no decision receipt at ${args.decision}`); return 3; }
+
+  const approved = readJson(approvalFile);
+  const decision = readJson(args.decision);
+
+  const payloadErrs = validateApprovalPayload(approved);
+  if (payloadErrs.length) {
+    console.error("the approval request is not a valid payload:\n  - " + payloadErrs.join("\n  - "));
+    return 2;
+  }
+
+  // Fresh render into no directory: we want the hashes, not more files on disk.
+  const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null });
+
+  // `--request` is the ULID of the `approval.requested` event a human emitted for these bytes,
+  // and it is REQUIRED. The first cut of this passed `decision.decides` in as the expected
+  // value, which compares the field against itself: DECIDES_MISMATCH could never fire, and a
+  // decision recorded about some entirely different request would have published. A check whose
+  // expected value comes from the thing being checked is not a check.
+  if (!args.request) {
+    console.error("publish needs --request ULID, the approval.requested event this decision decides. Without it there is nothing to bind the decision TO, and any recorded approval would do.");
+    return 2;
+  }
+
+  const problems = [
+    ...verifyDecision(decision, approved, args.request),
+    ...verifyChain({ approved, fresh, dir: args.dir }),
+    ...backdatingErrors({
+      effectiveDate: approved.effective_date,
+      decisionAt: decision.recorded_at,
+      previousEffectiveDate: existsSync(join(args.dir, "_published.json"))
+        ? readJson(join(args.dir, "_published.json")).effective_date
+        : null,
+    }),
+  ];
+
+  if (problems.length) {
+    console.error(`publish REFUSED for ${args.venture}:`);
+    for (const p of problems) console.error(`  - ${p}`);
+    return 2;
+  }
+
+  const prevFile = join(args.dir, "_published.json");
+  let diff = null;
+  if (existsSync(prevFile)) {
+    const prev = readJson(prevFile);
+    diff = semanticDiff(prev.run || prev, fresh);
+    console.log("this is a RE-publish. What changed:");
+    console.log(`  effective_date ${diff.effective_date.from} -> ${diff.effective_date.to}`);
+    for (const c of diff.clause_changes)
+      console.log(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}${c.note ? ` (${c.note})` : ""}`);
+    if (diff.opaque_rechange) console.error(`WARN consistency:-:-:${diff.opaque_reason}`);
+  }
+
+  writeFileSync(join(args.dir, "_published.json"), JSON.stringify({
+    subject: APPROVAL_SUBJECT,
+    venture: fresh.venture,
+    effective_date: approved.effective_date,
+    facts_sha256: fresh.facts_sha256,
+    template_set_sha: fresh.template_set_sha,
+    decision: { id: decision.id ?? null, decides: decision.decides ?? null, recorded_at: decision.recorded_at ?? null },
+    pages: approved.pages,
+    semantic_diff: diff,
+    run: fresh,
+  }, null, 2) + "\n", "utf8");
+
+  console.log(`published ${approved.pages.length} page(s) for ${fresh.venture}`);
+  console.log(`bound to decision ${decision.id ?? "(no id)"} recorded ${decision.recorded_at ?? "(no timestamp)"}`);
+  return 0;
+}
+
 function main(argv) {
   const args = parseArgs(argv);
   if (args.help || !args._.length) { console.log(usage()); return args.help ? 0 : 2; }
 
   const verb = args._[0];
+  if (verb === "propose") return proposeMain(args);
+  if (verb === "publish") return publishMain(args);
   if (verb !== "render") { console.error(`unknown verb "${verb}"\n\n${usage()}`); return 2; }
   if (!args.venture) { console.error(`render needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`render needs --out DIR\n\n${usage()}`); return 2; }
