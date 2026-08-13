@@ -92,7 +92,7 @@
 .claude/scripts/absorb/report-lint.mjs	e81631dba22c720f8db68aed0e413afba36c970065cfa0639429c96a87ce8401
 .claude/scripts/absorb/study.mjs	cea1d603c6ca3210ee574827cfd5fed80beadb2778d6b6ef7e4e3dac286c108a
 .claude/scripts/core/arc-gates.sh	e014e5f2ddfd3a857895e8b640b9a5218739cc89fda7fb709a6d78491adb4c13
-.claude/scripts/core/arc-products.mjs	848445fbf22642530acd0c87d0105e616bf4bcaff7fd2b1cd803f07aee945ba0
+.claude/scripts/core/arc-products.mjs	8ba982b37bfaa154835a5358651bd47f520e02289ce12530f86cd0d91b8c6364
 .claude/scripts/core/arc-profile.sh	8583b252787e2c5424e2dff090dfc0050fe4f7d5213984c5d2c7cfbfc98944ba
 .claude/scripts/core/arc-settings-merge.mjs	bab6957e3a4277a9facaec78be27b42736b75730c5536919c65672ea6a161b48
 .claude/scripts/core/arc-status.sh	923697030d9ae7c0a786727b09871463fc521b74362b044bd22f5cb16c588e21
@@ -160,7 +160,7 @@
 .claude/scripts/evolve/verdict.mjs	a9a3eec17baf206b20ddedd4bd8a7cc6244c5764bdcbb7ab2d17b9a6fa0ebb1d
 .claude/scripts/growth/lib/content-sha.mjs	0a7494b2ac0d5704e22d66ef4cf4dfa04d6633dfd98aaba9246cfaf7531a54e8
 .claude/scripts/growth/lib/deploy.mjs	4a4bf4359c80f68f785e6075f8328875e916789f5b2cd8bd070fe24e4e8ff810
-.claude/scripts/hq/arc-brief.mjs	b55cf7c9d2756e62b8671e75183ab27bb4b74b701750d4e444add12d1f920a1f
+.claude/scripts/hq/arc-brief.mjs	1fcd402395c5a1a59176e5a08ec3d920f6a3274b5be4a656717362c899ce12ae
 .claude/scripts/hq/arc-event.mjs	fabfe0e6abba5939ae939bc40be313738ca04b30cbe5f947eaac3548416dabcd
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	70403b5dbd606de7ac767ac96e791d7798fe077590d88659d9dd11ae426c90f7

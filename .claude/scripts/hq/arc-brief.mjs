@@ -73,12 +73,21 @@ const GROUPS = [
   // propose-only in both directions: its payload carries a `commit_ref`, which exists only
   // because a human already merged. The part that needed eyes fired earlier as `incident.raised`.
   // Filing a closed loop in the section reserved for open ones is how people learn to skim it.
+  //
+  // `content.published` lands here on exactly that precedent. Its payload carries `pr_ref`, which
+  // exists only because a human merged the publishing PR -- publishing is E2 and the machine never
+  // merges (ADR-1002) -- so the part that needed eyes has already happened and needs-you would
+  // re-ask a question that was answered. It is not background either: background is the collapsing
+  // tier for per-unit streams, and this fires once per article, at single digits per week. It is
+  // also the most externally-visible receipt the company emits, and the one kind whose absence
+  // from a brief would mean nobody noticed the site had changed.
   ["progress",  ["kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
                  "ship.done", "run.completed", "decision.recorded", "council.verdict",
                  "policy.level.changed", "develop.started", "slice.done",
                  "experiment.opened", "experiment.verdict", "experiment.promoted",
                  "experiment.rolled_back", "experiment.closed", "council.outcome",
-                 "outreach.replied", "deal.lost", "constitution.adopted"]],
+                 "outreach.replied", "deal.lost", "constitution.adopted",
+                 "content.published"]],
   ["background",["note.logged", "redaction.applied", "day.closed", "idea.captured",
                  "experiment.assigned", "experiment.measured",
                  "lead.researched", "outreach.sent", "lead.suppressed", "metric.observed"]],
@@ -87,7 +96,7 @@ const GROUPS = [
   // skipped, and a brief that silently omits a kind reads exactly like a quiet day. That is the
   // failure mode the UNREADABLE LINES counter one screen down already exists to prevent.
   //
-  // It should now be permanently EMPTY: every one of the closed 44 is assigned above, and the
+  // It should now be permanently EMPTY: every one of the closed 45 is assigned above, and the
   // coverage test in `tests/policy-brief.bats` derives its list from `KINDS` and fails if a kind
   // is added without a section. A lane extending the vocabulary gives it a home in the same
   // change, which is the only version of this that does not rot -- the catch-all ran 22 kinds

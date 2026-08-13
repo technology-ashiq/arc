@@ -612,13 +612,23 @@ _built_with_decision() {
 
 @test "arc-recall: REQ-04 adds no event kind and opens no spine of its own" {
   # ADR-0703: memory reads the spine through the reader library and emits nothing. A new query
-  # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so the count is
-  # MEASURED here rather than assumed.
+  # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so this is checked
+  # rather than assumed.
+  #
+  # It used to check by pinning the GLOBAL total at 44 -- which is not the claim in this test's
+  # name. Any OTHER lane extending the vocabulary legitimately turned this red: growth's
+  # content.published (ADR-1001) took the total to 45 and failed memory's suite on all three OS
+  # legs for a change memory had nothing to do with. A shared file in tests/ belongs to no lane
+  # (.claude/rules/lanes.md), so the assertion has to survive every lane, and the way to do that
+  # is to assert the actual claim -- memory contributes NO kind of its own -- which no other
+  # lane can ever falsify. This is the stronger version, not merely the newer one.
   vurl="$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/hq/lib/validate.mjs")).href)')"
   [ -n "$vurl" ]
-  run node -e "import(process.argv[1]).then(m=>{ if (m.KINDS.length !== 44) { console.error(\"KINDS.length is \" + m.KINDS.length); process.exit(1); } console.log(\"KINDS \" + m.KINDS.length); })" "$vurl"
+  # 'loaded' is the positive control: without it, 'owns-none' would also be satisfied by an empty
+  # or failed import, which is the vacuous pass this file's own last test exists to prevent.
+  run node -e "import(process.argv[1]).then(m=>{ const mine = m.KINDS.filter(k=>/^(memory|recall)[.]/.test(k)); console.log([mine.length ? 'OWNS:' + mine.join(',') : 'owns-none', m.KINDS.length === new Set(m.KINDS).size ? 'unique' : 'DUPES', m.KINDS.length > 10 ? 'loaded' : 'EMPTY'].join(' ')); })" "$vurl"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"KINDS 44"* ]]
+  [ "$output" = "owns-none unique loaded" ] || { echo "$output"; false; }
   # Positive control FIRST: prove this grep is reading the file it claims to read, so the absence
   # assertion below cannot pass on a typo in the path.
   run grep -c -- "--decisions" "$RECALL"

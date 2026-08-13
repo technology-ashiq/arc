@@ -47,8 +47,17 @@ _quarantined() { find "$SPINE" -path "*_quarantine*" -name "*.jsonl" -exec cat {
 @test "the emitter derives the idem itself and refuses a supplied one" {
   _spine noidem
   run bash "$(EVENT)" emit content.published --payload "$PAYLOAD" --idem "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  [ "$status" -ne 0 ] || { echo "a caller-supplied idem was accepted -- a decoy can now pre-claim a real article's key"; false; }
-  [ "$(_landed)" = "0" ] || { echo "the refused emit still wrote a receipt"; false; }
+  # arc-event does NOT exit non-zero on a refusal. In hook mode a SpineError becomes a SKIP that
+  # quarantines the receipt and leaves the caller alone -- "quarantine itself must never be the
+  # thing that blocks a session". The first version of this test asserted a non-zero exit and so
+  # went red against correct code. The exit status was never the property worth asserting anyway;
+  # these three are, and each one fails if the implementation is deleted.
+  [[ "$output" == *"BAD_IDEM"* ]] || { echo "expected a BAD_IDEM refusal, got: $output"; false; }
+  [ "$(_landed)" = "0" ] || { echo "a caller-supplied idem was accepted -- a decoy can now pre-claim a real article's key"; false; }
+  # Assert it RAN. Without this the test passes vacuously whenever the emit never happened at all
+  # -- a wrong EVENT path, an arg parsed away -- because "nothing landed" is also what a no-op
+  # looks like. A quarantine record is the marker the refusal branch emits only on the way through.
+  [ "$(_quarantined)" -ge 1 ] || { echo "nothing reached quarantine, so the refusal was never exercised"; false; }
 }
 
 @test "re-emitting identical bytes is idempotent on the spine itself" {
