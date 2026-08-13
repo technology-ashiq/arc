@@ -27,7 +27,8 @@
     ".claude/scripts/engine/drivers/hermes.mjs",
     ".claude/scripts/engine/drivers/hermes.sh",
     ".claude/scripts/engine/type-tagged-hash.mjs",
-    ".claude/scripts/engine/cert-label.mjs"
+    ".claude/scripts/engine/cert-label.mjs",
+    ".claude/scripts/engine/data-boundary.mjs"
   ],
   "files": [],
   "docs": []

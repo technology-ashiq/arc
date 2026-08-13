@@ -41,6 +41,7 @@ import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
+import { boundaryRefusal } from "./data-boundary.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -100,6 +101,11 @@ function loadRouter() {
 let driver = driverArg || "claude-code";
 let tier = null;
 let fallbacks = [];
+// `hosted:` says whether this class leaves the machine. It is read here, at routing, so the data
+// boundary below can name it in a refusal (Phase 06 REQ-02 fixture 3). An unrouted run has no
+// row and therefore no claim either way -- which is not the same fact as `hosted: local`, and is
+// left as the empty string rather than defaulted to the reassuring value.
+let hosted = "";
 if (driverArg === "auto") {
   const router = loadRouter();
   if (!router) { console.error("arc-run: --driver auto needs engine/router.yaml, which does not exist"); process.exit(1); }
@@ -113,6 +119,7 @@ if (driverArg === "auto") {
   }
   driver = row.driver;
   tier = row.tier;
+  hosted = typeof row.hosted === "string" ? row.hosted : "";
   fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
 }
 if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
@@ -467,6 +474,23 @@ if (dryRun) {
 // in --input (or in an @file that resolves outside the repo) was transmitted to the vendor
 // and the run then reported success.
 if (inputArg) scrub("--input (before anything is sent to a driver)", JSON.stringify(input), input);
+
+// THE DATA BOUNDARY, refused HERE and not inside the driver (ADR-0219, Phase 06 REQ-02 fixtures
+// 2 and 3). By the time a driver could refuse, the document has already been handed to it. This
+// sits after the dry-run exit -- a dry run spawns nothing, so there is nothing to confine -- and
+// before `attempt()`, which is the last line at which no driver process exists yet.
+//
+// Exit 5, its own code: arc-run already overloads 1 for "cannot proceed", and a boundary refusal
+// indistinguishable from a parse error is a boundary no fixture can assert.
+const refusal = boundaryRefusal({ input, processName, hosted });
+if (refusal) {
+  console.error(`arc-run: ${refusal.reason}`);
+  for (const m of refusal.markers) console.error(`arc-run:   ${m.path} ${m.why}`);
+  // The refusal is a receipt, not just an exit code -- a boundary that stops a run and leaves no
+  // trace is indistinguishable from a run nobody attempted.
+  emitRun({ outcome: "fail", reason: "policy", driver, attempts: 0 });
+  process.exit(refusal.code);
+}
 
 const selfCheck = processIsSelfConsistent();
 let a = attempt(driver);
