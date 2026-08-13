@@ -18,18 +18,43 @@ depends-on: —
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Steel thread — three core pages end to end: schema, render, three lints, hash fixtures, two-surface adversarial pass, text attack panel | 2d | pending |
-| 01 | The full set and its receipts — remaining four pages, scenario fixtures, completeness over seven, inbox wiring, hash-chain enforcement | 1.5d | pending |
+| 00 | Steel thread — three core pages end to end: schema, render, three lints, hash fixtures, two-surface adversarial pass, text attack panel | 2d | ✅ 2026-08-13 |
+| 01 | The full set and its receipts — remaining four pages, scenario fixtures, completeness over seven, inbox wiring, hash-chain enforcement | 1.5d | in progress |
 | 02 | Guards and governance — `--verify`, generated venture CI guard, pins + `--bump-templates`, template-edit approval, checklist renderer (all rows manual — probe automation cut at kickoff) | 0.5d | pending |
 | 03 | The real render — LexOS real facts, approval, commit into its tree, integration handoff, evidence bundle, retro | 1d | pending |
 
 ## Done-log
 
-_(nothing closed yet — the cycle opens on the owner's approval of this kickoff)_
+**Phase 00 — closed 2026-08-13.** A facts file becomes seven pages, deterministically, and four
+lints read the rendered bytes. Evidence: `initiatives/legal/evidence/phase-00/bundle.md`.
+
+Closed against every exit criterion, with three things worth naming rather than burying:
+
+- **CI green at `140cc00`, 19 of 19 jobs, read per-JOB.** It took three red runs to get there and
+  every red was real — dead mutation controls, then a product with no CATALOG entry plus a test
+  that asserted the wrong law, then a golden manifest regenerated mid-change instead of last.
+- **The negative controls were dead for the whole first push.** The helper ran under bats `run`,
+  a subshell, so every mutation control for all three lints silently passed. That is why three
+  criticals survived to be found by an agent rather than by a test.
+- **Five fresh attackers, ~70 findings**, and they were worth more than the code. Three converged
+  independently on the same #1: a venture itemising other people's records with the flag false
+  rendered a page that listed them and promised nothing.
+
+Appetite: 2d budgeted, closed inside it.
 
 ## Appetite burn
 
-**0d of 5d used.** Phase appetites sum to exactly 5d, so there is **no calendar slack** — the slack
+**~3d of 5d used (60%).** Re-derived at this close, not carried forward: Phase 00 closed inside
+its 2d, and Phase 01 has spent roughly 1d of its 1.5d with the receipts half now built and the
+adversarial pass on it still running. Phases 02 and 03 hold 1.5d between them against a 2d
+remainder, so the position is tight but not yet over.
+
+The kill tripwire was **2.5d if Phase 00 is not closed**. Phase 00 IS closed, so it did not fire.
+The honest read is that the scope grew rather than the estimate slipping: the reader panels
+returned 68 findings and a fourth lint (ADR-1013) that no phase spec anticipated, because nothing
+in the plan predicted that the worst defects would be BETWEEN pages rather than on them.
+
+_Historic, for the record:_ **0d of 5d used.** Phase appetites sum to exactly 5d, so there is **no calendar slack** — the slack
 is scope slack, held in the pre-decided cut order (probe automation → `--verify` polish → checklist
 renderer) and never taken from the adversarial passes. Kill tripwire at 2.5d if Phase 00 is not
 closed.
