@@ -21,7 +21,7 @@ import { parseFactsYaml, YamlError } from "./lib/yaml.mjs";
 import { canonicalHash, bytesHash, templateSetHash, CanonError, PREIMAGE_VERSION } from "./lib/canonical.mjs";
 import { validateFacts } from "./lib/schema.mjs";
 import { renderTemplate, strictestWindow, TemplateError, TRANSFORMS } from "./lib/template.mjs";
-import { runAllLints, findingsAreFatal, TRIAL } from "./lib/lints.mjs";
+import { runAllLints, scenarioSetLint, findingsAreFatal, TRIAL } from "./lib/lints.mjs";
 
 export const ENGINE_VERSION = "arc-legal/0.1.0";
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -135,6 +135,11 @@ export function renderVenture({ ventureName, outDir }) {
   const denylist = readJson(join(PRODUCT, "data", "claim-denylist.json"));
   const pagesDoc = readJson(join(PRODUCT, "data", "pages.json"));
   const windowRows = readJson(join(PRODUCT, "data", "grievance-windows.json"));
+  // The answerability fixture (ADR-1009). Read here rather than inside the lint so a missing or
+  // unparseable file is a loud refusal at load time, not a per-page finding repeated seven times.
+  const scenarioSet = readJson(join(PRODUCT, "data", "scenarios.json"));
+  if (!scenarioSet || !Array.isArray(scenarioSet.scenarios) || !scenarioSet.scenarios.length)
+    throw new Fail(3, "scenarios.json holds no scenarios. The answerability check is the only lint class that fails for insufficiency; running without it is not a degraded run, it is a different gate.");
 
   for (const row of windowRows) {
     if (!row.source_url) throw new Fail(2, `grievance-windows.json: "${row.instrument}" has no source_url. A legal number with no evidence link is exactly what this module refuses.`);
@@ -230,6 +235,7 @@ export function renderVenture({ ventureName, outDir }) {
       templateClauses: clauseDeclarationsIn(source),
       bodies: rendered.bodies,
       ownHost: facts.site_url,
+      scenarios: scenarioSet.scenarios,
     });
     findings.push(...pageFindings);
 
@@ -248,6 +254,11 @@ export function renderVenture({ ventureName, outDir }) {
   }
 
   if (!pages.length) throw new Fail(3, "no page templates exist in the pinned set");
+
+  // Set-level answerability, run ONCE. A scenario aimed at a page the pinned set no longer
+  // renders is invisible to the per-page pass -- the loop that would catch it never runs for a
+  // page that does not exist, so the check is disabled by exactly the condition it detects.
+  findings.push(...scenarioSetLint(scenarioSet.scenarios, pages.map((p) => p.page)));
 
   const run = {
     engine_version: ENGINE_VERSION,

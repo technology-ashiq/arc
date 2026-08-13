@@ -178,7 +178,7 @@ export function traceLint(page, text, clauseMap, facts, templateClauses) {
   return out;
 }
 
-export function completenessLint(page, text, required, facts, bodies) {
+export function completenessLint(page, text, required, facts, bodies, scenarios, templateClauses) {
   const out = [];
   const emitted = new Set(markersIn(text));
 
@@ -205,32 +205,113 @@ export function completenessLint(page, text, required, facts, bodies) {
   const rows = required[page];
   if (!rows) {
     out.push(finding("completeness", page, "-", "FAIL", "this page has a template but no required-clause list, so nothing checks what it must contain. An authored page with no list is a data gap, not a warning."));
+    // NOT an early return. It used to be, which meant a page missing its required-clause list
+    // ALSO silently skipped the answerability check below -- one data gap disabling two
+    // different classes of check, and the second one invisibly.
+  } else {
+    for (const row of rows) {
+      // conditionHolds fails CLOSED in the renderer (clause not emitted) and used to fail OPEN
+      // here (check skipped), so a one-character typo in a `when` field name silently disabled a
+      // mandatory-clause check. "Condition is false" and "condition is unevaluable" are now
+      // different answers.
+      if (row.when) {
+        const verdict = conditionVerdict(facts, row.when);
+        if (verdict === null) {
+          out.push(finding("completeness", page, row.id, "FAIL", `the required-clause condition "${row.when}" names a field that does not exist, or has no "=". An unevaluable condition disables the check it guards.`));
+          continue;
+        }
+        if (verdict === false) continue;
+      }
+      if (!emitted.has(row.id))
+        out.push(finding("completeness", page, row.id, "FAIL", `mandatory clause missing${row.when ? ` (required when ${row.when})` : ""}. Provenance alone cannot pass an empty page.`));
+    }
+  }
+
+  // ---- UNANSWERED: the class that fails for INSUFFICIENCY (ADR-1009 / LEG-I) ----
+  //
+  // Everything above this line fails for rule-breaking. A page can satisfy all of it and still
+  // leave the reader without the answer they came for, and `arc-design-cycle3` 2026-07-30 is the
+  // scar: "PASS was defined as an absence, so compliant characterless work passed five
+  // consecutive runs and no part of the loop could report that it was simply not good enough."
+  // This is the branch that fails for insufficiency.
+  if (!Array.isArray(scenarios)) {
+    out.push(finding("completeness", page, "-", "FAIL", "the scenario set is missing or unreadable, so the answerability check is disabled. A gate that cannot load its own pass condition reports nothing and looks identical to a clean run."));
     return out;
   }
-  for (const row of rows) {
-    // conditionHolds fails CLOSED in the renderer (clause not emitted) and used to fail OPEN
-    // here (check skipped), so a one-character typo in a `when` field name silently disabled a
-    // mandatory-clause check. "Condition is false" and "condition is unevaluable" are now
-    // different answers.
-    if (row.when) {
-      const verdict = conditionVerdict(facts, row.when);
+
+  for (const s of scenarios) {
+    if (s.page !== page) continue;
+
+    // A malformed guard is a FAILURE, never a skip. `conditionVerdict` returns null for
+    // "unevaluable", and treating that as "not applicable" is precisely how a typo disables a
+    // mandatory check -- fixed-defect-list row 11, found on the clause path, and the reason this
+    // path was written to answer it the same way from the start rather than inherit the bug.
+    if (s.when) {
+      const verdict = conditionVerdict(facts, s.when);
       if (verdict === null) {
-        out.push(finding("completeness", page, row.id, "FAIL", `the required-clause condition "${row.when}" names a field that does not exist, or has no "=". An unevaluable condition disables the check it guards.`));
+        out.push(finding("completeness", page, s.id, "FAIL", `the scenario guard "${s.when}" names a field that does not exist, or has no "=". An unevaluable guard silently excuses the scenario it guards.`));
         continue;
       }
-      if (verdict === false) continue;
+      if (verdict === false) continue; // genuinely not applicable to this venture
     }
-    if (!emitted.has(row.id))
-      out.push(finding("completeness", page, row.id, "FAIL", `mandatory clause missing${row.when ? ` (required when ${row.when})` : ""}. Provenance alone cannot pass an empty page.`));
+
+    const ids = Array.isArray(s.answered_by) ? s.answered_by : [];
+    if (!ids.length) {
+      out.push(finding("completeness", page, s.id, "FAIL", "this scenario names no answering clause, so it can never fail. A row that cannot fail is not a test."));
+      continue;
+    }
+
+    for (const id of ids) {
+      // ORPHANED is separated from UNANSWERED on purpose: they have different repairs. Orphaned
+      // means a template edit deleted or renamed the clause out from under the scenario, and the
+      // fix is in the template or the set. Unanswered means the clause exists but this venture's
+      // page did not get it, and the fix is a guard or a facts value.
+      // `templateClauses` is the array of DECLARATIONS trace-lint takes -- `{id, when}` records,
+      // not a Set of ids. Reading it as a Set is silently wrong rather than loudly wrong on any
+      // shape that happens to expose `.has`, so the id lookup is written against the real shape.
+      const declared = Array.isArray(templateClauses) ? templateClauses.some((d) => d.id === id) : true;
+      if (!declared) {
+        out.push(finding("completeness", page, s.id, "FAIL", `ORPHANED scenario: no template block on this page declares "${id}" any more. A template edit that orphans a scenario is a failure, not a silent pass (ADR-1009).`));
+        continue;
+      }
+      if (!emitted.has(id))
+        out.push(finding("completeness", page, s.id, "FAIL", `UNANSWERED: "${s.question}" -- the clause that answers it (${id}) is not on this page.`));
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Whole-SET answerability checks, run once rather than per page.
+ *
+ * A scenario pointing at a page that no longer renders is invisible to the per-page pass -- the
+ * loop that would have caught it never runs for a page that does not exist. That is the same
+ * shape as the required-clause early return above: the check is disabled by the very condition
+ * it exists to detect.
+ */
+export function scenarioSetLint(scenarios, renderedPageIds) {
+  const out = [];
+  if (!Array.isArray(scenarios)) {
+    out.push(finding("completeness", "-", "-", "FAIL", "the scenario set is missing or unreadable"));
+    return out;
+  }
+  const have = new Set(renderedPageIds);
+  const seen = new Set();
+  for (const s of scenarios) {
+    if (seen.has(s.id)) out.push(finding("completeness", "-", s.id, "FAIL", "duplicate scenario id: two rows with one id means one of them can never be reported separately"));
+    seen.add(s.id);
+    if (!have.has(s.page))
+      out.push(finding("completeness", s.page ?? "-", s.id, "FAIL", `this scenario names page "${s.page}", which the pinned set does not render. A scenario aimed at a page that does not exist can never fail, so it silently stops being a check.`));
   }
   return out;
 }
 
-export function runAllLints({ page, text, facts, clauseMap, required, denylist, templateClauses, bodies, ownHost }) {
+export function runAllLints({ page, text, facts, clauseMap, required, denylist, templateClauses, bodies, ownHost, scenarios }) {
   return [
     ...valueLint(page, text, denylist, ownHost),
     ...traceLint(page, text, clauseMap, facts, templateClauses),
-    ...completenessLint(page, text, required, facts, bodies),
+    ...completenessLint(page, text, required, facts, bodies, scenarios, templateClauses),
   ];
 }
 

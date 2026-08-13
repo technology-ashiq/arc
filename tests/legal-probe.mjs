@@ -243,6 +243,41 @@ switch (cmd) {
           writeFileSync(p, JSON.stringify(rows, null, 2), "utf8");
         }
         break;
+      case "orphan-scenario":
+        // Rename a clause the scenario set names. This is the template edit ADR-1009 says must
+        // fail: the page still renders, still traces, still carries a clause in that position --
+        // and the question SCN.NOTICE.LANGUAGE asks no longer has anywhere to be answered.
+        // The required-clause list is renamed WITH the template so the mandatory-clause check
+        // stays satisfied. Without that, this mutant would go red on the MISSING class and prove
+        // nothing about the ORPHANED one -- a control that fires for the wrong reason is not a
+        // control for the thing it was written for. PRIVACY.LANGUAGE carries no `when=`, so it is
+        // absent from clause-map.json by design and there is nothing to rename there.
+        patch(join(tmplDir, "privacy.tmpl.md"), "{{#clause id=PRIVACY.LANGUAGE}}", "{{#clause id=PRIVACY.LANGUAGE_RENAMED}}");
+        patch(join(dataDir, "required-clauses.json"), '"PRIVACY.LANGUAGE"', '"PRIVACY.LANGUAGE_RENAMED"');
+        break;
+      case "scenario-guard-typo":
+        // One character off in a scenario guard. It must FAIL, not skip: a guard that cannot be
+        // evaluated and is treated as "not applicable" silently excuses the row it guards, which
+        // is fixed-defect-list row 11 exactly, on a second path.
+        {
+          const p = join(dataDir, "scenarios.json");
+          const set = JSON.parse(readFileSync(p, "utf8"));
+          const row = set.scenarios.find((s) => s.when === "payment_model=gateway");
+          if (!row) die("no scenario guarded on payment_model=gateway to corrupt");
+          row.when = "payment_modle=gateway";
+          writeFileSync(p, JSON.stringify(set, null, 2), "utf8");
+        }
+        break;
+      case "scenario-orphan-page":
+        // Aim a scenario at a page the pinned set does not render. The per-page pass can never
+        // see it, so only the set-level check can.
+        {
+          const p = join(dataDir, "scenarios.json");
+          const set = JSON.parse(readFileSync(p, "utf8"));
+          set.scenarios[0].page = "no-such-page";
+          writeFileSync(p, JSON.stringify(set, null, 2), "utf8");
+        }
+        break;
       case "drop-subprocessors":
         // Take the sub-processor list OFF a venture that is not required to have one, and the
         // disclosure clause must vanish with it. This is the negative half of the
@@ -278,6 +313,26 @@ switch (cmd) {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, text.join(" ") + "\n", "utf8");
     console.log("wrote:" + file);
+    break;
+  }
+
+  /** scenario-count <scenarios.json> -> how many rows the answerability fixture declares */
+  case "scenario-count": {
+    const [file] = rest;
+    const set = JSON.parse(readFileSync(file, "utf8"));
+    if (!Array.isArray(set.scenarios)) die(`${file} has no scenarios array`);
+    console.log(String(set.scenarios.length));
+    break;
+  }
+
+  /** scenario-pages <scenarios.json> -> the distinct page ids the set aims at, sorted */
+  case "scenario-pages": {
+    const [file] = rest;
+    const set = JSON.parse(readFileSync(file, "utf8"));
+    if (!Array.isArray(set.scenarios) || !set.scenarios.length) die(`${file} has no scenarios`);
+    const pages = [...new Set(set.scenarios.map((s) => s.page))].sort();
+    if (pages.some((p) => typeof p !== "string" || !p)) die(`${file} has a scenario with no page`);
+    console.log(pages.join(" "));
     break;
   }
 
