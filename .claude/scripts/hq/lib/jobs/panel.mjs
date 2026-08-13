@@ -63,23 +63,37 @@ export async function loadRunEventsUpTo(spineDir, day) {
  * which is the correct amount of confidence in both cases.
  */
 export async function loadPanelInputs(spineDir, day) {
-  // READ THROUGH THE SPINE'S OWN READER, never by walking events/*.jsonl. SPINE-G (ADR-0030)
-  // makes the spine the only public API, and a second reader is not a shortcut -- it is a second
-  // opinion about torn lines, quarantine and ordering, which would let the panel and the brief
-  // disagree about the same day while both looked correct.
+  const { events, observedFrom } = await loadSpineEvents(spineDir, day);
+  return { events: events.filter((e) => e.kind === "run.completed"), observedFrom };
+}
+
+/**
+ * EVERY event the spine holds, unwrapped, optionally cut at a day -- and the earliest day it can
+ * speak to.
+ *
+ * The panel wants only `run.completed`; the audit needs incidents and skip notes too, because an
+ * "explained absence" is precisely a slot that has one of those instead of a run. Both go through
+ * this one reader rather than each walking the spine its own way.
+ *
+ * READ THROUGH THE SPINE'S OWN READER, never by walking events/*.jsonl. SPINE-G (ADR-0030) makes
+ * the spine the only public API, and a second reader is not a shortcut -- it is a second opinion
+ * about torn lines, quarantine and ordering, which would let the panel, the brief and the audit
+ * disagree about the same day while all three looked correct.
+ */
+export async function loadSpineEvents(spineDir, day = null) {
   const { events } = await query(spineDir, {});
-  const runs = [];
+  const out = [];
   let observedFrom = null;
   for (const wrapped of events) {
     // The reader yields wrapped records; the event itself is what carries kind and ts.
     const e = wrapped && wrapped.event ? wrapped.event : wrapped;
     if (!e || typeof e.ts !== "string") continue;
     const d = e.ts.slice(0, 10);
-    if (d > day) continue;
+    if (day !== null && d > day) continue;
     if (observedFrom === null || d < observedFrom) observedFrom = d;
-    if (e.kind === "run.completed") runs.push(e);
+    out.push(e);
   }
-  return { events: runs, observedFrom };
+  return { events: out, observedFrom };
 }
 
 /**

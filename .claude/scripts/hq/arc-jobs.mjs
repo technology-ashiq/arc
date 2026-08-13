@@ -36,7 +36,8 @@ import { lintJobs } from "./lib/jobs/schema.mjs";
 import { parseCadence, floorSlot, nextSlots, slotMs, istDay } from "./lib/jobs/cadence.mjs";
 import { processRunArgv } from "./lib/jobs/delegate.mjs";
 import { makeWindowsScheduler, registerVerified, registrationFor, PINNED_SETTINGS, SchedulerError } from "./lib/jobs/scheduler-os.mjs";
-import { derivePanel, needsYouLines, loadPanelInputs } from "./lib/jobs/panel.mjs";
+import { derivePanel, needsYouLines, loadPanelInputs, loadSpineEvents } from "./lib/jobs/panel.mjs";
+import { deriveAudit, needsYouHistory } from "./lib/jobs/audit.mjs";
 import { parseYamlSubset } from "../engine/yaml-subset.mjs";
 import { parsePolicyYaml } from "./lib/policy/yaml.mjs";
 import { processNames } from "./lib/policy/subjects.mjs";
@@ -68,7 +69,8 @@ const die = (code, msg) => { process.stderr.write(`arc-jobs: ${msg}\n`); process
 if (!command || command === "help" || has("help")) {
   process.stdout.write(
     "usage: arc-jobs list [--next N] | panel [--date D] | run <name> [--slot ISO] [--scheduled]\n" +
-    "                    | catchup | register [name] | unregister [name]\n",
+    "                    | catchup | register [name] | unregister [name]\n" +
+    "                    | audit [--from D] [--to D] [--json]\n",
   );
   process.exit(0);
 }
@@ -375,6 +377,94 @@ if (command === "panel") {
     for (const l of nag) process.stdout.write(`  ${l}\n`);
   }
   process.exit(0);
+}
+
+// ---------- audit ----------
+//
+// The proving week's instrument. Written BEFORE the week had any data in it, because a
+// measurement built after seeing the results can be tuned into one that flatters them without
+// anyone meaning to. Everything below comes from the spine and from the schedule; the OS is never
+// asked anything, so `--from D --to D` is a replay that returns the same answer forever.
+if (command === "audit") {
+  const { doc } = loadSchedule();
+
+  // ONLY COMPLETE DAYS ARE AUDITABLE, and the default window ends YESTERDAY.
+  //
+  // A day still in progress has slots that have not arrived yet, and the derivation cannot tell
+  // "has not come" from "did not happen" -- it would count every slot later today as MISSED. That
+  // is this lane's recurring failure shape pointed at its own instrument: a detector reporting a
+  // failure for something that has not occurred. It also corrupts the metric pack in the
+  // direction that invites someone to widen the window until the number looks better.
+  //
+  // The calendar judgement lives HERE, at the CLI, where `nowMs()` already lives. `deriveAudit`
+  // stays pure and simply measures the range it is given, so `--from D --to D` remains a replay.
+  const today = istDay(nowMs());
+  const yesterday = istDay(slotMs(today, 12, 0) - 86_400_000);
+  const to = flag("to") || yesterday;
+  const from = flag("from") || istDay(slotMs(to, 12, 0) - 6 * 86_400_000);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to))
+    die(2, `--from/--to must be YYYY-MM-DD, got ${from}..${to}`);
+  if (to >= today && !has("partial"))
+    die(2,
+      `--to ${to} is today or later, and a day that has not finished cannot be audited: every slot ` +
+      `still to come would be counted MISSED. Audit up to ${yesterday}, or pass --partial to measure ` +
+      `an incomplete day on purpose.`);
+
+  // Uncut: the audit needs to see runs on BOTH sides of the window, so it can tell "no run yet"
+  // apart from "ran outside the range". The window is applied inside the derivation, once.
+  const { events: allEvents, observedFrom } = await loadSpineEvents(spineRoot());
+  const jobs = doc.jobs || [];
+  let pack;
+  let history;
+  try {
+    pack = deriveAudit({ from, to, jobs, events: allEvents, observedFrom });
+    history = needsYouHistory({ from, to, jobs, events: allEvents, observedFrom, derivePanel });
+  } catch (e) {
+    die(2, `audit refused: ${e?.message || e}`);
+  }
+
+  if (has("json")) {
+    process.stdout.write(`${JSON.stringify({ ...pack, needsYouHistory: history }, null, 2)}\n`);
+    process.exit(0);
+  }
+
+  const t = pack.totals;
+  const ms = (v) => (v === null ? "n/a" : `${v}ms`);
+  process.stdout.write(`jobs audit ${from}..${to}  (${t.windowDays} days, spine observed from ${t.observedFrom ?? "never"})\n\n`);
+  for (const r of pack.perJob) {
+    const head = r.unreadableCadence ? "UNREADABLE CADENCE" : (r.enabled ? r.cadence : `${r.cadence} (disabled)`);
+    process.stdout.write(`  ${r.name.padEnd(22)} ${head}\n`);
+    process.stdout.write(`    expected ${r.expected}  completed ${r.completed}  failed ${r.failed}  drift p50 ${ms(r.driftP50Ms)}\n`);
+    process.stdout.write(`    gaps: ${r.unexplainedGaps.length} unexplained, ${r.explainedGaps.length} explained\n`);
+    for (const g of r.unexplainedGaps) process.stdout.write(`      MISSED ${g}\n`);
+    for (const g of r.explainedGaps) process.stdout.write(`      (ok)   ${g.slot}  -- ${g.why}\n`);
+    for (const u of r.unscheduledRuns) process.stdout.write(`      extra  ${u.slot}  x${u.count} (not an expected slot)\n`);
+    for (const m of r.manualStarts) process.stdout.write(`      MANUAL ${m.slot ?? m.ts}  actor ${m.actor}\n`);
+  }
+
+  // The pre-declared pack, in the PLAN's own order, so it cannot be reordered into a better story.
+  process.stdout.write("\nmetric pack\n");
+  process.stdout.write(`  attempted ${t.completed + t.failed}  completed ${t.completed}  missed ${t.unexplainedGaps}\n`);
+  process.stdout.write(`  drift p50                 ${ms(t.driftP50Ms)}\n`);
+  process.stdout.write(`  manual starts (target 0)  ${t.manualStarts}\n`);
+  process.stdout.write(`  incidents                 ${Object.entries(t.incidentsByClass).map(([k, v]) => `${k}=${v}`).join(" ")}\n`);
+  const unknown = Object.entries(t.unknownIncidentClasses);
+  if (unknown.length)
+    process.stdout.write(`  UNKNOWN incident classes  ${unknown.map(([k, v]) => `${k}=${v}`).join(" ")}  <- a class nobody declared\n`);
+  process.stdout.write(`  spend (expected 0)        INR ${t.spendInr}\n`);
+  process.stdout.write(`  needs-you days            ${history.length}\n`);
+  for (const d of history)
+    process.stdout.write(`    ${d.day}  ${d.overdue.map((o) => `${o.name} (${o.missed} missed)`).join(", ")}\n`);
+
+  // A VERDICT, not just numbers. A pack that only ever prints figures leaves the reading of them
+  // to whoever wants a particular answer, which is the failure the pre-declaration exists to stop.
+  const fails = [];
+  if (t.unexplainedGaps > 0) fails.push(`${t.unexplainedGaps} unexplained gap(s)`);
+  if (t.manualStarts > 0) fails.push(`${t.manualStarts} manual start(s) of a scheduled job`);
+  if (t.spendInr !== 0) fails.push(`INR ${t.spendInr} spent by a job that must not spend`);
+  if (unknown.length) fails.push(`${unknown.length} undeclared incident class(es)`);
+  process.stdout.write(`\n${fails.length ? `NOT CLEAN: ${fails.join("; ")}` : "CLEAN against the pre-declared pack"}\n`);
+  process.exit(fails.length ? 1 : 0);
 }
 
 // ---------- catchup ----------

@@ -18,6 +18,7 @@
     ".claude/scripts/hq/jobs/brief-materialize.mjs",
     ".claude/scripts/hq/jobs/day-close-roll.mjs",
     ".claude/scripts/hq/lib/canonical.mjs",
+    ".claude/scripts/hq/lib/jobs/audit.mjs",
     ".claude/scripts/hq/lib/jobs/cadence.mjs",
     ".claude/scripts/hq/lib/jobs/delegate.mjs",
     ".claude/scripts/hq/lib/jobs/panel.mjs",
