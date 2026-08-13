@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import {
   EXIT, EncodeError, NORMALIZER_VERSION, OperatorError,
   admitGroup, canonicalHash, canonicalJson, canonicalString,
-  medianWithSpread, newBudgetState, parseArgs, reconcileGroup, worstCaseFor,
+  discoverClasses, medianWithSpread, newBudgetState, parseArgs, reconcileGroup, worstCaseFor,
 } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -123,6 +123,27 @@ function recordingsWithCost(name, inr) {
     canonicalJson({ a: 1 }).endsWith("}\n") && !canonicalJson({ a: 1 }).includes("\r"));
   check("the hash is stable across insertion order", canonicalHash({ b: 1, a: 2 }) === canonicalHash({ a: 2, b: 1 }));
   check("the hash separates two genuinely different documents", canonicalHash({ a: 1 }) !== canonicalHash({ a: 2 }));
+}
+
+// ---- 1b. A PROCESS THAT SHIPS NO EVAL PACK IS ZERO FIXTURES, NOT A CRASH ----------------------
+{
+  // `declaredFixtureCount` threw on an absent `evals:` while every process in the tree happened
+  // to declare one. Then the scheduler lane merged, bringing processes that ship no eval pack at
+  // all, and bench could not run on the merged tree AT ALL -- every class, including the armed
+  // one, was lost to a startup error about a different class entirely.
+  //
+  // A class with no fixtures is exactly what the coverage gate already has a sentence for.
+  // Refusing to start is a far worse answer than reporting the zero.
+  const covered = discoverClasses(ROOT);
+  check("discovery survives a process that declares no evals at all", covered.length > 0);
+  const zero = covered.filter((c) => c.count === 0);
+  check("and reports each of them as zero fixtures rather than throwing",
+    zero.every((c) => c.eligible === false && /0 of 5 fixtures/.test(c.reason)),
+    JSON.stringify(zero.slice(0, 2)));
+  // The armed class is still found on the same tree -- otherwise "survives" would just mean
+  // "returned something".
+  check("and the armed class is still discovered beside them",
+    covered.some((c) => c.taskClass === "commit-msg-draft" && c.eligible === true));
 }
 
 // ---- 2. admission control and reconciliation, as pure functions -------------------------------

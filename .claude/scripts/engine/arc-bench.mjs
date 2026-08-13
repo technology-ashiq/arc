@@ -198,7 +198,17 @@ export function declaredFixtureCount(root, processName) {
   const parsed = parseYamlSubset(readFileSync(path, "utf8"));
   if (!parsed.ok) throw new Error(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
   const evals = parsed.value?.evals;
-  if (!Array.isArray(evals)) throw new Error(`${processName}: evals is missing or not a list`);
+  // AN ABSENT `evals:` IS ZERO FIXTURES, NOT AN ERROR. This threw when every process in the tree
+  // happened to declare one -- and then the scheduler lane merged, bringing processes that ship
+  // no eval pack at all, and bench could not run on the merged tree AT ALL. A class with no
+  // fixtures is exactly what the coverage gate already has a sentence for: NO PROPOSAL, evidence
+  // insufficient, 0 of 5. Refusing to start is a far worse answer than reporting the zero.
+  //
+  // A PRESENT-BUT-MALFORMED `evals:` still throws, because that is a broken declaration rather
+  // than an absent one -- the same distinction the ceiling file draws between "no row" and "a
+  // row that is not a number".
+  if (evals === undefined || evals === null) return 0;
+  if (!Array.isArray(evals)) throw new Error(`${processName}: evals is present but is not a list`);
   return evals.length;
 }
 
@@ -216,7 +226,9 @@ export function measuringFixtureCount(root, processName) {
   const parsed = parseYamlSubset(readFileSync(path, "utf8"));
   if (!parsed.ok) throw new Error(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
   const evals = parsed.value?.evals;
-  if (!Array.isArray(evals)) throw new Error(`${processName}: evals is missing or not a list`);
+  // Same rule as declaredFixtureCount: absent is zero, malformed is an error.
+  if (evals === undefined || evals === null) return 0;
+  if (!Array.isArray(evals)) throw new Error(`${processName}: evals is present but is not a list`);
   let n = 0;
   for (const rel of evals) {
     try {
@@ -568,7 +580,9 @@ export function loadClass(root, processName) {
   const parsed = parseYamlSubset(readFileSync(canon, "utf8"));
   if (!parsed.ok) throw new OperatorError(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
   const evals = parsed.value?.evals;
-  if (!Array.isArray(evals) || evals.length === 0) throw new OperatorError(`${processName}: evals is missing or empty`);
+  // loadClass is only reached for an ELIGIBLE class, which a zero-fixture one can never be --
+  // so this stays a hard error: getting here with no evals means the coverage gate was bypassed.
+  if (!Array.isArray(evals) || evals.length === 0) throw new OperatorError(`${processName}: evals is missing or empty, yet the class passed the coverage gate`);
 
   const fixtures = evals.map((rel) => {
     const p = resolve(root, rel);
