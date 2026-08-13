@@ -189,6 +189,52 @@ by any test here.
 - Eight panel findings remain open, listed in the evidence file. None asserts an untruth; each is
   a page less complete or more absolute than it should be.
 
+---
+
+## PICK UP HERE (next session)
+
+**Last known-good: `eacce4e`, run `31701045962`, 19/19 jobs success, read per-JOB. Tree clean,
+nothing half-built, nothing red.** Everything below is un-started work, not work in progress.
+
+Do these in order. Each is independently shippable.
+
+1. **`pins.yaml` + `--bump-templates`** — the biggest remaining item, and bigger than it sounds.
+   The criterion is *"venture A on template set v3 and venture B on v5 both render correctly in
+   one fixture run"*, and only `v1` exists today, so this needs a real multi-version set: a
+   per-venture pin file, resolution of `TEMPLATE_SET` from it instead of the module constant, and
+   two sets maintained at once. `--bump-templates` then forces per-venture re-approval, and a
+   publish against a moved `template_set_sha` without a bump must be REFUSED.
+   *Note:* `renderInputs()` currently hashes templates **and** all of `data/`, so "the set moved"
+   already covers more than the name suggests — read its comment before changing the pin shape.
+
+2. **Venture-side CI guard snippet** — must be **GENERATED from the same comparison function
+   `--verify` calls**, never hand-copied. The spec is explicit about why: a future canonicaliser
+   fix would land in `--verify` while the venture-side copy silently kept the old logic, in a repo
+   no twin-fix sweep of this one can reach. The twin-fix pattern has now recurred five times here.
+
+3. **Template-edit approval flow** — a template diff goes to the inbox as its own approval, never
+   a silent commit (ADR-1005, REQ-07).
+
+4. **Two-surface adversarial pass on `--verify` and the CI guard**, attacker prompts carrying
+   `initiatives/legal/evidence/fixed-defect-list.md` (28 rows) with the instruction to check every
+   row in every OTHER file. The last pass found 8 real holes, 5 of which published unapproved
+   bytes — including one in a gate written the commit before. Budget for finding things.
+
+5. **Phase 03 — the real LexOS render.** Blocked on one question owed to the owner: **is the
+   operator GST-registered?** Both branches are built and fixture-pinned, so nothing before this
+   depends on the answer.
+
+**Two live gaps to carry, both already recorded above:** `publish-gate.mjs` has no dedicated CI
+step because `.github/` is write-denied in this workspace (it runs inside the bats step, so it
+still turns the build red), and eight text-panel findings remain open in
+`initiatives/legal/evidence/phase-01/text-panel-round-2.md` — none asserts an untruth.
+
+**And a CI habit worth keeping:** two pushes in a row created NO run at all (the draft-PR
+behaviour `.claude/rules/testing.md` documents). It looks exactly like a slow queue. After every
+push, confirm a run exists for the SHA and `gh workflow run ci.yml --ref <branch>` if not.
+
+---
+
 **Still NOT built — the receipts half of Phase 01:** `publish` with hash-chain enforcement, the
 TOCTOU and backdating fixtures, `approval.requested` with its strict payload, the `arc-inbox`
 decision, re-publish semantic diff, and the two-surface adversarial pass on that path. Phases 02
