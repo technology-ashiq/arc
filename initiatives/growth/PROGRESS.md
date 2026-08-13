@@ -15,7 +15,7 @@ depends-on: —
 |---|---|---|---|
 | 00 | Contract + the road + steel thread | 2.0d | **IN PROGRESS** — contract done, site built; steel-thread emit waits on the human merge |
 | 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | NOT STARTED — entry gate: owner names the domain |
-| 02 | Miner + cluster gate | 1.0d | NOT STARTED |
+| 02 | Miner + cluster gate | 1.0d | **BUILT, awaiting CI + attack pass** — real run done, 7 exit criteria met, gate 1 enforced in code |
 | 03 | Generator + lints | 1.5d | NOT STARTED |
 | 04 | Publish path + A/B + GEO | 1.5d | NOT STARTED |
 | 05 | The EVO-H0 feed | 1.5d | NOT STARTED |
@@ -28,7 +28,7 @@ decided now, not on day 8.
 
 ## Appetite burn
 
-**~0.9 of 10 days used (9%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
+**~2.2 of 10 days used (22%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
 merged `content.published` by then, the publish path is fighting the stack — bank the vocabulary
 ADRs and the miner as documentation, stop, retro.
 
@@ -43,6 +43,45 @@ ADRs and the miner as documentation, stop, retro.
 | 2026-08-13 | Simulation gate: **9 blockers → 2**. The last two were pure lookups and were closed; the one-respawn cap was reached, so no third round ran | § Kickoff verification |
 | 2026-08-13 | **POL-I misreading corrected** — the design source conflated an authorization *subject* (ADR-0504) with a spine event kind. Growth adds NO `hq.policy.yaml` row, matching ADR-0703 and ADR-0912 | ADR-1001 |
 | 2026-08-13 | `kickoff.done` `01KZVM89535AM5SZDPWBV98M7C` and `approval.requested` `01KZVM8NN7XTEJ7P7Q1BMBS954` emitted from the MAIN clone, both verified present in `events/` and absent from quarantine | `.claude/state/hq/events/2026-08-13.jsonl` |
+| 2026-08-13 | **CI was red on 5 consecutive commits, all three OS legs.** 4 distinct failures, every one caused by `KINDS` 44 → 45; 3 of them in other lanes' files. Fixed in one commit | `f2d1f4f` |
+| 2026-08-13 | **Phase 02 built**: miner, cluster proposal, gate 1. Real mining run against HN's public API produced 14 attested keywords and cluster `c-001` (pillar "ai agents", 8 spokes, 2 BOFU), every row evidence-linked and verified | `882cb13`, `initiatives/growth/clusters/` |
+| 2026-08-13 | Mutant pass on the gate: 2 of 3 mutations went red correctly; the 3rd proved the spoke-floor guard **unreachable and untestable**, now labelled rather than left looking covered | `.claude/scripts/growth/lib/cluster.mjs` |
+
+## Phase 02 — built, not yet closed
+
+`arc-growth mine | cluster | generate`. Gate 1 (ADR-1012) is in code: `assertClusterApproved`
+refuses generation unless a human approved **that exact plan**, bound by `plan_sha` and not merely
+by cluster id. It rides on `approval.requested` + `decision.recorded` through `arc-inbox` — growth
+adds no approval receipt of its own, because a second source of truth for "did a human say yes" is
+what A5 forbids.
+
+**The real run is what paid for this phase.** Criterion 7 asks for one REAL mining run rather than
+a fixture run, and it found four defects a fixture run could not have:
+
+| # | What the real run exposed | Now |
+|---|---|---|
+| 1 | 41 live HN links reported as "did not resolve" — HN answered **429**. The resolver had two states where three were needed | Three states; a rate limit is UNKNOWN. The run **stops** rather than proceeding with a pool that lost 80% of its rows |
+| 2 | The 429s were self-inflicted: one HEAD per candidate against the human-facing item page | Verification is the source's job — one batched API query, 51 checks in one request |
+| 3 | Whole HN titles used as keywords, so the pillar came out as **"dspack studio"** — a product name nobody searches, with spokes sharing not one token with it | A keyword is an n-gram **attested by ≥2 independent stories** |
+| 4 | A story reposted 3× corroborated itself 3×, manufacturing "operating system for 916" (from a $916 price) as a 3-story topic | Attestation counts distinct headlines; bare numbers are not keywords |
+
+All four are pinned as fixtures in `tests/growth-mine.bats`.
+
+**Honest gaps, stated rather than smoothed:**
+
+- **Red-first was NOT done as the spec words it.** The spec wants each refusal observed RED before
+  the refusal exists; CI is the only place tests run here, and the queue is hours deep. What ran
+  instead was a **mutant pass**: the gate was deleted three ways and the suite re-checked. Two
+  mutations went red correctly. The third — deleting the spoke-floor — turned **nothing** red,
+  because the earlier pool check already covers every input that reaches it. That guard is
+  unreachable and is now labelled an invariant backstop instead of being left to look tested.
+  This is weaker than red-first and is recorded as such.
+- **Only one source is enabled** (HN via Algolia's public API). Reddit, search-suggest and
+  competitor pages sit disabled with the reason written into `sources.json`, awaiting the owner's
+  call on which are fair game. The cluster's BOFU rows therefore come from HN comparison language,
+  not from competitor gap analysis.
+- `c-001` is proposed, **not approved**. Sending it and approving it is gate 1, and it is the
+  owner's.
 
 ## Phase 00 — in progress
 
@@ -96,9 +135,18 @@ Phase 00's contract half is written, pushed and smoke-verified; the road half ex
 serving a real article. The cycle PR is **#177**, open and deliberately unmerged until every phase
 closes.
 
-**Next step:** Phase 02 (miner + cluster gate) and Phase 03 (generator + lints) — neither needs the
-site, so both proceed while P0-a waits. Phase 00 closes the moment arc-site PR #1 is merged and the
-`content.published` receipt emits with the merged sha.
+**Phase 02 is built and pushed** (`882cb13`), with a real mining run behind it and gate 1 enforced
+in code. Two fresh attackers and the code-reviewer are running against it now; their findings are
+fixed before the phase closes, not after.
+
+**Also fixed this session:** CI was **red on every commit after the kickoff one**, on all three OS
+legs — four distinct failures, all caused by `KINDS` going 44 → 45. Three of them were in files
+belonging to other lanes (`memory-recall.bats` pinned the global total, `arc-brief.mjs` groups every
+kind, `arc-products.mjs` needs a CATALOG entry). Phase 02's own non-negotiable warns that adding to
+`KINDS` breaks other lanes' *measured* assertions; that line was written at kickoff and then walked
+into anyway.
+
+**Next step:** Phase 03 (generator + lints) once the attack findings on Phase 02 are closed.
 
 **Blocked on:** exactly two things, both the owner's and both one click or one form:
 1. **arc-site PR #1** — the human merge. E2 is Tier E and ADR-1002 puts this merge with the human;
