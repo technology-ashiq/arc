@@ -695,6 +695,13 @@ ROWS
   [[ "$output" == *"days_without_revenue  40 of 50 days  WARNING 10 to the line"* ]] \
     || { echo "the fixture does not produce a WARNING, so nothing below is being tested: $output"; false; }
   # ARC PNL: the panel row above is the whole of a warning's reach. No needs-you item.
+  #
+  # This one MAY assert the whole group's absence, unlike its arc-brief twin below, and the reason is
+  # worth stating rather than leaving as a difference someone later "tidies up": arc-pnl's needs-you
+  # is written ENTIRELY by this lane (pnl flags, kill crossings, future-dated revenue), while
+  # arc-brief's is shared -- scheduler writes overdue-job lines into the same group, which is exactly
+  # what broke the twin. Even here it is a landmine against this lane's own future additions, so the
+  # specific-line check on the next line is the real assertion and this is the belt.
   [[ "$output" != *"needs you"* ]] || { echo "a WARNING opened the arc-pnl needs-you group: $output"; false; }
   [[ "$output" != *"kill line CROSSED"* ]] || { echo "a WARNING was reported as a crossing: $output"; false; }
 
@@ -711,7 +718,17 @@ ROWS
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"brief 2026-08-31"* ]] || { echo "the brief did not render: $output"; false; }
   [[ "$output" != *"kill line"* ]] || { echo "a WARNING surfaced on a quiet day: $output"; false; }
-  [[ "$output" != *"needs-you"* ]] || { echo "a WARNING opened the needs-you group: $output"; false; }
+  # ASSERT THE LINE'S ABSENCE, NOT THE GROUP'S. This used to require that `needs-you` did not appear
+  # at all, which was true when this lane was the only one putting derived lines there -- and stopped
+  # being true the moment scheduler's Cycle 12 merged, because an overdue job opens the same group.
+  # The test then failed for a fact about ANOTHER lane while the thing it actually guards was intact.
+  #
+  # An absence assertion has to name what must be absent. Scoping it to the whole group made this
+  # lane's test a hostage to every future lane that ever writes a needs-you line, which is the
+  # opposite of what a shared surface needs. The `kill line` check above IS the assertion; this one
+  # now only pins that no LEDGER line joined the group.
+  [[ "$output" != *"kill lines NOT EVALUATED"* ]] \
+    || { echo "the criteria notice surfaced on a day with a receipted file: $output"; false; }
 }
 
 @test "kill: needs-you renders on a day with zero events when a line is crossed" {
