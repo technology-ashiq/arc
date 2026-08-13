@@ -197,14 +197,58 @@ its `try`, so a bad TMPDIR inverted the fail-closed policy denial into a stack t
 nine test guards **could not fail** — one attacker wrote a mutant reverting half the change that
 passed 9/9.
 
-**Next action (2026-08-13).** Two tracks, deliberately separate so the cycle clock stays honest:
+**PR #184 MERGED as `9bd1443`, 19/19 green.** The emit-path track is closed: all three inline
+`--payload` call sites in `arc-run.mjs` now route through one `emitEvent` helper passing
+`--payload-file` and `--strict`. What did NOT ship is the receipt *gate* — see the deferred
+criterion in `phases/phase-04-spec.md` for why and what it is owed.
 
-1. **In Phase 04, on this cycle's clock** — build the two emit-path fixes now in
-   `phases/phase-04-spec.md`: `--payload-file` and `--strict`. Both are wiring to flags
-   `arc-event.sh` already supports. They carry a **bounded** adversarial pass on the emit path before
-   their PR merges (not the full two-surface panel), and the twin-fix instruction is to grep the
-   pattern across every **other** emit call site in this lane and record the count checked.
-2. **Off the clock, its own PR** — ADR-0220's per-invocation model/root seam. Unblocks four `bench`
-   Phase 03 DoD items: one real model benched end to end · candidate proven REACHED (real model id,
-   non-zero tokens) · REQ-05 preflight · human verdict. `tests/bench-steel-probe.mjs` already pins both
-   failures and **must go red** when the seam lands — it passes today for the wrong reasons.
+---
+
+## NEXT ACTION — start here on a cold resume
+
+**Build ADR-0220's per-invocation model/root seam.** It is the one thing `bench` is blocked on and
+the reason this change was routed in at all. Read `docs/adr/0220-the-model-is-a-per-invocation-trial-seam-separate-from-production-routing.md`
+first; it is the spec.
+
+- **OUT-OF-CYCLE.** Its own PR, **not** charged to Cycle 7's 7.5 days (owner-ruled 2026-08-13, see
+  PLAN § Appetite). `appetite-sum` must still read 7d = 93% when it lands.
+- **Unblocks four `bench` Phase 03 DoD items:** one real model benched end to end · candidate proven
+  REACHED (real model id + non-zero tokens) · REQ-05 preflight · human verdict.
+- **`tests/bench-steel-probe.mjs` pins both failures and MUST GO RED when the seam lands.** It passes
+  today for the wrong reasons — that red is the proof the seam works, not a regression.
+
+**The trap, stated so it is not re-proposed:** `arc-run.mjs:402` clobbers `ARC_DRIVER_MODEL`
+**deliberately** — the env var *was* the model knob and that was an un-reviewed tier change
+ADR-0069 b1 forbids. Honouring a caller-set env var is the WRONG fix and reopens a closed hole.
+ADR-0069 **(g)** is the door: a trial may use any model when isolated and receipted. The receipt must
+distinguish a **trial override** from a **routed pin** — a third state, not a reuse of either — or the
+ledger asserts a routing decision nothing applied.
+
+### Three things that are NOT derivable from the code, and cost real CI cycles to learn
+
+1. **Run the caller sweep BEFORE pushing** (`.claude/rules/testing.md`). **10 suites drive `arc-run`,
+   four of them bench's:** `bench-core` · `bench-driver-contract` · `bench-harness` · `bench-seal` ·
+   `engine-driver-contract` · `engine-emit-path` · `jobs-run` · `kickoff-lint` · `policy-demotion` ·
+   `policy-runwrapper`. Skipping this on a fix round cost a 5-job red.
+2. **Fixes produced by an adversarial pass are themselves UNATTACKED CODE.** The cycle non-negotiable
+   binds the pass to the code being shipped and says nothing about the repairs it generates. That gap
+   shipped a temporal-dead-zone bug: a named `const` declared beside its use put the file's earliest
+   exit path (`--budget inr=0`, which calls `fail()` during top-level execution) in the TDZ, so it
+   wrote **no receipt at all**. Attack the fix round too.
+3. **`verifyLanded` is BROKEN — build nothing that depends on its verdict.** Three defects: it derives
+   the day in UTC while the spine names its file from an IST timestamp (`canonical.mjs:135`,
+   `spine-io.mjs:318`), it re-derives the spine root by a different rule than the emitter's
+   `spineRoot()`, and its quarantine scan interpolates into a `bash -c` string where a path component
+   was demonstrably executed.
+
+### Also open, none blocking the seam
+
+- **`burn: 0.0d` in the machine header is STALE and it is the Phase 04 STOP clock** (see the warning
+  above `## Now`). No number was invented; whoever burned the days sets it, and `PORTFOLIO.md` moves
+  with it or `board-lint` fails.
+- **Cross-lane, reported never edited from here:** inline `--payload` is repo-wide (8 sites, 6 files)
+  including `hq/arc-inbox.mjs:147` — the approval path this phase's own mandate criterion uses. The
+  `--strict` gap is narrower: `develop/develop.mjs` and `develop/stuck.mjs` only.
+- **2 `.bats` files ride `_default_weight` 16 with no measurement** — `engine-emit-path.bats` (this
+  lane) and `jobs-audit.bats` (scheduler, arrived with #182). Named in `tests/shard-timings.json`
+  `_known_gap`; clears with a `weigh-tests.yml` dispatch, never a hand-written number.
