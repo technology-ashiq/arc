@@ -252,3 +252,15 @@ ledger asserts a routing decision nothing applied.
 - **2 `.bats` files ride `_default_weight` 16 with no measurement** — `engine-emit-path.bats` (this
   lane) and `jobs-audit.bats` (scheduler, arrived with #182). Named in `tests/shard-timings.json`
   `_known_gap`; clears with a `weigh-tests.yml` dispatch, never a hand-written number.
+- **KNOWN FLAKE, recorded rather than re-run away: `engine-driver-contract.bats` test
+  "REQ-04: a process whose own fixture fails its own schema is blamed, not the driver".**
+  Observed 2026-08-13 on **byte-identical trees**: PASS in run `31744731535` (21:14 UTC), FAIL in
+  `31745770809` (21:28 UTC), PASS on rerun of that same run. It fails at the
+  `"fault_hint":"process"` grep, which means the escalation receipt did not land. The test
+  `mktemp -d`s a directory, `cp -r`s the whole `.claude/scripts` tree into it and runs `arc-run`
+  against that copy, so it is I/O-heavy and load-sensitive by construction.
+  **Whether Cycle 7 widened its window is UNKNOWN and must not be assumed either way** — `--strict`
+  raised the emitter's spine-lock wait 2s → 15s and `EMIT_TIMEOUT_MS` went 10s → 20s, both of which
+  change the timing of the emit this test depends on. It is written down because a flake that is
+  only ever re-run until green is indistinguishable from a bug nobody caught, and this repo already
+  records tests that pass on shard luck. **Do not re-run it green and move on; instrument it.**
