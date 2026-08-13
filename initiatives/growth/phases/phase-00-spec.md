@@ -7,7 +7,7 @@ the entire path end-to-end on a preview URL — behind three owner account actio
 
 Serves **REQ-00** (publishing exists on the spine) and **REQ-10** (the site exists and serves one
 real article). This is the walking skeleton: input → core flow → output → deployed. It is
-deliberately the largest phase, because ADR-1003 folded the road into it.
+deliberately the largest phase, because ADR-1103 folded the road into it.
 
 ## Exit criteria (Definition of Done)
 
@@ -34,7 +34,7 @@ deliberately the largest phase, because ADR-1003 folded the road into it.
    exists in the site repo's merged tree — **not** a git blob sha (which prefixes a header), and
    **not** the rendered HTML (which changes whenever the layout does, so an unedited article would
    appear edited and the REQ-03 unedited counter would silently stop counting).
-4. **No `hq.policy.yaml` row is added, and none is needed** (ADR-1001): POL-I governs authorization
+4. **No `hq.policy.yaml` row is added, and none is needed** (ADR-1101): POL-I governs authorization
    *subjects* (`session:*`, `process:*`), and a spine event kind is not one. What this criterion
    asserts instead is that **growth is not a policy bypass** — `arc growth publish` runs under
    `session:interactive`'s existing ceiling and introduces no subject of its own.
@@ -44,7 +44,7 @@ deliberately the largest phase, because ADR-1003 folded the road into it.
 
 **The road**
 6. `arc-site` repository created: Astro, MDX, static output, `/blog/<slug>` renders.
-7. Deploy provider behind the ADR-1004 interface: `deploy preview <dir> → {url}`, with the local
+7. Deploy provider behind the ADR-1104 interface: `deploy preview <dir> → {url}`, with the local
    static-server **fake** used by every test. No `promote` verb exists in the interface.
 8. `sitemap.xml` generated at build.
 
@@ -68,7 +68,7 @@ deliberately the largest phase, because ADR-1003 folded the road into it.
 **Test command:** `bats tests/growth-vocabulary.bats tests/growth-publish-thread.bats`
 
 **Expected failure first:** `tests/growth-vocabulary.bats` case
-`"content.published is rejected as UNKNOWN_KIND before the ADR-1001 edit lands"` must be **RED
+`"content.published is rejected as UNKNOWN_KIND before the ADR-1101 edit lands"` must be **RED
 before the `KINDS` edit and GREEN after** — and its inverse, `"an unknown payload key exits 2"`,
 must be **RED until `assertContent` exists**. Both are written and run before the implementation.
 This ordering is the phase's negative control: `retro-log.md:36` records an emitter that exited 0
@@ -101,7 +101,7 @@ and the receipt located by id. Exit 0 from the emitter is not evidence that anyt
 
 Designing the site's visual identity (that is REQ-06, Phase 4 — this phase ships unstyled HTML
 that renders) · a general MDX component library · perfecting the sitemap before there are three
-pages · building the deploy interface's `promote` verb because symmetry feels right (ADR-1002
+pages · building the deploy interface's `promote` verb because symmetry feels right (ADR-1102
 forbids it existing at all) · moving `metric.observed`'s validator out of `validate-leads.mjs`.
 
 ## Out of scope for this phase
@@ -114,7 +114,7 @@ Any keyword mining · any generation · any lint · the domain and the Search Co
 - **Entry gate (owner, account actions):** create the `arc-site` repository, protect its default
   branch, and authorize **Vercel** against it. Vercel is the root `CLAUDE.md` deploy target and it
   gives a preview URL per pull request natively — which is the one feature the review pack cannot do
-  without (REQ-03). The adapter still sits behind ADR-1004's interface, so the host is replaceable;
+  without (REQ-03). The adapter still sits behind ADR-1104's interface, so the host is replaceable;
   naming it here removes the guess, it does not weld it on. These are this phase's entry gate — the earlier claim that
   Phase 0 needs "zero owner keystrokes" was false, and the deploy host is needed **here**, not at
   Phase 1, because this phase's own exit proof runs against it.
@@ -124,12 +124,12 @@ Any keyword mining · any generation · any lint · the domain and the Search Co
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

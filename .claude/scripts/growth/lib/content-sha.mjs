@@ -1,4 +1,4 @@
-// content-sha.mjs — the one definition of `content.published.content_sha` (ADR-1001).
+// content-sha.mjs — the one definition of `content.published.content_sha` (ADR-1101).
 //
 // It is `sha256` over the RAW BYTES of the published `.mdx` file as it exists in the site repo's
 // merged tree. Three things it is deliberately NOT, each of which was a live option:
@@ -8,7 +8,7 @@
 //     it with a plain sha256 of the file would get a different answer and conclude the receipt
 //     was forged.
 //   - NOT the rendered HTML. That changes whenever the layout changes, so an untouched article
-//     would look edited to the unedited-approval counter (ADR-1007) and the L2 evidence count
+//     would look edited to the unedited-approval counter (ADR-1107) and the L2 evidence count
 //     would silently stop climbing for a reason nobody could see.
 //   - NOT normalized. Line endings are hashed as they are. A normalizing hash reports two
 //     genuinely different files as identical, and this value is what the idem is built on.

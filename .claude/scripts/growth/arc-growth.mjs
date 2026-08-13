@@ -6,9 +6,9 @@
 //
 // E2 (Tier E, unamendable): there is NO promote, publish, merge or deploy verb here, and its
 // absence is the enforcement -- a verb that does not exist cannot be invoked by a mistake, a
-// retry loop or a mutant. Publishing is the human's, through a PR merge (ADR-1002).
+// retry loop or a mutant. Publishing is the human's, through a PR merge (ADR-1102).
 //
-// `generate` exists in this phase ONLY to hold gate 1 (ADR-1012): it refuses an unapproved
+// `generate` exists in this phase ONLY to hold gate 1 (ADR-1112): it refuses an unapproved
 // cluster. The generation itself lands in Phase 03 behind the same door.
 
 import { readFileSync, writeFileSync } from "node:fs";

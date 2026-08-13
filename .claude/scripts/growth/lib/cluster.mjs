@@ -1,7 +1,7 @@
 // growth/cluster -- build the ONE cluster proposal, and refuse generation until a human approved
 // THAT EXACT PLAN.
 //
-// Phase-02 criteria 4 and 6. Criterion 6 is gate 1 of the two recurring human gates (ADR-1012) and
+// Phase-02 criteria 4 and 6. Criterion 6 is gate 1 of the two recurring human gates (ADR-1112) and
 // the spec requires it in CODE, not in a runbook, so `assertClusterApproved` is the only door.
 //
 // Growth adds NO event kind for this. The approval rides on `approval.requested` and the human

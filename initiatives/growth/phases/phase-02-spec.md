@@ -21,7 +21,7 @@ found unevidenced at kickoff.
 5. **A candidate whose `evidence_url` is missing or does not resolve cannot enter the proposal** —
    structurally, not by warning.
 6. **Generation invoked against an unapproved cluster is refused.** This is gate 1 of the two
-   recurring gates (ADR-1012) and it must be enforced in code, not in the runbook.
+   recurring gates (ADR-1112) and it must be enforced in code, not in the runbook.
 7. **One REAL mining run** produces a real cluster proposal for the arc site — not a fixture run.
 
 ## Verification plan
@@ -53,12 +53,12 @@ since some sources forbid automated access. One short list, once.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

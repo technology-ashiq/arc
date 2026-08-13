@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Phase 00 -- the preview-deploy interface (ADR-1004).
+# Phase 00 -- the preview-deploy interface (ADR-1104).
 #
 # The fake is held to a higher bar than "returns a URL". It must actually SERVE the directory
 # over HTTP, because the thing the review pack depends on is a human opening the link and seeing
@@ -8,7 +8,7 @@
 # while zero real driver code ran.
 #
 # The other half of this file is the absence test. There is no `promote` verb and there must never
-# be one: promotion to the live site is the human's merge (E2, ADR-1002). An absent capability is
+# be one: promotion to the live site is the human's merge (E2, ADR-1102). An absent capability is
 # a stronger guarantee than a code review.
 bats_require_minimum_version 1.5.0
 load 'test_helper'

@@ -109,7 +109,7 @@ function safeLeadsIdem(kind, payload) {
   try { return leadsIdem(kind, payload); } catch { return null; }
 }
 
-// And for `content.published` (ADR-1001). This branch exists because of the comment on the policy
+// And for `content.published` (ADR-1101). This branch exists because of the comment on the policy
 // branch below: that vocabulary shipped with validators, payload builders and tests, and NOTHING
 // could write one to the spine, because the derivation was missing HERE. Every policy receipt was
 // rejected and quarantined, and it was invisible for a cycle because every test drove the modules

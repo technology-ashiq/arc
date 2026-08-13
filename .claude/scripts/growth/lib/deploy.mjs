@@ -1,7 +1,7 @@
-// deploy.mjs — the preview-deploy interface (ADR-1004), its offline fake, and the Vercel adapter.
+// deploy.mjs — the preview-deploy interface (ADR-1104), its offline fake, and the Vercel adapter.
 //
 // THE INTERFACE HAS NO `promote` VERB, AND THAT IS THE DESIGN.
-// Promotion to the live site is the human's merge (ADR-1002, Constitution E2). A `promote` that
+// Promotion to the live site is the human's merge (ADR-1102, Constitution E2). A `promote` that
 // exists "for symmetry" is a function some later refactor will call, and the guard protecting the
 // most important rule in this lane would then be a code review rather than an absent capability.
 // The review pack needs exactly one thing from a host — a URL a human can open — so that is

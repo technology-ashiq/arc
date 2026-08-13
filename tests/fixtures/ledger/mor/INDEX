@@ -1,0 +1,26 @@
+# Merchant-of-record settlement-export corpus (Phase 00, ADR-1015). One line per fixture: <file> — <what it proves>
+#
+# THE HEADER BELOW IS PINNED FROM THESE FIXTURES, NOT FROM A LIVE PROVIDER EXPORT — assumptions-ledger
+# row 1 (provider exports obtainable) is FIRED until a real file is redacted and pinned. Required:
+# row_type, transaction_id, settlement_batch_id, gross, tax, fees, net, currency, settled_at, and the
+# FX trio fx_rate/fx_source/fx_rate_date — required IN THE HEADER on this rail because it settles in
+# USD, and required cell by cell on every non-INR row (ADR-1003). Every other column is DROPPED by
+# construction (ADR-1002); buyer_email and product_name are in the good fixture precisely so the drop
+# is proven rather than asserted, on the rail whose exports carry the most of it. The addresses use
+# the reserved .invalid TLD: no real person's address is committed here, and none ever will be.
+#
+# `settlement_batch_id` is the field only this format supplies, and every row carries it into
+# raw_ref. The contract test asserts on it so a swapped-in razorpay parser — which emits
+# raw_ref.settlement_id instead — or a stub returning the shared type cannot pass (retro 2026-08-03).
+#
+# 02-crlf-bom.csv IS ITS BYTES. `.gitattributes` needs `tests/fixtures/ledger/** -text` in the same
+# commit, or `* text=auto eol=lf` rewrites it on add and the fixture goes green while testing nothing
+# — the seventh occurrence of that class in this repo (see the .gitattributes history).
+
+01-good-multi-row.csv — the happy path: 3 USD sales plus the batch's own batch_total, columns in an order unlike Appendix C so resolution must be BY NAME, a quoted product name carrying a comma, a doubled-quote escape, FX (rate/source/date) on every row, a UTC +00:00 settlement instant, LF endings and a trailing newline. Sum of net = 13029 cents = the declared total.
+02-crlf-bom.csv — UTF-8 BOM + CRLF endings + NO trailing final newline, on otherwise valid data. Byte-level fixture: git must not normalize it.
+03-malformed-net-mismatch.csv — row 3 breaks net = gross - tax - fees by one cent. The throw names row 3; nothing is repaired and no partial list is returned.
+04-malformed-three-decimals.csv — row 2 states 49.005, finer than a cent. Refused rather than rounded: rounding money at parse time is the float defect class this lane exists to prevent (ADR-1012).
+05-malformed-missing-column.csv — the header omits `settlement_batch_id`, the one field this format exists to supply. Refused at header time, before a single row is read.
+06-malformed-total-mismatch.csv — two sale rows under a batch_total that totals three. The export disagrees with itself, which is exactly what a missed ingest looks like.
+07-malformed-missing-fx.csv — row 3 is USD with the FX cells empty. Refused: a foreign row without a rate can only be converted at render, and that is what breaks replay (ADR-1003).

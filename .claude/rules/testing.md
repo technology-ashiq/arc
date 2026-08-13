@@ -54,6 +54,25 @@ gh run list --branch "$(git branch --show-current)" --limit 1 --json databaseId,
 gh workflow run arc-ci --ref "$(git branch --show-current)"
 ```
 
+**If it happens twice on the same branch, stop dispatching and find the cause.** It is not
+intermittent — it is every push until the cause is fixed, and dispatching each time hides that
+behind a minute of waiting per cycle. The ledger lane paid that toll five times before checking.
+
+```bash
+gh pr view --json isDraft,mergeable --jq '.'
+```
+
+**`mergeable: CONFLICTING` is the usual answer, and it is the one worth knowing.** The
+`pull_request` trigger runs against `refs/pull/N/merge`, and git cannot build that ref while the
+branch conflicts with base — so GitHub creates no run at all and reports nothing. The signal looks
+identical to a slow queue. A conflict means another lane has landed on a file you also touched, so
+the fix is the merge you already owe (`.claude/rules/lanes.md`, shared organs), not a dispatch.
+
+`isDraft: true` blocks a run only where the workflow filters on `pull_request` types; this repo's
+`on: pull_request` has no `types:` filter, so a draft still fires. Check both, and believe the one
+that is actually true rather than the first plausible story — this note originally named the draft
+as the cause and was wrong.
+
 "Pushed" and "a run exists" are two separate facts, exactly as "merged" and "verified" are.
 
 ### Regenerating the sync-golden manifest
@@ -71,6 +90,30 @@ git diff -U0 tests/fixtures/sync-golden/tree-manifest.txt | grep "^+[^+]" | cut 
 
 Do it **last**, after every code edit. A manifest regenerated mid-change is stale by the next
 commit, and its staleness is invisible until CI.
+
+## When you change a shared binary, find its callers MECHANICALLY
+
+"Grep the pattern, not the file" is the rule, and it failed three times in one cycle (ledger,
+2026-08-13) because the pattern is easy to state and hard to remember at the moment of the fix.
+The misses were all the same shape: a change to `arc-pnl` or `arc-brief` behaviour, and a suite in
+a DIFFERENT phase that invokes the same binary and was never looked at. One of them cost 24 red
+tests; another cost three.
+
+So do not rely on remembering. Before pushing a change to any binary under `.claude/scripts/hq/`,
+list what calls it and open each one:
+
+```bash
+grep -ln 'arc-pnl\|arc-brief' tests/*.bats     # every suite that drives that binary
+git grep -l 'deriveKillPanel\|derivePnl'       # every module that imports the thing you changed
+```
+
+The list is short and reading it takes a minute. What it catches is the case the rule was written
+for and does not prevent: **your fix is correct, and a test one phase away pinned the behaviour you
+just corrected.** That test is not wrong to fail — it is the only thing that noticed.
+
+The same applies across LANES, and there it is sharper still: a test asserting the ABSENCE of a
+shared group (`needs-you` in the brief) passes only while your lane is the sole writer. Name the
+LINE that must be absent, never the group.
 
 ## The vacuous pass — a test that passes while executing nothing
 

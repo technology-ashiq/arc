@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
-# Phase 00 -- `content.published`, growth's one receipt (ADR-1001). Vocabulary 44 -> 45.
+# Phase 00 -- `content.published`, growth's one receipt (ADR-1101). Vocabulary 44 -> 45.
 #
-# The idem is the whole point of this file. A first draft of ADR-1001 took the preimage over
+# The idem is the whole point of this file. A first draft of ADR-1101 took the preimage over
 # site|slug|content_sha alone, which READS like a total preimage and is not: a metadata-only
 # correction (a wrong template_id fixed, body bytes untouched) hashes identically to the original
 # and is refused as DUP_IDEM. That is the C2 loss class -- roughly 100 receipts quarantined by a
@@ -186,9 +186,25 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
   [ "$output" = "owns-mine claims-none" ]
 }
 
-@test "the vocabulary is 45 kinds and the count is read from the array" {
+@test "growth contributes exactly its own kinds and the count is read from the array" {
+  # This used to pin the GLOBAL total at 45. That is not growth's claim, and pinning it made this
+  # suite a tripwire for every other lane: the ledger lane added `month.closed` the same week and
+  # took the total to 46, which would have failed growth's suite for a change growth had nothing to
+  # do with. Memory's suite carried the identical defect and was rewritten for the identical
+  # reason -- twice in one week is the pattern, not the coincidence.
+  #
+  # The claim is ADDITIVE: the vocabulary equals everything that is not growth's plus exactly
+  # growth's, with nothing duplicated. That survives any lane adding anything, and it still fails
+  # if growth's kind goes missing or gets registered twice.
   run _node "$PRE
-    console.log(KINDS.length + ' ' + (KINDS.includes('content.published') ? 'has-content' : 'MISSING'));"
+    const mine = new Set(CONTENT_KINDS);
+    const others = KINDS.filter((k) => !mine.has(k));
+    console.log([
+      KINDS.includes('content.published') ? 'has-content' : 'MISSING',
+      KINDS.length === others.length + CONTENT_KINDS.length ? 'additive' : 'OVERLAP',
+      KINDS.length === new Set(KINDS).size ? 'unique' : 'DUPES',
+      KINDS.length > 10 ? 'loaded' : 'EMPTY',
+    ].join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "45 has-content" ]
+  [ "$output" = "has-content additive unique loaded" ]
 }

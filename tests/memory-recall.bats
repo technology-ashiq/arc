@@ -615,13 +615,19 @@ _built_with_decision() {
   # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so this is checked
   # rather than assumed.
   #
-  # It used to check by pinning the GLOBAL total at 44 -- which is not the claim in this test's
-  # name. Any OTHER lane extending the vocabulary legitimately turned this red: growth's
-  # content.published (ADR-1001) took the total to 45 and failed memory's suite on all three OS
-  # legs for a change memory had nothing to do with. A shared file in tests/ belongs to no lane
-  # (.claude/rules/lanes.md), so the assertion has to survive every lane, and the way to do that
-  # is to assert the actual claim -- memory contributes NO kind of its own -- which no other
-  # lane can ever falsify. This is the stronger version, not merely the newer one.
+  # It used to check by pinning the GLOBAL total -- which is not the claim in this test's name. Any
+  # OTHER lane extending the vocabulary legitimately turned this red, and it happened twice inside
+  # one week: growth's `content.published` (ADR-1001) took it to 45, and the ledger lane's
+  # `month.closed` (ADR-1004) took it to 46. Each time the failure message read "memory added a
+  # kind" while memory had done nothing at all.
+  #
+  # The ledger lane wrote the right answer into its own bump before this rewrite existed: "if a
+  # third lane trips it, the sharper form of this assertion is that the set of kinds reachable from
+  # memory's own modules is empty, which stays true no matter who else adds one." That is what is
+  # implemented here. Both lanes reached the same conclusion independently; this is the merge taking
+  # the STRONGER version rather than the earlier one (.claude/rules/lanes.md).
+  #
+  # A shared file in tests/ belongs to no lane, so its assertions have to survive every lane.
   vurl="$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/hq/lib/validate.mjs")).href)')"
   [ -n "$vurl" ]
   # 'loaded' is the positive control: without it, 'owns-none' would also be satisfied by an empty

@@ -64,6 +64,23 @@ export const TARGETS = Object.freeze(["claude-code", "codex"]);
 // declined to use that spelling was invisible.
 export const TOP_LEVEL_KEYS = Object.freeze([
   "name", "version", "intent", "permissions", "inputs", "tools", "output", "evals", "baseline", "body",
+  // `job_stub` marks a SCHEDULED-JOB STUB rather than an engine process (scheduler ADR-0802).
+  // ADR-0504 closes the policy subject set to `process:NAME` where NAME is a real stem in
+  // processes/, so a scheduled job that must be authorized at all needs a file here -- and a
+  // file here that is not an engine process needs to say so, or every engine gate reads it as
+  // a broken process. See JOB_STUB_KEYS for the closed schema that replaces this one.
+  "job_stub",
+]);
+
+/**
+ * A job stub is its own document class, with its own CLOSED key set.
+ *
+ * It declares no engine contract, so `output`, `evals` and `baseline` are not merely optional
+ * here -- they are FORBIDDEN. Carrying one would be a claim to be compiled, run and byte-diffed
+ * against a live command, and the compiler deliberately never sees these files.
+ */
+export const JOB_STUB_KEYS = Object.freeze([
+  "name", "version", "intent", "permissions", "inputs", "tools", "job_stub", "body",
 ]);
 const INPUT_KEYS = Object.freeze(["name", "type", "required", "default", "description"]);
 // `migrated` is optional and marks THE FLIP (ADR-0202). Before it, `baseline` is a live
@@ -250,6 +267,36 @@ for (const file of files) {
           `nested per-target passthrough key \`${path}\` is forbidden (ADR-0205)`,
           "no per-target keys at any depth", path, "move the content into `body:`");
       }
+    }
+
+    // --- a job stub is a different document class, and its checks END HERE (ADR-0802) ---
+    //
+    // It exists only so a scheduled job has a policy SUBJECT: ADR-0504 closes that set to
+    // `process:NAME` where NAME is a real stem in this directory, so a job that must be
+    // authorized needs a file here. It declares no engine contract and the compiler never sees
+    // it, so continuing into the output/evals/baseline checks would demand an engine contract
+    // from a document whose whole point is not having one.
+    //
+    // Keyed on PRESENCE, not on `=== true`. The frozen subset parses `yes`, `on`, `True` and
+    // `"true"` as STRINGS, so an equality check would let any of those spellings fall through
+    // into the engine path -- which is the same bypass the arc-run guard closes on its side.
+    if (Object.prototype.hasOwnProperty.call(doc, "job_stub")) {
+      if (doc.job_stub !== true)
+        add("schema-shape", at(lineOf(text, "job_stub")),
+          "`job_stub` must be the boolean `true`", "job_stub: true",
+          JSON.stringify(doc.job_stub),
+          "job_stub: true   # yes/on/True/\"true\" all parse as strings in the frozen subset");
+      for (const k of Object.keys(doc))
+        if (!JOB_STUB_KEYS.includes(k))
+          add("unknown-key", at(lineOf(text, k)), `\`${k}\` is not a key of the job-stub schema`,
+            `one of: ${JOB_STUB_KEYS.join(", ")}`, k,
+            "a job stub declares no engine contract, so output/evals/baseline are forbidden here");
+      const stem = rel.replace(/\\/g, "/").split("/").pop().replace(/\.process\.yaml$/i, "");
+      if (doc.name !== stem)
+        add("schema-shape", at(lineOf(text, "name")),
+          `job stub \`name\` must equal its filename stem \`${stem}\``,
+          stem, JSON.stringify(doc.name), `name: ${stem}`);
+      continue;
     }
 
     // --- dialect placeholders ANYWHERE, not just in body ---

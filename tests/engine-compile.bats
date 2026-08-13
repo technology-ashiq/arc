@@ -57,8 +57,22 @@ _procs() {
   # 1 proven + 2 retired must equal the pilots on disk. Without this, a file that vanished from
   # the scan entirely would leave both numbers looking healthy -- the arithmetic is the check that
   # neither count is quietly dropping a file.
-  pilots="$(ls "$ARC_ROOT/processes"/*.process.yaml | wc -l)"
-  [ "$pilots" -eq 3 ] || { echo "expected 3 pilot process files, found $pilots"; false; }
+  # A JOB STUB IS NOT A PILOT (scheduler ADR-0802). processes/ stopped being "one document class"
+  # when scheduled jobs needed policy subjects: ADR-0504 closes that set to a real stem in this
+  # directory, so each job ships a stub here purely to exist as one. A stub declares no engine
+  # contract and arc-compile deliberately never sees it, so counting stubs here would demand that
+  # a file be byte-identical to a baseline it does not have and was never meant to have.
+  #
+  # Both halves are counted rather than only the pilots, so the arithmetic still catches the case
+  # this check exists for -- a file quietly dropping out of the scan -- and additionally catches a
+  # stub that silently lost its marker, which would otherwise just look like one more pilot.
+  local total=0 stubs=0
+  total="$(ls "$ARC_ROOT/processes"/*.process.yaml | wc -l)"
+  for _f in "$ARC_ROOT/processes"/*.process.yaml; do
+    if grep -q '^job_stub:' "$_f"; then stubs=$((stubs + 1)); fi
+  done
+  pilots=$((total - stubs))
+  [ "$pilots" -eq 3 ] || { echo "expected 3 pilot process files, found $pilots (total $total, job stubs $stubs)"; false; }
 }
 
 @test "REQ-02: a retirement must be DECLARED, not inferred from a mismatch" {

@@ -1,6 +1,6 @@
-// validate-content.mjs — `content.published`, growth's one receipt (ADR-1001).
+// validate-content.mjs — `content.published`, growth's one receipt (ADR-1101).
 //
-// A NEW module rather than an addition to validate.mjs, for the reason ADR-1001 gives: that file
+// A NEW module rather than an addition to validate.mjs, for the reason ADR-1101 gives: that file
 // is a company organ three other LIVE lanes are editing this week, and a new module collides on
 // exactly one line (the KINDS spread) instead of on a function body.
 //
@@ -150,5 +150,5 @@ export function assertContent(event) {
   // real receipt, and the real one would then be lost to DUP_IDEM.
   const expected = contentIdem(kind, p);
   if (event.idem !== expected)
-    throw new SpineError("BAD_CONTENT", `${kind}.idem must be the total preimage over its identity-bearing fields (ADR-1001) — ${IDEM_FIELDS.join(", ")}, and never pr_ref`);
+    throw new SpineError("BAD_CONTENT", `${kind}.idem must be the total preimage over its identity-bearing fields (ADR-1101) — ${IDEM_FIELDS.join(", ")}, and never pr_ref`);
 }

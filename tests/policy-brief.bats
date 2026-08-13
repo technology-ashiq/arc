@@ -34,6 +34,9 @@ H=0000000000000000000000000000000000000000000000000000000000000000
 U=01JQ8XZ9K0ABCDEFGH00000009
 
 setup() {
+  # Byte-exact brief output is the CONSUMER configuration: no ventures.yaml, so no kill panel
+  # and no unreceipted notice. See arc_leave_the_repo in test_helper.bash.
+  arc_leave_the_repo || return 1
   SPINE="$BATS_TEST_TMPDIR/spine"; mkdir -p "$SPINE"
   export ARC_SPINE_ROOT="$SPINE"
   export ARC_SPINE_NOW="1784736000000"          # 2026-07-22

@@ -31,7 +31,7 @@ where it competed directly against E2's safety-critical mutant guard. The Astro 
 
 **The A/B slot**
 8. Two title templates as versioned files; `sha256(slug) → arm`, **replay-identical** — the
-   mechanics are fixed by **ADR-1006**, including why a human may not cherry-pick an arm (it
+   mechanics are fixed by **ADR-1106**, including why a human may not cherry-pick an arm (it
    confounds the arms at the source) and why random assignment is refused (it does not replay).
 9. `template_id` present in every payload; a receipt missing it is rejected — **and a value outside
    the two enumerated template versions is rejected by the same closed-set check. The field is
@@ -41,7 +41,7 @@ where it competed directly against E2's safety-critical mutant guard. The Astro 
 
 **The template**
 11. GEO parts: Article + FAQPage JSON-LD, author entity, disclaimer footer, sitemap auto-update, and
-    `llms.txt` — the last a **hedge** ADR-1013 forbids from appearing in any exit criterion as a
+    `llms.txt` — the last a **hedge** ADR-1113 forbids from appearing in any exit criterion as a
     lever. Its criterion is "well-formed", never "improves anything". **The IndexNow ping is CUT.**
 
 ## Verification plan
@@ -62,7 +62,7 @@ contract suite pass while zero real driver code ran (arc-engine, 2026-08-03).
 Designing a beautiful review pack when a plain list is faster to read · a general A/B framework
 (evolve owns experiments; this is two files and a hash) · perfecting JSON-LD coverage beyond Article
 and FAQPage · debugging why IndexNow did not affect Google — it does not reach Google, by design
-(ADR-1013) · a brand exploration that becomes its own cycle.
+(ADR-1113) · a brand exploration that becomes its own cycle.
 
 ## Out of scope for this phase
 
@@ -75,12 +75,12 @@ None. The merge of each content PR is the owner's, permanently — that is E2, n
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

@@ -1,0 +1,3 @@
+settled_at,record_type,customer_email,payment_id,currency,fee,gross_amount,tax,net_amount,settlement_id,description,fx_rate,fx_source,fx_rate_date
+2026-09-14T10:04:11+05:30,payment,priya@example.invalid,pay_QX7fK2mNbT1aZ9,INR,20.00,1180.00,180.00,980.00,setl_9nQ2rT7bV1xK,The clean row,,,
+2026-09-14T10:04:12+05:30,payment,r.kumar@example.invalid,pay_7Hs3vN9pL2wR4d,INR,20.00,1180.00,180.00,980.01,setl_9nQ2rT7bV1xK,One paise that belongs to nobody,,,

@@ -9,7 +9,7 @@ Blown appetite = cut scope or kill, never extend silently.
 
 Serves **REQ-11**. It is placed second, not last, for one reason: **Search Console does not
 backfill.** Data accrues from the moment a property is added, so every day this phase stays open is
-a day subtracted from evolve's trigger, one for one and unrecoverable (ADR-1005).
+a day subtracted from evolve's trigger, one for one and unrecoverable (ADR-1105).
 
 ## Entry gate (owner)
 
@@ -33,9 +33,9 @@ recorded (Assumption A-07).
    published to a preview host, so its receipt carries a `site` that is no longer true; because
    `site` is in the idem preimage, the correction is a new receipt that names the old one.
 6. `sitemap.xml` reachable at the permanent host.
-7. `llms.txt` generated — shipped as a **hedge**, and ADR-1013 forbids it appearing in any exit
+7. `llms.txt` generated — shipped as a **hedge**, and ADR-1113 forbids it appearing in any exit
    criterion as a lever. This criterion asserts the file exists and is well-formed, nothing more.
-   **The IndexNow ping is CUT** (ADR-1013 amendment): it reaches no Google surface, and Google is the
+   **The IndexNow ping is CUT** (ADR-1113 amendment): it reaches no Google surface, and Google is the
    only engine this cycle measures.
 
 ## Verification plan
@@ -79,12 +79,12 @@ Any content work · the ingest itself (Phase 5) · brand assets (Phase 4).
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

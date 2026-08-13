@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# Phase 02 -- the cluster proposal and GATE 1 (REQ-01, ADR-1012). Generation against an
+# Phase 02 -- the cluster proposal and GATE 1 (REQ-01, ADR-1112). Generation against an
 # unapproved cluster is refused in CODE, which is what this file proves.
 #
 # The gate binds an approval to the exact PLAN BYTES, not just to the cluster id. Without that a

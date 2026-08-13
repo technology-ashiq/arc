@@ -13,7 +13,7 @@ its campaign is parked, and **zero `metric.observed` receipts exist on the spine
 1. The live ADR-0408 validator is diffed against `PLAN-evolve` REQ-00's frozen spec **by a script,
    not by reading** — payload keys, idem preimage, `-` absents, `source_id` grammar, window field
    types.
-2. Its **expected output is exactly ADR-1009's enumerated findings**: three deviations — ISO-week
+2. Its **expected output is exactly ADR-1109's enumerated findings**: three deviations — ISO-week
    strings vs `assertTs` timestamps · a one-week window's equal bounds vs `window_start <
    window_end` · the dotted surface `growth.title-template` vs `DIMENSION_RE` — plus the fourth
    trap, that absent optionals are a literal `-` **in the idem preimage only** and a payload writing
@@ -54,7 +54,7 @@ refused · re-ingest is idempotent · a deliberately failed emission leaves the 
 **never zero** · a correction supersedes and the original bytes are unchanged · a URL-shaped
 `source_id` is rejected and the `h-` form accepted against the **live** validator · the join picks
 the supersede-chain head rather than the stale preview receipt · and the spec-diff returns exactly
-ADR-1009's enumerated findings.
+ADR-1109's enumerated findings.
 
 **The vacuous-pass guard for this phase:** the MISSING-never-zero fixture must be shown to fail when
 the completeness check is disabled. A window state that is only ever printed and never compared
@@ -62,7 +62,7 @@ against is the memory lane's `TIE_BREAK` finding wearing different clothes.
 
 ## Rabbit holes in this phase
 
-Building the Search Console API fetcher because the CSV ritual is manual — ADR-1008 sets that trigger
+Building the Search Console API fetcher because the CSV ritual is manual — ADR-1108 sets that trigger
 at ~800 URLs, not at irritation · any `experiment.*` emission · any verdict math · backfilling
 windows from before the property existed (it cannot be done) · perfecting the metric taxonomy when
 clicks and impressions are enough · editing `validate-leads.mjs` to make the plans' payload examples
@@ -80,12 +80,12 @@ runbook line matters as much as the code here.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

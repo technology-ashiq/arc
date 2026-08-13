@@ -16,12 +16,12 @@ days.
    not a batch rubber-stamp.
 2. The weekly ingest ritual runs at least once against a real Search Console export.
 3. The unedited-approval counter accumulates and is recorded at its **honest value**. It reaches at
-   most 10 of the 20 ADR-1007 requires, so **this cycle cannot earn an L2 promotion by
+   most 10 of the 20 ADR-1107 requires, so **this cycle cannot earn an L2 promotion by
    construction** — that limit is written into `PROGRESS.md`, not left to be inferred.
 4. **Production counts are read from the spine by the closing session itself** — the number of real
    `content.published` and `metric.observed` receipts, located in `events/` and confirmed absent
    from `events/_quarantine/`. Never inferred from CI, fixture counts, or what the plan intended.
-5. **Count honesty (ADR-1011):** if the quality gates forced rework past appetite, the cycle closes
+5. **Count honesty (ADR-1111):** if the quality gates forced rework past appetite, the cycle closes
    **cluster-complete** — pillar plus ≥5 spokes — and records the honest number with its reason
    beside it, so it reads as a decision rather than a shortfall.
 6. ≥1 COMPLETE metric window, **or** the MISSING states shown loudly with the reason. A window that
@@ -61,12 +61,12 @@ Nothing here compresses them.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

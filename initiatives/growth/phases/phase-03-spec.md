@@ -6,16 +6,16 @@ they cannot catch.
 **Depends on:** phase-02
 
 Serves **REQ-02**. Also closes pre-kickoff gate row 5 (exemplars), unevidenced at kickoff and
-resolved by ADR-1014.
+resolved by ADR-1114.
 
 ## Exit criteria (Definition of Done)
 
 1. **Exemplars exist:** 2–3 machine-drafted candidates, presented as ONE inbox item, owner-approved,
    versioned at `initiatives/growth/exemplars/`. This is a **one-time setup approval, not a third
-   gate** (ADR-1012).
+   gate** (ADR-1112).
 2. `seo-article-writer` **upgraded, and its prescriptive body removed** — the v0 skill's entire
    content is structure prescription ("the same deterministic structure every time", "5–8 H2s"),
-   which ADR-1010 forbids. The name and interface survive; the rules do not.
+   which ADR-1110 forbids. The name and interface survive; the rules do not.
 3. Prompt assembly takes the **approved exemplar files as its only style input**. No style rules in
    the prompt beyond them.
 4. MDX output with frontmatter `{title, meta, slug, cluster_id, template_id, citations[]}`, and an
@@ -56,17 +56,17 @@ Publishing, PRs, review packs (Phase 4) · A/B assignment · metrics.
 ## Your-setup / pending
 
 One inbox decision on the exemplar candidates. If all three are rejected, the fallback is the owner
-supplying real writing (ADR-1014) — his call at that point, with three concrete drafts to react to
+supplying real writing (ADR-1114) — his call at that point, with three concrete drafts to react to
 rather than a blank page.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1002).
-- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1011).
+- **E2 · Human Sovereignty (Tier E, unamendable):** the machine writes branches and drafts; a human merges every publish, every asset swap, every template change. E2 names *"publishing under Ashiq's name"* itself. Enforced in the command by a module-graph parse plus a running mutant — never by convention (ADR-1102).
+- **E3 · The Truth Law:** no fabricated numbers, benchmarks, case studies or testimonials; a source link on every claim-of-fact; arc's own results cited only where a receipt exists; simulated always labelled simulated (ADR-1111).
 - **A9 · Appetite over estimate:** 10 days is a cap. Blown means cut or kill.
-- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1004).
+- **A2 · Boring tech before clever tech** — the site choice names the boring alternative it beat (ADR-1104).
 - **A5 · One source of truth** — metrics live on the spine as receipts; no metrics database.
-- Exactly **two recurring human gates** (ADR-1012). Lints are **negative-only** (ADR-1010).
+- Exactly **two recurring human gates** (ADR-1112). Lints are **negative-only** (ADR-1110).
 - Total-preimage idems everywhere · **MISSING ≠ zero** · corrections `supersedes`, never overwrite · no raw URLs or PII on the spine · reader-only spine access · every emit verified in both `events/` and `events/_quarantine/`.
 - Official APIs only · **no cold email anywhere in this module** (that is leads', with its own caps and PII law) · no paid ads.
 - **Fixture-proven ≠ live-validated** — the tracker records which one each REQ closed as.

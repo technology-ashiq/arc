@@ -35,6 +35,11 @@ output:
             minLength: 1
 evals:
   - tests/fixtures/engine/evals/commit-msg-draft/basic.json
+  - tests/fixtures/engine/evals/commit-msg-draft/single-file-fix.json
+  - tests/fixtures/engine/evals/commit-msg-draft/new-feature-file.json
+  - tests/fixtures/engine/evals/commit-msg-draft/docs-only.json
+  - tests/fixtures/engine/evals/commit-msg-draft/multi-file-refactor.json
+  - tests/fixtures/engine/evals/commit-msg-draft/delete-and-add.json
 baseline:
   target: claude-code
   path: .claude/commands/arc-commit.md

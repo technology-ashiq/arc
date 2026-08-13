@@ -1,0 +1,8 @@
+P&L — all time
+no real revenue yet
+
+kill lines (as of 2026-08-13)  criteria 095766c66154f307c0ec419e6212c0a2e62f2c0fb467a996e64a7cfb2ec3443a
+  lexos
+    days_without_revenue  —  not evaluated: this venture has no revenue event on the spine, and ledger does not know its start date -- the days-without-revenue clock has no zero to count from
+    traffic_floor_monthly  —  not evaluated: ledger has no traffic data source in this lane -- ledger knows money, and nothing on the spine counts visits
+  2 criteria could not be evaluated

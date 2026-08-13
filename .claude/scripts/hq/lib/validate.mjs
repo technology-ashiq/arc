@@ -10,6 +10,11 @@ import { LEADS_KINDS, assertLeads, isLeadsKind } from "./validate-leads.mjs";
 import { CONTENT_KINDS, assertContent, isContentKind } from "./validate-content.mjs";
 import { POLICY_KINDS, assertPolicy, isPolicyKind, isPromotionRequest, assertPromotionRequest } from "./validate-policy.mjs";
 import { isAbJudgement, assertAbJudgement, isNearMissAbJudgement, assertNotNearMiss, isAdoptionProposal, assertAdoptionProposal } from "./validate-absorb.mjs";
+import {
+  isLedgerRevenueKind, assertLedgerRevenue,
+  isCriteriaChange, assertCriteriaChange, isNearMissCriteriaChange, assertNotNearMissCriteria,
+  assertMonthClosed, assertCostIncurred,
+} from "./validate-ledger.mjs";
 
 // How far ahead of the spine's own clock a ts may sit. Without a ceiling, one bad clock or
 // one hostile payload creates 9999-12-31.jsonl -- a day file that can never be closed and
@@ -51,11 +56,30 @@ export const KINDS = Object.freeze([
   // law would itself quarantine as UNKNOWN_KIND. It is a company organ (ADR-0053), so its shape
   // lives here inline beside decision.recorded and the council pair, not in a lane module.
   "constitution.adopted",
-  // 44 -> 45 by ADR-1001 (growth). The one receipt that makes "every publish is on the spine"
-  // true; before it, an emit quarantined as UNKNOWN_KIND while the command still exited 0, which
-  // is the 2026-08-02 retro entry verbatim. Its validator lives in its own module rather than
-  // here because this file is a company organ three live lanes are editing this week.
+  // 44 -> 46, and BOTH sides of this conflict claimed "44 -> 45". Two lanes added one kind each in
+  // the same week, which is the shared-organ collision `.claude/rules/lanes.md` predicts for exactly
+  // this file. Neither is dropped, and the count is RE-DERIVED from the merged array rather than
+  // taken from either branch's arithmetic -- a measured value has to be re-measured on the merged
+  // tree, because the merge invalidates both branches' answers.
+  //
+  // `content.published` (growth, ADR-1101): the receipt that makes "every publish is on the spine"
+  // true. Before it, an emit quarantined as UNKNOWN_KIND while the command still exited 0, which is
+  // the 2026-08-02 retro entry verbatim. Its validator lives in its own module rather than here
+  // because this file is a company organ several live lanes are editing this week -- which is also
+  // why this conflict exists at all.
+  //
+  // `month.closed` (ledger, ADR-1004 / LED-E): a month closing is a distinct, terminal, human-run
+  // fact, not a derivation. Everything else in that lane is computed at render and stored nowhere
+  // (ADR-1000); a close is the one thing that must survive as a receipt, because "this month was
+  // reconciled against the provider and frozen" cannot be re-derived from the payments themselves.
+  //
+  // ADDING A KIND HERE OBLIGES A `GROUPS` ROW IN arc-brief.mjs IN THE SAME COMMIT.
+  // `tests/policy-brief.bats` derives its coverage list from THIS array and asserts
+  // `all-<KINDS.length>-grouped`, so a kind with no section fails that suite shut rather than
+  // rendering into a catch-all nobody reads. Both new kinds carry their row; verified on the
+  // merged tree, not assumed from either side.
   ...CONTENT_KINDS,
+  "month.closed",
 ]);
 const KIND_SET = new Set(KINDS);
 
@@ -345,10 +369,27 @@ export function validateEvent(event) {
   if (typeof event.kind !== "string" || !KIND_SET.has(event.kind))
     // The count is derived, never typed: a hand-written "18" went stale the moment ADR-0106
     // extended the set, and a gate that misreports its own size teaches the wrong rule.
-    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400/0508/1001)`);
+    throw new SpineError("UNKNOWN_KIND", `kind ${JSON.stringify(event.kind)} is outside the closed ${KINDS.length} (ADR-0026, extended by ADR-0073/0106/0107/0309/0310/0400/0508/1101)`);
   if (!isPlainObject(event.payload))
     throw new SpineError("BAD_PAYLOAD", "payload must be an object (use {} for none)");
   if (REVENUE_KINDS.has(event.kind)) assertMoney(event.payload);
+  // ADR-1002 / LED-C. Deliberately AFTER assertMoney, which already establishes that `amount` is a
+  // positive integer in minor units -- so this runs on a payload whose core money field is known
+  // good and adds the closed schema, the namespaced-id grammar and the cross-field invariant.
+  // There is no ledger ingest CLI: this placement is what makes the PII contract unskippable,
+  // because every path onto the spine goes through validateEvent.
+  if (isLedgerRevenueKind(event.kind)) assertLedgerRevenue(event);
+  // The third instance of the approval PROFILE pattern (ADR-1017 / LED-R), after policy.promotion
+  // and absorb.ab-judgement: ledger's criteria receipt rides an approval.requested declaring
+  // subject "ledger.criteria", so the closed vocabulary gains ZERO kinds and Phase 02 keeps the
+  // one slot it has already committed to month.closed.
+  if (isCriteriaChange(event)) assertCriteriaChange(event);
+  if (isNearMissCriteriaChange(event)) assertNotNearMissCriteria(event);
+  if (event.kind === "month.closed") assertMonthClosed(event);
+  // Money is money wherever it lands. Nothing claimed cost.incurred until now, so a STRING amount
+  // reached the spine unquarantined -- a direct breach of ADR-1012 in the kind that carries the
+  // whole cost side of the P&L.
+  if (event.kind === "cost.incurred") assertCostIncurred(event);
   if (event.kind === "decision.recorded") assertDecision(event);
   if (event.kind === "constitution.adopted") assertConstitution(event);
   if (isExperimentKind(event.kind)) assertExperiment(event);
