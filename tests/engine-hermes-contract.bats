@@ -15,7 +15,7 @@ bats_require_minimum_version 1.5.0
 load 'test_helper'
 
 DRIVER() { echo "$ARC_ROOT/.claude/scripts/engine/drivers/hermes.sh"; }
-FAKE()   { echo "$ARC_ROOT/tests/fixtures/engine/hermes/fake-docker.sh"; }
+FAKE()   { echo "$ARC_ROOT/tests/fixtures/engine/hermes/fake-docker.mjs"; }
 PROBE()  { echo "$ARC_ROOT/tests/engine-hermes-probe.mjs"; }
 
 # A real digest-pinned reference. The digest is the one Phase 04 actually pulled and verified,

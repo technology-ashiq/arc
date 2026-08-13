@@ -62,6 +62,24 @@ import { EXIT, pinnedModel, runDriver, settle } from "./common.mjs";
 import { taggedSha256 } from "./type-tagged-hash.mjs";
 
 const DOCKER = process.env.ARC_HERMES_DOCKER || "docker";
+
+/**
+ * How to actually invoke the configured docker command.
+ *
+ * A `.mjs` or `.js` value is run with THIS node rather than executed directly, and that is not a
+ * courtesy — it is the only form of stand-in that works on all three CI legs. A shell script
+ * cannot be it: a fixture committed at mode 100644 fails with EACCES on ubuntu and macOS, and
+ * Node cannot execute a shebang script on windows at ALL, so the first version of the contract
+ * suite went red on every leg simultaneously. JavaScript is the one interpreter this matrix is
+ * guaranteed to have.
+ *
+ * Production is unaffected: `docker` has no such suffix and is spawned exactly as before.
+ */
+function dockerArgv(args) {
+  return /\.(mjs|cjs|js)$/i.test(DOCKER)
+    ? { cmd: process.execPath, argv: [DOCKER, ...args] }
+    : { cmd: DOCKER, argv: args };
+}
 const IMAGE = process.env.ARC_HERMES_IMAGE || "";
 const DATA_DIR = process.env.ARC_HERMES_DATA || "";
 const CONFIG_FILE = process.env.ARC_HERMES_CONFIG || "";
@@ -201,7 +219,8 @@ function msUntilDeadline() {
 
 function removeContainer(name) {
   try {
-    spawnSync(DOCKER, ["rm", "-f", name], { encoding: "utf8", timeout: 10_000 });
+    const { cmd, argv } = dockerArgv(["rm", "-f", name]);
+    spawnSync(cmd, argv, { encoding: "utf8", timeout: 10_000 });
   } catch {
     // Best effort by design: the run is already over and a failed cleanup must not replace the
     // outcome the caller needs to see. It is reported on stderr, which is never parsed.
@@ -250,7 +269,8 @@ await runDriver("hermes", async ({ processName, input }) => {
     timeoutMs = Math.max(1, Math.floor(remaining - TEARDOWN_GRACE_MS));
   }
 
-  const res = spawnSync(DOCKER, args, {
+  const { cmd, argv } = dockerArgv(args);
+  const res = spawnSync(cmd, argv, {
     encoding: "utf8",
     timeout: timeoutMs,
     maxBuffer: MAX_BUFFER,
