@@ -199,12 +199,54 @@ switch (cmd) {
    */
   case "mutate": {
     const [root, kind] = rest;
-    const tmplDir = join(root, "products", "legal", "templates", "v1");
+    const setsRoot = join(root, "products", "legal", "templates");
     const dataDir = join(root, "products", "legal", "data");
     const patch = (p, from, to) => {
       const s = readFileSync(p, "utf8");
       if (!s.includes(from)) die(`mutation anchor not found in ${p}: ${from.slice(0, 60)}`);
       writeFileSync(p, s.split(from).join(to), "utf8");
+    };
+
+    /**
+     * Patch a template in EVERY set, not just v1.
+     *
+     * These mutations were written when v1 was the only set, so the template directory was
+     * hardcoded to it. The moment ventures could pin different sets, a mutation aimed at v1 did
+     * nothing at all to a venture on v2 -- and the tests asserting the lint went RED went GREEN,
+     * because the tree they were testing had never been made bad. That is the vacuous pass with
+     * an extra step, and CI caught it on exactly the two branch-mismatch tests whose fixture had
+     * moved to v2.
+     *
+     * A mutation's intent is "make the template bad". Which set the venture under test happens to
+     * pin is not the mutation's business, so it writes to every set carrying the anchor -- and
+     * dies if NO set does, because a mutation that changed nothing is not a control.
+     */
+    const patchTemplate = (name, from, to) => {
+      const sets = readdirSync(setsRoot).sort();
+      if (!sets.length) die(`no template sets under ${setsRoot}`);
+      let hits = 0;
+      for (const set of sets) {
+        const p = join(setsRoot, set, name);
+        let s;
+        try { s = readFileSync(p, "utf8"); } catch { continue; }
+        if (!s.includes(from)) continue;
+        writeFileSync(p, s.split(from).join(to), "utf8");
+        hits++;
+      }
+      if (!hits) die(`mutation anchor not found in ${name} in ANY template set (${sets.join(", ")}): ${from.slice(0, 60)}`);
+    };
+
+    /** Overwrite a template in EVERY set, for mutations that replace rather than patch. */
+    const writeTemplateAllSets = (name, text) => {
+      const sets = readdirSync(setsRoot).sort();
+      let hits = 0;
+      for (const set of sets) {
+        const p = join(setsRoot, set, name);
+        try { readFileSync(p, "utf8"); } catch { continue; }
+        writeFileSync(p, text, "utf8");
+        hits++;
+      }
+      if (!hits) die(`${name} exists in no template set under ${setsRoot}`);
     };
 
     switch (kind) {
@@ -218,7 +260,7 @@ switch (cmd) {
         break;
       case "empty-page":
         // Render the privacy page to nothing at all: every clause body blanked.
-        writeFileSync(join(tmplDir, "privacy.tmpl.md"), "\n", "utf8");
+        writeTemplateAllSets("privacy.tmpl.md", "\n");
         break;
       case "denylist-bypass":
         // Blank the denylist. If the value lint still reports a claim, it is not reading this
@@ -227,19 +269,19 @@ switch (cmd) {
         break;
       case "claim-in-template":
         // Put a compliance badge into authored prose, where no facts-side check can see it.
-        patch(join(tmplDir, "terms.tmpl.md"), "## Who you are agreeing with", "## Who you are agreeing with\n\nOur service is ISO 27001 certified.");
+        patchTemplate("terms.tmpl.md", "## Who you are agreeing with", "## Who you are agreeing with\n\nOur service is ISO 27001 certified.");
         break;
       case "branch-leak":
         // Drop the guard from a payment clause so it renders under every branch.
-        patch(join(tmplDir, "refund-cancellation.tmpl.md"), "{{#clause id=REFUND.WINDOW when=payment_model=gateway}}", "{{#clause id=REFUND.WINDOW}}");
+        patchTemplate("refund-cancellation.tmpl.md", "{{#clause id=REFUND.WINDOW when=payment_model=gateway}}", "{{#clause id=REFUND.WINDOW}}");
         break;
       case "drop-required-clause":
         // Remove a mandatory clause from the template but leave it in the required list.
-        patch(join(tmplDir, "privacy.tmpl.md"), "{{#clause id=PRIVACY.GRIEVANCE}}", "{{#clause id=PRIVACY.GRIEVANCE when=venture=no-such-venture}}");
+        patchTemplate("privacy.tmpl.md", "{{#clause id=PRIVACY.GRIEVANCE}}", "{{#clause id=PRIVACY.GRIEVANCE when=venture=no-such-venture}}");
         break;
       case "map-drift":
         // Guard a clause on a branch the clause-map does not list it under.
-        patch(join(tmplDir, "refund-cancellation.tmpl.md"), "{{#clause id=REFUND.WINDOW when=payment_model=gateway}}", "{{#clause id=REFUND.WINDOW when=payment_model=mor}}");
+        patchTemplate("refund-cancellation.tmpl.md", "{{#clause id=REFUND.WINDOW when=payment_model=gateway}}", "{{#clause id=REFUND.WINDOW when=payment_model=mor}}");
         break;
       case "strip-window-source":
         // Take the evidence link off a grievance-window row.
@@ -305,7 +347,7 @@ switch (cmd) {
         // green -- the page is well-formed, every clause traces, nothing mandatory is missing,
         // and the scenario asking "what are the plans and what do they cost" is still answered.
         // Only a cross-page check can see it, which is the whole argument for ADR-1013.
-        patch(join(tmplDir, "pricing.tmpl.md"),
+        patchTemplate("pricing.tmpl.md",
           "**If we raise the price of a plan you are on, we tell you at least {{ facts.commitments.price_notice_days }} days before your next renewal, and you may cancel at the old price until then.** The new price applies from that renewal.",
           "If we change what a plan costs, we tell you before your next payment, and the change applies from the payment after that.");
         break;
@@ -318,7 +360,7 @@ switch (cmd) {
         // nothing about the ORPHANED one -- a control that fires for the wrong reason is not a
         // control for the thing it was written for. PRIVACY.LANGUAGE carries no `when=`, so it is
         // absent from clause-map.json by design and there is nothing to rename there.
-        patch(join(tmplDir, "privacy.tmpl.md"), "{{#clause id=PRIVACY.LANGUAGE}}", "{{#clause id=PRIVACY.LANGUAGE_RENAMED}}");
+        patchTemplate("privacy.tmpl.md", "{{#clause id=PRIVACY.LANGUAGE}}", "{{#clause id=PRIVACY.LANGUAGE_RENAMED}}");
         patch(join(dataDir, "required-clauses.json"), '"PRIVACY.LANGUAGE"', '"PRIVACY.LANGUAGE_RENAMED"');
         break;
       case "scenario-guard-typo":
