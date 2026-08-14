@@ -39,12 +39,12 @@ import { contentShaOfBytes } from "./lib/content-sha.mjs";
 let ARGS = { values: new Map(), bare: new Set(), positional: [] };
 
 const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan",
-  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts"];
+  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts", "week", "range-start", "range-end"];
 const BARE_FLAGS = ["offline", "accept-unknown"];
 
 // How many BARE arguments each verb takes. Declared per verb rather than globally, so `lint` still
 // refuses a shell-expanded glob while `publish <slug>` keeps the argument ADR-1102 gives it.
-const POSITIONALS = Object.freeze({ publish: 1 });
+const POSITIONALS = Object.freeze({ publish: 1, ingest: 1 });
 
 // ---------------------------------------------------------------------------------------------
 // ONE PARSE, and everything reads from it.
@@ -498,7 +498,83 @@ async function cmdPublish() {
   }
 }
 
-export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint, publish: cmdPublish };
+/** `spec-verify` -- REQ-05(a). The ADR-0408 diff, as a gate rather than a claim. */
+async function cmdSpecVerify() {
+  const SV = await import("./lib/spec-verify.mjs");
+  const validator = await import("../hq/lib/validate-leads.mjs");
+  let result;
+  try { result = SV.runSpecVerify(validator); }
+  catch (e) { die(e.code || "SPEC_VERIFY_FAILED", e.message); }
+  const v = SV.verdict(result);
+  process.stdout.write(SV.renderSpecVerify(result, v) + "\n");
+  if (!v.pass) {
+    process.stderr.write(`arc-growth: SPEC_DRIFT -- ${v.reason}\n`);
+    process.exit(6);
+  }
+}
+
+/**
+ * `ingest <csv> --week ISO-WEEK` -- REQ-05(b).
+ *
+ * READER-ONLY, like every other verb here. It derives the receipts and prints the exact emit
+ * commands; `arc-event` is the one writer to the spine (A5). Emitting from this surface would give
+ * the lane a second writer, which is the thing the constitution's one-source-of-truth article
+ * exists to prevent.
+ */
+async function cmdIngest() {
+  const csvPath = ARGS.positional[0];
+  const week = flag("week");
+  if (!csvPath || !week) die("BAD_ARGS", "ingest needs a CSV path and --week ISO-WEEK, e.g. arc-growth ingest export.csv --week 2026-W36");
+  const I = await import("./lib/ingest.mjs");
+
+  let days, bounds, parsed;
+  try {
+    days = I.isoWeekDays(week);
+    // The range-match guard needs the export's OWN declared range. It is a separate flag rather
+    // than something sniffed out of the file, because a range this command guessed is a range it
+    // cannot then verify -- and verifying a value against itself is not a check.
+    const rangeStart = flag("range-start");
+    const rangeEnd = flag("range-end");
+    I.assertRangeMatch(rangeStart && rangeEnd ? { start: rangeStart, end: rangeEnd } : null, days);
+    I.assertLagFloor(days, Date.now());
+    bounds = I.istBoundsForPacificDays(days);
+    parsed = I.parseGscCsv(readOrDie(csvPath, "the export"));
+  } catch (e) {
+    die(e.code || "INGEST_FAILED", e.message);
+  }
+
+  const receiptsPath = flag("receipts");
+  const receipts = receiptsPath ? parseJsonOrDie(readOrDie(receiptsPath, "the content.published receipts"), "the receipts file") : [];
+  if (!Array.isArray(receipts)) die("BAD_RECEIPTS", "--receipts must be a JSON array of content.published payloads");
+  const { joined, unjoined } = I.resolveSlugUrl(parsed.rows, receipts);
+
+  process.stdout.write(
+    `week ${week} = ${days[0]}..${days[6]} (Pacific)\n` +
+    `window ${bounds.window_start} .. ${bounds.window_end} (IST, half-open, derived from the verified PT days)\n` +
+    `${parsed.rows.length} row(s); ${joined.length} joined to a content.published head; ${unjoined.length} unjoined\n`,
+  );
+  // An unjoined row is REPORTED, never silently dropped: dropping it is how a feed quietly
+  // under-reports, and a URL with no receipt is information rather than noise.
+  for (const r of unjoined) process.stderr.write(`arc-growth: UNJOINED ${r.url} -- no content.published receipt heads this URL\n`);
+  // NO SITE TOTAL IS PRINTED. Search Console anonymizes low-volume rows, so a per-row sum
+  // under-reports, and a total that is quietly too low is the plausible-wrong-number this whole
+  // path is built against.
+  for (const r of joined) {
+    const payload = {
+      module: "growth", surface: "title-template", metric: "clicks",
+      value: r.clicks, unit_count: r.clicks,
+      window_start: bounds.window_start, window_end: bounds.window_end,
+      source_id: I.sourceIdFor(week),
+    };
+    process.stdout.write(`\n# ${r.slug}\n  arc-event.sh emit metric.observed --payload ${JSON.stringify(JSON.stringify(payload))}\n`);
+  }
+  process.stdout.write(
+    `\nThe window is MISSING until every receipt above is confirmed present in events/ and absent\n` +
+    `from events/_quarantine/. A partial window is MISSING, never zero.\n`,
+  );
+}
+
+export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint, publish: cmdPublish, ingest: cmdIngest, "spec-verify": cmdSpecVerify };
 
 export async function main(argvIn = process.argv.slice(2)) {
   const v = argvIn[0];

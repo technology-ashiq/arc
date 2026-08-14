@@ -48,13 +48,31 @@ its campaign is parked, and **zero `metric.observed` receipts exist on the spine
 
 ## Verification plan
 
-Coarse at kickoff, refined via `/arc-change` when the phase starts, and it **mirrors PLAN-evolve's
-own fixture manifest**: a range-mismatched export is refused naming both ranges · a pre-lag week is
-refused · re-ingest is idempotent · a deliberately failed emission leaves the window MISSING and
-**never zero** · a correction supersedes and the original bytes are unchanged · a URL-shaped
-`source_id` is rejected and the `h-` form accepted against the **live** validator · the join picks
-the supersede-chain head rather than the stale preview receipt · and the spec-diff returns exactly
-ADR-1109's enumerated findings.
+**Refined 2026-08-14** from the coarse kickoff one-liner. Suite: `tests/growth-feed.bats`.
+
+| # | What is proven | Expected |
+|---|---|---|
+| V1 | Green **on CI**, per-JOB, at the branch HEAD | every job `success`, three OS legs |
+| V2 | The spec-diff returns **exactly** ADR-1109's findings, against the LIVE validator | `D1,D2,D3,D4` — and it PROBES BEHAVIOUR, never scrapes source text, so a reformat of the other lane's file cannot fake a deviation |
+| V3 | The gate blocks in BOTH directions | a permissive stub makes all four vanish → BLOCKED. A missing finding means the shared organ moved and growth's conformance decision must be re-read |
+| V4 | The spec-verify's own control | a validator that refuses the conforming payload makes the gate refuse to REPORT AT ALL, rather than emit four findings that each mean nothing. It fired on its author (a missing `unit_count`) |
+| V5 | Windows are the verified PT days converted to IST | `2026-W36` → `2026-08-31T12:30:00+05:30 .. 2026-09-07T12:30:00+05:30`. NOT `00:00+05:30`, which is what an independently-defined Monday-IST boundary produces ~12.5h away |
+| V6 | The offset comes from a real IANA zone, not a hardcoded ±7/8 | the DST week `2026-W44` spans **169 h** and its end bound shifts to `13:30+05:30` |
+| V7 | The derived window is accepted by the **live** validator | asserting the string shape alone would be asserting this suite agrees with itself |
+| V8 | Range mismatch REFUSED, **naming both ranges** | `RANGE_MISMATCH`; a missing export range is `NO_EXPORT_RANGE`, never an assumption |
+| V9 | Pre-lag week refused | `TOO_EARLY`; the clock is injected, because an implicit one cannot be tested |
+| V10 | Headers parsed by CONTENT, unknown set refused | `UNRECOGNISED_HEADERS` — never a positional guess |
+| V11 | The join takes the **supersedes-chain head** | the live URL joins; the superseded preview URL does NOT, and is reported unjoined rather than dropped |
+| V12 | **MISSING is never zero** | partial, failed and nothing-attempted all render MISSING; only fully-confirmed renders COMPLETE |
+| V13 | No site total is ever printed | anonymised rows make a per-row sum under-report |
+| V14 | The brief line is re-derived every read and reports the empty case | with no receipts it says *the clock has not started*, never `0` |
+| V15 | The shared organ is unchanged when growth passes nothing | `arc-brief`'s baseline output is byte-identical, because ten suites from four other lanes assert on that renderer |
+
+**What this phase CANNOT prove, stated rather than smoothed.** Every row above is
+**fixture-proven, not live-validated**. There is no Search Console property, so no real CSV exists
+to ingest and no real `metric.observed` receipt can be emitted. The tracker records which one each
+REQ closed as, and this one closes as fixture-proven. The clock starts when the owner adds the
+property (Phase 01, parked — ADR-1115).
 
 **The vacuous-pass guard for this phase:** the MISSING-never-zero fixture must be shown to fail when
 the completeness check is disabled. A window state that is only ever printed and never compared

@@ -187,7 +187,7 @@ function parseArgs(argv) {
  * All three arrive PRE-COMPUTED so this file does no deriving of its own.
  */
 export function render(day, events, torn,
-  { full = false, jobLines = [], killCrossings = [], killNotice = null, spendLine = null } = {}) {
+  { full = false, jobLines = [], killCrossings = [], killNotice = null, spendLine = null, feedLines = [] } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -275,6 +275,12 @@ export function render(day, events, torn,
       // is non-empty by construction; the gl.length guard makes that explicit rather than assumed.
       if (g === "money" && spendLine && gl.length) out.push(spendLine);
     }
+    // THE GROWTH FEED LINES (growth REQ-05(c)). Unconditional and OUTSIDE the group buckets, on
+    // purpose: this is the only visible readout of a clock that runs whether or not anyone is
+    // watching, and a line that appears only when there are receipts cannot report the case that
+    // matters most -- that there are none. A stale feed already cost arc five silent days, so the
+    // caller re-derives these from the spine on every read and nothing here caches them.
+    if (feedLines.length) out.push("", ...feedLines);
     // A damaged line is reported in the brief itself: "the day looks quiet" and "the day is
     // unreadable" must never render the same.
     if (torn.length) out.push("", `UNREADABLE LINES: ${torn.length}`);
@@ -350,8 +356,19 @@ async function main(argv) {
     }
   } catch { jobLines = []; }
 
+  // The growth feed line, RE-DERIVED FROM THE SPINE ON EVERY READ (growth REQ-05(c)). Never
+  // cached: a cache would mean the line kept saying what was true the last time something wrote
+  // it, which is precisely the failure the line exists to prevent. Wrapped like the jobs panel
+  // above, and for the same reason -- a brief that refuses to render because one lane's derivation
+  // threw is strictly worse than a brief without that lane's line.
+  let growthFeedLines = [];
+  try {
+    const { feedLines: deriveFeed } = await import("../growth/lib/feed.mjs");
+    growthFeedLines = deriveFeed(events, nowMs());
+  } catch { growthFeedLines = []; }
+
   process.stdout.write(render(day, events, torn,
-    { full: flags.full === true, jobLines, killCrossings, killNotice, spendLine }));
+    { full: flags.full === true, jobLines, killCrossings, killNotice, spendLine, feedLines: growthFeedLines }));
   return 0;
 }
 

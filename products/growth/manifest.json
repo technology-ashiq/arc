@@ -16,12 +16,15 @@
     ".claude/scripts/growth/lib/deploy.mjs",
     ".claude/scripts/growth/lib/evidence.mjs",
     ".claude/scripts/growth/lib/exec-allowlist.mjs",
+    ".claude/scripts/growth/lib/feed.mjs",
     ".claude/scripts/growth/lib/generate.mjs",
     ".claude/scripts/growth/lib/geo.mjs",
     ".claude/scripts/growth/lib/guard.mjs",
+    ".claude/scripts/growth/lib/ingest.mjs",
     ".claude/scripts/growth/lib/mine.mjs",
     ".claude/scripts/growth/lib/publish.mjs",
     ".claude/scripts/growth/lib/slop-lint.mjs",
+    ".claude/scripts/growth/lib/spec-verify.mjs",
     ".claude/scripts/growth/lib/templates.mjs",
     ".claude/scripts/growth/lib/text.mjs"
   ]
