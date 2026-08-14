@@ -26,7 +26,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { EXIT, findReceipt, parseArgs, OperatorError } from "../.claude/scripts/engine/arc-bench.mjs";
+import { EXIT, findReceipt, knownDrivers, parseArgs, OperatorError } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BENCH = join(ROOT, ".claude/scripts/engine/arc-bench.mjs");
@@ -261,8 +261,19 @@ function eventsOn(spine) {
   check("a well-formed command parses", ok.driver === "mock" && ok.model === "m" && ok.dryRun === true);
 
   const r = bench(["--driver", "nosuch", "--budget", "inr=1"], { ARC_SPINE_ROOT: spineFor("flags") });
+  // DERIVED, NOT HARDCODED. This pinned the literal string
+  // `installed: claude-code, codex, generic-api, mock`, so it went red the moment engine added a
+  // fifth driver (`hermes`, Cycle 7) -- for a change that was correct. The test was not wrong to
+  // fail: it was the only thing that noticed the installed set had moved. But an exact-list pin
+  // makes every future driver a red build in a suite that owns none of them, and the property
+  // actually worth asserting is that the message lists the drivers that ARE on disk -- which is
+  // stronger than any fixed string, because it also catches a message that goes stale.
+  //
+  // knownDrivers() is arc-bench's own resolver, so the expectation cannot drift from the source.
+  const installed = knownDrivers(ROOT).join(", ");
   check("an unknown driver is exit 2 and names the installed set",
-    r.status === EXIT.OPERATOR && /installed: claude-code, codex, generic-api, mock/.test(r.stderr));
+    r.status === EXIT.OPERATOR && r.stderr.includes(`installed: ${installed}`),
+    `expected the message to list "${installed}"; stderr was: ${String(r.stderr).trim().slice(0, 200)}`);
 }
 
 // ---- 6. --dry-run invokes nothing and emits nothing -------------------------------------------

@@ -651,11 +651,34 @@ if (all) {
           add("router-tier", `${rel}:1`, `class \`${cls}\` names tier \`${row.tier}\`, which this file does not declare`,
             declared.join(" | "), String(row.tier), "add it to `tiers:` — after checking ADR-0069 block (a) names it");
         }
+        // DERIVED FROM WHAT IS INSTALLED, not from a second hardcoded list. This read
+        // `[...TARGETS, "generic-api"]`, which is a THIRD driver set alongside arc-run's DRIVERS
+        // and arc-bench's knownDrivers() -- and it had already fallen behind BOTH: `mock` landed
+        // in Cycle 12 and `hermes` in Cycle 7, and a router row naming either would have been
+        // rejected here as an unknown driver while arc-run routed it perfectly well. TARGETS is
+        // the COMPILE target set (which .md commands are generated) and was never the routing
+        // set; the two only looked alike while there were three drivers and two targets.
+        //
+        // A lint that says "unknown driver" about a driver that exists is worse than no lint:
+        // the operator reads it as authority and goes looking for a typo.
+        const installedDrivers = (() => {
+          try {
+            return readdirSync(join(root, ".claude/scripts/engine/drivers"))
+              .filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort();
+          } catch { return null; }
+        })();
         const chain = [row?.driver, ...(Array.isArray(row?.fallback) ? row.fallback : [])].filter(Boolean);
         for (const d of chain) {
-          if (!TARGETS.includes(d) && d !== "generic-api") {
+          // A drivers/ directory this lint cannot read is NOT a licence to accept anything, and
+          // it is not a reason to reject everything either -- it is a fact worth saying once.
+          if (installedDrivers === null) {
+            add("router-tier", `${rel}:1`, "the drivers directory could not be read, so no routing target could be checked",
+              "a readable .claude/scripts/engine/drivers/", "unreadable", "this is a broken checkout, not a routing error");
+            break;
+          }
+          if (!installedDrivers.includes(d)) {
             add("router-tier", `${rel}:1`, `class \`${cls}\` routes to unknown driver \`${d}\``,
-              [...TARGETS, "generic-api"].join(" | "), String(d), "drivers are claude-code, codex, generic-api");
+              installedDrivers.join(" | "), String(d), "add the driver, or fix the row — this list is read from drivers/*.sh");
           }
         }
       }
