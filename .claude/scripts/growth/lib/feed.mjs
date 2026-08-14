@@ -31,7 +31,7 @@ const DAY_MS = 86400000;
  * `nowMs` is injected rather than read from the clock, so the age this prints is testable rather
  * than merely plausible.
  */
-export function feedLines(events, nowMs, { expectedWeeks = null } = {}) {
+export function feedLines(events, nowMs, { expectedWeeks = null, includeEmpty = false } = {}) {
   if (!Array.isArray(events)) throw new FeedError("BAD_INPUT", "feedLines needs the events array");
   if (typeof nowMs !== "number" || !Number.isFinite(nowMs))
     throw new FeedError("BAD_NOW", "feedLines needs an explicit clock -- an implicit one cannot be tested");
@@ -44,7 +44,20 @@ export function feedLines(events, nowMs, { expectedWeeks = null } = {}) {
   if (mine.length === 0) {
     // NOT "0 windows". The distinction is the whole point: nobody has fed this surface, which is a
     // different fact from a week that genuinely had no clicks.
-    return [`growth feed: NO metric.observed receipts for ${FEED_MODULE}/${FEED_SURFACE} — the clock has not started`];
+    //
+    // BUT THE COMPANY BRIEF DOES NOT GET THIS LINE BY DEFAULT, and that is a correction. The first
+    // version returned it unconditionally, which put a permanent two-line block about a lane whose
+    // clock has not started into every brief, every day, for every other lane -- inside a renderer
+    // with a deliberate 40-line one-screen budget whose own comments are about not burying
+    // needs-you. It also broke `spine-brief.bats`, which is another lane's suite asserting the
+    // brief's exact bytes, and that suite was right to break: growth had changed the company's
+    // daily output to say something about growth.
+    //
+    // The empty state belongs to growth's own tracker, not to everyone's morning. Callers that
+    // genuinely want it -- growth's tests and growth's own surfaces -- ask for it.
+    return includeEmpty
+      ? [`growth feed: NO metric.observed receipts for ${FEED_MODULE}/${FEED_SURFACE} — the clock has not started`]
+      : [];
   }
 
   // Latest window end wins. Parsed from the payload's own bound rather than from the receipt's

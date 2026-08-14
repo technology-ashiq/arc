@@ -361,6 +361,10 @@ async function main(argv) {
   // it, which is precisely the failure the line exists to prevent. Wrapped like the jobs panel
   // above, and for the same reason -- a brief that refuses to render because one lane's derivation
   // threw is strictly worse than a brief without that lane's line.
+  //
+  // SILENCE WHEN THERE IS NO FEED. `includeEmpty` is deliberately not passed: a lane whose clock
+  // has not started does not get a permanent line in everyone else's brief, inside a renderer with
+  // a 40-line one-screen budget. Growth's empty state lives in growth's tracker.
   let growthFeedLines = [];
   try {
     const { feedLines: deriveFeed } = await import("../growth/lib/feed.mjs");

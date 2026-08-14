@@ -172,11 +172,14 @@ const DAY = 86400000;'
       { slug: 'a', url: 'https://arc.automemory.ai/blog/a/', content_sha: 'new', supersedes: 'old' }];
     const head = I.resolveSlugUrl([{ url: 'https://arc.automemory.ai/blog/a/', clicks: 9 }], receipts);
     const stale = I.resolveSlugUrl([{ url: 'https://old.vercel.app/blog/a/', clicks: 9 }], receipts);
-    console.log(head.joined.length + head.unjoined.length + ' ' + stale.joined.length + stale.unjoined.length + ' ' +
+    // Joined EXPLICITLY as strings. Written as bare + it is arithmetic: 1 + 0 is 1, not '10', and
+    // the assertion then compares a number-shaped string it never meant to build.
+    console.log([head.joined.length, head.unjoined.length].join('/') + ' ' +
+                [stale.joined.length, stale.unjoined.length].join('/') + ' ' +
                 (head.joined[0] ? head.joined[0].content_sha : 'NONE'));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # The live URL joins to the head; the superseded URL does NOT join and is reported unjoined.
-  [ "$output" = "10 01 new" ]
+  [ "$output" = "1/0 0/1 new" ]
 }
 
 @test "feed: a window is COMPLETE only after every receipt is confirmed, and MISSING otherwise" {
@@ -212,10 +215,15 @@ const DAY = 86400000;'
 
 # ---------- (c) the brief line ----------
 
-@test "feed: with no receipts the brief line says the clock has not started, not zero" {
+@test "feed: with no receipts the empty state says the clock has not started, not zero" {
+  # And it is OPT-IN. Returned unconditionally, it put a permanent block about a parked lane into
+  # every other lane's daily brief -- and `spine-brief.bats` was right to break over it.
   run _node "$PRE
-    console.log(F.feedLines([], Date.parse('2026-09-14T00:00:00Z'))[0]);"
+    const asked = F.feedLines([], Date.parse('2026-09-14T00:00:00Z'), { includeEmpty: true });
+    const brief = F.feedLines([], Date.parse('2026-09-14T00:00:00Z'));
+    console.log(asked.length + ' ' + brief.length + ' | ' + asked[0]);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == "1 0 | "* ]] || { echo "the empty state is not opt-in: $output"; false; }
   [[ "$output" == *"NO metric.observed receipts"* ]]
   [[ "$output" != *": 0 "* ]] || { echo "the line reported a zero: $output"; false; }
 }
@@ -234,7 +242,8 @@ const DAY = 86400000;'
 @test "feed: another lane's metric.observed receipts are not counted as growth's" {
   run _node "$PRE
     const ev = [{ event: { kind: 'metric.observed', payload: { module: 'leads', surface: 'campaign' } } }];
-    console.log(F.feedLines(ev, Date.parse('2026-09-14T00:00:00Z'))[0].includes('NO metric.observed') ? 'ignored' : 'COUNTED-ANOTHER-LANE');"
+    const l = F.feedLines(ev, Date.parse('2026-09-14T00:00:00Z'), { includeEmpty: true });
+    console.log(l[0].includes('NO metric.observed') ? 'ignored' : 'COUNTED-ANOTHER-LANE');"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "ignored" ]
 }
@@ -250,7 +259,11 @@ const DAY = 86400000;'
 @test "feed: arc-brief renders the growth lines when given them and is unchanged without" {
   # The wiring into a SHARED organ. The baseline must be byte-identical when no lines are passed,
   # because ten suites from four other lanes assert on this renderer's output.
-  run env ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine" _node "const B = await import(\"./.claude/scripts/hq/arc-brief.mjs\");
+  # `env VAR=x _node ...` cannot work: `_node` is a bats FUNCTION, and env execs a program. It
+  # failed with "env: '_node': No such file or directory" -- a test that never ran the thing it
+  # was asserting about.
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
+  run _node "const B = await import(\"./.claude/scripts/hq/arc-brief.mjs\");
     const withLines = B.render('2026-08-14', [], [], { feedLines: ['growth feed: test line'] });
     const without = B.render('2026-08-14', [], [], {});
     console.log((withLines.includes('growth feed: test line') ? 'rendered' : 'DROPPED') + ' ' +

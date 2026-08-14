@@ -167,7 +167,7 @@
 .claude/scripts/growth/lib/deploy.mjs	9e5d9939578194e9068d386b134288cb4d87a712cdd38dc351ae6520e04381bd
 .claude/scripts/growth/lib/evidence.mjs	4cd6405986359fece64c55e6b526c03d8b45ba1ee32cfaf8bf12f30e5be8cf0c
 .claude/scripts/growth/lib/exec-allowlist.mjs	40f564f6d11c4d981635ce59ae49c80d1c4fc32cffb7485e133f10d83bfdab70
-.claude/scripts/growth/lib/feed.mjs	c45b918dd95c9df685a6283dfea21c4011ecbecc0c42a63f4aae31ec49a90538
+.claude/scripts/growth/lib/feed.mjs	e22b89250c5bf96f112c4c74c8fb6094b895d0bdb44d7a5068ec77d42f273ae2
 .claude/scripts/growth/lib/generate.mjs	c6f066319b1c965f3c30155a56e681002ae4852063ca0fcf3f274b7409cd4634
 .claude/scripts/growth/lib/geo.mjs	1e9c9138c34f5803e66d37968a50369d864f3aaffdb7e7d6b1e20b3d3696cd30
 .claude/scripts/growth/lib/guard.mjs	e1c0f5fcb34f08990e077b6c56581422218e9e5421589795d1bbe86037f6bea9
@@ -178,7 +178,7 @@
 .claude/scripts/growth/lib/spec-verify.mjs	1a182203b1e9d65bfca036c4e80a4fcea54446350b6d822f68d63acaa7466d08
 .claude/scripts/growth/lib/templates.mjs	98def91a9638bb0f544587fbf5aa14e95e0fc449524e23be43e57e0bc7492d01
 .claude/scripts/growth/lib/text.mjs	699f00fb5caf44c43a7e0b082bcf1c07243f42e6b51bda5058c8910dcfdfcf01
-.claude/scripts/hq/arc-brief.mjs	0a5fa209e35db543cafad009df5403eb89ffb20a2a8a9dd39c5ef5937145d2be
+.claude/scripts/hq/arc-brief.mjs	27c055a82ff0c6a06ad0710a69828995f88a635575f9a1d44d89603c89768c55
 .claude/scripts/hq/arc-event.mjs	d290a2b3cd964dcf9320d02bf16af4257bc94850a0ae1f9a62336536905658d5
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	8943ba0e1351e7c003526356daf33f9f5fe5d1249d652b121a105c28f8ec7c79
