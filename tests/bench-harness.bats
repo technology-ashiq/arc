@@ -76,13 +76,28 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
   [[ "$(STEEL)" == *"ok and records that NO model was applied"* ]]
 }
 
-@test "M1 is corrected by measurement: two of its three env vars do not survive arc-run" {
-  # arc-run.mjs:378-381 rebuilds the driver environment and overwrites ARC_ROOT and
-  # ARC_DRIVER_MODEL; only ARC_MOCK_FIXTURE passes through. Asserted behaviourally rather than by
-  # grepping the source, so the day the engine grows a target-repo seam this fails loudly.
+@test "the model and workspace seam is used through its FLAGS, not the environment" {
+  # ADR-0220. The checks these replaced asserted that arc-run overwrites ARC_ROOT and
+  # ARC_DRIVER_MODEL, and their comment promised they would fail loudly the day a seam arrived.
+  # The seam arrived and they did NOT fail: it came as flags while ambient inheritance stayed
+  # closed on purpose, so both assertions stayed true while the conclusion they defended -- that
+  # bench cannot vary the model -- became false. A tripwire aimed at the mechanism that did not
+  # change cannot see the one that did.
   [ "$(STEEL_STATUS)" -eq 0 ]
-  [[ "$(STEEL)" == *"ok MEASURED: arc-run overwrites ARC_ROOT, so a bogus one does not reach the driver"* ]]
-  [[ "$(STEEL)" == *"ok MEASURED: arc-run overwrites ARC_DRIVER_MODEL, so its receipts read unpinned"* ]]
+  [[ "$(STEEL)" == *"ok a materialized fixture repo IS accepted as --work-root"* ]]
+  [[ "$(STEEL)" == *"ok and the fixture repo still holds the posed, unstaged change afterwards"* ]]
+  [[ "$(STEEL)" == *"ok a --work-root pointing INTO arc is refused, not silently accepted"* ]]
+  [[ "$(STEEL)" == *"ok --trial-model is refused on mock, naming the recording set instead"* ]]
+}
+
+@test "ambient model inheritance stays closed, and a request is never read as an application" {
+  # The env checks survive, narrowed to what they actually prove: ARC_DRIVER_MODEL and ARC_ROOT
+  # are still ignored, which is the ADR-0069 b1 hole staying shut rather than a missing seam.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok ambient ARC_ROOT is still ignored -- inheritance stays closed (ADR-0069 b1)"* ]]
+  [[ "$(STEEL)" == *"ok with a non-model-capable driver, nothing is applied and the receipt says so"* ]]
+  [[ "$(STEEL)" == *"ok and bench records the model as REQUESTED, never as applied"* ]]
+  [[ "$(STEEL)" == *"ok so no model_id is written for a model that never ran"* ]]
 }
 
 @test "a failing attempt is reported, not rounded up to a pass" {
@@ -157,5 +172,5 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
 
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ]
 }
