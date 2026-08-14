@@ -121,6 +121,38 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### REQ-04 IS NOT SATISFIABLE AS WRITTEN, and this is the finding — 2026-08-14
+
+**REQ-04 says the `hq.policy.yaml` row rides the SAME change as the router row. It cannot.**
+
+`policy-lint` (ADR-0504, `lib/policy/lint.mjs:126`) rejects a `kinds` entry whose process does not
+exist: *"the subject set is a directory listing, not an invention"*. The row was written, inserted
+by the owner, and policy-lint refused the file in one run:
+
+```
+policy-lint: hq.policy.yaml is NOT law -- 1 violation(s)
+  - kinds["process:build-in-public-draft"]: no process named "build-in-public-draft" exists
+```
+
+`processes/build-in-public-draft.process.yaml` is authored by **Phase 08** (REQ-07). So the policy
+row must land in Phase 08, WITH the file — not in Phase 07 with the router row. The insertion was
+REVERTED and `hq.policy.yaml` is law again (exit 0).
+
+**The comment I wrote inside that row claimed the opposite** — *"a row without a file is harmless,
+while a file without a row is ungoverned"* — and only the second half is true. policy-lint disproved
+the first half immediately. The asymmetry is real but it runs the other way: a file without a row is
+silently ungoverned, and a row without a file is a grant to a subject nobody can run, which the
+validator treats as the more serious of the two.
+
+**What this changes:** the router row stands alone and is correct. REQ-04's policy-row clause moves
+to Phase 08 as a hard dependency of REQ-07 — the process file and its policy row are ONE change,
+and the router row was always a different one. Route the amendment through `/arc-change` before
+Phase 08 opens rather than letting the two REQs quietly disagree.
+
+**The termination spec is unaffected** — it lives in the router row's comment and landed with it.
+
+---
+
 ### 2026-08-14, end of session — read this first
 
 **HEAD `bd16093`, pushed, tree clean, PR #172 OPEN and MERGEABLE.** A CI run exists for that SHA.
