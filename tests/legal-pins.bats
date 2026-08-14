@@ -146,6 +146,84 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" == *"already pinned"* ]]
 }
 
+@test "legal guard: the generated snippet carries no comparison logic of its own" {
+  # The requirement is not "ship a snippet", it is "ship a snippet that cannot drift". A
+  # hand-copied comparison would strand a future canonicaliser fix in a repo no twin-fix sweep of
+  # THIS one can reach. So the guard must INVOKE verify, not reimplement it.
+  run node "$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs" ci-guard --venture "fixture-gateway-gst"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"arc-legal.mjs verify"* ]]
+  [[ "$output" == *"arc-legal-guard-version:"* ]]
+  # It must not carry its own hashing. If these ever appear, someone has inlined the comparison.
+  [[ "$output" != *"sha256"* ]]
+  [[ "$output" != *"output_sha256"* ]]
+}
+
+@test "legal guard: the generated snippet goes RED on a one-byte page edit" {
+  # End to end, in the layout a venture actually uses, with the clean run first -- a guard that
+  # failed on everything would pass the red half and be useless.
+  _arc_legal_sandbox
+  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/legal/rendered"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/legal/rendered/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/legal/rendered" \
+    --decision "$SANDBOX/d.json" --request "$REQ"
+  [ "$status" -eq 0 ]
+
+  run node "$ARC_LEGAL_CLI" ci-guard --venture "fixture-gateway-gst" --out "$SANDBOX/ci-guard.sh"
+  [ "$status" -eq 0 ]
+
+  CLEAN=0
+  ( cd "$SANDBOX" && bash ci-guard.sh ) >"$SANDBOX/g1.txt" 2>&1 || CLEAN=$?
+  [ "$CLEAN" -eq 0 ]
+
+  printf 'x' >> "$SANDBOX/legal/rendered/terms.mdx"
+
+  DIRTY=0
+  ( cd "$SANDBOX" && bash ci-guard.sh ) >"$SANDBOX/g2.txt" 2>&1 || DIRTY=$?
+  [ "$DIRTY" -eq 2 ]
+  run cat "$SANDBOX/g2.txt"
+  [[ "$output" == *"TAMPERED"* ]]
+}
+
+@test "legal guard: a STALE guard version refuses the bump and leaves the pin alone" {
+  # The check is a PRECONDITION. It sat after the pin was rewritten, so a refused bump left the
+  # venture on the new set anyway -- the state the render-failure rollback exists to prevent,
+  # reintroduced by a check placed one block too late. The pin assertion is the half that catches
+  # that; the exit code alone would have passed even while it was broken.
+  _arc_legal_sandbox
+  run node "$ARC_LEGAL_CLI" ci-guard --venture "fixture-gateway-gst" --out "$SANDBOX/g.sh"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" json-set-line "$SANDBOX/g.sh" "# arc-legal-guard-version:" "# arc-legal-guard-version: arc-legal/0.0.9"
+  [ "$status" -eq 0 ]
+
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2 --guard "$SANDBOX/g.sh" \
+    >"$SANDBOX/o.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/o.txt"
+  [[ "$output" == *"staying GREEN"* ]]
+
+  run node "$ARC_LEGAL_CLI" render --venture "fixture-gateway-gst" --out "$SANDBOX/after"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/after/_run.json" template_set
+  [ "$output" = "v1" ]
+}
+
+@test "legal guard: a MISSING guard exits 3 and leaves the pin alone" {
+  _arc_legal_sandbox
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2 --guard "$SANDBOX/nope.sh" \
+    >/dev/null 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 3 ]
+
+  run node "$ARC_LEGAL_CLI" render --venture "fixture-gateway-gst" --out "$SANDBOX/after"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/after/_run.json" template_set
+  [ "$output" = "v1" ]
+}
+
 @test "legal pins: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"

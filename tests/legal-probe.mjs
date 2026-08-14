@@ -525,6 +525,23 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * json-set-line <file> <prefix> <replacement> -- replace the one line starting with a prefix.
+   *
+   * For text files rather than JSON, despite the name's family: the CI guard is a shell script
+   * and its version marker is a comment line. Refuses when the prefix matches zero lines or more
+   * than one -- a mutation that hit nothing, or hit several things, is not a control.
+   */
+  case "json-set-line": {
+    const [file, prefix, replacement] = rest;
+    const lines = readFileSync(file, "utf8").split(/\r?\n/);
+    const hits = lines.filter((l) => l.startsWith(prefix)).length;
+    if (hits !== 1) die(`prefix "${prefix}" matches ${hits} line(s) in ${file}; a mutation must hit exactly one`);
+    writeFileSync(file, lines.map((l) => (l.startsWith(prefix) ? replacement : l)).join("\n"), "utf8");
+    console.log("replaced:" + prefix);
+    break;
+  }
+
   case "stale-published": {
     const [dir] = rest;
     const p = join(dir, "_published.json");

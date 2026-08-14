@@ -129,6 +129,6 @@
     "legal-consistency.bats": 55,
     "legal-publish-gate.bats": 75,
     "legal-receipts.bats": 130,
-    "legal-pins.bats": 80
+    "legal-pins.bats": 130
   }
 }
