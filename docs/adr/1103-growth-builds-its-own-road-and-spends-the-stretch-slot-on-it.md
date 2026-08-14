@@ -1,4 +1,4 @@
-# ADR 1003 — Pre-kickoff gate rows 3–4 are false, so growth builds its own road and spends the stretch slot on it
+# ADR 1103 — Pre-kickoff gate rows 3–4 are false, so growth builds its own road and spends the stretch slot on it
 
 **Status:** accepted
 **Date:** 2026-08-12

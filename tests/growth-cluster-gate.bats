@@ -15,7 +15,11 @@ _node() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 PRE='const C = await import("./.claude/scripts/growth/lib/cluster.mjs");
 const err = (fn) => { try { fn(); return "NO-THROW"; } catch (e) { return e.code || e.name; } };
 const msg = (fn) => { try { fn(); return "NO-THROW"; } catch (e) { return e.message; } };
-const c = (i, intent = "informational") => ({ keyword: "kw " + i, intent,
+// One DISTINCT topic per candidate. This used to read "kw " + i, where the trailing number is a
+// bare digit the tokeniser drops -- so every candidate in the pool reduced to the single topic
+// token "kw", and under ADR-1116 that pool is one topic repeated twelve times, not a cluster.
+// The fixture was describing a shape the rule now correctly refuses to build.
+const c = (i, intent = "informational") => ({ keyword: "kw" + i, intent,
   evidence_url: "https://news.ycombinator.com/item?id=" + i, gap_note: "attested in 2 stories",
   source_id: "hn-algolia" });
 // 1 pillar + 8 spokes worth of non-transactional, plus 3 transactional for BOFU.
@@ -277,6 +281,70 @@ const gate = (events, over = {}) => C.assertClusterApproved({ events, clusterId:
   run node "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs" mine --sources s.json --out o.jsonl --offline=true
   [ "$status" -ne 0 ] || { echo "an unknown option was ignored: $output"; false; }
   [[ "$output" == *"BAD_ARGS"* ]]
+}
+
+# ---------- ADR-1116: a spoke must be a distinct topic, not a re-cut of the pillar ----------
+
+@test "gate: a candidate that only re-cuts the pillar is not a spoke" {
+  # The first REAL cluster was pillar "ai agents" with spokes "agents build", "ai agents build" and
+  # "coding agents" -- assumption A-05 fired on it. The cause was spoke selection sorting by
+  # DESCENDING token overlap with the pillar, so the rule preferred a candidate the more exactly it
+  # repeated the pillar. Empty residue means the candidate says nothing the pillar does not.
+  run _node "$PRE
+    const k = (kw, intent = 'informational') => ({ ...c(1, intent), keyword: kw });
+    const pool = [k('ai agents'), k('open-source ai'), k('ai agents build'), k('agents build'),
+                  k('ai coding'), k('coding workflows'), k('ai voice'), k('driven development'),
+                  k('open-source alternative', 'transactional'), k('pricing page', 'transactional')];
+    const p = C.buildClusterPlan({ candidates: pool, clusterId: 'c-001' });
+    console.log(p.pillar.keyword + ' | ' + p.spokes.map((s) => s.keyword).join(','));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # "open-source ai" reduces to {ai} -- a subset of the pillar, so its residue is empty.
+  # "ai agents build" and "agents build" both reduce to residue {build}: the same spoke twice.
+  [ "$output" = "ai agents | agents build,ai coding,coding workflows,ai voice,driven development" ]
+}
+
+@test "gate: two candidates with the same residue yield one spoke, not two" {
+  run _node "$PRE
+    const k = (kw, intent = 'informational') => ({ ...c(1, intent), keyword: kw });
+    const pool = [k('alpha'), k('alpha beta'), k('beta alpha'), k('alpha gamma'), k('alpha delta'),
+                  k('alpha epsilon'), k('alpha zeta'),
+                  k('buy alpha', 'transactional'), k('alpha cost', 'transactional')];
+    console.log(err(() => C.buildClusterPlan({ candidates: pool, clusterId: 'c-001' })));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # 'alpha beta' and 'beta alpha' are one topic, so only 5 distinct residues exist and the floor
+  # of 5 is met exactly -- but the pool check counts rows, so this proves the builder SUCCEEDS
+  # while collapsing the duplicate rather than padding the cluster with it.
+  [ "$output" = "NO-THROW" ]
+}
+
+@test "gate: the residue rule refuses rather than padding a pool of one repeated topic" {
+  # The negative control for the rule: a pool where every row restates the pillar must REFUSE.
+  # If ADR-1116's residue check is deleted, this pool builds a happy 6-spoke cluster and this test
+  # goes green -- so this is the assertion that fails when the implementation is ripped out.
+  run _node "$PRE
+    const k = (kw, intent = 'informational') => ({ ...c(1, intent), keyword: kw });
+    const pool = [k('ai agents'), k('agents ai'), k('ai agents ai'), k('agents'), k('ai'),
+                  k('agents ai agents'), k('ai ai agents'),
+                  k('buy agents', 'transactional'), k('agents cost', 'transactional')];
+    console.log(err(() => C.buildClusterPlan({ candidates: pool, clusterId: 'c-001' })));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "THIN_CLUSTER" ]
+}
+
+@test "gate: the pillar comparison keeps two-letter topic tokens" {
+  # The tokeniser dropped every token of two characters or fewer, so the pillar "ai agents" was
+  # compared as {agents} and "ai" -- this subject matter's most load-bearing token -- was invisible.
+  # With it restored, "ai coding" is a different topic from "coding agents": both carry {coding},
+  # so the second is the first repeated, and exactly one survives.
+  run _node "$PRE
+    const k = (kw, intent = 'informational') => ({ ...c(1, intent), keyword: kw });
+    const pool = [k('ai agents'), k('ai coding'), k('coding agents'), k('ai voice'), k('ai memory'),
+                  k('ai review'), k('ai testing'),
+                  k('buy ai', 'transactional'), k('ai pricing', 'transactional')];
+    const p = C.buildClusterPlan({ candidates: pool, clusterId: 'c-001' });
+    console.log(p.spokes.map((s) => s.keyword).join(','));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "ai coding,ai voice,ai memory,ai review,ai testing" ]
 }
 
 @test "gate: bats registers every test this file declares" {

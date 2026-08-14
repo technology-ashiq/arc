@@ -31,6 +31,7 @@
 // ------------------------------------------------------------------------------------------
 
 import { sha256Hex, canonicalize, ULID_RE } from "../../hq/lib/canonical.mjs";
+import { STOP } from "./adapters.mjs";
 
 const CLUSTER_ID_RE = /^c-[0-9]{3,9}$/;
 const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -113,6 +114,18 @@ function freezeRow(c, where) {
 const normKey = (s) => s.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /**
+ * The topic-bearing tokens of a phrase (ADR-1116). Filtered by the SAME reviewable `STOP` list the
+ * miner uses, never by token length: the length rule that stood here deleted `ai` from `ai agents`,
+ * so the pillar of an AI-agent cluster was compared to its spokes with its subject removed.
+ *
+ * A bare number is dropped for the reason `adapters.mjs` drops it -- prices and years cut out of a
+ * headline read as topics while being noise.
+ */
+function topicTokens(s) {
+  return new Set(normKey(s).split(" ").filter((t) => t !== "" && !STOP.has(t) && !/^\d+$/.test(t)));
+}
+
+/**
  * Compose ONE inbox item from evidenced candidates: 1 pillar, 5-8 spokes, 2-3 BOFU.
  */
 export function buildClusterPlan({ candidates, clusterId }) {
@@ -154,21 +167,53 @@ export function buildClusterPlan({ candidates, clusterId }) {
   const pool = informational.length > 0 ? informational : rest;
   const pillar = pool.slice().sort((a, b) => a.keyword.split(" ").length - b.keyword.split(" ").length)[0];
 
-  // Spokes are the rows most TOPICALLY related to the pillar, capped. A first version took every
-  // remaining candidate and proposed 73 spokes, which is not a cluster and not something a human
-  // approves -- it is a dump with a gate in front of it. Ordering by shared tokens is what makes
-  // a cluster a cluster; nothing here judges a candidate better or worse, only nearer the pillar.
-  const tokens = (s) => new Set(normKey(s).split(" ").filter((t) => t.length > 2));
-  const pillarTokens = tokens(pillar.keyword);
-  const overlap = (c) => [...tokens(c.keyword)].filter((t) => pillarTokens.has(t)).length;
-  const spokes = rest
-    .filter((c) => c !== pillar)
-    .map((c) => ({ c, n: overlap(c) }))
-    // Code-unit tiebreak, never localeCompare: the host locale must not decide which spokes are
-    // in the plan whose hash the human approval is bound to.
-    .sort((a, b) => b.n - a.n || (a.c.keyword < b.c.keyword ? -1 : a.c.keyword > b.c.keyword ? 1 : 0))
-    .slice(0, MAX_SPOKES)
-    .map((x) => x.c);
+  // Spokes are the rows that are DIFFERENT from the pillar and from each other, capped (ADR-1116).
+  //
+  // A first version took every remaining candidate and proposed 73 spokes, which is not a cluster
+  // and not something a human approves -- it is a dump with a gate in front of it. The fix for that
+  // sorted by descending token overlap with the pillar, which is how the FIRST REAL CLUSTER came
+  // out as `ai agents` with spokes `agents build`, `ai agents build` and `coding agents`: the rule
+  // ranked a candidate higher the more exactly it repeated the pillar. Assumption A-05 fired on it.
+  //
+  // So the test is the RESIDUE -- what a candidate says that the pillar does not. Empty residue is
+  // the pillar re-cut; a residue already covered by a chosen spoke is that spoke again. Order is
+  // candidate order, which is most-attested-first: evidence strength, not similarity.
+  const pillarTokens = topicTokens(pillar.keyword);
+  const residue = (c) => new Set([...topicTokens(c.keyword)].filter((t) => !pillarTokens.has(t)));
+
+  // Candidates sharing a residue are ONE topic said several ways, so the group elects a single
+  // representative before selection runs. Fewest topic tokens wins, which is what makes the
+  // representative the least restating phrasing available: a candidate carrying every pillar token
+  // plus the residue is strictly longer than one that drops a pillar token, so `agents build` beats
+  // `ai agents build` for residue {build} without needing a separate superset rule. Ties after that
+  // break on code units -- never localeCompare, because the host locale must not decide which rows
+  // are in the plan whose hash the human approval is bound to.
+  const better = (a, b) => {
+    const d = topicTokens(a.keyword).size - topicTokens(b.keyword).size;
+    if (d !== 0) return d < 0 ? a : b;
+    return a.keyword < b.keyword ? a : b;
+  };
+  const groups = new Map(); // residue key -> {rep, residue, order}
+  rest.forEach((c, i) => {
+    if (c === pillar) return;
+    const r = residue(c);
+    if (r.size === 0) return; // says nothing the pillar does not
+    const key = [...r].sort().join(" ");
+    const g = groups.get(key);
+    if (!g) groups.set(key, { rep: c, residue: r, order: i });
+    else g.rep = better(g.rep, c); // group keeps its FIRST-seen order, so attestation still ranks
+  });
+
+  // Group order is first appearance, i.e. most-attested-first: evidence strength, never similarity
+  // to the pillar. Then a residue already covered by a chosen spoke is that spoke again.
+  const spokes = [];
+  const taken = [];
+  for (const g of [...groups.values()].sort((a, b) => a.order - b.order)) {
+    if (spokes.length >= MAX_SPOKES) break;
+    if (taken.some((t) => [...g.residue].every((tok) => t.has(tok)))) continue;
+    taken.push(g.residue);
+    spokes.push(g.rep);
+  }
   const bofu = transactional.slice(0, MAX_BOFU);
 
   // Composition invariants. An earlier comment here called these unreachable on the strength of a

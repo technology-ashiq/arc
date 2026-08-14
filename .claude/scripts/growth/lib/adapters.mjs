@@ -94,9 +94,17 @@ export function hnAlgoliaAdapter({ offline = false, fetchImpl = globalThis.fetch
 }
 
 // Words that carry no topic on their own. A phrase made only of these is not a target.
-const STOP = new Set(("a an and are as at be building built by can do does for from has have how i in is it its "
+//
+// Exported because cluster.mjs needs the SAME list to decide whether a spoke repeats the pillar.
+// It had its own rule -- drop tokens of two characters or fewer -- which is a stopword list nobody
+// can review, and which deleted `ai` from `ai agents` (ADR-1116). One reviewable list, two readers.
+//
+// The determiners and quantifiers on the last line were added by ADR-1116: `any llm` reached a
+// cluster proposal as a topic because `any` was absent here while `an` was present.
+export const STOP = new Set(("a an and are as at be building built by can do does for from has have how i in is it its "
   + "my new not of on or our s that the their to us use using vs was we what when where which who why will with you your "
-  + "show ask tell hn launch open source").split(" "));
+  + "show ask tell hn launch open source "
+  + "all any both each either every few many more most much neither no none one other others same several some such two").split(" "));
 
 /**
  * Titles are HEADLINES, not keywords -- and the first real run proved it: taking whole titles

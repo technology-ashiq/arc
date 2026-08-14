@@ -199,21 +199,29 @@ the feed.
 
 | ADR | Decision | Reversibility |
 |---|---|---|
-| 1000 | growth is born as a lane and claims ADR century 1100–1199 | one-way |
-| 1001 | `content.published` joins the closed kind set, and growth adds no policy subject | one-way |
-| 1002 | Publishing is a PR the machine may never merge — and the article is **E2**, not A6 | one-way |
-| 1003 | Gate rows 3–4 are false, so growth builds its own road and spends the stretch slot on it | two-way |
-| 1004 | The site is static Astro + MDX in its own repo, behind a deploy interface | two-way |
-| 1005 | The domain is chosen at Phase 1's entry gate, and GSC never backfills | two-way |
-| 1006 | Two title templates, versioned files, assigned by `hash(slug)`, tagged in the payload | one-way |
-| 1007 | "Unedited approval" means sha equality; 20 of them is the L2 evidence bar | two-way |
-| 1008 | The weekly ingest reads a range-matched CSV of Pacific-time days, and refuses what it cannot prove | one-way |
-| 1009 | The spec-verify found three deviations; growth conforms to the code and flags them back | one-way |
-| 1010 | Lints are negative-only forever; exemplars are the only style input | one-way |
-| 1011 | Content policy: cluster shape, the POV floor, and the count-honesty clause | two-way |
-| 1012 | Exactly two recurring human gates; one-time setup approvals are not gates | two-way |
-| 1013 | IndexNow and `llms.txt` ship as cheap hedges, never as levers | two-way |
-| 1014 | Voice exemplars are machine-drafted and owner-approved once, never a writing task | two-way |
+| 1100 | growth is born as a lane and claims ADR century 1100–1199 | one-way |
+| 1101 | `content.published` joins the closed kind set, and growth adds no policy subject | one-way |
+| 1102 | Publishing is a PR the machine may never merge — and the article is **E2**, not A6 | one-way |
+| 1103 | Gate rows 3–4 are false, so growth builds its own road and spends the stretch slot on it | two-way |
+| 1104 | The site is static Astro + MDX in its own repo, behind a deploy interface | two-way |
+| 1105 | The domain is chosen at Phase 1's entry gate, and GSC never backfills | two-way |
+| 1106 | Two title templates, versioned files, assigned by `hash(slug)`, tagged in the payload | one-way |
+| 1107 | "Unedited approval" means sha equality; 20 of them is the L2 evidence bar | two-way |
+| 1108 | The weekly ingest reads a range-matched CSV of Pacific-time days, and refuses what it cannot prove | one-way |
+| 1109 | The spec-verify found three deviations; growth conforms to the code and flags them back | one-way |
+| 1110 | Lints are negative-only forever; exemplars are the only style input | one-way |
+| 1111 | Content policy: cluster shape, the POV floor, and the count-honesty clause | two-way |
+| 1112 | Exactly two recurring human gates; one-time setup approvals are not gates | two-way |
+| 1113 | IndexNow and `llms.txt` ship as cheap hedges, never as levers | two-way |
+| 1114 | Voice exemplars are machine-drafted and owner-approved once, never a writing task | two-way |
+| 1115 | Growth ships as a standing capability; the two domain-dependent phases are parked, not faked | two-way |
+| 1116 | A spoke must be a distinct topic, not a re-cut of the pillar's own tokens | two-way |
+
+**Renumber note (2026-08-14).** This index and every ADR's H1 title still carried the pre-merge
+numbers `1000–1015`, which `ledger` legitimately owns on disk — so the index resolved to *ledger's*
+decisions and growth's own ADRs were indexed by nothing and lint-checked by nothing. `1115` was
+missing from the index entirely. Renaming the files was only half the renumber; the citation
+surfaces are the other half.
 
 ## Non-negotiables
 
@@ -260,7 +268,7 @@ arms for a signal that cannot exist at five articles per arm.
 | A-02 | A `/blog` route on a preview URL, end-to-end, fits inside Phase 0's 2.0d | Phase 0 passes 2.0d without one article merged and serving → ADR-1103's revisit trigger, and the 50% tripwire is the hard stop | 0 |
 | A-03 | The idem preimage is collision-free **by construction, not by convention** — no identity-bearing field is omitted, and no field value can forge a delimiter | A fixture pair whose `slug` or `site` contains the join delimiter hashes identically (`site="a\|b", slug="c"` vs `site="a", slug="b\|c"`) → the preimage needs length-prefixed or escaped joining, not bare concatenation; and `slug`/`site` grammars must exclude the delimiter outright | 0 |
 | A-04 | The export's date range is machine-readable, so the range-match guard is buildable | Phase 5 finds no date-range metadata in the export → the guard degrades to an operator-confirmed echo, recorded as a **named weakening**, never dropped silently | 5 |
-| A-05 | 1 pillar + ≥5 spokes is the right cluster shape for arc's subject matter | The first cluster proposal has spokes that only restate the pillar → the shape is wrong for this material and ADR-1111's revisit trigger fires | 2 |
+| A-05 | 1 pillar + ≥5 spokes is the right cluster shape for arc's subject matter | **FIRED 2026-08-14, and the diagnosis acquits the assumption.** `c-001` came out as pillar `ai agents` with spokes `agents build`, `ai agents build`, `coding agents` — the trigger's exact words. But the cause was **selection, not shape**: `cluster.mjs` sorted spokes by *descending token overlap with the pillar*, so the rule ranked a candidate higher the more exactly it repeated the pillar, and the tokeniser's ≤2-char filter had deleted `ai` from the comparison entirely. Fixed by ADR-1116 (residue rule + the reviewable `STOP` list); the rebuilt `c-001` is 1 pillar + **7 distinct** spokes + 2 BOFU from the same 13-candidate pool, so 1-pillar-plus-≥5 held on its first honest test. **ADR-1111's revisit trigger is NOT fired** — the shape stands; the code that filled it did not | 2 |
 | A-06 | Machine-drafted exemplars can anchor a voice they are also imitating | The first cluster's drafts read generic, or every draft reads like the exemplars and like nothing else → fallback is the owner supplying real writing (ADR-1114) | 3 |
 | A-07 | The owner can name a domain and verify a GSC property inside Phase 1's window | **FIRED 2026-08-13.** No domain and no live site, and the owner ruled that growth ships as a standing capability instead (ADR-1115). The ledgered fallback — "continue on the preview URL" — turned out to be **unworkable, not merely weak**: Phase 00 closed the accidental-publication incident by serving `noindex` + `Disallow: /` on every non-domain host, so the preview URL is invisible to Google *by our own design* and could not yield one Search Console row. Phases 01 and 06 are PARKED; 03–05 build to completion; the cycle closes as "machine ready, clock not started" | 1 |
 

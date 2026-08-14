@@ -1,4 +1,4 @@
-# ADR 1013 — IndexNow and `llms.txt` ship as cheap hedges, and are never counted as growth levers
+# ADR 1113 — IndexNow and `llms.txt` ship as cheap hedges, and are never counted as growth levers
 
 **Status:** accepted
 **Date:** 2026-08-12

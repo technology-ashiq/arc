@@ -1,4 +1,4 @@
-# ADR 1012 — Exactly two recurring human gates, and one-time setup approvals are not gates
+# ADR 1112 — Exactly two recurring human gates, and one-time setup approvals are not gates
 
 **Status:** accepted
 **Date:** 2026-08-12

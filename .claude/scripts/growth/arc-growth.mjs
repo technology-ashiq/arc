@@ -125,7 +125,7 @@ async function cmdMine() {
     if (s.access.method === "manual-entry") adapters[s.id] = manualAdapter();
     else if (s.id === "hn-algolia") adapters[s.id] = hnAlgoliaAdapter({ offline });
   }
-  const candidates = await mine({ cfg, adapters, ownTargets });
+  const { candidates, ownExcluded } = await mine({ cfg, adapters, ownTargets });
 
   // Criterion 5, the live half: a link that does not resolve cannot enter the proposal. Done here,
   // before anything is written, so the candidates file itself is already clean.
@@ -147,7 +147,9 @@ async function cmdMine() {
     process.stderr.write(`arc-growth: UNKNOWN ${JSON.stringify(u.keyword)} -- evidence ${u.evidence_url} could not be checked (status ${u._status})\n`);
 
   writeFileSync(outPath, live.map((c) => JSON.stringify(c)).join("\n") + (live.length ? "\n" : ""), "utf8");
-  process.stdout.write(`mined ${live.length} candidate(s) from ${cfg.sources.filter((s) => s.enabled).length} enabled source(s); ${dead.length} gone; ${unknown.length} unverifiable; own-page exclusions ${ownTargets.size}\n`);
+  // Both numbers, separately labelled. "Read 2 own pages and excluded 0" and "read 2 and excluded
+  // 12" are opposite outcomes that the single old number could not tell apart.
+  process.stdout.write(`mined ${live.length} candidate(s) from ${cfg.sources.filter((s) => s.enabled).length} enabled source(s); ${dead.length} gone; ${unknown.length} unverifiable; own pages read ${ownTargets.size}; candidates excluded as own ${ownExcluded}\n`);
 
   // MISSING is not zero. A pool that lost rows to "could not check" is NOT the same pool as one
   // that lost them to "this page is gone", and continuing as though it were is how a thin market

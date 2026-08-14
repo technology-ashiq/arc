@@ -1,4 +1,4 @@
-# ADR 1007 — "Unedited approval" means sha equality, and 20 of them is the L2 evidence bar
+# ADR 1107 — "Unedited approval" means sha equality, and 20 of them is the L2 evidence bar
 
 **Status:** accepted
 **Date:** 2026-08-12

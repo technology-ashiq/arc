@@ -1,5 +1,13 @@
 # Phase 01 — Name and instrument the site
 
+> **PARKED (ADR-1115), 2026-08-13.** Assumption A-07 fired: growth ships as a standing capability
+> and this phase does not run in Cycle 14. **It un-parks unchanged** — nothing below is rewritten,
+> because the work is right and only its timing moved.
+>
+> Entry needs **two** things and has one. `arc.automemory.ai` now resolves and serves (2026-08-13),
+> so the domain half is satisfied; the **verified Search Console Domain property is still absent**,
+> and that is the half that starts evolve's clock. The domain existing does NOT un-park this phase.
+
 **Goal (one line):** the site gets a permanent name and a Search Console property, because that
 date is the earliest moment evolve's four-week clock can begin.
 **Appetite:** 1.0 day — of which roughly 2h is this lane's work; the rest is DNS propagation and

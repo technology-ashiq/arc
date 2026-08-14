@@ -1,4 +1,4 @@
-# ADR 1001 — `content.published` joins the closed kind set, and growth adds no policy subject
+# ADR 1101 — `content.published` joins the closed kind set, and growth adds no policy subject
 
 **Status:** accepted
 **Date:** 2026-08-12

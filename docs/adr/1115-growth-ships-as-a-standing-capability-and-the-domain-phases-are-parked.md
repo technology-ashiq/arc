@@ -1,4 +1,4 @@
-# ADR 1015 — Growth ships as a standing capability; the two domain-dependent phases are parked, not faked
+# ADR 1115 — Growth ships as a standing capability; the two domain-dependent phases are parked, not faked
 
 **Status:** accepted
 **Date:** 2026-08-13

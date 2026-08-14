@@ -1,4 +1,4 @@
-# ADR 1002 — Publishing is a pull request the machine may never merge, and the article it upholds is E2, not A6
+# ADR 1102 — Publishing is a pull request the machine may never merge, and the article it upholds is E2, not A6
 
 **Status:** accepted
 **Date:** 2026-08-12

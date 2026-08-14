@@ -238,5 +238,13 @@ export async function mine({ cfg, adapters, ownTargets = new Set() }) {
       all.push(c);
     }
   }
-  return excludeOwnPages(dedupeCandidates(all), ownTargets);
+  // The exclusion COUNT is measured here and handed back, because the caller cannot recompute it
+  // from the result. The CLI used to print `ownTargets.size` under the label "own-page exclusions",
+  // which is the number of pages READ FROM THE SITEMAP -- so a run that excluded nothing reported
+  // "1", and a run that wrongly excluded a dozen real keywords would report "1" just the same. The
+  // only number a human has for checking this guard was not measuring it: this lane's own
+  // validate-one-value-report-another shape, in the surface that reports on criterion 2.
+  const deduped = dedupeCandidates(all);
+  const candidates = excludeOwnPages(deduped, ownTargets);
+  return { candidates, ownExcluded: deduped.length - candidates.length };
 }

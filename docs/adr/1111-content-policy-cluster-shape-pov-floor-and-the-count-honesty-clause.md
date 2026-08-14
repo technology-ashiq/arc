@@ -1,4 +1,4 @@
-# ADR 1011 — Content policy: cluster shape, the POV floor, and the count-honesty clause
+# ADR 1111 — Content policy: cluster shape, the POV floor, and the count-honesty clause
 
 **Status:** accepted
 **Date:** 2026-08-12

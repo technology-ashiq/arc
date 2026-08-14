@@ -1,4 +1,4 @@
-# ADR 1006 — Two title templates, versioned as files, assigned by `hash(slug)`, tagged in the payload
+# ADR 1106 — Two title templates, versioned as files, assigned by `hash(slug)`, tagged in the payload
 
 **Status:** accepted
 **Date:** 2026-08-12

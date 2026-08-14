@@ -1,5 +1,10 @@
 # Phase 06 — Real week
 
+> **PARKED (ADR-1115), 2026-08-13.** This phase needs seven elapsed days of a live, **indexable**
+> site, and both halves are absent: the site serves `noindex` + `Disallow: /` by design until the
+> owner reviews it, and there is no Search Console property to read a week from. It un-parks
+> unchanged once Phase 01 closes and the indexability flip is merged.
+
 **Goal (one line):** honest operation, not a demo — the cluster ships through the real loop and the
 counts are read off the spine.
 **Appetite:** 1.25 days of effort across **≥7 elapsed days** — blown appetite = cut scope or kill,

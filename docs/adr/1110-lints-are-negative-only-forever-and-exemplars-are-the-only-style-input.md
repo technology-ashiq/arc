@@ -1,4 +1,4 @@
-# ADR 1010 — Lints are negative-only forever, and exemplars are the only style input
+# ADR 1110 — Lints are negative-only forever, and exemplars are the only style input
 
 **Status:** accepted
 **Date:** 2026-08-12

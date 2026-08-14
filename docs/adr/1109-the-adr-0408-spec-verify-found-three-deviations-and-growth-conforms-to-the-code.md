@@ -1,4 +1,4 @@
-# ADR 1009 — REQ-05(a) run early: the live `metric.observed` validator deviates from the frozen spec in three ways plus a fourth trap, and growth conforms to the code
+# ADR 1109 — REQ-05(a) run early: the live `metric.observed` validator deviates from the frozen spec in three ways plus a fourth trap, and growth conforms to the code
 
 **Status:** accepted
 **Date:** 2026-08-12

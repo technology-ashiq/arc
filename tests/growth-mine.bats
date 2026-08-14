@@ -252,6 +252,35 @@ const aerr = async (fn) => { try { await fn(); return "NO-THROW"; } catch (e) { 
   [[ "$output" == all-valid-* ]]
 }
 
+@test "mine: the exclusion count is the number excluded, not the number of own pages" {
+  # The CLI printed `own-page exclusions ${ownTargets.size}` -- the number of pages READ FROM THE
+  # SITEMAP under a label claiming it was the number of candidates removed. A real run against the
+  # live sitemap therefore reported "own-page exclusions 1" while excluding nothing, and a run that
+  # wrongly excluded a dozen real keywords would have reported "1" just the same. The only number a
+  # human has for checking criterion 2's guard was not measuring the guard.
+  run _node "$PRE
+    const adapters = { 'hn-algolia': async () => [cand({ keyword: 'alpha topic' }), cand({ keyword: 'beta topic' })] };
+    // TWO own pages, exactly ONE of which matches a candidate. A count that reports own-pages
+    // would say 2; a count that reports exclusions says 1. The numbers must disagree, or the test
+    // cannot tell which one is being printed.
+    const r = await M.mine({ cfg: M.loadSources(src()), adapters, ownTargets: new Set(['alpha-topic', 'unrelated-page']) });
+    console.log(r.candidates.length + ' left, ' + r.ownExcluded + ' excluded');"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "1 left, 1 excluded" ]
+}
+
+@test "mine: a run that excludes nothing reports zero exclusions" {
+  # The negative control for the test above. If ownExcluded silently went back to reporting the
+  # own-page count, this asserts 0 while two own pages were read -- so the two tests together
+  # cannot both pass on the wrong number.
+  run _node "$PRE
+    const adapters = { 'hn-algolia': async () => [cand({ keyword: 'alpha topic' })] };
+    const r = await M.mine({ cfg: M.loadSources(src()), adapters, ownTargets: new Set(['nothing-matches', 'also-not-this']) });
+    console.log(r.candidates.length + ' left, ' + r.ownExcluded + ' excluded');"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "1 left, 0 excluded" ]
+}
+
 @test "mine: bats registers every test this file declares" {
   # MEASURED, not asserted: bats silently DROPS a @test whose name carries a non-ASCII character,
   # and the natural response to that red is to bump a literal, restoring green on a suite running

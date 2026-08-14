@@ -1,4 +1,4 @@
-# ADR 1000 — growth is born as a lane and claims ADR century 1100–1199
+# ADR 1100 — growth is born as a lane and claims ADR century 1100–1199
 
 **Status:** accepted
 **Date:** 2026-08-12

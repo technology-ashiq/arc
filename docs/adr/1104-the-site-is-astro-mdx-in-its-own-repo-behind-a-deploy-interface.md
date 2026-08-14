@@ -1,4 +1,4 @@
-# ADR 1004 — The site is static Astro + MDX in its own repository, behind a deploy interface
+# ADR 1104 — The site is static Astro + MDX in its own repository, behind a deploy interface
 
 **Status:** accepted
 **Date:** 2026-08-12

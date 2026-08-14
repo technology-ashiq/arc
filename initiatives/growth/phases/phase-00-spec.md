@@ -7,7 +7,9 @@ the entire path end-to-end on a preview URL — behind three owner account actio
 
 Serves **REQ-00** (publishing exists on the spine) and **REQ-10** (the site exists and serves one
 real article). This is the walking skeleton: input → core flow → output → deployed. It is
-deliberately the largest phase, because ADR-1103 folded the road into it.
+deliberately the largest phase, because ADR-1103 folded the road into it. It is also the phase that
+carries the lane's birth decision (ADR-1100): growth owns ADR century **1100–1199**, and every
+decision this lane writes is numbered inside it.
 
 ## Exit criteria (Definition of Done)
 

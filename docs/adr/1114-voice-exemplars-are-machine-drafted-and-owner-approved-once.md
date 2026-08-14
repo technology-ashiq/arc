@@ -1,4 +1,4 @@
-# ADR 1014 — The voice exemplars are machine-drafted candidates the owner approves once, never a writing task
+# ADR 1114 — The voice exemplars are machine-drafted candidates the owner approves once, never a writing task
 
 **Status:** accepted
 **Date:** 2026-08-12

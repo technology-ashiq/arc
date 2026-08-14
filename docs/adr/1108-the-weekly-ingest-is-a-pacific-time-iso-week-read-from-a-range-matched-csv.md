@@ -1,4 +1,4 @@
-# ADR 1008 — The weekly ingest reads a range-matched CSV of Pacific-time days, and refuses everything it cannot prove
+# ADR 1108 — The weekly ingest reads a range-matched CSV of Pacific-time days, and refuses everything it cannot prove
 
 **Status:** accepted
 **Date:** 2026-08-12
