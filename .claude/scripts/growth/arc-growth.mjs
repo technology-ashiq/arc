@@ -39,7 +39,7 @@ import { contentShaOfBytes } from "./lib/content-sha.mjs";
 let ARGS = { values: new Map(), bare: new Set(), positional: [] };
 
 const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan",
-  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts", "week", "range-start", "range-end"];
+  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts", "week", "range-start", "range-end", "revision"];
 const BARE_FLAGS = ["offline", "accept-unknown"];
 
 // How many BARE arguments each verb takes. Declared per verb rather than globally, so `lint` still
@@ -543,6 +543,14 @@ async function cmdIngest() {
     die(e.code || "INGEST_FAILED", e.message);
   }
 
+  // A CORRECTION is an explicit act, never inferred. `--revision 2` says out loud that this is a
+  // second read of the same week, which is what gives the receipt a distinct idem (ADR-1117) --
+  // without it a re-ingest with different numbers hashes identically and is dropped as DUP_IDEM.
+  const revRaw = flag("revision", "1");
+  const revision = Number(revRaw);
+  if (!Number.isInteger(revision) || revision < 1)
+    die("BAD_ARGS", `--revision must be an integer >= 1, got ${JSON.stringify(revRaw)}`);
+
   const receiptsPath = flag("receipts");
   const receipts = receiptsPath ? parseJsonOrDie(readOrDie(receiptsPath, "the content.published receipts"), "the receipts file") : [];
   if (!Array.isArray(receipts)) die("BAD_RECEIPTS", "--receipts must be a JSON array of content.published payloads");
@@ -564,7 +572,7 @@ async function cmdIngest() {
       module: "growth", surface: "title-template", metric: "clicks",
       value: r.clicks, unit_count: r.clicks,
       window_start: bounds.window_start, window_end: bounds.window_end,
-      source_id: I.sourceIdFor(week),
+      source_id: I.sourceIdFor(week, revision),
     };
     process.stdout.write(`\n# ${r.slug}\n  arc-event.sh emit metric.observed --payload ${JSON.stringify(JSON.stringify(payload))}\n`);
   }

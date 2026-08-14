@@ -67,6 +67,16 @@ its campaign is parked, and **zero `metric.observed` receipts exist on the spine
 | V13 | No site total is ever printed | anonymised rows make a per-row sum under-report |
 | V14 | The brief line is re-derived every read and reports the empty case | with no receipts it says *the clock has not started*, never `0` |
 | V15 | The shared organ is unchanged when growth passes nothing | `arc-brief`'s baseline output is byte-identical, because ten suites from four other lanes assert on that renderer |
+| V16 | **A correction lands and a re-ingest stays idempotent** (ADR-1117) | same week + same revision → same key (idempotent) · different numbers alone → **still collides**, which is the pinned negative control · revisioned `source_id` → distinct key, accepted by the live validator |
+| V17 | The spec-verify probes the **emitter** surface too | `probeCorrectionCollision` — when leads fixes the call site the probe flips and ADR-1117's revisit trigger fires, instead of the workaround rotting |
+
+**A fifth deviation, found at this close and not by ADR-1109.** That ADR diffed the payload
+GRAMMAR; this one lives in the emitter's key derivation. `arc-event.mjs` passes `supersedes` into
+the *experiment* idem and **not** into the *leads* idem, so a `metric.observed` correction — same
+window, different numbers — hashed identically and was dropped as `DUP_IDEM`. The correction path
+ADR-1108 calls load-bearing did not work, and every file read on its own looked correct.
+Worked around by ADR-1117's revisioned `source_id`, which needs no change to a file growth does not
+own, and **flagged back** rather than absorbed.
 
 **What this phase CANNOT prove, stated rather than smoothed.** Every row above is
 **fixture-proven, not live-validated**. There is no Search Console property, so no real CSV exists

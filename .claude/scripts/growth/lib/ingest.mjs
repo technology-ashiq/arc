@@ -249,8 +249,24 @@ export function windowState({ emitted, attempted }) {
   return { state: "COMPLETE", reason: `${emitted} of ${attempted} receipts confirmed present in events/ and absent from _quarantine/` };
 }
 
-/** `source_id` for a week. `gsc-<ISO-week>`, which satisfies the live SOURCE_ID_RE. No URL, no PII. */
-export function sourceIdFor(week) {
+/**
+ * `source_id` for a week. `gsc-<ISO-week>`, and `gsc-<ISO-week>-r<N>` for a correction (ADR-1117).
+ * Satisfies the live SOURCE_ID_RE. No URL, no PII.
+ *
+ * THE REVISION EXISTS BECAUSE A CORRECTION OTHERWISE VANISHES. The idem preimage deliberately
+ * excludes `value` -- it identifies WHICH measurement this is, not what it said -- and the emitter
+ * derives the leads key WITHOUT `supersedes`, though it passes `supersedes` for the experiment
+ * family two lines down. So a re-ingest with different numbers hashed identically and was dropped
+ * as DUP_IDEM, silently, while the code that was supposed to make corrections land looked correct
+ * in every file you could read on its own.
+ *
+ * `source_id` IS in the preimage, so a revisioned id gives the correction a distinct key with no
+ * change to any file growth does not own. Re-ingesting the SAME export stays idempotent, because
+ * the same week at the same revision is the same key.
+ */
+export function sourceIdFor(week, revision = 1) {
   if (!ISO_WEEK_RE.test(String(week))) throw new IngestError("BAD_WEEK", `${JSON.stringify(week)} is not an ISO week`);
-  return `gsc-${week}`;
+  if (!Number.isInteger(revision) || revision < 1)
+    throw new IngestError("BAD_REVISION", `revision must be an integer >= 1, got ${JSON.stringify(revision)}`);
+  return revision === 1 ? `gsc-${week}` : `gsc-${week}-r${revision}`;
 }

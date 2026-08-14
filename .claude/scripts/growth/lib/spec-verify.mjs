@@ -104,6 +104,36 @@ export function runSpecVerify(validator, { kind = "metric.observed" } = {}) {
 }
 
 /**
+ * THE EMITTER SURFACE (ADR-1117). A separate probe, deliberately not folded into D1-D4.
+ *
+ * D1-D4 diff the payload GRAMMAR against the frozen spec. This one asks a different question of a
+ * different file: can a CORRECTION land at all? The idem preimage excludes `value` -- correctly,
+ * because it identifies which measurement this is rather than what it said -- so two reads of one
+ * week hash identically, and the emitter derives the leads key WITHOUT `supersedes` while passing
+ * `supersedes` for the experiment family two lines away. A metric correction therefore collided on
+ * DUP_IDEM and was silently dropped.
+ *
+ * Returns whether the collision still exists. When it stops existing, the emitter has been fixed
+ * and ADR-1117's revision suffix can go -- which is exactly what its revisit trigger names, and
+ * why this is probed rather than remembered.
+ */
+export function probeCorrectionCollision(validator) {
+  if (!validator || typeof validator.leadsIdem !== "function")
+    throw new SpecVerifyError("BAD_VALIDATOR", "the correction probe needs leadsIdem from the live validator");
+  const base = conformingPayload();
+  const original = validator.leadsIdem("metric.observed", base);
+  const corrected = validator.leadsIdem("metric.observed", { ...base, value: base.value + 7, unit_count: base.unit_count + 7 });
+  const revisioned = validator.leadsIdem("metric.observed", { ...base, value: base.value + 7, unit_count: base.unit_count + 7, source_id: base.source_id + "-r2" });
+  return {
+    collides: original === corrected,
+    revisionEscapes: original !== revisioned,
+    note: original === corrected
+      ? "a correction still collides on DUP_IDEM; ADR-1117's revisioned source_id is required"
+      : "the emitter now distinguishes corrections -- ADR-1117's revisit trigger has fired and the revision suffix can be retired",
+  };
+}
+
+/**
  * The gate. Returns the verdict; the caller decides the exit code.
  *
  * BOTH DIRECTIONS BLOCK. A missing finding is not good news -- it means the shared organ changed

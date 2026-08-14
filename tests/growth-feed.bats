@@ -272,6 +272,50 @@ const DAY = 86400000;'
   [ "$output" = 'rendered absent "brief 2026-08-14\n"' ]
 }
 
+@test "feed: a correction lands and a re-ingest stays idempotent" {
+  # ADR-1117, found by probing the LIVE code at the Phase 05 close rather than reading it. The idem
+  # preimage excludes `value` (correctly -- it identifies WHICH measurement this is, not what it
+  # said) and the emitter derives the leads key WITHOUT `supersedes`, though it passes `supersedes`
+  # for the experiment family two lines away. So a re-ingest with different numbers hashed
+  # IDENTICALLY and was dropped as DUP_IDEM: the correction path that ADR-1108 calls load-bearing
+  # did not work, and every file read on its own looked correct.
+  run _node "$PRE
+    const base = { module: 'growth', surface: 'title-template', metric: 'clicks', value: 12, unit_count: 12,
+      window_start: '2026-08-03T12:30:00+05:30', window_end: '2026-08-10T12:30:00+05:30', source_id: I.sourceIdFor('2026-W32') };
+    const same = V.leadsIdem('metric.observed', base);
+    const reingest = V.leadsIdem('metric.observed', { ...base });
+    const naive = V.leadsIdem('metric.observed', { ...base, value: 19, unit_count: 19 });
+    const fixed = V.leadsIdem('metric.observed', { ...base, value: 19, unit_count: 19, source_id: I.sourceIdFor('2026-W32', 2) });
+    console.log([(same === reingest) ? 'idempotent' : 'NOT-IDEMPOTENT',
+                 (same === naive) ? 'naive-collides' : 'NAIVE-ESCAPED',
+                 (same !== fixed) ? 'revision-lands' : 'REVISION-COLLIDES',
+                 err(() => V.assertLeads({ kind: 'metric.observed', payload: { ...base, source_id: I.sourceIdFor('2026-W32', 2) } }))].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # 'naive-collides' is the NEGATIVE CONTROL: it pins the defect ADR-1117 works around. If the
+  # emitter is ever fixed it flips to NAIVE-ESCAPED and this test goes red on purpose, which is
+  # ADR-1117's revisit trigger firing rather than rotting.
+  [ "$output" = "idempotent naive-collides revision-lands NO-THROW" ]
+}
+
+@test "feed: the revision suffix is an explicit act and refuses a nonsense value" {
+  run _node "$PRE
+    console.log([I.sourceIdFor('2026-W32'), I.sourceIdFor('2026-W32', 2),
+                 err(() => I.sourceIdFor('2026-W32', 0)), err(() => I.sourceIdFor('2026-W32', 1.5))].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "gsc-2026-W32 gsc-2026-W32-r2 BAD_REVISION BAD_REVISION" ]
+}
+
+@test "feed: the spec-verify probes the emitter surface, not only the validator" {
+  # D1-D4 diff the payload GRAMMAR. This asks a different question of a different file: can a
+  # correction land at all? Probed so that when the emitter IS fixed, the answer changes here
+  # rather than in someone's memory.
+  run _node "$PRE
+    const p = SV.probeCorrectionCollision(V);
+    console.log(p.collides + ' ' + p.revisionEscapes);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "true true" ]
+}
+
 @test "feed: bats registers every test this file declares" {
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
