@@ -303,30 +303,41 @@ _verify() {
   [[ "$output" == *"page:terms"* ]]
 }
 
-@test "legal receipts: a STALE FORMAT is UNVERIFIABLE, never TAMPERED" {
-  # The distinction the verb exists for. When the preimage version moves, every previously
-  # recorded hash stops matching -- and a verifier that calls those tampering cries wolf across
-  # the whole estate on upgrade day, after which nobody reads its output. Exit 3, not 2.
+@test "legal receipts: a record with NO preimage label is UNVERIFIABLE, never INTACT" {
+  # The distinction the verb exists for, tested honestly.
+  #
+  # The previous version of this test used a fixture that relabelled the record AND zeroed the
+  # facts hash in one step -- so the "stale format" fixture WAS an attack, and the suite asserted
+  # its outcome was correct. There was no case where the format moved and the bytes did not, and
+  # an attacker pointed out the test could therefore not tell the two apart.
+  #
+  # `arc-legal-canon/1` is the only format this engine has ever written, so there is no genuinely
+  # OLDER label available -- and inventing one would mean adding a version to the known list that
+  # was never shipped, which is a lie told to make a test pass. A record with NO label is the
+  # honest form of the same question: nothing says which algorithm produced these hashes.
   _published
-  run node "$ARC_ROOT/tests/legal-probe.mjs" stale-published "$SANDBOX/out"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" strip-preimage "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
   [ "$status" -eq 0 ]
   _verify
   [ "$VERIFY_STATUS" -eq 3 ]
   run cat "$SANDBOX/vfy.txt"
   [[ "$output" == *"verdict: UNVERIFIABLE"* ]]
-  # And it must not quietly read as fine either. Unknown is its own answer.
+  # Unknown is its own answer. It must not read as fine, and it must not read as tampering.
   [[ "$output" != *"verdict: INTACT"* ]]
+  [[ "$output" != *"verdict: TAMPERED"* ]]
 }
 
-@test "legal receipts: relabelling a record as stale does NOT excuse edited page bytes" {
-  # The attack on the classifier. Whoever can edit the record can also relabel it, so if the
-  # verdict came from the declared version, a tamperer would downgrade TAMPERED to UNVERIFIABLE
-  # by editing one string. Page bytes are hashed directly and the preimage version does not
-  # govern them, so they stay TAMPERED whatever the label claims.
+@test "legal receipts: an unlabelled record does NOT excuse edited page bytes" {
+  # The attack on the classifier. Whoever can edit a record can also strip its label, so if the
+  # verdict came from the label, a tamperer would downgrade TAMPERED to UNVERIFIABLE by deleting
+  # one string. Page bytes are hashed directly and the preimage version does not govern them, so
+  # they stay TAMPERED whatever the record says about its own format.
   _published
   run node "$ARC_ROOT/tests/legal-probe.mjs" tamper-page "$SANDBOX/out" terms
   [ "$status" -eq 0 ]
-  run node "$ARC_ROOT/tests/legal-probe.mjs" stale-published "$SANDBOX/out"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" strip-preimage "$SANDBOX/out"
   [ "$status" -eq 0 ]
   _verify
   [ "$VERIFY_STATUS" -eq 2 ]

@@ -101,12 +101,19 @@ function usage() {
   ].join("\n");
 }
 
+/** The only flags that take no value. Closed on purpose -- see the comment at the use site. */
+const BOOLEAN_FLAGS = new Set(["--no-guard"]);
+
 /** Flag values are separate argv entries; `--flag=value` is refused rather than half-supported. */
 function parseArgs(argv) {
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--help" || a === "-h") { out.help = true; continue; }
+    // Boolean flags carry no value, and the list is CLOSED. An open "any flag may be a boolean"
+    // rule would silently swallow a typo'd flag that was meant to take one -- `--gaurd FILE`
+    // would set a boolean and leave the path as a positional argument.
+    if (BOOLEAN_FLAGS.has(a)) { out[a.slice(2)] = true; continue; }
     if (a.startsWith("--")) {
       if (a.includes("=")) throw new Fail(2, `use \`${a.split("=")[0]} VALUE\`, not \`${a}\``);
       const key = a.slice(2);

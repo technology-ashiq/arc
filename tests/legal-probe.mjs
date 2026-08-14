@@ -636,6 +636,30 @@ switch (cmd) {
     break;
   }
 
+  /**
+   * strip-preimage <dir> -- remove the preimage label entirely, leaving the hashes alone.
+   *
+   * The only reachable UNVERIFIABLE case today. `KNOWN_PREIMAGES` holds one entry because
+   * `arc-legal-canon/1` is the only format this engine has ever written, so there is no genuinely
+   * OLDER label to test with -- and inventing one would mean adding a version to the known list
+   * that was never shipped, which is a lie told to make a test pass.
+   *
+   * A record with no label at all is the honest version of the same question: nothing says which
+   * algorithm produced these hashes, so the answer is "cannot tell", which is neither integrity
+   * nor tampering.
+   */
+  case "strip-preimage": {
+    const [dir] = rest;
+    const p = join(dir, "_published.json");
+    const doc = JSON.parse(readFileSync(p, "utf8"));
+    if (!doc.run?.preimage_version) die(`${p} has no run.preimage_version to strip`);
+    delete doc.run.preimage_version;
+    delete doc.preimage_version;
+    writeFileSync(p, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("stripped:preimage_version");
+    break;
+  }
+
   /** crlf-pages <dir> -- rewrite every .mdx with CRLF, as a Windows checkout would. */
   case "crlf-pages": {
     const [dir] = rest;

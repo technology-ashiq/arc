@@ -102,7 +102,7 @@ teardown() { _arc_legal_teardown; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/before-other/_run.json" template_set
   local other_before="$output"
 
-  run node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2
+  run node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2 --no-guard
   [ "$status" -eq 0 ]
   [[ "$output" == *"v1 -> v2"* ]]
 
@@ -131,7 +131,7 @@ teardown() { _arc_legal_teardown; }
     --decision "$SANDBOX/d.json" --request "$REQ" >/dev/null 2>&1 || BEFORE=$?
   [ "$BEFORE" -eq 0 ]
 
-  run node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2
+  run node "$ARC_LEGAL_CLI" bump-templates --venture "fixture-gateway-gst" --to v2 --no-guard
   [ "$status" -eq 0 ]
   [[ "$output" == *"VOID"* ]]
 
