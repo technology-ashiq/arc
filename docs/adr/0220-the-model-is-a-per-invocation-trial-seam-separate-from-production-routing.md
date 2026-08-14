@@ -90,6 +90,33 @@ proven REACHED (real model id, non-zero tokens) · the REQ-05 preflight · the h
    machinery against the arc repo; the driver's working directory becomes independently addressable. A
    caller that sets neither sees no change.
 
+## Amendment, 2026-08-14 — where the third state actually lives, and what the tripwire missed
+
+Recorded at implementation rather than edited silently, because two things came out differently
+from the sentence above.
+
+**1. The third state is a payload field, not a prefix on the model seat.** Constraint 3 said the
+model field "gains a third that is visibly distinct", which reads as `trial:claude-opus-5`. Built
+that way it would have been wrong: `--model` is the MP-F seat and answers *which model ran*, and
+encoding a second fact into it forces every reader to parse a string to get either one — which is
+exactly how `tier:X` came to assert a routing decision nothing had applied. So the seat stays a
+**clean model id** (the spine's `MODEL_RE` would have accepted the prefix, which is what makes this
+a judgement rather than a constraint), and provenance goes in the `run.completed` payload as
+`model_source: router | trial | none`. It is stamped inside `emitRun`, so it lands on failure paths
+as well as the success path — a provenance field that only appears on green runs cannot answer what
+a model was doing when it failed, which for a comparison is the more interesting half.
+
+**2. `bench`'s tripwire did not fire, and that is a real gap rather than a detail.** Bench pinned
+the old behaviour in `tests/bench-steel-probe.mjs` and wrote that the assertions would "fail loudly"
+the day this seam landed. They did not. Both `MEASURED:` checks still pass, because they exercise
+**environment variables** and this seam is **flags** — and their assertions remain literally true
+(`arc-run` does still overwrite `ARC_DRIVER_MODEL`), while the conclusion drawn from them ("bench
+therefore cannot vary the model") is now false. A green test whose premise has expired is the
+"stale comment going quietly wrong" shape bench built the probe to avoid, arriving through the one
+door it did not cover: the fix taking a different *shape* than the report assumed. Bench must move
+its call sites to `--trial-model` / `--work-root`; nothing in engine can make that happen, and no
+engine change should edit bench's probe to hide it.
+
 ## Consequences
 
 **What this buys.** `bench` can drive `arc-run` per invocation with a chosen model and a fixture repo,

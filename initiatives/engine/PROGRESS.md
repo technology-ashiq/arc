@@ -121,6 +121,37 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### SUPERSEDED BY ADR-0220, and my mechanism was the wrong shape — 2026-08-14
+
+**The finding below stands. The fix I built for it does not, and ADR-0220 landed the right one
+while I was building the wrong one.**
+
+I made arc-run ask the driver's `version` verb and put the answer in the MP-F model SEAT. The seam
+that landed on main as `4d68e07` splits it properly instead: **the seat carries the model — a clean
+model id, the thing that actually ran — and where the value came from is a SEPARATE field,
+`model_source`.** A runtime identity is provenance, not a model id, and encoding two facts into
+one string is how `tier:X` came to assert a routing decision nothing had applied.
+
+So the grammar conflict below is not a conflict at all under ADR-0220: nothing is trying to put an
+`@` or a `+` in the seat any more. The whole mechanism was removed in the merge — including a
+`driverVersion()` helper that added a SECOND `spawnSync` of a driver, which
+`policy-runwrapper.bats` caught immediately: *"arc-run calls the gate before it spawns, at exactly
+one call site"*. That guard is right and my change was a real second path — `runDriver` answers
+`version` BEFORE the policy gate (ADR-0902), so it genuinely bypassed it.
+
+**Two lessons, and the second is the useful one.** The guard caught it in one CI run. But the
+DESIGN error — putting provenance in a seat — was not something any guard could have caught, and
+the only reason it did not ship is that another lane happened to solve the same problem better in
+the same window. Read the ADRs that landed since your branch point before building against an
+interface, not just the tests.
+
+**What survived the merge and is still correct:** the data boundary (arc-run exit 5, one call
+site), the router-row validator, and the run deadline env — the last one union-merged into the
+seam's env block rather than either side winning, because both are needed and neither knew about
+the other.
+
+---
+
 ### ADR-0212 AND THE SPINE GRAMMAR DISAGREE — 2026-08-14, and it quarantined a receipt
 
 **ADR-0212 says the runtime occupies the MP-F model seat, recording runtime name + version +
@@ -303,16 +334,30 @@ criterion in `phases/phase-04-spec.md` for why and what it is owed.
 
 ## NEXT ACTION — start here on a cold resume
 
-**Build ADR-0220's per-invocation model/root seam.** It is the one thing `bench` is blocked on and
-the reason this change was routed in at all. Read `docs/adr/0220-the-model-is-a-per-invocation-trial-seam-separate-from-production-routing.md`
-first; it is the spec.
+**The seam is BUILT (2026-08-14).** `--trial-model ID` and `--work-root PATH` are on `arc-run`,
+proven end to end with negative controls, and covered by `tests/engine-model-seam.bats` (11 tests).
+The receipt records `model_source: router | trial | none`. See ADR-0220 **and its 2026-08-14
+amendment**, which records why the provenance lives in the payload rather than on the model seat.
+
+**What remains is the CROSS-LANE half, and bench cannot discover it on its own** (see the struck
+line below): bench's call sites still set `ARC_DRIVER_MODEL` / `ARC_ROOT` as environment variables,
+which the seam deliberately ignores. Until bench moves to the flags, its Phase 03 stays blocked
+even though the engine side is done. Route it to the bench session; do not edit bench's files from
+here.
+
+The original spec, kept because it is still the design of record:
 
 - **OUT-OF-CYCLE.** Its own PR, **not** charged to Cycle 7's 7.5 days (owner-ruled 2026-08-13, see
   PLAN § Appetite). `appetite-sum` must still read 7d = 93% when it lands.
 - **Unblocks four `bench` Phase 03 DoD items:** one real model benched end to end · candidate proven
   REACHED (real model id + non-zero tokens) · REQ-05 preflight · human verdict.
-- **`tests/bench-steel-probe.mjs` pins both failures and MUST GO RED when the seam lands.** It passes
-  today for the wrong reasons — that red is the proof the seam works, not a regression.
+- ~~**`tests/bench-steel-probe.mjs` pins both failures and MUST GO RED when the seam lands.**~~
+  **WRONG, corrected 2026-08-14 by running it.** The probe stays GREEN. Its two `MEASURED:` checks
+  exercise **environment variables**, and the seam is **flags** — so both assertions remain literally
+  true (`arc-run` does still overwrite `ARC_DRIVER_MODEL`) while the conclusion they were written to
+  defend ("bench therefore cannot vary the model") is now false. **Bench's own tripwire cannot see
+  this seam.** Bench must move its call sites to `--trial-model` / `--work-root`; no engine change
+  may edit bench's probe to hide it.
 
 **The trap, stated so it is not re-proposed:** `arc-run.mjs:402` clobbers `ARC_DRIVER_MODEL`
 **deliberately** — the env var *was* the model knob and that was an un-reviewed tier change
