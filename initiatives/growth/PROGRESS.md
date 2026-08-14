@@ -3,10 +3,10 @@
 <!-- machine header -->
 status: LIVE
 cycle: arc-growth (Cycle 14, opened 2026-08-12)
-phase: 03
+phase: 06
 appetite: 10d
-burn: 3.0d
-blocked-on: owner — arc-site PR #1 merge (E2, publishing is the human's); Phase 01 gated on the GSC property
+burn: 7.5d
+blocked-on: owner — ALL remaining work. arc-site PR #1 merge; Vercel-Git connect (no preview URLs without it); GSC Domain property (Phases 01+06); 2 approvals in the inbox
 depends-on: —
 
 ## Phase table
@@ -14,11 +14,11 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Contract + the road + steel thread | 2.0d | **IN PROGRESS** — contract done, site built; steel-thread emit waits on the human merge |
-| 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | **PARKED** (ADR-1115) — no domain exists; un-parks unchanged when one does |
+| 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | **PARKED** (ADR-1115) — the domain now exists; the **Search Console property** does not, and that is the half that starts the clock |
 | 02 | Miner + cluster gate | 1.0d | ✅ **DONE 2026-08-14** — 6 criteria met, criterion 3 narrowed and its gap recorded; A-05 fired and fixed (ADR-1116) |
-| 03 | Generator + lints | 1.5d | NOT STARTED |
-| 04 | Publish path + A/B + GEO | 1.5d | NOT STARTED |
-| 05 | The EVO-H0 feed | 1.5d | NOT STARTED |
+| 03 | Generator + lints | 1.5d | ✅ **DONE 2026-08-14** — 7 of 8 criteria met; the exemplar APPROVAL is outstanding (owner). 35 adversarial holes found and fixed |
+| 04 | Publish path + A/B + GEO | 1.5d | ✅ **DONE 2026-08-14** — guard is a parse, 3-escape mutant refused by name; criterion 5 live half + llms.txt deploy outstanding (owner) |
+| 05 | The EVO-H0 feed | 1.5d | ✅ **DONE 2026-08-14** — FIXTURE-PROVEN, not live-validated: no GSC property, so no real CSV and no real receipt. ADR-1117 fixed a silently-dropped correction path |
 | 06 | Real week | 1.25d | **PARKED** (ADR-1115) — needs 7 elapsed days of a live, indexable site; both halves absent |
 
 Phases sum to **9.75d** of a **10d** cap = **97.5% allocated**. **0.25d named reserve.** That is thin
@@ -28,9 +28,24 @@ decided now, not on day 8.
 
 ## Appetite burn
 
-**~3.0 of 10 days used (30%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
+**~7.5 of 10 days used (75%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
 merged `content.published` by then, the publish path is fighting the stack — bank the vocabulary
-ADRs and the miner as documentation, stop, retro. **Not reached; Phase 02 closed inside its 1.0d.**
+ADRs and the miner as documentation, stop, retro.
+
+**THE TRIPWIRE IS PAST, AND IT IS PAST FOR THE REASON IT NAMES.** No content PR has travelled to a
+merged `content.published`, because arc-site PR #1 is unmerged and per-PR preview URLs do not exist
+until the site repo is connected to the deploy provider. Both are owner actions.
+
+But the tripwire's *remedy* — bank the work as documentation and stop — is the wrong call here, and
+saying why is the point of writing this down rather than quietly continuing. The tripwire was
+written against **the publish path fighting the stack**: code that will not work. That is not what
+happened. Phases 02–05 are built, adversarially attacked and green on CI across three OS legs; what
+is missing is four owner keystrokes and a Search Console property that backfills nothing. Stopping
+now would bank a working machine as documentation while the only thing blocking it is a click.
+
+**The honest position: the build is done and the cycle is blocked, not overrunning.** Phases 00, 01
+and 06 cannot close without the owner, and no further machine work will change that. This is the
+scope-cut conversation the tripwire demands, held here, in writing, with the numbers.
 
 The machine header's `burn:` field carried `0d` through two closed phases while this line said 2.2d.
 Same file, two numbers, and the header is the one a script would read. Corrected at the Phase-02
@@ -56,6 +71,13 @@ supposed to be the single source of truth.
 | 2026-08-14 | **The 2026-08-13 ADR renumber was half applied.** Filenames had moved to 1100–1115; the PLAN index and all 16 H1 titles still read 1000–1015, numbers `ledger` owns on disk — so kickoff-lint was validating *ledger's* decisions as growth's and growth's own ADRs were checked by nothing. 1115 was absent from the index. `adr-wired` warnings 15 → 2, and both survivors were real gaps | `PLAN.md` § Key decisions |
 | 2026-08-14 | **A reported number was not the measured number.** `mine` printed `own-page exclusions ${ownTargets.size}` — pages read from the sitemap, labelled as candidates removed. Two live runs excluded nothing and both said "1" | `arc-growth.mjs`, `mine.mjs` |
 | 2026-08-14 | **ADR-1115's revisit trigger was reading TRUE while every reason for the park still stood.** "A domain and a live site exist" came true on 2026-08-13; the park is really on the Search Console clock. Trigger re-worded to name the condition that actually un-parks | ADR-1115 |
+| 2026-08-14 | **Phase 03 CLOSED.** Generator, slop-lint, citation-lint, the gutted `seo-article-writer`, 3 exemplars. 7 of 8 criteria; the exemplar approval is the owner's and is NOT ticked. `amendments: 1` (uncited-claim FAIL vs WARN) · `reopened: n` | `evidence/phase-03/` |
+| 2026-08-14 | **The adversarial pass returned 35 EXECUTED holes**, two CRITICAL and both the same defect twice: citation-lint did no Unicode folding while slop-lint did, and slop-lint matched per PHYSICAL LINE so a phrase crossing a soft wrap was missed. Together they shipped an article with **21 markers and 5 fabricated figures at exit 0**. Fixed by ONE shared text layer rather than twenty patches — a shared list of rules had already failed to stop this three times in two days | `lib/text.mjs`, `evidence/phase-03/` |
+| 2026-08-14 | **Phase 04 CLOSED.** Publish path, module-graph guard, 3-escape running mutant, A/B slot, GEO. Criterion 5's live half and the `llms.txt` deploy are outstanding (owner). `amendments: 1` (the E2 verb ban) · `reopened: n` | `evidence/phase-04/` |
+| 2026-08-14 | **The E2 verb ban contradicted its own ADR.** Phase 02 banned a `publish` verb; ADR-1102 names `arc growth publish <slug>` verbatim. The banned thing is the CAPABILITY, and it is now proven absent by a module-graph PARSE plus a mutant whose third escape — a deploy hook needing **no import at all** — broke the guard's first version | phase-04 spec § Amendment |
+| 2026-08-14 | **Phase 05 CLOSED, fixture-proven and not live-validated.** Spec-verify is a gate returning exactly ADR-1109's four findings against the LIVE validator; the ingest refuses on range mismatch, lag, unknown headers; windows are the verified PT days converted to IST (the DST week spans **169h**). `amendments: 1` (ADR-1117) · `reopened: n` | `evidence/phase-05/` |
+| 2026-08-14 | **A fifth deviation, in a surface ADR-1109 never examined.** `metric.observed` corrections were silently dropped: the emitter passes `supersedes` into the *experiment* idem and not the *leads* one, so a re-read with different numbers hashed identically and died as `DUP_IDEM`. Worked around by a revisioned `source_id`; flagged back rather than absorbed, and pinned as a negative control | ADR-1117 |
+| 2026-08-14 | **A growth line was rendering in every other lane's daily brief.** The feed's empty state printed unconditionally inside a renderer with a 40-line one-screen budget; `spine-brief.bats` broke over it and was right to. Empty state is now opt-in and the company brief is byte-identical | `arc-brief.mjs`, `lib/feed.mjs` |
 
 ## Phase 02 — built, not yet closed
 
@@ -143,10 +165,13 @@ one real article renders at a real URL.
 **Session handed off 2026-08-14.** Read this section and the Owner queue below; nothing else needs
 re-deriving.
 
-**Current position.** Phase 00 contract done and pushed, still open on the owner's arc-site merge.
-**Phase 02 CLOSED 2026-08-14** with its evidence bundle verified. Phase 01 and 06 PARKED
-(ADR-1115, trigger re-worded — the park is on the Search Console clock, not the address). Phase 03
-is in build; 04 and 05 follow, and none of them needs the domain.
+**Current position — THE BUILD IS DONE.** Phases **02, 03, 04 and 05 are CLOSED**, each with a
+verified evidence bundle, all green on CI `31787158440` @ `e0c3c32`: **19/19 jobs, three OS legs,
+read per-JOB**. Phase 00 is open on the owner's arc-site merge; 01 and 06 are PARKED on the Search
+Console property (ADR-1115).
+
+**Nothing further is buildable.** Every remaining item is an owner action, and no amount of machine
+work moves any of them. See the Owner queue below.
 
 **The domain now exists.** `arc.automemory.ai` resolves, serves the site, and is deliberately
 `noindex` + `Disallow: /`. The owner chose the subdomain over the root on 2026-08-13 because
@@ -175,11 +200,22 @@ The mechanism failed, not the lanes: all three ran the "scan every sibling workt
 table says prevents this, and the check cannot see what three other sessions are about to write.
 Worth a company-level fix in a retro rather than a fourth lane paying for it.
 
-**Next step:** Phase 03 — the generator, its negative-only lints, and the voice exemplars. Start by
-reading `initiatives/growth/phases/phase-03-spec.md`. Note the phase's own requirement that the
-lints be attacked by TWO fresh agents on different surfaces before the phase closes; Phase 02's
-three passes found 3 CRITICAL holes and roughly twenty more, so budget for that, not for a rubber
-stamp.
+**Next step: THE OWNER'S, not the machine's.** Work the Owner queue below. The two approvals are
+live inbox items and take one command each:
+
+```bash
+cd E:/Work_Hub/01_Automemory/arc
+node .claude/scripts/hq/arc-inbox.mjs inbox
+node .claude/scripts/hq/arc-inbox.mjs approve 01KZZRVSQJEAVD4YCZ8FDXR0DT --reason "..."   # 3 voice exemplars (ADR-1114)
+node .claude/scripts/hq/arc-inbox.mjs approve 01KZZRW51QHTA9CFEX5JRRGY7C --reason "..."   # cluster c-001, gate 1
+```
+
+Read the artifacts before approving. `c-001` still carries **`yc s23`**, a headline fragment no
+selection rule can kill without a blocklist — gate 1 is exactly where a human strikes it (ADR-1116).
+
+Once the site repo is connected to the deploy provider and PR #1 is merged, Phase 00's steel thread
+closes and the publish loop in `RUNBOOK.md` runs for real. Once the Search Console property exists,
+Phases 01 and 06 un-park unchanged.
 
 ## Owner queue — 4 items, deferred to a later session on 2026-08-14
 

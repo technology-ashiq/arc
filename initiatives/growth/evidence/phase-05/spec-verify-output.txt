@@ -1,0 +1,8 @@
+spec-verify (ADR-0408 vs PLAN-evolve REQ-00) -- PASS
+
+the live validator deviates from the frozen spec in exactly the four ways ADR-1109 recorded
+
+  D1 [BAD_LEADS_TS] an ISO-week string in window_start is refused; the frozen spec's own example uses one
+  D2 [BAD_LEADS] equal window bounds are refused; the spec's example sets both to the same ISO week
+  D3 [BAD_LEADS] the dotted surface named in PLAN-evolve and PLAN-growth is refused; DIMENSION_RE has no dot
+  D4 [BAD_LEADS] a payload writing the literal - for an absent optional is refused; the literal is a preimage rendering, so absent optionals are omitted entirely
