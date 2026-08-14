@@ -262,14 +262,21 @@ const DAY = 86400000;'
   # `env VAR=x _node ...` cannot work: `_node` is a bats FUNCTION, and env execs a program. It
   # failed with "env: '_node': No such file or directory" -- a test that never ran the thing it
   # was asserting about.
+  # SUBSTRING, not whole-output equality. `arc-brief.mjs` calls main() unconditionally at the
+  # bottom -- it has no main guard -- so importing it RUNS THE CLI and prints a real brief into
+  # $output alongside this probe's own line. Every other suite drives it as a subprocess and never
+  # meets this; the import path does. (Noted for the retro rather than fixed here: adding the guard
+  # is a shared-organ edit another lane owns, and this test does not need it.)
   export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"
   run _node "const B = await import(\"./.claude/scripts/hq/arc-brief.mjs\");
     const withLines = B.render('2026-08-14', [], [], { feedLines: ['growth feed: test line'] });
     const without = B.render('2026-08-14', [], [], {});
-    console.log((withLines.includes('growth feed: test line') ? 'rendered' : 'DROPPED') + ' ' +
+    console.log('PROBE ' + (withLines.includes('growth feed: test line') ? 'rendered' : 'DROPPED') + ' ' +
                 (without.includes('growth feed') ? 'LEAKED' : 'absent') + ' ' + JSON.stringify(without));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = 'rendered absent "brief 2026-08-14\n"' ]
+  # The baseline must be BYTE-identical when growth passes nothing: ten suites from four other
+  # lanes assert on this renderer's exact output.
+  [[ "$output" == *'PROBE rendered absent "brief 2026-08-14\n"'* ]] || { echo "$output"; false; }
 }
 
 @test "feed: a correction lands and a re-ingest stays idempotent" {
