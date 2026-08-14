@@ -31,11 +31,26 @@ resolved by ADR-1114.
 
 ## Verification plan
 
-Coarse at kickoff, refined via `/arc-change` when the phase starts: every versioned slop marker is
-caught by its own fixture; a claim without a link WARNs; a dead link WARNs; a clean article is
-green; and — **mandatory** — the **honest-limit fixture**: a marker-free sample that is still slop
-**passes** the lint and is caught only at the human gate. That fixture is committed so the lint's
-limits live in the test suite rather than in someone's memory.
+**Refined 2026-08-14** from the coarse kickoff one-liner. Suite: `tests/growth-lints.bats`.
+
+| # | What is proven | Expected |
+|---|---|---|
+| V1 | Green **on CI**, per-JOB, at the branch HEAD | every job `success`, three OS legs |
+| V2 | Every versioned slop marker is caught by its own fixture | each `phrases[].id` has a fixture that hits it; the suite **derives the id list from the marker file**, so a marker added without a fixture turns it RED |
+| V3 | A claim of fact with no source link **FAILs** | `UNCITED`, exit 5 from the CLI |
+| V4 | A dead link **WARNs**, never FAILs | `DEAD_LINK`, exit 0 |
+| V5 | A link that could not be checked is its own state | `UNCHECKED_LINK` WARN — not live, not dead (the 429 lesson) |
+| V6 | A clean article is green | zero findings, exit 0 |
+| V7 | **The honest-limit fixture (mandatory)** | a marker-free sample that is still slop **PASSES** both lints, and the fixture is committed |
+| V8 | **The vacuous-pass guard** | a deliberately broken marker file turns the suite RED — a lint that cannot tell "scanned clean" from "could not scan" is the memory lane's 2026-08-12 finding |
+| V9 | The assembled prompt carries no style prescription | `assertNoStylePrescription` on the REAL assembled bytes, and a mutant prompt carrying "5-8 H2s" is refused |
+| V10 | Frontmatter `citations[]` matches the body's links | derived, never accepted from the caller |
+
+**Correction, 2026-08-14.** The kickoff wording of this plan said *"a claim without a link WARNs"*.
+That contradicts REQ-02 (*"every claim-of-fact carries a source link"*) and ADR-1111, which makes
+the source link an **E3 law** rather than a suggestion. A law enforced at WARN is not enforced. The
+built behaviour is **FAIL for an uncited claim, WARN for a dead link** — a distinction ADR-1110 does
+draw explicitly, and the only one it draws.
 
 **The vacuous-pass guard for this phase:** each lint fixture must first prove the lint **ran** — a
 deliberately broken lint binary must turn the suite RED — before any fixture's verdict is trusted.

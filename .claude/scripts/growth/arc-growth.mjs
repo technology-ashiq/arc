@@ -11,7 +11,8 @@
 // `generate` exists in this phase ONLY to hold gate 1 (ADR-1112): it refuses an unapproved
 // cluster. The generation itself lands in Phase 03 behind the same door.
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { loadSources, mine, assertCandidate, MineError } from "./lib/mine.mjs";
 import {
   fakeResolver, httpResolver, partitionByEvidence,
@@ -19,48 +20,88 @@ import {
 } from "./lib/evidence.mjs";
 import { buildClusterPlan, planSha, assertClusterApproved, ClusterError } from "./lib/cluster.mjs";
 import { hnAlgoliaAdapter, manualAdapter, hnAlgoliaVerifier } from "./lib/adapters.mjs";
+import { loadMarkers, scanSlop, renderSlopReport } from "./lib/slop-lint.mjs";
+import { scanCitations, checkLinks, renderCitationReport } from "./lib/citation-lint.mjs";
+import { loadExemplars, clusterRows, assemblePrompt, assertNoStylePrescription, renderMdx } from "./lib/generate.mjs";
 
-const argv = process.argv.slice(2);
-const verb = argv[0];
+// Assigned by main() once the verb is known. Every flag read goes through flag()/has(), which read
+// this and nothing else -- there is no second reading of argv anywhere in the file.
+let ARGS = { values: new Map(), bare: new Set() };
 
-const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan"];
+const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan",
+  "keyword", "exemplars", "markers", "file", "draft"];
 const BARE_FLAGS = ["offline", "accept-unknown"];
 
-function flag(name, fallback = undefined) {
-  const hits = [];
-  for (let i = 0; i < argv.length; i++) if (argv[i] === `--${name}`) hits.push(i);
-  if (hits.length === 0) return fallback;
-  // Two values for one flag is an OPERATOR ERROR, not a last-wins or first-wins override.
-  // `.claude/rules/lanes.md` settled this: silently picking one of two named values is the
-  // "never guess" failure. Taking the FIRST was worse than either -- the file the operator named
-  // last was not the file written.
-  if (hits.length > 1)
-    die("BAD_ARGS", `--${name} given ${hits.length} times; pick one (values: ${hits.map((i) => JSON.stringify(argv[i + 1])).join(", ")})`);
-  const v = argv[hits[0] + 1];
-  // A flag whose value is the next flag has swallowed it. `.claude/rules/lanes.md` records this
-  // exact bug costing a lane its evidence path, so it is refused rather than accepted as empty.
-  if (v === undefined || v.startsWith("--"))
-    die("BAD_ARGS", `--${name} needs a value (got ${v === undefined ? "end of args" : JSON.stringify(v)})`);
-  // An EMPTY value is an unset shell variable that was correctly quoted. Accepting it made
-  // `--sitemap-file ""` disable the own-page exclusion while the run printed "no sitemap given",
-  // which is a lie about what the operator asked for.
-  if (v.trim() === "") die("BAD_ARGS", `--${name} was given an empty value (an unset shell variable?)`);
-  return v;
-}
-const has = (name) => argv.includes(`--${name}`);
-
-/** Anything unrecognised is refused. `--offline=true` silently ran ONLINE, and a typo in
- *  `--accept-unknown` was a no-op: both safety flags failed toward the less safe behaviour. */
-function assertKnownFlags() {
-  for (let i = 1; i < argv.length; i++) {
-    const a = argv[i];
-    if (!a.startsWith("--")) continue;
+// ---------------------------------------------------------------------------------------------
+// ONE PARSE, and everything reads from it.
+//
+// The old parser was three functions that disagreed about the same argv. `assertKnownFlags` skipped
+// every token that did not start with `--`, so anything else was validated by nobody and read by
+// nobody. Three real consequences, all found by an adversarial pass on 2026-08-14:
+//
+//   1. `lint --file *.md` -- the shell expands the glob, `--file` takes the first path, and the
+//      REST ARE SILENTLY DROPPED. Two articles with blocking findings were never opened and the
+//      command exited 0 "clean". That is the one property this surface must never break.
+//   2. `-offline` (one dash), `/offline`, and an em-dashed `--offline` were dropped with no error,
+//      so the run went ONLINE while the operator believed it was offline. The file's own comment
+//      says `--offline=true` did this once and was fixed; the twin was left standing.
+//   3. `assertKnownFlags` consumed the token after a value flag while `has()` still counted it, so
+//      `--candidates --offline` was simultaneously a value and a bare flag.
+//
+// So argv is parsed ONCE, strictly, into a structure; `flag()` and `has()` are lookups. There is no
+// second reading of argv anywhere, which is what let the three disagree.
+function parseArgs(args) {
+  const values = new Map();
+  const bare = new Set();
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    // A token that is not `--name` is not an argument this CLI takes. Refusing it is the whole
+    // fix for the glob case: the extra paths become a loud error instead of silence.
+    if (!a.startsWith("--") || a === "--") {
+      die("BAD_ARGS", `unexpected argument ${JSON.stringify(a)} -- this command takes only --flags. ` +
+        `A shell glob (--file *.md) expands to several paths and only the first would be read.`);
+    }
     const name = a.slice(2);
-    if (BARE_FLAGS.includes(name)) continue;
-    if (VALUE_FLAGS.includes(name)) { i++; continue; }
-    die("BAD_ARGS", `unknown option ${JSON.stringify(a)} (known: ${[...VALUE_FLAGS.map((f) => "--" + f), ...BARE_FLAGS.map((f) => "--" + f)].join(" ")})`);
+    // `--name=value` is refused rather than parsed: accepting it here while `has()` looked for the
+    // bare form is how a safety flag became a no-op.
+    if (name.includes("=")) {
+      const base = name.split("=")[0];
+      die("BAD_ARGS", BARE_FLAGS.includes(base)
+        ? `--${base} takes no value; write it bare, not ${JSON.stringify(a)}`
+        : `write --${base} <value>, not ${JSON.stringify(a)}`);
+    }
+    if (BARE_FLAGS.includes(name)) {
+      // Duplicates are an operator error for a BARE flag too. Idempotence is not the point: the
+      // rule is that silently resolving a repeat is the never-guess failure, and it was enforced
+      // for value flags and not for these.
+      if (bare.has(name)) die("BAD_ARGS", `--${name} given more than once`);
+      bare.add(name);
+      continue;
+    }
+    if (!VALUE_FLAGS.includes(name))
+      die("BAD_ARGS", `unknown option ${JSON.stringify(a)} (known: ${[...VALUE_FLAGS.map((f) => "--" + f), ...BARE_FLAGS.map((f) => "--" + f)].join(" ")})`);
+    if (values.has(name))
+      die("BAD_ARGS", `--${name} given more than once; pick one (values: ${JSON.stringify(values.get(name))}, ${JSON.stringify(args[i + 1])})`);
+    const v = args[i + 1];
+    // A flag whose value is the next flag has swallowed it. `.claude/rules/lanes.md` records this
+    // exact bug costing a lane its evidence path, so it is refused rather than accepted as empty.
+    if (v === undefined || v.startsWith("--"))
+      die("BAD_ARGS", `--${name} needs a value (got ${v === undefined ? "end of args" : JSON.stringify(v)})`);
+    // An EMPTY value is an unset shell variable that was correctly quoted. Accepting it made
+    // `--sitemap-file ""` disable the own-page exclusion while the run printed "no sitemap given",
+    // which is a lie about what the operator asked for.
+    if (v.trim() === "") die("BAD_ARGS", `--${name} was given an empty value (an unset shell variable?)`);
+    values.set(name, v);
+    i++; // consume the value
   }
+  return { values, bare };
 }
+
+function flag(name, fallback = undefined) {
+  return ARGS.values.has(name) ? ARGS.values.get(name) : fallback;
+}
+const has = (name) => ARGS.bare.has(name);
+
 
 function die(code, message) {
   process.stderr.write(`arc-growth: ${code} -- ${message}\n`);
@@ -71,10 +112,21 @@ function die(code, message) {
 // long-path semantics happily create them -- so `--out nul` made a file no ordinary tool can read
 // and `--out a.jsonl.` made one that every other program resolves to `a.jsonl`. A downstream
 // reader then silently gets the previous file.
-const WIN_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i;
+// CONIN$/CONOUT$ are console devices too and were missing from this list.
+const WIN_RESERVED = /^(con|prn|aux|nul|com[0-9]|lpt[0-9]|conin\$|conout\$)(\.|$)/i;
 function assertWritablePath(p, what) {
   const base = p.split(/[\\/]/).pop() ?? "";
   if (base === "") die("BAD_ARGS", `--${what} names a directory, not a file`);
+  // A COLON opens an NTFS alternate data stream. `--out article.mdx:hidden` wrote 104 bytes into a
+  // stream nothing reads and left a ZERO-BYTE article.mdx at the named path -- and the command
+  // printed "rendered" and exited 0. git commits the empty file, the site build reads the empty
+  // file, and the only artifact this whole lane produces is silently gone. This is the same class
+  // as the reserved-device names above: Node writes it happily, every other tool resolves it
+  // elsewhere. The other characters are Windows-invalid in a filename and mean the same thing --
+  // a path that cannot be what the operator thinks it is.
+  if (/[:<>"|?*]/.test(base))
+    die("BAD_ARGS", `--${what} ${JSON.stringify(p)} contains ${JSON.stringify(base.match(/[:<>"|?*]/)[0])}; ` +
+      `a colon opens an NTFS alternate data stream, leaving a zero-byte file at the path you named`);
   if (WIN_RESERVED.test(base))
     die("BAD_ARGS", `--${what} ${JSON.stringify(p)} is a Windows reserved device name`);
   if (/[. ]$/.test(base))
@@ -230,19 +282,157 @@ async function cmdGenerate() {
 
   const approvalId = assertClusterApproved({ events, clusterId, planSha: sha });
   process.stdout.write(`cluster ${clusterId} approved by ${approvalId} for plan ${sha.slice(0, 12)}\n`);
-  process.stdout.write("generation itself lands in Phase 03; this phase ships the gate that guards it\n");
+
+  // Phase 03: past the gate, assemble the drafting prompt. The DRAFTING itself is the skill's
+  // (`.claude/skills/seo-article-writer`), not this command's -- a deterministic CLI that shells
+  // out to a model would be untestable and, worse, would put an unreviewable creative step inside
+  // a binary that also holds a security gate. This writes the prompt; a human or an agent runs it.
+  const keyword = flag("keyword");
+  if (!keyword) die("BAD_ARGS", "generate needs --keyword K naming an approved row of the cluster");
+  const outPath = flag("out");
+  if (!outPath) die("BAD_ARGS", "generate needs --out F for the assembled prompt");
+  assertWritablePath(outPath, "out");
+
+  const exDir = flag("exemplars", "initiatives/growth/exemplars");
+  let exemplars, prompt;
+  try {
+    exemplars = loadExemplars(exDir);
+  } catch (e) {
+    die(e.code || "NO_EXEMPLARS", e.message);
+  }
+  const rows = clusterRows(plan);
+  const row = rows.find((r) => r.keyword === keyword);
+  if (!row)
+    die("ROW_NOT_IN_CLUSTER", `${JSON.stringify(keyword)} is not a row of ${clusterId}; approved rows are: ${rows.map((r) => r.keyword).join(" | ")}`);
+  try {
+    // assemblePrompt runs assertNoStylePrescription itself, on the authored template. It is not
+    // re-run here on the assembled bytes: doing that scanned the operator's own approved keyword
+    // and threw STYLE_PRESCRIPTION on `seo faq schema`, naming the wrong cause.
+    prompt = assemblePrompt({ row, cluster: plan, exemplars });
+  } catch (e) {
+    die(e.code || "BAD_PROMPT", e.message);
+  }
+  writeFileSync(outPath, prompt, "utf8");
+  process.stdout.write(
+    `prompt for ${JSON.stringify(keyword)} written to ${outPath} ` +
+    `(${exemplars.length} exemplar(s), ${prompt.length} bytes)\n` +
+    `draft it with the seo-article-writer skill, then: arc-growth render --draft F --plan ${planPath} --out F\n`,
+  );
 }
 
-const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate };
+/** Render a drafted body into the site's MDX shape. Separate verb, because drafting is not ours. */
+function cmdRender() {
+  const draftPath = flag("draft");
+  const planPath = flag("plan");
+  const outPath = flag("out");
+  if (!draftPath || !planPath || !outPath) die("BAD_ARGS", "render needs --draft F --plan F --out F");
+  assertWritablePath(outPath, "out");
+  const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
+  const draft = parseJsonOrDie(readOrDie(draftPath, "draft"), "the draft");
+  if (draft === null || typeof draft !== "object" || Array.isArray(draft))
+    die("BAD_DRAFT", "the draft must be a JSON object of {title, meta, slug, template_id, body}");
+  // The PLAN gets the same shape check as the draft. It did not, so a null or array plan surfaced
+  // as `BAD_DRAFT -- Cannot read properties of null` and sent the operator to inspect a file that
+  // was fine. The twin of a fix is where this repo keeps losing.
+  if (plan === null || typeof plan !== "object" || Array.isArray(plan) || typeof plan.cluster_id !== "string")
+    die("BAD_PLAN", `the cluster plan at ${planPath} is not a cluster plan (no cluster_id)`);
+  // cluster_id comes from the PLAN, never from the draft. A draft that names its own cluster could
+  // attribute an article to a cluster nobody approved, and the approval is bound to the plan.
+  let mdx;
+  try {
+    mdx = renderMdx({
+      title: draft.title, meta: draft.meta, slug: draft.slug,
+      cluster_id: plan.cluster_id, template_id: draft.template_id, body: draft.body,
+    });
+  } catch (e) {
+    die(e.code || "BAD_DRAFT", e.message);
+  }
+  writeFileSync(outPath, mdx, "utf8");
+  process.stdout.write(`rendered ${outPath} for cluster ${plan.cluster_id}\n`);
+}
 
-async function main() {
-  const fn = Object.hasOwn(COMMANDS, verb) ? COMMANDS[verb] : undefined;
-  if (typeof fn !== "function") die("BAD_ARGS", `unknown command ${JSON.stringify(verb ?? "")} (${Object.keys(COMMANDS).join(" | ")})`);
-  assertKnownFlags();
+/** Run both lints over one file and print the review-pack reports. */
+async function cmdLint() {
+  const file = flag("file");
+  if (!file) die("BAD_ARGS", "lint needs --file F");
+  const markersPath = flag("markers", "initiatives/growth/slop-markers.json");
+  const text = readOrDie(file, "the article");
+  // AN EMPTY ARTICLE IS NOT A CLEAN ARTICLE. A zero-byte or whitespace-only file used to print
+  // "No marker matched" and exit 0, which is "could not scan" reported as "scanned clean" -- the
+  // one property this surface must never break. A truncated or half-written draft reached the
+  // review pack indistinguishable from a real one that passed.
+  if (text.trim() === "")
+    die("EMPTY_ARTICLE", `${file} is empty or whitespace only -- there is nothing to lint, and reporting that as clean would be a lie`);
+  let markers;
+  try {
+    markers = loadMarkers(readOrDie(markersPath, "the marker list"));
+  } catch (e) {
+    die(e.code || "BAD_MARKERS", e.message);
+  }
+
+  const slop = scanSlop(text, markers);
+  const claims = scanCitations(text);
+  // Links are checked only when the run is online. `--offline` reports that they were NOT checked
+  // rather than reporting them fine: an unchecked link is not a live one (the 429 lesson).
+  const linkResult = has("offline")
+    ? null
+    : await checkLinks(text, httpResolver());
+
+  process.stdout.write(renderSlopReport(slop) + "\n\n");
+  process.stdout.write(renderCitationReport(claims, linkResult) + "\n");
+  process.stdout.write(`\n${POV_FLOOR_LINE}\n`);
+
+  // Exit code carries the verdict; WARNs never change it. A dead link is the web's weather.
+  const fails = slop.findings.length + claims.findings.filter((f) => f.level === "FAIL").length;
+  if (fails > 0) {
+    process.stderr.write(`arc-growth: LINT_FAIL -- ${fails} finding(s) that block the review pack\n`);
+    process.exit(5);
+  }
+}
+
+// Criterion 7. The POV floor is a HUMAN line in the review pack and never a regex (ADR-1110): a
+// marker list cannot tell an original stance from a confident sentence, and a lint that claimed to
+// would be the prescriptive turn arriving in disguise. It is printed by the lint command so it
+// travels with the report the reviewer actually reads.
+export const POV_FLOOR_LINE =
+  "POV FLOOR (human, not a lint): name the one original practitioner insight in this draft -- " +
+  "something arc learned by doing, not restated from the sources. If you cannot name it, the " +
+  "draft does not pass, and no lint above can tell you that.";
+
+// EXPORTED so a test can ask the module what it registered instead of grepping the source for an
+// object literal. The E2 "no publishing verb" assertion used to be
+// `grep -o 'const COMMANDS = {[^}]*}'`, and an adversarial pass walked a mutant straight past it:
+// one appended line, `COMMANDS.publish = fn`, registers a fully reachable verb that the grep cannot
+// see. The literal is not the only way to register -- `Object.assign` and `defineProperty` are two
+// more. A guard on a Tier E unamendable rule cannot be a substring search of its own source, which
+// is this repo's oldest recurring defect (grep where a parse was needed).
+export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint };
+
+export async function main(argvIn = process.argv.slice(2)) {
+  const v = argvIn[0];
+  const fn = Object.hasOwn(COMMANDS, v) ? COMMANDS[v] : undefined;
+  if (typeof fn !== "function") die("BAD_ARGS", `unknown command ${JSON.stringify(v ?? "")} (${Object.keys(COMMANDS).join(" | ")})`);
+  // Parse AFTER the verb is known and BEFORE the command runs. One parse, one structure.
+  ARGS = parseArgs(argvIn.slice(1));
   await fn();
 }
 
-main().catch((e) => {
+// Run the CLI only when this file IS the program. Without this the module cannot be imported at
+// all: `await import(...)` executed main(), which died on the importer's argv and took the host
+// process with it (exit 2) -- which is precisely why the E2 test above was reduced to grepping.
+//
+// BOTH SIDES ARE REALPATH'd. Comparing `process.argv[1]` to `import.meta.url` directly silently
+// no-ops behind a symlink, and the repo has been bitten by that shape three times; on Windows it
+// also fails on drive-letter case alone.
+const _isMain = (() => {
+  try {
+    return realpathSync(process.argv[1] ?? "") === realpathSync(fileURLToPath(import.meta.url));
+  } catch {
+    return false; // cannot resolve either side -> do not run as a program
+  }
+})();
+
+if (_isMain) main().catch((e) => {
   if (e instanceof MineError || e instanceof EvidenceError || e instanceof ClusterError) die(e.code, e.message);
   // A SpineError carries its own code and a message written for a human -- the worktree guard's
   // message even names the directory to run from. Dumping it as UNEXPECTED with a raw stack
