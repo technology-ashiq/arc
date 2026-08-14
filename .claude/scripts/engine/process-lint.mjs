@@ -661,9 +661,15 @@ if (all) {
         //
         // A lint that says "unknown driver" about a driver that exists is worse than no lint:
         // the operator reads it as authority and goes looking for a typo.
+        // READ FROM THIS SCRIPT'S OWN SIBLING DIRECTORY, not from the root being linted. The
+        // installed driver set is a property of the ENGINE doing the linting, not of the tree it
+        // is pointed at: `--root` sandboxes copy a router.yaml and a process file and nothing
+        // else, and a consumer repo has no drivers/ at all. Reading from `root` made this lint
+        // report "the drivers directory could not be read" for every such caller, which turned a
+        // clean sandbox red for a reason that had nothing to do with its router.
         const installedDrivers = (() => {
           try {
-            return readdirSync(join(root, ".claude/scripts/engine/drivers"))
+            return readdirSync(new URL("./drivers/", import.meta.url))
               .filter((f) => f.endsWith(".sh")).map((f) => f.slice(0, -3)).sort();
           } catch { return null; }
         })();
