@@ -121,6 +121,44 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### 2026-08-14, end of session — read this first
+
+**HEAD `bd16093`, pushed, tree clean, PR #172 OPEN and MERGEABLE.** A CI run exists for that SHA.
+Read it per-JOB before trusting it: `gh run view <id> --json jobs`.
+
+**THE HIRE DECISION IS ON THE SPINE.** `approval.requested` `01KZYG5QBAM1ZZQJK7J0ZG13AK` →
+`decision.recorded` **`01KZYG5R1BB8BJ1R4MRFY5SP4M`**, both verified present in
+`.claude/state/hq/events/2026-08-14.jsonl` and absent from `_quarantine/`. The Phase 07 router row
+is UNBLOCKED and cites that ULID plus the mandate decision `01KZTM348858PDH44K4HA64CVA`.
+
+**THE CEILING FIGURE IS NOT NEEDED YET.** The branch session asked the owner for it as a blocker;
+the session on main is right that it is not one. Phases 04, 05 and 06 all run at zero spend against
+the local ollama endpoint. Recommended value when it IS needed: **0** — the key is deliberately
+unfunded so certification fixture 10 can assert a real HTTP 402 at zero cost.
+
+**NEXT ACTION, and it is unblocked:** write the Phase 07 runtime row into `engine/router.yaml` with
+`cap: L1-drafts`, `hosted: local`, `judge: ashiq`, `review_by: 2026-11-13`, plus the
+`hq.policy.yaml` row (`"process:build-in-public-draft"`, born at L1) and the termination spec — ONE
+reviewed diff, as REQ-04 requires. The validator for all four fields already exists and is green
+(`router-row.mjs`, full 16-cell hostile matrix, enforced at router LOAD).
+
+**WHAT WENT RED TODAY, AND WHY IT IS THE USEFUL PART.** The merge broke one check:
+`tests/bench-steel-probe.mjs` pinned the literal installed-driver string, and adding `hermes`
+changed it. That test was not wrong to fail — it was the only thing that noticed. The tracker had
+already said *run the caller sweep BEFORE pushing*, and I read that during the merge and pushed
+without doing it. Doing the sweep properly afterwards found a **THIRD driver set** in
+`process-lint.mjs` that had fallen behind BOTH the others: a router row naming `hermes` OR `mock`
+would have been rejected as an unknown driver while arc-run routed it perfectly well. That is
+exactly tomorrow's row. Both are fixed by DERIVING the set from `drivers/*.sh` rather than by
+updating a fourth copy of it.
+
+**RECORDED, NOT FIXED:** `process-lint.mjs` carries six LITERAL NUL bytes at lines 599-601, used as
+placeholder sentinels. That is why `grep` reports the file as binary and why line-oriented searches
+against it return nothing. Seventh occurrence of the invisible-character class this cycle. It
+belongs to another lane's compile path and is not blocking.
+
+---
+
 **Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
 
 > ⚠ **The `burn: 0.0d` in the machine header above is STALE, and it is the STOP clock.** Phase 04
