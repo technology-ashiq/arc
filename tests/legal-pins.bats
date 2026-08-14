@@ -224,6 +224,86 @@ teardown() { _arc_legal_teardown; }
   [ "$output" = "v1" ]
 }
 
+@test "legal templates: an EDITED set blocks publish even with a fresh venture approval" {
+  # REQ-07, and the reason it is a separate decision. The per-venture approval covers that
+  # venture's FACTS and the pages they produce; it does not approve the WORDING, because the
+  # person approving a venture is not reviewing the clause library every venture shares. Without
+  # this, editing a clause and committing it would put new words in front of customers on the
+  # next publish with every receipt in the chain looking clean.
+  #
+  # The venture approval here is minted AFTER the edit, so it matches perfectly. Only the set
+  # approval can refuse.
+  _arc_legal_sandbox
+  run node "$ARC_ROOT/tests/legal-probe.mjs" data-edit "$SANDBOX" grievance-windows.json '"ack_hours": 48' '"ack_hours": 47'
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"SET_EDITED_SINCE_APPROVAL"* ]]
+}
+
+@test "legal templates: an UNedited set publishes, so the refusal above means something" {
+  # The positive control for the test above. Same flow, nothing edited.
+  _arc_legal_sandbox
+  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    --decision "$SANDBOX/d.json" --request "$REQ"
+  [ "$status" -eq 0 ]
+}
+
+@test "legal templates: a set with NO approval on record is refused -- absence is not consent" {
+  _arc_legal_sandbox
+  run node "$ARC_ROOT/tests/legal-probe.mjs" json-del "$SANDBOX/products/legal/approved-sets.json" sets
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"SET_RECORD_UNREADABLE"* ]]
+}
+
+@test "legal templates: propose-templates refuses a set already approved at these bytes" {
+  # Nothing to decide. A request that asks a human to re-approve what they already approved is
+  # how approval becomes a reflex.
+  _arc_legal_sandbox
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" propose-templates --set v1 >"$SANDBOX/o.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/o.txt"
+  [[ "$output" == *"already approved"* ]]
+}
+
+@test "legal templates: propose-templates on an edited set names the files and both hashes" {
+  # "The set hash changed" is not reviewable. The person being asked has to know what they are
+  # reading, so the request carries the file list and the sha it is moving FROM.
+  _arc_legal_sandbox
+  run node "$ARC_ROOT/tests/legal-probe.mjs" data-edit "$SANDBOX" grievance-windows.json '"ack_hours": 48' '"ack_hours": 47'
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" propose-templates --set v1 --out "$SANDBOX/req.json"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/req.json" subject
+  [ "$output" = "legal.templates" ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/req.json" previously_approved_sha
+  [ "${#output}" -eq 64 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" field "$SANDBOX/req.json" template_set_sha
+  [ "${#output}" -eq 64 ]
+}
+
 @test "legal pins: this suite registers every test it declares" {
   command -v bats >/dev/null 2>&1 || { echo "bats is not on PATH" >&2; return 1; }
   run node "$ARC_ROOT/tests/legal-probe.mjs" count-tests "$BATS_TEST_FILENAME"

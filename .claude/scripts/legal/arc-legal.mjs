@@ -25,7 +25,7 @@ import { runAllLints, scenarioSetLint, crossPageLint, findingsAreFatal, TRIAL, G
 import { buildChecklist, renderChecklist, renderCiGuard, guardVersionIn } from "./lib/checklist.mjs";
 import {
   approvalPayload, validateApprovalPayload, verifyChain, verifyDecision,
-  backdatingErrors, semanticDiff, APPROVAL_SUBJECT,
+  backdatingErrors, semanticDiff, APPROVAL_SUBJECT, TEMPLATE_SUBJECT, templateSetApprovalErrors,
   verifyPublished, VERIFY_INTACT, VERIFY_TAMPERED,
 } from "./lib/receipts.mjs";
 
@@ -85,6 +85,7 @@ function usage() {
     "       arc-legal checklist --venture NAME [--out FILE] [--evidence FILE]",
     "       arc-legal bump-templates --venture NAME --to SET [--guard FILE]",
     "       arc-legal ci-guard --venture NAME [--out FILE] [--dir PAGES_DIR]",
+    "       arc-legal propose-templates --set SET [--out FILE]",
     "",
     "  --venture NAME   a fixture venture under tests/fixtures/legal/ventures/",
     "  --out DIR        where the rendered pages are written",
@@ -498,7 +499,10 @@ function publishMain(args) {
   const hadPrevious = existsSync(ledgerFile);
   const previous = hadPrevious ? readJson(ledgerFile) : null;
 
+  const approvedSets = existsSync(join(PRODUCT, "approved-sets.json")) ? readJson(join(PRODUCT, "approved-sets.json")) : null;
+
   const problems = [
+    ...templateSetApprovalErrors({ approvedSets, templateSet: fresh.template_set, sha: fresh.template_set_sha }),
     ...verifyDecision(decision, approved, args.request),
     ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: readdirSync(args.dir) }),
     ...backdatingErrors({
@@ -579,6 +583,50 @@ function publishMain(args) {
 /**
  * ci-guard -- emit the venture-side CI guard. Generated, never hand-written; see renderCiGuard.
  */
+/**
+ * propose-templates -- send a template SET to the inbox as its own approval.
+ *
+ * REQ-07: a template diff is a decision in its own right, never a silent commit. This writes the
+ * request; a human decides it, and the approved sha is recorded in products/legal/approved-sets.json.
+ * Publish refuses any set whose current bytes are not the approved ones.
+ *
+ * It reports WHICH FILES moved, because "the set hash changed" is not reviewable and the person
+ * being asked has to know what they are reading.
+ */
+function proposeTemplatesMain(args) {
+  if (!args.set) { console.error(`propose-templates needs --set SET (e.g. --set v2)\n\n${usage()}`); return 2; }
+  if (!SET_NAME.test(args.set)) { console.error(`"${args.set}" is not a set name like "v2"`); return 2; }
+  if (!existsSync(join(PRODUCT, "templates", args.set))) { console.error(`template set ${args.set} does not exist`); return 3; }
+
+  const set = renderInputs(args.set);
+  const recordPath = join(PRODUCT, "approved-sets.json");
+  const record = existsSync(recordPath) ? readJson(recordPath) : { version: 1, sets: {} };
+  const previous = record.sets?.[args.set] ?? null;
+
+  if (previous === set.sha) {
+    console.error(`template set ${args.set} is already approved at these exact bytes. There is nothing to decide.`);
+    return 2;
+  }
+
+  const payload = {
+    subject: TEMPLATE_SUBJECT,
+    template_set: args.set,
+    template_set_sha: set.sha,
+    previously_approved_sha: previous,
+    files: Object.keys(set.files).sort(),
+  };
+  const text = JSON.stringify(payload, null, 2) + "\n";
+  if (args.out) { mkdirSync(dirname(args.out), { recursive: true }); writeFileSync(args.out, text, "utf8"); }
+  process.stdout.write(text);
+
+  console.log("");
+  console.log(`A HUMAN decides this. It is the PROSE being approved, not any venture's facts --`);
+  console.log(`the person approving a venture is not reviewing the clause library, which is why`);
+  console.log(`this is a separate decision (REQ-07).`);
+  console.log(`Once approved, record it:  products/legal/approved-sets.json -> sets.${args.set} = ${set.sha}`);
+  return 0;
+}
+
 function ciGuardMain(args) {
   if (!args.venture) { console.error(`ci-guard needs --venture NAME\n\n${usage()}`); return 2; }
   const text = renderCiGuard({
@@ -723,6 +771,7 @@ function main(argv) {
   if (verb === "checklist") return checklistMain(args);
   if (verb === "bump-templates") return bumpTemplatesMain(args);
   if (verb === "ci-guard") return ciGuardMain(args);
+  if (verb === "propose-templates") return proposeTemplatesMain(args);
   if (verb !== "render") { console.error(`unknown verb "${verb}"\n\n${usage()}`); return 2; }
   if (!args.venture) { console.error(`render needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`render needs --out DIR\n\n${usage()}`); return 2; }

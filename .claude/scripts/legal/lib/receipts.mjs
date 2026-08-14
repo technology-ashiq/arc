@@ -24,6 +24,33 @@ import { join } from "node:path";
 import { bytesHash } from "./canonical.mjs";
 
 export const APPROVAL_SUBJECT = "legal.publish";
+export const TEMPLATE_SUBJECT = "legal.templates";
+
+/**
+ * Is this template SET, at these exact bytes, one a human has approved as PROSE?
+ *
+ * Separate from the per-venture approval on purpose, and this is the whole point of REQ-07. The
+ * publish approval approves a VENTURE's facts and the pages they produce; it does not approve the
+ * WORDING, because the person approving a venture is not reviewing the clause library. Without
+ * this check, editing a clause and committing it would put new words in front of customers on the
+ * next publish, and every receipt in the chain would look clean -- the venture owner would have
+ * approved words nobody reviewed as words.
+ *
+ * A set absent from the record is NOT approved. Absence is never consent.
+ */
+export function templateSetApprovalErrors({ approvedSets, templateSet, sha }) {
+  const errs = [];
+  if (!approvedSets || typeof approvedSets !== "object" || !approvedSets.sets || typeof approvedSets.sets !== "object")
+    return ["SET_RECORD_UNREADABLE: approved-sets.json is missing or malformed, so no template set can be shown to have been approved. A record that cannot be read is not a record of approval."];
+
+  const recorded = approvedSets.sets[templateSet];
+  if (recorded === undefined)
+    errs.push(`SET_NOT_APPROVED: template set "${templateSet}" has no approval on record. A template edit is its own decision (REQ-07) -- the per-venture approval covers that venture's facts, not the clause wording every venture shares.`);
+  else if (recorded !== sha)
+    errs.push(`SET_EDITED_SINCE_APPROVAL: template set "${templateSet}" was approved at ${String(recorded).slice(0, 12)}... and is now ${String(sha).slice(0, 12)}.... The prose has been edited since a human read it. Take a template approval before publishing.`);
+
+  return errs;
+}
 
 /**
  * The strict payload profile (ADR-1003). Unknown keys are REJECTED rather than ignored, because

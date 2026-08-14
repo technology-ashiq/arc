@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "_comment": [
+    "Which template SET VERSIONS a human has approved, and at which exact bytes (ADR-1005, REQ-07).",
+    "",
+    "A template edit is its own decision. Without this file, editing a clause and committing it",
+    "would put new wording in front of customers on the next publish, and the only approval in",
+    "the chain would be the per-venture one -- which approves a VENTURE fact set, not the prose.",
+    "The venture owner would be approving words nobody reviewed as words.",
+    "",
+    "It lives OUTSIDE products/legal/data/ on purpose. Everything in data/ is inside the render",
+    "input hash, so recording an approved hash there would change the hash it records -- a file",
+    "that can never agree with itself."
+  ],
+  "sets": {
+    "v1": "fd34f1d74b3bba4c3a769bdf078839650f6289883eb8ad0a2a59f39bc7cf5e2e",
+    "v2": "0e0c4e4186bf698ad7441a954fdd01171ea82e66e87f3b7e23bab2ab6b160872"
+  }
+}
