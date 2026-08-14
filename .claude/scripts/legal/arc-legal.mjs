@@ -138,7 +138,22 @@ function parseArgs(argv) {
  * separator or a `..` is refused BEFORE it is joined, and the resolved path is then checked to
  * be inside the fixtures root -- one confinement function, every path through it.
  */
-function factsPathFor(name) {
+function factsPathFor(name, ventureDirOverride) {
+  // A REAL venture's facts live in the venture's own repo, not in arc's fixtures (ADR-1005:
+  // facts, pages, pins and receipts are venture-local). Without this the engine could only ever
+  // render its own test fixtures, which made a real render impossible -- the one thing the whole
+  // product is for.
+  //
+  // The override is an explicit operator-supplied directory, exactly like `--out`, so it is not
+  // confined to a root the way a NAME is. What it must still do is exist and carry both files:
+  // a directory with no facts.yaml is a typo, and rendering nothing while exiting 0 is the
+  // failure this lane keeps finding elsewhere.
+  if (ventureDirOverride) {
+    const p = resolve(ventureDirOverride, "facts.yaml");
+    if (!existsSync(p)) throw new Fail(3, `no facts.yaml in ${ventureDirOverride}`);
+    return p;
+  }
+
   if (!/^[a-z][a-z0-9-]{0,63}$/.test(name))
     throw new Fail(3, `"${name}" is not a venture name (lowercase letters, digits and hyphens)`);
   const root = join(REPO_ROOT, "tests", "fixtures", "legal", "ventures");
@@ -234,8 +249,8 @@ function clauseDeclarationsIn(source) {
   return decls;
 }
 
-export function renderVenture({ ventureName, outDir }) {
-  const factsPath = factsPathFor(ventureName);
+export function renderVenture({ ventureName, outDir, ventureDir }) {
+  const factsPath = factsPathFor(ventureName, ventureDir);
   const templateSet = pinnedSetFor(ventureName, dirname(factsPath));
 
   let raw;
@@ -850,7 +865,7 @@ function main(argv) {
   if (!args.venture) { console.error(`render needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`render needs --out DIR\n\n${usage()}`); return 2; }
 
-  const { run } = renderVenture({ ventureName: args.venture, outDir: args.out });
+  const { run } = renderVenture({ ventureName: args.venture, outDir: args.out, ventureDir: args["venture-dir"] });
 
   for (const f of run.findings) console.error(`${f.level} ${f.group}:${f.page}:${f.clause}:${f.message}`);
   for (const n of run.not_authored) console.error(`NOT-AUTHORED ${n.page}: ${n.reason} (phase ${n.phase})`);
