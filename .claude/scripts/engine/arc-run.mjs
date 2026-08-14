@@ -42,7 +42,7 @@ import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
-import { routerFaults } from "./router-row.mjs";
+import { routerFaults, RUNTIME_DRIVERS } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -358,6 +358,23 @@ function emitEvent(kind, payloadObj, extraArgs = []) {
   }
 }
 
+/**
+ * A driver's own identity, from the opt-in `version` verb (ADR-0902).
+ *
+ * Returns null on ANY failure -- the verb is optional, the driver may refuse it, and a driver that
+ * did not answer must leave the seat absent rather than have one synthesised for it. The status is
+ * checked rather than the output trusted: a driver that printed nothing and exited 0 is not a
+ * driver that reported a version.
+ */
+function driverVersion(name) {
+  const sh = join(root, ".claude/scripts/engine/drivers", `${name}.sh`);
+  if (!existsSync(sh)) return null;
+  const res = spawnSync("bash", [sh, "version"], { encoding: "utf8", cwd: root, timeout: 15_000 });
+  if (res.error || res.status !== 0) return null;
+  const line = String(res.stdout || "").trim().split(/\r?\n/).filter(Boolean).pop();
+  return line || null;
+}
+
 function emitRun(payload) {
   const { cost, ...rest } = payload;
   const { flag, tokens } = costArgs(cost);
@@ -367,7 +384,45 @@ function emitRun(payload) {
   // The receipt records the model that was ACTUALLY used, never the tier label. A label
   // here asserted a routing decision nothing had applied -- a false claim in an append-only
   // ledger, which is worse than an absent one (ADR-0069 b5 / Constitution E3).
-  if (pinnedModel) extra.push("--model", pinnedModel);
+  // THE RUNTIME OCCUPIES THE SEAT (ADR-0212, amending ADR-0069 blocks a and b). For a normal
+  // driver the seat holds a model id that the router pinned. For an agent runtime there IS no
+  // model id to pin -- the runtime chooses its own model, which is the whole point of hiring one
+  // -- so the seat holds runtime name + version + pinned config hash instead, taken from the
+  // driver's own `version` verb.
+  //
+  // ASKED, NEVER INVENTED. A runtime that does not answer the verb leaves the seat `unpinned`
+  // exactly as before; nothing is synthesised from the driver name, because a seat that is always
+  // populated stops distinguishing a driver that reported from one that did not.
+  //
+  // SCOPED TO RUNTIME DRIVERS. The verb is opt-in (ADR-0902) and `claude-code` and `mock` already
+  // answer it for bench's own provenance; asking it here for THEM would change receipts this
+  // change has no business changing, and a bench probe pins that arc-run receipts read `unpinned`
+  // for a mock run.
+  // AND IT MUST FIT THE SEAT'S GRAMMAR, or it is not emitted at all.
+  //
+  // FOUND BY READING THE RECEIPT RATHER THAN THE EXIT CODE: the spine's MODEL_RE
+  // (lib/validate.mjs) is `[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}` — no `@`, no `+`. The version verb
+  // answers `hermes@sha256:<digest>+cfg.<hash>` (ADR-0902's format, which bench puts in a
+  // SUBJECT block and never in the model seat), so the first hermes receipt was QUARANTINED with
+  // code BAD_MODEL while arc-run reported the run fine. An emitter that exits 0 is not evidence.
+  //
+  // ADR-0212 requires the runtime to occupy this seat and the spine grammar forbids the only
+  // identity the runtime has. That is a real conflict between an ADR and the schema, and
+  // resolving it — widening a COMPANY-WIDE grammar, or re-formatting the identity — is a
+  // reviewed decision, not something this file may take on its own. So the fail-safe: a seat
+  // value that would quarantine is DROPPED, the run falls back to the pre-existing behaviour, and
+  // the reason is said out loud once. A dropped seat costs provenance on one receipt; a
+  // quarantined receipt costs the whole receipt.
+  const SEAT_RE = /^[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}$/;
+  let runtimeSeat = RUNTIME_DRIVERS.has(driver) ? driverVersion(driver) : null;
+  if (runtimeSeat && !SEAT_RE.test(runtimeSeat)) {
+    console.error(`arc-run: NOTICE the ${driver} version ${JSON.stringify(runtimeSeat)} is not a legal model id`);
+    console.error("         (spine MODEL_RE allows A-Za-z0-9:._/- only). Emitting the seat unpinned rather than");
+    console.error("         quarantining the receipt. ADR-0212 and the spine grammar disagree here — see PROGRESS.");
+    runtimeSeat = null;
+  }
+  if (runtimeSeat) extra.push("--model", runtimeSeat);
+  else if (pinnedModel) extra.push("--model", pinnedModel);
   else if (tier) extra.push("--model", "unpinned");
 
   const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}) }, extra);

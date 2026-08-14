@@ -121,6 +121,33 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### ADR-0212 AND THE SPINE GRAMMAR DISAGREE — 2026-08-14, and it quarantined a receipt
+
+**ADR-0212 says the runtime occupies the MP-F model seat, recording runtime name + version +
+pinned config hash. The spine's schema forbids the only identity the runtime has.**
+
+`MODEL_RE` in `lib/validate.mjs:101` is `[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}` — **no `@`, no `+`**.
+The version verb answers `hermes@sha256:<digest>+cfg.<hash>` (ADR-0902's format, which bench puts
+in a SUBJECT block and never in the model seat). So the first hermes `run.completed` was
+**QUARANTINED with code `BAD_MODEL`** while arc-run reported the run fine.
+
+**It was found by reading the RECEIPT, not the exit code.** arc-run printed nothing wrong; the
+event simply landed in `_quarantine/`. This is the same shape this lane already recorded once —
+an emitter exiting 0 is not evidence anything was written — and it is the reason the check is
+"grep the landed file", never "the command succeeded".
+
+**Fail-safe applied, decision NOT taken.** A seat value that would quarantine is now dropped, the
+run falls back to `unpinned`, and arc-run says out loud why. A dropped seat costs provenance on
+one receipt; a quarantined receipt costs the whole receipt. Verified: the same run now lands
+`approval.requested` + `run.completed` with **zero quarantined**.
+
+**The real resolution is a reviewed decision and belongs in an ADR**, because both options are
+company-wide: widen `MODEL_RE` (a spine schema every product shares), or re-format the runtime
+identity (and then two representations of one identity exist, which is its own collision risk).
+Route it through `/arc-change` — do not let a session pick one silently to make a receipt green.
+
+---
+
 ### REQ-04 IS NOT SATISFIABLE AS WRITTEN, and this is the finding — 2026-08-14
 
 **REQ-04 says the `hq.policy.yaml` row rides the SAME change as the router row. It cannot.**
