@@ -4,9 +4,20 @@
 **Date:** 2026-08-13
 **Product:** `growth`
 **Reversibility:** two-way
-**Revisit trigger:** a domain and a live site exist — then Phase 01 and Phase 06 un-park exactly as
-written, with no code change, and the first thing to check is whether the ingest still matches
-Search Console's current export format (ADR-1108).
+**Revisit trigger:** *(sharpened 2026-08-14 — see below; the original wording is now satisfied and
+was never the real condition)* **a verified Search Console Domain property exists** for
+`automemory.ai`. Phase 01 then un-parks exactly as written, with no code change, and the first thing
+to check is whether the ingest still matches Search Console's current export format (ADR-1108).
+**Phase 06 additionally needs the indexability flip merged**, because a `noindex` site accrues no
+week to read.
+
+> **Why this was re-worded.** The trigger first read *"a domain and a live site exist"*. On
+> 2026-08-13 both came true — `arc.automemory.ai` resolves and serves a real article — and the
+> phase-02 close on 2026-08-14 caught the trigger reading TRUE while every reason for the park was
+> still standing. Search Console does not backfill, and this ADR parks the phases on **the clock**,
+> not on the address. A trigger that fires early is worse than one that never fires: the next
+> session would have un-parked Phase 01 straight into its own entry gate and lost the time to
+> discovering why. The condition now names the thing that actually starts the clock.
 
 ## Context
 

@@ -3,10 +3,10 @@
 <!-- machine header -->
 status: LIVE
 cycle: arc-growth (Cycle 14, opened 2026-08-12)
-phase: 00
+phase: 03
 appetite: 10d
-burn: 0d
-blocked-on: owner — arc-site PR #1 merge (E2, publishing is the human's); Phase 01 gated on the domain + GSC property
+burn: 3.0d
+blocked-on: owner — arc-site PR #1 merge (E2, publishing is the human's); Phase 01 gated on the GSC property
 depends-on: —
 
 ## Phase table
@@ -15,7 +15,7 @@ depends-on: —
 |---|---|---|---|
 | 00 | Contract + the road + steel thread | 2.0d | **IN PROGRESS** — contract done, site built; steel-thread emit waits on the human merge |
 | 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | **PARKED** (ADR-1115) — no domain exists; un-parks unchanged when one does |
-| 02 | Miner + cluster gate | 1.0d | **BUILT, awaiting CI + attack pass** — real run done, 7 exit criteria met, gate 1 enforced in code |
+| 02 | Miner + cluster gate | 1.0d | ✅ **DONE 2026-08-14** — 6 criteria met, criterion 3 narrowed and its gap recorded; A-05 fired and fixed (ADR-1116) |
 | 03 | Generator + lints | 1.5d | NOT STARTED |
 | 04 | Publish path + A/B + GEO | 1.5d | NOT STARTED |
 | 05 | The EVO-H0 feed | 1.5d | NOT STARTED |
@@ -28,9 +28,14 @@ decided now, not on day 8.
 
 ## Appetite burn
 
-**~2.2 of 10 days used (22%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
+**~3.0 of 10 days used (30%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
 merged `content.published` by then, the publish path is fighting the stack — bank the vocabulary
-ADRs and the miner as documentation, stop, retro.
+ADRs and the miner as documentation, stop, retro. **Not reached; Phase 02 closed inside its 1.0d.**
+
+The machine header's `burn:` field carried `0d` through two closed phases while this line said 2.2d.
+Same file, two numbers, and the header is the one a script would read. Corrected at the Phase-02
+close, and it is worth noticing that a tracker can disagree with itself in the one place that is
+supposed to be the single source of truth.
 
 ## Done log
 
@@ -46,6 +51,11 @@ ADRs and the miner as documentation, stop, retro.
 | 2026-08-13 | **CI was red on 5 consecutive commits, all three OS legs.** 4 distinct failures, every one caused by `KINDS` 44 → 45; 3 of them in other lanes' files. Fixed in one commit | `f2d1f4f` |
 | 2026-08-13 | **Phase 02 built**: miner, cluster proposal, gate 1. Real mining run against HN's public API produced 14 attested keywords and cluster `c-001` (pillar "ai agents", 8 spokes, 2 BOFU), every row evidence-linked and verified | `882cb13`, `initiatives/growth/clusters/` |
 | 2026-08-13 | Mutant pass on the gate: 2 of 3 mutations went red correctly; the 3rd proved the spoke-floor guard **unreachable and untestable**, now labelled rather than left looking covered | `.claude/scripts/growth/lib/cluster.mjs` |
+| 2026-08-14 | **Phase 02 CLOSED.** 6 of 7 criteria met; criterion 3 narrowed via `/arc-change` and its gap recorded rather than ticked. CI `31778577391` @ `d4500cc` **19/19 jobs green, three OS legs, read per-JOB**. Bundle verified, 5 artifacts. `amendments: 1` · `reopened: n` | `initiatives/growth/evidence/phase-02/` |
+| 2026-08-14 | **A-05 FIRED and the diagnosis acquitted the assumption.** `c-001`'s spokes restated the pillar because selection sorted by *descending overlap with the pillar*, and the tokeniser's ≤2-char filter had deleted `ai`. ADR-1116's residue rule replaced it; the rebuilt cluster is 1 pillar + **7 distinct** spokes + 2 BOFU from the same pool, so the SHAPE held on its first honest test | ADR-1116, `cluster-c-001.json` |
+| 2026-08-14 | **The 2026-08-13 ADR renumber was half applied.** Filenames had moved to 1100–1115; the PLAN index and all 16 H1 titles still read 1000–1015, numbers `ledger` owns on disk — so kickoff-lint was validating *ledger's* decisions as growth's and growth's own ADRs were checked by nothing. 1115 was absent from the index. `adr-wired` warnings 15 → 2, and both survivors were real gaps | `PLAN.md` § Key decisions |
+| 2026-08-14 | **A reported number was not the measured number.** `mine` printed `own-page exclusions ${ownTargets.size}` — pages read from the sitemap, labelled as candidates removed. Two live runs excluded nothing and both said "1" | `arc-growth.mjs`, `mine.mjs` |
+| 2026-08-14 | **ADR-1115's revisit trigger was reading TRUE while every reason for the park still stood.** "A domain and a live site exist" came true on 2026-08-13; the park is really on the Search Console clock. Trigger re-worded to name the condition that actually un-parks | ADR-1115 |
 
 ## Phase 02 — built, not yet closed
 
@@ -133,9 +143,10 @@ one real article renders at a real URL.
 **Session handed off 2026-08-14.** Read this section and the Owner queue below; nothing else needs
 re-deriving.
 
-**Current position.** Phase 00 contract done and pushed. Phase 02 BUILT — miner, cluster proposal
-and gate 1 — survived three adversarial passes and is green on CI. Phase 01 and 06 PARKED
-(ADR-1115). Phases 03, 04, 05 are the remaining build, and none of them needs the domain.
+**Current position.** Phase 00 contract done and pushed, still open on the owner's arc-site merge.
+**Phase 02 CLOSED 2026-08-14** with its evidence bundle verified. Phase 01 and 06 PARKED
+(ADR-1115, trigger re-worded — the park is on the Search Console clock, not the address). Phase 03
+is in build; 04 and 05 follow, and none of them needs the domain.
 
 **The domain now exists.** `arc.automemory.ai` resolves, serves the site, and is deliberately
 `noindex` + `Disallow: /`. The owner chose the subdomain over the root on 2026-08-13 because
