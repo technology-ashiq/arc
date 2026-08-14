@@ -28,7 +28,13 @@
  *
  * Usage:
  *   arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M]
- *               [--input JSON|@FILE] [--root PATH] [--dry-run]
+ *               [--input JSON|@FILE] [--root PATH] [--work-root PATH]
+ *               [--trial-model ID] [--dry-run]
+ *
+ * `--root` is where ARC lives; `--work-root` is where the DRIVER works (ADR-0220). They default
+ * to the same place. `--trial-model` names a model for this invocation only, under ADR-0069(g)
+ * -- it writes no router row and changes no tier, and the receipt records `model_source: trial`
+ * so it can never be read back as a routing decision.
  * Zero dependencies, Node 18+.
  */
 
@@ -71,6 +77,8 @@ let driverArg = "";
 let budgetStr = "";
 let inputArg = "";
 let root = "";
+let trialModel = "";
+let workRootArg = "";
 let dryRun = false;
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -79,16 +87,42 @@ for (let i = 0; i < argv.length; i++) {
   else if (a === "--budget") budgetStr = argv[++i] ?? "";
   else if (a === "--input") inputArg = argv[++i] ?? "";
   else if (a === "--root") root = argv[++i] ?? "";
+  // THE SEAM (ADR-0220). Both are EXPLICIT and opt-in: a caller that passes neither gets
+  // today's behaviour byte-for-byte, and nothing is ever inherited from the ambient
+  // environment. That distinction is the whole decision -- reading ARC_DRIVER_MODEL off the
+  // environment is the un-reviewed tier change ADR-0069 b1 forbids, which is why the clobber
+  // below exists in the first place. A flag is a thing a caller wrote down on purpose.
+  else if (a === "--trial-model") trialModel = argv[++i] ?? "";
+  else if (a === "--work-root") workRootArg = argv[++i] ?? "";
   else if (a === "--dry-run") dryRun = true;
   else { console.error(`arc-run: unknown option ${a}`); process.exit(2); }
 }
-if (!processName) { console.error("usage: arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M] [--input JSON|@FILE]"); process.exit(2); }
+if (!processName) { console.error("usage: arc-run.mjs --process NAME [--driver NAME|auto] [--budget inr=N,min=M] [--input JSON|@FILE] [--root PATH] [--work-root PATH] [--trial-model ID]"); process.exit(2); }
 
 function gitToplevel() {
   try { return execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
   catch { return ""; }
 }
 root = resolve(root || process.env.ARC_ROOT || gitToplevel() || ".");
+
+// TWO ROOTS, BECAUSE ONE NAME WAS DOING TWO JOBS (ADR-0220).
+//
+//   root      WHERE ARC'S MACHINERY LIVES -- processes/, engine/router.yaml, the driver scripts,
+//             arc-event.sh, the spine. Always the arc repo. Never redirected by the seam.
+//   workRoot  WHERE THE DRIVER DOES ITS WORK -- handed down as ARC_ROOT and as the child's cwd.
+//
+// They were the same variable, so they could never differ, so a driver could only ever operate on
+// the arc repo itself. `commit-msg-draft` holds `git.op: add:*` and `commit:*`: a real driver run
+// against a benchmark fixture would have staged and committed INSIDE arc. Defaulting workRoot to
+// root keeps every existing caller byte-identical -- this widens what is expressible, not what
+// happens by default.
+const workRoot = workRootArg ? resolve(workRootArg) : root;
+if (workRootArg && !existsSync(workRoot)) {
+  // Refuse before the driver starts. A non-existent work root would otherwise surface as an
+  // inscrutable driver failure attributed to the driver rather than to the caller's flag.
+  console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} does not exist`);
+  process.exit(2);
+}
 
 const fail = (reason, msg, extra = {}) => {
   console.error(`arc-run: ${msg}`);
@@ -165,6 +199,47 @@ if (tier) {
   const router = loadRouter();
   pinnedModel = router?.models?.[tier]?.[driver] ?? null;
 }
+
+// ---------- the trial seam (ADR-0220) ----------
+/**
+ * WHERE THE MODEL CAME FROM IS RECORDED, NOT JUST WHICH MODEL IT WAS.
+ *
+ * `router` -- a reviewed engine/router.yaml row resolved a tier to a model. Production routing.
+ * `trial`  -- this invocation named a model explicitly, under ADR-0069 block (g): a trial may use
+ *             any candidate model from any provider WITHOUT amending the policy, provided it is
+ *             isolated and receipted. It writes no router row, changes no tier, and cannot affect
+ *             any run that did not ask for it.
+ * `none`   -- nothing pinned it; the driver's own default applies and the receipt says so.
+ *
+ * The two are never silently merged. A receipt that read like a routed pin when a trial supplied
+ * the model would assert a routing decision nothing applied -- the false-claim-in-an-append-only-
+ * ledger failure this file already refuses at the tier label (see emitRun).
+ */
+let modelSource = pinnedModel ? "router" : "none";
+if (trialModel) {
+  // TWO SOURCES FOR ONE VALUE IS AN OPERATOR ERROR, NOT A PRECEDENCE PUZZLE. `--driver auto`
+  // resolving a tier AND `--trial-model` naming one is exactly the "never guess" shape the lane
+  // rules name: silently picking either is how a trial gets recorded as production routing, or a
+  // reviewed row gets quietly overridden. Exit 2 is arc-run's published operator-error code
+  // (ADR-0219); no new code is claimed.
+  if (pinnedModel) {
+    console.error(`arc-run: --trial-model ${JSON.stringify(trialModel)} conflicts with the router pin ${JSON.stringify(pinnedModel)}`);
+    console.error(`         \`--driver auto\` resolved tier \`${tier}\` to a reviewed model, and a trial may not silently override a reviewed routing decision.`);
+    console.error("         Name a driver explicitly (--driver NAME) to run the trial, or drop --trial-model to use the routed pin.");
+    process.exit(2);
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/.test(trialModel)) {
+    // The same grammar the spine enforces on the model seat (validate.mjs MODEL_RE). Rejecting
+    // here means the run never starts, rather than spending a driver call and then discovering
+    // at emit time that the receipt cannot be written.
+    console.error(`arc-run: --trial-model ${JSON.stringify(trialModel)} is not a clean model id`);
+    process.exit(2);
+  }
+  modelSource = "trial";
+}
+// The one value handed to the driver, whatever produced it. Drivers are untouched by this
+// change: they still read ARC_DRIVER_MODEL and know nothing about routers, tiers or trials.
+const effectiveModel = trialModel || pinnedModel;
 
 // ---------- budget ----------
 const BUDGET_KEYS = ["inr", "min"];
@@ -347,10 +422,21 @@ function emitRun(payload) {
   // The receipt records the model that was ACTUALLY used, never the tier label. A label
   // here asserted a routing decision nothing had applied -- a false claim in an append-only
   // ledger, which is worse than an absent one (ADR-0069 b5 / Constitution E3).
-  if (pinnedModel) extra.push("--model", pinnedModel);
+  // THE SEAT CARRIES THE MODEL, THE PAYLOAD CARRIES ITS PROVENANCE (ADR-0220).
+  //
+  // `--model` is the MP-F seat and stays a CLEAN MODEL ID -- the thing that actually ran. It is
+  // deliberately not prefixed with `trial:`: the seat answers "which model", and encoding a
+  // second fact into it would make every reader parse a string to get either one, which is how
+  // `tier:X` came to assert a routing decision nothing had applied. Where the value came from is
+  // a separate question and gets a separate field, `model_source`, set in emitRun's caller.
+  if (effectiveModel) extra.push("--model", effectiveModel);
   else if (tier) extra.push("--model", "unpinned");
 
-  const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}) }, extra);
+  // `model_source` is derived state and is stamped HERE, after ...rest, so it lands on EVERY
+  // run.completed -- the failure paths through `fail()` as much as the success path. A provenance
+  // field that only appears on green runs cannot answer "what was this model doing when it failed",
+  // which for a bench comparison is the more interesting half.
+  const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}), model_source: modelSource }, extra);
   if (!r.ok) {
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
     console.error("         The run is NOT recorded. Under --strict the emitter rejects rather than quarantining.");
@@ -508,13 +594,21 @@ function invoke(name) {
   // RangeError before any scrub or receipt could run.
   const timeoutMs = rem === undefined ? undefined : Math.max(1, Math.floor(rem));
   const res = spawnSync("bash", [sh, "run", processName, JSON.stringify(input), budgetStr], {
-    encoding: "utf8", cwd: root, timeout: timeoutMs,
+    // cwd follows workRoot, not root: a driver that shells out to git must land in the repo it
+    // was pointed at. The driver SCRIPT path is already absolute (resolved from root above), so
+    // moving cwd cannot make arc-run fail to find its own machinery.
+    encoding: "utf8", cwd: workRoot, timeout: timeoutMs,
     // arc-run defaulted to Node's 1 MiB while claude-code.mjs deliberately sets 64 MiB for
     // the CLI it wraps -- so a large but perfectly valid answer was truncated and then
     // blamed on the driver.
     maxBuffer: 64 * 1024 * 1024,
     killSignal: "SIGKILL",
-    env: { ...process.env, ARC_DRIVER_COST_FILE: costFile, ARC_ROOT: root, ARC_DRIVER_MODEL: pinnedModel ?? "" },
+    // STILL AN UNCONDITIONAL OVERWRITE, AND THAT IS DELIBERATE. Both values are decided by
+    // arc-run from explicit inputs -- a router row or a --trial-model flag -- and never inherited
+    // from whatever the ambient environment happened to hold. That is the ADR-0069 b1 property
+    // this line was written to enforce, and the seam does not weaken it: it only gives the caller
+    // a reviewed way to SAY what the value should be, instead of no way at all.
+    env: { ...process.env, ARC_DRIVER_COST_FILE: costFile, ARC_ROOT: workRoot, ARC_DRIVER_MODEL: effectiveModel ?? "" },
   });
   let cost = null;
   if (existsSync(costFile)) {
@@ -662,7 +756,7 @@ function succeed(r) {
   const payload = JSON.stringify(r.output);
   scrub("the spine payload", payload, r.output);
   console.log(payload);
-  emitRun({ outcome: "ok", driver, attempts: attemptsMade, cost: r.cost ?? undefined, fault_hint: "unknown", model: pinnedModel ?? "unpinned" });
+  emitRun({ outcome: "ok", driver, attempts: attemptsMade, cost: r.cost ?? undefined, fault_hint: "unknown", model: effectiveModel ?? "unpinned" });
   // STILL EXIT 0 ON AN UNRECORDED RECEIPT -- for now, and on purpose.
   //
   // Failing the run here is the obvious other half of "exit 0 is not evidence". It WAS written,
