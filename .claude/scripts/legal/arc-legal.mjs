@@ -33,7 +33,39 @@ export const ENGINE_VERSION = "arc-legal/0.1.0";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "..", "..", "..");
 const PRODUCT = join(REPO_ROOT, "products", "legal");
-const TEMPLATE_SET = "v1";
+
+/**
+ * The template set is PER VENTURE, resolved from that venture's `pins.yaml`, never a constant.
+ *
+ * It was a module constant, which meant every venture moved the moment the set moved -- the exact
+ * thing pinning exists to prevent. ADR-1005 makes facts, pages, pins and receipts venture-local
+ * precisely so one venture can adopt a new set while another stays put and both keep rendering.
+ *
+ * A MISSING pin is a REFUSAL, not a default to the newest set. Defaulting would float a venture
+ * onto whatever set happens to be latest, silently, which is the failure this whole mechanism is
+ * built against -- and it would look identical to a venture that had been deliberately upgraded.
+ */
+const SET_NAME = /^v[1-9][0-9]*$/;
+
+function pinnedSetFor(ventureName, ventureDir) {
+  const pinPath = join(ventureDir, "pins.yaml");
+  if (!existsSync(pinPath))
+    throw new Fail(3, `"${ventureName}" has no pins.yaml. A venture with no pinned template set would float onto whatever set is newest, which is what pinning exists to prevent. Write \`template_set: v1\` next to its facts.yaml.`);
+
+  let pins;
+  try { pins = parseFactsYaml(readFileSync(pinPath, "utf8")); }
+  catch (e) {
+    if (e instanceof YamlError) throw new Fail(2, `${pinPath}: ${e.message}`);
+    throw e;
+  }
+
+  const set = pins.template_set;
+  if (typeof set !== "string" || !SET_NAME.test(set))
+    throw new Fail(2, `${pinPath}: template_set is ${JSON.stringify(set)}, which is not a set name like "v1". It is joined into a directory path.`);
+  if (!existsSync(join(PRODUCT, "templates", set)))
+    throw new Fail(3, `"${ventureName}" pins template set ${set}, which does not exist under products/legal/templates/. A pin to a set that is not there is a broken venture, not a reason to fall back.`);
+  return set;
+}
 
 class Fail extends Error {
   constructor(code, message) { super(message); this.code = code; }
@@ -51,6 +83,7 @@ function usage() {
     "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
     "       arc-legal verify  --venture NAME --dir DIR",
     "       arc-legal checklist --venture NAME [--out FILE] [--evidence FILE]",
+    "       arc-legal bump-templates --venture NAME --to SET",
     "",
     "  --venture NAME   a fixture venture under tests/fixtures/legal/ventures/",
     "  --out DIR        where the rendered pages are written",
@@ -126,15 +159,15 @@ function factsPathFor(name) {
  * The field is still reported as `template_set_sha` for continuity, but it covers the whole
  * input set; `renderInputs()` is the name that tells the truth.
  */
-function renderInputs() {
-  const tdir = join(PRODUCT, "templates", TEMPLATE_SET);
-  if (!existsSync(tdir)) throw new Fail(3, `template set ${TEMPLATE_SET} is missing at ${tdir}`);
+function renderInputs(templateSet) {
+  const tdir = join(PRODUCT, "templates", templateSet);
+  if (!existsSync(tdir)) throw new Fail(3, `template set ${templateSet} is missing at ${tdir}`);
   const files = {};
   for (const f of readdirSync(tdir).sort()) {
     if (!f.endsWith(".tmpl.md")) continue;
-    files[`templates/${TEMPLATE_SET}/${f}`] = readFileSync(join(tdir, f), "utf8").split("\r\n").join("\n");
+    files[`templates/${templateSet}/${f}`] = readFileSync(join(tdir, f), "utf8").split("\r\n").join("\n");
   }
-  if (!Object.keys(files).length) throw new Fail(3, `template set ${TEMPLATE_SET} holds no .tmpl.md files`);
+  if (!Object.keys(files).length) throw new Fail(3, `template set ${templateSet} holds no .tmpl.md files`);
 
   const ddir = join(PRODUCT, "data");
   if (!existsSync(ddir)) throw new Fail(3, `the legal data directory is missing at ${ddir}`);
@@ -150,7 +183,7 @@ function renderInputs() {
   // The templates alone, for the renderer, which keys them by bare filename.
   const templates = {};
   for (const [k, v] of Object.entries(files))
-    if (k.startsWith("templates/")) templates[k.slice(`templates/${TEMPLATE_SET}/`.length)] = v;
+    if (k.startsWith("templates/")) templates[k.slice(`templates/${templateSet}/`.length)] = v;
 
   return { dir: tdir, files: templates, data, sha: templateSetHash(files) };
 }
@@ -170,6 +203,7 @@ function clauseDeclarationsIn(source) {
 
 export function renderVenture({ ventureName, outDir }) {
   const factsPath = factsPathFor(ventureName);
+  const templateSet = pinnedSetFor(ventureName, dirname(factsPath));
 
   let raw;
   try { raw = readFileSync(factsPath, "utf8"); }
@@ -184,7 +218,7 @@ export function renderVenture({ ventureName, outDir }) {
 
   // Read from the HASHED set, never from disk again. A second read is a second chance for the
   // bytes to differ from the ones the pin covers.
-  const set = renderInputs();
+  const set = renderInputs(templateSet);
   const need = (f) => { const d = set.data[f]; if (d === undefined) throw new Fail(3, `products/legal/data/${f} is missing`); return d; };
   const vocab = need("vocab.json");
   const clauseMap = need("clause-map.json");
@@ -279,7 +313,7 @@ export function renderVenture({ ventureName, outDir }) {
     const route = effectiveRoutes[pageDef.id];
     const header = [
       `<!-- GENERATED by ${ENGINE_VERSION}. DO NOT EDIT. Change legal/facts.yaml or the template set, then re-render and re-approve. -->`,
-      `<!-- engine:${ENGINE_VERSION} set:${TEMPLATE_SET}@${set.sha} facts:${factsSha} page:${pageDef.id} route:${route} -->`,
+      `<!-- engine:${ENGINE_VERSION} set:${templateSet}@${set.sha} facts:${factsSha} page:${pageDef.id} route:${route} -->`,
       "",
       `# ${pageDef.title}`,
       "",
@@ -333,7 +367,7 @@ export function renderVenture({ ventureName, outDir }) {
   const run = {
     engine_version: ENGINE_VERSION,
     preimage_version: PREIMAGE_VERSION,
-    template_set: TEMPLATE_SET,
+    template_set: templateSet,
     template_set_sha: set.sha,
     venture: ventureName,
     // Carried so the checklist can decide activation applicability without re-parsing facts.
@@ -526,11 +560,76 @@ function publishMain(args) {
  * position, it does not gate on one. A renderer that refused to print an unchecked row would
  * push an operator toward recording something to make it go away.
  */
+/**
+ * bump-templates -- move ONE venture to a new template set, and say plainly that its approval is
+ * now void.
+ *
+ * The forcing function is not a flag this command sets; it is arithmetic. Moving the pin changes
+ * `template_set_sha`, and `publish` re-derives that hash and refuses on `TEMPLATES_CHANGED`. So a
+ * publish attempted against a moved set WITHOUT a bump is refused for the same reason a publish
+ * after a bump is refused: the bytes a human approved are not the bytes on offer. There is no
+ * separate "needs re-approval" flag that could drift out of step with the hashes.
+ *
+ * One venture at a time, by name. A bump that moved every venture at once would be the module
+ * constant this replaced, wearing a command's clothes.
+ *
+ * Exit 0 bumped - exit 2 refused - exit 3 could not run.
+ */
+function bumpTemplatesMain(args) {
+  if (!args.venture) { console.error(`bump-templates needs --venture NAME\n\n${usage()}`); return 2; }
+  if (!args.to) { console.error(`bump-templates needs --to SET (e.g. --to v2)\n\n${usage()}`); return 2; }
+  if (!SET_NAME.test(args.to)) { console.error(`"${args.to}" is not a set name like "v2"`); return 2; }
+
+  const factsPath = factsPathFor(args.venture);
+  const ventureDir = dirname(factsPath);
+  const from = pinnedSetFor(args.venture, ventureDir);
+
+  if (from === args.to) {
+    console.error(`"${args.venture}" is already pinned to ${args.to}. A no-op bump would still print a re-approval warning, and a warning nobody needs is a warning people learn to skip.`);
+    return 2;
+  }
+  if (!existsSync(join(PRODUCT, "templates", args.to))) {
+    console.error(`template set ${args.to} does not exist under products/legal/templates/`);
+    return 3;
+  }
+
+  // What actually changes, computed rather than asserted, so the operator sees the consequence
+  // and not just the intention.
+  const before = renderVenture({ ventureName: args.venture, outDir: null }).run;
+  const pinPath = join(ventureDir, "pins.yaml");
+  const src = readFileSync(pinPath, "utf8");
+  const line = `template_set: ${from}`;
+  if (!src.includes(line)) { console.error(`${pinPath} does not carry "${line}"`); return 3; }
+  writeFileSync(pinPath, src.split(line).join(`template_set: ${args.to}`), "utf8");
+
+  let after;
+  try { after = renderVenture({ ventureName: args.venture, outDir: null }).run; }
+  catch (e) {
+    // Put the pin back. A venture left pinned to a set it cannot render is worse than an
+    // un-bumped one, and this is the only window in which that state can exist.
+    writeFileSync(pinPath, src, "utf8");
+    console.error(`bump REFUSED: "${args.venture}" does not render under ${args.to}, so the pin was rolled back. ${e.message}`);
+    return 2;
+  }
+
+  const diff = semanticDiff(before, after);
+  console.log(`bumped ${args.venture}: ${from} -> ${args.to}`);
+  console.log(`set sha ${before.template_set_sha.slice(0, 12)}... -> ${after.template_set_sha.slice(0, 12)}...`);
+  for (const c of diff.clause_changes)
+    console.log(`  ${c.page}: +${c.added.join(",") || "-"} -${c.removed.join(",") || "-"}`);
+  if (!diff.clause_changes.length)
+    console.log("  no clause appeared or disappeared -- the change is in clause PROSE, which a clause-id diff cannot show. Read the rendered pages before re-approving.");
+  console.log("");
+  console.log("Any existing approval for this venture is now VOID: the set hash it committed to has moved,");
+  console.log("and publish re-derives that hash. Re-run propose, take a fresh human decision, then publish.");
+  return 0;
+}
+
 function checklistMain(args) {
   if (!args.venture) { console.error(`checklist needs --venture NAME\n\n${usage()}`); return 2; }
 
   const { run } = renderVenture({ ventureName: args.venture, outDir: null });
-  const providerPages = renderInputs().data["provider-pages.json"];
+  const providerPages = renderInputs(run.template_set).data["provider-pages.json"];
   if (!providerPages) throw new Fail(3, "products/legal/data/provider-pages.json is missing");
 
   const evidence = args.evidence ? readJson(args.evidence) : {};
@@ -583,6 +682,7 @@ function main(argv) {
   if (verb === "publish") return publishMain(args);
   if (verb === "verify") return verifyMain(args);
   if (verb === "checklist") return checklistMain(args);
+  if (verb === "bump-templates") return bumpTemplatesMain(args);
   if (verb !== "render") { console.error(`unknown verb "${verb}"\n\n${usage()}`); return 2; }
   if (!args.venture) { console.error(`render needs --venture NAME\n\n${usage()}`); return 2; }
   if (!args.out) { console.error(`render needs --out DIR\n\n${usage()}`); return 2; }

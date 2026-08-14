@@ -9,7 +9,7 @@
  * exits nonzero. A subcommand that cannot do its job never prints a number that could be
  * mistaken for an answer -- "0 findings" and "could not read the sidecar" must not look alike.
  */
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, rmSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -496,6 +496,32 @@ switch (cmd) {
     if (!src.includes(from)) die(`anchor not found in ${p}: ${from}`);
     writeFileSync(p, src.split(from).join(to), "utf8");
     console.log("edited:" + file);
+    break;
+  }
+
+  /**
+   * pin <sandbox> <venture> <value|--delete> -- rewrite or remove a venture's template pin.
+   *
+   * `--delete` is the one that matters: a venture with no pin must be REFUSED, never defaulted
+   * to the newest set. A default there would float a venture onto a set nobody chose for it, and
+   * would look identical to a deliberate upgrade.
+   */
+  case "pin": {
+    const [sandbox, venture, value] = rest;
+    const p = join(sandbox, "tests", "fixtures", "legal", "ventures", venture, "pins.yaml");
+    if (value === "--delete") {
+      rmSync(p);
+      console.log("deleted:pins.yaml");
+      break;
+    }
+    const src = readFileSync(p, "utf8");
+    const at = src.split(/\r?\n/).findIndex((l) => l.startsWith("template_set:"));
+    if (at < 0) die(`no template_set line in ${p}`);
+    const lines = src.split(/\r?\n/);
+    if (lines[at] === `template_set: ${value}`) die(`${venture} is already pinned to ${value}; that is not a mutation`);
+    lines[at] = `template_set: ${value}`;
+    writeFileSync(p, lines.join("\n"), "utf8");
+    console.log("pinned:" + value);
     break;
   }
 
