@@ -39,19 +39,39 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
+import { MODEL_RE } from "../hq/lib/validate.mjs";
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
 // precisely so it can be SELECTED here and NAMED on a receipt.
 const DRIVERS = ["claude-code", "codex", "generic-api", "mock"];
+
+// Drivers that actually hand the model to a provider, verified in their source rather than
+// assumed: claude-code pushes `--model` onto its CLI argv, generic-api puts it in the request
+// body. `codex` reads pinnedModel() and then invokes `exec --json <prompt>` without it, and
+// `mock` never reads it. A receipt that names a model the driver never sent is a fabrication,
+// so --trial-model is refused for the two that cannot carry it.
+const MODEL_CAPABLE = ["claude-code", "generic-api"];
+
+// DECLARED AT THE TOP, ASSIGNED AFTER ROUTING, AND THAT SPLIT IS DELIBERATE.
+//
+// `emitRun` reads both, and `fail()` reaches `emitRun` from anywhere in top-level execution --
+// including the `--budget inr=0` arm, which is the earliest exit in the file. Declaring them
+// beside the routing block that computes them left them in the temporal dead zone for any exit
+// path that moved above it, and this file has ALREADY shipped that exact defect once: a named
+// constant declared next to its use made `--budget inr=0` die with
+// "Cannot access EMIT_TIMEOUT_MS before initialization" and write no receipt at all. Safe
+// defaults here mean a receipt emitted from any exit path is honest rather than absent.
+let modelSource = "none";
+let effectiveModel = null;
 
 // The emitter's strict-mode spine-lock wait is 15s (arc-event.mjs STRICT_LOCK_TIMEOUT_MS); hook
 // mode's was 2s. arc-run's kill budget MUST exceed the child's own timeout, or the parent SIGKILLs
@@ -80,6 +100,7 @@ let root = "";
 let trialModel = "";
 let workRootArg = "";
 let dryRun = false;
+const seen = new Set();
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
   if (a === "--process") processName = argv[++i] ?? "";
@@ -92,8 +113,24 @@ for (let i = 0; i < argv.length; i++) {
   // environment. That distinction is the whole decision -- reading ARC_DRIVER_MODEL off the
   // environment is the un-reviewed tier change ADR-0069 b1 forbids, which is why the clobber
   // below exists in the first place. A flag is a thing a caller wrote down on purpose.
-  else if (a === "--trial-model") trialModel = argv[++i] ?? "";
-  else if (a === "--work-root") workRootArg = argv[++i] ?? "";
+  //
+  // PRESENCE, NOT TRUTHINESS, AND NO LAST-WINS. Both were built the lazy way first and both
+  // failed OPEN in the dangerous direction: `--work-root "$W"` with W unset silently aimed the
+  // driver at the ARC REPO -- which is the precise accident this seam exists to prevent, since
+  // commit-msg-draft carries `git.op: add:*` and `commit:*`. `--trial-model "$M"` with M unset
+  // silently ran PRODUCTION ROUTING while the caller believed a trial ran. An empty value is an
+  // operator error, exactly as `parseBudget` below says of a repeated budget key and as
+  // `.claude/rules/lanes.md` says of a repeated `--lane`: silently picking one of two named
+  // values is the never-guess failure, and silently substituting a default for an absent one is
+  // the same failure wearing a friendlier face.
+  else if (a === "--trial-model" || a === "--work-root") {
+    const key = a.slice(2);
+    if (seen.has(key)) { console.error(`arc-run: ${a} given twice -- that is an operator error, not a last-wins override`); process.exit(2); }
+    seen.add(key);
+    const v = argv[++i];
+    if (v === undefined || v === "") { console.error(`arc-run: ${a} needs a value (an empty one is an operator error, not "unset")`); process.exit(2); }
+    if (key === "trial-model") trialModel = v; else workRootArg = v;
+  }
   else if (a === "--dry-run") dryRun = true;
   else { console.error(`arc-run: unknown option ${a}`); process.exit(2); }
 }
@@ -117,11 +154,51 @@ root = resolve(root || process.env.ARC_ROOT || gitToplevel() || ".");
 // root keeps every existing caller byte-identical -- this widens what is expressible, not what
 // happens by default.
 const workRoot = workRootArg ? resolve(workRootArg) : root;
-if (workRootArg && !existsSync(workRoot)) {
-  // Refuse before the driver starts. A non-existent work root would otherwise surface as an
-  // inscrutable driver failure attributed to the driver rather than to the caller's flag.
-  console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} does not exist`);
-  process.exit(2);
+if (workRootArg) {
+  // Refuse before the driver starts. Each of these surfaced as an inscrutable "driver exited 1"
+  // with an empty stderr -- a receipt blaming the DRIVER for the caller's flag, which is a false
+  // claim in an append-only ledger.
+  let st = null;
+  try { st = statSync(workRoot); } catch { st = null; }
+  if (!st) { console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} does not exist`); process.exit(2); }
+  // `existsSync` alone passed a regular FILE, and spawnSync then failed ENOENT with res.error
+  // discarded -- status 1, stderr empty, receipt `reason: driver`. No driver process ever started.
+  if (!st.isDirectory()) { console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} is not a directory`); process.exit(2); }
+
+  // THE CONTAINMENT CHECK, AND WITHOUT IT THE FLAG ISOLATES NOTHING.
+  //
+  // Moving `cwd` is not containment, because git does not care about cwd -- it walks UP until it
+  // finds a repository. A work-root anywhere beneath the arc tree (a materialized fixture under
+  // tests/, a scratch dir, a gitignored staging area -- all natural choices for a bench harness)
+  // therefore leaves `git add` and `git commit` operating on ARC'S OWN INDEX. That is the exact
+  // outcome this seam was justified by preventing, and the version of it that shipped an hour ago
+  // did not prevent it.
+  //
+  // So: the work-root must be the TOPLEVEL of its own repository, and that repository must not be
+  // arc's. Anything else is refused by name rather than discovered later in a commit log.
+  const topOf = (dir) => {
+    try { return realpathSync(execFileSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
+    catch { return ""; }
+  };
+  const wTop = topOf(workRoot);
+  const aTop = topOf(root) || realpathSync(root);
+  if (!wTop) {
+    console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} is not inside a git repository`);
+    console.error("         A driver holding git.op grants needs a repo to hold its work; a bare directory would send those operations nowhere useful.");
+    process.exit(2);
+  }
+  if (wTop === aTop) {
+    console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} resolves to THIS repository (${aTop})`);
+    console.error("         git walks UPWARD from cwd, so a work-root inside arc would commit into arc -- which is what --work-root exists to prevent.");
+    console.error("         Materialize the fixture repo outside this tree and point --work-root at its own toplevel.");
+    process.exit(2);
+  }
+  if (realpathSync(workRoot) !== wTop) {
+    // A subdirectory of another repo is refused too: the driver would operate on that repo's index
+    // from a partial view, which is a different surprise rather than a safer one.
+    console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} is not the toplevel of its repository (that is ${wTop})`);
+    process.exit(2);
+  }
 }
 
 const fail = (reason, msg, extra = {}) => {
@@ -215,31 +292,48 @@ if (tier) {
  * the model would assert a routing decision nothing applied -- the false-claim-in-an-append-only-
  * ledger failure this file already refuses at the tier label (see emitRun).
  */
-let modelSource = pinnedModel ? "router" : "none";
+modelSource = pinnedModel ? "router" : "none";
 if (trialModel) {
-  // TWO SOURCES FOR ONE VALUE IS AN OPERATOR ERROR, NOT A PRECEDENCE PUZZLE. `--driver auto`
-  // resolving a tier AND `--trial-model` naming one is exactly the "never guess" shape the lane
-  // rules name: silently picking either is how a trial gets recorded as production routing, or a
-  // reviewed row gets quietly overridden. Exit 2 is arc-run's published operator-error code
-  // (ADR-0219); no new code is claimed.
-  if (pinnedModel) {
-    console.error(`arc-run: --trial-model ${JSON.stringify(trialModel)} conflicts with the router pin ${JSON.stringify(pinnedModel)}`);
-    console.error(`         \`--driver auto\` resolved tier \`${tier}\` to a reviewed model, and a trial may not silently override a reviewed routing decision.`);
-    console.error("         Name a driver explicitly (--driver NAME) to run the trial, or drop --trial-model to use the routed pin.");
+  // THE GUARD KEYS ON `tier`, NOT ON `pinnedModel`. The TIER is the reviewed routing decision;
+  // `pinnedModel` is a derived lookup that can be ABSENT while that decision exists -- which is
+  // the documented state for codex and generic-api at every tier (engine/router.yaml). Keying on
+  // the derived value let a trial silently serve a production-routed class the moment any class
+  // routed to one of them. Validate the thing that was decided, not the thing it looked up.
+  if (tier) {
+    console.error(`arc-run: --trial-model ${JSON.stringify(trialModel)} conflicts with routed tier \`${tier}\`${pinnedModel ? ` (pin ${JSON.stringify(pinnedModel)})` : " (which resolves to no pin for this driver)"}`);
+    console.error("         `--driver auto` consulted engine/router.yaml, and a trial may not silently override a reviewed routing decision.");
+    console.error("         Name a driver explicitly (--driver NAME) to run the trial, or drop --trial-model to use the route.");
     process.exit(2);
   }
-  if (!/^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/.test(trialModel)) {
-    // The same grammar the spine enforces on the model seat (validate.mjs MODEL_RE). Rejecting
-    // here means the run never starts, rather than spending a driver call and then discovering
-    // at emit time that the receipt cannot be written.
+  if (!MODEL_RE.test(trialModel)) {
+    // The spine's OWN regex, imported rather than copied. Rejecting here means the run never
+    // starts, instead of spending a driver call and discovering at emit time that the receipt
+    // cannot be written -- which under --strict would exit 0 with real money spent (succeed()).
     console.error(`arc-run: --trial-model ${JSON.stringify(trialModel)} is not a clean model id`);
+    process.exit(2);
+  }
+  // A RECEIPT MAY NOT VOUCH FOR A MODEL THAT NEVER RAN.
+  //
+  // `mock` never reads the model at all and `codex` reads it but never passes it to the CLI
+  // (`exec --json <prompt>`). Accepting --trial-model for either would stamp
+  // `model: X, model_source: trial` on a run where the provider was handed nothing -- and for
+  // `mock`, which reaches no provider whatsoever, a full replay sweep could produce a complete
+  // model-comparison table of models that never ran, every row receipted as a trial. For the one
+  // lane whose entire purpose is measuring models, that is worse than having no seam.
+  //
+  // ADR-0069 block (e) wants the exact model id of WHAT ANSWERED. arc-run can only honestly
+  // record what it ASKED FOR, so it refuses to ask a driver that cannot carry the question.
+  if (!MODEL_CAPABLE.includes(driver)) {
+    console.error(`arc-run: driver \`${driver}\` cannot apply a model, so --trial-model would be recorded but never used`);
+    console.error(`         Model-capable drivers: ${MODEL_CAPABLE.join(", ")}.`);
+    console.error(`         \`mock\` replays recordings (its model identity IS the recording set -- point ARC_MOCK_DIR at the set you mean); \`codex\` invokes its CLI without a model argument.`);
     process.exit(2);
   }
   modelSource = "trial";
 }
 // The one value handed to the driver, whatever produced it. Drivers are untouched by this
 // change: they still read ARC_DRIVER_MODEL and know nothing about routers, tiers or trials.
-const effectiveModel = trialModel || pinnedModel;
+effectiveModel = trialModel || pinnedModel;
 
 // ---------- budget ----------
 const BUDGET_KEYS = ["inr", "min"];
@@ -398,7 +492,14 @@ function emitEvent(kind, payloadObj, extraArgs = []) {
     const id = execFileSync("bash",
       [join(root, ".claude/scripts/hq/arc-event.sh"), "emit", kind,
         "--payload-file", file, "--strict", ...extraArgs],
-      { encoding: "utf8", cwd: root, timeout: EMIT_TIMEOUT_MS, killSignal: "SIGKILL" }).trim();
+      // ARC_MODEL IS BLANKED, AND THAT CLOSES THE LAST AMBIENT PATH TO THE MODEL SEAT.
+      // `arc-event.mjs:208` reads `model: flags.model ?? (process.env.ARC_MODEL || null)`, and
+      // this call previously inherited the whole environment -- so an ambient ARC_MODEL wrote an
+      // arbitrary model onto an append-only receipt while `model_source` vouched that nothing had
+      // pinned it. Blanking rather than deleting: the `|| null` on the emitter side turns "" into
+      // an absent seat, which is the honest value when arc-run passed no --model.
+      { encoding: "utf8", cwd: root, timeout: EMIT_TIMEOUT_MS, killSignal: "SIGKILL",
+        env: { ...process.env, ARC_MODEL: "" } }).trim();
     return { ok: true, id, error: "" };
   } catch (e) {
     return { ok: false, id: "", error: String(e.message).split("\n")[0] };
@@ -603,12 +704,32 @@ function invoke(name) {
     // blamed on the driver.
     maxBuffer: 64 * 1024 * 1024,
     killSignal: "SIGKILL",
-    // STILL AN UNCONDITIONAL OVERWRITE, AND THAT IS DELIBERATE. Both values are decided by
-    // arc-run from explicit inputs -- a router row or a --trial-model flag -- and never inherited
-    // from whatever the ambient environment happened to hold. That is the ADR-0069 b1 property
-    // this line was written to enforce, and the seam does not weaken it: it only gives the caller
-    // a reviewed way to SAY what the value should be, instead of no way at all.
-    env: { ...process.env, ARC_DRIVER_COST_FILE: costFile, ARC_ROOT: workRoot, ARC_DRIVER_MODEL: effectiveModel ?? "" },
+    // ARC_ROOT STAYS ARC. The first version of this seam set it to workRoot, and that was wrong
+    // in a way no test caught: `claude-code.mjs:25` and `codex.mjs:21` do
+    // `join(process.env.ARC_ROOT, "processes", name + ".process.yaml")`, so repointing it made the
+    // DRIVER read its process document -- the prompt body AND the `tools:` list that becomes
+    // `--allowedTools` -- out of the target tree, while arc-run's job-stub guard, self-consistency
+    // check and policy gate all judged arc's copy. A target tree could widen its own grant. It
+    // also broke both real drivers outright, since a fixture repo has no processes/ directory.
+    //
+    // The conflation this seam exists to split lived in arc-run AND, on the same variable, one
+    // layer down in the drivers. Splitting only the near copy moved the bug rather than fixing it.
+    // So the workspace travels as `cwd` plus its own name, and ARC_ROOT keeps meaning exactly what
+    // every driver already assumes it means.
+    //
+    // The two overwrites remain unconditional and that is still the point: both values are decided
+    // by arc-run from explicit inputs, never inherited. ARC_LLM_MODEL is blanked for the same
+    // reason -- engine/router.yaml names it verbatim as "the un-reviewed tier change ADR-0069
+    // block (b)(1) forbids", and `generic-api.mjs:22` falls back to it, so leaving it in the
+    // spread would have left b1 open through the one door the seam did not close.
+    env: {
+      ...process.env,
+      ARC_DRIVER_COST_FILE: costFile,
+      ARC_ROOT: root,
+      ARC_WORK_ROOT: workRoot,
+      ARC_DRIVER_MODEL: effectiveModel ?? "",
+      ARC_LLM_MODEL: "",
+    },
   });
   let cost = null;
   if (existsSync(costFile)) {
@@ -651,7 +772,12 @@ function attempt(name) {
 }
 
 if (dryRun) {
+  // --dry-run is the one surface whose entire job is "tell me what will happen", so it names the
+  // two flags that change what happens. It was silent about both, which made it the worst place
+  // to check a command before running it for real.
   console.log(`arc-run: would run \`${processName}\` on \`${driver}\`${tier ? ` (tier ${tier})` : ""}${fallbacks.length ? ` fallback ${fallbacks.join(" -> ")}` : ""}`);
+  console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource})`);
+  console.log(`         driver workspace ${workRoot}${workRoot === root ? " (this repo -- no --work-root given)" : ""}`);
   process.exit(0);
 }
 
@@ -680,6 +806,20 @@ while (a.verdict === "driver" && !overBudget() && msRemaining() !== 0 && fallbac
   const next = fallbacks.shift();
   console.error(`arc-run: ${driver} reported a driver fault (${a.why}); falling back to ${next}`);
   driver = next;
+  // THE PIN IS PER-DRIVER, SO IT IS RECOMPUTED PER HOP. It was resolved once from the ORIGINAL
+  // driver and never revisited, so a fallback was spawned with the previous driver's model --
+  // a Claude id handed to the Codex driver -- and the receipt then asserted
+  // `driver: codex, model: sonnet, model_source: router`. engine/router.yaml says in as many
+  // words that codex and generic-api have no entry on purpose and "run unpinned and say so";
+  // the provenance field turned that into an explicit claim of the opposite. Every scheduled job
+  // takes this path (lib/jobs/delegate.mjs hardcodes --driver auto), so it is the common case
+  // rather than an edge one.
+  if (tier) {
+    const router = loadRouter();
+    pinnedModel = router?.models?.[tier]?.[driver] ?? null;
+    effectiveModel = trialModel || pinnedModel;
+    modelSource = pinnedModel ? "router" : "none";
+  }
   a = attempt(driver);
 }
 
@@ -718,6 +858,14 @@ if (a.verdict === "schema") {
     process: processName,
     driver,
     tier: tier ?? "(unrouted)",
+    // THE PROPOSAL CARRIES ITS OWN PROVENANCE. This is the one receipt a human reads before
+    // editing engine/router.yaml, and without these two fields a failed --trial-model run read as
+    // "escalate X to a stronger tier" with nothing saying a caller-named trial produced the
+    // evidence. Acting on it would mean a reviewed router diff justified by a model the router
+    // never selected -- a trial laundered into a production tier change through the very ladder
+    // ADR-0204 built to stop exactly that.
+    model: effectiveModel ?? "unpinned",
+    model_source: modelSource,
     fault_hint: faultHint,
     why: faultHint === "process"
       ? `the process is not self-consistent: ${selfCheck.why} — no driver is being blamed`
