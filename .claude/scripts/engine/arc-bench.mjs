@@ -621,13 +621,38 @@ export function discoverClasses(root) {
 }
 
 /**
+ * Can this driver actually carry a model? ASKED, never remembered.
+ *
+ * `arc-run` keeps the list (`MODEL_CAPABLE`), and a second copy here would be a second copy that
+ * drifts -- the failure this repo has recorded against hardcoded counts and duplicated deny-rules
+ * more than once. A `--dry-run` carrying a throwaway `--trial-model` is answered by arc-run's own
+ * validation before anything is invoked: exit 0 means it would apply the model, exit 2 means it
+ * refuses to record one it cannot apply.
+ *
+ * Costs one process per RUN, not per attempt, and reaches no provider.
+ */
+export function driverTakesModel(root, driver) {
+  // Any declared process will do -- the capability is the DRIVER's, and arc-run only needs a
+  // parseable process to reach its own validation. Read from the tree so a renamed pilot cannot
+  // turn this probe into a silent "not capable".
+  const processName = readdirSync(join(root, "processes")).filter((f) => f.endsWith(".process.yaml")).map((f) => f.slice(0, -".process.yaml".length)).sort()[0];
+  if (!processName) return false;
+  const res = spawnSync(process.execPath, [
+    join(root, ".claude/scripts/engine/arc-run.mjs"),
+    "--process", processName, "--driver", driver,
+    "--trial-model", "capability-probe", "--dry-run", "--root", root,
+  ], { encoding: "utf8", cwd: root, timeout: 60000, killSignal: "SIGKILL" });
+  return res.status === 0;
+}
+
+/**
  * ONE attempt: materialize, invoke `arc-run` once (M1), score, and clean up on every path.
  *
  * The materialized repo is torn down in a `finally`, including when the attempt throws -- a
  * harness that only cleans up on success fills the runner disk exactly when something is already
  * wrong, which is the moment the next diagnosis needs the disk.
  */
-export function runAttempt(root, { processName, fixture, driver, model, budget, timeoutMs }) {
+export function runAttempt(root, { processName, fixture, driver, trialModel, budget, timeoutMs }) {
   const stateDir = join(fixture.dir, "repo-states", fixture.id);
   const state = materializeRepoState(stateDir);
   const tmp = mkdtempSync(join(tmpdir(), "arc-bench-in-"));
@@ -643,6 +668,15 @@ export function runAttempt(root, { processName, fixture, driver, model, budget, 
     // its root from `ARC_ROOT` -- which bench has just pointed at the materialized fixture repo,
     // where `processes/` does not exist -- and the run dies with "no such process". The env var
     // and the flag answer two different questions and only the flag answers arc-run's.
+    // THE SEAM, AS FLAGS (ADR-0220). `--work-root` hands the driver the materialized fixture repo
+    // as its working directory; `--trial-model` hands it the candidate. Both are EXPLICIT: ambient
+    // inheritance of `ARC_DRIVER_MODEL` stays closed, because that is the ADR-0069 b1 hole and the
+    // seam deliberately did not reopen it. Bench's old env vars were never read and are gone.
+    //
+    // `--trial-model` only where the driver can carry it: arc-run REFUSES it on `mock` and `codex`
+    // (a receipt naming a model the driver never applied would be a fabrication), and for a replay
+    // sweep the model identity IS the recording set, which bench already records as the driver's
+    // own `version` digest.
     const args = [
       join(root, ".claude/scripts/engine/arc-run.mjs"),
       "--process", processName,
@@ -650,6 +684,12 @@ export function runAttempt(root, { processName, fixture, driver, model, budget, 
       "--input", `@${inputFile}`,
       "--budget", budgetString(budget),
       "--root", root,
+      // The materialized repo is a `mkdtemp` outside arc with its own `git init`, which is exactly
+      // arc-run's requirement: the toplevel of its own repository, not this one. Without it git
+      // walks upward from cwd and `commit-msg-draft` -- which holds `add:*` and `commit:*` --
+      // commits INTO arc.
+      "--work-root", state.root,
+      ...(trialModel ? ["--trial-model", trialModel] : []),
     ];
     const res = spawnSync(process.execPath, args, {
       encoding: "utf8",
@@ -659,7 +699,7 @@ export function runAttempt(root, { processName, fixture, driver, model, budget, 
       // truncated a large but valid answer and the driver was blamed for it. Same reasoning here.
       maxBuffer: 64 * 1024 * 1024,
       killSignal: "SIGKILL",
-      env: { ...process.env, ARC_ROOT: state.root, ARC_DRIVER_MODEL: model, ARC_MOCK_FIXTURE: fixture.id },
+      env: { ...process.env, ARC_MOCK_FIXTURE: fixture.id },
     });
 
     const elapsedMs = Date.now() - started;
@@ -1268,13 +1308,20 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
   const remaining = { ...cliBudget };
   const ceilings = readCeilings(root);
   const state = newBudgetState(ceilings, cliBudget.inr);
-  // THE CEILING KEYS ON THE MODEL THAT WILL ACTUALLY BE APPLIED, never the one requested. A
-  // bound exists to cover what the invocation will really spend, and `--model` does not reach
-  // the driver at all today (phase-00-spec M1 amendment) -- so keying on the request would look
-  // up a ceiling for a pair that is never invoked. `appliedModel` is null until the engine grows
-  // a model seam, at which point this lookup starts refusing real pairs that have no entry,
-  // which is exactly what it should do.
-  const appliedModel = null;
+  // THE CEILING KEYS ON THE MODEL THAT WILL ACTUALLY BE APPLIED, never the one requested. A bound
+  // exists to cover what the invocation will really spend, so keying on a request the driver
+  // cannot carry would look up a ceiling for a pair that is never invoked.
+  //
+  // ADR-0220 landed the seam, so `appliedModel` is no longer always null: a model DOES reach a
+  // model-capable driver now, as `--trial-model`. On `mock` and `codex` it still cannot -- arc-run
+  // refuses to record a model those drivers never applied -- so a `--model` given there is
+  // REQUESTED and not applied, exactly as before, and the ceiling keys on `(unpinned)`.
+  //
+  // The consequence is deliberate and is the gate doing its job: the first real pair benched here
+  // will be REFUSED until `ceilings.json` declares a worst case for it. A missing ceiling is a
+  // refusal, never a default.
+  const trialModel = model && driverTakesModel(root, driver) ? model : null;
+  const appliedModel = trialModel;
   const ceilingKey = appliedModel || "(unpinned)";
   const worstCase = worstCaseFor(ceilings, driver, appliedModel);
   const identity = driverIdentity(root, driver);
@@ -1336,7 +1383,7 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
         const perAttempt = { ...remaining };
         const timeoutMs = "min" in perAttempt ? Math.max(1000, Math.floor(perAttempt.min * 60000)) : 10 * 60000;
         let r;
-        try { r = runAttempt(root, { processName: cov.taskClass, fixture: fx, driver, model, budget: perAttempt, timeoutMs }); }
+        try { r = runAttempt(root, { processName: cov.taskClass, fixture: fx, driver, trialModel, budget: perAttempt, timeoutMs }); }
         catch (e) { r = { ok: false, verdict: "harness", why: String(e.message).split("\n")[0], elapsedMs: 0, schema: null, measuredInr: null }; }
         attempts += 1;
         if ("min" in remaining) remaining.min = Math.max(0, remaining.min - r.elapsedMs / 60000);
@@ -1414,16 +1461,24 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
         ceiling_key: `${driver}/${ceilingKey}`,
       },
       fingerprint: {
-        // `model_id`, `provider`, `effort` and `statusline_cost` are ABSENT on purpose: with an
-        // explicit --driver, arc-run hands the driver an empty ARC_DRIVER_MODEL and its own
-        // receipt reads `unpinned`, so there is no model identity to record. Writing the
-        // REQUESTED id here would claim a model that was never applied.
+        // `model_id` is present ONLY when a model was actually applied (ADR-0220's seam), and
+        // absent otherwise. `model_requested` records what was asked for either way, so a request
+        // the driver could not carry is visible as a request rather than silently dropped -- and
+        // never mistaken for a model that ran. `provider`, `effort` and `statusline_cost` stay
+        // absent: no driver reports them.
         ...(model ? { model_requested: model } : {}),
+        ...(appliedModel ? { model_id: appliedModel } : {}),
       },
-      model_applied: null,
-      // request_settings is absent for the same reason: bench has no channel through arc-run to
-      // set temperature or any other provider knob, so declaring `temperature: 0` would record a
-      // setting nothing applied.
+      model_applied: appliedModel,
+      // WHERE THE MODEL CAME FROM, in arc-run's own vocabulary: `trial` when this run applied one
+      // through `--trial-model`, `none` when nothing was applied. `router` is not reachable from
+      // here -- bench names its driver explicitly and never routes, which is the propose-only rule.
+      // Recorded because "a trial override read back as a routing decision" is exactly the false
+      // claim ADR-0220 constraint 3 exists to prevent.
+      model_source: appliedModel ? "trial" : "none",
+      // request_settings stays absent: bench has no channel through arc-run to set temperature or
+      // any other provider knob, so declaring `temperature: 0` would record a setting nothing
+      // applied. The model seam closed the model half of this and not this half.
       router_sha_at_read: shaBefore,
       router_unchanged: shaBefore === shaAfter,
       // The non-deterministic half, deliberately kept OUT of the scorecard.
@@ -2120,7 +2175,7 @@ function printReport(scorecard, provenance) {
   const out = [];
   const s = provenance.subject;
   out.push(`arc-bench ${provenance.bench} -- driver ${s.driver}${s.driver_version ? ` (${s.driver_version})` : " (version: ABSENT)"} -- normalizer ${scorecard.normalizer_version}`);
-  out.push(`model requested ${provenance.fingerprint.model_requested ?? "(none)"} -- applied: NONE (arc-run pins a model only via --driver auto + a router row)`);
+  out.push(`model requested ${provenance.fingerprint.model_requested ?? "(none)"} -- applied ${provenance.model_applied ?? "NONE"} (source: ${provenance.model_source})`);
   out.push(`router ${provenance.router_unchanged ? "UNCHANGED" : "CHANGED -- propose-only was violated"} · caps run ${provenance.budget.run_cap_inr} / process ${provenance.budget.process_cap_inr} · K=${provenance.budget.k}`);
   for (const c of scorecard.classes) {
     if (!c.eligible) { out.push(`  ${c.task_class}: ${c.reason}`); continue; }
@@ -2231,7 +2286,8 @@ function main() {
     normalizer_version: report.scorecard.normalizer_version,
     subject: report.provenance.subject,
     fingerprint: report.provenance.fingerprint,
-    model_applied: null,
+    model_applied: report.provenance.model_applied,
+    model_source: report.provenance.model_source,
     router_unchanged: report.provenance.router_unchanged,
     attempts: report.provenance.attempts,
     outcome: report.outcome,

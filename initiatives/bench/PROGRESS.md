@@ -1,11 +1,11 @@
 # PROGRESS.md — arc-bench "the model market"
 
-status: BLOCKED
+status: LIVE
 cycle: arc-bench (Cycle 13, opened 2026-08-12)
 phase: 04
 appetite: 8d
 burn: 7.25d
-blocked-on: engine — arc-run overwrites ARC_DRIVER_MODEL, so bench cannot vary the model (Phase 03's real event)
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -21,7 +21,7 @@ depends-on: —
 | 00 | The road + steel thread — `drivers/mock`, `version` verb, assertion schema, fixture-repo harness, `commit-msg-draft` armed to 5, one fixture end to end | 3.0d | ✅ done 2026-08-13 |
 | 01 | Bench core — full run, K=3 sequential, K-group admission control, provenance, total encoder, replay proof | 1.5d | ✅ done 2026-08-13 |
 | 02 | Router proposal — three artifacts, gates-first eligibility, `NO PROPOSAL` with reason, `approval.requested` | 0.75d | ✅ done 2026-08-13 |
-| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ⚠️ guard done · real event BLOCKED |
+| 03 | Drift guard + the real event — split axes, three tiers, enumerated re-pin causes, one real model to a recorded verdict | 1.0d | ⚠️ guard done · real event PENDING (unblocked 2026-08-14) |
 | 04 | Seal + retro — two mutants, two adversarial surfaces, redaction sweep, runbook, production count from the spine | 1.0d | ✅ done 2026-08-13 |
 
 Phases sum to **7.25d**; the remaining **0.75d is named reserve, not unallocated scope**.
@@ -51,7 +51,7 @@ kickoff, not at 6pm on day 8).
   **03 — the drift guard (half).** Two split comparability axes, every cost delta classified into
   exactly one cause, three tiers with **tier 3 report-only at any size**, muted classes named, and
   the anti-goalpost clause: **a score movement alone never re-pins**. A clean guard run leaves
-  **no approval** on the spine and says so. **The real-event half is BLOCKED** — see the current-position section below.
+  **no approval** on the spine and says so. **The real-event half was BLOCKED** at close. **UNBLOCKED 2026-08-14** by engine ADR-0220 — see `## Now`. This entry is left as written: the done-log records what was true at the close, and a pointer beats a rewrite.
 
   **04 — the seal.** Two mutants, **run not grepped**, each proved to have reached its target
   behaviour before its rejection counts. The direct-spawn mutant is rejected for **bench's** reason
@@ -88,7 +88,8 @@ kickoff, not at 6pm on day 8).
   present in `events/` and absent from `_quarantine/`**.
 
   **Four engine defects found by RUNNING it, none of them fixed here** — `arc-run.mjs` is a
-  one-line-only path for this lane, so bench reports and moves on:
+  one-line-only path for this lane, so bench reports and moves on. **Defects 1 and 2 were CLOSED
+  by engine ADR-0220 on 2026-08-14**; 3 and 4 stand. Left as written for the same reason:
   1. `ARC_ROOT` does not survive `arc-run`, so the fixture-repo harness **cannot reach a real
      driver** — and `commit-msg-draft` holds `add:*`/`commit:*`, so a real driver today would
      stage and commit **inside the arc repo**.
@@ -145,39 +146,56 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
-**Current position, 2026-08-13: 4 of 5 phases CLOSED. Phase 03's real-event half is BLOCKED on
-the engine lane.**
+**Current position, 2026-08-14: 4 of 5 phases CLOSED. Phase 03's real-event half is UNBLOCKED and
+not yet built.**
 
-Everything bench can build is built and green on CI at `786a378` (run `31680704721`, read per JOB).
-The whole cycle rides one branch and merges once — `feat/arc-bench-phase-00-rest`, **PR #180**.
+## The blocker is gone, and it was closed by the engine lane
 
-## THE BLOCKER, and why it is not a bench change
+`ADR-0220` landed on main as `4d68e07`, **out-of-cycle and owner-ruled**, raised by this lane
+after Cycle 13 merged. `arc-run` now takes two flags:
 
-`arc-run` rebuilds the driver environment (`arc-run.mjs:378-381`) and **overwrites**
-`ARC_DRIVER_MODEL` with `pinnedModel ?? ""`. With an explicit `--driver` there is no tier, so a
-model can only be pinned through `--driver auto` plus a `classes.NAME` row in
-`engine/router.yaml` — and that file is **do-not-touch for this lane, permanently**.
+| Flag | What it gives bench |
+|---|---|
+| `--trial-model ID` | the candidate reaches the driver — bench can vary the model |
+| `--work-root PATH` | the driver works in the materialized fixture repo, not in arc |
 
-**Bench therefore cannot vary the model, which is the entire premise of a model market.** Four
-Phase-03 DoD items depend on it: one real model benched end to end, the candidate proven REACHED,
-the REQ-05 preflight, and the human verdict on a run that cannot be configured.
+Bench is wired to both. Four constraints came with them and all four are honoured here:
 
-The same rebuild also overwrites `ARC_ROOT`, so the fixture-repo harness **cannot reach a real
-driver** — and `commit-msg-draft` holds `git.op: add:*` and `commit:*`, so a real driver run
-today would stage and commit **inside the arc repo itself**. **One engine seam closes both.**
+- **Ambient inheritance stays shut.** `ARC_DRIVER_MODEL` in the environment is still ignored — it
+  is the ADR-0069 b1 hole and the seam did not reopen it. Bench's old env vars are gone; it passes
+  flags.
+- **`--trial-model` is refused on `mock` and `codex`**, because a receipt naming a model those
+  drivers never applied would be a fabrication. Bench ASKS `arc-run` whether a driver can carry a
+  model rather than keeping a second copy of the list.
+- **`--work-root` must be the toplevel of its own repo, outside arc.** The materialized fixture
+  repo already is one. A work-root inside arc is refused, because git walks upward and
+  `commit-msg-draft` holds `add:*`/`commit:*`.
+- **Receipts carry `model_source: router|trial|none`**, so a trial can never be read back as a
+  routing decision. Bench records it, and writes `model_id` only when a model was actually applied.
 
-Measured, not read: `tests/bench-steel-probe.mjs` points `ARC_ROOT` at a directory holding no
-recordings and the run still replays the right bytes, and it asserts `arc-run`'s own receipt reads
-`model: unpinned` while bench set `claude-opus-5`.
+## The tripwire that did not fire, and what it cost
 
-**Next step, and it belongs to ENGINE:** `/arc-change --lane engine` for a seam that lets a caller
-name the model for one invocation without editing the router, or a router row bench may propose
-against. Either is a reviewed diff citing ADR-0069. Bench reaches across no fence to make it.
+This lane pinned the old blocker with two checks whose comment promised they would *"fail loudly
+the day the engine grows a target-repo seam"*. **The seam arrived and nothing failed.** The checks
+asserted that `arc-run` overwrites the env vars — which is still TRUE, deliberately — while the
+conclusion they defended became false. A tripwire aimed at the mechanism that did not change cannot
+see the mechanism that did.
 
-**Also carried to engine:** `arc-run.mjs:257` still passes `--payload` inline and carries the
-Windows-path `BAD_JSON` bug bench fixed on its own emit path, and `arc-run` emits
-`run.completed` **without `--strict`**, so a rejected payload quarantines at exit 0. Bench guards
-its own side: `drivers/mock` refuses a `__cost.source` outside the spine's closed set.
+**The engine lane found it by reading this lane's probe. This lane's probe did not find it.** The
+checks now ask about the flags; the env checks survive, narrowed to the one thing they actually
+prove. Recorded in `docs/retro-log.md`.
+
+## What is left in Phase 03, and what it needs from the owner
+
+The real event is now buildable and is **not** built. It needs three things this session cannot
+supply:
+
+1. **A model-capable driver, authenticated.** `claude-code` with a second model id reachable.
+2. **Real money.** A ceiling for that driver+model pair must be hand-authored into
+   `initiatives/bench/ceilings.json` first — a missing ceiling is a refusal, never a default, so
+   the run will be REFUSED until it exists. That is the gate working.
+3. **A human verdict.** `arc-inbox approve|reject ULID --reason`, from the main clone. Both
+   outcomes are success; no agent may press it.
 
 ## The monthly guard
 
