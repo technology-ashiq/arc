@@ -39,7 +39,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -176,24 +176,39 @@ if (workRootArg) {
   //
   // So: the work-root must be the TOPLEVEL of its own repository, and that repository must not be
   // arc's. Anything else is refused by name rather than discovered later in a commit log.
-  const topOf = (dir) => {
-    try { return realpathSync(execFileSync("git", ["-C", dir, "rev-parse", "--show-toplevel"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim()); }
-    catch { return ""; }
+  // EVERY QUESTION HERE IS ASKED OF GIT, AND NONE OF IT COMPARES PATH STRINGS.
+  //
+  // The first version compared `realpathSync(workRoot)` against git's `--show-toplevel`, and that
+  // is wrong on exactly one of the three CI legs: Windows hands a process an 8.3 SHORT path
+  // (`C:/Users/RUNNER~1/...`) while git reports the long form (`C:\Users\runneradmin\...`), and
+  // `realpathSync` does not expand short names. Same directory, two strings, so a perfectly valid
+  // work-root was refused as "not the toplevel of its repository". Invisible on the box that wrote
+  // it, because a hand-typed path is already long-form -- the recorded Windows-path-resolution
+  // shape, verbatim.
+  //
+  // `--show-prefix` is git's own answer to "where am I relative to the toplevel": empty AT the
+  // toplevel, non-empty in a subdirectory, and it fails outside a repo. It needs no normalisation
+  // because it is not a path comparison at all. The one remaining comparison is git-output against
+  // git-output, so both sides are spelled the same way by construction.
+  const gitIn = (dir, ...args) => {
+    try { return execFileSync("git", ["-C", dir, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim(); }
+    catch { return null; }
   };
-  const wTop = topOf(workRoot);
-  const aTop = topOf(root) || realpathSync(root);
-  if (!wTop) {
+  const prefix = gitIn(workRoot, "rev-parse", "--show-prefix");
+  if (prefix === null) {
     console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} is not inside a git repository`);
     console.error("         A driver holding git.op grants needs a repo to hold its work; a bare directory would send those operations nowhere useful.");
     process.exit(2);
   }
-  if (wTop === aTop) {
+  const wTop = gitIn(workRoot, "rev-parse", "--show-toplevel");
+  const aTop = gitIn(root, "rev-parse", "--show-toplevel");
+  if (wTop !== null && aTop !== null && wTop === aTop) {
     console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} resolves to THIS repository (${aTop})`);
     console.error("         git walks UPWARD from cwd, so a work-root inside arc would commit into arc -- which is what --work-root exists to prevent.");
     console.error("         Materialize the fixture repo outside this tree and point --work-root at its own toplevel.");
     process.exit(2);
   }
-  if (realpathSync(workRoot) !== wTop) {
+  if (prefix !== "") {
     // A subdirectory of another repo is refused too: the driver would operate on that repo's index
     // from a partial view, which is a different surprise rather than a safer one.
     console.error(`arc-run: --work-root ${JSON.stringify(workRootArg)} is not the toplevel of its repository (that is ${wTop})`);
