@@ -139,7 +139,7 @@
 .claude/scripts/engine/adapters/codex.mjs	1d46d11e9ae8f17754b26cbab7b3af849a52767459b74c7d2349f4d3a7686d2b
 .claude/scripts/engine/arc-bench.mjs	65d0f065c3676ffde5e652114650f2d19c1a4dfa684d5433b99e32e39a003197
 .claude/scripts/engine/arc-compile.mjs	c397af7fe2cda0c88ea79c81120e0060ecad97989edecf9fb725886557911db8
-.claude/scripts/engine/arc-run.mjs	7e628edc12bd15bd339d87e15f1620d6cf2ad8f8e34476112787428f5acf9b96
+.claude/scripts/engine/arc-run.mjs	e690f00922eb2b1085485e36627d8defb35f5b10523b621c9cf3bf100d2a8324
 .claude/scripts/engine/drivers/claude-code.mjs	d8586735c4359247383936833eacd8d7af21c66bf6374304980ad3fc65658142
 .claude/scripts/engine/drivers/claude-code.sh	c85ad83beaf07d4a7aa13228e30e3598944fe0eb98f0160b2d93bd437f42b1f7
 .claude/scripts/engine/drivers/codex.mjs	5d6c44d2c87593387aae80734a58fd377192c0b00b2e6d3085b2a3ce12c69f7e
@@ -232,7 +232,7 @@
 .claude/scripts/hq/lib/validate-leads.mjs	0f5cf51a91a9ec91857f433169149bfed7f35bd89f78c3ba9e5accc7bdfa2709
 .claude/scripts/hq/lib/validate-ledger.mjs	5ee5e61d395eccaa732f5c49215d6db80873ef030bc6027a675a5837ce010d88
 .claude/scripts/hq/lib/validate-policy.mjs	6b5bd88f51b75956bbf1b3bc755360002e27db431d7488695c96c8c2456be657
-.claude/scripts/hq/lib/validate.mjs	b81067ab1bbe06c268da5e13992444c8008b701f50974926ddf22c7e7f9823b0
+.claude/scripts/hq/lib/validate.mjs	5c68bd36ad1ea187081aa99a0c117f4d7ce326f88fc6f687937458033e24b242
 .claude/scripts/hq/policy-hook.mjs	d1f038fb8a16ee229673ec7886e130835b26bd22e17f9f7176ccc635f06aad76
 .claude/scripts/hq/policy-lint.mjs	2a6d1101f2de3e84dbb650be3b07a90ccf124ce07595c658ac3c9b1e87370e5a
 .claude/scripts/hq/policy-matrix.mjs	96dd7a3ba2984b00593b77b7575d91d70e309720feec28704ab98e4c52f141fb

@@ -109,7 +109,11 @@ export { PROCESS_RE } from "../../core/variant-grammar.mjs";
 import { PROCESS_RE } from "../../core/variant-grammar.mjs";
 const VENTURE_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const RUN_ID_RE = /^r-[A-Za-z0-9._-]{1,64}$/;
-const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/;
+// EXPORTED so callers validate against THIS regex rather than a copy of it. arc-run refuses a
+// bad --trial-model before spending a driver call, and a second hand-copied literal is the
+// "validate one read, compare another" defect this repo keeps re-learning: the copies agree until
+// one is tightened, and then a run spends real money and the receipt is rejected at emit time.
+export const MODEL_RE = /^[A-Za-z0-9][A-Za-z0-9:._\/-]{0,127}$/;
 // Moved to canonical.mjs as IST_TS_RE so leads' payload `*_at` validator shares ONE definition
 // with the event `ts` rule (ADR-0400). Aliased, not re-declared: a copied regex drifts.
 const TS_RE = IST_TS_RE;
