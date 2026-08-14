@@ -377,12 +377,24 @@ const exemplars = () => G.loadExemplars("initiatives/growth/exemplars");'
   # 'Non-empty' was the whole bar -- a pass condition that is only an absence, in the file that
   # anchors the voice. Three exemplars containing the letters h, a and u switched the old
   # prescription control off entirely.
+  # The paths travel by ENVIRONMENT, never interpolated into a JS string literal. A Windows
+  # temp path is full of backslashes, and `'C:\Users\...\tiny'` inside JS makes `\U` and `\t`
+  # escape sequences -- so readdirSync got a mangled path, threw, and every case collapsed to
+  # NO_EXEMPLARS. CI caught it on one Windows shard; it passed on every Linux and macOS leg.
+  #
+  # The visible failure was one assertion. The invisible one was worse: on Windows the OTHER two
+  # cases were passing for the wrong reason -- an unreadable mangled path returns NO_EXEMPLARS,
+  # which is exactly what they assert. Two vacuous passes hiding behind one honest failure.
   mkdir -p "$BATS_TEST_TMPDIR/empty" "$BATS_TEST_TMPDIR/tiny"
   printf 'h' > "$BATS_TEST_TMPDIR/tiny/a.md"
+  [ -s "$BATS_TEST_TMPDIR/tiny/a.md" ] || { echo "fixture builder wrote nothing"; false; }
+  export EX_EMPTY="$BATS_TEST_TMPDIR/empty"
+  export EX_TINY="$BATS_TEST_TMPDIR/tiny"
+  export EX_GONE="$BATS_TEST_TMPDIR/does-not-exist"
   run _node "$PRE
-    console.log([err(() => G.loadExemplars('$BATS_TEST_TMPDIR/empty')),
-                 err(() => G.loadExemplars('$BATS_TEST_TMPDIR/tiny')),
-                 err(() => G.loadExemplars('$BATS_TEST_TMPDIR/does-not-exist'))].join(' '));"
+    console.log([err(() => G.loadExemplars(process.env.EX_EMPTY)),
+                 err(() => G.loadExemplars(process.env.EX_TINY)),
+                 err(() => G.loadExemplars(process.env.EX_GONE))].join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "NO_EXEMPLARS EMPTY_EXEMPLAR NO_EXEMPLARS" ]
 }
@@ -518,9 +530,12 @@ const exemplars = () => G.loadExemplars("initiatives/growth/exemplars");'
   # unamendable rule cannot be a substring search of its own source.
   #
   # The module is now importable (it has a main guard), so the test ASKS it what it registered.
+  # `publish` is NOT on the banned list -- ADR-1102 names the command verbatim, and Phase 04's
+  # module-graph guard plus its three-escape mutant prove the capability absent, which a name check
+  # never could (phase-04 spec, Amendment 2026-08-14).
   run _node "const M = await import(\"./.claude/scripts/growth/arc-growth.mjs\");
     const verbs = Object.keys(M.COMMANDS).sort();
-    const banned = verbs.filter((v) => /promote|publish|merge|deploy|ship/.test(v));
+    const banned = verbs.filter((v) => /promote|merge|deploy|ship/.test(v));
     console.log(verbs.join(',') + ' | ' + (banned.length ? 'BANNED:' + banned.join(',') : 'none'));"
   [ "$status" -eq 0 ] || { echo "the module could not be imported at all: $output"; false; }
   [[ "$output" == *"| none"* ]] || { echo "a publishing verb is registered: $output"; false; }

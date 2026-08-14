@@ -44,12 +44,41 @@ where it competed directly against E2's safety-critical mutant guard. The Astro 
     `llms.txt` — the last a **hedge** ADR-1113 forbids from appearing in any exit criterion as a
     lever. Its criterion is "well-formed", never "improves anything". **The IndexNow ping is CUT.**
 
+## Amendment, 2026-08-14 — the E2 verb ban was over-broad against its own ADR
+
+Phase 02 shipped a test asserting the command registry exposes **no `publish` verb**. Criterion 1
+of this phase requires `arc growth publish <slug>`, and **ADR-1102 names that command explicitly**:
+*"`arc growth publish <slug>` creates a branch and a PR. It has no merge path and no default-branch
+push path."*
+
+So the Phase-02 assertion contradicts the decision it was written to enforce. The banned thing is
+never the WORD — it is the **capability**: a merge, a push to the default branch, a direct deploy.
+Opening a pull request is the opposite of those; it is the act that puts the decision in front of a
+human, which is what E2 asks for.
+
+The banned list becomes `promote · merge · deploy · ship`, and `publish` is permitted **only**
+alongside the module-graph guard and its running mutant (criteria 2 and 3). A verb name was never
+the control; the guard is. Routed here rather than edited quietly into a test, because the
+assertion encodes a Tier E unamendable article and a silent loosening of one is exactly what the
+process exists to prevent.
+
 ## Verification plan
 
-Coarse at kickoff, refined via `/arc-change` when the phase starts: the three-escape mutant is
-rejected with per-escape attribution; a pack without a preview URL is invalid; both template arms
-produce tagged receipts and assignment replays identically across a wiped-and-replayed run; sha-equal
-and sha-diff move the counter correctly; and the JSON-LD validates against its schema.
+**Refined 2026-08-14** from the coarse kickoff one-liner.
+
+| # | What is proven | Expected |
+|---|---|---|
+| V1 | Green **on CI**, per-JOB, at the branch HEAD | every job `success`, three OS legs |
+| V2 | The publish module's **module graph** carries no merge, no default-branch push, no deploy write | a PARSE of imports and call targets, never a grep — a grep misses `from "fs"`, `fs/promises`, `child_process` and async exec/spawn |
+| V3 | The **running mutant** attempts three distinct escapes and each is REJECTED | merge · `push origin main` · direct deploy-hook write — and **each rejection names the escape it caught**, so an incidental crash cannot pass as a negative control |
+| V4 | A review pack missing the preview URL is **invalid**, not warned | structural refusal |
+| V5 | Arm assignment is `sha256(slug)`, **replay-identical**, through the PRODUCTION function | the fixture calls the real assignment via the real path, never a hash re-implemented in the test (arc-engine 2026-08-03: a fake that swapped the code path let a three-driver suite pass with zero real driver code) |
+| V6 | `template_id` is validated on its **VALUES**, not merely its presence | a value outside the two enumerated templates is rejected by the closed-set check (arc-memory 2026-08-12) |
+| V7 | The enumerated set and the versioned template FILES agree | a test derives the file list from disk and compares it to the validator's constant — one list, two readers |
+| V8 | Re-publishing a slug is an **update**, not a duplicate page | fixture |
+| V9 | The unedited counter: sha-equal increments, sha-different **neither increments nor resets** | fixture |
+| V10 | **Zero `experiment.*`** emissions from growth | the stream is evolve's and the two are never summed |
+| V11 | JSON-LD is well-formed Article + FAQPage | parsed and shape-checked. `llms.txt` is checked "well-formed" and **never** "improves anything" (ADR-1113) |
 
 **The replay fixture must invoke the production assignment function through the real publish path**,
 never a hash re-implemented inside the test — a fake that swapped the code path let a three-driver

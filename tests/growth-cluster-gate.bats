@@ -256,11 +256,20 @@ const gate = (events, over = {}) => C.assertClusterApproved({ events, clusterId:
   # The module now has a realpath-both-sides main guard, so importing it does NOT run the CLI and
   # the test can simply ask what was registered. Same fix as tests/growth-lints.bats: the rule is
   # grep the pattern, not the file, and a fix is not applied until it is made everywhere.
+  #
+  # THE BANNED LIST NO LONGER CONTAINS `publish`, and that is a correction rather than a loosening.
+  # ADR-1102 names the command verbatim: *"arc growth publish <slug> creates a branch and a PR. It
+  # has no merge path and no default-branch push path."* Phase 02 banned the WORD, which
+  # contradicted the decision the test was written to enforce. The banned thing is the CAPABILITY --
+  # a merge, a push to the default branch, a deploy -- and opening a pull request is the act that
+  # puts a human in the loop rather than one that bypasses them. The capability is proven absent by
+  # `guard.mjs` and its three-escape mutant in tests/growth-publish.bats, which is a far stronger
+  # control than a name check ever was (phase-04 spec, Amendment 2026-08-14).
   run _node "const M = await import(\"./.claude/scripts/growth/arc-growth.mjs\");
     const verbs = Object.keys(M.COMMANDS).sort();
-    console.log(verbs.join(',') + ' | ' + (verbs.filter((v) => /promote|publish|merge|deploy|ship/.test(v)).join(',') || 'none'));"
+    console.log(verbs.join(',') + ' | ' + (verbs.filter((v) => /promote|merge|deploy|ship/.test(v)).join(',') || 'none'));"
   [ "$status" -eq 0 ] || { echo "the module could not be imported at all: $output"; false; }
-  [[ "$output" == *"| none"* ]] || { echo "COMMANDS registers a publishing verb: $output"; false; }
+  [[ "$output" == *"| none"* ]] || { echo "COMMANDS registers a merge/deploy verb: $output"; false; }
   # Positive control: 'none' must be the answer to a real registry, not to an empty object.
   [[ "$output" == *"mine"* ]] || { echo "positive control failed: registry does not even list mine: $output"; false; }
 }

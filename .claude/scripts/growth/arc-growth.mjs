@@ -2,14 +2,21 @@
 //
 //   arc-growth mine     --sources F --out F [--sitemap URL|--sitemap-file F] [--offline]
 //   arc-growth cluster  --candidates F --cluster-id c-NNN --out F [--request]
-//   arc-growth generate --cluster-id c-NNN --plan F
+//   arc-growth generate --cluster-id c-NNN --plan F --keyword K --out F
+//   arc-growth render   --draft F --plan F --out F
+//   arc-growth lint     --file F [--markers F] [--offline]
+//   arc-growth publish  <slug> --article F --plan F --preview URL [--out F]
 //
-// E2 (Tier E, unamendable): there is NO promote, publish, merge or deploy verb here, and its
-// absence is the enforcement -- a verb that does not exist cannot be invoked by a mistake, a
-// retry loop or a mutant. Publishing is the human's, through a PR merge (ADR-1102).
+// E2 (Tier E, unamendable): there is no promote, MERGE, deploy or ship verb here, and there is no
+// path to one -- `exec-allowlist.mjs` is the single module that may spawn anything, `guard.mjs`
+// PARSES the module graph to prove it, and a running mutant attempts three escapes that must each
+// be refused BY NAME.
 //
-// `generate` exists in this phase ONLY to hold gate 1 (ADR-1112): it refuses an unapproved
-// cluster. The generation itself lands in Phase 03 behind the same door.
+// `publish` exists and is supposed to: ADR-1102 names it verbatim -- *"arc growth publish <slug>
+// creates a branch and a PR. It has no merge path and no default-branch push path."* Phase 02
+// shipped a test banning the WORD, which contradicted the decision it was enforcing; the banned
+// thing is the capability, and opening a pull request is the act that puts a human in the loop
+// rather than one that bypasses them (phase-04 spec, Amendment 2026-08-14).
 
 import { readFileSync, writeFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -23,14 +30,21 @@ import { hnAlgoliaAdapter, manualAdapter, hnAlgoliaVerifier } from "./lib/adapte
 import { loadMarkers, scanSlop, renderSlopReport } from "./lib/slop-lint.mjs";
 import { scanCitations, checkLinks, renderCitationReport } from "./lib/citation-lint.mjs";
 import { loadExemplars, clusterRows, assemblePrompt, assertNoStylePrescription, renderMdx } from "./lib/generate.mjs";
+import { assignArm } from "./lib/templates.mjs";
+import { buildReviewPack, renderReviewPack, PublishError } from "./lib/publish.mjs";
+import { contentShaOfBytes } from "./lib/content-sha.mjs";
 
 // Assigned by main() once the verb is known. Every flag read goes through flag()/has(), which read
 // this and nothing else -- there is no second reading of argv anywhere in the file.
-let ARGS = { values: new Map(), bare: new Set() };
+let ARGS = { values: new Map(), bare: new Set(), positional: [] };
 
 const VALUE_FLAGS = ["sources", "out", "sitemap", "sitemap-file", "candidates", "cluster-id", "plan",
-  "keyword", "exemplars", "markers", "file", "draft"];
+  "keyword", "exemplars", "markers", "file", "draft", "article", "preview", "templates", "receipts"];
 const BARE_FLAGS = ["offline", "accept-unknown"];
+
+// How many BARE arguments each verb takes. Declared per verb rather than globally, so `lint` still
+// refuses a shell-expanded glob while `publish <slug>` keeps the argument ADR-1102 gives it.
+const POSITIONALS = Object.freeze({ publish: 1 });
 
 // ---------------------------------------------------------------------------------------------
 // ONE PARSE, and everything reads from it.
@@ -50,16 +64,23 @@ const BARE_FLAGS = ["offline", "accept-unknown"];
 //
 // So argv is parsed ONCE, strictly, into a structure; `flag()` and `has()` are lookups. There is no
 // second reading of argv anywhere, which is what let the three disagree.
-function parseArgs(args) {
+function parseArgs(args, { positionals = 0 } = {}) {
   const values = new Map();
   const bare = new Set();
+  const positional = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    // A token that is not `--name` is not an argument this CLI takes. Refusing it is the whole
-    // fix for the glob case: the extra paths become a loud error instead of silence.
+    // A token that is not `--name` is a POSITIONAL, and a verb takes only as many as it declares.
+    // `publish <slug>` legitimately takes one (CLAUDE.md: a bare first argument is always the
+    // command's own). Everything past that count is refused, which is the whole fix for the glob
+    // case: `lint --file *.md` declares zero, so the shell-expanded extra paths become a loud
+    // error instead of being read by nobody.
     if (!a.startsWith("--") || a === "--") {
-      die("BAD_ARGS", `unexpected argument ${JSON.stringify(a)} -- this command takes only --flags. ` +
-        `A shell glob (--file *.md) expands to several paths and only the first would be read.`);
+      if (positional.length < positionals) { positional.push(a); continue; }
+      die("BAD_ARGS", positionals === 0
+        ? `unexpected argument ${JSON.stringify(a)} -- this command takes only --flags. ` +
+          `A shell glob (--file *.md) expands to several paths and only the first would be read.`
+        : `unexpected extra argument ${JSON.stringify(a)} -- this command takes ${positionals} bare argument(s), then only --flags`);
     }
     const name = a.slice(2);
     // `--name=value` is refused rather than parsed: accepting it here while `has()` looked for the
@@ -94,7 +115,7 @@ function parseArgs(args) {
     values.set(name, v);
     i++; // consume the value
   }
-  return { values, bare };
+  return { values, bare, positional };
 }
 
 function flag(name, fallback = undefined) {
@@ -406,14 +427,85 @@ export const POV_FLOOR_LINE =
 // see. The literal is not the only way to register -- `Object.assign` and `defineProperty` are two
 // more. A guard on a Tier E unamendable rule cannot be a substring search of its own source, which
 // is this repo's oldest recurring defect (grep where a parse was needed).
-export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint };
+/**
+ * `publish <slug>` -- REQ-03. Assemble the review pack and print the exact branch/PR commands.
+ *
+ * IT DOES NOT SPAWN ANYTHING ITSELF. The commands are printed for the operator, and the only
+ * module in this lane that may spawn is `exec-allowlist.mjs`, whose allowlist contains no merge,
+ * no default-branch push and no deploy. That split is what makes the module-graph audit mean
+ * something: this file assembles, that file executes, and the guard proves the second one cannot
+ * do the forbidden thing.
+ */
+async function cmdPublish() {
+  const slug = ARGS.positional[0];
+  if (!slug) die("BAD_ARGS", "publish needs a slug: arc-growth publish <slug> --article F --plan F --preview URL");
+  const articlePath = flag("article");
+  const planPath = flag("plan");
+  const previewUrl = flag("preview");
+  if (!articlePath || !planPath) die("BAD_ARGS", "publish needs --article F and --plan F");
+
+  const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
+  if (plan === null || typeof plan !== "object" || Array.isArray(plan) || typeof plan.cluster_id !== "string")
+    die("BAD_PLAN", `the cluster plan at ${planPath} is not a cluster plan (no cluster_id)`);
+  const article = readOrDie(articlePath, "the article");
+  if (article.trim() === "") die("EMPTY_ARTICLE", `${articlePath} is empty -- there is nothing to publish`);
+
+  // The lints run HERE, not in review: a pack whose reports were produced by hand is a pack whose
+  // reports can disagree with the file being shipped.
+  let markers;
+  try { markers = loadMarkers(readOrDie(flag("markers", "initiatives/growth/slop-markers.json"), "the marker list")); }
+  catch (e) { die(e.code || "BAD_MARKERS", e.message); }
+  const slop = scanSlop(article, markers);
+  const claims = scanCitations(article);
+  const linkResult = has("offline") ? null : await checkLinks(article, httpResolver());
+
+  const contentSha = contentShaOfBytes(Buffer.from(article, "utf8"));
+  const templateId = assignArm(slug);
+
+  let pack;
+  try {
+    pack = buildReviewPack({
+      slug,
+      previewUrl,
+      slopReport: renderSlopReport(slop),
+      citationReport: renderCitationReport(claims, linkResult),
+      diff: `article ${articlePath} (${Buffer.byteLength(article, "utf8")} bytes, content_sha ${contentSha.slice(0, 12)})`,
+      povLine: POV_FLOOR_LINE,
+      templateId,
+      contentSha,
+    });
+  } catch (e) {
+    die(e.code || "BAD_PACK", e.message);
+  }
+
+  const blocking = slop.findings.length + claims.findings.filter((f) => f.level === "FAIL").length;
+  const outPath = flag("out");
+  if (outPath) { assertWritablePath(outPath, "out"); writeFileSync(outPath, renderReviewPack(pack), "utf8"); }
+  process.stdout.write(renderReviewPack(pack) + "\n");
+  process.stdout.write(
+    `branch: growth/${slug}\n` +
+    `arm: ${templateId} (sha256(slug), replay-identical -- ADR-1106)\n` +
+    `content_sha: ${contentSha}\n\n` +
+    `The machine does not merge. Open the PR, then a HUMAN merges it (E2, ADR-1102):\n` +
+    `  git checkout -b growth/${slug}\n` +
+    `  git add <the article> && git commit -m "content: ${slug}"\n` +
+    `  git push -u origin growth/${slug}\n` +
+    `  gh pr create --fill\n`,
+  );
+  if (blocking > 0) {
+    process.stderr.write(`arc-growth: LINT_FAIL -- ${blocking} finding(s) block this pack\n`);
+    process.exit(5);
+  }
+}
+
+export const COMMANDS = { mine: cmdMine, cluster: cmdCluster, generate: cmdGenerate, render: cmdRender, lint: cmdLint, publish: cmdPublish };
 
 export async function main(argvIn = process.argv.slice(2)) {
   const v = argvIn[0];
   const fn = Object.hasOwn(COMMANDS, v) ? COMMANDS[v] : undefined;
   if (typeof fn !== "function") die("BAD_ARGS", `unknown command ${JSON.stringify(v ?? "")} (${Object.keys(COMMANDS).join(" | ")})`);
   // Parse AFTER the verb is known and BEFORE the command runs. One parse, one structure.
-  ARGS = parseArgs(argvIn.slice(1));
+  ARGS = parseArgs(argvIn.slice(1), { positionals: POSITIONALS[v] || 0 });
   await fn();
 }
 
