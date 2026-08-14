@@ -73,15 +73,31 @@ teardown() { _arc_legal_teardown; }
   # and exit 3 (the strict parser refuses the file outright: duplicate keys and tabs are outside
   # its subset). Both are safe; only 0 is not. Each shape is asserted separately so a single fix
   # cannot appear to cover all five.
-  local shape
-  for shape in publish-shape-decoy publish-shape-same-indent publish-shape-duplicate-key \
-               publish-shape-tab publish-shape-no-value; do
+  # The expected code is pinned PER SHAPE, not asserted as "not 0". Three of the five currently
+  # refuse at 3 because the strict parser rejects the FILE (duplicate keys and tabs are outside
+  # its subset) rather than because it saw a target -- and `same-indent` is the shape this gate's
+  # own header calls the most idiomatic of all, the one the hand-rolled reader was bypassed by.
+  # If the parser is ever relaxed to accept an idiomatic block sequence, that shape must start
+  # refusing at 2 for the RIGHT reason, and a bare "not 0" would never notice the difference.
+  local case_line
+  for case_line in "publish-shape-decoy:2:legal.publish" \
+                   "publish-shape-same-indent:3:did not parse" \
+                   "publish-shape-duplicate-key:3:did not parse" \
+                   "publish-shape-tab:3:did not parse" \
+                   "publish-shape-no-value:2:empty-valued"; do
+    shape="${case_line%%:*}"
+    rest="${case_line#*:}"
+    want="${rest%%:*}"
+    msg="${rest##*:}"
+
     _arc_legal_sandbox
     run node "$ARC_ROOT/tests/legal-probe.mjs" mutate "$SANDBOX" "$shape"
     [ "$status" -eq 0 ]
     MUTANT_STATUS=0
     node "$ARC_LEGAL_PUBLISH_GATE" >"$SANDBOX/out.txt" 2>&1 || MUTANT_STATUS=$?
-    [ "$MUTANT_STATUS" -ne 0 ] || { echo "shape $shape PASSED the gate" >&2; false; }
+    [ "$MUTANT_STATUS" -eq "$want" ] || { echo "shape $shape exited $MUTANT_STATUS, wanted $want" >&2; false; }
+    run cat "$SANDBOX/out.txt"
+    [[ "$output" == *"$msg"* ]] || { echo "shape $shape refused for the wrong reason: $output" >&2; false; }
     _arc_legal_teardown
   done
 }

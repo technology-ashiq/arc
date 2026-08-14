@@ -334,6 +334,97 @@ _verify() {
   [[ "$output" == *"verdict: TAMPERED"* ]]
 }
 
+@test "legal receipts: verify REFUSES when the record's page list is deleted" {
+  # The work-list used to come from the record being audited, so removing one key emptied the
+  # loop and the verdict collapsed to INTACT -- with every page on disk defaced. An audit that
+  # asks the suspect which questions to answer is not an audit.
+  _published
+  printf '# Terms\n\nWe are ISO 27001 certified and refunds are NEVER given.\n' > "$SANDBOX/out/terms.mdx"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" json-del "$SANDBOX/out/_published.json" pages
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -ne 0 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" != *"verdict: INTACT"* ]]
+}
+
+@test "legal receipts: verify catches an unapproved page FILE, not just an edited one" {
+  # verifyChain gained this check and verifyPublished -- twelve lines below it in the same file --
+  # did not. Verify is the half the generated guard runs in the VENTURE's repo, which is the one
+  # place no twin-fix sweep of this repo can reach. Both Phase-02 attackers found it separately.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" stray-page "$SANDBOX/out" terms-v2
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -eq 2 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: TAMPERED"* ]]
+  [[ "$output" == *"terms-v2"* ]]
+}
+
+@test "legal receipts: an unapproved page ONE DIRECTORY DOWN is refused too" {
+  # The listing was not recursive, so `out/en/terms.mdx` published at exit 0 while the identical
+  # bytes at `out/terms-v2.mdx` were refused -- and a static host serves /en/terms exactly as it
+  # serves /terms-v2.
+  _proposed
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  mkdir -p "$SANDBOX/out/en"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" stray-page "$SANDBOX/out/en" terms
+  [ "$status" -eq 0 ]
+  _publish "$SANDBOX/d.json"
+  [ "$PUBLISH_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"PAGE_UNAPPROVED_FILE"* ]]
+}
+
+@test "legal receipts: a page id that escapes the publish directory is not followed" {
+  # `validateApprovalPayload` says "one confinement function, every path through it" -- and the
+  # id read back OUT of the published record went through no such function, so a record naming
+  # `../decoy/terms` had verify hash an untouched copy outside the directory and call the defaced
+  # one inside it INTACT.
+  _published
+  mkdir -p "$SANDBOX/decoy"
+  cp "$SANDBOX/out/terms.mdx" "$SANDBOX/decoy/terms.mdx"
+  printf '# Terms\n\nDEFACED.\n' > "$SANDBOX/out/terms.mdx"
+  run node "$ARC_ROOT/tests/legal-probe.mjs" repoint-page "$SANDBOX/out/_published.json" terms "../decoy/terms"
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -ne 0 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" != *"verdict: INTACT"* ]]
+}
+
+@test "legal receipts: a FORGED preimage label is TAMPERED, not excused as stale" {
+  # `canRederive` was a string compare against a field the record declares, so ANY unrecognised
+  # label -- not just a genuinely older format -- bought an excuse. A tamperer who could edit the
+  # record could relabel it and read back "re-publish under the current format", an instruction to
+  # launder the edit. A label this engine has never written means forged, not old.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" mutate-facts "$SANDBOX" "fixture-gateway-gst" refund_window_days 7
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" relabel-preimage "$SANDBOX/out" "arc-legal-canon/99"
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -eq 2 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: TAMPERED"* ]]
+}
+
+@test "legal receipts: a CRLF checkout of untouched pages is INTACT, not TAMPERED" {
+  # The engine normalised every INPUT it read and not the OUTPUT it hashed. arc's own repo hides
+  # that behind .gitattributes; the venture repo the guard ships into has none, so on a Windows
+  # checkout every .mdx arrives as CRLF and every page verified as TAMPERED on an untouched tree.
+  # A guard that cries wolf on a clean checkout is one people switch off.
+  _published
+  run node "$ARC_ROOT/tests/legal-probe.mjs" crlf-pages "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  _verify
+  [ "$VERIFY_STATUS" -eq 0 ]
+  run cat "$SANDBOX/vfy.txt"
+  [[ "$output" == *"verdict: INTACT"* ]]
+}
+
 @test "legal receipts: verify on a directory with nothing published exits 3" {
   _arc_legal_sandbox
   mkdir -p "$SANDBOX/out"

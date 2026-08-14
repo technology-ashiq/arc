@@ -111,7 +111,7 @@ switch (cmd) {
    */
   case "canon": {
     const [name, libPath] = rest;
-    const lib = await import(libPath || new URL("../.claude/scripts/legal/lib/canonical.mjs", import.meta.url).href);
+    const lib = await import(libPath ? pathToFileURL(libPath).href : new URL("../.claude/scripts/legal/lib/canonical.mjs", import.meta.url).href);
     const { canonicalHash } = lib;
     const cmp = (a, b) => (canonicalHash(a) === canonicalHash(b) ? "same" : "differ");
     const refuse = (fn) => {
@@ -182,7 +182,7 @@ switch (cmd) {
   /** parse <facts.yaml> -> `ok` or `refused:<CODE>` from the bounded YAML parser */
   case "parse": {
     const [file, libPath] = rest;
-    const lib = await import(libPath || new URL("../.claude/scripts/legal/lib/yaml.mjs", import.meta.url).href);
+    const lib = await import(libPath ? pathToFileURL(libPath).href : new URL("../.claude/scripts/legal/lib/yaml.mjs", import.meta.url).href);
     try {
       lib.parseFactsYaml(readFileSync(file, "utf8"));
       console.log("ok");
@@ -581,6 +581,75 @@ switch (cmd) {
     if (hits !== 1) die(`prefix "${prefix}" matches ${hits} line(s) in ${file}; a mutation must hit exactly one`);
     writeFileSync(file, lines.map((l) => (l.startsWith(prefix) ? replacement : l)).join("\n"), "utf8");
     console.log("replaced:" + prefix);
+    break;
+  }
+
+  /**
+   * drop-set-approval <approved-sets.json> <set> -- remove ONE set's approval, leaving the record
+   * otherwise intact.
+   *
+   * The state SET_NOT_APPROVED describes, which nothing could previously create: the existing
+   * test deleted the whole `sets` map and therefore exercised SET_RECORD_UNREADABLE instead. An
+   * attacker's one-line mutant passed every approved-set test and published an unapproved set.
+   */
+  case "drop-set-approval": {
+    const [file, set] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    if (!doc.sets || typeof doc.sets !== "object") die(`${file} has no sets map`);
+    if (!(set in doc.sets)) die(`${file} has no approval for "${set}" to drop`);
+    delete doc.sets[set];
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("dropped:" + set);
+    break;
+  }
+
+  /** repoint-page <published.json> <page> <newId> -- make the record name a different path. */
+  case "repoint-page": {
+    const [file, page, newId] = rest;
+    const doc = JSON.parse(readFileSync(file, "utf8"));
+    const row = (doc.pages || []).find((p) => p.page === page);
+    if (!row) die(`${file} has no page "${page}"`);
+    row.page = newId;
+    writeFileSync(file, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("repointed:" + newId);
+    break;
+  }
+
+  /**
+   * relabel-preimage <dir> <label> -- change ONLY the declared preimage version.
+   *
+   * Deliberately separate from `stale-published`, which relabels AND zeroes the facts hash in one
+   * step. That combination meant the "a stale format is UNVERIFIABLE" test's fixture WAS the
+   * attack, and the suite asserted its outcome was correct -- there was no case where the format
+   * moved and the bytes did not. These two conditions have to be producible apart to be told
+   * apart.
+   */
+  case "relabel-preimage": {
+    const [dir, label] = rest;
+    const p = join(dir, "_published.json");
+    const doc = JSON.parse(readFileSync(p, "utf8"));
+    if (!doc.run) die(`${p} has no run block to relabel`);
+    if (doc.run.preimage_version === label) die(`already labelled "${label}"; that is not a mutation`);
+    doc.run.preimage_version = label;
+    writeFileSync(p, JSON.stringify(doc, null, 2) + "\n", "utf8");
+    console.log("relabelled:" + label);
+    break;
+  }
+
+  /** crlf-pages <dir> -- rewrite every .mdx with CRLF, as a Windows checkout would. */
+  case "crlf-pages": {
+    const [dir] = rest;
+    let n = 0;
+    for (const f of readdirSync(dir)) {
+      if (!f.endsWith(".mdx")) continue;
+      const p = join(dir, f);
+      const src = readFileSync(p, "utf8");
+      if (!src.includes("\n")) continue;
+      writeFileSync(p, src.split("\r\n").join("\n").split("\n").join("\r\n"), "utf8");
+      n++;
+    }
+    if (!n) die(`no .mdx files under ${dir} to convert; a mutation that changed nothing is not a control`);
+    console.log("crlf:" + n);
     break;
   }
 

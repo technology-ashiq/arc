@@ -107,9 +107,27 @@ export function canonicalHash(value) {
   return sha256(preimage(value));
 }
 
-/** Hash of literal bytes -- used for rendered pages, where the bytes ARE the artifact. */
+/**
+ * Hash of a rendered page.
+ *
+ * LINE ENDINGS ARE NORMALISED TO LF FIRST, and that is not a convenience -- it is the difference
+ * between a working guard and one that cries wolf on an entire repository.
+ *
+ * The engine already normalises every INPUT it reads (`.split("\r\n").join("\n")` on templates
+ * and on data files) and did not normalise the OUTPUT it hashed. arc's own repo hid that, because
+ * `.gitattributes` pins `* text=auto eol=lf` here. The venture repo the generated CI guard ships
+ * into has no such file, so on a Windows checkout with the default `core.autocrlf=true` every
+ * `.mdx` arrives as CRLF and every page verified as TAMPERED -- on an untouched tree. A guard
+ * that reports tampering on a clean checkout is worse than no guard: it is one people switch off.
+ *
+ * WHAT THIS TRANSFORM DESTROYS (the disclosure any normalising gate owes): a file that differs
+ * from the approved one ONLY in line endings now verifies as INTACT. That is the intent -- git
+ * rewrites line endings on checkout and nobody edited anything -- but it does mean the hash is a
+ * hash of the page's TEXT rather than of its literal bytes on disk, and a page whose meaning
+ * depended on CRLF (none do; these are markdown) would not be distinguished.
+ */
 export function bytesHash(text) {
-  return sha256(text);
+  return sha256(String(text).split("\r\n").join("\n"));
 }
 
 /**

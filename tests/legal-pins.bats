@@ -36,9 +36,17 @@ teardown() { _arc_legal_teardown; }
 
   # And their SET HASHES differ, so the two sets are genuinely different bytes and not two names
   # for one directory.
+  # The status checks matter here: `run` folds stderr into $output, and two probe FAILURES would
+  # produce two different error strings -- different because the PATHS differ -- so the
+  # inequality would hold and this test would pass having compared two error messages. It is the
+  # assertion carrying "the two sets are genuinely different bytes".
   run node "$ARC_ROOT/tests/legal-probe.mjs" field "$BATS_TEST_TMPDIR/a/_run.json" template_set_sha
+  [ "$status" -eq 0 ]
+  [ "${#output}" -eq 64 ]
   local sha_a="$output"
   run node "$ARC_ROOT/tests/legal-probe.mjs" field "$BATS_TEST_TMPDIR/b/_run.json" template_set_sha
+  [ "$status" -eq 0 ]
+  [ "${#output}" -eq 64 ]
   [ "$sha_a" != "$output" ]
 
   # Both render CLEANLY. "Renders correctly" is the criterion, not "renders".
@@ -261,7 +269,28 @@ teardown() { _arc_legal_teardown; }
   [ "$status" -eq 0 ]
 }
 
-@test "legal templates: a set with NO approval on record is refused -- absence is not consent" {
+@test "legal templates: a set MISSING FROM the record is refused -- absence is not consent" {
+  # This is SET_NOT_APPROVED, and it had no coverage at all. The test that claimed to cover it
+  # deleted the whole `sets` map, which exercises SET_RECORD_UNREADABLE -- a different branch.
+  # An attacker's mutant (`approvedSets.sets[templateSet] ?? sha`) passed all three approved-set
+  # tests AND published a set with no approval whatsoever. So this deletes ONE key and leaves the
+  # record otherwise intact, which is the state that was unreachable.
+  _arc_legal_sandbox
+  run node "$ARC_ROOT/tests/legal-probe.mjs" drop-set-approval "$SANDBOX/products/legal/approved-sets.json" v1
+  [ "$status" -eq 0 ]
+  run node "$ARC_LEGAL_CLI" propose --venture "fixture-gateway-gst" --out "$SANDBOX/out"
+  [ "$status" -eq 0 ]
+  run node "$ARC_ROOT/tests/legal-probe.mjs" decision "$SANDBOX/out/_approval.json" "$SANDBOX/d.json" approve "2026-08-13T00:00:00Z"
+  [ "$status" -eq 0 ]
+  MUTANT_STATUS=0
+  node "$ARC_LEGAL_CLI" publish --venture "fixture-gateway-gst" --dir "$SANDBOX/out" \
+    --decision "$SANDBOX/d.json" --request "$REQ" >"$SANDBOX/pub.txt" 2>&1 || MUTANT_STATUS=$?
+  [ "$MUTANT_STATUS" -eq 2 ]
+  run cat "$SANDBOX/pub.txt"
+  [[ "$output" == *"SET_NOT_APPROVED"* ]]
+}
+
+@test "legal templates: an UNREADABLE approved-sets record is refused as its own class" {
   _arc_legal_sandbox
   run node "$ARC_ROOT/tests/legal-probe.mjs" json-del "$SANDBOX/products/legal/approved-sets.json" sets
   [ "$status" -eq 0 ]

@@ -83,7 +83,7 @@ function usage() {
     "       arc-legal publish --venture NAME --dir DIR --decision FILE --request ULID",
     "       arc-legal verify  --venture NAME --dir DIR",
     "       arc-legal checklist --venture NAME [--out FILE] [--evidence FILE]",
-    "       arc-legal bump-templates --venture NAME --to SET [--guard FILE]",
+    "       arc-legal bump-templates --venture NAME --to SET (--guard FILE | --no-guard)",
     "       arc-legal ci-guard --venture NAME [--out FILE] [--dir PAGES_DIR]",
     "       arc-legal propose-templates --set SET [--out FILE]",
     "",
@@ -195,6 +195,30 @@ function renderInputs(templateSet) {
  * both -- the id to know which markers are legal, and the guard to detect a clause-map that has
  * drifted away from the templates it is supposed to describe.
  */
+/**
+ * Every `.mdx` under a publish directory, RECURSIVELY, as paths relative to it.
+ *
+ * `readdirSync(dir)` is not recursive, so a page one directory down -- `out/en/terms.mdx` -- was
+ * in no receipt and published at exit 0, while the identical bytes at `out/terms-v2.mdx` were
+ * refused. A static host serves `/en/terms` exactly as it serves `/terms-v2`, so the guard was
+ * looking at the wrong shape of "the directory".
+ *
+ * `{ recursive: true }` on readdirSync needs Node 20; this walks by hand so the engine keeps
+ * working on the Node 18 CI leg, where the recursive option silently does nothing.
+ */
+function listPagesRecursively(dir, prefix = "") {
+  const out = [];
+  let entries;
+  try { entries = readdirSync(join(dir, prefix), { withFileTypes: true }); }
+  catch { return out; }
+  for (const e of entries) {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name;
+    if (e.isDirectory()) out.push(...listPagesRecursively(dir, rel));
+    else out.push(rel);
+  }
+  return out;
+}
+
 function clauseDeclarationsIn(source) {
   const decls = [];
   const re = /\{\{#clause\s+id=([A-Z][A-Z0-9_.]*)(?:\s+when=([A-Za-z0-9_.]+=[A-Za-z0-9_-]+))?\s*\}\}/g;
@@ -494,7 +518,13 @@ function publishMain(args) {
   // Monotonicity used to read <--dir>/_published.json, so proposing into a FRESH directory walked
   // straight past it and re-published a BACKWARDS effective date at exit 0. A guard keyed to a
   // caller-chosen location is a guard the caller can move out from under.
-  const ledgerDir = join(REPO_ROOT, ".claude", "state", "legal-published");
+  // The ledger is a RECEIPT, not scratch state, so it lives with the product and is committed.
+  // It sat under .claude/state/, which is gitignored -- so monotonicity was enforced only on the
+  // machine that happened to publish last. A fresh clone, a CI runner, a worktree or a second
+  // operator all saw "nothing published before" and a backwards effective_date went through at
+  // exit 0. Row 23 moved this off a caller-chosen DIRECTORY; it was still keyed to a
+  // caller-chosen MACHINE.
+  const ledgerDir = join(PRODUCT, "published");
   const ledgerFile = join(ledgerDir, args.venture + ".json");
   const hadPrevious = existsSync(ledgerFile);
   const previous = hadPrevious ? readJson(ledgerFile) : null;
@@ -504,7 +534,7 @@ function publishMain(args) {
   const problems = [
     ...templateSetApprovalErrors({ approvedSets, templateSet: fresh.template_set, sha: fresh.template_set_sha }),
     ...verifyDecision(decision, approved, args.request),
-    ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: readdirSync(args.dir) }),
+    ...verifyChain({ approved, fresh, dir: args.dir, dirEntries: listPagesRecursively(args.dir) }),
     ...backdatingErrors({
       // The RE-DERIVED date, never the one recorded in the approval file. That value was
       // forgeable -- editing it alone, facts hash untouched, published a record claiming a date
@@ -629,6 +659,26 @@ function proposeTemplatesMain(args) {
 
 function ciGuardMain(args) {
   if (!args.venture) { console.error(`ci-guard needs --venture NAME\n\n${usage()}`); return 2; }
+
+  // ci-guard writes a SHELL PROGRAM into somebody else's repository, and both values below are
+  // interpolated into a double-quoted line in it. CLAUDE.md's rule is explicit that a backtick or
+  // a `$` inside a double-quoted string is executable -- and this verb was the one place that
+  // never ran its input through `factsPathFor`, the function whose own comment reads "one
+  // confinement function, every path through it".
+  //
+  // Both attackers reproduced command execution here, and one turned `--dir` into a guard that
+  // exits 0 having verified nothing. Validation happens BEFORE anything is emitted.
+  if (!/^[a-z][a-z0-9-]{0,63}$/.test(args.venture)) {
+    console.error(`"${args.venture}" is not a venture name. It is interpolated into generated shell, so it is refused rather than escaped.`);
+    return 2;
+  }
+  if (args.dir !== undefined) {
+    const d = args.dir;
+    if (!/^[A-Za-z0-9._/-]+$/.test(d) || d.startsWith("/") || /^[A-Za-z]:/.test(d) || d.split("/").some((seg) => seg === "..")) {
+      console.error(`"${d}" is not a repo-relative pages directory. It is interpolated into generated shell, so it is refused rather than escaped.`);
+      return 2;
+    }
+  }
   const text = renderCiGuard({
     engineVersion: ENGINE_VERSION,
     venture: args.venture,
@@ -668,6 +718,14 @@ function bumpTemplatesMain(args) {
   // The bump is the moment a venture's setup changes and the only moment anyone is looking. A
   // guard generated against an older engine may compare under rules this engine no longer uses,
   // and its failure mode is silence: it keeps passing.
+  // NOT optional by omission. Row 27 closed exactly this shape in verifyChain and row 22 filed it
+  // as a CLASS, and it came straight back here: a precondition you skip by not typing a flag is a
+  // precondition the hurried operator never runs. Either name the guard or say explicitly that
+  // this venture has none.
+  if (!args.guard && !args["no-guard"]) {
+    console.error("bump-templates needs --guard FILE (the venture CI guard to version-check) or --no-guard to state that this venture has none. Skipping the check by omitting a flag is how it stops being a precondition.");
+    return 2;
+  }
   if (args.guard) {
     if (!existsSync(args.guard)) {
       console.error(`no CI guard at ${args.guard}. Generate one with \`arc-legal ci-guard --venture ${args.venture} --out ${args.guard}\`.`);
@@ -753,7 +811,16 @@ ${usage()}`); return 2; }
 
   const published = readJson(publishedFile);
   const { run: fresh } = renderVenture({ ventureName: args.venture, outDir: null });
-  const { verdict, results } = verifyPublished({ published, fresh, dir: args.dir, currentPreimage: PREIMAGE_VERSION });
+  const { verdict, results } = verifyPublished({
+    published,
+    fresh,
+    dir: args.dir,
+    // Verify is the half that runs in the VENTURE's repo through the generated guard, so it is
+    // the half that most needs the unapproved-file sweep -- and it was the half that did not
+    // have it.
+    dirEntries: listPagesRecursively(args.dir),
+    currentPreimage: PREIMAGE_VERSION,
+  });
 
   for (const r of results) console.log(`${r.verdict.padEnd(12)} ${r.what}${r.detail ? " -- " + r.detail : ""}`);
   console.log(`verdict: ${verdict}`);

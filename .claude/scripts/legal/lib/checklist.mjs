@@ -102,6 +102,19 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {} }) 
     let outcome;
     let note;
 
+    // A note is operator-supplied and lands in a markdown TABLE CELL. A `|` in it rewrites the
+    // columns to its right -- an attacker (or a careless paste) put `| **NOT-APPLICABLE** |` in a
+    // note and the rendered row's outcome column said NOT-APPLICABLE while the object said PASS.
+    // A newline splits the row in two, and the second physical line renders as a row with NO
+    // outcome, which the blank-row guard could not see because it inspects the OBJECT.
+    //
+    // Rejected rather than escaped: a note carrying a table delimiter is a data error, and
+    // silently rewriting an operator's evidence is its own kind of lie.
+    if (recorded && typeof recorded.note === "string" && /[|\r\n]/.test(recorded.note)) {
+      errs.push(`row "${row.id}" has a note containing a table delimiter or a line break. It is rendered into a markdown cell, where either one rewrites the row -- including its outcome column.`);
+      continue;
+    }
+
     if (!isMerchant) {
       // ADR-1011: where the operator is not the merchant there is no activation to pass, and
       // rendering these green would tell them they had cleared a gate they were never at.
@@ -169,5 +182,19 @@ export function renderChecklist({ rows, venture }) {
   const counts = {};
   for (const r of rows) counts[r.outcome] = (counts[r.outcome] ?? 0) + 1;
   out.push("", `${rows.length} row(s): ` + OUTCOMES.map((o) => `${counts[o] ?? 0} ${o}`).join(" · "));
-  return out.join("\n") + "\n";
+  const text = out.join("\n") + "\n";
+
+  // Assert the RENDERED LINES, not the objects that produced them. The blank-row guard in
+  // buildChecklist inspects the object -- which is exactly the mistake its sibling comment warns
+  // about on the other side -- so a value that broke the table apart was invisible to it. This
+  // counts the data rows in the output and requires one per row, each with the fixed cell count.
+  const dataRows = text.split("\n").filter((l) => l.startsWith("| ") && !l.startsWith("| # ") && !l.startsWith("|---"));
+  if (dataRows.length !== rows.length)
+    throw new Error(`the checklist rendered ${dataRows.length} table row(s) for ${rows.length} checklist row(s). A value has broken the table apart, and a physical row with no outcome is indistinguishable from a row nobody wrote.`);
+  for (const line of dataRows) {
+    const cells = line.split("|").length - 2; // leading and trailing pipes
+    if (cells !== 6)
+      throw new Error(`a rendered checklist row has ${cells} cells, not 6: ${line.slice(0, 80)}`);
+  }
+  return text;
 }

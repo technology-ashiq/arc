@@ -183,25 +183,12 @@ export function verifyChain({ approved, fresh, dir, dirEntries }) {
   // checking the wrong set: a hand-written `terms-v2.mdx` dropped into the publish directory --
   // carrying a false certification claim and a refund denial -- published at exit 0, in no
   // receipt, with the gate reporting success. Both checks stay; they catch different things.
-  // A missing listing is an ERROR, not a skipped check. `if (Array.isArray(dirEntries))` made a
-  // security check optional by omission -- a caller that forgot the argument got a silently
-  // weaker verifyChain that still returned clean, three lines below this function's own
-  // "could-not-check is not a pass".
-  if (!Array.isArray(dirEntries)) {
-    errs.push("DIRECTORY_NOT_LISTED: verifyChain was given no directory listing, so unapproved files in the publish directory could not be checked for.");
-  } else {
-    for (const entry of dirEntries) {
-      // Case-INSENSITIVE. Windows and macOS default filesystems are case-preserving but
-      // case-insensitive, so `terms-v2.MDX` occupies the same name as `.mdx` and is served
-      // identically by any static host -- and a case-sensitive suffix test skips it, on exactly
-      // the two legs where it matters most.
-      const lower = entry.toLowerCase();
-      if (!lower.endsWith(".mdx")) continue;
-      const page = lower.slice(0, -4);
-      if (!approvedPages.has(page))
-        errs.push(`PAGE_UNAPPROVED_FILE: "${entry}" is in the publish directory and is in no receipt. Every .mdx there is published, whether or not this run produced it.`);
-    }
-  }
+  // Shared with the verifier. It was written here and NOT in `verifyPublished` twelve lines
+  // below, which is the twin-fix pattern at its shortest range; one implementation now.
+  for (const r of unapprovedFileResults(dirEntries, approvedPages))
+    errs.push(r.what === "directory"
+      ? `DIRECTORY_NOT_LISTED: ${r.detail}`
+      : `PAGE_UNAPPROVED_FILE: ${r.what.slice(5)} -- ${r.detail}`);
 
   return errs;
 }
@@ -268,20 +255,75 @@ export function verifyDecision(decision, payload, requestId) {
  * unchecked bytes; folding it into TAMPERED is the false alarm above. A gate that cannot check
  * must say it cannot check.
  */
+/**
+ * One implementation of "is there an .mdx here that nobody approved", shared by the publish gate
+ * and the verifier.
+ *
+ * It was written twice -- once in `verifyChain` and not at all in `verifyPublished` -- which is
+ * the twin-fix pattern in its purest form, twelve lines apart in one file. Sharing it means the
+ * next fix cannot land in one and miss the other.
+ *
+ * The listing must be RECURSIVE at the call site: a page one directory down (`out/en/terms.mdx`)
+ * published at exit 0 while the identical bytes at `out/terms-v2.mdx` were refused, and a static
+ * host serves `/en/terms` exactly as it serves `/terms-v2`.
+ */
+export function unapprovedFileResults(dirEntries, approvedPages) {
+  if (!Array.isArray(dirEntries))
+    return [{ what: "directory", verdict: "UNVERIFIABLE", detail: "no directory listing was supplied, so an unapproved file in the publish directory could not be looked for. Could-not-check is not a pass." }];
+
+  const out = [];
+  for (const entry of dirEntries) {
+    // Case-INSENSITIVE: on Windows and macOS `terms-v2.MDX` is the same file name and is served
+    // identically by any host, so a case-sensitive suffix test skips it on the two legs where it
+    // matters most.
+    const lower = String(entry).replace(/\\/g, "/").toLowerCase();
+    if (!lower.endsWith(".mdx")) continue;
+    const page = lower.slice(0, -4);
+    if (!approvedPages.has(page))
+      out.push({ what: `file:${entry}`, verdict: "TAMPERED", detail: `this .mdx is in the publish directory and is in no receipt. Everything there is served, whether or not this run produced it.` });
+  }
+  return out;
+}
+
 export const VERIFY_INTACT = "INTACT";
 export const VERIFY_TAMPERED = "TAMPERED";
 export const VERIFY_UNVERIFIABLE = "UNVERIFIABLE";
 
-export function verifyPublished({ published, fresh, dir, currentPreimage }) {
+/**
+ * Preimage versions this engine has ever shipped.
+ *
+ * `canRederive` used to be `recorded === current`, which meant ANY unrecognised label -- not just
+ * a genuinely older format -- was accepted as an excuse for a mismatch. An attacker who could
+ * edit the record could therefore relabel a TAMPERED one to `arc-legal-canon/99` and have the
+ * verifier downgrade it to UNVERIFIABLE, then read back the remediation string "re-publish under
+ * the current format to get a verifiable record" -- an instruction to launder the edit.
+ *
+ * A label outside this list is not a format this engine has ever written, so the record is forged
+ * or corrupt. That is TAMPERED, not stale.
+ */
+export const KNOWN_PREIMAGES = new Set(["arc-legal-canon/1"]);
+
+/** Page ids are joined into a filesystem path, so they carry the same confinement everywhere. */
+const PAGE_ID = /^[a-z][a-z0-9-]{0,63}$/;
+
+export function verifyPublished({ published, fresh, dir, dirEntries, currentPreimage }) {
   const out = [];
   const recordedPreimage = published?.run?.preimage_version ?? published?.preimage_version ?? null;
 
   // The version question is asked FIRST and answered by capability, not by the label. "Can this
-  // build compute the algorithm the record claims?" -- if not, nothing below can be classified.
+  // build compute the algorithm the record claims?" -- and a label this engine has never written
+  // means the answer is "this record is not one of ours", which is not the same as "old".
   const canRederive = recordedPreimage === currentPreimage;
+  const forgedLabel = recordedPreimage !== null && !KNOWN_PREIMAGES.has(recordedPreimage);
 
   const cmp = (what, was, now) => {
     if (was === now) return { what, verdict: VERIFY_INTACT };
+    if (forgedLabel)
+      return {
+        what,
+        verdict: VERIFY_TAMPERED,
+        detail: `the record claims preimage "${recordedPreimage}", which this engine has never written. A record labelled with a format that does not exist is forged or corrupt, not old -- relabelling must not buy an excuse for a hash that does not match.`,
+      };
     if (!canRederive)
       return {
         what,
@@ -298,23 +340,57 @@ export function verifyPublished({ published, fresh, dir, currentPreimage }) {
   out.push(cmp("facts", published?.facts_sha256, fresh.facts_sha256));
   out.push(cmp("template_set", published?.template_set_sha, fresh.template_set_sha));
 
-  for (const p of published?.pages ?? []) {
-    const file = join(dir, `${p.page}.mdx`);
+  // THE WORK-LIST IS NOT TAKEN FROM THE RECORD BEING AUDITED.
+  //
+  // It was `published.pages ?? []`, so deleting one key from the record emptied the loop and the
+  // verdict collapsed to INTACT -- with every page on disk defaced. `fresh.pages` was passed in
+  // and never used. An audit that asks the suspect which questions to answer is not an audit.
+  if (!Array.isArray(published?.pages) || !published.pages.length) {
+    out.push({ what: "record", verdict: VERIFY_UNVERIFIABLE, detail: "the published record carries no page list, so there is nothing to compare the files on disk against. An empty work-list is not a clean result." });
+  }
+
+  const recorded = new Map();
+  for (const p of Array.isArray(published?.pages) ? published.pages : []) {
+    // The page id comes out of the record and is joined into a path. `validateApprovalPayload`
+    // carries the comment "one confinement function, every path through it" -- and this path was
+    // never put through it, so a record naming `../decoy/terms` had verify read an untouched copy
+    // outside the publish directory and report INTACT on a defaced one inside it.
+    if (typeof p?.page !== "string" || !PAGE_ID.test(p.page)) {
+      out.push({ what: `page:${String(p?.page)}`, verdict: VERIFY_UNVERIFIABLE, detail: "the record names a page id that is not a page name. It is joined into a file path, so it is not followed." });
+      continue;
+    }
+    recorded.set(p.page, p.output_sha256);
+  }
+
+  // Every page the CURRENT render produces must be covered by the record. A page the record
+  // simply does not mention is exactly the gap the deleted-key case exploited.
+  for (const p of fresh?.pages ?? [])
+    if (!recorded.has(p.page))
+      out.push({ what: `page:${p.page}`, verdict: VERIFY_UNVERIFIABLE, detail: "this run produces this page and the published record does not cover it, so nothing here can say whether the file on disk was ever approved." });
+
+  for (const [page, sha] of recorded) {
+    const file = join(dir, `${page}.mdx`);
     if (!existsSync(file)) {
-      out.push({ what: `page:${p.page}`, verdict: VERIFY_UNVERIFIABLE, detail: `${file} is gone. A missing page cannot be compared, and an absent file is not a clean one.` });
+      out.push({ what: `page:${page}`, verdict: VERIFY_UNVERIFIABLE, detail: `${file} is gone. A missing page cannot be compared, and an absent file is not a clean one.` });
       continue;
     }
     let onDisk;
     try { onDisk = bytesHash(readFileSync(file, "utf8")); }
-    catch (e) { out.push({ what: `page:${p.page}`, verdict: VERIFY_UNVERIFIABLE, detail: `unreadable (${e.message})` }); continue; }
+    catch (e) { out.push({ what: `page:${page}`, verdict: VERIFY_UNVERIFIABLE, detail: `unreadable (${e.message})` }); continue; }
     // Page bytes are hashed directly and are NOT affected by the canonicaliser's preimage
     // version -- that governs the facts preimage only. So a page mismatch is tampering whatever
     // the format label says, and routing it through `cmp` would let a relabelled record excuse
     // edited page bytes as "stale format".
-    out.push(onDisk === p.output_sha256
-      ? { what: `page:${p.page}`, verdict: VERIFY_INTACT }
-      : { what: `page:${p.page}`, verdict: VERIFY_TAMPERED, detail: `the published file has been edited since it was approved (recorded ${String(p.output_sha256).slice(0, 12)}..., on disk ${onDisk.slice(0, 12)}...)` });
+    out.push(onDisk === sha
+      ? { what: `page:${page}`, verdict: VERIFY_INTACT }
+      : { what: `page:${page}`, verdict: VERIFY_TAMPERED, detail: `the published file has been edited since it was approved (recorded ${String(sha).slice(0, 12)}..., on disk ${onDisk.slice(0, 12)}...)` });
   }
+
+  // UNAPPROVED FILES. `verifyChain` gained this and `verifyPublished` -- twelve lines below it in
+  // the same file -- did not. Verify is the half that runs continuously in the VENTURE's repo via
+  // the generated guard, so it is the half no twin-fix sweep of this repo can ever reach. Both
+  // attackers found it independently.
+  out.push(...unapprovedFileResults(dirEntries, recorded));
 
   const worst = out.some((r) => r.verdict === VERIFY_TAMPERED)
     ? VERIFY_TAMPERED
