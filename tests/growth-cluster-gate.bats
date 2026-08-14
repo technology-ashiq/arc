@@ -243,18 +243,26 @@ const gate = (events, over = {}) => C.assertClusterApproved({ events, clusterId:
   # E2 is enforced by ABSENCE. A verb that does not exist cannot be reached by a mistake, a retry
   # loop, or a mutant module.
   #
-  # This used to grep the source for a verb at line start. Two things were wrong with that: adding
-  # `publish: cmdGenerate` to the COMMANDS object -- the ONLY way a verb is actually reachable --
-  # left it green, and `\s` inside `grep -E` is a GNU extension that degrades to a literal `s` on
-  # macOS, so on a third of the CI legs the pattern could not match anything at all. Ask the
-  # module what it registered instead.
-  # The module runs its CLI on import, so it is read as TEXT and the registry is parsed out of it.
-  run bash -c "grep -o 'const COMMANDS = {[^}]*}' '$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs'"
-  [ "$status" -eq 0 ] || { echo "no COMMANDS registry found in arc-growth.mjs at all"; false; }
+  # THIRD VERSION OF THIS TEST, and the first that is not a substring search.
+  #   v1 grepped for a verb at line start: adding `publish: cmdGenerate` to the COMMANDS object
+  #      left it green, and `\s` in `grep -E` is a GNU extension that silently degrades on macOS.
+  #   v2 grepped the object literal. An adversarial pass on 2026-08-14 walked a mutant past it:
+  #      ONE appended line, `COMMANDS.publish = fn`, registers a fully reachable verb that no
+  #      grep of the literal can see. `Object.assign` and `defineProperty` are two more ways.
+  #      The mutant wrote its file and exited 0 while this test stayed green.
+  # A guard on a Tier E unamendable rule cannot be a substring search of its own source -- that is
+  # this repo's oldest recurring defect, a grep where a parse was needed.
+  #
+  # The module now has a realpath-both-sides main guard, so importing it does NOT run the CLI and
+  # the test can simply ask what was registered. Same fix as tests/growth-lints.bats: the rule is
+  # grep the pattern, not the file, and a fix is not applied until it is made everywhere.
+  run _node "const M = await import(\"./.claude/scripts/growth/arc-growth.mjs\");
+    const verbs = Object.keys(M.COMMANDS).sort();
+    console.log(verbs.join(',') + ' | ' + (verbs.filter((v) => /promote|publish|merge|deploy|ship/.test(v)).join(',') || 'none'));"
+  [ "$status" -eq 0 ] || { echo "the module could not be imported at all: $output"; false; }
+  [[ "$output" == *"| none"* ]] || { echo "COMMANDS registers a publishing verb: $output"; false; }
+  # Positive control: 'none' must be the answer to a real registry, not to an empty object.
   [[ "$output" == *"mine"* ]] || { echo "positive control failed: registry does not even list mine: $output"; false; }
-  for verb in promote publish merge deploy ship; do
-    [[ "$output" != *"$verb"* ]] || { echo "COMMANDS registers a publishing verb ($verb): $output"; false; }
-  done
 }
 
 @test "gate: the CLI itself refuses to generate against an unapproved cluster" {
