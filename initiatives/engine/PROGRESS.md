@@ -94,9 +94,42 @@ on-track run is one that learns to be ignored.
   decision receipt `01KZTKAF70H19K7PNJVWBXZDT5`, verified present in `events/` and absent from
   `_quarantine/`. Lane flips IDLE → LIVE and Phase 04 opens.
 
+- 2026-08-13 — **`/arc-change --lane engine`: bench cannot vary the model through `arc-run`.** Raised by
+  the `bench` lane after Cycle 13 merged (`15a61c7`). Triaged as **three items, not one**, and the
+  claims were verified against `arc-run.mjs` directly rather than carried from the report.
+  - **The seam → ADR-0220, ruled OUT-OF-CYCLE by the owner.** `arc-run.mjs:402` rebuilds the driver env
+    and overwrites two caller-set variables. `ARC_DRIVER_MODEL` is clobbered **on purpose** (lines
+    140–145: the env var *was* the model knob, and that was "an un-reviewed tier change of exactly the
+    kind ADR-0069 b1 forbids"), so this is a decision, not a bug — the naive fix reopens a closed hole.
+    The only surviving pin path needs an `engine/router.yaml` row, and **bench has no write path to the
+    router ever** (its own REQ-02 asserts the SHA unchanged before and after every run). `ARC_ROOT` is a
+    second defect on the same line: `root` conflates *where arc's machinery lives* with *where the
+    driver works*, so a benched `commit-msg-draft` (`git.op: add:*` + `commit:*`) would stage and commit
+    **inside the arc repo**. ADR-0069 **(g)** is the door — trials may use any model when isolated and
+    receipted. Ships as its own PR, **not charged to this cycle's 7.5 days**, so the day-5 kill
+    checkpoint keeps measuring only the hire.
+  - **Two `arc-run` emit-path BUGS → charged here, added to `phases/phase-04-spec.md`.** `:279` passes
+    `--payload` inline where `arc-event.sh:29` already accepts `--payload-file` — a **twin-fix**, bench
+    met the identical defect and closed it on its own path. On Windows a path in a payload returns
+    `REJECT BAD_JSON -- invalid escape \U`, so only a failure receipt can be written. And `:278` emits
+    `run.completed` without `--strict` (`arc-event.sh:27`): `verifyLanded()` does detect quarantine but
+    only **warns to stderr while arc-run exits 0**, so a quarantined receipt reads as a green run —
+    a live violation of this plan's "exit 0 is not evidence" non-negotiable.
+  - Band check done before claiming `0220`: `technology-ashiq/arc-engine` @ `424f24e` is a stale
+    **Cycle 6** branch topping out at `0206`, so `main` was the truth and `0219` the real high-water
+    mark. Next engine cycle starts at **0221**.
+
 ## Now
 
 **Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
+
+> ⚠ **The `burn: 0.0d` in the machine header above is STALE, and it is the STOP clock.** Phase 04
+> opened 2026-08-12; slices 01 and 02 are proven and slice 06 was written, attacked and reverted since.
+> That is not zero days. Phase 04's STOP is specified as *"one working day of burn **as recorded in
+> `initiatives/engine/PROGRESS.md`**"*, so a clock reading 0.0 means the STOP cannot fire on schedule.
+> **No number is invented here** (ADR-0069 b5 / Constitution E3 — absent beats estimated), and
+> `board-lint` cross-checks this field against `PORTFOLIO.md`, so the two move together or not at all.
+> The session that burned the days records the real figure.
 
 `/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
 ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:
@@ -147,3 +180,87 @@ claim unproven for exactly one reason: nothing runnable was installed and no cre
 that was discovered at Phase 03 rather than Phase 00. So REQ-00 makes one live headless invocation a
 Phase-04 exit criterion. If the runtime cannot run on this machine, EXE-A's STOP fires at 1 day
 burned instead of 5.
+
+**2026-08-13, the adversarial pass earned its cost before merge.** Two fresh agents on different
+surfaces attacked PR #184 while CI was green on all 19 jobs. They overlapped on almost nothing.
+The shell/OS attacker **reproduced** the motivating failure rather than trusting it (inline
+`--payload` + a Windows path → `REJECT BAD_JSON -- invalid escape \U`; `--payload-file` → sealed),
+so the payload half shipped. **The gate half was backed out**: `verifyLanded` turned out to carry
+three independent defects — a UTC/IST day mismatch making it wrong for 22.9% of the clock, a
+spine-root rule that disagrees with the emitter, and a `bash -c` scan that **executed** a path
+component. All three were survivable as a warning and none as a gate. **CI was green only because
+it ran at 14:22 UTC, outside the bad window** — the tests passed by clock luck, which is exactly
+what an adversarial pass exists to catch and a green suite cannot.
+Also found and fixed: `--strict` had put the emitter's 15s lock wait inside a 10s SIGKILL, orphaning
+a node grandchild that sealed the receipt *after* arc-run reported it lost; `mkdtempSync` sat outside
+its `try`, so a bad TMPDIR inverted the fail-closed policy denial into a stack trace; and three of the
+nine test guards **could not fail** — one attacker wrote a mutant reverting half the change that
+passed 9/9.
+
+**PR #184 MERGED as `9bd1443`, 19/19 green.** The emit-path track is closed: all three inline
+`--payload` call sites in `arc-run.mjs` now route through one `emitEvent` helper passing
+`--payload-file` and `--strict`. What did NOT ship is the receipt *gate* — see the deferred
+criterion in `phases/phase-04-spec.md` for why and what it is owed.
+
+---
+
+## NEXT ACTION — start here on a cold resume
+
+**Build ADR-0220's per-invocation model/root seam.** It is the one thing `bench` is blocked on and
+the reason this change was routed in at all. Read `docs/adr/0220-the-model-is-a-per-invocation-trial-seam-separate-from-production-routing.md`
+first; it is the spec.
+
+- **OUT-OF-CYCLE.** Its own PR, **not** charged to Cycle 7's 7.5 days (owner-ruled 2026-08-13, see
+  PLAN § Appetite). `appetite-sum` must still read 7d = 93% when it lands.
+- **Unblocks four `bench` Phase 03 DoD items:** one real model benched end to end · candidate proven
+  REACHED (real model id + non-zero tokens) · REQ-05 preflight · human verdict.
+- **`tests/bench-steel-probe.mjs` pins both failures and MUST GO RED when the seam lands.** It passes
+  today for the wrong reasons — that red is the proof the seam works, not a regression.
+
+**The trap, stated so it is not re-proposed:** `arc-run.mjs:402` clobbers `ARC_DRIVER_MODEL`
+**deliberately** — the env var *was* the model knob and that was an un-reviewed tier change
+ADR-0069 b1 forbids. Honouring a caller-set env var is the WRONG fix and reopens a closed hole.
+ADR-0069 **(g)** is the door: a trial may use any model when isolated and receipted. The receipt must
+distinguish a **trial override** from a **routed pin** — a third state, not a reuse of either — or the
+ledger asserts a routing decision nothing applied.
+
+### Three things that are NOT derivable from the code, and cost real CI cycles to learn
+
+1. **Run the caller sweep BEFORE pushing** (`.claude/rules/testing.md`). **10 suites drive `arc-run`,
+   four of them bench's:** `bench-core` · `bench-driver-contract` · `bench-harness` · `bench-seal` ·
+   `engine-driver-contract` · `engine-emit-path` · `jobs-run` · `kickoff-lint` · `policy-demotion` ·
+   `policy-runwrapper`. Skipping this on a fix round cost a 5-job red.
+2. **Fixes produced by an adversarial pass are themselves UNATTACKED CODE.** The cycle non-negotiable
+   binds the pass to the code being shipped and says nothing about the repairs it generates. That gap
+   shipped a temporal-dead-zone bug: a named `const` declared beside its use put the file's earliest
+   exit path (`--budget inr=0`, which calls `fail()` during top-level execution) in the TDZ, so it
+   wrote **no receipt at all**. Attack the fix round too.
+3. **`verifyLanded` is BROKEN — build nothing that depends on its verdict.** Three defects: it derives
+   the day in UTC while the spine names its file from an IST timestamp (`canonical.mjs:135`,
+   `spine-io.mjs:318`), it re-derives the spine root by a different rule than the emitter's
+   `spineRoot()`, and its quarantine scan interpolates into a `bash -c` string where a path component
+   was demonstrably executed.
+
+### Also open, none blocking the seam
+
+- **`burn: 0.0d` in the machine header is STALE and it is the Phase 04 STOP clock** (see the warning
+  above `## Now`). No number was invented; whoever burned the days sets it, and `PORTFOLIO.md` moves
+  with it or `board-lint` fails.
+- **Cross-lane, reported never edited from here:** inline `--payload` is repo-wide (8 sites, 6 files)
+  including `hq/arc-inbox.mjs:147` — the approval path this phase's own mandate criterion uses. The
+  `--strict` gap is narrower: `develop/develop.mjs` and `develop/stuck.mjs` only.
+- **2 `.bats` files ride `_default_weight` 16 with no measurement** — `engine-emit-path.bats` (this
+  lane) and `jobs-audit.bats` (scheduler, arrived with #182). Named in `tests/shard-timings.json`
+  `_known_gap`; clears with a `weigh-tests.yml` dispatch, never a hand-written number.
+- **KNOWN FLAKE, recorded rather than re-run away: `engine-driver-contract.bats` test
+  "REQ-04: a process whose own fixture fails its own schema is blamed, not the driver".**
+  Observed 2026-08-13 on **byte-identical trees**: PASS in run `31744731535` (21:14 UTC), FAIL in
+  `31745770809` (21:28 UTC), PASS on rerun of that same run. It fails at the
+  `"fault_hint":"process"` grep, which means the escalation receipt did not land. The test
+  `mktemp -d`s a directory, `cp -r`s the whole `.claude/scripts` tree into it and runs `arc-run`
+  against that copy, so it is I/O-heavy and load-sensitive by construction.
+  **Whether Cycle 7 widened its window is UNKNOWN and must not be assumed either way** — `--strict`
+  raised the emitter's spine-lock wait 2s → 15s and `EMIT_TIMEOUT_MS` went 10s → 20s, both of which
+  change the timing of the emit this test depends on. It is written down because a flake that is
+  only ever re-run until green is indistinguishable from a bug nobody caught, and this repo already
+  records tests that pass on shard luck. **Do not re-run it green and move on; instrument it.**
