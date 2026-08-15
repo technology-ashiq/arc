@@ -16,8 +16,15 @@
  *      asserts bench reports each as such rather than rounding them up to a pass. A test that
  *      only ever sees green cannot tell green from unconditional.
  *
- * It also pins the two MEASURED findings about M1's env plumbing, so the day the engine grows a
- * target-repo seam these assertions fail loudly instead of a stale comment going quietly wrong.
+ * IT ALSO PINS THE SEAM, AND THIS PART GOT ITS OWN LESSON. The sentence that used to sit here
+ * promised that the env-plumbing checks below would "fail loudly the day the engine grows a
+ * target-repo seam". ADR-0220 landed exactly that seam and NOTHING failed: it arrived as flags
+ * (`--work-root`, `--trial-model`) while ambient inheritance stayed closed on purpose, so every
+ * assertion here stayed TRUE while the conclusion it defended became FALSE. A tripwire aimed at
+ * the mechanism that did not change cannot see the mechanism that did, and a true assertion is
+ * not the same thing as a live one. The engine lane found it by reading this file; this file did
+ * not find it. The checks now ask about the FLAGS, and the env checks remain only to assert what
+ * they actually prove: that ambient inheritance is still shut.
  */
 
 import { spawnSync } from "node:child_process";
@@ -26,7 +33,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { EXIT, findReceipt, parseArgs, OperatorError } from "../.claude/scripts/engine/arc-bench.mjs";
+import { EXIT, findReceipt, materializeRepoState, parseArgs, repoStatus, OperatorError } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BENCH = join(ROOT, ".claude/scripts/engine/arc-bench.mjs");
@@ -139,20 +146,43 @@ function eventsOn(spine) {
   const runs = all.filter((e) => e.kind === "run.completed" && e.process !== "bench@0.1.0");
   check("arc-run emitted one receipt per attempt, beside bench's one", runs.length === 15, `saw ${runs.length}`);
 
-  // MEASURED FINDING 2: ARC_DRIVER_MODEL does not survive arc-run. Bench set it to
-  // `claude-opus-5` above, and arc-run's OWN receipt still reads `unpinned` -- because with an
-  // explicit --driver there is no tier, so pinnedModel is null and the driver is handed "".
-  check("MEASURED: arc-run overwrites ARC_DRIVER_MODEL, so its receipts read unpinned",
-    runs.length > 0 && runs.every((e) => e.payload.model === "unpinned"),
-    runs.map((e) => e.payload.model).join(","));
+  // THE MODEL SEAM, ASKED OF THE DRIVER RATHER THAN OF THE ENVIRONMENT (ADR-0220).
+  //
+  // The check that used to live here asserted "arc-run overwrites ARC_DRIVER_MODEL, so its
+  // receipts read unpinned", and its comment promised it would "fail loudly the day the engine
+  // grows a seam". THE SEAM ARRIVED AND IT DID NOT FAIL: ambient inheritance stayed closed on
+  // purpose (it is the ADR-0069 b1 hole), so the assertion is still TRUE while the conclusion it
+  // defended -- that bench cannot vary the model -- became false. A tripwire aimed at the
+  // mechanism that did not change cannot see the mechanism that did. Found by the engine lane
+  // reading this file, not by this file.
+  //
+  // So it now asks about the FLAG. `mock` is not model-capable, so this run applied none and the
+  // receipt must say so in arc-run's own vocabulary -- and `--model` given here is a REQUEST that
+  // was never applied, which the receipt must not blur into a model that ran.
+  check("with a non-model-capable driver, nothing is applied and the receipt says so",
+    runs.length > 0 && runs.every((e) => e.payload.model_source === "none"),
+    runs.map((e) => e.payload.model_source).join(","));
+  if (mine.length === 1) {
+    check("and bench records the model as REQUESTED, never as applied",
+      mine[0].payload.fingerprint.model_requested === "claude-opus-5"
+      && mine[0].payload.model_applied === null
+      && mine[0].payload.model_source === "none");
+    check("so no model_id is written for a model that never ran",
+      !("model_id" in mine[0].payload.fingerprint));
+  }
 }
 
-// ---- 2. MEASURED FINDING 1: ARC_ROOT does not survive arc-run either -------------------------
+// ---- 2. THE WORKSPACE SEAM, AND THE DOOR THAT STAYED SHUT ------------------------------------
 {
-  // Point ARC_ROOT at a directory that holds NO recordings. If it reached the driver, the mock
-  // would resolve its recording dir underneath it and die naming the path it looked for. The run
-  // succeeding is the proof that arc-run replaced the value with its own root.
-  const spine = spineFor("arcroot");
+  // TWO FACTS, and they are different facts. This section used to assert only the second and
+  // called it "bench cannot reach a real driver" -- which stopped being true when ADR-0220 landed
+  // `--work-root`, while the assertion itself stayed green.
+  const spine = spineFor("workroot");
+
+  // (a) THE DOOR IS STILL SHUT. Ambient `ARC_ROOT` is ignored BY DESIGN -- it is the ADR-0069 b1
+  // hole and the seam deliberately did not reopen it. Pointed at a directory holding no
+  // recordings, the run still replays the right bytes, which it could only do by resolving from
+  // arc-run's own root. This assertion is unchanged; what changed is what it is allowed to mean.
   const bogus = join(scratch, "bogus-no-recordings");
   mkdirSync(bogus, { recursive: true });
   const res = spawnSync(process.execPath, [
@@ -161,10 +191,55 @@ function eventsOn(spine) {
     encoding: "utf8", cwd: ROOT, timeout: 120000, killSignal: "SIGKILL",
     env: { ...process.env, ARC_SPINE_ROOT: spine, ARC_MOCK_FIXTURE: "docs-only", ARC_ROOT: bogus },
   });
-  check("MEASURED: arc-run overwrites ARC_ROOT, so a bogus one does not reach the driver",
+  check("ambient ARC_ROOT is still ignored -- inheritance stays closed (ADR-0069 b1)",
     res.status === 0, `status ${res.status}: ${String(res.stderr).trim().split("\n").pop()}`);
   check("and the right recording was still replayed",
     /document what total does with non-array input/.test(res.stdout || ""));
+
+  // (b) THE FLAG IS THE DOOR THAT OPENS, and it is guarded. A work-root inside arc is REFUSED,
+  // because git walks upward from cwd and `commit-msg-draft` holds `add:*` and `commit:*` -- so
+  // an unguarded seam would commit into arc. This is the assertion the old one should have been.
+  const inside = spawnSync(process.execPath, [
+    ARC_RUN, "--process", "commit-msg-draft", "--driver", "mock", "--input", "{}", "--budget", "inr=10",
+    "--root", ROOT, "--work-root", ROOT,
+  ], { encoding: "utf8", cwd: ROOT, timeout: 120000, killSignal: "SIGKILL", env: { ...process.env, ARC_SPINE_ROOT: spineFor("workroot-inside") } });
+  check("a --work-root pointing INTO arc is refused, not silently accepted",
+    inside.status === 2 && /commit into arc/.test(inside.stderr || ""), `status ${inside.status}`);
+
+  // (c) AND A REAL FIXTURE REPO IS ACCEPTED. Not a grep of bench's source -- a grep is not a
+  // running proof, which is this repo's own rule about guards. The harness materializes a repo
+  // exactly as a run does, and arc-run either accepts it as the toplevel of its own repository or
+  // refuses it. Paired with (b), that is an accept AND a refuse, so a seam that accepted
+  // everything could not pass both.
+  const posed = materializeRepoState(join(ROOT, "tests/fixtures/engine/evals/commit-msg-draft/repo-states/docs-only"));
+  try {
+    const good = spawnSync(process.execPath, [
+      ARC_RUN, "--process", "commit-msg-draft", "--driver", "mock", "--input", "{}", "--budget", "inr=10",
+      "--root", ROOT, "--work-root", posed.root,
+    ], {
+      encoding: "utf8", cwd: ROOT, timeout: 120000, killSignal: "SIGKILL",
+      env: { ...process.env, ARC_SPINE_ROOT: spineFor("workroot-good"), ARC_MOCK_FIXTURE: "docs-only" },
+    });
+    check("a materialized fixture repo IS accepted as --work-root",
+      good.status === 0, `status ${good.status}: ${String(good.stderr).trim().split("\n").pop()}`);
+    // The harness leaves the change UNSTAGED and the driver is a replay that touches no git, so
+    // the repo must come back exactly as posed. A run that had worked in the wrong directory
+    // would leave this one clean.
+    check("and the fixture repo still holds the posed, unstaged change afterwards",
+      repoStatus(posed.root).length > 0, JSON.stringify(repoStatus(posed.root)));
+  } finally {
+    posed.cleanup();
+  }
+
+  // (d) --trial-model is REFUSED on a driver that cannot apply one. A receipt naming a model the
+  // driver never used would be a fabrication, and for a replay sweep the model identity IS the
+  // recording set.
+  const trial = spawnSync(process.execPath, [
+    ARC_RUN, "--process", "commit-msg-draft", "--driver", "mock", "--trial-model", "claude-opus-5",
+    "--dry-run", "--root", ROOT,
+  ], { encoding: "utf8", cwd: ROOT, timeout: 120000, killSignal: "SIGKILL" });
+  check("--trial-model is refused on mock, naming the recording set instead",
+    trial.status === 2 && /ARC_MOCK_DIR/.test(trial.stderr || ""), `status ${trial.status}`);
 }
 
 // ---- 3. a not-scored attempt is reported, never rounded up to a pass -------------------------
