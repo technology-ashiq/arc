@@ -115,6 +115,51 @@ Run it from an **Administrator** terminal. It changes nothing about the tasks or
 starts recording what Task Scheduler already does. Without it, if this recurs on Monday we will
 know only that it recurred.
 
+### The log is on, and it was PROVEN to record rather than assumed to
+
+The owner ran the elevated command the same day:
+
+```
+$ wevtutil gl Microsoft-Windows-TaskScheduler/Operational
+enabled: true
+```
+
+Enabled is not the same as recording what we need, and finding that out on Monday — after the
+event we are waiting for — would waste the whole point of turning it on. So it was tested against
+a **throwaway** task rather than a real job: starting `brief-materialize` by hand would write a
+receipt with a session actor and put a manual start into the metric pack, and that is the one
+number the week must keep at zero.
+
+```
+$ probe-oplog.ps1            # register \arc\arc-oplog-probe, start it, read back, remove it
+REGISTERED
+LAST_RESULT=0
+MARKER_WRITTEN=True
+OPLOG_EVENTS=9
+  15:30:52  id=325  Task Scheduler queued instance ... of task "\arc\arc-oplog-probe".
+  15:30:52  id=110  Task Scheduler launched ... instance of task "\arc\arc-oplog-probe" for user "ashiq".
+  15:30:52  id=129  Task Scheduler launch task "\arc\arc-oplog-probe", instance "cmd.exe" with process ID 27628.
+  15:30:52  id=100  Task Scheduler started ... instance of the "\arc\arc-oplog-probe" task.
+  15:30:52  id=200  Task Scheduler launched action "cmd.exe" in instance ... of task "\arc\arc-oplog-probe".
+  15:30:52  id=201  Task Scheduler successfully completed ... action "cmd.exe" with return code 0.
+  15:30:52  id=102  Task Scheduler successfully finished ... instance of the task.
+REMOVED=True
+```
+
+Afterwards, the machine is exactly as it was — `list` returns the two real jobs and nothing else,
+and the pack still reads `manual starts (target 0)  0`.
+
+**This makes Monday decisive rather than merely observed**, because the two hypotheses now render
+differently in the log:
+
+| What the log shows on 2026-08-17 06:00 | What it means |
+|---|---|
+| `100`/`102` present, **no `200`/`201`** | Task Scheduler started an instance and **never launched the action**. The run that "succeeded" while doing nothing is a scheduler-side event, and the missing log file is a consequence rather than the cause |
+| `200` present, `201` with a non-zero return code | The action launched and `cmd.exe` failed — and then the absent log file points at the redirect or at something holding the launch, which is where the AV hypothesis lives |
+| `200` and `201` both clean, still no log file and no receipt | Something between `cmd.exe` starting and the redirect opening. The narrowest and least likely case, and the only one that would need a new instrument |
+
+Written down BEFORE the event, so the reading cannot be chosen after seeing which one happened.
+
 ### Carried forward
 
 - The AV watch item from Phase 02 is now **live rather than theoretical**. A run that Task
