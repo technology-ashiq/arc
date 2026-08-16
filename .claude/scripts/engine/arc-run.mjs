@@ -47,6 +47,23 @@ import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
+
+// The runtime identity grammar. Alphanumerics plus the punctuation `hermes@sha256:<digest>+cfg.<hash>`
+// actually uses, 1-256 chars. Deliberately NOT reusing MODEL_RE: this field exists precisely because
+// a runtime identity is NOT a model id (ADR-0221), and one regex serving both would re-create the
+// conflation that quarantined the first hermes receipt.
+//
+// DECLARED HERE, AT THE TOP, AND THAT POSITION IS LOAD-BEARING. Written next to its only use in
+// `seatFor()` it sat ~470 lines below `fail()`, which runs during TOP-LEVEL execution on the
+// earliest exit path in this file (`--budget inr=0`, "stopped before invoking any driver"). That
+// path calls fail -> emitRun -> seatFor -> this const, hits the temporal dead zone, the emit throws
+// into its catch, and the run writes NO RECEIPT AT ALL while still exiting 1. CI caught it in one
+// job; `engine-driver-contract.bats:104` is the only thing that noticed.
+//
+// This is the SAME defect this cycle already recorded and fixed once, re-introduced by a fix
+// produced by an adversarial pass -- which is exactly the gap the tracker names: "fixes produced by
+// an adversarial pass are themselves UNATTACKED CODE".
+const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
 import { routerFaults } from "./router-row.mjs";
@@ -517,12 +534,6 @@ function scrub(label, text, parsed) {
  * arbitrarily long string into the payload, cross MAX_EVENT_BYTES and cost the WHOLE receipt to
  * `OVERSIZE` — the same quarantine the model guard exists to prevent, one line below it.
  */
-// The runtime identity grammar. Alphanumerics plus the six punctuation characters
-// `hermes@sha256:<digest>+cfg.<hash>` actually uses, 1-256 chars. Deliberately NOT reusing
-// MODEL_RE: this field exists precisely because a runtime identity is not a model id (ADR-0221),
-// and one regex serving both would re-create the conflation that quarantined the first receipt.
-const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
-
 function seatFor(cost) {
   const reportedModel = cost && typeof cost.model === "string" && MODEL_RE.test(cost.model) ? cost.model : null;
   const rawRuntime = cost && typeof cost.runtime === "string" ? cost.runtime.trim() : "";

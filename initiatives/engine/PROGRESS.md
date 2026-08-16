@@ -191,6 +191,21 @@ never cleared between runs inside one test, so a run writing nothing scored agai
 one · `mktemp -d` unchecked, so a failure gave `mkdir -p /data` and `rm -rf ""` · `console.log` then
 `process.exit` on the macOS async-stdout path · no suite self-count.
 
+**AND THE FIX ROUND SHIPPED THE EXACT DEFECT THE TRACKER SAYS FIX ROUNDS SHIP.** CI went red on
+5 of 19 jobs, all five on the same assertion: *"REQ-05: a budget that leaves nothing to spend stops
+BEFORE any driver runs"*. Cause: `RUNTIME_ID_RE` was declared as a `const` beside its only use in
+`seatFor()`, ~470 lines below `fail()` — which runs during **top-level execution** on the earliest
+exit path in the file. That path calls `fail` → `emitRun` → `seatFor` → the const, hits the
+**temporal dead zone**, the emit throws into its own catch, and the run writes **no receipt at all**.
+
+**Exit code 1 either way.** A caller checking the exit code could never tell the difference; only
+`engine-driver-contract.bats:104`, which greps the landed file, noticed. Proven both directions —
+const at the top: receipt present. Const moved back: `NO RECEIPT`, same exit 1.
+
+This is the **same defect this cycle already recorded and fixed once**, re-introduced by a fix an
+adversarial pass produced. The tracker's own words: *"fixes produced by an adversarial pass are
+themselves UNATTACKED CODE."* Written twice, hit twice.
+
 **And one I inflicted on myself while fixing theirs.** The `runtimeId` guard was written twice
 wrong: first as `!/[ -]/`, which reads as "no space and no hyphen" and **is** the range `0x20-0x2D`;
 then spelled with **literal 0x00 and 0x1f bytes**, which made `arc-run.mjs` binary to git and
