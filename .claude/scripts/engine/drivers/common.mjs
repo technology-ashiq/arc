@@ -47,7 +47,7 @@ export function parseBudget(s) {
  * ADR-0069 block (b)(5) -- recorded, estimated and fabricated are three different things and
  * only the first may enter a receipt.
  */
-export function writeCost({ tokensIn, tokensOut, inr, source }) {
+export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) {
   const path = process.env.ARC_DRIVER_COST_FILE;
   if (!path) return;
   const cost = {};
@@ -57,6 +57,18 @@ export function writeCost({ tokensIn, tokensOut, inr, source }) {
   // `source` is mandatory whenever ANY figure is present -- a number whose provenance is
   // unstated is the thing MP-F exists to prevent.
   if (Object.keys(cost).length) cost.source = source || "measured";
+  // THE SIDECAR IS THE ONLY CHANNEL A DRIVER HAS BACK TO arc-run, so what-actually-ran rides
+  // here too (ADR-0221). `produce()` returning a `model` key looked like that channel and was
+  // not: the caller below destructures `{ output, cost }` and drops everything else, so
+  // `drivers/hermes` has been returning a model nothing read. Two facts, two keys, never one
+  // string -- `model` is the clean model id the driver observed, `runtime` is which contractor
+  // observed it, and ADR-0220 is the reason those are not the same field.
+  //
+  // These are written even when no cost figure exists: a run can know its model and not its
+  // spend, and `Object.keys(cost).length` above must therefore be evaluated BEFORE they land or
+  // a model id would silently manufacture `source: "measured"` for an empty cost record.
+  if (typeof model === "string" && model) cost.model = model;
+  if (typeof runtime === "string" && runtime) cost.runtime = runtime;
   writeFileSync(path, `${JSON.stringify(cost)}\n`, "utf8");
 }
 

@@ -121,6 +121,63 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### 2026-08-16 — the credential landed, and auditing the bundle against its own spec found four things
+
+**Branch `feat/arc-engine-cycle7-close`, cut fresh from `main`.** The previous branch's PR **#172
+merged as `e324745`** at 07:40 UTC — phases 04–05 complete and 06–07 partial are on `main`, CI
+`31933907089` 19/19 per-JOB at `3ce87ee`. That branch is spent and was 12,031 lines behind; nothing
+more is built on it.
+
+**THE CAPPED KEY EXISTS AND ITS CEILING IS PROVIDER-VERIFIED.** `approval.requested`
+`01M04XJT2BA8PRTEAY3PB6STZ6` → `decision.recorded` `01M04XKB3EP4RXFX3PEQ8GFQJN`, both in
+`events/2026-08-16.jsonl`, neither quarantined. `GET /api/v1/key` → HTTP 200, `limit: 0`,
+`limit_reset: null`, `limit_remaining: 0`. Read from the provider, not from intent. **A-05 did not
+fire.** The ordering deviation is recorded in `evidence/phase-04/key-ceiling-ulid.txt`: ADR-0213
+wants the figure before issuance and the owner did both in one act.
+
+**REQ-04 AMENDED (`/arc-change`).** The `hq.policy.yaml` row cannot ride the Phase-07 router diff —
+`policy-lint` refuses a grant to a process file that does not exist yet. It moves to REQ-07 /
+Phase 08, where the file and its grant are one change. PLAN, phase-07-spec and phase-08-spec all
+move together; phase-08's conditional *"if Phase 07 did not already carry it"* is resolved and gone.
+
+**ADR-0221 — the runtime identity leaves the model seat.** ADR-0212 (*runtime in the seat*) and
+ADR-0220 (*seat is a clean model id*) genuinely conflicted, and the seat value ADR-0212 specified is
+what quarantined the first hermes receipt with `BAD_MODEL`. Resolved: identity → its own `runtime`
+payload field, seat → `unpinned`, `model_source` gains a `runtime` value that no production run can
+currently reach and that is documented as unreachable rather than left to be discovered.
+
+**FOUR THINGS FOUND BY AUDITING THE EVIDENCE BUNDLE AGAINST ITS OWN VERIFICATION PLAN**, which is
+the only reason any of them surfaced:
+
+1. **`--usage-file` exists and the comment saying it did not was false** (sixth this cycle). Then
+   the flag itself turned out to write a report in **one run out of five**, and **the probe's own
+   teardown destroyed that one report's 410 bytes before anyone read them** — so its provenance is
+   unresolved. The verdict was carried without looking at the artifact. Recorded as a method
+   failure; the probe now deletes nothing.
+2. **`produce()`'s returned `model` is dead code** — `common.mjs` destructures `{ output, cost }`
+   and drops the rest, so `drivers/hermes` has been returning a model nothing read since it was
+   written. Seventh dead assertion. The live channel is the cost sidecar.
+3. **`HERMES_WRITE_SAFE_ROOT=/opt/data` is real and enforced** — observed denying a write outside
+   it. A `/tmp` usage-file target was measuring that confinement, not the feature. Phase 06
+   fixture 1 gains measured evidence.
+4. **The runtime does not reliably honour a one-shot output contract on `llama3.1:8b`.** Five runs
+   of one pinned prompt returned: correct JSON once, a web page title, two write-denied messages,
+   and a bash syntax error. The parser is fine; the answer is not. **This is a direct risk to
+   REQ-07's three real runs** and is now written into phase-06-spec rather than discovered in
+   Phase 08.
+
+**Shipped with it:** `tests/engine-usage-reader.bats` (9 tests) exercising the reader through the
+real driver path via the fake-docker seam — **four mutants killed, none survived** (flag not passed
+→ 7 red · `MODEL_RE` guard removed → 2 red · sidecar drops model → 1 red · estimate leaks into `inr`
+→ 1 red). `tests/engine-usage-flag-probe.mjs` pins the vendor behaviour and goes red, keeping the
+file, the day a report appears. Two evidence files close the Phase-04 bundle's named absences.
+
+**Still owed before Phase 04 can close:** the burn figure. Activity is on the record for 08-12
+(9 commits), 08-13 (23), 08-14 (13), 08-15 (1) and 08-16 (1) — the closing session sets the number,
+and `board-lint` moves `PORTFOLIO.md` with it.
+
+---
+
 ### SUPERSEDED BY ADR-0220, and my mechanism was the wrong shape — 2026-08-14
 
 **The finding below stands. The fix I built for it does not, and ADR-0220 landed the right one

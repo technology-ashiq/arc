@@ -57,11 +57,16 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import { EXIT, pinnedModel, runDriver, settle } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
+// The seat grammar is imported from the spine's OWN validator rather than re-spelled here.
+// A second copy of a regex is a second thing to keep in sync, and the failure this guards
+// against was precisely two layers disagreeing about what a model id may contain (ADR-0221).
+import { MODEL_RE } from "../../hq/lib/validate.mjs";
 
 const DOCKER = process.env.ARC_HERMES_DOCKER || "docker";
 
@@ -356,12 +361,31 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   ].join("\n");
 
   const name = `arc-hermes-${process.pid}-${Date.now()}`;
+
+  // THE USAGE REPORT IS ASKED FOR, BECAUSE THE RUNTIME OFFERS ONE (ADR-0221). The vendor
+  // documents the flag on the pinned image itself: "One-shot mode only: after the run, write a
+  // JSON usage report (estimated cost, token counts, model, api_calls) to PATH. The report is
+  // written even when the run fails, so pipelines can always account for spend."
+  //
+  // The path is inside the mounted volume because that is the ONLY host-visible path the
+  // container can write to; anywhere else and the file dies with the container. It carries the
+  // container name so two concurrent runs cannot read each other's spend, and it is removed
+  // after the read so a failed run can never inherit the previous run's figures -- a stale
+  // sidecar reporting someone else's tokens is worse than no sidecar at all.
+  const usageHost = USAGE_FILE || join(DATA_DIR, `${name}.usage.json`);
+  const usageInContainer = USAGE_FILE ? "" : `/opt/data/${name}.usage.json`;
+
   const args = [
     "run", "--rm", "--name", name,
     "-v", `${DATA_DIR}:/opt/data`,
     IMAGE,
     "-z", prompt,
   ];
+  // An operator-supplied ARC_HERMES_USAGE_FILE is a HOST path this driver cannot translate into
+  // the container's filesystem, so in that case the flag is not passed and the file is only read
+  // if something else wrote it. That is the pre-ADR-0221 behaviour, kept intact for the operator
+  // who mounts their own layout, rather than guessing a mapping and writing to nowhere.
+  if (usageInContainer) args.push("--usage-file", usageInContainer);
 
   const remaining = msUntilDeadline();
   let timeoutMs;
@@ -409,31 +433,60 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
 
   const output = extractAnswer(res.stdout ?? "");
 
-  // COST IS ABSENT UNLESS IT WAS MEASURED. No usage flag is passed that has not been verified
-  // against the vendor -- inventing one is how a fabricated artifact enters a repository, and
-  // Phase 04 caught exactly that shape once already. When the operator points
-  // ARC_HERMES_USAGE_FILE at a sidecar the runtime actually wrote, its figures are read; when
-  // they are absent they stay absent, never zeroed (ADR-0069 b5).
+  // COST IS ABSENT UNLESS IT WAS MEASURED, and the model is absent unless the runtime said so.
+  //
+  // THE COMMENT THAT STOOD HERE WAS FALSE and is corrected rather than deleted, because the
+  // correction is the finding. It read "No usage flag is passed that has not been verified
+  // against the vendor" -- implying none existed. `--usage-file` is documented on the pinned
+  // image's own `--help`, was verified there on 2026-08-16, and is now passed on every run
+  // (ADR-0221). Sixth comment this cycle asserting something the world did not do.
+  //
+  // What the report may and may not become:
+  //   token counts  -> `source: "measured"`, because the runtime counted them
+  //   `model`       -> the MP-F seat, because it answers WHICH MODEL RAN
+  //   estimated cost-> NOTHING. REQ-05 says cost is provider-reported or absent, and the
+  //                    runtime's own estimate is neither. It is not carried into `inr`.
   let cost;
-  if (USAGE_FILE && existsSync(USAGE_FILE)) {
+  if (existsSync(usageHost)) {
     try {
-      const u = JSON.parse(readFileSync(USAGE_FILE, "utf8"));
+      const u = JSON.parse(readFileSync(usageHost, "utf8"));
       const tokensIn = Number(u.prompt_tokens ?? u.tokens_in);
       const tokensOut = Number(u.completion_tokens ?? u.tokens_out);
-      if (Number.isFinite(tokensIn) || Number.isFinite(tokensOut)) {
+      const reported = typeof u.model === "string" ? u.model.trim() : "";
+      // The seat is a CLEAN model id or it is nothing. An id the spine would quarantine is
+      // dropped here rather than at the emitter: a rejected receipt costs the whole receipt,
+      // a dropped seat costs one field. This lane has already paid the first price once.
+      const model = MODEL_RE.test(reported) ? reported : "";
+      if (reported && !model) {
+        process.stderr.write(`hermes: WARN the runtime reported a model id the spine grammar refuses — seat left unpinned\n`);
+      }
+      if (Number.isFinite(tokensIn) || Number.isFinite(tokensOut) || model) {
         cost = {
           tokensIn: Number.isFinite(tokensIn) ? tokensIn : undefined,
           tokensOut: Number.isFinite(tokensOut) ? tokensOut : undefined,
-          source: "measured",
+          source: (Number.isFinite(tokensIn) || Number.isFinite(tokensOut)) ? "measured" : undefined,
+          model: model || undefined,
+          runtime: versionString(),
         };
       }
     } catch {
       // A usage file we cannot read is reported and then ignored. Guessing a figure here would
       // put an estimate where a measurement is claimed.
-      process.stderr.write(`hermes: WARN the usage file at ${USAGE_FILE} did not parse — cost is reported as absent\n`);
+      process.stderr.write(`hermes: WARN the usage file at ${usageHost} did not parse — cost and model are reported as absent\n`);
+    } finally {
+      // Read once, then gone. Only the path THIS driver chose is removed: an operator-supplied
+      // ARC_HERMES_USAGE_FILE belongs to the operator and is never deleted by us.
+      if (!USAGE_FILE) {
+        try { rmSync(usageHost, { force: true, maxRetries: 3, retryDelay: 50 }); }
+        catch { /* a leftover report is harmless; losing the run over it is not */ }
+      }
     }
   }
 
+  // `model` here is DEAD and has always been: the shared caller destructures `{ output, cost }`
+  // and drops the rest, which is why the seat was `unpinned` on every hermes run no matter what
+  // this returned. The live channel is the cost sidecar above (ADR-0221). Returned anyway so the
+  // contract shape is unchanged for any caller that later starts reading it.
   return { output, cost, model: pinnedModel() ?? "unpinned" };
 }, { version: versionString });
 

@@ -6,7 +6,7 @@
 
 ## Exit criteria (Definition of Done)
 
-- [ ] A `build-in-public-draft` process file is authored in `processes/` with output schema `{draft, sources, task-class, pack-ref}`, and it lands **with its `hq.policy.yaml` row** if Phase 07 did not already carry it (POL-I birth rule, birth-lint green).
+- [ ] A `build-in-public-draft` process file is authored in `processes/` with output schema `{draft, sources, task-class, pack-ref}`, and it lands **with its `hq.policy.yaml` row in the SAME change** (POL-I birth rule, ceiling L1, birth-lint green, filename stem matching the `name:` field). **The conditional "if Phase 07 did not already carry it" is resolved and removed (`/arc-change`, 2026-08-16): Phase 07 cannot carry it.** `policy-lint` refuses a `kinds` entry whose process file does not exist, and this phase authors that file — so the grant and the file are one change or neither. Phase 07's copy of this criterion is struck with the same reason.
 - [ ] **Context packs work as specified** (ADR-0214): an `external-ok` digest assembled from spine and day events, **approved by the owner before dispatch**, with **N dispatches declared at approval time** and per-dispatch receipts staying individual. The pack bounds the **data, not the angle** — unless the job pins an angle, the take belongs to the runtime.
 - [ ] Fixture: a pack carrying a planted `internal-only` marker is **refused before the runtime process starts**, exiting `5` at the arc-run layer (ADR-0219), with a negative control proving the check can fail.
 - [ ] Accepted past drafts and one-line rejection reasons **ride the next pack**, and the runtime's own persistent memory stays off — state lives in arc receipts (ADR-0211).

@@ -1,0 +1,46 @@
+# Phase 04 / REQ-05 — the capped-key ceiling decision, on the spine
+
+approval.requested  01M04XJT2BA8PRTEAY3PB6STZ6
+decision.recorded   01M04XKB3EP4RXFX3PEQ8GFQJN   (decides the above, verdict: approve)
+
+Both verified present in `.claude/state/hq/events/2026-08-16.jsonl` and absent from
+`.claude/state/hq/events/_quarantine/`. Emitted from the canonical clone
+`E:/Work_Hub/01_Automemory/arc`, because a receipt written in a worktree is real, valid, and
+invisible to `arc-inbox`.
+
+## The figure, and how it was verified
+
+**Ceiling: 0, non-resetting.** Not taken from the owner's word and not from this session's
+recommendation — read back from the provider after issuance:
+
+    GET https://openrouter.ai/api/v1/key   ->   HTTP 200
+      limit:            0
+      limit_reset:      null      (never resets -- ADR-0213's "non-resetting" clause, proven)
+      limit_remaining:  0
+      is_free_tier:     true
+
+The key is deliberately unfunded so certification fixture 10 can assert the provider's real
+**HTTP 402** at zero spend. OpenRouter's own error table: *402 — "Your account or API key has
+insufficient credits."* Free-tier models remain reachable because OpenRouter governs those by
+request **rate** limits (429), which are a separate mechanism from credit limits.
+
+## Ordering deviation, recorded rather than smoothed
+
+ADR-0213 requires the figure be recorded **before** the key is issued. The owner named 0 and
+issued the key in a single act on 2026-08-16, so this receipt was written **after** issuance.
+
+Assumption **A-05 did not fire**. Its trigger is *"Phase 07 reaches key provisioning with no figure
+recorded"* — a key issued with no number, or a number invented to unblock the step. Neither
+happened: the figure is the owner's, it is 0, and the provider confirms the key carries it.
+
+The deviation is written here because the alternative is a record that reads as if the ordering
+held. An honest out-of-order record is recoverable; a tidy false one is not.
+
+## What this key is NOT yet
+
+- **Not read by any code.** `ARC_HERMES_API_KEY` is declared in `.env.example` and set in
+  `.env.local`, and no path in the repo reads it. Wiring is Phase 06/07 work.
+- **Not exercised.** Fixtures 4 and 10 are the first things that will touch it. Until then the
+  only claim this file makes is that the credential exists with the ceiling the owner set.
+- **Not the only lever.** ADR-0216 makes the credential the termination path: revoking it stops
+  dispatch instantly. That property is asserted, not yet demonstrated — Phase 07 owes the demo.

@@ -565,14 +565,43 @@ function emitRun(payload) {
   // second fact into it would make every reader parse a string to get either one, which is how
   // `tier:X` came to assert a routing decision nothing had applied. Where the value came from is
   // a separate question and gets a separate field, `model_source`, set in emitRun's caller.
-  if (effectiveModel) extra.push("--model", effectiveModel);
+  // A RUNTIME REPORTS THE MODEL IT USED, AND THAT IS A FOURTH SOURCE (ADR-0221). An agent
+  // runtime picks its own model inside a process arc does not observe, so the seat looked
+  // permanently unanswerable and every hermes receipt carried `unpinned`. It is answerable:
+  // the runtime writes it into the usage report, the driver puts it in the cost sidecar, and
+  // it arrives here as a MEASUREMENT rather than a claim.
+  //
+  // PRECEDENCE, AND IT ONLY EVER FILLS A HOLE: a routed pin and a trial override both win.
+  // Overriding a pin with the driver's word would let a driver rewrite what routing decided,
+  // which is the shape ADR-0069 b1 exists to forbid -- and a runtime row carries no `models:`
+  // entry anyway (ADR-0217), so in production this branch runs exactly when nothing else can.
+  //
+  // `runtime` is a SEPARATE field, never folded into the seat: `hermes@sha256:...+cfg....` is
+  // provenance, the seat is a model id, and one string carrying both is how `tier:X` came to
+  // assert a routing decision nothing had applied.
+  const reportedModel = cost && typeof cost.model === "string" && MODEL_RE.test(cost.model) ? cost.model : null;
+  const seat = effectiveModel ?? reportedModel;
+  const seatSource = effectiveModel ? modelSource : (reportedModel ? "runtime" : modelSource);
+  const runtimeId = cost && typeof cost.runtime === "string" && cost.runtime ? cost.runtime : null;
+
+  if (seat) extra.push("--model", seat);
   else if (tier) extra.push("--model", "unpinned");
 
   // `model_source` is derived state and is stamped HERE, after ...rest, so it lands on EVERY
   // run.completed -- the failure paths through `fail()` as much as the success path. A provenance
   // field that only appears on green runs cannot answer "what was this model doing when it failed",
   // which for a bench comparison is the more interesting half.
-  const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}), model_source: modelSource }, extra);
+  // `...rest` may carry a `model` the caller computed from `effectiveModel` alone, which is
+  // stale the moment a runtime reports one. It is overwritten AFTER the spread, for the same
+  // reason `model_source` is: derived state is stamped in one place or it disagrees with itself.
+  const r = emitEvent("run.completed", {
+    process: processName,
+    ...rest,
+    ...(tokens ? { tokens } : {}),
+    ...(seat ? { model: seat } : {}),
+    ...(runtimeId ? { runtime: runtimeId } : {}),
+    model_source: seatSource,
+  }, extra);
   if (!r.ok) {
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
     console.error("         The run is NOT recorded. Under --strict the emitter rejects rather than quarantining.");
