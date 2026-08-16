@@ -13,6 +13,7 @@
     ".claude/scripts/growth/lib/citation-lint.mjs",
     ".claude/scripts/growth/lib/cluster.mjs",
     ".claude/scripts/growth/lib/content-sha.mjs",
+    ".claude/scripts/growth/lib/cutover.mjs",
     ".claude/scripts/growth/lib/deploy.mjs",
     ".claude/scripts/growth/lib/evidence.mjs",
     ".claude/scripts/growth/lib/exec-allowlist.mjs",
