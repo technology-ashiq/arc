@@ -21,6 +21,36 @@ So the ceiling has to live somewhere arc does not have to watch: **the credentia
 own definition of spend seen from the driver side — metered consumption against a human-pre-approved
 provider budget, where the cap itself is a recorded human decision.
 
+## Amendment, 2026-08-16 — the mechanism works and does NOT produce the code this ADR named
+
+Measured against the live credential (`limit: 0`, `limit_reset: null`), not read from documentation:
+
+| Request | Result |
+|---|---|
+| a paid model | **HTTP 403** — `"Key limit exceeded (total limit)"` |
+| a `:free` model | **HTTP 200**, a real completion |
+
+**The decision stands: the cap refuses spend at the credential, exactly as designed.** What is wrong
+is the code this ADR wrote down. OpenRouter separates two refusals that the paragraph below
+conflated:
+
+- **402** — *"Your account or API key has insufficient credits"* — the **account** is out of money.
+- **403** — *"Key limit exceeded (total limit)"* — the **per-key `limit`** is spent.
+
+This ADR chose the per-key limit deliberately, so **403 is the code this design produces**, and 402
+belongs to a design this ADR rejected. Every fixture and REQ asserting 402 has been corrected;
+`initiatives/engine/evidence/phase-06/fixture-10-capped-key.md` holds the measurement.
+
+This is ADR-0219's shape repeating inside the same cycle: an exit contract described from
+documentation, fixtures written against the description, and the difference invisible until someone
+ran it. A fixture asserting 402 would have failed against a **working** cap — and a cap that had
+stopped working would have been indistinguishable from a spec that was simply wrong.
+
+**The free-tier half holds, with a caveat.** A `:free` model answers on the unfunded key, so Phases
+06–08 reach a hosted model at zero spend as planned. But the free surface moves: 16 of 413 models
+carry a `:free` slug today, and two slugs this plan's own examples used are already gone. A process
+pinned to a free slug must pin it **and** record the date it was verified.
+
 ## Options considered
 
 1. **Meter in the shim** — impossible for an opaque runtime, and a metering claim that cannot be

@@ -226,6 +226,35 @@ shipped `hermes.sh` · the container name is `pid + ms`, which collides across P
 
 ---
 
+### FIXTURE 10: THE CAP WORKS AND THE SPEC ASSERTED THE WRONG CODE — 2026-08-16
+
+Run against the live credential, not read from documentation. A **paid** model returns
+**HTTP 403 `Key limit exceeded (total limit)`**; a **`:free`** model returns **HTTP 200** with a real
+completion.
+
+**The mechanism passes.** Spend is refused at the credential — ADR-0213's *"the credential is the
+leash"*, working. **The asserted code was wrong in four places.** OpenRouter separates
+**402** (the *account* is out of credits) from **403** (this *key's* limit is spent), and ADR-0213
+chose the per-key limit, so 403 is the code this design produces. A fixture asserting 402 would have
+failed against a **working** cap — and a cap that had stopped working would have been
+indistinguishable from a spec that was simply wrong.
+
+**ADR-0219's shape, repeating inside the same cycle:** an exit contract described from documentation,
+fixtures written against the description, the difference invisible until someone ran it. Corrected in
+PLAN (3 sites), phase-07-spec, and ADR-0213 by amendment.
+
+**The zero-spend path is now a measurement, not an assumption** — a `:free` model answers on the
+unfunded key. Caveat recorded: 16 of 413 models carry a `:free` slug and two the plan itself named
+are already gone (`anthropic/claude-3.5-sonnet` → *"No endpoints found"*;
+`meta-llama/llama-3.2-3b-instruct:free` → *"unavailable for free"*). Phase 08 pins its slug **and**
+the date it was verified.
+
+**Not established:** the shim's mapping of that refusal to `fail` / `reason: budget` with zero silent
+continuation. Nothing here went through arc-run — the runtime holds its own credential and arc never
+issues this call. That arm is owed and is not counted.
+
+---
+
 ### PHASE 06 FIXTURE 8 FAILS, AND IT OPENS A REQ-06 HOLE — 2026-08-16
 
 **The runtime's persistent memory is ON and cannot be turned off.** A marker planted in run N
