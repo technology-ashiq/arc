@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "_comment": [
+    "The launch checklist's row source (ADR-1201). No checklist row is hardcoded in the renderer;",
+    "every row comes from here, and a row with no `source_url` FAILS rather than rendering.",
+    "",
+    "ADR-1201 is the reason the split exists: the design source recorded SIX required pages, and",
+    "the verified position is that Razorpay's default activation flow documents FIVE, with a",
+    "separate CONDITIONAL list for additional e-commerce sites. The built page set is the",
+    "seven-page superset; this file records which of them the provider actually demands, and",
+    "under what condition, so the checklist never presents a conditional requirement as a",
+    "mandatory one.",
+    "",
+    "The `card statement descriptor` row the plan carried was DROPPED at kickoff as unverified,",
+    "and it is not reinstated here on memory.",
+    "",
+    "ALL ROWS ARE MANUAL in v1. The URL-fetch probe arm is designated cut #1 (PLAN, Appetite),",
+    "taken at kickoff rather than left to fire mid-phase: six deliverables plus an adversarial",
+    "pass do not fit half a day, and LexOS stays PAUSED all cycle so there is no live site to",
+    "probe. A row's outcome is therefore recorded evidence, and NOT-CHECKED is a first-class",
+    "answer rather than a failure to render."
+  ],
+  "rows": [
+    {
+      "id": "PROV.TERMS",
+      "kind": "provider-required",
+      "page": "terms",
+      "what": "Terms and Conditions reachable at a stable public URL",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    },
+    {
+      "id": "PROV.PRIVACY",
+      "kind": "provider-required",
+      "page": "privacy",
+      "what": "Privacy Policy reachable at a stable public URL",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    },
+    {
+      "id": "PROV.SHIPPING",
+      "kind": "provider-required",
+      "page": "shipping-delivery",
+      "what": "Shipping / delivery policy, stating digital delivery where that is what is sold",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    },
+    {
+      "id": "PROV.CONTACT",
+      "kind": "provider-required",
+      "page": "contact",
+      "what": "Contact Us page carrying a real address, an email and a phone number",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    },
+    {
+      "id": "PROV.REFUNDS",
+      "kind": "provider-required",
+      "page": "refund-cancellation",
+      "what": "Cancellation and Refunds policy with a stated window",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    },
+    {
+      "id": "PROV.ABOUT",
+      "kind": "provider-conditional",
+      "page": "about",
+      "condition": "an additional e-commerce site, where the provider asks for an About Us page",
+      "what": "About Us page naming the operating entity",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    },
+    {
+      "id": "PROV.PRICING",
+      "kind": "provider-conditional",
+      "page": "pricing",
+      "condition": "an additional e-commerce site, where the provider asks for pricing details",
+      "what": "Pricing details page stating the all-inclusive amount",
+      "source_url": "https://razorpay.com/docs/payments/account-activation/"
+    }
+  ]
+}

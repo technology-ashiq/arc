@@ -56,6 +56,44 @@ Promotion = delete the group from the `TRIAL` set in `kickoff-lint.mjs` (one lin
 | 2026-08-09 | status, cap, decision-ref, evidence, shape (registry-ref) | registered at birth, absorb Phase 02 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
 | 2026-08-09 | allowlist, deps, attribution (rebuild-lint) | registered at birth, absorb Phase 02 | fired on deliberately malformed inputs only — see note | **n/a — not counted** |
 | 2026-08-07 | birth-rule (kickoff-lint) | arc's own tree, all 8 lanes | no — silent on every lane | **n/a — NOT counted as 8 clean runs, and not as one.** See below |
+| 2026-08-13 | value (legal-lints) | registered at birth, legal Phase 00 | **YES** — twice on the lane's own authored pages | **YES, twice — both real false positives, both fixed.** See below |
+| 2026-08-13 | trace (legal-lints) | registered at birth, legal Phase 00 | **YES** — once on a correct page | **YES — one real false positive, fixed.** See below |
+| 2026-08-13 | completeness (legal-lints) | registered at birth, legal Phase 00 | **YES** — on 3 of 6 fixtures, unplanted | **no** — see below; this is the only true positive of the three |
+
+### the three `legal` lints — registered at birth, and two of them are already at zero
+
+These gates run over RENDERED page bytes, not over a plan, so their promotion criteria read
+across from `tests/kickoff-lint.bats` to **`tests/legal-lints.bats`**: fixture-proven means each
+lint is asserted RED against a mutant tree that actually runs (`legal-probe.mjs mutate`), and the
+six clean fixtures render at zero findings.
+
+They are logged as three separate rows rather than one bundled row because they did not behave
+alike, and bundling them would have hidden that:
+
+- **completeness** fired **unplanted** during Phase 01 on exactly three of the six fixtures, and
+  it was right all three times: `PRIVACY.PROCESSOR`, `PRIVACY.SUBPROCESSORS` and
+  `TERMS.PROCESSOR_ROLE` were declared conditionally required but emitted unconditionally. Only
+  one of those three was known when the lint was pointed at the tree; it found the other two on
+  its own. That is one clean run, not three — one tree, one invocation.
+- **value** fired twice on the lane's own honest prose and was wrong both times. Once on the
+  `legal advice` denylist token, which the mandatory "this is not legal advice" disclaimer is
+  *required* to contain; once on a new bare-URL rule that flagged the venture's own `site_url`.
+  Both were the gate misreading correct content, which is precisely the failure WARN-first exists
+  to absorb — had either shipped as FAIL, a correct page would have been blocked.
+- **trace** fired once on a correct page: a clause legitimately mapped under two branches read as
+  a branch mismatch. Fixed by asking whether the SELECTED branch lists the clause, rather than
+  whether any other branch does.
+
+**Count so far: value 0 clean runs (2 logged false positives), trace 0 (1 logged false positive),
+completeness 1.** A logged false positive resets the count, and these were logged the moment they
+happened rather than after promotion was wanted. None of the three is promotable, and the two that
+misfired are further from promotion today than the day they were written — which is the ledger
+working, not the lints failing.
+
+**Same-author caveat applies in full.** Every run above is this lane checking pages this lane
+authored. By the standard this file already sets twice, that is not accuracy. A real clean run for
+these three is a render of a venture whose facts and pages were written by someone who had not seen
+the lints — Phase 03's LexOS render is the first candidate, and it is one run, not three.
 
 ### `birth-rule` — why its silence proves nothing yet (policy Phase 03, REQ-07)
 

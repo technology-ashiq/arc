@@ -179,7 +179,7 @@ function registrySourceCommit(dir) {
 // Must stay sorted and must match products/ on disk exactly — tests/products.bats derives
 // the expected list from the directory, so a manifest that lands without its CATALOG entry
 // is invisible to --status and fails there rather than shipping unnoticed.
-const CATALOG = ["absorb", "core", "council", "design", "develop", "engine", "evolve", "git", "growth", "hq", "leads", "memory", "plan", "qa", "review"];
+const CATALOG = ["absorb", "core", "council", "design", "develop", "engine", "evolve", "git", "growth", "hq", "leads", "legal", "memory", "plan", "qa", "review"];
 
 // --status rendered from the registry (REQ-05): the registry is the ground truth for
 // INSTALLED; HEALTH is a live integrity check (are the files it claims still on disk?).

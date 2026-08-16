@@ -878,6 +878,91 @@ _arc_run_lint() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# legal lane (Cycle 14). arc-legal resolves its product tree three levels up from
+# .claude/scripts/legal/, so a sandbox MIRRORS the real layout rather than flattening it --
+# a flat copy passes while the real layout is broken (the arc-scan lesson, above).
+# ---------------------------------------------------------------------------
+
+_arc_legal_sandbox() {
+  SANDBOX="$(mktemp -d 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-legal.$$.$RANDOM")"
+  mkdir -p "$SANDBOX/.claude/scripts" "$SANDBOX/products" "$SANDBOX/tests/fixtures/legal"
+  cp -r "$ARC_ROOT/.claude/scripts/legal"         "$SANDBOX/.claude/scripts/"
+  cp -r "$ARC_ROOT/products/legal"                "$SANDBOX/products/"
+  cp -r "$ARC_ROOT/tests/fixtures/legal/ventures" "$SANDBOX/tests/fixtures/legal/"
+  cp    "$ARC_ROOT/tests/legal-probe.mjs"         "$SANDBOX/tests/"
+  # hq.policy.yaml comes too, so the REQ-06 publish gate can be run against a MUTATED policy
+  # without touching the real one. The gate resolves its repo root from its own location, so a
+  # copy under $SANDBOX reads $SANDBOX/hq.policy.yaml and nothing else.
+  cp    "$ARC_ROOT/hq.policy.yaml"                "$SANDBOX/"
+  # publish-gate.mjs imports the AUTHORITATIVE policy parser rather than hand-rolling one, so the
+  # sandbox needs it too. Without it the gate exits 3 ("could not check") for every case and all
+  # four mutant tests fail for a reason that has nothing to do with what they test -- which is
+  # exactly what happened on CI the first time the gate switched parsers.
+  mkdir -p "$SANDBOX/.claude/scripts/hq/lib"
+  cp -r "$ARC_ROOT/.claude/scripts/hq/lib/policy"  "$SANDBOX/.claude/scripts/hq/lib/"
+  ARC_LEGAL_CLI="$SANDBOX/.claude/scripts/legal/arc-legal.mjs"
+  ARC_LEGAL_PUBLISH_GATE="$SANDBOX/.claude/scripts/legal/publish-gate.mjs"
+  # A sandbox that did not actually copy is a silent pass generator: every "no findings"
+  # assertion downstream would hold against a tree with no engine in it. FOUR copies run, so
+  # all four roots are asserted -- checking one of them left a partial sandbox surfacing as a
+  # render failure rather than as the copy that actually failed.
+  local _p
+  for _p in "$ARC_LEGAL_CLI" \
+            "$ARC_LEGAL_PUBLISH_GATE" \
+            "$SANDBOX/hq.policy.yaml" \
+            "$SANDBOX/.claude/scripts/hq/lib/policy/yaml.mjs" \
+            "$SANDBOX/products/legal/templates/v1" \
+            "$SANDBOX/products/legal/data" \
+            "$SANDBOX/tests/fixtures/legal/ventures" \
+            "$SANDBOX/tests/legal-probe.mjs"; do
+    [ -e "$_p" ] || { echo "legal sandbox incomplete: $_p" >&2; return 1; }
+  done
+}
+
+_arc_legal_teardown() {
+  ARC_LEGAL_CLI=""
+  [ -n "${SANDBOX:-}" ] && rm -rf "$SANDBOX" 2>/dev/null || true
+}
+
+# Render one fixture venture into a fresh directory. Sets ARC_LEGAL_OUT.
+# Call under bats `run` when the exit code is the subject; the sidecar is read from disk either
+# way, because a lint whose findings are scraped from stdout is a lint tested through its
+# formatting rather than through its behaviour.
+_arc_legal_render() {
+  local _cli="${ARC_LEGAL_CLI:-$ARC_ROOT/.claude/scripts/legal/arc-legal.mjs}"
+  local _venture="$1"
+  ARC_LEGAL_OUT="${BATS_TEST_TMPDIR}/out-${_venture}"
+  node "$_cli" render --venture "$_venture" --out "$ARC_LEGAL_OUT"
+}
+
+_arc_legal_run_json() { echo "$ARC_LEGAL_OUT/_run.json"; }
+
+# Count findings in the sidecar for a group and level. Prints a number, always -- "0" and
+# "could not read the sidecar" must never be the same output.
+_arc_legal_findings() {
+  local _group="$1" _level="$2"
+  node "$ARC_ROOT/tests/legal-probe.mjs" findings "$(_arc_legal_run_json)" "$_group" "$_level"
+}
+
+# Every @test name in a bats file must be 7-bit ASCII. bats silently DROPS a @test whose title
+# carries a non-ASCII character -- five tests once vanished that way and the file stayed green
+# (arc-evolve 2026-08-04). Returns 1 if any offending line is found, and prints it.
+_arc_ascii_test_names() {
+  local _file="$1" _bad
+  # Assert it LOOKED before asserting what it saw. The first cut discarded the reading grep's
+  # status and tested only that the result was empty, so a missing file, a renamed suite or a
+  # file with zero tests all returned success -- a helper reporting clean because it could not
+  # scan, which is the one thing a broken scanner and a healthy tree agree on.
+  local _names
+  _names="$(LC_ALL=C grep -c '^@test' "$_file")" || { echo "cannot read $_file" >&2; return 1; }
+  [ "$_names" -gt 0 ] || { echo "$_file declares no @test lines" >&2; return 1; }
+  _bad="$(LC_ALL=C grep -n '^@test' "$_file" | LC_ALL=C grep '[^ -~]' || true)"
+  [ -z "$_bad" ] && return 0
+  echo "$_bad" >&2
+  return 1
+}
+
 # ---------------------------------------------------------------------------------------------
 # arc_leave_the_repo -- run the rest of this test from a directory with NO repository above it.
 #
