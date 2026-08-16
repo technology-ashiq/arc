@@ -226,6 +226,41 @@ shipped `hermes.sh` · the container name is `pid + ms`, which collides across P
 
 ---
 
+### FIXTURES 1, 4, 6 PASS · FIXTURE 7 FAILS — 2026-08-16, probed at the container boundary
+
+Measured with a shell inside the pinned image, no model call: the runtime runs entirely inside the
+container, so what the container reaches is what the runtime reaches.
+Evidence: `evidence/phase-06/fixtures-1-4-6-7-confinement.md`. Probe kept as a committed fixture.
+
+- **Fixture 1 PASS, in the strongest form** — the arc repo is not unwritable, it is **invisible**.
+  `/opt/data` is the only bind mount; `/mnt` is empty; the repo path does not resolve.
+  `/proc/mounts` carries `path=C:\` on the 9p line, which reads alarming and is Docker Desktop's
+  WSL2 share-root metadata, not the exposed path — checked by listing rather than by reading.
+- **Fixture 4 PASS** — zero arc-shaped env vars inside the runtime. Worth stating precisely: the
+  requirement is *"only its own capped key"*, and today the answer is **neither its own key nor
+  arc's**. The second half passes; the first half is unbuilt.
+- **Fixture 6 PASS, and the obvious assertion would have failed it** — `touch /opt/data/../escape.txt`
+  **succeeds**, and lands in the container's own layer, never on the host side of the mount. The
+  property is *where it lands*, not *whether it errors*. Asserting "the write was refused" would
+  have reported FAIL on a correctly confined system.
+- **FIXTURE 7 FAILS on the behavioural arm.** `curl https://example.com` → **200**. Egress is
+  completely unrestricted: no allowlist, no proxy, default Docker networking. There is no config to
+  match, so the behavioural arm is the only arm and it fails. This is the pre-mortem's risk 4
+  arriving on schedule — a prompt-injected runtime leaking through a channel the reviewed draft
+  never shows.
+
+**Also measured, outside any fixture: the runtime runs as `uid=0(root)` in the container.** Confined,
+so not a host escape — but nothing stops the agent rewriting its own config, including the file whose
+hash ADR-0209 pins. **A pin computed over a file its subject can rewrite is a pin that checks
+itself.**
+
+**The STOP question is now set up and deliberately not taken here.** REQ-02: *"any fixture that
+cannot be proven without netns/seccomp/VM work is recorded UNPROVABLE and the STOP fires."* Egress
+control is exactly that shape. Whether it can be done honestly with a proxy sidecar — or whether this
+is where the cycle stops and banks — is the day-5 decision, with the clock at 4.5 of 7.5.
+
+---
+
 ### FIXTURE 10: THE CAP WORKS AND THE SPEC ASSERTED THE WRONG CODE — 2026-08-16
 
 Run against the live credential, not read from documentation. A **paid** model returns
