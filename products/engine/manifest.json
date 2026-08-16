@@ -12,6 +12,7 @@
     ".claude/scripts/engine/process-lint.mjs",
     ".claude/scripts/engine/arc-compile.mjs",
     ".claude/scripts/engine/arc-run.mjs",
+    ".claude/scripts/engine/egress-proxy.py",
     ".claude/scripts/engine/arc-bench.mjs",
     ".claude/scripts/engine/adapters/claude-code.mjs",
     ".claude/scripts/engine/adapters/codex.mjs",
