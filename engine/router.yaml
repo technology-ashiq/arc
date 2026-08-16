@@ -74,6 +74,62 @@ classes:
     driver: claude-code
     fallback: []
 
+  # ===========================================================================================
+  # THE HIRE (Cycle 7, REQ-04). This row is a hire, and the four fields below are its terms.
+  # ===========================================================================================
+  #
+  # THE DECISION THAT MADE IT (ADR-0217 — a hire is a receipt, and the row cites it):
+  #   mandate    decision.recorded 01KZTM348858PDH44K4HA64CVA   (the Build-out Mandate, 2026-08-09)
+  #   this hire  decision.recorded 01KZYG5R1BB8BJ1R4MRFY5SP4M   (deciding approval.requested
+  #                                                              01KZYG5QBAM1ZZQJK7J0ZG13AK)
+  # Both verified present in .claude/state/hq/events/ and ABSENT from _quarantine/ before this row
+  # was written — an exit-0 emitter is not evidence anything landed, and this lane has the
+  # quarantined receipt to prove it.
+  #
+  # THE FOUR FIELDS ARE MANDATORY AND ENFORCED AT LOAD, not at dispatch (router-row.mjs). A row
+  # missing any of them fails `arc-run` before it routes anything, because a row that only fails
+  # when someone happens to use it sits wrong for as long as nobody does.
+  #
+  #   cap:        the ceiling this runtime may ever reach. L1-drafts is absolute this cycle: it
+  #               PROPOSES, and a human copies anything out. A draft that publishes itself is an
+  #               incident, not a feature.
+  #   hosted:     local — the container runs on this machine against a local endpoint. The data
+  #               boundary reads this field: an internal-only input against a `hosted: cloud` row
+  #               is refused at routing (ADR-0219, arc-run exit 5).
+  #   judge:      who accepts or rejects the output. Accept/reject plus one line, never a
+  #               line-edit (ADR-0218) — arc verifies outcomes and never prescribes method.
+  #   review_by:  tenure. Every hire is planned obsolescence (ADR-0216). Past this date the row is
+  #               EXPIRED: dispatching through it refuses NAMING THE ROW and emits one idempotent
+  #               rejustify-or-retire proposal. Ninety days from the hire decision.
+  #
+  # NO `models:` ENTRY, and that is not an omission. ADR-0212 amends ADR-0069 so an agent runtime
+  # OCCUPIES the model seat rather than being routed to one: `drivers/hermes version` reports the
+  # pinned image digest plus a config hash whose preimage is named (the runtime config file, the
+  # egress policy, the vetted skill list). Adding a tier→model mapping here would assert a routing
+  # decision that nothing applies.
+  #
+  # NO FALLBACK, deliberately. Falling back from a capped, tenured, judged runtime to a model API
+  # would silently route L1-drafts work through a row with none of those four terms — which is the
+  # whole point of having them.
+  #
+  # TERMINATION SPEC (REQ-04). Two acts, in this order, and both are reviewed diffs:
+  #   1. REVOKE THE CREDENTIAL first, at the provider. The key is the money bound; a disabled row
+  #      with a live key still spends if anything else reaches the runtime.
+  #   2. DISABLE THE ROW second — delete it, or set `driver:` to a driver that is not installed so
+  #      the router refuses to load rather than silently re-routing. Do NOT merely change `cap:`;
+  #      a lowered ceiling still dispatches.
+  #   Termination is a repo edit citing this comment. Nothing terminates a hire at run time, for
+  #   the same reason nothing promotes one: both are tier changes, and ADR-0069 b1 forbids them
+  #   outside a reviewed diff.
+  build-in-public-draft:
+    tier: balanced-workhorse
+    driver: hermes
+    cap: L1-drafts
+    hosted: local
+    judge: ashiq
+    review_by: 2026-11-13
+    fallback: []
+
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
 # works: `arc-run --driver auto` on an unknown class is an error, and this row only supplies
 # the tier for one that is known but unrouted.

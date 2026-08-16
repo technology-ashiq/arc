@@ -1,0 +1,6 @@
+{
+  "_comment": "A faithful npm packument for a package literally NAMED 1.2.3 that publishes only 0.0.1. An earlier version of this fixture named it v1.2.3, which only bites when a leading-v strip exists -- it could not detect the unscoped-reader hole it was written to guard, and an adversarial pass proved the suite stayed green under exactly that mutant. Bare, it detects both.",
+  "name": "1.2.3",
+  "versions": { "0.0.1": { "dist": { "integrity": "sha512-EVILEVILEVILEVILEVILEVILEVILEVILEVILEVILEVIL" } } },
+  "fetched": "2026-08-12"
+}

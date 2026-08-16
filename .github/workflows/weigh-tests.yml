@@ -95,7 +95,7 @@ jobs:
         run: |
           set -u; mkdir -p "$HOME/bin"
           curl -fsSL -o "$HOME/bin/opengrep.exe" \
-            https://github.com/opengrep/opengrep/releases/latest/download/opengrep_windows_x86.exe \
+            https://github.com/opengrep/opengrep/releases/download/v1.26.0/opengrep_windows_x86.exe \
             || echo "opengrep install skipped"
           echo "$HOME/bin" >> "$GITHUB_PATH"
 

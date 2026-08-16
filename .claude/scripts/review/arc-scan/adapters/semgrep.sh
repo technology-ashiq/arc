@@ -50,18 +50,45 @@ if [ "$rt" = "docker" ]; then
   arc_log "semgrep: scanned ${#targets[@]} file(s) via docker ($ARC_DOCKER_IMAGE)"
 else
   # native. opengrep and semgrep differ on the SARIF flag and metrics handling.
+  #
+  # THE STATUS AND STDERR ARE CAPTURED, NOT DISCARDED. This ran as `... >/dev/null 2>&1 || true`
+  # for its whole life, which makes a scanner that DIED indistinguishable from one that ran and
+  # found nothing: stdout gone, stderr gone, exit status thrown away, and the empty-SARIF
+  # backstop at the end of this file then hands the pipeline a clean verdict.
+  #
+  # That is not hypothetical. opengrep v1.27.0 (published 2026-08-12T14:55:32Z, pulled UNPINNED
+  # from releases/latest) is broken on the windows runner: the identical repo SHA 6792091c ran
+  # arc-ci green at 14:02 and red at 17:24 with nothing changed but the binary, and ubuntu and
+  # macOS stayed green throughout. Three tests that plant a finding started reporting
+  # "0 finding(s)" -- and for two days nobody could see WHY, because these two lines ate the
+  # reason. The tool exits 2, semgrep's fatal-error code, and said so the whole time.
+  #
+  # A non-zero status is REPORTED and the scan is marked degraded. The adapter still exits 0,
+  # because its contract forbids failing the hook on a tool problem (lines 8-12) -- but
+  # "degraded" and "clean" must never print the same line again.
+  errf="$(mktemp 2>/dev/null || echo "${TMPDIR:-/tmp}/arc-semgrep-err.$$")"
   case "$(basename "$bin")" in
     opengrep*)
       "$bin" scan --config "$rules" \
         --sarif-output="$out" --disable-version-check --quiet \
-        "${targets[@]}" >/dev/null 2>&1 || true;;
+        "${targets[@]}" >/dev/null 2>"$errf"
+      rc=$?;;
     *) # semgrep proper
       "$bin" scan --config "$rules" \
         --sarif --output="$out" \
         --metrics=off --disable-version-check --quiet \
-        "${targets[@]}" >/dev/null 2>&1 || true;;
+        "${targets[@]}" >/dev/null 2>"$errf"
+      rc=$?;;
   esac
-  arc_log "semgrep: scanned ${#targets[@]} file(s) via $bin"
+  if [ "$rc" -ne 0 ]; then
+    # No --error is passed, so findings do NOT raise the exit status: any non-zero here is the
+    # tool failing, and 2 is specifically fatal.
+    arc_skip "semgrep (the scanner exited $rc -- it did not complete, so this is NOT a clean scan)"
+    arc_log "semgrep: $bin exited $rc; first line of its stderr: $(head -n 1 "$errf" 2>/dev/null)"
+  else
+    arc_log "semgrep: scanned ${#targets[@]} file(s) via $bin"
+  fi
+  rm -f "$errf" 2>/dev/null || true
 fi
 
 # Adapter must always leave a valid SARIF behind for the merge step.

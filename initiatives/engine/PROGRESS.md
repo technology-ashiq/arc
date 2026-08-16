@@ -121,6 +121,134 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### SUPERSEDED BY ADR-0220, and my mechanism was the wrong shape — 2026-08-14
+
+**The finding below stands. The fix I built for it does not, and ADR-0220 landed the right one
+while I was building the wrong one.**
+
+I made arc-run ask the driver's `version` verb and put the answer in the MP-F model SEAT. The seam
+that landed on main as `4d68e07` splits it properly instead: **the seat carries the model — a clean
+model id, the thing that actually ran — and where the value came from is a SEPARATE field,
+`model_source`.** A runtime identity is provenance, not a model id, and encoding two facts into
+one string is how `tier:X` came to assert a routing decision nothing had applied.
+
+So the grammar conflict below is not a conflict at all under ADR-0220: nothing is trying to put an
+`@` or a `+` in the seat any more. The whole mechanism was removed in the merge — including a
+`driverVersion()` helper that added a SECOND `spawnSync` of a driver, which
+`policy-runwrapper.bats` caught immediately: *"arc-run calls the gate before it spawns, at exactly
+one call site"*. That guard is right and my change was a real second path — `runDriver` answers
+`version` BEFORE the policy gate (ADR-0902), so it genuinely bypassed it.
+
+**Two lessons, and the second is the useful one.** The guard caught it in one CI run. But the
+DESIGN error — putting provenance in a seat — was not something any guard could have caught, and
+the only reason it did not ship is that another lane happened to solve the same problem better in
+the same window. Read the ADRs that landed since your branch point before building against an
+interface, not just the tests.
+
+**What survived the merge and is still correct:** the data boundary (arc-run exit 5, one call
+site), the router-row validator, and the run deadline env — the last one union-merged into the
+seam's env block rather than either side winning, because both are needed and neither knew about
+the other.
+
+---
+
+### ADR-0212 AND THE SPINE GRAMMAR DISAGREE — 2026-08-14, and it quarantined a receipt
+
+**ADR-0212 says the runtime occupies the MP-F model seat, recording runtime name + version +
+pinned config hash. The spine's schema forbids the only identity the runtime has.**
+
+`MODEL_RE` in `lib/validate.mjs:101` is `[A-Za-z0-9][A-Za-z0-9:._/-]{0,127}` — **no `@`, no `+`**.
+The version verb answers `hermes@sha256:<digest>+cfg.<hash>` (ADR-0902's format, which bench puts
+in a SUBJECT block and never in the model seat). So the first hermes `run.completed` was
+**QUARANTINED with code `BAD_MODEL`** while arc-run reported the run fine.
+
+**It was found by reading the RECEIPT, not the exit code.** arc-run printed nothing wrong; the
+event simply landed in `_quarantine/`. This is the same shape this lane already recorded once —
+an emitter exiting 0 is not evidence anything was written — and it is the reason the check is
+"grep the landed file", never "the command succeeded".
+
+**Fail-safe applied, decision NOT taken.** A seat value that would quarantine is now dropped, the
+run falls back to `unpinned`, and arc-run says out loud why. A dropped seat costs provenance on
+one receipt; a quarantined receipt costs the whole receipt. Verified: the same run now lands
+`approval.requested` + `run.completed` with **zero quarantined**.
+
+**The real resolution is a reviewed decision and belongs in an ADR**, because both options are
+company-wide: widen `MODEL_RE` (a spine schema every product shares), or re-format the runtime
+identity (and then two representations of one identity exist, which is its own collision risk).
+Route it through `/arc-change` — do not let a session pick one silently to make a receipt green.
+
+---
+
+### REQ-04 IS NOT SATISFIABLE AS WRITTEN, and this is the finding — 2026-08-14
+
+**REQ-04 says the `hq.policy.yaml` row rides the SAME change as the router row. It cannot.**
+
+`policy-lint` (ADR-0504, `lib/policy/lint.mjs:126`) rejects a `kinds` entry whose process does not
+exist: *"the subject set is a directory listing, not an invention"*. The row was written, inserted
+by the owner, and policy-lint refused the file in one run:
+
+```
+policy-lint: hq.policy.yaml is NOT law -- 1 violation(s)
+  - kinds["process:build-in-public-draft"]: no process named "build-in-public-draft" exists
+```
+
+`processes/build-in-public-draft.process.yaml` is authored by **Phase 08** (REQ-07). So the policy
+row must land in Phase 08, WITH the file — not in Phase 07 with the router row. The insertion was
+REVERTED and `hq.policy.yaml` is law again (exit 0).
+
+**The comment I wrote inside that row claimed the opposite** — *"a row without a file is harmless,
+while a file without a row is ungoverned"* — and only the second half is true. policy-lint disproved
+the first half immediately. The asymmetry is real but it runs the other way: a file without a row is
+silently ungoverned, and a row without a file is a grant to a subject nobody can run, which the
+validator treats as the more serious of the two.
+
+**What this changes:** the router row stands alone and is correct. REQ-04's policy-row clause moves
+to Phase 08 as a hard dependency of REQ-07 — the process file and its policy row are ONE change,
+and the router row was always a different one. Route the amendment through `/arc-change` before
+Phase 08 opens rather than letting the two REQs quietly disagree.
+
+**The termination spec is unaffected** — it lives in the router row's comment and landed with it.
+
+---
+
+### 2026-08-14, end of session — read this first
+
+**HEAD `bd16093`, pushed, tree clean, PR #172 OPEN and MERGEABLE.** A CI run exists for that SHA.
+Read it per-JOB before trusting it: `gh run view <id> --json jobs`.
+
+**THE HIRE DECISION IS ON THE SPINE.** `approval.requested` `01KZYG5QBAM1ZZQJK7J0ZG13AK` →
+`decision.recorded` **`01KZYG5R1BB8BJ1R4MRFY5SP4M`**, both verified present in
+`.claude/state/hq/events/2026-08-14.jsonl` and absent from `_quarantine/`. The Phase 07 router row
+is UNBLOCKED and cites that ULID plus the mandate decision `01KZTM348858PDH44K4HA64CVA`.
+
+**THE CEILING FIGURE IS NOT NEEDED YET.** The branch session asked the owner for it as a blocker;
+the session on main is right that it is not one. Phases 04, 05 and 06 all run at zero spend against
+the local ollama endpoint. Recommended value when it IS needed: **0** — the key is deliberately
+unfunded so certification fixture 10 can assert a real HTTP 402 at zero cost.
+
+**NEXT ACTION, and it is unblocked:** write the Phase 07 runtime row into `engine/router.yaml` with
+`cap: L1-drafts`, `hosted: local`, `judge: ashiq`, `review_by: 2026-11-13`, plus the
+`hq.policy.yaml` row (`"process:build-in-public-draft"`, born at L1) and the termination spec — ONE
+reviewed diff, as REQ-04 requires. The validator for all four fields already exists and is green
+(`router-row.mjs`, full 16-cell hostile matrix, enforced at router LOAD).
+
+**WHAT WENT RED TODAY, AND WHY IT IS THE USEFUL PART.** The merge broke one check:
+`tests/bench-steel-probe.mjs` pinned the literal installed-driver string, and adding `hermes`
+changed it. That test was not wrong to fail — it was the only thing that noticed. The tracker had
+already said *run the caller sweep BEFORE pushing*, and I read that during the merge and pushed
+without doing it. Doing the sweep properly afterwards found a **THIRD driver set** in
+`process-lint.mjs` that had fallen behind BOTH the others: a router row naming `hermes` OR `mock`
+would have been rejected as an unknown driver while arc-run routed it perfectly well. That is
+exactly tomorrow's row. Both are fixed by DERIVING the set from `drivers/*.sh` rather than by
+updating a fourth copy of it.
+
+**RECORDED, NOT FIXED:** `process-lint.mjs` carries six LITERAL NUL bytes at lines 599-601, used as
+placeholder sentinels. That is why `grep` reports the file as binary and why line-oriented searches
+against it return nothing. Seventh occurrence of the invisible-character class this cycle. It
+belongs to another lane's compile path and is not blocking.
+
+---
+
 **Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
 
 > ⚠ **The `burn: 0.0d` in the machine header above is STALE, and it is the STOP clock.** Phase 04
@@ -266,6 +394,123 @@ ledger asserts a routing decision nothing applied.
 - **2 `.bats` files ride `_default_weight` 16 with no measurement** — `engine-emit-path.bats` (this
   lane) and `jobs-audit.bats` (scheduler, arrived with #182). Named in `tests/shard-timings.json`
   `_known_gap`; clears with a `weigh-tests.yml` dispatch, never a hand-written number.
+
+---
+
+## Folded in from the branch session, 2026-08-14
+
+> Two engine-lane sessions ran in the same window without seeing each other. Everything above is
+> the session working on `main`; everything below is the `technology-ashiq/arc-executor` branch.
+> Both are kept. Where they disagreed, the disagreement is recorded rather than flattened.
+
+**ONE CORRECTION, AND IT MATTERS BECAUSE THE OWNER WAS ASKED FOR SOMETHING HE DID NOT NEED TO
+GIVE.** The branch session asked the owner for the capped-key ceiling figure as a blocker. The
+session above is right that it is NOT one: phases 04, 05 and 06 run at zero spend against the
+local ollama endpoint, and the credential is first needed by certification fixtures 4 and 10 —
+which cannot run until the real-container work lands anyway. The ask was premature. The figure is
+still owed eventually (ADR-0213 / A-05) and the recommended value is **0**, because the key is
+deliberately unfunded so fixture 10 can assert the provider's real HTTP 402 at zero cost.
+
+**THE HIRE DECISION IS ON THE SPINE as of 2026-08-14**, which the session above did not have:
+`approval.requested` `01KZYG5QBAM1ZZQJK7J0ZG13AK` → `decision.recorded`
+**`01KZYG5R1BB8BJ1R4MRFY5SP4M`**, both verified present in
+`.claude/state/hq/events/2026-08-14.jsonl` and absent from `_quarantine/`. ADR-0217's router row
+cites that ULID plus the mandate decision `01KZTM348858PDH44K4HA64CVA`. The `hq.policy.yaml` row
+and the termination spec ride the SAME change.
+
+**CI IS GREEN ON THE BRANCH, AND IT IS A REAL GREEN.** Runs on `4cae3f8`, `4b52930` and
+`4b53770`: 19/19 jobs, read per-JOB. The three windows tests report `ok`, **not skip** — checked
+explicitly, because `tests/test_helper.bash` carries a canary that skips them when the scanner
+cannot flag its own known-positive.
+
+
+### What is built and green
+
+- **Phase 04** — runtime installed digest-pinned, one live headless invocation, evidence bundle,
+  slice ledger filled (13 slices; slice 09, the capped key, recorded CARRIED to Phase 06).
+- **Phase 05** — `drivers/hermes` on the real 3-code contract, `type-tagged-hash.mjs`, 47 contract
+  tests. `drivers/mock` and the `version` verb were REUSED from the bench lane, not rebuilt.
+- **Phase 06 (part)** — `cert-label.mjs`: the certification label is DERIVED, and a mock run is
+  structurally incapable of producing one. `data-boundary.mjs`: refused ABOVE the driver at arc-run
+  exit 5, ONE confinement function with a test asserting exactly one call site.
+  `engine-isolation-cert.bats`: the regression arm, fixtures 1, 2+3, 5, 11, 12.
+- **Phase 07 (part)** — `router-row.mjs`: `cap`/`hosted`/`judge`/`review_by` all mandatory on a
+  runtime row, enforced at router LOAD, full 16-cell hostile matrix, tenure boundary testable.
+
+### Adversarial passes. Four of them, and PR #184's. They found 60 holes here plus PR #184's set.
+
+Round 3 on `capability-vet.sh`: 24 holes, 16 surviving mutants, two CRITICAL.
+Round 4 on the hermes shim: 36 holes, 18 surviving mutants, three CRITICAL.
+
+**The three that matter most, because none was findable by reading the code:**
+- `settle()` discarded queued stdout and exited **0** — 8 MiB written, 458752 received. macOS only,
+  because node's stdout-to-a-pipe is async there and synchronous on the other two legs. This was in
+  `common.mjs` and affected **all five drivers**.
+- The container command line was asserted by NOTHING: a driver mutated to run
+  `--privileged -v /:/host` with the model input never passed was byte-identical green.
+- Three parse holes returned an attacker-chosen or wrong document, including a pretty-printed
+  answer yielding a nested FRAGMENT — the likeliest of all to fire in production.
+
+**Five comments in this cycle's own code asserted things the code did not do.** Each is corrected
+in place and named in the commit that corrected it. That is worth more than the fixes.
+
+**2026-08-13, PR #184 — the adversarial pass earned its cost before merge.** Two fresh agents on
+different surfaces attacked it while CI was green on all 19 jobs, and overlapped on almost nothing.
+The shell/OS attacker **reproduced** the motivating failure rather than trusting it (inline
+`--payload` + a Windows path → `REJECT BAD_JSON -- invalid escape \U`; `--payload-file` → sealed),
+so the payload half shipped. **The gate half was backed out**: `verifyLanded` carried three
+independent defects — a UTC/IST day mismatch making it wrong for 22.9% of the clock, a spine-root
+rule disagreeing with the emitter, and a `bash -c` scan that **executed** a path component. All
+three were survivable as a warning and none as a gate. **CI was green only because it ran at 14:22
+UTC, outside the bad window** — the tests passed by clock luck, which is exactly what an
+adversarial pass exists to catch and a green suite cannot. Also found and fixed: `--strict` put the
+emitter's 15s lock wait inside a 10s SIGKILL, orphaning a node grandchild that sealed the receipt
+*after* arc-run reported it lost; `mkdtempSync` sat outside its `try`, so a bad TMPDIR inverted the
+fail-closed policy denial into a stack trace; and three of nine test guards **could not fail**.
+
+### OWED, and not counted as done
+
+1. **The runtime ROW in `engine/router.yaml`** — UNBLOCKED as of 2026-08-14. The hire decision is on
+   the spine: `approval.requested` `01KZYG5QBAM1ZZQJK7J0ZG13AK` → `decision.recorded`
+   **`01KZYG5R1BB8BJ1R4MRFY5SP4M`**, both verified present in
+   `.claude/state/hq/events/2026-08-14.jsonl` and absent from `_quarantine/`. ADR-0217's row cites
+   that ULID plus the mandate decision `01KZTM348858PDH44K4HA64CVA`. The `hq.policy.yaml` row
+   (`"process:build-in-public-draft"`, born L1) and the termination spec ride the SAME change.
+2. **The capped key** (REQ-05, and Phase 06 fixtures 4 and 10). Settled path: free models plus an
+   UNFUNDED key, so fixture 10 asserts the provider's real HTTP 402 at zero spend. Needs the owner
+   to name the ceiling figure BEFORE issuance (ADR-0213 / A-05). Recommended figure: **0**.
+3. **Phase 06 fixtures 4, 6, 7, 8, 10** — a live credential, a real container, real egress control,
+   two consecutive real runs. Fixture 7 is already recorded PARTIAL: domain-granular egress is
+   UNPROVABLE without netns or a proxy sidecar.
+4. **The scrubbed transcript per dispatch** (REQ-03) and `run.completed` carrying the MP-F seat.
+5. **An adversarial pass on the certification SUITE itself** — the attacker's job is to make a
+   fixture pass while the property it claims is false. A Phase 06 exit criterion.
+6. **Phase 08 entirely** — the draft process, context packs, and >=3 real runs with verdicts.
+7. **The three arc-scan weights in `tests/shard-timings.json` are FAILING-time, not run-time** —
+   both weigh runs they came from ran after opengrep broke. Re-measure now that the pin has landed.
+8. **ADR-0220's per-invocation model/root seam — OFF THIS CYCLE'S CLOCK, ITS OWN PR.** It unblocks
+   **four `bench` Phase 03 DoD items**: one real model benched end to end · candidate proven REACHED
+   (real model id, non-zero tokens) · REQ-05 preflight · human verdict. `tests/bench-steel-probe.mjs`
+   already pins both failures and **must go RED when the seam lands** — it passes today for the
+   wrong reasons. Another lane is waiting on this; it is not engine's to defer quietly.
+
+### Four things a resuming session should not re-learn the hard way
+
+**A test seam must run on all three legs.** The red corpus started as a `.sh` and failed on ubuntu
+and macOS with EACCES (mode 100644) and on windows because Node cannot execute a shebang script
+there at all. All 33 tests, all three OSes, one cause — and the local check that passed beforehand
+had run the fixture through `bash` rather than through the driver.
+
+**A bats file that fails to GATHER takes its whole shard with it.** One unbalanced quote produced
+`declared 2435, executed 1` on nine jobs, and the only signal was that count. There is now a test
+that shell-parses every `tests/*.bats` the way gather does.
+
+**A green suite can be green by clock luck.** PR #184's gate passed CI at 14:22 UTC and was wrong
+for 22.9% of the day. Nothing in the suite could have said so.
+
+**Two lanes will reach for the same missing line on the same day.** It happened twice in this
+window: the opengrep pin, and a `.gitattributes` byte-fixture entry both lanes numbered "seventh".
+The merge is the only place either of them found out.
 - **KNOWN FLAKE, recorded rather than re-run away: `engine-driver-contract.bats` test
   "REQ-04: a process whose own fixture fails its own schema is blamed, not the driver".**
   Observed 2026-08-13 on **byte-identical trees**: PASS in run `31744731535` (21:14 UTC), FAIL in
