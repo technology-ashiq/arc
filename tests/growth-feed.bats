@@ -175,12 +175,21 @@ const DAY = 86400000;'
   #
   # Both receipts below therefore share `content_sha`, and the chain is by EVENT ULID. Against
   # either defect this case goes red: the old code filtered both receipts out and joined nothing.
+  #
+  # MUTANT-RESISTANCE, added 2026-08-16 after an adversarial pass. The previous fixture listed the
+  # head LAST and carried one slug, so replacing the whole chain resolution with
+  # `heads = [receipts[receipts.length - 1]]` -- last-wins by array order, the exact pre-fix defect
+  # -- still passed. Array order and chain order were indistinguishable.
+  #
+  # The head is now listed FIRST, before the receipt it supersedes, and a second untouched slug is
+  # present. Taking the last element now yields the STALE receipt and this case goes red.
   run _node "$PRE
     const SHA = 'a'.repeat(64);
-    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2';
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', Z = '01KZZZZZZZZZZZZZZZZZZZZZZ9';
     const receipts = [
-      { id: A, supersedes: null, slug: 'a', url: 'https://old.vercel.app/blog/a/', content_sha: SHA },
-      { id: B, supersedes: A, slug: 'a', url: 'https://arc.automemory.ai/blog/a/', content_sha: SHA }];
+      { id: B, supersedes: A, slug: 'a', url: 'https://arc.automemory.ai/blog/a/', content_sha: SHA },
+      { id: Z, supersedes: null, slug: 'z', url: 'https://arc.automemory.ai/blog/z/', content_sha: SHA },
+      { id: A, supersedes: null, slug: 'a', url: 'https://old.vercel.app/blog/a/', content_sha: SHA }];
     const head = I.resolveSlugUrl([{ url: 'https://arc.automemory.ai/blog/a/', clicks: 9 }], receipts);
     const stale = I.resolveSlugUrl([{ url: 'https://old.vercel.app/blog/a/', clicks: 9 }], receipts);
     // Joined EXPLICITLY as strings. Written as bare + it is arithmetic: 1 + 0 is 1, not '10', and

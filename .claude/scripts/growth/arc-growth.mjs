@@ -165,6 +165,26 @@ function readOrDie(path, what) {
   }
 }
 
+/**
+ * The RAW bytes of a file, with no decode and no BOM strip.
+ *
+ * `content_sha` is defined over raw bytes (ADR-1101), and `content-sha.mjs` states that the
+ * approval path and the publish path "must agree byte-for-byte or `unedited := draft_sha ==
+ * content_sha` compares two different functions". They did not: the draft path hashed
+ * `Buffer.from(readOrDie(p), "utf8")`, which has already stripped a BOM and round-tripped the
+ * bytes through a UTF-8 decode, while the publish path hashes the file. On a BOM-prefixed or
+ * invalid-UTF-8 file the two disagreed, and the visible symptom would not be an error — it is a
+ * second receipt for an article nobody edited, with ADR-1107's unedited counter reading a phantom
+ * edit. Exactly the CRLF defect fixed in arc-site the same day, left open in the sibling reader.
+ */
+function readBytesOrDie(path, what) {
+  try {
+    return readFileSync(path);
+  } catch (e) {
+    die("NO_FILE", `cannot read ${what} at ${path}: ${e.message}`);
+  }
+}
+
 function parseJsonOrDie(text, what) {
   try {
     return JSON.parse(text);
@@ -459,7 +479,14 @@ async function cmdPublish() {
   const claims = scanCitations(article);
   const linkResult = has("offline") ? null : await checkLinks(article, httpResolver());
 
-  const contentSha = contentShaOfBytes(Buffer.from(article, "utf8"));
+  // Hashed from the FILE, not from the decoded string the lints read. See readBytesOrDie: hashing
+  // the re-encoded string made draft_sha and content_sha two different functions on any file
+  // carrying a BOM or a byte UTF-8 cannot represent.
+  const articleBytes = readBytesOrDie(articlePath, "the article");
+  if (articleBytes.length >= 3 && articleBytes[0] === 0xef && articleBytes[1] === 0xbb && articleBytes[2] === 0xbf)
+    die("BOM_IN_ARTICLE",
+      `${articlePath} starts with a UTF-8 BOM. Refused rather than stripped: content_sha is over raw bytes, so stripping it here would hash something other than the file that gets published, and keeping it publishes an invisible character into the article`);
+  const contentSha = contentShaOfBytes(articleBytes);
   const templateId = assignArm(slug);
 
   let pack;

@@ -237,10 +237,23 @@ export function resolveSlugUrl(rows, receipts) {
   //
   // An id-less record is REFUSED rather than treated as a head, because "treated as a head" is
   // precisely how defect 1 stayed invisible through a phase close.
-  for (const r of receipts)
-    if (!r || typeof r.id !== "string" || !r.id)
+  // Checked for its VALUE, not merely its presence. The first version of this guard tested
+  // `typeof r.id === "string"` only, which is the enforce-the-name-never-the-value defect already
+  // recorded twice in this lane — and `--receipts` is an operator-built projection the spine never
+  // sees, so nothing else would catch a content_sha sitting where a ULID belongs. With a sha in
+  // both fields the chain resolves to nothing and BOTH receipts drop out, reproducing the exact
+  // defect ADR-1119 fixed, one file over.
+  const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+  for (const r of receipts) {
+    if (!r || typeof r.id !== "string" || !ULID.test(r.id))
       throw new IngestError("BAD_RECEIPT",
-        "every receipt needs the `id` of the event it came from — `supersedes` names an EVENT (a ULID), and a chain keyed on anything else breaks on exactly the correction this join exists to survive");
+        "every receipt needs the ULID `id` of the event it came from — `supersedes` names an EVENT, and a chain keyed on anything else breaks on exactly the correction this join exists to survive");
+    if (r.supersedes !== undefined && r.supersedes !== null && !ULID.test(String(r.supersedes)))
+      throw new IngestError("BAD_RECEIPT",
+        `supersedes ${JSON.stringify(r.supersedes)} is not a ULID — a content_sha here names no event, so the receipt it should retire stays live`);
+    if (r.supersedes && r.supersedes === r.id)
+      throw new IngestError("BAD_RECEIPT", `receipt ${r.id} supersedes itself — a cycle empties the head set silently`);
+  }
   const superseded = new Set(receipts.map((r) => r.supersedes).filter(Boolean));
   const heads = receipts.filter((r) => !superseded.has(r.id));
   const byUrl = new Map();

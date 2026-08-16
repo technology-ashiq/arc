@@ -33,6 +33,13 @@ PERMANENT_SITE='arc.automemory.ai'
 # The Phase 0 receipt, on the preview host, exactly as the steel thread emits it.
 PRE_PAYLOAD="{\"site\":\"$PREVIEW_SITE\",\"slug\":\"receipts-driven-os\",\"url\":\"https://$PREVIEW_SITE/blog/receipts-driven-os\",\"title\":\"Receipts driven OS\",\"template_id\":\"title-a\",\"cluster_id\":\"c-000\",\"content_sha\":\"$SHA_A\",\"pr_ref\":\"#2\"}"
 
+# The same receipt on the permanent host, written OUT rather than derived with sed. The previous
+# form was `sed "s/$PREVIEW_SITE/$PERMANENT_SITE/g"`, and both hostnames are full of dots that sed
+# reads as "any character" -- it matched here only because a dot also matches a dot. A fixture that
+# is correct by coincidence is a fixture that breaks the first time a host contains a hyphen where
+# the pattern expects one.
+REPIN_PAYLOAD="{\"site\":\"$PERMANENT_SITE\",\"slug\":\"receipts-driven-os\",\"url\":\"https://$PERMANENT_SITE/blog/receipts-driven-os\",\"title\":\"Receipts driven OS\",\"template_id\":\"title-a\",\"cluster_id\":\"c-000\",\"content_sha\":\"$SHA_A\",\"pr_ref\":\"#2\"}"
+
 _spine() {
   SPINE="$BATS_TEST_TMPDIR/spine-$1"
   mkdir -p "$SPINE"
@@ -40,9 +47,23 @@ _spine() {
 }
 
 _landed() { grep -rho '"kind":"content.published"' "$SPINE/events" 2>/dev/null | wc -l | tr -d ' '; }
-_quarantined() { find "$SPINE" -path "*_quarantine*" -name "*.jsonl" -exec cat {} + 2>/dev/null | grep -c . || true; }
-# Every event line in the canonical log, newest last.
-_lines() { find "$SPINE/events" -name "*.jsonl" -exec cat {} + 2>/dev/null; }
+
+# Quarantine is MEASURED, not best-effort. The `2>/dev/null | grep -c . || true` form makes a
+# failed measurement look identical to a clean run, which is the same absence-reported-as-zero
+# confusion the spine's own MISSING-vs-zero rule exists to prevent. The directory is created up
+# front so `cat` has something to read and a real read error stays a real error.
+_quarantined() {
+  mkdir -p "$SPINE/events/_quarantine"
+  find "$SPINE" -path "*_quarantine*" -name "*.jsonl" -exec cat {} + | grep -c . | tr -d ' '
+}
+
+# Every event line in the canonical log, oldest first.
+#
+# SORTED by filename. `find -exec cat` returns directory order, which is filesystem-dependent, and
+# these tests index l[0]/l[1] as "first receipt" and "second receipt". A cutover that straddles
+# midnight writes two date files, and on a host that walks them in another order the assertions
+# would swap the two receipts and fail for a reason nothing in the test names.
+_lines() { find "$SPINE/events" -name "*.jsonl" | LC_ALL=C sort | xargs cat 2>/dev/null; }
 
 # cd into ARC_ROOT and import RELATIVELY, which is the idiom every other growth suite uses. An
 # absolute path built from $PWD does not survive here: under MSYS it is /c/Users/... and Node on
@@ -75,9 +96,7 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   # what "editing it" looks like to a spine that cannot be edited -- it does not rewrite the first
   # receipt, it appends a second one that claims to BE the first. The append-only log is what makes
   # the original bytes survive, and this case asserts that survival directly.
-  local repinned
-  repinned="$(echo "$PRE_PAYLOAD" | sed "s/$PREVIEW_SITE/$PERMANENT_SITE/g")"
-  run bash "$(EVENT)" emit content.published --payload "$repinned" --strict
+  run bash "$(EVENT)" emit content.published --payload "$REPIN_PAYLOAD" --strict
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 
   # The first receipt's bytes are still there, verbatim, as a prefix of the log.
@@ -97,9 +116,7 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   first_id="$(_lines | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const l=s.trim().split(String.fromCharCode(10)).filter(Boolean).map(JSON.parse).filter(e=>e.kind==='content.published');console.log(l[0].id);})")"
   [ -n "$first_id" ]
 
-  local repinned
-  repinned="$(echo "$PRE_PAYLOAD" | sed "s/$PREVIEW_SITE/$PERMANENT_SITE/g")"
-  run bash "$(EVENT)" emit content.published --payload "$repinned" --supersedes "$first_id" --strict
+  run bash "$(EVENT)" emit content.published --payload "$REPIN_PAYLOAD" --supersedes "$first_id" --strict
   [ "$status" -eq 0 ] || { echo "$output"; false; }
 
   [ "$(_landed)" = "2" ]
@@ -217,12 +234,85 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
 
 @test "cutover: every published slug is in the sitemap, and no article is in the sitemap without a receipt" {
   run _node "$PRE
-    const xml = (paths) => '<urlset>' + ['/'].concat(paths).map((p) => '<loc>https://arc.automemory.ai' + p + '</loc>').join('') + '</urlset>';
-    const ok = C.checkSitemapCoverage(xml(['/blog/a/', '/blog/b/']), ['a', 'b']);
-    const gap = C.checkSitemapCoverage(xml(['/blog/a/']), ['a', 'b']);
-    const ghost = C.checkSitemapCoverage(xml(['/blog/a/', '/blog/ghost/']), ['a']);
-    console.log([ok.ok, gap.ok, gap.missing.join(','), ghost.ok, ghost.extra.join(',')].join(' '));"
+    const H = 'arc.automemory.ai';
+    const xml = (urls) => '<urlset>' + urls.map((u) => '<loc>' + u + '</loc>').join('') + '</urlset>';
+    const on = (host, paths) => xml(['https://' + host + '/'].concat(paths.map((p) => 'https://' + host + p)));
+    const ok = C.checkSitemapCoverage(on(H, ['/blog/a/', '/blog/b/']), ['a', 'b'], H);
+    const gap = C.checkSitemapCoverage(on(H, ['/blog/a/']), ['a', 'b'], H);
+    const ghost = C.checkSitemapCoverage(on(H, ['/blog/a/', '/blog/ghost/']), ['a'], H);
+    console.log([ok.ok, ok.parsed, gap.ok, gap.missing.join(','), ghost.ok, ghost.extra.join(',')].join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # The homepage is in every sitemap and has no receipt; it must NOT count as a ghost article.
-  [ "$output" = "true false b false ghost" ]
+  [ "$output" = "true 3 false b false ghost" ]
+}
+
+@test "cutover: a sitemap still advertising the OLD host fails -- the host is the thing this phase changes" {
+  # The first version of checkSitemapCoverage stripped the host and compared slugs only, so this
+  # exact input returned ok:true. A coverage check that cannot see the one field being changed is
+  # decoration, and it was criterion 6's evidence.
+  run _node "$PRE
+    const H = 'arc.automemory.ai';
+    const stale = '<urlset><loc>https://old.vercel.app/blog/a/</loc><loc>https://old.vercel.app/blog/b/</loc></urlset>';
+    const r = C.checkSitemapCoverage(stale, ['a', 'b'], H);
+    console.log([r.ok, r.missing.join(','), r.wrongHost.length, r.parsed].join(' '));
+    // And the host is REQUIRED, so no caller can opt out of the check by omitting it.
+    console.log(err(() => C.checkSitemapCoverage(stale, ['a'], undefined)));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "false a,b 2 2" ]
+  [ "${lines[1]}" = "BAD_SITE" ]
+}
+
+@test "cutover: planCutover REFUSES every ambiguity instead of counting it as work" {
+  # Each of these was previously planned, reported as a correction, and then refused by the spine
+  # -- which reports a no-op as a success. Found by an adversarial pass, not by this suite.
+  run _node "$PRE
+    const SHA = '$SHA_A';
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4';
+    const H = 'arc.automemory.ai';
+    const p = (site, slug) => ({ site, slug, url: 'https://' + site + '/blog/' + slug, title: 'T', template_id: 'title-a', cluster_id: 'c-000', content_sha: SHA, pr_ref: '#2' });
+    const ev = (id, sup, payload) => ({ id, supersedes: sup, payload });
+    console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(B, A, p('old.test','x')), ev(D, A, p('old.test','x'))], H)));
+    console.log(err(() => C.planCutover([ev(A, B, p('old.test','x')), ev(B, A, p('old.test','x'))], H)));
+    console.log(err(() => C.planCutover([ev(A, null, null)], H)));
+    console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(B, null, p('old.test','x'))], H)));
+    console.log(err(() => C.planCutover([ev(A, SHA, p('old.test','x'))], H)));
+    console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(A, null, p('old.test','y'))], H)));
+    console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(B, A, p(H,'x')), ev(D, B, p('old.test','x'))], H)));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "FORKED_CHAIN" ]     # two receipts supersede one predecessor
+  [ "${lines[1]}" = "CHAIN_CYCLE" ]      # every event superseded; no head at all
+  [ "${lines[2]}" = "UNREADABLE_HEAD" ]  # was counted as "already pinned"
+  [ "${lines[3]}" = "AMBIGUOUS_SLUG" ]   # two live heads for one slug
+  [ "${lines[4]}" = "BAD_SUPERSEDES" ]   # a content_sha where a ULID belongs
+  [ "${lines[5]}" = "DUPLICATE_EVENT" ]
+  [ "${lines[6]}" = "WOULD_COLLIDE" ]    # the correction re-creates a receipt already on the spine
+}
+
+@test "cutover: an inherited payload field is refused, not silently dropped from the correction" {
+  # repinReceipt read fields with typeof payload[f] (prototype chain) and rebuilt with own keys
+  # only, so an inherited field passed the check and then vanished -- the truncation the
+  # UNKNOWN_FIELD guard exists to refuse. validate-content.mjs fixed this same shape one file over.
+  run _node "$PRE
+    const proto = Object.create({ pr_ref: '#9' });
+    Object.assign(proto, { site: 'old.test', slug: 'x', url: 'https://old.test/blog/x', title: 'T', template_id: 'title-a', cluster_id: 'c-000', content_sha: '$SHA_A' });
+    console.log(err(() => C.repinReceipt({ id: '01KZZZZZZZZZZZZZZZZZZZZZZ1', payload: proto }, 'arc.automemory.ai')));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "INCOMPLETE_PRIOR" ]
+}
+
+# ---------------------------------------------------------------------------------------------
+# Self-count. Required of a suite that IS the proof of a rule (.claude/rules/testing.md).
+# ---------------------------------------------------------------------------------------------
+
+@test "cutover: this suite registers every test it declares" {
+  # bats silently DROPS a @test whose name carries a non-ASCII character -- five such tests in
+  # Cycle 7 were never registered, never ran and never failed, and the file stayed green. The only
+  # observable signal is the count falling. This asserts the count, and also re-checks the cause
+  # directly so a failure says WHICH of the two happened.
+  local declared
+  declared="$(grep -c '^@test' "$BATS_TEST_FILENAME")"
+  [ "$declared" -eq 14 ] || { echo "declared $declared, expected 14 -- update this number deliberately, never to make it pass"; false; }
+
+  run grep -nP '^@test.*[^\x00-\x7F]' "$BATS_TEST_FILENAME"
+  [ "$status" -ne 0 ] || { echo "non-ASCII in a @test name -- bats will drop it silently:"; echo "$output"; false; }
 }
