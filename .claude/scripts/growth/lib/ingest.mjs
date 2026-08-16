@@ -11,6 +11,11 @@
 // reports. An adversarial pass killed the first version of ADR-1108 for exactly that. The bounds
 // here are derived FROM THE VERIFIED PT DAYS, so the receipt describes the data that produced it.
 
+// One chain validator for the whole lane. `resolveSlugUrl` and `planCutover` read the same
+// supersede structure, and when each had its own notion of "valid" they disagreed in exactly the
+// ways ADR-1119 documents.
+import { assertChainIntegrity } from "./cutover.mjs";
+
 export class IngestError extends Error {
   constructor(code, message) { super(message); this.name = "IngestError"; this.code = code; }
 }
@@ -243,19 +248,23 @@ export function resolveSlugUrl(rows, receipts) {
   // sees, so nothing else would catch a content_sha sitting where a ULID belongs. With a sha in
   // both fields the chain resolves to nothing and BOTH receipts drop out, reproducing the exact
   // defect ADR-1119 fixed, one file over.
-  const ULID = /^[0-9A-HJKMNP-TV-Z]{26}$/;
-  for (const r of receipts) {
-    if (!r || typeof r.id !== "string" || !ULID.test(r.id))
-      throw new IngestError("BAD_RECEIPT",
-        "every receipt needs the ULID `id` of the event it came from — `supersedes` names an EVENT, and a chain keyed on anything else breaks on exactly the correction this join exists to survive");
-    if (r.supersedes !== undefined && r.supersedes !== null && !ULID.test(String(r.supersedes)))
-      throw new IngestError("BAD_RECEIPT",
-        `supersedes ${JSON.stringify(r.supersedes)} is not a ULID — a content_sha here names no event, so the receipt it should retire stays live`);
-    if (r.supersedes && r.supersedes === r.id)
-      throw new IngestError("BAD_RECEIPT", `receipt ${r.id} supersedes itself — a cycle empties the head set silently`);
+  // ONE chain validator, shared with `planCutover`. It used to be a local loop here that checked
+  // only that `id` was a non-empty string, and the two readers then disagreed about what a valid
+  // chain is: this one accepted a fork (resolving last-wins by array order — ADR-1119 defect 1
+  // verbatim), a two-event cycle (dropping both receipts so real clicks landed unjoined with no
+  // error — defect 2 verbatim), and a duplicate id. Two readers of one structure disagreeing about
+  // validity IS the twin-defect shape this lane keeps paying for, so there is one function now.
+  //
+  // Wrapped so the caller still sees an IngestError: the ingest's error vocabulary is what its own
+  // tests and its CLI report on, and leaking a CutoverError here would make the ingest fail with
+  // the name of a module the operator is not running.
+  let heads;
+  try {
+    heads = assertChainIntegrity(receipts);
+  } catch (e) {
+    throw new IngestError("BAD_RECEIPT",
+      `the receipt set is not a resolvable supersede chain (${e.code}): ${e.message}`);
   }
-  const superseded = new Set(receipts.map((r) => r.supersedes).filter(Boolean));
-  const heads = receipts.filter((r) => !superseded.has(r.id));
   const byUrl = new Map();
   for (const r of heads) if (r.url) byUrl.set(String(r.url).replace(/\/$/, ""), r);
   const joined = [], unjoined = [];

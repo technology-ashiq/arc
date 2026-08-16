@@ -3,9 +3,10 @@
 **Phase 01 UN-PARKED 2026-08-16** when ADR-1115's sharpened trigger came true. The criteria below
 are verbatim from `phases/phase-01-spec.md`; nothing was reworded to fit what got built.
 
-**Two criteria are NOT met and are recorded as not-met rather than argued into MET.** Criterion 5
-cannot be satisfied until Phase 00 emits the receipt it supersedes, and criterion 3's evidence
-capture is the owner's. A phase that closes with those ticked would be closing on a vacuous pass.
+**Two criteria are not ticked, and are recorded honestly rather than argued into MET.** Criterion 5
+is **NOT APPLICABLE** — there is no pre-cutover receipt to correct and, by the decision recorded
+below, there will not be. Criterion 3's evidence capture is the owner's. A phase that closed with
+either of those ticked would be closing on a vacuous pass.
 
 ## The criteria
 
@@ -15,7 +16,7 @@ capture is the owner's. A phase that closes with those ticked would be closing o
 | 2 | DNS + TLS green; the site serves over HTTPS at the chosen host | **MET** | `https://arc.automemory.ai/blog/receipts-driven-os` → 200. Nameservers `meera`/`noel.ns.cloudflare.com` |
 | 3 | Search Console **Domain** property added and verified | **PARTIAL** | The property exists and its TXT resolves from Google's own `8.8.8.8` **and** from `1.1.1.1`. The spec asks for the verified property *captured in the bundle* — that screenshot is the owner's and is **not** here, so this is not ticked |
 | 4 | `content.published.site` re-pinned to the permanent host **in configuration** | **MET** | `initiatives/growth/site.json` + `loadSiteConfig`. There was no configuration surface at all before this — `publish` never touches `site` and the steel thread passed the host on the command line |
-| 5 | Every pre-cutover receipt corrected **by `supersedes`, never edited** | **NOT MET — and not satisfiable yet** | The path is built, adversarially attacked and proven end-to-end through the real emitter. But the spine holds **zero** `content.published` receipts, so there is nothing to correct. Ticking this would be a vacuous pass |
+| 5 | Every pre-cutover receipt corrected **by `supersedes`, never edited** | **NOT APPLICABLE** | The path is built, adversarially attacked and proven end-to-end through the real emitter. There is no pre-cutover receipt to correct and, per the decision below, there will not be: the steel-thread receipt carries the permanent host because the domain landed before the first publication. Not a vacuous pass and not a gap — an occasion that never arose |
 | 6 | `sitemap.xml` reachable at the permanent host | **MET** | Was **404** — Astro emits `sitemap-index.xml`. Fixed by SERVING the conventional path (`vercel.json` 308), not by rewording the criterion to match whatever the build emits. Verified through the preview: 200, `application/xml` |
 | 7 | `llms.txt` generated and well-formed — existence only, **never a lever** (ADR-1113) | **MET** | And it had already drifted: a static `public/` file listing one article while the site served two. Now generated from the same content glob as the homepage and the sitemap |
 
@@ -43,9 +44,9 @@ The machinery is not wasted either way: `resolveSlugUrl`, `planCutover` and the 
 every FUTURE correction rides on, and the two defects found building them were live defects in
 shipped code regardless of whether a cutover ever happens.
 
-## What criterion 5 actually proved
+## What the criterion-5 machinery actually proved
 
-The mechanism is real even though the criterion is not met, and the distinction matters:
+The mechanism is real even though the criterion never comes due, and the distinction matters:
 
 ```
 first emit  exit=0   id=01M05AC3GBJQ6B1TM1KMWAGA8Q

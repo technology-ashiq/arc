@@ -467,7 +467,20 @@ async function cmdPublish() {
   const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
   if (plan === null || typeof plan !== "object" || Array.isArray(plan) || typeof plan.cluster_id !== "string")
     die("BAD_PLAN", `the cluster plan at ${planPath} is not a cluster plan (no cluster_id)`);
-  const article = readOrDie(articlePath, "the article");
+  // ONE read. The bytes that get hashed and the text that gets linted are the same bytes, decoded
+  // once — not two reads seconds apart with a network round trip between them.
+  //
+  // The first version of the content_sha fix read the text here and the bytes again after
+  // `checkLinks`, which is an `await` over the network. So the change made to stop the hash and the
+  // lint disagreeing about ENCODING left them able to disagree about the FILE: an edit landing in
+  // that window produced a review pack whose lint reports described different bytes than the
+  // content_sha the approval binds to. Reading the bytes first also fires the BOM refusal before
+  // the lints and before the network call, rather than after.
+  const articleBytes = readBytesOrDie(articlePath, "the article");
+  if (articleBytes.length >= 3 && articleBytes[0] === 0xef && articleBytes[1] === 0xbb && articleBytes[2] === 0xbf)
+    die("BOM_IN_ARTICLE",
+      `${articlePath} starts with a UTF-8 BOM. Refused rather than stripped: content_sha is over raw bytes, so stripping it here would hash something other than the file that gets published, and keeping it publishes an invisible character into the article`);
+  const article = articleBytes.toString("utf8");
   if (article.trim() === "") die("EMPTY_ARTICLE", `${articlePath} is empty -- there is nothing to publish`);
 
   // The lints run HERE, not in review: a pack whose reports were produced by hand is a pack whose
@@ -479,13 +492,9 @@ async function cmdPublish() {
   const claims = scanCitations(article);
   const linkResult = has("offline") ? null : await checkLinks(article, httpResolver());
 
-  // Hashed from the FILE, not from the decoded string the lints read. See readBytesOrDie: hashing
-  // the re-encoded string made draft_sha and content_sha two different functions on any file
-  // carrying a BOM or a byte UTF-8 cannot represent.
-  const articleBytes = readBytesOrDie(articlePath, "the article");
-  if (articleBytes.length >= 3 && articleBytes[0] === 0xef && articleBytes[1] === 0xbb && articleBytes[2] === 0xbf)
-    die("BOM_IN_ARTICLE",
-      `${articlePath} starts with a UTF-8 BOM. Refused rather than stripped: content_sha is over raw bytes, so stripping it here would hash something other than the file that gets published, and keeping it publishes an invisible character into the article`);
+  // Hashed from the bytes read ONCE above, never from a re-encode of the decoded string: that made
+  // draft_sha and content_sha two different functions on any file carrying a BOM or a byte UTF-8
+  // cannot represent.
   const contentSha = contentShaOfBytes(articleBytes);
   const templateId = assignArm(slug);
 
@@ -496,7 +505,11 @@ async function cmdPublish() {
       previewUrl,
       slopReport: renderSlopReport(slop),
       citationReport: renderCitationReport(claims, linkResult),
-      diff: `article ${articlePath} (${Buffer.byteLength(article, "utf8")} bytes, content_sha ${contentSha.slice(0, 12)})`,
+      // The length reported is the length HASHED. `Buffer.byteLength(article, "utf8")` re-encodes
+      // the decoded string, so on invalid-UTF-8 input it disagreed with the bytes content_sha was
+      // taken over — a reported number that is not the measured number, in the very line that
+      // prints the measurement.
+      diff: `article ${articlePath} (${articleBytes.length} bytes, content_sha ${contentSha.slice(0, 12)})`,
       povLine: POV_FLOOR_LINE,
       templateId,
       contentSha,

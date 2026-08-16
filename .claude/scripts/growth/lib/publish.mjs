@@ -6,6 +6,7 @@
 // interesting code and the dangerous code are not the same file.
 
 import { assertTemplateId } from "./templates.mjs";
+import { ULID_RE } from "../../hq/lib/canonical.mjs";
 
 export class PublishError extends Error {
   constructor(code, message) { super(message); this.name = "PublishError"; this.code = code; }
@@ -94,7 +95,9 @@ export function classifyPublication(slug, receipts) {
   // The field is RENAMED rather than quietly corrected. A caller reading `supersedes` and getting
   // a ULID where it expected a sha should break at the name, not silently at the spine. Phase 04's
   // exit-criteria evidence cited the old behaviour as MET and is corrected alongside this.
-  if (typeof last.id !== "string" || !/^[0-9A-HJKMNP-TV-Z]{26}$/.test(last.id))
+  // ULID_RE imported, not re-typed — a local copy here was looser than the spine's and would have
+  // returned a pointer the emitter refuses as BAD_SUPERSEDES.
+  if (typeof last.id !== "string" || !ULID_RE.test(last.id))
     throw new PublishError("BAD_INPUT",
       `the prior receipt for ${slug} has no ULID id — classifyPublication needs event projections (payload plus id), not bare payloads, because a payload cannot carry the pointer this returns`);
   return { kind: "update", supersedesEventId: last.id, priorCount: prior.length };

@@ -189,7 +189,7 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
 @test "cutover: planCutover takes heads only, and refuses an id-less event rather than assuming it is one" {
   run _node "$PRE
     const p = (site, slug) => ({ site, slug, url: 'https://' + site + '/blog/' + slug, title: 'T', template_id: 'title-a', cluster_id: 'c-000', content_sha: '$SHA_A', pr_ref: '#2' });
-    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4';
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4', E = '01KZZZZZZZZZZZZZZZZZZZZZZ5';
     // A is superseded by B; B is a head on the old host; D is a head already on the new host.
     const events = [
       { id: A, supersedes: null, payload: p('old.test', 'x') },
@@ -225,12 +225,28 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
 @test "cutover: the committed site.json is valid and matches the ADR-1118 address" {
   # Asserts the REAL file, not a fixture. A loader proven only against inline objects says nothing
   # about the config the code will actually read.
+  #
+  # Passes the RAW TEXT, not JSON.parse output. The BOM strip and the duplicate-key scan live only
+  # on the string branch, so parsing first bypassed exactly the hardening that was added -- and
+  # this is the only test that reads the real committed file, which is where a BOM or a doubled
+  # "site" would actually appear.
   run _node "$PRE
     const fs = await import('node:fs');
-    const cfg = C.loadSiteConfig(JSON.parse(fs.readFileSync('initiatives/growth/site.json', 'utf8')));
-    console.log(cfg.site);"
+    console.log(C.loadSiteConfig(fs.readFileSync('initiatives/growth/site.json', 'utf8')).site);
+    console.log(C.loadSiteConfig(String.fromCharCode(65279) + '{\"schema\":1,\"site\":\"arc.automemory.ai\"}').site);
+    console.log(err(() => C.loadSiteConfig('{\"schema\":1,\"site\":\"arc.automemory.ai\",\"site\":\"evil.example\"}')));
+    console.log(err(() => C.loadSiteConfig('{\"schema\":1,\"site\":\"arc.automemory.ai\",\"site_OLD\":\"x\"}')));
+    console.log(err(() => C.loadSiteConfig('{not json')));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "arc.automemory.ai" ]
+  [ "${lines[0]}" = "arc.automemory.ai" ]
+  # A BOM is what Notepad and PowerShell write on the primary platform. It used to reach JSON.parse
+  # and die as a bare SyntaxError on the Windows leg only, never as BAD_SITE_CONFIG.
+  [ "${lines[1]}" = "arc.automemory.ai" ]
+  # A duplicate key is legal JSON and last-one-wins SILENTLY, in a hand-edited file that pins a
+  # one-way decision.
+  [ "${lines[2]}" = "BAD_SITE_CONFIG" ]
+  [ "${lines[3]}" = "BAD_SITE_CONFIG" ]
+  [ "${lines[4]}" = "BAD_SITE_CONFIG" ]
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -267,6 +283,37 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   [ "${lines[1]}" = "BAD_SITE" ]
 }
 
+@test "cutover: a wrong host is caught even on pages that are not articles" {
+  # The host comparison used to run AFTER the /blog/ filter, so every non-article entry was skipped
+  # before it could be checked. A sitemap advertising the homepage and /about on the OLD host
+  # returned ok:true with an empty wrongHost -- in the one phase whose subject is the host.
+  run _node "$PRE
+    const H = 'arc.automemory.ai';
+    const mixed = '<urlset><loc>https://old.vercel.app/</loc><loc>https://old.vercel.app/about</loc><loc>https://' + H + '/blog/a/</loc></urlset>';
+    const r = C.checkSitemapCoverage(mixed, ['a'], H);
+    console.log([r.ok, r.wrongHost.length, r.missing.length, r.extra.length].join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Not ok, two wrong-host entries, and the article itself is neither missing nor a ghost.
+  [ "$output" = "false 2 0 0" ]
+}
+
+@test "cutover: an empty or unreadable sitemap is REFUSED, never reported as full coverage" {
+  # parsed was returned so a caller COULD distinguish this -- but the only field a caller reads is
+  # ok, and an empty sitemap answered ok:true. A counter nobody folds into the verdict is a counter
+  # nobody consults: MISSING reported as zero, one module after the one that refuses exactly that.
+  run _node "$PRE
+    const H = 'arc.automemory.ai';
+    console.log(err(() => C.checkSitemapCoverage('<urlset></urlset>', [], H)));
+    console.log(err(() => C.checkSitemapCoverage('<html>404 Not Found</html>', ['a'], H)));
+    // A sitemap INDEX is refused BY NAME rather than reporting every article missing -- and this
+    // is the shape the vercel.json redirect points the conventional /sitemap.xml at.
+    console.log(err(() => C.checkSitemapCoverage('<sitemapindex><sitemap><loc>https://' + H + '/sitemap-0.xml</loc></sitemap></sitemapindex>', ['a'], H)));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "EMPTY_SITEMAP" ]
+  [ "${lines[1]}" = "EMPTY_SITEMAP" ]
+  [ "${lines[2]}" = "SITEMAP_INDEX" ]
+}
+
 @test "cutover: planCutover REFUSES every ambiguity instead of counting it as work" {
   # Each of these was previously planned, reported as a correction, and then refused by the spine
   # -- which reports a no-op as a success. Found by an adversarial pass, not by this suite.
@@ -282,7 +329,9 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
     console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(B, null, p('old.test','x'))], H)));
     console.log(err(() => C.planCutover([ev(A, SHA, p('old.test','x'))], H)));
     console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(A, null, p('old.test','y'))], H)));
-    console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(B, A, p(H,'x')), ev(D, B, p('old.test','x'))], H)));"
+    console.log(err(() => C.planCutover([ev(A, null, p('old.test','x')), ev(B, A, p(H,'x')), ev(D, B, p('old.test','x'))], H)));
+    console.log(err(() => C.planCutover([ev(A, B, p('old.test','x')), ev(B, A, p('old.test','x')), ev(D, null, p('old.test','z'))], H)));
+    console.log(err(() => C.planCutover([ev(A, E, p('old.test','x'))], H)));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "${lines[0]}" = "FORKED_CHAIN" ]     # two receipts supersede one predecessor
   [ "${lines[1]}" = "CHAIN_CYCLE" ]      # every event superseded; no head at all
@@ -291,6 +340,49 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   [ "${lines[4]}" = "BAD_SUPERSEDES" ]   # a content_sha where a ULID belongs
   [ "${lines[5]}" = "DUPLICATE_EVENT" ]
   [ "${lines[6]}" = "WOULD_COLLIDE" ]    # the correction re-creates a receipt already on the spine
+  # A PARTIAL cycle -- two events pointing at each other beside a real head. The first version only
+  # checked heads.length === 0, so this returned the head and silently dropped the other two from
+  # the plan AND from every count.
+  [ "${lines[7]}" = "CHAIN_CYCLE" ]
+  # A supersedes naming an event not in the set: the chain cannot be resolved against receipts it
+  # cannot see, and guessing would mean treating the pointer as absent.
+  [ "${lines[8]}" = "DANGLING_SUPERSEDES" ]
+}
+
+@test "cutover: the ULID grammar is the spine's, not a looser local copy" {
+  # canonical.mjs pins the first character to 0-7 -- a 48-bit millisecond timestamp cannot exceed
+  # 7ZZ... A hand-rolled /^[0-9A-HJKMNP-TV-Z]{26}$/ accepted a string starting Z, which planCutover
+  # then returned as planned work and the emitter refused as BAD_SUPERSEDES: the exact
+  # no-op-reported-as-success failure this module exists to eliminate. Three files had their own
+  # copy in the same diff whose headline fix was de-duplicating SITE_RE for this very reason.
+  run _node "$PRE
+    const CAN = await import('./.claude/scripts/hq/lib/canonical.mjs');
+    const BAD = 'Z'.repeat(26);
+    const p = { site: 'old.test', slug: 'x', url: 'https://old.test/blog/x', title: 'T', template_id: 'title-a', cluster_id: 'c-000', content_sha: '$SHA_A', pr_ref: '#2' };
+    console.log(CAN.ULID_RE.test(BAD) ? 'SPINE-ACCEPTS' : 'spine-refuses');
+    console.log(err(() => C.repinReceipt({ id: BAD, payload: p }, 'arc.automemory.ai')));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "spine-refuses" ]
+  [ "${lines[1]}" = "BAD_EVENT" ]
+}
+
+@test "cutover: the ingest and the cutover agree about what a valid chain is" {
+  # They did not. resolveSlugUrl accepted a fork (resolving last-wins by array order), a two-event
+  # cycle (dropping both receipts so real clicks landed unjoined with no error) and a duplicate id,
+  # all of which planCutover refused -- in the same commit. Two readers of one structure
+  # disagreeing about validity IS the twin-defect shape, so they share one function now.
+  run _node "$PRE
+    const I = await import('./.claude/scripts/growth/lib/ingest.mjs');
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4';
+    const r = (id, sup, slug) => ({ id, supersedes: sup, slug, url: 'https://a.test/blog/' + slug, content_sha: '$SHA_A' });
+    console.log(err(() => I.resolveSlugUrl([], [r(A,null,'x'), r(B,A,'x'), r(D,A,'x')])));
+    console.log(err(() => I.resolveSlugUrl([], [r(A,B,'x'), r(B,A,'x')])));
+    console.log(err(() => I.resolveSlugUrl([], [r(A,null,'x'), r(A,null,'y')])));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Wrapped as the ingest's own error vocabulary -- the operator is running the ingest, not cutover.
+  [ "${lines[0]}" = "BAD_RECEIPT" ]
+  [ "${lines[1]}" = "BAD_RECEIPT" ]
+  [ "${lines[2]}" = "BAD_RECEIPT" ]
 }
 
 @test "cutover: an inherited payload field is refused, not silently dropped from the correction" {
@@ -316,7 +408,7 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   # directly so a failure says WHICH of the two happened.
   local declared
   declared="$(grep -c '^@test' "$BATS_TEST_FILENAME")"
-  [ "$declared" -eq 14 ] || { echo "declared $declared, expected 14 -- update this number deliberately, never to make it pass"; false; }
+  [ "$declared" -eq 18 ] || { echo "declared $declared, expected 18 -- update this number deliberately, never to make it pass"; false; }
 
   run grep -nP '^@test.*[^\x00-\x7F]' "$BATS_TEST_FILENAME"
   [ "$status" -ne 0 ] || { echo "non-ASCII in a @test name -- bats will drop it silently:"; echo "$output"; false; }

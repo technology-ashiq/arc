@@ -43,22 +43,42 @@ cd E:/Work_Hub/01_Automemory/arc-site && git checkout main && git pull --ff-only
 node E:/Work_Hub/01_Automemory/arc/.claude/scripts/growth/content-sha-of.mjs src/pages/blog/the-author-cannot-be-the-attacker.mdx
 ```
 
-Then emit, substituting that sha and the merge PR number. The payload file exists so the JSON never
-has to survive a shell quoting round-trip:
+Then write the payload to a REAL FILE and emit from it. Two things here are not stylistic, and both
+were wrong in the first draft of this procedure:
+
+- **`bash`, not `node`.** `arc-event.sh` is `#!/usr/bin/env bash`; running it under node throws a
+  `SyntaxError` on line 2. Every other invocation in this file uses `bash`.
+- **A real file, not `<(process substitution)`.** Process substitution yields `/dev/fd/N`, which
+  **native Windows node cannot open** — and this procedure runs on `E:/`. It would fail at the one
+  moment it must not.
 
 ```bash
 cd E:/Work_Hub/01_Automemory/arc
-node .claude/scripts/hq/arc-event.sh emit content.published --payload-file <(cat <<JSON
-{"site":"arc.automemory.ai",
+
+# The host comes from site.json, never typed here. Criterion 4 exists because a hand-typed host is
+# one typo away from a receipt claiming an article lives somewhere it does not -- and since `site`
+# is in the idem preimage, that typo is ACCEPTED as a distinct publication rather than refused as a
+# mistake. A runbook that hardcodes the host reintroduces exactly the defect the config removed.
+SITE="$(node -p "require('./initiatives/growth/site.json').site")"
+echo "site = $SITE"
+
+# Fill in the sha from step 3 and the merge PR number, then write the file.
+cat > /tmp/steel-thread.json <<JSON
+{"site":"$SITE",
  "slug":"the-author-cannot-be-the-attacker",
- "url":"https://arc.automemory.ai/blog/the-author-cannot-be-the-attacker/",
+ "url":"https://$SITE/blog/the-author-cannot-be-the-attacker/",
  "title":"The person who wrote the check is the worst person to break it",
  "template_id":"title-a",
  "cluster_id":"c-000",
- "content_sha":"<the sha from step 3>",
+ "content_sha":"PASTE_THE_SHA_FROM_STEP_3",
  "pr_ref":"#2"}
 JSON
-) --strict
+
+# Refuse to emit a placeholder. This is an append-only log; a receipt carrying the literal
+# PASTE_THE_SHA_FROM_STEP_3 could not be edited afterwards, only superseded.
+grep -q PASTE_THE_SHA /tmp/steel-thread.json && { echo "sha not filled in -- STOP"; false; }
+
+bash .claude/scripts/hq/arc-event.sh emit content.published --payload-file /tmp/steel-thread.json --strict
 ```
 
 **Then LOOK.** Exit 0 is not evidence — `retro-log.md:36` records an emitter that exited 0 while

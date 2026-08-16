@@ -34,7 +34,17 @@ export class CutoverError extends Error {
   constructor(code, message) { super(message); this.name = "CutoverError"; this.code = code; }
 }
 
-const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+// Imported, NOT re-typed. The first version of this file hand-rolled
+// `/^[0-9A-HJKMNP-TV-Z]{26}$/`, which is LOOSER than the spine's: `canonical.mjs` pins the first
+// character to `0-7`, because a 48-bit millisecond timestamp cannot exceed `7ZZ…`. So a 26-char
+// string starting `Z` passed here and was refused as `BAD_SUPERSEDES` at emit — planned as work,
+// rejected by the spine, which is precisely the no-op-reported-as-success failure this module
+// exists to eliminate.
+//
+// The galling part: this diff's own headline fix was de-duplicating `SITE_RE` for exactly this
+// reason, and the same mistake was made one identifier over, in the same file, in the same change.
+// A rule stated in a comment does not transfer to the next constant; importing does.
+import { ULID_RE } from "../../hq/lib/canonical.mjs";
 
 /**
  * The eight fields a `content.published` payload carries. Named here so an added field fails LOUDLY
@@ -282,15 +292,28 @@ export function checkSitemapCoverage(sitemapXml, publishedSlugs, expectedSite) {
     if (!hostMatch) { wrongHost.push(loc); continue; }
     const [, host, path = "/"] = hostMatch;
     const clean = path.replace(/\/$/, "");
+    // HOST FIRST, before the /blog/ filter. It used to run after, so a sitemap advertising the
+    // homepage and /about on the OLD host returned {ok:true, wrongHost:[]} — every non-article
+    // entry was skipped before it could be checked, in the one phase whose subject is the host.
+    // The whole sitemap must be on the expected host, not merely the articles in it.
+    if (host !== expectedSite) { wrongHost.push(loc); continue; }
     // Classified case-INSENSITIVELY so `/BLOG/d/` is seen, then required to be exactly `/blog/`.
     // Skipping it silently meant a near-miss article path was neither matched nor reported, which
     // is the same invisible-entry hole as the tag regex one layer up. URL paths are case-sensitive,
     // so a differently-cased prefix is a real anomaly and not a synonym.
     if (!/^\/blog\//i.test(clean)) continue;
     if (!clean.startsWith("/blog/")) { malformed.push(loc); continue; }
-    if (host !== expectedSite) { wrongHost.push(loc); continue; }
     inSitemap.add(clean.slice("/blog/".length));
   }
+  // An unparseable or empty sitemap is REFUSED, not reported as clean. `parsed` was returned so a
+  // caller COULD distinguish it — but the only field a caller reads is `ok`, and
+  // `checkSitemapCoverage("<urlset></urlset>", [], site)` answered `{ok: true, parsed: 0}`. A
+  // counter nobody folds into the verdict is a counter nobody consults; this is MISSING reported
+  // as zero, one function after the module that refuses exactly that.
+  if (parsed === 0)
+    throw new CutoverError("EMPTY_SITEMAP",
+      "no <loc> entries were parsed — an unreadable or empty sitemap is MISSING, and reporting it as full coverage is the failure this check exists to prevent");
+
   const published = new Set(publishedSlugs);
 
   const missing = [...published].filter((s) => !inSitemap.has(s)).sort();
@@ -308,6 +331,71 @@ export function checkSitemapCoverage(sitemapXml, publishedSlugs, expectedSite) {
 }
 
 /**
+ * Validate a set of `content.published` events as a supersede FOREST and return its heads.
+ *
+ * EXPORTED and shared, because the first version of this logic lived only in `planCutover` while
+ * `resolveSlugUrl` — the reader that actually decides which article a week of clicks belongs to —
+ * accepted three shapes `planCutover` refused. A fork resolved last-wins by array order (ADR-1119
+ * defect 1, verbatim); a two-event cycle dropped both receipts so real clicks landed unjoined with
+ * no error (defect 2, verbatim); a duplicate id passed. Two readers of one structure disagreeing
+ * about what is valid IS the twin-defect shape, so there is now one function.
+ *
+ * Refuses, in order: a bad id or supersedes grammar, a duplicate id, a supersedes naming no event,
+ * a fork, and any cycle — including a PARTIAL one. The first version only caught a cycle that
+ * consumed every event (`heads.length === 0`), so `[A→B, B→A, C]` returned C as the sole head and
+ * silently dropped two receipts from both the plan and the counts. Reachability is proved by
+ * walking back from the heads and requiring the visited set to cover every event.
+ */
+export function assertChainIntegrity(events) {
+  if (!Array.isArray(events))
+    throw new CutoverError("BAD_INPUT", "assertChainIntegrity needs an array of events");
+  events.forEach((e, i) => assertEventIds(e, `event ${i}`));
+
+  const byId = new Map();
+  for (const e of events) {
+    if (byId.has(e.id)) throw new CutoverError("DUPLICATE_EVENT", `event ${e.id} appears twice`);
+    byId.set(e.id, e);
+  }
+
+  // A fork: two receipts superseding one predecessor. Heads-only does not prevent this, it
+  // propagates it, and "which receipt describes this URL" then has two answers — not a tie but an
+  // unanswerable question.
+  const targets = new Map();
+  for (const e of events) {
+    if (!e.supersedes) continue;
+    if (!byId.has(e.supersedes))
+      throw new CutoverError("DANGLING_SUPERSEDES",
+        `event ${e.id} supersedes ${e.supersedes}, which is not in this set — the chain cannot be resolved against receipts it cannot see`);
+    if (targets.has(e.supersedes))
+      throw new CutoverError("FORKED_CHAIN",
+        `events ${targets.get(e.supersedes)} and ${e.id} both supersede ${e.supersedes} — the chain has two live branches and no single head`);
+    targets.set(e.supersedes, e.id);
+  }
+
+  const superseded = new Set(targets.keys());
+  const heads = events.filter((e) => !superseded.has(e.id));
+  if (events.length > 0 && heads.length === 0)
+    throw new CutoverError("CHAIN_CYCLE", "every event is superseded by another — the chain is a cycle and has no head");
+
+  // Every event must be reachable by walking back from some head. Anything unvisited sits in a
+  // cycle that does not involve a head, and would otherwise vanish silently from every count.
+  const seen = new Set();
+  for (const h of heads) {
+    let cur = h;
+    while (cur && !seen.has(cur.id)) {
+      seen.add(cur.id);
+      cur = byId.get(cur.supersedes);
+    }
+  }
+  if (seen.size !== events.length) {
+    const orphans = events.filter((e) => !seen.has(e.id)).map((e) => e.id);
+    throw new CutoverError("CHAIN_CYCLE",
+      `${orphans.length} event(s) are unreachable from any head (${orphans.join(", ")}) — they sit in a cycle and would disappear from the plan and from every count without erroring`);
+  }
+  return heads;
+}
+
+/**
  * Plan the whole cutover: every receipt that is still a HEAD and is not already on the new host.
  *
  * Refuses rather than guesses on every ambiguity the adversarial pass surfaced — a fork, a cycle,
@@ -322,28 +410,7 @@ export function planCutover(events, newSite) {
     throw new CutoverError("BAD_SITE", `${JSON.stringify(newSite)} is not a bare lowercase hostname`);
   events.forEach((e, i) => assertEventIds(e, `event ${i}`));
 
-  const seenId = new Set();
-  for (const e of events) {
-    if (seenId.has(e.id)) throw new CutoverError("DUPLICATE_EVENT", `event ${e.id} appears twice`);
-    seenId.add(e.id);
-  }
-
-  // A fork: two receipts superseding the same predecessor. Heads-only does not prevent this, it
-  // propagates it — and "which receipt describes this URL" then has two answers, which is not a
-  // tie but an unanswerable question.
-  const targets = new Map();
-  for (const e of events) {
-    if (!e.supersedes) continue;
-    if (targets.has(e.supersedes))
-      throw new CutoverError("FORKED_CHAIN",
-        `events ${targets.get(e.supersedes)} and ${e.id} both supersede ${e.supersedes} — the chain has two live branches and no single head`);
-    targets.set(e.supersedes, e.id);
-  }
-
-  const superseded = new Set(targets.keys());
-  const heads = events.filter((e) => !superseded.has(e.id));
-  if (events.length > 0 && heads.length === 0)
-    throw new CutoverError("CHAIN_CYCLE", "every event is superseded by another — the chain is a cycle and has no head");
+  const heads = assertChainIntegrity(events);
 
   for (const h of heads)
     if (!h.payload || typeof h.payload !== "object" || Array.isArray(h.payload))
