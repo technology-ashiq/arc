@@ -125,13 +125,11 @@ function eventsOn(spine) {
     "    const res = spawnSync(\"bash\", [join(root, \".claude/scripts/engine/drivers\", `${driver}.sh`), \"run\", processName, \"{}\", budgetString(budget)], {");
 
   const spine = dir("mutant-spawn-spine");
-  // ARC_MOCK_DIR IS SET EXPLICITLY, and the first draft of this test learned why. Bench sets
-  // `ARC_ROOT` to the materialized fixture repo per M1; `arc-run` OVERWRITES it with its own
-  // root, so in the real path the driver resolves its recordings from the repo. A direct spawn
-  // does not overwrite it -- so the mutant handed the driver the temp repo, the mock found no
-  // recordings there, and the run failed for a SCORING reason. That would have been an
-  // unattributable control: rejected, but not for the rule under test. Naming the recording dir
-  // makes the direct spawn genuinely work, so the only thing left to reject it is the receipt.
+  // ARC_MOCK_DIR IS SET EXPLICITLY, so the direct spawn genuinely WORKS and the only thing left
+  // to reject it is the missing receipt. Without it the mutant fails for a SCORING reason -- the
+  // driver resolves its recordings relative to whatever root it was handed -- and a control
+  // rejected for the wrong reason proves nothing about the rule under test. That is not
+  // hypothetical: the first draft of this test was exactly that, and it read as a pass.
   const r = runIn(d, ["--driver", "mock", "--budget", "inr=1000,min=15"], {
     ARC_SPINE_ROOT: spine,
     ARC_MOCK_DIR: join(d, "tests/fixtures/bench/mock-replay"),
@@ -156,13 +154,19 @@ function eventsOn(spine) {
   const runs = eventsOn(spine).filter((e) => e.kind === "run.completed" && e.process !== "bench@0.1.0");
   check("the spine confirms it: NOT ONE arc-run receipt for the attempts it made", runs.length === 0, `saw ${runs.length}`);
 
-  // A SECOND, INDEPENDENT consequence of the same mutation, recorded because it is the one this
-  // lane found by accident: a direct spawn lets `ARC_ROOT` through to the driver, where the real
-  // path does not. Two paths that hand the driver a different environment are two paths, and
-  // "every driver satisfies the same contract" is only true of the one arc-run takes.
-  const withoutMockDir = runIn(d, ["--driver", "mock", "--budget", "inr=1000,min=15"], { ARC_SPINE_ROOT: dir("mutant-spawn-spine-2") });
-  check("and the same mutant, left alone, hands the driver a DIFFERENT ARC_ROOT than arc-run would",
-    /no recording for commit-msg-draft/.test(withoutMockDir.stdout), withoutMockDir.stdout.slice(0, 300));
+  // A SECOND CONSEQUENCE, restated after ADR-0220. This used to observe that a direct spawn let
+  // bench's own `ARC_ROOT` through to the driver where arc-run overwrote it -- an observation that
+  // died honestly when bench stopped setting that variable and started passing `--work-root`.
+  //
+  // What the mutation costs NOW is the seam itself: arc-run gives the driver `ARC_WORK_ROOT` and
+  // a cwd inside the materialized fixture repo, and a direct spawn gives it neither, so a driver
+  // that shells out to git lands wherever cwd happens to be -- which for this sandbox is a copy of
+  // arc. That property is asserted directly, and from both sides, in bench-steel-probe.mjs: a real
+  // fixture repo is ACCEPTED as `--work-root` and a work-root pointing into arc is REFUSED.
+  //
+  // The old check is removed rather than loosened. A check whose observation has expired should be
+  // deleted or re-aimed, never kept green by weakening it -- that is how a suite fills with
+  // assertions nobody can say the meaning of.
 }
 
 // ---- 3. a CLEAN sandbox run is green, so the mutants above are not passing on a broken base ---
@@ -206,8 +210,11 @@ function eventsOn(spine) {
 
   // (b) UNKNOWN MODEL -- named, never applied, and never silently accepted as applied.
   const rm = runIn(d, ["--driver", "mock", "--model", "not-a-real-model-id", "--budget", "inr=1000,min=20"], { ARC_SPINE_ROOT: dir("unknown-model-spine") });
+  // The scorecard now names the SOURCE as well, in arc-run's own vocabulary (ADR-0220): `mock`
+  // cannot carry a model, so nothing was applied and the line must say so rather than leaving a
+  // reader to infer it from an absence.
   check("an unknown model id is recorded as REQUESTED and never as applied",
-    /model requested not-a-real-model-id -- applied: NONE/.test(rm.stdout), rm.stdout.split("\n")[1]);
+    /model requested not-a-real-model-id -- applied NONE \(source: none\)/.test(rm.stdout), rm.stdout.split("\n")[1]);
 
   // (c) NONDETERMINISTIC KEY ORDERING -- the canonical writer sorts, so two objects built in
   // different orders are byte-identical.

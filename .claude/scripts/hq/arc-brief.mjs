@@ -82,12 +82,21 @@ const GROUPS = [
   // propose-only in both directions: its payload carries a `commit_ref`, which exists only
   // because a human already merged. The part that needed eyes fired earlier as `incident.raised`.
   // Filing a closed loop in the section reserved for open ones is how people learn to skim it.
+  //
+  // `content.published` lands here on exactly that precedent. Its payload carries `pr_ref`, which
+  // exists only because a human merged the publishing PR -- publishing is E2 and the machine never
+  // merges (ADR-1102) -- so the part that needed eyes has already happened and needs-you would
+  // re-ask a question that was answered. It is not background either: background is the collapsing
+  // tier for per-unit streams, and this fires once per article, at single digits per week. It is
+  // also the most externally-visible receipt the company emits, and the one kind whose absence
+  // from a brief would mean nobody noticed the site had changed.
   ["progress",  ["kickoff.done", "phase.closed", "review.completed", "qa.completed", "commit.done",
                  "ship.done", "run.completed", "decision.recorded", "council.verdict",
                  "policy.level.changed", "develop.started", "slice.done",
                  "experiment.opened", "experiment.verdict", "experiment.promoted",
                  "experiment.rolled_back", "experiment.closed", "council.outcome",
-                 "outreach.replied", "deal.lost", "constitution.adopted"]],
+                 "outreach.replied", "deal.lost", "constitution.adopted",
+                 "content.published"]],
   ["background",["note.logged", "redaction.applied", "day.closed", "idea.captured",
                  "experiment.assigned", "experiment.measured",
                  "lead.researched", "outreach.sent", "lead.suppressed", "metric.observed"]],
@@ -96,7 +105,7 @@ const GROUPS = [
   // skipped, and a brief that silently omits a kind reads exactly like a quiet day. That is the
   // failure mode the UNREADABLE LINES counter one screen down already exists to prevent.
   //
-  // It should now be permanently EMPTY: every one of the closed 44 is assigned above, and the
+  // It should now be permanently EMPTY: every one of the closed 45 is assigned above, and the
   // coverage test in `tests/policy-brief.bats` derives its list from `KINDS` and fails if a kind
   // is added without a section. A lane extending the vocabulary gives it a home in the same
   // change, which is the only version of this that does not rot -- the catch-all ran 22 kinds
@@ -178,7 +187,7 @@ function parseArgs(argv) {
  * All three arrive PRE-COMPUTED so this file does no deriving of its own.
  */
 export function render(day, events, torn,
-  { full = false, jobLines = [], killCrossings = [], killNotice = null, spendLine = null } = {}) {
+  { full = false, jobLines = [], killCrossings = [], killNotice = null, spendLine = null, feedLines = [] } = {}) {
   // Test-only door; production budget is 40 lines (one screen).
   const budget = Number(process.env.ARC_BRIEF_MAX_LINES || 40);
 
@@ -266,6 +275,12 @@ export function render(day, events, torn,
       // is non-empty by construction; the gl.length guard makes that explicit rather than assumed.
       if (g === "money" && spendLine && gl.length) out.push(spendLine);
     }
+    // THE GROWTH FEED LINES (growth REQ-05(c)). Unconditional and OUTSIDE the group buckets, on
+    // purpose: this is the only visible readout of a clock that runs whether or not anyone is
+    // watching, and a line that appears only when there are receipts cannot report the case that
+    // matters most -- that there are none. A stale feed already cost arc five silent days, so the
+    // caller re-derives these from the spine on every read and nothing here caches them.
+    if (feedLines.length) out.push("", ...feedLines);
     // A damaged line is reported in the brief itself: "the day looks quiet" and "the day is
     // unreadable" must never render the same.
     if (torn.length) out.push("", `UNREADABLE LINES: ${torn.length}`);
@@ -341,8 +356,23 @@ async function main(argv) {
     }
   } catch { jobLines = []; }
 
+  // The growth feed line, RE-DERIVED FROM THE SPINE ON EVERY READ (growth REQ-05(c)). Never
+  // cached: a cache would mean the line kept saying what was true the last time something wrote
+  // it, which is precisely the failure the line exists to prevent. Wrapped like the jobs panel
+  // above, and for the same reason -- a brief that refuses to render because one lane's derivation
+  // threw is strictly worse than a brief without that lane's line.
+  //
+  // SILENCE WHEN THERE IS NO FEED. `includeEmpty` is deliberately not passed: a lane whose clock
+  // has not started does not get a permanent line in everyone else's brief, inside a renderer with
+  // a 40-line one-screen budget. Growth's empty state lives in growth's tracker.
+  let growthFeedLines = [];
+  try {
+    const { feedLines: deriveFeed } = await import("../growth/lib/feed.mjs");
+    growthFeedLines = deriveFeed(events, nowMs());
+  } catch { growthFeedLines = []; }
+
   process.stdout.write(render(day, events, torn,
-    { full: flags.full === true, jobLines, killCrossings, killNotice, spendLine }));
+    { full: flags.full === true, jobLines, killCrossings, killNotice, spendLine, feedLines: growthFeedLines }));
   return 0;
 }
 

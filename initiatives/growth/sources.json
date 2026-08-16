@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "_comment": [
+    "The NAMED source list for `arc growth mine` (phase-02 exit criterion 1). It is a versioned",
+    "file rather than a prompt so that what the miner read on any given day is recoverable from",
+    "git, and so that adding a source is a reviewed diff.",
+    "",
+    "`enabled` is the gate. A source is enabled ONLY when its access method is an official,",
+    "documented API whose terms permit automated reads. Everything else sits here disabled with",
+    "the reason written down, because the phase spec's Your-setup item is the owner's call on",
+    "which communities and competitors are fair game -- and a disabled row asks that question in",
+    "a form he can answer with one word, instead of an empty file that asks nothing.",
+    "",
+    "A9/E3: no source is enabled on the assumption that its terms are probably fine."
+  ],
+  "sources": [
+    {
+      "id": "hn-algolia",
+      "kind": "community",
+      "enabled": true,
+      "access": {
+        "method": "official-public-api",
+        "endpoint": "https://hn.algolia.com/api/v1/search",
+        "auth": "none",
+        "terms_url": "https://hn.algolia.com/api",
+        "terms_note": "Algolia publishes this endpoint for public use and documents no auth requirement. Read-only, rate-limited by the provider."
+      },
+      "queries": [
+        "receipts driven development",
+        "agent build system",
+        "AI coding agent workflow",
+        "audit log architecture",
+        "append only event log",
+        "open source alternative AI agent",
+        "self-hosted AI agent alternative",
+        "best AI coding agent comparison",
+        "AI agent platform pricing"
+      ],
+      "_queries_note": "The last four are BOFU-shaped ON PURPOSE. The first real run returned 51 candidates with ZERO transactional intent, so the cluster builder correctly refused to compose a plan -- HN discusses architecture, not purchase. Rather than invent BOFU keywords (the rabbit hole this phase names by title), the fix is to ask the real source for the comparison and alternative language it does carry."
+    },
+    {
+      "id": "reddit-official",
+      "kind": "community",
+      "enabled": false,
+      "disabled_reason": "Needs the owner's sign-off plus registered OAuth credentials. Reddit's API terms distinguish personal use from commercial; enabling this without that call is exactly the assumption E3 forbids.",
+      "access": {
+        "method": "official-api",
+        "endpoint": "https://oauth.reddit.com",
+        "auth": "oauth-client-credentials",
+        "terms_url": "https://www.redditinc.com/policies/data-api-terms"
+      },
+      "queries": []
+    },
+    {
+      "id": "search-suggest",
+      "kind": "search-suggest",
+      "enabled": false,
+      "disabled_reason": "The autocomplete endpoint everyone uses for this is undocumented and not an official API. The non-negotiable is official APIs only, so it stays off until there is a documented one.",
+      "access": {
+        "method": "undocumented",
+        "endpoint": "",
+        "auth": "none",
+        "terms_url": ""
+      },
+      "queries": []
+    },
+    {
+      "id": "competitor-pages",
+      "kind": "competitor",
+      "enabled": false,
+      "disabled_reason": "Which competitors are fair game is the owner's call (phase-02 Your-setup). Gap notes for these are entered BY HAND with one evidence URL per row until then -- the miner never fetches them.",
+      "access": {
+        "method": "manual-entry",
+        "endpoint": "",
+        "auth": "none",
+        "terms_url": ""
+      },
+      "queries": []
+    }
+  ]
+}

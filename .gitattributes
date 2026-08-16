@@ -15,6 +15,15 @@
 # platforms. Freeze them exactly as hashed -- this OVERRIDES `* text=auto eol=lf`.
 docs/evidence/** -text
 
+# ADR-0055 moved evidence to initiatives/<lane>/evidence/, and this rule did not follow it.
+# Found at the growth Phase-02 close, 2026-08-14: THIRTEEN lanes have an evidence directory and
+# not one of them was frozen, so every lane bundle written since the move has been subject to
+# `* text=auto eol=lf`. The failure is asymmetric and therefore invisible where it is authored --
+# on Windows (core.autocrlf=true) a fresh clone checks a bundle out as CRLF and every sha256 in
+# its manifest mismatches, while the same bundle verifies clean on Linux CI. A tamper-evident
+# manifest that only holds on one OS is not tamper-evident.
+initiatives/*/evidence/** -text
+
 # Byte-exact hostile fixture for product-lint (Phase 00): the crlf-bom case tests
 # BOM + CR rejection -- git must NOT normalize its bytes or the fixture silently
 # stops testing what it claims. OVERRIDES `* text=auto eol=lf`.
