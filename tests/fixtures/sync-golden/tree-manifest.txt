@@ -187,7 +187,7 @@
 .claude/scripts/growth/lib/templates.mjs	98def91a9638bb0f544587fbf5aa14e95e0fc449524e23be43e57e0bc7492d01
 .claude/scripts/growth/lib/text.mjs	699f00fb5caf44c43a7e0b082bcf1c07243f42e6b51bda5058c8910dcfdfcf01
 .claude/scripts/hq/arc-brief.mjs	27c055a82ff0c6a06ad0710a69828995f88a635575f9a1d44d89603c89768c55
-.claude/scripts/hq/arc-event.mjs	d290a2b3cd964dcf9320d02bf16af4257bc94850a0ae1f9a62336536905658d5
+.claude/scripts/hq/arc-event.mjs	f768935062268db309a5360fd2eff69a3091243d7ee9d6bdbada64fcfafb5e3b
 .claude/scripts/hq/arc-event.sh	6344f4d155907cc9ae00cd1e7b852234d70f2fceaf1418574d4c8b6cda17bf60
 .claude/scripts/hq/arc-inbox.mjs	8943ba0e1351e7c003526356daf33f9f5fe5d1249d652b121a105c28f8ec7c79
 .claude/scripts/hq/arc-jobs.mjs	a2fb7b377de98e6684e3e84b4eda673eb696e2ed946e0e73a96377a731232a3f
@@ -235,7 +235,7 @@
 .claude/scripts/hq/lib/redact.mjs	a9e0ac1832761d73cf11141e1bf5bcd26e46ea1ee53886b71416550096907314
 .claude/scripts/hq/lib/spine-io.mjs	e63ba8a16839f75c70227a581ce7b547467eb365391d27a2dd9062f88d81d4b4
 .claude/scripts/hq/lib/validate-absorb.mjs	2b404b96f3ff5b3b3dd6d21d51b6d871040f8addd4914d5c5ca1cf17507ef14b
-.claude/scripts/hq/lib/validate-content.mjs	686792decac69d976a252c6ec8daf5721cb64334e506746a37887f8fb0020806
+.claude/scripts/hq/lib/validate-content.mjs	bd51b29daa5d4a40a7bafb57e1c94444114fc38ddef9a21f1e876fb68b74e6cc
 .claude/scripts/hq/lib/validate-experiment.mjs	21ad45d162632f47308962ef5282a814f1951685b45d99e4ba73fba6f9d54597
 .claude/scripts/hq/lib/validate-leads.mjs	0f5cf51a91a9ec91857f433169149bfed7f35bd89f78c3ba9e5accc7bdfa2709
 .claude/scripts/hq/lib/validate-ledger.mjs	5ee5e61d395eccaa732f5c49215d6db80873ef030bc6027a675a5837ce010d88

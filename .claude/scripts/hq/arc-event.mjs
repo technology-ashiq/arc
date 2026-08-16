@@ -125,6 +125,20 @@ function safePolicyIdem(kind, payload) {
 
 // ---------- event construction ----------
 function synthesize(kind, flags, { deriveIdem }) {
+  // `--payload` IS NOT BYTE-FAITHFUL, and no guard here can make it so. Measured 2026-08-16:
+  // argv cannot carry a lone surrogate at all — the runtime substitutes U+FFFD before this
+  // process starts, so `A\uD83CB` arrives as `A�B` and the information is gone before any
+  // arc code runs. A title truncated mid-emoji is therefore ACCEPTED and STORED as U+FFFD, which
+  // is not the title that was submitted, and arc cannot detect it.
+  //
+  // An adversarial pass reported this as `Buffer.from(str, "utf8")` being lossy here. That call IS
+  // non-injective, but it is not where the loss happens on any reachable path, and a guard added
+  // at this line could never fire — verified by probing argv directly. Recorded because a guard
+  // that cannot fire reads as coverage, and the wrong diagnosis would have shipped one.
+  //
+  // `--payload-file` is the byte-faithful path: it reads bytes off disk and refuses non-UTF-8
+  // outright (`BAD_UTF8`, exit 2, verified against a raw `ED A0 BC`). Anything carrying non-ASCII
+  // should use it, and `initiatives/growth/RUNBOOK.md` does.
   const payload = flags["payload-file"]
     ? readJsonFile(flags["payload-file"])
     : flags.payload !== undefined
