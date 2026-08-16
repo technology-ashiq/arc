@@ -3,23 +3,23 @@
 <!-- machine header -->
 status: LIVE
 cycle: arc-growth (Cycle 14, opened 2026-08-12)
-phase: 01
+phase: 06
 appetite: 10d
-burn: 7.5d
-blocked-on: owner — INDEXABLE flip PR (the clock); Phase 00 steel-thread merge; Cloudflare grey-cloud; 2 inbox approvals
+burn: 8.0d
+blocked-on: elapsed time — 7 days of a live indexable site, clock STARTED 2026-08-16, earliest read 2026-08-23
 depends-on: —
 
 ## Phase table
 
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
-| 00 | Contract + the road + steel thread | 2.0d | **IN PROGRESS** — contract done, site built, Vercel↔Git connected 2026-08-14 so preview URLs exist at last. Steel thread runs now; the emit waits on one human merge (E2) |
+| 00 | Contract + the road + steel thread | 2.0d | ✅ **DONE 2026-08-17** — all 11 criteria met. The steel thread ran for real: branch → PR #2 → preview build → **the owner's merge** → `content.published` `01M05XS2B71NNXNE5ADRAR7CRT`, verified in `events/` and absent from `_quarantine/`. Receipt carries the PERMANENT host (E3: naming the preview host would have been untrue). `amendments: 1` (the host) · `reopened: n` |
 | 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | **UN-PARKED 2026-08-16** — ADR-1115's trigger is TRUE: the GSC Domain property for `automemory.ai` is added and its TXT resolves from Google's own resolver. ADR-1118 written (the one-way address). Criterion 5 waits on Phase 00's receipt |
 | 02 | Miner + cluster gate | 1.0d | ✅ **DONE 2026-08-14** — 6 criteria met, criterion 3 narrowed and its gap recorded; A-05 fired and fixed (ADR-1116) |
 | 03 | Generator + lints | 1.5d | ✅ **DONE 2026-08-14** — 7 of 8 criteria met; the exemplar APPROVAL is outstanding (owner). 35 adversarial holes found and fixed |
 | 04 | Publish path + A/B + GEO | 1.5d | ✅ **DONE 2026-08-14** — guard is a parse, 3-escape mutant refused by name; criterion 5 live half + llms.txt deploy outstanding (owner) |
 | 05 | The EVO-H0 feed | 1.5d | ✅ **DONE 2026-08-14** — FIXTURE-PROVEN, not live-validated: no GSC property, so no real CSV and no real receipt. ADR-1117 fixed a silently-dropped correction path |
-| 06 | Real week | 1.25d | **PARKED** (ADR-1115) — needs 7 elapsed days of a live, **indexable** site. The live half now exists; the indexable half is one owner-merged PR away (`INDEXABLE = false → true`), and the 7-day count cannot begin before it lands |
+| 06 | Real week | 1.25d | **UN-PARKED 2026-08-17, and now blocked on ELAPSED TIME rather than on anyone.** Both halves exist: the site is live and `INDEXABLE = true` (arc-site #3, merged 2026-08-16). Verified on the live host — `robots.txt` serves `Allow: /` plus the sitemap line, and no `noindex` meta tag remains. **The clock started 2026-08-16; the earliest honest read is 2026-08-23.** Nothing can shorten it |
 
 Phases sum to **9.75d** of a **10d** cap = **97.5% allocated**. **0.25d named reserve.** That is thin
 and it is stated rather than dressed up: C4 was 100% allocated and closed at ~112%. Pre-planned cut
@@ -28,24 +28,30 @@ decided now, not on day 8.
 
 ## Appetite burn
 
-**~7.5 of 10 days used (75%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
+**~8.0 of 10 days used (80%).** 50% tripwire = 5.0d: if no content PR has travelled end-to-end to a
 merged `content.published` by then, the publish path is fighting the stack — bank the vocabulary
 ADRs and the miner as documentation, stop, retro.
 
-**THE TRIPWIRE IS PAST, AND IT IS PAST FOR THE REASON IT NAMES.** No content PR has travelled to a
-merged `content.published`, because arc-site PR #1 is unmerged and per-PR preview URLs do not exist
-until the site repo is connected to the deploy provider. Both are owner actions.
+**THE TRIPWIRE WAS BREACHED ON 2026-08-14 AND IS NOW CLEARED — 2026-08-17.** Its condition was: no
+content PR has travelled end to end to a merged `content.published`. One has.
+`01M05XS2B71NNXNE5ADRAR7CRT` is on the spine, and every leg of the path it names was exercised for
+real — branch, PR, preview build, human merge, receipt.
 
-But the tripwire's *remedy* — bank the work as documentation and stop — is the wrong call here, and
-saying why is the point of writing this down rather than quietly continuing. The tripwire was
-written against **the publish path fighting the stack**: code that will not work. That is not what
-happened. Phases 02–05 are built, adversarially attacked and green on CI across three OS legs; what
-is missing is four owner keystrokes and a Search Console property that backfills nothing. Stopping
-now would bank a working machine as documentation while the only thing blocking it is a click.
+**The judgement made while it was breached is worth keeping, because it was the call and it turned
+out right.** The tripwire's remedy is *bank the work as documentation and stop*, and that was
+refused on 2026-08-14 with a stated reason: the tripwire was written against **the publish path
+fighting the stack** — code that will not work — and that was not what had happened. Phases 02–05
+were built, adversarially attacked and green across three OS legs. What was missing was four owner
+keystrokes. Stopping would have banked a working machine as documentation while the only thing
+blocking it was a click.
 
-**The honest position: the build is done and the cycle is blocked, not overrunning.** Phases 00, 01
-and 06 cannot close without the owner, and no further machine work will change that. This is the
-scope-cut conversation the tripwire demands, held here, in writing, with the numbers.
+Three days later the clicks happened and the path worked on its first real run. Recorded plainly
+rather than quietly deleted: **a tripwire that fires for a reason outside its own theory of failure
+is evidence about the tripwire, not only about the work.** The condition was well chosen; the
+remedy attached to it assumed the only cause could be broken code.
+
+**Burn is 8.0 of 10 days.** Nothing further is buildable and nothing is owner-blocked. Phase 06
+closes on elapsed time alone: 2026-08-16 → 2026-08-23.
 
 The machine header's `burn:` field carried `0d` through two closed phases while this line said 2.2d.
 Same file, two numbers, and the header is the one a script would read. Corrected at the Phase-02
@@ -77,6 +83,9 @@ supposed to be the single source of truth.
 | 2026-08-14 | **The E2 verb ban contradicted its own ADR.** Phase 02 banned a `publish` verb; ADR-1102 names `arc growth publish <slug>` verbatim. The banned thing is the CAPABILITY, and it is now proven absent by a module-graph PARSE plus a mutant whose third escape — a deploy hook needing **no import at all** — broke the guard's first version | phase-04 spec § Amendment |
 | 2026-08-14 | **Phase 05 CLOSED, fixture-proven and not live-validated.** Spec-verify is a gate returning exactly ADR-1109's four findings against the LIVE validator; the ingest refuses on range mismatch, lag, unknown headers; windows are the verified PT days converted to IST (the DST week spans **169h**). `amendments: 1` (ADR-1117) · `reopened: n` | `evidence/phase-05/` |
 | 2026-08-14 | **A fifth deviation, in a surface ADR-1109 never examined.** `metric.observed` corrections were silently dropped: the emitter passes `supersedes` into the *experiment* idem and not the *leads* one, so a re-read with different numbers hashed identically and died as `DUP_IDEM`. Worked around by a revisioned `source_id`; flagged back rather than absorbed, and pinned as a negative control | ADR-1117 |
+| 2026-08-17 | **PHASE 00 CLOSED — the steel thread ran for real.** Owner merged arc-site #2 and #3; `content.published` `01M05XS2B71NNXNE5ADRAR7CRT` emitted from the main clone and verified present in `events/`, absent from `_quarantine/`. `content_sha` cross-checked against an independent `sha256sum` and agreeing byte-for-byte, over a merged file carrying **0 CR bytes** — the `.gitattributes` LF pin holding, without which this hash differed between a Windows checkout and the Linux build host | `evidence/phase-00/` |
+| 2026-08-17 | **The clock started, and Cloudflare was un-proxied in the same window.** `INDEXABLE = true` live: `robots.txt` is 77 bytes, one coherent group, `Allow: /` + sitemap. `server: Vercel`, **no `CF-RAY`** — the managed robots block that used to sit above ours is gone. The timing mattered: while the site was `noindex` the meta tag covered that conflict, and the flip removed the cover, so the first crawlable day would otherwise have been the first day two contradictory robots groups were Google's only instruction | live host |
+| 2026-08-17 | **Phase 01's own checker found a real gap on its first production use.** `checkSitemapCoverage` against the live sitemap and the spine returned `extra: ["receipts-driven-os"]` — the FIRST article is live and indexable with **no receipt**, pushed directly in the skeleton commit with no PR (confirmed via the GitHub API), so `pr_ref` cannot be filled honestly. **No receipt was fabricated.** Its clicks will report UNJOINED and never reach the EVO-H0 feed until this is settled | `evidence/phase-00/`, owner queue 7 |
 | 2026-08-16 | **Phase 01 UN-PARKED.** GSC Domain property verified (TXT resolves from `8.8.8.8` and `1.1.1.1`). ADR-1118 finally records the address as the one-way door it always was — three days late, because the phase carrying that obligation was PARKED and nothing was checking. Criterion 4 got a configuration surface it never had; criterion 6's literal `/sitemap.xml` was 404 and is now served rather than reworded | ADR-1118, `site.json`, `lib/cutover.mjs` |
 | 2026-08-16 | **The clock was never started by the GSC property.** A `noindex` site accrues no impressions, so ADR-1105's one-for-one day loss simply MOVED from the property to the `INDEXABLE` flip. Owner approved shipping it; arc-site PRs #2 and #3 prepared, both awaiting the one merge click E2 reserves for a human | arc-site #2, #3 |
 | 2026-08-16 | **Building criterion 5 found two silent defects in shipped code.** `resolveSlugUrl` resolved the supersede chain from `payload.supersedes` — a key the closed payload shape can NEVER carry, so the superseded set was always empty and every receipt looked like a head — and compared it against `content_sha`, which a re-pin leaves unchanged, so both receipts were filtered out and a week of clicks fell out of the join. The covering test used two *different* shas, the one shape where that works | ADR-1119 |
@@ -167,9 +176,32 @@ one real article renders at a real URL.
 
 ## Now
 
-**Updated 2026-08-16. The 2026-08-14 handoff was overtaken by events and its Owner queue had gone
-stale in the direction that stops work** — it named four blockers, and three of them were done
-before this line was written. Corrected here against verified artifacts, not against reports.
+**Updated 2026-08-17. THE MACHINE IS DONE. Everything that remains is elapsed time.**
+
+The owner merged arc-site **#2** and **#3** on 2026-08-16, and the two things that had gated this
+lane since 2026-08-12 both fell in the same minute:
+
+- **Phase 00's steel thread ran end to end** — branch → PR → preview build → human merge →
+  `content.published` `01M05XS2B71NNXNE5ADRAR7CRT`, verified present in `events/` and absent from
+  `_quarantine/`. Phase 00 is **CLOSED**, all 11 criteria.
+- **The clock started.** `INDEXABLE = true` is live: `robots.txt` now serves `Allow: /` and the
+  sitemap line, and the `noindex` meta tag is gone from every page. Verified against the live host,
+  not against the merge. Phase 06 un-parks and its seven days run **2026-08-16 → 2026-08-23**.
+
+There is no owner action left that any phase is waiting on. The two inbox approvals and the
+Cloudflare grey-cloud switch remain open and are described below, but nothing blocks on them today.
+
+**Its own tooling caught a real gap on first use.** `checkSitemapCoverage`, run against the live
+sitemap and the spine, reported `extra: ["receipts-driven-os"]` — **the first article is live and
+indexable with no receipt.** It was pushed directly in the skeleton commit; the GitHub API confirms
+no PR was ever opened for it, so a receipt cannot honestly carry the `pr_ref` the closed key set
+requires. One was NOT fabricated. The consequence is concrete: every click that article earns will
+report UNJOINED and never reach the EVO-H0 feed. Three ways out are set out in
+`evidence/phase-00/exit-criteria.md`; the choice is the owner's.
+
+**Earlier correction, kept because the lesson is about the tracker itself.** The 2026-08-14 handoff
+named four blockers and three were already done when it was read on 2026-08-16 — a tracker stale in
+the direction that stops work. Everything below is verified against artifacts, not reports.
 
 **Current position — BUILD WORK HAS RESUMED.** Phases **02, 03, 04 and 05 remain CLOSED**, each with
 a verified evidence bundle; Cycle 14's build merged to `main` as `27efa88` (PR #177) with CI
@@ -263,26 +295,34 @@ once claimed. Ordered by how much each unblocks.
    produced** — all three deployments to date are `target: production`. The connection is proven;
    the preview half is proven only when the first PR builds one, which the two prepared PRs will do.
 2. ~~**Merge arc-site PR #1.**~~ **DONE 2026-08-14 20:49Z**, merged as `04dff54f`.
-3. **Cloudflare → the `arc` record → grey cloud (DNS only).** **STILL OPEN, re-verified 2026-08-16:**
-   `Server: cloudflare` and a `CF-RAY` header are present, and the managed `robots.txt` is still
-   being served with `Allow: /` above our `Disallow: /` — two conflicting groups for the same
-   user-agent. We remain safe because the `noindex` meta tag does the real work: safe by accident,
-   not by design. **This gets more urgent the moment `INDEXABLE` flips**, because at that point the
-   meta tag stops covering for the conflicting robots.txt.
+3. ~~**Cloudflare → the `arc` record → grey cloud (DNS only).**~~ **DONE, verified 2026-08-17.**
+   `server: Vercel` and **no `CF-RAY` header** — the record is no longer proxied. `robots.txt` is
+   now 77 bytes and a single coherent group (`User-agent: *` · `Allow: /` · `Sitemap:`), where it
+   previously carried Cloudflare's managed block with `Allow: /` sitting above our `Disallow: /`.
+   **The timing mattered more than it looked.** While the site was `noindex` the meta tag was doing
+   the real work and the conflicting robots groups were harmless-by-accident. Flipping `INDEXABLE`
+   removed that cover, so had this stayed proxied, the first genuinely crawlable day would also
+   have been the first day two contradictory robots groups were the only instruction Google had.
 4. ~~**Search Console → Domain property for `automemory.ai`.**~~ **DONE 2026-08-16.** Domain form,
    verified by TXT `google-site-verification=X4WZ3w67…` resolving from `8.8.8.8` and `1.1.1.1`.
    Covers the root and every subdomain: one property, one clock.
 
 **New, and the top of the queue — two merge clicks (E2: the machine never merges a publish):**
 
-5. **Merge the `INDEXABLE` flip PR on arc-site.** **This is the clock.** Until it lands the site is
-   `noindex` and Search Console accrues nothing, so evolve's four-week trigger is still at day zero
-   and every day costs one day, unrecoverably (ADR-1105). The owner approved shipping it 2026-08-16.
-6. **Merge the steel-thread PR on arc-site.** Closes Phase 00 criterion 10 — one real article
-   travelling branch → PR → preview URL → human merge → `content.published`, with `content_sha` read
-   from the site repo's merged tree. It also produces the first preview deployment, closing item 1's
-   caveat, and gives Phase 01 criterion 5 the pre-cutover receipt it has nothing to supersede
-   without.
+5. ~~**Merge the `INDEXABLE` flip PR.**~~ **DONE 2026-08-16** (arc-site #3, `f8b9ea6`). Verified on
+   the live host rather than on the merge: `robots.txt` serves `Allow: /` plus the sitemap line and
+   no `noindex` meta tag remains. **The clock is running: 2026-08-16 → 2026-08-23.**
+6. ~~**Merge the steel-thread PR.**~~ **DONE 2026-08-16** (arc-site #2, `b2626c1`). Phase 00
+   criterion 10 closed with receipt `01M05XS2B71NNXNE5ADRAR7CRT`. It also produced the first two
+   preview deployments this project has ever had, closing item 1's caveat.
+
+**Open, but nothing is waiting on them:**
+
+7. **Decide what happens to `receipts-driven-os`.** It is live and indexable with **no receipt**,
+   because it was pushed directly and never had a PR, so `pr_ref` cannot be filled honestly. Its
+   traffic will report UNJOINED forever until this is settled. Options in
+   `evidence/phase-00/exit-criteria.md`: re-publish it through the path (one merge click), make
+   `pr_ref` nullable by ADR, or accept the gap.
 
 **Not yet, and not to be done on anyone's initiative:**
 
