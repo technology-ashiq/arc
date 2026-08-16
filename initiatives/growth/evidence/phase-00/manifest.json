@@ -1,0 +1,12 @@
+{
+  "phase": "00",
+  "commit": "da2e6af782384af38998d1a51bcac519b2b92fb1",
+  "short": "da2e6af",
+  "generated": "2026-08-16T18:46:21Z",
+  "files": [
+    {
+      "name": "exit-criteria.md",
+      "sha256": "6f4fc09965181f5504b248f0b4bf45978643859d393656920a7d1a42127945cd"
+    }
+  ]
+}
