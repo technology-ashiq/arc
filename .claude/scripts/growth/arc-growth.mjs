@@ -553,7 +553,12 @@ async function cmdIngest() {
 
   const receiptsPath = flag("receipts");
   const receipts = receiptsPath ? parseJsonOrDie(readOrDie(receiptsPath, "the content.published receipts"), "the receipts file") : [];
-  if (!Array.isArray(receipts)) die("BAD_RECEIPTS", "--receipts must be a JSON array of content.published payloads");
+  // Each entry is an EVENT projection -- the payload fields PLUS the event `id` and its
+  // event-level `supersedes` -- not a bare payload. `supersedes` is not an allowed payload key
+  // (the shape is closed to eight fields), so a file of bare payloads can never express a chain;
+  // `resolveSlugUrl` now refuses one loudly rather than treating every receipt as a head.
+  if (!Array.isArray(receipts))
+    die("BAD_RECEIPTS", "--receipts must be a JSON array of content.published event projections: the payload fields plus the event id and supersedes");
   const { joined, unjoined } = I.resolveSlugUrl(parsed.rows, receipts);
 
   process.stdout.write(

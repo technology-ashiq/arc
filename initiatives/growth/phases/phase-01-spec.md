@@ -23,6 +23,15 @@
 >   true by serving `/sitemap.xml` rather than by softening the criterion to match what the build
 >   happens to emit — a criterion edited to fit its output measures nothing.
 >
+> **Criterion 5's supersede path found two defects in shipped code, both silent — ADR-1119.**
+> `resolveSlugUrl` resolved the chain from `payload.supersedes`, a key `assertContent` refuses
+> outright, so its superseded set was **always empty** and every receipt looked like a head; and it
+> compared that value against `content_sha`, which the re-pin leaves **unchanged**, so both receipts
+> were filtered out and a week of real clicks fell out of the join. Reproduced before fixing. The
+> covering test used two *different* shas — the one shape where a sha-keyed chain works — and put
+> `supersedes` in a payload that cannot carry it, so it could not observe either failure. The chain
+> is now keyed on the event ULID and `--receipts` takes event projections.
+>
 > **Clock status, stated because it is the reason this phase exists.** The property existing does
 > **not** start evolve's four-week clock on its own. The site serves `noindex, nofollow` plus
 > `Disallow: /`, so Google accrues zero impressions and Search Console will hold zero Performance

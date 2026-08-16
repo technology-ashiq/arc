@@ -219,8 +219,30 @@ export function parseGscCsv(text) {
  */
 export function resolveSlugUrl(rows, receipts) {
   if (!Array.isArray(receipts)) throw new IngestError("BAD_INPUT", "receipts must be an array");
-  const superseded = new Set(receipts.map((r) => r && r.supersedes).filter(Boolean));
-  const heads = receipts.filter((r) => r && !superseded.has(r.content_sha));
+  // Every receipt must carry the EVENT id it was read from. Two defects lived in the four lines
+  // below until 2026-08-16 and both were invisible because they fail silently:
+  //
+  //   1. The chain was resolved against `r.supersedes` read from a PAYLOAD. `content.published`
+  //      closes its payload to eight fields with `optional: []`, so `assertContent` refuses that
+  //      key outright and it can NEVER be present on a real receipt. The superseded set was
+  //      therefore always empty, every receipt was a head, and the URL map silently resolved
+  //      last-wins by array order.
+  //   2. It compared `supersedes` against `content_sha`. The Phase 01 cutover changes `site` and
+  //      `url` and leaves the BYTES ALONE, so both receipts share one `content_sha` — and the
+  //      comparison filtered BOTH of them out, dropping a real week of clicks from the join.
+  //
+  // The test that was supposed to cover this used two DIFFERENT content_shas, which is the single
+  // shape in which a content_sha-keyed chain happens to work. It is now written against the real
+  // cutover shape and would go red against either defect.
+  //
+  // An id-less record is REFUSED rather than treated as a head, because "treated as a head" is
+  // precisely how defect 1 stayed invisible through a phase close.
+  for (const r of receipts)
+    if (!r || typeof r.id !== "string" || !r.id)
+      throw new IngestError("BAD_RECEIPT",
+        "every receipt needs the `id` of the event it came from — `supersedes` names an EVENT (a ULID), and a chain keyed on anything else breaks on exactly the correction this join exists to survive");
+  const superseded = new Set(receipts.map((r) => r.supersedes).filter(Boolean));
+  const heads = receipts.filter((r) => !superseded.has(r.id));
   const byUrl = new Map();
   for (const r of heads) if (r.url) byUrl.set(String(r.url).replace(/\/$/, ""), r);
   const joined = [], unjoined = [];
