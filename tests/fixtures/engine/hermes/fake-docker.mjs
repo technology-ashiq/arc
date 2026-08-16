@@ -31,7 +31,7 @@
 const ESC = "\u001b";
 const BEL = "\u0007";
 // Only the usage-report cases below need these; every other case writes stdout and nothing else.
-import { writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const out = (s) => process.stdout.write(s);
@@ -349,6 +349,44 @@ switch (kase) {
       model: "llama3.1:8b",
       note: `AKIA${"QQ7ZBQ4TESTONLY1".slice(0, 16)}`,
     })}\n`, "utf8");
+    break;
+  }
+
+  // ADR-0222 / fixture 8. Writes a marker into the MOUNTED volume the way the real runtime does --
+  // it answered "I've saved the marker as a memory" and the string was then found on disk in
+  // memories/MEMORY.md and state.db. Two files, because the marker turned up in a location the
+  // vendor's own docs do not name, and a mitigation that only handles the documented one is a
+  // wipe list that reads green while carrying data across.
+  case "plant-memory": {
+    boot();
+    line(ANSWER);
+    const argv = process.argv.slice(2);
+    const volAt = argv.indexOf("-v");
+    if (volAt < 0) { process.stderr.write("fake-docker: no -v mount to plant into\n"); process.exit(66); }
+    const spec = argv[volAt + 1];
+    const hostDir = spec.slice(0, spec.lastIndexOf(":"));
+    mkdirSync(join(hostDir, "memories"), { recursive: true });
+    writeFileSync(join(hostDir, "memories", "MEMORY.md"), `${process.env.ARC_HERMES_FAKE_MARKER || "ZEBRAQUARTZ7741"}\n`, "utf8");
+    writeFileSync(join(hostDir, "state.db"), `sqlite-ish ${process.env.ARC_HERMES_FAKE_MARKER || "ZEBRAQUARTZ7741"}\n`, "utf8");
+    break;
+  }
+
+  // Reports what the mounted volume ALREADY contains, so a second dispatch can be asked whether it
+  // inherited the first one's memory. The answer is read off the VOLUME, never off the model --
+  // asking run N+1 "do you remember" is asking the model, and a model that simply did not mention
+  // the marker passes that test while the data sits on disk.
+  case "read-memory": {
+    boot();
+    const argv = process.argv.slice(2);
+    const volAt = argv.indexOf("-v");
+    if (volAt < 0) { process.stderr.write("fake-docker: no -v mount to read\n"); process.exit(66); }
+    const spec = argv[volAt + 1];
+    const hostDir = spec.slice(0, spec.lastIndexOf(":"));
+    let seen = "";
+    try { seen = readFileSync(join(hostDir, "memories", "MEMORY.md"), "utf8").trim(); } catch { seen = ""; }
+    let db = "";
+    try { db = readFileSync(join(hostDir, "state.db"), "utf8").trim(); } catch { db = ""; }
+    line(JSON.stringify({ ok: true, runtime: "hermes", memory_seen: seen, state_seen: db }));
     break;
   }
 

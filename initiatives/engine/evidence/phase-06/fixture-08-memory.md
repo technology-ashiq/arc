@@ -1,4 +1,32 @@
-# Phase 06 · fixture 8 — persistent memory OFF: **FAIL, measured**
+# Phase 06 · fixture 8 — persistent memory OFF: **FAILED as measured, then CLOSED by ADR-0222**
+
+> **STATUS UPDATE 2026-08-17 — the fixture now PASSES, and it passes on a property that is actually
+> true.** The runtime's memory is still always-on and still uncloseable by configuration; what
+> changed is what arc mounts. Under **ADR-0222** each dispatch runs against a **private copy of a
+> warm template**, made immediately before the container starts and removed after it exits, so two
+> dispatches cannot share a memory file, a session or a `state.db` — regardless of which of the
+> volume's 20+ directories the runtime decides to persist into next.
+>
+> **Copying beats wiping because it needs no knowledge of the runtime's storage layout.** The marker
+> below turned up in `state.db` as well as the `MEMORY.md` the vendor names, so a wipe list one file
+> short would read green while carrying data across.
+>
+> **Measured cost: 2,235 ms** to copy 36 MB / 1,171 files, against a **145–400s+** cold boot for an
+> empty volume. The cheap option and the safe option are the same one, which is unusual enough to
+> say out loud.
+>
+> Proven by `tests/engine-hermes-workspace.bats` (6 tests) — dispatch N+1 sees nothing dispatch N
+> wrote, the template is never mutated, the copy is removed afterwards, and the driver states which
+> mode ran on the transcript. **A mutant that mounts the template directly reddens 3 of the 6.** The
+> negative control seeds the marker into the template and asserts the reader DOES see it, so the
+> empty result in the main test is a finding rather than a fixture that writes nothing.
+>
+> **Still open, and not closed by this ADR:** the carry-over path assumption A-06 names — accepted
+> drafts riding a later pack — is a different route into the same hole.
+
+---
+
+## The original measurement, kept because it is the reason any of the above exists
 
 REQ-02 fixture 8: *"a marker planted in run N is unrecallable in run N+1, proving persistent memory
 OFF (ADR-0211)."*

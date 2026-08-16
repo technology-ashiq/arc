@@ -56,8 +56,9 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -400,7 +401,62 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     JSON.stringify(input),
   ].join("\n");
 
-  const name = `arc-hermes-${process.pid}-${Date.now()}`;
+  // `randomUUID`, not `pid + ms`. An adversarial pass flagged the old name as too weak: two drivers
+  // in separate PID namespaces (docker-in-docker, two hosts sharing a volume over SMB) can produce
+  // the same pid in the same millisecond, and then `docker run --name` fails outright or one run's
+  // cleanup deletes another's files. ADR-0222 makes that collision worse, because the name now also
+  // keys a per-dispatch WORKSPACE.
+  const name = `arc-hermes-${randomUUID()}`;
+
+  // ADR-0222: THE DISPATCH GETS A PRIVATE COPY OF THE RUNTIME HOME.
+  //
+  // `ARC_HERMES_DATA` is a TEMPLATE here, not the workspace. The runtime's built-in memory cannot
+  // be turned off -- `hermes memory --help` says "Built-in memory (MEMORY.md/USER.md) is always
+  // active" -- and a marker planted in one run was measured on disk afterwards in BOTH
+  // `memories/MEMORY.md` and `state.db`. Mounting one directory across dispatches therefore carries
+  // content from pack A into dispatch B without it ever travelling as a pack, so REQ-06's boundary
+  // check never sees it.
+  //
+  // Copying beats wiping precisely because it needs NO knowledge of the runtime's storage layout:
+  // a wipe list one file short reads green while carrying data across, and the marker was already
+  // in a file the vendor's own docs do not name. Measured cost: 2,235 ms for 36 MB / 1,171 files,
+  // against a 145-400s cold boot for an empty volume. The cheap option and the safe option are the
+  // same one here.
+  let workspace = DATA_DIR;
+  let workspaceIsCopy = false;
+  if (DATA_DIR && existsSync(DATA_DIR)) {
+    let scratch;
+    try {
+      scratch = mkdtempSync(join(tmpdir(), "arc-hermes-ws-"));
+      workspace = join(scratch, "data");
+      cpSync(DATA_DIR, workspace, { recursive: true, dereference: false, force: true });
+      workspaceIsCopy = true;
+      // CLEANED UP ON EVERY EXIT PATH, registered at creation rather than written at each return.
+      // The usage-report cleanup was put in a `finally` that only the SUCCESS path reached, and an
+      // adversarial pass found it littering the volume on all five failure exits. A 36 MB copy per
+      // failed dispatch is a worse version of that same defect, so the handler is attached to
+      // process exit -- which covers the throws, the budget declines and the timeouts alike.
+      // `rmSync` is synchronous, which is the only kind of work an exit handler may do.
+      process.on("exit", () => {
+        try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); }
+        catch { /* a leftover scratch dir is not worth failing a completed run over */ }
+      });
+    } catch (e) {
+      // FAIL, never fall back to mounting the template. A fallback here is a dispatch running
+      // unconfined while every count still reads green -- the shape this cycle refused for egress
+      // one commit earlier. And a mutated template would carry run N's memories into run N+1
+      // through the template itself, which is the thing this whole mechanism exists to stop.
+      if (scratch) { try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); } catch { /* nothing to salvage */ } }
+      throw new Error(`could not make a private workspace from ${DATA_DIR}: ${e.message}`);
+    }
+  }
+  // SAY WHICH MODE RAN, on the transcript arc-run now forwards and scrubs. `workspaceIsCopy` was
+  // otherwise a variable nothing read -- the dead-assertion class this cycle has already recorded
+  // twice. An unconfined dispatch has to be visible in the trail rather than inferred from the
+  // absence of a line.
+  process.stderr.write(workspaceIsCopy
+    ? `hermes: workspace is a PRIVATE copy of ${DATA_DIR} (ADR-0222)\n`
+    : `hermes: workspace is the template itself -- memory WILL carry between dispatches (ADR-0222)\n`);
 
   // THE USAGE REPORT IS ASKED FOR, BECAUSE THE RUNTIME OFFERS ONE (ADR-0221). The vendor
   // documents the flag on the pinned image itself: "One-shot mode only: after the run, write a
@@ -423,7 +479,7 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   //
   // Closed by RECENCY, not by ownership: a report is only read if it was written after this run
   // started. That makes the operator path safe without deleting a file arc does not own.
-  const usageHost = USAGE_FILE || join(DATA_DIR, `${name}.usage.json`);
+  const usageHost = USAGE_FILE || join(workspace, `${name}.usage.json`);
   const usageInContainer = USAGE_FILE ? "" : `/opt/data/${name}.usage.json`;
   const runStartedAt = Date.now();
 
@@ -439,7 +495,7 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   // if something else wrote it -- and then only if it is newer than this run (see usageHost).
   const args = [
     "run", "--rm", "--name", name,
-    "-v", `${DATA_DIR}:/opt/data`,
+    "-v", `${workspace}:/opt/data`,
   ];
 
   // EGRESS CONFINEMENT (Phase 06 fixture 7). Measured 2026-08-16: with default networking this

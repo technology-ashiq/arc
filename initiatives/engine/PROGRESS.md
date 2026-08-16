@@ -226,6 +226,43 @@ shipped `hermes.sh` · the container name is `pid + ms`, which collides across P
 
 ---
 
+### FIXTURE 8 CLOSED — ADR-0222, a private workspace per dispatch, 2026-08-17
+
+The runtime's memory is still always-on and still uncloseable by configuration. What changed is
+**what arc mounts**. `ARC_HERMES_DATA` becomes a **template**: it is read and copied, never mounted,
+and each dispatch runs against its own copy which is removed when it exits.
+
+**Copying beats wiping, and the reason is the measurement.** The planted marker turned up in
+`state.db` as well as the `MEMORY.md` the vendor names — so a wipe list needs to know the runtime's
+storage layout, and one file short reads **green while carrying data across**. A copy needs to know
+nothing.
+
+| option | closes it? | measured |
+|---|---|---|
+| fresh empty volume | yes | a **145–400s+** cold boot every dispatch |
+| **warm template copied** | **yes** | **2,235 ms** for 36 MB / 1,171 files |
+| wipe the memory surface | only if the list is complete | ~0 ms, and the list is the problem |
+
+**The cheap option and the safe option are the same one**, which is unusual enough to say out loud;
+where they diverge this plan takes the safe one.
+
+`tests/engine-hermes-workspace.bats`, 6 tests: dispatch N+1 sees nothing dispatch N wrote · the
+template is never mutated (otherwise memory travels through the template and the copy buys nothing)
+· the copy is removed afterwards · the driver states which mode ran on the transcript. **A mutant
+mounting the template directly reddens 3 of 6.** The negative control seeds the marker into the
+template and asserts the reader DOES see it, so test 1's empty result is a finding rather than a
+fixture that writes nothing.
+
+**Copy failure FAILS the dispatch** — no fallback to mounting the template. That fallback is
+unconfined execution wearing the appearance of a control, the same refusal the egress work made.
+The container name moved from `pid + ms` to `randomUUID()`, because that name now keys a workspace
+and an adversarial pass had already flagged the old one as collision-prone.
+
+**Closed for the VOLUME path only.** Assumption A-06's carry-over path — accepted drafts riding a
+later pack — is a different route into the same hole and stays open.
+
+---
+
 ### FIXTURE 7'S BEHAVIOURAL ARM NOW PASSES — the egress gate is built, 2026-08-17
 
 `.claude/scripts/engine/egress-proxy.py`, run inside the **same pinned image** (Python 3.13 is
