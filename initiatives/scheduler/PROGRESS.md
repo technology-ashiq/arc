@@ -5,7 +5,7 @@ cycle: arc-scheduler (Cycle 12, opened 2026-08-12)
 phase: 03
 appetite: 3d
 burn: 2.5d
-blocked-on: elapsed time — the proving week runs to 2026-08-20
+blocked-on: elapsed time — the proving week RESTARTED 2026-08-17 (a defect made every run after the first a no-op); runs to 2026-08-24
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -26,7 +26,7 @@ depends-on: —
 | 00 | Steel thread — `hq.jobs.yaml` + `jobs-lint` (hostile corpus + adversarial pass) + wrapper core (per-job lock, slot computation, receipts + idem@slot, git-state guard, POL-D authorization, script timeout, mock-driver delegation) + the two job scripts + `processes/` stubs + the `arc-run` refusal guard | 1.0d | ✅ done 2026-08-12 |
 | 01 | The attended heartbeat — `run` / `catchup` / `list --next 7`, read-only SessionStart nudge, deterministic brief jobs panel with overdue needs-you | 0.5d | ✅ done 2026-08-12 |
 | 02 | The cron flip — `register`/`unregister` with ADR-0803's five explicit settings, next-minute smoke, fail-closed policy gate, rehearsed off-switch | 0.75d | ✅ done 2026-08-13 |
-| 03 | Proving week + retro — ≥2 jobs unattended ≥7d, zero manual starts by actor query, fire-drill, gap audit, metric pack, `/arc-retro` | 0.5d | ⏳ running — clock started 2026-08-13, earliest close 2026-08-20 |
+| 03 | Proving week + retro — ≥2 jobs unattended ≥7d, zero manual starts by actor query, fire-drill, gap audit, metric pack, `/arc-retro` | 0.5d | ⏳ running — clock RESTARTED 2026-08-17, earliest close 2026-08-24 |
 
 **Appetite burn: 2.5 of 3 days used (83%).** Phases allocate **2.75 of 3 days; 0.25 days reserved
 for Phase 0 adversarial rework** — named, not spare. The reserve exists because this repo's own

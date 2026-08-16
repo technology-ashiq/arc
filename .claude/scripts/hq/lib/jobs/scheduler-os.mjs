@@ -100,9 +100,23 @@ export function taskActionLine({ command, args = [], logPath } = {}) {
   const prog = `${quoted(winPath(command))}${argv ? ` ${argv}` : ""}`;
   return {
     execute: "cmd.exe",
-    // `if not exist ... md` rather than plain `md`, which errors on an existing directory and
-    // would take the run down with it.
-    argument: `/c "if not exist ${quoted(dir)} md ${quoted(dir)} & ${prog} >> ${quoted(winPath(logPath))} 2>&1"`,
+    // NO CONDITIONAL IN THE COMMAND LINE, and this line cost a proving week.
+    //
+    // It used to read `if not exist DIR md DIR & PROG`. `cmd` binds the ENTIRE remainder of the
+    // line to the IF, so once the directory existed -- which is every run after the first -- the
+    // program never ran and cmd exited **0**. Task Scheduler recorded a successful run, no log
+    // was written because nothing wrote one, and no receipt landed because nothing executed. A
+    // job that reports success and does nothing is the precise failure this whole cycle exists to
+    // detect, shipped inside the fix for a different one.
+    //
+    // Parenthesising the IF does not help: measured, `if not exist DIR (md DIR) & PROG` fails the
+    // same way. The conditional has to go. `md` on an existing directory errors, `2>nul` swallows
+    // that, and `&` then runs the program unconditionally -- there is nothing left for the parser
+    // to bind.
+    //
+    // The fixture that missed it tested the directory-MISSING branch only, which is the first run
+    // and never happens again. Both states are pinned now.
+    argument: `/c "md ${quoted(dir)} 2>nul & ${prog} >> ${quoted(winPath(logPath))} 2>&1"`,
   };
 }
 

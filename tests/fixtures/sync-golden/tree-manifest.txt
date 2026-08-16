@@ -202,7 +202,7 @@
 .claude/scripts/hq/lib/jobs/delegate.mjs	da71f1138f59439d5aaa0a95377cfd876c180e7029ad31d0668f0fbe3a08efb1
 .claude/scripts/hq/lib/jobs/panel.mjs	5acc0e9c062b47e052202d024d94cb49a11787076072ad5e0909badcd0a7e2b9
 .claude/scripts/hq/lib/jobs/policy-gate.mjs	b0bd307fb4a9e87ac9a88aaa3af306fb765aee071902c3dbe6e7492411930a17
-.claude/scripts/hq/lib/jobs/scheduler-os.mjs	e76d264f8da04e0793ef017f704d6237df8076822aebf6942f0b67505b619c46
+.claude/scripts/hq/lib/jobs/scheduler-os.mjs	4fefc52277e981aa206abfee43414cbde67edadea86f7a40ced1b0708df55851
 .claude/scripts/hq/lib/jobs/scheduler-task.ps1	f18b06fb9a4167778ef515c5ee917139e1af248a92bf4db6ea55e3d32c9dd3fb
 .claude/scripts/hq/lib/jobs/schema.mjs	312a3ae673b8e6141b689d8029679f4e45cac386dc6c341753a147fad03491fb
 .claude/scripts/hq/lib/ledger/costs.mjs	353c4a67cadcbc1b11f69807b17370634f046af2834a254e21956db5a4c20c68

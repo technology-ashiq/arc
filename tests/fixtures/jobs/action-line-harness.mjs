@@ -46,9 +46,6 @@ try {
   out("WEEKDAY_TRIGGER", registrationFor(
     { name: "brief-materialize", type: "script", cadence: "weekdays@06:00", budget: { min: 2 } }, common).trigger);
 
-  if (existsSync(logDir)) rmSync(logDir, { recursive: true, force: true });
-  out("LOGDIR_BEFORE", existsSync(logDir));
-
   // `String.fromCharCode` rather than a literal: the marker must not be a word this file could be
   // matched on by accident, and no apostrophe or backtick goes anywhere near a command line here.
   const probe = taskActionLine({
@@ -58,15 +55,32 @@ try {
   });
   out("EXECUTE", probe.execute);
 
-  const r = spawnSync(probe.execute, [probe.argument], {
-    encoding: "utf8", windowsHide: true, shell: false, windowsVerbatimArguments: true,
-  });
-  out("EXIT", r.error ? `spawn:${r.error.code}` : r.status);
-  out("STDERR", String(r.stderr || "").trim().slice(0, 200));
-
   const logFile = `${logDir}/probe.log`;
-  out("LOGDIR_AFTER", existsSync(logDir));
-  out("LOG_BODY", existsSync(logFile) ? readFileSync(logFile, "utf8").trim() : null);
+  const fire = () => {
+    if (existsSync(logFile)) rmSync(logFile, { force: true });
+    const r = spawnSync(probe.execute, [probe.argument], {
+      encoding: "utf8", windowsHide: true, shell: false, windowsVerbatimArguments: true,
+    });
+    return {
+      exit: r.error ? `spawn:${r.error.code}` : r.status,
+      stderr: String(r.stderr || "").trim().slice(0, 160),
+      dir: existsSync(logDir),
+      body: existsSync(logFile) ? readFileSync(logFile, "utf8").trim() : null,
+    };
+  };
+
+  // FIRST RUN -- the log directory does not exist. The action has to create it.
+  if (existsSync(base)) rmSync(base, { recursive: true, force: true });
+  out("LOGDIR_BEFORE", existsSync(logDir));
+  const first = fire();
+  out("FIRST", first);
+
+  // EVERY RUN AFTER THAT -- the directory is already there. This is the case the original fixture
+  // never asked about, and it is the one that shipped: `if not exist DIR md DIR & PROG` binds the
+  // whole line to the IF, so the program never ran and cmd still exited 0. Task Scheduler
+  // recorded a successful run of a job that did nothing, every slot, for three days.
+  const second = fire();
+  out("SECOND", second);
 
   rmSync(base, { recursive: true, force: true });
   process.stdout.write("HARNESS-DONE\n");
