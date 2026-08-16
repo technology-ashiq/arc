@@ -19,6 +19,30 @@ capture is the owner's. A phase that closes with those ticked would be closing o
 | 6 | `sitemap.xml` reachable at the permanent host | **MET** | Was **404** — Astro emits `sitemap-index.xml`. Fixed by SERVING the conventional path (`vercel.json` 308), not by rewording the criterion to match whatever the build emits. Verified through the preview: 200, `application/xml` |
 | 7 | `llms.txt` generated and well-formed — existence only, **never a lever** (ADR-1113) | **MET** | And it had already drifted: a static `public/` file listing one article while the site served two. Now generated from the same content glob as the homepage and the sitemap |
 
+## Criterion 5 will most likely never be satisfiable, and that is the RIGHT outcome
+
+Worth settling here rather than at the merge, because the tempting move is the wrong one.
+
+Phase 00 criterion 10 says the steel-thread receipt carries **the preview host**, and that Phase 01
+corrects it by `supersedes` — "the specified path, not a workaround". That was written when **no
+domain existed**. It does now: the article will be served at `arc.automemory.ai` the moment PR #2
+merges.
+
+So emitting the receipt with the preview host would mean **writing down something untrue** — a
+receipt asserting an article lives at an address it does not — purely so that criterion 5 has
+something to correct. That is a fabricated fact created to tick a box, and **E3 forbids it** in
+plainer terms than any convenience argument can answer.
+
+**Decision: the steel-thread receipt is emitted with the permanent host**, and criterion 5 closes
+as *not applicable* rather than met. The cutover machinery is built, adversarially attacked and
+proven end-to-end against the real emitter — it simply never has to run, because the domain landed
+before the first publication did. Capability without an occasion to use it is a good outcome; a
+false receipt manufactured to give it one is not.
+
+The machinery is not wasted either way: `resolveSlugUrl`, `planCutover` and the ULID chain are what
+every FUTURE correction rides on, and the two defects found building them were live defects in
+shipped code regardless of whether a cutover ever happens.
+
 ## What criterion 5 actually proved
 
 The mechanism is real even though the criterion is not met, and the distinction matters:

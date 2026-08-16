@@ -9,6 +9,7 @@
   "agents": [],
   "scripts": [
     ".claude/scripts/growth/arc-growth.mjs",
+    ".claude/scripts/growth/content-sha-of.mjs",
     ".claude/scripts/growth/lib/adapters.mjs",
     ".claude/scripts/growth/lib/citation-lint.mjs",
     ".claude/scripts/growth/lib/cluster.mjs",
