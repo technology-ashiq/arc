@@ -3,10 +3,95 @@
 Two loops. The publish loop runs when there is a draft; the ingest loop runs once a week.
 Everything here is a command plus the one thing only a human can do.
 
-**Nothing in this file runs yet.** The site is `noindex` and there is no Search Console property,
-so the ingest loop has nothing to read (Phase 01 is parked, ADR-1115). It is written now because
-the phase spec is explicit that the runbook line matters as much as the code — a ritual invented
-later, under time pressure, is where a range gets mis-set.
+**Updated 2026-08-16.** The Search Console Domain property now exists and Phase 01 is un-parked, so
+the ingest loop has a clock — but **not yet data**: the site is `noindex` until arc-site PR #3
+merges, and Google accrues no impressions before then. The ingest stays unrunnable for a different
+reason than when this file was written, and the distinction matters: it used to be *no property*,
+now it is *no indexability*.
+
+---
+
+## Closing Phase 00's steel thread, once arc-site PR #2 is merged
+
+Written out in full because the alternative is re-deriving it at the moment of the merge, which is
+where a wrong value gets typed into a receipt that cannot be edited afterwards.
+
+**The receipt carries the PERMANENT host, not the preview host.** Phase 00 criterion 10 says the
+preview host, and that was written when no domain existed. One now does, and the article is served
+at `arc.automemory.ai` — so a receipt naming the preview host would assert something untrue purely
+to give Phase 01 criterion 5 something to correct. **E3 forbids that.** Criterion 5 closes as *not
+applicable*; see `evidence/phase-01/exit-criteria.md`.
+
+```bash
+# 1. From the MAIN clone -- never a worktree. The spine is gitignored, so a worktree has its own
+#    and an event written there is valid, real, and invisible to every reader including arc-inbox.
+cd E:/Work_Hub/01_Automemory/arc
+
+# 2. Pull first. A stale checkout rejects a newly merged kind as UNKNOWN_KIND, and the emitter
+#    exits 0 while quarantining, so the failure is silent.
+git pull --ff-only
+
+# 3. content_sha is sha256 over the RAW BYTES of the .mdx in the SITE repo's MERGED tree.
+#    Not a git blob sha (that prefixes a header), not the rendered HTML, and read from the merged
+#    tree rather than a local working copy -- arc-site pins eol=lf so the two now agree, which
+#    they did not before 2026-08-16.
+cd E:/Work_Hub/01_Automemory/arc-site && git checkout main && git pull --ff-only
+
+# Uses contentShaOfFile -- THE definition. Never hash it another way here: a runbook that computes
+# this value independently is a second implementation of the field the receipt is keyed on, and
+# that exact class already bit us across a BOM on 2026-08-16.
+node E:/Work_Hub/01_Automemory/arc/.claude/scripts/growth/content-sha-of.mjs src/pages/blog/the-author-cannot-be-the-attacker.mdx
+```
+
+Then write the payload to a REAL FILE and emit from it. Two things here are not stylistic, and both
+were wrong in the first draft of this procedure:
+
+- **`bash`, not `node`.** `arc-event.sh` is `#!/usr/bin/env bash`; running it under node throws a
+  `SyntaxError` on line 2. Every other invocation in this file uses `bash`.
+- **A real file, not `<(process substitution)`.** Process substitution yields `/dev/fd/N`, which
+  **native Windows node cannot open** — and this procedure runs on `E:/`. It would fail at the one
+  moment it must not.
+
+```bash
+cd E:/Work_Hub/01_Automemory/arc
+
+# The host comes from site.json, never typed here. Criterion 4 exists because a hand-typed host is
+# one typo away from a receipt claiming an article lives somewhere it does not -- and since `site`
+# is in the idem preimage, that typo is ACCEPTED as a distinct publication rather than refused as a
+# mistake. A runbook that hardcodes the host reintroduces exactly the defect the config removed.
+SITE="$(node -p "require('./initiatives/growth/site.json').site")"
+echo "site = $SITE"
+
+# Fill in the sha from step 3 and the merge PR number, then write the file.
+cat > /tmp/steel-thread.json <<JSON
+{"site":"$SITE",
+ "slug":"the-author-cannot-be-the-attacker",
+ "url":"https://$SITE/blog/the-author-cannot-be-the-attacker/",
+ "title":"The person who wrote the check is the worst person to break it",
+ "template_id":"title-a",
+ "cluster_id":"c-000",
+ "content_sha":"PASTE_THE_SHA_FROM_STEP_3",
+ "pr_ref":"#2"}
+JSON
+
+# Refuse to emit a placeholder. This is an append-only log; a receipt carrying the literal
+# PASTE_THE_SHA_FROM_STEP_3 could not be edited afterwards, only superseded.
+grep -q PASTE_THE_SHA /tmp/steel-thread.json && { echo "sha not filled in -- STOP"; false; }
+
+bash .claude/scripts/hq/arc-event.sh emit content.published --payload-file /tmp/steel-thread.json --strict
+```
+
+**Then LOOK.** Exit 0 is not evidence — `retro-log.md:36` records an emitter that exited 0 while
+every receipt it wrote was quarantined:
+
+```bash
+grep -rl content.published .claude/state/hq/events/*.jsonl        # must find it
+find .claude/state/hq/events/_quarantine -name "*.jsonl" -newermt "-10 minutes" | head   # must be empty
+```
+
+`cluster_id` is `c-000`, the reserved literal for pre-cluster content — the miner never mints it,
+so no real cluster can collide. `template_id` is `title-a`, a real versioned file, so it survives
+REQ-04's closed-set check rather than being a sentinel that needs superseding later.
 
 ---
 

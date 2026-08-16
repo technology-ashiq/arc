@@ -34,7 +34,13 @@ export const isContentKind = (kind) => CONTENT_KIND_SET.has(kind);
 const DELIM = "|";
 
 // A hostname, lowercase, no scheme, no port, no path. Excludes the delimiter by construction.
-const SITE_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+//
+// EXPORTED since 2026-08-16. `cutover.mjs` had copied this pattern with a comment claiming "the
+// test asserts the two agree" — no such test existed and none could be written, because neither
+// copy was exported. A duplicated grammar with an imagined test guarding it is worse than an
+// honest duplicate: it reads as covered. One grammar, imported, is the only version of this that
+// stays true (A5).
+export const SITE_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 // A URL slug. No leading/trailing hyphen, no underscores — this becomes a public path segment.
 const SLUG_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 // Machine dimensions, the same shape `metric.observed` uses for `surface` (validate-leads.mjs:85),
@@ -71,6 +77,37 @@ const hasControlChar = (s) => {
   return false;
 };
 
+// A lone surrogate — half of a pair, with no partner. Found by an adversarial pass 2026-08-16, and
+// it is an IDEM COLLISION, which is the one failure this file's header claims to have closed.
+//
+// The preimage is joined as a STRING and then hashed as BYTES, and that map is not injective:
+// `Buffer.from(s, "utf8")` encodes every lone surrogate to EF BF BD, the same three bytes as
+// U+FFFD. So `title` ending in a lone surrogate and the same title ending in U+FFFD are different
+// strings, produce different event shas, and hash to ONE idem — the second is dropped as DUP_IDEM.
+// The `|` delimiter defence operates on the string and cannot see this, because the loss happens
+// one layer down at the encode.
+//
+// It is reachable without an attacker: any `title.slice(0, N)` landing mid-pair in an emoji title
+// produces one, and JSON round-trips it intact, so the value survives being read back off a spine
+// file. Refused here rather than normalized — normalizing is how a validator becomes a suggestion,
+// and silently rewriting a title would change the very bytes the idem is taken over.
+//
+// Written by hand rather than with String.prototype.isWellFormed, which is Node 20+; the CI matrix
+// still runs an 18 leg, where that method is undefined and the guard would silently never fire.
+const hasLoneSurrogate = (s) => {
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c >= 0xd800 && c <= 0xdbff) {
+      const next = s.charCodeAt(i + 1);
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+      i++;
+    } else if (c >= 0xdc00 && c <= 0xdfff) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const SHAPE = Object.freeze({
   "content.published": Object.freeze({
     required: Object.freeze(["site", "slug", "url", "title", "template_id", "cluster_id", "content_sha", "pr_ref"]),
@@ -95,6 +132,11 @@ export function contentIdem(kind, p) {
     // silently make two different publications share a key.
     if (v.includes(DELIM))
       throw new SpineError("BAD_CONTENT", `${kind}.${f} may not contain ${JSON.stringify(DELIM)} — it is the idem join delimiter, and a value carrying it can forge another receipt's key`);
+    // Asserted HERE as well as in assertContent, because this function is exported and the emitter
+    // derives idems through it. A guard that lives only in the validator protects only the callers
+    // that happen to validate first.
+    if (hasLoneSurrogate(v))
+      throw new SpineError("BAD_CONTENT", `${kind}.${f} contains a lone surrogate — it encodes to the same UTF-8 bytes as U+FFFD, so two different values would share one idem and the second would be dropped as DUP_IDEM`);
     parts.push(v);
   }
   return sha256Hex(parts.join(DELIM));
@@ -121,6 +163,8 @@ export function assertContent(event) {
       throw new SpineError("BAD_CONTENT", `${kind}.${k} must be a string`);
     if (hasControlChar(v))
       throw new SpineError("BAD_CONTENT", `${kind}.${k} carries an ASCII control character — refused by code point, never stripped`);
+    if (hasLoneSurrogate(v))
+      throw new SpineError("BAD_CONTENT", `${kind}.${k} contains a lone surrogate — it encodes to the same UTF-8 bytes as U+FFFD, so two different values would share one idem and the second would be dropped as DUP_IDEM`);
   }
 
   if (!SITE_RE.test(p.site))

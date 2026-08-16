@@ -6,6 +6,7 @@
 // interesting code and the dangerous code are not the same file.
 
 import { assertTemplateId } from "./templates.mjs";
+import { ULID_RE } from "../../hq/lib/canonical.mjs";
 
 export class PublishError extends Error {
   constructor(code, message) { super(message); this.name = "PublishError"; this.code = code; }
@@ -77,11 +78,29 @@ export function renderReviewPack(pack) {
  */
 export function classifyPublication(slug, receipts) {
   if (!Array.isArray(receipts))
-    throw new PublishError("BAD_INPUT", "receipts must be an array of content.published payloads");
+    throw new PublishError("BAD_INPUT", "receipts must be an array of content.published event projections");
   const prior = receipts.filter((r) => r && r.slug === slug);
-  if (prior.length === 0) return { kind: "new", supersedes: null, priorCount: 0 };
+  if (prior.length === 0) return { kind: "new", supersedesEventId: null, priorCount: 0 };
   const last = prior[prior.length - 1];
-  return { kind: "update", supersedes: last.content_sha, priorCount: prior.length };
+  // The pointer is the prior EVENT's ULID. This returned `last.content_sha` until 2026-08-16 under
+  // the field name `supersedes`, and an adversarial pass found it still there after ADR-1119 fixed
+  // the same defect in `ingest.mjs` and `cutover.mjs` — the third adjacent file, which is this
+  // lane's most-repeated failure and the reason the rule is "grep the pattern, not the file".
+  //
+  // Two things were wrong with a sha here, and the second is the one that bites: the spine refuses
+  // a non-ULID `supersedes` outright (`BAD_SUPERSEDES`), so it would have failed loudly — but a
+  // site re-pin leaves the bytes UNCHANGED, so both receipts share one `content_sha` and the value
+  // could not have named which event it meant even if the grammar had allowed it.
+  //
+  // The field is RENAMED rather than quietly corrected. A caller reading `supersedes` and getting
+  // a ULID where it expected a sha should break at the name, not silently at the spine. Phase 04's
+  // exit-criteria evidence cited the old behaviour as MET and is corrected alongside this.
+  // ULID_RE imported, not re-typed — a local copy here was looser than the spine's and would have
+  // returned a pointer the emitter refuses as BAD_SUPERSEDES.
+  if (typeof last.id !== "string" || !ULID_RE.test(last.id))
+    throw new PublishError("BAD_INPUT",
+      `the prior receipt for ${slug} has no ULID id — classifyPublication needs event projections (payload plus id), not bare payloads, because a payload cannot carry the pointer this returns`);
+  return { kind: "update", supersedesEventId: last.id, priorCount: prior.length };
 }
 
 /**

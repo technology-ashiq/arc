@@ -228,12 +228,23 @@ const pack = (over = {}) => ({ slug: "three-states-not-two", previewUrl: "https:
 # ---------- update vs duplicate, and the unedited counter ----------
 
 @test "publish: re-publishing a slug is an update, not a duplicate page" {
+  # REWRITTEN 2026-08-16 (ADR-1119). This pinned `supersedes === content_sha` as correct, and it
+  # is not: the spine's `supersedes` is a ULID naming an EVENT, and after a site re-pin BOTH
+  # receipts carry one content_sha, so the sha could not identify which event it meant even if the
+  # grammar had allowed it. The fixture also used two DIFFERENT shas, the single shape in which a
+  # sha-keyed pointer looks like it works. Both receipts below share one sha, deliberately.
   run _node "$PRE
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2';
     const none = P.classifyPublication('a', []);
-    const again = P.classifyPublication('a', [{ slug: 'a', content_sha: sha('a') }, { slug: 'b', content_sha: sha('b') }]);
-    console.log(none.kind + ' ' + again.kind + ' ' + again.priorCount + ' ' + (again.supersedes === sha('a') ? 'supersedes-last' : 'WRONG-TARGET'));"
+    const again = P.classifyPublication('a', [
+      { id: A, slug: 'a', content_sha: sha('x') },
+      { id: B, slug: 'a', content_sha: sha('x') }]);
+    console.log(none.kind + ' ' + again.kind + ' ' + again.priorCount + ' ' + (again.supersedesEventId === B ? 'names-last-event' : 'WRONG-TARGET'));
+    // Bare payloads can no longer answer this question, and say so instead of guessing.
+    console.log(err(() => P.classifyPublication('a', [{ slug: 'a', content_sha: sha('x') }])));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "new update 1 supersedes-last" ]
+  [ "${lines[0]}" = "new update 2 names-last-event" ]
+  [ "${lines[1]}" = "BAD_INPUT" ]
 }
 
 @test "publish: sha-equal increments the counter and sha-different neither increments nor resets" {
