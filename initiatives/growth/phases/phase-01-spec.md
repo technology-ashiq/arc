@@ -1,12 +1,34 @@
 # Phase 01 — Name and instrument the site
 
-> **PARKED (ADR-1115), 2026-08-13.** Assumption A-07 fired: growth ships as a standing capability
-> and this phase does not run in Cycle 14. **It un-parks unchanged** — nothing below is rewritten,
-> because the work is right and only its timing moved.
+> **UN-PARKED 2026-08-16.** ADR-1115's sharpened revisit trigger — *a verified Search Console
+> Domain property exists for `automemory.ai`* — is now TRUE. Verified rather than reported: the
+> record `google-site-verification=X4WZ3w67…` resolves for `automemory.ai` from Google's own public
+> resolver `8.8.8.8` and from `1.1.1.1`. The owner added the property on 2026-08-16.
 >
-> Entry needs **two** things and has one. `arc.automemory.ai` now resolves and serves (2026-08-13),
-> so the domain half is satisfied; the **verified Search Console Domain property is still absent**,
-> and that is the half that starts evolve's clock. The domain existing does NOT un-park this phase.
+> **The phase un-parked unchanged, exactly as promised — every criterion below is verbatim.** Three
+> notes on entry state, none of which rewrite a criterion:
+>
+> - **Criterion 1 was an outstanding debt, not new work.** ADR-1105 required the domain choice to
+>   get its own one-way ADR *at this gate*; the address went live 2026-08-13 and the ADR was never
+>   written, because the phase that requires it was parked. Now **ADR-1118**. The park mechanism
+>   suspending a record-keeping obligation along with the work is a retro item.
+> - **Criterion 5 has nothing to correct yet, and that is a sequencing fact, not a pass.** The spine
+>   holds **zero** `content.published` receipts — Phase 00's steel thread never ran, having been
+>   blocked on the Vercel-Git connect that completed 2026-08-14. Criterion 5 is satisfiable only
+>   *after* Phase 00 emits a preview-host receipt for this phase to supersede. Closing it before
+>   then would be a vacuous pass of exactly the kind `.claude/rules/testing.md` names.
+> - **Criterion 6 reads literally and the literal reading currently fails.** `/sitemap.xml` is
+>   **404**; Astro's integration emits `/sitemap-index.xml` and `/sitemap-0.xml`, both **200** and
+>   both correctly pointing at `https://arc.automemory.ai/`. This phase makes the literal criterion
+>   true by serving `/sitemap.xml` rather than by softening the criterion to match what the build
+>   happens to emit — a criterion edited to fit its output measures nothing.
+>
+> **Clock status, stated because it is the reason this phase exists.** The property existing does
+> **not** start evolve's four-week clock on its own. The site serves `noindex, nofollow` plus
+> `Disallow: /`, so Google accrues zero impressions and Search Console will hold zero Performance
+> rows. Property **and** indexability together start the clock. The owner ruled on 2026-08-16 that
+> the `INDEXABLE` flip ships now; until that PR is merged the one-for-one day loss of ADR-1105 has
+> simply moved from the GSC property to the flip.
 
 **Goal (one line):** the site gets a permanent name and a Search Console property, because that
 date is the earliest moment evolve's four-week clock can begin.

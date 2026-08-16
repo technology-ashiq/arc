@@ -217,6 +217,7 @@ the feed.
 | 1115 | Growth ships as a standing capability; the two domain-dependent phases are parked, not faked | two-way |
 | 1116 | A spoke must be a distinct topic, not a re-cut of the pillar's own tokens | two-way |
 | 1117 | Metric corrections carry a revisioned `source_id`; the emitter's idem asymmetry is flagged back | two-way |
+| 1118 | The site is `arc.automemory.ai` — a subdomain of the company root, chosen as a one-way door | one-way |
 
 **Renumber note (2026-08-14).** This index and every ADR's H1 title still carried the pre-merge
 numbers `1000–1015`, which `ledger` legitimately owns on disk — so the index resolved to *ledger's*
