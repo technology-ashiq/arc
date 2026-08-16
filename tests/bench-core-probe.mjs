@@ -134,12 +134,34 @@ function recordingsWithCost(name, inr) {
   //
   // A class with no fixtures is exactly what the coverage gate already has a sentence for.
   // Refusing to start is a far worse answer than reporting the zero.
+  // AND THIS CHECK WENT VACUOUS ON 2026-08-17, WHICH IS ITS OWN LESSON.
+  //
+  // It read `discoverClasses(ROOT).filter(c => c.count === 0)` and asserted `.every(...)` over the
+  // result. The only zero-fixture classes in the tree were the two scheduler job stubs -- so when
+  // `discoverClasses` correctly stopped returning stubs, the filter went empty, `[].every()` is
+  // `true`, and the check kept printing `ok` while measuring nothing. The guard that caught the
+  // last cross-lane regression was silently disarmed by the next one, and no string in any bats
+  // file was watching this line.
+  //
+  // So the subject is now BUILT rather than borrowed from whatever the shared `processes/`
+  // directory happens to contain. A test whose subject is another lane's file is a test that lane
+  // can delete.
   const covered = discoverClasses(ROOT);
   check("discovery survives a process that declares no evals at all", covered.length > 0);
-  const zero = covered.filter((c) => c.count === 0);
-  check("and reports each of them as zero fixtures rather than throwing",
-    zero.every((c) => c.eligible === false && /0 of 5 fixtures/.test(c.reason)),
-    JSON.stringify(zero.slice(0, 2)));
+
+  const noEvalTree = mkdtempSync(join(tmpdir(), "bench-core-noevals-"));
+  try {
+    mkdirSync(join(noEvalTree, "processes"), { recursive: true });
+    writeFileSync(join(noEvalTree, "processes", "declares-nothing.process.yaml"),
+      "name: declares-nothing\nversion: 1.0.0\nintent: \"a process that ships no eval pack at all\"\npermissions: declared\ninputs: []\n", "utf8");
+    const zero = discoverClasses(noEvalTree);
+    check("a process declaring no evals is DISCOVERED, not a startup crash", zero.length === 1, JSON.stringify(zero));
+    check("and reports zero fixtures rather than throwing",
+      zero.length === 1 && zero[0].count === 0 && zero[0].eligible === false && /0 of 5 fixtures/.test(zero[0].reason),
+      JSON.stringify(zero));
+  } finally {
+    rmSync(noEvalTree, { recursive: true, force: true });
+  }
   // The armed class is still found on the same tree -- otherwise "survives" would just mean
   // "returned something".
   check("and the armed class is still discovered beside them",
@@ -230,10 +252,24 @@ function recordingsWithCost(name, inr) {
   // would have admitted three groups off the stale reservation and invoked nine times.
   check("only the FIRST group ran before the corrected remainder refused the rest",
     runs.length === 3, `saw ${runs.length} invocations`);
-  check("a later fixture is refused because the cap was exhausted",
-    /the run cap was exhausted before this group/.test(r.stdout), r.stdout);
+  // AND IT NAMES THE CAP THAT ACTUALLY BOUND. This assertion used to require the words "the run
+  // cap was exhausted", which was FALSE for its own fixture: the run cap here is 1000 and the
+  // spend is 120, so what stopped the run is the PROCESS sub-cap of 100. One hardcoded sentence
+  // served both branches, and this test pinned it. The consequence is not cosmetic once a real
+  // pair is benched -- ceilings.json now makes the sub-cap the binding constraint on every real
+  // run, so an operator told the run cap was reached would go and raise the wrong number.
+  check("a later fixture is refused, and the refusal names the PROCESS sub-cap that actually bound",
+    /the process sub-cap was exhausted by commit-msg-draft before this group/.test(r.stdout), r.stdout);
+  check("and it does not blame the run cap, which had 880 of 1000 left",
+    !/the run cap was exhausted before this group/.test(r.stdout), r.stdout);
   check("the measured cost reached bench at all", runs.some((e) => e.cost && e.cost.inr_estimate === 40),
     JSON.stringify(runs.map((e) => e.cost)));
+  // AND THE BREACH IS REPORTED. A ceiling is hand-authored (ADR-0904 has no pricing snapshot), so
+  // a group whose measured spend came in above its reservation is the single observation that
+  // proves the guess wrong -- and it used to be absorbed in silence: admission correctly
+  // re-derived off the real number and nothing anywhere said the bound had been passed.
+  check("a measured spend above the reservation is REPORTED, not silently absorbed",
+    /CEILING BREACHED on commit-msg-draft: reserved 30, measured 120/.test(r.stdout), r.stdout);
   check("the overrun run exits 1", r.status === EXIT.PARTIAL);
 
   // A costed receipt that the spine would REJECT must fail at the driver, loudly, not vanish into

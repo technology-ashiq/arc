@@ -39,7 +39,10 @@ D_STATUS() { cat "$BATS_FILE_TMPDIR/drift.status"; }
   [ "$(D_STATUS)" -eq 0 ]
   local oks
   oks="$(D | grep -c '^ok ')"
-  [ "$oks" -ge 40 ]
+  # 56 measured 2026-08-17 (49 before the vanished-class section). Tightened from a floor of 40:
+  # at that slack a whole section could be deleted without the count moving, which is the one
+  # thing this test exists to notice.
+  [ "$oks" -eq 56 ]
 }
 
 @test "quality and cost comparability fail independently" {
@@ -116,7 +119,22 @@ D_STATUS() { cat "$BATS_FILE_TMPDIR/drift.status"; }
   [[ "$(D)" == *"ok nothing was quarantined"* ]]
 }
 
+@test "a class the champion benched and this run did not is a finding, not an absence" {
+  # The guard walked the CANDIDATE's classes and looked the champion up from them, so a class
+  # present only on the champion side was visited by nothing: no row, no alert, clean stayed true
+  # and the receipt said outcome ok. Latent while discovery returned every process stem; live the
+  # moment it started filtering job stubs, because processes/ is a company organ every live lane
+  # edits and one job_stub line added upstream would delete a class from the guard's view
+  # entirely. That is this lane's own recorded failure shape: a guard reporting no drift on a run
+  # where nothing was measured.
+  [ "$(D_STATUS)" -eq 0 ]
+  [[ "$(D)" == *"ok a class the champion benched and this run did not is REPORTED, not skipped"* ]]
+  [[ "$(D)" == *"ok the run does NOT report itself clean"* ]]
+  [[ "$(D)" == *"ok an approval.requested IS raised for it, because absence is never inferred from nobody looking"* ]]
+  [[ "$(D)" == *"ok and the receipt records the guard as NOT clean"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 13 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ]
 }

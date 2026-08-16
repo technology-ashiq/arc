@@ -611,13 +611,73 @@ export function loadClass(root, processName) {
   return { processName, fixtures, pack, version };
 }
 
-/** Every class this tree declares, each carrying its coverage verdict. */
-export function discoverClasses(root) {
+/**
+ * Is this process a scheduled-job stub rather than something a driver can run?
+ *
+ * `processes/` is a company organ EVERY live lane edits, and the scheduler lane added two stubs
+ * to it (ADR-0802/ADR-0504: a scheduled job needs a policy subject, and the subject set is a
+ * directory listing of this folder, so the job needs a filename stem here). Those files say
+ * "NOT AN ENGINE PROCESS" in their own body. They ship no `evals:` and never will.
+ *
+ * The rule is `arc-run.mjs:247`'s, and it is keyed on PRESENCE, never on `=== true`: the frozen
+ * YAML subset parses `yes`, `on`, `True`, `TRUE` and `"true"` as STRINGS and `1` as a number, so
+ * an equality check lets every one of those spellings walk past.
+ *
+ * WHAT `job_stub: false` MEANS DEPENDS ON WHO IS ASKING, and an earlier draft of this comment
+ * repeated arc-run's claim that it is "the one spelling that means compile me". Checked across
+ * the tree, that is false. Four readers, three verdicts:
+ *   - here and `arc-run.mjs:247`  -- presence + `!== false`  -> RUNNABLE
+ *   - `arc-compile.mjs:110-112`   -- presence only            -> silently skipped, never compiled
+ *   - `process-lint.mjs:283-288`  -- `!== true` is an ERROR   -> the document is rejected outright
+ * The hole is closed by the linter rather than by agreement: `job_stub: false` cannot land in the
+ * tree at all, so the divergence is latent and not live. It is written down because the next
+ * reader of any one of those four sites would otherwise trust a sentence the other three break --
+ * and because repairing `arc-compile` and `process-lint` is the ENGINE lane's work, not bench's.
+ *
+ * This IS a second copy, which this repo has been burned by before, so it is pinned rather than
+ * trusted: section 8 of `tests/bench-steel-probe.mjs` (driven by `tests/bench-harness.bats`)
+ * compares bench's verdict against arc-run's ACTUAL behaviour for every process in the tree and
+ * for every truthy spelling, so a divergence is a red suite and not a silent wrong answer. And
+ * `driverTakesModel` below no longer treats an unexpected arc-run refusal as an answer at all,
+ * so even a drifted copy cannot degrade a run quietly.
+ */
+export function isJobStub(root, processName) {
+  const path = join(root, "processes", `${processName}.process.yaml`);
+  const parsed = parseYamlSubset(readFileSync(path, "utf8"));
+  if (!parsed.ok) throw new OperatorError(`${processName}: canonical file does not parse: ${parsed.error?.what ?? "unknown"}`);
+  const doc = parsed.value;
+  if (!doc || !Object.prototype.hasOwnProperty.call(doc, "job_stub")) return false;
+  return doc.job_stub !== false;
+}
+
+/** Every process stem in the tree, stubs included, in a stable order. */
+export function allProcessNames(root) {
   return readdirSync(join(root, "processes"))
     .filter((f) => f.endsWith(".process.yaml"))
     .map((f) => f.slice(0, -".process.yaml".length))
-    .sort()
-    .map((name) => classCoverage(root, name));
+    .sort();
+}
+
+/**
+ * The process stems a driver can actually be pointed at.
+ *
+ * Used both for the coverage report and for picking the capability probe's subject. A stub in
+ * either place is a wrong answer: in the report it is a permanent "NO PROPOSAL - 0 of 5" row for
+ * something that is not a candidate, and in the probe it made arc-run refuse for a reason that
+ * has nothing to do with the driver.
+ */
+export function runnableProcessNames(root) {
+  return allProcessNames(root).filter((name) => !isJobStub(root, name));
+}
+
+/** The job stubs this tree carries, so their absence from the report is STATED, never silent. */
+export function jobStubNames(root) {
+  return allProcessNames(root).filter((name) => isJobStub(root, name));
+}
+
+/** Every class this tree declares, each carrying its coverage verdict. Job stubs are not classes. */
+export function discoverClasses(root) {
+  return runnableProcessNames(root).map((name) => classCoverage(root, name));
 }
 
 /**
@@ -631,18 +691,74 @@ export function discoverClasses(root) {
  *
  * Costs one process per RUN, not per attempt, and reaches no provider.
  */
-export function driverTakesModel(root, driver) {
-  // Any declared process will do -- the capability is the DRIVER's, and arc-run only needs a
-  // parseable process to reach its own validation. Read from the tree so a renamed pilot cannot
-  // turn this probe into a silent "not capable".
-  const processName = readdirSync(join(root, "processes")).filter((f) => f.endsWith(".process.yaml")).map((f) => f.slice(0, -".process.yaml".length)).sort()[0];
-  if (!processName) return false;
+export function driverTakesModel(root, driver, model) {
+  // A RUNNABLE process -- the capability is the DRIVER's, but arc-run has to get past the
+  // process before it ever reaches the driver question.
+  //
+  // THIS IS WHERE IT BROKE, and the shape is worth keeping written down. The old line took the
+  // alphabetically first `*.process.yaml` in the tree, with a comment saying the tree-read
+  // existed so a renamed pilot could not turn the probe into a silent "not capable". Then the
+  // scheduler lane added `brief-materialize` -- a job stub, sorting first. arc-run refuses stubs
+  // at `arc-run.mjs:247`, BEFORE its `--trial-model` check, and exits 1. The probe read
+  // `status === 0` and nothing else, so "this PROCESS is not runnable" was returned as "this
+  // DRIVER cannot carry a model". Bench then dropped the model and reported
+  // `applied NONE (source: none)` -- for the one lane whose entire purpose is varying the model.
+  // The tree-read the comment defended is exactly what caused the silent "not capable".
+  if (!model) throw new OperatorError("driverTakesModel needs the model that will actually be used -- probing with a placeholder answers a question about the placeholder");
+  const all = allProcessNames(root);
+  const processName = runnableProcessNames(root)[0];
+  if (!processName) {
+    // The two cases are different facts and the operator fixes them differently, so the message
+    // may not merge them. Pointing at a stub theory when the directory is simply empty sends the
+    // reader looking for a file that is not there.
+    throw new OperatorError(all.length === 0
+      ? "`processes/` holds no process files at all, so there is nothing to probe the driver with"
+      : `every process in \`processes/\` is a scheduled-job stub (${all.join(", ")}), so there is nothing runnable to probe the driver with`);
+  }
+
+  // PROBED WITH THE REAL MODEL ID, never a placeholder. The first version sent a fixed
+  // `capability-probe` string and bench then used the OPERATOR's id for all 15 invocations --
+  // "validate one read, compare another", this lane's own signature defect, and the consequence
+  // was expensive rather than cosmetic: arc-run validates `--trial-model` against its id grammar
+  // BEFORE it reaches the capability check, so `--model "claude sonnet 4"` passed a probe about
+  // `capability-probe`, then died on every attempt AFTER admission control had already reserved
+  // the group -- and a reservation is only released by a measured spend, so the report would have
+  // claimed 90 rupees committed for a run that reached no provider at all. Probing with the real
+  // id puts arc-run's own validation in front of the money.
   const res = spawnSync(process.execPath, [
     join(root, ".claude/scripts/engine/arc-run.mjs"),
     "--process", processName, "--driver", driver,
-    "--trial-model", "capability-probe", "--dry-run", "--root", root,
+    "--trial-model", model, "--dry-run", "--root", root,
   ], { encoding: "utf8", cwd: root, timeout: 60000, killSignal: "SIGKILL" });
-  return res.status === 0;
+  const said = `${res.stdout ?? ""}${res.stderr ?? ""}`;
+
+  // READ THE ANSWER, NOT THE EXIT CODE. arc-run spends exit 2 on every operator error it has --
+  // an unreadable --work-root, a malformed budget, an unknown process -- so a bare status check
+  // cannot tell "this driver cannot carry a model" from "you called me wrong", and exit 1 is a
+  // third thing again. Both arms below require the sentence arc-run prints for that exact
+  // decision, and they are the ONLY two answers this function accepts.
+  if (res.status === 0 && /\(source: trial\)/.test(said)) return true;
+  if (res.status === 2 && /cannot apply a model/.test(said)) return false;
+
+  // ANYTHING ELSE IS LOUD. A probe whose failure mode is `return false` answers a question it was
+  // never asked, and it answers it in the direction that silently weakens the run: the model is
+  // dropped, the receipt says `source: none`, and every number bench produces is then a
+  // measurement of the wrong thing. There is no reading of an unrecognised answer under which
+  // continuing is better than stopping.
+  // THE TIMEOUT ARM GOES FIRST, and it did not. `spawnSync` sets BOTH `error` (ETIMEDOUT) and
+  // `signal` when it kills a slow child, so testing `res.error` first meant the branch written for
+  // exactly this case could never fire on any platform -- and it reported "spawn failed", which
+  // points a diagnosis at PATH or ENOENT when the real cause is a slow runner. Verified on win32;
+  // SIGKILL itself is fine there, Node maps it to TerminateProcess.
+  const timedOut = Boolean(res.signal) || res.error?.code === "ETIMEDOUT";
+  const why = timedOut ? `killed after the 60s probe timeout (signal ${res.signal ?? "none"})`
+    : res.error ? `spawn failed: ${res.error.message}`
+    : `exit ${res.status} with no recognised verdict`;
+  throw new OperatorError(
+    `capability probe for driver \`${driver}\` with model \`${model}\` gave no usable answer -- ${why}.\n`
+    + `         Probed with process \`${processName}\` under root ${root}. arc-run said:\n`
+    + said.split("\n").filter(Boolean).map((l) => `           ${l}`).join("\n"),
+  );
 }
 
 /**
@@ -769,8 +885,17 @@ export function runAttempt(root, { processName, fixture, driver, trialModel, bud
  * Bumping this invalidates every stored scorecard, which is precisely why it lives INSIDE each
  * one: a replay against a scorecard written by a different normalizer must report
  * **stale-format**, not tamper. They are different facts and they get different exit codes.
+ *
+ * 1.1.0 (2026-08-17): `discoverClasses` stopped returning scheduled-job stubs, so `classes[]` --
+ * which IS the hashed record -- lost two rows. REMOVING a row is a format change exactly as
+ * adding a field is, and without this bump every bundle captured before that change would have
+ * replayed as `MISMATCH` (the tamper verdict, exit 1) rather than stale-format (exit 3), sending
+ * a reader hunting a corruption that never happened. Caught by the adversarial pass, against a
+ * docstring added in the SAME diff that states this rule and applied it only to the field it
+ * declined to add -- never to the two rows it deleted. The rule is about the SHAPE of the hashed
+ * record; a deletion is not the safe direction.
  */
-export const NORMALIZER_VERSION = "1.0.0";
+export const NORMALIZER_VERSION = "1.1.0";
 
 /** A value the encoder refuses. Distinct from OperatorError: the operator did not type this. */
 export class EncodeError extends Error {}
@@ -971,6 +1096,16 @@ export function newBudgetState(ceilings, cliCeilingInr) {
     runCommitted: 0,
     perProcessCommitted: new Map(),
     exhausted: false,
+    // WHICH cap stopped the run, and on whose account. Declared here rather than assigned only in
+    // reconcileGroup so a reader of the state never meets an undefined field, and so the fixture
+    // loop can name the cap it actually hit instead of the one it always used to name.
+    exhaustedCap: null,
+    exhaustedProcess: null,
+    // Ceilings are hand-authored guesses (ADR-0904 has no pricing snapshot). A group whose
+    // MEASURED spend came in above its reservation is the one observation that proves the guess
+    // wrong, and it was absorbed silently: admission correctly re-derived off the real number and
+    // nothing anywhere said the bound had been breached.
+    overruns: [],
     reasons: [],
   };
 }
@@ -1019,12 +1154,25 @@ export function reconcileGroup(state, processName, reserved, measuredInr, measur
   const complete = measuredAttempts === null || k === null || measuredAttempts >= k;
   const effective = complete ? measuredInr : Math.max(reserved, measuredInr);
   const delta = effective - reserved;
+  // Recorded BEFORE the early return, because a group can overrun its reservation and still land
+  // on delta 0 relative to a partial measurement.
+  if (complete && measuredInr !== null && measuredInr > reserved) {
+    state.overruns.push({ process: processName, reserved, measured: measuredInr });
+  }
   if (delta === 0) return { applied: complete, delta: 0, partial: !complete };
   state.runCommitted += delta;
   state.perProcessCommitted.set(processName, (state.perProcessCommitted.get(processName) ?? 0) + delta);
-  if (state.runCommitted >= state.runCap || (state.perProcessCommitted.get(processName) ?? 0) >= state.processCap) {
+  // WHICH cap, recorded rather than left for the reader to guess. The fixture loop printed one
+  // hardcoded sentence naming the RUN cap for both branches, and the ceilings file now makes the
+  // PROCESS sub-cap the binding constraint on every real pair -- so the mislabelled branch became
+  // the expected one. An operator told the wrong cap was reached raises the wrong number.
+  const runHit = state.runCommitted >= state.runCap;
+  const procHit = (state.perProcessCommitted.get(processName) ?? 0) >= state.processCap;
+  if (runHit || procHit) {
     state.exhausted = true;
-    state.reasons.push(`measured spend reached a cap after reconciling ${processName}`);
+    state.exhaustedCap = runHit ? "run" : "process";
+    state.exhaustedProcess = processName;
+    state.reasons.push(`measured spend reached the ${runHit ? "RUN" : `PROCESS sub-`}cap after reconciling ${processName}`);
   }
   return { applied: true, delta, partial: !complete };
 }
@@ -1320,7 +1468,7 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
   // The consequence is deliberate and is the gate doing its job: the first real pair benched here
   // will be REFUSED until `ceilings.json` declares a worst case for it. A missing ceiling is a
   // refusal, never a default.
-  const trialModel = model && driverTakesModel(root, driver) ? model : null;
+  const trialModel = model && driverTakesModel(root, driver, model) ? model : null;
   const appliedModel = trialModel;
   const ceilingKey = appliedModel || "(unpinned)";
   const worstCase = worstCaseFor(ceilings, driver, appliedModel);
@@ -1335,6 +1483,7 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
   const invocationViolations = [];
   let attempts = 0;
   let partial = false;
+  let noClassReason = null;
 
   for (const cov of discoverClasses(root)) {
     const entry = emptyClassEntry(cov);
@@ -1352,7 +1501,9 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
 
       if (state.exhausted) {
         partial = true;
-        entry.unselected.push({ file: fx.file, reason: "the run cap was exhausted before this group" });
+        entry.unselected.push({ file: fx.file, reason: state.exhaustedCap === "process"
+          ? `the process sub-cap was exhausted by ${state.exhaustedProcess} before this group`
+          : "the run cap was exhausted before this group" });
         continue;
       }
       if ("min" in remaining && remaining.min <= 0) {
@@ -1442,9 +1593,31 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
     closeClass(entry);
   }
 
+  // A RUN THAT BENCHED NOTHING IS NOT A CLEAN RUN, and until this line it reported `outcome: ok`.
+  //
+  // `partial` is set only INSIDE the fixture loop, so a tree with no benchable class at all never
+  // reached any of its arms: zero rows, exit 0, `ok` on the receipt. Latent while
+  // `discoverClasses` returned every stem in the tree; live the moment it started filtering,
+  // because one `job_stub:` line added to `commit-msg-draft` by another lane -- `processes/` is a
+  // shared organ -- would empty this list and the run would cheerfully certify that nothing is
+  // wrong. "Nothing to measure" and "measured, and it is fine" are different facts.
+  const benchable = classes.filter((c) => c.eligible !== false).length;
+  if (classes.length === 0 || benchable === 0) {
+    partial = true;
+    noClassReason = classes.length === 0
+      ? `no benchable task class exists in \`processes/\` at all (stubs skipped: ${jobStubNames(root).join(", ") || "none"})`
+      : `every task class in \`processes/\` is short of the ${MIN_FIXTURES}-fixture floor, so nothing was benched`;
+  }
+
   const shaAfter = routerSha(root);
 
   return {
+    // Computed HERE, inside the error boundary and before anything is written, rather than in
+    // `main` after the spend: `jobStubNames` re-reads and re-parses every process file, and a
+    // file that became unparseable mid-run would otherwise throw AFTER real money was spent --
+    // losing the report, the scorecard, the provenance and the receipt to a bare stack trace.
+    job_stubs_skipped: jobStubNames(root),
+    no_class_reason: noClassReason,
     scorecard: buildScorecard({ classes, packRevisions, processVersions }),
     provenance: {
       bench: BENCH_ID,
@@ -1495,6 +1668,10 @@ export function runBench(root, { driver, model, budget, dryRun = false, capture 
         k: state.k,
         committed_inr: state.runCommitted,
         min_remaining: "min" in remaining ? Number(remaining.min.toFixed(4)) : null,
+        // The ceiling is a hand-authored guess; these are the observations that prove it wrong.
+        // In provenance, never in the scorecard: they are facts about this run, not part of the
+        // record a replay must reproduce byte-identically.
+        ceiling_overruns: state.overruns,
         reconciliations,
       },
       attempts,
@@ -2139,9 +2316,39 @@ export function buildGuardReport(root, report, championDir) {
     for (const a of alerts) if (a.inbox) inbox.push({ task_class: entry.task_class, ...a });
   }
 
+  // A CLASS THE CHAMPION BENCHED AND THIS RUN DID NOT IS A FINDING, NOT AN ABSENCE.
+  //
+  // The loop above walks the CANDIDATE's classes and looks the champion up from them, so a class
+  // present only on the champion side was visited by nothing: no row, no line, no alert, and
+  // `clean` stayed true. That was survivable while `discoverClasses` returned every process stem
+  // in the tree; it stopped being survivable the moment it started FILTERING, because
+  // `processes/` is a shared organ any lane may edit and one `job_stub:` line added upstream
+  // would now delete a class from the guard's field of view entirely -- reporting "no drift" on a
+  // run that benched nothing, which is this lane's own recorded failure shape (a guard that
+  // reported no drift on a run where every attempt failed).
+  //
+  // It goes to the INBOX rather than to a report line. A class that silently stopped being
+  // measured is strictly worse than one measured and found worse, and the whole doctrine here is
+  // that absence is never inferred from nobody having looked.
+  const benchedNow = new Set(report.scorecard.classes.map((c) => c.task_class));
+  for (const champEntry of champScorecard.classes) {
+    if (benchedNow.has(champEntry.task_class)) continue;
+    const what = `the champion benched \`${champEntry.task_class}\` and this run did not bench it at all -- the class is gone from the candidate scorecard, so there is no number to compare and no drift can be ruled out`;
+    classes.push({ task_class: champEntry.task_class, muted: false, why: null, axes: null, cost: null, alerts: [{ tier: 1, inbox: true, what }], repin: { mayRepin: false, causes: [] } });
+    inbox.push({ task_class: champEntry.task_class, tier: 1, inbox: true, what });
+  }
+
   const lines = ["drift guard:"];
   for (const c of classes) {
     if (c.muted) { lines.push(`  ${c.task_class}: MUTED -- ${c.why}`); continue; }
+    // A vanished class has no axes to compare on -- that IS its finding, so it prints its alert
+    // and nothing else. Reaching the comparability line with `axes: null` would crash the guard
+    // on exactly the run it exists to report.
+    if (c.axes === null) {
+      lines.push(`  ${c.task_class}: NOT BENCHED BY THIS RUN`);
+      for (const a of c.alerts) lines.push(`    TIER ${a.tier}: ${a.what}`);
+      continue;
+    }
     lines.push(`  ${c.task_class}: quality ${c.axes.quality.comparable ? "comparable" : `NOT comparable (${c.axes.quality.differences[0]})`} · cost ${c.axes.cost.comparable ? `${c.cost.cause} ${c.cost.delta_pct === null ? "" : `${c.cost.delta_pct.toFixed(1)}%`}` : `NOT comparable (${c.axes.cost.differences[0]})`}`);
     for (const a of c.alerts) lines.push(`    TIER ${a.tier}${a.inbox ? "" : " (REPORT-ONLY)"}: ${a.what}`);
     if (!c.alerts.length) lines.push("    no drift");
@@ -2170,8 +2377,20 @@ export function buildGuardReport(root, report, championDir) {
   return { classes, inbox, approval, lines, clean: inbox.length === 0 };
 }
 
-/** The scorecard. Human-readable and deliberately unpinned -- no test asserts its shape (M13). */
-function printReport(scorecard, provenance) {
+/**
+ * The scorecard. Human-readable and deliberately unpinned -- no test asserts its shape (M13).
+ *
+ * `stubs` is passed in rather than read off the scorecard on purpose: the scorecard is the object
+ * the replay proof hashes byte-identically, so adding a field to it is a FORMAT change that owes
+ * a `NORMALIZER_VERSION` bump and turns every existing capture bundle into a stale-format exit 3.
+ * A line that exists only to be read by a human belongs on the report, not in the hashed record.
+ */
+function printReport(scorecard, provenance, stubs, noClassReason) {
+  // REQUIRED, not defaulted. `stubs` carries the only statement anywhere that the coverage set
+  // was reduced -- it is deliberately kept out of the hashed scorecard and never enters the
+  // receipt payload -- so a call site that omitted it would silently delete the fact rather than
+  // print an empty list.
+  if (!Array.isArray(stubs)) throw new EncodeError("printReport needs the skipped-stub list: omitting it deletes the only record that the coverage set was reduced");
   const out = [];
   const s = provenance.subject;
   out.push(`arc-bench ${provenance.bench} -- driver ${s.driver}${s.driver_version ? ` (${s.driver_version})` : " (version: ABSENT)"} -- normalizer ${scorecard.normalizer_version}`);
@@ -2193,7 +2412,20 @@ function printReport(scorecard, provenance) {
     }
     for (const u of c.unselected) out.push(`    - ${u.file}: not selected -- ${u.reason}`);
   }
+  // STATED, never silent. Two files vanished from this report when job stubs stopped being
+  // treated as classes, and a coverage report that quietly got shorter is indistinguishable from
+  // one whose scope quietly shrank.
+  if (stubs.length) out.push(`  not benched -- scheduled-job stubs, not task classes: ${stubs.join(", ")}`);
+  // The loudest line in the file, and it did not exist: a run with nothing to bench printed a
+  // header, no rows, and `outcome: ok`.
+  if (noClassReason) out.push(`  NOTHING WAS BENCHED -- ${noClassReason}`);
   out.push(`  committed against the cap: ${provenance.budget.committed_inr}${provenance.budget.min_remaining === null ? "" : ` · minutes left ${provenance.budget.min_remaining}`}`);
+  // A breached ceiling never stopped anything -- admission re-derives off the real spend, which is
+  // correct -- but it is the ONE observation that says the hand-authored number was too low, and
+  // it used to be absorbed in silence.
+  for (const o of provenance.budget.ceiling_overruns ?? []) {
+    out.push(`  CEILING BREACHED on ${o.process}: reserved ${o.reserved}, measured ${o.measured} -- the hand-authored worst case is too low, raise it in initiatives/bench/ceilings.json`);
+  }
   console.log(out.join("\n"));
 }
 
@@ -2267,7 +2499,10 @@ function main() {
     process.exit(e instanceof OperatorError ? EXIT.OPERATOR : EXIT.PARTIAL);
   }
 
-  printReport(report.scorecard, report.provenance);
+  // Read off the REPORT, not recomputed here. Recomputing re-parsed every process file outside
+  // main's try/catch and after the spend, so an unparseable file would have escaped as a raw
+  // stack trace with no report, no scorecard and no receipt written.
+  printReport(report.scorecard, report.provenance, report.job_stubs_skipped, report.no_class_reason);
 
   if (outDir) {
     mkdirSync(outDir, { recursive: true });

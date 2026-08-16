@@ -48,7 +48,10 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   [ "$(CORE_STATUS)" -eq 0 ]
   local oks
   oks="$(CORE | grep -c '^ok ')"
-  [ "$oks" -ge 55 ]
+  # 87 measured 2026-08-17. Tightened from a floor of 55 against an actual of ~84: at that slack
+  # a whole section could be deleted without the count moving, which is the one thing this test
+  # exists to notice.
+  [ "$oks" -eq 87 ]
 }
 
 @test "the canonical encoder refuses NaN rather than folding it to null" {
@@ -89,7 +92,7 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   # would have admitted three groups off the stale reservation and invoked nine times.
   [ "$(CORE_STATUS)" -eq 0 ]
   [[ "$(CORE)" == *"ok only the FIRST group ran before the corrected remainder refused the rest"* ]]
-  [[ "$(CORE)" == *"ok a later fixture is refused because the cap was exhausted"* ]]
+  [[ "$(CORE)" == *"ok a later fixture is refused, and the refusal names the PROCESS sub-cap that actually bound"* ]]
   [[ "$(CORE)" == *"ok an ABSENT measurement leaves the reservation standing"* ]]
 }
 
@@ -137,7 +140,31 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   [[ "$(CORE)" == *"ok a tampered scorecard is a MISMATCH, not stale-format"* ]]
 }
 
+@test "a process declaring no evals is discovered as zero fixtures, not a crash" {
+  # WATCHED BY NAME because it was not, and that is how it went vacuous. The check used to filter
+  # the real tree for zero-fixture classes; the only two were another lane's job stubs, so when
+  # discovery correctly stopped returning stubs the filter went empty and `[].every()` kept the
+  # check green while it measured nothing. Nothing in any bats file was matching the line, so the
+  # ok-count floor absorbed it without a word. Its subject is now a tree the probe BUILDS.
+  [ "$(CORE_STATUS)" -eq 0 ]
+  [[ "$(CORE)" == *"ok a process declaring no evals is DISCOVERED, not a startup crash"* ]]
+  [[ "$(CORE)" == *"ok and reports zero fixtures rather than throwing"* ]]
+}
+
+@test "a refusal names the cap that actually bound, and a breached ceiling is reported" {
+  # Both were silent failures of the same kind: the run knew something the operator was not told.
+  # One hardcoded sentence named the RUN cap for both exhaustion branches -- false for its own
+  # fixture, whose run cap has 880 of 1000 left -- and ceilings.json now makes the PROCESS sub-cap
+  # the binding constraint on every real pair, so the wrong number would have been raised. And a
+  # measured spend above a hand-authored reservation is the ONE observation proving the ceiling
+  # was a bad guess; it was absorbed without a line.
+  [ "$(CORE_STATUS)" -eq 0 ]
+  [[ "$(CORE)" == *"ok a later fixture is refused, and the refusal names the PROCESS sub-cap that actually bound"* ]]
+  [[ "$(CORE)" == *"ok and it does not blame the run cap, which had 880 of 1000 left"* ]]
+  [[ "$(CORE)" == *"ok a measured spend above the reservation is REPORTED, not silently absorbed"* ]]
+}
+
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 16 ]
 }
