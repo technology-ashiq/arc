@@ -48,11 +48,15 @@ import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
+import { boundaryRefusal } from "./data-boundary.mjs";
+import { routerFaults } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
 // precisely so it can be SELECTED here and NAMED on a receipt.
-const DRIVERS = ["claude-code", "codex", "generic-api", "mock"];
+// `hermes` is the agent-runtime shim (ADR-0208/0219, engine Cycle 7). It is one more driver and
+// not a special guest: same argv contract, same three-code exit map, same cost sidecar.
+const DRIVERS = ["claude-code", "codex", "generic-api", "hermes", "mock"];
 
 // Drivers that actually hand the model to a provider, verified in their source rather than
 // assumed: claude-code pushes `--model` onto its CLI argv, generic-api puts it in the request
@@ -257,12 +261,27 @@ function loadRouter() {
   if (!existsSync(p)) return null;
   const r = parseYamlSubset(readFileSync(p, "utf8"));
   if (!r.ok) { console.error(`arc-run: engine/router.yaml does not parse: ${r.error.what}`); process.exit(1); }
+  // AT LOAD, NOT AT DISPATCH (REQ-04, ADR-0216). A row that only fails when someone happens to
+  // route through it sits wrong for as long as nobody uses it, and the first person to use it is
+  // the one who discovers the hire was never bounded. Every fault is reported, not the first:
+  // fixing a four-field row one refusal at a time is four round trips.
+  const faults = routerFaults(r.value);
+  if (faults.length) {
+    console.error(`arc-run: engine/router.yaml has ${faults.length} row fault(s) and will not load:`);
+    for (const f of faults) console.error(`arc-run:   ${f}`);
+    process.exit(1);
+  }
   return r.value;
 }
 
 let driver = driverArg || "claude-code";
 let tier = null;
 let fallbacks = [];
+// `hosted:` says whether this class leaves the machine. It is read here, at routing, so the data
+// boundary below can name it in a refusal (Phase 06 REQ-02 fixture 3). An unrouted run has no
+// row and therefore no claim either way -- which is not the same fact as `hosted: local`, and is
+// left as the empty string rather than defaulted to the reassuring value.
+let hosted = "";
 if (driverArg === "auto") {
   const router = loadRouter();
   if (!router) { console.error("arc-run: --driver auto needs engine/router.yaml, which does not exist"); process.exit(1); }
@@ -276,6 +295,7 @@ if (driverArg === "auto") {
   }
   driver = row.driver;
   tier = row.tier;
+  hosted = typeof row.hosted === "string" ? row.hosted : "";
   fallbacks = Array.isArray(row.fallback) ? row.fallback : [];
 }
 if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driver}\` (known: ${DRIVERS.join(", ")})`); process.exit(1); }
@@ -529,6 +549,7 @@ function emitEvent(kind, payloadObj, extraArgs = []) {
   }
 }
 
+
 function emitRun(payload) {
   const { cost, ...rest } = payload;
   const { flag, tokens } = costArgs(cost);
@@ -538,7 +559,6 @@ function emitRun(payload) {
   // The receipt records the model that was ACTUALLY used, never the tier label. A label
   // here asserted a routing decision nothing had applied -- a false claim in an append-only
   // ledger, which is worse than an absent one (ADR-0069 b5 / Constitution E3).
-  // THE SEAT CARRIES THE MODEL, THE PAYLOAD CARRIES ITS PROVENANCE (ADR-0220).
   //
   // `--model` is the MP-F seat and stays a CLEAN MODEL ID -- the thing that actually ran. It is
   // deliberately not prefixed with `trial:`: the seat answers "which model", and encoding a
@@ -744,6 +764,23 @@ function invoke(name) {
       ARC_WORK_ROOT: workRoot,
       ARC_DRIVER_MODEL: effectiveModel ?? "",
       ARC_LLM_MODEL: "",
+      // The RUN's deadline, as an ABSOLUTE epoch millisecond, so a driver that must impose its
+      // own timeout on a subprocess cannot accidentally start a fresh budget. `budgetStr` is
+      // the ORIGINAL allowance and is passed unchanged for reporting; a driver reading `min`
+      // from it and using it as a timeout would hand every driver in the fallback chain a full
+      // budget again -- the defect this file already records at the timeout arm below. An
+      // absolute instant has the time already burned subtracted, and cannot be un-subtracted.
+      //
+      // Absent (no `min` bound) means NO deadline, not a zero one: an unbounded run must not be
+      // declined by a driver reading an empty string as 0.
+      //
+      // SET TO undefined, NOT OMITTED — the same reason ARC_LLM_MODEL above is blanked rather
+      // than left out. `...process.env` is spread first, so a key that is only ever ADDED can
+      // never clear one the caller already has, and a stale ARC_DRIVER_DEADLINE_EPOCH_MS in the
+      // ambient environment made every UNBUDGETED run decline before any driver started,
+      // reported as `budget`. Node drops an env key whose value is undefined, so this both sets
+      // and clears.
+      ARC_DRIVER_DEADLINE_EPOCH_MS: timeoutMs === undefined ? undefined : String(Date.now() + timeoutMs),
     },
   });
   let cost = null;
@@ -752,7 +789,17 @@ function invoke(name) {
   }
   rmSync(tmp, { recursive: true, force: true });
   const timedOut = res.error && res.error.code === "ETIMEDOUT";
-  return { code: timedOut ? 124 : (res.status ?? 1), stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut };
+  // ARC-RUN'S OWN CEILING IS NOT A DRIVER FAULT. Only ETIMEDOUT was ever inspected, so a
+  // maxBuffer overflow -- which arrives as `status: null, signal: SIGKILL, error.code: ENOBUFS`
+  // -- fell through `res.status ?? 1` to a plain 1 and was reported as `verdict: driver`. The
+  // fallback chain then re-ran every remaining driver, spending real budget on each, and the
+  // receipt said the driver had exited 1 while never mentioning the buffer. It is OUR limit that
+  // stopped the run, and the receipt has to say so.
+  const overflowed = res.error && res.error.code === "ENOBUFS";
+  return {
+    code: timedOut ? 124 : overflowed ? 125 : (res.status ?? 1),
+    stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut, overflowed,
+  };
 }
 
 function attempt(name) {
@@ -768,6 +815,10 @@ function attempt(name) {
   // budget again, per driver -- and made the receipt read `reason: driver`, so the promise
   // that an over-budget run "reports a budget outcome" was false.
   if (r.timedOut) return { ...r, verdict: "budget", why: `exceeded the ${budget.min}-minute budget for the RUN` };
+  // Same reasoning one line down: our own output ceiling is arc-run's limit, not the driver's
+  // misbehaviour, and falling back to another driver cannot help — the next one produces the
+  // same volume and hits the same wall, having spent the budget to get there.
+  if (r.overflowed) return { ...r, verdict: "harness", why: `the driver produced more output than arc-run's ${64 * 1024 * 1024}-byte ceiling` };
   if (r.code === 2) return { ...r, verdict: "budget", why: r.stderr.trim() || "driver declined for budget" };
   // POLICY BEFORE DRIVER, and for exactly the reason the budget arm above exists. A denial fell
   // through to `verdict: "driver"`, so ONE denial produced three high-severity incidents as the
@@ -801,6 +852,23 @@ if (dryRun) {
 // in --input (or in an @file that resolves outside the repo) was transmitted to the vendor
 // and the run then reported success.
 if (inputArg) scrub("--input (before anything is sent to a driver)", JSON.stringify(input), input);
+
+// THE DATA BOUNDARY, refused HERE and not inside the driver (ADR-0219, Phase 06 REQ-02 fixtures
+// 2 and 3). By the time a driver could refuse, the document has already been handed to it. This
+// sits after the dry-run exit -- a dry run spawns nothing, so there is nothing to confine -- and
+// before `attempt()`, which is the last line at which no driver process exists yet.
+//
+// Exit 5, its own code: arc-run already overloads 1 for "cannot proceed", and a boundary refusal
+// indistinguishable from a parse error is a boundary no fixture can assert.
+const refusal = boundaryRefusal({ input, processName, hosted });
+if (refusal) {
+  console.error(`arc-run: ${refusal.reason}`);
+  for (const m of refusal.markers) console.error(`arc-run:   ${m.path} ${m.why}`);
+  // The refusal is a receipt, not just an exit code -- a boundary that stops a run and leaves no
+  // trace is indistinguishable from a run nobody attempted.
+  emitRun({ outcome: "fail", reason: "policy", driver, attempts: 0 });
+  process.exit(refusal.code);
+}
 
 const selfCheck = processIsSelfConsistent();
 let a = attempt(driver);

@@ -164,7 +164,7 @@ jobs:
           # loss would have been invisible.
           #
           # Moving this pin is a reviewed diff that re-runs the arc-scan suite, never a bump.
-          base=https://github.com/opengrep/opengrep/releases/download/v1.25.0
+          base=https://github.com/opengrep/opengrep/releases/download/v1.26.0
           if [ "$RUNNER_OS" = "Windows" ]; then
             curl -fsSL -o "$HOME/bin/opengrep.exe" "$base/opengrep_windows_x86.exe" || echo "opengrep install skipped"
           elif [ "$RUNNER_OS" = "macOS" ]; then
