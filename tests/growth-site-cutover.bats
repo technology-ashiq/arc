@@ -167,8 +167,13 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # Missing entirely, and present-but-a-sha. The second is the defect this phase found: a sha is
   # 64 hex chars and a ULID is 26 Crockford base32, so the grammar catches the confusion.
-  [ "${lines[0]}" = "BAD_PRIOR_ID" ]
-  [ "${lines[1]}" = "BAD_PRIOR_ID" ]
+  #
+  # The code is BAD_EVENT, not BAD_PRIOR_ID. `repinReceipt` and `planCutover` now share one
+  # `assertEventIds` guard -- introduced because validating `id` in one and trusting `supersedes`
+  # in the other is exactly how the stale receipt got re-pinned beside its successor -- and one
+  # rule keeps one code. The caller context is in the message, not in a second error name.
+  [ "${lines[0]}" = "BAD_EVENT" ]
+  [ "${lines[1]}" = "BAD_EVENT" ]
 }
 
 @test "cutover: re-pinning something already on the permanent host is REFUSED, not reported as work" {
