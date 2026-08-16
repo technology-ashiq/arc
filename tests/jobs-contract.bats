@@ -211,10 +211,39 @@ _run_case() {
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   echo "$output" | grep -q "HARNESS-DONE" || { echo "harness never finished:"; echo "$output"; false; }
   echo "$output" | grep -q '^LOGDIR_BEFORE:false$' || { echo "the harness did not start from a missing log dir:"; echo "$output"; false; }
-  echo "$output" | grep -q '^EXIT:0$' || { echo "the action line did not run:"; echo "$output"; false; }
-  echo "$output" | grep -q '^LOGDIR_AFTER:true$' || { echo "the action did not create its own log dir:"; echo "$output"; false; }
-  # The marker proves the PROGRAM ran, not merely that cmd exited 0.
-  echo "$output" | grep -q '^LOG_BODY:"hi"$' || { echo "no program output reached the log:"; echo "$output"; false; }
+  # FIRST run: the directory does not exist and the action has to create it.
+  echo "$output" | grep -q -F 'FIRST:{"exit":0,"stderr":"","dir":true,"body":"hi"}' \
+    || { echo "the first run did not create its log dir and write to it:"; echo "$output"; false; }
+}
+
+@test "task action: it runs AGAIN when the log directory already exists" {
+  # THE DEFECT THAT COST A PROVING WEEK, pinned.
+  #
+  # The action read `if not exist DIR md DIR & PROG`. `cmd` binds the entire remainder of the line
+  # to the IF, so once the directory existed -- every run after the first -- the program never ran
+  # and cmd exited 0. Task Scheduler recorded a successful run, no log was written because nothing
+  # wrote one, and no receipt landed because nothing executed. Three days of scheduled runs were
+  # no-ops reporting success.
+  #
+  # It shipped inside the FIX for a different finding, and the fixture that came with it tested
+  # only the directory-MISSING branch -- the first run, which never happens again. The failure
+  # path was covered and the normal path was not.
+  #
+  # Parenthesising does not help: `if not exist DIR (md DIR) & PROG` was measured and fails the
+  # same way. The conditional is gone entirely.
+  case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*) : ;;
+    *) skip "cmd.exe only exists on the Windows leg" ;;
+  esac
+  run node "$ARC_ROOT/tests/fixtures/jobs/action-line-harness.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  echo "$output" | grep -q -F 'SECOND:{"exit":0,"stderr":"","dir":true,"body":"hi"}' \
+    || { echo "the second run did nothing -- the job would report success forever:"; echo "$output"; false; }
+  # And the guard against the shape returning: no conditional in the built command line at all.
+  if grep -n 'if not exist' "$ARC_ROOT/.claude/scripts/hq/lib/jobs/scheduler-os.mjs" | grep -v '^\s*[0-9]*: *//' | grep -q 'argument:'; then
+    echo "a conditional is back in the task action line"
+    false
+  fi
 }
 
 @test "jobs-contract: bats registers every test this file declares" {
