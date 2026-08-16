@@ -189,7 +189,7 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
 @test "cutover: planCutover takes heads only, and refuses an id-less event rather than assuming it is one" {
   run _node "$PRE
     const p = (site, slug) => ({ site, slug, url: 'https://' + site + '/blog/' + slug, title: 'T', template_id: 'title-a', cluster_id: 'c-000', content_sha: '$SHA_A', pr_ref: '#2' });
-    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4', E = '01KZZZZZZZZZZZZZZZZZZZZZZ5';
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4';
     // A is superseded by B; B is a head on the old host; D is a head already on the new host.
     const events = [
       { id: A, supersedes: null, payload: p('old.test', 'x') },
@@ -319,7 +319,7 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   # -- which reports a no-op as a success. Found by an adversarial pass, not by this suite.
   run _node "$PRE
     const SHA = '$SHA_A';
-    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4';
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', D = '01KZZZZZZZZZZZZZZZZZZZZZZ4', E = '01KZZZZZZZZZZZZZZZZZZZZZZ5';
     const H = 'arc.automemory.ai';
     const p = (site, slug) => ({ site, slug, url: 'https://' + site + '/blog/' + slug, title: 'T', template_id: 'title-a', cluster_id: 'c-000', content_sha: SHA, pr_ref: '#2' });
     const ev = (id, sup, payload) => ({ id, supersedes: sup, payload });
