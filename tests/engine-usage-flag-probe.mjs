@@ -27,7 +27,7 @@
 // passes on a machine that could not run it is a green light nobody earned.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, statSync, writeSync } from "node:fs";
 import { join } from "node:path";
 
 const IMAGE = process.env.ARC_HERMES_IMAGE
@@ -38,8 +38,15 @@ const DOCKER = process.env.ARC_HERMES_DOCKER || "docker";
 // only meaningful on a warm volume, which is why it declines rather than guesses on a cold one.
 const RUN_TIMEOUT_MS = Number(process.env.ARC_HERMES_PROBE_TIMEOUT_MS || 300_000);
 
+// WRITE SYNCHRONOUSLY AND SET exitCode -- never console.log then process.exit(). node's
+// stdout-to-a-pipe is synchronous on windows and linux and ASYNCHRONOUS on macOS, and
+// `process.exit()` discards whatever is still queued: drivers/common.mjs records 8 MiB written and
+// 458752 received, writer exit 0. bats `run` captures through a pipe and then greps for this exact
+// line, so on the one leg where it can be lost, it would be.
+function say(line) { writeSync(1, `${line}\n`); }
+
 function skip(why) {
-  console.log(`SKIP engine-usage-flag-probe -- ${why}`);
+  say(`SKIP engine-usage-flag-probe -- ${why}`);
   process.exit(0);
 }
 
@@ -75,13 +82,30 @@ const startedAt = Date.now();
 {
   // ASK FOR THE REPORT AT A PATH THE HOST CAN SEE. If the flag ever works, the file lands here.
   const usageInContainer = "/opt/data/probe.usage.json";
+
+  // THE ARGV MUST MATCH WHAT THE DRIVER ACTUALLY SENDS, OR THIS PROBE MEASURES A SHAPE PRODUCTION
+  // NEVER USES. The first version put `--usage-file` BEFORE `-z <prompt>` while
+  // drivers/hermes.mjs pushed it AFTER -- and a one-shot CLI that treats everything following
+  // `-z` as prompt text swallows one and honours the other. A tripwire whose command line differs
+  // from production's is the "assert the thing it cares about" rule broken from the other end.
+  // Kept in sync by construction: the driver builds this same order.
+  //
+  // `--name` for the same reason drivers/hermes.mjs uses one: `--rm` alone does not clean up when
+  // the CLI is SIGKILLed at the timeout -- the container outlives it. Without a name there is
+  // nothing to reap by, and the orphan keeps running READ-WRITE inside the operator's configured
+  // runtime home with nobody holding a handle.
+  const name = `arc-usage-probe-${process.pid}-${Date.now()}`;
   const run = spawnSync(DOCKER, [
-    "run", "--rm",
+    "run", "--rm", "--name", name,
     "-v", `${vol}:/opt/data`,
     IMAGE,
-    "--usage-file", usageInContainer,
     "-z", "Reply with ONE JSON document and nothing after it: {\"ok\": true}",
+    "--usage-file", usageInContainer,
   ], { encoding: "utf8", timeout: RUN_TIMEOUT_MS, killSignal: "SIGKILL", maxBuffer: 64 * 1024 * 1024 });
+
+  // Reap unconditionally. A container that already exited makes this a no-op; one that outlived
+  // the CLI is stopped here rather than left on the operator's volume.
+  spawnSync(DOCKER, ["rm", "-f", name], { encoding: "utf8", timeout: 60_000 });
 
   // A COLD VOLUME CANNOT ANSWER THIS QUESTION. First boot populates the whole data dir and the
   // measured cold run blew past 400s; a timeout here says nothing about the flag, so the probe
@@ -100,10 +124,10 @@ const startedAt = Date.now();
   let answered = false;
   try { answered = JSON.parse(lastLine).ok === true; } catch { answered = false; }
   if (!answered) {
-    console.log(`not ok 1 - the run did not produce its answer on the last stdout line, so nothing below is meaningful (got: ${JSON.stringify(lastLine.slice(0, 120))})`);
+    say(`not ok 1 - the run did not produce its answer on the last stdout line, so nothing below is meaningful (got: ${JSON.stringify(lastLine.slice(0, 120))})`);
     failures += 1;
   } else {
-    console.log("ok 1 - the run reached its answer, so the flag had a real run to report on");
+    say("ok 1 - the run reached its answer, so the flag had a real run to report on");
   }
 
   // ASSERTION 2 -- THE PINNED CONCLUSION. No usage report appears anywhere in the volume.
@@ -128,15 +152,15 @@ const startedAt = Date.now();
   })(vol);
 
   if (found.length === 0) {
-    console.log("ok 2 - --usage-file wrote nothing, which is ADR-0221's recorded finding and still true");
+    say("ok 2 - --usage-file wrote nothing, which is ADR-0221's recorded finding and still true");
   } else {
-    console.log("not ok 2 - A USAGE REPORT APPEARED. This is GOOD NEWS, not a regression -- but it is");
-    console.log("          NOT yet proof the vendor flag works. ADR-0221 recorded one such file in five");
-    console.log("          runs, and could not tell whether the FLAG wrote it or the AGENT did, having");
-    console.log("          seen the filename in its own argv. THE FILE IS LEFT ON DISK ON PURPOSE:");
-    console.log("          read it before deciding. A usage report should carry token counts, a model");
-    console.log("          and api_calls; anything else means the agent wrote it.");
-    for (const f of found) console.log(`          found: ${f}`);
+    say("not ok 2 - A USAGE REPORT APPEARED. This is GOOD NEWS, not a regression -- but it is");
+    say("          NOT yet proof the vendor flag works. ADR-0221 recorded one such file in five");
+    say("          runs, and could not tell whether the FLAG wrote it or the AGENT did, having");
+    say("          seen the filename in its own argv. THE FILE IS LEFT ON DISK ON PURPOSE:");
+    say("          read it before deciding. A usage report should carry token counts, a model");
+    say("          and api_calls; anything else means the agent wrote it.");
+    for (const f of found) say(`          found: ${f}`);
     failures += 1;
   }
 }
@@ -154,5 +178,5 @@ const startedAt = Date.now();
 // evidence that can settle what wrote it -- the vendor flag, or the agent itself acting on a
 // filename it saw in its own argv.
 
-console.log(`1..2`);
+say(`1..2`);
 process.exit(failures === 0 ? 0 : 1);

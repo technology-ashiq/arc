@@ -223,6 +223,8 @@ switch (kase) {
   case "usage-report":
   case "usage-report-no-model":
   case "usage-report-bad-model":
+  case "usage-report-object-model":
+  case "usage-report-empty-tokens":
   case "usage-report-tokens-only": {
     boot();
     line(ANSWER);
@@ -258,6 +260,15 @@ switch (kase) {
     if (kase === "usage-report") report.model = "llama3.1:8b";
     if (kase === "usage-report-bad-model") report.model = "hermes@sha256:deadbeef+cfg.1";
     if (kase === "usage-report-no-model") report.model = "";
+    // A STRUCTURED model. `typeof u.model === "string"` is false, so the old reader dropped it in
+    // total silence -- "wrong type" and "missing" collapsed into one input, with the loud arm
+    // reserved for the one case a fixture happened to cover.
+    if (kase === "usage-report-object-model") report.model = { id: "llama3.1:8b" };
+    // AN EMPTY token figure. Number("") === 0 and Number.isFinite(0) is true, so this used to
+    // become {"tokens_in":0,"source":"measured"} -- a fabricated measurement on an append-only
+    // receipt, which arc-bench then sums. The other figure is left valid so the test can prove one
+    // bad field does not discard the good one.
+    if (kase === "usage-report-empty-tokens") { report.prompt_tokens = ""; report.model = "llama3.1:8b"; }
     // `usage-report-tokens-only` carries no `model` key at all -- absent and empty are different
     // inputs, and a reader that only checks truthiness cannot tell them apart.
     writeFileSync(hostPath, `${JSON.stringify(report)}\n`, "utf8");

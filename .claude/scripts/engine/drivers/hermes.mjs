@@ -71,6 +71,41 @@ import { MODEL_RE } from "../../hq/lib/validate.mjs";
 const DOCKER = process.env.ARC_HERMES_DOCKER || "docker";
 
 /**
+ * A token count, or `undefined` — never a fabricated zero.
+ *
+ * `Number()` is the trap. `Number("") === 0`, and so do `Number([])`, `Number(" ")` and
+ * `Number("\n")`, all of which pass `Number.isFinite`. The first version of this reader used
+ * `Number(u.prompt_tokens)` directly, so a report carrying `"prompt_tokens": ""` produced
+ * `{"tokens_in":0,"source":"measured"}` on an append-only receipt — and `arc-bench.mjs` sums those
+ * and derives a per-token rate from them. "Absent" and "present but empty" are different inputs,
+ * and MP-F's own rule (`common.mjs`: recorded, estimated and fabricated are three different
+ * things) is broken by the reader that feeds it.
+ *
+ * The bounds are the SPINE'S OWN, taken from `validate.mjs` assertCost: a non-negative safe
+ * integer, at most 1e12. They are applied HERE because a hermes run reports no `inr`, so its token
+ * counts ride `payload.tokens`, which `run.completed` does not shape-check at all — the one place
+ * the spine would have caught a negative or fractional count is the one place these never reach.
+ */
+function countOrUndefined(v) {
+  if (typeof v === "number") {
+    if (!Number.isInteger(v) || v < 0 || v > 1e12) return undefined;
+    return v;
+  }
+  // A numeric STRING is accepted, but only one that is unambiguously a decimal integer. `"0x10"`
+  // becomes 16 under Number() and `"1e3"` becomes 1000; neither is a token count anyone wrote.
+  if (typeof v === "string" && /^[0-9]{1,15}$/.test(v.trim())) {
+    const n = Number(v.trim());
+    return Number.isInteger(n) && n >= 0 && n <= 1e12 ? n : undefined;
+  }
+  return undefined;
+}
+
+/** True when the file was last written at or after the moment this run started. */
+function freshEnough(path, since) {
+  try { return statSync(path).mtimeMs >= since; } catch { return false; }
+}
+
+/**
  * How to actually invoke the configured docker command.
  *
  * A `.mjs` or `.js` value is run with THIS node rather than executed directly, and that is not a
@@ -370,22 +405,40 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   // The path is inside the mounted volume because that is the ONLY host-visible path the
   // container can write to; anywhere else and the file dies with the container. It carries the
   // container name so two concurrent runs cannot read each other's spend, and it is removed
-  // after the read so a failed run can never inherit the previous run's figures -- a stale
-  // sidecar reporting someone else's tokens is worse than no sidecar at all.
+  // after the read so a failed run can never inherit the previous run's figures.
+  //
+  // THE SENTENCE ABOVE WAS FALSE FOR THE OPERATOR PATH UNTIL AN ADVERSARIAL PASS SAID SO, and the
+  // correction is kept in place because it is the finding. With ARC_HERMES_USAGE_FILE set, the
+  // flag is NOT passed (a host path cannot be translated into the container), so nothing rewrites
+  // that file -- and the cleanup below skips it because it belongs to the operator. Every
+  // subsequent run of every process therefore re-read the same report and stamped its tokens
+  // `measured` and its model into the MP-F seat: a model that did not run, on a run that measured
+  // nothing, forever. Exactly the "stale sidecar is worse than no sidecar" outcome the comment
+  // promised to prevent. Seventh comment this cycle asserting what the code did not do.
+  //
+  // Closed by RECENCY, not by ownership: a report is only read if it was written after this run
+  // started. That makes the operator path safe without deleting a file arc does not own.
   const usageHost = USAGE_FILE || join(DATA_DIR, `${name}.usage.json`);
   const usageInContainer = USAGE_FILE ? "" : `/opt/data/${name}.usage.json`;
+  const runStartedAt = Date.now();
 
+  // FLAG BEFORE THE PROMPT, AND THE PROMPT LAST. The flag was originally pushed AFTER `-z prompt`
+  // while tests/engine-usage-flag-probe.mjs sent it BEFORE, so the tripwire and production did not
+  // share a command line -- and a one-shot CLI that treats the tail after `-z` as prompt text
+  // would honour one and swallow the other. Both orderings were then measured against the pinned
+  // image and neither wrote a report, so this is not the cause of the no-op; it is corrected
+  // because a tripwire whose argv differs from production's cannot pin production's behaviour.
+  //
+  // An operator-supplied ARC_HERMES_USAGE_FILE is a HOST path this driver cannot translate into
+  // the container's filesystem, so in that case the flag is not passed and the file is only read
+  // if something else wrote it -- and then only if it is newer than this run (see usageHost).
   const args = [
     "run", "--rm", "--name", name,
     "-v", `${DATA_DIR}:/opt/data`,
     IMAGE,
-    "-z", prompt,
   ];
-  // An operator-supplied ARC_HERMES_USAGE_FILE is a HOST path this driver cannot translate into
-  // the container's filesystem, so in that case the flag is not passed and the file is only read
-  // if something else wrote it. That is the pre-ADR-0221 behaviour, kept intact for the operator
-  // who mounts their own layout, rather than guessing a mapping and writing to nowhere.
   if (usageInContainer) args.push("--usage-file", usageInContainer);
+  args.push("-z", prompt);
 
   const remaining = msUntilDeadline();
   let timeoutMs;
@@ -447,12 +500,31 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   //   estimated cost-> NOTHING. REQ-05 says cost is provider-reported or absent, and the
   //                    runtime's own estimate is neither. It is not carried into `inr`.
   let cost;
-  if (existsSync(usageHost)) {
+  // A REPORT IS ONLY THIS RUN'S IF IT WAS WRITTEN DURING THIS RUN. Ownership is not enough: on the
+  // operator path the file is never rewritten and never deleted, so `existsSync` alone re-reported
+  // one stale report as `measured` on every subsequent run of every process, forever.
+  if (existsSync(usageHost) && freshEnough(usageHost, runStartedAt)) {
+    let u;
+    // THE PARSE IS ITS OWN TRY, so the diagnostic names the real cause. One wide try around the
+    // read, the parse, the grammar check and versionString() reported EISDIR and EACCES as
+    // "did not parse", sending the operator to look at the wrong thing.
     try {
-      const u = JSON.parse(readFileSync(usageHost, "utf8"));
-      const tokensIn = Number(u.prompt_tokens ?? u.tokens_in);
-      const tokensOut = Number(u.completion_tokens ?? u.tokens_out);
-      const reported = typeof u.model === "string" ? u.model.trim() : "";
+      u = JSON.parse(readFileSync(usageHost, "utf8"));
+    } catch (e) {
+      process.stderr.write(`hermes: WARN the usage file at ${usageHost} could not be read or parsed (${e.code || e.name}) — cost and model are reported as absent\n`);
+      u = null;
+    }
+    if (u && typeof u === "object" && !Array.isArray(u)) try {
+      const tokensIn = countOrUndefined(u.prompt_tokens ?? u.tokens_in);
+      const tokensOut = countOrUndefined(u.completion_tokens ?? u.tokens_out);
+      // "Wrong type" and "missing" are DIFFERENT INPUTS. Collapsing them meant `{"model": 42}` was
+      // dropped in total silence while only the string case was loud -- so a runtime that started
+      // emitting a structured model would stop filling the seat and nothing would say so.
+      let reported = "";
+      if (typeof u.model === "string") reported = u.model.trim();
+      else if (u.model !== undefined && u.model !== null) {
+        process.stderr.write(`hermes: WARN the runtime reported a non-string model (${typeof u.model}) — seat left unpinned\n`);
+      }
       // The seat is a CLEAN model id or it is nothing. An id the spine would quarantine is
       // dropped here rather than at the emitter: a rejected receipt costs the whole receipt,
       // a dropped seat costs one field. This lane has already paid the first price once.
@@ -460,19 +532,19 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
       if (reported && !model) {
         process.stderr.write(`hermes: WARN the runtime reported a model id the spine grammar refuses — seat left unpinned\n`);
       }
-      if (Number.isFinite(tokensIn) || Number.isFinite(tokensOut) || model) {
+      if (tokensIn !== undefined || tokensOut !== undefined || model) {
         cost = {
-          tokensIn: Number.isFinite(tokensIn) ? tokensIn : undefined,
-          tokensOut: Number.isFinite(tokensOut) ? tokensOut : undefined,
-          source: (Number.isFinite(tokensIn) || Number.isFinite(tokensOut)) ? "measured" : undefined,
+          tokensIn,
+          tokensOut,
+          source: (tokensIn !== undefined || tokensOut !== undefined) ? "measured" : undefined,
           model: model || undefined,
           runtime: versionString(),
         };
       }
-    } catch {
-      // A usage file we cannot read is reported and then ignored. Guessing a figure here would
-      // put an estimate where a measurement is claimed.
-      process.stderr.write(`hermes: WARN the usage file at ${usageHost} did not parse — cost and model are reported as absent\n`);
+    } catch (e) {
+      // Anything the grammar check or versionString() throws lands here, named as itself rather
+      // than as a parse failure.
+      process.stderr.write(`hermes: WARN the usage report at ${usageHost} could not be interpreted (${e.message}) — cost and model are reported as absent\n`);
     } finally {
       // Read once, then gone. Only the path THIS driver chose is removed: an operator-supplied
       // ARC_HERMES_USAGE_FILE belongs to the operator and is never deleted by us.

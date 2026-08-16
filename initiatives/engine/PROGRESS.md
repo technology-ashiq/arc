@@ -150,6 +150,67 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE ADVERSARIAL PASS ON TODAY'S WORK — 2026-08-16, two fresh surfaces, 30 findings, ~zero overlap
+
+Required by the cycle non-negotiable **before** the shipping PR merges, never at the phase close.
+Two fresh agents, neither having seen the implementation: one on decision logic, one on the
+shell/OS boundary. **They overlapped on essentially nothing** — again the structural result this
+lane keeps measuring, not a matter of effort.
+
+**The five that mattered most, and three of them were in code written today:**
+
+1. **The tripwire was DEAD ON ARRIVAL, and it was proven dead.** `setup()` exported
+   `ARC_HERMES_DATA` to an empty scratch dir; that export was still live when the test ran the
+   probe, whose third gate asks the volume for a `config.yaml`. It never had one. So the probe
+   cleared its Docker and image gates and **skipped anyway, on every machine including this one**,
+   and the assertion accepted the skip. Permanently green, permanently measuring nothing. **That is
+   `bench-steel-probe.mjs` repeating inside the file written to explain why it must not.**
+2. **A proven `bash -c` injection through the checkout path**, in a test I wrote. One apostrophe in
+   the path gives `unexpected EOF`; **two rebalance the quoting and the inner shell EXECUTES the
+   span between them** — the attacker ran `$(id -un)` to show it. This lane's already-fixed defect
+   class, recurring verbatim, in the file citing it.
+3. **`Number("") === 0`.** A report carrying `"prompt_tokens": ""` became
+   `{"tokens_in":0,"source":"measured"}` on an append-only receipt — and `arc-bench` sums those and
+   derives a per-token rate. A fabricated measurement is the one thing MP-F exists to refuse.
+4. **A TWIN-FIX MISS, both twins in one file.** The seat fix went into `emitRun` and not into the
+   escalation proposal 300 lines below, which builds its own `model`/`model_source`. One run, two
+   receipts, disagreeing about which model ran — and the proposal is *"the one receipt a human
+   reads before editing engine/router.yaml"*. Now computed once, in `seatFor()`.
+5. **The routed pin was the one model input never checked against the seat grammar.** `--trial-model`
+   is validated, a runtime-reported model is validated, `router.models` was read straight onto the
+   receipt — and it **wins** the precedence over the validated one. A pin containing a space makes
+   the emitter throw `BAD_MODEL` under `--strict`: the whole receipt lost, on a successful run, at
+   exit 0.
+
+Also fixed: the probe orphaned a container on the operator's live volume (no `--name`, no reap) ·
+the probe's argv order differed from the driver's, so it pinned a shape production never sends ·
+the operator `USAGE_FILE` branch re-reported one stale report as `measured` forever, **and the
+comment above it claimed that was prevented** (seventh false comment) · a non-string `model` was
+dropped in silence · one wide `try` reported `EISDIR`/`EACCES` as "did not parse" · `$COST` was
+never cleared between runs inside one test, so a run writing nothing scored against the previous
+one · `mktemp -d` unchecked, so a failure gave `mkdir -p /data` and `rm -rf ""` · `console.log` then
+`process.exit` on the macOS async-stdout path · no suite self-count.
+
+**And one I inflicted on myself while fixing theirs.** The `runtimeId` guard was written twice
+wrong: first as `!/[ -]/`, which reads as "no space and no hyphen" and **is** the range `0x20-0x2D`;
+then spelled with **literal 0x00 and 0x1f bytes**, which made `arc-run.mjs` binary to git and
+invisible to grep. **Eighth invisible-character defect this cycle, and the second to land inside the
+fix for the previous one.** Now an explicit allowlist, `RUNTIME_ID_RE`, every character visible.
+A control-byte scan across all six touched files reports 0.
+
+**Argv order was measured, not assumed.** The flag was tried both before and after `-z <prompt>`
+against the pinned image: neither wrote a report. So the ordering defect is real as a *tripwire*
+defect and is **not** the cause of the no-op — ADR-0221's finding stands.
+
+**Not yet fixed, named rather than counted as done:** token counts still ride the unvalidated
+`payload.tokens` (they are bounded in the driver now, but a different driver reporting `inr` sends
+the same value through `--cost` where the spine throws and `--strict` loses the receipt) · the
+fixture's `-v` recovery is more permissive than real docker and its `startsWith` mount check is a
+prefix test, not a path-boundary test · the suite drives `hermes.mjs` directly rather than the
+shipped `hermes.sh` · the container name is `pid + ms`, which collides across PID namespaces.
+
+---
+
 ### PHASE 06 FIXTURE 8 FAILS, AND IT OPENS A REQ-06 HOLE — 2026-08-16
 
 **The runtime's persistent memory is ON and cannot be turned off.** A marker planted in run N
