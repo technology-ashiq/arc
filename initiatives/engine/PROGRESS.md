@@ -2,9 +2,9 @@
 
 status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
-phase: 04
+phase: 05
 appetite: 7.5d
-burn: 0.0d
+burn: 4.5d
 blocked-on: —
 depends-on: —
 
@@ -28,13 +28,13 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Steel thread — **parked, shipped in Cycle 6** (canonical process layer, `arc-run`, driver contract, `router.yaml`) | — | ✅ done 2026-08-03 |
-| 04 | The law, and proof the hands exist — mandate receipt, ADR-0212 merged, runtime installed behind a container backend, ONE live headless invocation, **or the STOP fires** | 1 day | pending |
+| 04 | The law, and proof the hands exist — mandate receipt, ADR-0212 merged, runtime installed behind a container backend, ONE live headless invocation, **or the STOP fires** | 1 day | ✅ done 2026-08-16 |
 | 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | pending |
 | 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | pending |
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 0.0 of 7.5 days used (0%).** Phases allocate 7 of 7.5 — **93%, and the half-day of
+**Appetite burn: 4.5 of 7.5 days used (60%) — set 2026-08-16, derivation above `## Now`.** Phases allocate 7 of 7.5 — **93%, and the half-day of
 slack is thin**, flagged by `kickoff-lint` and left honest rather than padded. The design source's
 "1.5 weeks (8 working days)" rounds up: 1.5 weeks is 7.5 working days at a 5-day week, so the cap is
 written as the smaller, true number. Kill checkpoint is read at **day 5**, not at the 50% mark of
@@ -42,6 +42,35 @@ written as the smaller, true number. Kill checkpoint is read at **day 5**, not a
 on-track run is one that learns to be ignored.
 
 ## Done log
+
+- 2026-08-16 — **PHASE 04 CLOSED.** `/arc-phase-done 04 --lane engine`. REQ-00 `active` → `validated`.
+  Receipts: `phase.closed` **`01M05A4WRVESNR8YE8MBZJB2S1`** · `approval.requested`
+  **`01M05A4Y4QM54VRQWSNE9ENQMD`** (moving past a closed phase is an owner sign-off gate). Both
+  verified present in `events/2026-08-16.jsonl` and absent from `_quarantine/` — grepped the landed
+  file, because an emitter exiting 0 is not evidence anything was written.
+  `amendments: 2` (REQ-04's policy-row clause → Phase 08; ADR-0221's seat decision) · `reopened: n`.
+  **Actual vs appetite: the phase was budgeted 1 day and the cycle is at 4.5 of 7.5 (60%)** — the
+  phase itself was not the overrun; the clock reading 0.0 for four days was.
+  - **STOP evaluated: DID NOT FIRE**, because the runtime installed as a digest-pinned container
+    image, ran headlessly on this machine, returned parseable JSON, and exited on its own in both a
+    cold (176s) and a warm (32s) run. Re-verified today: Docker `29.6.1` up, image present by
+    digest, `Hermes Agent v0.20.0 (2026.8.3)`. Written down even though it did not fire — a STOP
+    nobody records is indistinguishable from a STOP nobody checked.
+  - **CI green at `d1014b5`: 19/19 jobs, read per-JOB, zero skipped, head SHA confirmed equal to
+    local HEAD.** Run `31941207679`.
+  - **The capped credential is live and its ceiling is provider-read**, not asserted:
+    `limit 0 / limit_reset null / limit_remaining 0`. Receipts `01M04XJT2BA8PRTEAY3PB6STZ6` →
+    `01M04XKB3EP4RXFX3PEQ8GFQJN`. Slice 09, recorded CARRIED to Phase 06, is **resolved here after
+    all**. Assumption **A-05 did not fire**.
+  - **Evidence bundle: 7 of the 9 files its Verification plan names, plus `key-ceiling-ulid.txt`,
+    plus `absent-evidence.md` naming the two that are missing and why.** `smoke-usage.json` cannot
+    be produced reliably (ADR-0221) and `capability-lock.diff` does not exist because the runtime is
+    pinned out-of-band and deliberately **not gate-admitted** (issue #167). Both are findings, not
+    omissions — a quietly shortened expected-files list is how a bundle stops being evidence.
+  - **The close itself found four defects**, all from auditing the bundle against its own spec rather
+    than checking the files existed: a false driver comment about `--usage-file`, a dead `model`
+    return path, `HERMES_WRITE_SAFE_ROOT` enforcement (a gain — Phase 06 fixture 1), and the runtime
+    failing to honour a one-shot output contract on `llama3.1:8b` in 4 of 5 runs.
 
 - 2026-08-12 — `/arc-kickoff --lane engine`. Cycle 6 archived; `PLAN.md`, 5 phase specs and **ADRs
   0208–0219** written; `kickoff-lint` green. **No code.** Awaiting owner approval.
@@ -120,6 +149,204 @@ on-track run is one that learns to be ignored.
     mark. Next engine cycle starts at **0221**.
 
 ## Now
+
+### THE ADVERSARIAL PASS ON TODAY'S WORK — 2026-08-16, two fresh surfaces, 30 findings, ~zero overlap
+
+Required by the cycle non-negotiable **before** the shipping PR merges, never at the phase close.
+Two fresh agents, neither having seen the implementation: one on decision logic, one on the
+shell/OS boundary. **They overlapped on essentially nothing** — again the structural result this
+lane keeps measuring, not a matter of effort.
+
+**The five that mattered most, and three of them were in code written today:**
+
+1. **The tripwire was DEAD ON ARRIVAL, and it was proven dead.** `setup()` exported
+   `ARC_HERMES_DATA` to an empty scratch dir; that export was still live when the test ran the
+   probe, whose third gate asks the volume for a `config.yaml`. It never had one. So the probe
+   cleared its Docker and image gates and **skipped anyway, on every machine including this one**,
+   and the assertion accepted the skip. Permanently green, permanently measuring nothing. **That is
+   `bench-steel-probe.mjs` repeating inside the file written to explain why it must not.**
+2. **A proven `bash -c` injection through the checkout path**, in a test I wrote. One apostrophe in
+   the path gives `unexpected EOF`; **two rebalance the quoting and the inner shell EXECUTES the
+   span between them** — the attacker ran `$(id -un)` to show it. This lane's already-fixed defect
+   class, recurring verbatim, in the file citing it.
+3. **`Number("") === 0`.** A report carrying `"prompt_tokens": ""` became
+   `{"tokens_in":0,"source":"measured"}` on an append-only receipt — and `arc-bench` sums those and
+   derives a per-token rate. A fabricated measurement is the one thing MP-F exists to refuse.
+4. **A TWIN-FIX MISS, both twins in one file.** The seat fix went into `emitRun` and not into the
+   escalation proposal 300 lines below, which builds its own `model`/`model_source`. One run, two
+   receipts, disagreeing about which model ran — and the proposal is *"the one receipt a human
+   reads before editing engine/router.yaml"*. Now computed once, in `seatFor()`.
+5. **The routed pin was the one model input never checked against the seat grammar.** `--trial-model`
+   is validated, a runtime-reported model is validated, `router.models` was read straight onto the
+   receipt — and it **wins** the precedence over the validated one. A pin containing a space makes
+   the emitter throw `BAD_MODEL` under `--strict`: the whole receipt lost, on a successful run, at
+   exit 0.
+
+Also fixed: the probe orphaned a container on the operator's live volume (no `--name`, no reap) ·
+the probe's argv order differed from the driver's, so it pinned a shape production never sends ·
+the operator `USAGE_FILE` branch re-reported one stale report as `measured` forever, **and the
+comment above it claimed that was prevented** (seventh false comment) · a non-string `model` was
+dropped in silence · one wide `try` reported `EISDIR`/`EACCES` as "did not parse" · `$COST` was
+never cleared between runs inside one test, so a run writing nothing scored against the previous
+one · `mktemp -d` unchecked, so a failure gave `mkdir -p /data` and `rm -rf ""` · `console.log` then
+`process.exit` on the macOS async-stdout path · no suite self-count.
+
+**AND THE FIX ROUND SHIPPED THE EXACT DEFECT THE TRACKER SAYS FIX ROUNDS SHIP.** CI went red on
+5 of 19 jobs, all five on the same assertion: *"REQ-05: a budget that leaves nothing to spend stops
+BEFORE any driver runs"*. Cause: `RUNTIME_ID_RE` was declared as a `const` beside its only use in
+`seatFor()`, ~470 lines below `fail()` — which runs during **top-level execution** on the earliest
+exit path in the file. That path calls `fail` → `emitRun` → `seatFor` → the const, hits the
+**temporal dead zone**, the emit throws into its own catch, and the run writes **no receipt at all**.
+
+**Exit code 1 either way.** A caller checking the exit code could never tell the difference; only
+`engine-driver-contract.bats:104`, which greps the landed file, noticed. Proven both directions —
+const at the top: receipt present. Const moved back: `NO RECEIPT`, same exit 1.
+
+This is the **same defect this cycle already recorded and fixed once**, re-introduced by a fix an
+adversarial pass produced. The tracker's own words: *"fixes produced by an adversarial pass are
+themselves UNATTACKED CODE."* Written twice, hit twice.
+
+**And one I inflicted on myself while fixing theirs.** The `runtimeId` guard was written twice
+wrong: first as `!/[ -]/`, which reads as "no space and no hyphen" and **is** the range `0x20-0x2D`;
+then spelled with **literal 0x00 and 0x1f bytes**, which made `arc-run.mjs` binary to git and
+invisible to grep. **Eighth invisible-character defect this cycle, and the second to land inside the
+fix for the previous one.** Now an explicit allowlist, `RUNTIME_ID_RE`, every character visible.
+A control-byte scan across all six touched files reports 0.
+
+**Argv order was measured, not assumed.** The flag was tried both before and after `-z <prompt>`
+against the pinned image: neither wrote a report. So the ordering defect is real as a *tripwire*
+defect and is **not** the cause of the no-op — ADR-0221's finding stands.
+
+**Not yet fixed, named rather than counted as done:** token counts still ride the unvalidated
+`payload.tokens` (they are bounded in the driver now, but a different driver reporting `inr` sends
+the same value through `--cost` where the spine throws and `--strict` loses the receipt) · the
+fixture's `-v` recovery is more permissive than real docker and its `startsWith` mount check is a
+prefix test, not a path-boundary test · the suite drives `hermes.mjs` directly rather than the
+shipped `hermes.sh` · the container name is `pid + ms`, which collides across PID namespaces.
+
+---
+
+### PHASE 06 FIXTURE 8 FAILS, AND IT OPENS A REQ-06 HOLE — 2026-08-16
+
+**The runtime's persistent memory is ON and cannot be turned off.** A marker planted in run N
+(`ZEBRAQUARTZ7741`) was found on disk in the mounted volume, in `memories/MEMORY.md` and in
+`state.db`. Run N answered *"I've saved the marker as a memory"*; run N+1's stdout did not contain
+it — **so the obvious assertion would have recorded a PASS on a false property.** The assertion has
+to be *the volume does not contain the marker*, never *the answer does not mention it*. Looking at
+the artifact is the only reason this is not filed green.
+
+`hermes memory --help` on the pinned image: *"Built-in memory (MEMORY.md/USER.md) is **always
+active**"* — `memory off` disables only an external provider. **Not closeable by configuration.**
+
+**It is wider than fixture 8.** REQ-06 confines what enters a dispatch and assumes the dispatch is
+the unit. It is not, while the runtime writes memories into a volume the next dispatch mounts:
+content from pack A reaches dispatch B **without ever travelling as a pack**, so the `internal-only`
+refusal at arc-run exit 5 never sees it. Strictly worse than the carry-over path A-06 already
+worries about, because that one at least goes through the pack.
+
+Three mitigations with measured costs are written up in `evidence/phase-06/fixture-08-memory.md`;
+recommendation is a warm template copied per dispatch. **Not applied** — it is a design fork whose
+cheapest-looking option multiplies every class budget REQ-05 derives from calibration receipts, so
+it goes through `/arc-change` and an ADR, not through the session that found it.
+
+Result recorded as `FAIL`, not `UNPROVABLE`: REQ-02's STOP is for boundaries that need netns/seccomp
+/VM work to assert honestly. This one was entirely provable with what was to hand and simply failed.
+A failing fixture is a defect to close.
+
+---
+
+### THE SCOPE-CUT CONVERSATION, HELD — 2026-08-16, at 60% with the tripwire phase not done
+
+`/arc-phase-done` forces this at ≥50% burnt with the tripwire phase open. Both are true: **4.5 of
+7.5 days (60%)**, and Phase 06 — which carries REQ-02, the certification the day-5 checkpoint reads —
+is partial. So it is held here rather than deferred, and it is held with numbers.
+
+**The position.** 3.0 days remain. The phases that remain are budgeted **4.5 days** (06: 2.0 · 07:
+1.0 · 08: 1.5). That is a **1.5-day overrun on the current plan**, visible now instead of at day 7.
+
+**The pre-decided cut is APPLIED, not re-argued.** PLAN § Appetite named it in advance for exactly
+this moment: Phase 08 loses its **hand-written results table** first, then **any dispatch beyond the
+three-run floor**. Both are now cut. Recovery: **~0.5 day**, leaving 4.0 days of work against 3.0.
+The cut is deliberately small because the plan says so — the three real runs and the adversarial
+passes are the only two things in this cycle that test the work outside its own fixtures, and both
+are named uncuttable.
+
+**The day-5 checkpoint is 0.5 days away and REQ-02 is not certified.** Its text: *"if REQ-02 is not
+certified against the real runtime at 5 days burned, stop — bank the shim and the certification
+suite as documentation, record demand-triggered retry."* On the current clock that reads at the
+**next working session**. It is not being read early and it is not being read late.
+
+**What changed today that bears on it, and it cuts both ways.** In favour: the credential blocker is
+gone, Docker is up, the image is pinned and runs, and `HERMES_WRITE_SAFE_ROOT` turns out to be real
+enforcement fixture 1 can lean on. Against: **the runtime returned the contracted answer in 1 of 5
+runs** on `llama3.1:8b`. REQ-02's fixtures do not need good answers — they need the boundary to
+hold, which is a different question — but **REQ-07's three real runs do**, and that is the cycle's
+central claim. A cycle that certifies isolation and cannot get three usable drafts has proven the
+cage and not the hire.
+
+**Not escalated, because the plan already decided it.** The cut was pre-committed; applying it is
+bookkeeping. What IS the owner's, and is stated rather than asked: if the day-5 read fires, the
+choice between *stop and bank* and *extend the appetite* is a scope decision, and `leads` set the
+precedent on 2026-08-10 by extending 7d → 11d in writing rather than absorbing it silently.
+
+---
+
+### 2026-08-16 — the credential landed, and auditing the bundle against its own spec found four things
+
+**Branch `feat/arc-engine-cycle7-close`, cut fresh from `main`.** The previous branch's PR **#172
+merged as `e324745`** at 07:40 UTC — phases 04–05 complete and 06–07 partial are on `main`, CI
+`31933907089` 19/19 per-JOB at `3ce87ee`. That branch is spent and was 12,031 lines behind; nothing
+more is built on it.
+
+**THE CAPPED KEY EXISTS AND ITS CEILING IS PROVIDER-VERIFIED.** `approval.requested`
+`01M04XJT2BA8PRTEAY3PB6STZ6` → `decision.recorded` `01M04XKB3EP4RXFX3PEQ8GFQJN`, both in
+`events/2026-08-16.jsonl`, neither quarantined. `GET /api/v1/key` → HTTP 200, `limit: 0`,
+`limit_reset: null`, `limit_remaining: 0`. Read from the provider, not from intent. **A-05 did not
+fire.** The ordering deviation is recorded in `evidence/phase-04/key-ceiling-ulid.txt`: ADR-0213
+wants the figure before issuance and the owner did both in one act.
+
+**REQ-04 AMENDED (`/arc-change`).** The `hq.policy.yaml` row cannot ride the Phase-07 router diff —
+`policy-lint` refuses a grant to a process file that does not exist yet. It moves to REQ-07 /
+Phase 08, where the file and its grant are one change. PLAN, phase-07-spec and phase-08-spec all
+move together; phase-08's conditional *"if Phase 07 did not already carry it"* is resolved and gone.
+
+**ADR-0221 — the runtime identity leaves the model seat.** ADR-0212 (*runtime in the seat*) and
+ADR-0220 (*seat is a clean model id*) genuinely conflicted, and the seat value ADR-0212 specified is
+what quarantined the first hermes receipt with `BAD_MODEL`. Resolved: identity → its own `runtime`
+payload field, seat → `unpinned`, `model_source` gains a `runtime` value that no production run can
+currently reach and that is documented as unreachable rather than left to be discovered.
+
+**FOUR THINGS FOUND BY AUDITING THE EVIDENCE BUNDLE AGAINST ITS OWN VERIFICATION PLAN**, which is
+the only reason any of them surfaced:
+
+1. **`--usage-file` exists and the comment saying it did not was false** (sixth this cycle). Then
+   the flag itself turned out to write a report in **one run out of five**, and **the probe's own
+   teardown destroyed that one report's 410 bytes before anyone read them** — so its provenance is
+   unresolved. The verdict was carried without looking at the artifact. Recorded as a method
+   failure; the probe now deletes nothing.
+2. **`produce()`'s returned `model` is dead code** — `common.mjs` destructures `{ output, cost }`
+   and drops the rest, so `drivers/hermes` has been returning a model nothing read since it was
+   written. Seventh dead assertion. The live channel is the cost sidecar.
+3. **`HERMES_WRITE_SAFE_ROOT=/opt/data` is real and enforced** — observed denying a write outside
+   it. A `/tmp` usage-file target was measuring that confinement, not the feature. Phase 06
+   fixture 1 gains measured evidence.
+4. **The runtime does not reliably honour a one-shot output contract on `llama3.1:8b`.** Five runs
+   of one pinned prompt returned: correct JSON once, a web page title, two write-denied messages,
+   and a bash syntax error. The parser is fine; the answer is not. **This is a direct risk to
+   REQ-07's three real runs** and is now written into phase-06-spec rather than discovered in
+   Phase 08.
+
+**Shipped with it:** `tests/engine-usage-reader.bats` (9 tests) exercising the reader through the
+real driver path via the fake-docker seam — **four mutants killed, none survived** (flag not passed
+→ 7 red · `MODEL_RE` guard removed → 2 red · sidecar drops model → 1 red · estimate leaks into `inr`
+→ 1 red). `tests/engine-usage-flag-probe.mjs` pins the vendor behaviour and goes red, keeping the
+file, the day a report appears. Two evidence files close the Phase-04 bundle's named absences.
+
+**Still owed before Phase 04 can close:** the burn figure. Activity is on the record for 08-12
+(9 commits), 08-13 (23), 08-14 (13), 08-15 (1) and 08-16 (1) — the closing session sets the number,
+and `board-lint` moves `PORTFOLIO.md` with it.
+
+---
 
 ### SUPERSEDED BY ADR-0220, and my mechanism was the wrong shape — 2026-08-14
 
@@ -249,15 +476,27 @@ belongs to another lane's compile path and is not blocking.
 
 ---
 
-**Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.**
+**Current position, 2026-08-12: APPROVED. Phase 04 is opening. 0.0 of 7.5 days burned.** *(Historic
+line, kept as written on 2026-08-12. The live figure is 4.5d — see the derivation above `## Now`.)*
 
-> ⚠ **The `burn: 0.0d` in the machine header above is STALE, and it is the STOP clock.** Phase 04
-> opened 2026-08-12; slices 01 and 02 are proven and slice 06 was written, attacked and reverted since.
-> That is not zero days. Phase 04's STOP is specified as *"one working day of burn **as recorded in
-> `initiatives/engine/PROGRESS.md`**"*, so a clock reading 0.0 means the STOP cannot fire on schedule.
-> **No number is invented here** (ADR-0069 b5 / Constitution E3 — absent beats estimated), and
-> `board-lint` cross-checks this field against `PORTFOLIO.md`, so the two move together or not at all.
-> The session that burned the days records the real figure.
+> ✅ **The clock is SET, 2026-08-16: `burn: 4.5d` of 7.5d — 60%.** It read `0.0d` for four days, which
+> is not an absence but a false assertion, and it meant the day-5 kill checkpoint could not fire.
+>
+> **How the figure was derived, because a number without a method is the thing this rule exists to
+> stop.** It is a measurement of *active days*, not a stopwatch: engine-lane work landed on five
+> distinct dates — 2026-08-12, 08-13, 08-14, 08-15, 08-16 — counted from commits touching
+> `initiatives/engine/`, `.claude/scripts/engine/`, `docs/adr/02*` and `tests/engine-*` on the branch
+> that merged as `e324745`. Three of those (08-12, 08-13, 08-14) carried 9, 23 and 13 commits and are
+> counted as **full days**. 08-15 carried one commit and 08-16 is this session; each is counted as
+> **half a day**. 3 + 0.5 + 0.5 = **4.5d**.
+>
+> **What is deliberately NOT claimed:** this is not hours worked, and ADR-0220's seam — owner-ruled
+> off this clock on 2026-08-13 — consumed part of 08-14 without being subtracted, because no honest
+> measurement of that fraction exists. So **4.5d is an upper-leaning figure and the real number may be
+> lower**. That direction is chosen on purpose: a clock that runs slightly fast makes a kill
+> checkpoint fire early, and a clock that runs slow is the failure already recorded above.
+>
+> `board-lint` cross-checks this field against `PORTFOLIO.md`; the two move in the same commit.
 
 `/arc-kickoff` produced `PLAN.md`, `phases/phase-04-spec.md` through `phase-08-spec.md`, and twelve
 ADRs (0208–0219) covering EXE-A…K plus one decision the design source did not anticipate. Receipts:

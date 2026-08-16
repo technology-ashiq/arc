@@ -47,6 +47,23 @@ import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
+
+// The runtime identity grammar. Alphanumerics plus the punctuation `hermes@sha256:<digest>+cfg.<hash>`
+// actually uses, 1-256 chars. Deliberately NOT reusing MODEL_RE: this field exists precisely because
+// a runtime identity is NOT a model id (ADR-0221), and one regex serving both would re-create the
+// conflation that quarantined the first hermes receipt.
+//
+// DECLARED HERE, AT THE TOP, AND THAT POSITION IS LOAD-BEARING. Written next to its only use in
+// `seatFor()` it sat ~470 lines below `fail()`, which runs during TOP-LEVEL execution on the
+// earliest exit path in this file (`--budget inr=0`, "stopped before invoking any driver"). That
+// path calls fail -> emitRun -> seatFor -> this const, hits the temporal dead zone, the emit throws
+// into its catch, and the run writes NO RECEIPT AT ALL while still exiting 1. CI caught it in one
+// job; `engine-driver-contract.bats:104` is the only thing that noticed.
+//
+// This is the SAME defect this cycle already recorded and fixed once, re-introduced by a fix
+// produced by an adversarial pass -- which is exactly the gap the tracker names: "fixes produced by
+// an adversarial pass are themselves UNATTACKED CODE".
+const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
 import { routerFaults } from "./router-row.mjs";
@@ -309,7 +326,30 @@ if (!DRIVERS.includes(driver)) { console.error(`arc-run: unknown driver \`${driv
 let pinnedModel = null;
 if (tier) {
   const router = loadRouter();
-  pinnedModel = router?.models?.[tier]?.[driver] ?? null;
+  const raw = router?.models?.[tier]?.[driver] ?? null;
+  // THE ROUTED PIN IS CHECKED AGAINST THE SEAT GRAMMAR, AND IT WAS THE ONE INPUT THAT NEVER WAS.
+  // `--trial-model` is validated below, and a runtime-reported model is validated in `seatFor` --
+  // but `router.models` was read straight onto the receipt. `router-row.mjs` iterates
+  // `router.classes` and never looks at `router.models`, so a pin like `claude sonnet 4` (a space)
+  // or a non-string YAML scalar reached `--model`, the emitter threw BAD_MODEL under `--strict`,
+  // and the ENTIRE receipt for a successful run was lost at exit 0. Worse, that unvalidated value
+  // WINS the precedence over the runtime-reported one that was validated.
+  //
+  // Refused loudly here rather than dropped: unlike a runtime's report, a router pin is a reviewed
+  // production routing decision, so a malformed one is an operator error to fix in the file, not a
+  // field to silently omit. The message names the file and the exact path to edit.
+  if (raw !== null && raw !== undefined) {
+    if (typeof raw !== "string" || !MODEL_RE.test(raw)) {
+      console.error(`arc-run: engine/router.yaml models.${tier}.${driver} is ${JSON.stringify(raw)}, which is not a clean model id`);
+      console.error("         The spine refuses it (MODEL_RE), so the run would complete and its receipt would be");
+      console.error("         rejected -- a lost receipt on a successful run. Fix the row rather than the seat.");
+      // Exit 2, matching the `--trial-model` arm forty lines below and every other operator-error
+      // path in this file. Deliberately NOT 1: nothing has run, no receipt is owed, and 1 is what
+      // this file uses once a run has been attempted.
+      process.exit(2);
+    }
+    pinnedModel = raw;
+  }
 }
 
 // ---------- the trial seam (ADR-0220) ----------
@@ -474,6 +514,48 @@ function scrub(label, text, parsed) {
  * recorded as one: metric 1 of ADR-0069 block (c) ("cost per accepted output") stays
  * uncomputable until the spine can express tokens-without-money.
  */
+/**
+ * The MP-F seat, its provenance, and the runtime identity — computed in ONE place.
+ *
+ * It lives in a function because it did not, and that cost a defect an adversarial pass found
+ * immediately: the fix went into `emitRun` and NOT into the escalation proposal three hundred
+ * lines below, which builds its own `model`/`model_source` from `effectiveModel` alone. One run
+ * then produced two receipts disagreeing about which model ran — and the proposal is, by its own
+ * comment, "the one receipt a human reads before editing engine/router.yaml", so the disagreeing
+ * copy was the one a router diff would have been justified by. Textbook twin-fix miss, both twins
+ * in the same file.
+ *
+ * PRECEDENCE: a routed pin and a `--trial-model` override both beat a runtime-reported model. The
+ * report only ever fills a seat that would otherwise be empty, so a driver can never rewrite what
+ * routing decided (ADR-0069 b1) — and a runtime row carries no `models:` entry anyway (ADR-0217).
+ *
+ * `runtime` is a SEPARATE field and is length-bounded here: `cost.model` is held to 128 chars by
+ * MODEL_RE while `cost.runtime` was checked only for truthiness, so a driver could push an
+ * arbitrarily long string into the payload, cross MAX_EVENT_BYTES and cost the WHOLE receipt to
+ * `OVERSIZE` — the same quarantine the model guard exists to prevent, one line below it.
+ */
+function seatFor(cost) {
+  const reportedModel = cost && typeof cost.model === "string" && MODEL_RE.test(cost.model) ? cost.model : null;
+  const rawRuntime = cost && typeof cost.runtime === "string" ? cost.runtime.trim() : "";
+  return {
+    seat: effectiveModel ?? reportedModel,
+    seatSource: effectiveModel ? modelSource : (reportedModel ? "runtime" : modelSource),
+    // AN ALLOWLIST, SPELLED. Two earlier attempts at this one line were both wrong in ways that
+    // do not show in a diff. The first was `!/[ -]/` -- which reads as "no space and no hyphen"
+    // and IS the range 0x20-0x2D, so it also rejected !"#$%&'()*+, . The second spelled a control
+    // range using LITERAL 0x00 and 0x1f bytes, which made this whole file binary to git and
+    // invisible to grep -- the seventh invisible-character defect this cycle, and the second one
+    // to land inside the fix for the previous one.
+    //
+    // So: an explicit positive character set, every character visible, matching the only shape a
+    // runtime identity has (`hermes@sha256:<hex>+cfg.<hex>`), bounded because `cost.model` is
+    // bounded by MODEL_RE and this field was checked for truthiness alone -- long enough to cross
+    // MAX_EVENT_BYTES and cost the whole receipt to OVERSIZE, one line below the guard that
+    // exists to prevent exactly that.
+    runtimeId: RUNTIME_ID_RE.test(rawRuntime) ? rawRuntime : null,
+  };
+}
+
 function costArgs(cost) {
   if (!cost) return { flag: null, tokens: null };
   const tokens = {};
@@ -565,14 +647,40 @@ function emitRun(payload) {
   // second fact into it would make every reader parse a string to get either one, which is how
   // `tier:X` came to assert a routing decision nothing had applied. Where the value came from is
   // a separate question and gets a separate field, `model_source`, set in emitRun's caller.
-  if (effectiveModel) extra.push("--model", effectiveModel);
+  // A RUNTIME REPORTS THE MODEL IT USED, AND THAT IS A FOURTH SOURCE (ADR-0221). An agent
+  // runtime picks its own model inside a process arc does not observe, so the seat looked
+  // permanently unanswerable and every hermes receipt carried `unpinned`. It is answerable:
+  // the runtime writes it into the usage report, the driver puts it in the cost sidecar, and
+  // it arrives here as a MEASUREMENT rather than a claim.
+  //
+  // PRECEDENCE, AND IT ONLY EVER FILLS A HOLE: a routed pin and a trial override both win.
+  // Overriding a pin with the driver's word would let a driver rewrite what routing decided,
+  // which is the shape ADR-0069 b1 exists to forbid -- and a runtime row carries no `models:`
+  // entry anyway (ADR-0217), so in production this branch runs exactly when nothing else can.
+  //
+  // `runtime` is a SEPARATE field, never folded into the seat: `hermes@sha256:...+cfg....` is
+  // provenance, the seat is a model id, and one string carrying both is how `tier:X` came to
+  // assert a routing decision nothing had applied.
+  const { seat, seatSource, runtimeId } = seatFor(cost);
+
+  if (seat) extra.push("--model", seat);
   else if (tier) extra.push("--model", "unpinned");
 
   // `model_source` is derived state and is stamped HERE, after ...rest, so it lands on EVERY
   // run.completed -- the failure paths through `fail()` as much as the success path. A provenance
   // field that only appears on green runs cannot answer "what was this model doing when it failed",
   // which for a bench comparison is the more interesting half.
-  const r = emitEvent("run.completed", { process: processName, ...rest, ...(tokens ? { tokens } : {}), model_source: modelSource }, extra);
+  // `...rest` may carry a `model` the caller computed from `effectiveModel` alone, which is
+  // stale the moment a runtime reports one. It is overwritten AFTER the spread, for the same
+  // reason `model_source` is: derived state is stamped in one place or it disagrees with itself.
+  const r = emitEvent("run.completed", {
+    process: processName,
+    ...rest,
+    ...(tokens ? { tokens } : {}),
+    ...(seat ? { model: seat } : {}),
+    ...(runtimeId ? { runtime: runtimeId } : {}),
+    model_source: seatSource,
+  }, extra);
   if (!r.ok) {
     console.error(`arc-run: could not emit run.completed: ${r.error}`);
     console.error("         The run is NOT recorded. Under --strict the emitter rejects rather than quarantining.");

@@ -30,6 +30,10 @@
 
 const ESC = "\u001b";
 const BEL = "\u0007";
+// Only the usage-report cases below need these; every other case writes stdout and nothing else.
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 const out = (s) => process.stdout.write(s);
 const line = (s) => process.stdout.write(s + "\n");
 const ANSWER = '{"ok":true,"runtime":"hermes"}';
@@ -205,6 +209,71 @@ switch (kase) {
   case "escape-in-string":
     line(`{"ok":true,"runtime":"hermes","secret":"AB${ESC}[31mCD"}`);
     break;
+
+  // THE USAGE-REPORT CASES EXIST BECAUSE THE REAL RUNTIME CANNOT REACH THEM (ADR-0221).
+  // `hermes --usage-file PATH` is vendor-documented and writes nothing at the pinned digest --
+  // measured four ways, and pinned as a no-op by tests/engine-usage-flag-probe.mjs. So the
+  // reader in drivers/hermes.mjs would ship as a branch nothing had ever executed, which is the
+  // vacuous pass this repo keeps paying for. These cases make it execute.
+  //
+  // The path is TAKEN FROM THE ARGV THE DRIVER ACTUALLY PASSED, never reconstructed here: a
+  // fixture that computes its own idea of the path proves the fixture and the test agree, not
+  // that the driver asked for the right file. The container path is rewritten to its host side
+  // using the -v mapping in that same argv, for the same reason.
+  case "usage-report":
+  case "usage-report-no-model":
+  case "usage-report-bad-model":
+  case "usage-report-object-model":
+  case "usage-report-empty-tokens":
+  case "usage-report-tokens-only": {
+    boot();
+    line(ANSWER);
+    const argv = process.argv.slice(2);
+    const flagAt = argv.indexOf("--usage-file");
+    const volAt = argv.indexOf("-v");
+    if (flagAt < 0 || flagAt + 1 >= argv.length) {
+      process.stderr.write("fake-docker: the driver passed no --usage-file, so this case cannot report\n");
+      process.exit(65);
+    }
+    if (volAt < 0 || volAt + 1 >= argv.length) {
+      process.stderr.write("fake-docker: the driver passed no -v mount, so the container path cannot be mapped home\n");
+      process.exit(66);
+    }
+    const inContainer = argv[flagAt + 1];
+    const spec = argv[volAt + 1];
+    // A windows host path is `C:/x:/opt/data`, so the container side is after the LAST colon,
+    // never the first. Splitting on the first colon here would have written the report to `/`.
+    const cut = spec.lastIndexOf(":");
+    const hostDir = spec.slice(0, cut);
+    const mountPoint = spec.slice(cut + 1);
+    if (!inContainer.startsWith(mountPoint)) {
+      process.stderr.write(`fake-docker: --usage-file ${inContainer} is outside the mount ${mountPoint}, so the host would never see it\n`);
+      process.exit(67);
+    }
+    const hostPath = join(hostDir, inContainer.slice(mountPoint.length).replace(/^\/+/, ""));
+
+    // Four shapes, because the reader has four outcomes and each one needs its own arrival:
+    // a full report, a report with no model, a model the spine grammar refuses, and tokens with
+    // no model at all. `estimated_cost_usd` rides every one of them precisely so a test can
+    // assert it is NEVER carried into a cost field.
+    const report = { estimated_cost_usd: 0.0123, api_calls: 2, prompt_tokens: 1234, completion_tokens: 567 };
+    if (kase === "usage-report") report.model = "llama3.1:8b";
+    if (kase === "usage-report-bad-model") report.model = "hermes@sha256:deadbeef+cfg.1";
+    if (kase === "usage-report-no-model") report.model = "";
+    // A STRUCTURED model. `typeof u.model === "string"` is false, so the old reader dropped it in
+    // total silence -- "wrong type" and "missing" collapsed into one input, with the loud arm
+    // reserved for the one case a fixture happened to cover.
+    if (kase === "usage-report-object-model") report.model = { id: "llama3.1:8b" };
+    // AN EMPTY token figure. Number("") === 0 and Number.isFinite(0) is true, so this used to
+    // become {"tokens_in":0,"source":"measured"} -- a fabricated measurement on an append-only
+    // receipt, which arc-bench then sums. The other figure is left valid so the test can prove one
+    // bad field does not discard the good one.
+    if (kase === "usage-report-empty-tokens") { report.prompt_tokens = ""; report.model = "llama3.1:8b"; }
+    // `usage-report-tokens-only` carries no `model` key at all -- absent and empty are different
+    // inputs, and a reader that only checks truthiness cannot tell them apart.
+    writeFileSync(hostPath, `${JSON.stringify(report)}\n`, "utf8");
+    break;
+  }
 
   default:
     process.stderr.write(`fake-docker: unknown ARC_HERMES_FAKE_CASE [${kase || "unset"}]\n`);
