@@ -143,10 +143,85 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
 }
 
 @test "a carriage return in a payload string is refused by code point, never stripped" {
+  # The forced `{ idem: SHA }` is GONE. It was a deliberately wrong idem, so this reported
+  # BAD_CONTENT whether or not the control-character check existed -- it passed for the right
+  # reason only because that loop happens to run before the idem comparison, and a reorder would
+  # have made it vacuous in silence. Letting mk compute the correct idem leaves the CR as the only
+  # thing that can fail. Same fix applied to the ADR-1120 case below; found by writing that one.
   run _node "$PRE
-    console.log(refuses(() => validateEvent(mk('content.published', with_({ title:'a\\r\\nb' }), { idem: SHA }))));"
+    console.log(refuses(() => validateEvent(mk('content.published', with_({ title:'a\\r\\nb' })))));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "BAD_CONTENT" ]
+}
+
+@test "invisible and bidi-override characters are refused in a title (ADR-1120)" {
+  # title is the ONLY free-form string in any idem preimage in this repo, which makes two harms
+  # reachable there and nowhere else. U+202E reverses rendering order, so a published headline can
+  # display as something other than what it says -- on a page under the owner's name. And because
+  # title is in the preimage, ANY invisible character makes two identical-looking titles into two
+  # different facts: nothing errors, the spine just holds two receipts a human cannot tell apart.
+  #
+  # Only C0 and DEL were refused before this. Measured, not assumed: all nine below were ACCEPTED.
+  run _node "$PRE
+    const C = (n) => String.fromCharCode(n);
+    const bad = [[0x202E,'RLO'],[0x202A,'LRE'],[0x2066,'isolate'],[0x200B,'ZWSP'],[0xFEFF,'BOM'],[0x0085,'NEL'],[0x009B,'CSI'],[0x2028,'linesep'],[0x2029,'parasep']];
+    // NO forced idem. The sibling CR test passes { idem: SHA }, which is a DELIBERATELY WRONG
+    // idem -- so that test would report BAD_CONTENT even if the character check did nothing at
+    // all, and it only passes for the right reason because the character loop happens to run
+    // before the idem comparison. Reorder assertContent and it becomes vacuous silently. Letting
+    // mk compute the correct idem makes the character the ONLY thing that can fail here.
+    const out = bad.map(([cp,n]) => refuses(() => validateEvent(mk('content.published', with_({ title: 'a' + C(cp) + 'b' })))) === 'BAD_CONTENT' ? 'ok' : 'ACCEPTED:' + n);
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "ok ok ok ok ok ok ok ok ok" ]
+}
+
+@test "zero-width joiners and bidi MARKS are still accepted -- the rule is not printing-vs-not" {
+  # The negative control, and the reason this is an ADR rather than a one-line widening. A blanket
+  # ban on non-printing characters looks principled and refuses CORRECT titles: U+200D composes
+  # every emoji family and flag, U+200C is required orthography in Persian and Hindi, and
+  # U+200E/200F are MARKS that nudge bidi toward correct display rather than reversing it.
+  #
+  # If this goes red because the rule was widened, the RULE is wrong, not this fixture.
+  #
+  # Every character is an escape, never a literal. Literal emoji and Devanagari in a bats string
+  # travel through the shell into node -e, and that is the shape that passes on ubuntu and fails on
+  # exactly one CI leg -- the same class as the MSYS path bug this suite family already paid for.
+  run _node "$PRE
+    const C = (n) => String.fromCharCode(n);
+    const good = [
+      ['emoji', 'Ship it \\uD83C\\uDF89'],
+      ['zwj-family', '\\uD83D\\uDC68' + C(0x200D) + '\\uD83D\\uDC69' + C(0x200D) + '\\uD83D\\uDC66'],
+      ['flag', '\\uD83C\\uDDEE\\uD83C\\uDDF3'],
+      ['zwnj-hindi', '\\u0915\\u094D' + C(0x200C) + '\\u0937'],
+      ['lrm', 'arc ' + C(0x200E) + '\\u0627\\u0644\\u0639'],
+      ['rlm', 'arc ' + C(0x200F) + '\\u0627\\u0644\\u0639'],
+      ['cjk', '\\u53D7\\u9818\\u66F8'],
+      ['accented', 'Caf\\u00E9']];
+    const out = good.map(([n,t]) => refuses(() => validateEvent(mk('content.published', with_({ title: t })))) === 'ACCEPTED' ? 'ok' : 'REFUSED:' + n);
+    console.log(out.join(' '));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "ok ok ok ok ok ok ok ok" ]
+}
+
+@test "a lone surrogate is refused -- it encodes to the same bytes as U+FFFD (ADR-1119)" {
+  # The preimage is joined as a STRING and hashed as BYTES, and that map is not injective: every
+  # lone surrogate encodes to EF BF BD, exactly like U+FFFD. Two different titles, two different
+  # event shas, ONE idem -- the second dropped as DUP_IDEM, which is the C2 loss class reproduced
+  # inside the rule written to prevent it.
+  #
+  # The collision is SHOWN, not asserted about: the two titles differ as strings and their UTF-8
+  # bytes are identical. That is the whole defect in two lines.
+  run _node "$PRE
+    const lone = 'Receipts \\uD83C';
+    const repl = 'Receipts \\uFFFD';
+    console.log(refuses(() => validateEvent(mk('content.published', with_({ title: lone })))));
+    console.log(lone !== repl ? 'titles-differ' : 'SAME');
+    console.log(Buffer.from(lone,'utf8').equals(Buffer.from(repl,'utf8')) ? 'bytes-identical' : 'bytes-differ');"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "BAD_CONTENT" ]
+  [ "${lines[1]}" = "titles-differ" ]
+  [ "${lines[2]}" = "bytes-identical" ]
 }
 
 @test "a supplied idem that does not match the payload is refused" {

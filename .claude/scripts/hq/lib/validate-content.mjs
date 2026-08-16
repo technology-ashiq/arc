@@ -69,13 +69,41 @@ const isPlainObject = (v) =>
 
 // Control characters are refused by CODE POINT, never normalized — normalizing is how a validator
 // quietly becomes a suggestion. CR is in this range, which is what makes the CRLF fixture pass.
-const hasControlChar = (s) => {
+// C0 + DEL, and the invisible/bidi set ADR-1120 adds.
+//
+// The split is override-versus-mark and invisible-with-no-use versus invisible-with-a-use, NOT
+// printing-versus-non-printing — that distinction looks principled and refuses correct titles in
+// real languages. Returns the offending code point so the error can name it; an error that says
+// only "an invisible character" is unactionable against a character you cannot see.
+const INVISIBLE = new Map([
+  [0x2028, "U+2028 LINE SEPARATOR"],
+  [0x2029, "U+2029 PARAGRAPH SEPARATOR"],
+  [0xfeff, "U+FEFF ZERO WIDTH NO-BREAK SPACE (BOM)"],
+  [0x200b, "U+200B ZERO WIDTH SPACE"],
+]);
+
+// DELIBERATELY ABSENT, and each for a reason that would be a regression to forget:
+//   U+200D ZWJ  — composes emoji sequences; refusing it rejects a family or a composed flag.
+//   U+200C ZWNJ — required orthography in Persian, Hindi and others.
+//   U+200E/200F — bidi MARKS, not overrides: they nudge the algorithm toward correct display of
+//                 mixed-direction text rather than reversing it.
+const badCodePoint = (s) => {
   for (const ch of s) {
     const c = ch.codePointAt(0);
-    if (c < 0x20 || c === 0x7f) return true;
+    if (c < 0x20 || c === 0x7f) return `an ASCII control character (U+${c.toString(16).toUpperCase().padStart(4, "0")})`;
+    // C1: NEL, CSI and friends. Terminal escape territory, no textual meaning.
+    if (c >= 0x80 && c <= 0x9f) return `a C1 control character (U+${c.toString(16).toUpperCase().padStart(4, "0")})`;
+    // Bidi embeddings, overrides and isolates. U+202E is the spoofing vector: it reverses
+    // rendering order, so a published headline can display as something other than what it says.
+    if ((c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069))
+      return `a bidi override/isolate (U+${c.toString(16).toUpperCase().padStart(4, "0")}) — it changes how the title RENDERS versus what it says`;
+    const named = INVISIBLE.get(c);
+    if (named) return named;
   }
-  return false;
+  return null;
 };
+
+const hasControlChar = (s) => badCodePoint(s) !== null;
 
 // A lone surrogate — half of a pair, with no partner. Found by an adversarial pass 2026-08-16, and
 // it is an IDEM COLLISION, which is the one failure this file's header claims to have closed.
@@ -161,8 +189,10 @@ export function assertContent(event) {
   for (const [k, v] of Object.entries(p)) {
     if (typeof v !== "string")
       throw new SpineError("BAD_CONTENT", `${kind}.${k} must be a string`);
-    if (hasControlChar(v))
-      throw new SpineError("BAD_CONTENT", `${kind}.${k} carries an ASCII control character — refused by code point, never stripped`);
+    const bad = badCodePoint(v);
+    if (bad)
+      throw new SpineError("BAD_CONTENT",
+        `${kind}.${k} carries ${bad} — refused by code point, never stripped. ${kind}.title is the one free-form field in the idem preimage, so an invisible character makes two identical-looking titles into two different facts (ADR-1120)`);
     if (hasLoneSurrogate(v))
       throw new SpineError("BAD_CONTENT", `${kind}.${k} contains a lone surrogate — it encodes to the same UTF-8 bytes as U+FFFD, so two different values would share one idem and the second would be dropped as DUP_IDEM`);
   }

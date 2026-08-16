@@ -26,6 +26,15 @@ decision this lane writes is numbered inside it.
    this week, and a new module collides only on the one `KINDS` line.
    Closed key set `{site, slug, url, title, template_id, cluster_id, content_sha, pr_ref}`; an unknown
    payload key **throws** a `SpineError`, it is never ignored.
+   **Amendment 2026-08-16 (ADR-1119, ADR-1120): `title` is the only free-form string in any idem
+   preimage in this repo, and that made two Unicode failures reachable there and nowhere else.** A
+   *lone surrogate* encodes to the same UTF-8 bytes as U+FFFD, so two different titles produced ONE
+   idem and the second died as `DUP_IDEM` — the C2 loss class inside the rule written to prevent it.
+   And only C0 + DEL were refused, so a title could carry U+202E (which reverses how a published
+   headline RENDERS versus what it says) or any zero-width character (which makes two
+   identical-looking titles into two different facts). Both are refused by code point now, never
+   stripped. U+200D, U+200C and the bidi *marks* stay allowed — they compose emoji and are required
+   orthography in real scripts, and refusing them would reject correct titles to prevent a spoof.
 3. Idem implemented as a **total preimage over every identity-bearing field** — `site`, `slug`,
    `content_sha`, `title`, `template_id`, `cluster_id`, `url` — and deliberately NOT `pr_ref`, which
    stamps our process rather than the publication. Under a `site+slug+content_sha` preimage a
