@@ -1,0 +1,6 @@
+{
+  "_comment": "The OCI spec /v2/NAME/tags/list shape: the REPOSITORY in name and the tags in tags. Reading name as the tag here is the format-specific-assumption defect one level down, so name must be ignored when tags is present.",
+  "name": "oci-tool",
+  "tags": [ { "name": "v2026.8.3" }, "v2026.7.30" ],
+  "digest": "sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e"
+}

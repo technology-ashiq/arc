@@ -1,0 +1,7 @@
+{
+  "_comment": "The shape an OCI registry really returns: the TAG in name, the index digest in digest, per-arch digests under images. No versions array and no dist.integrity, which is why the npm-shaped reader could never admit one.",
+  "name": "v2026.8.3",
+  "digest": "sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e",
+  "images": [ { "digest": "sha256:c0cab4e3711bcb27a312be1b3776254fc06fd50d5f7a6b8017915fc7171cb39e", "architecture": "amd64", "os": "linux" } ],
+  "fetched": "2026-08-12"
+}

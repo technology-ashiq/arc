@@ -1,0 +1,47 @@
+{
+  "name": "legal",
+  "version": "0.1.0",
+  "requires": [
+    "core",
+    "hq"
+  ],
+  "commands": [],
+  "scripts": [
+    ".claude/scripts/legal/arc-legal.mjs",
+    ".claude/scripts/legal/lib/yaml.mjs",
+    ".claude/scripts/legal/lib/canonical.mjs",
+    ".claude/scripts/legal/lib/schema.mjs",
+    ".claude/scripts/legal/lib/template.mjs",
+    ".claude/scripts/legal/lib/lints.mjs",
+    ".claude/scripts/legal/publish-gate.mjs",
+    ".claude/scripts/legal/lib/receipts.mjs",
+    ".claude/scripts/legal/lib/checklist.mjs"
+  ],
+  "files": [
+    "products/legal/approved-sets.json",
+    "products/legal/data/claim-denylist.json",
+    "products/legal/data/clause-map.json",
+    "products/legal/data/cross-page-claims.json",
+    "products/legal/data/grievance-windows.json",
+    "products/legal/data/pages.json",
+    "products/legal/data/provider-pages.json",
+    "products/legal/data/required-clauses.json",
+    "products/legal/data/scenarios.json",
+    "products/legal/data/vocab.json",
+    "products/legal/templates/v1/about.tmpl.md",
+    "products/legal/templates/v1/contact.tmpl.md",
+    "products/legal/templates/v1/pricing.tmpl.md",
+    "products/legal/templates/v1/privacy.tmpl.md",
+    "products/legal/templates/v1/refund-cancellation.tmpl.md",
+    "products/legal/templates/v1/shipping-delivery.tmpl.md",
+    "products/legal/templates/v1/terms.tmpl.md",
+    "products/legal/templates/v2/about.tmpl.md",
+    "products/legal/templates/v2/contact.tmpl.md",
+    "products/legal/templates/v2/pricing.tmpl.md",
+    "products/legal/templates/v2/privacy.tmpl.md",
+    "products/legal/templates/v2/refund-cancellation.tmpl.md",
+    "products/legal/templates/v2/shipping-delivery.tmpl.md",
+    "products/legal/templates/v2/terms.tmpl.md"
+  ],
+  "docs": []
+}

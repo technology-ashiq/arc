@@ -212,7 +212,17 @@ export async function runDriver(name, produce, opts = {}) {
     process.stdout.write(`${JSON.stringify(output)}\n`);
     process.exitCode = EXIT.OK;
   } catch (e) {
-    die(EXIT.DRIVER_FAIL, e.message);
+    // A REAL driver could not decline for budget, and that was a hole in the shared contract
+    // rather than a missing feature of any one driver. The fake path has always been able to
+    // (`__decline_budget` above), so an offline recording could exercise exit 2 while nothing
+    // that actually talks to a runtime ever could -- which makes "the budget arm is covered" a
+    // statement about the fixture and not about the code.
+    //
+    // CLOSED, AND CLOSED NARROWLY: only BUDGET_DECLINED may be requested this way. The exit map
+    // is 0/1/2 and this cycle adds nothing to it (ADR-0219), so an `arcExit` naming anything
+    // else is a driver trying to widen the contract and is ignored rather than obeyed.
+    const asked = e && e.arcExit;
+    die(asked === EXIT.BUDGET_DECLINED ? EXIT.BUDGET_DECLINED : EXIT.DRIVER_FAIL, e.message);
   }
 }
 
@@ -223,5 +233,30 @@ export async function runDriver(name, produce, opts = {}) {
  * drain naturally, and keep a ref'd backstop for the case where it does not.
  */
 export function settle() {
-  setTimeout(() => process.exit(process.exitCode ?? 0), 250).unref();
+  // AND NEVER WHILE BYTES ARE STILL QUEUED. The unref'd timer does not HOLD the loop open, but it
+  // still FIRES while the loop is alive for another reason -- and a large answer draining into a
+  // slow reader is exactly such a reason. `process.exit()` then discards everything queued.
+  //
+  // Measured across a real process boundary: 8 MiB written, 458752 bytes received, truncated,
+  // and the writer exited **0**. 94.5% of the answer lost while the run reported success. arc-run
+  // then reads the truncated document as a schema failure, spends a retry, and emits an
+  // escalation proposal blaming the driver for output the driver produced correctly.
+  //
+  // WHY NO LEG COULD CATCH IT: node's stdout-to-a-pipe is SYNCHRONOUS on Windows and Linux and
+  // ASYNCHRONOUS on macOS. ubuntu and windows are structurally immune; only the macOS leg can
+  // see it, and only with an answer big enough to outrun the reader.
+  //
+  // A GIVE-UP IS NOT A SUCCESS. If the queue never drains we still have to exit, but exiting 0
+  // with bytes pending is the lie this whole comment is about -- so the give-up path reports a
+  // driver failure instead, and arc-run treats a truncated answer as one.
+  const deadline = Date.now() + 30_000;
+  const tick = () => {
+    if (process.stdout.writableLength > 0) {
+      if (Date.now() < deadline) { setTimeout(tick, 25).unref(); return; }
+      process.exitCode = EXIT.DRIVER_FAIL;
+      process.stderr.write("arc-driver: stdout did not drain within 30s — the answer is incomplete, reporting a driver failure rather than a truncated success\n");
+    }
+    process.exit(process.exitCode ?? 0);
+  };
+  setTimeout(tick, 250).unref();
 }

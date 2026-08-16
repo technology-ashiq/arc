@@ -1,0 +1,20 @@
+[
+  {
+    "instrument": "Consumer Protection (E-Commerce) Rules 2020",
+    "ack_hours": 48,
+    "resolve_days": 30,
+    "source_url": "https://www.indialaw.in/blog/blog/consumer-protection-e-commerce-rules-2020/",
+    "in_force_from": "2020-07-23",
+    "source_kind": "secondary",
+    "verified_on": "2026-08-03"
+  },
+  {
+    "instrument": "DPDP Rules 2025, Rule 14(3)",
+    "ack_hours": null,
+    "resolve_days": 90,
+    "source_url": "https://www.dpdpa.com/dpdparules/rule14.html",
+    "in_force_from": "2027-05-13",
+    "source_kind": "secondary",
+    "verified_on": "2026-08-12"
+  }
+]

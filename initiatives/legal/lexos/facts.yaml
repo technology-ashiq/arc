@@ -1,0 +1,100 @@
+# LexOS — legal pack facts (Phase 03, staging copy)
+#
+# This is the STAGING copy in arc. The live copy belongs in the LexOS repo at `legal/facts.yaml`
+# (ADR-1205: facts, pages, pins and receipts are venture-local). It is staged here first because
+# writing into a separate real project is the owner's call, not mine.
+#
+# EVERY VALUE BELOW IS DERIVED FROM SOMETHING, NOT GUESSED:
+#
+#   payment_model: none               <- LexOS ADR-0003, "Razorpay settles to each firm": each law
+#                                        firm is its own merchant. LexOS never takes the client's
+#                                        money, so there is no gateway and no merchant-of-record.
+#   gst_registered: false             <- the owner, 2026-08-15.
+#   stores_third_party_client_data    <- LexOS is practice-management software for law firms; the
+#                                        records it holds are the firms' CLIENTS' matters. That is
+#                                        the definition of the processor role, and it is why this
+#                                        venture is the one the processor clauses were written for.
+#   site_url                          <- docs/lexos-idea.md names lexos.app.
+#
+# THE IDENTITY FIELDS ARE DELIBERATELY ABSENT. They are real-world facts about a real operator --
+# a legal name, a registered address, a working support mailbox, a named grievance officer -- and
+# inventing them would put a false statement on a customer-facing legal page, which is the one
+# thing this whole product exists to prevent. The fixtures use invented details precisely so no
+# real person's data becomes test data; the reverse duty applies here.
+#
+# The schema will refuse this file and NAME each missing field. That refusal is the request: it is
+# machine-generated rather than my guess at what is needed.
+
+venture: lexos
+site_url: "https://lexos.app"
+
+# The date the pages take effect. Must not be earlier than the day the owner approves them
+# (publish refuses BACKDATED), so it is set at approval time, not now.
+# effective_date: YYYY-MM-DD
+
+# ---- who the operator is (OWNER MUST SUPPLY) ------------------------------------------------
+# operator:
+#   type: entity | individual
+#   legal_name: "..."        the name on the incorporation record or the PAN
+#   trade_name: "LexOS"
+#
+# registered_address: "..."  the address a legal notice can be served at
+# support:
+#   email: "..."
+#   phone: "..."
+# grievance:
+#   name: "..."              a real person; Rule 4(5) also wants their DESIGNATION
+#   email: "..."
+# deletion_route:
+#   mailbox: "..."
+
+# ---- what it does with data ------------------------------------------------------------------
+data_categories:
+  - identity
+  - contact
+  - billing
+  - usage-analytics
+  - client-matter-content
+  - uploaded-documents
+
+stores_third_party_client_data: true
+
+retention: until-account-deletion
+
+sub_processors:
+  - "Amazon Web Services India (hosting, Mumbai region)"
+  - "Neon (managed Postgres)"
+  - "Resend (transactional email)"
+
+# ---- money -----------------------------------------------------------------------------------
+payment_model: none
+payment_provider: none
+gst_registered: false
+refund_window_days: 14
+
+# pricing:
+#   plan_names: [...]
+#   plan_amounts_inr: [...]
+
+# ---- what we promise, in numbers (OWNER MUST CONFIRM -- these are commitments, not defaults) --
+# commitments:
+#   refund_decision_days: 5
+#   deletion_live_days: 7
+#   deletion_backup_days: 35
+#   renewal_notice_days: 7
+#   price_notice_days: 30
+#   breach_notice_hours: 72
+#   payment_failure_grace_days: 14
+
+# ---- where the pages live on the site --------------------------------------------------------
+routes:
+  terms: /legal/terms
+  privacy: /legal/privacy
+  refund-cancellation: /legal/refunds
+  shipping-delivery: /legal/delivery
+  contact: /contact
+  pricing: /pricing
+  about: /about
+
+delivery:
+  access_within_hours: 1

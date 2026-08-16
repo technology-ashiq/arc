@@ -75,3 +75,24 @@ tests/fixtures/leads/replies-hostile/** -text
 # testing nothing. The export parsers are attacked at the byte level (CRLF, BOM, quoted commas),
 # so the whole directory is frozen as authored. OVERRIDES `* text=auto eol=lf`.
 tests/fixtures/ledger/** -text
+
+# Cycle 7, engine Phase 04/05: capability-vet's fixture corpus. EIGHTH occurrence -- and it and
+# the seventh above were written INDEPENDENTLY, IN THE SAME WINDOW, BY TWO LANES, each numbering
+# itself seventh. Neither author knew the other was writing one. That is the sharpest evidence
+# in this file that the class is not a series of individual oversights: two lanes reached for the
+# same missing line on the same day, and the merge is the only place either of them found out.
+#
+# This one differs from the seventh in HOW it surfaced. The ledger case was caught by git warning
+# on the commit that created the directory. This one was found by an ADVERSARIAL PASS, long after
+# creation -- the directory had carried byte-level cases since it was made and never got this
+# line, so the rule stated at the fifth occurrence ("any fixture directory whose cases attack at
+# the byte level gets -text in the same commit that creates it") was written down and then not
+# applied to the next directory created.
+#
+# The NUL fixtures survived only because git auto-detects them as binary, which is luck rather
+# than policy. The BOM and CRLF manifests added alongside this line are exactly the cases
+# `* text=auto eol=lf` would flatten: a 3-byte BOM on a package.json defeats the lifecycle-hook
+# reader while npm still runs the hook, and a fixture that proves it is worthless if git strips
+# the bytes on the way in. Verified before writing this: `git hash-object --path <case>` gave the
+# CRLF and LF forms the SAME blob. OVERRIDES `* text=auto eol=lf`.
+tests/fixtures/develop/capability/** -text

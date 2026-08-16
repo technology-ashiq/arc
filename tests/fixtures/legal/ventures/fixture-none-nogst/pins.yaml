@@ -1,0 +1,9 @@
+# Which template set this venture's pages are rendered from.
+#
+# Venture-LOCAL by design (ADR-1005): facts, pages, pins and receipts all live with the venture,
+# and there are no cross-repo spine writes. One venture moving to a new set must not move any
+# other venture, which is the whole reason this is a file per venture rather than a constant.
+#
+# A MISSING pin is an error, never a default to the newest set. Floating onto whatever set is
+# latest is precisely what pinning exists to prevent, and it would happen silently.
+template_set: v2

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "_comment": [
+    "Cross-page consistency (ADR-1213). Every other lint in this lane reads ONE page's rendered",
+    "bytes, and three independent reader panels put a cross-page contradiction in their top four",
+    "findings -- so the worst defects the pages had were in the one place nothing could look.",
+    "",
+    "A claim is a commitment stated on more than one page. The rule is not that the pages use the",
+    "same words; it is that wherever a page makes the claim AT ALL, it states the same NUMBER,",
+    "taken from the same facts field. The real defect was subtler than a mismatch: the pricing",
+    "page stated the price-rise commitment with no number at all -- 'we tell you before your next",
+    "payment' -- while the terms page said 'at least 30 days before your next renewal'. Nothing",
+    "disagreed numerically because one side had no number to disagree with, and the vaguer page",
+    "was the one a buyer reads before paying.",
+    "",
+    "So the check is: on every page listed, the rendered value of `fact` must appear. A page that",
+    "makes the commitment vaguely fails, which is the point."
+  ],
+  "claims": [
+    {
+      "id": "PRICE_RISE_NOTICE",
+      "fact": "commitments.price_notice_days",
+      "pages": ["pricing", "terms"],
+      "what": "how many days before a price rise takes effect you are told"
+    },
+    {
+      "id": "RENEWAL_NOTICE",
+      "fact": "commitments.renewal_notice_days",
+      "pages": ["pricing", "refund-cancellation"],
+      "when": "derived.autorenew=yes",
+      "what": "how many days before an automatic charge you are told the amount and date"
+    },
+    {
+      "id": "REFUND_WINDOW",
+      "fact": "refund_window_days",
+      "pages": ["refund-cancellation", "shipping-delivery"],
+      "what": "the length of the change-of-mind refund window"
+    },
+    {
+      "id": "PAYMENT_FAILURE_GRACE",
+      "fact": "commitments.payment_failure_grace_days",
+      "pages": ["pricing", "terms"],
+      "what": "how long access continues after a payment fails or an invoice goes unpaid"
+    },
+    {
+      "id": "DELETION_LIVE",
+      "fact": "commitments.deletion_live_days",
+      "pages": ["privacy"],
+      "what": "how long live data takes to delete"
+    }
+  ]
+}
