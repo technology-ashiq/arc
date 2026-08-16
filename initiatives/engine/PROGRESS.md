@@ -226,6 +226,46 @@ shipped `hermes.sh` · the container name is `pid + ms`, which collides across P
 
 ---
 
+### THE RUNTIME'S BAD ANSWERS WERE OUR CONFIG, AND THE TRANSCRIPT FIX IS WHAT FOUND IT — 2026-08-16
+
+Earlier today five runs of one pinned prompt returned five different shapes of wrong, and it was
+written up as *"the runtime does not reliably honour a one-shot output contract"*. **That framing
+was wrong, and the correction is the more useful finding.**
+
+The cause was on the container's stderr the entire time:
+
+```
+[config-migrate] WARNING: This config predates version 12 (~2 years old) and can no longer be
+auto-migrated. ... or manually set _config_version: 12
+```
+
+`config.yaml` was hand-written from Phase 04's evidence with **no `_config_version`**, so the runtime
+could not migrate it and ran with its configuration not taking. **arc threw that line away on every
+successful run** — the transcript was discarded until this same session forwarded it for the secret
+scrub. The isolation fix and this diagnosis are literally the same fix: *a trail you do not keep is a
+trail nobody reads.*
+
+With the version set, the runtime auto-migrated to config version 33 and the warning is gone.
+
+**Round 2 is still a fail, honestly.** `commit-msg-draft` through the real container: exit 1,
+`$.commits: required property is absent`, one same-tier retry, then a proposal receipt — ADR-0204's
+ladder working exactly as designed. **599 seconds** for the pair.
+
+**So the conclusion changes shape rather than disappearing.** An 8B local model does not produce a
+real arc process's schema, at ~5 minutes an attempt. Three named-uncuttable runs plus retries on that
+path is most of a day for an unknown chance of a usable draft.
+
+**Phase 08 should dispatch against OpenRouter's free tier, not local ollama** — already proven
+reachable on the unfunded capped key at HTTP 200, better models, faster, still zero spend, with the
+slug pinned *and* dated. And `commit-msg-draft` was an unfair probe: it needs git context the
+container never had, which is three confounds (stale config, weak model, contextless process) and
+each is removable. Evidence: `evidence/phase-06/runtime-answer-reliability.md`.
+
+**REQ-05 gets its first real data point:** ~300s per attempt, doubled by the ladder. A class budget
+written before these receipts existed would have been a guess.
+
+---
+
 ### FIXTURES 1, 4, 6 PASS · FIXTURE 7 FAILS — 2026-08-16, probed at the container boundary
 
 Measured with a shell inside the pinned image, no model call: the runtime runs entirely inside the
