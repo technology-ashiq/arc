@@ -254,10 +254,21 @@ so not a host escape — but nothing stops the agent rewriting its own config, i
 hash ADR-0209 pins. **A pin computed over a file its subject can rewrite is a pin that checks
 itself.**
 
-**The STOP question is now set up and deliberately not taken here.** REQ-02: *"any fixture that
-cannot be proven without netns/seccomp/VM work is recorded UNPROVABLE and the STOP fires."* Egress
-control is exactly that shape. Whether it can be done honestly with a proxy sidecar — or whether this
-is where the cycle stops and banks — is the day-5 decision, with the clock at 4.5 of 7.5.
+**THE STOP DOES NOT FIRE ON FIXTURE 7, AND THAT IS A MEASUREMENT.** REQ-02 fires the STOP for a
+boundary that *"cannot be proven without netns/seccomp/VM work"*. Before letting it fire, the levers
+were measured: `--network none` and an `--internal` bridge both block **everything including the
+model**, so neither works alone. The dual-homed proxy pattern was then built and run:
+
+| Probe | Result |
+|---|---|
+| proxy (on internal + bridge) → `example.com` | **200** |
+| client (internal only) → `example.com` | **BLOCKED** |
+| client → the proxy by name | **REACHES** |
+
+**An honest egress restriction exists with stock Docker — no netns, no seccomp, no VM.** So fixture 7
+is **build work, not an unprovable boundary**, and the cycle does not bank here. What is proven is
+the *lever*; the allowlisting gate itself is unbuilt, and the behavioural arm (allowed host succeeds,
+disallowed host fails) is owed.
 
 ---
 

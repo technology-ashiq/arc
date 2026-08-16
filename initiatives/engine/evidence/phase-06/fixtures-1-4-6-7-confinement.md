@@ -80,11 +80,47 @@ own workspace, its 71 bundled skills, or its own configuration — including the
 hash ADR-0209 pins. A runtime that can rewrite the file its own pin is computed over is a pin that
 checks itself.
 
+## Fixture 7 is PROVABLE, and the STOP therefore does NOT fire — measured, not argued
+
+REQ-02's STOP is for a boundary that *"cannot be proven without netns/seccomp/VM work"*. Before
+letting that fire on fixture 7, the available levers were measured rather than reasoned about:
+
+| Configuration | `https://example.com` | the model endpoint |
+|---|---|---|
+| default networking (today) | **200** | 200 |
+| `--network none` | **BLOCKED** | **BLOCKED** |
+| `--internal` user-defined bridge | **BLOCKED** | **BLOCKED** |
+
+So the two one-line levers block *everything*, the model included, and neither is usable alone. The
+dual-homed proxy pattern was then built and run end to end:
+
+```
+network arc-int   : --internal, no gateway
+container arc-proxy : attached to BOTH arc-int and bridge
+container client    : attached to arc-int ONLY
+```
+
+| Probe | Result |
+|---|---|
+| proxy → `https://example.com` | **200** — the sidecar can reach out |
+| client → `https://example.com` | **BLOCKED** — no direct route exists |
+| client → `arc-proxy` by name | **REACHES** — the only path out is through the sidecar |
+
+**That is an honest egress restriction with stock Docker, no netns, no seccomp, no VM.** Fixture 7 is
+therefore **build work, not an unprovable boundary**, and REQ-02's STOP does not fire on it. The
+allowlist lives in the sidecar, and the pinned-hash comparison ADR-0209 describes has something real
+to compare against.
+
+**What this does not yet prove:** that an allowlisting proxy passes the model traffic correctly (the
+runtime must be pointed at it), that the pin covers the proxy's allowlist, and that a host *outside*
+the allowlist is refused while one inside succeeds — the behavioural arm proper. The lever is
+proven; the gate is not built.
+
 ## What is owed from here
 
-1. **Egress control** — an allowlist enforced somewhere real (proxy sidecar, or `--network` with a
-   restricted bridge), plus the pinned-hash comparison ADR-0209 describes. If it cannot be asserted
-   honestly without netns work, REQ-02 says record it **UNPROVABLE and fire the STOP** — that is a
-   decision this evidence sets up and does not take.
+1. **The egress sidecar itself** — an allowlisting proxy on the internal network, the runtime
+   pointed at it, plus the pinned-hash comparison. The mechanism is proven available above; what
+   remains is building it and asserting both directions (allowed host succeeds, disallowed host
+   fails).
 2. **The capped key into the container**, so fixture 4's first half has something to be true about.
 3. **A non-root user**, or a written acceptance of root-in-container with the pin consequence named.
