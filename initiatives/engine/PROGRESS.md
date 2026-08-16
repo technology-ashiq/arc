@@ -150,6 +150,35 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### PHASE 06 FIXTURE 8 FAILS, AND IT OPENS A REQ-06 HOLE — 2026-08-16
+
+**The runtime's persistent memory is ON and cannot be turned off.** A marker planted in run N
+(`ZEBRAQUARTZ7741`) was found on disk in the mounted volume, in `memories/MEMORY.md` and in
+`state.db`. Run N answered *"I've saved the marker as a memory"*; run N+1's stdout did not contain
+it — **so the obvious assertion would have recorded a PASS on a false property.** The assertion has
+to be *the volume does not contain the marker*, never *the answer does not mention it*. Looking at
+the artifact is the only reason this is not filed green.
+
+`hermes memory --help` on the pinned image: *"Built-in memory (MEMORY.md/USER.md) is **always
+active**"* — `memory off` disables only an external provider. **Not closeable by configuration.**
+
+**It is wider than fixture 8.** REQ-06 confines what enters a dispatch and assumes the dispatch is
+the unit. It is not, while the runtime writes memories into a volume the next dispatch mounts:
+content from pack A reaches dispatch B **without ever travelling as a pack**, so the `internal-only`
+refusal at arc-run exit 5 never sees it. Strictly worse than the carry-over path A-06 already
+worries about, because that one at least goes through the pack.
+
+Three mitigations with measured costs are written up in `evidence/phase-06/fixture-08-memory.md`;
+recommendation is a warm template copied per dispatch. **Not applied** — it is a design fork whose
+cheapest-looking option multiplies every class budget REQ-05 derives from calibration receipts, so
+it goes through `/arc-change` and an ADR, not through the session that found it.
+
+Result recorded as `FAIL`, not `UNPROVABLE`: REQ-02's STOP is for boundaries that need netns/seccomp
+/VM work to assert honestly. This one was entirely provable with what was to hand and simply failed.
+A failing fixture is a defect to close.
+
+---
+
 ### THE SCOPE-CUT CONVERSATION, HELD — 2026-08-16, at 60% with the tripwire phase not done
 
 `/arc-phase-done` forces this at ≥50% burnt with the tripwire phase open. Both are true: **4.5 of
