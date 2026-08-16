@@ -85,18 +85,72 @@ Refused in `title`, in addition to the existing C0 + DEL:
 The split is therefore **override versus mark, and invisible-with-no-use versus invisible-with-a-use**
 — not "printing versus non-printing", which is the distinction that looks principled and is wrong.
 
+## Correction, same day: this ADR's first version overclaimed, and the split was incoherent
+
+Written before a two-surface adversarial pass, which returned 33 further invisible code points and
+one argument that changes what this decision can honestly claim. Both are corrected above rather
+than left as an addendum, because an ADR read later is read as the decision, not as its history.
+
+**The refused set was a sample presented as a class.** Six hand-picked ranges. The pass found 33
+more, including **U+2060 WORD JOINER — the character Unicode introduced so that U+FEFF could stop
+being used for this**. Refusing the deprecated spelling while accepting the current one is the
+split inverted. Worse, the tag block U+E0000–E007F encodes A–Z invisibly, so an entire hidden
+string could ride inside a headline. Replaced with Unicode's own
+`Default_Ignorable_Code_Point` class, minus a named allow-list. Format-control blocks not in every
+version's table (Egyptian, U+13430) are named explicitly — a class is only as good as the version
+you copied it from.
+
+**The allow-list granted exactly the harm the refuse-list refuses.** `"Receipts driven" + ZWJ +
+" OS"` renders identically to the plain title and produces a different idem. The justification for
+allowing U+200D was *contextual* — emoji composition — but the rule it produced was
+*unconditional*, licensing the character where it can join nothing at all. The joiners are now
+**position-checked**: legal only between two non-ASCII characters they can actually join. Emoji
+families and Hindi orthography pass; a joiner beside a space, at an edge, or between ASCII letters
+does not.
+
+**And the honest limit: refusal cannot close harm (b) at all.** Demonstrated in pure ASCII —
+
+```
+"Receipts  driven OS"  vs  "Receipts driven OS"   DIFFERENT IDEM, identical rendering
+"Receipts driven OS "  vs  "Receipts driven OS"   DIFFERENT IDEM, identical rendering
+```
+
+HTML collapses whitespace runs, so these render byte-identically as a headline. U+0020 cannot be
+refused. **Every codepoint rule in this ADR closes harm (a) — spoofing — and merely narrows harm
+(b).** Closing (b) needs a *normalization-for-identity* policy: a folded key stored alongside the
+verbatim preimage, so the bytes stay exact while identity is compared on a normal form. This ADR
+rejected normalization outright without noticing that refusal alone cannot cover the class it
+claimed. That policy is not designed here and is the honest open item.
+
 ## Consequences
 
-**Good.** The one free-form field reaching an idem can no longer carry a character that makes two
-identical-looking titles into two different facts, nor one that makes a published headline render
-as something it does not say. Both harms are silent today; both become a refusal at emit.
+**Good.** Harm (a) is substantially closed: no character in the default-ignorable class, the
+control ranges, or the bidi overrides can reach a published headline, and the joiners that remain
+legal must be doing real work. `contentIdem` now enforces the same rule as `assertContent`, so a
+caller deriving a key without validating first is no longer a hole.
+
+**The claim this section used to make is withdrawn.** It said the field "can no longer carry a
+character that makes two identical-looking titles into two different facts". That is false, and
+was false when written — the whitespace cases above need no special character at all.
 
 **Bad, and stated.** This is a judgement about language, made by someone who does not read most of
 the scripts it affects. The U+200E/U+200F row in particular is a guess that marks are safe enough,
 and the revisit trigger exists because the first legitimate title this refuses is better evidence
 than the reasoning above.
 
-**Not addressed here.** Homoglyph titles — Cyrillic "а" for Latin "a" — are the same *class* of
-harm and are NOT refused. They cannot be caught by a codepoint range, only by a confusables table
-and a normalization policy, and shipping half of that would produce a rule that looks like it
-handles homoglyphs and does not. Named so the gap is visible rather than assumed covered.
+**Not addressed here — each named so the gap is visible rather than assumed covered:**
+
+- **Homoglyphs.** Cyrillic "а" for Latin "a". Needs a confusables table; half of one produces a
+  rule that looks like it handles them and does not.
+- **Whitespace and identity.** Double spaces, trailing spaces, NBSP versus space — all render
+  identically and hash differently, all in characters that cannot be refused. This is the residue
+  of harm (b) described above, and it wants the normalization-for-identity policy, not a rule here.
+- **`|` in a title is refused, and that is a real false positive.** `Title | Brand` is one of the
+  commonest headline forms on the web. It is visible, printing, and spoofs nothing — it is refused
+  only because ADR-1101 uses `|` as the idem join delimiter. **This ADR's own revisit trigger fires
+  on it.** The structural answer is a preimage that content cannot forge — length-prefixed fields,
+  or a hash-of-hashes — which belongs to ADR-1101 and is not taken here. Recorded because the
+  alternative is someone rediscovering it while trying to publish an ordinary headline.
+- **Unbounded combining marks.** 140 stacked U+0301 render as a spike escaping the line box and
+  overprinting neighbouring content — harm (a), reached without any override, and stopped today
+  only by the 300-byte cap, which is not a rule about display.

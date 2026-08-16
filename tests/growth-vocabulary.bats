@@ -161,10 +161,20 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
   # title is in the preimage, ANY invisible character makes two identical-looking titles into two
   # different facts: nothing errors, the spine just holds two receipts a human cannot tell apart.
   #
-  # Only C0 and DEL were refused before this. Measured, not assumed: all nine below were ACCEPTED.
+  # Only C0 and DEL were refused before this. Measured, not assumed: all 18 below were ACCEPTED.
   run _node "$PRE
-    const C = (n) => String.fromCharCode(n);
-    const bad = [[0x202E,'RLO'],[0x202A,'LRE'],[0x2066,'isolate'],[0x200B,'ZWSP'],[0xFEFF,'BOM'],[0x0085,'NEL'],[0x009B,'CSI'],[0x2028,'linesep'],[0x2029,'parasep']];
+    // fromCodePoint, NOT fromCharCode. fromCharCode truncates to 16 bits, so U+E0041 became U+0041
+    // ('A') and the tag-block, Egyptian and musical fixtures were testing ordinary characters
+    // under the names of astral ones -- three assertions that would have passed while proving
+    // nothing about the code points they name.
+    const C = (n) => String.fromCodePoint(n);
+    // The first version of this list was SIX hand-picked ranges, and an adversarial pass found 33
+    // more invisible code points that were all accepted -- including U+2060 WORD JOINER, the
+    // character Unicode introduced so U+FEFF could stop being used for it, and the tag block
+    // U+E0041 which encodes 'A' invisibly. The rule is now Unicode's Default_Ignorable class, so
+    // these fixtures are SAMPLES OF A CLASS rather than the definition of one.
+    const bad = [[0x202E,'RLO'],[0x202A,'LRE'],[0x2066,'isolate'],[0x200B,'ZWSP'],[0xFEFF,'BOM'],[0x0085,'NEL'],[0x009B,'CSI'],[0x2028,'linesep'],[0x2029,'parasep'],
+                 [0x2060,'wordjoiner'],[0xE0041,'tag-A'],[0x3164,'hangulfill'],[0x00AD,'softhyphen'],[0x061C,'ALM'],[0xFFF9,'interlinear'],[0x206E,'digitshapes'],[0x13430,'egyptian'],[0x1D173,'musical']];
     // NO forced idem. The sibling CR test passes { idem: SHA }, which is a DELIBERATELY WRONG
     // idem -- so that test would report BAD_CONTENT even if the character check did nothing at
     // all, and it only passes for the right reason because the character loop happens to run
@@ -173,7 +183,7 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
     const out = bad.map(([cp,n]) => refuses(() => validateEvent(mk('content.published', with_({ title: 'a' + C(cp) + 'b' })))) === 'BAD_CONTENT' ? 'ok' : 'ACCEPTED:' + n);
     console.log(out.join(' '));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "ok ok ok ok ok ok ok ok ok" ]
+  [ "$output" = "ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok ok" ]
 }
 
 @test "zero-width joiners and bidi MARKS are still accepted -- the rule is not printing-vs-not" {
@@ -234,9 +244,15 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
 }
 
 @test "url and site must agree, and the url must be https" {
+  # The forced `{ idem: SHA }` is GONE. PROVEN VACUOUS BY MUTATION: with both url rules deleted
+  # from assertContent, this test stayed GREEN, because a deliberately wrong idem yields
+  # BAD_CONTENT on its own. It asserted the error code of a rule it never reached.
+  #
+  # `url` IS in IDEM_FIELDS, but contentIdem does not check its grammar, so the fixture can derive
+  # a real idem and still exercise the url rule. There was never a reason to force one.
   run _node "$PRE
-    const a = refuses(() => validateEvent(mk('content.published', with_({ url:'https://elsewhere.example.com/blog/receipts-driven-os' }), { idem: SHA })));
-    const b = refuses(() => validateEvent(mk('content.published', with_({ url:'http://arc-site.example.com/blog/receipts-driven-os' }), { idem: SHA })));
+    const a = refuses(() => validateEvent(mk('content.published', with_({ url:'https://elsewhere.example.com/blog/receipts-driven-os' }))));
+    const b = refuses(() => validateEvent(mk('content.published', with_({ url:'http://arc-site.example.com/blog/receipts-driven-os' }))));
     console.log(a + ' ' + b);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "BAD_CONTENT BAD_CONTENT" ]
@@ -244,9 +260,10 @@ const refuses = (fn) => { try { fn(); return "ACCEPTED"; } catch (e) { return e.
 
 @test "a url carrying a query string or fragment is refused" {
   # Not style. A query string is where a person-derived parameter would ride onto a public spine.
+  # Same vacuous-idem fix as above; also proven green-with-the-rule-deleted before this change.
   run _node "$PRE
-    const a = refuses(() => validateEvent(mk('content.published', with_({ url:'https://arc-site.example.com/blog/x?utm_source=mail' }), { idem: SHA })));
-    const b = refuses(() => validateEvent(mk('content.published', with_({ url:'https://arc-site.example.com/blog/x#who' }), { idem: SHA })));
+    const a = refuses(() => validateEvent(mk('content.published', with_({ url:'https://arc-site.example.com/blog/x?utm_source=mail' }))));
+    const b = refuses(() => validateEvent(mk('content.published', with_({ url:'https://arc-site.example.com/blog/x#who' }))));
     console.log(a + ' ' + b);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [ "$output" = "BAD_CONTENT BAD_CONTENT" ]
