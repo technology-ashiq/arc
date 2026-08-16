@@ -102,6 +102,27 @@ export function repinReceipt(priorEvent, newSite) {
 }
 
 /**
+ * Phase 01 criterion 4: read the ONE pinned value for `content.published.site`.
+ *
+ * Takes the parsed JSON rather than a path, because this module has no filesystem access by
+ * design -- the same reason `publish.mjs` has no exec capability. The caller reads the file.
+ *
+ * The host is re-checked against the grammar HERE, at read time. A bad value would otherwise
+ * surface as a refused receipt at the spine, which is late, loud in the wrong place, and blames
+ * the emit rather than the config.
+ */
+export function loadSiteConfig(json) {
+  if (!json || typeof json !== "object" || Array.isArray(json))
+    throw new CutoverError("BAD_SITE_CONFIG", "the site config must be a JSON object");
+  if (json.schema !== 1)
+    throw new CutoverError("BAD_SITE_CONFIG", `unsupported site config schema ${JSON.stringify(json.schema)} — expected 1`);
+  if (typeof json.site !== "string" || !SITE_RE.test(json.site))
+    throw new CutoverError("BAD_SITE_CONFIG",
+      `site ${JSON.stringify(json.site)} is not a bare lowercase hostname — no scheme, no port, no path, no trailing dot`);
+  return { site: json.site };
+}
+
+/**
  * Phase 01 criterion 6 / fixture `sitemap-includes-published-slugs`: the sitemap and the spine
  * agree about which articles exist.
  *

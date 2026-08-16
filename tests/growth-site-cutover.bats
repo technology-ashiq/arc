@@ -182,6 +182,35 @@ const err = (f) => { try { f(); return "NO_THROW"; } catch (e) { return e.code |
   [ "${lines[1]}" = "BAD_EVENT" ]
 }
 
+@test "cutover: the pinned site is read from config and re-checked against the grammar" {
+  # Criterion 4. Before this existed the host was typed on the command line, and because `site` is
+  # in the idem preimage a typo would have been accepted as a DISTINCT fact rather than refused as
+  # a mistake -- a receipt claiming an article lives somewhere it does not.
+  run _node "$PRE
+    console.log(C.loadSiteConfig({ schema: 1, site: 'arc.automemory.ai' }).site);
+    console.log(err(() => C.loadSiteConfig({ schema: 1, site: 'https://arc.automemory.ai' })));
+    console.log(err(() => C.loadSiteConfig({ schema: 1, site: 'arc.automemory.ai/blog' })));
+    console.log(err(() => C.loadSiteConfig({ schema: 1, site: 'ARC.automemory.ai' })));
+    console.log(err(() => C.loadSiteConfig({ schema: 2, site: 'arc.automemory.ai' })));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "arc.automemory.ai" ]
+  [ "${lines[1]}" = "BAD_SITE_CONFIG" ]
+  [ "${lines[2]}" = "BAD_SITE_CONFIG" ]
+  [ "${lines[3]}" = "BAD_SITE_CONFIG" ]
+  [ "${lines[4]}" = "BAD_SITE_CONFIG" ]
+}
+
+@test "cutover: the committed site.json is valid and matches the ADR-1118 address" {
+  # Asserts the REAL file, not a fixture. A loader proven only against inline objects says nothing
+  # about the config the code will actually read.
+  run _node "$PRE
+    const fs = await import('node:fs');
+    const cfg = C.loadSiteConfig(JSON.parse(fs.readFileSync('initiatives/growth/site.json', 'utf8')));
+    console.log(cfg.site);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "arc.automemory.ai" ]
+}
+
 # ---------------------------------------------------------------------------------------------
 # The sitemap agrees with the spine, both directions.
 # ---------------------------------------------------------------------------------------------
