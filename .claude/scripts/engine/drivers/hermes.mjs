@@ -126,6 +126,11 @@ const IMAGE = process.env.ARC_HERMES_IMAGE || "";
 const DATA_DIR = process.env.ARC_HERMES_DATA || "";
 const CONFIG_FILE = process.env.ARC_HERMES_CONFIG || "";
 const EGRESS_FILE = process.env.ARC_HERMES_EGRESS || "";
+// The Docker network the runtime joins, and the proxy it is pointed at. Both are orchestrated
+// outside this process (Phase 06), because a driver that created networks would be arc owning
+// infrastructure it cannot clean up after a SIGKILL. See the egress block in the run builder.
+const EGRESS_NETWORK = process.env.ARC_HERMES_NETWORK || "";
+const EGRESS_PROXY = process.env.ARC_HERMES_PROXY || "";
 const SKILLS_FILE = process.env.ARC_HERMES_SKILLS || "";
 const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
 
@@ -435,8 +440,38 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   const args = [
     "run", "--rm", "--name", name,
     "-v", `${DATA_DIR}:/opt/data`,
-    IMAGE,
   ];
+
+  // EGRESS CONFINEMENT (Phase 06 fixture 7). Measured 2026-08-16: with default networking this
+  // container reaches ANY host -- `curl https://example.com` returned 200. A config-pin diff reads
+  // green against that, which is why REQ-02 wants a behavioural arm.
+  //
+  // Both one-line levers were measured and neither works alone: `--network none` and an
+  // `--internal` bridge block everything, the model endpoint included. What does work, measured end
+  // to end, is a dual-homed allowlisting proxy -- the runtime joins an `--internal` network with no
+  // gateway, and the proxy is the single route out. Allowed host 200, disallowed host refused, both
+  // decisions logged.
+  //
+  // OPT-IN, AND THAT IS A DELIBERATE WEAKNESS RATHER THAN AN OVERSIGHT. A driver that silently
+  // fell back to unrestricted networking when the operator forgot the variable would be a gate that
+  // cannot fail. It is opt-in because the network and proxy are orchestrated OUTSIDE this process
+  // (Phase 06 owns that), and a driver that created Docker networks would be arc taking on
+  // infrastructure it has no way to clean up after a SIGKILL. The receipt records which mode ran,
+  // so an unconfined dispatch is visible rather than assumed.
+  if (EGRESS_NETWORK) {
+    args.push("--network", EGRESS_NETWORK);
+    if (EGRESS_PROXY) {
+      // Both spellings: curl and requests read the lowercase pair, some SDKs read the uppercase.
+      // NO_PROXY keeps container-to-container traffic off the proxy.
+      for (const [k, v] of [["HTTPS_PROXY", EGRESS_PROXY], ["https_proxy", EGRESS_PROXY],
+                            ["HTTP_PROXY", EGRESS_PROXY], ["http_proxy", EGRESS_PROXY],
+                            ["NO_PROXY", "localhost,127.0.0.1"], ["no_proxy", "localhost,127.0.0.1"]]) {
+        args.push("-e", `${k}=${v}`);
+      }
+    }
+  }
+
+  args.push(IMAGE);
   if (usageInContainer) args.push("--usage-file", usageInContainer);
   args.push("-z", prompt);
 

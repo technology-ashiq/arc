@@ -111,10 +111,41 @@ therefore **build work, not an unprovable boundary**, and REQ-02's STOP does not
 allowlist lives in the sidecar, and the pinned-hash comparison ADR-0209 describes has something real
 to compare against.
 
-**What this does not yet prove:** that an allowlisting proxy passes the model traffic correctly (the
-runtime must be pointed at it), that the pin covers the proxy's allowlist, and that a host *outside*
-the allowlist is refused while one inside succeeds — the behavioural arm proper. The lever is
-proven; the gate is not built.
+## Fixture 7's behavioural arm now PASSES — the gate is built and measured
+
+`.claude/scripts/engine/egress-proxy.py`, run inside the **same pinned image** (it already carries
+Python 3.13, so no second supply-chain artifact to pin, vet and rotate), on the internal network,
+with the runtime pointed at it:
+
+| Probe | Result |
+|---|---|
+| allowlisted `openrouter.ai:443` **through the proxy** | **HTTP 200** |
+| non-allowlisted `example.com` **through the proxy** | **BLOCKED** |
+| the proxy's own decision log | `ALLOW openrouter.ai:443` · `DENY example.com:443 -- host:port is not on the allowlist` |
+| started with an empty allowlist | **refuses to start** — *"a policy nobody wrote… would read as deny-all while looking like a misconfiguration"* |
+
+Design choices that are refusals rather than omissions:
+
+- **CONNECT only.** Model traffic is HTTPS, so the proxy never sees plaintext and does not pretend
+  to. Terminating TLS would make it a man-in-the-middle holding the runtime's credential — a larger
+  risk than the one it closes. **Plain HTTP is refused**, because an allowlisted host reached over
+  `http://` would let the runtime exfiltrate in a query string the reviewed draft never shows.
+- **Exact `host:port` matching, no wildcards, no suffix rules.** A suffix rule is how
+  `evil-openrouter.ai` gets allowed; a bare hostname lets the same host be reached on any port.
+- **Fail closed** on an unparseable request line, an unknown method, a missing port, or a host not
+  on the list. There is no default-allow path in the file.
+
+**The driver asks for it, and the honest weakness is pinned.** `ARC_HERMES_NETWORK` and
+`ARC_HERMES_PROXY` are **opt-in**: unconfigured means *unconfined*, and
+`tests/engine-hermes-egress.bats` asserts that explicitly so nobody reads the positive tests as
+"egress is confined" when the variables are unset. It is opt-in because the network and proxy are
+orchestrated outside the driver — a driver that created Docker networks would be arc owning
+infrastructure it cannot clean up after a SIGKILL. A proxy set **without** a network is also refused:
+that combination is unrestricted egress wearing the appearance of a control.
+
+**What is still owed:** the orchestration itself (something has to create the network and start the
+proxy for a real dispatch), and the pinned-hash comparison ADR-0209 describes now that there is an
+allowlist worth hashing.
 
 ## What is owed from here
 

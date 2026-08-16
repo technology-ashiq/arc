@@ -226,6 +226,35 @@ shipped `hermes.sh` · the container name is `pid + ms`, which collides across P
 
 ---
 
+### FIXTURE 7'S BEHAVIOURAL ARM NOW PASSES — the egress gate is built, 2026-08-17
+
+`.claude/scripts/engine/egress-proxy.py`, run inside the **same pinned image** (Python 3.13 is
+already there, so no second supply-chain artifact to pin, vet and rotate), on an `--internal`
+network with the runtime pointed at it:
+
+| Probe | Result |
+|---|---|
+| allowlisted `openrouter.ai:443` through the proxy | **200** |
+| non-allowlisted `example.com` through the proxy | **BLOCKED** |
+| the proxy's decision log | `ALLOW openrouter.ai:443` · `DENY example.com:443` |
+| started with an empty allowlist | **refuses to start** |
+
+**CONNECT only, exact `host:port`, fail closed, plain HTTP refused.** Each is a refusal with a
+reason: terminating TLS would make the proxy a man-in-the-middle holding the runtime's credential;
+a suffix rule is how `evil-openrouter.ai` gets allowed; and an allowlisted host reached over
+`http://` would let the runtime exfiltrate in a query string the reviewed draft never shows.
+
+**The honest weakness is pinned rather than hidden.** `ARC_HERMES_NETWORK` / `ARC_HERMES_PROXY` are
+**opt-in**, so unconfigured means *unconfined* — and `tests/engine-hermes-egress.bats` asserts that
+explicitly, so the positive tests cannot be read as "egress is confined" when the variables are
+unset. A proxy set **without** a network is refused too: that pair is unrestricted egress wearing
+the appearance of a control. 6 tests, and removing the driver's egress block reddens 2 of them.
+
+**Owed:** the orchestration (something must create the network and start the proxy for a real
+dispatch) and ADR-0209's pinned-hash comparison, which now has an allowlist worth hashing.
+
+---
+
 ### THE RUNTIME'S BAD ANSWERS WERE OUR CONFIG, AND THE TRANSCRIPT FIX IS WHAT FOUND IT — 2026-08-16
 
 Earlier today five runs of one pinned prompt returned five different shapes of wrong, and it was
