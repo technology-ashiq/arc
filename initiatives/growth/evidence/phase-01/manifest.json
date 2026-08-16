@@ -1,0 +1,16 @@
+{
+  "phase": "01",
+  "commit": "eaa02cb2f1d51b672cd467981b524338f27c5ab4",
+  "short": "eaa02cb",
+  "generated": "2026-08-16T15:48:05Z",
+  "files": [
+    {
+      "name": "ci-run-31955640829.json",
+      "sha256": "de84054e98bba148d0e1376271876e69130ee790d9b07b7a3c8207aefbf5fae6"
+    },
+    {
+      "name": "exit-criteria.md",
+      "sha256": "34029910c0d731de2709fc908c363c750e1d6faf82909960b17caff1a23c82c5"
+    }
+  ]
+}

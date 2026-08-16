@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "site": "arc.automemory.ai",
+  "_comment": [
+    "Phase 01 criterion 4: `content.published.site` is pinned HERE and read from here, so the",
+    "receipt's host has exactly one source. Before this file the value had no configuration",
+    "surface at all -- `publish` builds a review pack and never touches `site`, and the Phase 00",
+    "steel thread passed the host by hand on the command line. A value typed at a prompt is a",
+    "value that is one typo away from a receipt claiming an article lives somewhere it does not,",
+    "and because `site` is in the idem preimage that receipt would be accepted as a distinct fact",
+    "rather than rejected as a mistake.",
+    "",
+    "The address itself is ADR-1118 and is ONE-WAY. Changing this string is not a config tweak:",
+    "it is a domain move, and it costs every URL, every backlink and all Search Console history.",
+    "Anything editing it must also emit a supersede correction for every live receipt, which is",
+    "what `planCutover` in lib/cutover.mjs exists to produce.",
+    "",
+    "A bare lowercase hostname. No scheme, no port, no path, no trailing dot -- the grammar in",
+    "validate-content.mjs is the authority and `loadSiteConfig` re-checks against it here, so a",
+    "bad value fails when the config is read rather than when a receipt is refused at the spine."
+  ]
+}

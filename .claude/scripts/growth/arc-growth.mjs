@@ -165,6 +165,26 @@ function readOrDie(path, what) {
   }
 }
 
+/**
+ * The RAW bytes of a file, with no decode and no BOM strip.
+ *
+ * `content_sha` is defined over raw bytes (ADR-1101), and `content-sha.mjs` states that the
+ * approval path and the publish path "must agree byte-for-byte or `unedited := draft_sha ==
+ * content_sha` compares two different functions". They did not: the draft path hashed
+ * `Buffer.from(readOrDie(p), "utf8")`, which has already stripped a BOM and round-tripped the
+ * bytes through a UTF-8 decode, while the publish path hashes the file. On a BOM-prefixed or
+ * invalid-UTF-8 file the two disagreed, and the visible symptom would not be an error — it is a
+ * second receipt for an article nobody edited, with ADR-1107's unedited counter reading a phantom
+ * edit. Exactly the CRLF defect fixed in arc-site the same day, left open in the sibling reader.
+ */
+function readBytesOrDie(path, what) {
+  try {
+    return readFileSync(path);
+  } catch (e) {
+    die("NO_FILE", `cannot read ${what} at ${path}: ${e.message}`);
+  }
+}
+
 function parseJsonOrDie(text, what) {
   try {
     return JSON.parse(text);
@@ -447,7 +467,20 @@ async function cmdPublish() {
   const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
   if (plan === null || typeof plan !== "object" || Array.isArray(plan) || typeof plan.cluster_id !== "string")
     die("BAD_PLAN", `the cluster plan at ${planPath} is not a cluster plan (no cluster_id)`);
-  const article = readOrDie(articlePath, "the article");
+  // ONE read. The bytes that get hashed and the text that gets linted are the same bytes, decoded
+  // once — not two reads seconds apart with a network round trip between them.
+  //
+  // The first version of the content_sha fix read the text here and the bytes again after
+  // `checkLinks`, which is an `await` over the network. So the change made to stop the hash and the
+  // lint disagreeing about ENCODING left them able to disagree about the FILE: an edit landing in
+  // that window produced a review pack whose lint reports described different bytes than the
+  // content_sha the approval binds to. Reading the bytes first also fires the BOM refusal before
+  // the lints and before the network call, rather than after.
+  const articleBytes = readBytesOrDie(articlePath, "the article");
+  if (articleBytes.length >= 3 && articleBytes[0] === 0xef && articleBytes[1] === 0xbb && articleBytes[2] === 0xbf)
+    die("BOM_IN_ARTICLE",
+      `${articlePath} starts with a UTF-8 BOM. Refused rather than stripped: content_sha is over raw bytes, so stripping it here would hash something other than the file that gets published, and keeping it publishes an invisible character into the article`);
+  const article = articleBytes.toString("utf8");
   if (article.trim() === "") die("EMPTY_ARTICLE", `${articlePath} is empty -- there is nothing to publish`);
 
   // The lints run HERE, not in review: a pack whose reports were produced by hand is a pack whose
@@ -459,7 +492,10 @@ async function cmdPublish() {
   const claims = scanCitations(article);
   const linkResult = has("offline") ? null : await checkLinks(article, httpResolver());
 
-  const contentSha = contentShaOfBytes(Buffer.from(article, "utf8"));
+  // Hashed from the bytes read ONCE above, never from a re-encode of the decoded string: that made
+  // draft_sha and content_sha two different functions on any file carrying a BOM or a byte UTF-8
+  // cannot represent.
+  const contentSha = contentShaOfBytes(articleBytes);
   const templateId = assignArm(slug);
 
   let pack;
@@ -469,7 +505,11 @@ async function cmdPublish() {
       previewUrl,
       slopReport: renderSlopReport(slop),
       citationReport: renderCitationReport(claims, linkResult),
-      diff: `article ${articlePath} (${Buffer.byteLength(article, "utf8")} bytes, content_sha ${contentSha.slice(0, 12)})`,
+      // The length reported is the length HASHED. `Buffer.byteLength(article, "utf8")` re-encodes
+      // the decoded string, so on invalid-UTF-8 input it disagreed with the bytes content_sha was
+      // taken over — a reported number that is not the measured number, in the very line that
+      // prints the measurement.
+      diff: `article ${articlePath} (${articleBytes.length} bytes, content_sha ${contentSha.slice(0, 12)})`,
       povLine: POV_FLOOR_LINE,
       templateId,
       contentSha,
@@ -553,7 +593,12 @@ async function cmdIngest() {
 
   const receiptsPath = flag("receipts");
   const receipts = receiptsPath ? parseJsonOrDie(readOrDie(receiptsPath, "the content.published receipts"), "the receipts file") : [];
-  if (!Array.isArray(receipts)) die("BAD_RECEIPTS", "--receipts must be a JSON array of content.published payloads");
+  // Each entry is an EVENT projection -- the payload fields PLUS the event `id` and its
+  // event-level `supersedes` -- not a bare payload. `supersedes` is not an allowed payload key
+  // (the shape is closed to eight fields), so a file of bare payloads can never express a chain;
+  // `resolveSlugUrl` now refuses one loudly rather than treating every receipt as a head.
+  if (!Array.isArray(receipts))
+    die("BAD_RECEIPTS", "--receipts must be a JSON array of content.published event projections: the payload fields plus the event id and supersedes");
   const { joined, unjoined } = I.resolveSlugUrl(parsed.rows, receipts);
 
   process.stdout.write(

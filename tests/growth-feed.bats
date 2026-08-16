@@ -166,20 +166,52 @@ const DAY = 86400000;'
 @test "feed: the slug join takes the supersedes-chain HEAD, not the stale receipt" {
   # The Phase 1 domain cutover leaves TWO receipts per pre-cutover slug. A join on slug alone picks
   # the stale preview one and attributes a week of real clicks to a URL nobody visited.
+  #
+  # REWRITTEN 2026-08-16, because the previous fixture could not observe either failure it named.
+  # It used two DIFFERENT content_sha values, which is the one shape in which a content_sha-keyed
+  # chain happens to work -- and the REAL cutover changes `site` and `url` while leaving the bytes
+  # alone, so both receipts carry ONE content_sha. It also put `supersedes` in the payload, a key
+  # `assertContent` refuses outright, so the fixture described a receipt that cannot exist.
+  #
+  # Both receipts below therefore share `content_sha`, and the chain is by EVENT ULID. Against
+  # either defect this case goes red: the old code filtered both receipts out and joined nothing.
+  #
+  # MUTANT-RESISTANCE, added 2026-08-16 after an adversarial pass. The previous fixture listed the
+  # head LAST and carried one slug, so replacing the whole chain resolution with
+  # `heads = [receipts[receipts.length - 1]]` -- last-wins by array order, the exact pre-fix defect
+  # -- still passed. Array order and chain order were indistinguishable.
+  #
+  # The head is now listed FIRST, before the receipt it supersedes, and a second untouched slug is
+  # present. Taking the last element now yields the STALE receipt and this case goes red.
   run _node "$PRE
+    const SHA = 'a'.repeat(64);
+    const A = '01KZZZZZZZZZZZZZZZZZZZZZZ1', B = '01KZZZZZZZZZZZZZZZZZZZZZZ2', Z = '01KZZZZZZZZZZZZZZZZZZZZZZ9';
     const receipts = [
-      { slug: 'a', url: 'https://old.vercel.app/blog/a/', content_sha: 'old' },
-      { slug: 'a', url: 'https://arc.automemory.ai/blog/a/', content_sha: 'new', supersedes: 'old' }];
+      { id: B, supersedes: A, slug: 'a', url: 'https://arc.automemory.ai/blog/a/', content_sha: SHA },
+      { id: Z, supersedes: null, slug: 'z', url: 'https://arc.automemory.ai/blog/z/', content_sha: SHA },
+      { id: A, supersedes: null, slug: 'a', url: 'https://old.vercel.app/blog/a/', content_sha: SHA }];
     const head = I.resolveSlugUrl([{ url: 'https://arc.automemory.ai/blog/a/', clicks: 9 }], receipts);
     const stale = I.resolveSlugUrl([{ url: 'https://old.vercel.app/blog/a/', clicks: 9 }], receipts);
     // Joined EXPLICITLY as strings. Written as bare + it is arithmetic: 1 + 0 is 1, not '10', and
     // the assertion then compares a number-shaped string it never meant to build.
     console.log([head.joined.length, head.unjoined.length].join('/') + ' ' +
                 [stale.joined.length, stale.unjoined.length].join('/') + ' ' +
-                (head.joined[0] ? head.joined[0].content_sha : 'NONE'));"
+                (head.joined[0] ? head.joined[0].url : 'NONE'));"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   # The live URL joins to the head; the superseded URL does NOT join and is reported unjoined.
-  [ "$output" = "1/0 0/1 new" ]
+  # The third field is the joined URL rather than the content_sha, because after a re-pin BOTH
+  # receipts carry the same sha and asserting it would pass no matter which one was picked.
+  [ "$output" = "1/0 0/1 https://arc.automemory.ai/blog/a/" ]
+}
+
+@test "feed: a receipt without its event id is REFUSED, never treated as a head" {
+  # The silent-failure guard. When the chain was resolved from a payload field that can never
+  # exist, the superseded set was always empty and every receipt looked like a head -- so the join
+  # answered confidently and wrongly. An id-less receipt now stops the ingest instead.
+  run _node "$PRE
+    console.log(err(() => I.resolveSlugUrl([], [{ slug: 'a', url: 'https://x.test/blog/a/' }])));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "BAD_RECEIPT" ]
 }
 
 @test "feed: a window is COMPLETE only after every receipt is confirmed, and MISSING otherwise" {

@@ -11,6 +11,11 @@
 // reports. An adversarial pass killed the first version of ADR-1108 for exactly that. The bounds
 // here are derived FROM THE VERIFIED PT DAYS, so the receipt describes the data that produced it.
 
+// One chain validator for the whole lane. `resolveSlugUrl` and `planCutover` read the same
+// supersede structure, and when each had its own notion of "valid" they disagreed in exactly the
+// ways ADR-1119 documents.
+import { assertChainIntegrity } from "./cutover.mjs";
+
 export class IngestError extends Error {
   constructor(code, message) { super(message); this.name = "IngestError"; this.code = code; }
 }
@@ -219,8 +224,47 @@ export function parseGscCsv(text) {
  */
 export function resolveSlugUrl(rows, receipts) {
   if (!Array.isArray(receipts)) throw new IngestError("BAD_INPUT", "receipts must be an array");
-  const superseded = new Set(receipts.map((r) => r && r.supersedes).filter(Boolean));
-  const heads = receipts.filter((r) => r && !superseded.has(r.content_sha));
+  // Every receipt must carry the EVENT id it was read from. Two defects lived in the four lines
+  // below until 2026-08-16 and both were invisible because they fail silently:
+  //
+  //   1. The chain was resolved against `r.supersedes` read from a PAYLOAD. `content.published`
+  //      closes its payload to eight fields with `optional: []`, so `assertContent` refuses that
+  //      key outright and it can NEVER be present on a real receipt. The superseded set was
+  //      therefore always empty, every receipt was a head, and the URL map silently resolved
+  //      last-wins by array order.
+  //   2. It compared `supersedes` against `content_sha`. The Phase 01 cutover changes `site` and
+  //      `url` and leaves the BYTES ALONE, so both receipts share one `content_sha` — and the
+  //      comparison filtered BOTH of them out, dropping a real week of clicks from the join.
+  //
+  // The test that was supposed to cover this used two DIFFERENT content_shas, which is the single
+  // shape in which a content_sha-keyed chain happens to work. It is now written against the real
+  // cutover shape and would go red against either defect.
+  //
+  // An id-less record is REFUSED rather than treated as a head, because "treated as a head" is
+  // precisely how defect 1 stayed invisible through a phase close.
+  // Checked for its VALUE, not merely its presence. The first version of this guard tested
+  // `typeof r.id === "string"` only, which is the enforce-the-name-never-the-value defect already
+  // recorded twice in this lane — and `--receipts` is an operator-built projection the spine never
+  // sees, so nothing else would catch a content_sha sitting where a ULID belongs. With a sha in
+  // both fields the chain resolves to nothing and BOTH receipts drop out, reproducing the exact
+  // defect ADR-1119 fixed, one file over.
+  // ONE chain validator, shared with `planCutover`. It used to be a local loop here that checked
+  // only that `id` was a non-empty string, and the two readers then disagreed about what a valid
+  // chain is: this one accepted a fork (resolving last-wins by array order — ADR-1119 defect 1
+  // verbatim), a two-event cycle (dropping both receipts so real clicks landed unjoined with no
+  // error — defect 2 verbatim), and a duplicate id. Two readers of one structure disagreeing about
+  // validity IS the twin-defect shape this lane keeps paying for, so there is one function now.
+  //
+  // Wrapped so the caller still sees an IngestError: the ingest's error vocabulary is what its own
+  // tests and its CLI report on, and leaking a CutoverError here would make the ingest fail with
+  // the name of a module the operator is not running.
+  let heads;
+  try {
+    heads = assertChainIntegrity(receipts);
+  } catch (e) {
+    throw new IngestError("BAD_RECEIPT",
+      `the receipt set is not a resolvable supersede chain (${e.code}): ${e.message}`);
+  }
   const byUrl = new Map();
   for (const r of heads) if (r.url) byUrl.set(String(r.url).replace(/\/$/, ""), r);
   const joined = [], unjoined = [];
