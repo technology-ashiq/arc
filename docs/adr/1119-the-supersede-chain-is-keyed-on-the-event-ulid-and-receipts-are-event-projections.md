@@ -119,3 +119,23 @@ The pass changed this ADR's own claims. Three findings landed *in the fix this A
 The generalisation worth keeping is narrower than "attack the tests": **a fixture with one instance
 of anything cannot distinguish order from selection.** Both the sha-keyed chain and the array-order
 mutant survived for the same structural reason, one round apart.
+
+### The twin check on the surrogate collision came back CLEAN, and why that matters
+
+The lane rule is that a fix is not applied until it has been attacked somewhere it was never made,
+so the encoding collision was checked against **every other join-then-hash idem preimage in the
+repo** — `leadsIdem`'s seven kinds, `decision.recorded`, `constitution.adopted`. It is not
+reachable in any of them, and the reason is worth writing down rather than the result:
+
+**`content.published.title` is the only free-form string in any idem preimage in this repo.**
+Every other field that reaches a preimage is constrained to ASCII by its grammar before it gets
+there — `DIMENSION_RE`, `CAMPAIGN_RE`, `LEAD_ID_RE`, `SOURCE_ID_RE`, `PAYLOAD_TS_RE`, a ULID, a
+hex digest. A lone surrogate cannot enter, so the string-to-bytes step cannot lose information.
+Probed rather than reasoned about — a lone surrogate in `module`, `surface`, `metric` and
+`source_id` is refused `BAD_LEADS` in all four.
+
+So the invariant that keeps the rest of the spine safe is **"no free-form field reaches an idem"**,
+and `title` is the single documented exception. Anyone adding a free-form field to a preimage
+inherits this defect unless they refuse lone surrogates at the same time. That sentence is the
+actual deliverable of this twin check; "checked, clean" on its own would send the next person to
+re-derive it.
