@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# legal Phase 01 -- answerability (ADR-1009 / LEG-I).
+# legal Phase 01 -- answerability (ADR-1209 / LEG-I).
 #
 # This suite exists for one reason: every OTHER check in this lane fails for rule-breaking, and a
 # gate whose only failure mode is rule-breaking cannot report that a page is simply not good
@@ -18,7 +18,7 @@ SCENARIOS() { echo "$ARC_ROOT/products/legal/data/scenarios.json"; }
 teardown() { _arc_legal_teardown; }
 
 @test "legal scenarios: the fixture set is the committed one, at or above the ADR floor" {
-  # ADR-1009 says "at least eight". Read from the file, so deleting rows down to seven fails here
+  # ADR-1209 says "at least eight". Read from the file, so deleting rows down to seven fails here
   # rather than quietly lowering the bar the rest of the suite is measured against.
   run node "$ARC_ROOT/tests/legal-probe.mjs" scenario-count "$(SCENARIOS)"
   [ "$status" -eq 0 ]
@@ -53,7 +53,7 @@ teardown() { _arc_legal_teardown; }
 }
 
 @test "legal scenarios: a template edit that ORPHANS a scenario turns completeness red" {
-  # The case ADR-1009 names outright. The clause is RENAMED, not deleted, and the required-clause
+  # The case ADR-1209 names outright. The clause is RENAMED, not deleted, and the required-clause
   # list is renamed with it -- so the mandatory-clause check stays satisfied and the page still
   # renders a clause in that position. Everything provenance-shaped still passes. The only thing
   # that changed is that the reader's question has nowhere to be answered.

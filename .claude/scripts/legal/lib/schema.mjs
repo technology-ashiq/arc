@@ -1,5 +1,5 @@
 /**
- * The facts schema: three risk tiers, every field in exactly one (ADR-1002).
+ * The facts schema: three risk tiers, every field in exactly one (ADR-1202).
  *
  *   ENUM / INT / BOOL / DATE -- safe. Closed vocabulary, parsed not matched.
  *   FORMAT                   -- low risk. An ANCHORED regex, with the near-miss failing closed.
@@ -96,7 +96,7 @@ function crossFieldErrors(facts, errs) {
   const amounts = getPath(facts, "pricing.plan_amounts_inr");
   if (Array.isArray(names) && Array.isArray(amounts) && names.length !== amounts.length) {
     errs.push(
-      `pricing: ${names.length} plan name(s) but ${amounts.length} amount(s). Parallel arrays that have drifted apart would pair the wrong price with the wrong plan -- a false money statement arriving through the shape of the data rather than through a branch (ADR-1012).`,
+      `pricing: ${names.length} plan name(s) but ${amounts.length} amount(s). Parallel arrays that have drifted apart would pair the wrong price with the wrong plan -- a false money statement arriving through the shape of the data rather than through a branch (ADR-1212).`,
     );
   }
 

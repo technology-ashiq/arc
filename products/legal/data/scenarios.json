@@ -1,13 +1,13 @@
 {
   "version": 1,
   "note": [
-    "The answerability fixture (ADR-1009 / LEG-I). Each row is a real situation a reader arrives",
+    "The answerability fixture (ADR-1209 / LEG-I). Each row is a real situation a reader arrives",
     "with, and the clause ids that must be PRESENT on the named rendered page for that situation",
     "to have an answer. An unanswered row is a completeness FAILURE -- the finding class that",
     "fails for insufficiency rather than for rule-breaking, which is the thing arc-design-cycle3",
     "2026-07-30 said a quality gate must have and did not.",
     "",
-    "Committed in its own commit BEFORE the lint that reads it exists, per ADR-1009: a pass",
+    "Committed in its own commit BEFORE the lint that reads it exists, per ADR-1209: a pass",
     "condition written after the numbers are visible is chosen to flatter (arc-absorb 2026-08-10).",
     "",
     "`answered_by` is ALL-of, not any-of. A row listing two clauses is asserting that neither one",

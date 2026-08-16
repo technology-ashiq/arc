@@ -163,7 +163,7 @@ _publish() {
 }
 
 @test "legal receipts: an unknown key in the approval payload is REJECTED, not ignored" {
-  # ADR-1003's closed profile. An emitter that ignores unknown keys carries whatever somebody
+  # ADR-1203's closed profile. An emitter that ignores unknown keys carries whatever somebody
   # adds later -- a `force: true` would ride along and the receipt would look clean.
   _proposed
   run node "$ARC_ROOT/tests/legal-probe.mjs" approval-unknown-key "$SANDBOX/out/_approval.json"

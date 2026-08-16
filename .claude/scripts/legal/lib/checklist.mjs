@@ -116,7 +116,7 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {} }) 
     }
 
     if (!isMerchant) {
-      // ADR-1011: where the operator is not the merchant there is no activation to pass, and
+      // ADR-1211: where the operator is not the merchant there is no activation to pass, and
       // rendering these green would tell them they had cleared a gate they were never at.
       outcome = "NOT-APPLICABLE";
       note = `this venture takes no payments through a provider (payment_model: none), so there is no provider activation to satisfy. The page itself is still published; only the activation requirement is inapplicable.`;
@@ -157,9 +157,9 @@ export function buildChecklist({ providerPages, facts, routes, evidence = {} }) 
   const required = rows.filter((r) => r.kind === "provider-required").length;
   const conditional = rows.filter((r) => r.kind === "provider-conditional").length;
   if (required !== 5)
-    errs.push(`expected 5 provider-required rows and built ${required}. ADR-1001 pinned that count against a verified provider page-list; a drift here means the list moved or a row was dropped silently.`);
+    errs.push(`expected 5 provider-required rows and built ${required}. ADR-1201 pinned that count against a verified provider page-list; a drift here means the list moved or a row was dropped silently.`);
   if (conditional !== 2)
-    errs.push(`expected 2 provider-conditional rows and built ${conditional} (ADR-1001).`);
+    errs.push(`expected 2 provider-conditional rows and built ${conditional} (ADR-1201).`);
 
   return { rows, errs };
 }

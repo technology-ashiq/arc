@@ -1,5 +1,5 @@
 {
-  "_comment": "Compliance-claim denylist (ADR-1002, Constitution E3). Checked case-insensitively against the RENDERED bytes, never against the input value -- an input-side check is defeated by any encoding the renderer later undoes. Extending this list is a reviewed diff.",
+  "_comment": "Compliance-claim denylist (ADR-1202, Constitution E3). Checked case-insensitively against the RENDERED bytes, never against the input value -- an input-side check is defeated by any encoding the renderer later undoes. Extending this list is a reviewed diff.",
   "tokens": [
     "certified",
     "certification",

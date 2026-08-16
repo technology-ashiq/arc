@@ -9,7 +9,7 @@ byte-reproducible — the plan's own kill-criteria floor, reached by building fo
 ## Why this phase exists in this shape
 
 The design source's Phase 0 authored ALL content and rendered nothing, so at 40% of appetite nothing
-would have gone input → render → output. ADR-1000 restructures it: content stays first (these three
+would have gone input → render → output. ADR-1200 restructures it: content stays first (these three
 pages hold every hard clause), and the deliverable is exactly the kill-criteria fallback — *"ship the
 three core pages' content + bank the engine"* — so the fallback is reached by building forward
 rather than by retreating.
@@ -56,7 +56,7 @@ Typing is explicit, never inferred loosely: INT only for `^-?(0\|[1-9][0-9]*)$`,
 `true` / `false`, DATE only for `^\d{4}-\d{2}-\d{2}$`; everything else is a string. A quoted `"1000"`
 is a string and a bare `1000` is an INT, and the canonicaliser type-tags both so they cannot collide.
 
-**Facts fields for Phase 0** (the three risk tiers of ADR-1002 — ENUM/INT/BOOL/DATE are safe,
+**Facts fields for Phase 0** (the three risk tiers of ADR-1202 — ENUM/INT/BOOL/DATE are safe,
 FORMAT is regex-bounded, FREE-TEXT is length- and charset-bounded and denylisted on OUTPUT):
 
 | Field | Tier | Values / bound |
@@ -79,7 +79,7 @@ FORMAT is regex-bounded, FREE-TEXT is length- and charset-bounded and denylisted
 | `stores_third_party_client_data` | BOOL | when `true`, `sub_processors[]` must be NON-EMPTY |
 | `sub_processors[]` | FREE-TEXT | <= 80 chars each |
 | `site_url` | FORMAT | `^https://` only |
-| `routes.<page>` | FORMAT | `^/[a-z0-9/-]{1,64}$`, defaults per ADR-1010 item 7 |
+| `routes.<page>` | FORMAT | `^/[a-z0-9/-]{1,64}$`, defaults per ADR-1210 item 7 |
 | `effective_date` | DATE | ISO date |
 
 **Template syntax.** Templates live at `products/legal/templates/v1/PAGE.tmpl.md`. Two constructs
@@ -131,7 +131,7 @@ REAL venture publish (Phase 3, assumptions-ledger row 2). `resolve_days: null` i
 the instrument sets no resolution window; `ack_hours: null` likewise. A `null` is NOT a zero and the
 strictest-value computation skips nulls rather than treating them as the tightest bound.
 
-**Dark-pattern-free cancellation** (ADR-1008), the three testable criteria the refund page must
+**Dark-pattern-free cancellation** (ADR-1208), the three testable criteria the refund page must
 state and the checklist must later check: (a) cancelling takes no more steps than subscribing did;
 (b) auto-renewal amount and date are disclosed before the charge, not after; (c) no retention maze —
 no mandatory call, no offer-gate, no hidden final step. The page states each as a commitment in
@@ -208,20 +208,20 @@ appetite-burn line rather than carrying it forward, and rewrite `## Now`.
 
 ## Exit criteria (Definition of Done)
 
-- [ ] `products/legal/schema/facts.schema.json` (or its zero-dep equivalent) implements ADR-1002's three risk tiers; every field is tiered, and an unknown enum value is a parse error rather than a passthrough.
-- [ ] `tests/fixtures/legal/ventures/` holds **SIX sibling fixture facts files spanning the full `payment_model` x `gst_registered` cross product** (ADR-1011), named exactly as the executor contract lists them. Three files with `gst_registered` varied incidentally across a subset leaves untested cells in a product REQ-01 claims both axes select branches on.
+- [ ] `products/legal/schema/facts.schema.json` (or its zero-dep equivalent) implements ADR-1202's three risk tiers; every field is tiered, and an unknown enum value is a parse error rather than a passthrough.
+- [ ] `tests/fixtures/legal/ventures/` holds **SIX sibling fixture facts files spanning the full `payment_model` x `gst_registered` cross product** (ADR-1211), named exactly as the executor contract lists them. Three files with `gst_registered` varied incidentally across a subset leaves untested cells in a product REQ-01 claims both axes select branches on.
 - [ ] `products/legal/data/` holds `vocab.json`, `clause-map.json`, `grievance-windows.json` and `claim-denylist.json`, each shaped as the executor contract defines, and a lint FAILs any `grievance-windows.json` row missing a `source_url`.
-- [ ] Three pages AUTHORED as original text: `terms`, `privacy`, `refund-cancellation` — carrying the DPDP Rule-3 notice block **stating explicitly that it is adopted voluntarily and in ADVANCE of the Rules' commencement** (ADR-1006: Rule 3 commences 13/14-May-2027, and the non-negotiables forbid implying an obligation is in force before it is), the processor clause, the unified grievance block with the strictest window printed, and the dark-pattern-free cancellation wording (ADR-1008).
+- [ ] Three pages AUTHORED as original text: `terms`, `privacy`, `refund-cancellation` — carrying the DPDP Rule-3 notice block **stating explicitly that it is adopted voluntarily and in ADVANCE of the Rules' commencement** (ADR-1206: Rule 3 commences 13/14-May-2027, and the non-negotiables forbid implying an obligation is in force before it is), the processor clause, the unified grievance block with the strictest window printed, and the dark-pattern-free cancellation wording (ADR-1208).
 - [ ] `.claude/scripts/legal/arc-legal.mjs render --venture NAME --out DIR` writes those three pages as static MDX under `DIR/` and exits `0`, printing any TRIAL-level lint findings as warnings without changing the exit code. The three exit codes behave exactly as the executor contract above defines them, and a fixture asserts all three are reachable — `3` (unknown venture) is distinct from `2` (bad facts) is distinct from `0`.
 - [ ] value-lint, trace-lint and completeness-lint all run over the rendered output. WARN-first in TRIAL; the trial set and its promotion criteria are recorded in `docs/trial-ledger.md` in the same change — with `git log origin/main --oneline -5 -- docs/trial-ledger.md` run immediately BEFORE editing it, per the shared-file rule in `.claude/rules/lanes.md`, because bench, engine and leads are all LIVE and that ledger grows by append.
 - [ ] Byte-reproducibility fixture: two renders of identical inputs produce identical bytes, asserted on the bytes and not on a summary line.
-- [ ] Canonicaliser-totality fixture: `1000` vs `"1000"`, and a disabled vs unset optional field, produce DIFFERENT `facts_sha256` values; a numeric field written `030` produces a NAMED PARSE ERROR rather than being silently coerced to `24` (YAML 1.1 octal ambiguity); NFC and NFD encodings of an identical string value produce the SAME `facts_sha256` (normalised before hashing, never left to accidental byte equality); `undefined` / `NaN` / `+Infinity` / `-Infinity` / `BigInt` / a cycle are REFUSED with a named error rather than coerced (ADR-1004, assumptions row 7).
+- [ ] Canonicaliser-totality fixture: `1000` vs `"1000"`, and a disabled vs unset optional field, produce DIFFERENT `facts_sha256` values; a numeric field written `030` produces a NAMED PARSE ERROR rather than being silently coerced to `24` (YAML 1.1 octal ambiguity); NFC and NFD encodings of an identical string value produce the SAME `facts_sha256` (normalised before hashing, never left to accidental byte equality); `undefined` / `NaN` / `+Infinity` / `-Infinity` / `BigInt` / a cycle are REFUSED with a named error rather than coerced (ADR-1204, assumptions row 7).
 - [ ] **Every `@test` name across `tests/legal-*.bats` is 7-bit ASCII**, and each suite DERIVES and asserts its own registered-test count rather than pinning a literal. bats silently drops a `@test` whose title carries a non-ASCII character — five tests were never registered, never ran and never failed, and the file was green (`arc-evolve` 2026-08-04). The bullet above used to read `±Infinity`, and that character sat inside the very criterion protecting the hash chain.
-- [ ] The render records, per page, **which transforms it applied** (escaping, normalisation) — ADR-1002's transform-disclosure obligation.
+- [ ] The render records, per page, **which transforms it applied** (escaping, normalisation) — ADR-1202's transform-disclosure obligation.
 - [ ] **Two-surface adversarial pass on the three lints**, by two FRESH agents that have not seen the implementation: one on decision logic, one on the shell and OS boundary. Every found hole fixed and pinned as a fixture. Each attacker prompt carries this lane's running fixed-defect list with the instruction to check each entry in every OTHER file.
 - [ ] The running fixed-defect list is committed as `initiatives/legal/evidence/fixed-defect-list.md` (one row per hole: file · defect class · fix commit) and updated in the SAME commit as each fix. Phases 1–3 name this list in their attacker prompts; it must be a file they can read by path, not a session's memory of Phase 0 — the twin-fix recurrence was only closed once the list became a persisted artifact every OTHER file is checked against (`arc-absorb` 2026-08-09 / 2026-08-10).
 - [ ] **Negative control that RUNS:** a mutant renderer (one that emits an unpinned clause, and one that lets a denylisted claim through) is executed and each lint is asserted to go RED. A grep is never the guard.
-- [ ] **Text attack panel on the RENDERED bytes** of the three pages, three stances (hostile customer · regulator · competitor's lawyer). Findings triaged; anything the panel calls unsound in the processor or DPDP clause fires the kill-criteria path (ADR-1007).
+- [ ] **Text attack panel on the RENDERED bytes** of the three pages, three stances (hostile customer · regulator · competitor's lawyer). Findings triaged; anything the panel calls unsound in the processor or DPDP clause fires the kill-criteria path (ADR-1207).
 - [ ] `products/legal/manifest.json` exists; `tests/fixtures/sync-golden/tree-manifest.txt` regenerated as a NAMED step with the delta diffed first.
 - [ ] tests added and green **on CI**, per-JOB conclusions read (never the watcher's exit code).
 - [ ] tracker updated (`PROGRESS.md` row ✅ + done-log) and the evidence bundle written to `initiatives/legal/evidence/phase-00/`.
@@ -274,12 +274,12 @@ appetite-burn line rather than carrying it forward, and rewrite `## Now`.
 
 ## Rabbit holes in this phase
 
-- **Prose perfectionism on the three pages.** ADR-1009's answerability is the bar; taste is post-ship.
+- **Prose perfectionism on the three pages.** ADR-1209's answerability is the bar; taste is post-ship.
 - **Making trace-lint clever.** It is a lookup over the enum→clause map. Anything smarter is a future ADR.
 - **Over-normalising for hash stability.** The transform that buys determinism can delete the signal
   being judged (retro-log 2026-07-30) — hence the transform-disclosure exit criterion.
 - **Writing the lints and their tests in one pass.** The pass condition (scenario set, clause-ID map)
-  is committed in its OWN commit before the harness exists (ADR-1009, retro-log 2026-08-10).
+  is committed in its OWN commit before the harness exists (ADR-1209, retro-log 2026-08-10).
 
 ## Out of scope for this phase
 
@@ -297,12 +297,12 @@ fresh attackers and the text attack panel are agents this session spawns, not ow
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Not a lawyer, never pretends to be: no invented legal claims, and no compliance badge without a demonstrable truth plus an evidence link (Constitution E3, ADR-0012). Rendered pages carry no "reviewed by counsel" implication until ADR-1007 fires and it is true, and no page or checklist may imply a DPDP obligation is in force before it commences (ADR-1006).
-- The human gate is permanent (REQ-06): every publish is L1, propose-only, and no auto-publish path exists in code. `targets.publish` in `hq.policy.yaml` stays empty (ADR-1003).
-- All three lints (value / trace / completeness) are WARN-first in TRIAL, and no promotion to FAIL happens without an adversarial pass first — facts files and templates are hostile input (ADR-1002, ADR-1009).
+- Not a lawyer, never pretends to be: no invented legal claims, and no compliance badge without a demonstrable truth plus an evidence link (Constitution E3, ADR-0012). Rendered pages carry no "reviewed by counsel" implication until ADR-1207 fires and it is true, and no page or checklist may imply a DPDP obligation is in force before it commences (ADR-1206).
+- The human gate is permanent (REQ-06): every publish is L1, propose-only, and no auto-publish path exists in code. `targets.publish` in `hq.policy.yaml` stays empty (ADR-1203).
+- All three lints (value / trace / completeness) are WARN-first in TRIAL, and no promotion to FAIL happens without an adversarial pass first — facts files and templates are hostile input (ADR-1202, ADR-1209).
 - Every gate gets TWO fresh attackers with different surfaces (decision logic · shell and OS boundary), and each attacker prompt carries this lane's running fixed-defect list with "check each one in every OTHER file". The negative control is a MUTANT that runs, never a grep.
-- The text-level attack panel runs on the RENDERED bytes of the authored set before Phase 0 closes — content is parser-class too, and a transform applied for lint stability must declare what signal it destroys (ADR-1002).
-- Hash-chain law (ADR-1004): no publish without a bound receipt; no silent edits; no backdating; the canonicaliser is total and type-tagged; the preimage carries its own version and `--verify` reports stale-format and tamper as different exit codes.
+- The text-level attack panel runs on the RENDERED bytes of the authored set before Phase 0 closes — content is parser-class too, and a transform applied for lint stability must declare what signal it destroys (ADR-1202).
+- Hash-chain law (ADR-1204): no publish without a bound receipt; no silent edits; no backdating; the canonicaliser is total and type-tagged; the preimage carries its own version and `--verify` reports stale-format and tamper as different exit codes.
 - Emitter and reader discipline: zero new event kinds; every emit verified in `events/` AND `events/_quarantine/` by event id, never by ULID substring; `decision.recorded` only via `arc-inbox`.
 - Zero-dep Node and POSIX (A2); central `tests/` (ADR-0021); tests run on CI, never on this box; never delete — superseded template versions and retired pages keep their files (A10).
 - Original drafting only: no copied third-party policy text.

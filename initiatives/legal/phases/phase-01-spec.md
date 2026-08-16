@@ -7,14 +7,14 @@ an answering clause id, and no page can change without a `decision.recorded` tha
 
 ## Exit criteria (Definition of Done)
 
-- [ ] The remaining four pages authored: `shipping-delivery` (digital-delivery wording — no provider carve-out exists, ADR-1001), `contact`, `pricing` (one all-inclusive INR figure with tax treatment stated, ADR-1008), `about` (operator identity and trading-as disclosure).
+- [ ] The remaining four pages authored: `shipping-delivery` (digital-delivery wording — no provider carve-out exists, ADR-1201), `contact`, `pricing` (one all-inclusive INR figure with tax treatment stated, ADR-1208), `about` (operator identity and trading-as disclosure).
 - [ ] **Text-level attack panel (hostile customer · regulator · competitor's lawyer) runs on the RENDERED bytes of these four pages before this phase closes.** Phase 0's panel covered Phase 0's three pages only — `pricing` states a binding all-inclusive figure and `shipping-delivery` carries the one digital-delivery clause, which is exactly the class the panel exists to stress. Findings triaged as in Phase 0.
 - [ ] `tests/fixtures/sync-golden/tree-manifest.txt` regenerated as a NAMED step, delta diffed first, for the four new shipped files under `products/legal/`. Phase 0 closed this for its three pages; every phase that adds a shipped file repeats it rather than assuming one closure holds forever (`arc-orchestrator` 2026-07-22: the golden fixture broke across 10 separate commits, twice as a surprise mid-task failure).
 - [ ] **A CI check asserts `targets.publish` in `hq.policy.yaml` is empty** on every PR touching `.claude/scripts/legal/**`, proven by a mutant that adds a `legal.publish` target and is asserted to turn the check RED. REQ-06 calls the human gate permanent; until this lands, that permanence is a sentence four specs repeat and nothing tests.
-- [ ] Route paths read from FORMAT-tier facts fields with the ADR-1010 item-7 defaults; no page URL is a constant anywhere in the engine or the checklist.
-- [ ] Scenario fixture set of ≥ 8 committed **in its own commit, before the completeness lint reads it** (ADR-1009), each row mapping a situation to the clause id that answers it.
+- [ ] Route paths read from FORMAT-tier facts fields with the ADR-1210 item-7 defaults; no page URL is a constant anywhere in the engine or the checklist.
+- [ ] Scenario fixture set of ≥ 8 committed **in its own commit, before the completeness lint reads it** (ADR-1209), each row mapping a situation to the clause id that answers it.
 - [ ] Completeness lint runs over all seven pages and reports two distinct failure classes: MISSING mandatory clause id, and UNANSWERED scenario. An orphaned scenario after a template edit is a failure.
-- [ ] `approval.requested` emitted with the strict payload profile `subject: "legal.publish"`; unknown keys are REJECTED (fixture-pinned, ADR-1003).
+- [ ] `approval.requested` emitted with the strict payload profile `subject: "legal.publish"`; unknown keys are REJECTED (fixture-pinned, ADR-1203).
 - [ ] The owner's decision is taken through `arc-inbox approve|reject --reason …` and lands as `decision.recorded`. The raw emitter is never used for it, and the command handed over carries its `cd` to the canonical clone — the spine is gitignored, so each worktree has its own and a failed approve leaves no trace.
 - [ ] Every emit VERIFIED by event id in `events/` and in `events/_quarantine/`; a ULID substring grep is not accepted as proof.
 - [ ] Hash-chain enforced: publish refuses any `(facts_sha256, output_sha256[], template_set_sha)` mismatch. **TOCTOU fixture** — approve, edit the facts file, attempt publish → refused. **Backdating fixture** — `effective_date` earlier than the decision timestamp, or non-monotonic for that page → FAIL.
@@ -59,7 +59,7 @@ an answering clause id, and no page can change without a `decision.recorded` tha
 
 ## Rabbit holes in this phase
 
-- **Building a legal.updated kind because the tags feel awkward.** ADR-1003 says no; the promotion
+- **Building a legal.updated kind because the tags feel awkward.** ADR-1203 says no; the promotion
   trigger is a real cross-venture query, and it has its own ADR when it arrives.
 - **Making the semantic diff pretty.** It must be readable enough that a full-blob re-approval is
   never the easier path. That is the whole bar.
@@ -79,12 +79,12 @@ over with its `cd` already in it.
 
 ## Non-negotiables (verbatim from PLAN)
 
-- Not a lawyer, never pretends to be: no invented legal claims, and no compliance badge without a demonstrable truth plus an evidence link (Constitution E3, ADR-0012). Rendered pages carry no "reviewed by counsel" implication until ADR-1007 fires and it is true, and no page or checklist may imply a DPDP obligation is in force before it commences (ADR-1006).
-- The human gate is permanent (REQ-06): every publish is L1, propose-only, and no auto-publish path exists in code. `targets.publish` in `hq.policy.yaml` stays empty (ADR-1003).
-- All three lints (value / trace / completeness) are WARN-first in TRIAL, and no promotion to FAIL happens without an adversarial pass first — facts files and templates are hostile input (ADR-1002, ADR-1009).
+- Not a lawyer, never pretends to be: no invented legal claims, and no compliance badge without a demonstrable truth plus an evidence link (Constitution E3, ADR-0012). Rendered pages carry no "reviewed by counsel" implication until ADR-1207 fires and it is true, and no page or checklist may imply a DPDP obligation is in force before it commences (ADR-1206).
+- The human gate is permanent (REQ-06): every publish is L1, propose-only, and no auto-publish path exists in code. `targets.publish` in `hq.policy.yaml` stays empty (ADR-1203).
+- All three lints (value / trace / completeness) are WARN-first in TRIAL, and no promotion to FAIL happens without an adversarial pass first — facts files and templates are hostile input (ADR-1202, ADR-1209).
 - Every gate gets TWO fresh attackers with different surfaces (decision logic · shell and OS boundary), and each attacker prompt carries this lane's running fixed-defect list with "check each one in every OTHER file". The negative control is a MUTANT that runs, never a grep.
-- The text-level attack panel runs on the RENDERED bytes of the authored set before Phase 0 closes — content is parser-class too, and a transform applied for lint stability must declare what signal it destroys (ADR-1002).
-- Hash-chain law (ADR-1004): no publish without a bound receipt; no silent edits; no backdating; the canonicaliser is total and type-tagged; the preimage carries its own version and `--verify` reports stale-format and tamper as different exit codes.
+- The text-level attack panel runs on the RENDERED bytes of the authored set before Phase 0 closes — content is parser-class too, and a transform applied for lint stability must declare what signal it destroys (ADR-1202).
+- Hash-chain law (ADR-1204): no publish without a bound receipt; no silent edits; no backdating; the canonicaliser is total and type-tagged; the preimage carries its own version and `--verify` reports stale-format and tamper as different exit codes.
 - Emitter and reader discipline: zero new event kinds; every emit verified in `events/` AND `events/_quarantine/` by event id, never by ULID substring; `decision.recorded` only via `arc-inbox`.
 - Zero-dep Node and POSIX (A2); central `tests/` (ADR-0021); tests run on CI, never on this box; never delete — superseded template versions and retired pages keep their files (A10).
 - Original drafting only: no copied third-party policy text.

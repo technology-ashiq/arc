@@ -1,10 +1,10 @@
 {
   "version": 1,
   "_comment": [
-    "The launch checklist's row source (ADR-1001). No checklist row is hardcoded in the renderer;",
+    "The launch checklist's row source (ADR-1201). No checklist row is hardcoded in the renderer;",
     "every row comes from here, and a row with no `source_url` FAILS rather than rendering.",
     "",
-    "ADR-1001 is the reason the split exists: the design source recorded SIX required pages, and",
+    "ADR-1201 is the reason the split exists: the design source recorded SIX required pages, and",
     "the verified position is that Razorpay's default activation flow documents FIVE, with a",
     "separate CONDITIONAL list for additional e-commerce sites. The built page set is the",
     "seven-page superset; this file records which of them the provider actually demands, and",

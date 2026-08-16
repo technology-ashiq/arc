@@ -2,7 +2,7 @@
 # legal Phase 02 -- the launch checklist.
 #
 # This suite exists because an adversarial pass found the checklist had ZERO tests: the whole
-# Phase-02 deliverable, including its four-outcome enumeration, its ADR-1001 row counts and its
+# Phase-02 deliverable, including its four-outcome enumeration, its ADR-1201 row counts and its
 # blank-row guard, could have been deleted body by body and the suite would have stayed green.
 #
 # The outcome enumeration is the point of the thing. `arc-memory` 2026-08-12 shipped a scanner
@@ -27,7 +27,7 @@ teardown() { _arc_legal_teardown; }
 }
 
 @test "legal checklist: a non-merchant venture renders NOT-APPLICABLE with a reason, never green" {
-  # ADR-1011. Rendering these as PASS would tell an operator they had cleared a gate they were
+  # ADR-1211. Rendering these as PASS would tell an operator they had cleared a gate they were
   # never standing at.
   run node "$(CLI)" checklist --venture "fixture-none-nogst"
   [ "$status" -eq 0 ]
@@ -100,7 +100,7 @@ teardown() { _arc_legal_teardown; }
   [[ "$output" == *"source_url"* ]]
 }
 
-@test "legal checklist: the ADR-1001 row counts are asserted, so a dropped row is an error" {
+@test "legal checklist: the ADR-1201 row counts are asserted, so a dropped row is an error" {
   # 5 provider-required and 2 provider-conditional, pinned against a VERIFIED provider page-list.
   # A row silently dropped would otherwise just make the checklist shorter.
   _arc_legal_sandbox
@@ -110,7 +110,7 @@ teardown() { _arc_legal_teardown; }
   node "$ARC_LEGAL_CLI" checklist --venture "fixture-gateway-gst" >"$SANDBOX/o.txt" 2>&1 || MUTANT_STATUS=$?
   [ "$MUTANT_STATUS" -eq 2 ]
   run cat "$SANDBOX/o.txt"
-  [[ "$output" == *"ADR-1001"* ]]
+  [[ "$output" == *"ADR-1201"* ]]
 }
 
 @test "legal checklist: this suite registers every test it declares" {

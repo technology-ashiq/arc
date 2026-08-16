@@ -13,7 +13,7 @@ Phase 00 that Phase 01 delivered.
 | CLI | `.claude/scripts/legal/arc-legal.mjs` | `render --venture NAME --out DIR`; exit `0` rendered · `2` bad input · `3` could-not-run |
 | YAML subset parser | `.claude/scripts/legal/lib/yaml.mjs` | named errors for anchors, aliases, tags, merge keys, flow collections, block scalars, tab indent, duplicate keys, reserved keys, YAML-1.1 octal, NUL, BOM |
 | Canonicaliser | `.claude/scripts/legal/lib/canonical.mjs` | `arc-legal-canon/1`; type-tagged, length-prefixed, NFC-normalised; refuses NON_FINITE, NON_INTEGER, UNSAFE_INTEGER, BIGINT, UNDEFINED, EXOTIC_OBJECT, CYCLE, ARRAY_HOLE |
-| Schema | `.claude/scripts/legal/lib/schema.mjs` | three risk tiers per ADR-1002; closed vocabularies; three cross-field rules |
+| Schema | `.claude/scripts/legal/lib/schema.mjs` | three risk tiers per ADR-1202; closed vocabularies; three cross-field rules |
 | Template engine | `.claude/scripts/legal/lib/template.mjs` | two constructs only: guarded clause, namespaced interpolation |
 | Lints | `.claude/scripts/legal/lib/lints.mjs` | value · trace · completeness, all reading RENDERED bytes |
 | Data | `products/legal/data/` | `vocab.json`, `clause-map.json`, `required-clauses.json`, `pages.json`, `claim-denylist.json`, `grievance-windows.json` |

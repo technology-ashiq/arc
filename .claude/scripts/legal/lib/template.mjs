@@ -3,7 +3,7 @@
  *
  * Two constructs, no expressions, no loops the author controls, no conditionals beyond a
  * single field=value equality. Anything cleverer would make trace-lint an NLP project instead
- * of a lookup (ADR-1009's rabbit hole), and would put arbitrary evaluation between a facts
+ * of a lookup (ADR-1209's rabbit hole), and would put arbitrary evaluation between a facts
  * file and a sentence a stranger relies on.
  *
  *   {{#clause id=REFUND.WINDOW when=payment_model=gateway}} ... {{/clause}}
@@ -112,7 +112,7 @@ function resolveToken(expr, ctx) {
   }
 
   if (expr === "table.pricing") {
-    // The one paired rendering in the set. Parallel arrays are the shape ADR-1012 chose, and
+    // The one paired rendering in the set. Parallel arrays are the shape ADR-1212 chose, and
     // this is the single place they are zipped -- so a length mismatch has exactly one way to
     // reach a page, and the schema has already refused it before we get here. The belt is kept
     // anyway: a renderer that trusts an upstream check is a renderer that ships whatever the

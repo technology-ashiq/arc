@@ -2,7 +2,7 @@
 # legal Phase 02 -- per-venture template pins, and the bump that voids an approval.
 #
 # The template set used to be a module constant, which meant every venture moved the instant the
-# set moved. That is precisely what pinning exists to prevent, and ADR-1005 makes facts, pages,
+# set moved. That is precisely what pinning exists to prevent, and ADR-1205 makes facts, pages,
 # pins and receipts venture-local so one venture can adopt a new set while another stays put.
 #
 # The forcing function for re-approval is ARITHMETIC, not a flag. Moving a pin changes

@@ -178,7 +178,7 @@ _canon() { node "$ARC_ROOT/tests/legal-probe.mjs" canon "$1"; }
 
 @test "legal hash: editing one template moves every page in the set" {
   # template_set_sha covers the whole set, so a fix to one page forces re-approval of all of
-  # them. That is the intent of ADR-1005, and this is what asserts it.
+  # them. That is the intent of ADR-1205, and this is what asserts it.
   _arc_legal_sandbox
   run node "$ARC_LEGAL_CLI" render --venture "fixture-gateway-gst" --out "$SANDBOX/before"
   [ "$status" -eq 0 ]

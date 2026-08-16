@@ -47,20 +47,36 @@ export function spineRoot() {
       );
     return resolve(named);
   }
+  const dir = repoRoot();
+  if (dir === null)
+    throw new SpineError(
+      "NO_ROOT",
+      "no repository with .claude/ and .git/ at or above cwd -- refusing to guess a spine location (set ARC_SPINE_ROOT to be explicit)",
+    );
+  assertNotLinkedWorktree(dir);
+  return join(dir, ".claude", "state", "hq");
+}
+
+/**
+ * The REPOSITORY root -- the directory holding both `.claude/` and `.git/` -- or null.
+ *
+ * Extracted from `spineRoot` so the walk exists ONCE. It is deliberately separate from the spine:
+ * `ARC_SPINE_ROOT` points the SPINE somewhere, and a caller that conflated the two read a repo file
+ * out of a scratch directory and silently found nothing there (ledger Phase 01, finding 1) -- the
+ * kill-criteria file vanished and, with it, the refusal that guards it.
+ *
+ * No worktree assertion here, unlike `spineRoot`. That refusal exists because `.claude/state/` is
+ * gitignored and every worktree gets its own empty one; a TRACKED file is present and identical in
+ * every worktree, so refusing to find one would be a rule with no failure behind it.
+ */
+export function repoRoot() {
   let dir = process.cwd();
   for (;;) {
-    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git"))) {
-      assertNotLinkedWorktree(dir);
-      return join(dir, ".claude", "state", "hq");
-    }
+    if (existsSync(join(dir, ".claude")) && existsSync(join(dir, ".git"))) return dir;
     const up = dirname(dir);
-    if (up === dir) break;
+    if (up === dir) return null;
     dir = up;
   }
-  throw new SpineError(
-    "NO_ROOT",
-    "no repository with .claude/ and .git/ at or above cwd -- refusing to guess a spine location (set ARC_SPINE_ROOT to be explicit)",
-  );
 }
 
 /**
@@ -144,10 +160,20 @@ function sleepSync(ms) {
  * else, the original holder's release deleted the NEW holder's lock -- and three processes
  * ended up inside the critical section at once.
  */
-export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+export function withLock(root, fn, { timeoutMs = DEFAULT_TIMEOUT_MS, lockName = ".lock" } = {}) {
   const dir = eventsDir(root);
   ensureDir(dir);
-  const lock = join(dir, ".lock");
+  // `lockName` is ADDITIVE and defaults to the one spine-wide lock, so every existing caller is
+  // byte-identical in behaviour. It exists for the scheduler's PER-JOB overlap lock (SCH-C):
+  // two different jobs firing in the same minute are legal, and only a job overlapping ITSELF
+  // is blocked, so they cannot share one lock. The alternative was a second hand-rolled lock,
+  // which is banned outright -- this token-ownership discipline took three defects to get right
+  // (a stale-breaker deleting a live holder's lock, an unconditional-unlink release handing the
+  // critical section to three processes at once, and EPERM/EACCES on Windows delete-pending
+  // meaning contention rather than failure), and none of that is worth reproducing badly.
+  if (typeof lockName !== "string" || !/^\.[a-z0-9.-]+$/.test(lockName))
+    throw new SpineError("LOCK_FAILED", `lockName ${JSON.stringify(lockName)} is not a safe lock filename`);
+  const lock = join(dir, lockName);
   const token = `${process.pid}:${randomBytes(8).toString("hex")}`;
   const deadline = Date.now() + timeoutMs;
   let fd = null;

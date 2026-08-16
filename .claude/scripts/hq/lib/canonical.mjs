@@ -115,8 +115,20 @@ export function newUlid(ms, salt) {
 export function nowMs() {
   const override = process.env.ARC_SPINE_NOW;
   if (override === undefined) return Date.now();
+  // A DECIMAL INTEGER, and nothing `Number()` is willing to be generous about. `Number("")` and
+  // `Number(" ")` are 0 -- the Unix epoch -- and `Number("0x1A4A5C4B400")` is a real timestamp
+  // years away, and both are finite, so the old `Number.isFinite` guard passed all three.
+  //
+  // What that bought, found by an adversarial pass: an unquoted empty variable in any wrapper set
+  // the render clock to 1970, which made every kill line ABSENT at exit 0 -- the whole panel
+  // disarmed, silently -- while a hex value moved the clock forward and manufactured a false
+  // CROSSED. This is the same set-but-empty failure `.claude/rules/lanes.md` records and that
+  // `spineRoot` and `venturesPath` both already refuse; this was the third door in the chain and
+  // the only one still open.
+  if (!/^-?\d+$/.test(override))
+    throw new SpineError("BAD_TS", `ARC_SPINE_NOW=${JSON.stringify(override)} must be a decimal integer of epoch milliseconds -- an empty value reads as 1970 and a hex value reads as a date years away, and both are silent`);
   const n = Number(override);
-  if (!Number.isFinite(n)) throw new SpineError("BAD_TS", `ARC_SPINE_NOW=${override} is not a number`);
+  if (!Number.isSafeInteger(n)) throw new SpineError("BAD_TS", `ARC_SPINE_NOW=${override} is outside the safe integer range`);
   return n;
 }
 

@@ -1,0 +1,24 @@
+{
+  "phase": "03",
+  "commit": "e0c3c321943bf6a75766c382b422c47a216a9856",
+  "short": "e0c3c32",
+  "generated": "2026-08-14T09:30:51Z",
+  "files": [
+    {
+      "name": "ci-run-31787158440.json",
+      "sha256": "8f931bb0d068e663a1bbc8349974b5985426b8bcad851ff49f00de00d9033711"
+    },
+    {
+      "name": "exit-criteria.md",
+      "sha256": "df35089e63e35741f6f26d7f99778e577e87ebdc022002d4bf6fbfbc806dee93"
+    },
+    {
+      "name": "honest-limit.md",
+      "sha256": "497127e487f061d0b96db462f11f9caa865ab44528a2617a30bc812bc45fa76e"
+    },
+    {
+      "name": "slop-markers.json",
+      "sha256": "c4a761d9e75512c60bfaac9a80242c55aeb2beb4155c00e1a7f90e40ca3acc20"
+    }
+  ]
+}

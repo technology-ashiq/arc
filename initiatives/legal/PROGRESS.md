@@ -12,7 +12,7 @@ depends-on: —
 > (tests green on CI + live demo + exit criteria + evidence). Evidence over assertion.
 > Evidence is lane-scoped at `initiatives/legal/evidence/phase-NN/` (ADR-0055). ADRs, the
 > retro-log, HISTORY and the trial-ledger stay at repo root (ADR-0053). This lane holds ADR
-> century **1000–1099**; ADR-1000..1011 are locked there.
+> century **1200–1299**; ADR-1200..1011 are locked there.
 
 ## Phases
 
@@ -51,7 +51,7 @@ remainder, so the position is tight but not yet over.
 
 The kill tripwire was **2.5d if Phase 00 is not closed**. Phase 00 IS closed, so it did not fire.
 The honest read is that the scope grew rather than the estimate slipping: the reader panels
-returned 68 findings and a fourth lint (ADR-1013) that no phase spec anticipated, because nothing
+returned 68 findings and a fourth lint (ADR-1213) that no phase spec anticipated, because nothing
 in the plan predicted that the worst defects would be BETWEEN pages rather than on them.
 
 _Historic, for the record:_ **0d of 5d used.** Phase appetites sum to exactly 5d, so there is **no calendar slack** — the slack
@@ -79,16 +79,16 @@ re-verified** because only one respawn is permitted.
 - The Build-out Mandate is on the canonical spine — `decision.recorded` **`01KZTM348858PDH44K4HA64CVA`**
   (deciding `01KZTM2DYQXXYHVBJZC462D982`), both read out of
   `E:/Work_Hub/01_Automemory/arc/.claude/state/hq/events/2026-08-12.jsonl`, neither quarantined.
-- ADR century **1000–1099** claimed, checked across all sixteen sibling worktrees (highest anywhere
+- ADR century **1200–1299** claimed, checked across all sixteen sibling worktrees (highest anywhere
   is 0914).
 - **Razorpay's page list is not the six the design source recorded.** The default activation flow
   documents FIVE; a separate, conditional six-item list exists for additional e-commerce sites. The
-  built set is the verified superset of SEVEN (ADR-1001), and the "card statement descriptor" claim
+  built set is the verified superset of SEVEN (ADR-1201), and the "card statement descriptor" claim
   was dropped as unverified.
 - **DPDP Rule 3 is NOT in force.** Notice, consent, grievance and SDF duties all commence together
-  on 13/14-May-2027; today only Board-institutional provisions are live (ADR-1006).
+  on 13/14-May-2027; today only Board-institutional provisions are live (ADR-1206).
 - **LexOS is not a merchant.** Its own ADR-0003 makes each law firm its own Razorpay merchant, so
-  `payment_model` gained a third value `none` before any receipt exists (ADR-1011). It also has zero
+  `payment_model` gained a third value `none` before any receipt exists (ADR-1211). It also has zero
   policy pages and no footer at all.
 
 **Open, and owed to the owner before Phase 00 code:** the operator's GST-registration posture
@@ -150,10 +150,10 @@ receipts/approval/publish half is not:
 `tests/legal-pages.bats`, `legal-scenarios.bats` and `legal-receipts.bats` were the verification
 plan's three suites. Only `legal-scenarios.bats` now exists.
 
-**A non-negotiable is breached and the owner should see it.** ADR-1007 fires the kill-criteria
+**A non-negotiable is breached and the owner should see it.** ADR-1207 fires the kill-criteria
 path when a panel calls the DPDP clause unsound. `privacy.mdx` says *"The DPDP Act **gives you**
 the option…"* in the present tense, eight sections after saying those provisions have not
-commenced — so the page denies and asserts the same duty. ADR-1006 is the decision it breaks. The
+commenced — so the page denies and asserts the same duty. ADR-1206 is the decision it breaks. The
 fix is one sentence; the reason it survived four reads is that it sits inside the clause everyone
 had already approved, and **no lint in this lane compares two clauses on one page**.
 
@@ -170,7 +170,7 @@ had already approved, and **no lint in this lane compares two clauses on one pag
 option is offered voluntarily, ahead of the duty. Grepped the pattern across all seven templates:
 every other DPDP reference was already future-tense.
 
-**ADR-1013 adds a fourth lint, `consistency`**, because three reader stances independently put a
+**ADR-1213 adds a fourth lint, `consistency`**, because three reader stances independently put a
 contradiction BETWEEN two pages in their top four findings — and every one of those pages passed
 all three existing lints, which each read a single page. The negative control is the argument:
 `mutate cross-page-drift` scores value 0 · trace 0 · completeness 0 · **consistency 1**.
@@ -213,7 +213,7 @@ Do these in order. Each is independently shippable.
    no twin-fix sweep of this one can reach. The twin-fix pattern has now recurred five times here.
 
 3. **Template-edit approval flow** — a template diff goes to the inbox as its own approval, never
-   a silent commit (ADR-1005, REQ-07).
+   a silent commit (ADR-1205, REQ-07).
 
 4. **Two-surface adversarial pass on `--verify` and the CI guard**, attacker prompts carrying
    `initiatives/legal/evidence/fixed-defect-list.md` (28 rows) with the instruction to check every

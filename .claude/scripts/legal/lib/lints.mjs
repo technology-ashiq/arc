@@ -18,7 +18,7 @@ import { conditionHolds, conditionVerdict, getPath } from "./schema.mjs";
 
 export const GROUPS = ["value", "trace", "completeness", "consistency"];
 // Nothing has been promoted yet. Promotion is /arc-retro's act against docs/trial-ledger.md,
-// never this cycle's convenience (ADR-1009).
+// never this cycle's convenience (ADR-1209).
 export const TRIAL = new Set(["value", "trace", "completeness", "consistency"]);
 
 const MARKER = /<!--\s*clause:([A-Z][A-Z0-9_.]*)\s*-->/g;
@@ -227,7 +227,7 @@ export function completenessLint(page, text, required, facts, bodies, scenarios,
     }
   }
 
-  // ---- UNANSWERED: the class that fails for INSUFFICIENCY (ADR-1009 / LEG-I) ----
+  // ---- UNANSWERED: the class that fails for INSUFFICIENCY (ADR-1209 / LEG-I) ----
   //
   // Everything above this line fails for rule-breaking. A page can satisfy all of it and still
   // leave the reader without the answer they came for, and `arc-design-cycle3` 2026-07-30 is the
@@ -271,7 +271,7 @@ export function completenessLint(page, text, required, facts, bodies, scenarios,
       // shape that happens to expose `.has`, so the id lookup is written against the real shape.
       const declared = Array.isArray(templateClauses) ? templateClauses.some((d) => d.id === id) : true;
       if (!declared) {
-        out.push(finding("completeness", page, s.id, "FAIL", `ORPHANED scenario: no template block on this page declares "${id}" any more. A template edit that orphans a scenario is a failure, not a silent pass (ADR-1009).`));
+        out.push(finding("completeness", page, s.id, "FAIL", `ORPHANED scenario: no template block on this page declares "${id}" any more. A template edit that orphans a scenario is a failure, not a silent pass (ADR-1209).`));
         continue;
       }
       if (!emitted.has(id))
@@ -283,7 +283,7 @@ export function completenessLint(page, text, required, facts, bodies, scenarios,
 }
 
 /**
- * CROSS-PAGE consistency (ADR-1013), run once over every rendered page.
+ * CROSS-PAGE consistency (ADR-1213), run once over every rendered page.
  *
  * Every other lint here reads a single page's bytes, and that is where the pages were worst:
  * three reader panels, blind to each other, each put a cross-page contradiction in their top

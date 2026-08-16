@@ -1,0 +1,31 @@
+name: day-close-roll
+version: 1.0.0
+intent: "Seal every unsealed day up to yesterday, oldest first, idempotently."
+permissions: declared
+job_stub: true
+inputs: []
+tools:
+  - fs.read
+  - fs.write
+  - shell.run:
+      - "node .claude/scripts/hq/arc-event.mjs close-day:*"
+body: |
+
+  NOT AN ENGINE PROCESS. This file exists so the job has a POLICY SUBJECT.
+
+  ADR-0504 closes the subject set to `session:interactive` or `process:NAME` where NAME is the
+  filename stem of a real `processes/*.process.yaml` -- "the subject set is a directory listing,
+  not an invention". A `job:` prefix fails `policy-lint`, so a scheduled job that needs to be
+  authorized at all needs a stem here. ADR-0802 records why that route was taken over widening
+  the subject set, which would have meant editing the policy engine itself.
+
+  `job_stub: true` is the marker `arc-run` refuses on. It is checked immediately after the
+  process file is parsed and BEFORE any driver is selected, so naming this file to
+  `arc-run --process day-close-roll` is a loud refusal rather than an LLM run against a process
+  body that was never written to be one.
+
+  The real work lives in `.claude/scripts/hq/jobs/day-close-roll.mjs` and is run by `arc-jobs`.
+  It shells out to `arc-event close-day` once per unsealed day because `closeDay` is a local
+  function in that CLI rather than an export -- and the roll, the ordering and the
+  already-sealed / empty-day classification all live in the job, because the CLI closes exactly
+  one day, throws on a day already closed, and refuses a day with no events (ADR-0805).

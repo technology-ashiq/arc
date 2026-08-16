@@ -1,0 +1,44 @@
+# ventures.yaml — the kill lines, and the one file in this repo where a frictionless edit is
+# most dangerous (ADR-1008 / LED-I).
+#
+# THIS FILE CANNOT BE EDITED SILENTLY. `arc pnl` parses it, canonicalizes it, digests the RESULT,
+# and refuses to render the kill panel unless that digest has an approved receipt on the spine:
+# an `approval.requested` declaring subject "ledger.criteria" and carrying the digest, decided by
+# a `decision.recorded` with verdict "approve" (ADR-1017 / LED-R). A change with no receipt prints
+# UNRECEIPTED CRITERIA CHANGE and nothing else.
+#
+# The digest is over the PARSED VALUES, not the bytes. Reformat this file, add or remove a comment,
+# change the line endings — the receipt still holds. Change any number, add or remove a venture, or
+# change `version` — it does not, and you owe a new one. That is deliberate: a control that fires on
+# whitespace is a control that gets muted.
+#
+# To change a line:
+#   1. edit the number here
+#   2. node .claude/scripts/hq/arc-pnl.mjs --criteria-digest      # prints the new digest
+#   3. emit the approval carrying that digest, then approve it through arc-inbox
+# There is no genesis exemption. The FIRST version of this file needed a receipt exactly as the
+# tenth edit will — "initial import is trusted" is a permanent unreceipted write of arbitrary
+# criteria, which is the whole failure this file exists to prevent.
+#
+# Criteria only. Money never lives here (ADR-1001 / LED-B): costs are `cost.incurred` events.
+# v1 ships exactly two criteria and a third is a later receipted decision, not an edit (ADR-1008).
+#
+# The venture set here stays identical to PORTFOLIO.md's Venture passports table. A kill line with
+# no passport row, or a passport row with no kill line, is the assumption-ledger trigger firing.
+#
+# PLACEHOLDER VALUES. The real thresholds for lexos are the owner's to set, and because this file
+# now requires a receipt to change, his first real edit is itself a `decision.recorded` — which is
+# the mechanism working rather than an obstacle.
+version: 1
+ventures:
+  lexos:
+    kill:
+      # Days since the last real revenue event. A CEILING: it crosses upward.
+      days_without_revenue: 90
+      # Monthly traffic floor. A FLOOR: it crosses downward.
+      #
+      # READ ADR-1018 BEFORE TRUSTING THIS LINE. Ledger has NO traffic source — it reads money, not
+      # visits — so this criterion renders ABSENT with a stated reason rather than OK. It is
+      # declared here on purpose: dropping it would hide the fact that a kill line nobody can
+      # measure has been declared, which is worse than showing it unmeasured.
+      traffic_floor_monthly: 100

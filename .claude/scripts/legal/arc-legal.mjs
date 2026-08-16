@@ -38,7 +38,7 @@ const PRODUCT = join(REPO_ROOT, "products", "legal");
  * The template set is PER VENTURE, resolved from that venture's `pins.yaml`, never a constant.
  *
  * It was a module constant, which meant every venture moved the moment the set moved -- the exact
- * thing pinning exists to prevent. ADR-1005 makes facts, pages, pins and receipts venture-local
+ * thing pinning exists to prevent. ADR-1205 makes facts, pages, pins and receipts venture-local
  * precisely so one venture can adopt a new set while another stays put and both keep rendering.
  *
  * A MISSING pin is a REFUSAL, not a default to the newest set. Defaulting would float a venture
@@ -139,7 +139,7 @@ function parseArgs(argv) {
  * be inside the fixtures root -- one confinement function, every path through it.
  */
 function factsPathFor(name, ventureDirOverride) {
-  // A REAL venture's facts live in the venture's own repo, not in arc's fixtures (ADR-1005:
+  // A REAL venture's facts live in the venture's own repo, not in arc's fixtures (ADR-1205:
   // facts, pages, pins and receipts are venture-local). Without this the engine could only ever
   // render its own test fixtures, which made a real render impossible -- the one thing the whole
   // product is for.
@@ -274,7 +274,7 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
   const denylist = need("claim-denylist.json");
   const pagesDoc = need("pages.json");
   const windowRows = need("grievance-windows.json");
-  // The answerability fixture (ADR-1009). Read here rather than inside the lint so a missing or
+  // The answerability fixture (ADR-1209). Read here rather than inside the lint so a missing or
   // unparseable file is a loud refusal at load time, not a per-page finding repeated seven times.
   const scenarioSet = need("scenarios.json");
   const crossClaims = need("cross-page-claims.json");
@@ -297,7 +297,7 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
 
   const windows = strictestWindow(windowRows, facts.effective_date);
 
-  // Routes are a FACTS field with pinned defaults (ADR-1010 item 7). The templates cross-link
+  // Routes are a FACTS field with pinned defaults (ADR-1210 item 7). The templates cross-link
   // pages, so every page id must resolve to a path even when the venture set none. The merged
   // view is what RENDERS; `facts` -- the authored file, unmerged -- is what HASHES, so a
   // default never silently becomes part of the venture's own signed facts.
@@ -306,7 +306,7 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
 
   // DERIVED facts. A `when=` guard is a single field=value equality by design -- no negation,
   // no conjunction, because an expression language between a facts file and a legal sentence is
-  // exactly what ADR-1009 refuses. Some clauses genuinely depend on a COMBINATION, and the
+  // exactly what ADR-1209 refuses. Some clauses genuinely depend on a COMBINATION, and the
   // answer is to compute the combination HERE, in code, and let the templates keep asking one
   // simple question.
   //
@@ -406,7 +406,7 @@ export function renderVenture({ ventureName, outDir, ventureDir }) {
   // page that does not exist, so the check is disabled by exactly the condition it detects.
   findings.push(...scenarioSetLint(scenarioSet.scenarios, pages.map((p) => p.page)));
 
-  // Cross-page consistency (ADR-1013), also once. A contradiction BETWEEN two pages is invisible
+  // Cross-page consistency (ADR-1213), also once. A contradiction BETWEEN two pages is invisible
   // to every per-page lint by construction, and that is where three reader panels independently
   // put their worst findings.
   GROUPS_RUN.add("consistency");

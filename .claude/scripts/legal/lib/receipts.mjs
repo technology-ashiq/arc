@@ -53,7 +53,7 @@ export function templateSetApprovalErrors({ approvedSets, templateSet, sha }) {
 }
 
 /**
- * The strict payload profile (ADR-1003). Unknown keys are REJECTED rather than ignored, because
+ * The strict payload profile (ADR-1203). Unknown keys are REJECTED rather than ignored, because
  * an emitter that accepts unknown keys will happily carry a `force: true` somebody added later,
  * and the receipt would look identical to a clean one.
  */
@@ -92,7 +92,7 @@ export function validateApprovalPayload(payload) {
 
   for (const k of Object.keys(payload))
     if (!APPROVAL_KEYS.includes(k))
-      errs.push(`unknown key "${k}" in the approval payload. The profile is closed (ADR-1003): an emitter that ignores unknown keys carries whatever somebody adds later, and the receipt looks clean.`);
+      errs.push(`unknown key "${k}" in the approval payload. The profile is closed (ADR-1203): an emitter that ignores unknown keys carries whatever somebody adds later, and the receipt looks clean.`);
   for (const k of APPROVAL_KEYS)
     if (payload[k] === undefined) errs.push(`the approval payload is missing "${k}"`);
 

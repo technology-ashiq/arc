@@ -612,13 +612,29 @@ _built_with_decision() {
 
 @test "arc-recall: REQ-04 adds no event kind and opens no spine of its own" {
   # ADR-0703: memory reads the spine through the reader library and emits nothing. A new query
-  # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so the count is
-  # MEASURED here rather than assumed.
+  # surface is exactly where a closed vocabulary (ADR-0026) grows by accident, so this is checked
+  # rather than assumed.
+  #
+  # It used to check by pinning the GLOBAL total -- which is not the claim in this test's name. Any
+  # OTHER lane extending the vocabulary legitimately turned this red, and it happened twice inside
+  # one week: growth's `content.published` (ADR-1001) took it to 45, and the ledger lane's
+  # `month.closed` (ADR-1004) took it to 46. Each time the failure message read "memory added a
+  # kind" while memory had done nothing at all.
+  #
+  # The ledger lane wrote the right answer into its own bump before this rewrite existed: "if a
+  # third lane trips it, the sharper form of this assertion is that the set of kinds reachable from
+  # memory's own modules is empty, which stays true no matter who else adds one." That is what is
+  # implemented here. Both lanes reached the same conclusion independently; this is the merge taking
+  # the STRONGER version rather than the earlier one (.claude/rules/lanes.md).
+  #
+  # A shared file in tests/ belongs to no lane, so its assertions have to survive every lane.
   vurl="$(cd "$ARC_ROOT" && node -e 'const {pathToFileURL}=require("node:url");const {resolve}=require("node:path");process.stdout.write(pathToFileURL(resolve(".claude/scripts/hq/lib/validate.mjs")).href)')"
   [ -n "$vurl" ]
-  run node -e "import(process.argv[1]).then(m=>{ if (m.KINDS.length !== 44) { console.error(\"KINDS.length is \" + m.KINDS.length); process.exit(1); } console.log(\"KINDS \" + m.KINDS.length); })" "$vurl"
+  # 'loaded' is the positive control: without it, 'owns-none' would also be satisfied by an empty
+  # or failed import, which is the vacuous pass this file's own last test exists to prevent.
+  run node -e "import(process.argv[1]).then(m=>{ const mine = m.KINDS.filter(k=>/^(memory|recall)[.]/.test(k)); console.log([mine.length ? 'OWNS:' + mine.join(',') : 'owns-none', m.KINDS.length === new Set(m.KINDS).size ? 'unique' : 'DUPES', m.KINDS.length > 10 ? 'loaded' : 'EMPTY'].join(' ')); })" "$vurl"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"KINDS 44"* ]]
+  [ "$output" = "owns-none unique loaded" ] || { echo "$output"; false; }
   # Positive control FIRST: prove this grep is reading the file it claims to read, so the absence
   # assertion below cannot pass on a typo in the path.
   run grep -c -- "--decisions" "$RECALL"

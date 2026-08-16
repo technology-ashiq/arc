@@ -1,0 +1,28 @@
+{
+  "phase": "02",
+  "commit": "d4500cc64c7db9daaf3538b7b79f5ed269320eff",
+  "short": "d4500cc",
+  "generated": "2026-08-14T07:23:53Z",
+  "files": [
+    {
+      "name": "candidates.jsonl",
+      "sha256": "b261f4e01a40e6c3d9ba7974ab9e833ff9c140d64c136c5c8b9e0017045ab892"
+    },
+    {
+      "name": "ci-run-31778577391.json",
+      "sha256": "2fde8123a8fd0a1f6f8cf6244d2b8e3f7e2412592bce07c79ae35a63dd9b40c1"
+    },
+    {
+      "name": "cluster-c-001.json",
+      "sha256": "fdc0da6a88d74f223e58313576e39a04f701c46f014ef7c6b49d36637305001c"
+    },
+    {
+      "name": "exit-criteria.md",
+      "sha256": "850e4637972c18b2836af08e17e7297cf2b2b3439b43b1b3f8b1b1d08b493bfc"
+    },
+    {
+      "name": "real-mining-run.txt",
+      "sha256": "22cc9918963ab9268aa56f90c6f42980cb84c288a6432ed6b04f90605428dedf"
+    }
+  ]
+}

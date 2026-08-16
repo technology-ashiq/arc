@@ -1,5 +1,5 @@
 {
-  "_comment": "Closed vocabularies for ENUM-tier facts fields (ADR-1002). Extended only by reviewed diff. An unknown value is a parse error, never a passthrough.",
+  "_comment": "Closed vocabularies for ENUM-tier facts fields (ADR-1202). Extended only by reviewed diff. An unknown value is a parse error, never a passthrough.",
   "data_categories": [
     "identity",
     "contact",

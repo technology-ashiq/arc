@@ -1,0 +1,14 @@
+{
+  "_readme": "ADR-0904. A CEILING BOUNDS SPEND. IT NEVER REPORTS IT. Every figure here is a hand-authored worst case per invocation, used only by ADR-0909's K-group reservation. None of it may ever appear in a run.completed payload, a scorecard cost column or a proposal row -- those carry only what a driver actually reported, and an unreported cost is ABSENT, never zero and never this number. A driver+model pair with no entry is REFUSED, not defaulted: a default ceiling is a number nobody measured doing the work of a bound, and it errs in the unrecoverable direction.",
+  "as_of": "2026-08-13",
+  "run_cap_inr": 500,
+  "process_cap_inr": 100,
+  "k": 3,
+  "worst_case_inr_per_invocation": {
+    "mock": {
+      "(unpinned)": 0
+    }
+  },
+  "_arithmetic": "Checked at Phase 1 per ADR-0904, against the tree as it stands. THREE classes are declared but only commit-msg-draft clears the fixture floor, so a full run is 5 fixtures x K=3 = 15 invocations of ONE class. Under the mock that reserves 15 x 0 = 0 against both caps and the caps are not the binding constraint. The arithmetic that MATTERS is the one that cannot be done yet: no real driver+model pair has an entry, because bench cannot pin a model through arc-run at all (phase-00-spec M1 amendment) -- so no real ceiling has an invocation to bound. Adding a real pair here without that seam would be declaring a bound on spend that nothing can spend.",
+  "_when_a_real_pair_is_added": "Reserve K x worst_case against BOTH caps before the group starts. With K=3 and a 100 rupee process sub-cap, a worst case above 33.33 rupees per invocation admits at most ONE fixture group per class -- so if a real pair lands above that, the process sub-cap is what needs the reasoned change, recorded here with its date, not the reservation rule."
+}

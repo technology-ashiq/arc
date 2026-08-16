@@ -1,0 +1,24 @@
+{
+  "phase": "04",
+  "commit": "e0c3c321943bf6a75766c382b422c47a216a9856",
+  "short": "e0c3c32",
+  "generated": "2026-08-14T09:30:53Z",
+  "files": [
+    {
+      "name": "ci-run-31787158440.json",
+      "sha256": "8f931bb0d068e663a1bbc8349974b5985426b8bcad851ff49f00de00d9033711"
+    },
+    {
+      "name": "exit-criteria.md",
+      "sha256": "0f5a2285393f07117c726e774f9a3389dfaf7ac740787944d9af90e070fba598"
+    },
+    {
+      "name": "title-a.md",
+      "sha256": "86bcbaddc2f75abf880dbc4fd8a5f67fe57a3b48c079024c84ce69818fb10a8f"
+    },
+    {
+      "name": "title-b.md",
+      "sha256": "a0961dd20c46d9c56bedb6c6bc4d86fa72160f7a2f3e294339a7325a41a6f0aa"
+    }
+  ]
+}

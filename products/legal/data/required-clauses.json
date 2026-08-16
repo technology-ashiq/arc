@@ -1,5 +1,5 @@
 {
-  "_comment": "Completeness lint input (ADR-1009). A mandatory clause absent from the RENDERED bytes is a MISSING-CLAUSE finding, even when every clause that IS present traces perfectly -- provenance alone cannot pass an empty page. `when` is a single field=value equality against the facts (including the derived ones), or absent for always-required.",
+  "_comment": "Completeness lint input (ADR-1209). A mandatory clause absent from the RENDERED bytes is a MISSING-CLAUSE finding, even when every clause that IS present traces perfectly -- provenance alone cannot pass an empty page. `when` is a single field=value equality against the facts (including the derived ones), or absent for always-required.",
   "terms": [
     {
       "id": "TERMS.PARTIES"

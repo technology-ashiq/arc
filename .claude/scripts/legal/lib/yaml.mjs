@@ -1,7 +1,7 @@
 /**
  * A deliberately SMALL YAML subset, and a named error for everything outside it.
  *
- * A facts file is hostile input (ADR-1002): it is edited in a hurry and interpolated into
+ * A facts file is hostile input (ADR-1202): it is edited in a hurry and interpolated into
  * sentences that carry legal meaning. A permissive parser is the wrong shape for that job,
  * because every construct it accepts quietly is a construct nobody wrote a rule for.
  *

@@ -1,0 +1,4 @@
+row_type,transaction_id,settlement_batch_id,settled_at,currency,gross,tax,fees,net,fx_rate,fx_source,fx_rate_date,buyer_email,product_name
+sale,txn_9f2Kd8Lm3Qp7Ts,setl_batch_20260914,2026-09-14T04:34:11+00:00,USD,49.00,0.00,2.45,46.55,83.20,provider-settlement,2026-09-14,buyer@example.invalid,The row that is here
+sale,txn_4bR7wE1nZ5xC8v,setl_batch_20260914,2026-09-14T06:12:59+00:00,USD,99.00,19.80,4.95,74.25,83.20,provider-settlement,2026-09-14,a.silva@example.invalid,The other row that is here
+batch_total,,setl_batch_20260914,,USD,197.00,19.80,9.85,167.35,,,,,

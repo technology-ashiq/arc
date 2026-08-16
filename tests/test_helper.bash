@@ -946,3 +946,43 @@ _arc_ascii_test_names() {
   echo "$_bad" >&2
   return 1
 }
+
+# ---------------------------------------------------------------------------------------------
+# arc_leave_the_repo -- run the rest of this test from a directory with NO repository above it.
+#
+# WHY IT EXISTS. `arc pnl` and `arc brief` resolve `ventures.yaml` from the REPOSITORY
+# (kill-panel.mjs venturesPath -> spine-io.mjs repoRoot), never from the spine. That is deliberate:
+# an earlier version derived it from the spine root and returned nothing whenever ARC_SPINE_ROOT was
+# set, which silently deleted the kill panel AND the UNRECEIPTED refusal in every configuration a
+# test runs in (ledger Phase 01, adversarial finding 1).
+#
+# The consequence for TESTS is that a suite invoking either binary from inside this checkout reads
+# THIS repo's ventures.yaml, which is unreceipted against any scratch spine -- so `arc pnl` exits 3
+# with an empty stdout and `arc brief` grows a NOT EVALUATED line in needs-you. Suites that assert
+# byte-exact output are asserting the CONSUMER configuration: no criteria file at all, which is the
+# state every install outside this repo is in.
+#
+# ONE COPY, HERE. Four suites need this, and four copies of a rule is the twin-fix shape this lane
+# has already paid for twice.
+#
+# The precondition is ASSERTED and deliberately STRICTER than repoRoot's own rule (which wants
+# `.claude` AND `.git`): a bare clone under TMPDIR would carry no `.claude` yet, would not be a repo
+# by that rule, and would still invalidate the caller. If this ever fires, the fix is to run bats
+# from outside any checkout -- never to delete the check.
+arc_leave_the_repo() {
+  cd "$BATS_TEST_TMPDIR" || { echo "could not cd to BATS_TEST_TMPDIR"; return 1; }
+  local d="$PWD"
+  while [ -n "$d" ]; do
+    if [ -e "$d/.git" ]; then
+      echo "cwd $PWD has a git repository above it at $d --"
+      echo "these tests would read that repository's ventures.yaml instead of running as a consumer."
+      return 1
+    fi
+    case "$d" in
+      */*) d="${d%/*}" ;;
+      *)   d="" ;;
+    esac
+  done
+  [ -e "/.git" ] && { echo "a git repository at / would be read as this repo"; return 1; }
+  return 0
+}

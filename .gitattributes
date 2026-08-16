@@ -15,6 +15,15 @@
 # platforms. Freeze them exactly as hashed -- this OVERRIDES `* text=auto eol=lf`.
 docs/evidence/** -text
 
+# ADR-0055 moved evidence to initiatives/<lane>/evidence/, and this rule did not follow it.
+# Found at the growth Phase-02 close, 2026-08-14: THIRTEEN lanes have an evidence directory and
+# not one of them was frozen, so every lane bundle written since the move has been subject to
+# `* text=auto eol=lf`. The failure is asymmetric and therefore invisible where it is authored --
+# on Windows (core.autocrlf=true) a fresh clone checks a bundle out as CRLF and every sha256 in
+# its manifest mismatches, while the same bundle verifies clean on Linux CI. A tamper-evident
+# manifest that only holds on one OS is not tamper-evident.
+initiatives/*/evidence/** -text
+
 # Byte-exact hostile fixture for product-lint (Phase 00): the crlf-bom case tests
 # BOM + CR rejection -- git must NOT normalize its bytes or the fixture silently
 # stops testing what it claims. OVERRIDES `* text=auto eol=lf`.
@@ -58,3 +67,11 @@ tests/fixtures/engine/hostile/** -text
 # Applied in the same commit that creates the directory, per the rule above.
 tests/fixtures/leads/replies/** -text
 tests/fixtures/leads/replies-hostile/** -text
+
+# Cycle: ledger Phase 00. SEVENTH occurrence of the byte-level-fixture class, and this one was
+# caught by git warning on the very commit that created the directory -- it had already stored
+# `02-crlf-bom.csv` with 0 CRs against 3 in the working copy, so the CRLF-and-BOM case was
+# byte-identical to the plain one and the parser suite would have reported it HANDLED while
+# testing nothing. The export parsers are attacked at the byte level (CRLF, BOM, quoted commas),
+# so the whole directory is frozen as authored. OVERRIDES `* text=auto eol=lf`.
+tests/fixtures/ledger/** -text

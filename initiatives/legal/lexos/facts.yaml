@@ -1,7 +1,7 @@
 # LexOS — legal pack facts (Phase 03, staging copy)
 #
 # This is the STAGING copy in arc. The live copy belongs in the LexOS repo at `legal/facts.yaml`
-# (ADR-1005: facts, pages, pins and receipts are venture-local). It is staged here first because
+# (ADR-1205: facts, pages, pins and receipts are venture-local). It is staged here first because
 # writing into a separate real project is the owner's call, not mine.
 #
 # EVERY VALUE BELOW IS DERIVED FROM SOMETHING, NOT GUESSED:

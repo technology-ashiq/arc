@@ -1,7 +1,7 @@
 {
   "version": 1,
   "_comment": [
-    "Which template SET VERSIONS a human has approved, and at which exact bytes (ADR-1005, REQ-07).",
+    "Which template SET VERSIONS a human has approved, and at which exact bytes (ADR-1205, REQ-07).",
     "",
     "A template edit is its own decision. Without this file, editing a clause and committing it",
     "would put new wording in front of customers on the next publish, and the only approval in",
@@ -10,10 +10,11 @@
     "",
     "It lives OUTSIDE products/legal/data/ on purpose. Everything in data/ is inside the render",
     "input hash, so recording an approved hash there would change the hash it records -- a file",
-    "that can never agree with itself."
+    "that can never agree with itself.",
+    "RE-RECORDED 2026-08-15 after the ADR renumber (1000-1013 -> 1200-1213). The renumber rewrote ADR references inside data/*.json _comment blocks, and data/ is inside the render-input hash, so both set hashes moved and publish correctly refused with SET_EDITED_SINCE_APPROVAL. This is a MECHANICAL reference renumber with no prose change -- diffed to confirm no template file moved at all -- which is why it is re-recorded rather than sent round as a fresh prose decision."
   ],
   "sets": {
-    "v1": "fd34f1d74b3bba4c3a769bdf078839650f6289883eb8ad0a2a59f39bc7cf5e2e",
-    "v2": "0e0c4e4186bf698ad7441a954fdd01171ea82e66e87f3b7e23bab2ab6b160872"
+    "v1": "4f1e24314935d86d5a7bcc42315762111c7948aa155e350cac4e7531b207e701",
+    "v2": "97b7f63db61a8ab5d1b909b97e43b1e84a369581e2313639f390b0ec6a0613be"
   }
 }

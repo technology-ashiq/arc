@@ -1,7 +1,7 @@
 {
   "version": 1,
   "_comment": [
-    "Cross-page consistency (ADR-1013). Every other lint in this lane reads ONE page's rendered",
+    "Cross-page consistency (ADR-1213). Every other lint in this lane reads ONE page's rendered",
     "bytes, and three independent reader panels put a cross-page contradiction in their top four",
     "findings -- so the worst defects the pages had were in the one place nothing could look.",
     "",

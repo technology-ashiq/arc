@@ -1,0 +1,1 @@
+mined 13 candidate(s) from 1 enabled source(s); 0 gone; 0 unverifiable; own pages read 1; candidates excluded as own 0

@@ -346,13 +346,13 @@ switch (cmd) {
         // commitment as the terms page, with the NUMBER taken out. Every per-page lint stays
         // green -- the page is well-formed, every clause traces, nothing mandatory is missing,
         // and the scenario asking "what are the plans and what do they cost" is still answered.
-        // Only a cross-page check can see it, which is the whole argument for ADR-1013.
+        // Only a cross-page check can see it, which is the whole argument for ADR-1213.
         patchTemplate("pricing.tmpl.md",
           "**If we raise the price of a plan you are on, we tell you at least {{ facts.commitments.price_notice_days }} days before your next renewal, and you may cancel at the old price until then.** The new price applies from that renewal.",
           "If we change what a plan costs, we tell you before your next payment, and the change applies from the payment after that.");
         break;
       case "orphan-scenario":
-        // Rename a clause the scenario set names. This is the template edit ADR-1009 says must
+        // Rename a clause the scenario set names. This is the template edit ADR-1209 says must
         // fail: the page still renders, still traces, still carries a clause in that position --
         // and the question SCN.NOTICE.LANGUAGE asks no longer has anywhere to be answered.
         // The required-clause list is renamed WITH the template so the mandatory-clause check

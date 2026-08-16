@@ -35,10 +35,10 @@
   not approve the WORDING every venture shares. `approved-sets.json` records which set versions a
   human approved and at which bytes. A set absent from the record is NOT approved.
 - **Launch checklist from `provider-pages.json`.** 5 provider-required, 2 provider-conditional per
-  ADR-1001, counts asserted. All rows manual (probe automation cut #1 at kickoff). Four outcomes,
+  ADR-1201, counts asserted. All rows manual (probe automation cut #1 at kickoff). Four outcomes,
   `NOT-CHECKED` the default and a real answer.
 - **Where the operator is not the merchant, activation rows are NOT-APPLICABLE with the reason**
-  (ADR-1011) — rendering them green would tell an operator they had cleared a gate they were never
+  (ADR-1211) — rendering them green would tell an operator they had cleared a gate they were never
   standing at.
 
 ## Two-surface adversarial pass — ten holes, and two found the same two

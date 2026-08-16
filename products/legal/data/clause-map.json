@@ -1,5 +1,5 @@
 {
-  "_comment": "The enum-to-clause map (ADR-1002). One key per BRANCHING field. Trace-lint reads it in three directions: a clause emitted but declared by no template block is a FAIL; a clause mapped under some branch and emitted when a DIFFERENT branch was selected is a branch mismatch; and a template guard naming a branch this map does not list is map drift. Keys beginning `derived.` are computed in arc-legal.mjs, not authored -- a `when=` guard is a single field=value equality by design, so a clause that depends on a COMBINATION gets that combination computed for it rather than an expression language added to the templates.",
+  "_comment": "The enum-to-clause map (ADR-1202). One key per BRANCHING field. Trace-lint reads it in three directions: a clause emitted but declared by no template block is a FAIL; a clause mapped under some branch and emitted when a DIFFERENT branch was selected is a branch mismatch; and a template guard naming a branch this map does not list is map drift. Keys beginning `derived.` are computed in arc-legal.mjs, not authored -- a `when=` guard is a single field=value equality by design, so a clause that depends on a COMBINATION gets that combination computed for it rather than an expression language added to the templates.",
   "payment_model": {
     "gateway": [
       "TERMS.FEES.GATEWAY",

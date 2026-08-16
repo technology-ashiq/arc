@@ -1,5 +1,5 @@
 {
-  "_comment": "The page set (ADR-1001): the VERIFIED Razorpay activation superset. Five rows are provider-required in the default activation flow; two are provider-conditional (the additional-site / e-commerce tab) and are independently useful under the Consumer Protection (E-Commerce) Rules 2020 entity disclosures. `phase` records which build phase authors the template -- a page whose template does not exist yet is skipped by the renderer with a named reason, never silently.",
+  "_comment": "The page set (ADR-1201): the VERIFIED Razorpay activation superset. Five rows are provider-required in the default activation flow; two are provider-conditional (the additional-site / e-commerce tab) and are independently useful under the Consumer Protection (E-Commerce) Rules 2020 entity disclosures. `phase` records which build phase authors the template -- a page whose template does not exist yet is skipped by the renderer with a named reason, never silently.",
   "pages": [
     {
       "id": "terms",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bats
-# legal Phase 01 -- cross-page consistency (ADR-1013).
+# legal Phase 01 -- cross-page consistency (ADR-1213).
 #
 # The existing three lints each read ONE page. Three reader panels, blind to each other, put a
 # contradiction BETWEEN two pages in their top four findings -- pages that individually passed
@@ -76,7 +76,7 @@ teardown() { _arc_legal_teardown; }
 }
 
 @test "legal consistency: the lint group set is derived, never pinned to a literal" {
-  # ADR-1013 grew GROUPS from three to four. Anything that counted three is now wrong, and a
+  # ADR-1213 grew GROUPS from three to four. Anything that counted three is now wrong, and a
   # pinned literal here would go red for ADDING a fifth -- the arc-memory 2026-08-12 failure.
   run node "$ARC_ROOT/tests/legal-probe.mjs" groups
   [ "$status" -eq 0 ]

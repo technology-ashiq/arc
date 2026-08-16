@@ -1,5 +1,5 @@
 /**
- * A TOTAL, type-tagged canonicaliser (ADR-1004).
+ * A TOTAL, type-tagged canonicaliser (ADR-1204).
  *
  * The receipt attests to bytes, so the function that produces the preimage is the whole
  * chain's weakest point. arc has shipped this defect twice already:
@@ -133,7 +133,7 @@ export function bytesHash(text) {
 /**
  * Hash of a template SET: every file's path and content, order-independent.
  * A page's rendered bytes carry this, so one template edit moves every page -- which is the
- * point (ADR-1005: a template fix is not done until each venture has re-approved).
+ * point (ADR-1205: a template fix is not done until each venture has re-approved).
  */
 export function templateSetHash(files) {
   const rows = Object.keys(files)

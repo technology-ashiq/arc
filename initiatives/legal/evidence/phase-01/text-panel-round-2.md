@@ -19,9 +19,9 @@ Three fresh stances, none of which saw the others' findings, run over two render
 
 **68 findings. All three stances returned UNSOUND.**
 
-## The one that fires the kill-criteria path (ADR-1007)
+## The one that fires the kill-criteria path (ADR-1207)
 
-The regulator found a **statement of law that is wrong, in the DPDP clause**, which ADR-1007
+The regulator found a **statement of law that is wrong, in the DPDP clause**, which ADR-1207
 names explicitly as the trigger:
 
 > `privacy.mdx`, both ventures: "The DPDP Act **gives you** the option of receiving it in any
@@ -32,7 +32,7 @@ commences 13 May 2027. The same page, eight sections earlier, says *"Those provi
 commenced"* and *"we are not telling you that a legal duty applies to us today when it does not"*.
 
 **So the page denies and asserts the same duty, and the sentence that asserts it is the one the
-lane's own non-negotiable was written to prevent.** ADR-1006 is not merely drifted here; a single
+lane's own non-negotiable was written to prevent.** ADR-1206 is not merely drifted here; a single
 sentence escaped it. The regulator was explicit that the surrounding discipline is otherwise a
 model of the required disclosure — which is exactly why this survived four earlier reads: it sits
 inside the clause everyone had already checked and approved.
@@ -109,7 +109,7 @@ rewritten to match what was done to it.
 | Finding | How |
 |---|---|
 | DPDP present tense (kill-criteria) | Rewritten to name s.5(3), say it has not commenced, and state the offer is voluntary and ahead of the duty. Grepped the pattern across all seven templates: every other DPDP reference was already future-tense. |
-| Price-rise: three rules | One rule, one fact (`commitments.price_notice_days`), stated on both pages — and now enforced by the `consistency` lint (ADR-1013) rather than by care. |
+| Price-rise: three rules | One rule, one fact (`commitments.price_notice_days`), stated on both pages — and now enforced by the `consistency` lint (ADR-1213) rather than by care. |
 | Shipping grants a refund the refunds page refuses | `REFUND.DELIVERY_FAILURE` added, saying a delivery failure is not a change of mind and the window does not limit it. Shipping points at that clause instead of at a window that excludes it. |
 | Venture B told about card storage on a site taking no cards | `PRICING.WHAT_YOU_PAY_WITH` split three ways on `payment_model`. The `none` branch states the real route, that nothing auto-charges, and that a card will never be asked for. |
 | B's "1 hour, no human approval" delivery | New `derived.payment_is_automatic`; `DELIVERY.WHEN.OFFLINE` says access opens within one working day of the money landing, and why we cannot see it sooner. |
@@ -152,7 +152,7 @@ The shape of the fix is already visible and it is not "reword eight sentences":
   blind spot. That is a Phase 02 lint, and this panel is the evidence for it.
 - Findings 3, 4 and 5 are the **`payment_model: none` branch** carrying wording written for a
   gateway. The branch renders, traces and passes completeness — it is the prose that is wrong for
-  the branch, which is the failure mode ADR-1009's answerability class was written for and which
+  the branch, which is the failure mode ADR-1209's answerability class was written for and which
   36 scenarios did not catch, because a scenario asks whether a question has AN answer, not
   whether the answer is TRUE for this venture.
 - Finding 6 is a one-line renderer fix (pluralise at render time).

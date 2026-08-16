@@ -1,0 +1,77 @@
+{
+  "cluster_id": "c-001",
+  "pillar": {
+    "keyword": "ai agents",
+    "intent": "informational",
+    "evidence_url": "https://news.ycombinator.com/item?id=43740549",
+    "gap_note": "attested in 11 independent HN stories; evidence link is one of them; found via query \"agent build system\"",
+    "source_id": "hn-algolia"
+  },
+  "spokes": [
+    {
+      "keyword": "agents build",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=46858945",
+      "gap_note": "attested in 4 independent HN stories; evidence link is one of them; found via query \"agent build system\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "ai coding",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=47690236",
+      "gap_note": "attested in 4 independent HN stories; evidence link is one of them; found via query \"AI coding agent workflow\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "coding workflows",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=46913544",
+      "gap_note": "attested in 3 independent HN stories; evidence link is one of them; found via query \"AI coding agent workflow\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "ai voice",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=46518527",
+      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"self-hosted AI agent alternative\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "driven development",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=504453",
+      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"receipts driven development\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "multi-agent ai coding workflows",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=47690236",
+      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"AI coding agent workflow\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "yc s23",
+      "intent": "informational",
+      "evidence_url": "https://news.ycombinator.com/item?id=36847569",
+      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"append only event log\"",
+      "source_id": "hn-algolia"
+    }
+  ],
+  "bofu": [
+    {
+      "keyword": "open-source alternative",
+      "intent": "transactional",
+      "evidence_url": "https://news.ycombinator.com/item?id=47378675",
+      "gap_note": "attested in 7 independent HN stories; evidence link is one of them; found via query \"open source alternative AI agent\"",
+      "source_id": "hn-algolia"
+    },
+    {
+      "keyword": "open-source alternative to claude",
+      "intent": "transactional",
+      "evidence_url": "https://news.ycombinator.com/item?id=48761096",
+      "gap_note": "attested in 2 independent HN stories; evidence link is one of them; found via query \"open source alternative AI agent\"",
+      "source_id": "hn-algolia"
+    }
+  ]
+}
