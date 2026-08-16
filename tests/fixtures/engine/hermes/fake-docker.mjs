@@ -275,6 +275,83 @@ switch (kase) {
     break;
   }
 
+  // THE PLANTED-KEY CASES. REQ-03 names FOUR artifact classes -- draft output, scrubbed
+  // transcript, run.completed payload, and the cost/usage sidecar -- and requires a fixture
+  // showing zero leaks across all four WITH a negative control. The existing coverage in
+  // engine-driver-contract.bats proves the scrub for ARC_DRIVER_FAKE, which short-circuits
+  // common.mjs before produce() ever runs, and only for stdout. So it is a statement about the
+  // fake path and about one class. These plant the key on the real hermes path instead.
+  //
+  // The key shape is AWS `AKIA` + 16 uppercase alphanumerics, which redact.mjs matches as
+  // `aws-access-key-id`. It is FAKE and matches nothing that exists.
+  // THE NEGATIVE CONTROL FOR THE SCRUB, and it has to satisfy a real process schema or the run
+  // fails the contract instead of passing clean -- which would make "no secret was reported" true
+  // for the wrong reason. Shaped for commit-msg-draft: {commits:[{sha, subject}]}.
+  case "commit-clean":
+    boot();
+    line('{"commits":[{"sha":"a1b2c3d","subject":"fix: a clean answer with no planted key"}]}');
+    break;
+
+  case "secret-stdout":
+    boot();
+    line(`{"ok":true,"runtime":"hermes","note":"AKIA${"QQ7ZBQ4TESTONLY1".slice(0, 16)}"}`);
+    break;
+
+  case "secret-stderr":
+    boot();
+    // On the transcript, not the answer. A scrub that only reads stdout passes this while the
+    // key sits in the trail ADR-0215 requires to be stored per dispatch.
+    process.stderr.write(`hermes: connecting with AKIA${"QQ7ZBQ4TESTONLY1".slice(0, 16)}\n`);
+    line(ANSWER);
+    break;
+
+  // A SCHEMA-VALID ANSWER **AND** A USAGE REPORT, so a test can assert the seat end to end on a
+  // LANDED RECEIPT. Until this existed, nothing in the repo asserted `model_source: "runtime"` or
+  // the `runtime` payload field: an adversarial pass showed that deleting the entire ADR-0221 seam
+  // from arc-run left every suite green, because the reader tests only ever read the driver's own
+  // sidecar and never ran arc-run at all.
+  case "commit-clean-usage": {
+    boot();
+    line('{"commits":[{"sha":"a1b2c3d","subject":"fix: a clean answer with a usage report"}]}');
+    const argv = process.argv.slice(2);
+    const flagAt = argv.indexOf("--usage-file");
+    const volAt = argv.indexOf("-v");
+    if (flagAt < 0 || volAt < 0) { process.stderr.write("fake-docker: no --usage-file or -v to write into\n"); process.exit(65); }
+    const spec = argv[volAt + 1];
+    const cut = spec.lastIndexOf(":");
+    const hostDir = spec.slice(0, cut);
+    const mountPoint = spec.slice(cut + 1);
+    writeFileSync(
+      join(hostDir, argv[flagAt + 1].slice(mountPoint.length).replace(/^\/+/, "")),
+      `${JSON.stringify({ prompt_tokens: 1234, completion_tokens: 567, model: "llama3.1:8b", estimated_cost_usd: 0.0123 })}\n`,
+      "utf8",
+    );
+    break;
+  }
+
+  case "secret-usage": {
+    // Inside the USAGE REPORT, which becomes the cost sidecar. The narrowest of the four and the
+    // one no existing test reaches at all.
+    boot();
+    line(ANSWER);
+    const argv = process.argv.slice(2);
+    const flagAt = argv.indexOf("--usage-file");
+    const volAt = argv.indexOf("-v");
+    if (flagAt < 0 || volAt < 0) { process.stderr.write("fake-docker: no --usage-file or -v to plant into\n"); process.exit(65); }
+    const spec = argv[volAt + 1];
+    const cut = spec.lastIndexOf(":");
+    const hostDir = spec.slice(0, cut);
+    const mountPoint = spec.slice(cut + 1);
+    const hostPath = join(hostDir, argv[flagAt + 1].slice(mountPoint.length).replace(/^\/+/, ""));
+    writeFileSync(hostPath, `${JSON.stringify({
+      prompt_tokens: 1234,
+      completion_tokens: 567,
+      model: "llama3.1:8b",
+      note: `AKIA${"QQ7ZBQ4TESTONLY1".slice(0, 16)}`,
+    })}\n`, "utf8");
+    break;
+  }
+
   default:
     process.stderr.write(`fake-docker: unknown ARC_HERMES_FAKE_CASE [${kase || "unset"}]\n`);
     process.exit(64);

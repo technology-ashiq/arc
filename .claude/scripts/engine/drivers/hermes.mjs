@@ -484,6 +484,23 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     throw new Error(`the runtime exited ${res.status}: ${why}`);
   }
 
+  // THE RUNTIME'S TRANSCRIPT IS FORWARDED, ON EVERY RUN, AND UNTIL NOW IT WAS NOT.
+  //
+  // `res.stderr` was read in exactly one place -- to pull a reason line when the container exited
+  // non-zero -- and on a SUCCESSFUL run it was discarded entirely. So `arc-run`'s
+  // `scrub("the hermes driver's transcript", r.stderr)` only ever saw this driver's own WARN
+  // lines, never the runtime's. A planted key in the container's stderr passed straight through:
+  // measured, with a fixture, and the scrub did not fire.
+  //
+  // That is REQ-03's transcript class unprotected, and ADR-0215 says why it matters in one line:
+  // the trail is reviewed alongside the draft **because injection shows in trails**. The runs
+  // where that matters most are precisely the successful ones -- an injected runtime produces a
+  // clean-looking answer and a dirty trail.
+  //
+  // Forwarded rather than parsed: it stays diagnostics (common.mjs: "stderr -- diagnostics, never
+  // parsed"), it reaches the scrub, and Phase 06 stores it per dispatch from here.
+  if (res.stderr) process.stderr.write(String(res.stderr));
+
   const output = extractAnswer(res.stdout ?? "");
 
   // COST IS ABSENT UNLESS IT WAS MEASURED, and the model is absent unless the runtime said so.
