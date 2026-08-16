@@ -87,8 +87,31 @@ setup() { export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/spine"; mkdir -p "$ARC_SPINE_
     > "$d/tests/fixtures/engine/evals/commit-msg-draft/basic.json"
   ARC_DRIVER_FAKE="$(FAKE badschema)" run node "$(RUN)" --process commit-msg-draft --driver claude-code --root "$d"
   [ "$status" -eq 1 ]
+  # KEEP arc-run's OWN OUTPUT. `run` overwrites $output on the next call, and this test used to
+  # throw it away immediately -- so when the receipt did not land, the failure message was "the
+  # grep found nothing" and nothing else. This test is a RECORDED FLAKE (PROGRESS.md, 2026-08-13:
+  # PASS and FAIL observed on byte-identical trees, PASS again on rerun), and the tracker's
+  # instruction is explicit: do not re-run it green, INSTRUMENT it. Everything below exists so the
+  # next red carries its own diagnosis instead of costing another observation.
+  local runout="$output"
+
   run grep -rh "engine-escalation" "$ARC_SPINE_ROOT/events"
-  [[ "$output" == *'"fault_hint":"process"'* ]]
+  if [[ "$output" != *'"fault_hint":"process"'* ]]; then
+    echo "=== FLAKE DIAGNOSIS (engine-driver-contract REQ-04) ==="
+    echo "--- arc-run said: ---"
+    echo "$runout"
+    echo "--- did the emitter report a problem? ---"
+    echo "$runout" | grep -iE "could not emit|not recorded|timed out|EMIT_TIMEOUT|lock" || echo "(no emit diagnostic in arc-run output)"
+    echo "--- events dir: ---"
+    ls -la "$ARC_SPINE_ROOT/events" 2>&1 | tail -5
+    echo "--- QUARANTINE (a receipt that was written and REJECTED looks identical to one never written): ---"
+    ls -la "$ARC_SPINE_ROOT/events/_quarantine" 2>&1 | tail -5
+    grep -rh "engine-escalation" "$ARC_SPINE_ROOT/events/_quarantine" 2>/dev/null | tail -2 || echo "(nothing quarantined)"
+    echo "--- every kind that DID land, so 'no receipt' and 'the wrong receipt' are distinguishable: ---"
+    grep -roh '"kind":"[a-z._]*"' "$ARC_SPINE_ROOT/events" 2>/dev/null | sort | uniq -c || echo "(no events at all)"
+    echo "======================================================"
+    false
+  fi
   [[ "$output" == *"no driver is being blamed"* ]]
 }
 

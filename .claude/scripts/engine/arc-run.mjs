@@ -1043,6 +1043,13 @@ if (a.verdict === "schema") {
   }
   // Rung 2: a PROPOSAL receipt, and then stop. No tier is changed here or anywhere.
   const faultHint = selfCheck.ok ? "driver" : "process";
+  // THE SAME SEAT THE RECEIPT WILL CARRY, computed by the same function. This is the twin that was
+  // missed once and then missed AGAIN: `seatFor()` was written specifically to close it, with a
+  // comment saying so, and was still called from `emitRun` alone -- so the helper existed, the
+  // comment claimed the fix, and this receipt went on disagreeing with the one three lines below.
+  // A comment asserting what the code does not do, inside the fix for a comment asserting what the
+  // code does not do.
+  const proposalSeat = seatFor(retry.cost);
   const proposal = {
     what: `escalate \`${processName}\` to a stronger tier`,
     gate: "engine-escalation",
@@ -1055,8 +1062,9 @@ if (a.verdict === "schema") {
     // evidence. Acting on it would mean a reviewed router diff justified by a model the router
     // never selected -- a trial laundered into a production tier change through the very ladder
     // ADR-0204 built to stop exactly that.
-    model: effectiveModel ?? "unpinned",
-    model_source: modelSource,
+    model: proposalSeat.seat ?? "unpinned",
+    model_source: proposalSeat.seatSource,
+    ...(proposalSeat.runtimeId ? { runtime: proposalSeat.runtimeId } : {}),
     fault_hint: faultHint,
     why: faultHint === "process"
       ? `the process is not self-consistent: ${selfCheck.why} — no driver is being blamed`
