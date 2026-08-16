@@ -91,3 +91,31 @@ with an adversarial pass behind it. What the pass did not do was run the *next* 
 through *this* phase's readers. The cheap generalisation: when a phase's own documentation names a
 future scenario, that scenario is a fixture, not a comment. `resolveSlugUrl` described the cutover
 in prose and was never given one.
+
+## The two-surface adversarial pass, 2026-08-16
+
+Two fresh attackers, neither having seen the implementation reasoning, one on decision logic and
+one on the encoding/OS boundary. **23 real findings.** Their overlap was two items, both of which
+each had already observed fixed mid-run — which is the argument for two surfaces stated as a
+measurement rather than a principle: a single attacker's blind spot is structural.
+
+The pass changed this ADR's own claims. Three findings landed *in the fix this ADR describes*:
+
+- **`contentIdem` collides at the UTF-8 encoding boundary.** The preimage is joined as a string and
+  hashed as bytes, and that map is not injective — every lone surrogate encodes to `EF BF BD`, the
+  same bytes as U+FFFD. Two different titles, two different event shas, **one idem**, second
+  dropped as `DUP_IDEM`. That is the C2 loss class reproduced inside the rule written to prevent
+  it, in a file whose header claims the preimage is total. The `|` defence works on the string and
+  cannot see a collision that happens one layer down at the encode. Refused now in both
+  `contentIdem` and `assertContent`.
+- **`content_sha` was two different functions**, exactly as `content-sha.mjs` warned it must never
+  be: the draft path hashed a BOM-stripped, decode-round-tripped string and the publish path hashed
+  the file. The CRLF half of this was found and fixed the same day in `arc-site`; the BOM half was
+  left open in the sibling reader. **Twin-fix recurrence number five in this lane.**
+- **A mutant that ignores the chain entirely passed the rewritten test.** Both fixtures carried one
+  slug, so array order and chain order were indistinguishable, and `heads = [last]` — the exact
+  pre-fix defect — stayed green. The fixture now lists the head *before* the receipt it supersedes.
+
+The generalisation worth keeping is narrower than "attack the tests": **a fixture with one instance
+of anything cannot distinguish order from selection.** Both the sha-keyed chain and the array-order
+mutant survived for the same structural reason, one round apart.

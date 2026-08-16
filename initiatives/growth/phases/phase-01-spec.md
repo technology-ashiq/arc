@@ -32,6 +32,19 @@
 > `supersedes` in a payload that cannot carry it, so it could not observe either failure. The chain
 > is now keyed on the event ULID and `--receipts` takes event projections.
 >
+> **The mandatory two-surface adversarial pass ran 2026-08-16 and returned 23 real findings.**
+> Two fresh attackers, one on decision logic and one on the encoding/OS boundary; their overlap was
+> two items. One finding is CRITICAL and sits in a company organ: `contentIdem` collides at the
+> UTF-8 encoding boundary, because a lone surrogate encodes to the same bytes as U+FFFD — so two
+> different titles produce **one idem** and the second is dropped as `DUP_IDEM`. That is the C2
+> loss class reproduced inside the rule written to prevent it. Also closed: `content_sha` was two
+> different functions across the draft and publish paths (the BOM twin of the CRLF fix made the
+> same day — **fifth twin-fix recurrence in this lane**), `repinUrl` invented a path out of a query
+> string or a password, `checkSitemapCoverage` was blind to four ordinary sitemap encodings, and
+> `planCutover` reported forks, cycles and idem collisions as work. A mutant ignoring the supersede
+> chain entirely passed the rewritten test until its fixture gained a second slug. Full accounting
+> in ADR-1119.
+>
 > **Clock status, stated because it is the reason this phase exists.** The property existing does
 > **not** start evolve's four-week clock on its own. The site serves `noindex, nofollow` plus
 > `Disallow: /`, so Google accrues zero impressions and Search Console will hold zero Performance
