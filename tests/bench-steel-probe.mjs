@@ -28,12 +28,12 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { EXIT, findReceipt, knownDrivers, materializeRepoState, parseArgs, repoStatus, OperatorError } from "../.claude/scripts/engine/arc-bench.mjs";
+import { EXIT, allProcessNames, discoverClasses, driverTakesModel, findReceipt, isJobStub, jobStubNames, knownDrivers, materializeRepoState, parseArgs, repoStatus, runBench, runnableProcessNames, OperatorError } from "../.claude/scripts/engine/arc-bench.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const BENCH = join(ROOT, ".claude/scripts/engine/arc-bench.mjs");
@@ -51,6 +51,13 @@ const check = (name, ok, detail = "") => {
 };
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-steel-"));
+// CLEANED ON EVERY EXIT PATH, not only the happy one. The single `rmSync` at the end of the file
+// is unreachable from a throw, and the sections below now call code that throws BY DESIGN
+// (`driverTakesModel` refuses to answer a question it does not understand). A probe that leaks
+// its tree exactly when something is already wrong fills the runner disk at the worst moment --
+// and section 1's own leak check watches a different directory, so this leak was structurally
+// invisible to the suite that exists to catch leaks.
+process.on("exit", () => { try { rmSync(scratch, { recursive: true, force: true }); } catch { /* the disk is not the finding */ } });
 const spineFor = (name) => {
   const p = join(scratch, name, "spine");
   mkdirSync(p, { recursive: true });
@@ -362,6 +369,195 @@ function eventsOn(spine) {
   check("--dry-run exits 0", r.status === EXIT.OK, `status ${r.status}`);
   check("--dry-run says it invoked nothing", /nothing was invoked and no receipt was emitted/.test(r.stdout));
   check("--dry-run wrote NO event at all", eventsOn(spine).length === 0);
+}
+
+// ---- 7. THE CAPABILITY PROBE, AND THE POSITIVE CONTROL THAT WAS NEVER HERE --------------------
+//
+// SECTION 1 ABOVE HAS FOUR CHECKS ON THE MODEL SEAM AND EVERY ONE OF THEM DRIVES `mock`, whose
+// correct answer is "nothing applied". So the suite could tell that a non-capable driver applies
+// no model, and could not tell that a CAPABLE one applies anything at all. Nothing anywhere
+// asserted the true half.
+//
+// That gap had a two-day cost. `driverTakesModel` picked the alphabetically first process in
+// `processes/` to probe with; the scheduler lane added `brief-materialize`, a job stub, which
+// sorts first; arc-run refuses stubs before it ever reaches its model check; and the probe read
+// any non-zero exit as "this driver cannot carry a model". Bench then dropped the model on EVERY
+// run and reported `applied NONE (source: none)` -- while `PROGRESS.md` said "bench is wired to
+// both flags" and the whole suite stayed green, because every assertion it owned expected NONE.
+//
+// This is the same shape as the tripwire recorded in section 1, one cycle later: an assertion
+// that is TRUE about a mechanism nobody changed, defending a conclusion that has quietly become
+// false. The fix that generalises is not another `mock` check. It is a control that goes RED when
+// the capability answer flips, whatever flipped it.
+{
+  // (a) THE POSITIVE CONTROL. This is the assertion that was missing, and it is the one that
+  // would have failed the day the stub landed.
+  check("a model-capable driver is REPORTED as capable", driverTakesModel(ROOT, "claude-code", "haiku") === true);
+
+  // (b) The negative control, which only means something now that (a) exists beside it. Alone it
+  // passed for two days while the answer was "not capable" for every driver on earth.
+  check("and a driver that cannot carry a model is reported as not capable", driverTakesModel(ROOT, "mock", "haiku") === false);
+
+  // (c) THE REAL MODEL ID IS WHAT GETS PROBED. The first fix sent a fixed `capability-probe`
+  // string, so arc-run validated the placeholder's grammar and bench then used the OPERATOR's id
+  // for every invocation -- "validate one read, compare another", and this one had a price: an
+  // id arc-run would reject dies on every attempt AFTER admission control reserved the group.
+  let threwBadId = null;
+  try { driverTakesModel(ROOT, "claude-code", "claude sonnet 4"); } catch (e) { threwBadId = e; }
+  check("a model id arc-run would REJECT is caught by the probe, before any group is reserved",
+    threwBadId instanceof OperatorError, threwBadId === null ? "the probe accepted it" : `threw ${threwBadId?.constructor?.name}`);
+
+  // (d) AN UNRECOGNISED ANSWER IS LOUD. The old probe returned `false` for every failure it did
+  // not understand -- and `false` is not "I do not know", it is a confident claim about the
+  // driver, in the direction that silently weakens the run. An unknown driver is a refusal that
+  // has nothing to do with model capability, so it must reach the operator rather than be filed
+  // as one.
+  let threw = null;
+  try { driverTakesModel(ROOT, "no-such-driver-anywhere", "haiku"); } catch (e) { threw = e; }
+  check("an unrecognised probe answer THROWS rather than answering the question it was not asked",
+    threw instanceof OperatorError, threw === null ? "it returned instead of throwing" : `threw ${threw?.constructor?.name}`);
+  check("and the thrown message quotes what arc-run actually said, so the cause is readable",
+    threw !== null && /no usable answer/.test(threw.message) && /arc-run said:/.test(threw.message),
+    String(threw?.message).slice(0, 200));
+
+  // (e) A TREE WITH NOTHING RUNNABLE IN IT also throws. The old code returned `false` here too.
+  const stubOnly = join(scratch, "stub-only-tree");
+  mkdirSync(join(stubOnly, "processes"), { recursive: true });
+  writeFileSync(join(stubOnly, "processes", "only-a-stub.process.yaml"), "name: only-a-stub\nversion: 1.0.0\njob_stub: true\n", "utf8");
+  check("a tree whose processes are ALL job stubs has nothing to probe with, and says so",
+    runnableProcessNames(stubOnly).length === 0 && jobStubNames(stubOnly).length === 1);
+  let threwStub = null;
+  try { driverTakesModel(stubOnly, "claude-code", "haiku"); } catch (e) { threwStub = e; }
+  check("and probing it throws rather than reporting the driver not capable",
+    threwStub instanceof OperatorError && /is a scheduled-job stub/.test(threwStub.message),
+    String(threwStub?.message).slice(0, 200));
+
+  // (f) AN EMPTY DIRECTORY IS A DIFFERENT FACT FROM A DIRECTORY OF STUBS, and the message may not
+  // merge them: pointing the reader at a stub theory when there are no files sends them looking
+  // for something that is not there.
+  const emptyTree = join(scratch, "empty-tree");
+  mkdirSync(join(emptyTree, "processes"), { recursive: true });
+  let threwEmpty = null;
+  try { driverTakesModel(emptyTree, "claude-code", "haiku"); } catch (e) { threwEmpty = e; }
+  check("an EMPTY processes directory says so, and is not blamed on stubs",
+    threwEmpty instanceof OperatorError && /no process files at all/.test(threwEmpty.message),
+    String(threwEmpty?.message).slice(0, 200));
+
+  // (g) Keyed on PRESENCE, so the frozen YAML subset parsing `yes` / `True` / `"true"` as STRINGS
+  // and `1` as a number cannot walk past. Only `false` reads as runnable HERE -- see isJobStub's
+  // comment for why that spelling means something different to arc-compile and process-lint.
+  const spellings = join(scratch, "stub-spellings");
+  mkdirSync(join(spellings, "processes"), { recursive: true });
+  for (const [file, value] of [["yes-stub", "yes"], ["true-stub", "True"], ["quoted-stub", '"true"'], ["one-stub", "1"], ["zero-stub", "0"], ["not-stub", "false"]]) {
+    writeFileSync(join(spellings, "processes", `${file}.process.yaml`), `name: ${file}\nversion: 1.0.0\njob_stub: ${value}\n`, "utf8");
+  }
+  check("every truthy spelling of job_stub is a stub, and only false is runnable",
+    runnableProcessNames(spellings).join(",") === "not-stub",
+    `runnable: ${runnableProcessNames(spellings).join(",")}`);
+  check("and the spelling fixture actually posed all six cases, so the check is not empty",
+    allProcessNames(spellings).length === 6, `posed ${allProcessNames(spellings).length}`);
+
+  // (h) A RUN THAT BENCHED NOTHING IS NOT A CLEAN RUN. `partial` was set only inside the fixture
+  // loop, so a tree with no benchable class never reached any of its arms: zero rows, exit 0,
+  // `outcome: ok` on the receipt -- a run certifying that nothing is wrong having measured
+  // nothing. Latent while discovery returned every stem in the tree; live the moment it started
+  // filtering, because one `job_stub:` line added to `commit-msg-draft` by another lane empties
+  // this list. Posed against `runBench` directly: the tree is synthetic, so the fixture loop is
+  // never entered and no driver is invoked.
+  const emptyRun = join(scratch, "no-benchable-class");
+  mkdirSync(join(emptyRun, "processes"), { recursive: true });
+  writeFileSync(join(emptyRun, "processes", "only-a-stub.process.yaml"), "name: only-a-stub\nversion: 1.0.0\njob_stub: true\n", "utf8");
+  mkdirSync(join(emptyRun, "engine"), { recursive: true });
+  cpSync(join(ROOT, "engine/router.yaml"), join(emptyRun, "engine/router.yaml"));
+  mkdirSync(join(emptyRun, "initiatives/bench"), { recursive: true });
+  cpSync(join(ROOT, "initiatives/bench/ceilings.json"), join(emptyRun, "initiatives/bench/ceilings.json"));
+  cpSync(join(ROOT, ".claude/scripts/engine"), join(emptyRun, ".claude/scripts/engine"), { recursive: true });
+  const nothing = runBench(emptyRun, { driver: "mock", budget: "inr=10" });
+  check("a run with no benchable task class does NOT report outcome ok",
+    nothing.outcome === "partial", `outcome ${nothing.outcome}`);
+  check("and it SAYS what happened rather than printing an empty report",
+    /no benchable task class exists/.test(String(nothing.no_class_reason)), String(nothing.no_class_reason));
+  check("and the stub it skipped is named in the report, not silently dropped",
+    nothing.job_stubs_skipped.join(",") === "only-a-stub" && nothing.scorecard.classes.length === 0,
+    JSON.stringify(nothing.job_stubs_skipped));
+}
+
+// ---- 8. BENCH AND ARC-RUN AGREE ON WHAT A JOB STUB IS -----------------------------------------
+//
+// `isJobStub` is a SECOND COPY of arc-run's rule, and this repo has been burned by second copies
+// that drift. The copy is not trusted -- it is pinned: for every process in the tree, bench's
+// verdict is compared against arc-run's actual behaviour when pointed at that process. A
+// divergence is a red suite here, not a wrong number in a scorecard six months from now.
+{
+  const askArcRun = (root, name) => {
+    const res = spawnSync(process.execPath, [
+      ARC_RUN, "--process", name, "--driver", "mock", "--trial-model", "agreement-probe", "--dry-run", "--root", root,
+    ], { encoding: "utf8", cwd: ROOT, timeout: 60000, killSignal: "SIGKILL" });
+    // arc-run refuses a stub at its own guard, by name, before driver selection.
+    return /is a scheduled-job stub/.test(`${res.stdout ?? ""}${res.stderr ?? ""}`);
+  };
+
+  // (a) THE REAL TREE. Whatever it happens to hold on the day -- bench does not own `processes/`
+  // and must not assert what is in it.
+  const disagreed = [];
+  let compared = 0;
+  for (const name of allProcessNames(ROOT)) {
+    compared += 1;
+    const mine = isJobStub(ROOT, name);
+    const theirs = askArcRun(ROOT, name);
+    if (mine !== theirs) disagreed.push(`${name}: bench=${mine} arc-run=${theirs}`);
+  }
+  // A RAN-ASSERTION, because `disagreed.length === 0` is also satisfied by zero iterations. If
+  // the directory is ever renamed or the extension changes, this section would otherwise pass
+  // green having compared nothing at all -- the shape .claude/rules/testing.md calls the
+  // vacuous pass.
+  check("the agreement loop actually compared the tree, rather than iterating nothing",
+    compared >= 3, `it compared ${compared} process(es)`);
+  check("bench's job-stub verdict matches arc-run's for EVERY process in the tree",
+    disagreed.length === 0, disagreed.join(" | "));
+
+  // (b) THE SPELLINGS ARC-RUN IS NEVER ASKED ABOUT ON THE REAL TREE. It carries exactly two
+  // shapes -- `job_stub: true` and no key at all -- so agreeing on it proves agreement for two
+  // of the nine spellings the presence-keying exists for. These are POSED, in a tree this probe
+  // builds, so the pin does not depend on another lane's files carrying interesting values.
+  const agree = join(scratch, "agreement-spellings");
+  mkdirSync(join(agree, "processes"), { recursive: true });
+  const posed = [["yes-stub", "yes"], ["true-stub", "True"], ["quoted-stub", '"true"'], ["one-stub", "1"], ["zero-stub", "0"], ["plain-stub", "true"], ["not-stub", "false"]];
+  for (const [file, value] of posed) {
+    writeFileSync(join(agree, "processes", `${file}.process.yaml`),
+      `name: ${file}\nversion: 1.0.0\nintent: "posed spelling"\npermissions: declared\ninputs: []\njob_stub: ${value}\n`, "utf8");
+  }
+  const spellingDisagreed = [];
+  for (const [file] of posed) {
+    const mine = isJobStub(agree, file);
+    const theirs = askArcRun(agree, file);
+    if (mine !== theirs) spellingDisagreed.push(`${file}: bench=${mine} arc-run=${theirs}`);
+  }
+  check("and it matches on every truthy spelling too, not only the two the tree happens to carry",
+    spellingDisagreed.length === 0 && posed.length === 7, spellingDisagreed.join(" | "));
+
+  // (c) NO STUB IS BENCHED -- stated WITHOUT requiring that any stub exist. The stubs belong to
+  // the scheduler lane; asserting their presence would turn a rename or a widened policy-subject
+  // set in THAT lane into a red suite in this one. `processes/` is a company organ, and the rule
+  // is to name the line that must hold, never the group that must be there.
+  const benched = discoverClasses(ROOT).map((c) => c.taskClass);
+  const stubs = jobStubNames(ROOT);
+  check("no job stub is offered as a benchable task class",
+    stubs.every((s) => !benched.includes(s)) && benched.length > 0,
+    `stubs ${stubs.join(",") || "(none)"} vs benched ${benched.join(",")}`);
+  check("and the same holds on a POSED tree, so the rule is proven even if the real tree has no stub",
+    discoverClasses(agree).map((c) => c.taskClass).join(",") === "not-stub",
+    discoverClasses(agree).map((c) => c.taskClass).join(","));
+
+  // (d) The report NAMES what it skipped. Only meaningful while the tree HAS a stub, so it is
+  // guarded rather than silently vacuous -- and the guard is reported either way.
+  const r = bench(["--driver", "mock", "--budget", "inr=10", "--dry-run"], { ARC_SPINE_ROOT: spineFor("stub-report") });
+  // Escaped: a stem is not grammar-checked anywhere, so a future stub named with a `.` or a `+`
+  // would over-match or throw at RegExp construction.
+  const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  check(stubs.length ? "the report NAMES the stubs it did not bench" : "there is no stub in the tree today, so there is nothing for the report to name",
+    stubs.length === 0 || stubs.every((s) => new RegExp(`not benched[^\\n]*${esc(s)}`).test(r.stdout)),
+    r.stdout.split("\n").slice(-3).join(" / "));
 }
 
 rmSync(scratch, { recursive: true, force: true });

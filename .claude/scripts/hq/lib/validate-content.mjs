@@ -69,12 +69,91 @@ const isPlainObject = (v) =>
 
 // Control characters are refused by CODE POINT, never normalized — normalizing is how a validator
 // quietly becomes a suggestion. CR is in this range, which is what makes the CRLF fixture pass.
-const hasControlChar = (s) => {
-  for (const ch of s) {
-    const c = ch.codePointAt(0);
-    if (c < 0x20 || c === 0x7f) return true;
+// Invisible and display-affecting code points (ADR-1120).
+//
+// THE FIRST VERSION OF THIS WAS A SAMPLE PRESENTED AS A CLASS. It listed six ranges by hand, and
+// an adversarial pass found 33 further code points that are equally invisible and were all
+// accepted — including U+2060 WORD JOINER, which is the character Unicode introduced *so that*
+// U+FEFF could stop being used for this. Refusing the deprecated spelling while accepting the
+// current one is the split inverted. Worse, the tag block U+E0000–E007F encodes A–Z invisibly, so
+// a whole hidden string could ride inside a headline.
+//
+// So the rule is now Unicode's own class — Default_Ignorable_Code_Point, the set defined as
+// "should render as nothing" — plus the C0/C1 controls, the line/paragraph separators, and the
+// interlinear annotation characters that Unicode says must not appear in plain-text interchange.
+// A named class is auditable; a hand-picked list is a list of the ones somebody thought of.
+const DEFAULT_IGNORABLE = [
+  [0x00ad, 0x00ad], [0x034f, 0x034f], [0x061c, 0x061c], [0x115f, 0x1160],
+  [0x17b4, 0x17b5], [0x180b, 0x180f], [0x200b, 0x200f], [0x202a, 0x202e],
+  [0x2060, 0x206f], [0x3164, 0x3164], [0xfe00, 0xfe0f], [0xfeff, 0xfeff],
+  [0xffa0, 0xffa0], [0xfff0, 0xfff8], [0x1bca0, 0x1bca3], [0x1d173, 0x1d17a],
+  // Egyptian Hieroglyph Format Controls. Not in every Unicode version's Default_Ignorable table,
+  // which is exactly why it survived the first sweep of this list — a class is only as good as the
+  // version you copied it from, so format-control blocks are named explicitly rather than assumed
+  // to be covered by the property.
+  [0x13430, 0x1343f],
+  [0xe0000, 0xe0fff],
+];
+
+// Carved back OUT of that class, because refusing these would reject CORRECT titles — which is a
+// worse error than the spoof it would prevent. Each is allowed for a concrete reason:
+//   U+200C ZWNJ / U+200D ZWJ  — required orthography (Persian, Hindi) and emoji composition. Both
+//                               are additionally POSITION-CHECKED below; a flat allow was how the
+//                               first version licensed them in places they cannot join anything.
+//   U+200E LRM / U+200F RLM   — bidi MARKS, not overrides: they nudge mixed-direction text toward
+//                               correct display rather than reversing it.
+//   U+FE00–U+FE0F             — variation selectors. U+FE0F is what makes an emoji render as an
+//                               emoji rather than as monochrome text; banning it breaks ordinary
+//                               titles containing ❤️.
+const ALLOWED_IGNORABLE = new Set([0x200c, 0x200d, 0x200e, 0x200f,
+  0xfe00, 0xfe01, 0xfe02, 0xfe03, 0xfe04, 0xfe05, 0xfe06, 0xfe07,
+  0xfe08, 0xfe09, 0xfe0a, 0xfe0b, 0xfe0c, 0xfe0d, 0xfe0e, 0xfe0f]);
+
+const inRanges = (c, ranges) => ranges.some(([lo, hi]) => c >= lo && c <= hi);
+const U = (c) => `U+${c.toString(16).toUpperCase().padStart(4, "0")}`;
+
+/**
+ * The first offending code point in `s`, described, or null.
+ *
+ * Returns a DESCRIPTION rather than a boolean because the offender is by definition invisible: an
+ * error saying only "an invisible character" is unactionable against something you cannot see in
+ * your own editor.
+ */
+const badCodePoint = (s) => {
+  const cps = [...s].map((ch) => ch.codePointAt(0));
+  for (let i = 0; i < cps.length; i++) {
+    const c = cps[i];
+    if (c < 0x20 || c === 0x7f) return `an ASCII control character (${U(c)})`;
+    // C1: NEL, CSI and friends. Terminal escape territory, no textual meaning.
+    if (c >= 0x80 && c <= 0x9f) return `a C1 control character (${U(c)})`;
+    // A title is one line, by construction.
+    if (c === 0x2028 || c === 0x2029) return `a line/paragraph separator (${U(c)})`;
+    // Unicode: must not appear in plain-text interchange; they change what a renderer shows.
+    if (c >= 0xfff9 && c <= 0xfffb) return `an interlinear annotation character (${U(c)})`;
+
+    if (!inRanges(c, DEFAULT_IGNORABLE)) continue;
+
+    if (!ALLOWED_IGNORABLE.has(c)) {
+      // Bidi overrides get their own message because the harm is specific and worth naming.
+      if (c >= 0x202a && c <= 0x202e)
+        return `a bidi override (${U(c)}) — it changes how the text RENDERS versus what it says`;
+      return `an invisible (default-ignorable) character (${U(c)})`;
+    }
+
+    // POSITION CHECK for the joiners. A joiner between two things it can actually join is
+    // orthography; the same character next to a space, at an edge, or between ASCII letters joins
+    // nothing and exists only to make two identical-looking titles into two different receipts.
+    // The flat allow in the first version licensed exactly that: "Receipts driven" + ZWJ + " OS"
+    // renders identically to the plain title and hashed differently.
+    if (c === 0x200c || c === 0x200d) {
+      const prev = cps[i - 1];
+      const next = cps[i + 1];
+      const joinable = (x) => x !== undefined && x > 0x7f && !inRanges(x, DEFAULT_IGNORABLE);
+      if (!joinable(prev) || !joinable(next))
+        return `a zero-width joiner (${U(c)}) that joins nothing — it is only valid between two non-ASCII characters it can actually join`;
+    }
   }
-  return false;
+  return null;
 };
 
 // A lone surrogate — half of a pair, with no partner. Found by an adversarial pass 2026-08-16, and
@@ -137,6 +216,14 @@ export function contentIdem(kind, p) {
     // that happen to validate first.
     if (hasLoneSurrogate(v))
       throw new SpineError("BAD_CONTENT", `${kind}.${f} contains a lone surrogate — it encodes to the same UTF-8 bytes as U+FFFD, so two different values would share one idem and the second would be dropped as DUP_IDEM`);
+    // Same reasoning as the surrogate check directly above, and it was NOT applied here until an
+    // adversarial pass pointed at the asymmetry: this function is exported and the emitter derives
+    // idems through it, so a guard living only in `assertContent` protects only the callers that
+    // happen to validate first. Two guards with one justification, one of them copied and one not,
+    // is the twin-defect shape this lane has now paid for six times.
+    const badCp = badCodePoint(v);
+    if (badCp)
+      throw new SpineError("BAD_CONTENT", `${kind}.${f} carries ${badCp} — refused before it can enter an idem preimage (ADR-1120)`);
     parts.push(v);
   }
   return sha256Hex(parts.join(DELIM));
@@ -161,8 +248,12 @@ export function assertContent(event) {
   for (const [k, v] of Object.entries(p)) {
     if (typeof v !== "string")
       throw new SpineError("BAD_CONTENT", `${kind}.${k} must be a string`);
-    if (hasControlChar(v))
-      throw new SpineError("BAD_CONTENT", `${kind}.${k} carries an ASCII control character — refused by code point, never stripped`);
+    const bad = badCodePoint(v);
+    if (bad)
+      // The message names THE FIELD IT IS ABOUT. It used to append "…title is the one free-form
+      // field…" unconditionally, so a `site` error explained itself by talking about `title` twice.
+      throw new SpineError("BAD_CONTENT",
+        `${kind}.${k} carries ${bad} — refused by code point, never stripped (ADR-1120)`);
     if (hasLoneSurrogate(v))
       throw new SpineError("BAD_CONTENT", `${kind}.${k} contains a lone surrogate — it encodes to the same UTF-8 bytes as U+FFFD, so two different values would share one idem and the second would be dropped as DUP_IDEM`);
   }
@@ -177,8 +268,12 @@ export function assertContent(event) {
   // and the receipt describes a page nobody can find.
   if (!p.url.startsWith(`https://${p.site}/`))
     throw new SpineError("BAD_CONTENT", `${kind}.url must be under https://${p.site}/ — url and site disagree, so the receipt points at a page this site never served`);
-  if (p.title.length === 0 || Buffer.byteLength(p.title, "utf8") > MAX_TITLE_BYTES)
-    throw new SpineError("BAD_CONTENT", `${kind}.title must be 1..${MAX_TITLE_BYTES} bytes`);
+  // TRIMMED length, not raw. `title: " "` satisfied `length === 0` and published a blank headline;
+  // so did a title made only of joiners before those became position-checked. A receipt whose
+  // title renders as nothing is a receipt nobody can identify from the log.
+  if (p.title.trim().length === 0 || Buffer.byteLength(p.title, "utf8") > MAX_TITLE_BYTES)
+    throw new SpineError("BAD_CONTENT",
+      `${kind}.title must be 1..${MAX_TITLE_BYTES} bytes and not blank — a title that renders as nothing cannot identify its receipt`);
   if (!TEMPLATE_ID_RE.test(p.template_id))
     throw new SpineError("BAD_CONTENT", `${kind}.template_id must be a lowercase machine dimension`);
   if (!CLUSTER_ID_RE.test(p.cluster_id))
