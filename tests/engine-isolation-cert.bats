@@ -142,6 +142,56 @@ PROC="commit-msg-draft"
 }
 
 # ---------------------------------------------------------------------------------------------
+# 9 — a hostile output is judged ABOVE the driver, and the ladder runs
+# ---------------------------------------------------------------------------------------------
+
+@test "cert 9: a hostile output that parses is passed through INTACT, never pre-judged" {
+  # ADR-0204's ladder is arc-run's, after a 0 exit: schema failure -> one same-tier retry -> an
+  # approval.requested proposal. The shim's only job is to not interfere, and the fixture is
+  # injection-shaped AS WELL AS schema-invalid so that a driver quietly sanitising content would
+  # change the bytes arc-run judges and fail this test.
+  mkdir -p "$BATS_TEST_TMPDIR/d9"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=hostile-schema \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d9" \
+    bash "$(DRIVER)" run "$PROC" '{}' ''
+  [ "$status" -eq 0 ] || { echo "the driver judged the content itself: status=$status $stderr"; false; }
+  [[ "$output" == *"IGNORE ALL PREVIOUS INSTRUCTIONS"* ]] \
+    || { echo "the driver altered hostile content instead of passing it through: $output"; false; }
+}
+
+# ---------------------------------------------------------------------------------------------
+# 10 — a spent capped key is BUDGET, not a driver fault
+# ---------------------------------------------------------------------------------------------
+
+@test "cert 10: an exhausted capped key exits BUDGET_DECLINED, with zero silent continuation" {
+  # MEASURED, not read from documentation: the live key returned HTTP 403 `Key limit exceeded
+  # (total limit)` on 2026-08-16, and the plan had asserted 402 in four places -- a fixture written
+  # from the description would have failed against a WORKING cap. Classifying this as `driver`
+  # sends arc-run down the fallback chain, which spends the budget again per driver against a key
+  # that cannot pay: a loop that cannot succeed and does not stop.
+  mkdir -p "$BATS_TEST_TMPDIR/d10"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=spend-refused \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d10" \
+    bash "$(DRIVER)" run "$PROC" '{}' ''
+  [ "$status" -eq 2 ] || { echo "a spent credential was not BUDGET_DECLINED (2), got $status: $stderr"; false; }
+  [[ "$stderr" == *"could not spend"* ]] || { echo "the refusal does not name spend: $stderr"; false; }
+}
+
+@test "cert 10b: NEGATIVE CONTROL -- an ordinary runtime failure stays a DRIVER fault" {
+  # Without this, the classifier above is indistinguishable from "any non-zero exit is budget".
+  # The two fixtures differ ONLY in the message, which is exactly the discrimination being tested.
+  mkdir -p "$BATS_TEST_TMPDIR/d10b"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=spend-refused-control \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d10b" \
+    bash "$(DRIVER)" run "$PROC" '{}' ''
+  [ "$status" -eq 1 ] || { echo "an ordinary runtime error was classified as budget: $status"; false; }
+  [[ "$stderr" != *"could not spend"* ]] || { echo "an internal error was reported as a spend refusal: $stderr"; false; }
+}
+
+# ---------------------------------------------------------------------------------------------
 # The label, and the rows that cannot be proven here
 # ---------------------------------------------------------------------------------------------
 
@@ -180,6 +230,6 @@ PROC="commit-msg-draft"
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "11" ] || { echo "expected 11 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "14" ] || { echo "expected 14 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

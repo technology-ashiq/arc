@@ -1,0 +1,5 @@
+egress-proxy: allowlist = openrouter.ai:443
+egress-proxy: listening on 0.0.0.0:3128
+egress-proxy: WARN bound on all interfaces -- every host that can route here gets this allowlist; use --bind to narrow it to the internal network
+egress-proxy: ALLOW openrouter.ai:443 (requested 'openrouter.ai:443')
+egress-proxy: DENY example.com:443 -- host:port is not on the allowlist

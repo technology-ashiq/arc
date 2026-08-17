@@ -58,7 +58,7 @@
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { cpSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -449,6 +449,38 @@ function sweepStaleWorkspaces() {
   return swept;
 }
 
+/**
+ * Does this runtime failure say the CREDENTIAL is spent, rather than that the runtime broke?
+ *
+ * The distinction decides an exit code, and the exit code decides whether arc-run walks its
+ * fallback chain. Against a spent key that walk cannot succeed, so misclassifying here turns one
+ * refusal into a run that spends its whole budget failing.
+ *
+ * THE PATTERNS COME FROM A MEASUREMENT, NOT FROM DOCUMENTATION. On 2026-08-16 the live capped key
+ * returned **HTTP 403 `Key limit exceeded (total limit)`** for a paid model and HTTP 200 for a
+ * `:free` one. The plan had asserted 402 in four places and would have failed against a WORKING
+ * cap -- and a cap that had stopped working would have been indistinguishable from a spec that was
+ * simply wrong. That is ADR-0219's shape repeating inside one cycle, which is why this list names
+ * the run that produced each entry.
+ *
+ * DELIBERATELY NARROW. Anything not matched here stays `driver`, because the cost of the two
+ * mistakes is not symmetric: classifying a real driver fault as `budget` silently ends a run that
+ * a retry would have completed, while the reverse is a wasted fallback and a wrong receipt. When
+ * in doubt this returns false.
+ */
+export function isSpendRefusal(text) {
+  const t = String(text || "").toLowerCase();
+  return (
+    t.includes("key limit exceeded") ||                 // measured 2026-08-16, per-key cap (403)
+    t.includes("insufficient_quota") ||                 // OpenAI-compatible providers
+    t.includes("insufficient credits") ||               // account dry (402)
+    t.includes("quota exceeded") ||
+    t.includes("billing_hard_limit_reached") ||
+    /\b40[23]\b[^\n]*\b(limit|quota|credit|billing)\b/.test(t) ||
+    /\b(limit|quota|credit|billing)\b[^\n]*\b40[23]\b/.test(t)
+  );
+}
+
 function removeContainer(name) {
   // THE RESULT IS INSPECTED, NOT A `catch`. spawnSync REPORTS failures on the returned object --
   // it does not throw -- so the catch block that used to be here was dead code, both `error` and
@@ -616,7 +648,14 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
         catch { /* a leftover scratch dir is not worth failing a completed run over */ }
       };
       process.on("exit", cleanScratch);
-      for (const sig of ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]) {
+      // THE SIGNAL LIST IS FILTERED BY WHAT THIS PLATFORM ACTUALLY HAS. `SIGBREAK` exists only on
+      // Windows and `process.on` THROWS `ERR_UNKNOWN_SIGNAL` for a name the platform does not
+      // define -- so hard-coding the four names took the whole driver down on the macOS and linux
+      // legs. Caught by CI within minutes of the push, which is the leg-specific class this repo
+      // keeps recording: invisible on the box that wrote it, red on two of three legs.
+      const signals = ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
+        .filter((s) => Object.prototype.hasOwnProperty.call(osConstants.signals, s));
+      for (const sig of signals) {
         process.on(sig, () => {
           cleanScratch();
           // Re-raise with the default disposition so the exit STATUS still reports the signal.
@@ -799,6 +838,26 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   }
   if (res.status !== 0) {
     const why = String(res.stderr || "").trim().split("\n").slice(-1)[0] || `exit ${res.status}`;
+    // A SPENT CREDENTIAL IS **BUDGET**, NOT A DRIVER FAULT (Phase 06 fixture 10, ADR-0213).
+    //
+    // The runtime holds its own capped key and arc never issues the model call, so arc-run cannot
+    // see the refusal directly -- it arrives only as text in the runtime's output. Everything here
+    // was previously classified `driver`, which is the defect ADR-0210 already records for the
+    // wall-clock: a budget failure reported as a driver failure sends arc-run down the FALLBACK
+    // chain, which spends the budget again on the next driver. Against a spent key that is a loop
+    // that cannot succeed and does not stop, and the receipt blames a driver that worked.
+    //
+    // MEASURED, NOT READ FROM DOCUMENTATION -- which is the correction ADR-0219 and fixture 10 both
+    // had to make. Against the live capped key on 2026-08-16: a paid model returns
+    // **HTTP 403 `Key limit exceeded (total limit)`**, and 402 is the ACCOUNT-out-of-credits code,
+    // which this design does not use because ADR-0213 chose a PER-KEY limit. Both are matched
+    // anyway: the account running dry is also a spend refusal, and refusing to classify it would
+    // put the more expensive failure on the fallback path.
+    if (isSpendRefusal(`${res.stderr || ""}\n${res.stdout || ""}`)) {
+      const e = new Error(`the runtime could not spend: ${why}`);
+      e.arcExit = EXIT.BUDGET_DECLINED;
+      throw e;
+    }
     throw new Error(`the runtime exited ${res.status}: ${why}`);
   }
 
