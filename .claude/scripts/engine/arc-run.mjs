@@ -709,12 +709,26 @@ function emitRun(payload) {
   // `...rest` may carry a `model` the caller computed from `effectiveModel` alone, which is
   // stale the moment a runtime reports one. It is overwritten AFTER the spread, for the same
   // reason `model_source` is: derived state is stamped in one place or it disagrees with itself.
+  // THE WALL-CLOCK IS RECORDED, BECAUSE REQ-05 DERIVES A BUDGET FROM RECEIPTS AND THERE WAS NO
+  // NUMBER IN THEM TO DERIVE FROM.
+  //
+  // The criterion reads: "three runs at a deliberately generous wall-clock, their durations
+  // recorded, and the class budget derived FROM THOSE RECEIPTS. A budget written before the
+  // receipts exist is a guess and is not accepted here." The first landed hermes receipt carried
+  // `driver, fault_hint, model_source, outcome, process, reason` and no duration at all -- so the
+  // only way to satisfy that clause was to read a stopwatch by hand, which is the guess it forbids.
+  //
+  // MEASURED, so it is present. This is the one field in this payload that is never absent: unlike
+  // cost, which is provider-reported or nothing, elapsed time is something arc-run itself observed
+  // from its own clock. ADR-0069 b5 governs figures we would have to INFER; this is not one.
+  // Monotonic-ish by construction -- both ends come from the same process's Date.now().
   const r = emitEvent("run.completed", {
     process: processName,
     ...rest,
     ...(tokens ? { tokens } : {}),
     ...(seat ? { model: seat } : {}),
     ...(runtimeId ? { runtime: runtimeId } : {}),
+    duration_ms: Math.max(0, Date.now() - runStartedAt),
     model_source: seatSource,
   }, extra);
   if (!r.ok) {

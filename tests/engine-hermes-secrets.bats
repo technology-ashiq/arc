@@ -170,10 +170,19 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
         if (e.kind === "run.completed") found = e;
       }
     if (!found) { console.log("NO_RECEIPT"); process.exit(1); }
-    console.log(JSON.stringify({ runtime: found.payload.runtime ?? null, cost: found.payload.cost ?? null }));
+    console.log(JSON.stringify({
+      runtime: found.payload.runtime ?? null,
+      cost: found.payload.cost ?? null,
+      has_duration: typeof found.payload.duration_ms === "number" && found.payload.duration_ms >= 0,
+    }));
   ' "$ARC_SPINE_ROOT/events"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"runtime":"hermes@sha256:'* ]] || { echo "the receipt carries no runtime identity: $output"; false; }
+  # REQ-05 derives a class budget FROM RECEIPTS, and the first landed hermes receipt carried no
+  # duration at all -- so the only way to satisfy that clause was a hand-read stopwatch, which is
+  # exactly the guess it forbids. Unlike cost, elapsed time is something arc-run observed on its
+  # own clock, so it is never absent.
+  [[ "$output" == *'"has_duration":true'* ]] || { echo "the receipt carries no duration: $output"; false; }
   # AND the spend stays absent. An identity field must not manufacture a cost record -- that is
   # ADR-0069 b5, and it is the exact trade this fix had to avoid making.
   [[ "$output" == *'"cost":null'* ]] || { echo "a cost was manufactured alongside the identity: $output"; false; }
