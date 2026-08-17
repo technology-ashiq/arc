@@ -331,9 +331,28 @@ function recordingsWithCost(name, inr) {
   const mine = eventsOn(spine).filter((e) => e.kind === "run.completed" && e.process === "bench@0.1.0");
   check("exactly one bench receipt for the whole run", mine.length === 1, `saw ${mine.length}`);
   if (mine.length === 1) {
-    const text = JSON.stringify(mine[0]);
+    // THE HASHES ARE EXCLUDED, AND THAT IS A FIXED FLAKE RATHER THAN A LOOSENING.
+    //
+    // This grepped `JSON.stringify(mine[0])` -- the WHOLE envelope, `idem` and `id` included. `idem`
+    // is a 64-character sha256 hex string, so the four digits `3313` land inside it by coincidence
+    // at roughly 61 positions x (1/16)^4 per value: about 0.19% per receipt, per run. It finally
+    // rolled one on 2026-08-17 (`...401f3313f850...`), and the failure looked exactly like a
+    // ceiling leak: the assertion's own output printed the receipt with the digits in it.
+    //
+    // A HASH CANNOT CARRY A SEMANTIC LEAK. It is a digest of content that is checked field by
+    // field elsewhere, so matching a decimal ceiling inside hex is a false positive by
+    // construction. The property ADR-0904 actually states is that the ceiling never enters an
+    // emitted PAYLOAD -- so that is what is searched, plus the envelope minus its machine-generated
+    // identifiers.
+    const { id: _id, idem: _idem, ...semantic } = mine[0];
+    const text = JSON.stringify(semantic);
     check("no ceiling value appears anywhere in the emitted receipt",
       !text.includes("7919") && !text.includes("3313") && !/"worst_case/.test(text), text.slice(0, 200));
+    // And the exclusion is not a hole: assert the identifiers really are opaque machine values, so
+    // a future change that started routing content through them would fail here rather than pass.
+    check("the excluded identifiers are an opaque ULID and a sha256, carrying no content",
+      /^[0-9A-HJKMNP-TV-Z]{26}$/.test(mine[0].id) && /^[0-9a-f]{64}$/.test(mine[0].idem),
+      `id=${mine[0].id} idem=${mine[0].idem}`);
     check("the receipt carries the scorecard hash rather than the scorecard",
       typeof mine[0].payload.scorecard_sha === "string" && mine[0].payload.classes.every((c) => !("fixtures" in c)));
     check("the receipt still says no model was applied", mine[0].payload.model_applied === null);
