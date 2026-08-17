@@ -151,6 +151,75 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE SECOND ADVERSARIAL PASS — 2026-08-17, 44 findings, and the worst was in a fix four hours old
+
+Two fresh agents, different surfaces (router/tenure decision logic · receipt+identity and the
+shell/OS boundary). **20 and 24 findings, 17 of the second agent's PROVED by execution.**
+
+**Three criticals, and every one of them was in code written TODAY:**
+
+1. **The transcript storage was persisting an unscrubbed credential to disk.** `scrub()` takes an
+   optional parsed object and its own comment says why — without it the scanner's **structural**
+   layer is inert. That rule had been applied to **two of four** call sites: the cost sidecar and
+   `--input` passed one; the driver's **stdout and transcript did not**. Measured:
+   `{"password":"hunter2"}` scans **clean** through the synthetic wrapper and hits
+   `credential-shaped field "password"` through the real object. The transcript is precisely what
+   the day's new `storeTranscript` then writes into a lane's evidence directory, **on an exit-0
+   run**. Fixed at the **funnel**, not the call sites — a rule each caller must remember is a rule
+   that gets forgotten, twice, two lines apart.
+2. **The tenure proposal could never be emitted — zero, not one.** The idem key was a raw string;
+   `validate.mjs` requires lowercase sha256 hex, so `--strict` rejected every proposal and the only
+   trace was a WARN. Five refusals left **zero** receipts, and **the idempotency claim was satisfied
+   VACUOUSLY** — 0 is at most 1, so nothing looked wrong. Now sha256 over a length-prefixed
+   preimage, loud on failure. Measured: 5 dispatches → exactly **1** proposal, 5 refusal receipts,
+   0 quarantined.
+3. **The router loaded, validated and checked tenure only under `--driver auto`.** The same file
+   reported four faults under `auto` and exited **0** under an explicit `--driver`. `arc-bench`
+   makes `--driver` **mandatory** — so the one lane that spends real money never validated the
+   router, never checked the four hire terms, never checked tenure.
+
+**And the identity fix from the morning had the same defect one scope out.** `runtimeId` was
+computed at the *tail* of `produce()`, so any throw skipped `writeCost` entirely and the receipts a
+failure post-mortem reads carried **no contractor**. Re-shipped four hours after the comment
+describing that exact shape was written. *Fixes produced by an adversarial pass are themselves
+unattacked code* — recorded for the fourth time this cycle, and true again.
+
+**My own negative control could not fail.** `cost` is a top-level event field, so
+`payload.cost ?? null` was a tautology and a mutant fabricating a zero spend stayed green — the one
+guard on the fix's central trade.
+
+**Also fixed:** `storeTranscript` wrote **outside** its directory via `../` in the process name, and
+lost 2 of 8 concurrent transcripts to millisecond collisions while all eight reported success · a
+negative `inr` drove `inrSpent` down so `overBudget()` could never fire again · a fractional spend
+was stamped `measured` and a numeric-string spend was dropped silently · the wrong-type-is-loud fix
+lived in `hermes` while `writeCost` is the funnel every driver uses · `egress-session.sh` **hung
+forever** on a flag with no value, glob-expanded allowlist entries against the operator's CWD, and
+reused a pre-existing **non-internal** network while reporting a confined session · the config hash
+could not tell the vetted proxy from an attacker's (`proxy` was a boolean; now the origin — three
+postures, three hashes) · `--dry-run` promised "would run" for a row that refuses · the termination
+spec's step 2 was **false** (an unknown driver does not make the router refuse to load) · the
+`fallback` chain was never checked for runtime reachability, so `driver: claude-code, fallback:
+[hermes]` loaded with **zero** faults and dispatched to the runtime through a row with none of the
+four terms · `isExpired` failed **open** on a `Date`, silently disabling tenure repo-wide.
+
+**The gap that made all of it possible: nothing drove `arc-run` through an expired row.** The mutant
+`expiredRow = null` left all nine router tests green. The matrix proved a FUNCTION; nothing proved
+the MECHANISM — which is this phase's own headline lesson, arriving one layer up. Seven new tests
+close it, including the five-dispatch idempotency measurement and a negative control that a live row
+still dispatches.
+
+**One governance find, from a lint rather than an agent.** ADR-0216 records the tenure as **two
+weeks**, owner-ruled. The live row carried **2026-11-13** under a comment reading "Ninety days from
+the hire decision" — 6.4× the ruling, and nothing could have caught it, because the enforcement did
+not exist: a wrong tenure and a right one behaved identically. Set to `2026-08-31`.
+
+**Still on the defeated grep self-count:** `engine-router-row` and `engine-hermes-smoke` fixed here;
+`engine-compile`, `engine-driver-contract` and `engine-process-lint` have **no self-count test at
+all** — named rather than fixed, because they are not a finding of this pass and inventing scope
+mid-round is how a fix round becomes a refactor.
+
+---
+
 ### THE FIRST RECEIPTED REAL DISPATCH — 2026-08-17, and it found what no fixture could
 
 PR #194 merged (`4cc73fd`, CI 19/19 per JOB, head SHA confirmed). The certification dispatch then

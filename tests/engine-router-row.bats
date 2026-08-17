@@ -127,7 +127,8 @@ YAML
 @test "tenure: arc-run REFUSES to dispatch through an expired row, naming the row and the file" {
   local root="$BATS_TEST_TMPDIR/expired"
   expired_root "$root"
-  ARC_SPINE_ROOT="$root/spine" run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
   [ "$status" -ne 0 ] || { echo "an expired row dispatched: $output"; false; }
   [[ "$output" == *"EXPIRED on 2020-01-01"* ]] || { echo "the refusal does not name the date: $output"; false; }
   [[ "$output" == *"engine/router.yaml"* ]] || { echo "the refusal does not name the file to edit: $output"; false; }
@@ -139,8 +140,14 @@ YAML
   local root="$BATS_TEST_TMPDIR/idem"
   expired_root "$root"
   mkdir -p "$root/spine"
+  # EXPORTED, not prefixed onto the `run` call. `VAR=x run node …` sets VAR for the bats `run`
+  # FUNCTION, and a bash assignment before a function is not exported to the function's children --
+  # so `node` never saw it, wrote to the real spine root, and the count here was 0. It works when
+  # you type it in a shell because an assignment before an EXTERNAL command IS exported for that
+  # command. Two different rules, one syntax; CI caught it and this box could not have.
+  export ARC_SPINE_ROOT="$root/spine"
   for _ in 1 2 3 4 5; do
-    ARC_SPINE_ROOT="$root/spine" run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
+    run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
     [ "$status" -ne 0 ]
   done
   local proposals
@@ -160,7 +167,8 @@ YAML
   # adjacent refusal paths, and only one of them recorded.
   local root="$BATS_TEST_TMPDIR/receipt"
   expired_root "$root"
-  ARC_SPINE_ROOT="$root/spine" run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
   [ "$status" -ne 0 ]
   run grep -ho '"reason":"tenure"' "$root"/spine/events/*.jsonl
   [ "$status" -eq 0 ] || { echo "no run receipt names the tenure refusal"; false; }
@@ -170,7 +178,8 @@ YAML
   # The negative control. Without it, "refuses an expired row" is satisfied by refusing every row.
   local root="$BATS_TEST_TMPDIR/live"
   expired_root "$root" "2099-01-01"
-  ARC_SPINE_ROOT="$root/spine" run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
   [ "$status" -eq 0 ] || { echo "a live row was refused: $output"; false; }
   [[ "$output" == *"would run"* ]] || { echo "$output"; false; }
   [[ "$output" != *"EXPIRED"* ]]
@@ -181,7 +190,8 @@ YAML
   # reassuring direction is worse than no preview.
   local root="$BATS_TEST_TMPDIR/dry"
   expired_root "$root"
-  ARC_SPINE_ROOT="$root/spine" run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
   [ "$status" -ne 0 ] || { echo "dry-run promised a run that would refuse: $output"; false; }
   [[ "$output" == *"would REFUSE"* ]] || { echo "$output"; false; }
   [[ "$output" != *"would run"* ]]
@@ -193,7 +203,8 @@ YAML
   # the one lane that spends real money was the lane that validated nothing.
   local root="$BATS_TEST_TMPDIR/explicit"
   expired_root "$root"
-  ARC_SPINE_ROOT="$root/spine" run node "$(RUN)" --root "$root" --process commit-msg-draft --driver mock --dry-run
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver mock --dry-run
   [ "$status" -ne 0 ] || { echo "an explicit --driver bypassed tenure: $output"; false; }
   [[ "$output" == *"EXPIRED"* ]] || { echo "$output"; false; }
 }

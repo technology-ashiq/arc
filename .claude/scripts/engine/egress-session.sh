@@ -87,13 +87,21 @@ read_allowlist() {
     # version counted non-empty lines and validated nothing, so the two shapes egress-proxy.py
     # exists to refuse -- suffix rules and bare hostnames -- sailed through the script that says it
     # catches them. The proxy still refuses them; this makes the refusal name the FILE and the LINE.
-    case "$line" in
-      *[!A-Za-z0-9.:-]* | .* | *:*:* | *:) die "allowlist $ALLOWLIST: \`$line\` is not an exact host:port (no wildcards, no leading dot)" ;;
-    esac
-    case "$line" in
-      *:*) : ;;
-      *)   die "allowlist $ALLOWLIST: \`$line\` has no port -- a bare hostname would be reachable on any port" ;;
-    esac
+    # A POSITIVE POSIX-CLASS PATTERN, not a negated letter range. The first version used a negated
+    # bracket expression carrying a letter range, and tests/portability.bats refuses those: under a
+    # non-C locale a letter range collates to something other than the 26 letters, so the same
+    # pattern means different things on different runners. The alnum class is locale-defined in the
+    # way you actually want.
+    #
+    # AND THE COMMENT DOES NOT QUOTE THE BAD PATTERN. The first draft of this comment spelled it
+    # out to explain it, and the portability guard greps SOURCE -- comments included -- so the
+    # explanation re-tripped the check it was explaining. That is this repo's recorded shape: the
+    # second break lands inside the comment describing the first.
+    #
+    # One expression covers the whole shape (host charset, required colon, decimal port), so there
+    # is no second check that can drift from the first.
+    printf '%s' "$line" | grep -qE '^[[:alnum:]][[:alnum:].-]*:[0-9]{1,5}$' \
+      || die "allowlist $ALLOWLIST: \`$line\` is not an exact host:port (no wildcards, no leading dot, decimal port)"
     ENTRIES+=(--allow "$line")
     count=$((count + 1))
   done < "$ALLOWLIST"
