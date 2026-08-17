@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 06
 appetite: 9.5d
-burn: 5.5d
+burn: 6.5d
 blocked-on: —
 depends-on: —
 
@@ -34,7 +34,7 @@ depends-on: —
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 5.5 of 9.5 days used (58%) — set 2026-08-17.** It was 5.5 of **7.5** when it was
+**Appetite burn: 6.5 of 9.5 days used (68%) — set 2026-08-18.** The clock is set the day the work happens, because this cycle has twice recorded the cost of setting it later: the Phase 04 close found it reading 0.0 for four days, and the day-5 checkpoint fired against a number a full working day stale. It was 5.5 of **7.5** when it was
 set, which is what **fired the day-5 kill checkpoint**; the checkpoint was read, the owner ruled
 CONTINUE, and the cap moved to 9.5 in writing (PLAN § Appetite). Both numbers are kept in that
 order deliberately: a percentage that silently improves because the denominator moved is how an
@@ -191,6 +191,103 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE KEY LANDED, AND REQ-02 IS COMPLETE — 2026-08-18
+
+The owner supplied the capped credential. Everything below followed from it, and every claim is a
+measurement rather than a reading.
+
+**THE HIRE WORKS.** Pinned container, OpenRouter, the capped key: `{"ok":true}` — **first try**. The
+local `llama3.1:8b` had failed the schema on **five of five** real dispatches, and
+`runtime-answer-reliability.md` named the reason three sessions ago: the model was the confound, not
+the runtime. Key ceiling read from the provider rather than from documentation: `limit 0`,
+`is_free_tier: true`. Zero spend.
+
+**The slug is pinned WITH its date, because this plan already lost two to rot.** 17 `:free` slugs
+exist today; 5 of the largest answer on this key; exactly **one** returned the contracted JSON clean
+— `poolside/laguna-s-2.1:free`. Two returned empty and the nemotrons leaked their reasoning into the
+answer, which is a schema failure wearing a good model's name.
+
+**FIXTURE 4 CLOSED, and its second half is structural rather than a filter.** One `-e` reaches the
+container (`OPENROUTER_API_KEY`), no `ARC_*` var leaks, a planted canary is absent. `docker run` does
+not inherit the host environment, so there is no allowlist to drift and no denylist to miss a new
+name. The first half — *"only its own capped key"* — did not exist until now.
+
+**FIXTURE 7 CLOSED, confined and receipted** (`01M08P9KDZCVWB9QS2ES0PKB3M`, not quarantined):
+
+| Probe | Result |
+|---|---|
+| the runtime on `arc-egress` behind the proxy | **`{"confined":true}`** |
+| proxy trail | `ALLOW openrouter.ai:443` |
+| a non-allowlisted host, same network | blocked · `DENY example.com:443` |
+
+**The config hash MOVED between the two postures on a landed receipt** — `cfg.9c642d0847ca`
+unconfined, `cfg.e4c4ccd145d0` confined. Which is precisely what the preimage was rebuilt for, after
+an adversarial pass proved the two hashed identically.
+
+---
+
+**AND ADR-0222'S COPY KILLED NODE ON A REAL RUNTIME HOME.** The session's largest finding.
+
+`cpSync` did not throw — it took the whole process down with **STATUS_STACK_BUFFER_OVERRUN
+(0xC0000409) and no error text**. In `verbatimSymlinks:true`, `dereference:false` **and**
+`dereference:true` alike, so never a mode problem; the `\\?\` extended-length prefix changed
+nothing, so not MAX_PATH. Bisected to `home/`, where **uv** builds its wheel cache as symlinks whose
+targets are container-absolute (`/opt/data/...`) and therefore **dangling on the host**.
+
+**A hard crash is worse than a failure: no exception, no receipt, no diagnosis — the dispatch
+vanishes.** Every fixture stayed green throughout, because fixtures plant regular files.
+
+Fixed by **skipping** symlinks rather than reproducing them, which keeps ADR-0222's actual argument:
+its case for copying over wiping was that a copy needs *no knowledge of the runtime's storage
+layout*, and "skip every symlink" is a rule about a FILE KIND. Excluding `home/.cache/uv` by path
+would smuggle that knowledge straight back in. Measured after: **2,570 ms / 1,128 files / 13 links
+skipped**, against the ADR's original 2,235 ms / 1,171 — the cost claim still holds.
+
+**And the symlink guard shipped that same morning was WRONG.** It refused *any* symlink: fine
+against fixtures, and it refuses **every dispatch after the first** against a real home. A gate that
+blocks the normal case gets switched off — for a good reason — taking the real protection with it.
+The property is **escape, not existence**. Both directions proven.
+
+**Six stale workspaces were swept** on the next dispatch — left by those very crashes. The SIGKILL
+half of the ADR-0222 cleanup is proven by the thing it was written for rather than by a fixture.
+
+---
+
+**THE ROUTER WAS LYING ABOUT WHERE THE DATA GOES.** The row read `hosted: local` — true when
+written, falsified the moment the credential landed. `data-boundary.mjs` reads that field to decide
+how a refusal is REPORTED: an internal-only input against a `hosted: cloud` row is refused *with the
+routing fact attached* (fixture 3). A stale `local` made the boundary's own explanation wrong about
+where the document was about to go, **on the one code path whose entire job is to say that**.
+Corrected to `cloud`.
+
+**A BENCH TEST WAS GREPPING A SHA256.** CI went red on a check reading *"no ceiling value appears
+anywhere in the emitted receipt"* — implemented as a substring search over the whole envelope,
+`idem` included. `idem` is 64 hex characters, so the ceiling's four digits land inside it at roughly
+**0.19% per receipt**. It finally rolled one (`...401f3313f850...`) and the failure read exactly like
+a real ceiling leak. A hash cannot carry a semantic leak; the search now covers the payload plus the
+envelope minus its machine-generated ids, **with a companion check that those ids stay opaque** —
+excluding a field and leaving the probe count still is how a guard quietly loses coverage. 87 → 88.
+
+**One genuine environment flake, recorded rather than re-run away:** `arc-event: REJECT INTERNAL --
+EIO: i/o error, fsync`, one receipt of fifteen, macOS runner only, not reproducible locally.
+
+---
+
+**43 SECONDS, AGAINST 248–342 ON LOCAL OLLAMA.** Roughly 7x. That makes Phase 07's `min=9`
+calibration a **local-model** number, and Phase 08 must re-derive against the hosted path —
+`calibrate-budget.mjs` takes `--driver` so the two populations never mix.
+
+**What REQ-02 still owes: nothing.** All twelve fixtures now stand on the real runtime.
+
+**The one thing left, and it is not mine to do.** `hq.policy.yaml` is on the ungrantable-resource
+deny list in the checked-in `.claude/settings.json`, beside `CONSTITUTION.md` and the policy engine —
+PLAN's own Do-not-touch section says so in words. `processes/build-in-public-draft.process.yaml` is
+written and held, because POL-I's birth rule and `policy-lint` agree in opposite directions: the file
+and its grant land as one change or neither. **Opening that deny so an agent can write its own hiring
+grant is the thing POL-I exists to prevent**, so the row is the owner's to paste.
+
+---
+
 ### HELD BACK, NOT LOST — Phase 08's process layer, and the gate hole writing it exposed
 
 **`processes/build-in-public-draft.process.yaml` is WRITTEN and is deliberately NOT on the branch.**
@@ -336,7 +433,7 @@ leave one open item, because a queue that grows per attempt is a queue a human s
 |---|---|---|
 | 1 | repo not mounted / byte-identical after | **PASS** |
 | 2+3 | data boundary, arc-run exit 5 | **BUILT + suite** (mechanism whole, negative controls) |
-| 4 | env audit, zero arc secrets | **PASS on its second half** — "only its own capped key" needs the key |
+| 4 | env audit, zero arc secrets | **PASS, both halves** — one `-e`, no ARC_* leak, canary absent (2026-08-18) |
 | 5 | planted key absent from every artifact | **PASS** (4 classes + negative control) |
 | 6 | traversal / symlink escape | **PASS** |
 | 7 | egress allowlist | **PASS, orchestrated and measured**, with a negative control |
@@ -346,7 +443,7 @@ leave one open item, because a queue that grows per attempt is a queue a human s
 | 11 | wall-clock overrun | **PASS** |
 | 12 | unpinned runtime refused | **PASS** |
 
-**What REQ-02 still owes:** the confined-egress arm of a real dispatch, which needs the hosted-model
+**SUPERSEDED 2026-08-18 — REQ-02 owes nothing; the confined arm is closed. Kept for the record:** the confined-egress arm of a real dispatch, which needs the hosted-model
 path and therefore the capped key — an `--internal` network cannot reach `host.docker.internal`, so
 the local model and the confined network are mutually exclusive by construction.
 
@@ -492,7 +589,7 @@ Assumption **A-04 did not fire**, and not by opinion:
 | Boundary | Status | How it was settled |
 |---|---|---|
 | repo invisible to the runtime (fx 1) | **PASS** | probed at the container boundary; repo path does not resolve |
-| zero arc secrets in the runtime env (fx 4) | **PASS on its second half** | *"only its own capped key"* is still unbuilt — see the gap list |
+| zero arc secrets in the runtime env (fx 4) | **PASS, both halves as of 2026-08-18** | when this was written the first half was unbuilt; the credential injection closed it |
 | traversal / symlink escape (fx 6) | **PASS** | the property is *where the bytes land*, not whether the write errors |
 | egress allowlist (fx 7) | **PASS, behaviourally** | dual-homed proxy, `ALLOW openrouter.ai:443` / `DENY example.com:443`, measured |
 | persistent memory off (fx 8) | **PASS** | ADR-0222, private workspace copy, 2,235 ms |
