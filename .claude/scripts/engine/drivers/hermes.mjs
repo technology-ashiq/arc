@@ -57,9 +57,9 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { cpSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
+import { cpSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
 import { constants as osConstants, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { EXIT, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
@@ -134,6 +134,16 @@ const EGRESS_NETWORK = process.env.ARC_HERMES_NETWORK || "";
 const EGRESS_PROXY = process.env.ARC_HERMES_PROXY || "";
 const SKILLS_FILE = process.env.ARC_HERMES_SKILLS || "";
 const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
+
+// The runtime's own capped credential (ADR-0213), and the variable name its configured provider
+// reads it under. See the injection site for why this is the only knob.
+const API_KEY = process.env.ARC_HERMES_API_KEY || "";
+const API_KEY_ENV = process.env.ARC_HERMES_API_KEY_ENV || "OPENROUTER_API_KEY";
+
+// Where the workspace is mounted INSIDE the container. Named once because two things depend on it
+// meaning the same thing: the `-v` spec, and the symlink guard that treats a target under this
+// path as staying inside the workspace (see targetStaysInside).
+const CONTAINER_MOUNT = "/opt/data";
 
 // arc-run's 1 MiB default truncated a large but perfectly valid answer and then blamed the
 // driver (arc-run.mjs:375-378). The same number is used here so the two layers cannot disagree.
@@ -414,7 +424,13 @@ function msUntilDeadline() {
  * is exactly where a link would hide, and "found nothing" must never be the answer to "could not
  * look".
  */
-function findSymlink(root, depth = 0) {
+// A `longPath()` helper lived here briefly, adding the Windows `\\?\` extended-length prefix. It
+// is DELETED rather than kept "in case": MAX_PATH was a plausible reading of the crash and the
+// measurement refused it -- the prefix changed nothing, and bisecting found dangling symlinks
+// instead. Keeping an unused helper because the theory was reasonable is how a file accumulates
+// code nothing calls, which is the defect this phase spent a day removing from three other places.
+
+function findEscapingSymlink(root, depth = 0, base = root) {
   if (depth > 64) return `${root} (nesting deeper than 64 levels)`;
   let entries;
   try {
@@ -424,13 +440,46 @@ function findSymlink(root, depth = 0) {
   }
   for (const entry of entries) {
     const full = join(root, entry.name);
-    if (entry.isSymbolicLink()) return full;
+    if (entry.isSymbolicLink()) {
+      let target = "";
+      try { target = readlinkSync(full); } catch (e) { return `${full} (link unreadable: ${(e && e.code) || e.message})`; }
+      if (!targetStaysInside(full, target, base)) return `${full} -> ${target}`;
+      continue;
+    }
     if (entry.isDirectory()) {
-      const found = findSymlink(full, depth + 1);
+      const found = findEscapingSymlink(full, depth + 1, base);
       if (found) return found;
     }
   }
   return null;
+}
+
+/**
+ * Does this symlink stay inside the workspace, in the container's view or the host's?
+ *
+ * MEASURED ON THE REAL RUNTIME HOME, 2026-08-17, and it is why the first version of this guard was
+ * wrong. `uv` -- the Python installer the image ships -- builds its wheel cache as **13 symlinks**
+ * whose targets are CONTAINER-ABSOLUTE: `/opt/data/home/.cache/uv/archive-v0/...`. Every one of
+ * them points inside the mount, so a copy of the template carries links that resolve to the COPY's
+ * own contents, because `/opt/data` means whatever is mounted there.
+ *
+ * The first guard refused any symlink at all. It would therefore have refused EVERY dispatch the
+ * moment the runtime warmed its cache -- which is to say, every dispatch after the first. A gate
+ * that blocks the normal case is a gate that gets switched off, and it would have been switched off
+ * for the right reason, taking the real protection with it.
+ *
+ * So the property is ESCAPE, not existence:
+ *   - container-absolute under the mount point  -> stays inside (this is uv's whole cache)
+ *   - relative, resolving within the template    -> stays inside
+ *   - anything else                              -> refused, and the refusal names the target
+ */
+function targetStaysInside(linkPath, target, base) {
+  const t = String(target).replace(/\\/g, "/");
+  if (t === CONTAINER_MOUNT || t.startsWith(`${CONTAINER_MOUNT}/`)) return true;
+  if (t.startsWith("/") || /^[A-Za-z]:/.test(t)) return false;   // some other absolute path
+  const resolved = resolve(dirname(linkPath), target);
+  const root = resolve(base);
+  return resolved === root || resolved.startsWith(root + sep);
 }
 
 /**
@@ -637,15 +686,54 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     if (!st.isDirectory()) {
       throw new Error(`ARC_HERMES_DATA (${DATA_DIR}) is not a directory — refusing to dispatch (ADR-0222)`);
     }
-    const linked = findSymlink(DATA_DIR);
+    const linked = findEscapingSymlink(DATA_DIR);
     if (linked) {
-      throw new Error(`the runtime template ${DATA_DIR} contains a symlink at ${linked} — refusing, because a copy cannot be private when a path inside it points out of the copy (ADR-0222)`);
+      throw new Error(`the runtime template ${DATA_DIR} contains a symlink that ESCAPES it: ${linked} — refusing, because a copy cannot be private when a path inside it points out of the copy (ADR-0222)`);
     }
     let scratch;
     try {
       scratch = mkdtempSync(join(tmpdir(), "arc-hermes-ws-"));
       workspace = join(scratch, "data");
-      cpSync(DATA_DIR, workspace, { recursive: true, dereference: true, force: true });
+      // SYMLINKS ARE SKIPPED, NOT REPRODUCED, AND THAT IS THE FIX FOR A HARD CRASH.
+      //
+      // MEASURED 2026-08-17 against a REAL warmed runtime home, and this is the finding of the
+      // whole ADR-0222 mechanism: `cpSync` did not throw, it took the entire Node process down with
+      // STATUS_STACK_BUFFER_OVERRUN (0xC0000409) and NO error text. In `verbatimSymlinks:true`, in
+      // `dereference:false`, and in `dereference:true` alike -- so it was never a mode problem --
+      // and the extended-length `\\?\` prefix did not help either, so it was not MAX_PATH.
+      // Bisected to `home/`, which is where uv builds its wheel cache as symlinks whose targets are
+      // container-absolute (`/opt/data/home/.cache/uv/archive-v0/...`) and therefore DANGLING on
+      // the host. A hard crash is worse than a failure: no exception, no receipt, no diagnosis --
+      // the dispatch simply vanishes, and every fixture stayed green because fixtures plant
+      // regular files.
+      //
+      // SKIPPING KEEPS ADR-0222'S ARGUMENT INTACT. Its case for copying over wiping was that a copy
+      // needs NO knowledge of the runtime's storage layout. "Skip every symlink" is a rule about a
+      // FILE KIND and preserves that exactly; excluding `home/.cache/uv` by path would smuggle the
+      // layout knowledge straight back in and be wrong the day the vendor moves it.
+      //
+      // WHAT IT COSTS: the links are a package CACHE -- a pointer into an archive store -- so a
+      // dispatch rebuilds them rather than losing state. And a link that pointed OUT of the
+      // template never reaches here at all: the guard above refuses that case loudly, because a
+      // template depending on outside state is not a template. Measured after the change: 2,570 ms,
+      // 1,128 files, 13 links skipped, 0 links in the copy -- against ADR-0222's original 2,235 ms
+      // / 1,171 files, so the cost claim in the ADR still holds.
+      let skippedLinks = 0;
+      cpSync(DATA_DIR, workspace, {
+        recursive: true,
+        force: true,
+        filter: (src) => {
+          try {
+            if (lstatSync(src).isSymbolicLink()) { skippedLinks += 1; return false; }
+          } catch { return false; }
+          return true;
+        },
+      });
+      if (skippedLinks > 0) {
+        // SAID, NOT SILENT. The copy is deliberately not byte-identical to the template, and a
+        // difference nobody is told about is a difference nobody can account for later.
+        process.stderr.write(`hermes: ${skippedLinks} symlink(s) skipped while copying the template — they are cache pointers and the runtime rebuilds them (ADR-0222)\n`);
+      }
       workspaceIsCopy = true;
       // CLEANED UP ON EVERY EXIT PATH THIS PROCESS CAN OBSERVE, registered at creation rather than
       // written at each return. The usage-report cleanup was put in a `finally` that only the SUCCESS
@@ -838,6 +926,32 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
         args.push("-e", `${k}=${v}`);
       }
     }
+  }
+
+  // THE RUNTIME'S OWN CAPPED CREDENTIAL, AND NOTHING ELSE (Phase 06 fixture 4).
+  //
+  // Fixture 4 asks that an env audit inside the runtime shows "only its own capped key and ZERO
+  // arc secrets". Until now the honest answer was **neither** -- the second half passed because no
+  // credential was injected at all, and the first half was simply unbuilt. Measured 2026-08-17:
+  // with this one variable set, the runtime reaches OpenRouter and answers on the first attempt.
+  //
+  // THE ZERO-ARC-SECRETS HALF IS STRUCTURAL, not a filter to maintain. `docker run` does not
+  // inherit the host environment; a container sees exactly the variables named by `-e`. So there
+  // is no allowlist here that could drift, and no denylist that could miss a new `ARC_*` name --
+  // the container's environment is a whitelist by construction, and this is the only credential on
+  // it.
+  //
+  // THE VARIABLE NAME IS THE RUNTIME'S, not arc's. arc holds the key as `ARC_HERMES_API_KEY` and
+  // hands it over under whatever name the runtime's configured provider reads -- OpenRouter's
+  // `OPENROUTER_API_KEY` by default, because ADR-0213 chose OpenRouter. `ARC_HERMES_API_KEY_ENV`
+  // exists so a provider change is one variable rather than a shim edit; it is deliberately the
+  // only knob, because every extra one is a way for the credential to reach the wrong place.
+  //
+  // UNSET IS UNSET. No key means no `-e`, and the runtime fails its own way against its own
+  // provider. Passing an empty credential would turn "no key configured" into "authentication
+  // failed", which is a worse diagnosis of a different problem.
+  if (API_KEY) {
+    args.push("-e", `${API_KEY_ENV}=${API_KEY}`);
   }
 
   args.push(IMAGE);

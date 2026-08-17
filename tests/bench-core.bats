@@ -51,7 +51,14 @@ CORE_STATUS() { cat "$BATS_FILE_TMPDIR/core.status"; }
   # 87 measured 2026-08-17. Tightened from a floor of 55 against an actual of ~84: at that slack
   # a whole section could be deleted without the count moving, which is the one thing this test
   # exists to notice.
-  [ "$oks" -eq 87 ]
+  #
+  # 87 -> 88 on 2026-08-17: the ceiling-leak check gained a companion asserting that the two fields
+  # it now EXCLUDES (`id`, `idem`) are an opaque ULID and a sha256. The exclusion exists because the
+  # old check grepped the whole envelope for the decimal ceiling `3313`, and a sha256 hex digest
+  # contains those four digits about 0.19% of the time -- it finally rolled one, and the failure
+  # read exactly like a real ceiling leak. Excluding a field without asserting it stays opaque would
+  # have been a hole, so the count moved by one rather than staying still.
+  [ "$oks" -eq 88 ]
 }
 
 @test "the canonical encoder refuses NaN rather than folding it to null" {
