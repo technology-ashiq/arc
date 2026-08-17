@@ -144,7 +144,22 @@ classes:
     tier: balanced-workhorse
     driver: hermes
     cap: L1-drafts
-    hosted: local
+    # CLOUD, CORRECTED 2026-08-17 — and this field is not descriptive, it is load-bearing.
+    #
+    # It read `local` from the day the row was written, and that was true then: Phases 04-06 ran
+    # against a local `ollama` endpoint at zero spend. It stopped being true the moment the capped
+    # credential landed and the runtime started reaching **openrouter.ai** — measured the same day,
+    # HTTP 200 through the allowlisting proxy.
+    #
+    # `data-boundary.mjs` reads this value to decide how a refusal is REPORTED: an internal-only
+    # input against a `hosted: cloud` row is refused *with the routing fact attached* (REQ-02
+    # fixture 3). So a stale `local` does not merely mislead a reader — it makes the boundary's own
+    # explanation wrong about where the document was about to go, on the one code path whose entire
+    # job is to say that.
+    #
+    # Left stale, this is the shape this cycle keeps recording: a field that was accurate when
+    # written, quietly falsified by a later change, with nothing that reads it noticing.
+    hosted: cloud
     judge: ashiq
     review_by: 2026-08-31
     fallback: []

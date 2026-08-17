@@ -182,3 +182,14 @@ kinds:
     publish: { level: L0 }
     deploy: { level: L0 }
     spend: { level: L0 }
+
+  "process:build-in-public-draft":
+    e2: []
+    read: { level: L3 }
+    write: { level: L0 }
+    shell: { level: L0 }
+    network: { level: L1 }
+    message: { level: L0 }
+    publish: { level: L0 }
+    deploy: { level: L0 }
+    spend: { level: L0 }
