@@ -136,13 +136,25 @@ run_driver() {
   [[ "$output" == *'"tokens_out":567'* ]]
 }
 
-@test "ADR-0221 negative control: no usage report means no sidecar, and the run does not fail" {
+@test "ADR-0221 negative control: no usage report means NO FIGURES -- but the identity still rides" {
   # This is the state the REAL runtime is in today. If this test ever fails, the fail-safe that
   # keeps hermes runs working while the vendor flag is a no-op has broken.
+  #
+  # REWRITTEN 2026-08-17. It asserted `[ ! -f "$COST" ]`, and that became FALSE the moment the
+  # runtime identity started riding every dispatch: the sidecar now always exists, carrying the
+  # identity and no figures. Two problems with the old form, and only one of them was staleness --
+  # an absence assertion cannot tell "correctly wrote no figures" from "the driver crashed before
+  # writing anything", which is this repo's own recorded class. Asserted on CONTENT now.
   run_driver clean
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ok":true'* ]]
-  [ ! -f "$COST" ]
+  [ -s "$COST" ] || { echo "no sidecar at all -- the identity should always ride"; false; }
+  run cat "$COST"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"runtime":"hermes@sha256:'* ]] || { echo "the sidecar carries no runtime identity: $output"; false; }
+  # NO figures, and no `source`. An identity must never manufacture a measurement (ADR-0069 b5).
+  [[ "$output" != *"tokens_in"* ]] || { echo "a token count was invented: $output"; false; }
+  [[ "$output" != *"source"* ]] || { echo "a source was stamped with no figure to source: $output"; false; }
 }
 
 @test "ADR-0221: the report is deleted after it is read, so run N+1 cannot inherit run N's figures" {
@@ -216,7 +228,17 @@ run_driver() {
   run_driver clean
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ok":true'* ]]
-  [ ! -f "$COST" ]
+  # CONTENT, NOT ABSENCE. This assertion is the ENTIRE proof that the stale figures were not
+  # adopted, and `[ ! -f "$COST" ]` proved it equally well when the driver crashed before writing
+  # anything -- a pass condition that is only an absence. The sidecar now always exists (the
+  # identity rides every dispatch), so the real property is: identity present, stale numbers absent.
+  [ -s "$COST" ] || { echo "no sidecar at all"; false; }
+  run cat "$COST"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"runtime":"hermes@sha256:'* ]]
+  [[ "$output" != *"99"* ]] || { echo "the STALE token count was adopted: $output"; false; }
+  [[ "$output" != *"stale-model"* ]] || { echo "the STALE model was adopted: $output"; false; }
+  [[ "$output" != *"source"* ]] || { echo "a source was stamped from a stale report: $output"; false; }
 }
 
 @test "ADR-0221: a non-string model is refused AND says so, which is what makes it different from absent" {

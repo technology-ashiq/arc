@@ -125,9 +125,18 @@ classes:
   # TERMINATION SPEC (REQ-04). Two acts, in this order, and both are reviewed diffs:
   #   1. REVOKE THE CREDENTIAL first, at the provider. The key is the money bound; a disabled row
   #      with a live key still spends if anything else reaches the runtime.
-  #   2. DISABLE THE ROW second — delete it, or set `driver:` to a driver that is not installed so
-  #      the router refuses to load rather than silently re-routing. Do NOT merely change `cap:`;
-  #      a lowered ceiling still dispatches.
+  #   2. DELETE THE ROW second. Not "rename the driver", not "lower the cap".
+  #
+  #      CORRECTED 2026-08-17, and the old wording was FALSE. It said to "set `driver:` to a driver
+  #      that is not installed so the router refuses to load" — measured, the router LOADS fine:
+  #      an unknown driver is not in RUNTIME_DRIVERS, so the row stops looking like a runtime row
+  #      and its four terms validate happily. The refusal comes later, from a different check, and
+  #      only on the `--driver auto` path — so `--driver hermes` against that same tree still
+  #      dispatched. A termination step that leaves the contractor reachable is not a termination
+  #      step, and step 1 already warns that a live key spends if anything reaches the runtime.
+  #
+  #      Deleting the row is the only form with no reachable remainder: no row, no route, and the
+  #      fallback chain of every other row is now validated for runtime reachability too.
   #   Termination is a repo edit citing this comment. Nothing terminates a hire at run time, for
   #   the same reason nothing promotes one: both are tier changes, and ADR-0069 b1 forbids them
   #   outside a reviewed diff.

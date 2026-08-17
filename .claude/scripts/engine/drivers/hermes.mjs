@@ -62,7 +62,7 @@ import { constants as osConstants, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { EXIT, pinnedModel, runDriver, settle } from "./common.mjs";
+import { EXIT, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
 // The seat grammar is imported from the spine's OWN validator rather than re-spelled here.
 // A second copy of a regex is a second thing to keep in sync, and the failure this guards
@@ -326,6 +326,24 @@ function fileComponent(label, path) {
  * The schema version moves with the shape, because a preimage that gains a field while keeping its
  * name makes two incomparable hashes look comparable.
  */
+/**
+ * The comparable identity of a proxy URL: scheme, host, port. Null when unset.
+ *
+ * Deliberately NOT the whole URL. A proxy URL can carry `user:password@`, and a preimage is a
+ * thing operators paste into comparisons and receipts -- so the credential half is dropped rather
+ * than hashed. An unparseable value is recorded as itself rather than silently becoming null: an
+ * operator who set garbage should see a hash that differs from one who set nothing.
+ */
+function proxyOrigin(url) {
+  if (!url) return null;
+  try {
+    const u = new URL(String(url));
+    return `${u.protocol}//${u.hostname}${u.port ? `:${u.port}` : ""}`;
+  } catch {
+    return `unparseable:${String(url).slice(0, 64)}`;
+  }
+}
+
 export function configPreimage() {
   return {
     schema: "arc.driver.hermes.config-hash.v2",
@@ -333,11 +351,16 @@ export function configPreimage() {
     config: fileComponent("the runtime config file", CONFIG_FILE),
     egress: fileComponent("the egress/network policy", EGRESS_FILE),
     skills: fileComponent("the vetted skill list", SKILLS_FILE),
-    // The MODE, not a file: what confinement was actually asked for on this invocation. `proxy` is
-    // a boolean because the proxy's URL is an address, not a policy -- the policy is its allowlist,
-    // which lives in the proxy's own argv and is hashed by whoever orchestrates it.
+    // The MODE, not a file: what confinement was actually asked for on this invocation.
+    //
+    // THE PROXY'S ORIGIN, NOT A BOOLEAN. `proxy: Boolean(...)` recorded only THAT a proxy was
+    // named, so a dispatch through the vetted `arc-eproxy:3128` and one through
+    // `attacker.example:8080` produced BYTE-IDENTICAL config hashes -- proved. That is the same
+    // defect this field was added to close, one level down: the pin moved from "was there a
+    // policy" to "was there a proxy" without ever reaching "WHICH one". The origin is the part an
+    // operator can compare; the path and any credentials in the URL are deliberately not hashed.
     network: EGRESS_NETWORK || null,
-    proxy: Boolean(EGRESS_PROXY),
+    proxy: proxyOrigin(EGRESS_PROXY),
   };
 }
 
@@ -733,6 +756,30 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   if (workspace.slice(drivePrefix).includes(":")) {
     throw new Error(`the workspace path ${workspace} contains a colon, which docker would read as a volume-spec separator — refusing rather than mounting somewhere unintended`);
   }
+  // THE IDENTITY IS WRITTEN BEFORE THE SPAWN, and that placement is the fix rather than a detail.
+  //
+  // It was first computed at the TAIL of produce(), beside the cost. So it rode successful
+  // dispatches and no other: any throw on the way -- a non-zero runtime exit, unparseable output, a
+  // timeout, ENOBUFS, a malformed deadline -- skipped `writeCost` entirely, and `seatFor(null)`
+  // put `runtime: null` on the receipt. The one field naming WHICH CONTRACTOR FAILED was absent
+  // from precisely the receipts a failure post-mortem reads.
+  //
+  // That is the SAME structural defect the previous fix describes ("cost was only constructed
+  // INSIDE the usage-report block"), moved one scope outward and shipped again four hours later --
+  // which is what "fixes produced by an adversarial pass are themselves unattacked code" means in
+  // practice. Written here, before anything can throw; the usage block enriches it later.
+  //
+  // COMPUTED ONCE, in one binding, because two call sites deriving one quantity is this lane's
+  // most-repeated defect: the seat fix went into `emitRun` and not into the escalation proposal
+  // 300 lines below, and one run produced two receipts disagreeing about which model ran.
+  //
+  // `versionString()` is wrapped: it reads and hashes files, so it CAN throw, and a provenance
+  // field that kills a dispatch which otherwise worked is a worse trade than an absent one.
+  let runtimeId = "";
+  try { runtimeId = versionString(); }
+  catch (e) { process.stderr.write(`hermes: WARN could not compute the runtime identity (${e.message}) — the receipt will carry none\n`); }
+  if (runtimeId) writeCost({ runtime: runtimeId });
+
   const args = [
     "run", "--rm", "--name", name,
     "-v", `${workspace}:/opt/data`,
@@ -925,10 +972,6 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   // Every fixture test passed throughout, because they all plant a usage report. The suite proved
   // the enriched path and nothing proved the ordinary one -- which is the shape of a run that
   // measures nothing.
-  // COMPUTED ONCE. Two call sites deriving the same quantity is this lane's most-repeated defect
-  // class -- the seat fix went into `emitRun` and not into the escalation proposal 300 lines below,
-  // and one run produced two receipts disagreeing about which model ran. One binding, both users.
-  const runtimeId = versionString();
   let cost = { runtime: runtimeId };
   // A REPORT IS ONLY THIS RUN'S IF IT WAS WRITTEN DURING THIS RUN. Ownership is not enough: on the
   // operator path the file is never rewritten and never deleted, so `existsSync` alone re-reported

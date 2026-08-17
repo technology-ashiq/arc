@@ -172,7 +172,10 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
     if (!found) { console.log("NO_RECEIPT"); process.exit(1); }
     console.log(JSON.stringify({
       runtime: found.payload.runtime ?? null,
-      cost: found.payload.cost ?? null,
+      // TOP-LEVEL, not payload. `cost` is an event field (arc-event.mjs), so `payload.cost` is
+      // undefined on every receipt ever written and `?? null` made this a tautology -- the guard
+      // on the fix trade could not fail. A mutant stamping a fabricated zero cost stayed green.
+      cost: found.cost ?? null,
       has_duration: typeof found.payload.duration_ms === "number" && found.payload.duration_ms >= 0,
     }));
   ' "$ARC_SPINE_ROOT/events"

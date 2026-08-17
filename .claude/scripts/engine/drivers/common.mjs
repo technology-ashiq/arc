@@ -53,7 +53,19 @@ export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) 
   const cost = {};
   if (Number.isFinite(tokensIn)) cost.tokens_in = tokensIn;
   if (Number.isFinite(tokensOut)) cost.tokens_out = tokensOut;
-  if (Number.isFinite(inr)) cost.inr = inr;
+  // A NON-NEGATIVE INTEGER, NOT MERELY "FINITE". `Number.isFinite` admitted three wrong things,
+  // all proved: a NEGATIVE spend (arc-run does `inrSpent += r.cost.inr`, so one negative report
+  // drives the total down and `overBudget()` cannot fire again for the rest of the fallback chain
+  // -- a driver reporting -1000000 buys unlimited budget); a FRACTIONAL value, stamped `measured`
+  // and carried into `inr_estimate` even though these are integer minor units; and a numeric
+  // STRING, which was dropped in total silence, losing a real provider-reported spend.
+  //
+  // The upper bound is a sanity ceiling, not a policy: a figure past it is a units bug, and a
+  // units bug on an append-only money receipt is the expensive kind.
+  if (Number.isInteger(inr) && inr >= 0 && inr <= 1e12) cost.inr = inr;
+  else if (inr !== undefined && inr !== null) {
+    process.stderr.write(`arc-driver: WARN refusing a cost of ${JSON.stringify(inr)} — spend must be a non-negative integer in paise; reported as absent\n`);
+  }
   // `source` is mandatory whenever ANY figure is present -- a number whose provenance is
   // unstated is the thing MP-F exists to prevent.
   if (Object.keys(cost).length) cost.source = source || "measured";
@@ -67,8 +79,19 @@ export function writeCost({ tokensIn, tokensOut, inr, source, model, runtime }) 
   // These are written even when no cost figure exists: a run can know its model and not its
   // spend, and `Object.keys(cost).length` above must therefore be evaluated BEFORE they land or
   // a model id would silently manufacture `source: "measured"` for an empty cost record.
+  // WRONG TYPE IS LOUD HERE TOO. `drivers/hermes` learned this lesson ("'Wrong type' and 'missing'
+  // are DIFFERENT INPUTS ... `{"model": 42}` was dropped in total silence") and the fix went into
+  // hermes ALONE -- while THIS is the funnel every driver uses (mock, claude-code, codex,
+  // generic-api). So the loud-on-wrong-type property held for exactly one driver and failed for the
+  // shared path. A fix is not applied until it has been attacked where it was never made.
   if (typeof model === "string" && model) cost.model = model;
+  else if (model !== undefined && model !== null) {
+    process.stderr.write(`arc-driver: WARN a non-string model (${typeof model}) was dropped — the seat is left unpinned\n`);
+  }
   if (typeof runtime === "string" && runtime) cost.runtime = runtime;
+  else if (runtime !== undefined && runtime !== null) {
+    process.stderr.write(`arc-driver: WARN a non-string runtime identity (${typeof runtime}) was dropped\n`);
+  }
   writeFileSync(path, `${JSON.stringify(cost)}\n`, "utf8");
 }
 

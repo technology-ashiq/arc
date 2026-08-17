@@ -48,12 +48,20 @@ EVIDENCE="$REPO/initiatives/engine/evidence/phase-06"
 
 die() { printf 'egress-session: %s\n' "$1" >&2; exit "${2:-1}"; }
 
+# EVERY FLAG CHECKS IT HAS A VALUE BEFORE `shift 2`.
+#
+# `--image` with no value used to HANG THE SCRIPT FOREVER, silently: `shift 2` fails with only one
+# positional left, `set -e` is not on, `$#` never decreases, and the loop spins. Measured: `timeout
+# 10 … up --image` exits 124 having printed nothing at all. This is the one script an operator
+# drives by hand around a real dispatch, and its worst failure mode was a dead terminal.
+need_value() { [ "$#" -ge 2 ] || die "$1 needs a value" 2; }
+
 verb="${1:-}"; shift || true
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --allowlist) ALLOWLIST="${2:-}"; shift 2 ;;
-    --image)     IMAGE="${2:-}"; shift 2 ;;
-    --out)       OUT="${2:-}"; shift 2 ;;
+    --allowlist) need_value "$@"; ALLOWLIST="$2"; shift 2 ;;
+    --image)     need_value "$@"; IMAGE="$2"; shift 2 ;;
+    --out)       need_value "$@"; OUT="$2"; shift 2 ;;
     *) die "unknown flag $1" 2 ;;
   esac
 done
@@ -63,13 +71,30 @@ done
 # design; catching it here names the FILE, which the proxy cannot.
 read_allowlist() {
   [ -f "$ALLOWLIST" ] || die "no allowlist at $ALLOWLIST -- the policy file is not optional"
-  ENTRIES=""
+  # AN ARRAY, NOT A STRING. The entries were accumulated into one string and expanded UNQUOTED so
+  # docker would receive them as separate words. Word-splitting was intended; PATHNAME EXPANSION
+  # was not, and nothing disabled it -- so an entry carrying a glob (`*.openrouter.ai:443`, exactly
+  # the shape the allowlist header warns operators against writing) expanded against the operator's
+  # CWD. Measured: a one-line allowlist reported "carries 1 entr(y|ies)" while the proxy was started
+  # with a policy made of local FILENAMES. An array expands to exactly the words it holds.
+  ENTRIES=()
   local count=0
   while IFS= read -r raw || [ -n "$raw" ]; do
     line="${raw%%#*}"
     line="$(printf '%s' "$line" | tr -d '[:space:]')"
     [ -n "$line" ] || continue
-    ENTRIES="$ENTRIES --allow $line"
+    # VALIDATED HERE TOO, and the comment above this function claimed it already was. The old
+    # version counted non-empty lines and validated nothing, so the two shapes egress-proxy.py
+    # exists to refuse -- suffix rules and bare hostnames -- sailed through the script that says it
+    # catches them. The proxy still refuses them; this makes the refusal name the FILE and the LINE.
+    case "$line" in
+      *[!A-Za-z0-9.:-]* | .* | *:*:* | *:) die "allowlist $ALLOWLIST: \`$line\` is not an exact host:port (no wildcards, no leading dot)" ;;
+    esac
+    case "$line" in
+      *:*) : ;;
+      *)   die "allowlist $ALLOWLIST: \`$line\` has no port -- a bare hostname would be reachable on any port" ;;
+    esac
+    ENTRIES+=(--allow "$line")
     count=$((count + 1))
   done < "$ALLOWLIST"
   [ "$count" -gt 0 ] || die "the allowlist at $ALLOWLIST has no entries -- that is a policy nobody wrote"
@@ -85,10 +110,18 @@ case "$verb" in
     esac
     read_allowlist
 
-    "$DOCKER" network inspect "$NETWORK" >/dev/null 2>&1 || {
+    # AN EXISTENCE CHECK CANNOT TELL "the network I built" FROM "a network with the same name".
+    # A pre-existing NON-internal `arc-egress` short-circuited the create, the proxy attached, `up`
+    # reported a confined session and printed the exports -- and every dispatch had a default
+    # gateway straight past the allowlist. The driver's config hash would then be byte-identical to
+    # a genuinely confined run. The property is `Internal: true`, so that is what is asserted.
+    if "$DOCKER" network inspect "$NETWORK" >/dev/null 2>&1; then
+      internal="$("$DOCKER" network inspect -f '{{.Internal}}' "$NETWORK" 2>/dev/null)"
+      [ "$internal" = "true" ] || die "network $NETWORK exists but is NOT --internal (Internal=$internal) -- refusing to report a confined session over an open bridge. Remove it: docker network rm $NETWORK"
+    else
       "$DOCKER" network create --internal "$NETWORK" >/dev/null || die "could not create the internal network $NETWORK"
       printf 'egress-session: created internal network %s\n' "$NETWORK" >&2
-    }
+    fi
 
     # Idempotent: a leftover proxy from an interrupted session is replaced rather than duplicated.
     "$DOCKER" rm -f "$PROXY_NAME" >/dev/null 2>&1 || true
@@ -106,12 +139,14 @@ case "$verb" in
     # The proxy script is MOUNTED IN rather than expected in the image: the runtime image carries
     # Python but not arc's file, and the whole point of reusing the image is that there is no second
     # artifact to pin and vet.
-    # shellcheck disable=SC2086 -- ENTRIES is a deliberately word-split flag list
+    # ENTRIES is an ARRAY and is quoted. The disable that used to sit here excused an unquoted
+    # expansion as "deliberately word-split" -- which it was, and which also enabled pathname
+    # expansion nobody wanted. The array gives the word-splitting without the globbing.
     MSYS2_ARG_CONV_EXCL='*' MSYS_NO_PATHCONV=1 "$DOCKER" run -d --name "$PROXY_NAME" --network "$NETWORK" \
       --restart no \
       -v "$HERE/egress-proxy.py:/opt/egress-proxy.py:ro" \
       --entrypoint python3 \
-      "$IMAGE" -B /opt/egress-proxy.py --port "$PROXY_PORT" $ENTRIES >/dev/null \
+      "$IMAGE" -B /opt/egress-proxy.py --port "$PROXY_PORT" "${ENTRIES[@]}" >/dev/null \
       || die "could not create $PROXY_NAME"
 
     MSYS2_ARG_CONV_EXCL='*' "$DOCKER" network connect bridge "$PROXY_NAME" >/dev/null 2>&1 \
