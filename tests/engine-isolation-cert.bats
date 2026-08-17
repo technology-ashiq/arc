@@ -32,6 +32,13 @@ PROC="commit-msg-draft"
   # nothing about the invocation and eight mutants of it survived — including one that mounted
   # host root.
   local argvf="$BATS_TEST_TMPDIR/argv.jsonl"
+  # THE TEMPLATE IS CREATED, and until 2026-08-17 it was not -- in this test or in three others.
+  # An adversarial pass found that a missing ARC_HERMES_DATA made the driver SKIP the private-copy
+  # block and mount the template path directly, so every one of these certificate runs exercised the
+  # UNCONFINED mode. The certificate was issued against the state it certifies against. The driver
+  # now refuses a missing template outright, which is what makes this mkdir load-bearing rather than
+  # cosmetic.
+  mkdir -p "$BATS_TEST_TMPDIR/data"
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
     ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/data" \
@@ -52,6 +59,7 @@ PROC="commit-msg-draft"
   # Compared as TEXT, not through md5sum: md5sum is GNU-only and macOS ships `md5` with different
   # output, so hashing here would fail one leg of the matrix for a reason that has nothing to do
   # with the property being tested. There is no reason to hash a value that is already small.
+  mkdir -p "$BATS_TEST_TMPDIR/data2"        # see cert 1 -- a missing template used to mean unconfined
   local before; before="$(cd "$ARC_ROOT" && git status --porcelain | sort)"
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
@@ -100,6 +108,7 @@ PROC="commit-msg-draft"
 # ---------------------------------------------------------------------------------------------
 
 @test "cert 11: a runtime that never exits is stopped at the budget line, as BUDGET" {
+  mkdir -p "$BATS_TEST_TMPDIR/d11"          # see cert 1 -- a missing template used to mean unconfined
   local deadline=$(( $(date +%s) * 1000 + 6000 ))
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=hang \
@@ -118,10 +127,15 @@ PROC="commit-msg-draft"
 @test "cert 12: an image pinned by TAG rather than digest is refused" {
   # A tag can be repushed. Phase 04 measured :latest moving to a different build on the same day
   # the pinned digest stood still, so a tag proves nothing about which runtime answered.
+  #
+  # The template exists so this test fails for its OWN reason. With it missing, the run would refuse
+  # on the workspace check and the assertion below would pass on the wrong refusal -- a green test
+  # measuring a different rule, which is the near-miss shape this suite exists to catch.
+  mkdir -p "$BATS_TEST_TMPDIR/d12-created"
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
     ARC_HERMES_IMAGE="nousresearch/hermes-agent:v2026.8.3" \
-    ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d12" \
+    ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d12-created" \
     bash "$(DRIVER)" run "$PROC" '{}' ''
   [ "$status" -eq 1 ] || { echo "an unpinned tag was accepted: $status"; false; }
   [[ "$stderr" == *"pinned by digest"* ]] || { echo "wrong reason: $stderr"; false; }
@@ -158,7 +172,14 @@ PROC="commit-msg-draft"
 }
 
 @test "this file registers every test it declares" {
-  local n
-  n="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$n" -eq 11 ] || { echo "declared $n tests, expected 11 - a test was added or silently dropped"; false; }
+  # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
+  # `^@test ` lines in the SOURCE -- the DECLARED count. bats silently DROPS a @test whose name
+  # carries a non-ASCII character, and the source line survives the drop, so the number never
+  # moved and the guard stayed green while a test did not run. `bats --count` reports what bats
+  # actually REGISTERED. Assert both and that they agree: the pair catches a drop (registered
+  # falls) and a silent removal (declared falls).
+  declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
+  registered="$(bats --count "$BATS_TEST_FILENAME")"
+  [ "$registered" = "11" ] || { echo "expected 11 REGISTERED tests, bats registered $registered"; false; }
+  [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

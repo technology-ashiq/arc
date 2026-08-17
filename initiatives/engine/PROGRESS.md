@@ -151,6 +151,121 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE ADVERSARIAL PASS ON THE EGRESS AND WORKSPACE CODE — 2026-08-17. 50 findings, and this time the two surfaces AGREED.
+
+Required before PR #194 merges, never at the phase close. Two fresh agents, neither having seen the
+implementation: one on decision logic, one on the shell/OS boundary. **27 and 23 findings.**
+
+**The overlap is the headline, because in this lane there has never been any.** Every previous pass
+this cycle produced ~zero shared findings — the structural blind-spot result the tracker keeps
+recording. This time both surfaces independently found and PROVED the **same five criticals**. Two
+independent agents converging is a much stronger signal than either one alone, and it says these
+were not subtle.
+
+**The five both of them found, all PROVED by execution:**
+
+1. **A missing template silently disabled ADR-0222 in its entirety.** `existsSync(DATA_DIR)` false
+   meant the copy block was **skipped, not failed** — `workspaceIsCopy` stayed false, the template
+   path went into `-v`, docker created it host-side as root, and **every dispatch from then on
+   shared one directory**. That is the exact memory-carrying mechanism ADR-0222 exists to stop,
+   reached by the state `.env.example` itself calls normal (*"seed the template once"*). The `catch`
+   that promises to fail rather than fall back never ran, because that path never entered the `try`.
+   Three lines above, `fileComponent()` in the same file carefully separates *not configured* from
+   *missing* from *unreadable*; the workspace block collapsed the last two into "run unconfined,
+   exit 0". **Twin readers of one rule, one failing closed and one failing open — five times now.**
+2. **`ARC_HERMES_NETWORK=host` was accepted verbatim**, handing the container the host network
+   namespace: unrestricted egress plus every host-local service, while the code, the tests and the
+   evidence all said "confined". It is the value most likely to be typed while debugging. **And the
+   one guard written for exactly this could not fire** — `engine-hermes-contract.bats` greps for the
+   space-separated `--network host` while the recorder writes JSON, so the bytes are
+   `"--network","host"`. A grep where the property needs a parse, caught guarding itself.
+3. **"A proxy without a network is refused" was false in three places at once** — in the code (it
+   silently dropped the proxy and ran unconfined at exit 0), in `.env.example` (*"the driver refuses
+   that combination"*), and in the test, which was **titled** *"is NOT silently honoured"* and
+   asserted `status -eq 0`. **The test pinned the bug as correct.**
+4. **`port.isdigit()` then `int(port)` in the proxy.** `str.isdigit()` is True for Unicode digits:
+   `--allow host:٤٤٣` was **accepted as port 443**, and a CONNECT to `host:²` passed the check then
+   raised `ValueError` past a handler catching only `OSError` — thread dead, **no 403, no DENY line,
+   client socket never closed**, repeatable to exhaust fds. The docstring's *"a malformed port —
+   all 403"* was false for the input that most needed it. `hermes.mjs` had fixed this exact class one
+   file away with an anchored decimal regex. **Twin-fix miss, one day apart.**
+5. **The config hash could not distinguish a confined dispatch from an unconfined one.**
+   `versionString()` was byte-identical for both postures; the preimage named a policy FILE
+   (`ARC_HERMES_EGRESS`) that is documented nowhere and set by nothing, so that component has been
+   `{named:false}` on **every run ever made**. A pin over the wrong thing, next to a comment claiming
+   the receipt records which mode ran. **Eighth false comment this cycle.**
+
+**Four more that only one surface found, and all four matter:**
+
+- **The exit handler does not run on the kill path this file is written around.** Proved by
+  SIGKILLing a child with an exit handler. arc-run spawns the driver with `killSignal: "SIGKILL"`,
+  so **every killed dispatch — the common failure mode — leaked 36 MB containing the runtime's
+  `memories/MEMORY.md` and `state.db`**, the precise artifact ADR-0222 exists to destroy. The comment
+  claimed it covered "the timeouts alike". SIGKILL cannot be caught, so the fix is two mechanisms:
+  signal handlers for what can be caught, and a startup sweep for what cannot.
+- **`dereference: false` does not mean the same thing on all three legs.** On Windows it was measured
+  **following an inner junction and copying the target's contents in**; on POSIX it reproduces a link,
+  so a "private" copy still writes to shared state. Refusing a template containing any symlink needs
+  no per-OS reasoning — the same argument that chose copying over wiping.
+- **`hermes.sh` breaks under an exported `CDPATH`** (proved): `cd` prints the resolved directory to
+  stdout, `HERE` becomes two lines, and the driver dies with ENOENT for a reason unrelated to the
+  runtime. No `-P`, no failure check, and `set -e` is not on.
+- **The main guard compared a realpath-resolved URL against an as-given argv**, so behind any symlink
+  the driver **silently does nothing: exit 0, empty stdout**, and arc-run spends a retry blaming the
+  runtime. Five other main-guards in this repo already realpath both sides. **Sixth twin recurrence.**
+
+**AND THE TESTS WERE WORSE THAN THE CODE.** Both suites written the same day carried assertions that
+could not fail:
+
+- The workspace-removal test counted `arc-hermes-ws-*` under `${TMPDIR:-/tmp}` while Node creates
+  them in `os.tmpdir()` — on this box `0 ≤ 0`, **passing with the cleanup deleted**. And `after ≤
+  before` cannot distinguish "created and removed" from "never created".
+- The self-count guard **greps the source**, so a `@test` bats drops for a non-ASCII name leaves its
+  line intact and the count never moves. `engine-emit-path.bats` had already fixed this and written
+  down why. **The sweep found it in SIX engine suites, not the two the pass named** — the twin rule
+  paying for itself.
+- Four `run cat "$ARGV"` sites never checked the status, and two of those tests asserted only `!=`,
+  which `cat: No such file` satisfies perfectly.
+- The negative control planted a marker whose fixture **fell back to a default byte-identical to the
+  expected value**, so a broken export proved the default rather than the wiring.
+- The flag-position probe used `indexOf`, so a flag appended after the image was invisible whenever
+  the same flag appeared legally earlier — and an **absent** flag scored as "not misplaced".
+- **The certification suite set `ARC_HERMES_DATA` to four directories it never created**, so every
+  certificate run exercised the unconfined path. **The certificate was issued against the mode it
+  certifies against.**
+
+**And one nobody had looked for: `egress-proxy.py` had ZERO coverage of any kind.** Nothing launched
+it, no suite named it, and this repo has no Python lint step — so a syntax error or an inverted
+`if key not in allowed` would have shipped **green into every consumer repo the sync manifest
+feeds**. The stated excuse was that a CI runner has no Docker; that is true of the container and
+false of the decision logic, which an attacker drove from a bare interpreter in milliseconds.
+`tests/engine-egress-proxy.bats` now does exactly that, 12 tests, no Docker, no network.
+
+**Also fixed:** a transport failure to an *allowlisted* host was logged `DENY` and answered 403 —
+including into an already-established tunnel, which is corruption rather than refusal · bytes
+pipelined with the CONNECT were silently discarded, so a batched ClientHello hung to timeout ·
+suffix rules like `.openrouter.ai` were **accepted** at parse and merely never matched, so the proxy
+started, printed a plausible policy and denied everything · `--port 0` bound an ephemeral port while
+logging "listening on 0" · unbounded threads with no idle timeout and a bare `accept()` loop, so the
+confined runtime could switch off its own confinement · IPv6 was unreachable in both directions ·
+the ALLOW line logged the raw target rather than the decided key · two concurrent dispatches on the
+operator usage path read the same report and both stamped `measured` with the same tokens ·
+`TEARDOWN_GRACE_MS` was never re-measured when ADR-0222 added a second job to that window.
+
+**A defect I introduced while fixing theirs, caught before it shipped.** The first draft of the
+stale-workspace sweep deleted every matching directory — which would have destroyed a
+**concurrently running** dispatch's live workspace out from under its container. A cleanup that
+causes the corruption it cleans up after. Age-guarded now. *Fixes produced by an adversarial pass
+are themselves unattacked code*, written down for the third time this cycle and true again.
+
+**One more, found by a lint rather than an agent:** `process-lint.mjs` carried **six literal NUL
+bytes** (a placeholder sentinel written as raw bytes instead of escapes). Git handles it via
+`.gitattributes`, but **ripgrep treats the file as binary and skips it** — so every grep-based gate
+in this repo silently exempted it, including the shell-string safety check the adversarial pass is
+required to run. Escaped; behaviour identical; the file is now scannable.
+
+---
+
 ### THE DAY-5 KILL CHECKPOINT, READ — 2026-08-17. It FIRED, and the owner ruled CONTINUE.
 
 **The clock first, because a tripwire read against a stale number is not a read.** `burn` sat at

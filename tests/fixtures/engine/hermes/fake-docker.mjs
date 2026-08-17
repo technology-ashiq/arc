@@ -31,8 +31,23 @@
 const ESC = "\u001b";
 const BEL = "\u0007";
 // Only the usage-report cases below need these; every other case writes stdout and nothing else.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, writeSync } from "node:fs";
 import { join } from "node:path";
+
+/**
+ * Name the failure and exit, with the message GUARANTEED written first.
+ *
+ * Every site below was `process.stderr.write(...)` immediately followed by `process.exit(N)`.
+ * common.mjs already records this repo's own finding that Node's stdio-to-a-pipe is ASYNCHRONOUS on
+ * macOS and `process.exit()` discards what is still queued -- which is why `settle()` exists. The
+ * exit code survived, so a test still failed; what could be dropped on exactly one leg is the NAME
+ * that makes the failure legible, leaving `the runtime exited 65: exit 65`. `writeSync` is
+ * synchronous on every platform.
+ */
+const die = (code, msg) => {
+  try { writeSync(2, `fake-docker: ${msg}\n`); } catch { /* the exit code still carries */ }
+  process.exit(code);
+};
 
 const out = (s) => process.stdout.write(s);
 const line = (s) => process.stdout.write(s + "\n");
@@ -232,12 +247,10 @@ switch (kase) {
     const flagAt = argv.indexOf("--usage-file");
     const volAt = argv.indexOf("-v");
     if (flagAt < 0 || flagAt + 1 >= argv.length) {
-      process.stderr.write("fake-docker: the driver passed no --usage-file, so this case cannot report\n");
-      process.exit(65);
+      die(65, "the driver passed no --usage-file, so this case cannot report");
     }
     if (volAt < 0 || volAt + 1 >= argv.length) {
-      process.stderr.write("fake-docker: the driver passed no -v mount, so the container path cannot be mapped home\n");
-      process.exit(66);
+      die(66, "the driver passed no -v mount, so the container path cannot be mapped home");
     }
     const inContainer = argv[flagAt + 1];
     const spec = argv[volAt + 1];
@@ -247,8 +260,7 @@ switch (kase) {
     const hostDir = spec.slice(0, cut);
     const mountPoint = spec.slice(cut + 1);
     if (!inContainer.startsWith(mountPoint)) {
-      process.stderr.write(`fake-docker: --usage-file ${inContainer} is outside the mount ${mountPoint}, so the host would never see it\n`);
-      process.exit(67);
+      die(67, `--usage-file ${inContainer} is outside the mount ${mountPoint}, so the host would never see it`);
     }
     const hostPath = join(hostDir, inContainer.slice(mountPoint.length).replace(/^\/+/, ""));
 
@@ -316,7 +328,7 @@ switch (kase) {
     const argv = process.argv.slice(2);
     const flagAt = argv.indexOf("--usage-file");
     const volAt = argv.indexOf("-v");
-    if (flagAt < 0 || volAt < 0) { process.stderr.write("fake-docker: no --usage-file or -v to write into\n"); process.exit(65); }
+    if (flagAt < 0 || volAt < 0) { die(65, "no --usage-file or -v to write into"); }
     const spec = argv[volAt + 1];
     const cut = spec.lastIndexOf(":");
     const hostDir = spec.slice(0, cut);
@@ -337,7 +349,7 @@ switch (kase) {
     const argv = process.argv.slice(2);
     const flagAt = argv.indexOf("--usage-file");
     const volAt = argv.indexOf("-v");
-    if (flagAt < 0 || volAt < 0) { process.stderr.write("fake-docker: no --usage-file or -v to plant into\n"); process.exit(65); }
+    if (flagAt < 0 || volAt < 0) { die(65, "no --usage-file or -v to plant into"); }
     const spec = argv[volAt + 1];
     const cut = spec.lastIndexOf(":");
     const hostDir = spec.slice(0, cut);
@@ -362,12 +374,27 @@ switch (kase) {
     line(ANSWER);
     const argv = process.argv.slice(2);
     const volAt = argv.indexOf("-v");
-    if (volAt < 0) { process.stderr.write("fake-docker: no -v mount to plant into\n"); process.exit(66); }
+    if (volAt < 0) { die(66, "no -v mount to plant into"); }
     const spec = argv[volAt + 1];
     const hostDir = spec.slice(0, spec.lastIndexOf(":"));
+    // THE MARKER HAS NO DEFAULT ANY MORE. It fell back to a hardcoded literal byte-identical to
+    // what the suite exported, so misspelling the export left every marker assertion passing
+    // against this file's own constant -- a negative control that proves the default rather than
+    // the wiring. An unset marker is now a named failure.
+    const marker = process.env.ARC_HERMES_FAKE_MARKER;
+    if (!marker) {
+      die(66, "ARC_HERMES_FAKE_MARKER is unset, so this case cannot plant anything\n");
+      process.exitCode = 68;
+      break;
+    }
     mkdirSync(join(hostDir, "memories"), { recursive: true });
-    writeFileSync(join(hostDir, "memories", "MEMORY.md"), `${process.env.ARC_HERMES_FAKE_MARKER || "ZEBRAQUARTZ7741"}\n`, "utf8");
-    writeFileSync(join(hostDir, "state.db"), `sqlite-ish ${process.env.ARC_HERMES_FAKE_MARKER || "ZEBRAQUARTZ7741"}\n`, "utf8");
+    writeFileSync(join(hostDir, "memories", "MEMORY.md"), `${marker}\n`, "utf8");
+    writeFileSync(join(hostDir, "state.db"), `sqlite-ish ${marker}\n`, "utf8");
+    // SAY THAT IT PLANTED, so the suite can assert the fixture DID something. Mutating this case
+    // into a no-op used to leave three isolation tests green: a fixture that writes nothing is
+    // indistinguishable from isolation that works, which is the vacuous pass this whole file
+    // exists to avoid producing.
+    die(64, `planted the marker into ${hostDir}\n`);
     break;
   }
 
@@ -379,7 +406,7 @@ switch (kase) {
     boot();
     const argv = process.argv.slice(2);
     const volAt = argv.indexOf("-v");
-    if (volAt < 0) { process.stderr.write("fake-docker: no -v mount to read\n"); process.exit(66); }
+    if (volAt < 0) { process.stderr.write("fake-docker: no -v mount to read"); }
     const spec = argv[volAt + 1];
     const hostDir = spec.slice(0, spec.lastIndexOf(":"));
     let seen = "";
@@ -391,6 +418,5 @@ switch (kase) {
   }
 
   default:
-    process.stderr.write(`fake-docker: unknown ARC_HERMES_FAKE_CASE [${kase || "unset"}]\n`);
-    process.exit(64);
+    process.stderr.write(`fake-docker: unknown ARC_HERMES_FAKE_CASE [${kase || "unset"}]`);
 }
