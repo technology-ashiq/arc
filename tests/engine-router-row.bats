@@ -104,6 +104,10 @@ YAML
 # idempotency claim was satisfied vacuously, because 0 is at most 1.
 # ---------------------------------------------------------------------------------------------
 
+# A fake root carrying ONLY a router and a process. Enough to prove the refusal, and deliberately
+# not enough to emit: `arc-run` resolves `.claude/scripts/hq/arc-event.sh` from `--root`, so a root
+# without that tree cannot write a receipt. The refusal is non-fatal about a failed emit by design,
+# so these tests still assert exactly what they name.
 expired_root() {
   local root="$1" by="${2:-2020-01-01}"
   mkdir -p "$root/engine" "$root/processes"
@@ -124,6 +128,20 @@ classes:
 YAML
 }
 
+# The same root PLUS the machinery a receipt needs. `arc-run` builds the emitter path from `--root`,
+# so a receipt-asserting test has to carry `.claude/scripts` with it -- CI proved that by failing
+# with "Command failed: bash <root>/.claude/scripts/hq/arc-event.sh" while the idem was perfectly
+# correct. Kept separate from `expired_root` because the copy is I/O-heavy and load-sensitive (this
+# repo already records a flake of exactly that shape), so only the two tests that assert receipts
+# pay for it.
+expired_root_emitting() {
+  local root="$1" by="${2:-2020-01-01}"
+  expired_root "$root" "$by"
+  mkdir -p "$root/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$root/.claude/scripts"
+  [ -f "$root/.claude/scripts/hq/arc-event.sh" ] || { echo "the emitter was not copied into the fake root"; false; }
+}
+
 @test "tenure: arc-run REFUSES to dispatch through an expired row, naming the row and the file" {
   local root="$BATS_TEST_TMPDIR/expired"
   expired_root "$root"
@@ -138,7 +156,7 @@ YAML
   # The idempotency claim, measured rather than asserted. A queue that grows by one per attempt is
   # a queue a human stops reading, which turns the loudest refusal in the system into noise.
   local root="$BATS_TEST_TMPDIR/idem"
-  expired_root "$root"
+  expired_root_emitting "$root"
   mkdir -p "$root/spine"
   # EXPORTED, not prefixed onto the `run` call. `VAR=x run node …` sets VAR for the bats `run`
   # FUNCTION, and a bash assignment before a function is not exported to the function's children --
@@ -166,7 +184,7 @@ YAML
   # that stops a run and leaves no trace is indistinguishable from a run nobody attempted. Two
   # adjacent refusal paths, and only one of them recorded.
   local root="$BATS_TEST_TMPDIR/receipt"
-  expired_root "$root"
+  expired_root_emitting "$root"
   export ARC_SPINE_ROOT="$root/spine"
   run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
   [ "$status" -ne 0 ]
