@@ -32,6 +32,13 @@ PROC="commit-msg-draft"
   # nothing about the invocation and eight mutants of it survived — including one that mounted
   # host root.
   local argvf="$BATS_TEST_TMPDIR/argv.jsonl"
+  # THE TEMPLATE IS CREATED, and until 2026-08-17 it was not -- in this test or in three others.
+  # An adversarial pass found that a missing ARC_HERMES_DATA made the driver SKIP the private-copy
+  # block and mount the template path directly, so every one of these certificate runs exercised the
+  # UNCONFINED mode. The certificate was issued against the state it certifies against. The driver
+  # now refuses a missing template outright, which is what makes this mkdir load-bearing rather than
+  # cosmetic.
+  mkdir -p "$BATS_TEST_TMPDIR/data"
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
     ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/data" \
@@ -52,6 +59,7 @@ PROC="commit-msg-draft"
   # Compared as TEXT, not through md5sum: md5sum is GNU-only and macOS ships `md5` with different
   # output, so hashing here would fail one leg of the matrix for a reason that has nothing to do
   # with the property being tested. There is no reason to hash a value that is already small.
+  mkdir -p "$BATS_TEST_TMPDIR/data2"        # see cert 1 -- a missing template used to mean unconfined
   local before; before="$(cd "$ARC_ROOT" && git status --porcelain | sort)"
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
@@ -100,6 +108,7 @@ PROC="commit-msg-draft"
 # ---------------------------------------------------------------------------------------------
 
 @test "cert 11: a runtime that never exits is stopped at the budget line, as BUDGET" {
+  mkdir -p "$BATS_TEST_TMPDIR/d11"          # see cert 1 -- a missing template used to mean unconfined
   local deadline=$(( $(date +%s) * 1000 + 6000 ))
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=hang \
@@ -118,13 +127,68 @@ PROC="commit-msg-draft"
 @test "cert 12: an image pinned by TAG rather than digest is refused" {
   # A tag can be repushed. Phase 04 measured :latest moving to a different build on the same day
   # the pinned digest stood still, so a tag proves nothing about which runtime answered.
+  #
+  # The template exists so this test fails for its OWN reason. With it missing, the run would refuse
+  # on the workspace check and the assertion below would pass on the wrong refusal -- a green test
+  # measuring a different rule, which is the near-miss shape this suite exists to catch.
+  mkdir -p "$BATS_TEST_TMPDIR/d12-created"
   run --separate-stderr env \
     ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=clean \
     ARC_HERMES_IMAGE="nousresearch/hermes-agent:v2026.8.3" \
-    ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d12" \
+    ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d12-created" \
     bash "$(DRIVER)" run "$PROC" '{}' ''
   [ "$status" -eq 1 ] || { echo "an unpinned tag was accepted: $status"; false; }
   [[ "$stderr" == *"pinned by digest"* ]] || { echo "wrong reason: $stderr"; false; }
+}
+
+# ---------------------------------------------------------------------------------------------
+# 9 — a hostile output is judged ABOVE the driver, and the ladder runs
+# ---------------------------------------------------------------------------------------------
+
+@test "cert 9: a hostile output that parses is passed through INTACT, never pre-judged" {
+  # ADR-0204's ladder is arc-run's, after a 0 exit: schema failure -> one same-tier retry -> an
+  # approval.requested proposal. The shim's only job is to not interfere, and the fixture is
+  # injection-shaped AS WELL AS schema-invalid so that a driver quietly sanitising content would
+  # change the bytes arc-run judges and fail this test.
+  mkdir -p "$BATS_TEST_TMPDIR/d9"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=hostile-schema \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d9" \
+    bash "$(DRIVER)" run "$PROC" '{}' ''
+  [ "$status" -eq 0 ] || { echo "the driver judged the content itself: status=$status $stderr"; false; }
+  [[ "$output" == *"IGNORE ALL PREVIOUS INSTRUCTIONS"* ]] \
+    || { echo "the driver altered hostile content instead of passing it through: $output"; false; }
+}
+
+# ---------------------------------------------------------------------------------------------
+# 10 — a spent capped key is BUDGET, not a driver fault
+# ---------------------------------------------------------------------------------------------
+
+@test "cert 10: an exhausted capped key exits BUDGET_DECLINED, with zero silent continuation" {
+  # MEASURED, not read from documentation: the live key returned HTTP 403 `Key limit exceeded
+  # (total limit)` on 2026-08-16, and the plan had asserted 402 in four places -- a fixture written
+  # from the description would have failed against a WORKING cap. Classifying this as `driver`
+  # sends arc-run down the fallback chain, which spends the budget again per driver against a key
+  # that cannot pay: a loop that cannot succeed and does not stop.
+  mkdir -p "$BATS_TEST_TMPDIR/d10"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=spend-refused \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d10" \
+    bash "$(DRIVER)" run "$PROC" '{}' ''
+  [ "$status" -eq 2 ] || { echo "a spent credential was not BUDGET_DECLINED (2), got $status: $stderr"; false; }
+  [[ "$stderr" == *"could not spend"* ]] || { echo "the refusal does not name spend: $stderr"; false; }
+}
+
+@test "cert 10b: NEGATIVE CONTROL -- an ordinary runtime failure stays a DRIVER fault" {
+  # Without this, the classifier above is indistinguishable from "any non-zero exit is budget".
+  # The two fixtures differ ONLY in the message, which is exactly the discrimination being tested.
+  mkdir -p "$BATS_TEST_TMPDIR/d10b"
+  run --separate-stderr env \
+    ARC_HERMES_DOCKER="$(FAKE)" ARC_HERMES_FAKE_CASE=spend-refused-control \
+    ARC_HERMES_IMAGE="$PINNED" ARC_HERMES_DATA="$BATS_TEST_TMPDIR/d10b" \
+    bash "$(DRIVER)" run "$PROC" '{}' ''
+  [ "$status" -eq 1 ] || { echo "an ordinary runtime error was classified as budget: $status"; false; }
+  [[ "$stderr" != *"could not spend"* ]] || { echo "an internal error was reported as a spend refusal: $stderr"; false; }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -158,7 +222,14 @@ PROC="commit-msg-draft"
 }
 
 @test "this file registers every test it declares" {
-  local n
-  n="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$n" -eq 11 ] || { echo "declared $n tests, expected 11 - a test was added or silently dropped"; false; }
+  # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
+  # `^@test ` lines in the SOURCE -- the DECLARED count. bats silently DROPS a @test whose name
+  # carries a non-ASCII character, and the source line survives the drop, so the number never
+  # moved and the guard stayed green while a test did not run. `bats --count` reports what bats
+  # actually REGISTERED. Assert both and that they agree: the pair catches a drop (registered
+  # falls) and a silent removal (declared falls).
+  declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
+  registered="$(bats --count "$BATS_TEST_FILENAME")"
+  [ "$registered" = "14" ] || { echo "expected 14 REGISTERED tests, bats registered $registered"; false; }
+  [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

@@ -56,10 +56,11 @@
  */
 
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
-import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { cpSync, existsSync, lstatSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync } from "node:fs";
+import { constants as osConstants, tmpdir } from "node:os";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { EXIT, pinnedModel, runDriver, settle } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
@@ -126,6 +127,11 @@ const IMAGE = process.env.ARC_HERMES_IMAGE || "";
 const DATA_DIR = process.env.ARC_HERMES_DATA || "";
 const CONFIG_FILE = process.env.ARC_HERMES_CONFIG || "";
 const EGRESS_FILE = process.env.ARC_HERMES_EGRESS || "";
+// The Docker network the runtime joins, and the proxy it is pointed at. Both are orchestrated
+// outside this process (Phase 06), because a driver that created networks would be arc owning
+// infrastructure it cannot clean up after a SIGKILL. See the egress block in the run builder.
+const EGRESS_NETWORK = process.env.ARC_HERMES_NETWORK || "";
+const EGRESS_PROXY = process.env.ARC_HERMES_PROXY || "";
 const SKILLS_FILE = process.env.ARC_HERMES_SKILLS || "";
 const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
 
@@ -151,7 +157,13 @@ const MAX_BUFFER = (() => {
 
 // Room to tear the container down before arc-run SIGKILLs this process. Without it a timeout
 // leaves a container running with nobody holding a handle to it.
-const TEARDOWN_GRACE_MS = 3000;
+//
+// RAISED 3000 -> 8000 ON 2026-08-17, because ADR-0222 put a second job in this window and nobody
+// re-measured the budget. `removeContainer` may consume `max(500, GRACE-500)` on a wedged daemon,
+// which left 500 ms to recursively delete 1,171 files -- and the copy is the artifact holding the
+// runtime's memory, so the half that gets skipped under pressure is the half that matters. A grace
+// that was correct before a phase added work to it is a stale constant, not a safe default.
+const TEARDOWN_GRACE_MS = 8000;
 
 /**
  * Strip ANSI escape sequences.
@@ -299,13 +311,33 @@ function fileComponent(label, path) {
  * missing, which is the collision this whole encoder exists to prevent -- and those two states
  * mean opposite things about whether anyone decided anything.
  */
+/**
+ * THE EGRESS MODE IS IN THE PREIMAGE, AND ITS ABSENCE WAS A REAL HOLE (found by both adversarial
+ * surfaces, 2026-08-17).
+ *
+ * `versionString()` was byte-identical for two dispatches with opposite security postures: one on
+ * an internal network behind the allowlisting proxy, one on default networking reaching any host.
+ * The preimage named a POLICY FILE (`ARC_HERMES_EGRESS`) and not the policy actually in force --
+ * and `ARC_HERMES_EGRESS` is documented nowhere, appears in no test and is set by nothing, so that
+ * component has been `{named:false}` on every run ever made. The hash advertised a pin nobody had
+ * while the real control sat outside it. A pin computed over the wrong thing is the same defect as
+ * a pin computed over a file its own subject can rewrite, which this cycle already recorded.
+ *
+ * The schema version moves with the shape, because a preimage that gains a field while keeping its
+ * name makes two incomparable hashes look comparable.
+ */
 export function configPreimage() {
   return {
-    schema: "arc.driver.hermes.config-hash.v1",
+    schema: "arc.driver.hermes.config-hash.v2",
     image: IMAGE || null,
     config: fileComponent("the runtime config file", CONFIG_FILE),
     egress: fileComponent("the egress/network policy", EGRESS_FILE),
     skills: fileComponent("the vetted skill list", SKILLS_FILE),
+    // The MODE, not a file: what confinement was actually asked for on this invocation. `proxy` is
+    // a boolean because the proxy's URL is an address, not a policy -- the policy is its allowlist,
+    // which lives in the proxy's own argv and is hashed by whoever orchestrates it.
+    network: EGRESS_NETWORK || null,
+    proxy: Boolean(EGRESS_PROXY),
   };
 }
 
@@ -343,6 +375,112 @@ function msUntilDeadline() {
   return Number(String(raw).trim()) - Date.now();
 }
 
+/**
+ * The first symlink anywhere under `root`, or null. Depth-first, and it walks with `lstat` so it
+ * SEES links rather than following them.
+ *
+ * Why this exists: `cpSync`'s `dereference` flag does not mean the same thing on all three CI legs.
+ * On POSIX `dereference:false` reproduces a link, so a template holding `memories -> /srv/shared`
+ * yields a "private" copy that still writes to shared state. On Windows it was MEASURED following
+ * an inner junction and copying the target's CONTENTS in, dragging host files the operator never
+ * placed there into the directory that is then bind-mounted into the container. Both directions
+ * break the property; refusing needs no per-OS reasoning, which is the same argument that chose
+ * copying over wiping in ADR-0222.
+ *
+ * A directory it cannot read is reported as a finding rather than skipped -- an unreadable subtree
+ * is exactly where a link would hide, and "found nothing" must never be the answer to "could not
+ * look".
+ */
+function findSymlink(root, depth = 0) {
+  if (depth > 64) return `${root} (nesting deeper than 64 levels)`;
+  let entries;
+  try {
+    entries = readdirSync(root, { withFileTypes: true });
+  } catch (e) {
+    return `${root} (unreadable: ${(e && e.code) || e.message})`;
+  }
+  for (const entry of entries) {
+    const full = join(root, entry.name);
+    if (entry.isSymbolicLink()) return full;
+    if (entry.isDirectory()) {
+      const found = findSymlink(full, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Remove `arc-hermes-ws-*` directories left by earlier dispatches this process could not clean.
+ *
+ * SIGKILL cannot be caught, so the signal handlers registered at copy time cover everything except
+ * the one signal arc-run actually sends when a run overruns. Without this sweep, every killed
+ * dispatch leaves 36 MB holding the runtime's `memories/MEMORY.md` and `state.db` in the system
+ * temp dir forever. The sweep is the second half of that mechanism and neither half is sufficient
+ * alone.
+ *
+ * It is deliberately conservative: only the exact prefix this driver creates, only inside
+ * `tmpdir()`, and a failure to remove one is a warning rather than a refusal -- a stale directory
+ * from a previous run is not a reason to fail the run in front of us.
+ *
+ * THE AGE GUARD IS LOAD-BEARING, NOT TIDINESS. The first draft of this sweep deleted every matching
+ * directory, which would have destroyed a CONCURRENTLY RUNNING dispatch's live workspace out from
+ * under its container -- a cleanup that causes the corruption it is cleaning up after. Only
+ * directories older than the longest run this driver can survive are touched; a live workspace is
+ * always younger than that because arc-run kills the dispatch first.
+ */
+const STALE_WORKSPACE_MS = 6 * 60 * 60 * 1000;   // 6h — comfortably past any single dispatch
+
+function sweepStaleWorkspaces() {
+  const base = tmpdir();
+  let entries;
+  try { entries = readdirSync(base, { withFileTypes: true }); } catch { return 0; }
+  const cutoff = Date.now() - STALE_WORKSPACE_MS;
+  let swept = 0;
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith("arc-hermes-ws-")) continue;
+    const full = join(base, entry.name);
+    try {
+      if (statSync(full).mtimeMs > cutoff) continue;   // young enough to belong to a live dispatch
+      rmSync(full, { recursive: true, force: true, maxRetries: 2, retryDelay: 50 });
+      swept++;
+    } catch { /* another dispatch may hold it; the next sweep gets it */ }
+  }
+  return swept;
+}
+
+/**
+ * Does this runtime failure say the CREDENTIAL is spent, rather than that the runtime broke?
+ *
+ * The distinction decides an exit code, and the exit code decides whether arc-run walks its
+ * fallback chain. Against a spent key that walk cannot succeed, so misclassifying here turns one
+ * refusal into a run that spends its whole budget failing.
+ *
+ * THE PATTERNS COME FROM A MEASUREMENT, NOT FROM DOCUMENTATION. On 2026-08-16 the live capped key
+ * returned **HTTP 403 `Key limit exceeded (total limit)`** for a paid model and HTTP 200 for a
+ * `:free` one. The plan had asserted 402 in four places and would have failed against a WORKING
+ * cap -- and a cap that had stopped working would have been indistinguishable from a spec that was
+ * simply wrong. That is ADR-0219's shape repeating inside one cycle, which is why this list names
+ * the run that produced each entry.
+ *
+ * DELIBERATELY NARROW. Anything not matched here stays `driver`, because the cost of the two
+ * mistakes is not symmetric: classifying a real driver fault as `budget` silently ends a run that
+ * a retry would have completed, while the reverse is a wasted fallback and a wrong receipt. When
+ * in doubt this returns false.
+ */
+export function isSpendRefusal(text) {
+  const t = String(text || "").toLowerCase();
+  return (
+    t.includes("key limit exceeded") ||                 // measured 2026-08-16, per-key cap (403)
+    t.includes("insufficient_quota") ||                 // OpenAI-compatible providers
+    t.includes("insufficient credits") ||               // account dry (402)
+    t.includes("quota exceeded") ||
+    t.includes("billing_hard_limit_reached") ||
+    /\b40[23]\b[^\n]*\b(limit|quota|credit|billing)\b/.test(t) ||
+    /\b(limit|quota|credit|billing)\b[^\n]*\b40[23]\b/.test(t)
+  );
+}
+
 function removeContainer(name) {
   // THE RESULT IS INSPECTED, NOT A `catch`. spawnSync REPORTS failures on the returned object --
   // it does not throw -- so the catch block that used to be here was dead code, both `error` and
@@ -372,8 +510,24 @@ function removeContainer(name) {
  * parser got `hermes: usage: ...` instead. Every parser assertion therefore had to go through a
  * subprocess, which is why several of its rules (the scalar guard among them) had no direct test
  * at all and why a mutant deleting one of them survived.
+ *
+ * BOTH SIDES ARE REALPATH-ED, and that is a fixed defect rather than caution. `import.meta.url` is
+ * already resolved through symlinks by the ESM loader; `process.argv[1]` is the path as the caller
+ * typed it. Behind ANY symlink -- a linked `drivers/` dir, a symlinked checkout, a consumer tree
+ * produced by sync -- the two strings differ, `isEntryPoint` is false, and the driver silently does
+ * nothing: exit 0, empty stdout, and arc-run spends a retry blaming the runtime for an answer this
+ * file never tried to produce. Five other main-guards in this repo (`arc-bench.mjs`,
+ * `arc-growth.mjs`, `arc-legal.mjs`, `arc-recall.mjs`, `conflict-check.mjs`) already realpath both
+ * sides; this file shipped the defeated form. Sixth twin-fix recurrence for this lane.
+ *
+ * The comparison falls back to the unresolved form when either path cannot be resolved (a deleted
+ * argv[1], a permission error), because failing to resolve must not silently disable the driver --
+ * that is the same failure wearing a different hat.
  */
-const isEntryPoint = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+function sameFile(a, b) {
+  try { return realpathSync(a) === realpathSync(b); } catch { return a === b; }
+}
+const isEntryPoint = Boolean(process.argv[1]) && sameFile(process.argv[1], fileURLToPath(import.meta.url));
 
 if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   if (!IMAGE) {
@@ -387,6 +541,11 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   if (!DATA_DIR) {
     throw new Error("ARC_HERMES_DATA is not set — the runtime needs a data volume to mount at /opt/data");
   }
+  // The SIGKILL half of the ADR-0222 cleanup. See sweepStaleWorkspaces().
+  const sweptCount = sweepStaleWorkspaces();
+  if (sweptCount > 0) {
+    process.stderr.write(`hermes: swept ${sweptCount} stale workspace(s) left by dispatches that were killed rather than exited (ADR-0222)\n`);
+  }
 
   const prompt = [
     `You are executing the arc process \`${processName}\`.`,
@@ -395,7 +554,139 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     JSON.stringify(input),
   ].join("\n");
 
-  const name = `arc-hermes-${process.pid}-${Date.now()}`;
+  // `randomUUID`, not `pid + ms`. An adversarial pass flagged the old name as too weak: two drivers
+  // in separate PID namespaces (docker-in-docker, two hosts sharing a volume over SMB) can produce
+  // the same pid in the same millisecond, and then `docker run --name` fails outright or one run's
+  // cleanup deletes another's files. ADR-0222 makes that collision worse, because the name now also
+  // keys a per-dispatch WORKSPACE.
+  const name = `arc-hermes-${randomUUID()}`;
+
+  // ADR-0222: THE DISPATCH GETS A PRIVATE COPY OF THE RUNTIME HOME.
+  //
+  // `ARC_HERMES_DATA` is a TEMPLATE here, not the workspace. The runtime's built-in memory cannot
+  // be turned off -- `hermes memory --help` says "Built-in memory (MEMORY.md/USER.md) is always
+  // active" -- and a marker planted in one run was measured on disk afterwards in BOTH
+  // `memories/MEMORY.md` and `state.db`. Mounting one directory across dispatches therefore carries
+  // content from pack A into dispatch B without it ever travelling as a pack, so REQ-06's boundary
+  // check never sees it.
+  //
+  // Copying beats wiping precisely because it needs NO knowledge of the runtime's storage layout:
+  // a wipe list one file short reads green while carrying data across, and the marker was already
+  // in a file the vendor's own docs do not name. Measured cost: 2,235 ms for 36 MB / 1,171 files,
+  // against a 145-400s cold boot for an empty volume. The cheap option and the safe option are the
+  // same one here.
+  // THE TEMPLATE MUST BE A REAL, READABLE, SYMLINK-FREE DIRECTORY, AND A MISS IS A REFUSAL.
+  //
+  // This was `if (DATA_DIR && existsSync(DATA_DIR))`, and BOTH adversarial surfaces proved the same
+  // hole independently: with `ARC_HERMES_DATA` pointing at a path that does not exist yet -- a fresh
+  // machine, a typo, an unmounted volume, or a directory `stat` cannot read (existsSync is false on
+  // EACCES too) -- the entire copy block was SKIPPED rather than failed. `workspaceIsCopy` stayed
+  // false, the template path went straight into `-v`, docker created it host-side as root, and every
+  // dispatch from then on shared one directory. That is precisely the memory-carrying mechanism
+  // ADR-0222 exists to stop, reached by the state `.env.example` itself describes as normal
+  // ("Seed the template once"). The `catch` that promises to fail rather than fall back never ran,
+  // because this path never entered the `try`.
+  //
+  // Three lines up, `fileComponent()` in this same file carefully separates *not configured* from
+  // *configured but missing* from *configured but unreadable*. The workspace block collapsed the last
+  // two into "run unconfined, exit 0". Twin readers of one rule, one failing closed and one failing
+  // open -- the defect class this cycle has now hit five times.
+  //
+  // SYMLINKS ARE REFUSED, not copied. `dereference: false` does not mean the same thing on all three
+  // legs: on POSIX it reproduces a link, so a template containing `memories -> /srv/shared/memories`
+  // gives a "private" copy that still writes into shared state; on Windows it was MEASURED following
+  // an inner junction and copying the target's contents in, pulling host content the operator never
+  // put there into the directory that gets bind-mounted. The runtime writes into this tree and its
+  // layout is explicitly unknown, so a link it created cannot be ruled out. Refusing needs no per-OS
+  // reasoning and no knowledge of the layout -- the same argument that chose copying over wiping.
+  let workspace = DATA_DIR;
+  let workspaceIsCopy = false;
+  {
+    let st;
+    try {
+      st = lstatSync(DATA_DIR);
+    } catch (e) {
+      throw new Error(`ARC_HERMES_DATA is set to ${DATA_DIR}, which cannot be read (${(e && e.code) || e.message}) — refusing to dispatch rather than mounting a shared directory (ADR-0222)`);
+    }
+    if (st.isSymbolicLink()) {
+      throw new Error(`ARC_HERMES_DATA (${DATA_DIR}) is a symlink — refusing, because the copy would be a link back at the template and every dispatch would share it (ADR-0222)`);
+    }
+    if (!st.isDirectory()) {
+      throw new Error(`ARC_HERMES_DATA (${DATA_DIR}) is not a directory — refusing to dispatch (ADR-0222)`);
+    }
+    const linked = findSymlink(DATA_DIR);
+    if (linked) {
+      throw new Error(`the runtime template ${DATA_DIR} contains a symlink at ${linked} — refusing, because a copy cannot be private when a path inside it points out of the copy (ADR-0222)`);
+    }
+    let scratch;
+    try {
+      scratch = mkdtempSync(join(tmpdir(), "arc-hermes-ws-"));
+      workspace = join(scratch, "data");
+      cpSync(DATA_DIR, workspace, { recursive: true, dereference: true, force: true });
+      workspaceIsCopy = true;
+      // CLEANED UP ON EVERY EXIT PATH THIS PROCESS CAN OBSERVE, registered at creation rather than
+      // written at each return. The usage-report cleanup was put in a `finally` that only the SUCCESS
+      // path reached, and an adversarial pass found it littering the volume on all five failure
+      // exits. A 36 MB copy per failed dispatch is a worse version of that same defect.
+      // `rmSync` is synchronous, which is the only kind of work an exit handler may do.
+      //
+      // THE PREVIOUS COMMENT HERE CLAIMED `process.on("exit")` "covers the throws, the budget
+      // declines and the TIMEOUTS alike", AND THE LAST THIRD WAS FALSE -- the ninth false comment
+      // this cycle, found by both adversarial surfaces and PROVED by spawning a child with an exit
+      // handler and SIGKILLing it: the handler does not run. Only the internal ETIMEDOUT branch,
+      // which throws, was ever covered. arc-run spawns this driver with `killSignal: "SIGKILL"`
+      // (arc-run.mjs) and hermes.sh `exec`s node, so the kill lands here directly -- and a killed
+      // dispatch is the COMMON failure mode, not a rare one. Every one of them leaked 36 MB
+      // containing the runtime's `memories/MEMORY.md` and `state.db`: the exact data-carrying
+      // artifact ADR-0222 exists to destroy, accumulating in the system temp dir unreferenced.
+      //
+      // SIGKILL cannot be caught -- that is physics, not an omission. So this is two mechanisms:
+      // handlers for the signals that CAN be caught, and a sweep at startup for the ones that
+      // cannot. Neither alone is enough and the pair is stated so the gap is not re-discovered.
+      const cleanScratch = () => {
+        try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); }
+        catch { /* a leftover scratch dir is not worth failing a completed run over */ }
+      };
+      process.on("exit", cleanScratch);
+      // THE SIGNAL LIST IS FILTERED BY WHAT THIS PLATFORM ACTUALLY HAS. `SIGBREAK` exists only on
+      // Windows and `process.on` THROWS `ERR_UNKNOWN_SIGNAL` for a name the platform does not
+      // define -- so hard-coding the four names took the whole driver down on the macOS and linux
+      // legs. Caught by CI within minutes of the push, which is the leg-specific class this repo
+      // keeps recording: invisible on the box that wrote it, red on two of three legs.
+      const signals = ["SIGINT", "SIGTERM", "SIGHUP", "SIGBREAK"]
+        .filter((s) => Object.prototype.hasOwnProperty.call(osConstants.signals, s));
+      for (const sig of signals) {
+        process.on(sig, () => {
+          cleanScratch();
+          // Re-raise with the default disposition so the exit STATUS still reports the signal.
+          // Swallowing it here would turn a killed dispatch into a clean exit, which is the
+          // "exit 0 is not evidence" defect wearing a signal handler.
+          process.removeAllListeners(sig);
+          try { process.kill(process.pid, sig); } catch { process.exit(EXIT.DRIVER_FAIL); }
+        });
+      }
+    } catch (e) {
+      // FAIL, never fall back to mounting the template. A fallback here is a dispatch running
+      // unconfined while every count still reads green -- the shape this cycle refused for egress
+      // one commit earlier. And a mutated template would carry run N's memories into run N+1
+      // through the template itself, which is the thing this whole mechanism exists to stop.
+      if (scratch) { try { rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 }); } catch { /* nothing to salvage */ } }
+      throw new Error(`could not make a private workspace from ${DATA_DIR}: ${e.message}`);
+    }
+  }
+  // SAY WHICH MODE RAN, on the transcript arc-run now forwards and scrubs.
+  //
+  // THE LINE IS DERIVED FROM WHAT WILL BE MOUNTED, NOT FROM "DID I MAKE A COPY", and that is a
+  // fixed defect. It read `workspaceIsCopy`, which is set the instant `cpSync` returns -- so the
+  // minimal mutant (leave the copy intact, change the `-v` spec back to `${DATA_DIR}`) still
+  // printed "workspace is a PRIVATE copy" on a dispatch that mounted the template, and the suite's
+  // claimed "3 of 6 redden" was really 2. Asserting the wrong property: the real property is where
+  // the bytes land, which is the same correction fixture 6 already forced on this cycle.
+  if (!workspaceIsCopy || workspace === DATA_DIR) {
+    throw new Error(`refusing to dispatch: the workspace to be mounted (${workspace}) is the template itself — ADR-0222 requires a private copy`);
+  }
+  process.stderr.write(`hermes: workspace is a PRIVATE copy of ${DATA_DIR} at ${workspace} (ADR-0222)\n`);
+  process.stderr.write(`hermes: egress mode ${EGRESS_NETWORK ? `network=${EGRESS_NETWORK} proxy=${EGRESS_PROXY ? "set" : "none"}` : "UNCONFINED -- no network configured, the runtime reaches any host"}\n`);
 
   // THE USAGE REPORT IS ASKED FOR, BECAUSE THE RUNTIME OFFERS ONE (ADR-0221). The vendor
   // documents the flag on the pinned image itself: "One-shot mode only: after the run, write a
@@ -418,7 +709,7 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   //
   // Closed by RECENCY, not by ownership: a report is only read if it was written after this run
   // started. That makes the operator path safe without deleting a file arc does not own.
-  const usageHost = USAGE_FILE || join(DATA_DIR, `${name}.usage.json`);
+  const usageHost = USAGE_FILE || join(workspace, `${name}.usage.json`);
   const usageInContainer = USAGE_FILE ? "" : `/opt/data/${name}.usage.json`;
   const runStartedAt = Date.now();
 
@@ -432,25 +723,105 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   // An operator-supplied ARC_HERMES_USAGE_FILE is a HOST path this driver cannot translate into
   // the container's filesystem, so in that case the flag is not passed and the file is only read
   // if something else wrote it -- and then only if it is newer than this run (see usageHost).
+  // THE VOLUME SPEC IS COLON-DELIMITED AND IS BUILT BY CONCATENATION, so a colon inside the host
+  // path silently re-partitions it: docker reads `/tmp/a:b/ws:/opt/data` as source `/tmp/a`,
+  // destination `b/ws` and MODE `/opt/data`. A colon is a legal POSIX path character, and the fake
+  // docker fixture compensates with `lastIndexOf(":")` -- which means the suite cannot see this
+  // class at all. Refused rather than escaped: a Windows drive prefix (`C:`) is the only colon a
+  // legitimate path here carries, and everything else is a malformed mount wearing a working one.
+  const drivePrefix = process.platform === "win32" && /^[A-Za-z]:[\\/]/.test(workspace) ? 2 : 0;
+  if (workspace.slice(drivePrefix).includes(":")) {
+    throw new Error(`the workspace path ${workspace} contains a colon, which docker would read as a volume-spec separator — refusing rather than mounting somewhere unintended`);
+  }
   const args = [
     "run", "--rm", "--name", name,
-    "-v", `${DATA_DIR}:/opt/data`,
-    IMAGE,
+    "-v", `${workspace}:/opt/data`,
   ];
+
+  // EGRESS CONFINEMENT (Phase 06 fixture 7). Measured 2026-08-16: with default networking this
+  // container reaches ANY host -- `curl https://example.com` returned 200. A config-pin diff reads
+  // green against that, which is why REQ-02 wants a behavioural arm.
+  //
+  // Both one-line levers were measured and neither works alone: `--network none` and an
+  // `--internal` bridge block everything, the model endpoint included. What does work, measured end
+  // to end, is a dual-homed allowlisting proxy -- the runtime joins an `--internal` network with no
+  // gateway, and the proxy is the single route out. Allowed host 200, disallowed host refused, both
+  // decisions logged.
+  //
+  // OPT-IN, AND THAT IS A DELIBERATE WEAKNESS RATHER THAN AN OVERSIGHT. A driver that silently
+  // fell back to unrestricted networking when the operator forgot the variable would be a gate that
+  // cannot fail. It is opt-in because the network and proxy are orchestrated OUTSIDE this process
+  // (Phase 06 owns that), and a driver that created Docker networks would be arc taking on
+  // infrastructure it has no way to clean up after a SIGKILL. The receipt records which mode ran,
+  // so an unconfined dispatch is visible rather than assumed.
+  // THE NETWORK NAME IS VALIDATED, AND THE PAIR IS ALL-OR-NOTHING. Both adversarial surfaces proved
+  // the same two holes here, independently.
+  //
+  // 1. `ARC_HERMES_NETWORK=host` was accepted verbatim and became `--network host`, which hands the
+  //    container the HOST's network namespace: unrestricted egress plus every host-local service,
+  //    while this file, its tests and its evidence all say "confined". It is the value most likely
+  //    to be typed by someone debugging. `bridge`, `default`, `none` and `container:NAME` are the
+  //    same class. The one guard written for exactly this, in engine-hermes-contract.bats, COULD
+  //    NOT FIRE: the recorder writes JSON.stringify(argv), so the bytes are the comma-separated
+  //    `"--network","host"` and the guard grepped for the space-separated spelling. A grep where the
+  //    property needs a parse -- this cycle's most-repeated defect, now caught guarding itself.
+  //
+  // 2. `ARC_HERMES_PROXY` set without `ARC_HERMES_NETWORK` was SILENTLY DROPPED. `.env.example` says
+  //    "the driver refuses that combination" and the bats test is titled "is NOT silently honoured"
+  //    while asserting exit 0. The operator who sets one of two variables got full unrestricted
+  //    egress and three documents telling them otherwise. Tenth false comment this cycle.
+  if (EGRESS_PROXY && !EGRESS_NETWORK) {
+    throw new Error("ARC_HERMES_PROXY is set but ARC_HERMES_NETWORK is not — refusing. A proxy without an internal network is unrestricted egress wearing the appearance of a control; set both or neither.");
+  }
+  if (EGRESS_NETWORK) {
+    const RESERVED = new Set(["host", "none", "bridge", "default"]);
+    if (RESERVED.has(EGRESS_NETWORK.toLowerCase()) || /^container:/i.test(EGRESS_NETWORK)) {
+      throw new Error(`ARC_HERMES_NETWORK=${EGRESS_NETWORK} is a reserved docker network mode, not an isolated user network — refusing, because it would remove the confinement it appears to configure`);
+    }
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(EGRESS_NETWORK)) {
+      throw new Error(`ARC_HERMES_NETWORK=${EGRESS_NETWORK} is not a valid docker network name`);
+    }
+    args.push("--network", EGRESS_NETWORK);
+    if (EGRESS_PROXY) {
+      // Both spellings: curl and requests read the lowercase pair, some SDKs read the uppercase.
+      // NO_PROXY keeps container-to-container traffic off the proxy.
+      for (const [k, v] of [["HTTPS_PROXY", EGRESS_PROXY], ["https_proxy", EGRESS_PROXY],
+                            ["HTTP_PROXY", EGRESS_PROXY], ["http_proxy", EGRESS_PROXY],
+                            ["NO_PROXY", "localhost,127.0.0.1"], ["no_proxy", "localhost,127.0.0.1"]]) {
+        args.push("-e", `${k}=${v}`);
+      }
+    }
+  }
+
+  args.push(IMAGE);
   if (usageInContainer) args.push("--usage-file", usageInContainer);
   args.push("-z", prompt);
 
   const remaining = msUntilDeadline();
   let timeoutMs;
   if (remaining !== undefined) {
+    // THE GRACE SCALES WITH THE BUDGET INSTEAD OF BEING A FLAT CONSTANT, and that is a defect I
+    // introduced and CI caught within minutes.
+    //
+    // Raising TEARDOWN_GRACE_MS from 3000 to 8000 (because ADR-0222 added a workspace delete to
+    // that window) silently changed the MEANING of every short-budget run: with 6000ms left, the
+    // `remaining <= GRACE` branch below fired and the runtime was never started at all. The exit
+    // code stayed 2, so a caller reading only the code saw no difference -- but the reason line
+    // changed from "over time" to "not enough to start", and the container that was never launched
+    // was never reaped. Two contract tests said so; nothing else would have.
+    //
+    // A constant that was correct before a phase added work to it is a stale constant. Reserving a
+    // FRACTION means the guard cannot grow past the budget it guards: at most a quarter of what is
+    // left, never more than the full grace, never less than 1s.
+    const grace = Math.min(TEARDOWN_GRACE_MS, Math.max(1000, Math.floor(remaining / 4)));
     // Already past the deadline before we start: decline rather than launch a container that
     // will be killed. Launching it would spend real time and real money to reach the same answer.
-    if (remaining <= TEARDOWN_GRACE_MS) {
+    if (remaining <= grace) {
       const e = new Error(`the run budget has ${Math.max(0, Math.round(remaining))}ms left, which is not enough to start the runtime`);
       e.arcExit = EXIT.BUDGET_DECLINED;
       throw e;
     }
-    timeoutMs = Math.max(1, Math.floor(remaining - TEARDOWN_GRACE_MS));
+    timeoutMs = Math.max(1, Math.floor(remaining - grace));
   }
 
   const { cmd, argv } = dockerArgv(args);
@@ -481,8 +852,45 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   }
   if (res.status !== 0) {
     const why = String(res.stderr || "").trim().split("\n").slice(-1)[0] || `exit ${res.status}`;
+    // A SPENT CREDENTIAL IS **BUDGET**, NOT A DRIVER FAULT (Phase 06 fixture 10, ADR-0213).
+    //
+    // The runtime holds its own capped key and arc never issues the model call, so arc-run cannot
+    // see the refusal directly -- it arrives only as text in the runtime's output. Everything here
+    // was previously classified `driver`, which is the defect ADR-0210 already records for the
+    // wall-clock: a budget failure reported as a driver failure sends arc-run down the FALLBACK
+    // chain, which spends the budget again on the next driver. Against a spent key that is a loop
+    // that cannot succeed and does not stop, and the receipt blames a driver that worked.
+    //
+    // MEASURED, NOT READ FROM DOCUMENTATION -- which is the correction ADR-0219 and fixture 10 both
+    // had to make. Against the live capped key on 2026-08-16: a paid model returns
+    // **HTTP 403 `Key limit exceeded (total limit)`**, and 402 is the ACCOUNT-out-of-credits code,
+    // which this design does not use because ADR-0213 chose a PER-KEY limit. Both are matched
+    // anyway: the account running dry is also a spend refusal, and refusing to classify it would
+    // put the more expensive failure on the fallback path.
+    if (isSpendRefusal(`${res.stderr || ""}\n${res.stdout || ""}`)) {
+      const e = new Error(`the runtime could not spend: ${why}`);
+      e.arcExit = EXIT.BUDGET_DECLINED;
+      throw e;
+    }
     throw new Error(`the runtime exited ${res.status}: ${why}`);
   }
+
+  // THE RUNTIME'S TRANSCRIPT IS FORWARDED, ON EVERY RUN, AND UNTIL NOW IT WAS NOT.
+  //
+  // `res.stderr` was read in exactly one place -- to pull a reason line when the container exited
+  // non-zero -- and on a SUCCESSFUL run it was discarded entirely. So `arc-run`'s
+  // `scrub("the hermes driver's transcript", r.stderr)` only ever saw this driver's own WARN
+  // lines, never the runtime's. A planted key in the container's stderr passed straight through:
+  // measured, with a fixture, and the scrub did not fire.
+  //
+  // That is REQ-03's transcript class unprotected, and ADR-0215 says why it matters in one line:
+  // the trail is reviewed alongside the draft **because injection shows in trails**. The runs
+  // where that matters most are precisely the successful ones -- an injected runtime produces a
+  // clean-looking answer and a dirty trail.
+  //
+  // Forwarded rather than parsed: it stays diagnostics (common.mjs: "stderr -- diagnostics, never
+  // parsed"), it reaches the scrub, and Phase 06 stores it per dispatch from here.
+  if (res.stderr) process.stderr.write(String(res.stderr));
 
   const output = extractAnswer(res.stdout ?? "");
 
@@ -503,15 +911,44 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   // A REPORT IS ONLY THIS RUN'S IF IT WAS WRITTEN DURING THIS RUN. Ownership is not enough: on the
   // operator path the file is never rewritten and never deleted, so `existsSync` alone re-reported
   // one stale report as `measured` on every subsequent run of every process, forever.
-  if (existsSync(usageHost) && freshEnough(usageHost, runStartedAt)) {
+  //
+  // RECENCY WAS STILL NOT ENOUGH ON THE OPERATOR PATH, and an adversarial pass proved it: with
+  // ARC_HERMES_USAGE_FILE set the path carries no container name, so TWO CONCURRENT dispatches read
+  // the same file and both stamp `source:"measured"` with the SAME token counts and the SAME model
+  // into their MP-F seats. arc-bench sums those to derive a per-token rate, so the spend is
+  // double-counted from a single measurement. The comment three lines up already carried one
+  // correction about this exact path and left the concurrency half uncorrected -- a twin inside a
+  // fix, which is how this cycle keeps re-shipping the same shape.
+  //
+  // CLOSED BY AN EXCLUSIVE CLAIM: the report is renamed into a per-container name before it is read.
+  // `rename` is atomic on both POSIX and Windows, so exactly one of two concurrent dispatches wins
+  // it and the loser reports cost absent -- which is the honest answer, because the loser genuinely
+  // has no measurement of its own. An absent field is never estimated (ADR-0069 b5).
+  let usageRead = usageHost;
+  if (USAGE_FILE && existsSync(usageHost) && freshEnough(usageHost, runStartedAt)) {
+    const claimed = `${usageHost}.${name}.claim`;
+    try { renameSync(usageHost, claimed); usageRead = claimed; }
+    catch (e) {
+      process.stderr.write(`hermes: WARN could not claim the usage report at ${usageHost} (${(e && e.code) || e.message}) — another dispatch took it; cost and model are reported as absent\n`);
+      usageRead = "";
+    }
+  } else if (USAGE_FILE && existsSync(usageHost)) {
+    // A REAL MEASUREMENT DISCARDED IN SILENCE IS WORSE THAN NO MEASUREMENT, because the operator
+    // then confirms the wrong root cause: "no report appeared" is exactly what the vendor-no-op
+    // probe pins, and a clock-skewed VM or a coarse-mtime filesystem produces the same symptom from
+    // a report that is perfectly good. Every other failure in this block names itself; this one did
+    // not.
+    process.stderr.write(`hermes: WARN a usage report exists at ${usageHost} but predates this run — ignored as stale, not as absent\n`);
+  }
+  if (usageRead && existsSync(usageRead) && freshEnough(usageRead, runStartedAt)) {
     let u;
     // THE PARSE IS ITS OWN TRY, so the diagnostic names the real cause. One wide try around the
     // read, the parse, the grammar check and versionString() reported EISDIR and EACCES as
     // "did not parse", sending the operator to look at the wrong thing.
     try {
-      u = JSON.parse(readFileSync(usageHost, "utf8"));
+      u = JSON.parse(readFileSync(usageRead, "utf8"));
     } catch (e) {
-      process.stderr.write(`hermes: WARN the usage file at ${usageHost} could not be read or parsed (${e.code || e.name}) — cost and model are reported as absent\n`);
+      process.stderr.write(`hermes: WARN the usage file at ${usageRead} could not be read or parsed (${e.code || e.name}) — cost and model are reported as absent\n`);
       u = null;
     }
     if (u && typeof u === "object" && !Array.isArray(u)) try {
@@ -544,12 +981,15 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     } catch (e) {
       // Anything the grammar check or versionString() throws lands here, named as itself rather
       // than as a parse failure.
-      process.stderr.write(`hermes: WARN the usage report at ${usageHost} could not be interpreted (${e.message}) — cost and model are reported as absent\n`);
+      process.stderr.write(`hermes: WARN the usage report at ${usageRead} could not be interpreted (${e.message}) — cost and model are reported as absent\n`);
     } finally {
-      // Read once, then gone. Only the path THIS driver chose is removed: an operator-supplied
-      // ARC_HERMES_USAGE_FILE belongs to the operator and is never deleted by us.
-      if (!USAGE_FILE) {
-        try { rmSync(usageHost, { force: true, maxRetries: 3, retryDelay: 50 }); }
+      // Read once, then gone. The driver removes only what it owns: the report it asked the
+      // container to write, or -- on the operator path -- the CLAIM it renamed for itself. The
+      // operator's own ARC_HERMES_USAGE_FILE is never deleted by us; after a successful claim that
+      // path no longer exists anyway, because the claim moved it.
+      const mine = USAGE_FILE ? (usageRead && usageRead !== usageHost ? usageRead : "") : usageHost;
+      if (mine) {
+        try { rmSync(mine, { force: true, maxRetries: 3, retryDelay: 50 }); }
         catch { /* a leftover report is harmless; losing the run over it is not */ }
       }
     }

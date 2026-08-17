@@ -596,9 +596,9 @@ for (const file of files) {
             const m = liveRaw.match(/^---\n[\s\S]*?\n---\n([\s\S]*)$/);
             if (m) {
               const mask = (s) => s
-                .replace(/\{\{[^{}]*\}\}/g, " PH ")
-                .replace(/\$\{\d+(:-[^}]*)?\}/g, " PH ")
-                .replace(/\$ARGUMENTS\b/g, " PH ");
+                .replace(/\{\{[^{}]*\}\}/g, "\u0000PH\u0000")
+                .replace(/\$\{\d+(:-[^}]*)?\}/g, "\u0000PH\u0000")
+                .replace(/\$ARGUMENTS\b/g, "\u0000PH\u0000");
               if (mask(body) !== mask(m[1])) {
                 add("body-drift", at(lineOf(text, "body:")),
                   `\`body\` does not match the prose of \`${bl.path}\` (placeholders excepted)`,

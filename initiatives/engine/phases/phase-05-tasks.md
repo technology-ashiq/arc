@@ -221,7 +221,19 @@ tier: (not proven)
 decision: arc-run already scrubs all four at `attempt()`, so the MECHANISM exists and is shared.
 What is missing is the proof that it holds for THIS driver with a negative control — and a check
 inherited without a negative control is a check nobody has seen fail.
-result: NOT PROVEN — owed. Recorded rather than assumed from the fact that arc-run calls scrub().
+result: **PROVEN 2026-08-16** — `tests/engine-hermes-secrets.bats`, 9 tests, all four REQ-03 artifact
+  classes driven through `arc-run` on the REAL hermes path (only the docker binary substituted;
+  `ARC_DRIVER_FAKE` deliberately unused because it short-circuits `common.mjs` before `produce()`).
+  Negative control asserts a clean run BOTH passes the scrub AND produces its answer — a failed run
+  also reports no secret. Two mutants killed: removing the transcript forward reddens class 2,
+  deleting the ADR-0221 seam from `emitRun` reddens the end-to-end receipt test.
+  **AND WRITING IT FOUND THE HOLE IT WAS WRITTEN TO LOOK FOR.** The runtime's stderr was DISCARDED
+  on every successful run — read only to pull a reason line when the container exited non-zero — so
+  `arc-run`'s transcript scrub never saw it, and a planted key passed straight through. Measured,
+  with a fixture, before it was fixed. ADR-0215 keeps a trail per dispatch precisely because
+  injection shows in trails, and the runs where that matters are the ones whose answer looks clean.
+  The earlier inherited coverage in `engine-driver-contract.bats` could not have caught it: it
+  proves the fake path, and one class of four.
 commit: (pending)
 
 #### slice: 11

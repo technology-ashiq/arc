@@ -3,8 +3,8 @@
 status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 05
-appetite: 7.5d
-burn: 4.5d
+appetite: 9.5d
+burn: 5.5d
 blocked-on: —
 depends-on: —
 
@@ -34,7 +34,8 @@ depends-on: —
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 4.5 of 7.5 days used (60%) — set 2026-08-16, derivation above `## Now`.** Phases allocate 7 of 7.5 — **93%, and the half-day of
+**Appetite burn: 5.5 of 7.5 days used (73%) — set 2026-08-17, derivation above `## Now`. The
+day-5 kill checkpoint has therefore FIRED and is read in `## Now`.** Phases allocate 7 of 7.5 — **93%, and the half-day of
 slack is thin**, flagged by `kickoff-lint` and left honest rather than padded. The design source's
 "1.5 weeks (8 working days)" rounds up: 1.5 weeks is 7.5 working days at a 5-day week, so the cap is
 written as the smaller, true number. Kill checkpoint is read at **day 5**, not at the 50% mark of
@@ -150,6 +151,181 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE ADVERSARIAL PASS ON THE EGRESS AND WORKSPACE CODE — 2026-08-17. 50 findings, and this time the two surfaces AGREED.
+
+Required before PR #194 merges, never at the phase close. Two fresh agents, neither having seen the
+implementation: one on decision logic, one on the shell/OS boundary. **27 and 23 findings.**
+
+**The overlap is the headline, because in this lane there has never been any.** Every previous pass
+this cycle produced ~zero shared findings — the structural blind-spot result the tracker keeps
+recording. This time both surfaces independently found and PROVED the **same five criticals**. Two
+independent agents converging is a much stronger signal than either one alone, and it says these
+were not subtle.
+
+**The five both of them found, all PROVED by execution:**
+
+1. **A missing template silently disabled ADR-0222 in its entirety.** `existsSync(DATA_DIR)` false
+   meant the copy block was **skipped, not failed** — `workspaceIsCopy` stayed false, the template
+   path went into `-v`, docker created it host-side as root, and **every dispatch from then on
+   shared one directory**. That is the exact memory-carrying mechanism ADR-0222 exists to stop,
+   reached by the state `.env.example` itself calls normal (*"seed the template once"*). The `catch`
+   that promises to fail rather than fall back never ran, because that path never entered the `try`.
+   Three lines above, `fileComponent()` in the same file carefully separates *not configured* from
+   *missing* from *unreadable*; the workspace block collapsed the last two into "run unconfined,
+   exit 0". **Twin readers of one rule, one failing closed and one failing open — five times now.**
+2. **`ARC_HERMES_NETWORK=host` was accepted verbatim**, handing the container the host network
+   namespace: unrestricted egress plus every host-local service, while the code, the tests and the
+   evidence all said "confined". It is the value most likely to be typed while debugging. **And the
+   one guard written for exactly this could not fire** — `engine-hermes-contract.bats` greps for the
+   space-separated `--network host` while the recorder writes JSON, so the bytes are
+   `"--network","host"`. A grep where the property needs a parse, caught guarding itself.
+3. **"A proxy without a network is refused" was false in three places at once** — in the code (it
+   silently dropped the proxy and ran unconfined at exit 0), in `.env.example` (*"the driver refuses
+   that combination"*), and in the test, which was **titled** *"is NOT silently honoured"* and
+   asserted `status -eq 0`. **The test pinned the bug as correct.**
+4. **`port.isdigit()` then `int(port)` in the proxy.** `str.isdigit()` is True for Unicode digits:
+   `--allow host:٤٤٣` was **accepted as port 443**, and a CONNECT to `host:²` passed the check then
+   raised `ValueError` past a handler catching only `OSError` — thread dead, **no 403, no DENY line,
+   client socket never closed**, repeatable to exhaust fds. The docstring's *"a malformed port —
+   all 403"* was false for the input that most needed it. `hermes.mjs` had fixed this exact class one
+   file away with an anchored decimal regex. **Twin-fix miss, one day apart.**
+5. **The config hash could not distinguish a confined dispatch from an unconfined one.**
+   `versionString()` was byte-identical for both postures; the preimage named a policy FILE
+   (`ARC_HERMES_EGRESS`) that is documented nowhere and set by nothing, so that component has been
+   `{named:false}` on **every run ever made**. A pin over the wrong thing, next to a comment claiming
+   the receipt records which mode ran. **Eighth false comment this cycle.**
+
+**Four more that only one surface found, and all four matter:**
+
+- **The exit handler does not run on the kill path this file is written around.** Proved by
+  SIGKILLing a child with an exit handler. arc-run spawns the driver with `killSignal: "SIGKILL"`,
+  so **every killed dispatch — the common failure mode — leaked 36 MB containing the runtime's
+  `memories/MEMORY.md` and `state.db`**, the precise artifact ADR-0222 exists to destroy. The comment
+  claimed it covered "the timeouts alike". SIGKILL cannot be caught, so the fix is two mechanisms:
+  signal handlers for what can be caught, and a startup sweep for what cannot.
+- **`dereference: false` does not mean the same thing on all three legs.** On Windows it was measured
+  **following an inner junction and copying the target's contents in**; on POSIX it reproduces a link,
+  so a "private" copy still writes to shared state. Refusing a template containing any symlink needs
+  no per-OS reasoning — the same argument that chose copying over wiping.
+- **`hermes.sh` breaks under an exported `CDPATH`** (proved): `cd` prints the resolved directory to
+  stdout, `HERE` becomes two lines, and the driver dies with ENOENT for a reason unrelated to the
+  runtime. No `-P`, no failure check, and `set -e` is not on.
+- **The main guard compared a realpath-resolved URL against an as-given argv**, so behind any symlink
+  the driver **silently does nothing: exit 0, empty stdout**, and arc-run spends a retry blaming the
+  runtime. Five other main-guards in this repo already realpath both sides. **Sixth twin recurrence.**
+
+**AND THE TESTS WERE WORSE THAN THE CODE.** Both suites written the same day carried assertions that
+could not fail:
+
+- The workspace-removal test counted `arc-hermes-ws-*` under `${TMPDIR:-/tmp}` while Node creates
+  them in `os.tmpdir()` — on this box `0 ≤ 0`, **passing with the cleanup deleted**. And `after ≤
+  before` cannot distinguish "created and removed" from "never created".
+- The self-count guard **greps the source**, so a `@test` bats drops for a non-ASCII name leaves its
+  line intact and the count never moves. `engine-emit-path.bats` had already fixed this and written
+  down why. **The sweep found it in SIX engine suites, not the two the pass named** — the twin rule
+  paying for itself.
+- Four `run cat "$ARGV"` sites never checked the status, and two of those tests asserted only `!=`,
+  which `cat: No such file` satisfies perfectly.
+- The negative control planted a marker whose fixture **fell back to a default byte-identical to the
+  expected value**, so a broken export proved the default rather than the wiring.
+- The flag-position probe used `indexOf`, so a flag appended after the image was invisible whenever
+  the same flag appeared legally earlier — and an **absent** flag scored as "not misplaced".
+- **The certification suite set `ARC_HERMES_DATA` to four directories it never created**, so every
+  certificate run exercised the unconfined path. **The certificate was issued against the mode it
+  certifies against.**
+
+**And one nobody had looked for: `egress-proxy.py` had ZERO coverage of any kind.** Nothing launched
+it, no suite named it, and this repo has no Python lint step — so a syntax error or an inverted
+`if key not in allowed` would have shipped **green into every consumer repo the sync manifest
+feeds**. The stated excuse was that a CI runner has no Docker; that is true of the container and
+false of the decision logic, which an attacker drove from a bare interpreter in milliseconds.
+`tests/engine-egress-proxy.bats` now does exactly that, 12 tests, no Docker, no network.
+
+**Also fixed:** a transport failure to an *allowlisted* host was logged `DENY` and answered 403 —
+including into an already-established tunnel, which is corruption rather than refusal · bytes
+pipelined with the CONNECT were silently discarded, so a batched ClientHello hung to timeout ·
+suffix rules like `.openrouter.ai` were **accepted** at parse and merely never matched, so the proxy
+started, printed a plausible policy and denied everything · `--port 0` bound an ephemeral port while
+logging "listening on 0" · unbounded threads with no idle timeout and a bare `accept()` loop, so the
+confined runtime could switch off its own confinement · IPv6 was unreachable in both directions ·
+the ALLOW line logged the raw target rather than the decided key · two concurrent dispatches on the
+operator usage path read the same report and both stamped `measured` with the same tokens ·
+`TEARDOWN_GRACE_MS` was never re-measured when ADR-0222 added a second job to that window.
+
+**A defect I introduced while fixing theirs, caught before it shipped.** The first draft of the
+stale-workspace sweep deleted every matching directory — which would have destroyed a
+**concurrently running** dispatch's live workspace out from under its container. A cleanup that
+causes the corruption it cleans up after. Age-guarded now. *Fixes produced by an adversarial pass
+are themselves unattacked code*, written down for the third time this cycle and true again.
+
+**One more, found by a lint rather than an agent:** `process-lint.mjs` carried **six literal NUL
+bytes** (a placeholder sentinel written as raw bytes instead of escapes). Git handles it via
+`.gitattributes`, but **ripgrep treats the file as binary and skips it** — so every grep-based gate
+in this repo silently exempted it, including the shell-string safety check the adversarial pass is
+required to run. Escaped; behaviour identical; the file is now scannable.
+
+---
+
+### THE DAY-5 KILL CHECKPOINT, READ — 2026-08-17. It FIRED, and the owner ruled CONTINUE.
+
+**The clock first, because a tripwire read against a stale number is not a read.** `burn` sat at
+`4.5d` set 2026-08-16 while a full working day of 2026-08-17 (the egress gate, ADR-0222, five
+commits) went uncounted. Set to **5.5 of 7.5 (73%)**. This is the *second* time this cycle the clock
+lagged the work — the Phase 04 close already recorded *"the phase itself was not the overrun; the
+clock reading 0.0 for four days was."* Written down again rather than treated as a one-off.
+
+**So the checkpoint fires.** PLAN: *"if REQ-02 is not certified against the real runtime at 5 days
+burned, stop — bank the shim and the certification suite as documentation, record demand-triggered
+retry."* At 5.5d, REQ-02 is not certified. The tripwire is not read early and not read late.
+
+**And the read is CONTINUE, because the STOP's premise was measured and is false.** That STOP exists
+for one thing, stated in REQ-02: a boundary *"that cannot be proven without netns/seccomp/VM work"*.
+Assumption **A-04 did not fire**, and not by opinion:
+
+| Boundary | Status | How it was settled |
+|---|---|---|
+| repo invisible to the runtime (fx 1) | **PASS** | probed at the container boundary; repo path does not resolve |
+| zero arc secrets in the runtime env (fx 4) | **PASS on its second half** | *"only its own capped key"* is still unbuilt — see the gap list |
+| traversal / symlink escape (fx 6) | **PASS** | the property is *where the bytes land*, not whether the write errors |
+| egress allowlist (fx 7) | **PASS, behaviourally** | dual-homed proxy, `ALLOW openrouter.ai:443` / `DENY example.com:443`, measured |
+| persistent memory off (fx 8) | **PASS** | ADR-0222, private workspace copy, 2,235 ms |
+| capped key (fx 10) | **mechanism PASS** | live 403 `Key limit exceeded`; the shim-mapping arm is owed |
+
+A cycle does not bank a cage it has already built, measured and closed. **The remaining REQ-02 work
+is one real run plus four named arms — not an unknown.**
+
+**Reading the code rather than this tracker is what settled it, and the two disagreed.** The `## Now`
+narrative below reads as *"6 of 12 fixtures outstanding"*. The suites say otherwise:
+`engine-isolation-cert.bats` already carries rows **1, 2+3, 5, 11, 12**; `engine-data-boundary.bats`
+carries the exit-5 mechanism whole, with negative controls; `engine-cert-label.bats` makes a mock run
+*structurally* incapable of certifying. What is actually missing is **the real arm** — every one of
+those runs today against `ARC_HERMES_DOCKER=fake`, which is correct design and is not certification.
+**A tracker narrative is not the artifact.** This lane's own rule, applied to itself.
+
+**The honest gap list for Phase 06, complete:**
+
+1. **Egress orchestration** — the proxy is built and measured, but nothing creates the `--internal`
+   network or starts the proxy for a real dispatch. `ARC_HERMES_NETWORK`/`ARC_HERMES_PROXY` stay
+   opt-in, so **unconfigured means unconfined**, and the suite asserts that explicitly rather than
+   letting the positive tests read as *"egress is confined"*.
+2. **Fixture 10's shim arm** — the provider's 403 is measured, but nothing has proven the shim maps
+   it to `fail` / `reason: budget` with zero silent continuation. Nothing went through `arc-run`.
+3. **Fixture 4's first half** — *"only its own capped key"*. Today the container has neither key.
+   Once the credential is injected the fixture must be re-proven, not carried.
+4. **ADR-0209's pinned-hash comparison** — there is finally an allowlist worth hashing.
+5. **Fixture 9 on the real path** — the 2026-08-16 599-second run produced schema-failure → one
+   same-tier retry → proposal receipt, which is the ladder working. But that was a weak model
+   answering badly, **not a planted hostile output**, so it is evidence and not the fixture.
+6. **The certification run itself**, human-started, with receipts and the scrubbed transcript bundle.
+
+**The appetite is extended IN WRITING, 7.5d → 9.5d** (owner ruled 2026-08-17: complete the cycle).
+`leads` set the precedent on 2026-08-10 by extending 7d → 11d in writing rather than absorbing it
+silently, and that is the only acceptable shape. Phase appetites are **unchanged** — the extension is
+slack against a Phase 06 that costs more than its 2 days, never a licence for new scope. The two
+pre-decided cuts stay cut. **The three real runs stay uncuttable.**
+
+---
+
 ### THE ADVERSARIAL PASS ON TODAY'S WORK — 2026-08-16, two fresh surfaces, 30 findings, ~zero overlap
 
 Required by the cycle non-negotiable **before** the shipping PR merges, never at the phase close.
@@ -223,6 +399,187 @@ the same value through `--cost` where the spine throws and `--strict` loses the 
 fixture's `-v` recovery is more permissive than real docker and its `startsWith` mount check is a
 prefix test, not a path-boundary test · the suite drives `hermes.mjs` directly rather than the
 shipped `hermes.sh` · the container name is `pid + ms`, which collides across PID namespaces.
+
+---
+
+### FIXTURE 8 CLOSED — ADR-0222, a private workspace per dispatch, 2026-08-17
+
+The runtime's memory is still always-on and still uncloseable by configuration. What changed is
+**what arc mounts**. `ARC_HERMES_DATA` becomes a **template**: it is read and copied, never mounted,
+and each dispatch runs against its own copy which is removed when it exits.
+
+**Copying beats wiping, and the reason is the measurement.** The planted marker turned up in
+`state.db` as well as the `MEMORY.md` the vendor names — so a wipe list needs to know the runtime's
+storage layout, and one file short reads **green while carrying data across**. A copy needs to know
+nothing.
+
+| option | closes it? | measured |
+|---|---|---|
+| fresh empty volume | yes | a **145–400s+** cold boot every dispatch |
+| **warm template copied** | **yes** | **2,235 ms** for 36 MB / 1,171 files |
+| wipe the memory surface | only if the list is complete | ~0 ms, and the list is the problem |
+
+**The cheap option and the safe option are the same one**, which is unusual enough to say out loud;
+where they diverge this plan takes the safe one.
+
+`tests/engine-hermes-workspace.bats`, 6 tests: dispatch N+1 sees nothing dispatch N wrote · the
+template is never mutated (otherwise memory travels through the template and the copy buys nothing)
+· the copy is removed afterwards · the driver states which mode ran on the transcript. **A mutant
+mounting the template directly reddens 3 of 6.** The negative control seeds the marker into the
+template and asserts the reader DOES see it, so test 1's empty result is a finding rather than a
+fixture that writes nothing.
+
+**Copy failure FAILS the dispatch** — no fallback to mounting the template. That fallback is
+unconfined execution wearing the appearance of a control, the same refusal the egress work made.
+The container name moved from `pid + ms` to `randomUUID()`, because that name now keys a workspace
+and an adversarial pass had already flagged the old one as collision-prone.
+
+**Closed for the VOLUME path only.** Assumption A-06's carry-over path — accepted drafts riding a
+later pack — is a different route into the same hole and stays open.
+
+---
+
+### FIXTURE 7'S BEHAVIOURAL ARM NOW PASSES — the egress gate is built, 2026-08-17
+
+`.claude/scripts/engine/egress-proxy.py`, run inside the **same pinned image** (Python 3.13 is
+already there, so no second supply-chain artifact to pin, vet and rotate), on an `--internal`
+network with the runtime pointed at it:
+
+| Probe | Result |
+|---|---|
+| allowlisted `openrouter.ai:443` through the proxy | **200** |
+| non-allowlisted `example.com` through the proxy | **BLOCKED** |
+| the proxy's decision log | `ALLOW openrouter.ai:443` · `DENY example.com:443` |
+| started with an empty allowlist | **refuses to start** |
+
+**CONNECT only, exact `host:port`, fail closed, plain HTTP refused.** Each is a refusal with a
+reason: terminating TLS would make the proxy a man-in-the-middle holding the runtime's credential;
+a suffix rule is how `evil-openrouter.ai` gets allowed; and an allowlisted host reached over
+`http://` would let the runtime exfiltrate in a query string the reviewed draft never shows.
+
+**The honest weakness is pinned rather than hidden.** `ARC_HERMES_NETWORK` / `ARC_HERMES_PROXY` are
+**opt-in**, so unconfigured means *unconfined* — and `tests/engine-hermes-egress.bats` asserts that
+explicitly, so the positive tests cannot be read as "egress is confined" when the variables are
+unset. A proxy set **without** a network is refused too: that pair is unrestricted egress wearing
+the appearance of a control. 6 tests, and removing the driver's egress block reddens 2 of them.
+
+**Owed:** the orchestration (something must create the network and start the proxy for a real
+dispatch) and ADR-0209's pinned-hash comparison, which now has an allowlist worth hashing.
+
+---
+
+### THE RUNTIME'S BAD ANSWERS WERE OUR CONFIG, AND THE TRANSCRIPT FIX IS WHAT FOUND IT — 2026-08-16
+
+Earlier today five runs of one pinned prompt returned five different shapes of wrong, and it was
+written up as *"the runtime does not reliably honour a one-shot output contract"*. **That framing
+was wrong, and the correction is the more useful finding.**
+
+The cause was on the container's stderr the entire time:
+
+```
+[config-migrate] WARNING: This config predates version 12 (~2 years old) and can no longer be
+auto-migrated. ... or manually set _config_version: 12
+```
+
+`config.yaml` was hand-written from Phase 04's evidence with **no `_config_version`**, so the runtime
+could not migrate it and ran with its configuration not taking. **arc threw that line away on every
+successful run** — the transcript was discarded until this same session forwarded it for the secret
+scrub. The isolation fix and this diagnosis are literally the same fix: *a trail you do not keep is a
+trail nobody reads.*
+
+With the version set, the runtime auto-migrated to config version 33 and the warning is gone.
+
+**Round 2 is still a fail, honestly.** `commit-msg-draft` through the real container: exit 1,
+`$.commits: required property is absent`, one same-tier retry, then a proposal receipt — ADR-0204's
+ladder working exactly as designed. **599 seconds** for the pair.
+
+**So the conclusion changes shape rather than disappearing.** An 8B local model does not produce a
+real arc process's schema, at ~5 minutes an attempt. Three named-uncuttable runs plus retries on that
+path is most of a day for an unknown chance of a usable draft.
+
+**Phase 08 should dispatch against OpenRouter's free tier, not local ollama** — already proven
+reachable on the unfunded capped key at HTTP 200, better models, faster, still zero spend, with the
+slug pinned *and* dated. And `commit-msg-draft` was an unfair probe: it needs git context the
+container never had, which is three confounds (stale config, weak model, contextless process) and
+each is removable. Evidence: `evidence/phase-06/runtime-answer-reliability.md`.
+
+**REQ-05 gets its first real data point:** ~300s per attempt, doubled by the ladder. A class budget
+written before these receipts existed would have been a guess.
+
+---
+
+### FIXTURES 1, 4, 6 PASS · FIXTURE 7 FAILS — 2026-08-16, probed at the container boundary
+
+Measured with a shell inside the pinned image, no model call: the runtime runs entirely inside the
+container, so what the container reaches is what the runtime reaches.
+Evidence: `evidence/phase-06/fixtures-1-4-6-7-confinement.md`. Probe kept as a committed fixture.
+
+- **Fixture 1 PASS, in the strongest form** — the arc repo is not unwritable, it is **invisible**.
+  `/opt/data` is the only bind mount; `/mnt` is empty; the repo path does not resolve.
+  `/proc/mounts` carries `path=C:\` on the 9p line, which reads alarming and is Docker Desktop's
+  WSL2 share-root metadata, not the exposed path — checked by listing rather than by reading.
+- **Fixture 4 PASS** — zero arc-shaped env vars inside the runtime. Worth stating precisely: the
+  requirement is *"only its own capped key"*, and today the answer is **neither its own key nor
+  arc's**. The second half passes; the first half is unbuilt.
+- **Fixture 6 PASS, and the obvious assertion would have failed it** — `touch /opt/data/../escape.txt`
+  **succeeds**, and lands in the container's own layer, never on the host side of the mount. The
+  property is *where it lands*, not *whether it errors*. Asserting "the write was refused" would
+  have reported FAIL on a correctly confined system.
+- **FIXTURE 7 FAILS on the behavioural arm.** `curl https://example.com` → **200**. Egress is
+  completely unrestricted: no allowlist, no proxy, default Docker networking. There is no config to
+  match, so the behavioural arm is the only arm and it fails. This is the pre-mortem's risk 4
+  arriving on schedule — a prompt-injected runtime leaking through a channel the reviewed draft
+  never shows.
+
+**Also measured, outside any fixture: the runtime runs as `uid=0(root)` in the container.** Confined,
+so not a host escape — but nothing stops the agent rewriting its own config, including the file whose
+hash ADR-0209 pins. **A pin computed over a file its subject can rewrite is a pin that checks
+itself.**
+
+**THE STOP DOES NOT FIRE ON FIXTURE 7, AND THAT IS A MEASUREMENT.** REQ-02 fires the STOP for a
+boundary that *"cannot be proven without netns/seccomp/VM work"*. Before letting it fire, the levers
+were measured: `--network none` and an `--internal` bridge both block **everything including the
+model**, so neither works alone. The dual-homed proxy pattern was then built and run:
+
+| Probe | Result |
+|---|---|
+| proxy (on internal + bridge) → `example.com` | **200** |
+| client (internal only) → `example.com` | **BLOCKED** |
+| client → the proxy by name | **REACHES** |
+
+**An honest egress restriction exists with stock Docker — no netns, no seccomp, no VM.** So fixture 7
+is **build work, not an unprovable boundary**, and the cycle does not bank here. What is proven is
+the *lever*; the allowlisting gate itself is unbuilt, and the behavioural arm (allowed host succeeds,
+disallowed host fails) is owed.
+
+---
+
+### FIXTURE 10: THE CAP WORKS AND THE SPEC ASSERTED THE WRONG CODE — 2026-08-16
+
+Run against the live credential, not read from documentation. A **paid** model returns
+**HTTP 403 `Key limit exceeded (total limit)`**; a **`:free`** model returns **HTTP 200** with a real
+completion.
+
+**The mechanism passes.** Spend is refused at the credential — ADR-0213's *"the credential is the
+leash"*, working. **The asserted code was wrong in four places.** OpenRouter separates
+**402** (the *account* is out of credits) from **403** (this *key's* limit is spent), and ADR-0213
+chose the per-key limit, so 403 is the code this design produces. A fixture asserting 402 would have
+failed against a **working** cap — and a cap that had stopped working would have been
+indistinguishable from a spec that was simply wrong.
+
+**ADR-0219's shape, repeating inside the same cycle:** an exit contract described from documentation,
+fixtures written against the description, the difference invisible until someone ran it. Corrected in
+PLAN (3 sites), phase-07-spec, and ADR-0213 by amendment.
+
+**The zero-spend path is now a measurement, not an assumption** — a `:free` model answers on the
+unfunded key. Caveat recorded: 16 of 413 models carry a `:free` slug and two the plan itself named
+are already gone (`anthropic/claude-3.5-sonnet` → *"No endpoints found"*;
+`meta-llama/llama-3.2-3b-instruct:free` → *"unavailable for free"*). Phase 08 pins its slug **and**
+the date it was verified.
+
+**Not established:** the shim's mapping of that refusal to `fail` / `reason: budget` with zero silent
+continuation. Nothing here went through arc-run — the runtime holds its own credential and arc never
+issues this call. That arm is owed and is not counted.
 
 ---
 

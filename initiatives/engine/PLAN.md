@@ -87,14 +87,29 @@ Measured **2026-08-12** against `777808f`, not inherited: the design source's ow
 | REQ-02 | Isolation is certified against the real thing, not promised | The 12-fixture Isolation Certification Suite runs green **against the real runtime, human-started, once**, with the run receipts attached as the evidence bundle. **The data-boundary refusal mechanism is built HERE, not in Phase 08** — fixtures 2 and 3 assert it, so certification cannot borrow a gate that does not exist yet; Phase 08's REQ-06 then builds the context-pack semantics (approval, batch, angle, feedback) *on top of* this mechanism rather than introducing it. Fixture 7 carries a **behavioural** arm as well as its config-pin diff: an attempted outbound connection to a host outside the pinned allowlist must actually fail, because a config match is a promise and this REQ's whole outcome is that promises do not count. **Fixtures 4 and 10 need a live capped credential** (an env audit needs a key to audit; an exhaustion test needs a key to exhaust), so the key is provisioned in **Phase 04** rather than Phase 07 — REQ-05 still closes in Phase 07, but a certification that STOPs for want of a credential would fire the kill criterion for a scheduling bug rather than a real isolation gap, and that is the worst outcome this plan can produce. A mock-green run is labelled `regression`, never `certification`, and the label is asserted by a test rather than written by hand. CI reruns the suite on `drivers/mock` for regression only. **Any fixture that cannot be proven without netns/seccomp/VM work is recorded UNPROVABLE and fires the STOP** — an unprovable boundary is a no | 06 | active |
 | REQ-03 | Every dispatch is a policy-grade receipt with a trail | `run.completed` carries the engine's existing payload with **zero new event kinds**; the **runtime identity moves to its own `runtime` payload field and the MP-F seat reads `unpinned`** (**ADR-0221, amending ADR-0212 — the original "runtime + version + config hash in the seat" quarantined the first receipt with `BAD_MODEL`; `MODEL_RE` admits no `@` and no `+`**). The `--usage-file` reader that would have filled the seat with a measured model id **ships as fail-safe plumbing**: the vendor-documented flag produced a report in **one run of five** and that report's bytes were destroyed before reading, so the branch is exercised by a planted-file fixture and the real-world behaviour is pinned by a probe that goes red — and keeps the file — the day one appears. Token counts would land as measured, the report's **estimated** cost never enters a cost field, and absent cost or effort fields stay absent. A **scrubbed transcript per dispatch** is stored at `initiatives/engine/evidence/phase-NN/`, and the 3-planted-key fixture shows zero leaks across the **four named artifact classes — draft output, scrubbed transcript, `run.completed` receipt payload, and the cost/usage sidecar** — with a negative control proving the check can fail. Win-rate per class is **derivable** from receipts — writing the reader is explicitly out of scope | 06 | active |
 | REQ-04 | Hiring is a reviewed, receipted, expiring, revocable act | **ONE reviewed `router.yaml` diff** adds the runtime row with `cap:` (`L1-drafts`), `hosted:`, `judge:` and `review_by:` **all mandatory — a row where any of the 4 is absent, empty, `null` or malformed fails the router load**, asserted by hostile fixtures covering each of those four inputs per field, because "missing" and "present but empty" are different inputs and a near-miss that loads is a guard that cannot fail. `review_by:` is enforced **at load time**: dispatching through an expired row refuses naming the row and emits **one idempotent** rejustify-or-retire proposal. The same change carries the termination spec (key revoke + row disable). **AMENDED 2026-08-16 (`/arc-change`): the `hq.policy.yaml` row does NOT ride this change and cannot** — `policy-lint` (ADR-0504) rejects a `kinds` entry whose process file does not exist (*"the subject set is a directory listing, not an invention"*), and `processes/build-in-public-draft.process.yaml` is authored by Phase 08. The row was written, inserted, refused in one run, and reverted. It moves to REQ-07 / Phase 08, where the process file and its policy row are ONE change. The comment written beside that row claimed *"a row without a file is harmless, while a file without a row is ungoverned"*; only the second half is true, and the validator treats the first half as the **more** serious of the two — a grant to a subject nobody can run | 07 | active |
-| REQ-05 | Money cannot exceed the cap, even on an opaque runtime | The runtime holds its own **OpenRouter capped key** whose non-resetting ceiling is a figure the owner records **before issuance**. Fixtures: an exhausted key produces `fail` / `reason: budget` with zero silent continuation and the provider's real **HTTP 402** asserted, never a mocked one · a wall-clock overrun exits `2` at the budget line and **charges the run, not the attempt** — proven by a fixture forcing one retry plus one fallback hop and asserting total elapsed stays inside the stated cap · cost fields are provider-reported or absent. Class budgets are set **from the first 3 calibration runs' recorded durations**, never guessed | 07 | active |
+| REQ-05 | Money cannot exceed the cap, even on an opaque runtime | The runtime holds its own **OpenRouter capped key** whose non-resetting ceiling is a figure the owner records **before issuance**. Fixtures: an exhausted key produces `fail` / `reason: budget` with zero silent continuation and the provider's real refusal code asserted, never a mocked one — **measured 2026-08-16 as HTTP 403 `Key limit exceeded (total limit)`, NOT 402**: OpenRouter returns 402 when the ACCOUNT is out of credits and 403 when the PER-KEY `limit` is spent, and ADR-0213 chose the per-key limit, so 403 is the code this design produces · a wall-clock overrun exits `2` at the budget line and **charges the run, not the attempt** — proven by a fixture forcing one retry plus one fallback hop and asserting total elapsed stays inside the stated cap · cost fields are provider-reported or absent. Class budgets are set **from the first 3 calibration runs' recorded durations**, never guessed | 07 | active |
 | REQ-06 | The input is as governed as the output, and no thinner than the job needs | Draft inputs are `external-ok` **context packs approved by the owner before dispatch**; one approval covers **N dispatches with N declared at approval**, per-dispatch receipts stay individual. The pack bounds data, not the angle. Accepted drafts and rejection reasons may ride the next pack. Fixture: a pack carrying a planted `internal-only` marker is **refused before the runtime process starts**, exiting `5` at the arc-run layer (ADR-0219), with a negative control proving the check can fail — and the identical fixture runs against the **carry-over path** (accepted drafts and rejection reasons riding a later pack), because that is a second, automated route by which runtime-generated content re-enters an owner-approved pack. **ONE confinement function, every fixture-supplied path through it** — never two call sites that can drift | 08 | active |
 | REQ-07 | One real job with a verdict, not just a pulse | A `build-in-public-draft` process is authored (output schema `{draft, sources, task-class, pack-ref}`) **and its `hq.policy.yaml` row (POL-I birth rule, ceiling L1) lands in the SAME change, birth-lint green — moved here from REQ-04 by `/arc-change` on 2026-08-16 because `policy-lint` refuses a row whose process file does not yet exist, so the file and its grant are one change or neither**, and run through the runtime **≥3 times on arc's own build-out journey**, with `run.completed` receipts confirmed present in `.claude/state/hq/events/` and **absent from `_quarantine/`**. Each draft gets an accept/reject + one-line-reason receipt (`approval.requested` → `decision.recorded`). Verdict arm is **capability-gap**: no current driver runs this class, so a paired baseline is impossible and **honestly waived in one line**, never fabricated. Drafts are surfaced for human pickup; **publishing is a human copying it out**. Win, lose or split, the receipt is the deliverable | 08 | active |
 
 ## Appetite
 
-**7.5 working days hard cap** — 1.5 weeks at a 5-day week (owner-ruled 2026-08-09, full appetite
-locked, the lean fallback offered and declined).
+**9.5 days hard cap — EXTENDED from 7.5 by the owner on 2026-08-17**, at the day-5 kill checkpoint,
+in writing rather than absorbed silently. Working days throughout; `kickoff-lint` reads the first
+day-or-week figure in this section, so the live cap is stated first and the history follows it. The
+original: 7.5 working days — 1.5 weeks at a 5-day week (owner-ruled 2026-08-09, full appetite locked,
+the lean fallback offered and declined).
+
+**Why the extension is recorded here and not simply spent.** The day-5 checkpoint FIRED — burn 5.5 of
+7.5 with REQ-02 uncertified. Its STOP exists for a boundary *"that cannot be proven without
+netns/seccomp/VM work"*, and by then every isolation boundary the STOP was written about had been
+measured and closed (fixtures 1, 4, 6, 7, 8 pass; fixture 10's mechanism passes) — assumption A-04
+never fired. What remained was one real certification run plus four named arms, which is a schedule
+overrun and not the unprovable boundary the STOP guards. The owner ruled **continue**. `leads` set the
+shape on 2026-08-10 by extending 7d → 11d in writing; **"At 100% → cut or kill, never extend
+silently"** is satisfied by an extension that is neither silent nor a re-argued cut.
+
+**Phase appetites are UNCHANGED and the extension buys no new scope.** The two pre-decided cuts stay
+cut, and the three real runs stay uncuttable. The read is in `PROGRESS.md` § Now.
 
 **The design source says "1.5 weeks (8 working days)" and those are not the same number.** 1.5 weeks
 is 7.5 working days; "8" is a rounding-up that only holds if a week is longer than five days. The
@@ -103,10 +118,12 @@ than the rounded one — this is the same arithmetic slip Cycle 6 caught in its 
 ("2 weeks" against phases summing to 13 days), and rounding in the plan's favour is how a cap stops
 being a constraint.
 
-Phases allocate **7 of 7.5**, so the slack is **half a day, and that is thin** — 93%, which
-`kickoff-lint` flags and is right to. It is not padded to look better: portfolio C4 ran 112% on a
-100%-allocated plan, and evolve C7 and policy C9 both closed at exactly 100%. The half-day is the
-real margin, and the pre-decided cut below is the real valve.
+Phases allocate **7 of 9.5** after the extension (7 of 7.5 before it, **93%** — thin, flagged by
+`kickoff-lint`, and right to be). It was not padded to look better: portfolio C4 ran 112% on a
+100%-allocated plan, and evolve C7 and policy C9 both closed at exactly 100%. **The 2.0 days added
+on 2026-08-17 are slack against a Phase 06 that is costing more than its 2-day allocation — they are
+not redistributed into the phase rows, because moving them there would erase the overrun instead of
+recording it.** Phase 06's actual-vs-appetite is reported at its close, as every phase's is.
 
 **Tier:** M
 
@@ -120,6 +137,11 @@ next module. Three independent hard STOPs sit above that: **no candidate green o
 STOP at Phase 04** (recorded "no eligible runtime yet") · **REQ-02 unprovable without sandbox
 infrastructure → STOP** (an unprovable boundary is a no) · **runtime API/CLI churn eats more than 2
 days → bank and fall back to existing drivers**. At 100% → cut or kill, never extend silently.
+
+**READ 2026-08-17 at burn 5.5/7.5. It fired; the ruling was CONTINUE and the appetite was extended
+to 9.5 in writing (see above).** Recorded even though the STOP did not end the cycle — a tripwire
+nobody records is indistinguishable from a tripwire nobody checked, which is the same rule the Phase
+04 STOP was written down under. The three STOPs above remain armed and unchanged; A-04 has not fired.
 
 **Each STOP's evaluation is itself evidence.** Whichever phase carries a STOP condition records an
 explicit line at its close — `STOP evaluated: fired` or `did not fire, because X` — **even when it
@@ -184,7 +206,7 @@ flowchart TB
   end
 
   rt[External: Hermes Agent v2026.8.3<br/>inside a container backend]
-  key[External: OpenRouter capped key<br/>HTTP 402 at the ceiling]
+  key[External: OpenRouter capped key<br/>HTTP 403 key-limit at the ceiling]
 
   ashiq -->|approved context pack| boundary
   boundary --> budget --> ladder --> parse
@@ -280,7 +302,7 @@ flowchart TB
 | Dep | Interface | Fake impl | Real impl | Contract test |
 |---|---|---|---|---|
 | Hermes Agent runtime | `drivers/hermes` — process invocation, no SDK | `drivers/mock` replaying a pinned transcript, **regression only** | pinned tag `v2026.8.3`, container backend | `tests/engine-hermes-contract.bats` — same suite against fake and real; the real arm asserts the shim's own code path executed |
-| OpenRouter capped credential | `ARC_HERMES_API_KEY` in env (ADR-0211) | keyless mock arm | human-provisioned non-resetting capped key | exhausted-key fixture asserting the real **HTTP 402** → `fail`/`budget` |
+| OpenRouter capped credential | `ARC_HERMES_API_KEY` in env (ADR-0211) | keyless mock arm | human-provisioned non-resetting capped key | exhausted-key fixture asserting the real **HTTP 403** (`Key limit exceeded`) → `fail`/`budget`; 402 is the ACCOUNT-out-of-credits code and is not what a per-key limit produces |
 | Docker container backend | Hermes Agent backend config, hashed per ADR-0209 | n/a — the fake needs no container | Docker Desktop daemon on this machine | certification fixtures 1, 6 and 7 (repo write blocked, traversal blocked, egress config matches its pin) |
 | Hermes Agent's skill/plugin surface | `capability-vet.sh` scan feeding `capability-lock.json` (ADR-0110/0209) | n/a — `drivers/mock` carries no skill surface | `/arc-capability` run against the runtime and its allowlist decision recorded **before** Phase 04's `--version` can report a config hash | fixture 7 fails closed if `capability-lock.json` holds no entry to compare the live config against |
 | ABS-D owner-judge grammar (absorb, its own plan) | `judge:` router field + verdict receipts | accept/reject via existing kinds | lands with absorb's cycle | one-line deferral recorded (ADR-0214); grammar kept ABS-D-compatible |

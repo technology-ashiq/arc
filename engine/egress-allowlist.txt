@@ -1,0 +1,22 @@
+# engine/egress-allowlist.txt -- the runtime's entire permitted egress, one host:port per line.
+#
+# THIS FILE IS THE POLICY, AND IT IS HASHED INTO THE DRIVER'S PINNED CONFIG HASH (ADR-0209) via
+# ARC_HERMES_EGRESS. Until 2026-08-17 that variable was documented nowhere and set by nothing, so
+# the `egress` component of every config hash ever computed was `{named:false}` -- the pin
+# advertised an egress policy that did not exist. A pin over a file nobody writes is not a pin.
+#
+# EXACT host:port ONLY. No wildcards, no suffix rules, no bare hostnames:
+#   - a suffix rule (`.openrouter.ai`) is how `evil-openrouter.ai` gets allowed
+#   - a bare hostname lets the same host be reached on any port
+# egress-proxy.py REFUSES either shape at startup rather than merely failing to match it. That
+# distinction is a fixed defect: it used to accept them, print a plausible-looking policy, and then
+# deny everything, which surfaces much later as unexplained model errors.
+#
+# CHANGING THIS FILE CHANGES THE CONFIG HASH, which is the point. A widened allowlist is a reviewed
+# diff with a receipt, exactly like a router row -- never an ad-hoc flag on one dispatch.
+#
+# Blank lines and lines beginning with # are ignored.
+
+# The model endpoint. Phase 06 fixture 10 measured a live 200 through this host on the capped key,
+# and a 403 `Key limit exceeded (total limit)` once its ceiling was spent.
+openrouter.ai:443
