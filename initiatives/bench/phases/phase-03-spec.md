@@ -40,6 +40,33 @@ whole loop once on a real model with a real human verdict.
 - [ ] tests added and green on CI, read per JOB; test counts asserted; `@test` names ASCII-only
 - [ ] tracker updated: PROGRESS row ✅, done-log line, `## Now` rewritten, machine header moved
 
+## CORRECTION (2026-08-17): the four blockers below are gone, and one of them came back in disguise
+
+Read this before the section under it. Everything the 2026-08-13 close listed as BLOCKED has been
+closed — but not in the order it expected, and the second closure was needed because the first one
+was believed rather than measured.
+
+- **Blockers 1, 2 and 3** were the same engine defect: `arc-run` rebuilt the driver environment and
+  overwrote `ARC_DRIVER_MODEL`, so no model could reach a driver. **Engine ADR-0220 landed
+  `--trial-model` / `--work-root` on 2026-08-14** and bench was wired to both.
+- **Then bench kept dropping the model anyway, for three more days, and the tracker said it did
+  not.** `driverTakesModel` probed with the alphabetically first `processes/*.process.yaml`; the
+  scheduler lane's `brief-materialize` job stub sorts first; `arc-run` refuses stubs before its
+  `--trial-model` check; and the probe read any non-zero exit as *"this driver cannot carry a
+  model"*. Found by a **free `--dry-run`**, not by any test — every model-seam check in the suite
+  drives `mock`, whose correct answer is `NONE`. Fixed in PR #198 (merged `e28b3a0`, CI green
+  19/19 per JOB) together with 26 findings from two fresh adversarial surfaces.
+- **Blocker 4, the human verdict, stands unchanged** and always will: it is an owner keystroke.
+
+**What the DoD list above still owes, and what it now costs.** The real event is TWO real runs,
+not one — a proposal is a comparison and `evaluateGates` refuses one whose cost is reported on a
+single side, so a real candidate cannot be scored against a mock champion. Champion `sonnet`
+(15 invocations, ceiling ₹12) + candidate `haiku` (15, ₹6) = **₹270 gate-enforced worst case**,
+and the process sub-cap moved 100 → 200 so the champion run cannot stop three fixtures in having
+already spent the money. It must be started from the MAIN CLONE: `spine-io.mjs` refuses to resolve
+a spine inside a linked worktree, so a receipt emitted from the bench worktree never reaches the
+canonical spine.
+
 ## STATUS AT CLOSE (2026-08-13): the guard half is built; the real-event half is BLOCKED
 
 This phase has two halves and they have different fates. Recorded here rather than left for a

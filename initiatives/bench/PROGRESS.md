@@ -146,8 +146,32 @@ in unmerged worktrees. Third occurrence of that staleness pattern. Bench took **
 
 ## Now
 
-**Current position, 2026-08-14: 4 of 5 phases CLOSED. Phase 03's real-event half is UNBLOCKED and
-not yet built.**
+**Current position, 2026-08-17: 4 of 5 phases CLOSED. Phase 03's real-event half is now genuinely
+buildable, and is NOT built — it is waiting on money and an owner keystroke, nothing else.**
+
+## The line below said bench was wired to the seam. Measured, that was false for three days.
+
+The section that follows was written on 2026-08-14 and says *"Bench is wired to both"*. It was
+wrong, and the way it was found is the point: a **free `--dry-run`**, run on 2026-08-17 —
+
+```
+arc-bench --driver claude-code --model haiku --dry-run
+  model requested haiku -- applied NONE (source: none)
+```
+
+`driverTakesModel` probed with the alphabetically FIRST `processes/*.process.yaml`. The scheduler
+lane added `brief-materialize`, a job stub, which sorts first; `arc-run` refuses stubs BEFORE its
+`--trial-model` check; and the probe read any non-zero exit as *"this driver cannot carry a
+model"*. Bench dropped the model on every run. The comment above that line said the tree-read
+existed so a rename could not cause a silent "not capable" — the tree-read is what caused one.
+
+**No test caught it because all four model-seam checks drive `mock`, whose correct answer is
+NONE.** The negative control existed; the positive one never did. Fixed in **PR #198** along with
+**26 findings from two fresh adversarial surfaces**, CI green **19/19 per JOB** at `fcdd5d0`,
+merged as `e28b3a0`. The lesson lines are in `docs/retro-log.md`.
+
+The section below is left as written, with this correction above it: the done-log records what was
+believed at the time, and a pointer beats a rewrite.
 
 ## The blocker is gone, and it was closed by the engine lane
 
@@ -185,17 +209,36 @@ see the mechanism that did.
 checks now ask about the flags; the env checks survive, narrowed to the one thing they actually
 prove. Recorded in `docs/retro-log.md`.
 
-## What is left in Phase 03, and what it needs from the owner
+## What is left in Phase 03 — corrected 2026-08-17
 
-The real event is now buildable and is **not** built. It needs three things this session cannot
-supply:
+Everything an agent can do is done. Two items remain and both are genuinely the owner's.
 
-1. **A model-capable driver, authenticated.** `claude-code` with a second model id reachable.
-2. **Real money.** A ceiling for that driver+model pair must be hand-authored into
-   `initiatives/bench/ceilings.json` first — a missing ceiling is a refusal, never a default, so
-   the run will be REFUSED until it exists. That is the gate working.
-3. **A human verdict.** `arc-inbox approve|reject ULID --reason`, from the main clone. Both
-   outcomes are success; no agent may press it.
+**It is TWO real runs, not one, and that was not understood until it was measured.** A proposal is
+a COMPARISON: `evaluateGates` refuses one whose cost is reported on a single side, and a mock
+scorecard carries no `cost_inr` at all — so a real candidate cannot be judged against a mock
+champion. Champion = **sonnet** (the router's incumbent for `commit-msg-draft`), candidate =
+**haiku** (ADR-0914: a second model id under `claude-code`, not the class champion).
+
+| | Invocations | Ceiling | Bounded at |
+|---|---|---|---|
+| Champion `claude-code/sonnet` | 5 fixtures x K=3 = 15 | ₹12 | ₹180 |
+| Candidate `claude-code/haiku` | 15 | ₹6 | ₹90 |
+| | | | **₹270 worst case** |
+
+Both ceilings are hand-authored in `initiatives/bench/ceilings.json`, whose process sub-cap moved
+**100 → 200** with its arithmetic and with a written account of what that loosens. At 100 the
+champion run stops after three of five fixture groups and yields `NO PROPOSAL` **having already
+spent the money** — which is why the number moved rather than the reservation rule.
+
+1. **Real money — the owner's call.** ₹270 is the gate-enforced worst case, not an estimate of
+   the spend. A pair with no ceiling is REFUSED, never defaulted; that is the gate working.
+2. **A human verdict.** `arc-inbox approve|reject ULID --reason`. Both outcomes are success; no
+   agent may press it.
+
+**And the run must be started from the MAIN CLONE, never this worktree.** `spine-io.mjs` hard-
+refuses to resolve a spine inside a linked worktree, so a receipt emitted from here would never
+reach the canonical spine and REQ-05's chain — run, proposal, approval, verdict, read back OFF the
+spine — could not be closed.
 
 ## The monthly guard
 
