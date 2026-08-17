@@ -12,6 +12,7 @@
     ".claude/scripts/engine/process-lint.mjs",
     ".claude/scripts/engine/arc-compile.mjs",
     ".claude/scripts/engine/arc-run.mjs",
+    ".claude/scripts/engine/calibrate-budget.mjs",
     ".claude/scripts/engine/egress-proxy.py",
     ".claude/scripts/engine/egress-session.sh",
     ".claude/scripts/engine/arc-bench.mjs",
