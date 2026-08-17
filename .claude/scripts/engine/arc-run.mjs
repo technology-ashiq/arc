@@ -1057,7 +1057,13 @@ function storeTranscript(name, text) {
     // evidence out of its own bundle, which `.claude/rules/lanes.md` already records happening for
     // real once. Sanitise, then verify containment: the second check is not redundant, it is what
     // makes the first one falsifiable.
-    const safe = `${processName}-${name}-attempt${attemptsMade}`.replace(/[^A-Za-z0-9._-]/g, "_");
+    // `\w` rather than a spelled-out letter range: identical set (`[A-Za-z0-9_]`), and it does not
+    // trip tests/portability.bats, which refuses NEW negated bracket expressions carrying a letter
+    // range anywhere in the tree. That guard is aimed at shell globs, where a range is
+    // locale-collated; a JavaScript class is code-point based and would have been safe. Complying
+    // anyway -- a guard with one hand-argued exception per file is a guard nobody can read, and
+    // `\w` is the clearer spelling regardless.
+    const safe = `${processName}-${name}-attempt${attemptsMade}`.replace(/[^\w.-]/g, "_");
 
     // PID AND ATTEMPT IN THE NAME, AND `wx` SO A COLLISION THROWS. The stamp alone was
     // millisecond-resolution: eight concurrent dispatches produced SIX files, and all eight printed
