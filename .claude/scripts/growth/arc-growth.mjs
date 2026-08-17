@@ -371,7 +371,7 @@ function cmdRender() {
   const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
   const draft = parseJsonOrDie(readOrDie(draftPath, "draft"), "the draft");
   if (draft === null || typeof draft !== "object" || Array.isArray(draft))
-    die("BAD_DRAFT", "the draft must be a JSON object of {title, meta, slug, template_id, pubDate, body}");
+    die("BAD_DRAFT", "the draft must be a JSON object of {title, meta, slug, pubDate, body} -- template_id is ASSIGNED from the slug, never supplied");
   // The PLAN gets the same shape check as the draft. It did not, so a null or array plan surfaced
   // as `BAD_DRAFT -- Cannot read properties of null` and sent the operator to inspect a file that
   // was fine. The twin of a fix is where this repo keeps losing.
@@ -379,11 +379,23 @@ function cmdRender() {
     die("BAD_PLAN", `the cluster plan at ${planPath} is not a cluster plan (no cluster_id)`);
   // cluster_id comes from the PLAN, never from the draft. A draft that names its own cluster could
   // attribute an article to a cluster nobody approved, and the approval is bound to the plan.
+  //
+  // template_id comes from the ASSIGNMENT, never from the draft, and for the same reason one field
+  // over. `assignArm` is `sha256(slug) -> arm` and is replay-identical (ADR-1106); `publish`
+  // computes it independently when it builds the review pack. While `render` accepted the draft's
+  // value, those two could disagree — and on the FIRST real article they did: the frontmatter said
+  // `title-a` and the assignment said `title-b`.
+  //
+  // That is not a cosmetic mismatch. `template_id` is a `content.published` payload field validated
+  // on its VALUES (REQ-04), so the file would have claimed one arm while the receipt carried the
+  // other, and every A/B number derived from those receipts would describe an experiment that did
+  // not happen. A draft naming its own arm is a draft opting itself out of the experiment.
+  const arm = assignArm(draft.slug);
   let mdx;
   try {
     mdx = renderMdx({
       title: draft.title, meta: draft.meta, slug: draft.slug,
-      cluster_id: plan.cluster_id, template_id: draft.template_id, body: draft.body,
+      cluster_id: plan.cluster_id, template_id: arm, body: draft.body,
       // From the DRAFT, not from a clock. The publication date is a fact about the article, so a
       // re-render months later must not restamp it — and a `new Date()` here would make this
       // function's output depend on when it ran, which is the one thing a content hash cannot have.

@@ -159,6 +159,42 @@ const pack = (over = {}) => ({ slug: "three-states-not-two", previewUrl: "https:
   [[ "$output" == *"NO_PREVIEW_URL"* ]]
 }
 
+@test "render: the arm comes from the ASSIGNMENT, and a draft naming its own is overridden" {
+  # FOUND ON THE FIRST REAL ARTICLE, 2026-08-18. `render` took template_id from the DRAFT while
+  # `publish` computed assignArm(slug) independently, so the two could disagree -- and they did on
+  # the first one written: the frontmatter said title-a, the assignment said title-b.
+  #
+  # Not cosmetic. template_id is a content.published payload field validated on its VALUES (REQ-04),
+  # so the file would claim one arm while the receipt carried the other, and every A/B number
+  # derived from those receipts would describe an experiment that did not happen. A draft naming its
+  # own arm is a draft opting itself out of the experiment.
+  #
+  # This drives the CLI, not renderMdx, because the derivation lives in the CLI -- testing the
+  # library here would leave the actual caller uncovered, which is the shape the sibling test above
+  # was written for.
+  local d="$BATS_TEST_TMPDIR/draft.json" out="$BATS_TEST_TMPDIR/a.mdx"
+  # The slug is chosen because assignArm maps it to title-b; the draft deliberately claims title-a.
+  cat > "$d" <<'JSON'
+{"title":"T","meta":"M","slug":"multi-agent-ai-coding-workflows","template_id":"title-a","pubDate":"2026-08-18","body":"Body text."}
+JSON
+  [ -s "$d" ] || { echo "fixture is empty -- an empty fixture is a silent pass generator"; false; }
+
+  run node "$ARC_ROOT/.claude/scripts/growth/arc-growth.mjs" render \
+    --draft "$d" --plan "$ARC_ROOT/initiatives/growth/clusters/c-001.json" --out "$out"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+
+  # Assert it RAN before asserting what it wrote.
+  [ -s "$out" ] || { echo "render exited 0 and wrote nothing"; false; }
+  grep -q 'template_id: "title-b"' "$out" || { echo "arm not derived from the slug:"; grep template_id "$out"; false; }
+  grep -q 'template_id: "title-a"' "$out" && { echo "the draft's arm survived into the file"; false; }
+
+  # The positive control: the derivation agrees with the function publish uses, rather than with a
+  # constant this test happens to hardcode.
+  run _node "const T = await import('./.claude/scripts/growth/lib/templates.mjs');
+    console.log(T.assignArm('multi-agent-ai-coding-workflows'));"
+  [ "$output" = "title-b" ]
+}
+
 # ---------- the A/B slot ----------
 
 @test "publish: arm assignment is replay-identical through the PRODUCTION path" {
