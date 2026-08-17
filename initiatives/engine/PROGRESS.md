@@ -3,8 +3,8 @@
 status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 05
-appetite: 7.5d
-burn: 4.5d
+appetite: 9.5d
+burn: 5.5d
 blocked-on: —
 depends-on: —
 
@@ -34,7 +34,8 @@ depends-on: —
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 4.5 of 7.5 days used (60%) — set 2026-08-16, derivation above `## Now`.** Phases allocate 7 of 7.5 — **93%, and the half-day of
+**Appetite burn: 5.5 of 7.5 days used (73%) — set 2026-08-17, derivation above `## Now`. The
+day-5 kill checkpoint has therefore FIRED and is read in `## Now`.** Phases allocate 7 of 7.5 — **93%, and the half-day of
 slack is thin**, flagged by `kickoff-lint` and left honest rather than padded. The design source's
 "1.5 weeks (8 working days)" rounds up: 1.5 weeks is 7.5 working days at a 5-day week, so the cap is
 written as the smaller, true number. Kill checkpoint is read at **day 5**, not at the 50% mark of
@@ -149,6 +150,66 @@ on-track run is one that learns to be ignored.
     mark. Next engine cycle starts at **0221**.
 
 ## Now
+
+### THE DAY-5 KILL CHECKPOINT, READ — 2026-08-17. It FIRED, and the owner ruled CONTINUE.
+
+**The clock first, because a tripwire read against a stale number is not a read.** `burn` sat at
+`4.5d` set 2026-08-16 while a full working day of 2026-08-17 (the egress gate, ADR-0222, five
+commits) went uncounted. Set to **5.5 of 7.5 (73%)**. This is the *second* time this cycle the clock
+lagged the work — the Phase 04 close already recorded *"the phase itself was not the overrun; the
+clock reading 0.0 for four days was."* Written down again rather than treated as a one-off.
+
+**So the checkpoint fires.** PLAN: *"if REQ-02 is not certified against the real runtime at 5 days
+burned, stop — bank the shim and the certification suite as documentation, record demand-triggered
+retry."* At 5.5d, REQ-02 is not certified. The tripwire is not read early and not read late.
+
+**And the read is CONTINUE, because the STOP's premise was measured and is false.** That STOP exists
+for one thing, stated in REQ-02: a boundary *"that cannot be proven without netns/seccomp/VM work"*.
+Assumption **A-04 did not fire**, and not by opinion:
+
+| Boundary | Status | How it was settled |
+|---|---|---|
+| repo invisible to the runtime (fx 1) | **PASS** | probed at the container boundary; repo path does not resolve |
+| zero arc secrets in the runtime env (fx 4) | **PASS on its second half** | *"only its own capped key"* is still unbuilt — see the gap list |
+| traversal / symlink escape (fx 6) | **PASS** | the property is *where the bytes land*, not whether the write errors |
+| egress allowlist (fx 7) | **PASS, behaviourally** | dual-homed proxy, `ALLOW openrouter.ai:443` / `DENY example.com:443`, measured |
+| persistent memory off (fx 8) | **PASS** | ADR-0222, private workspace copy, 2,235 ms |
+| capped key (fx 10) | **mechanism PASS** | live 403 `Key limit exceeded`; the shim-mapping arm is owed |
+
+A cycle does not bank a cage it has already built, measured and closed. **The remaining REQ-02 work
+is one real run plus four named arms — not an unknown.**
+
+**Reading the code rather than this tracker is what settled it, and the two disagreed.** The `## Now`
+narrative below reads as *"6 of 12 fixtures outstanding"*. The suites say otherwise:
+`engine-isolation-cert.bats` already carries rows **1, 2+3, 5, 11, 12**; `engine-data-boundary.bats`
+carries the exit-5 mechanism whole, with negative controls; `engine-cert-label.bats` makes a mock run
+*structurally* incapable of certifying. What is actually missing is **the real arm** — every one of
+those runs today against `ARC_HERMES_DOCKER=fake`, which is correct design and is not certification.
+**A tracker narrative is not the artifact.** This lane's own rule, applied to itself.
+
+**The honest gap list for Phase 06, complete:**
+
+1. **Egress orchestration** — the proxy is built and measured, but nothing creates the `--internal`
+   network or starts the proxy for a real dispatch. `ARC_HERMES_NETWORK`/`ARC_HERMES_PROXY` stay
+   opt-in, so **unconfigured means unconfined**, and the suite asserts that explicitly rather than
+   letting the positive tests read as *"egress is confined"*.
+2. **Fixture 10's shim arm** — the provider's 403 is measured, but nothing has proven the shim maps
+   it to `fail` / `reason: budget` with zero silent continuation. Nothing went through `arc-run`.
+3. **Fixture 4's first half** — *"only its own capped key"*. Today the container has neither key.
+   Once the credential is injected the fixture must be re-proven, not carried.
+4. **ADR-0209's pinned-hash comparison** — there is finally an allowlist worth hashing.
+5. **Fixture 9 on the real path** — the 2026-08-16 599-second run produced schema-failure → one
+   same-tier retry → proposal receipt, which is the ladder working. But that was a weak model
+   answering badly, **not a planted hostile output**, so it is evidence and not the fixture.
+6. **The certification run itself**, human-started, with receipts and the scrubbed transcript bundle.
+
+**The appetite is extended IN WRITING, 7.5d → 9.5d** (owner ruled 2026-08-17: complete the cycle).
+`leads` set the precedent on 2026-08-10 by extending 7d → 11d in writing rather than absorbing it
+silently, and that is the only acceptable shape. Phase appetites are **unchanged** — the extension is
+slack against a Phase 06 that costs more than its 2 days, never a licence for new scope. The two
+pre-decided cuts stay cut. **The three real runs stay uncuttable.**
+
+---
 
 ### THE ADVERSARIAL PASS ON TODAY'S WORK — 2026-08-16, two fresh surfaces, 30 findings, ~zero overlap
 

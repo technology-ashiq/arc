@@ -93,8 +93,23 @@ Measured **2026-08-12** against `777808f`, not inherited: the design source's ow
 
 ## Appetite
 
-**7.5 working days hard cap** — 1.5 weeks at a 5-day week (owner-ruled 2026-08-09, full appetite
-locked, the lean fallback offered and declined).
+**9.5 days hard cap — EXTENDED from 7.5 by the owner on 2026-08-17**, at the day-5 kill checkpoint,
+in writing rather than absorbed silently. Working days throughout; `kickoff-lint` reads the first
+day-or-week figure in this section, so the live cap is stated first and the history follows it. The
+original: 7.5 working days — 1.5 weeks at a 5-day week (owner-ruled 2026-08-09, full appetite locked,
+the lean fallback offered and declined).
+
+**Why the extension is recorded here and not simply spent.** The day-5 checkpoint FIRED — burn 5.5 of
+7.5 with REQ-02 uncertified. Its STOP exists for a boundary *"that cannot be proven without
+netns/seccomp/VM work"*, and by then every isolation boundary the STOP was written about had been
+measured and closed (fixtures 1, 4, 6, 7, 8 pass; fixture 10's mechanism passes) — assumption A-04
+never fired. What remained was one real certification run plus four named arms, which is a schedule
+overrun and not the unprovable boundary the STOP guards. The owner ruled **continue**. `leads` set the
+shape on 2026-08-10 by extending 7d → 11d in writing; **"At 100% → cut or kill, never extend
+silently"** is satisfied by an extension that is neither silent nor a re-argued cut.
+
+**Phase appetites are UNCHANGED and the extension buys no new scope.** The two pre-decided cuts stay
+cut, and the three real runs stay uncuttable. The read is in `PROGRESS.md` § Now.
 
 **The design source says "1.5 weeks (8 working days)" and those are not the same number.** 1.5 weeks
 is 7.5 working days; "8" is a rounding-up that only holds if a week is longer than five days. The
@@ -103,10 +118,12 @@ than the rounded one — this is the same arithmetic slip Cycle 6 caught in its 
 ("2 weeks" against phases summing to 13 days), and rounding in the plan's favour is how a cap stops
 being a constraint.
 
-Phases allocate **7 of 7.5**, so the slack is **half a day, and that is thin** — 93%, which
-`kickoff-lint` flags and is right to. It is not padded to look better: portfolio C4 ran 112% on a
-100%-allocated plan, and evolve C7 and policy C9 both closed at exactly 100%. The half-day is the
-real margin, and the pre-decided cut below is the real valve.
+Phases allocate **7 of 9.5** after the extension (7 of 7.5 before it, **93%** — thin, flagged by
+`kickoff-lint`, and right to be). It was not padded to look better: portfolio C4 ran 112% on a
+100%-allocated plan, and evolve C7 and policy C9 both closed at exactly 100%. **The 2.0 days added
+on 2026-08-17 are slack against a Phase 06 that is costing more than its 2-day allocation — they are
+not redistributed into the phase rows, because moving them there would erase the overrun instead of
+recording it.** Phase 06's actual-vs-appetite is reported at its close, as every phase's is.
 
 **Tier:** M
 
@@ -120,6 +137,11 @@ next module. Three independent hard STOPs sit above that: **no candidate green o
 STOP at Phase 04** (recorded "no eligible runtime yet") · **REQ-02 unprovable without sandbox
 infrastructure → STOP** (an unprovable boundary is a no) · **runtime API/CLI churn eats more than 2
 days → bank and fall back to existing drivers**. At 100% → cut or kill, never extend silently.
+
+**READ 2026-08-17 at burn 5.5/7.5. It fired; the ruling was CONTINUE and the appetite was extended
+to 9.5 in writing (see above).** Recorded even though the STOP did not end the cycle — a tripwire
+nobody records is indistinguishable from a tripwire nobody checked, which is the same rule the Phase
+04 STOP was written down under. The three STOPs above remain armed and unchanged; A-04 has not fired.
 
 **Each STOP's evaluation is itself evidence.** Whichever phase carries a STOP condition records an
 explicit line at its close — `STOP evaluated: fired` or `did not fire, because X` — **even when it
