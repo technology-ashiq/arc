@@ -66,7 +66,7 @@ import { MODEL_RE } from "../hq/lib/validate.mjs";
 const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
-import { routerFaults } from "./router-row.mjs";
+import { isExpired, routerFaults } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -299,6 +299,27 @@ let fallbacks = [];
 // row and therefore no claim either way -- which is not the same fact as `hosted: local`, and is
 // left as the empty string rather than defaulted to the reassuring value.
 let hosted = "";
+// Set by the router block below when the routed row is past its tenure. Acted on after the emit
+// helpers exist, because the refusal has to leave a receipt and the receipt needs the emitter.
+let expiredRow = null;
+
+/**
+ * Today, as the operator's calendar sees it.
+ *
+ * LOCAL COMPONENTS, NOT `toISOString()`. `review_by` is a date a human wrote on a calendar, so
+ * "expired" has to mean "the operator's date is past it". `toISOString()` is UTC, and this repo has
+ * already paid for exactly that confusion once: `verifyLanded` derived its day in UTC while the
+ * spine names its file from an IST timestamp, and the result was wrong for 22.9% of the clock. A
+ * tenure check that flips a day early or late depending on the hour is not a tenure check.
+ *
+ * Tests never reach this -- `isExpired(row, today)` takes the day as a parameter precisely so the
+ * boundary, which is the only interesting day, is settable.
+ */
+function todayISO() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
 if (driverArg === "auto") {
   const router = loadRouter();
   if (!router) { console.error("arc-run: --driver auto needs engine/router.yaml, which does not exist"); process.exit(1); }
@@ -310,6 +331,21 @@ if (driverArg === "auto") {
     console.error(`         Add a \`classes.${processName}\` row to engine/router.yaml (known: ${Object.keys(router.classes ?? {}).join(", ") || "none"}).`);
     process.exit(1);
   }
+  // TENURE IS ENFORCED HERE, AND UNTIL 2026-08-17 IT WAS ENFORCED NOWHERE.
+  //
+  // `isExpired()` was written, exported and unit-tested at its boundary -- and never called by
+  // anything that dispatches. `grep -rl isExpired` returned the module and its own probe, so the
+  // suite was green while a row past its `review_by` routed exactly like a fresh one. That is this
+  // repo's own vacuous-pass rule wearing a different hat: the test proved the FUNCTION, and nothing
+  // proved the mechanism ran. ADR-0216's whole claim is that a hire has a tenure rather than a
+  // permanent seat, and a tenure nothing checks is a comment.
+  //
+  // PROPOSE-ONLY IN BOTH DIRECTIONS. Expiry refuses the dispatch; it never disables the row by
+  // itself and never renews one by itself. Both are tier-shaped changes, and ADR-0069 b1 puts
+  // those in a reviewed diff -- so the receipt is an `approval.requested`, exactly like the
+  // escalation ladder's, and acting on it is a human editing the file.
+  expiredRow = isExpired(row, todayISO()) ? { name: processName, row } : null;
+
   driver = row.driver;
   tier = row.tier;
   hosted = typeof row.hosted === "string" ? row.hosted : "";
@@ -995,6 +1031,43 @@ if (dryRun) {
 // in --input (or in an @file that resolves outside the repo) was transmitted to the vendor
 // and the run then reported success.
 if (inputArg) scrub("--input (before anything is sent to a driver)", JSON.stringify(input), input);
+
+// TENURE: an EXPIRED row refuses the dispatch and leaves ONE proposal (REQ-04, ADR-0216).
+//
+// Placed here, before `attempt()` and after the emit helpers exist, because the refusal must be
+// receipted and the receipt needs the emitter. It sits before any driver process is created, for
+// the same reason the data boundary does: a refusal after the spawn has already spent the thing it
+// was refusing.
+//
+// THE PROPOSAL IS IDEMPOTENT ON (class, review_by). Five dispatches through the same expired row
+// leave exactly ONE open proposal, not five -- a queue that grows by one per attempt is a queue a
+// human stops reading, which turns the loudest refusal in the system into noise. Moving the date
+// is a NEW proposal, correctly: that is a different decision about a different tenure.
+if (expiredRow) {
+  const { name: cls, row: erow } = expiredRow;
+  console.error(`arc-run: the route for task class \`${cls}\` EXPIRED on ${erow.review_by} (today is ${todayISO()}).`);
+  console.error(`         Its tenure is over, so it does not dispatch. Edit \`classes.${cls}\` in engine/router.yaml:`);
+  console.error("         re-justify it with a new review_by in a reviewed diff, or retire the row.");
+  console.error("         Expiry never renews a row and never disables one -- both are tier changes (ADR-0069 b1).");
+
+  const prop = emitEvent("approval.requested", {
+    kind: "router-row-tenure",
+    class: cls,
+    driver: erow.driver ?? null,
+    review_by: erow.review_by,
+    asks: "rejustify-or-retire",
+    why: `the ${cls} row passed its review_by and dispatch is refused until a human decides`,
+    adr: "ADR-0216",
+  }, ["--process", `${processName}@${doc?.version ?? "unknown"}`, "--outcome", "fail",
+      // The idem key is the DECISION's identity, not the attempt's.
+      "--idem", `router-tenure:${cls}:${erow.review_by}`]);
+
+  if (prop.ok) { verifyLanded(prop.id); console.error(`arc-run: proposal ${prop.id} recorded.`); }
+  else console.error(`arc-run: WARN could not emit the tenure proposal: ${prop.error}`);
+
+  // Exit 1: this is arc-run refusing to proceed, not a driver failing and not a budget decline.
+  process.exit(1);
+}
 
 // THE DATA BOUNDARY, refused HERE and not inside the driver (ADR-0219, Phase 06 REQ-02 fixtures
 // 2 and 3). By the time a driver could refuse, the document has already been handed to it. This

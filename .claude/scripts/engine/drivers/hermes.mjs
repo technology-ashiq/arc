@@ -907,7 +907,29 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   //   `model`       -> the MP-F seat, because it answers WHICH MODEL RAN
   //   estimated cost-> NOTHING. REQ-05 says cost is provider-reported or absent, and the
   //                    runtime's own estimate is neither. It is not carried into `inr`.
-  let cost;
+  // THE RUNTIME IDENTITY RIDES EVERY RECEIPT, NOT ONLY THE ONES THAT MEASURED A COST.
+  //
+  // FOUND BY THE FIRST CERTIFICATION DISPATCH, 2026-08-17, and by nothing before it. ADR-0221's
+  // criterion is that `run.completed` carries the runtime in its own `runtime` payload field. It
+  // did not: `cost` was only constructed INSIDE the usage-report block, arc-run reads `runtime`
+  // off the cost sidecar, and the vendor's `--usage-file` is pinned as a no-op that has never
+  // written a report on this image. So the one field identifying WHICH CONTRACTOR RAN was absent
+  // from every real receipt, and the landed one read `runtime: undefined, model_source: none`.
+  //
+  // The identity needs no report to be known -- `versionString()` is the pinned image digest plus
+  // the config hash, computed offline. `common.mjs`'s writeCost already anticipates exactly this
+  // ("a run can know its model and not its spend") and writes `runtime` independently of any
+  // figure, so no cost is manufactured here: an empty cost record still gets no `source`, and an
+  // absent spend stays absent (ADR-0069 b5).
+  //
+  // Every fixture test passed throughout, because they all plant a usage report. The suite proved
+  // the enriched path and nothing proved the ordinary one -- which is the shape of a run that
+  // measures nothing.
+  // COMPUTED ONCE. Two call sites deriving the same quantity is this lane's most-repeated defect
+  // class -- the seat fix went into `emitRun` and not into the escalation proposal 300 lines below,
+  // and one run produced two receipts disagreeing about which model ran. One binding, both users.
+  const runtimeId = versionString();
+  let cost = { runtime: runtimeId };
   // A REPORT IS ONLY THIS RUN'S IF IT WAS WRITTEN DURING THIS RUN. Ownership is not enough: on the
   // operator path the file is never rewritten and never deleted, so `existsSync` alone re-reported
   // one stale report as `measured` on every subsequent run of every process, forever.
@@ -975,7 +997,7 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
           tokensOut,
           source: (tokensIn !== undefined || tokensOut !== undefined) ? "measured" : undefined,
           model: model || undefined,
-          runtime: versionString(),
+          runtime: runtimeId,
         };
       }
     } catch (e) {
