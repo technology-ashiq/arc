@@ -151,6 +151,173 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### HELD BACK, NOT LOST — Phase 08's process layer, and the gate hole writing it exposed
+
+**`processes/build-in-public-draft.process.yaml` is WRITTEN and is deliberately NOT on the branch.**
+Schema (`draft`, `sources`, `task-class`, `pack-ref`), brief, eval fixture, `tools: []` — a process
+that reads a pack and returns prose has no reason to touch the repo, and a draft process that could
+commit is a draft process that can publish.
+
+**It cannot land alone.** POL-I's birth rule and `policy-lint` agree in opposite directions: the
+process file and its `hq.policy.yaml` grant land as ONE change or neither — `policy-lint` refuses a
+row naming a process that does not exist, and `kickoff-lint` flags a process with no row. This is
+the same ordering that struck REQ-04's copy of the criterion and moved it to Phase 08.
+
+**The blocker is environmental, not a decision: `hq.policy.yaml` is denied to this session's editor.**
+No freeze is active and the file is writable on disk — the deny is a harness permission on that path,
+the same shape as `.github/`. Routing around a permission the owner set is not an option, so the
+process file and its fixture are held (content preserved) and the branch stays governed: 5 processes,
+0 ungoverned. **Owner call: open that path and the pair lands in one change, or Phase 08's process
+layer stays with the owner.**
+
+**The gate hole it exposed, which is a finding in its own right.** `process-lint` requires
+`baseline: {target, path, commit, sha256}` **unconditionally** — every process until now replaced a
+command a driver already ran. REQ-07 introduces the first that replaces nothing, and its DoD names
+the answer: *"a paired baseline is impossible and honestly waived in one line, never fabricated,
+never quietly omitted."* So the spec **mandates a waiver the gate refuses to let anyone write**. The
+only two compliant options were an invented key (correctly rejected) or pointing `path` at an
+unrelated file — which is precisely the fabrication the DoD forbids. **A rule whose only compliant
+answer is a lie has a hole in it.**
+
+The fix was built and proven, then held with the file it serves: a closed reason, a real sentence, a
+date, mutually exclusive with the pin fields so it cannot hide a baseline that exists. **Seven
+negative controls, all firing** — invented reason, shrug instead of a sentence, missing date,
+non-date date, waiver carrying a pin field, smuggled extra key, and the real file still passing.
+Held rather than shipped because a gate feature with no consumer is exactly the *exported, tested,
+called by nothing* defect this phase spent the day removing.
+
+---
+
+### THE SECOND ADVERSARIAL PASS — 2026-08-17, 44 findings, and the worst was in a fix four hours old
+
+Two fresh agents, different surfaces (router/tenure decision logic · receipt+identity and the
+shell/OS boundary). **20 and 24 findings, 17 of the second agent's PROVED by execution.**
+
+**Three criticals, and every one of them was in code written TODAY:**
+
+1. **The transcript storage was persisting an unscrubbed credential to disk.** `scrub()` takes an
+   optional parsed object and its own comment says why — without it the scanner's **structural**
+   layer is inert. That rule had been applied to **two of four** call sites: the cost sidecar and
+   `--input` passed one; the driver's **stdout and transcript did not**. Measured:
+   `{"password":"hunter2"}` scans **clean** through the synthetic wrapper and hits
+   `credential-shaped field "password"` through the real object. The transcript is precisely what
+   the day's new `storeTranscript` then writes into a lane's evidence directory, **on an exit-0
+   run**. Fixed at the **funnel**, not the call sites — a rule each caller must remember is a rule
+   that gets forgotten, twice, two lines apart.
+2. **The tenure proposal could never be emitted — zero, not one.** The idem key was a raw string;
+   `validate.mjs` requires lowercase sha256 hex, so `--strict` rejected every proposal and the only
+   trace was a WARN. Five refusals left **zero** receipts, and **the idempotency claim was satisfied
+   VACUOUSLY** — 0 is at most 1, so nothing looked wrong. Now sha256 over a length-prefixed
+   preimage, loud on failure. Measured: 5 dispatches → exactly **1** proposal, 5 refusal receipts,
+   0 quarantined.
+3. **The router loaded, validated and checked tenure only under `--driver auto`.** The same file
+   reported four faults under `auto` and exited **0** under an explicit `--driver`. `arc-bench`
+   makes `--driver` **mandatory** — so the one lane that spends real money never validated the
+   router, never checked the four hire terms, never checked tenure.
+
+**And the identity fix from the morning had the same defect one scope out.** `runtimeId` was
+computed at the *tail* of `produce()`, so any throw skipped `writeCost` entirely and the receipts a
+failure post-mortem reads carried **no contractor**. Re-shipped four hours after the comment
+describing that exact shape was written. *Fixes produced by an adversarial pass are themselves
+unattacked code* — recorded for the fourth time this cycle, and true again.
+
+**My own negative control could not fail.** `cost` is a top-level event field, so
+`payload.cost ?? null` was a tautology and a mutant fabricating a zero spend stayed green — the one
+guard on the fix's central trade.
+
+**Also fixed:** `storeTranscript` wrote **outside** its directory via `../` in the process name, and
+lost 2 of 8 concurrent transcripts to millisecond collisions while all eight reported success · a
+negative `inr` drove `inrSpent` down so `overBudget()` could never fire again · a fractional spend
+was stamped `measured` and a numeric-string spend was dropped silently · the wrong-type-is-loud fix
+lived in `hermes` while `writeCost` is the funnel every driver uses · `egress-session.sh` **hung
+forever** on a flag with no value, glob-expanded allowlist entries against the operator's CWD, and
+reused a pre-existing **non-internal** network while reporting a confined session · the config hash
+could not tell the vetted proxy from an attacker's (`proxy` was a boolean; now the origin — three
+postures, three hashes) · `--dry-run` promised "would run" for a row that refuses · the termination
+spec's step 2 was **false** (an unknown driver does not make the router refuse to load) · the
+`fallback` chain was never checked for runtime reachability, so `driver: claude-code, fallback:
+[hermes]` loaded with **zero** faults and dispatched to the runtime through a row with none of the
+four terms · `isExpired` failed **open** on a `Date`, silently disabling tenure repo-wide.
+
+**The gap that made all of it possible: nothing drove `arc-run` through an expired row.** The mutant
+`expiredRow = null` left all nine router tests green. The matrix proved a FUNCTION; nothing proved
+the MECHANISM — which is this phase's own headline lesson, arriving one layer up. Seven new tests
+close it, including the five-dispatch idempotency measurement and a negative control that a live row
+still dispatches.
+
+**One governance find, from a lint rather than an agent.** ADR-0216 records the tenure as **two
+weeks**, owner-ruled. The live row carried **2026-11-13** under a comment reading "Ninety days from
+the hire decision" — 6.4× the ruling, and nothing could have caught it, because the enforcement did
+not exist: a wrong tenure and a right one behaved identically. Set to `2026-08-31`.
+
+**Still on the defeated grep self-count:** `engine-router-row` and `engine-hermes-smoke` fixed here;
+`engine-compile`, `engine-driver-contract` and `engine-process-lint` have **no self-count test at
+all** — named rather than fixed, because they are not a finding of this pass and inventing scope
+mid-round is how a fix round becomes a refactor.
+
+---
+
+### THE FIRST RECEIPTED REAL DISPATCH — 2026-08-17, and it found what no fixture could
+
+PR #194 merged (`4cc73fd`, CI 19/19 per JOB, head SHA confirmed). The certification dispatch then
+ran **from the main clone**, human-started, and its receipt **landed**:
+`01M07FX9ZAY3EHCQFKVVKA2RT7`, `run.completed`, verified present in
+`events/2026-08-17.jsonl` and **absent from `_quarantine/`** — grepped in both places, never read
+off an emitter's exit code. REQ-03's transcript storage wrote its first real file.
+
+**THE SEQUENCING FACT THE PLAN NEVER STATED: a certification run cannot be made from a worktree.**
+The first attempt refused, by design and loudly:
+
+> `arc-event: REJECT WORKTREE_SPINE` — `.claude/state/` is gitignored, so a worktree has its OWN
+> spine and an event written there is valid, real, and invisible to every reader, `arc-inbox`
+> included.
+
+So REQ-02's receipts and REQ-07's three real runs are **main-clone work, after the merge**. Without
+`--strict` (PR #184) this would have reported success while writing into a spine nobody can read.
+
+**And the landed receipt read `runtime: undefined`.** ADR-0221 requires the runtime identity in its
+own payload field. The chain that broke it: `cost` was built only *inside* the usage-report block ·
+arc-run reads the identity off the cost sidecar · the vendor `--usage-file` is a **pinned no-op**
+that has never written a report on this image. So the field naming *which contractor ran* was absent
+from **every real receipt** — while **every fixture test passed, because they all plant a usage
+report.** The suite proved the enriched path; nothing proved the ordinary one, and the ordinary one
+is every real run. Fixed without manufacturing a cost; identity present, spend absent, both asserted.
+
+**Tenure was enforced NOWHERE.** `isExpired()` was written, exported and unit-tested at its
+boundary — and called by nothing that dispatches (`grep -rl` returned the module and its own probe).
+A row past its `review_by` routed exactly like a fresh one while the suite stayed green. That is the
+vacuous-pass rule in a new costume: the test proved the FUNCTION, nothing proved the MECHANISM.
+Now wired into routing, with **one** proposal idempotent on `(class, review_by)` — five dispatches
+leave one open item, because a queue that grows per attempt is a queue a human stops reading.
+
+**Fixture scoreboard, on the real runtime:**
+
+| # | What | State |
+|---|---|---|
+| 1 | repo not mounted / byte-identical after | **PASS** |
+| 2+3 | data boundary, arc-run exit 5 | **BUILT + suite** (mechanism whole, negative controls) |
+| 4 | env audit, zero arc secrets | **PASS on its second half** — "only its own capped key" needs the key |
+| 5 | planted key absent from every artifact | **PASS** (4 classes + negative control) |
+| 6 | traversal / symlink escape | **PASS** |
+| 7 | egress allowlist | **PASS, orchestrated and measured**, with a negative control |
+| 8 | memory off | **PASS** (ADR-0222) |
+| 9 | hostile output → ladder | **PASS on the REAL path** — schema fail → one retry → proposal |
+| 10 | capped key exhausted | **mechanism PASS**, shim arm **BUILT** with a negative control |
+| 11 | wall-clock overrun | **PASS** |
+| 12 | unpinned runtime refused | **PASS** |
+
+**What REQ-02 still owes:** the confined-egress arm of a real dispatch, which needs the hosted-model
+path and therefore the capped key — an `--internal` network cannot reach `host.docker.internal`, so
+the local model and the confined network are mutually exclusive by construction.
+
+**REQ-07 is where the risk now sits, and the number is three for three.** The 8B local model has
+failed the schema on the real path in every measurement: 1-of-5 before the config fix, 0-of-1 after,
+0-of-1 today (it answered in prose). Phase 08's three uncuttable runs need a hosted model. The
+free tier is proven reachable at HTTP 200 on the unfunded key and costs nothing — **the key itself
+is the one thing this session cannot supply.**
+
+---
+
 ### THE ADVERSARIAL PASS ON THE EGRESS AND WORKSPACE CODE — 2026-08-17. 50 findings, and this time the two surfaces AGREED.
 
 Required before PR #194 merges, never at the phase close. Two fresh agents, neither having seen the

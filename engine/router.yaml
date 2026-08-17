@@ -100,7 +100,17 @@ classes:
   #               line-edit (ADR-0218) — arc verifies outcomes and never prescribes method.
   #   review_by:  tenure. Every hire is planned obsolescence (ADR-0216). Past this date the row is
   #               EXPIRED: dispatching through it refuses NAMING THE ROW and emits one idempotent
-  #               rejustify-or-retire proposal. Ninety days from the hire decision.
+  #               rejustify-or-retire proposal, idempotent on (class, review_by).
+  #
+  #               TWO WEEKS, owner-ruled 2026-08-09 and written into ADR-0216 as "tight probation".
+  #               CORRECTED 2026-08-17: this row shipped `2026-11-13` under a comment reading
+  #               "Ninety days from the hire decision" -- 6.4x the period the owner actually ruled,
+  #               asserted confidently by the comment that was supposed to carry the rule. Neither
+  #               number was checked against the ADR until tenure was wired into the dispatch path
+  #               and someone had to ask what the date meant. A comment stating a governance figure
+  #               that contradicts its own ADR is the false-comment class applied to a decision
+  #               record rather than to code, and it is the more expensive version: the code was
+  #               enforcing nothing at all, so nothing could have caught it.
   #
   # NO `models:` ENTRY, and that is not an omission. ADR-0212 amends ADR-0069 so an agent runtime
   # OCCUPIES the model seat rather than being routed to one: `drivers/hermes version` reports the
@@ -115,9 +125,18 @@ classes:
   # TERMINATION SPEC (REQ-04). Two acts, in this order, and both are reviewed diffs:
   #   1. REVOKE THE CREDENTIAL first, at the provider. The key is the money bound; a disabled row
   #      with a live key still spends if anything else reaches the runtime.
-  #   2. DISABLE THE ROW second — delete it, or set `driver:` to a driver that is not installed so
-  #      the router refuses to load rather than silently re-routing. Do NOT merely change `cap:`;
-  #      a lowered ceiling still dispatches.
+  #   2. DELETE THE ROW second. Not "rename the driver", not "lower the cap".
+  #
+  #      CORRECTED 2026-08-17, and the old wording was FALSE. It said to "set `driver:` to a driver
+  #      that is not installed so the router refuses to load" — measured, the router LOADS fine:
+  #      an unknown driver is not in RUNTIME_DRIVERS, so the row stops looking like a runtime row
+  #      and its four terms validate happily. The refusal comes later, from a different check, and
+  #      only on the `--driver auto` path — so `--driver hermes` against that same tree still
+  #      dispatched. A termination step that leaves the contractor reachable is not a termination
+  #      step, and step 1 already warns that a live key spends if anything reaches the runtime.
+  #
+  #      Deleting the row is the only form with no reachable remainder: no row, no route, and the
+  #      fallback chain of every other row is now validated for runtime reachability too.
   #   Termination is a repo edit citing this comment. Nothing terminates a hire at run time, for
   #   the same reason nothing promotes one: both are tier changes, and ADR-0069 b1 forbids them
   #   outside a reviewed diff.
@@ -127,7 +146,7 @@ classes:
     cap: L1-drafts
     hosted: local
     judge: ashiq
-    review_by: 2026-11-13
+    review_by: 2026-08-31
     fallback: []
 
 # The default for a process with no class row. Deliberately NOT a catch-all that silently

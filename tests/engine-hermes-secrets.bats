@@ -146,6 +146,51 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   [ "$output" = "0" ]
 }
 
+@test "ADR-0221: the RUNTIME rides the receipt even when no usage report exists" {
+  # FOUND BY THE FIRST CERTIFICATION DISPATCH, 2026-08-17, and by nothing before it. ADR-0221 says
+  # run.completed carries the runtime in its own payload field. It did not: `cost` was built only
+  # INSIDE the usage-report block, arc-run reads `runtime` off the cost sidecar, and the vendor's
+  # --usage-file is pinned as a no-op that has never written a report on this image. So the one
+  # field naming WHICH CONTRACTOR RAN was absent from every real receipt -- the landed one read
+  # `runtime: undefined, model_source: none`.
+  #
+  # Every fixture test passed throughout, because they all PLANT a usage report. The suite proved
+  # the enriched path; nothing proved the ordinary one, which is the shape of a run that measures
+  # nothing -- i.e. every real run.
+  run_arc commit-clean
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+
+  run node -e '
+    const fs = require("fs");
+    const dir = process.argv[1];
+    let found = null;
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".jsonl")))
+      for (const l of fs.readFileSync(dir + "/" + f, "utf8").trim().split("\n")) {
+        const e = JSON.parse(l);
+        if (e.kind === "run.completed") found = e;
+      }
+    if (!found) { console.log("NO_RECEIPT"); process.exit(1); }
+    console.log(JSON.stringify({
+      runtime: found.payload.runtime ?? null,
+      // TOP-LEVEL, not payload. `cost` is an event field (arc-event.mjs), so `payload.cost` is
+      // undefined on every receipt ever written and `?? null` made this a tautology -- the guard
+      // on the fix trade could not fail. A mutant stamping a fabricated zero cost stayed green.
+      cost: found.cost ?? null,
+      has_duration: typeof found.payload.duration_ms === "number" && found.payload.duration_ms >= 0,
+    }));
+  ' "$ARC_SPINE_ROOT/events"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"runtime":"hermes@sha256:'* ]] || { echo "the receipt carries no runtime identity: $output"; false; }
+  # REQ-05 derives a class budget FROM RECEIPTS, and the first landed hermes receipt carried no
+  # duration at all -- so the only way to satisfy that clause was a hand-read stopwatch, which is
+  # exactly the guess it forbids. Unlike cost, elapsed time is something arc-run observed on its
+  # own clock, so it is never absent.
+  [[ "$output" == *'"has_duration":true'* ]] || { echo "the receipt carries no duration: $output"; false; }
+  # AND the spend stays absent. An identity field must not manufacture a cost record -- that is
+  # ADR-0069 b5, and it is the exact trade this fix had to avoid making.
+  [[ "$output" == *'"cost":null'* ]] || { echo "a cost was manufactured alongside the identity: $output"; false; }
+}
+
 @test "REQ-03 STORAGE: the scrubbed transcript is written when a caller asks for one" {
   # The SCAN half of REQ-03 was proven long before the STORAGE half existed. A real dispatch on
   # 2026-08-17 made the gap concrete: the driver's own lines never reach arc-run's stderr, so
@@ -190,7 +235,7 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   [ "$n" -eq 0 ] || { echo "a transcript was written without being asked for"; false; }
 }
 
-@test "suite: all 12 tests in this file are REGISTERED" {
+@test "suite: all 13 tests in this file are REGISTERED" {
   # bats silently DROPS a @test whose name carries a non-ASCII character; five such tests in this
   # cycle never ran and never failed, and the only signal was the count falling on CI.
   # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
@@ -201,6 +246,6 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "12" ] || { echo "expected 12 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "13" ] || { echo "expected 13 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

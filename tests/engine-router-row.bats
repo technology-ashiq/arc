@@ -94,8 +94,171 @@ YAML
   [[ "$output" != *"would run"* ]] || { echo "it reached routing before failing: $output"; false; }
 }
 
+# ---------------------------------------------------------------------------------------------
+# TENURE, DRIVEN THROUGH arc-run. Everything above proves the FUNCTION; these prove the MECHANISM.
+#
+# Until 2026-08-17 nothing here drove arc-run through an expired row at all -- `isExpired` was
+# exported, unit-tested at its boundary, and called by nothing that dispatches. The mutant
+# `expiredRow = null` left all nine tests green. That gap is also why the FIRST wiring shipped with
+# an idem key the spine refuses, so five refusals left zero proposals and nobody noticed: the
+# idempotency claim was satisfied vacuously, because 0 is at most 1.
+# ---------------------------------------------------------------------------------------------
+
+# A fake root carrying ONLY a router and a process. Enough to prove the refusal, and deliberately
+# not enough to emit: `arc-run` resolves `.claude/scripts/hq/arc-event.sh` from `--root`, so a root
+# without that tree cannot write a receipt. The refusal is non-fatal about a failed emit by design,
+# so these tests still assert exactly what they name.
+expired_root() {
+  local root="$1" by="${2:-2020-01-01}"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: mock
+    cap: L1-drafts
+    hosted: local
+    judge: ashiq
+    review_by: $by
+    fallback: []
+YAML
+}
+
+# The same root PLUS the machinery a receipt needs. `arc-run` builds the emitter path from `--root`,
+# so a receipt-asserting test has to carry `.claude/scripts` with it -- CI proved that by failing
+# with "Command failed: bash <root>/.claude/scripts/hq/arc-event.sh" while the idem was perfectly
+# correct. Kept separate from `expired_root` because the copy is I/O-heavy and load-sensitive (this
+# repo already records a flake of exactly that shape), so only the two tests that assert receipts
+# pay for it.
+expired_root_emitting() {
+  local root="$1" by="${2:-2020-01-01}"
+  expired_root "$root" "$by"
+  mkdir -p "$root/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$root/.claude/scripts"
+  [ -f "$root/.claude/scripts/hq/arc-event.sh" ] || { echo "the emitter was not copied into the fake root"; false; }
+}
+
+@test "tenure: arc-run REFUSES to dispatch through an expired row, naming the row and the file" {
+  local root="$BATS_TEST_TMPDIR/expired"
+  expired_root "$root"
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
+  [ "$status" -ne 0 ] || { echo "an expired row dispatched: $output"; false; }
+  [[ "$output" == *"EXPIRED on 2020-01-01"* ]] || { echo "the refusal does not name the date: $output"; false; }
+  [[ "$output" == *"engine/router.yaml"* ]] || { echo "the refusal does not name the file to edit: $output"; false; }
+}
+
+@test "tenure: five dispatches through one expired row leave EXACTLY ONE proposal" {
+  # The idempotency claim, measured rather than asserted. A queue that grows by one per attempt is
+  # a queue a human stops reading, which turns the loudest refusal in the system into noise.
+  local root="$BATS_TEST_TMPDIR/idem"
+  expired_root_emitting "$root"
+  mkdir -p "$root/spine"
+  # EXPORTED, not prefixed onto the `run` call. `VAR=x run node …` sets VAR for the bats `run`
+  # FUNCTION, and a bash assignment before a function is not exported to the function's children --
+  # so `node` never saw it, wrote to the real spine root, and the count here was 0. It works when
+  # you type it in a shell because an assignment before an EXTERNAL command IS exported for that
+  # command. Two different rules, one syntax; CI caught it and this box could not have.
+  export ARC_SPINE_ROOT="$root/spine"
+  for _ in 1 2 3 4 5; do
+    run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
+    [ "$status" -ne 0 ]
+  done
+  local proposals
+  proposals="$(grep -ho 'approval.requested' "$root"/spine/events/*.jsonl 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$proposals" = "1" ] || { echo "expected exactly 1 proposal after 5 refusals, found $proposals"; false; }
+  # AND it must have LANDED rather than quarantined. The first version of this mechanism passed a
+  # non-sha256 idem, so every proposal was REJECTED and the count above was 0 -- vacuously "at most
+  # one". An absence assertion alone cannot tell one from none.
+  local quarantined
+  quarantined="$(find "$root/spine/_quarantine" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$quarantined" = "0" ] || { echo "$quarantined record(s) were quarantined -- the proposal is not landing"; false; }
+}
+
+@test "tenure: the refusal leaves a run receipt too, so it is not invisible" {
+  # The data-boundary refusal in the same file already does this, under its own rule: a boundary
+  # that stops a run and leaves no trace is indistinguishable from a run nobody attempted. Two
+  # adjacent refusal paths, and only one of them recorded.
+  local root="$BATS_TEST_TMPDIR/receipt"
+  expired_root_emitting "$root"
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto
+  [ "$status" -ne 0 ]
+  run grep -ho '"reason":"tenure"' "$root"/spine/events/*.jsonl
+  [ "$status" -eq 0 ] || { echo "no run receipt names the tenure refusal"; false; }
+}
+
+@test "tenure: a row still INSIDE its tenure dispatches normally" {
+  # The negative control. Without it, "refuses an expired row" is satisfied by refusing every row.
+  local root="$BATS_TEST_TMPDIR/live"
+  expired_root "$root" "2099-01-01"
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
+  [ "$status" -eq 0 ] || { echo "a live row was refused: $output"; false; }
+  [[ "$output" == *"would run"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"EXPIRED"* ]]
+}
+
+@test "tenure: --dry-run reports the refusal instead of promising a run" {
+  # It printed "would run" and exited 0 for a dispatch that refuses. A preview that is wrong in the
+  # reassuring direction is worse than no preview.
+  local root="$BATS_TEST_TMPDIR/dry"
+  expired_root "$root"
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
+  [ "$status" -ne 0 ] || { echo "dry-run promised a run that would refuse: $output"; false; }
+  [[ "$output" == *"would REFUSE"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"would run"* ]]
+}
+
+@test "tenure: an EXPLICIT --driver is validated and refused too, not just --driver auto" {
+  # `loadRouter()` ran only inside the `--driver auto` branch, so the same file reported four faults
+  # under `auto` and exited 0 under `--driver hermes`. arc-bench makes `--driver` MANDATORY -- so
+  # the one lane that spends real money was the lane that validated nothing.
+  local root="$BATS_TEST_TMPDIR/explicit"
+  expired_root "$root"
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver mock --dry-run
+  [ "$status" -ne 0 ] || { echo "an explicit --driver bypassed tenure: $output"; false; }
+  [[ "$output" == *"EXPIRED"* ]] || { echo "$output"; false; }
+}
+
+@test "router-row: a fallback INTO the agent runtime carries the four terms too" {
+  # `isRuntime` looked at `row.driver` alone, so a row with `driver: claude-code` and
+  # `fallback: [hermes]` loaded with ZERO faults -- no cap, no tenure -- and on the first driver
+  # fault arc-run dispatches to the runtime through it. router.yaml's own comment says exactly this
+  # must not happen; it guarded the wrong direction.
+  local root="$BATS_TEST_TMPDIR/fallback"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<'YAML'
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - hermes
+YAML
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver auto --dry-run
+  [ "$status" -ne 0 ] || { echo "a row that can reach the runtime loaded unbounded: $output"; false; }
+  [[ "$output" == *"will not load"* ]]
+  [[ "$output" == *"fallback chain"* ]] || { echo "the reason does not name the fallback: $output"; false; }
+}
+
 @test "this file registers every test it declares" {
-  local n
-  n="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$n" -eq 9 ] || { echo "declared $n tests, expected 9 - a test was added or silently dropped"; false; }
+  # FIXED 2026-08-17. It counted `^@test ` lines in the SOURCE -- the DECLARED count. bats silently
+  # DROPS a @test whose name carries a non-ASCII character and the source line survives the drop,
+  # so the number never moved while a test did not run. Seven sibling engine suites already carried
+  # the fixed form; this one, written the same week in the same directory, carried the defeated one.
+  declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
+  registered="$(bats --count "$BATS_TEST_FILENAME")"
+  [ "$registered" = "16" ] || { echo "expected 16 REGISTERED tests, bats registered $registered"; false; }
+  [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

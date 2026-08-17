@@ -41,10 +41,11 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 import { parseYamlSubset } from "./yaml-subset.mjs";
 import { validateData } from "./schema-subset.mjs";
+import { sha256Hex } from "../hq/lib/canonical.mjs";
 import { scanSecrets } from "../hq/lib/redact.mjs";
 import { MODEL_RE } from "../hq/lib/validate.mjs";
 
@@ -66,7 +67,7 @@ import { MODEL_RE } from "../hq/lib/validate.mjs";
 const RUNTIME_ID_RE = /^[A-Za-z0-9][A-Za-z0-9@:+._/-]{0,255}$/;
 import { authorizeRun } from "../hq/lib/policy/run-gate.mjs";
 import { boundaryRefusal } from "./data-boundary.mjs";
-import { routerFaults } from "./router-row.mjs";
+import { isExpired, routerFaults } from "./router-row.mjs";
 
 // `mock` is the replay driver (ADR-0902, bench lane): it reaches no provider and costs nothing,
 // so bench's own suite runs offline and free. It is a real driver rather than an env fake
@@ -299,10 +300,75 @@ let fallbacks = [];
 // row and therefore no claim either way -- which is not the same fact as `hosted: local`, and is
 // left as the empty string rather than defaulted to the reassuring value.
 let hosted = "";
+// Set by the router block below when the routed row is past its tenure. Acted on after the emit
+// helpers exist, because the refusal has to leave a receipt and the receipt needs the emitter.
+let expiredRow = null;
+
+/**
+ * Today, as the operator's calendar sees it.
+ *
+ * LOCAL COMPONENTS, NOT `toISOString()`. `review_by` is a date a human wrote on a calendar, so
+ * "expired" has to mean "the operator's date is past it". `toISOString()` is UTC, and this repo has
+ * already paid for exactly that confusion once: `verifyLanded` derived its day in UTC while the
+ * spine names its file from an IST timestamp, and the result was wrong for 22.9% of the clock. A
+ * tenure check that flips a day early or late depending on the hour is not a tenure check.
+ *
+ * Tests never reach this -- `isExpired(row, today)` takes the day as a parameter precisely so the
+ * boundary, which is the only interesting day, is settable.
+ */
+function todayISO() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+// READ ONCE, AT MODULE SCOPE. The deciding day and the printed day were two independent clock
+// reads separated by the entire parse-and-scrub path, so a run crossing local midnight on the
+// review_by date would refuse using one day and name the other -- on the single day the whole
+// mechanism is designed around. Same quantity, two derivations: the defect class this cycle has
+// now recorded six times.
+const TODAY = todayISO();
+
+// THE ROUTER IS LOADED AND VALIDATED WHATEVER THE DRIVER, and until 2026-08-17 it was not.
+//
+// `loadRouter()` -- which is where `routerFaults` runs, where the four mandatory hire terms are
+// enforced, and now where tenure is read -- was called ONLY inside the `--driver auto` branch. So a
+// router.yaml with a hermes row carrying `cap: NOT-A-CAP`, no `judge` and a malformed `review_by`
+// reported four faults and exited 1 under `auto`, and under `--driver hermes` printed
+// "would run" and exited 0 against the identical file.
+//
+// That is not a theoretical CLI path. `arc-bench.mjs` makes `--driver` MANDATORY and invokes
+// arc-run with it -- so the one lane that spends real money was the lane that never validated the
+// router, never checked the four terms, and never checked tenure. Proven by an adversarial pass.
+//
+// Loaded unconditionally now: the load is the gate, and a gate that only runs on one of two
+// entry points is a gate the other entry point does not have.
+const routerDoc = loadRouter();
+const routedRow = routerDoc?.classes?.[processName] ?? null;
+if (routedRow) {
+  // TENURE IS ENFORCED HERE, AND UNTIL 2026-08-17 IT WAS ENFORCED NOWHERE.
+  //
+  // `isExpired()` was written, exported and unit-tested at its boundary -- and never called by
+  // anything that dispatches. `grep -rl isExpired` returned the module and its own probe, so the
+  // suite was green while a row past its `review_by` routed exactly like a fresh one. That is this
+  // repo's own vacuous-pass rule wearing a different hat: the test proved the FUNCTION, and nothing
+  // proved the mechanism ran. ADR-0216's whole claim is that a hire has a tenure rather than a
+  // permanent seat, and a tenure nothing checks is a comment.
+  //
+  // Read off the ROUTED ROW regardless of how the driver was chosen: a tenure that lapses only for
+  // callers who asked for `auto` is a tenure the money-spending caller does not have.
+  //
+  // PROPOSE-ONLY IN BOTH DIRECTIONS. Expiry refuses the dispatch; it never disables the row by
+  // itself and never renews one by itself. Both are tier-shaped changes, and ADR-0069 b1 puts
+  // those in a reviewed diff -- so the receipt is an `approval.requested`, exactly like the
+  // escalation ladder's, and acting on it is a human editing the file.
+  expiredRow = isExpired(routedRow, TODAY) ? { name: processName, row: routedRow } : null;
+}
+
 if (driverArg === "auto") {
-  const router = loadRouter();
+  const router = routerDoc;
   if (!router) { console.error("arc-run: --driver auto needs engine/router.yaml, which does not exist"); process.exit(1); }
-  const row = router.classes?.[processName];
+  const row = routedRow;
   if (!row) {
     // Loud, and it names the file to edit. The fix is always "edit this file", never
     // "guess harder" -- a router that silently defaults is a router that routes by accident.
@@ -480,19 +546,57 @@ function processIsSelfConsistent() {
  * sidecar, and the spine payload. Uses the SPINE'S OWN scanner, imported -- a second copy of
  * the deny-rules would be a copy that drifts from the rules the spine actually enforces.
  */
+/**
+ * Every JSON object or array this text contains, so the STRUCTURAL layer has something to look at.
+ *
+ * THE FIX AT THE FUNNEL, NOT AT THE CALLERS, and that is deliberate. The rule "pass the REAL parsed
+ * object" was written into this file and then applied to two of its four call sites: the cost
+ * sidecar and `--input` passed one; the driver's **stdout** and its **transcript** did not. Both
+ * therefore ran with the structural layer inert, and an adversarial pass proved the consequence --
+ * `{"password":"hunter2"}` in a transcript scans CLEAN through the synthetic `{text}` wrapper and
+ * `hit: true, rule: credential-shaped field "password"` through the real object. That transcript is
+ * then written to a lane's evidence directory by `storeTranscript`, so the miss did not merely fail
+ * to stop a run: it persisted the credential to disk on an exit-0 run.
+ *
+ * A rule that each caller must remember is a rule that gets forgotten -- twice here, two lines
+ * apart. Deriving the structural candidates inside `scrub` means a two-argument call is now as safe
+ * as a three-argument one, and there is no longer a wrong way to call it.
+ */
+function structuralCandidates(text) {
+  const out = [];
+  const push = (s) => {
+    const t = String(s).trim();
+    if (!t || (t[0] !== "{" && t[0] !== "[")) return;
+    try {
+      const v = JSON.parse(t);
+      if (v && typeof v === "object") out.push(v);
+    } catch { /* not JSON; the textual layer still sees these bytes */ }
+  };
+  push(text);
+  // Line by line as well: a driver's stderr is diagnostics with JSON *embedded* in it, so the whole
+  // blob rarely parses while an individual line often does.
+  for (const line of String(text).split("\n")) push(line);
+  return out;
+}
+
 function scrub(label, text, parsed) {
   if (!text) return;
-  let verdict;
-  try {
-    // Pass the REAL parsed object. Handing scanSecrets a synthetic `{ text }` wrapper meant
-    // its structural layer only ever saw one key called "text" -- and that layer exists
-    // precisely because no textual rule ever matched `{"password":"..."}`. A short or
-    // space-bearing credential value evaded the only layer that was running.
-    verdict = scanSecrets(String(text), parsed !== undefined ? parsed : { text: String(text) });
-  }
-  catch (e) { fail("secret-scan", `secret scan could not run over ${label}: ${e.message}`, { driver }); return; }
-  if (verdict.hit) {
-    fail("secret", `a secret matching rule \`${verdict.rule}\` appeared in ${label} — the artifact was NOT written and the run is stopped`, { driver, rule: verdict.rule });
+  // Pass the REAL parsed object when the caller has one; otherwise derive every structural
+  // candidate from the text rather than handing over a wrapper whose only key is "text".
+  const objects = parsed !== undefined ? [parsed] : structuralCandidates(text);
+  // Always include the plain-text pass, so the textual DENY_RULES run even when nothing parses.
+  if (objects.length === 0) objects.push({ text: String(text) });
+
+  for (const obj of objects) {
+    let verdict;
+    try {
+      verdict = scanSecrets(String(text), obj);
+    }
+    catch (e) { fail("secret-scan", `secret scan could not run over ${label}: ${e.message}`, { driver }); return; }
+    if (verdict.hit) {
+      fail("secret", `a secret matching rule \`${verdict.rule}\` appeared in ${label} — the artifact was NOT written and the run is stopped`, { driver, rule: verdict.rule });
+      return;
+    }
   }
 }
 
@@ -673,12 +777,26 @@ function emitRun(payload) {
   // `...rest` may carry a `model` the caller computed from `effectiveModel` alone, which is
   // stale the moment a runtime reports one. It is overwritten AFTER the spread, for the same
   // reason `model_source` is: derived state is stamped in one place or it disagrees with itself.
+  // THE WALL-CLOCK IS RECORDED, BECAUSE REQ-05 DERIVES A BUDGET FROM RECEIPTS AND THERE WAS NO
+  // NUMBER IN THEM TO DERIVE FROM.
+  //
+  // The criterion reads: "three runs at a deliberately generous wall-clock, their durations
+  // recorded, and the class budget derived FROM THOSE RECEIPTS. A budget written before the
+  // receipts exist is a guess and is not accepted here." The first landed hermes receipt carried
+  // `driver, fault_hint, model_source, outcome, process, reason` and no duration at all -- so the
+  // only way to satisfy that clause was to read a stopwatch by hand, which is the guess it forbids.
+  //
+  // MEASURED, so it is present. This is the one field in this payload that is never absent: unlike
+  // cost, which is provider-reported or nothing, elapsed time is something arc-run itself observed
+  // from its own clock. ADR-0069 b5 governs figures we would have to INFER; this is not one.
+  // Monotonic-ish by construction -- both ends come from the same process's Date.now().
   const r = emitEvent("run.completed", {
     process: processName,
     ...rest,
     ...(tokens ? { tokens } : {}),
     ...(seat ? { model: seat } : {}),
     ...(runtimeId ? { runtime: runtimeId } : {}),
+    duration_ms: Math.max(0, Date.now() - runStartedAt),
     model_source: seatSource,
   }, extra);
   if (!r.ok) {
@@ -929,12 +1047,41 @@ function invoke(name) {
  */
 function storeTranscript(name, text) {
   const dir = process.env.ARC_RUN_TRANSCRIPT_DIR;
-  if (!dir || !text) return;
+  if (!dir) return;
   try {
     mkdirSync(dir, { recursive: true });
+
+    // THE FILENAME IS SANITISED, because `processName` reached it by raw concatenation and a
+    // process named `../processes/commit-msg-draft` wrote the transcript OUTSIDE the directory it
+    // was handed -- proven. With a lane's evidence path as the target that silently redirects
+    // evidence out of its own bundle, which `.claude/rules/lanes.md` already records happening for
+    // real once. Sanitise, then verify containment: the second check is not redundant, it is what
+    // makes the first one falsifiable.
+    // `\w` rather than a spelled-out letter range: identical set (`[A-Za-z0-9_]`), and it does not
+    // trip tests/portability.bats, which refuses NEW negated bracket expressions carrying a letter
+    // range anywhere in the tree. That guard is aimed at shell globs, where a range is
+    // locale-collated; a JavaScript class is code-point based and would have been safe. Complying
+    // anyway -- a guard with one hand-argued exception per file is a guard nobody can read, and
+    // `\w` is the clearer spelling regardless.
+    const safe = `${processName}-${name}-attempt${attemptsMade}`.replace(/[^\w.-]/g, "_");
+
+    // PID AND ATTEMPT IN THE NAME, AND `wx` SO A COLLISION THROWS. The stamp alone was
+    // millisecond-resolution: eight concurrent dispatches produced SIX files, and all eight printed
+    // "stored ... " and exited 0. Silent overwrite of evidence, reported as success. On a
+    // one-second-mtime filesystem the loss would be near-total.
     const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const file = join(dir, `${processName}-${name}-attempt${attemptsMade}-${stamp}.transcript.txt`);
-    writeFileSync(file, String(text), "utf8");
+    const file = join(dir, `${safe}-${process.pid}-${stamp}.transcript.txt`);
+    if (!resolve(file).startsWith(resolve(dir) + sep)) {
+      process.stderr.write(`arc-run: WARN refusing to store a transcript outside ${dir}\n`);
+      return;
+    }
+
+    // AN EMPTY TRANSCRIPT STILL WRITES A FILE, with a sentinel body. Returning early on empty text
+    // made "this dispatch was quiet", "the directory was unwritable" and "the feature is off" all
+    // look identical from the outside -- and the file COUNT is what a phase close reads. Absence
+    // now always means failure.
+    const body = String(text || "").length ? String(text) : "(no transcript output on this attempt)\n";
+    writeFileSync(file, body, { encoding: "utf8", flag: "wx" });
     process.stderr.write(`arc-run: stored the scrubbed ${name} transcript at ${file}\n`);
   } catch (e) {
     // A failure to store evidence must not silently pass as evidence stored. It also must not kill
@@ -984,6 +1131,16 @@ if (dryRun) {
   // --dry-run is the one surface whose entire job is "tell me what will happen", so it names the
   // two flags that change what happens. It was silent about both, which made it the worst place
   // to check a command before running it for real.
+  //
+  // AND IT REPORTS TENURE, because it did not and therefore reported the OPPOSITE of what happens.
+  // The expiry refusal sits below this block's `process.exit(0)`, so `--dry-run` against an
+  // expired row printed "would run" and exited 0 for a dispatch that refuses. A preview that is
+  // wrong in the reassuring direction is worse than no preview.
+  if (expiredRow) {
+    console.log(`arc-run: would REFUSE \`${processName}\` — its route EXPIRED on ${String(expiredRow.row.review_by ?? "").trim()} (today is ${TODAY}).`);
+    console.log(`         Re-justify \`classes.${processName}\` in engine/router.yaml with a new review_by, or retire the row.`);
+    process.exit(1);
+  }
   console.log(`arc-run: would run \`${processName}\` on \`${driver}\`${tier ? ` (tier ${tier})` : ""}${fallbacks.length ? ` fallback ${fallbacks.join(" -> ")}` : ""}`);
   console.log(`         model ${effectiveModel ?? "unpinned"} (source: ${modelSource})`);
   console.log(`         driver workspace ${workRoot}${workRoot === root ? " (this repo -- no --work-root given)" : ""}`);
@@ -995,6 +1152,74 @@ if (dryRun) {
 // in --input (or in an @file that resolves outside the repo) was transmitted to the vendor
 // and the run then reported success.
 if (inputArg) scrub("--input (before anything is sent to a driver)", JSON.stringify(input), input);
+
+// TENURE: an EXPIRED row refuses the dispatch and leaves ONE proposal (REQ-04, ADR-0216).
+//
+// Placed here, before `attempt()` and after the emit helpers exist, because the refusal must be
+// receipted and the receipt needs the emitter. It sits before any driver process is created, for
+// the same reason the data boundary does: a refusal after the spawn has already spent the thing it
+// was refusing.
+//
+// THE PROPOSAL IS IDEMPOTENT ON (class, review_by). Five dispatches through the same expired row
+// leave exactly ONE open proposal, not five -- a queue that grows by one per attempt is a queue a
+// human stops reading, which turns the loudest refusal in the system into noise. Moving the date
+// is a NEW proposal, correctly: that is a different decision about a different tenure.
+if (expiredRow) {
+  const { name: cls, row: erow } = expiredRow;
+  // NORMALISED ONCE. `fieldFault` and `isExpired` both trim; the message, the payload and the idem
+  // key used the raw value -- so `review_by: "2026-01-01 "` and `"2026-01-01"` are ONE decision
+  // that produced TWO idem keys, and a later diff removing the whitespace opened a second proposal
+  // for the same tenure. Same quantity, four spellings.
+  const by = String(erow.review_by ?? "").trim();
+
+  console.error(`arc-run: the route for task class \`${cls}\` EXPIRED on ${by} (today is ${TODAY}).`);
+  console.error(`         Its tenure is over, so it does not dispatch. Edit \`classes.${cls}\` in engine/router.yaml:`);
+  console.error("         re-justify it with a new review_by in a reviewed diff, or retire the row.");
+  console.error("         Expiry never renews a row and never disables one -- both are tier changes (ADR-0069 b1).");
+
+  const prop = emitEvent("approval.requested", {
+    kind: "router-row-tenure",
+    class: cls,
+    driver: erow.driver ?? null,
+    review_by: by,
+    asks: "rejustify-or-retire",
+    why: `the ${cls} row passed its review_by and dispatch is refused until a human decides`,
+    adr: "ADR-0216",
+  }, ["--process", `${processName}@${doc?.version ?? "unknown"}`, "--outcome", "fail",
+      // THE IDEM MUST BE LOWERCASE SHA256 HEX, and the first version of this was not.
+      //
+      // It passed `router-tenure:${cls}:${by}` verbatim. `validate.mjs` refuses that with
+      // `BAD_IDEM -- idem must be lowercase sha256 hex`, so under `--strict` the emit exited 2,
+      // the proposal was never sealed, and the only trace was a one-line WARN. Measured: five
+      // dispatches through an expired row left ZERO proposals. The idempotency claim was satisfied
+      // vacuously -- 0 is indeed at most 1 -- which is why nothing looked wrong.
+      //
+      // The preimage is LENGTH-PREFIXED rather than colon-joined, because a bare `a:b:c` cannot
+      // distinguish a class named `a:b` with review_by `c` from a class `a` with review_by `b:c`.
+      // The spine derives its other bound idems the same way (`decision.recorded|<ulid>`), so this
+      // matches the house shape rather than inventing one.
+      "--idem", sha256Hex(`router-tenure|${cls.length}|${cls}|${by.length}|${by}`)]);
+
+  if (prop.ok) {
+    verifyLanded(prop.id);
+    console.error(`arc-run: proposal ${prop.id} recorded.`);
+  } else {
+    // LOUD, NOT A WARN. The proposal IS the mechanism: a refusal nobody can find later is a
+    // refusal that did not happen, and the ladder's own rule is that a proposal which could not be
+    // written must never be treated as one that was. A WARN here is how this shipped broken.
+    console.error(`arc-run: FAILED to record the tenure proposal: ${prop.error}`);
+    console.error("         The refusal STANDS -- nothing dispatched -- but no reviewable receipt exists.");
+  }
+
+  // THE REFUSAL LEAVES A RUN RECEIPT TOO. The data-boundary refusal fifteen lines below already
+  // does this, under its own rule: a boundary that stops a run and leaves no trace is
+  // indistinguishable from a run nobody attempted. Two adjacent refusal paths in one file, and
+  // only one of them recorded -- the twin shape again.
+  emitRun({ outcome: "fail", reason: "tenure", driver, attempts: 0, proposal: prop.ok ? prop.id : undefined });
+
+  // Exit 1: this is arc-run refusing to proceed, not a driver failing and not a budget decline.
+  process.exit(1);
+}
 
 // THE DATA BOUNDARY, refused HERE and not inside the driver (ADR-0219, Phase 06 REQ-02 fixtures
 // 2 and 3). By the time a driver could refuse, the document has already been handed to it. This

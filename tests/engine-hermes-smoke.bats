@@ -92,7 +92,14 @@ EV() { echo "$ARC_ROOT/initiatives/engine/evidence/phase-04"; }
 # whose name carries a non-ASCII character -- five such tests once vanished from a green
 # file and the only signal was the count falling on CI.
 @test "this file registers every test it declares" {
-  local n
-  n="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
-  [ "$n" -eq 6 ] || { echo "declared $n tests, expected 6 - a test was added or silently dropped"; false; }
+  # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
+  # `^@test ` lines in the SOURCE -- the DECLARED count. bats silently DROPS a @test whose name
+  # carries a non-ASCII character, and the source line survives the drop, so the number never
+  # moved and the guard stayed green while a test did not run. `bats --count` reports what bats
+  # actually REGISTERED. Assert both and that they agree: the pair catches a drop (registered
+  # falls) and a silent removal (declared falls).
+  declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
+  registered="$(bats --count "$BATS_TEST_FILENAME")"
+  [ "$registered" = "6" ] || { echo "expected 6 REGISTERED tests, bats registered $registered"; false; }
+  [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

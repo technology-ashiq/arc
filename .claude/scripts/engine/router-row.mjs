@@ -83,15 +83,43 @@ export function rowFaults(className, row) {
   if (!row || typeof row !== "object" || Array.isArray(row)) {
     return [`classes.${className} is not a mapping`];
   }
-  const isRuntime = RUNTIME_DRIVERS.has(String(row.driver || "").trim());
-  const carriesAny = REQUIRED.some((k) => Object.prototype.hasOwnProperty.call(row, k));
-  if (!isRuntime && !carriesAny) return [];
+  // A WRONG-TYPED `fallback` IS A FAULT, NOT A SILENT EMPTY LIST. `fallback: hermes` (a string
+  // where a list was meant) used to make arc-run's `Array.isArray` false and the whole resilience
+  // chain vanish -- the typo deletes the row's fallbacks and nothing reports it.
+  const faults = [];
+  const hasFallback = Object.prototype.hasOwnProperty.call(row, "fallback");
+  if (hasFallback && !Array.isArray(row.fallback)) {
+    faults.push(`classes.${className} has a \`fallback\` that is not a list (${JSON.stringify(row.fallback)}) — a wrong-typed fallback silently becomes no fallback at all`);
+  }
 
+  // THE FALLBACK CHAIN IS PART OF "DOES THIS ROW REACH THE RUNTIME", and it was not.
+  //
+  // `isRuntime` looked at `row.driver` alone, so this loaded with ZERO faults:
+  //
+  //     classes: { commit-msg-draft: { driver: claude-code, fallback: [hermes] } }
+  //
+  // No cap, no hosted, no judge, no review_by, no tenure -- and on the first driver fault arc-run
+  // sets `driver = "hermes"` and dispatches to the agent runtime through a row carrying none of
+  // the four terms. router.yaml's own comment says exactly this must not happen ("falling back
+  // from a capped, tenured, judged runtime to a model API would silently route L1-drafts work
+  // through a row with none of those four terms") -- it just guarded the wrong direction.
+  //
+  // `process-lint.mjs` already walks `[row.driver, ...row.fallback]` for driver existence. Two
+  // validators of one file, each holding a check the other lacks: the twin shape at the module
+  // level rather than the line level.
+  const chain = [row.driver, ...(Array.isArray(row.fallback) ? row.fallback : [])];
+  const runtimeInChain = chain.find((d) => RUNTIME_DRIVERS.has(String(d || "").trim()));
+  const isRuntime = Boolean(runtimeInChain);
+  const carriesAny = REQUIRED.some((k) => Object.prototype.hasOwnProperty.call(row, k));
+  if (!isRuntime && !carriesAny) return faults;
+
+  const viaFallback = isRuntime && String(row.driver || "").trim() !== String(runtimeInChain).trim();
   const why = isRuntime
-    ? `routes to the agent runtime \`${row.driver}\``
+    ? (viaFallback
+      ? `can REACH the agent runtime \`${runtimeInChain}\` through its fallback chain`
+      : `routes to the agent runtime \`${row.driver}\``)
     : "already carries one of the tenure fields, so it must carry all four or it constrains nothing";
 
-  const faults = [];
   for (const k of REQUIRED) {
     const fault = fieldFault(k, row[k]);
     if (fault) faults.push(`classes.${className} ${why}, and \`${k}\` ${fault}`);
@@ -117,6 +145,16 @@ export function routerFaults(router) {
  * interesting day.
  */
 export function isExpired(row, today) {
+  // `today` IS VALIDATED, AND THE REASON IS THE FAILURE DIRECTION. `review_by` is guarded four
+  // ways; its counterpart was guarded zero ways, and the likeliest caller mistake failed OPEN.
+  // Measured: `isExpired(row, new Date())` returns **false for every row, forever** -- relational
+  // `<` takes the number hint, `Number("2026-11-13")` is NaN, and every NaN comparison is false.
+  // So a caller passing a Date silently disables tenure repo-wide with no error anywhere, which is
+  // precisely the shape of the defect this function was just wired in to fix. `"banana"` fails the
+  // other way and expires everything. Neither is acceptable from a guess about a parameter type.
+  if (typeof today !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(today)) {
+    throw new TypeError(`isExpired: today must be a YYYY-MM-DD string, got ${JSON.stringify(today)}`);
+  }
   const by = row && typeof row.review_by === "string" ? row.review_by.trim() : "";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(by)) return false;   // shape is rowFaults' job, not tenure's
   // String comparison is correct for ISO dates and needs no timezone, which is the point: a
