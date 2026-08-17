@@ -57,7 +57,15 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
   [ "$(STEEL_STATUS)" -eq 0 ]
   local oks
   oks="$(STEEL | grep -c '^ok ')"
-  [ "$oks" -ge 38 ]
+  # EXACT, and it took an adversarial pass to make it so. The first version of this line was a
+  # floor with slack "for the receipt-guarded checks", and the slack was both wrong and useless:
+  # every guarded check sits behind `if (mine.length === 1)` and is PRECEDED by a check that fails
+  # in the same scenario, so on any probe that exits 0 all of them ran -- while the slack was wide
+  # enough that six of the eight sections could have vanished entirely and still cleared the
+  # floor. A floor whose stated purpose is catching a silently dropped section, that cannot catch
+  # a silently dropped section, is worse than no floor: it reads as a guard.
+  # 70 measured 2026-08-17 (51 before sections 7 and 8).
+  [ "$oks" -eq 70 ]
 }
 
 @test "the receipt is verified present in events and absent from quarantine" {
@@ -98,6 +106,78 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
   [[ "$(STEEL)" == *"ok with a non-model-capable driver, nothing is applied and the receipt says so"* ]]
   [[ "$(STEEL)" == *"ok and bench records the model as REQUESTED, never as applied"* ]]
   [[ "$(STEEL)" == *"ok so no model_id is written for a model that never ran"* ]]
+}
+
+@test "a model-capable driver is reported capable, and one that cannot is not" {
+  # THE POSITIVE CONTROL, and the whole reason this test exists. Every model-seam check above
+  # drives mock, whose correct answer is "nothing applied" -- so the suite could prove a
+  # NON-capable driver applies nothing and could not prove a capable one applies anything.
+  # For two days driverTakesModel answered "not capable" for every driver on earth, bench dropped
+  # the model on every run, and the whole file stayed green because every assertion it owned
+  # expected NONE. This is the assertion that goes red the moment that answer flips.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok a model-capable driver is REPORTED as capable"* ]]
+  [[ "$(STEEL)" == *"ok and a driver that cannot carry a model is reported as not capable"* ]]
+}
+
+@test "an unrecognised capability answer throws instead of reporting not capable" {
+  # A probe whose failure mode is `return false` answers a question nobody asked, in the
+  # direction that silently weakens the run. arc-run spends exit 2 on every operator error it
+  # has, so a bare status check cannot tell "this driver cannot carry a model" from "you called
+  # me wrong". Both arms now require the sentence arc-run prints for that exact decision.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok an unrecognised probe answer THROWS rather than answering the question it was not asked"* ]]
+  [[ "$(STEEL)" == *"ok and the thrown message quotes what arc-run actually said, so the cause is readable"* ]]
+  [[ "$(STEEL)" == *"ok a tree whose processes are ALL job stubs has nothing to probe with, and says so"* ]]
+  [[ "$(STEEL)" == *"ok and probing it throws rather than reporting the driver not capable"* ]]
+}
+
+@test "every truthy spelling of job_stub is a stub and only false is runnable" {
+  # Keyed on PRESENCE, never on equality: the frozen YAML subset parses yes, on, True and
+  # quoted true as STRINGS and 1 as a number, so an equality check lets all of them walk past.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok every truthy spelling of job_stub is a stub, and only false is runnable"* ]]
+}
+
+@test "bench and arc-run agree on what a job stub is, for every process in the tree" {
+  # isJobStub is a SECOND COPY of arc-run's rule, and this repo has been burned by copies that
+  # drift. It is pinned rather than trusted: the verdicts are compared per process, so a
+  # divergence is a red suite here and not a wrong number in a scorecard months from now.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok bench's job-stub verdict matches arc-run's for EVERY process in the tree"* ]]
+}
+
+@test "a run with no benchable task class does not report itself ok" {
+  # `partial` was set only inside the fixture loop, so a tree with nothing to bench reached none
+  # of its arms: zero rows, exit 0, outcome ok on the receipt -- a run certifying that nothing is
+  # wrong having measured nothing. One job_stub line added to commit-msg-draft by another lane
+  # empties that list, and processes/ is a company organ every live lane edits.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok a run with no benchable task class does NOT report outcome ok"* ]]
+  [[ "$(STEEL)" == *"ok and it SAYS what happened rather than printing an empty report"* ]]
+  [[ "$(STEEL)" == *"ok and the stub it skipped is named in the report, not silently dropped"* ]]
+}
+
+@test "the probe is given the real model id, not a placeholder" {
+  # arc-run validates --trial-model against its id grammar BEFORE the capability check, so a
+  # probe sent a fixed placeholder validated the placeholder while bench used the operator's id
+  # for every invocation -- validate one read, compare another. The cost was not cosmetic: a
+  # rejected id dies on every attempt AFTER admission control reserved the group, and a
+  # reservation is released only by a measured spend.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok a model id arc-run would REJECT is caught by the probe, before any group is reserved"* ]]
+  [[ "$(STEEL)" == *"ok an EMPTY processes directory says so, and is not blamed on stubs"* ]]
+}
+
+@test "job stubs are not benched, and the report names the ones it skipped" {
+  # processes/ is a company organ every live lane edits. The scheduler lane added two job stubs,
+  # which bench then listed forever as NO PROPOSAL 0 of 5 -- a permanent row for something that
+  # is not a candidate for anything, and the file that broke the capability probe. They are gone
+  # from the report, and their absence is STATED: a coverage report that quietly got shorter
+  # reads exactly like one whose scope quietly shrank.
+  [ "$(STEEL_STATUS)" -eq 0 ]
+  [[ "$(STEEL)" == *"ok no job stub is offered as a benchable task class"* ]]
+  [[ "$(STEEL)" == *"ok the report NAMES the stubs it did not bench"* ]]
 }
 
 @test "a failing attempt is reported, not rounded up to a pass" {
@@ -172,5 +252,5 @@ STEEL_STATUS() { cat "$BATS_FILE_TMPDIR/steel.status"; }
 
 @test "this file registers the number of tests it declares" {
   # retro-log 2026-08-04: bats SILENTLY DROPS a @test whose name carries a non-ASCII character.
-  [ "${#BATS_TEST_NAMES[@]}" -eq 15 ]
+  [ "${#BATS_TEST_NAMES[@]}" -eq 22 ]
 }

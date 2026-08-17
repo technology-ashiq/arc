@@ -272,6 +272,54 @@ const side = (over = {}) => ({
     g2.status === EXIT.OK || g2.status === EXIT.PARTIAL, `status ${g2.status}`);
 }
 
+// ---- A CLASS THE CHAMPION BENCHED AND THIS RUN DID NOT ----------------------------------------
+//
+// The guard walked the CANDIDATE's classes and looked the champion up from them, so a class
+// present only on the CHAMPION side was visited by nothing: no row, no line, no alert, and the
+// run reported `clean` and `outcome: ok`. Survivable while class discovery returned every process
+// stem in the tree; NOT survivable once it started filtering, because `processes/` is a company
+// organ every live lane edits and one `job_stub:` line added upstream would delete a class from
+// the guard's field of view entirely -- reporting "no drift" on a run that benched nothing.
+//
+// That is this lane's own recorded failure shape (a guard that reported no drift on a run where
+// every attempt failed), so it is proven here rather than reasoned about. The champion bundle is
+// a FILE, so the case is posed by giving the champion a class the candidate cannot have.
+{
+  const cf = join(dir("vanished-ceilings"), "two-groups.json");
+  writeFileSync(cf, JSON.stringify({
+    as_of: "2026-08-13", run_cap_inr: 1000, process_cap_inr: 60, k: 3,
+    worst_case_inr_per_invocation: { mock: { "(unpinned)": 10 } },
+  }), "utf8");
+
+  const champ = join(scratch, "vanished-champ");
+  const r1 = bench(["--driver", "mock", "--budget", "inr=1000,min=15", "--out", champ], { ARC_SPINE_ROOT: dir("vanished-champ-spine"), ARC_BENCH_CEILINGS: cf });
+  check("the vanished-class champion run produced a bundle", existsSync(join(champ, "scorecard.json")), `status ${r1.status}`);
+
+  // Doctoring test DATA, not code: the champion is given a row for a class this tree cannot
+  // bench, which is exactly what an upstream `job_stub:` line would produce tomorrow.
+  const sc = JSON.parse(readFileSync(join(champ, "scorecard.json"), "utf8"));
+  const model = sc.classes.find((c) => c.eligible !== false) ?? sc.classes[0];
+  check("the doctored champion starts from a real benched class", Boolean(model), JSON.stringify(sc.classes.map((c) => c.task_class)));
+  sc.classes.push({ ...model, task_class: "class-that-vanished" });
+  writeFileSync(join(champ, "scorecard.json"), JSON.stringify(sc), "utf8");
+
+  const spine = dir("vanished-spine");
+  const g = bench(["--driver", "mock", "--budget", "inr=1000,min=15", "--out", join(scratch, "vanished-out"), "--champion", champ], { ARC_SPINE_ROOT: spine, ARC_BENCH_CEILINGS: cf });
+
+  check("a class the champion benched and this run did not is REPORTED, not skipped",
+    /class-that-vanished: NOT BENCHED BY THIS RUN/.test(g.stdout), g.stdout);
+  check("and it is stated as a finding, naming why no drift can be ruled out",
+    /class-that-vanished[\s\S]*no drift can be ruled out/.test(g.stdout), g.stdout);
+  // The load-bearing one: it must not read as a clean run. Before this, it did.
+  check("the run does NOT report itself clean",
+    !/no inbox-tier drift/.test(g.stdout) && !/NO approval event was created/.test(g.stdout), g.stdout);
+  check("an approval.requested IS raised for it, because absence is never inferred from nobody looking",
+    eventsOn(spine).filter((e) => e.kind === "approval.requested").length === 1,
+    JSON.stringify(eventsOn(spine).map((e) => e.kind)));
+  check("and the receipt records the guard as NOT clean",
+    eventsOn(spine).some((e) => e.kind === "run.completed" && e.process === "bench@0.1.0" && e.payload.guard && e.payload.guard.clean === false));
+}
+
 rmSync(scratch, { recursive: true, force: true });
 
 if (failed) { console.error(`\n${failed} check(s) FAILED`); process.exit(1); }
