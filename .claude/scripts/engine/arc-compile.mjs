@@ -120,6 +120,7 @@ if (!files.length) { console.error("arc-compile: nothing to compile"); process.e
 const out = [];
 let identical = 0;
 let retired = 0; // ADR-0207: counted apart from identical, never folded into it
+let noBaseline = 0; // waived baseline: never a command, so nothing to reproduce. Counted, not hidden.
 let failed = 0;
 
 for (const file of files) {
@@ -131,6 +132,26 @@ for (const file of files) {
     continue;
   }
   const doc = parsed.value;
+
+  // A PROCESS THAT NEVER WAS A COMMAND HAS NOTHING TO REPRODUCE.
+  //
+  // Every process here until 2026-08-18 was migrated FROM a command file, and this compiler exists
+  // to prove the migration byte-identical. A `baseline: {waived: capability-gap}` process was never
+  // a command in any target and is dispatched only to a runtime, so rendering it as one produces a
+  // file nobody will ever invoke, to compare against nothing.
+  //
+  // REPORTED AND COUNTED SEPARATELY, never silently skipped -- the same treatment `[retired]` gets
+  // four lines below, and for the same reason: a skip folded into the identical total would be a
+  // pass nobody earned. This one matters more than tidiness, because the claude-code adapter
+  // REFUSES a `tools: []` process (an absent allowed-tools line means UNRESTRICTED there, so the
+  // most restrictive declaration would render as the most permissive). That refusal is correct and
+  // must stay loud for a process that IS destined for a command file; here it is answering a
+  // question nobody asked.
+  if (doc.baseline?.waived) {
+    out.push(`[no-baseline] ${rel} — baseline waived (${doc.baseline.waived}), so there is no command to reproduce for target \`${target}\``);
+    noBaseline++;
+    continue;
+  }
 
   let rendered;
   try {
@@ -260,6 +281,9 @@ if (mode === "write") {
   console.log(`\narc-compile: wrote ${files.length - failed} of ${files.length} file(s) for target \`${target}\``);
   process.exit(failed ? 1 : 0);
 }
-const scope = files.length - retired;
-console.log(`\narc-compile: ${identical}/${scope} byte-identical for target \`${target}\`${retired ? ` (${retired} retired, ADR-0207)` : ""}`);
+// Both exclusions come OUT of the denominator and are named in the line. A waived-baseline process
+// left in `scope` would make the ratio read as a shortfall forever; folded into `identical` it
+// would read as a pass nobody earned. Neither, and the count says which.
+const scope = files.length - retired - noBaseline;
+console.log(`\narc-compile: ${identical}/${scope} byte-identical for target \`${target}\`${retired ? ` (${retired} retired, ADR-0207)` : ""}${noBaseline ? ` (${noBaseline} with no baseline to reproduce)` : ""}`);
 process.exit(failed ? 1 : 0);

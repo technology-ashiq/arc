@@ -3,16 +3,31 @@ version: 1.0.0
 intent: "Draft one build-in-public post from an approved context pack. L1 only -- a draft, never a publication."
 permissions: declared
 
-# THE PACK IS THE ONLY INPUT, and it is a reference rather than the content (ADR-0214).
+# THE PACK ARRIVES AS CONTENT, NOT AS A REFERENCE, and that is a correction with two reasons.
 #
-# `pack-ref` names a pack the owner APPROVED before dispatch, declaring N dispatches at approval
-# time. The runtime never selects its own material: the pack bounds the DATA. It does not bound the
-# ANGLE -- unless `angle` is set, the take belongs to the runtime, because arc constrains boundaries
-# and verifies outcomes and never prescribes method (ADR-0218).
+# The first draft passed `pack_ref` alone. A reference is unresolvable to a process declaring no
+# tools -- the runtime would need `fs.read` to fetch it, which is a capability this job does not
+# otherwise want and which the honest-narrowing rule (POL-D) says not to grant "just in case".
+#
+# THE SECOND REASON IS THE ONE THAT MATTERS. REQ-06's data boundary scans the INPUT for
+# internal-only markers before any driver process starts. Handed a reference, it scans a
+# twenty-five-character id and sees nothing -- the boundary would pass a pack it never read, on the
+# one code path whose entire job is to know what is leaving. Inlined, everything bound for a hosted
+# model passes under the scan first. A boundary that inspects a pointer is not inspecting the data.
+#
+# `pack_ref` stays, for provenance: the draft echoes it so a receipt names its material.
+#
+# The pack bounds the DATA. It does not bound the ANGLE -- unless `angle` is set, the take belongs
+# to the runtime, because arc constrains boundaries and verifies outcomes and never prescribes
+# method (ADR-0218).
 inputs:
   - name: pack_ref
     type: string
-    description: "The approved context pack this draft may draw on, and the only material it may use."
+    description: "The approved pack's id, echoed back on the draft so a receipt names its material."
+    required: true
+  - name: pack
+    type: string
+    description: "The pack's CONTENT, inlined. The only material this draft may use."
     required: true
   - name: angle
     type: string
