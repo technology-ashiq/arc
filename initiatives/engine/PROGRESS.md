@@ -151,6 +151,43 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### HELD BACK, NOT LOST — Phase 08's process layer, and the gate hole writing it exposed
+
+**`processes/build-in-public-draft.process.yaml` is WRITTEN and is deliberately NOT on the branch.**
+Schema (`draft`, `sources`, `task-class`, `pack-ref`), brief, eval fixture, `tools: []` — a process
+that reads a pack and returns prose has no reason to touch the repo, and a draft process that could
+commit is a draft process that can publish.
+
+**It cannot land alone.** POL-I's birth rule and `policy-lint` agree in opposite directions: the
+process file and its `hq.policy.yaml` grant land as ONE change or neither — `policy-lint` refuses a
+row naming a process that does not exist, and `kickoff-lint` flags a process with no row. This is
+the same ordering that struck REQ-04's copy of the criterion and moved it to Phase 08.
+
+**The blocker is environmental, not a decision: `hq.policy.yaml` is denied to this session's editor.**
+No freeze is active and the file is writable on disk — the deny is a harness permission on that path,
+the same shape as `.github/`. Routing around a permission the owner set is not an option, so the
+process file and its fixture are held (content preserved) and the branch stays governed: 5 processes,
+0 ungoverned. **Owner call: open that path and the pair lands in one change, or Phase 08's process
+layer stays with the owner.**
+
+**The gate hole it exposed, which is a finding in its own right.** `process-lint` requires
+`baseline: {target, path, commit, sha256}` **unconditionally** — every process until now replaced a
+command a driver already ran. REQ-07 introduces the first that replaces nothing, and its DoD names
+the answer: *"a paired baseline is impossible and honestly waived in one line, never fabricated,
+never quietly omitted."* So the spec **mandates a waiver the gate refuses to let anyone write**. The
+only two compliant options were an invented key (correctly rejected) or pointing `path` at an
+unrelated file — which is precisely the fabrication the DoD forbids. **A rule whose only compliant
+answer is a lie has a hole in it.**
+
+The fix was built and proven, then held with the file it serves: a closed reason, a real sentence, a
+date, mutually exclusive with the pin fields so it cannot hide a baseline that exists. **Seven
+negative controls, all firing** — invented reason, shrug instead of a sentence, missing date,
+non-date date, waiver carrying a pin field, smuggled extra key, and the real file still passing.
+Held rather than shipped because a gate feature with no consumer is exactly the *exported, tested,
+called by nothing* defect this phase spent the day removing.
+
+---
+
 ### THE SECOND ADVERSARIAL PASS — 2026-08-17, 44 findings, and the worst was in a fix four hours old
 
 Two fresh agents, different surfaces (router/tenure decision logic · receipt+identity and the
