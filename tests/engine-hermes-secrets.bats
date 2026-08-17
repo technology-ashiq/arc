@@ -146,7 +146,51 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   [ "$output" = "0" ]
 }
 
-@test "suite: all 9 tests in this file are REGISTERED" {
+@test "REQ-03 STORAGE: the scrubbed transcript is written when a caller asks for one" {
+  # The SCAN half of REQ-03 was proven long before the STORAGE half existed. A real dispatch on
+  # 2026-08-17 made the gap concrete: the driver's own lines never reach arc-run's stderr, so
+  # nothing wrote them anywhere and "a scrubbed transcript per dispatch is stored at
+  # initiatives/<lane>/evidence/phase-NN/" was a sentence with no code under it.
+  #
+  # Opt-in by env var because arc-run belongs to no lane -- ten suites and five lanes drive this
+  # binary, and a hard-coded engine path would put bench's transcripts in engine's bundle.
+  local dir="$BATS_TEST_TMPDIR/transcripts"
+  # `commit-clean`, not `clean`: the latter answers `{"ok":true}`, which fails commit-msg-draft's
+  # schema on purpose. Asserting status 0 against it would have made this test measure the ladder
+  # rather than the storage.
+  export ARC_RUN_TRANSCRIPT_DIR="$dir"
+  run_arc commit-clean
+  [ "$status" -eq 0 ] || { echo "the run did not succeed: $output"; false; }
+  local n; n="$(find "$dir" -type f -name '*.transcript.txt' 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$n" -ge 1 ] || { echo "no transcript was stored in $dir"; false; }
+  # It must contain the DRIVER's lines, not merely exist. An empty file satisfies a count.
+  grep -q "ADR-0222" "$dir"/*.transcript.txt || { echo "the stored transcript does not carry the driver's own lines"; false; }
+}
+
+@test "REQ-03 STORAGE NEGATIVE CONTROL: a planted key stops the run and stores NOTHING" {
+  # The ordering IS the guarantee: scrub() fails the run before storeTranscript() is reached, so
+  # the file on disk can never be the unscrubbed one. Inverting those two lines would turn an
+  # evidence path into a leak path, and nothing else in the suite would notice.
+  local dir="$BATS_TEST_TMPDIR/transcripts-neg"
+  export ARC_RUN_TRANSCRIPT_DIR="$dir"
+  run_arc secret-stderr
+  [ "$status" -ne 0 ] || { echo "a planted key did not stop the run"; false; }
+  [[ "$output" == *"aws-access-key-id"* ]] || { echo "the refusal does not name the rule: $output"; false; }
+  local n; n="$(find "$dir" -type f 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$n" -eq 0 ] || { echo "a transcript was stored despite the secret: $(ls "$dir")"; false; }
+}
+
+@test "REQ-03 STORAGE: with no directory asked for, nothing is written anywhere" {
+  # Opt-in means opt-in. A default path would make every lane's dispatches write into whatever
+  # directory this binary happened to think was theirs.
+  unset ARC_RUN_TRANSCRIPT_DIR
+  run_arc commit-clean
+  [ "$status" -eq 0 ]
+  local n; n="$(find "$BATS_TEST_TMPDIR" -name '*.transcript.txt' 2>/dev/null | wc -l | tr -d ' ')"
+  [ "$n" -eq 0 ] || { echo "a transcript was written without being asked for"; false; }
+}
+
+@test "suite: all 12 tests in this file are REGISTERED" {
   # bats silently DROPS a @test whose name carries a non-ASCII character; five such tests in this
   # cycle never ran and never failed, and the only signal was the count falling on CI.
   # FIXED 2026-08-17 after an adversarial pass defeated the previous version, which counted
@@ -157,6 +201,6 @@ PLANTED="AKIAQQ7ZBQ4TESTONLY1"
   # falls) and a silent removal (declared falls).
   declared="$(grep -c "^@test " "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "9" ] || { echo "expected 9 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "12" ] || { echo "expected 12 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

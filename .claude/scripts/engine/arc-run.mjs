@@ -39,7 +39,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -910,6 +910,40 @@ function invoke(name) {
   };
 }
 
+/**
+ * STORE the scrubbed transcript, when a caller asks for it (REQ-03, ADR-0215).
+ *
+ * The scan half of REQ-03 has been proven for a while: `scrub()` runs the spine's own scanner over
+ * the driver's transcript and stops the run on a hit. The STORAGE half was never built, and a real
+ * dispatch on 2026-08-17 made that concrete -- the driver's own lines do not reach arc-run's stderr,
+ * so nothing was writing them anywhere and "a scrubbed transcript per dispatch is stored at
+ * initiatives/<lane>/evidence/phase-NN/" was a sentence with no code under it.
+ *
+ * OPT-IN BY ENV VAR, because arc-run belongs to no lane. Ten suites and five lanes drive this
+ * binary; a hard-coded engine evidence path would have bench's runs writing into engine's bundle.
+ * The caller that wants the artifact names the directory.
+ *
+ * WRITTEN ONLY AFTER THE SCAN PASSED. A transcript carrying a secret stops the run before this
+ * point, so the file on disk can never be the unscrubbed one -- the ordering IS the guarantee, and
+ * inverting it would turn an evidence path into a leak path.
+ */
+function storeTranscript(name, text) {
+  const dir = process.env.ARC_RUN_TRANSCRIPT_DIR;
+  if (!dir || !text) return;
+  try {
+    mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const file = join(dir, `${processName}-${name}-attempt${attemptsMade}-${stamp}.transcript.txt`);
+    writeFileSync(file, String(text), "utf8");
+    process.stderr.write(`arc-run: stored the scrubbed ${name} transcript at ${file}\n`);
+  } catch (e) {
+    // A failure to store evidence must not silently pass as evidence stored. It also must not kill
+    // a completed dispatch, so it is loud and non-fatal -- and the count of stored files is what
+    // the phase close reads, never this line.
+    process.stderr.write(`arc-run: WARN could not store the ${name} transcript in ${dir}: ${e.message}\n`);
+  }
+}
+
 function attempt(name) {
   attemptsMade += 1;
   const r = invoke(name);
@@ -917,6 +951,7 @@ function attempt(name) {
   scrub(`the ${name} driver's stdout`, r.stdout);
   scrub(`the ${name} driver's transcript`, r.stderr);
   if (r.cost) scrub(`the ${name} driver's cost sidecar`, JSON.stringify(r.cost), r.cost);
+  storeTranscript(name, r.stderr);
 
   // A timeout is the BUDGET being spent, not the driver misbehaving. Classifying it as a
   // driver fault made budget exhaustion trigger the fallback chain -- which then spent the
