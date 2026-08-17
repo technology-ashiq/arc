@@ -1,0 +1,15 @@
+{
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. A bench runner is a declared no-go; these exist so a later cycle has fuel rather than an archaeology project. `input` is keyed by the process's inputs[].name; `expected` must satisfy the process's output schema. The expected draft below is deliberately a MODEST one — it states a fact and a surprise and stops — because a fixture showing an aspirational answer teaches a later comparison the wrong bar.",
+  "input": {
+    "pack_ref": "pack-2026-08-17-engine-cycle7"
+  },
+  "expected": {
+    "draft": "A test in our suite passed for four days while measuring nothing. Its probe skipped on every machine — a leftover environment variable made one of its gates fail — and the assertion accepted the skip as a pass. It was green the whole time. We now assert that a probe RAN before asserting what it printed.",
+    "sources": [
+      "pack-2026-08-17-engine-cycle7#adversarial-pass-finding-1",
+      "pack-2026-08-17-engine-cycle7#testing-rules-vacuous-pass"
+    ],
+    "task-class": "build-in-public-draft",
+    "pack-ref": "pack-2026-08-17-engine-cycle7"
+  }
+}

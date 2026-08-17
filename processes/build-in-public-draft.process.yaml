@@ -1,0 +1,101 @@
+name: build-in-public-draft
+version: 1.0.0
+intent: "Draft one build-in-public post from an approved context pack. L1 only -- a draft, never a publication."
+permissions: declared
+
+# THE PACK IS THE ONLY INPUT, and it is a reference rather than the content (ADR-0214).
+#
+# `pack-ref` names a pack the owner APPROVED before dispatch, declaring N dispatches at approval
+# time. The runtime never selects its own material: the pack bounds the DATA. It does not bound the
+# ANGLE -- unless `angle` is set, the take belongs to the runtime, because arc constrains boundaries
+# and verifies outcomes and never prescribes method (ADR-0218).
+inputs:
+  - name: pack_ref
+    type: string
+    description: "The approved context pack this draft may draw on, and the only material it may use."
+    required: true
+  - name: angle
+    type: string
+    description: "Optional. A pinned take. Absent means the angle belongs to the runtime (ADR-0218)."
+    required: false
+
+# NO `git.op`, NO `shell.run`. This process reads a pack and returns prose. It has no reason to
+# touch the repo, and a draft process that could commit is a draft process that can publish -- the
+# L1 ceiling and the human publish gate are absolute (ADR-0069, POL-I).
+tools: []
+
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - draft
+    - sources
+    - task-class
+    - pack-ref
+  properties:
+    draft:
+      type: string
+      minLength: 1
+    # EVERY CLAIM TRACES TO THE PACK. A draft that cites nothing is a draft nobody can check, and
+    # the whole point of a bounded pack is that the material is knowable in advance.
+    sources:
+      type: array
+      items:
+        type: string
+        minLength: 1
+    task-class:
+      type: string
+      minLength: 1
+    pack-ref:
+      type: string
+      minLength: 1
+
+# WRITTEN, NEVER EXECUTED THIS CYCLE. A bench runner is a declared no-go; these exist so a later
+# cycle has fuel rather than an archaeology project.
+evals:
+  - tests/fixtures/engine/evals/build-in-public-draft/basic.json
+
+# NO `baseline:` BLOCK AT ALL, AND THE WAIVER IS THE POINT (REQ-07's capability-gap arm).
+#
+# Every other process in this directory carries a `baseline:` naming the command file it was
+# migrated from, because each replaced something a driver already did. This one replaces nothing:
+# no current driver runs this class as a process, so a paired A/B baseline is IMPOSSIBLE rather
+# than merely absent, and the verdict arm is capability-gap.
+#
+# THE GATE HAD NO WAY TO SAY THIS, and that was the finding. `process-lint` required target, path,
+# commit and sha256 unconditionally, so the only compliant options were to invent a waiver key it
+# rejected, or to pin `path` at an unrelated file -- which is exactly the fabrication REQ-07's DoD
+# forbids. A rule that leaves only a lie as the compliant answer has a hole in it. The lint now
+# accepts a waiver, and deliberately makes it expensive: a closed reason, a real sentence, a date,
+# and mutually exclusive with the pin fields so it cannot hide a baseline that does exist.
+baseline:
+  waived: capability-gap
+  why: "no existing driver runs this class as a process, so there is nothing to measure against; the only alternative to this waiver would be a fabricated pin"
+  recorded: 2026-08-17
+
+body: |
+  Draft ONE short build-in-public post from the approved context pack you are given.
+
+  YOUR MATERIAL IS THE PACK AND NOTHING ELSE. Do not reach for anything outside it -- not the web,
+  not the repository, not your own recollection of this project. If the pack does not support a
+  claim, the claim does not go in the draft. This is not a style preference: the pack is what a
+  human approved leaving the machine, and anything else is data nobody agreed to send.
+
+  WHAT MAKES A GOOD ONE:
+
+  1. One concrete thing that actually happened, with the specific detail that makes it real -- a
+     number, a measurement, a thing that broke. "We improved reliability" is not a post. "A test
+     passed for four days while measuring nothing, and here is what it was measuring instead" is.
+  2. Say what was surprising. A build log with no surprise in it is a changelog.
+  3. Short. If it needs a heading, it is two posts.
+  4. No hype, no adjectives doing the work of facts, no "excited to share". Write the way you would
+     tell a colleague what happened.
+
+  THE ANGLE IS YOURS unless the pack pins one. You were hired for judgement about how to tell it,
+  not to fill a template.
+
+  RETURN the JSON object this process declares: `draft`, `sources` (the pack entries each claim
+  rests on), `task-class`, and `pack-ref` echoed back.
+
+  YOU ARE NOT PUBLISHING. A human reads this, accepts or rejects it with one line, and copies it
+  out themselves if they want it. Nothing you return goes anywhere on its own.
