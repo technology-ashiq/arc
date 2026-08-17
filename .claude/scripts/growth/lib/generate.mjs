@@ -30,7 +30,7 @@ export class GenerateError extends Error {
 }
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,79}$/;
-const FRONTMATTER_KEYS = ["title", "meta", "slug", "cluster_id", "template_id", "citations"];
+const FRONTMATTER_KEYS = ["layout", "title", "meta", "pubDate", "slug", "cluster_id", "template_id", "citations"];
 const MAX_FIELD = 1000;
 
 // Line separators that a YAML or prompt parser may treat as a break. `/[\r\n]/` missed U+0085,
@@ -218,7 +218,7 @@ export function bodyLinks(body) {
  * that disagrees with the links in the text is a lie in a machine-readable field, and it is exactly
  * the kind that survives review because nobody cross-checks two parts of the same file by hand.
  */
-export function renderMdx({ title, meta, slug, cluster_id, template_id, body }) {
+export function renderMdx({ title, meta, slug, cluster_id, template_id, body, pubDate }) {
   const req = { title, meta, slug, cluster_id, template_id, body };
   for (const [k, v] of Object.entries(req))
     if (typeof v !== "string" || v.trim() === "")
@@ -229,12 +229,33 @@ export function renderMdx({ title, meta, slug, cluster_id, template_id, body }) 
     if (LINE_BREAKS_RE.test(v))
       throw new GenerateError("BAD_FRONTMATTER", `${k} must not contain a line break (including U+0085, U+2028 and U+2029, which JSON.stringify passes through raw)`);
 
+  // `pubDate` is REQUIRED and is not derived from a clock. The homepage sorts on it and the layout
+  // puts it in the JSON-LD `datePublished`, so a missing one silently reorders the index and
+  // publishes structured data with no date. It is a parameter rather than `new Date()` because the
+  // publication date of an article is a fact about the article, not about when this function ran —
+  // a re-render months later must not restamp it.
+  if (typeof pubDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(pubDate))
+    throw new GenerateError("BAD_FRONTMATTER", `pubDate ${JSON.stringify(pubDate)} must be YYYY-MM-DD`);
+
   const citations = bodyLinks(body);
   const y = (s) => JSON.stringify(String(s)); // JSON strings are valid YAML scalars, and they escape
   const lines = [
     "---",
+    // THE LAYOUT LINE, and it is load-bearing rather than cosmetic.
+    //
+    // Without it Astro renders the MDX as a bare fragment. Measured on this function's first LIVE
+    // use, 2026-08-18, by building the real site with a rendered article in it: no `<html>` tag,
+    // no `rel=canonical`, no `application/ld+json` — every bit of Phase 04's GEO work silently
+    // absent — and, worst, no `noindex` control, because `isPublishedDomain` lives in the layout
+    // the page never loads. A page published this way is indexable no matter what INDEXABLE says.
+    //
+    // Every fixture for this function asserted the frontmatter KEYS it emits. None ever built the
+    // site, so the one property that mattered — does this file become a page — was never tested.
+    // Fixture-proven is not live-validated, and this is what the difference looked like.
+    "layout: ../../layouts/Article.astro",
     `title: ${y(title)}`,
     `meta: ${y(meta)}`,
+    `pubDate: ${y(pubDate)}`,
     `slug: ${y(slug)}`,
     `cluster_id: ${y(cluster_id)}`,
     `template_id: ${y(template_id)}`,

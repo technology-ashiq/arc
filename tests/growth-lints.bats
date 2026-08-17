@@ -406,9 +406,43 @@ const exemplars = () => G.loadExemplars("initiatives/growth/exemplars");'
   [ "$output" = "ROW_NOT_IN_CLUSTER" ]
 }
 
-@test "generate: frontmatter citations are derived from the body, never supplied" {
+@test "generate: the rendered file carries the layout, so it becomes a PAGE and not a fragment" {
+  # FOUND ON THIS FUNCTION'S FIRST LIVE USE, 2026-08-18. Every fixture here asserted the frontmatter
+  # KEYS renderMdx emits, and none ever built the site -- so the one property that decides whether
+  # the output is publishable was never tested. Measured by putting a rendered article into the real
+  # arc-site tree and running the build:
+  #
+  #   without `layout:`  ->  no <html> tag, no rel=canonical, no application/ld+json, and NO
+  #                          noindex control -- because isPublishedDomain lives in the layout the
+  #                          page never loads. The article would publish as a bare fragment that is
+  #                          indexable no matter what INDEXABLE says.
+  #   with it            ->  <html> 1, canonical 1, JSON-LD 1, datePublished carried.
+  #
+  # THE LIMIT OF THIS TEST, stated rather than left implied: it asserts the layout LINE, not that
+  # Astro applies it. Only a site build proves that, and this suite cannot build another repo. So
+  # this catches the regression (someone dropping the key) and not the original class (nobody having
+  # checked what the key does). The value is pinned exactly, because a typo in the path fails the
+  # same silent way.
   run _node "$PRE
     const mdx = G.renderMdx({ title: 'T', meta: 'M', slug: 'a-slug', cluster_id: 'c-001',
+      template_id: 'title-v1', pubDate: '2026-08-18', body: 'Body.' });
+    const first = mdx.split(String.fromCharCode(10))[1];
+    console.log(first);
+    console.log(mdx.includes(String.fromCharCode(10) + 'pubDate: \"2026-08-18\"') ? 'pubDate-carried' : 'PUBDATE-MISSING');
+    // pubDate is required and is NOT defaulted from a clock: an article's publication date is a
+    // fact about the article, so a re-render months later must not restamp it.
+    console.log(err(() => G.renderMdx({ title: 'T', meta: 'M', slug: 'a-slug', cluster_id: 'c-001', template_id: 't', body: 'b' })));
+    console.log(err(() => G.renderMdx({ title: 'T', meta: 'M', slug: 'a-slug', cluster_id: 'c-001', template_id: 't', pubDate: '18-08-2026', body: 'b' })));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "${lines[0]}" = "layout: ../../layouts/Article.astro" ]
+  [ "${lines[1]}" = "pubDate-carried" ]
+  [ "${lines[2]}" = "BAD_FRONTMATTER" ]
+  [ "${lines[3]}" = "BAD_FRONTMATTER" ]
+}
+
+@test "generate: frontmatter citations are derived from the body, never supplied" {
+  run _node "$PRE
+    const mdx = G.renderMdx({ title: 'T', meta: 'M', slug: 'a-slug', cluster_id: 'c-001', pubDate: '2026-08-18',
       template_id: 'title-v1', citations: ['https://a-lie.example'],
       body: 'Body with [one](https://example.com/1) and [two](https://example.com/2).' });
     console.log((mdx.includes('a-lie.example') ? 'ACCEPTED-A-LIE' : 'derived') + ' ' + (mdx.match(/^  - /gm) || []).length);"
@@ -422,7 +456,7 @@ const exemplars = () => G.loadExemplars("initiatives/growth/exemplars");'
   # citations: [] -- the exact lie renderMdx says it prevents, reached from the other side.
   run _node "$PRE
     const body = 'Arc measured a 40% drop, see https://example.com/receipt-a for the receipt.';
-    const mdx = G.renderMdx({ title: 'T', meta: 'M', slug: 's', cluster_id: 'c-001', template_id: 't', body });
+    const mdx = G.renderMdx({ title: 'T', meta: 'M', slug: 's', cluster_id: 'c-001', template_id: 't', pubDate: '2026-08-18', body });
     const paren = G.bodyLinks('See [w](https://en.wikipedia.org/wiki/A_(b)).');
     console.log((mdx.includes('receipt-a') ? 'carried' : 'DROPPED') + ' ' + paren.length + ' ' + paren[0]);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
@@ -435,7 +469,7 @@ const exemplars = () => G.loadExemplars("initiatives/growth/exemplars");'
   # all three through raw, so the character reaches the emitted YAML scalar.
   run _node "$PRE
     const bad = (over) => err(() => G.renderMdx({ title: 'T', meta: 'M', slug: 'a-slug',
-      cluster_id: 'c-001', template_id: 'title-v1', body: 'b', ...over }));
+      cluster_id: 'c-001', template_id: 'title-v1', pubDate: '2026-08-18', body: 'b', ...over }));
     console.log([bad({ title: 'T\nslug: hijacked' }), bad({ title: 'T' + LS + 'slug: hijacked' }),
                  bad({ title: 'T' + ch(0x0085) + 'slug: hijacked' }),
                  bad({ slug: 'Not A Slug' }), bad({ body: '  ' })].join(' '));"

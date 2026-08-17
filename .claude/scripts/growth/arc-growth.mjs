@@ -371,7 +371,7 @@ function cmdRender() {
   const plan = parseJsonOrDie(readOrDie(planPath, "cluster plan"), "the cluster plan");
   const draft = parseJsonOrDie(readOrDie(draftPath, "draft"), "the draft");
   if (draft === null || typeof draft !== "object" || Array.isArray(draft))
-    die("BAD_DRAFT", "the draft must be a JSON object of {title, meta, slug, template_id, body}");
+    die("BAD_DRAFT", "the draft must be a JSON object of {title, meta, slug, template_id, pubDate, body}");
   // The PLAN gets the same shape check as the draft. It did not, so a null or array plan surfaced
   // as `BAD_DRAFT -- Cannot read properties of null` and sent the operator to inspect a file that
   // was fine. The twin of a fix is where this repo keeps losing.
@@ -384,6 +384,10 @@ function cmdRender() {
     mdx = renderMdx({
       title: draft.title, meta: draft.meta, slug: draft.slug,
       cluster_id: plan.cluster_id, template_id: draft.template_id, body: draft.body,
+      // From the DRAFT, not from a clock. The publication date is a fact about the article, so a
+      // re-render months later must not restamp it — and a `new Date()` here would make this
+      // function's output depend on when it ran, which is the one thing a content hash cannot have.
+      pubDate: draft.pubDate,
     });
   } catch (e) {
     die(e.code || "BAD_DRAFT", e.message);
