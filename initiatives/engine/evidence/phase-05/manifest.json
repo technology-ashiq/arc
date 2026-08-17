@@ -1,0 +1,24 @@
+{
+  "phase": "05",
+  "commit": "52d3027ad0321411d140e1d18a83cf4f91798934",
+  "short": "52d3027",
+  "generated": "2026-08-17T11:57:06Z",
+  "files": [
+    {
+      "name": "absent-evidence.md",
+      "sha256": "b3591579bbedb7e0012ea1ba61d54f09a7eb8db4e7c7a851d4f6d1c7d8dea77e"
+    },
+    {
+      "name": "adversarial-passes.md",
+      "sha256": "c5d08369422c10cea3c17cc88f78b888931dd096b1fe2eca50b979e39a2fae3c"
+    },
+    {
+      "name": "ci-per-job.md",
+      "sha256": "2690fef5ae01f7a84c9a4b132509aa65e4c8f766c13230174f4b2dfe076bd2dd"
+    },
+    {
+      "name": "red-fixture-corpus.md",
+      "sha256": "8f9e4fb8c19e447fa6c34088234f2065edf87ea5fb765cdcbf08ce26f3d16194"
+    }
+  ]
+}

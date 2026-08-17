@@ -2,7 +2,7 @@
 
 status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
-phase: 05
+phase: 06
 appetite: 9.5d
 burn: 5.5d
 blocked-on: —
@@ -29,13 +29,16 @@ depends-on: —
 |---|---|---|---|
 | 00 | Steel thread — **parked, shipped in Cycle 6** (canonical process layer, `arc-run`, driver contract, `router.yaml`) | — | ✅ done 2026-08-03 |
 | 04 | The law, and proof the hands exist — mandate receipt, ADR-0212 merged, runtime installed behind a container backend, ONE live headless invocation, **or the STOP fires** | 1 day | ✅ done 2026-08-16 |
-| 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | pending |
+| 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | ✅ done 2026-08-17 |
 | 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | pending |
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 5.5 of 7.5 days used (73%) — set 2026-08-17, derivation above `## Now`. The
-day-5 kill checkpoint has therefore FIRED and is read in `## Now`.** Phases allocate 7 of 7.5 — **93%, and the half-day of
+**Appetite burn: 5.5 of 9.5 days used (58%) — set 2026-08-17.** It was 5.5 of **7.5** when it was
+set, which is what **fired the day-5 kill checkpoint**; the checkpoint was read, the owner ruled
+CONTINUE, and the cap moved to 9.5 in writing (PLAN § Appetite). Both numbers are kept in that
+order deliberately: a percentage that silently improves because the denominator moved is how an
+overrun stops looking like one. Phases allocate 7 of 7.5 — **93%, and the half-day of
 slack is thin**, flagged by `kickoff-lint` and left honest rather than padded. The design source's
 "1.5 weeks (8 working days)" rounds up: 1.5 weeks is 7.5 working days at a 5-day week, so the cap is
 written as the smaller, true number. Kill checkpoint is read at **day 5**, not at the 50% mark of
@@ -43,6 +46,43 @@ written as the smaller, true number. Kill checkpoint is read at **day 5**, not a
 on-track run is one that learns to be ignored.
 
 ## Done log
+
+- 2026-08-17 — **PHASE 05 CLOSED.** `/arc-phase-done 05 --lane engine`. REQ-01 `active` → `validated`.
+  `amendments: 0` · `reopened: n`. **Actual vs appetite: budgeted 1.5 days; the shim itself was
+  built inside it, and what overran was the two adversarial rounds against it, which are counted
+  against the cycle rather than against this phase.**
+  - **CI green on the MERGED tree, read per JOB, zero skipped**: 19/19 at `1a13e8a`, and again at
+    `ab2a73b` on the PR before it. Head SHA confirmed equal to local HEAD both times. Merging tests
+    nothing in this repo, so the `workflow_dispatch` on `main` is the evidence, not the merge.
+  - **The red corpus is 47 tests in one file**, mapped fixture-by-fixture to the DoD in
+    `evidence/phase-05/red-fixture-corpus.md` — junk bytes, ANSI flood, truncated JSON,
+    injection-shaped output, empty stdout, a runtime that never exits, output past a single read.
+    Twelve more rows came from the adversarial passes rather than the spec: DCS/APC/OSC payloads, a
+    stale line left by an unterminated OSC, a lone-CR progress bar, a pretty-printed answer read as
+    a nested fragment, a lone surrogate, a fractional buffer ceiling, an orphaned container.
+  - **LIVE DEMO, on the real runtime, both arms:** a spent deadline makes the driver exit **2**
+    *before starting the runtime* (`the run budget has 0ms left`), and a wall-clock overrun through
+    `arc-run` lands a receipt reading **`reason: budget`** — `01M07SDCNH28C881ZHWR2E4PSS`,
+    `duration_ms: 59921` against a 60-second budget. The property ADR-0210 exists for — a timeout is
+    budget, never driver — holds on the real path and not only against the seam.
+  - **AN AMENDMENT THE DEMO ITSELF FORCED.** The spec's scenario says to run `arc-run … --budget
+    min=2` and *"watch it exit 2"*. Two things are wrong with that sentence and both were found by
+    obeying it. `min=2` is **4.5x too small** — the calibration measured 248-342 seconds per
+    dispatch — so the demo as written can only ever demonstrate the failure. And the exit code
+    belongs to the DRIVER: ADR-0219 says arc-run's exit space is separate, and arc-run reports **1**
+    for a failed run while the receipt carries the reason. Both arms are demonstrated above at the
+    layer each one actually lives in.
+  - **Also measured, and recorded because it is a real edge:** on the overrun, `docker rm -f` timed
+    out (`ETIMEDOUT`) and the driver warned that the container *may* still be running. It was not —
+    `--rm` reaped it. The warning is honest rather than wrong, and warning-not-failing is the right
+    trade: a completed run should not be lost to a slow daemon.
+  - **Evidence bundle built and VERIFIED** (`arc-evidence.sh bundle 05` → `verify 05`, sha256
+    manifest): the red-fixture corpus map, the three adversarial passes, CI read per job, and
+    `absent-evidence.md` naming the four things the Verification plan asks for that this bundle
+    cannot produce — chief among them that the passes never recorded their agent session ids, which
+    weakens the anti-anchoring claim and is fixed forward rather than backfilled.
+  - **Assumptions A-02 and A-03 did NOT fire**, and the trigger scan is clean: the only `FIRED`
+    marker in PLAN is the day-5 checkpoint, already routed and ruled.
 
 - 2026-08-16 — **PHASE 04 CLOSED.** `/arc-phase-done 04 --lane engine`. REQ-00 `active` → `validated`.
   Receipts: `phase.closed` **`01M05A4WRVESNR8YE8MBZJB2S1`** · `approval.requested`
