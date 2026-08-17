@@ -151,6 +151,67 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### THE FIRST RECEIPTED REAL DISPATCH — 2026-08-17, and it found what no fixture could
+
+PR #194 merged (`4cc73fd`, CI 19/19 per JOB, head SHA confirmed). The certification dispatch then
+ran **from the main clone**, human-started, and its receipt **landed**:
+`01M07FX9ZAY3EHCQFKVVKA2RT7`, `run.completed`, verified present in
+`events/2026-08-17.jsonl` and **absent from `_quarantine/`** — grepped in both places, never read
+off an emitter's exit code. REQ-03's transcript storage wrote its first real file.
+
+**THE SEQUENCING FACT THE PLAN NEVER STATED: a certification run cannot be made from a worktree.**
+The first attempt refused, by design and loudly:
+
+> `arc-event: REJECT WORKTREE_SPINE` — `.claude/state/` is gitignored, so a worktree has its OWN
+> spine and an event written there is valid, real, and invisible to every reader, `arc-inbox`
+> included.
+
+So REQ-02's receipts and REQ-07's three real runs are **main-clone work, after the merge**. Without
+`--strict` (PR #184) this would have reported success while writing into a spine nobody can read.
+
+**And the landed receipt read `runtime: undefined`.** ADR-0221 requires the runtime identity in its
+own payload field. The chain that broke it: `cost` was built only *inside* the usage-report block ·
+arc-run reads the identity off the cost sidecar · the vendor `--usage-file` is a **pinned no-op**
+that has never written a report on this image. So the field naming *which contractor ran* was absent
+from **every real receipt** — while **every fixture test passed, because they all plant a usage
+report.** The suite proved the enriched path; nothing proved the ordinary one, and the ordinary one
+is every real run. Fixed without manufacturing a cost; identity present, spend absent, both asserted.
+
+**Tenure was enforced NOWHERE.** `isExpired()` was written, exported and unit-tested at its
+boundary — and called by nothing that dispatches (`grep -rl` returned the module and its own probe).
+A row past its `review_by` routed exactly like a fresh one while the suite stayed green. That is the
+vacuous-pass rule in a new costume: the test proved the FUNCTION, nothing proved the MECHANISM.
+Now wired into routing, with **one** proposal idempotent on `(class, review_by)` — five dispatches
+leave one open item, because a queue that grows per attempt is a queue a human stops reading.
+
+**Fixture scoreboard, on the real runtime:**
+
+| # | What | State |
+|---|---|---|
+| 1 | repo not mounted / byte-identical after | **PASS** |
+| 2+3 | data boundary, arc-run exit 5 | **BUILT + suite** (mechanism whole, negative controls) |
+| 4 | env audit, zero arc secrets | **PASS on its second half** — "only its own capped key" needs the key |
+| 5 | planted key absent from every artifact | **PASS** (4 classes + negative control) |
+| 6 | traversal / symlink escape | **PASS** |
+| 7 | egress allowlist | **PASS, orchestrated and measured**, with a negative control |
+| 8 | memory off | **PASS** (ADR-0222) |
+| 9 | hostile output → ladder | **PASS on the REAL path** — schema fail → one retry → proposal |
+| 10 | capped key exhausted | **mechanism PASS**, shim arm **BUILT** with a negative control |
+| 11 | wall-clock overrun | **PASS** |
+| 12 | unpinned runtime refused | **PASS** |
+
+**What REQ-02 still owes:** the confined-egress arm of a real dispatch, which needs the hosted-model
+path and therefore the capped key — an `--internal` network cannot reach `host.docker.internal`, so
+the local model and the confined network are mutually exclusive by construction.
+
+**REQ-07 is where the risk now sits, and the number is three for three.** The 8B local model has
+failed the schema on the real path in every measurement: 1-of-5 before the config fix, 0-of-1 after,
+0-of-1 today (it answered in prose). Phase 08's three uncuttable runs need a hosted model. The
+free tier is proven reachable at HTTP 200 on the unfunded key and costs nothing — **the key itself
+is the one thing this session cannot supply.**
+
+---
+
 ### THE ADVERSARIAL PASS ON THE EGRESS AND WORKSPACE CODE — 2026-08-17. 50 findings, and this time the two surfaces AGREED.
 
 Required before PR #194 merges, never at the phase close. Two fresh agents, neither having seen the
