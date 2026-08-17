@@ -382,11 +382,7 @@ switch (kase) {
     // against this file's own constant -- a negative control that proves the default rather than
     // the wiring. An unset marker is now a named failure.
     const marker = process.env.ARC_HERMES_FAKE_MARKER;
-    if (!marker) {
-      die(66, "ARC_HERMES_FAKE_MARKER is unset, so this case cannot plant anything\n");
-      process.exitCode = 68;
-      break;
-    }
+    if (!marker) die(68, "ARC_HERMES_FAKE_MARKER is unset, so this case cannot plant anything");
     mkdirSync(join(hostDir, "memories"), { recursive: true });
     writeFileSync(join(hostDir, "memories", "MEMORY.md"), `${marker}\n`, "utf8");
     writeFileSync(join(hostDir, "state.db"), `sqlite-ish ${marker}\n`, "utf8");
@@ -394,7 +390,11 @@ switch (kase) {
     // into a no-op used to leave three isolation tests green: a fixture that writes nothing is
     // indistinguishable from isolation that works, which is the vacuous pass this whole file
     // exists to avoid producing.
-    die(64, `planted the marker into ${hostDir}\n`);
+    //
+    // NOT `die()`. A scripted rewrite turned this success line into `die(64, ...)` and every
+    // plant-memory dispatch started exiting 64 -- caught by RUNNING the fixture, because
+    // `node --check` passed: the mangled file was still perfectly valid JavaScript.
+    writeSync(2, `fake-docker: planted the marker into ${hostDir}\n`);
     break;
   }
 
@@ -436,7 +436,7 @@ switch (kase) {
     boot();
     const argv = process.argv.slice(2);
     const volAt = argv.indexOf("-v");
-    if (volAt < 0) { process.stderr.write("fake-docker: no -v mount to read"); }
+    if (volAt < 0) die(66, "no -v mount to read");
     const spec = argv[volAt + 1];
     const hostDir = spec.slice(0, spec.lastIndexOf(":"));
     let seen = "";
@@ -448,5 +448,10 @@ switch (kase) {
   }
 
   default:
-    process.stderr.write(`fake-docker: unknown ARC_HERMES_FAKE_CASE [${kase || "unset"}]`);
+    // THE NEGATIVE CONTROL FOR EVERY drive() CALL IN THE CONTRACT SUITE. A typo in a case name
+    // would otherwise arrive at the parser as an empty-stdout fixture and pass the wrong test for
+    // the wrong reason -- so this MUST exit non-zero, and for a while it did not: a scripted
+    // rewrite dropped the `process.exit(64)` and left the write behind. `node --check` was green
+    // on the mangled file, and only running it showed exit 0.
+    die(64, `unknown ARC_HERMES_FAKE_CASE [${kase || "unset"}]`);
 }

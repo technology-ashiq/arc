@@ -800,14 +800,28 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   const remaining = msUntilDeadline();
   let timeoutMs;
   if (remaining !== undefined) {
+    // THE GRACE SCALES WITH THE BUDGET INSTEAD OF BEING A FLAT CONSTANT, and that is a defect I
+    // introduced and CI caught within minutes.
+    //
+    // Raising TEARDOWN_GRACE_MS from 3000 to 8000 (because ADR-0222 added a workspace delete to
+    // that window) silently changed the MEANING of every short-budget run: with 6000ms left, the
+    // `remaining <= GRACE` branch below fired and the runtime was never started at all. The exit
+    // code stayed 2, so a caller reading only the code saw no difference -- but the reason line
+    // changed from "over time" to "not enough to start", and the container that was never launched
+    // was never reaped. Two contract tests said so; nothing else would have.
+    //
+    // A constant that was correct before a phase added work to it is a stale constant. Reserving a
+    // FRACTION means the guard cannot grow past the budget it guards: at most a quarter of what is
+    // left, never more than the full grace, never less than 1s.
+    const grace = Math.min(TEARDOWN_GRACE_MS, Math.max(1000, Math.floor(remaining / 4)));
     // Already past the deadline before we start: decline rather than launch a container that
     // will be killed. Launching it would spend real time and real money to reach the same answer.
-    if (remaining <= TEARDOWN_GRACE_MS) {
+    if (remaining <= grace) {
       const e = new Error(`the run budget has ${Math.max(0, Math.round(remaining))}ms left, which is not enough to start the runtime`);
       e.arcExit = EXIT.BUDGET_DECLINED;
       throw e;
     }
-    timeoutMs = Math.max(1, Math.floor(remaining - TEARDOWN_GRACE_MS));
+    timeoutMs = Math.max(1, Math.floor(remaining - grace));
   }
 
   const { cmd, argv } = dockerArgv(args);
