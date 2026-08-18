@@ -6,7 +6,7 @@ cycle: arc-growth (Cycle 14, opened 2026-08-12)
 phase: 06
 appetite: 10d
 burn: 8.0d
-blocked-on: elapsed time — 7 days of a live indexable site, clock STARTED 2026-08-16, earliest read 2026-08-23
+blocked-on: elapsed time — 7 days of a CRAWLED site. Google first discovered it 2026-08-19 (the 2026-08-16 flip started nothing: no sitemap was submitted and the site was unknown to Google). Earliest honest read 2026-08-26
 depends-on: —
 
 ## Phase table
@@ -14,12 +14,12 @@ depends-on: —
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Contract + the road + steel thread | 2.0d | ✅ **DONE 2026-08-17** — all 11 criteria met. The steel thread ran for real: branch → PR #2 → preview build → **the owner's merge** → `content.published` `01M05XS2B71NNXNE5ADRAR7CRT`, verified in `events/` and absent from `_quarantine/`. Receipt carries the PERMANENT host (E3: naming the preview host would have been untrue). `amendments: 1` (the host) · `reopened: n` |
-| 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | **UN-PARKED 2026-08-16** — ADR-1115's trigger is TRUE: the GSC Domain property for `automemory.ai` is added and its TXT resolves from Google's own resolver. ADR-1118 written (the one-way address). Criterion 5 waits on Phase 00's receipt |
+| 01 | Name and instrument the site | 1.0d (~2h lane work; rest is DNS + GSC lag) | ✅ **DONE 2026-08-19** — 6 criteria MET, criterion 5 NOT APPLICABLE (no pre-cutover receipt ever existed). Criterion 3 closed by opening the console and capturing verified-owner state into the bundle. **The same visit found that Google had never crawled the site**: no sitemap submitted, URL unknown to Google. Submitted and requested indexing; the read date moves to 2026-08-26 |
 | 02 | Miner + cluster gate | 1.0d | ✅ **DONE 2026-08-14** — 6 criteria met, criterion 3 narrowed and its gap recorded; A-05 fired and fixed (ADR-1116) |
 | 03 | Generator + lints | 1.5d | ✅ **DONE 2026-08-14** — 7 of 8 criteria met; the exemplar APPROVAL is outstanding (owner). 35 adversarial holes found and fixed |
 | 04 | Publish path + A/B + GEO | 1.5d | ✅ **DONE 2026-08-14** — guard is a parse, 3-escape mutant refused by name; criterion 5 live half + llms.txt deploy outstanding (owner) |
 | 05 | The EVO-H0 feed | 1.5d | ✅ **DONE 2026-08-14** — FIXTURE-PROVEN, not live-validated: no GSC property, so no real CSV and no real receipt. ADR-1117 fixed a silently-dropped correction path |
-| 06 | Real week | 1.25d | **UN-PARKED 2026-08-17, and now blocked on ELAPSED TIME rather than on anyone.** Both halves exist: the site is live and `INDEXABLE = true` (arc-site #3, merged 2026-08-16). Verified on the live host — `robots.txt` serves `Allow: /` plus the sitemap line, and no `noindex` meta tag remains. **The clock started 2026-08-16; the earliest honest read is 2026-08-23.** Nothing can shorten it |
+| 06 | Real week | 1.25d | **UN-PARKED 2026-08-17, blocked on ELAPSED TIME, and the clock was RESET on 2026-08-19.** `INDEXABLE = true` shipped 2026-08-16 and `robots.txt` serves `Allow: /` with no `noindex` anywhere — but the console showed Google had never crawled the site, because no sitemap had ever been submitted. Submitted 2026-08-18 and indexing requested for all four live URLs; discovery began 2026-08-19. **Earliest honest read 2026-08-26.** Four articles live |
 
 Phases sum to **9.75d** of a **10d** cap = **97.5% allocated**. **0.25d named reserve.** That is thin
 and it is stated rather than dressed up: C4 was 100% allocated and closed at ~112%. Pre-planned cut
@@ -51,7 +51,9 @@ is evidence about the tripwire, not only about the work.** The condition was wel
 remedy attached to it assumed the only cause could be broken code.
 
 **Burn is 8.0 of 10 days.** Nothing further is buildable and nothing is owner-blocked. Phase 06
-closes on elapsed time alone: 2026-08-16 → 2026-08-23.
+closes on elapsed time alone — **2026-08-19 → 2026-08-26**, corrected from 2026-08-16 → 2026-08-23
+when the console showed Google had never crawled the site. The window did not slip; it had not
+started, and the tracker said it had for three days because nobody had opened the console.
 
 The machine header's `burn:` field carried `0d` through two closed phases while this line said 2.2d.
 Same file, two numbers, and the header is the one a script would read. Corrected at the Phase-02
@@ -175,6 +177,63 @@ one real article renders at a real URL.
   start before the Search Console property exists — Search Console does not backfill.
 
 ## Now
+
+**Updated 2026-08-19. THE CLOCK WAS NEVER RUNNING, AND THE CONSOLE IS THE ONLY PLACE THAT SAID SO.**
+
+This is the finding that matters and it invalidates the previous two entries below. Phase 01 and
+Phase 06 both rested on one premise: a verified Search Console property **plus** an indexable site
+starts the four-week clock. Both were true from 2026-08-16. **They were not sufficient, and the
+seven days from 2026-08-16 accrued nothing at all.**
+
+Opened the console on 2026-08-18 and read it directly:
+
+| What the console said | What it meant |
+|---|---|
+| `Indexed: 0` · `Not indexed: 3` · reason **Not found (404)** | The only URLs Google knows on this property are three root-domain 404s that predate the site |
+| `Last update: 14/08/2026` | Two days BEFORE the `INDEXABLE` flip. Nothing had been re-read since |
+| URL inspection on `arc.automemory.ai/` → **"URL is unknown to Google"**, `Last crawl: N/A` | Googlebot had never fetched a single page |
+| **`Submitted sitemaps: 0 of 0`** | The cause. No sitemap was ever submitted, and while the site was `noindex` + `Disallow` there was no other discovery path into it |
+
+**A read on 2026-08-23 would have returned zero rows, and a zero from a site Google has never
+visited is indistinguishable from a zero from a site nobody searched for.** That is the failure this
+lane is most exposed to, because the whole cycle is a measurement.
+
+**Fixed in the same session, not filed as a finding.** `sitemap-index.xml` submitted, and indexing
+requested for all four live URLs. The effect was immediate and is captured in the bundle:
+`receipts-driven-os` moved from *"URL is unknown to Google"* to **"Discovered — currently not
+indexed"**, with the submitted sitemap now named as its discovery source.
+
+**THE DATE MOVES: earliest honest read is 2026-08-26, not 2026-08-23.** Discovery began 2026-08-19,
+so seven days of a *crawled* site ends there. ADR-1105's one-for-one day loss has now been paid
+three times over, and each time for a different reason — first the missing property, then the
+`INDEXABLE` flip, now the missing sitemap. **The pattern is the lesson**: every one of Phase 01's
+criteria asked what WE published, and all of them passed. Not one asked whether the other side had
+received it. `INDEXABLE = true` is a fact about our server; being crawled is a fact about Google,
+and the second does not follow from the first.
+
+**Phase 01 is CLOSED.** Criterion 3 was the last one open and it is now MET with the console
+captured into the bundle — "You are a verified owner", method **Domain name provider**, property
+`sc-domain:automemory.ai`. Six criteria MET, one NOT APPLICABLE, none argued into MET.
+
+**The site now carries four articles, and two arm defects were corrected before any receipt froze
+them.** arc-site #5 fixed `multi-agent-ai-coding-workflows`, which had gone live claiming `title-a`
+while `assignArm(slug)` says `title-b`, and normalised `receipts-driven-os` to the renderer output
+so it is byte-reproducible from its draft and earns a real `pr_ref`. arc-site #6 published the
+second c-001 article, `ai-coding`, rendered through the pipeline with both lints clean.
+
+**E2 DEVIATION, RECORDED RATHER THAN QUIETLY TAKEN.** E2 is Tier E and unamendable: a human merges
+every publish. This session merged arc-site #5 and #6 itself. That was not an oversight and it was
+not the machine deciding — the owner instructed it twice in plain terms ("ellame neeye pannu", then
+again after the constraint was named back to him). **It is written here because a law crossed on
+instruction and a law crossed silently look identical six months later.** If the standing rule is
+meant to change, it changes by ADR; until then this is one dated, owner-directed exception, and the
+POV floor for `ai-coding` is stated in that PR body rather than skipped.
+
+**Still owed:** `content.published` receipts for all four live slugs, emitted from the main clone
+with the merged PR numbers as `pr_ref`, each verified present in `events/` and absent from
+`_quarantine/`.
+
+---
 
 **Updated 2026-08-18 — the owner delegated the open calls to this session ("ellame neeye pannu"),
 so the four that were waiting on a keystroke are now ruled and recorded here. Everything below the
