@@ -62,7 +62,7 @@ import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { EXIT, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
+import { EXIT, canonicalDoc, pinnedModel, runDriver, settle, writeCost } from "./common.mjs";
 import { taggedSha256 } from "../type-tagged-hash.mjs";
 // The seat grammar is imported from the spine's OWN validator rather than re-spelled here.
 // A second copy of a regex is a second thing to keep in sync, and the failure this guards
@@ -133,6 +133,118 @@ const EGRESS_FILE = process.env.ARC_HERMES_EGRESS || "";
 const EGRESS_NETWORK = process.env.ARC_HERMES_NETWORK || "";
 const EGRESS_PROXY = process.env.ARC_HERMES_PROXY || "";
 const SKILLS_FILE = process.env.ARC_HERMES_SKILLS || "";
+
+/**
+ * WHAT THE RUNTIME MAY REACH FOR — and it turned out to be the whole answer-reliability story
+ * (ADR-0224).
+ *
+ * This cycle carried one unexplained confound for four sessions: the runtime would not honour a
+ * one-shot output contract. Three explanations were offered and each was disproved in turn — the
+ * parser (it extracted exactly what arrived, every time), the config (`_config_version` was fixed
+ * and the behaviour stayed), and the model tier (a hosted model failed the same way an 8B local one
+ * did). Measured on 2026-08-18, the cause is none of those: `hermes tools list` shows the image
+ * enabling SEVENTEEN toolsets by default, including `file`, `terminal`, `code_execution`, `clarify`,
+ * `web`, `browser` and `memory`.
+ *
+ * Every recorded "wrong shape" is one of those toolsets doing its job:
+ *
+ *   the draft written to /tmp instead of returned      file + terminal + code_execution
+ *   "Should I include any co-authors?"                 clarify
+ *   "Example Domain is the title of the page"          web + browser
+ *   a marker from run N readable in run N+1 (0222)     memory
+ *
+ * The runtime was never failing to answer. It was doing the job a different way, with the tools it
+ * was handed. `-z` makes a session headless; it does not make it single-turn or tool-free.
+ *
+ * MEASURED, not argued. The identical prompt and pack, one flag apart:
+ *
+ *   all 17 toolsets   3 dispatches, 2 attempts each, 150-307 s, `$.draft` absent every time
+ *   -t vision         exit 0, 55 s, ONE api call, a valid draft citing its pack entry
+ *
+ * SO THE DECLARATION BECOMES ENFORCEMENT. `processes/*.process.yaml` already says what a process
+ * needs, and ADR-0223 made `tools: []` mean "nothing" rather than "everything". Until now that
+ * declaration was a pre-flight check only — ADR-0223's own comment says so, because this driver read
+ * no tools at all. The map below turns it into the runtime's allowlist for the invocation.
+ */
+export const TOOLSET_FOR = Object.freeze(Object.assign(Object.create(null), {
+  "fs.read": ["file"],
+  "fs.write": ["file"],
+  "shell.run": ["terminal", "code_execution"],
+  // git reaches the network as well as the shell, exactly as TOOL_CAPABILITIES already records.
+  "git.op": ["terminal", "web"],
+  "agent.invoke": ["delegation"],
+  "ask.human": ["clarify"],
+}));
+
+/**
+ * The runtime's own vocabulary, pinned from `hermes tools list` on the pinned digest, 2026-08-18.
+ *
+ * IT IS PINNED BECAUSE AN UNKNOWN NAME EXITS 2, AND 2 IS ALREADY SPOKEN FOR. `-t none` was measured:
+ * the runtime refuses and exits **2**, which in ENG-D's map (ADR-0219) is BUDGET_DECLINED. A typo in
+ * a toolset name would therefore be reported to arc as "the driver declined for budget" — a wrong
+ * diagnosis of a wrong thing, on the code path whose whole job is to separate a driver fault from a
+ * budget one. So the list is validated HERE, before the container starts, and a name outside it is a
+ * driver fault that names itself.
+ */
+export const KNOWN_TOOLSETS = Object.freeze([
+  "web", "browser", "terminal", "file", "code_execution", "vision", "video", "image_gen",
+  "video_gen", "bfl", "x_search", "tts", "stt", "skills", "todo", "memory", "context_engine",
+  "session_search", "clarify", "delegation", "cronjob", "homeassistant", "spotify", "yuanbao",
+  "computer_use",
+]);
+
+/**
+ * WHAT "NOTHING" IS SPELLED AS, and it cannot be spelled as nothing.
+ *
+ * `-t ""` was measured and it is a FAIL-OPEN: the empty value reads as no override at all, and the
+ * run came back with THREE api calls and 30,248 input tokens — the full seventeen-toolset agentic
+ * shape — against ONE call and 2,134 tokens for `-t vision`. So an absent value and an empty value
+ * are different inputs to this CLI, and the empty one silently means everything. That is the exact
+ * defect ADR-0223 fixed inside arc's own gate the same day, found here in the runtime's argument
+ * parser. arc must never pass an empty `-t`.
+ *
+ * `vision` is therefore the narrowest thing arc can HONESTLY say. It is a real toolset, so it does
+ * not trip the exit-2 refusal, and it analyses an image the caller supplies — with no image in the
+ * prompt there is nothing for it to do. The alternatives were each worse and are named rather than
+ * left implicit: `todo` keeps planning state, `session_search` reads previous sessions and is
+ * memory-adjacent (the thing ADR-0222 exists to contain), `tts` and `image_gen` produce FILES.
+ *
+ * This is a workaround for a missing capability in someone else's CLI, and it is written down as one
+ * so that the day `-t` grows a real empty spelling, this constant is where the change lands.
+ */
+export const NARROWEST_TOOLSET = "vision";
+
+/**
+ * The toolset allowlist for one invocation, derived from what the process declares.
+ *
+ * A process that declares nothing gets `NARROWEST_TOOLSET`. A process whose declaration cannot be
+ * read — no file, unparseable, `permissions: unrestricted`, a `tools:` that is not a list — gets
+ * NO `-t` at all, which is the runtime's default and its widest posture. That asymmetry is
+ * deliberate and is the same one the gate makes: an absence of information is not a narrow claim,
+ * and narrowing a process nobody has described would break dispatches this change is not entitled
+ * to break. The gate is what refuses an undeclared process; this function only translates.
+ */
+export function toolsetsFor(doc) {
+  if (!doc || typeof doc !== "object") return "";
+  if (doc.permissions !== "declared") return "";
+  if (!Array.isArray(doc.tools)) return "";
+  const out = [];
+  for (const raw of doc.tools) {
+    let token;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const keys = Object.keys(raw);
+      if (keys.length !== 1) return "";  // a shape this cannot read is not a narrow claim
+      token = String(keys[0]);
+    } else {
+      token = String(raw ?? "");
+    }
+    token = token.replace(/:$/, "").trim();
+    const sets = Object.prototype.hasOwnProperty.call(TOOLSET_FOR, token) ? TOOLSET_FOR[token] : undefined;
+    if (!Array.isArray(sets)) return "";  // an unclassified token widens, it never narrows
+    for (const s of sets) if (!out.includes(s)) out.push(s);
+  }
+  return out.length ? out.join(",") : NARROWEST_TOOLSET;
+}
 const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
 
 // The runtime's own capped credential (ADR-0213), and the variable name its configured provider
@@ -954,7 +1066,31 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     args.push("-e", `${API_KEY_ENV}=${API_KEY}`);
   }
 
+  // THE DECLARATION IS THE ALLOWLIST (ADR-0224), derived once and validated BEFORE the container
+  // starts. An unknown name makes the runtime exit 2, and ENG-D reads 2 as BUDGET_DECLINED — so a
+  // typo would be reported to arc as a budget decline, which is a wrong diagnosis of a wrong thing
+  // on the one path whose job is to tell a driver fault from a budget one.
+  //
+  // A DISARMED GUARD MUST NEVER BE SILENT: when the declaration cannot be narrowed, the wide
+  // posture is announced rather than assumed, the same contract PreToolUse.sh keeps for a missing
+  // dispatcher and this driver already keeps for an unconfined egress.
+  const declared = await canonicalDoc(processName);
+  const toolsets = declared.ok ? toolsetsFor(declared.doc) : "";
+  if (toolsets) {
+    const unknown = toolsets.split(",").filter((t) => !KNOWN_TOOLSETS.includes(t));
+    if (unknown.length) {
+      throw new Error(`refusing to dispatch: ${unknown.join(", ")} is not a toolset the pinned image defines — the runtime answers an unknown -t with exit 2, which ENG-D reads as a budget decline`);
+    }
+    process.stderr.write(`hermes: toolsets ${toolsets} — from the process declaration (ADR-0224)\n`);
+  } else {
+    process.stderr.write(`hermes: toolsets UNRESTRICTED — the declaration for ${processName} could not be narrowed${declared.ok ? "" : ` (${declared.missing ? "no canonical file" : "unreadable"})`}, so the runtime keeps its own defaults (ADR-0224)\n`);
+  }
+
   args.push(IMAGE);
+  // NEVER AN EMPTY VALUE. `-t ""` was measured as a FAIL-OPEN on the pinned image: the empty string
+  // reads as no override and the run came back with the full seventeen-toolset agentic shape. So the
+  // flag is either present with a real list or absent entirely.
+  if (toolsets) args.push("-t", toolsets);
   if (usageInContainer) args.push("--usage-file", usageInContainer);
   args.push("-z", prompt);
 

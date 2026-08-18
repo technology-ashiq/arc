@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 06
 appetite: 9.5d
-burn: 7.0d
+burn: 7.5d
 blocked-on: —
 depends-on: —
 
@@ -34,7 +34,7 @@ depends-on: —
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 7.0 of 9.5 days used (74%) — set 2026-08-18, advanced the same evening after the ADR-0223 round and REQ-07's three dispatches.** The clock is set the day the work happens, because this cycle has twice recorded the cost of setting it later: the Phase 04 close found it reading 0.0 for four days, and the day-5 checkpoint fired against a number a full working day stale. It was 5.5 of **7.5** when it was
+**Appetite burn: 7.5 of 9.5 days used (79%) — set 2026-08-18, advanced twice that day: once after the ADR-0223 round and REQ-07's three dispatches, again after ADR-0224 closed the answer-reliability confound. One long day, counted as one.** The clock is set the day the work happens, because this cycle has twice recorded the cost of setting it later: the Phase 04 close found it reading 0.0 for four days, and the day-5 checkpoint fired against a number a full working day stale. It was 5.5 of **7.5** when it was
 set, which is what **fired the day-5 kill checkpoint**; the checkpoint was read, the owner ruled
 CONTINUE, and the cap moved to 9.5 in writing (PLAN § Appetite). Both numbers are kept in that
 order deliberately: a percentage that silently improves because the denominator moved is how an
@@ -190,6 +190,67 @@ on-track run is one that learns to be ignored.
     mark. Next engine cycle starts at **0221**.
 
 ## Now
+
+### THE CONFOUND IS CLOSED, AND IT WAS THE TOOLSETS ALL ALONG — 2026-08-18
+
+Full measurement: `evidence/phase-08/req07-toolsets-are-the-confound.md`. **ADR-0224.**
+
+For four sessions this cycle carried one unexplained result — the runtime would not honour a one-shot
+output contract — and offered three explanations, each disproved in turn: the parser (it extracted
+exactly what arrived, every time), the config (fixed, behaviour unchanged), the model tier (a hosted
+model failed the same way an 8B local one did).
+
+**It was none of them.** `hermes tools list` shows the pinned image enabling **seventeen toolsets by
+default** — `file`, `terminal`, `code_execution`, `clarify`, `web`, `browser`, `memory` among them.
+Every "wrong shape" this cycle wrote down is one of those doing its job: the draft written to `/tmp`
+(`file`+`terminal`+`code_execution`), *"Should I include any co-authors?"* (`clarify`), *"Example
+Domain is the title of the page"* (`web`+`browser`), the run-N marker readable in run N+1
+(`memory` — the thing ADR-0222 exists to contain). **The runtime was never failing to answer; it was
+doing the job a different way, with the tools it was handed.** `-z` makes a session headless, and the
+vendor's own help says in the same paragraph that tools and memory load as normal.
+
+**Measured, same prompt and pack, one flag apart:**
+
+| invocation | exit | wall | api calls | input tokens | result |
+|---|---|---|---|---|---|
+| all 17 (no `-t`), ×3 | 1 | 150–307 s | — | — | `$.draft` absent every time |
+| `-t vision` | **0** | **55 s** | **1** | **2,134** | **a valid draft, sources cited** |
+
+**The declaration is now the allowlist.** ADR-0223 made `tools: []` mean *nothing*; this makes the
+runtime honour it. `fs.*`→`file` · `shell.run`→`terminal,code_execution` · `git.op`→`terminal,web` ·
+`agent.invoke`→`delegation` · `ask.human`→`clarify` · **nothing→`vision`**. ADR-0223's own comment
+admitted the declaration constrained nothing at the runtime; that gap is closed.
+
+**Two hazards guarded, both measured rather than guessed:**
+
+- **`-t ""` IS A FAIL-OPEN** — the empty value reads as no override and the run came back with three
+  api calls and 30,248 input tokens, the full agentic shape. **That is the exact defect ADR-0223
+  fixed inside arc's own gate hours earlier**, found in someone else's argument parser and failing in
+  the dangerous direction. arc never passes an empty `-t`, and a test holds it.
+- **`-t <unknown>` EXITS 2, and ENG-D reads 2 as BUDGET_DECLINED.** A typo would reach arc as *the
+  driver declined for budget*. The list is validated against the image's own vocabulary before the
+  container starts, and a test asserts the map can never produce a name outside it.
+
+A declaration that cannot be narrowed passes NO flag and **says so** (`toolsets UNRESTRICTED`) — an
+absence of information is not a narrow claim, and refusing an undeclared process is the gate's job.
+
+**A vacuous pass I wrote and then caught by running it:** the announcement assertions read `$stderr`
+*after* a helper that itself calls `run cat`, which replaces `$stderr` — so they passed on a driver
+that announced nothing and failed on one that announced correctly. Stashed before the helper now,
+with the reason in the test.
+
+**THE ADVERSARIAL PASS ON ADR-0224 IS OWED, AND THIS IS THE FLAG.** CLAUDE.md says a gate is not done
+until two fresh agents on different surfaces have attacked it, and today proved that rule five times
+over on ADR-0223. Both attackers were launched against this change and both died on repeated
+upstream `529 Overloaded` errors, twice each; a third is running. **The branch is pushed so CI can
+run, and it is NOT merged until the pass completes** — the eight tests and the container
+measurements are evidence, not a substitute. If the pass finds nothing, that gets written down too;
+what must not happen is the pass quietly never being mentioned again.
+
+**ADR-0221 clause 4 needs its amendment written:** the `-t vision` run produced a COMPLETE usage
+report (`input_tokens 2134`, `output_tokens 193`, `api_calls 1`, model), so the reader that ADR calls
+unproven works. What is false is the **vendor's** documented promise that the report is *"written even
+when the run fails"* — four of six observed runs wrote one, and one that did not was a failing run.
 
 ### REQ-07 RAN FOR REAL — THREE DISPATCHES, THREE RECEIPTS, ZERO DRAFTS — 2026-08-18
 
