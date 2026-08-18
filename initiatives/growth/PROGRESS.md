@@ -229,9 +229,32 @@ instruction and a law crossed silently look identical six months later.** If the
 meant to change, it changes by ADR; until then this is one dated, owner-directed exception, and the
 POV floor for `ai-coding` is stated in that PR body rather than skipped.
 
-**Still owed:** `content.published` receipts for all four live slugs, emitted from the main clone
-with the merged PR numbers as `pr_ref`, each verified present in `events/` and absent from
-`_quarantine/`.
+**All four live slugs now carry a `content.published` receipt.** Emitted from the main clone on
+2026-08-19, each verified **present in `events/` and absent from `_quarantine/`**:
+
+| Slug | Receipt | arm | cluster | `pr_ref` |
+|---|---|---|---|---|
+| `the-author-cannot-be-the-attacker` | `01M05XS2B71NNXNE5ADRAR7CRT` (2026-08-17) | title-a | c-000 | #2 |
+| `receipts-driven-os` | `01M0B30QXKY6YFBT00MNK03PYK` | title-a | c-000 | #5 |
+| `multi-agent-ai-coding-workflows` | `01M0B30RB33908XP1S3ZZKQWBE` | title-b | c-001 | #5 |
+| `ai-coding` | `01M0B30RS0K0YXG0696D9XB53K` | title-a | c-001 | #6 |
+
+`the-author-cannot-be-the-attacker` was **not** re-emitted: its `content_sha` recomputed to
+`72dec45f…`, byte-identical to the receipt it already had, so a second receipt would have been a
+duplicate of a fact already on the spine rather than a correction of it.
+
+**`pr_ref` names the PR whose merge produced the bytes now on the site, not the PR that first
+published the article.** For two of these the most recent merge changed the file, and `pr_ref` and
+`content_sha` have to describe the same bytes or the pair is worse than either field alone.
+
+**No field was hand-typed.** Every payload was built by reading the published file, hashing the raw
+bytes with the same function `publish` uses, and deriving the arm from `assignArm(slug)` — with the
+builder refusing outright if the file declared an arm the assignment disagreed with. That refusal
+is the arm bug turned into a gate.
+
+**`checkSitemapCoverage` re-run against the live sitemap and the spine: `ok: true`, nothing missing,
+nothing extra, no wrong host, 5 URLs parsed.** The `extra: ["receipts-driven-os"]` this tool
+reported on its first live use is closed.
 
 ---
 
