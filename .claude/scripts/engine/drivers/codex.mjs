@@ -10,11 +10,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 
-import { canonicalRoot, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
-import { parseYamlSubset } from "../yaml-subset.mjs";
+import { canonicalDoc, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 import { render as renderCodex } from "../adapters/codex.mjs";
 
 const CLI = process.env.ARC_CODEX_CLI || "codex";
@@ -25,9 +22,14 @@ const CLI = process.env.ARC_CODEX_CLI || "codex";
 const WORK_ROOT = process.env.ARC_ROOT || process.cwd();
 
 await runDriver("codex", async ({ processName, input }) => {
-  const canonPath = join(await canonicalRoot(), "processes", `${processName}.process.yaml`);
-  const parsed = parseYamlSubset(readFileSync(canonPath, "utf8"));
-  if (!parsed.ok) throw new Error(`canonical file does not parse: ${parsed.error.what}`);
+  // ONE READER for the canonical document (canonicalDoc). This body used to open the file itself,
+  // so the gate validated one read while the prompt and the tool grant came from a second, later
+  // one -- and an adversarial pass showed the two can see different bytes if anything writes
+  // between them. Sharing the ROOT was only half the fix; sharing the READ is the other half.
+  const read = await canonicalDoc(processName);
+  if (read.missing) throw new Error(`canonical file not found: ${read.path}`);
+  if (!read.ok) throw new Error(`canonical file does not parse: ${read.what}`);
+  const parsed = { value: read.doc };
 
   const prompt = [
     renderCodex(parsed.value),

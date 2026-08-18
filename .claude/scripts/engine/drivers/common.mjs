@@ -173,6 +173,44 @@ export async function canonicalRoot() {
   }
 }
 
+/**
+ * THE CANONICAL PROCESS DOCUMENT, read ONCE from the machinery root (ADR-0220, ADR-0223).
+ *
+ * EVERY DRIVER-SIDE CONSUMER GOES THROUGH HERE: `driverPolicyDenial` validates the document,
+ * `drivers/hermes` derives the runtime's toolset allowlist from it (ADR-0224), and
+ * `drivers/claude-code` and `drivers/codex` build their prompt and their tool grant from it. Those
+ * must all be looking at the same bytes: a gate that validates one read while the dispatch is shaped
+ * by another is the defect this lane has closed in `verdict.mjs`, in `lineage.mjs` and inside
+ * `arc-run.mjs`.
+ *
+ * THE FIRST VERSION OF THIS COMMENT OVERCLAIMED, and an adversarial pass said so. It read "one
+ * reader, so there is no second copy to drift" while `claude-code.mjs` and `codex.mjs` still each
+ * opened the file themselves — sharing the ROOT was only half the fix, and the pass demonstrated the
+ * two reads seeing different bytes when something writes between them. Both now call this.
+ *
+ * WHAT IS STILL OUTSIDE, NAMED RATHER THAN IMPLIED: `arc-run.mjs` reads its own copy from its own
+ * `root` (`--root` / `$ARC_ROOT` / git toplevel) to validate the driver's OUTPUT against the schema.
+ * In the normal case that resolves to the same tree; where it does not, arc-run would judge a result
+ * against a contract the driver never executed. Fixing that means touching ADR-0220's work-root seam
+ * and is deliberately not bundled here. `arc-bench.mjs` also reads process files and belongs to
+ * another lane.
+ *
+ * It returns a RESULT rather than throwing, because the three callers want different things from a
+ * miss: the gate treats an absent file as "arc-run reports this better than we can", and a driver
+ * wants to name it.
+ */
+export async function canonicalDoc(processName) {
+  const root = await canonicalRoot();
+  const path = join(root, "processes", `${processName}.process.yaml`);
+  if (!existsSync(path)) return { ok: false, missing: true, root, path, doc: null };
+  const { parseYamlSubset } = await import("../yaml-subset.mjs");
+  const parsed = parseYamlSubset(readFileSync(path, "utf8"));
+  if (!parsed || !parsed.ok) {
+    return { ok: false, missing: false, root, path, doc: null, what: (parsed && parsed.error && parsed.error.what) || "unknown" };
+  }
+  return { ok: true, missing: false, root, path, doc: parsed.value };
+}
+
 async function driverPolicyDenial(processName) {
   if (!processName) return null;
   let gate;
@@ -182,15 +220,11 @@ async function driverPolicyDenial(processName) {
     return null; // no policy library in this tree -- nothing has been declared, nothing to enforce
   }
   try {
-    const root = gate.policyRoot();
-    const { readFileSync, existsSync } = await import("node:fs");
-    const { join } = await import("node:path");
-    const canon = join(root, "processes", `${processName}.process.yaml`);
-    if (!existsSync(canon)) return null; // arc-run reports the missing process better than we can
-    const { parseYamlSubset } = await import("../yaml-subset.mjs");
-    const parsed = parseYamlSubset(readFileSync(canon, "utf8"));
-    const doc = parsed && parsed.ok ? parsed.value : null;
-    const verdict = gate.authorizeRun({ processName, doc, root });
+    // ONE READER (see canonicalDoc). This function used to open the file itself, which is how
+    // the gate came to validate one copy while two drivers shaped their dispatch from another.
+    const read = await canonicalDoc(processName);
+    if (read.missing) return null; // arc-run reports the missing process better than we can
+    const verdict = gate.authorizeRun({ processName, doc: read.doc, root: read.root });
     if (!verdict.inForce) {
       process.stderr.write(`arc-driver: NOTICE ${verdict.reason} — this run is unpoliced\n`);
       return null;
