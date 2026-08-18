@@ -176,7 +176,82 @@ one real article renders at a real URL.
 
 ## Now
 
-**Updated 2026-08-17. THE MACHINE IS DONE. Everything that remains is elapsed time.**
+**Updated 2026-08-18 — the owner delegated the open calls to this session ("ellame neeye pannu"),
+so the four that were waiting on a keystroke are now ruled and recorded here. Everything below the
+next divider is the 2026-08-17 entry, kept verbatim.**
+
+**Two paragraphs further down are STALE and are corrected here rather than deleted, because the
+lesson is about the tracker.** The 2026-08-16 layer still says Cloudflare is *"still proxied"* and
+that *"THE CLOCK IS NOT RUNNING"*. Both were true when written and neither is true now — line 87 and
+item 3 of the owner list already record the un-proxy as DONE, so **this file has been disagreeing
+with itself in three places for two days.** Re-verified against the live host on 2026-08-18:
+`server: Vercel`, **no `CF-RAY`**, our own `robots.txt` served (`Allow: /` plus the sitemap line),
+no `noindex` meta tag anywhere, and `sitemap-0.xml` carrying exactly three URLs — the homepage and
+the two live articles. The clock is running and the crawl path is correct **by design now, not by
+the cover of a `noindex` tag**.
+
+**The four inbox approvals are recorded.** Growth phases 02, 03, 04 and 05 were approved on
+2026-08-18 on the owner delegation, each with its evidence bundle named in the approval reason.
+The growth section of the HQ inbox is empty.
+
+**RULING 1 — the receipt-less first article: OPTION 1, re-publish it through the path.** The choice
+was between (1) a trivial PR that gives `receipts-driven-os` a real `pr_ref`, (2) making `pr_ref`
+nullable by ADR, and (3) accepting the gap. Option 2 amends a closed key set on a company organ to
+paper over one historical accident, which is the tail wagging the dog. Option 3 leaves arc's own
+site carrying a page the spine does not know about, in a cycle whose entire subject is receipts.
+**Option 1 costs one merge click and is the only one that ends with a true receipt.** It is also
+time-critical rather than tidy-minded: the measurement window is 2026-08-16 → 2026-08-23 and that
+article is one of only two live, so every day it stays unjoined is real click data leaving the
+EVO-H0 feed permanently.
+
+**RULING 2 — `yc s23`: KILLED, and it costs nothing.** It is a headline fragment, not a topic — the
+search behind it is "who was in the YC S23 batch", a directory lookup arc cannot serve without
+writing about YC rather than about arc, which the POV floor and E3 would both refuse. ADR-1116 named
+this class as explicitly NOT fixed by the residue rule and left it to gate 1, a human reading the
+proposal; this is that gate firing, on schedule, for the case it was left open for. **The kill does
+not shrink the target**: REQ-09 narrowed to cluster-complete = pillar + ≥5 spokes, and `c-001` holds
+7 spokes, so 6 remain and 5 are needed. The approved cluster file is NOT edited — it is the mined
+record of what was found, and rewriting an approved plan to match a later editorial call is exactly
+the attribution hole `cluster_id`-from-the-plan exists to prevent.
+
+**A gate defect surfaced on 2026-08-18, the code was innocent, and the FIRST repair was worse than
+the bug.** The A/B arm fix (PR #206) turned five CI legs red on a test asserting growth names no
+`experiment.*` spine kind. The scan was one broad grep, and a comment in the fix ended a sentence
+with the word *experiment* followed by a full stop. **Nothing was emitted; an English sentence was
+indistinguishable from an event kind.** The lane writes about experiments for a living, so this was
+a recurring false positive, and a gate that cries wolf is a gate that eventually gets edited to fit
+whatever tripped it.
+
+**The repair was written, judged strictly stronger by its own author, and then taken apart by two
+fresh adversarial passes — this line is the correction of a claim made earlier in this same
+entry.** The first repair skipped comment-shaped lines and scanned for six named kinds. Both
+attackers, working different surfaces and sharing almost no findings, returned the same verdict:
+**weaker than the single grep it replaced.** Demonstrated, not argued — the registry holds **eight**
+kinds and the list was a hand-typed copy of six, so `experiment.rolled_back` and `promotion.proposed`
+were already missing; a line opening with `*` is not a comment, and a generator method and a wrapped
+operator continuation both emitted real receipts under node while the gate reported clean; the
+exclusion re-anchored on any `:12: //` inside the matched line, a form this repo writes constantly;
+`grep | grep -v || true` always exits 0, so the status assertion was decorative; a NUL byte or one
+bad multibyte sequence makes grep call a file binary and stop reporting lines, and `evolve/board.mjs`
+carries two raw NULs today; and the negative control **passed with zero fixtures on disk**, because
+every assertion read `[ -n "$output" ]` and bats satisfies that with grep own error text.
+
+**The second repair stops guessing which lines are comments.** Nothing is excluded; both signals
+match shapes only code produces. The kind list is now READ from the registry and fails loudly unless
+it is exactly eight, so extending the closed set breaks this suite instead of widening the hole.
+`grep` runs directly rather than inside a shell string, so its real exit status is the it-ran
+assertion. **Declared limit, written into the test rather than left silent:** a kind assembled at
+runtime from parts is invisible to any literal scan and was invisible to the original too — ADR-1102
+answered that class for E2 with a parse of the module graph, and the same answer belongs here.
+**Follow-up, tracked not dropped:** extend the existing `guard.mjs` graph parse to refuse an
+`EXPERIMENT_KINDS` member reaching an emit call. That is a new capability and goes through
+`/arc-change`, not into this fix.
+
+**The lesson is the one already in CLAUDE.md, paid for again:** the author of a gate cannot be its
+attacker. The author-written breaking inputs for this repair found one hole. Two unanchored agents
+found twelve, four of them demonstrated with a real spine emission under node.
+
+---
 
 The owner merged arc-site **#2** and **#3** on 2026-08-16, and the two things that had gated this
 lane since 2026-08-12 both fell in the same minute:
