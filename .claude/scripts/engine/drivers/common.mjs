@@ -176,11 +176,24 @@ export async function canonicalRoot() {
 /**
  * THE CANONICAL PROCESS DOCUMENT, read ONCE from the machinery root (ADR-0220, ADR-0223).
  *
- * `driverPolicyDenial` validates this document and `drivers/hermes` derives the runtime's toolset
- * allowlist from it (ADR-0224). Those two must be looking at the same bytes: a gate that validates
- * one read while the dispatch is shaped by another is the defect this lane has now closed in
- * `verdict.mjs`, in `lineage.mjs`, inside `arc-run.mjs` and — found by an adversarial pass — in two
- * drivers at once. One reader, so there is no second copy to drift.
+ * EVERY DRIVER-SIDE CONSUMER GOES THROUGH HERE: `driverPolicyDenial` validates the document,
+ * `drivers/hermes` derives the runtime's toolset allowlist from it (ADR-0224), and
+ * `drivers/claude-code` and `drivers/codex` build their prompt and their tool grant from it. Those
+ * must all be looking at the same bytes: a gate that validates one read while the dispatch is shaped
+ * by another is the defect this lane has closed in `verdict.mjs`, in `lineage.mjs` and inside
+ * `arc-run.mjs`.
+ *
+ * THE FIRST VERSION OF THIS COMMENT OVERCLAIMED, and an adversarial pass said so. It read "one
+ * reader, so there is no second copy to drift" while `claude-code.mjs` and `codex.mjs` still each
+ * opened the file themselves — sharing the ROOT was only half the fix, and the pass demonstrated the
+ * two reads seeing different bytes when something writes between them. Both now call this.
+ *
+ * WHAT IS STILL OUTSIDE, NAMED RATHER THAN IMPLIED: `arc-run.mjs` reads its own copy from its own
+ * `root` (`--root` / `$ARC_ROOT` / git toplevel) to validate the driver's OUTPUT against the schema.
+ * In the normal case that resolves to the same tree; where it does not, arc-run would judge a result
+ * against a contract the driver never executed. Fixing that means touching ADR-0220's work-root seam
+ * and is deliberately not bundled here. `arc-bench.mjs` also reads process files and belongs to
+ * another lane.
  *
  * It returns a RESULT rather than throwing, because the three callers want different things from a
  * miss: the gate treats an absent file as "arc-run reports this better than we can", and a driver

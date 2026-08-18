@@ -239,13 +239,37 @@ absence of information is not a narrow claim, and refusing an undeclared process
 that announced nothing and failed on one that announced correctly. Stashed before the helper now,
 with the reason in the test.
 
-**THE ADVERSARIAL PASS ON ADR-0224 IS OWED, AND THIS IS THE FLAG.** CLAUDE.md says a gate is not done
-until two fresh agents on different surfaces have attacked it, and today proved that rule five times
-over on ADR-0223. Both attackers were launched against this change and both died on repeated
-upstream `529 Overloaded` errors, twice each; a third is running. **The branch is pushed so CI can
-run, and it is NOT merged until the pass completes** — the eight tests and the container
-measurements are evidence, not a substitute. If the pass finds nothing, that gets written down too;
-what must not happen is the pass quietly never being mentioned again.
+**THE ADVERSARIAL PASS ON ADR-0224 FOUND TWO HOLES, BOTH REAL, BOTH FIXED.** (It took four
+launches: both attackers died on repeated upstream `529 Overloaded`, twice each, before landing.)
+
+1. **THE GATE AND THE DRIVER DISAGREED ABOUT THE SAME FIELD, and the wider one was the enforcement.**
+   `toolsetsFor` required `permissions: declared` up front, so it discarded the `tools:` list of any
+   file marked `unrestricted` — while `declaredCapabilities` never consults `permissions` past the
+   empty-list branch, because `unrestricted` means *nobody set the coarse field*, not *nothing has
+   been narrowed*. Proven on a real committed file: `processes/kickoff-plan.process.yaml`
+   (`unrestricted`, six tokens) had the GATE reading a narrow declaration while the DRIVER handed the
+   runtime all seventeen toolsets. **This is ADR-0223's own fix relocated instead of generalised** —
+   the empty-list branch got the `permissions` check and the populated one did not. The predicate now
+   matches the gate exactly, and a test asserts the two never disagree about DIRECTION across twelve
+   shapes rather than asserting a value.
+
+2. **`canonicalDoc` was not the sole reader, and its own docstring said it was.** `claude-code.mjs`
+   and `codex.mjs` still each opened the file. Sharing the ROOT was half the fix; sharing the READ is
+   the other half, and the pass demonstrated the two reads seeing different bytes with a writer in
+   between. Both now call it, three now-dead imports removed, **and the overclaiming comment is
+   rewritten** — the second time in one day that a comment of mine claimed more than the code did.
+
+**NAMED RESIDUAL, not fixed tonight:** `arc-run.mjs` still reads its own copy of the process file
+from its own `root` (`--root`/`$ARC_ROOT`/git toplevel) to validate the driver's OUTPUT, while the
+drivers now read from `policyRoot()`. Normally the same tree; where it is not, arc-run would judge a
+result against a contract the driver never executed. Fixing it means touching ADR-0220's work-root
+seam, so it is written down rather than bundled. `arc-bench.mjs` also reads process files and belongs
+to another lane.
+
+**Also pinned rather than tidied: `web.search` exists in the adapter's `TOOL_MAP` and in neither
+other table.** Harmless today (an unclassified token makes the gate declare everything, so the run is
+denied before a driver acts) and *classifying* it would WIDEN it, which is a reviewed-diff decision.
+A test now names it as the one known gap and fails on any NEW drift between the three tables.
 
 **ADR-0221 clause 4 needs its amendment written:** the `-t vision` run produced a COMPLETE usage
 report (`input_tokens 2134`, `output_tokens 193`, `api_calls 1`, model), so the reader that ADR calls
