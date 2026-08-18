@@ -87,10 +87,44 @@ const run = (doc, over={}, events=[]) =>
   [ "$output" = "8 false" ]
 }
 
-@test "an empty tools list declares everything rather than nothing" {
-  run _node "$PRE console.log(run({ permissions:'declared', tools:[] }).declared.length);"
+@test "an EXPLICITLY empty tools list declares NOTHING -- absence and emptiness are different inputs" {
+  # `tools: []` is the narrowest statement this vocabulary can make, and reading it as "declares
+  # everything" inverted the gate on the strictest file in the repo. build-in-public-draft holds
+  # zero tools precisely so it can never commit or publish, and was blocked by every L0 in its
+  # own row for saying so -- while `tools: [ask.human]`, which maps to the identical empty set,
+  # sailed through. Same effective declaration, opposite verdicts, and the stricter file lost.
+  #
+  # This test replaces one that asserted the old reading (`declares everything rather than
+  # nothing`). The rule and the test that protected it were wrong together, which is why fixing
+  # only the module would have been reverted by CI.
+  run _node "$PRE
+    const g = run({ permissions:'declared', tools:[] });
+    console.log(g.declared.length + ' ' + g.mayInvoke + ' denials=' + g.denials.length);"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ "$output" = "8" ]
+  [ "$output" = "0 true denials=0" ]
+}
+
+@test "negative control: an ABSENT tools key still declares everything" {
+  # The half of the old behaviour that was RIGHT, pinned so the fix above cannot over-apply. A
+  # file that never said what it needs has told the gate nothing, and deny-by-default assumes the
+  # worst. If this ever reports 0, silence has become a free pass.
+  run _node "$PRE
+    const g = run({ permissions:'declared' });
+    console.log(g.declared.length + ' ' + g.mayInvoke);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "8 false" ]
+}
+
+@test "negative control: tools present but null, scalar or mapping is an absence, not an empty list" {
+  # `tools:` with nothing after it parses as YAML null; `tools: everything` parses as a string.
+  # Neither is a list, so neither makes the STATEMENT `tools: []` makes -- they are malformed,
+  # and malformed assumes the worst. This is the exact seam an over-eager "empty means nothing"
+  # reading would leak through, so every non-list shape is enumerated rather than sampled.
+  run _node "$PRE
+    const shapes = [null, undefined, 'everything', {}, 0, false, ''];
+    console.log(shapes.map(t => run({ permissions:'declared', tools:t }).declared.length).join(','));"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "8,8,8,8,8,8,8" ]
 }
 
 @test "a tool entry that parses as a mapping does not throw" {
@@ -448,9 +482,123 @@ EOF
   [[ "$output" != *"policy denied"* ]] || { echo "a tree with no policy library was denied: $output"; false; }
 }
 
+@test "an empty tools list under permissions: unrestricted still declares everything" {
+  # ADR-0223 clause 2, and the first thing an adversarial pass broke about clause 1. `unrestricted`
+  # means "nobody has narrowed this file yet" -- the adapters and drivers emit NO allowed-tools line
+  # for it, and an ABSENT line is UNRESTRICTED. So `unrestricted` + `tools: []` reaching the
+  # empty-declaration arm would put the gate and the driver in exact opposition on one file: the
+  # gate answering "asks for nothing" about the very document the driver hands the default tool set
+  # to. Measured before the fix: lint-clean, gate-clean, and compiled to an unrestricted command.
+  #
+  # This test is also what makes the `permissions` term in that predicate load-bearing: delete it
+  # and the empty-list branch is dead code the loop would reproduce anyway.
+  run _node "$PRE
+    const u = run({ permissions:'unrestricted', tools:[] });
+    const d = run({ permissions:'declared',     tools:[] });
+    console.log(u.declared.length + ' ' + u.mayInvoke + ' | ' + d.declared.length + ' ' + d.mayInvoke);"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ "$output" = "8 false | 0 true" ]
+}
+
+@test "BYPASS -- a declared process with an EMPTY grant is refused by the driver, not silently widened" {
+  # ADR-0223 clause 4. `adapters/claude-code.mjs` throws on this, because an absent --allowedTools
+  # means UNRESTRICTED: the most restrictive declaration a process can make otherwise reaches the
+  # CLI byte-identical to the most permissive one. `drivers/claude-code.mjs` reused the adapter's
+  # MAPPING and not its RULE, so the rule held at compile time and not at dispatch -- and for a
+  # baseline-waived process arc-compile never renders the command, so the compile-time refusal
+  # never runs at all. The run gate was the only thing standing there, and ADR-0223 moved it.
+  #
+  # ARC_DRIVER_FAKE is deliberately NOT used: `fakeResponse` returns BEFORE produce(), so a fake
+  # recording would make this pass without the refusal ever being reached.
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/processes" "$d/.claude"
+  cp -r "$ARC_ROOT/.claude/scripts" "$d/.claude/"
+  cat > "$d/processes/empty-grant.process.yaml" <<'EOF'
+name: empty-grant
+version: 1.0.0
+permissions: declared
+inputs: []
+tools: []
+output:
+  type: object
+body: |
+  BODY
+EOF
+  run env ARC_CLAUDE_CLI=definitely-not-a-real-cli \
+    bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run empty-grant '{}' ''
+  [ "$status" -ne 0 ] || { echo "an empty grant reached the CLI"; echo "$output"; false; }
+  [[ "$output" == *"empty grant set"* ]] || { echo "the driver did not refuse the empty grant: $output"; false; }
+  # It must die at the REFUSAL, not at the CLI -- otherwise this passes on any missing binary.
+  [[ "$output" != *"claude CLI failed"* ]] || { echo "the driver reached the CLI before refusing: $output"; false; }
+
+  # NEGATIVE CONTROL: the refusal is conditional. A process that declares real tools must sail past
+  # it and die at the CLI instead, or the assertion above is satisfied by a driver that refuses
+  # everything.
+  cat > "$d/processes/has-grant.process.yaml" <<'EOF'
+name: has-grant
+version: 1.0.0
+permissions: declared
+inputs: []
+tools:
+  - fs.read
+output:
+  type: object
+body: |
+  BODY
+EOF
+  run env ARC_CLAUDE_CLI=definitely-not-a-real-cli \
+    bash "$d/.claude/scripts/engine/drivers/claude-code.sh" run has-grant '{}' ''
+  [[ "$output" == *"claude CLI failed"* ]] || { echo "a process WITH tools was also refused: $output"; false; }
+}
+
+@test "BYPASS -- a hostile ARC_ROOT cannot hand a driver a process file the gate never saw" {
+  # ADR-0223 clause 5. `driverPolicyDenial` validates the canonical file at policyRoot(); the CLI
+  # drivers read their prompt and their tool grant from $ARC_ROOT. Two reads, two files, one
+  # verdict -- "validate one read, compare another", which this lane has now closed in verdict.mjs,
+  # in lineage.mjs and inside arc-run.mjs itself (whose comment records shutting exactly this door:
+  # a target tree could widen its own grant). The driver copies were left open, in claude-code.mjs
+  # and again in codex.mjs. ADR-0220 already assigns `processes/` to the machinery root, so this
+  # applies a standing rule rather than deciding a new one.
+  #
+  # The REAL scripts are invoked on purpose. Copying them into the sandbox would move policyRoot()
+  # into the sandbox too, and the two roots would agree again -- testing nothing.
+  local d; d="$(mktemp -d)"
+  mkdir -p "$d/processes"
+  cat > "$d/processes/only-in-hostile.process.yaml" <<'EOF'
+name: only-in-hostile
+version: 1.0.0
+permissions: declared
+inputs: []
+tools:
+  - fs.write
+  - shell.run
+output:
+  type: object
+body: |
+  ATTACKER BODY
+EOF
+  local hostile; hostile="$(basename "$d")"
+  run env ARC_ROOT="$d" ARC_CLAUDE_CLI=definitely-not-a-real-cli \
+    bash "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.sh" run only-in-hostile '{}' ''
+  [ "$status" -ne 0 ] || { echo "the driver ran a process that exists only in a hostile ARC_ROOT"; echo "$output"; false; }
+  # Separator-free assertions only: this suite has already shipped a path check that passed on
+  # ubuntu and macOS and failed on windows alone. A mktemp basename is unique, so its ABSENCE from
+  # the resolution error is the discriminator -- the driver never looked inside the hostile tree.
+  [[ "$output" == *"only-in-hostile.process.yaml"* ]] || { echo "$output"; false; }
+  [[ "$output" != *"$hostile"* ]] || { echo "the driver resolved the process inside the hostile ARC_ROOT: $output"; false; }
+  [[ "$output" != *"ATTACKER BODY"* ]] || { echo "the hostile body reached the driver: $output"; false; }
+
+  # NEGATIVE CONTROL: a process that DOES live in the machinery root still resolves and dies at the
+  # CLI. Without it, the assertions above are satisfied by a driver that can no longer find any
+  # process at all.
+  run env ARC_ROOT="$d" ARC_CLAUDE_CLI=definitely-not-a-real-cli \
+    bash "$ARC_ROOT/.claude/scripts/engine/drivers/claude-code.sh" run commit-msg-draft '{}' ''
+  [[ "$output" == *"claude CLI failed"* ]] || { echo "a real process was not resolved from the machinery root: $output"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 28 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 28 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 33 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 33 -- a @test was silently dropped"
     false
   }
 }

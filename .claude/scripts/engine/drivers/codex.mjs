@@ -13,15 +13,19 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalRoot, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 import { parseYamlSubset } from "../yaml-subset.mjs";
 import { render as renderCodex } from "../adapters/codex.mjs";
 
 const CLI = process.env.ARC_CODEX_CLI || "codex";
-const ROOT = process.env.ARC_ROOT || process.cwd();
+// The work root -- the child cwd, and nothing else. The canonical process file is read from the
+// MACHINERY root instead (ADR-0220 splits them; ADR-0223 records why it matters): the policy gate
+// validates the file at policyRoot(), so a driver building its prompt and its tool grant from a
+// file at $ARC_ROOT is validating one read and using another.
+const WORK_ROOT = process.env.ARC_ROOT || process.cwd();
 
 await runDriver("codex", async ({ processName, input }) => {
-  const canonPath = join(ROOT, "processes", `${processName}.process.yaml`);
+  const canonPath = join(await canonicalRoot(), "processes", `${processName}.process.yaml`);
   const parsed = parseYamlSubset(readFileSync(canonPath, "utf8"));
   if (!parsed.ok) throw new Error(`canonical file does not parse: ${parsed.error.what}`);
 
@@ -37,7 +41,7 @@ await runDriver("codex", async ({ processName, input }) => {
 
   let raw;
   try {
-    raw = execFileSync(CLI, ["exec", "--json", prompt], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: ROOT });
+    raw = execFileSync(CLI, ["exec", "--json", prompt], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
   } catch (e) {
     throw new Error(`codex CLI failed: ${String(e.message).split("\n")[0]}`);
   }

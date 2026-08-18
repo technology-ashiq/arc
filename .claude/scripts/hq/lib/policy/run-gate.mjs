@@ -58,8 +58,46 @@ export const TOOL_CAPABILITIES = Object.freeze(Object.assign(Object.create(null)
  */
 export function declaredCapabilities(doc) {
   if (!doc || typeof doc !== "object") return new Set(CAPABILITIES);
-  const tools = Array.isArray(doc.tools) ? doc.tools : [];
-  if (tools.length === 0) return new Set(CAPABILITIES); // nothing to go on -- assume the worst
+  /**
+   * AN ABSENT `tools:` AND AN EXPLICITLY EMPTY ONE ARE DIFFERENT INPUTS, and collapsing them
+   * inverted this gate on the narrowest file in the repo (ADR-0223).
+   *
+   * `tools:` missing, `tools:` with nothing after it (YAML null), or `tools:` holding a scalar
+   * are all an ABSENCE OF INFORMATION -- the file never said what it needs, so deny-by-default
+   * assumes the worst and every capability is declared.
+   *
+   * `tools: []` under `permissions: declared` is not an absence. It is a STATEMENT, and the
+   * narrowest one this vocabulary can make: this process asks for nothing. Reading that as
+   * "asks for everything" meant a process holding zero tools was blocked by every L0 in its own
+   * row, while `tools: [ask.human]` -- which maps to the identical empty capability set, since a
+   * prompt to a human is not a capability the machine holds -- sailed through. Same effective
+   * declaration, opposite verdicts, and the stricter file was the one that lost.
+   *
+   * THE `permissions` FIELD IS PART OF THE PREDICATE, and leaving it out was the first thing an
+   * adversarial pass broke. `unrestricted` means "nobody has narrowed this file yet" -- the
+   * adapters and drivers emit NO allowed-tools line for it, and an absent line is UNRESTRICTED.
+   * So `unrestricted` + `tools: []` reaching the empty-declaration arm would put the gate and the
+   * driver in exact opposition on one file: the gate answering "asks for nothing" while the
+   * driver hands over the default tool set. That is this same inversion entering from the other
+   * side, so only `declared` earns the narrow reading.
+   *
+   * WHAT THIS DOES AND DOES NOT BUY, stated honestly because the first draft of this comment
+   * overclaimed it. The declaration is what the ADAPTERS and the CLI DRIVERS pass on: a
+   * `declared` process with no tools renders no grant, and both `adapters/claude-code.mjs` and
+   * `drivers/claude-code.mjs` now REFUSE that rather than omitting the line. It is NOT a
+   * universal runtime boundary: `drivers/hermes.mjs` reads no tools at all (an agent runtime is
+   * constrained by its container and its egress policy, not by this list), and the interactive
+   * PreToolUse hook judges `session:interactive` rather than the process kind. So the guarantee
+   * here is narrow and real -- a process declaring nothing is handed nothing by the surfaces that
+   * hand tools over -- rather than the blanket "every tool is gated downstream" it first claimed.
+   *
+   * POL-D says a process may request LESS than its grant. Requesting nothing is the limit case of
+   * less, not a hole in the rule.
+   */
+  if (!Array.isArray(doc.tools)) return new Set(CAPABILITIES);
+  const tools = doc.tools;
+  if (tools.length === 0)
+    return doc.permissions === "declared" ? new Set() : new Set(CAPABILITIES);
   const out = new Set();
   for (const raw of tools) {
     // A token appears as `shell.run`, as `shell.run:` (a trailing colon), or -- when it carries
