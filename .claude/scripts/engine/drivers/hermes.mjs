@@ -750,11 +750,48 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
     process.stderr.write(`hermes: swept ${sweptCount} stale workspace(s) left by dispatches that were killed rather than exited (ADR-0222)\n`);
   }
 
+  /**
+   * THE PROCESS BRIEF REACHES THE RUNTIME. It never did, and that was the whole confound.
+   *
+   * This prompt used to be three lines: the process NAME, an instruction to reply with one JSON
+   * document, and the input. No body, no output contract, no description of a single field. For
+   * four sessions this cycle recorded that "the runtime does not reliably honour a one-shot output
+   * contract" and offered four explanations -- the parser, the config, the model tier, and then the
+   * seventeen default toolsets (ADR-0224). Every one of them was wrong, and the last was wrong
+   * because the comparison behind it changed two variables at once.
+   *
+   * ISOLATED 2026-08-19, same pack, same image, same key, ONE variable at a time:
+   *
+   *   thin prompt + all 17 toolsets    fail, `$.draft` absent          (3 dispatches, 2 attempts each)
+   *   thin prompt + `-t vision`        fail, `$.draft` absent          (3 dispatches, 2 attempts each)
+   *   full prompt + `-t vision`        exit 0,  55 s, a valid draft
+   *   full prompt + all 17 toolsets    exit 0,  62 s, a valid draft
+   *
+   * The runtime was being told a process NAME and asked for JSON. It was never told the contract had
+   * a `draft` field, so `$.draft: required property is absent` is the only honest thing it could
+   * have produced. `drivers/claude-code.mjs` has always sent `doc.body`; this driver was written
+   * without it and nothing compared the two.
+   *
+   * A DOC THAT CANNOT BE READ FALLS BACK AND SAYS SO, rather than refusing: `demo` and every
+   * fixture process in the suite have no canonical file, and the gate is what refuses an undeclared
+   * process. A silent fallback is what hid this for four sessions, so it is announced.
+   */
+  const declared = await canonicalDoc(processName);
+  const brief = declared.ok && typeof declared.doc?.body === "string" && declared.doc.body.trim()
+    ? declared.doc.body
+    : null;
+  if (!brief) {
+    process.stderr.write(`hermes: NO PROCESS BRIEF for ${processName}${declared.missing ? " (no canonical file)" : declared.ok ? " (the file declares no body)" : " (unreadable)"} — the runtime is being told a process NAME and nothing else\n`);
+  }
+
   const prompt = [
-    `You are executing the arc process \`${processName}\`.`,
-    "Reply with ONE JSON document as the final line of your output and nothing after it.",
+    brief ?? `You are executing the arc process \`${processName}\`.`,
     "",
+    "---",
+    "INPUT (JSON):",
     JSON.stringify(input),
+    "",
+    "Reply with ONE JSON document matching this process's output contract, and nothing else.",
   ].join("\n");
 
   // `randomUUID`, not `pid + ms`. An adversarial pass flagged the old name as too weak: two drivers
@@ -1093,7 +1130,8 @@ if (isEntryPoint) await runDriver("hermes", async ({ processName, input }) => {
   // A DISARMED GUARD MUST NEVER BE SILENT: when the declaration cannot be narrowed, the wide
   // posture is announced rather than assumed, the same contract PreToolUse.sh keeps for a missing
   // dispatcher and this driver already keeps for an unconfined egress.
-  const declared = await canonicalDoc(processName);
+  // Reuses the document read before the prompt: ONE read, two consumers. It used to be read
+  // twice, which is the shape that let the gate validate one copy while the dispatch used another.
   const toolsets = declared.ok ? toolsetsFor(declared.doc) : "";
   if (toolsets) {
     const unknown = toolsets.split(",").filter((t) => !KNOWN_TOOLSETS.includes(t));

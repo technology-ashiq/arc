@@ -1,15 +1,25 @@
 #!/usr/bin/env bats
-# engine-hermes-toolsets.bats -- ADR-0224: what the runtime may reach for is what the process declared.
+# engine-hermes-toolsets.bats -- what the runtime is TOLD and what it may REACH FOR, both derived
+# from the one process declaration (ADR-0224, and its 2026-08-19 amendment).
+#
+# The file name says toolsets because that is what it started as. It covers the prompt too, and
+# deliberately in one place: both halves come from the same `canonicalDoc` read, and the bug that
+# cost this cycle four sessions was that ONE of them was missing while the other looked fine.
 #
 # WHAT IS ASSERTED HERE AND WHAT IS NOT. These tests assert the ARGV the driver builds, through the
-# fake-docker recorder, plus the pure derivation. They do NOT prove that a restricted toolset makes
-# the runtime answer in one shot -- that was measured against real containers on 2026-08-18 and is
-# written up in `initiatives/engine/evidence/phase-08/req07-toolsets-are-the-confound.md`:
+# fake-docker recorder, plus the pure derivation. Runtime BEHAVIOUR was measured against real
+# containers and is written up in `initiatives/engine/evidence/phase-08/req07-what-the-runtime-was-told.md`.
+# The isolated grid, one variable at a time -- the first version of this header quoted the CONFOUNDED
+# pair instead, which is how the wrong cause reached an ADR:
 #
-#   all 17 toolsets   3 dispatches, 2 attempts each, 150-307 s, `$.draft` absent every time
-#   -t vision         exit 0, 55 s, ONE api call, a valid draft citing its pack entry
-#   -t ""             FAIL-OPEN -- 3 api calls, 30,248 input tokens, the full agentic shape
-#   -t none           exit 2, no output, no usage report
+#   thin prompt + all 17     fail, `$.draft` absent      thin prompt + -t vision   fail, same
+#   full prompt + -t vision  exit 0, 55 s, a draft       full prompt + all 17      exit 0, 62 s, a draft
+#
+# So the PROMPT is what decides whether an answer arrives. What the toolset flag decides is what the
+# runtime may reach for while producing it, which is an isolation property and is why it is still here:
+#
+#   -t ""     FAIL-OPEN -- 3 api calls, 30,248 input tokens, the full seventeen-toolset shape
+#   -t none   exit 2, no output, no usage report (and ENG-D reads 2 as BUDGET_DECLINED)
 #
 # The split is the same one engine-hermes-egress.bats makes and for the same reason: a CI runner has
 # no Docker and no image, so a suite that tried to prove runtime BEHAVIOUR here would skip on every
@@ -85,6 +95,12 @@ toolsets_exclude() {
   local want="$1" got; got="$(toolset_value)"
   case ",$got," in *",$want,"*) echo "-t carries [$got], which must not include [$want]"; return 1;; esac
   return 0
+}
+
+# What the runtime is actually TOLD -- the `-z` argument, extracted the same way and for the same
+# reason as the toolset value.
+prompt_value() {
+  node -e 'const fs=require("node:fs");const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8").trim().split("\n").pop());const i=a.indexOf("-z");process.stdout.write(i<0?"":String(a[i+1]??""));' "$ARGV"
 }
 
 # ---------------------------------------------------------------------------
@@ -311,9 +327,64 @@ toolsets_exclude() {
   [[ "$output" == *"no unpinned drift" ]]
 }
 
+# ---------------------------------------------------------------------------
+# What the runtime is TOLD -- the other half of the same declaration
+# ---------------------------------------------------------------------------
+
+@test "the prompt carries the process BRIEF and its output contract, not just the process name" {
+  # THE CONFOUND THAT COST THIS CYCLE FOUR SESSIONS. This driver's prompt was three lines -- the
+  # process NAME, "reply with one JSON document", and the input. No body, no contract, not one field
+  # name. `$.draft: required property is absent` was the only honest thing the runtime could produce,
+  # because nothing had ever told it the contract HAS a `draft`. `drivers/claude-code.mjs` has always
+  # sent `doc.body`; nothing compared the two.
+  #
+  # Isolated 2026-08-19, one variable at a time, same pack and image and key:
+  #   thin prompt + all 17 toolsets   fail        thin prompt + `-t vision`      fail
+  #   full prompt + `-t vision`       a draft     full prompt + all 17 toolsets  a draft
+  # The toolsets were never the answer-reliability cause; ADR-0224 says so now, amended.
+  run --separate-stderr bash "$DRIVER" run build-in-public-draft '{"pack_ref":"p","pack":"PACKMARKER"}' min=5
+  [ "$status" -eq 0 ] || { echo "$output"; echo "$stderr"; false; }
+  read_argv
+  local p; p="$(prompt_value)"
+  [ -n "$p" ] || { echo "no -z prompt in the argv at all"; false; }
+  # The BRIEF itself, by a line only the process body contains.
+  [[ "$p" == *"Draft ONE short build-in-public post"* ]] || {
+    echo "the process brief did not reach the runtime; prompt was: ${p:0:200}"; false; }
+  # And every field of the output contract it is being asked to satisfy.
+  local missing=""
+  for k in draft sources task-class pack-ref; do
+    case "$p" in *"$k"*) ;; *) missing="$missing $k";; esac
+  done
+  [ -z "$missing" ] || { echo "the prompt never names these contract fields:$missing"; false; }
+  # POSITIVE control that the input still rides along -- a brief with no input is the opposite bug.
+  [[ "$p" == *"PACKMARKER"* ]] || { echo "the input did not reach the runtime"; false; }
+}
+
+@test "NEGATIVE CONTROL -- a process with no brief still runs, falls back, and SAYS so" {
+  # `demo` and every fixture process have no canonical file. Refusing them would break the suites and
+  # is the gate's job anyway. What must not happen is the SILENT fallback that hid the bug above for
+  # four sessions, so the thin prompt is announced.
+  run --separate-stderr bash "$DRIVER" run demo '{"q":1}' min=5
+  [ "$status" -eq 0 ] || { echo "$output"; echo "$stderr"; false; }
+  local said="$stderr"
+  read_argv
+  local p; p="$(prompt_value)"
+  [[ "$p" == *"You are executing the arc process"* ]] || { echo "unexpected fallback prompt: ${p:0:120}"; false; }
+  [[ "$said" == *"NO PROCESS BRIEF for demo"* ]] || { echo "the missing brief was silent: $said"; false; }
+}
+
+@test "the canonical document is read exactly ONCE per dispatch" {
+  # The prompt and the toolset allowlist both derive from it. Two reads is the shape that let the
+  # gate validate one copy while the dispatch used another -- already fixed once in this driver and
+  # in two others, so it is pinned rather than remembered.
+  cd "$ARC_ROOT"
+  local n; n="$(grep -c 'await canonicalDoc(processName)' .claude/scripts/engine/drivers/hermes.mjs)"
+  [ "$n" -eq 1 ] || { echo "canonicalDoc is called $n times in hermes.mjs, expected exactly 1"; false; }
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 14 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 14 -- a @test was silently dropped"
     false
   }
 }
