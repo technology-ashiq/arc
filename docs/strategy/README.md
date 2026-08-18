@@ -12,16 +12,16 @@
 Still steering decisions → **root** · feeds `/arc-kickoff` → **`plans/`** · rationale
 that no longer changes but briefs cite → **`records/`** · superseded/dead → **`docs/archive/`**.
 
-## File map & status (updated 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
+## File map & status (updated 2026-08-18 — PLAN-face promoted from BRIEF-dashboard under the owner's Build-out Mandate; 2026-08-12 — PLAN-bench promoted from its brief; 2026-08-10 wave: PLAN-executor + PLAN-scheduler + PLAN-ledger + PLAN-growth + PLAN-memory + PLAN-legal-pack + PLAN-ops + PLAN-trader promoted under the owner's Build-out Mandate)
 
 | File | Status | Role now |
 |---|---|---|
-| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 21 full PLANs + 2 BRIEFs + ordering/triggers in `plans/README.md` |
+| `plans/` (24 files) | **ACTIVE — the operational layer** | Kickoff-ready: 22 full PLANs + 1 BRIEF (chat-mcp) + ordering/triggers in `plans/README.md` |
 | `../../CONSTITUTION.md` | **LAW · adopted v1.0 on 2026-08-06** | The DNA (3 eternal + 10 working articles). At the repo root and in the core manifest, per its own Enforcement clause 1. Receipt: `01KZ9V0QXNNMB3ZH18MSH8DKH3`, pinning sha256 `233a6496…6ee6` — edit the file and that hash stops matching. Tier E is unamendable; a Tier-A amendment is a fresh `constitution.adopted` superseding this one |
 | `arc-master-execution-plan.md` (v1.2) | **ACTIVE — strategy source** | Roadmap, money milestones, operating rhythm, kill criteria, 14-decision log, coverage map. `plans/` operationalizes its §6 trigger table |
 | `arc-company-org-blueprint.md` | **ACTIVE — org lens** (2026-07-25) | The company org-chart view: ~50 roles → modules with EXISTS/PLANNED/MISSING/HUMAN status, the shape rule, flagship grades, standing retro-agenda items. Source of `BRIEF-legal-pack` + growth/leads/ledger v1.1 notes |
 | `arc-full-architecture.md` | ACTIVE — reference | The target picture: 16 modules / kernel–workflows–ventures, model-agnostic engine, evolve contract, data layer. Briefs assume its definitions |
-| `arc-hq-mockup.html` | **ACTIVE — design spec** | The dashboard's visual target; `plans/BRIEF-dashboard.md` cites it as the spec |
+| `arc-hq-mockup.html` | Reference — concept list only (status changed 2026-08-18) | Panels/ideology the 2026-07 HQ concept listed (feed · pipeline · portfolio kill-distance · inbox · autonomy ladder · learning); **superseded as the design spec by `plans/PLAN-face.md`** — the visual answer comes from the design lane's three-thesis blind exploration (FACE-I), never from this mock. Kept in place because the master plan and archived briefs link it |
 | `records/arc-architecture-v2.1-verdicts.md` | Record | Review round-1 adjudication (vocabulary, capability-lint law, policy capability-vector matrix — `plans/PLAN-policy.md` builds on it) |
 | `records/arc-hq-blueprint.md` | Record | HQ concept: autonomy ladder, learning-as-calibration, moat analysis. Absorbed into Cycle-2 plan + policy/evolve/dashboard/chat briefs |
 | `records/arc-money-engine-plan.md` | Record | Original idea scoring (pain-mining 9 · leads-service 8.5 · SaaS factory 8 · video 6/8 · trading 2) and monetization logic. Sequencing superseded by the master plan |
@@ -39,6 +39,7 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
 | ~~`plans/BRIEF-ops.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-ops.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the FIRED Build-out-Mandate trigger with the OPEN live-value REQ-05 row, the OPS-G fold-derived idem formula, the flood-control meta-incident, drill mode with real-vs-drill separation, the heartbeat + deterministic staleness line, the leads private-store PII law for tickets, injection containment with template-locked drafts, policy-enforced L1 (POL-G) + POL-I rows, canary→spine unification resolving the brief's reader-only-vs-canary-history contradiction, the ADR-0408 `metric.observed` conformance with the no-evolve-clock honesty boundary, and the scheduler-job alignment exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-trader.md`~~ | **MOVED → `docs/archive/`** (2026-08-10) | Superseded by `plans/PLAN-trader.md`; kept in archive for history — never feed the brief to a kickoff (the review rounds hardened the plan well past the brief: the two-zone playground/verdict-lab law, the pre-registration + attempt-family + null-monkey + regime honesty battery with the no-WIN verdict vocabulary, the spine-receipt 72h cooldown replacing wall-clock, the ANTI-CASE cooling protocol, the fifth lock condition [compliance review], the no-broker-creds credential inventory, the divergence-as-north-metric paper run and the graceful-degradation slotting exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | ~~`plans/BRIEF-bench.md`~~ | **MOVED → `docs/archive/`** (2026-08-12) | Superseded by `plans/PLAN-bench.md`; kept in archive for history — never feed the brief to a kickoff (two review rounds hardened the plan well past the brief: replay-determinism + the provenance tuple replaced the impossible same-config-same-scores claim, gates-first selection with the NO-PROPOSAL null result [a 70/20/10 composite rejected on the record], K-group admission-controlled budgets, the partial-run proposal bar, split quality/cost comparability with classified cost deltas, enumerated baseline re-pin causes, per-task-class MIN_FIXTURES, the zero-new-kinds spine mapping, the driver-explicit CLI and the REQ-05 preflight exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
+| ~~`plans/BRIEF-dashboard.md`~~ | **MOVED → `docs/archive/`** (2026-08-18) | Superseded by `plans/PLAN-face.md`; kept in archive for history — never feed the brief to a kickoff (the plan hardened well past the brief: the mandate-converted trigger with the REQ-10 live-value milestone, the three-layer contract [zero-dep L2 read door + decision door · L3 face in its own repo], the stamp/chip/seal affordance law with stamps only on `approval.requested`, the MAP and TAPE signatures, the 32-room coverage contract with the room birth-rule + `face-coverage` lint, the honesty classes, the governed engine-process brain, and the design-lane blind exploration exist only in the plan; the brief's kickoff prompt is pre-lane — the plan's is lane-native) |
 | `README.md` (this file) | ACTIVE | You are here |
 
 ## Corrections that override older text in this folder
@@ -490,6 +491,45 @@ that no longer changes but briefs cite → **`records/`** · superseded/dead →
     never proposes · three-tier champion drift guard on split quality/cost comparability axes with
     enumerated baseline re-pin causes · zero new spine kinds. Inherits MP-F (ADR-0069) and absorb's
     ABS-D owner-judge grammar. `plans/BRIEF-bench.md` superseded → moved to `docs/archive/`.
+
+24. **2026-08-18:** `plans/PLAN-face.md` added (arc face v1 — "the working HQ": one surface
+    that IS arc operating — every product, lane, pipeline, gate, receipt kind and concept,
+    built and planned, as live views over the ONE spine + the sanctioned tracker files;
+    v1.0, landed owner-instructed 2026-08-18 from a Cowork session after a full-tree sweep
+    and a fresh adversarial review; decisions FACE-A…P named as letters; ADR numbers at
+    kickoff from the century claimed per `PORTFOLIO.md` — NEW lane `face`). **Trigger
+    converted under the owner's Build-out Mandate (2026-08-09 — same receipt as correction
+    #15, cited by the kickoff ADRs; A8's letter kept; honesty note in-file: the brief's pull
+    [brief overflows one screen / ≥3 earning ventures] never organically fired — `arc-brief`
+    auto-collapses at 40 lines and 0 ventures earn — and no receipt is invented; the pull
+    survives as REQ-10's live-value milestone: ≥5 real days with every owner decision going
+    through the face).** Core beyond the brief: **three layers** — L1 truth (spine reader +
+    the lints' own parsers, a spine-health reader added to `spine.mjs` via `/arc-change`) ·
+    L2 `arc dash` zero-dep server in arc (ONE read door with cursor polling + an allow-listed
+    `/api/file/:id`, ONE decision door = the `arc-inbox` function with a byte-parity fixture,
+    `/api/ask` → `arc-run`; localhost + token, no daemon) · L3 the face app in its own repo
+    `arc-face` so the OS repo stays zero-dep (FACE-A, owner may flip) · **stamps only on
+    `approval.requested`** (approve/reject + mandatory reason = the only write; other needs-you
+    kinds are cards with the resolving CLI as a copyable chip; forever-human actions are seals
+    quoting E2/ADR — three affordance classes, lint-enforced) · **MAP** (every pipeline a
+    transit line from manifest `face:` sections + a planned-rooms registry for unborn lanes;
+    human gates = stamp stations; Inbox = the interchange; unexercised lines dashed, planned
+    dotted) · **TAPE** (day-close ruler; as-of replay of every spine-derived view; file-borne
+    panels badged "file, not log") · **32 rooms on one 6-zone template** + the room
+    birth-rule (`face:` manifest section, `product-lint` `KNOWN_FIELDS`, `face-coverage` lint
+    FAIL from birth; Appendices A–D map all 46 kinds / 26 commands / 30 agents / lints to
+    rooms) · honesty classes real / simulated / rehearsal / drill / exploratory never
+    co-rendered or summed; `not instrumented` / ABSENT / MISSING first-class · **Ask arc =
+    engine process `face-ask`** (router row + `hq.policy.yaml` row per POL-I, budget,
+    `run.completed`; zero write tools) · art direction decided by the design lane's
+    three-thesis blind exploration with a reference fourth item (FACE-I) — Claude Design
+    only after the pick, as taste canvas + design-system home synced FROM the repo behind a
+    DES-G `/arc-change`; `arc-hq-mockup.html` demoted to a concept list. Tier L = 27 working
+    days in three banked blocks + 5 real dogfood days; REQ-01..10 one phase each. Cross-plan:
+    `BRIEF-chat-mcp.md` (the one remaining brief) names this lane's L2 as its prerequisite —
+    same read door + decision door exposed as MCP tools; the July `arcface` prototype is NOT
+    reused (owner ruling 2026-08-18). `BRIEF-dashboard.md` superseded → moved to
+    `docs/archive/`.
 
 ## Provenance
 
