@@ -1,8 +1,8 @@
 {
   "phase": "01",
-  "commit": "eaa02cb2f1d51b672cd467981b524338f27c5ab4",
-  "short": "eaa02cb",
-  "generated": "2026-08-16T15:48:05Z",
+  "commit": "4239ec973100c39957d283d5cbed96da8a1d20b4",
+  "short": "4239ec9",
+  "generated": "2026-08-18T18:42:07Z",
   "files": [
     {
       "name": "ci-run-31955640829.json",
@@ -10,7 +10,23 @@
     },
     {
       "name": "exit-criteria.md",
-      "sha256": "34029910c0d731de2709fc908c363c750e1d6faf82909960b17caff1a23c82c5"
+      "sha256": "05c8eb007f341f654b5a14d1fd23dc2c2ec24becc29037b7d1e07fa3dc563101"
+    },
+    {
+      "name": "gsc-indexing-requested.jpg",
+      "sha256": "5670dbf08b899cc07a5e087c7337be8467dcf082a738f8e2e265144ae91c0401"
+    },
+    {
+      "name": "gsc-ownership-verified.jpg",
+      "sha256": "5d2fcfb61abe1f3fc7a8c709a1451720284a223d8b8a46d368f2419b012c805b"
+    },
+    {
+      "name": "gsc-page-indexing-before.jpg",
+      "sha256": "533b1cf1ce73a3ff29ef9f4486c2ae34e6780d998fd95cd3cd691ba081add7b6"
+    },
+    {
+      "name": "gsc-sitemap-submitted.jpg",
+      "sha256": "66d2f5da8abbda7d772dff46497b04125ec2114d258b227f0ce88f82406bdae8"
     }
   ]
 }
