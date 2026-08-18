@@ -51,6 +51,42 @@ read_argv() {
 
 _derive() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 
+# THE VALUE `-t` ACTUALLY CARRIES, extracted from the recorded argv rather than pattern-matched
+# inside it. Two proven reasons, both from an adversarial pass on the first version of this file:
+#
+#   A glob like *'"-t"'*'"vision"'* is NOT adjacency-anchored. It passed on an argv reading
+#   `"-t","browser", ... ,"--env-marker","vision"` -- the flag carrying the wrong value entirely,
+#   with the expected token sitting somewhere else in the array.
+#
+#   Worse, `-t` carries ONE comma-joined string, so `"file"` only ever forms the quoted token
+#   `"file"` when it is the SOLE toolset. Widening `git.op` to include `file` handed
+#   commit-msg-draft the file toolset and the `!= *'"file"'*` assertion still passed -- the check
+#   could not see the leak in the only shape the leak takes.
+#
+# So: pull the value out, and compare it as a LIST.
+toolset_value() {
+  node -e 'const fs=require("node:fs");const a=JSON.parse(fs.readFileSync(process.argv[1],"utf8").trim().split("\n").pop());const i=a.indexOf("-t");process.stdout.write(i<0?"":String(a[i+1]??""));' "$ARGV"
+}
+
+# Present-and-equal-to, as a whole list.
+toolsets_are() {
+  local want="$1" got; got="$(toolset_value)"
+  [ "$got" = "$want" ] || { echo "-t carries [$got], expected [$want]"; return 1; }
+}
+
+# One member of the comma-separated list, never a substring of the whole string.
+toolsets_include() {
+  local want="$1" got; got="$(toolset_value)"
+  case ",$got," in *",$want,"*) return 0;; esac
+  echo "-t carries [$got], which does not include [$want]"; return 1
+}
+
+toolsets_exclude() {
+  local want="$1" got; got="$(toolset_value)"
+  case ",$got," in *",$want,"*) echo "-t carries [$got], which must not include [$want]"; return 1;; esac
+  return 0
+}
+
 # ---------------------------------------------------------------------------
 # The ARGV the driver actually builds
 # ---------------------------------------------------------------------------
@@ -67,7 +103,8 @@ _derive() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
   # running it: the same "assert a different command's output" shape testing.md names.
   local said="$stderr"
   read_argv
-  [[ "$output" == *'"-t"'*'"vision"'* ]] || { echo "no narrowed toolset in the argv: $output"; false; }
+  # The whole list, not a substring of the argv: see toolset_value.
+  toolsets_are "vision" || { echo "$output"; false; }
   # POSITIVE assertion on the announcement too: a narrowing nobody can see in the trail is one an
   # operator cannot audit.
   [[ "$said" == *"toolsets vision"* ]] || { echo "the driver did not announce the narrowing: $said"; false; }
@@ -79,11 +116,14 @@ _derive() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
   run --separate-stderr bash "$DRIVER" run commit-msg-draft '{"q":1}' min=5
   [ "$status" -eq 0 ] || { echo "$output"; echo "$stderr"; false; }
   read_argv
-  [[ "$output" == *'"-t"'* ]] || { echo "no toolset flag at all: $output"; false; }
-  [[ "$output" == *"terminal"* ]] || { echo "shell.run/git.op did not map to terminal: $output"; false; }
-  # AND NOTHING WIDER. `file` is the one an authoring-adjacent process must not silently acquire,
-  # and commit-msg-draft declares no fs token.
-  [[ "$output" != *'"file"'* ]] || { echo "a process declaring no fs token was handed the file toolset: $output"; false; }
+  toolsets_include "terminal" || { echo "$output"; false; }
+  # AND NOTHING WIDER. `file` is the one an authoring-adjacent process must not silently acquire, and
+  # commit-msg-draft declares no fs token. Asserted as a LIST MEMBER: an adversarial pass widened
+  # `git.op` to include `file`, this process was handed it, and the previous substring form still
+  # passed -- because a comma-joined value never forms the quoted token `"file"` unless `file` is the
+  # only toolset, which is the one shape the leak does not take.
+  toolsets_exclude "file" || { echo "$output"; false; }
+  toolsets_exclude "memory" || { echo "$output"; false; }
 }
 
 @test "NEGATIVE CONTROL -- a declaration that cannot be narrowed passes NO flag, and says so out loud" {
@@ -109,8 +149,35 @@ _derive() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
   run --separate-stderr bash "$DRIVER" run demo '{"q":1}' min=5
   [ "$status" -eq 0 ] || { echo "$stderr"; false; }
   read_argv
-  [[ "$output" != *'"-t",""'* ]] || { echo "an empty -t value reached docker: $output"; false; }
-  [[ "$output" != *'"-t", ""'* ]] || { echo "an empty -t value reached docker: $output"; false; }
+  # Two facts, and they are different: the flag is ABSENT here (not present-and-empty), and if any
+  # future path did pass it, the value must never be the empty string. Extracting the value proves
+  # both -- a glob for `"-t",""` cannot tell an absent flag from an empty one.
+  [[ "$output" != *'"-t"'* ]] || { echo "the flag was passed for an unnarrowable declaration: $output"; false; }
+  local got; got="$(toolset_value)"
+  [ -z "$got" ] || { echo "-t carries [$got] for a process with no narrowable declaration"; false; }
+}
+
+@test "the unknown-toolset refusal is WIRED, and it is upstream of the container spawn" {
+  # THE ARGS-SITE VALIDATION HAD NO COVERAGE AT ALL, proven by an adversarial pass: deleting the
+  # `throw` left all eight tests green, because the only tests touching KNOWN_TOOLSETS check it as
+  # pure data and never through the driver. Its trigger is unreachable through real data by
+  # construction -- the map test below guarantees every value it can produce is defined -- so this
+  # asserts the guard EXISTS and sits before the spawn, the same shape policy-runwrapper.bats uses to
+  # pin the policy gate upstream of arc-run's only spawnSync.
+  #
+  # It is a grep, and a grep is the weakest assertion in this file. It is here because the
+  # alternative was an env override that could WIDEN a dispatch, which is a worse thing to add than a
+  # weak test is to keep.
+  cd "$ARC_ROOT"
+  local src=".claude/scripts/engine/drivers/hermes.mjs"
+  local guard spawn
+  guard="$(grep -n 'refusing to dispatch: .* is not a toolset' "$src" | head -1 | cut -d: -f1)"
+  [ -n "$guard" ] || { echo "the unknown-toolset refusal is gone from $src"; false; }
+  grep -q 'KNOWN_TOOLSETS.includes' "$src" || { echo "the refusal no longer consults KNOWN_TOOLSETS"; false; }
+  spawn="$(grep -n 'spawnSync(' "$src" | tail -1 | cut -d: -f1)"
+  [ -n "$spawn" ] || { echo "no spawn site found in $src"; false; }
+  [ "$guard" -lt "$spawn" ] || {
+    echo "the refusal at line $guard is not upstream of the container spawn at line $spawn"; false; }
 }
 
 # ---------------------------------------------------------------------------
@@ -245,8 +312,8 @@ _derive() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
 }
 
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 10 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 11 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 11 -- a @test was silently dropped"
     false
   }
 }

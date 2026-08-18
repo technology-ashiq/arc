@@ -259,6 +259,30 @@ launches: both attackers died on repeated upstream `529 Overloaded`, twice each,
    between. Both now call it, three now-dead imports removed, **and the overclaiming comment is
    rewritten** — the second time in one day that a comment of mine claimed more than the code did.
 
+**THE SECOND SURFACE FOUND THREE MORE, ALL IN MY OWN ASSERTIONS, and the third is the worst thing
+found today.** It mutated the product in a scratch clone and reported which mutations SURVIVED.
+
+3. **The `-t` value was pattern-matched INSIDE the argv instead of extracted from it, so a
+   comma-joined list could hide a leak.** `-t` carries ONE comma-separated string, so `"file"` only
+   ever forms the quoted token `"file"` when `file` is the SOLE toolset. The pass widened
+   `git.op` to include `file`, `commit-msg-draft` (which declares no fs token) **was handed the file
+   toolset**, and my `!= *'"file"'*` assertion still passed — it could only have caught the one shape
+   the leak never takes. Fixed by extracting the value and comparing it as a LIST.
+4. **The positive glob was not adjacency-anchored.** `*'"-t"'*'"vision"'*` passed on an argv reading
+   `"-t","browser", … ,"--env-marker","vision"` — the flag carrying the wrong value entirely, with
+   the expected token sitting elsewhere in the array.
+5. **The unknown-toolset refusal had NO coverage: deleting the `throw` left all eight tests green.**
+   The only tests touching `KNOWN_TOOLSETS` check it as pure data and never through the driver. Its
+   trigger is unreachable through real data by construction, so it is now pinned the way
+   `policy-runwrapper.bats` pins the policy gate — the guard must exist, consult `KNOWN_TOOLSETS`,
+   and sit upstream of the spawn. That is a grep, and the weakest assertion in the file; the
+   alternative was an env override that could WIDEN a dispatch, which is a worse thing to add than a
+   weak test is to keep.
+
+**Both passes attacked MY OWN tests and both found the same class**: an assertion that reads
+something adjacent to the thing it claims to check. Eleven tests now; the mutations that survived
+are dead.
+
 **NAMED RESIDUAL, not fixed tonight:** `arc-run.mjs` still reads its own copy of the process file
 from its own `root` (`--root`/`$ARC_ROOT`/git toplevel) to validate the driver's OUTPUT, while the
 drivers now read from `policyRoot()`. Normally the same tree; where it is not, arc-run would judge a
