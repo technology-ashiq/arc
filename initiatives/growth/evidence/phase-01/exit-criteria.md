@@ -3,10 +3,39 @@
 **Phase 01 UN-PARKED 2026-08-16** when ADR-1115's sharpened trigger came true. The criteria below
 are verbatim from `phases/phase-01-spec.md`; nothing was reworded to fit what got built.
 
-**Two criteria are not ticked, and are recorded honestly rather than argued into MET.** Criterion 5
-is **NOT APPLICABLE** — there is no pre-cutover receipt to correct and, by the decision recorded
-below, there will not be. Criterion 3's evidence capture is the owner's. A phase that closed with
-either of those ticked would be closing on a vacuous pass.
+**UPDATED 2026-08-18.** Criterion 3 is now **MET** — the console was opened and the verified-owner
+state captured into this bundle (`gsc-ownership-verified.jpg`). Criterion 5 remains **NOT
+APPLICABLE**: there is no pre-cutover receipt to correct and, by the decision recorded below, there
+will not be. Every other criterion was already MET. **The phase closes with six MET and one that
+never arose, and nothing argued into MET.**
+
+**THE CONSOLE ALSO CONTRADICTED THE PHASE'S CENTRAL ASSUMPTION, AND THAT IS THE MOST IMPORTANT LINE
+IN THIS FILE.** This phase exists because Search Console does not backfill, so the clock starts when
+the property exists and the site is indexable. Both were true on 2026-08-16. **They were not
+sufficient.** Opened on 2026-08-18, the console reported `Indexed: 0`, `Not indexed: 3` with the
+single reason **Not found (404)** — three root-domain URLs that have nothing to do with this site —
+and a last update of **14/08/2026**, two days before the flip. URL inspection on
+`https://arc.automemory.ai/` returned **"URL is unknown to Google"**, `Last crawl: N/A`, **"No
+referring sitemaps detected"**.
+
+So Googlebot had never fetched a single page of this site, and the seven days from 2026-08-16 were
+accruing nothing. **A read on 2026-08-23 would have returned zero rows and been misread as a real
+zero.** The cause was mechanical and had been invisible because nobody had opened the console since
+the property was added: **the sitemap was never submitted** (`Submitted sitemaps: 0 of 0`), and with
+the site un-indexable until 08-16 there was no other discovery path into it.
+
+Fixed in the same session rather than recorded as a finding: `https://arc.automemory.ai/sitemap-index.xml`
+submitted (`gsc-sitemap-submitted.jpg`), and indexing requested for all four live URLs — the
+homepage and the three articles (`gsc-indexing-requested.jpg`). The effect was immediate and
+visible: `receipts-driven-os` moved from *"URL is unknown to Google"* to **"Discovered – currently
+not indexed"**, with `Sitemaps: https://arc.automemory.ai/sitemap-index.xml` now named as its
+discovery source.
+
+**The lesson generalises past this phase.** Every criterion here was about what *we* published, and
+all of them passed. Not one of them asked whether the other side had *received* it, so the phase
+could be entirely green while the only thing it exists to start had not started. `INDEXABLE = true`
+is a fact about our server; being crawled is a fact about Google, and the second does not follow
+from the first. `gsc-page-indexing-before.jpg` is kept as the record of that state.
 
 ## The criteria
 
@@ -14,7 +43,7 @@ either of those ticked would be closing on a vacuous pass.
 |---|---|---|---|
 | 1 | Domain named, **its own one-way ADR written**, options + consequences + a real revisit trigger | **MET** | `docs/adr/1118-*.md`. Names the option it REJECTED: `automemory.ai/arc` was the stronger long-run SEO position and lost to repo independence (ADR-1104), knowingly, while both addresses were at zero authority |
 | 2 | DNS + TLS green; the site serves over HTTPS at the chosen host | **MET** | `https://arc.automemory.ai/blog/receipts-driven-os` → 200. Nameservers `meera`/`noel.ns.cloudflare.com` |
-| 3 | Search Console **Domain** property added and verified | **PARTIAL** | The property exists and its TXT resolves from Google's own `8.8.8.8` **and** from `1.1.1.1`. The spec asks for the verified property *captured in the bundle* — that screenshot is the owner's and is **not** here, so this is not ticked |
+| 3 | Search Console **Domain** property added and verified | **MET 2026-08-18** | `gsc-ownership-verified.jpg` in this bundle: **"You are a verified owner"**, verification method **Domain name provider — Successfully verified**, property `sc-domain:automemory.ai`, so root plus every subdomain on one property and one clock. Captured from the console itself, not inferred from DNS. The earlier PARTIAL was correct at the time: the TXT resolving from `8.8.8.8` and `1.1.1.1` proves the token is published, never that Google accepted it — only the console can say that |
 | 4 | `content.published.site` re-pinned to the permanent host **in configuration** | **MET** | `initiatives/growth/site.json` + `loadSiteConfig`. There was no configuration surface at all before this — `publish` never touches `site` and the steel thread passed the host on the command line |
 | 5 | Every pre-cutover receipt corrected **by `supersedes`, never edited** | **NOT APPLICABLE** | The path is built, adversarially attacked and proven end-to-end through the real emitter. There is no pre-cutover receipt to correct and, per the decision below, there will not be: the steel-thread receipt carries the permanent host because the domain landed before the first publication. Not a vacuous pass and not a gap — an occasion that never arose |
 | 6 | `sitemap.xml` reachable at the permanent host | **MET** | Was **404** — Astro emits `sitemap-index.xml`. Fixed by SERVING the conventional path (`vercel.json` 308), not by rewording the criterion to match whatever the build emits. Verified through the preview: 200, `application/xml` |
