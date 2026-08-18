@@ -92,6 +92,17 @@
       "content.published": { "group": "progress", "homes": ["growth", "today"] }
     }
   },
+  "lanes": {
+    "$comment": "every born lane (initiatives/<lane>/) -> the room(s) that render it. face-coverage FAILs on a lane dir with no entry (the birth-rule: a new lane lands its face: rows + this entry in the same change). A lane's own Lane room is the template instance; module lanes also get their named room.",
+    "map": {
+      "absorb": "absorb", "bench": "bench", "design": "design-studio",
+      "develop": "develop", "engine": "engine-room", "evolve": "evolve",
+      "face": "toolbelt", "growth": "growth", "leads": "leads",
+      "ledger": "money", "legal": "legal", "memory": "memory",
+      "model-policy": "model-policy", "policy": "policy",
+      "portfolio": "board", "scheduler": "scheduler"
+    }
+  },
   "commands": {
     "$comment": "26; (G) = generated from a process file, never hand-edited",
     "map": {
