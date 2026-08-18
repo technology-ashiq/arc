@@ -191,9 +191,53 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
-### THE CONFOUND IS CLOSED, AND IT WAS THE TOOLSETS ALL ALONG — 2026-08-18
+### CORRECTION — IT WAS NOT THE TOOLSETS. THE RUNTIME WAS NEVER SENT THE BRIEF — 2026-08-19
 
-Full measurement: `evidence/phase-08/req07-toolsets-are-the-confound.md`. **ADR-0224.**
+The section below this one is **wrong about the cause**, and ADR-0224 is amended rather than retired.
+Full record: `evidence/phase-08/req07-what-the-runtime-was-told.md`.
+
+`drivers/hermes.mjs` built a three-line prompt — the process NAME, *"reply with ONE JSON document"*,
+and the input. **No `doc.body`, no output contract, not one field name.** `drivers/claude-code.mjs`
+has always sent the brief; nothing compared the two, and `grep -c 'doc.body' hermes.mjs` returned
+**0** for the whole cycle. So `$.draft: required property is absent` was the only honest thing the
+runtime could produce: it had never been told the contract HAS a `draft`.
+
+**Isolated 2026-08-19, one variable at a time, same pack, image and key:**
+
+| prompt | toolsets | exit | wall | result |
+|---|---|---|---|---|
+| thin (name only) | all 17 | 1 | 150–307 s | `$.draft` absent, ×3 dispatches |
+| thin (name only) | `-t vision` | 1 | 99–194 s | `$.draft` absent, ×3 dispatches |
+| full (brief + contract) | `-t vision` | 0 | 55 s | a valid draft |
+| full (brief + contract) | all 17 | **0** | **62 s** | **a valid draft** |
+
+**HOW THE WRONG ANSWER WAS REACHED, because that is the reusable part.** The comparison changed TWO
+variables at once — thin-prompt-plus-all-toolsets against full-prompt-plus-`vision` — and the
+difference was attributed to the flag. **And the cell that would have caught it WAS RUN:** a `-t ""`
+probe with the full prompt returned a valid draft, pretty-printed across several lines, and the
+probe's own verdict parser only recognised single-line JSON, so it reported `NO JSON OBJECT ON
+STDOUT` on a run that had succeeded. A measurement tool produced a false negative and an ADR was
+built on it — the same class as trusting a report about a screenshot instead of opening it, applied
+to a probe of my own writing.
+
+**Cost: six dispatches and two owner approvals**, against a bug findable by reading five lines of the
+driver beside the driver next to it.
+
+**What the toolset narrowing is still for: isolation, not answers.** A process declaring `tools: []`
+was handed `file`, `terminal`, `code_execution` and `memory` it never asked for — a real widening on
+a hosted contractor at the L1-drafts ceiling, and REQ-02's business. ADR-0224 keeps it on those
+terms. The `-t ""` fail-open and the `-t <unknown>` exit-2/BUDGET_DECLINED collision are independent
+measurements and both stand.
+
+**REQ-03's transcript requirement is now met and it is what found this.** `ARC_RUN_TRANSCRIPT_DIR`
+was set for the round-2 dispatches; five scrubbed transcripts landed under
+`evidence/phase-08/transcripts/`, and the runtime's own words in them — *"I'll work from the pack
+provided. Let me first ground this against…"* — are what sent me to read the prompt. The three
+round-1 dispatches went past that requirement, and the JSON they returned is still unrecoverable.
+
+### ~~THE CONFOUND IS CLOSED, AND IT WAS THE TOOLSETS ALL ALONG~~ — 2026-08-18, CAUSE CORRECTED ABOVE
+
+Full measurement: `evidence/phase-08/req07-what-the-runtime-was-told.md`. **ADR-0224.**
 
 For four sessions this cycle carried one unexplained result — the runtime would not honour a one-shot
 output contract — and offered three explanations, each disproved in turn: the parser (it extracted

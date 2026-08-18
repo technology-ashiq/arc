@@ -1,6 +1,38 @@
-# ADR 0224 — what a process declares becomes the runtime's toolset allowlist, and the seventeen defaults were the confound
+# ADR 0224 — what a process declares becomes the runtime's toolset allowlist ~~, and the seventeen defaults were the confound~~
 
-**Status:** accepted
+> **AMENDED 2026-08-19 — THE TITLE'S SECOND HALF IS WRONG, AND SO IS THIS ADR'S CENTRAL CLAIM.**
+> The seventeen default toolsets were **not** the answer-reliability confound. **The prompt was.**
+> `drivers/hermes.mjs` sent the runtime a process NAME and the input JSON — never `doc.body`, never
+> the output contract, not one field name — while `drivers/claude-code.mjs` had always sent the
+> brief. `$.draft: required property is absent` was the only honest thing the runtime could produce,
+> because nothing had ever told it the contract has a `draft`.
+>
+> **The comparison this ADR was written on changed TWO variables at once** — a thin prompt with all
+> seventeen toolsets against a full prompt with `-t vision` — which is exactly the confounded
+> experiment this cycle keeps recording. Worse, the cell that would have caught it *was* run and its
+> verdict was lost: the probe's own parser only recognised single-line JSON, the runtime answered
+> with a pretty-printed object, and the tool reported "no JSON" on a run that had in fact succeeded.
+> A conclusion was then built on that false negative.
+>
+> **Isolated 2026-08-19, one variable at a time, same pack, image and key:**
+>
+> | prompt | toolsets | result |
+> |---|---|---|
+> | thin (name only) | all 17 | **fail** — `$.draft` absent, 3 dispatches × 2 attempts |
+> | thin (name only) | `-t vision` | **fail** — `$.draft` absent, 3 dispatches × 2 attempts |
+> | full (brief + contract) | `-t vision` | exit 0, 55 s, a valid draft |
+> | full (brief + contract) | all 17 | **exit 0, 62 s, a valid draft** |
+>
+> **What survives, and why this ADR is amended rather than retired:** narrowing a process that
+> declares nothing is still correct as an ISOLATION property — a draft process handed `file`,
+> `terminal` and `memory` it never asked for is a real widening, and REQ-02 is where that belongs.
+> Clauses 1–5 all stand on their own terms. The measurements behind clause 3 (`-t ""` is a
+> fail-open) and clause 4 (`-t <unknown>` exits 2, colliding with BUDGET_DECLINED) are real and
+> independent of this error. What does not stand is the causal story in the Context section below:
+> read it as *what the toolsets do*, never as *why the answers failed*. Six dispatches and two owner
+> approvals were spent before the prompt was read.
+
+**Status:** accepted, amended 2026-08-19
 **Date:** 2026-08-18
 **Product:** `engine` — Cycle 7, executor v1. Completes ADR-0223 (which made `tools: []` mean something) and amends ADR-0221 clause 4. Decides nothing about policy levels.
 **Reversibility:** two-way
@@ -11,7 +43,7 @@ Recorded as the finding that closed a four-session confound, not as new scope: R
 
 ## Context
 
-Full measurement: `initiatives/engine/evidence/phase-08/req07-toolsets-are-the-confound.md`.
+Full measurement: `initiatives/engine/evidence/phase-08/req07-what-the-runtime-was-told.md`.
 
 For four sessions this cycle carried one unexplained result — **the runtime would not honour a
 one-shot output contract** — and three explanations were offered and disproved in turn: the parser
