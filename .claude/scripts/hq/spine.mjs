@@ -21,9 +21,9 @@
 //   spine cursor                       # the id of the newest event, for a consumer to store
 //   spine days                         # the days that exist
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { SpineError, ULID_RE } from "./lib/canonical.mjs";
-import { dayFile, listDays, spineRoot, derivedDir } from "./lib/spine-io.mjs";
+import { dayFile, listDays, spineRoot, derivedDir, quarantineDir, readIdemIndex, isDayClosed } from "./lib/spine-io.mjs";
 import { join } from "node:path";
 
 export const STATE_DB = (root) => join(derivedDir(root), "state.db");
@@ -132,6 +132,48 @@ export function applyFilters(events, { kind, since, venture, date, limit } = {})
 export async function query(root, filters = {}) {
   const { events, torn, engine } = await readAll(root, filters.engine);
   return { events: applyFilters(events, filters), torn, engine };
+}
+
+/**
+ * Spine health -- quarantine counts by refusal code, idem-index size, torn lines, day
+ * seals. Lives HERE (face lane, ADR-1301) so no consumer ever opens `_quarantine/` or
+ * `derived/` itself: the reader is the only public API (ADR-0030), and health is a read.
+ * Counts only -- quarantine `raw` bodies never leave this function (they can carry the
+ * very bytes that were refused; a stub_only record exists precisely because its input
+ * must not be re-surfaced, ADR-0028).
+ */
+export function spineHealth(root) {
+  const days = listDays(root);
+  const closed = days.filter((d) => isDayClosed(root, d));
+  const { events, torn } = scanAll(root);
+  let idemSize = 0;
+  try { idemSize = readIdemIndex(root).size; } catch { idemSize = -1; } // -1 = index unreadable, a named state
+  const quarantined = { total: 0, byCode: {}, stubOnly: 0, unreadable: 0 };
+  const qDir = quarantineDir(root);
+  if (existsSync(qDir)) {
+    for (const f of readdirSync(qDir)) {
+      if (!f.endsWith(".jsonl")) continue;
+      let text;
+      try { text = readFileSync(join(qDir, f), "utf8"); } catch { quarantined.unreadable++; continue; }
+      for (const line of text.split("\n")) {
+        if (line === "") continue;
+        let rec;
+        try { rec = JSON.parse(line); } catch { quarantined.unreadable++; continue; }
+        quarantined.total++;
+        const code = typeof rec.code === "string" ? rec.code : "UNKNOWN";
+        quarantined.byCode[code] = (quarantined.byCode[code] || 0) + 1;
+        if (rec.stub_only) quarantined.stubOnly++;
+      }
+    }
+  }
+  return {
+    events: events.length,
+    days: days.length,
+    daysClosed: closed.length,
+    torn: torn.map((t) => ({ day: t.day, line: t.line })),
+    idemIndex: idemSize,
+    quarantined,
+  };
 }
 
 // ---------- CLI ----------

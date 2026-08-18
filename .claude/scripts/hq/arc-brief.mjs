@@ -376,10 +376,14 @@ async function main(argv) {
   return 0;
 }
 
-main(process.argv.slice(2))
-  .then((code) => process.exit(code))
-  .catch((err) => {
-    const code = err instanceof SpineError ? err.code : "INTERNAL";
-    process.stderr.write(`arc-brief: ERROR ${code} -- ${err.message}\n`);
-    process.exit(2);
-  });
+// Only run the CLI when invoked directly -- importers (arc-dash /api/brief as-of,
+// ADR-1301) get render() as a library, not a side effect. Guard style: spine.mjs.
+if (process.argv[1] && process.argv[1].endsWith("arc-brief.mjs")) {
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      const code = err instanceof SpineError ? err.code : "INTERNAL";
+      process.stderr.write(`arc-brief: ERROR ${code} -- ${err.message}\n`);
+      process.exit(2);
+    });
+}

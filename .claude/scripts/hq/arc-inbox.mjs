@@ -35,10 +35,17 @@ const ARC_EVENT = join(HERE, "arc-event.mjs");
 // same approval collide as DUP_IDEM -- the backstop behind the read-check below.
 const decisionIdem = (approvalId) => sha256Hex(`decision.recorded|${approvalId}`);
 
-async function loadApprovals(root) {
+// Exported for the L2 decision door (face lane, ADR-1302): /api/decide calls THIS decide
+// and the inbox fold comes from THIS loadApprovals -- one implementation, byte-parity by
+// construction. Extraction found mechanical at kickoff re-verification 2026-08-19.
+export async function loadApprovals(root, { asof = null } = {}) {
   // Two reads through the ONLY public API, across all days, in append order.
-  const requested = (await query(root, { kind: "approval.requested" })).events;
-  const decided = (await query(root, { kind: "decision.recorded" })).events;
+  // asof (YYYY-MM-DD): fold as the spine stood at the END of that day -- BOTH sides of
+  // the fold cut at the same boundary, or a later decision would close an approval that
+  // was still open on the day being replayed (the Tape's honesty, ADR-1305).
+  const cut = (events) => (asof === null ? events : events.filter((e) => e.day <= asof));
+  const requested = cut((await query(root, { kind: "approval.requested" })).events);
+  const decided = cut((await query(root, { kind: "decision.recorded" })).events);
   const decidedIds = new Set(decided.map((e) => e.event.payload && e.event.payload.decides));
   return { requested, decidedIds };
 }
@@ -119,7 +126,7 @@ function criteriaDetail(digest) {
   }
 }
 
-async function decide(root, verdict, id, reason) {
+export async function decide(root, verdict, id, reason) {
   if (typeof id !== "string" || !ULID_RE.test(id))
     throw new SpineError("BAD_ARGS", `<id> ${JSON.stringify(id)} is not a ULID`);
   if (typeof reason !== "string" || reason.length === 0)
@@ -187,10 +194,15 @@ async function main(argv) {
   throw new SpineError("BAD_ARGS", `unknown command ${JSON.stringify(command)} (inbox | approve <id> --reason R | reject <id> --reason R)`);
 }
 
-main(process.argv.slice(2))
-  .then((code) => process.exit(code))
-  .catch((err) => {
-    const code = err instanceof SpineError ? err.code : "INTERNAL";
-    process.stderr.write(`arc-inbox: ERROR ${code} -- ${err.message}\n`);
-    process.exit(2);
-  });
+// Only run the CLI when invoked directly -- importers (arc-dash, ADR-1302) get the
+// library, not a side effect. Same guard style as spine.mjs. Before this guard existed,
+// importing this file EXECUTED the inbox and exited the importer's process.
+if (process.argv[1] && process.argv[1].endsWith("arc-inbox.mjs")) {
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      const code = err instanceof SpineError ? err.code : "INTERNAL";
+      process.stderr.write(`arc-inbox: ERROR ${code} -- ${err.message}\n`);
+      process.exit(2);
+    });
+}

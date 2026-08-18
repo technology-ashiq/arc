@@ -39,6 +39,33 @@ export const validLaneName = (n) =>
 // Tolerant DETECTION (case, bold, leading space), STRICT value grammar — the
 // council-v2/v3 markdown-contract checklist. Header block only (stops at the first
 // level-2+ heading), fenced blocks skipped, LAST value wins when a key repeats.
+// The FULL machine header as an object -- every `key: value` line above the first `##`,
+// with the same fence/CR/FIFO guards as laneStatus below (kept as a sibling rather than
+// refolding laneStatus, whose exact behaviour the lane resolver load-bears; the two walk
+// the same grammar and a change to one is a change to grep for in the other -- twin rule).
+// Exported for the L2 read door (face lane, ADR-1301): the board is a view, the machine
+// header is the truth, and this is the ONE parser that reads it.
+export function laneHeader(file) {
+  let text;
+  try { if (!statSync(file).isFile()) return {}; text = readFileSync(file, "utf8"); } catch { return {}; }
+  const out = {};
+  let fence = false, fchar = "";
+  for (const raw of text.split("\n")) {
+    const line = raw.replace(/\r$/, "");
+    const t = line.replace(/^[ \t]+/, "");
+    const f3 = t.slice(0, 3);
+    if (f3 === "```" || f3 === "~~~") {
+      if (!fence) { fence = true; fchar = f3; } else if (f3 === fchar) { fence = false; fchar = ""; }
+      continue;
+    }
+    if (fence) continue;
+    if (/^##/.test(t)) break;
+    const m = t.replace(/\*/g, "").match(/^([a-z][a-z-]*)[ \t]*:[ \t]*(.*)$/);
+    if (m && !(m[1] in out)) out[m[1]] = m[2].trim();
+  }
+  return out;
+}
+
 export function laneStatus(file) {
   let text;
   // statSync first: readFileSync on a FIFO blocks forever, and bash's `[ -f ]`

@@ -26,7 +26,9 @@ start, ship L2 alone)
       labelled, never as live
 - [ ] decision door: `arc-inbox` approve/reject extracted into an importable function
       (via `/arc-change`), `/api/decide` calls it; **byte-parity fixture** green
-      (CLI vs door → every one of the envelope's 15 keys identical except `id`/`ts`,
+      (CLI vs door → every envelope key identical except `id`/`ts` — the LIVE envelope
+      carries 16 keys, counted off a real line 2026-08-19; the design source's "15" was a
+      stale doc count, and the fixture derives the key list from the emitted event itself,
       **`actor` named and asserted identical** — the fixture states both callers'
       actor values explicitly and fails if the door substitutes its own); route-
       enumeration fixture proves no other mutating route

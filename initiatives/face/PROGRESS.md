@@ -25,7 +25,7 @@ depends-on: arc-face — L3 build (separate repo, born at Phase 04 entry, ADR-13
 |---|---|---|---|
 | 00 | Brief + coverage contract — four contracts pass `design-lint`; Coverage map frozen as the `face:` schema draft + planned-rooms registry; 8 signature screens named | 1d | pending |
 | 01 | Explore ×3 + design system — three theses, isolated variants, blind jury vs reference, owner PICK + PREDICTION → canonical `tokens.css` + core components (design source's Ph 02 folded in; block A = 6d unchanged) | 5d | pending |
-| 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | pending |
+| 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | built — local green; CI + 2 fresh attackers pending |
 | 04 | Shell — `arc-face` L3 repo born; Today · Inbox (stamps + needs-you cards) · Spine/Tape on live L2 + sim; keyboard model; ⌘K | 4d | pending |
 | 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | pending |
 | 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | pending |

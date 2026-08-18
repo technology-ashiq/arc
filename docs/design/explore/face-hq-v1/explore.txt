@@ -1,0 +1,4 @@
+id=face-hq-v1
+brief=docs/design/briefs/face-hq/brief.md
+base=5132cad
+isolation=route-namespace (ADR-0037 fallback, phase-open decision 2026-07-29)
