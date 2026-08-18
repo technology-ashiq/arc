@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 06
 appetite: 9.5d
-burn: 6.5d
+burn: 7.0d
 blocked-on: —
 depends-on: —
 
@@ -34,7 +34,7 @@ depends-on: —
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | pending |
 | 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
 
-**Appetite burn: 6.5 of 9.5 days used (68%) — set 2026-08-18.** The clock is set the day the work happens, because this cycle has twice recorded the cost of setting it later: the Phase 04 close found it reading 0.0 for four days, and the day-5 checkpoint fired against a number a full working day stale. It was 5.5 of **7.5** when it was
+**Appetite burn: 7.0 of 9.5 days used (74%) — set 2026-08-18, advanced the same evening after the ADR-0223 round and REQ-07's three dispatches.** The clock is set the day the work happens, because this cycle has twice recorded the cost of setting it later: the Phase 04 close found it reading 0.0 for four days, and the day-5 checkpoint fired against a number a full working day stale. It was 5.5 of **7.5** when it was
 set, which is what **fired the day-5 kill checkpoint**; the checkpoint was read, the owner ruled
 CONTINUE, and the cap moved to 9.5 in writing (PLAN § Appetite). Both numbers are kept in that
 order deliberately: a percentage that silently improves because the denominator moved is how an
@@ -191,6 +191,74 @@ on-track run is one that learns to be ignored.
 
 ## Now
 
+### REQ-07 RAN FOR REAL — THREE DISPATCHES, THREE RECEIPTS, ZERO DRAFTS — 2026-08-18
+
+Full record: `evidence/phase-08/req07-three-real-dispatches.md`. The uncuttable clause is satisfied
+on its own terms — three confined dispatches through the hired runtime, three `run.completed`
+receipts in `.claude/state/hq/events/`, **none quarantined**, every one carrying the CONFINED config
+hash `cfg.e4c4ccd145d0` rather than asserting the posture in prose.
+
+| # | receipt | outcome | attempts | wall |
+|---|---|---|---|---|
+| 1 | `01M0ASG8YDJA8SBYTAHWE3VJHN` | `fail` / `schema` | 2 | 216,737 ms |
+| 2 | `01M0ASSNJB1EM9NR4J2SD0XJHR` | `fail` / `schema` | 2 | 306,974 ms |
+| 3 | `01M0ASY9CE73D7ES4XNRT4PM9H` | `fail` / `driver` | 2 | 150,503 ms |
+
+**THE RUNTIME TRIED TO WRITE THE DRAFT TO A FILE.** Run 3 ended on the runtime's own
+*"File-mutation verifier: 2 file(s) were NOT modified this turn"*, naming `/tmp/build-in-public-draft-…`.
+It is an agent, and on an authoring task its instinct is to work in the filesystem and then report
+about the filesystem. `-z` makes the session headless; it does not make it single-turn or tool-free.
+Runs 1 and 2 failed the schema on `$.draft` twice each, and ADR-0204's ladder stopped with a
+tier-change proposal both times — working exactly as designed, on the real path.
+
+So the confound `runtime-answer-reliability.md` recorded for a local 8B model is now measured on the
+**hosted** model too, and the cause is not model size. The verdict arm was already waived as
+capability-gap, and the DoD says win, lose or split the receipt is the deliverable.
+
+**AND THE USAGE REPORT WROTE.** All three receipts carry `model: poolside/laguna-s-2.1:free` with
+`model_source: runtime` — a value with exactly one source in the code, a fresh usage report read from
+the workspace. **ADR-0221 clause 4 says that reader is fail-safe plumbing "NOT claimed to work
+against the real runtime"; it fired and filled the seat, so that clause needs an amendment rather
+than a quiet edit.** The trigger is NOT established: two direct container probes — a successful
+one-shot and a failing one — each produced no file, while the three long agentic sessions did.
+
+**`tests/engine-usage-flag-probe.mjs` could not announce it.** Run immediately after, it returned
+`SKIP -- the runtime exited 1, so the "written even when the run fails" clause is the only one in
+play and this probe does not test it`. A probe that skips on the condition under which the file
+appears cannot go red the day it appears — the same defect the DoD contrasted it against, by a
+different route.
+
+**A MISS, RECORDED RATHER THAN GLOSSED: no scrubbed transcript was stored for any of the three.**
+`storeTranscript` is opt-in on `ARC_RUN_TRANSCRIPT_DIR` and the dispatch script did not set it, so
+three dispatches went past REQ-03's per-dispatch transcript requirement with the storage half armed
+and unused. The cost is concrete: runs 1 and 2 returned JSON the schema rejected for ONE missing
+property, and **the exact shape is now unrecoverable** — the one artifact that would say whether the
+fix is a prompt change or a schema change.
+
+**The approval is SPENT and no fourth run was attempted.** The pack was approved `external-ok, N=3`.
+Three were issued. A fourth would exceed the owner's terms, and spending that count quietly would
+make the mechanism decorative. **A retry needs a new pack approval — owner's call, ADR-0214.**
+
+### THE GATE THAT REFUSED THE NARROWEST PROCESS IN THE REPO — 2026-08-18
+
+`tools: []` was read as an absence rather than a statement, so `build-in-public-draft` — which
+declares nothing precisely so it can never commit or publish — collided with its own six L0 grants
+and was the ONE process the gate would not start. Red on all three CI legs. **ADR-0223.**
+
+The adversarial pass on that fix found three more, all taken: `unrestricted` + `tools: []` was
+gate-clean while compiling to an UNRESTRICTED command · `drivers/claude-code.mjs` held the adapter's
+tool mapping and not its refusal, so an empty grant OMITTED `--allowedTools` and an absent line is
+unrestricted · the CLI drivers read their process file from `$ARC_ROOT` while the gate validated the
+one at `policyRoot()`, demonstrated with an attacker-authored `processes/` tree, and `codex.mjs`
+carried the identical defect. One shared `canonicalRoot()` now serves both.
+
+**The first draft's justification comment claimed every tool is gated downstream. Measured, false** —
+`hermes` reads no tools at all, the interactive hook is disarmed unless `ARC_POLICY_HOOK=1` and
+judges `session:interactive`, and script jobs have no boundary. The claim is narrowed in code and ADR.
+
+Merged as #204 at `aaddb75`; **merged tree verified green by `workflow_dispatch`, 19/19 per job,
+zero skipped**, because CI does not run on a push to `main` in this repo.
+
 ### THE KEY LANDED, AND REQ-02 IS COMPLETE — 2026-08-18
 
 The owner supplied the capped credential. Everything below followed from it, and every claim is a
@@ -288,7 +356,15 @@ grant is the thing POL-I exists to prevent**, so the row is the owner's to paste
 
 ---
 
-### HELD BACK, NOT LOST — Phase 08's process layer, and the gate hole writing it exposed
+### ~~HELD BACK, NOT LOST~~ — RESOLVED 2026-08-18. Kept below because the reasoning still stands.
+
+**RESOLVED.** The owner opened the path and pasted the `hq.policy.yaml` row himself, so the process
+file and its grant landed as ONE change (`097bd9e`), birth-lint green, 6 processes / 0 ungoverned.
+The `process-lint` waiver the hole below describes shipped with it, and `arc-compile` gained the
+matching `[no-baseline]` class. **Everything from "is deliberately NOT on the branch" onward is the
+state on 2026-08-17 and is preserved as the record of why the pair could not be split — not as a
+description of today.** One thing the section did not anticipate: the gate then refused the file for
+an unrelated reason (ADR-0223, above).
 
 **`processes/build-in-public-draft.process.yaml` is WRITTEN and is deliberately NOT on the branch.**
 Schema (`draft`, `sources`, `task-class`, `pack-ref`), brief, eval fixture, `tools: []` — a process
