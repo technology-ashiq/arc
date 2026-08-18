@@ -1,4 +1,64 @@
-# Phase 08 — the toolsets were the confound, measured 2026-08-18
+# Phase 08 — what the runtime was TOLD, and the confound that was not the toolsets
+
+> **THIS FILE WAS FIRST WRITTEN AS `req07-toolsets-are-the-confound.md` AND ITS CENTRAL CLAIM WAS
+> WRONG.** Renamed and corrected 2026-08-19. Everything below the correction is the original
+> measurement of what the TOOLSETS do, which stands; what does not stand is the causal story it was
+> wrapped in. Kept rather than deleted, because the way the wrong answer was reached is the more
+> useful record.
+
+## The correction
+
+**The seventeen default toolsets were not the answer-reliability confound. The prompt was.**
+
+`drivers/hermes.mjs` built a three-line prompt: the process NAME, "reply with ONE JSON document",
+and the input. No `doc.body`, no output contract, not one field name. `drivers/claude-code.mjs` has
+always sent the brief; nothing ever compared the two, and `grep -c 'doc.body' hermes.mjs` returned
+**0** for the whole cycle.
+
+So `$.draft: required property is absent` was the only honest thing the runtime could produce. It
+had never been told the contract has a `draft`.
+
+**Isolated 2026-08-19, one variable at a time, same pack, image and key:**
+
+| prompt | toolsets | exit | wall | result |
+|---|---|---|---|---|
+| thin (name only) | all 17 | 1 | 150–307 s | `$.draft` absent, 3 dispatches × 2 attempts |
+| thin (name only) | `-t vision` | 1 | 99–194 s | `$.draft` absent, 3 dispatches × 2 attempts |
+| full (brief + contract) | `-t vision` | 0 | 55 s | a valid draft, sources cited |
+| full (brief + contract) | all 17 | **0** | **62 s** | **a valid draft** |
+
+The bottom row is the cell that settles it, and it is the cell that was missing when ADR-0224 was
+written.
+
+## How the wrong answer was reached, because that is the reusable part
+
+**The comparison changed two variables at once.** Thin-prompt-plus-all-toolsets was compared against
+full-prompt-plus-`vision`, and the difference was attributed to the flag. That is the confounded
+experiment this cycle keeps recording in other people's work.
+
+**And the cell that would have caught it WAS RUN.** A `-t ""` probe went out with the full prompt and
+came back with a valid draft — pretty-printed across several lines. The probe's own verdict parser
+only recognised a JSON object on ONE line, so it printed `NO JSON OBJECT ON STDOUT` on a run that had
+succeeded. **A measurement tool produced a false negative and a conclusion was built on it**, which
+is the same class as trusting an agent's report about a screenshot instead of opening the screenshot
+— applied here to a probe of my own writing.
+
+**Cost: six dispatches and two owner approvals**, against a bug findable by reading five lines of the
+driver and diffing them with the driver next to it.
+
+## What the toolset narrowing IS still for
+
+Not answer reliability — isolation. A draft process that declares `tools: []` was being handed
+`file`, `terminal`, `code_execution` and `memory` it never asked for, and that is a real widening on
+a hosted contractor at the L1-drafts ceiling. It belongs to REQ-02, and ADR-0224 keeps it on those
+terms. The two measured hazards guarded there are independent of the error above and both stand:
+`-t ""` is a fail-open, and `-t <unknown>` exits 2 where ENG-D reads 2 as BUDGET_DECLINED.
+
+---
+
+## The original write-up, preserved
+
+### (as first recorded 2026-08-18)
 
 This cycle carried one unexplained result for four sessions: **the runtime would not honour a
 one-shot output contract.** Three explanations were offered and each was disproved in turn.
