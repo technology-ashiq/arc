@@ -1,8 +1,22 @@
 # ADR 0221 — the runtime identity leaves the model seat, and the usage flag that would have filled it does not reliably write
 
+> **AMENDED 2026-08-18 BY ADR-0224 — clause 4 of this ADR is now measurably wrong, and it is flagged
+> here rather than only in the amending ADR because a reader who lands on this file alone would act on
+> a false claim.** Clause 4 ships the `--usage-file` reader as *"fail-safe plumbing, and NOT claimed
+> to work against the real runtime"*. On the real path the reader FIRED: all three REQ-07 dispatches
+> filled the model seat with `model_source: runtime`, and a `-t vision` run produced a complete report
+> — `input_tokens 2134`, `output_tokens 193`, `api_calls 1`, model present. What is false is the
+> **vendor's** documented promise that the report is *"written even when the run fails"*: four of six
+> observed runs wrote one, and one that did not was a failing run. The trigger stays unestablished.
+> Everything else in this ADR stands, including the seat decision itself.
+>
+> (This repo does not usually back-annotate an amended ADR — the amending one names its target. The
+> exception is made because the stale sentence is not a design preference but a statement of fact
+> about the runtime, and a stale copy lies.)
+
 **Status:** accepted
 **Date:** 2026-08-16
-**Product:** `engine` — Cycle 7, executor v1. Amends ADR-0212, applies ADR-0220's rule.
+**Product:** `engine` — Cycle 7, executor v1. Amends ADR-0212, applies ADR-0220's rule. **Clause 4 amended by ADR-0224.**
 **Reversibility:** two-way
 No schema widens and no event kind is added. The seat value and the payload field are both already-legal shapes; reverting means going back to a seat that quarantines the receipt, which is what ADR-0212 as written produces.
 **Revisit trigger:** `hermes --usage-file PATH` starts writing a report reliably, carrying token counts and a model. `tests/engine-usage-flag-probe.mjs` asserts today's behaviour, **goes red on that day, and leaves the file on disk to be read** — at which point the seat can carry a measured model id and clause 4 below is re-decided rather than left as fail-safe plumbing.
