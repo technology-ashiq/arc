@@ -226,8 +226,25 @@ export const NARROWEST_TOOLSET = "vision";
  */
 export function toolsetsFor(doc) {
   if (!doc || typeof doc !== "object") return "";
-  if (doc.permissions !== "declared") return "";
   if (!Array.isArray(doc.tools)) return "";
+  /**
+   * THE PREDICATE MATCHES `declaredCapabilities` EXACTLY, and the first draft did not — found by an
+   * adversarial pass, on a real committed file.
+   *
+   * That draft required `permissions: declared` up front, which threw away the tools list of any
+   * file marked `unrestricted`. The GATE does not: past the empty-list branch it never consults
+   * `permissions` again, because `unrestricted` means "nobody has set the coarse field", not
+   * "nothing has been narrowed" — a populated `tools:` list IS the narrowing, and POL-D says the
+   * intersection is the whole rule. So `processes/kickoff-plan.process.yaml` (`unrestricted`, six
+   * tokens) had the gate reading a narrow declaration while this function discarded it and handed
+   * the runtime all seventeen toolsets. Two functions, one field, opposite answers, and the wider
+   * one was the enforcement.
+   *
+   * `permissions` still decides the EMPTY case, and only that case: `declared` + `tools: []` is the
+   * statement "asks for nothing" (ADR-0223), while `unrestricted` + `tools: []` is an absence of
+   * information and must not be read as a narrow claim.
+   */
+  if (doc.tools.length === 0) return doc.permissions === "declared" ? NARROWEST_TOOLSET : "";
   const out = [];
   for (const raw of doc.tools) {
     let token;
@@ -243,7 +260,9 @@ export function toolsetsFor(doc) {
     if (!Array.isArray(sets)) return "";  // an unclassified token widens, it never narrows
     for (const s of sets) if (!out.includes(s)) out.push(s);
   }
-  return out.length ? out.join(",") : NARROWEST_TOOLSET;
+  // out is non-empty here unless every token mapped to nothing, which only `ask.human`-style
+  // entries can do -- and those DO map to a toolset, so an empty out means the loop returned early.
+  return out.join(",");
 }
 const USAGE_FILE = process.env.ARC_HERMES_USAGE_FILE || "";
 

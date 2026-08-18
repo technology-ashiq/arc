@@ -172,9 +172,81 @@ _derive() { cd "$ARC_ROOT" && node --input-type=module -e "$1"; }
   [ "$output" = "narrowest=vision" ]
 }
 
+@test "the gate and the driver never disagree about the same declaration" {
+  # THE HOLE AN ADVERSARIAL PASS FOUND, pinned. The first draft required `permissions: declared`
+  # before deriving anything, which discarded the tools list of every file marked `unrestricted` --
+  # so `kickoff-plan` (unrestricted, six tokens) had the GATE reading a narrow declaration while the
+  # DRIVER handed the runtime all seventeen toolsets. Two functions, one field, opposite answers, and
+  # the wider one was the enforcement.
+  #
+  # The invariant is not "they return the same value" -- they speak different vocabularies. It is
+  # that they never disagree about DIRECTION: whenever the gate falls back to all eight capabilities
+  # (it could not read a narrow claim), the driver must pass no flag; and whenever the gate reads a
+  # narrow claim, the driver must narrow too. A row where one narrows and the other widens is the bug.
+  run _derive "
+    const h = await import('./.claude/scripts/engine/drivers/hermes.mjs');
+    const g = await import('./.claude/scripts/hq/lib/policy/run-gate.mjs');
+    // CAPABILITIES lives in model.mjs, not run-gate -- derived rather than written as 8, because a
+    // literal here would keep passing the day the vocabulary grows a ninth.
+    const { CAPABILITIES } = await import('./.claude/scripts/hq/lib/policy/model.mjs');
+    const rows = [
+      ['declared+empty',          { permissions:'declared',     tools: [] }],
+      ['unrestricted+empty',      { permissions:'unrestricted', tools: [] }],
+      ['no-permissions+empty',    { tools: [] }],
+      ['declared+read',           { permissions:'declared',     tools: ['fs.read'] }],
+      ['unrestricted+read',       { permissions:'unrestricted', tools: ['fs.read'] }],
+      ['unrestricted+six',        { permissions:'unrestricted', tools: ['fs.read','fs.write','shell.run','git.op','ask.human','agent.invoke'] }],
+      ['declared+unknown',        { permissions:'declared',     tools: ['telepathy.invoke'] }],
+      ['unrestricted+unknown',    { permissions:'unrestricted', tools: ['telepathy.invoke'] }],
+      ['declared+absent',         { permissions:'declared' }],
+      ['declared+null',           { permissions:'declared',     tools: null }],
+      ['declared+scalar',         { permissions:'declared',     tools: 'everything' }],
+      ['declared+mapping',        { permissions:'declared',     tools: [{ 'shell.run': ['x'] }] }],
+    ];
+    const bad = [];
+    for (const [label, doc] of rows) {
+      const gateWide = g.declaredCapabilities(doc).size === CAPABILITIES.length;
+      const driverWide = h.toolsetsFor(doc) === '';
+      if (gateWide !== driverWide) bad.push(label + '(gateWide=' + gateWide + ',driverWide=' + driverWide + ')');
+    }
+    console.log(bad.length ? 'DISAGREE: ' + bad.join(' ') : 'all ' + rows.length + ' shapes agree on direction');"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == "all "*" shapes agree on direction" ]]
+}
+
+@test "the three readers of the tools vocabulary have no UNPINNED drift between them" {
+  # There are three tables keyed by the same `tools:` tokens: the gate's TOOL_CAPABILITIES, this
+  # driver's TOOLSET_FOR, and the adapter's TOOL_MAP which renders the interactive command files.
+  # An adversarial pass found `web.search` present in the adapter and absent from the other two --
+  # pre-existing, harmless today (an unclassified token makes the gate declare everything, so the run
+  # is denied before any driver acts) and NOT silently tolerated: it is pinned by name here.
+  #
+  # Classifying it is a policy decision, not a tidy-up: adding `web.search` to TOOL_CAPABILITIES
+  # would WIDEN it from all-eight to one capability, and that belongs in a reviewed diff with an ADR.
+  # What this test buys is that the NEXT drift fails instead of joining it.
+  run _derive "
+    const h = await import('./.claude/scripts/engine/drivers/hermes.mjs');
+    const g = await import('./.claude/scripts/hq/lib/policy/run-gate.mjs');
+    const a = await import('./.claude/scripts/engine/adapters/claude-code.mjs');
+    const gate = new Set(Object.keys(g.TOOL_CAPABILITIES));
+    const drv  = new Set(Object.keys(h.TOOLSET_FOR));
+    const adp  = new Set(Object.keys(a.TOOL_MAP ?? {}));
+    const KNOWN_GAP = new Set(['web.search']);
+    const diff = [];
+    for (const t of adp) if (!gate.has(t) && !KNOWN_GAP.has(t)) diff.push('adapter-only:' + t);
+    for (const t of gate) if (!drv.has(t)) diff.push('gate-only:' + t);
+    for (const t of drv) if (!gate.has(t)) diff.push('driver-only:' + t);
+    // The known gap must still BE a gap -- if it gets classified, this test must be updated rather
+    // than quietly keep excusing a token that no longer needs excusing.
+    for (const t of KNOWN_GAP) if (gate.has(t)) diff.push('stale-waiver:' + t);
+    console.log(diff.length ? 'DRIFT: ' + diff.join(' ') : 'gate=' + gate.size + ' driver=' + drv.size + ' adapter=' + adp.size + ' no unpinned drift');"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"no unpinned drift" ]]
+}
+
 @test "this file registered every test it declares" {
-  [ "${#BATS_TEST_NAMES[@]}" -eq 8 ] || {
-    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 8 -- a @test was silently dropped"
+  [ "${#BATS_TEST_NAMES[@]}" -eq 10 ] || {
+    echo "registered ${#BATS_TEST_NAMES[@]} tests, expected 10 -- a @test was silently dropped"
     false
   }
 }
