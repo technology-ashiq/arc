@@ -32,6 +32,36 @@ const pack = (over = {}) => ({ slug: "three-states-not-two", previewUrl: "https:
   slopReport: "clean", citationReport: "clean", diff: "+1 -0", povLine: "POV: ...",
   templateId: "title-a", contentSha: sha("a"), ...over });'
 
+# ---------- the experiment-kind scan, defined ONCE ----------
+#
+# The live check and its negative control both read these. They used to hold separate copies of
+# the patterns, and an adversarial pass showed the deployed one could then be mutated to match
+# nothing while the control went on certifying the copy it owned.
+
+# The closed kind list, READ FROM the registry that actually gates emission rather than copied
+# next to the test. A copy is how the first repair drifted: it named six kinds where the registry
+# holds eight, and the two it missed were the two used to walk straight through it. Exits non-zero
+# unless the set is exactly eight, so extending the closed set -- an ADR-level event -- fails this
+# suite loudly instead of quietly widening the hole.
+EXPERIMENT_KIND_PROG='const V = await import("./.claude/scripts/hq/lib/validate-experiment.mjs");
+const k = V.EXPERIMENT_KINDS;
+if (!Array.isArray(k) || k.length !== 8) { console.error("REGISTRY_DRIFT:" + (Array.isArray(k) ? k.length : "absent")); process.exit(3); }
+for (const x of k) console.log(x);'
+
+_experiment_kinds() { (cd "$ARC_ROOT" && node --input-type=module -e "$EXPERIMENT_KIND_PROG"); }
+
+# The kinds as one ERE alternation, dots made literal. A failed read yields an empty string, and
+# every caller asserts non-empty before scanning, so a registry that cannot be read fails the test
+# rather than producing a pattern that matches nothing.
+_experiment_kind_alternation() {
+  _experiment_kinds | tr -d '\r' | sed 's/[.]/[.]/g' | tr '\n' '|' | sed 's/|$//'
+}
+
+# `experiment.` continuing into a name character. An English sentence ends the word with a space or
+# with nothing after it, so prose cannot match. The leading class rejects a hyphen so that naming
+# evolve validate-experiment.mjs by path is not read as an emission.
+EXPERIMENT_SHAPE='(^|[^-A-Za-z])experiment[.][A-Za-z_$]'
+
 # ---------- the module-graph guard is a PARSE ----------
 
 @test "publish: the real publish graph carries no merge, push or deploy capability" {
@@ -251,14 +281,143 @@ JSON
   [ "$output" = "BAD_TEMPLATE" ]
 }
 
-@test "publish: growth emits zero experiment kinds" {
-  # That stream is evolve's and the two are never summed (ADR-0302, ADR-1106). An absence check, so
-  # it carries a positive control: the grep must be able to find something in these files at all.
-  run bash -c "grep -rl 'experiment\.' '$ARC_ROOT/.claude/scripts/growth/' || true"
-  [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [ -z "$output" ] || { echo "a growth source names an experiment kind: $output"; false; }
-  run bash -c "grep -rl 'content\.published' '$ARC_ROOT/.claude/scripts/growth/' || true"
-  [ -n "$output" ] || { echo "positive control failed: the grep finds nothing in growth at all"; false; }
+@test "publish: growth names no evolve experiment receipt" {
+  # That stream is evolve, and the two are never summed (ADR-0302, ADR-1106). An ABSENCE check,
+  # whose dominant failure mode is therefore going quietly blind rather than going red.
+  #
+  # HISTORY, because every line below is a scar. This was one grep for `experiment\.` until
+  # 2026-08-18, when a comment ending "...out of the experiment." turned five CI legs red with the
+  # code underneath it correct. The lane writes about experiments for a living, so that was going
+  # to recur, and a gate that cries wolf is a gate that gets edited to fit whatever tripped it.
+  # The first repair split it into a broad scan that skipped comment-shaped lines plus a scan for
+  # six named kinds. TWO fresh adversarial passes then took that repair apart, and both reached
+  # the same verdict: it was WEAKER than the single grep it replaced. What they demonstrated:
+  #
+  #   - the registry holds EIGHT kinds, not six. `experiment.rolled_back` and `promotion.proposed`
+  #     were missing, and the second contains no `experiment.` substring at all. The list was a
+  #     COPY of a closed set that lives somewhere else, so it had already drifted.
+  #   - a line opening with `*` is not a comment. A generator method and a wrapped operator
+  #     continuation both execute, both open with `*`, and both emitted a real receipt under node
+  #     while the gate reported clean.
+  #   - the exclusion anchor re-anchored on any `:12: //` INSIDE the matched line, and this repo
+  #     cites source positions in that exact form constantly.
+  #   - `grep | grep -v || true` always exits 0, so the status assertion guarding it was decorative.
+  #   - a NUL byte or, under a UTF-8 locale, one invalid multibyte sequence makes grep call a file
+  #     binary and stop reporting lines. `.claude/scripts/evolve/board.mjs` carries two raw NULs
+  #     today, so this is a live idiom one directory over, not a hypothetical.
+  #   - a UTF-8 BOM is not `[[:space:]]`, so a BOM-prefixed comment defeated the comment skip.
+  #
+  # THE REPAIR IS TO STOP GUESSING WHICH LINES ARE COMMENTS. Nothing is excluded now. Both signals
+  # match shapes that only code produces, so prose is out by construction rather than by filter:
+  #
+  #   SIGNAL 1 -- the eight kinds READ FROM THE REGISTRY, verbatim, everywhere, comments included.
+  #     Derived, never copied, and the reader fails loudly unless the closed set is exactly eight,
+  #     so a ninth kind breaks this test instead of slipping past it. Prose does not write
+  #     `experiment.rolled_back`; if a comment ever does, a human should look.
+  #   SIGNAL 2 -- the stream token continuing into a kind: `experiment.` followed by a name
+  #     character. An English sentence ends the word with a space or with nothing after it, so it
+  #     cannot match. The leading class rejects a hyphen, so naming evolve validate-experiment.mjs
+  #     by path is not read as an emission -- that citation tripped the first repair.
+  #
+  # `-a` on every scan forces text treatment, which is what closes the NUL and locale holes on all
+  # three legs regardless of grep version or an unset LC_ALL. `run grep` directly instead of
+  # `bash -c "..."` leaves no embedded program for an apostrophe in a path to break, and makes
+  # `$status` grep OWN status, where 1 means it ran and found nothing. That single number is the
+  # it-ran assertion the previous version only appeared to have.
+  #
+  # DECLARED LIMIT, because a gate must say what it does not catch: a kind assembled at runtime
+  # from parts is invisible to any literal scan, and was invisible to the original too. ADR-1102
+  # answered that class for E2 with a parse of the module graph rather than a grep, and the same
+  # answer is the right one here. Tracked as a follow-up, not left as a silence.
+  alt="$(_experiment_kind_alternation)"
+  [ -n "$alt" ] || { echo "the experiment kind registry could not be read"; false; }
+
+  # grep -r does not descend a symlinked directory and says nothing when it declines, so an
+  # unscanned subtree would read as a clean one. Prove there is nothing to decline.
+  run find "$ARC_ROOT/.claude/scripts/growth/" -type l
+  [ -z "$output" ] || { echo "a symlink under growth is skipped by grep -r, so it is unscanned: $output"; false; }
+
+  run grep -ranE "$alt" "$ARC_ROOT/.claude/scripts/growth/"
+  [ "$status" -eq 1 ] || { echo "signal 1 status $status (0 = a registered kind is named here, 2+ = the scan itself failed): $output"; false; }
+
+  run grep -ranE "$EXPERIMENT_SHAPE" "$ARC_ROOT/.claude/scripts/growth/"
+  [ "$status" -eq 1 ] || { echo "signal 2 status $status (0 = a kind shape is named here, 2+ = the scan itself failed): $output"; false; }
+
+  # POSITIVE CONTROL, run through the SAME scan shape rather than a different one, because the
+  # question it has to answer is whether THIS scan can produce output at all. It is a COUNT and not
+  # an existence check: one readable file satisfies existence while every other file in the tree is
+  # silently unreadable, which is exactly how a per-file blind spot hides behind a green control.
+  run grep -ralaE 'content[.]published' "$ARC_ROOT/.claude/scripts/growth/"
+  [ "$status" -eq 0 ] || { echo "positive control: the scan found nothing anywhere in growth (status $status)"; false; }
+  hits="$(printf '%s\n' "$output" | wc -l | tr -d '[:space:]')"
+  [ "$hits" -ge 5 ] || { echo "positive control: only $hits growth files were readable by the scan, expected at least 5"; false; }
+}
+
+@test "publish: the experiment scan fires on every registered kind and on none of the prose" {
+  # THE MUTANT IS THE NEGATIVE CONTROL. An absence check that has gone blind is indistinguishable
+  # from one that is passing, so the scan is planted with real emissions and made to find them.
+  #
+  # The previous negative control was itself a vacuous pass, twice over. It held its OWN copies of
+  # the patterns, so mutating the deployed one to match nothing left it certifying the copy; and
+  # every assertion was `[ -n "$output" ]`, which bats satisfies with grep own error text, so it
+  # passed with ZERO fixtures on disk. Both are closed here: the patterns come from the same
+  # file-level definitions the live check uses, every fixture is asserted non-empty after writing,
+  # and the assertions read `$status` and CONTENT rather than emptiness.
+  #
+  # One fixture per REGISTERED kind, generated by looping the registry. The old control exercised
+  # two of six alternation branches, and the kind it never planted was the kind that escaped.
+  alt="$(_experiment_kind_alternation)"
+  [ -n "$alt" ] || { echo "the experiment kind registry could not be read"; false; }
+
+  d="$BATS_TEST_TMPDIR/growthlike"
+  mkdir -p "$d/emits" "$d/prose"
+
+  _experiment_kinds > "$d/kinds.txt"
+  [ -s "$d/kinds.txt" ] || { echo "the experiment kind registry could not be listed"; false; }
+  n=0
+  while read -r k; do
+    k="$(printf '%s' "$k" | tr -d '[:space:]')"
+    [ -n "$k" ] || continue
+    n=$((n + 1))
+    printf 'emitEvent("%s", { unit_id: "u1" });\n' "$k" > "$d/emits/kind-$n.mjs"
+    [ -s "$d/emits/kind-$n.mjs" ] || { echo "fixture $n was never written; the control would have certified nothing"; false; }
+  done < "$d/kinds.txt"
+  [ "$n" -eq 8 ] || { echo "expected 8 registered kinds, planted $n"; false; }
+
+  # The four shapes two adversarial passes used to walk through the first repair. Each of these
+  # executes in real JavaScript, and each opens its line in a way that looked like a comment.
+  printf '  */ emitEvent("experiment.rolled_back", { proposal_id: "p1" });\n' > "$d/emits/after-block-close.mjs"
+  printf '  * rollback() { return emitEvent("experiment.promoted", {}); }\n'  > "$d/emits/generator-method.mjs"
+  printf 'const w = 3\n  * emitEvent("experiment.measured", {});\n'           > "$d/emits/operator-continuation.mjs"
+  printf 'emitEvent("experiment.opened", { ref: "adr-0304.md:12: // n" });\n' > "$d/emits/colon-reference.mjs"
+  for f in after-block-close generator-method operator-continuation colon-reference; do
+    [ -s "$d/emits/$f.mjs" ] || { echo "escape fixture $f was never written"; false; }
+  done
+
+  run grep -ranE "$alt" "$d/emits/"
+  [ "$status" -eq 0 ] || { echo "signal 1 went blind on planted emissions (status $status): $output"; false; }
+  for k in experiment.rolled_back promotion.proposed experiment.promoted experiment.measured; do
+    printf '%s\n' "$output" | grep -qF "$k" || { echo "signal 1 missed $k in: $output"; false; }
+  done
+
+  run grep -ranE "$EXPERIMENT_SHAPE" "$d/emits/"
+  [ "$status" -eq 0 ] || { echo "signal 2 went blind on planted emissions (status $status): $output"; false; }
+  printf '%s\n' "$output" | grep -qF "experiment.rolled_back" || { echo "signal 2 missed the kind after a block close: $output"; false; }
+
+  # And the prose that must stay silent. The first entry is the exact sentence that turned five CI
+  # legs red on 2026-08-18; the last is the path citation the first repair then tripped on.
+  printf '  // a draft naming its own arm is a draft opting itself out of the experiment.\n' > "$d/prose/line-comment.mjs"
+  printf '/** Growth never touches an evolve experiment. It only publishes. */\n'            > "$d/prose/block-comment.mjs"
+  printf 'export const arm = readArm(); // it opts itself out of the experiment.\n'          > "$d/prose/trailing-comment.mjs"
+  printf 'export const V = ".claude/scripts/hq/lib/validate-experiment.mjs";\n'              > "$d/prose/path-citation.mjs"
+  for f in line-comment block-comment trailing-comment path-citation; do
+    [ -s "$d/prose/$f.mjs" ] || { echo "prose fixture $f was never written"; false; }
+  done
+
+  run grep -ranE "$alt" "$d/prose/"
+  [ "$status" -eq 1 ] || { echo "signal 1 read prose as a registered kind (status $status): $output"; false; }
+  run grep -ranE "$EXPERIMENT_SHAPE" "$d/prose/"
+  [ "$status" -eq 1 ] || { echo "signal 2 read prose as a kind shape (status $status): $output"; false; }
 }
 
 # ---------- update vs duplicate, and the unedited counter ----------

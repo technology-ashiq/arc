@@ -178,6 +178,13 @@ draft.* If you cannot name it, the draft does not pass, and neither lint above c
 - **Cluster `c-001` contains `yc s23`** — a headline fragment that survives every selection rule.
   Killing that class needs a blocklist (fragile) or token-level attestation (unevidenced). It is a
   known limit handled at gate 1, which is a human reading the proposal (ADR-1116).
+  **RULED 2026-08-18: no article is written for `yc s23`.** The search behind it is a directory
+  lookup — who was in that batch — which arc cannot answer without writing about YC instead of
+  about arc, and neither the POV floor nor E3 would pass that. Gate 1 fired for exactly the case it
+  was left open for. The cluster file is deliberately **not** edited: it is the mined record of what
+  was found, and an approved plan rewritten to match a later editorial call is the same attribution
+  hole that sourcing `cluster_id` from the plan exists to prevent. Cluster-complete is unaffected —
+  REQ-09 needs pillar + ≥5 spokes and 6 spokes remain.
 - **This cycle cannot earn an L2 promotion.** The bar is 20 unedited approvals and ten articles
   yields at most 10 (ADR-1107).
 - **The A/B slot produces no verdict.** Five articles per arm against evolve's ~1,900-per-arm floor
