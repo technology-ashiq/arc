@@ -17,21 +17,34 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
+import { canonicalRoot, parseModelJson, pinnedModel, runDriver, settle } from "./common.mjs";
 import { parseYamlSubset } from "../yaml-subset.mjs";
 import { renderAllowedTools } from "../adapters/claude-code.mjs";
 
 const CLI = process.env.ARC_CLAUDE_CLI || "claude";
-const ROOT = process.env.ARC_ROOT || process.cwd();
+// The work root -- the child cwd, and nothing else. The canonical process file is read from the
+// MACHINERY root instead (ADR-0220 splits them; ADR-0223 records why it matters): the policy gate
+// validates the file at policyRoot(), so a driver building its prompt and its tool grant from a
+// file at $ARC_ROOT is validating one read and using another.
+const WORK_ROOT = process.env.ARC_ROOT || process.cwd();
 
 await runDriver("claude-code", async ({ processName, input }) => {
-  const canonPath = join(ROOT, "processes", `${processName}.process.yaml`);
+  const canonPath = join(await canonicalRoot(), "processes", `${processName}.process.yaml`);
   const parsed = parseYamlSubset(readFileSync(canonPath, "utf8"));
   if (!parsed.ok) throw new Error(`canonical file does not parse: ${parsed.error.what}`);
   const doc = parsed.value;
 
   // Reuse, never re-derive. If this ever cannot be reused, that is the named finding.
   const allowed = doc.permissions === "declared" ? renderAllowedTools(doc.tools) : null;
+  // AND REUSE THE ADAPTER REFUSAL, NOT ONLY ITS MAPPING. `adapters/claude-code.mjs` THROWS on
+  // an empty grant under `declared`, because an ABSENT --allowedTools is UNRESTRICTED: the most
+  // restrictive declaration a process can make otherwise reaches the CLI byte-identical to the
+  // most permissive one. This driver took the mapping and left the rule behind, so the rule held
+  // at compile time and not at dispatch -- the twin-fix shape, and the drift this file's own
+  // header warns about. Found by the adversarial pass on ADR-0223, which made `tools: []`
+  // dispatchable and so made this reachable.
+  if (doc.permissions === "declared" && !allowed)
+    throw new Error("claude-code driver: `permissions: declared` produced an empty grant set — an absent --allowedTools means UNRESTRICTED, so this run would silently widen the process");
 
   const prompt = [
     doc.body,
@@ -51,7 +64,7 @@ await runDriver("claude-code", async ({ processName, input }) => {
 
   let raw;
   try {
-    raw = execFileSync(CLI, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: ROOT });
+    raw = execFileSync(CLI, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024, cwd: WORK_ROOT });
   } catch (e) {
     throw new Error(`claude CLI failed: ${String(e.message).split("\n")[0]}`);
   }

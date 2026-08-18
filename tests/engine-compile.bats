@@ -54,6 +54,15 @@ _procs() {
   [[ "$output" == *"[retired] "* ]]
   [[ "$output" == *"kickoff-plan.process.yaml — migration proof retired"* ]]
   [[ "$output" == *"review-diff.process.yaml — migration proof retired"* ]]
+  # AND THE WAIVED PILOT IS NAMED, for the same reason the two retired ones are. The arithmetic
+  # below derives `waived` from the same directory arc-compile scans, so losing that file
+  # decrements both sides AND removes its clause from the output -- three cancelling changes, and
+  # the equation stays balanced. An adversarial mutation pass proved it: DELETING
+  # build-in-public-draft, and separately reclassifying it as a job stub, each left this test
+  # green while deleting any other pilot reddened it. Only a pinned identity notices a file
+  # leaving the pilot set, which is the exact property the comment below claims to enforce.
+  [[ "$output" == *"build-in-public-draft.process.yaml — baseline waived"* ]] || {
+    echo "arc-compile does not name the waived pilot -- it has left the scan"; echo "$output"; false; }
   # 1 proven + 2 retired must equal the pilots on disk. Without this, a file that vanished from
   # the scan entirely would leave both numbers looking healthy -- the arithmetic is the check that
   # neither count is quietly dropping a file.
@@ -66,13 +75,45 @@ _procs() {
   # Both halves are counted rather than only the pilots, so the arithmetic still catches the case
   # this check exists for -- a file quietly dropping out of the scan -- and additionally catches a
   # stub that silently lost its marker, which would otherwise just look like one more pilot.
-  local total=0 stubs=0
+  # A BASELINE-WAIVED PILOT IS A THIRD CLASS, and pinning the pilot count at a literal 3 made the
+  # arithmetic mean "no process may ever be added" rather than "no file may quietly drop out".
+  # build-in-public-draft (REQ-07) replaces no existing command, so a paired baseline is
+  # IMPOSSIBLE rather than merely absent and the file waives it in writing. It is a pilot, it has
+  # no proof to reproduce, and it belongs in neither the byte-identical total nor the retired one.
+  local total=0 stubs=0 waived=0
   total="$(ls "$ARC_ROOT/processes"/*.process.yaml | wc -l)"
   for _f in "$ARC_ROOT/processes"/*.process.yaml; do
-    if grep -q '^job_stub:' "$_f"; then stubs=$((stubs + 1)); fi
+    if grep -q '^job_stub:' "$_f"; then stubs=$((stubs + 1)); continue; fi
+    # Scoped to the baseline block. A bare grep for the key would also match a `waived:` under any
+    # other top-level block, which is the unscoped-assertion trap this suite already records.
+    if awk '/^baseline:/ { inb = 1; next } /^[^ ]/ { inb = 0 } inb && /^  waived:/ { hit = 1 } END { exit !hit }' "$_f"; then
+      waived=$((waived + 1))
+    fi
   done
   pilots=$((total - stubs))
-  [ "$pilots" -eq 3 ] || { echo "expected 3 pilot process files, found $pilots (total $total, job stubs $stubs)"; false; }
+  # arc-compile must AGREE with the directory about how many pilots have no baseline.
+  #
+  # MATCHED AGAINST THE SUMMARY LINE, NEVER THE WHOLE OUTPUT. arc-compile interpolates the process
+  # file's own `baseline.waived` value into its per-file `[no-baseline]` line, so free text a
+  # process author controls lands in `$output`. Grepping all of it let a waiver reason spelled
+  # `1 with no baseline to reproduce)` satisfy an assertion about the SUMMARY -- proven by deleting
+  # the summary clause from arc-compile and watching the same block go FAIL then PASS purely on the
+  # reason string. Today only `process-lint`'s closed reason list stops that, and this test does not
+  # run the lint; an assertion should not depend on a gate it never invokes.
+  local summary; summary="$(printf '%s\n' "$output" | grep '^arc-compile: ')"
+  [ -n "$summary" ] || { echo "arc-compile printed no summary line at all"; echo "$output"; false; }
+  if [ "$waived" -gt 0 ]; then
+    [[ "$summary" == *"($waived with no baseline to reproduce)"* ]] || {
+      echo "arc-compile does not report $waived no-baseline pilot(s); the directory and the scan disagree"
+      echo "$summary"; false; }
+  else
+    [[ "$summary" != *"with no baseline to reproduce"* ]] || {
+      echo "arc-compile reports a no-baseline pilot, but no file on disk waives its baseline"
+      echo "$summary"; false; }
+  fi
+  # 1 proven + 2 retired + the waived pilots must equal the pilots on disk.
+  [ "$((1 + 2 + waived))" -eq "$pilots" ] || {
+    echo "1 proven + 2 retired + $waived waived != $pilots pilots (total $total, job stubs $stubs)"; false; }
 }
 
 @test "REQ-02: a retirement must be DECLARED, not inferred from a mismatch" {

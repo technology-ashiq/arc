@@ -523,7 +523,56 @@ for (const file of files) {
 
     // --- baseline: bound to the NAME, inside the repo, a real file, and body-checked ---
     const bl = doc.baseline;
-    if (!bl || typeof bl !== "object" || Array.isArray(bl)) {
+    // THE CAPABILITY-GAP WAIVER, and the gate had no way to express it.
+    //
+    // Every process here until 2026-08-18 replaced something a driver already did, so `baseline`
+    // was unconditionally required: target, path, commit, sha256, all four. Cycle 7's REQ-07
+    // introduces the first process that replaces NOTHING -- no current driver runs its class -- and
+    // its own DoD names the verdict arm: "a paired baseline is impossible and honestly waived in
+    // one line, never fabricated, never quietly omitted."
+    //
+    // So the spec MANDATED a waiver the gate refused to let anyone write. The first attempt invented
+    // `baseline: {waived: ...}` and this lint correctly rejected the unknown key; the alternative was
+    // to point `path` at an unrelated file, which is precisely the fabrication the DoD forbids.
+    // A rule that leaves only a lie as the compliant option is a rule with a hole in it.
+    //
+    // THE WAIVER IS DELIBERATELY NOT CHEAP: a closed reason, a real sentence, and a date, and it is
+    // mutually exclusive with the pin fields -- so it cannot be used to skip a baseline that exists,
+    // only to declare that none can.
+    const WAIVER_REASONS = ["capability-gap"];
+    const isWaiver = bl && typeof bl === "object" && !Array.isArray(bl)
+      && Object.prototype.hasOwnProperty.call(bl, "waived");
+    if (isWaiver) {
+      if (!WAIVER_REASONS.includes(bl.waived)) {
+        add("baseline-drift", at(lineOf(text, "waived:")),
+          `baseline.waived \`${bl.waived}\` is not a known waiver reason`, WAIVER_REASONS.join(" | "),
+          String(bl.waived), "waived: capability-gap");
+      }
+      if (typeof bl.why !== "string" || bl.why.trim().length < 20) {
+        add("baseline-drift", at(lineOf(text, "waived:")),
+          "a waived baseline needs `why`, and a real sentence rather than a shrug",
+          "a string of at least 20 characters", JSON.stringify(bl.why),
+          'why: "no existing driver runs this class, so there is nothing to measure against"');
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(String(bl.recorded ?? ""))) {
+        add("baseline-drift", at(lineOf(text, "waived:")),
+          "a waived baseline needs `recorded`, so the waiver has a date somebody can question",
+          "YYYY-MM-DD", String(bl.recorded), "recorded: 2026-08-18");
+      }
+      for (const k of BASELINE_REQUIRED) {
+        if (k in bl) {
+          add("baseline-drift", at(lineOf(text, k)),
+            `baseline.${k} is set alongside \`waived\` — a waiver claims no baseline EXISTS, so it cannot carry one`,
+            "either the pin fields or the waiver, never both", k,
+            "remove the waiver if there is a real baseline to pin");
+        }
+      }
+      for (const k of Object.keys(bl)) {
+        if (!["waived", "why", "recorded"].includes(k)) {
+          add("unknown-key", at(lineOf(text, k)), `unknown key \`${k}\` in a waived \`baseline\``, "waived, why, recorded", k, "a waiver is three fields");
+        }
+      }
+    } else if (!bl || typeof bl !== "object" || Array.isArray(bl)) {
       add("baseline-drift", at(lineOf(text, "baseline:")), "`baseline` block is missing", BASELINE_KEYS.join(", "), JSON.stringify(bl), "baseline:\n  target: claude-code");
     } else {
       for (const k of Object.keys(bl)) {

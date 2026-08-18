@@ -145,6 +145,34 @@ export function fakeResponse(processName) {
  * "not in force" -- the same contract arc-run keeps, announced the same way. A module that IS
  * present and throws denies.
  */
+/**
+ * WHERE THE PROCESS FILE IS READ FROM IS NOT WHERE THE WORK HAPPENS (ADR-0220, ADR-0223).
+ *
+ * ADR-0220 split one name into two: `root` is WHERE ARC MACHINERY LIVES -- `processes/`,
+ * `router.yaml`, the drivers -- and `workRoot` is where the driver does its work, handed down to
+ * the child as `ARC_ROOT` and as its cwd. The canonical process file belongs to the first.
+ *
+ * Every CLI driver read it from the second. So `driverPolicyDenial` below validated the file at
+ * `policyRoot()` while the driver body built its prompt and its tool grant from a DIFFERENT file
+ * at `$ARC_ROOT` -- validate one read, compare another, the defect this lane has now fixed in
+ * `verdict.mjs`, in `lineage.mjs` and inside `arc-run.mjs` itself (which records closing exactly
+ * this hole: "a target tree could widen its own grant"). The driver copies were left open, and an
+ * adversarial pass walked through them with an attacker-authored `processes/` tree: the gate read
+ * arc's benign file and the prompt plus `--allowedTools` came from the hostile one.
+ *
+ * The governing root is where THIS CODE lives, never the caller's. A tree with no policy library
+ * keeps the consumer-repo contract and falls back, because there is nothing there to disagree
+ * with.
+ */
+export async function canonicalRoot() {
+  try {
+    const gate = await import("../../hq/lib/policy/run-gate.mjs");
+    return gate.policyRoot();
+  } catch {
+    return process.env.ARC_ROOT || process.cwd();
+  }
+}
+
 async function driverPolicyDenial(processName) {
   if (!processName) return null;
   let gate;

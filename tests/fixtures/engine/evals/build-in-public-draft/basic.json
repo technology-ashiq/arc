@@ -1,0 +1,15 @@
+{
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle. A bench runner is a declared no-go; these exist so a later cycle has fuel rather than an archaeology project. `input` is keyed by the process's inputs[].name; `expected` must satisfy the process's output schema. The expected draft is deliberately a MODEST one — it states a fact and a surprise and stops — because a fixture showing an aspirational answer teaches a later comparison the wrong bar. `pack` carries CONTENT rather than a reference, so the data boundary can scan what is actually leaving.",
+  "input": {
+    "pack_ref": "pack-2026-08-18-cycle7",
+    "pack": "### #tripwire-dead-on-arrival\nA test in the suite passed for four days while measuring nothing. Its probe asked a mounted volume for a config file that was never put there, so the probe skipped on every machine — and the assertion accepted the skip as a pass. It was green the whole time. The rule that came out of it: assert a probe RAN before asserting what it printed.\n"
+  },
+  "expected": {
+    "draft": "A test in our suite passed for four days while measuring nothing. Its probe skipped on every machine — a leftover environment variable made one of its gates fail — and the assertion accepted the skip as a pass. It was green the whole time. We now assert that a probe RAN before asserting what it printed.",
+    "sources": [
+      "pack-2026-08-18-cycle7#tripwire-dead-on-arrival"
+    ],
+    "task-class": "build-in-public-draft",
+    "pack-ref": "pack-2026-08-18-cycle7"
+  }
+}
