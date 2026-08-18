@@ -1,0 +1,48 @@
+{
+  "$comment": "Draft JSON Schema for the face: section of products/<x>/manifest.json (ADR-1306). Frozen at Phase 00; product-lint KNOWN_FIELDS gains 'face' in the same change that first uses it (Phase 05, the evolve: precedent). Fields exactly: room, ring, kinds, actors, sanctioned, stations, decisions, numbers, concepts.",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "arc-face/face-section.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["room", "ring"],
+  "properties": {
+    "room": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$", "description": "room id, unique across manifests; must appear in the expected set" },
+    "ring": { "enum": ["command", "kernel", "factory", "money", "company"] },
+    "kinds": { "type": "array", "items": { "type": "string", "pattern": "^[a-z_]+\\.[a-z_.]+$" }, "description": "spine kinds this room renders typed; anything else renders generically" },
+    "actors": { "type": "array", "items": { "type": "string" }, "description": "spine actor prefixes whose receipts belong to this room's feed" },
+    "sanctioned": { "type": "array", "items": { "type": "string" }, "description": "sanctioned file ids (the L2 /api/file/:id allow-list entries) this room reads — file-borne panels get the file-not-log badge" },
+    "stations": {
+      "type": "array",
+      "description": "this room's line on the Map, in pipeline order (ADR-1304)",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "type"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "label": { "type": "string", "description": "verbatim — the command/script that performs the step" },
+          "type": { "enum": ["machine", "stamp", "seal"], "description": "circle = machine step, square = stamp (human decides), lock = seal (forever-human)" },
+          "kind": { "type": "string", "description": "the spine kind whose receipt lights this station, if any" },
+          "chip": { "type": "string", "description": "the exact CLI the human runs himself — copy, never execute" },
+          "shared": { "type": "boolean", "description": "true = joined by several lines (drawn once, by kind)" }
+        }
+      }
+    },
+    "decisions": { "type": "array", "items": { "type": "string" }, "description": "approval.requested profiles (gate/subject values) whose stamp cards surface in this room's Decide zone" },
+    "numbers": {
+      "type": "array",
+      "description": "the room's Numbers-zone tiles; every tile renders with Why? precedents and honest states",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "source"],
+        "properties": {
+          "id": { "type": "string" },
+          "label": { "type": "string" },
+          "source": { "type": "string", "description": "the derivation: kind filter, file id, or reader function — never a stored value" }
+        }
+      }
+    },
+    "concepts": { "type": "array", "items": { "type": "string" }, "description": "verbatim vocabulary chips; each must resolve to a station in this room (⌘K backing store)" }
+  }
+}

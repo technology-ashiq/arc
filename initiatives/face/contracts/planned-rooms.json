@@ -1,0 +1,39 @@
+{
+  "$comment": "Face-side planned-rooms registry (ADR-1306): rooms for lanes not yet born render DOTTED from this file until /arc-kickoff --lane births them and the manifest face: section takes over. No manifest is ever invented for an unborn lane. Sourced from the named PLAN/BRIEF files — re-read at Phase 05, never trusted stale.",
+  "version": "1.0.0",
+  "frozen": "2026-08-19",
+  "rooms": [
+    {
+      "room": "ops",
+      "ring": "money",
+      "source": "docs/strategy/plans/PLAN-ops.md (OPS-A..M)",
+      "line": ["registry", "sweep", "incident.raised", "ack", "resolve", "support file-drop", "classify", "template draft", "approval (stamp)", "human sends (seal)", "weekly report", "drill"],
+      "shows_today": ["docs/canary/*.md", "incident.raised (0 ever)"],
+      "takes_over": "manifest face: section at /arc-kickoff --lane ops"
+    },
+    {
+      "room": "trader",
+      "ring": "money",
+      "source": "docs/strategy/plans/PLAN-trader.md (TRD-A..M)",
+      "line": ["question.opened", "PLAYGROUND (EXPLORATORY)", "register", "snapshot.pinned", "backtest", "honesty battery", "verdict", "paper-live (human gate)", "30 days", "CONTINUE/DORMANT", "THE LOCK (display only)"],
+      "seals": ["unlock control", "real orders", "WIN (the word)"],
+      "takes_over": "manifest face: section at /arc-kickoff --lane trader"
+    },
+    {
+      "room": "discover",
+      "ring": "money",
+      "source": "docs/strategy/plans/PLAN-discover.md (DIS-A..D)",
+      "line": ["hunt", "miner", "normalize", "dedupe/cluster", "score.yaml", "top-2", "council", "approval (stamp)", "one-pager", "separate venture kickoff"],
+      "shows_today": ["idea.captured"],
+      "takes_over": "manifest face: section at /arc-kickoff --lane discover"
+    },
+    {
+      "room": "chat-mcp",
+      "ring": "command",
+      "source": "docs/strategy/plans/BRIEF-chat-mcp.md (sleeping — the face fires its trigger)",
+      "line": ["hq_query", "hq_brief", "hq_pnl", "hq_inbox", "hq_approve"],
+      "note": "the same L2 reader + the same decision path exposed as MCP tools for other clients; renders as Ask arc's second door, never a separate truth (ADR-1307)",
+      "takes_over": "manifest face: section when the brief wakes"
+    }
+  ]
+}
