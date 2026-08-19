@@ -93,6 +93,21 @@ generic → Map animation → Tape play (keep as-of).
   the contract — `face-sections.mjs --check` turns a hand-edit into a named CI failure —
   and `product-lint` `KNOWN_FIELDS` was extended in the same change, discharging
   assumption row 3 (the `evolve:` precedent held).
+- 2026-08-19 — **CI red a second time, and my row was breaking OTHER lanes.** The face-ask
+  router row carried `hosted: local` alone. `cap`/`hosted`/`judge`/`review_by` are one
+  group — carry any, carry all four — so the router refused to load with 3 faults and
+  `arc-run` was dead for every lane; five engine-suite jobs failed on my row, not their own
+  code. The fix was to DROP the field, not complete it: those four describe a HIRED external
+  runtime under tenure (ADR-0216/0217), and face-ask runs in-house, so inventing a judge and
+  a review date would fabricate a hire. Local-only still holds — ADR-1307 plus the driver
+  choice — and `data-boundary.mjs` only special-cases `hosted: cloud`.
+- 2026-08-19 — **Phase 07 capability gap, found by running it rather than reviewing it.**
+  `face-ask` declares `tools: []` (the brain has no hands). The `claude-code` driver
+  refuses it: an absent `--allowedTools` means UNRESTRICTED, so an empty grant fails closed
+  — ADR-0223 working as designed. There is no way yet to say "zero tools" explicitly. The
+  wrong fix is to give the brain a token tool to get a green run; the right one is an
+  engine-lane seam for an explicit empty allowlist. Recorded in the phase spec, raised
+  cross-lane, and Phase 07's bar is met on the offline deterministic path meanwhile.
 - 2026-08-19 — **CI red once, on the Windows leg only**, exactly as the no-local-tests rule
   predicts: a bats test built an import path by interpolating `$ARC_ROOT` through `sed` and
   produced `D:\d\a\arc\arc`. Moved to a real `.mjs` resolving from `import.meta.url`. That

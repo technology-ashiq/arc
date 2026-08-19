@@ -38,6 +38,29 @@ if squeezed)
 One coarse line, refined at phase start via `/arc-change`: golden-questions fixture
 (20/20 with citations) + zero-write tool-list fixture + offline-subset fixture.
 
+## Known gap, found 2026-08-19 by running it (not by review)
+
+**The zero-tools brain is not runnable on today's `claude-code` driver, and that is the
+driver being right.** `face-ask` declares `tools: []` — the whole point, ADR-1307: a brain
+with no hands. Driving `arc-run --process face-ask` gets past routing and then refuses:
+
+> `claude-code driver: permissions: declared produced an empty grant set — an absent
+> --allowedTools means UNRESTRICTED, so this run would silently widen the process`
+
+That is ADR-0223's fix working exactly as designed (an absent flag means unrestricted, so
+an empty grant must fail closed rather than omit the flag). But it leaves a real capability
+gap: **the driver has no way to say "zero tools" explicitly.**
+
+The wrong fix is to give `face-ask` a token harmless tool to get past the check — that
+trades the design for a green run. The right fix is an engine-lane change: let a driver
+pass an explicit empty allowlist, distinct from omitting the flag. Until then, Phase 07's
+DoD is met by the **offline deterministic path** (which needs no driver at all) and the
+golden-question bar is measured there; the LLM path opens when the engine lane lands the
+empty-allowlist seam.
+
+This is cross-lane, so it is raised to the engine lane rather than fixed here (shared
+organs, `.claude/rules/lanes.md`).
+
 ## Rabbit holes in this phase
 
 Voice (deferred, ADR-1315) · a "command palette that runs commands" · prompt engineering
