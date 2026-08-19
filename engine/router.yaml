@@ -164,6 +164,27 @@ classes:
     review_by: 2026-08-31
     fallback: []
 
+  # --- face lane, Cycle 15 (ADR-1307) -------------------------------------------------------
+  # Ask arc: the face's question box, as a governed run. Reads the company's own state and
+  # answers; it holds NO tools (the process declares `tools: []`, which ADR-0223 made mean
+  # "grant nothing"), so it cannot act even if a prompt asked it to.
+  #
+  # `hosted: local` is the DECISION, not a description of where it happens to run today
+  # (ADR-1307 + the ADR-0219 data boundary): every input is internal-only company state, so
+  # the boundary resolves to a local driver on effectively all traffic. A question that
+  # genuinely needs external context reopens this row by ADR before the row is widened --
+  # and `data-boundary.mjs` reads this value to explain its refusals, so a stale entry here
+  # makes the boundary wrong about where the data was going, which is the one thing it exists
+  # to be right about (the lesson the build-in-public row above paid for).
+  #
+  # Tier is balanced-workhorse per ADR-0069: this is a read-and-summarize job over supplied
+  # state, not a judgment call. Changing it is a reviewed diff citing that ADR, never a tweak.
+  face-ask:
+    tier: balanced-workhorse
+    driver: claude-code
+    hosted: local
+    fallback: []
+
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
 # works: `arc-run --driver auto` on an unknown class is an error, and this row only supplies
 # the tier for one that is known but unrouted.

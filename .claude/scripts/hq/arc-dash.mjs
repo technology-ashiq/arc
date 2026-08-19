@@ -52,7 +52,7 @@ import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 import { query, applyFilters, readAll, spineHealth, spineRoot } from "./spine.mjs";
-import { decide, loadApprovals } from "./arc-inbox.mjs";
+import { decide, loadApprovals, cutToDay } from "./arc-inbox.mjs";
 import { render as renderBrief } from "./arc-brief.mjs";
 import { derivePnl } from "./lib/ledger/pnl.mjs";
 import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
@@ -126,9 +126,9 @@ function parseAsof(url) {
   if (!DAY_RE.test(asof)) throw new DashError("BAD_ASOF", `asof "${asof}" is not YYYY-MM-DD`);
   return asof;
 }
-function cutAsof(events, asof) {
-  return asof === null ? events : events.filter((e) => e.day <= asof);
-}
+// The as-of cut is IMPORTED, never re-implemented (arc-inbox.cutToDay) -- see its comment:
+// this was a twin, and twins in this repo drift and then disagree at the boundary.
+const cutAsof = cutToDay;
 function lastId(events) {
   return events.length ? events[events.length - 1].event.id : null;
 }
@@ -299,8 +299,31 @@ async function apiAsk(ctx, body) {
     throw new DashError("PROCESS_NOT_LANDED", "face-ask is not on this tree yet (Phase 07); the honest answer is this refusal, not an ungoverned model call");
   const q = body && typeof body.q === "string" ? body.q : "";
   if (!q) throw new DashError("BAD_BODY", "ask needs { q: \"...\" }");
+
+  // THE PROCESS DECLARES TWO REQUIRED INPUTS, and the first cut sent one. face-ask has
+  // `tools: []` -- it cannot fetch anything -- so a call without `state` hands a brain with
+  // no hands nothing to reason about, and the process's own input contract refuses it. The
+  // read door assembles the pack HERE, which is also the design: the brain never gathers.
+  const health = spineHealth(ctx.root);
+  const { requested, decidedIds } = await loadApprovals(ctx.root);
+  const open = requested.filter((e) => !decidedIds.has(e.event.id));
+  const state = [
+    `SPINE: ${health.events} receipts · ${health.daysClosed} day.closed seals · ${health.kindsSeen ?? "?"} of 46 kinds have ever fired.`,
+    `OPEN approval.requested (${open.length}): ${open.map((e) => {
+      const p = e.event.payload || {};
+      const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
+      return `${e.event.id} ${what}`;
+    }).join(" · ") || "none"}`,
+    `MODE: ${ctx.mode}${ctx.mode === "sim" ? " (SIMULATED — every value below is fixture data, never real)" : ""}`,
+  ].join("\n");
+
   return new Promise((resolveP, rejectP) => {
-    execFile(process.execPath, [join(ctx.repo, ".claude", "scripts", "engine", "arc-run.mjs"), "--process", "face-ask", "--input", q], {
+    // arc-run takes ONE `--input` carrying a JSON object keyed by the process's declared
+    // input names -- not a flag per input. The first cut invented `--state` and arc-run
+    // rejected it by name, which is the good failure: an unknown flag is a refusal, never
+    // a silently-dropped argument.
+    execFile(process.execPath, [join(ctx.repo, ".claude", "scripts", "engine", "arc-run.mjs"),
+      "--process", "face-ask", "--input", JSON.stringify({ q, state })], {
       cwd: ctx.repo, timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
     }, (err, stdout, stderr) => {
       if (err) return rejectP(new DashError("ASK_FAILED", String(stderr || err.message).slice(0, 500)));
@@ -310,21 +333,33 @@ async function apiAsk(ctx, body) {
 }
 
 // ---------- THE route table (single dispatch authority; --routes prints it) ----------
-// mutates:true marks a route that can write to the spine. The route-enumeration fixture
-// asserts EXACTLY ONE such route exists and that it is /api/decide (FACE-C/ADR-1302).
-// /api/ask proxies to the governed engine (its receipts ride run.completed, emitted by
-// arc-run under policy, never by this server) -- proxy, not a write of this door's own.
+//
+// EVERY route declares `spineEffect` explicitly, and the fixture fails closed on a route
+// that declares none. That precision is the fix for a circular gate: the first cut carried
+// only `mutates`, and the fixture asserted "exactly one route has mutates:true" -- reading
+// back the very flag it was asserting on. A new write route labelled `mutates:false` (or
+// with the key simply absent, which `filter(r => r.mutates)` silently drops) passed it.
+// An adversarial pass named that circularity AND its live instance: /api/ask was flagged
+// `mutates:false` while the arc-run it proxies emits `run.completed` -- a spine write by
+// any honest reading, invisible to the gate the moment face-ask lands.
+//
+//   "write"   this door writes the spine itself. EXACTLY ONE (FACE-C/ADR-1302).
+//   "receipt" this door causes a spine write by a GOVERNED subprocess: arc-run emits
+//             run.completed under policy, budgeted and tier-pinned. Not this door's write,
+//             but not "none" either -- naming it is the difference between a contract and
+//             a comfortable label.
+//   "none"    reads only. Nothing about this route can reach the spine's writer.
 const ROUTES = Object.freeze([
-  { method: "GET", path: "/api/health", mutates: false, handler: (ctx, url) => apiHealth(ctx, url) },
-  { method: "GET", path: "/api/spine", mutates: false, handler: (ctx, url) => apiSpine(ctx, url) },
-  { method: "GET", path: "/api/brief", mutates: false, handler: (ctx, url) => apiBrief(ctx, url) },
-  { method: "GET", path: "/api/inbox", mutates: false, handler: (ctx, url) => apiInbox(ctx, url) },
-  { method: "GET", path: "/api/pnl", mutates: false, handler: (ctx, url) => apiPnl(ctx, url) },
-  { method: "GET", path: "/api/board", mutates: false, handler: (ctx) => apiBoard(ctx) },
-  { method: "GET", prefix: "/api/lane/", mutates: false, handler: (ctx, url, tail) => apiLane(ctx, tail) },
-  { method: "GET", prefix: "/api/file/", mutates: false, handler: (ctx, url, tail) => apiFile(ctx, tail) },
-  { method: "POST", path: "/api/decide", mutates: true, handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
-  { method: "POST", path: "/api/ask", mutates: false, proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
+  { method: "GET", path: "/api/health", mutates: false, spineEffect: "none", handler: (ctx, url) => apiHealth(ctx, url) },
+  { method: "GET", path: "/api/spine", mutates: false, spineEffect: "none", handler: (ctx, url) => apiSpine(ctx, url) },
+  { method: "GET", path: "/api/brief", mutates: false, spineEffect: "none", handler: (ctx, url) => apiBrief(ctx, url) },
+  { method: "GET", path: "/api/inbox", mutates: false, spineEffect: "none", handler: (ctx, url) => apiInbox(ctx, url) },
+  { method: "GET", path: "/api/pnl", mutates: false, spineEffect: "none", handler: (ctx, url) => apiPnl(ctx, url) },
+  { method: "GET", path: "/api/board", mutates: false, spineEffect: "none", handler: (ctx) => apiBoard(ctx) },
+  { method: "GET", prefix: "/api/lane/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiLane(ctx, tail) },
+  { method: "GET", prefix: "/api/file/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiFile(ctx, tail) },
+  { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
+  { method: "POST", path: "/api/ask", mutates: false, spineEffect: "receipt", proxy: "arc-run --process face-ask", handler: (ctx, url, tail, body) => apiAsk(ctx, body) },
 ]);
 
 // ---------- the static shell (GET /, no data, no auth) ----------
@@ -354,7 +389,9 @@ function boot(argv) {
     if (a.startsWith("--")) { flags[a.slice(2)] = argv[i + 1]; i++; }
   }
   if (flags.routes) {
-    const table = ROUTES.map((r) => ({ method: r.method, path: r.path || `${r.prefix}:tail`, mutates: r.mutates, ...(r.proxy ? { proxy: r.proxy } : {}) }));
+    // spineEffect is printed VERBATIM, never defaulted: the fixture's "every route declares
+    // one" check can only fail closed if an undeclared route arrives here as undefined.
+    const table = ROUTES.map((r) => ({ method: r.method, path: r.path || `${r.prefix}:tail`, mutates: r.mutates, spineEffect: r.spineEffect, ...(r.proxy ? { proxy: r.proxy } : {}) }));
     process.stdout.write(JSON.stringify(table, null, 2) + "\n");
     return null;
   }

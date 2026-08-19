@@ -192,3 +192,71 @@ and that failure is correct — it is the tool holding the phase to its own orde
 
 Nothing in the sections above is a claim that the variants diverged. It is a claim about what
 they were **assigned** to be.
+
+---
+
+## Phase 2 — the divergence call
+
+Written after all three variants were built and re-rendered. Judged from the three rendered
+PNGs first, then cross-checked against each `tokens.css`. The two calls below are made
+independently — a run must pass on both. **This section supersedes the placeholder above:** the
+verdict lines are no longer absent.
+
+### Structure — the 7 dimensions (evidence from the renders)
+
+- **1 · Primary object — differs.** A renders as one continuous surface where every screen is a
+  region and every open approval is an unstamped row; B renders the company as a literal transit
+  diagram (concentric rings, radiating lines, square stamp-stations, a printed legend); C opens
+  exactly one `approval.requested` as a full-depth serif dossier with the rest of the queue
+  demoted to a hairline identifier rail. Three different primary objects are legible at thumbnail
+  size.
+- **2 · Primary action — differs.** A's stamp is inline in a dense grid row (sweep-many); C's is
+  a single deliberate act with the mandatory reason as the largest field on the screen
+  (adjudicate-one); B stamps from amber station cards read off the map. The sweep-vs-adjudicate
+  split between the two dark variants is real and visible; B's "stamp where it lives" is the
+  weakest of the three — performed in cards near the map rather than literally on it.
+- **3 · Info before action — differs.** A packs the profile body into fixed row columns at
+  ~28 px density; C expands the full receipt drawer (canonical JSON, sha, supersedes chain), the
+  seals verbatim and the ₹ honesty class for the one open record; B surfaces spatial context —
+  which stations lit, which segments run dashed. Distinct on screen.
+- **4 · Navigation model — converged on the render (weak).** All three shipped the eight
+  signature screens as one long vertical scroll behind a near-identical top nav bar, so the
+  intended split — no-nav selection (A) vs spatial zoom/pan (B) vs record-to-record rail (C) — is
+  only partly readable from the static page. Within-section the models do differ (A's grid, B's
+  map viewport, C's reloading rail), but page-level navigation is the weakest of the seven.
+- **5 · Progressive disclosure — differs.** C is unmistakably inverted: a hairline rail of
+  identifiers with one record at maximum depth. A discloses in place, drawers opening beneath the
+  selected row. B discloses by proximity/zoom on the map. Visible.
+- **6 · Expert path — weak on the render.** The keyboard floor (`j/k a/r w t / ⌘K`) is shared,
+  and its per-variant application — walking stations vs rows vs a rail — does not surface in a
+  static screenshot. Specified in the tables, not shown by the pixels.
+- **7 · Failure/recovery — differs.** All three render the state matrix with verbatim refusal
+  codes, but the treatment differs: A's refusal holds a grid row, C's is a two-level
+  rail-code-plus-retained-evidence table, B's is a reddened place on the picture.
+
+### Art direction — the 4 axes (judged from the rendered screens, not the token files)
+
+- **Palette — differs, three ways.** The thumbnail test passes cleanly: A reads cold blue-black
+  (`#101114`, one ground) with grey ink and a few amber marks; B reads warm cream paper
+  (`#F7F5F0`) with black linework and amber; C reads warm oxidised brown-black (`#17140F`
+  surround / `#241F17` sheet) with bone/parchment serif on a lighter floating sheet. The two dark
+  variants (A, C) are unmistakably different temperatures — cold vs oxidised warm — not one dark
+  reused twice.
+- **Typography — differs, three ways.** A is monospace as the interface face; B is a geometric
+  grotesque with wide-tracked all-caps small labels; C is a genuine text serif carrying a large
+  display "approval.requested". No two share a typeface character.
+- **Density & rhythm — differs.** A is maximum-density packed rows; B is airy, with whitespace as
+  the map's substrate; C is a paced single-column reading rhythm with large section spacing.
+  Three different pacings of the eye.
+- **Surface & ornament — differs.** A is absolutely flat — hairlines and the single arc-ring
+  curve, no icon set; B's entire visual system is 2 px linework (station glyphs, hatched non-real
+  segments, a first-class legend, a printed ruler); C is one layered dossier sheet with a 2 px
+  ruled left margin and the stamp skeuomorph. Distinct idioms, no shared ornament.
+
+### Verdict
+
+Director call: A/B/C differ materially on 5 of 7 dimensions — three different primary objects (whole-company surface vs transit map vs one deep record), three disclosure rules and three failure treatments are visible on the renders; only navigation and expert-path partly converged because all three stacked the eight screens as one scroll behind a shared nav bar.
+
+Art-direction call: A/B/C differ materially on 4 of 4 axes — palette (cold blue-black / warm cream / oxidised brown-black), typeface character (mono / grotesque / serif), density (packed / airy / paced) and ornament (flat hairline / linework map / layered dossier) each read differently at thumbnail size, so no two pages are indistinguishable.
+
+Both calls stand. No reassignment ordered — the run passes both gates and proceeds to critique.

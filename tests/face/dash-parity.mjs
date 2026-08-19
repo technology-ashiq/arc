@@ -14,11 +14,16 @@ import { execFileSync, spawn } from "node:child_process";
 import { cpSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..");
 const PORT = 8411;
+
+// The repo's OWN sha function, imported rather than reimplemented -- a parity fixture that
+// hand-rolled the hash would be proving its own arithmetic, not the emitter's.
+// pathToFileURL: a bare Windows path is not a legal ESM specifier.
+const { eventSha } = await import(pathToFileURL(join(REPO, ".claude/scripts/hq/lib/canonical.mjs")).href);
 
 const tmp = mkdtempSync(join(tmpdir(), "face-parity-"));
 const BASE = join(tmp, "base");
@@ -90,7 +95,15 @@ if (cliEv && doorEv) {
   check("actor named + identical (no door impersonation)", cliEv.actor === "arc-event" && doorEv.actor === "arc-event");
   check("idem identical (same decision, same dedupe key)", cliEv.idem === doorEv.idem);
   check("payload byte-identical incl. reason", JSON.stringify(cliEv.payload) === JSON.stringify(doorEv.payload));
-  check("sha differs ONLY because id+ts do (recompute check)", cliEv.sha !== doorEv.sha);
+  // ACTUALLY RECOMPUTE. The first cut asserted only `cliEv.sha !== doorEv.sha` under the
+  // label "recompute check" -- a claim the assertion did not make (adversarial pass, F4).
+  // Two proofs now: each sha is the real eventSha of its own event (so neither side is
+  // carrying a sha that describes something else), and with id/ts normalised to a shared
+  // value the two shas become IDENTICAL -- which is what "differs only because id+ts do"
+  // actually means, rather than merely "differs".
+  check("each sha is genuinely its own event's eventSha", eventSha(cliEv) === cliEv.sha && eventSha(doorEv) === doorEv.sha);
+  const norm = (e) => ({ ...e, id: "01NORMALISEDNORMALISEDNORM", ts: "2026-01-01T00:00:00+05:30" });
+  check("normalise id+ts and the two shas COINCIDE (the real invariant)", eventSha(norm(cliEv)) === eventSha(norm(doorEv)));
 }
 
 console.log(`RAN: ${ran} checks, ${failed} failed`);

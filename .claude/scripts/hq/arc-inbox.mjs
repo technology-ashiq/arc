@@ -35,6 +35,20 @@ const ARC_EVENT = join(HERE, "arc-event.mjs");
 // same approval collide as DUP_IDEM -- the backstop behind the read-check below.
 const decisionIdem = (approvalId) => sha256Hex(`decision.recorded|${approvalId}`);
 
+/**
+ * THE as-of day cut, in ONE place.
+ *
+ * `asof` (YYYY-MM-DD) means "as the spine stood at the END of that day". This lived twice
+ * -- once here, once in arc-dash's `cutAsof` -- byte-identical and therefore fine, right up
+ * until one of them changed. That is the twin shape this repo keeps paying for (grep the
+ * pattern, not the file), and an adversarial pass named it before it could bite: had one
+ * side become `<`, `/api/spine?asof=X` and `/api/inbox?asof=X` would have disagreed at the
+ * day boundary, each defended by its own green test.
+ */
+export function cutToDay(events, asof) {
+  return asof === null || asof === undefined ? events : events.filter((e) => e.day <= asof);
+}
+
 // Exported for the L2 decision door (face lane, ADR-1302): /api/decide calls THIS decide
 // and the inbox fold comes from THIS loadApprovals -- one implementation, byte-parity by
 // construction. Extraction found mechanical at kickoff re-verification 2026-08-19.
@@ -43,7 +57,7 @@ export async function loadApprovals(root, { asof = null } = {}) {
   // asof (YYYY-MM-DD): fold as the spine stood at the END of that day -- BOTH sides of
   // the fold cut at the same boundary, or a later decision would close an approval that
   // was still open on the day being replayed (the Tape's honesty, ADR-1305).
-  const cut = (events) => (asof === null ? events : events.filter((e) => e.day <= asof));
+  const cut = (events) => cutToDay(events, asof);
   const requested = cut((await query(root, { kind: "approval.requested" })).events);
   const decided = cut((await query(root, { kind: "decision.recorded" })).events);
   const decidedIds = new Set(decided.map((e) => e.event.payload && e.event.payload.decides));

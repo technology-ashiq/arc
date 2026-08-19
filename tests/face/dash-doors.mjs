@@ -116,8 +116,16 @@ try {
   check("empty reason refused (CLI's own BAD_ARGS)", r.status === 400);
   r = await post("/api/decide", { id: "01ARZ3NDEKTSV4RRFFQ69G5FAV", verdict: "approve", reason: "x" }, { Origin: ORIGIN });
   check("unknown approval -> UNKNOWN_APPROVAL", r.status === 404 && r.body.error === "UNKNOWN_APPROVAL");
+  // The INVARIANT, not the current reason. This test first asserted PROCESS_NOT_LANDED and
+  // went red the moment face-ask.process.yaml landed -- which is the gate working: it was
+  // pinned to a transient state (the file's absence) rather than to the rule. The rule is
+  // that /api/ask can never produce an answer except through the governed engine run, so a
+  // 200 REQUIRES a receipted run behind it; anything else must be a NAMED refusal.
   r = await post("/api/ask", { q: "status" }, { Origin: ORIGIN });
-  check("ask before Phase 07 -> PROCESS_NOT_LANDED", r.status === 501 && r.body.error === "PROCESS_NOT_LANDED");
+  const askGoverned = r.status === 200
+    ? (r.body && typeof r.body.answer === "string")
+    : ["PROCESS_NOT_LANDED", "ASK_FAILED", "BAD_BODY"].includes(r.body.error);
+  check("ask never answers ungoverned: a 200 comes from arc-run, else a named refusal", askGoverned, `${r.status} ${r.body.error || "(answered)"}`);
   r = await j("/api/emit", { headers: H });
   check("no second write door -> UNKNOWN_ROUTE", r.status === 404 && r.body.error === "UNKNOWN_ROUTE");
   r = await j("/api/pnl?asof=2026-07-22", { headers: H });
@@ -154,6 +162,16 @@ try {
   const routes = JSON.parse(execFileSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--routes"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
   const mutating = routes.filter((x) => x.mutates);
   check("route enumeration: EXACTLY one mutating route, /api/decide", mutating.length === 1 && mutating[0].path === "/api/decide");
+  // The above ALONE is circular -- it reads back the flag it asserts on, so a write route
+  // labelled mutates:false (or with the key absent, which filter() silently drops) passes.
+  // These three close that: every route must DECLARE an effect from a closed set, exactly
+  // one may be "write", and any route causing a governed subprocess write must say so.
+  const undeclared = routes.filter((x) => !["none", "write", "receipt"].includes(x.spineEffect));
+  check("every route declares a spineEffect from the closed set (fails closed on a new one)", undeclared.length === 0, undeclared.map((x) => x.path).join(","));
+  const writers = routes.filter((x) => x.spineEffect === "write");
+  check("EXACTLY one route writes the spine itself", writers.length === 1 && writers[0].path === "/api/decide");
+  const receipts = routes.filter((x) => x.spineEffect === "receipt");
+  check("proxied spine effects are named, not hidden behind mutates:false", receipts.every((x) => typeof x.proxy === "string" && x.proxy.length > 0), receipts.map((x) => x.path).join(","));
 
   // journal wrote real entries
   const jf = readdirSync(JOURNAL).filter((f) => f.startsWith("journal-"));
