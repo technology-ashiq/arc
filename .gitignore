@@ -79,3 +79,7 @@ docs/evidence/planner-bench/
 # Each test removes its own in a finally block; this is the belt for a crashed run.
 .pol-tmp-*/
 tmp-escape-probe/
+
+# Playwright MCP page dumps — design agents verify renders with it and it
+# writes here. Artifacts, never sources.
+.playwright-mcp/

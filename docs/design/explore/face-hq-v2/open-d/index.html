@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc · Minutes · Day 22</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23F5F1E7'/%3E%3Crect x='3' y='3' width='10' height='10' fill='%231E3FAE'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400..700;1,6..72,400..700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+  /* design tokens. Paper, one ink, and four reserved signal colors. */
+  :root{
+    --paper:      #F5F1E7;
+    --paper-deep: #EFEADD;
+    --ink:        #17130C;
+    --ink-60:     rgba(23,19,12,.62);
+    --ink-40:     rgba(23,19,12,.42);
+    --ink-25:     rgba(23,19,12,.25);
+    --rule:       rgba(23,19,12,.16);
+    --rule-soft:  rgba(23,19,12,.09);
+    --pen:        #1E3FAE;   /* needs a human · the signing blue    */
+    --pen-soft:   rgba(30,63,174,.09);
+    --money:      #17694A;   /* real money · banknote green         */
+    --alarm:      #AE2318;   /* something is wrong · red ink        */
+    --unreal:     #6B5E8C;   /* not real data · always hatched      */
+    --serif: "Newsreader", Georgia, "Times New Roman", serif;
+    --mono:  "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+  }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ background:var(--paper); }
+  body{
+    color:var(--ink);
+    font-family:var(--serif);
+    font-optical-sizing:auto;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    min-height:900px;
+  }
+  .page{
+    width:1440px; margin:0 auto;
+    padding:28px 0 20px 112px;
+  }
+  /* every band: main column + margin column, Tufte-style */
+  .band{
+    display:grid;
+    grid-template-columns:800px 300px;
+    column-gap:60px;
+    align-items:start;
+  }
+  .mono{ font-family:var(--mono); }
+
+  /* --- masthead --- */
+  header.band{ padding-bottom:10px; border-bottom:1px solid var(--ink); }
+  .mast-main{ display:flex; align-items:baseline; gap:18px; white-space:nowrap; }
+  .wordmark{
+    font-family:var(--serif); font-size:26px; font-weight:600; letter-spacing:-.01em;
+    font-feature-settings:"onum";
+  }
+  .mast-title{
+    font-family:var(--mono); font-size:10px; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--ink-60);
+  }
+  .mast-date{
+    margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--ink);
+    letter-spacing:.02em;
+  }
+  .mast-side{ display:flex; flex-direction:column; gap:4px; padding-top:4px; }
+  .seal-caption{ font-family:var(--mono); font-size:10px; letter-spacing:.05em; color:var(--ink-60); white-space:nowrap; }
+
+  /* --- opening sentence --- */
+  .lede-band{ padding:18px 0 15px; border-bottom:1px solid var(--rule); }
+  .lede{
+    font-size:40px; line-height:1.14; font-weight:460; letter-spacing:-.012em;
+    max-width:800px;
+  }
+  .lede .pen{ color:var(--pen); }
+  .note-ref{
+    font-family:var(--mono); font-size:11px; color:var(--ink-40);
+    vertical-align:super; margin-left:2px;
+  }
+  .sidenote{
+    font-family:var(--mono); font-size:10.5px; line-height:1.65;
+    color:var(--ink-60); letter-spacing:.01em;
+  }
+  .sidenote .sn-ref{ color:var(--ink-40); }
+  .sidenote-serif{
+    font-family:var(--serif); font-style:italic; font-size:13.5px; line-height:1.5;
+    color:var(--ink-60);
+  }
+  .cmd{ color:var(--ink); }
+  .cmd::before{ content:"> "; color:var(--ink-40); }
+
+  /* --- section labels --- */
+  .sect{ padding-top:12px; }
+  .sect-label{
+    font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--ink-60); display:flex; gap:14px; align-items:baseline;
+  }
+  .sect-label b{ color:var(--ink); font-weight:500; }
+
+  /* --- the decision desk (expanded item) --- */
+  .desk{
+    margin-top:11px; padding:13px 22px 14px 20px;
+    border-left:2px solid var(--pen);
+    background:linear-gradient(90deg, var(--pen-soft), rgba(30,63,174,0) 68%);
+  }
+  .desk-kind{
+    display:flex; gap:14px; align-items:baseline; flex-wrap:wrap;
+    font-family:var(--mono); font-size:11px; color:var(--ink-60);
+  }
+  .desk-kind .kind{ color:var(--pen); font-weight:500; }
+  .desk-kind .age{ color:var(--ink); }
+  .desk-title{
+    margin-top:8px; font-size:20px; line-height:1.3; font-weight:480; max-width:720px;
+  }
+  .desk-title .alarm{ color:var(--alarm); }
+  .reason-row{ margin-top:11px; display:flex; align-items:flex-end; gap:16px; }
+  .reason{
+    flex:1; border:none; border-bottom:1px solid var(--ink-40); background:transparent;
+    font-family:var(--serif); font-style:italic; font-size:15.5px; color:var(--ink);
+    padding:6px 2px; resize:none; height:34px; outline:none;
+  }
+  .reason::placeholder{ color:var(--ink-40); font-style:italic; }
+  .reason:focus{ border-bottom-color:var(--pen); }
+  .btn{
+    font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
+    padding:9px 20px 8px; cursor:pointer; border-radius:1px;
+  }
+  .btn-approve{ background:var(--pen); color:var(--paper); border:1px solid var(--pen); }
+  .btn-approve:hover{ background:#172F85; border-color:#172F85; }
+  .btn-reject{ background:transparent; color:var(--pen); border:1px solid var(--pen); }
+  .btn-reject:hover{ background:var(--pen-soft); }
+
+  /* --- collapsed queue rows --- */
+  .rows{ margin-top:6px; }
+  .row{
+    display:grid; grid-template-columns:34px 1fr auto; column-gap:16px;
+    padding:8px 0 7px; border-bottom:1px solid var(--rule-soft);
+    align-items:baseline;
+  }
+  .row:last-child{ border-bottom:none; }
+  .row-count{
+    font-family:var(--mono); font-size:15px; color:var(--pen); font-weight:500;
+    text-align:right;
+  }
+  .row-title{ font-size:16.5px; font-weight:450; }
+  .row-meta{
+    grid-column:2; font-family:var(--mono); font-size:10.5px; color:var(--ink-60);
+    margin-top:2px; letter-spacing:.01em; white-space:nowrap;
+  }
+  .row-cmd{
+    grid-column:3; grid-row:1 / span 2; align-self:center;
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-60);
+  }
+
+  /* --- company state --- */
+  .state-band{ margin-top:14px; padding-top:14px; border-top:1px solid var(--rule); }
+  .ledger{ margin-top:10px; }
+  .ledger-row{
+    display:grid; grid-template-columns:190px 22px 1fr; column-gap:10px;
+    align-items:center; padding:3px 0;
+  }
+  .ledger-kind{ font-family:var(--mono); font-size:12px; color:var(--ink); }
+  .ledger-val{ font-family:var(--mono); font-size:12px; color:var(--ink-60); }
+  .ledger-val .money{ color:var(--money); font-weight:500; }
+  .glyph{ display:block; }
+
+  .lanes{
+    margin-top:8px; display:grid; grid-template-columns:repeat(7,1fr); column-gap:14px;
+    padding:8px 0 6px; border-top:1px solid var(--rule-soft);
+  }
+  .lane{ display:flex; flex-direction:column; gap:2px; }
+  .lane-name{ font-family:var(--mono); font-size:12px; font-weight:500; color:var(--ink); }
+  .lane-phase{ font-family:var(--mono); font-size:10px; color:var(--ink-60); letter-spacing:.04em; }
+  .lane-burn{ font-family:var(--mono); font-size:10px; color:var(--money); margin-top:3px; }
+  .lane-burn .of{ color:var(--ink-40); }
+  .lanes-foot{
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-60); margin-top:2px;
+  }
+
+  .register{ margin-top:10px; padding-top:10px; border-top:1px solid var(--rule-soft); }
+  .register-caption{
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-60); margin-top:5px;
+    letter-spacing:.01em;
+  }
+  .register-caption b{ color:var(--ink); font-weight:500; }
+
+  /* --- today, in the margin --- */
+  .today{ margin-top:10px; }
+  .today-label{
+    font-family:var(--mono); font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+    color:var(--ink-60); margin-bottom:7px;
+  }
+  .today-line{
+    display:grid; grid-template-columns:44px 1fr; column-gap:10px;
+    font-family:var(--mono); font-size:10.5px; line-height:2; color:var(--ink);
+  }
+  .today-line .t{ color:var(--ink-40); }
+
+  /* --- footer key --- */
+  footer{ margin-top:12px; padding-top:11px; border-top:1px solid var(--ink); }
+  .key-band{ align-items:center; }
+  .key{ display:flex; gap:26px; flex-wrap:wrap; align-items:center; }
+  .key-item{
+    display:flex; gap:8px; align-items:center;
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-60); letter-spacing:.02em;
+  }
+  .chip{ width:11px; height:11px; border-radius:1px; flex:none; }
+  .chip-pen{ background:var(--pen); }
+  .chip-money{ background:var(--money); }
+  .chip-alarm{ background:var(--alarm); }
+  .chip-unreal{
+    background:repeating-linear-gradient(45deg, var(--unreal) 0 1.6px, transparent 1.6px 4px);
+    border:1px solid var(--unreal);
+  }
+  .key-states{ display:flex; gap:12px; align-items:center; }
+  .key-state{
+    display:flex; gap:7px; align-items:center; white-space:nowrap;
+    font-family:var(--mono); font-size:10.5px; color:var(--ink-60);
+  }
+  .close-line{
+    margin-top:10px; font-size:18px; font-style:italic; font-weight:440; color:var(--ink);
+  }
+  .close-line .pen{ color:var(--pen); font-style:italic; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ---------------- masthead ---------------- -->
+  <header class="band">
+    <div class="mast-main">
+      <span class="wordmark">arc</span>
+      <span class="mast-title">Minutes of an automatic company</span>
+      <span class="mast-date">Tuesday 19 August 2026 · day 22 · log open</span>
+    </div>
+    <div class="mast-side">
+      <!-- 22 days: 21 sealed solid, day 22 open (outline) -->
+      <svg width="240" height="14" viewBox="0 0 240 14" aria-label="22 days, 21 sealed">
+        <g>
+          <rect x="0"   y="1" width="7" height="12" fill="var(--ink)"/><rect x="10.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="21"  y="1" width="7" height="12" fill="var(--ink)"/><rect x="31.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="42"  y="1" width="7" height="12" fill="var(--ink)"/><rect x="52.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="63"  y="1" width="7" height="12" fill="var(--ink)"/><rect x="73.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="84"  y="1" width="7" height="12" fill="var(--ink)"/><rect x="94.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="105" y="1" width="7" height="12" fill="var(--ink)"/><rect x="115.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="126" y="1" width="7" height="12" fill="var(--ink)"/><rect x="136.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="147" y="1" width="7" height="12" fill="var(--ink)"/><rect x="157.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="168" y="1" width="7" height="12" fill="var(--ink)"/><rect x="178.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="189" y="1" width="7" height="12" fill="var(--ink)"/><rect x="199.5" y="1" width="7" height="12" fill="var(--ink)"/><rect x="210" y="1" width="7" height="12" fill="var(--ink)"/>
+          <rect x="220.5" y="1.5" width="6" height="11" fill="none" stroke="var(--ink)" stroke-width="1"/>
+        </g>
+      </svg>
+      <span class="seal-caption">1,150 receipts · 22 days · 21 sealed shut</span>
+    </div>
+  </header>
+
+  <!-- ---------------- the sentence ---------------- -->
+  <div class="band lede-band">
+    <h1 class="lede">
+      <span class="pen">Thirteen decisions</span> are waiting on you.<span class="note-ref">&#185;</span><br>
+      Nothing else needs a human today.
+    </h1>
+    <aside class="sidenote">
+      <span class="sn-ref">&#185;&nbsp;</span>counted, not estimated:<br>
+      approval.requested raised 55,<br>
+      decided 42, open 13.<br>
+      <span class="cmd">arc log approval.requested</span>
+    </aside>
+  </div>
+
+  <!-- ---------------- the queue ---------------- -->
+  <section class="band sect">
+    <div>
+      <div class="sect-label"><b>Waiting on you</b><span>13 open · oldest raised 4 days ago</span></div>
+
+      <!-- item 1 · the decision desk -->
+      <div class="desk">
+        <div class="desk-kind">
+          <span class="kind">approval.requested</span>
+          <span>01M05A4Y4QM54VRQWSNE9ENQMD</span>
+          <span class="age">raised 4 days ago · the oldest open</span>
+        </div>
+        <p class="desk-title">
+          Approve moving past phase 04 in the engine lane:
+          <span class="alarm">the day-5 kill checkpoint is 0.5 days away with REQ-02 uncertified.</span>
+        </p>
+        <div class="reason-row">
+          <textarea class="reason" rows="1" placeholder="Your reason, typed by you. arc will not draft it."></textarea>
+          <button class="btn btn-approve" type="button">Approve</button>
+          <button class="btn btn-reject" type="button">Reject</button>
+        </div>
+      </div>
+
+      <!-- items 2 to 4 -->
+      <div class="rows">
+        <div class="row">
+          <span class="row-count">3</span>
+          <span class="row-title">Accept or reject build-in-public draft 1 of 3.</span>
+          <span class="row-meta">approval.requested · first of three</span>
+          <span class="row-cmd cmd">arc decide 01M0B663APQMV49EQR9AGR1WJQ</span>
+        </div>
+        <div class="row">
+          <span class="row-count">7</span>
+          <span class="row-title">Escalate a process to a stronger model tier.</span>
+          <span class="row-meta">approval.requested · seven verdicts, seven reasons · rule 1 forbids a batch</span>
+          <span class="row-cmd cmd">arc decide 01M0ASG8JG8X6PQ0045MJ6TY8Q</span>
+        </div>
+        <div class="row">
+          <span class="row-count">2</span>
+          <span class="row-title">Clear a content gate.</span>
+          <span class="row-meta">approval.requested · 2 waiting · nothing publishes while a gate is open</span>
+          <span class="row-cmd cmd">arc queue --gates</span>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <p class="sidenote-serif" style="margin-top:44px">
+        This form is the only thing in arc that writes. One human, one verdict,
+        one reason in his own words. No bulk action, no default reason, no undo.
+        Everything else is a command you run, or a thing no one may automate.
+      </p>
+    </aside>
+  </section>
+
+  <!-- ---------------- the company, from the log ---------------- -->
+  <section class="band state-band">
+    <div>
+      <div class="sect-label"><b>The company, from the log</b><span>every figure traces to a receipt</span></div>
+
+      <div class="ledger">
+        <div class="ledger-row">
+          <span class="ledger-kind">revenue.settled</span>
+          <svg class="glyph" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.4" fill="none" stroke="var(--ink)" stroke-width="1.2"/></svg>
+          <span class="ledger-val">has never fired · no receipt of money in exists · this is not a zero</span>
+        </div>
+        <div class="ledger-row">
+          <span class="ledger-kind">spend.recorded</span>
+          <svg class="glyph" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.8" fill="var(--ink)"/></svg>
+          <span class="ledger-val"><span class="money">₹31,290</span> out across 7 lanes in 22 days</span>
+        </div>
+        <div class="ledger-row">
+          <span class="ledger-kind" style="font-family:var(--serif); font-style:italic; font-size:13.5px; color:var(--ink-60)">runway, forecasts</span>
+          <svg class="glyph" width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.4" fill="none" stroke="var(--ink-40)" stroke-width="1.2" stroke-dasharray="2.2 2.4"/></svg>
+          <span class="ledger-val">not measured · arc holds no number it cannot receipt</span>
+        </div>
+      </div>
+
+      <div class="lanes">
+        <div class="lane"><span class="lane-name">bench</span><span class="lane-phase">phase 02</span><span class="lane-burn">₹3,150 <span class="of">of 6,000</span></span></div>
+        <div class="lane"><span class="lane-name">engine</span><span class="lane-phase">phase 04</span><span class="lane-burn">₹8,140 <span class="of">of 12,000</span></span></div>
+        <div class="lane"><span class="lane-name">face</span><span class="lane-phase">phase 05</span><span class="lane-burn">₹9,480 <span class="of">of 10,000</span></span></div>
+        <div class="lane"><span class="lane-name">growth</span><span class="lane-phase">phase 01</span><span class="lane-burn">₹2,270 <span class="of">of 8,000</span></span></div>
+        <div class="lane"><span class="lane-name">leads</span><span class="lane-phase">phase 03</span><span class="lane-burn">₹5,900 <span class="of">of 9,000</span></span></div>
+        <div class="lane"><span class="lane-name">legal</span><span class="lane-phase">phase 01</span><span class="lane-burn">₹740 <span class="of">of 4,000</span></span></div>
+        <div class="lane"><span class="lane-name">scheduler</span><span class="lane-phase">phase 02</span><span class="lane-burn">₹1,610 <span class="of">of 5,000</span></span></div>
+      </div>
+      <div class="lanes-foot">7 lanes live of 16 · the other 9 are built and idle · <span class="cmd">arc lanes --all</span></div>
+
+      <div class="register">
+        <!-- 46 event kinds · 14 have fired (solid) · 32 unexercised (open) -->
+        <svg width="740" height="12" viewBox="0 0 740 12" aria-label="46 event kinds, 14 fired">
+          <g>
+            <circle cx="6" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="22" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="38" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="54" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="70" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="86" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="102" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="118" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="134" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="150" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="166" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="182" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="198" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="214" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="230" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="246" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="262" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="278" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="294" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="310" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="326" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="342" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="358" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="374" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="390" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="406" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="422" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="438" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="454" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="470" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="486" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="502" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="518" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="534" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="550" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="566" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="582" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="598" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="614" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="630" cy="6" r="4.2" fill="var(--ink)"/>
+            <circle cx="646" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="662" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="678" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="694" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="710" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+            <circle cx="726" cy="6" r="3.8" fill="none" stroke="var(--ink-40)" stroke-width="1.1"/>
+          </g>
+        </svg>
+        <div class="register-caption">
+          <b>14 of 46 event kinds have fired.</b> The other 32 are built, tested, unexercised: never run in anger. <span class="cmd">arc kinds</span>
+        </div>
+      </div>
+    </div>
+
+    <aside>
+      <p class="sidenote-serif" style="margin-top:34px">
+        Banknote green marks real rupees and nothing else. So far, every green figure
+        on this page is money going out.
+      </p>
+      <div class="today">
+        <div class="today-label">Today so far · day 22</div>
+        <div class="today-line"><span class="t">09:12</span><span>decision.recorded</span></div>
+        <div class="today-line"><span class="t">10:04</span><span>approval.requested</span></div>
+        <div class="today-line"><span class="t">11:26</span><span>coverage.check.passed</span></div>
+        <div class="today-line"><span class="t">12:40</span><span>article.published</span></div>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ---------------- key + close ---------------- -->
+  <footer>
+    <div class="band key-band">
+      <div class="key">
+        <span class="key-item"><span class="chip chip-pen"></span>needs a human · pen blue</span>
+        <span class="key-item"><span class="chip chip-money"></span>real money</span>
+        <span class="key-item"><span class="chip chip-alarm"></span>something is wrong</span>
+        <span class="key-item"><span class="chip chip-unreal"></span>not real data · none on this page today</span>
+      </div>
+      <div class="key-states">
+        <span class="key-state"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.6" fill="var(--ink)"/></svg>measured</span>
+        <span class="key-state"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.2" fill="none" stroke="var(--ink)" stroke-width="1.2"/></svg>never happened</span>
+        <span class="key-state"><svg width="11" height="11" viewBox="0 0 12 12"><circle cx="6" cy="6" r="4.2" fill="none" stroke="var(--ink-40)" stroke-width="1.2" stroke-dasharray="2.2 2.4"/></svg>not measured</span>
+      </div>
+    </div>
+    <p class="close-line">
+      Decide <span class="pen">the thirteen</span> and close the book.
+      The company runs on whether you watch it or not.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

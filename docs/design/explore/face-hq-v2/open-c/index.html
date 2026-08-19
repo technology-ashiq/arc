@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc · operations deck</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18.9 5.6 A 9.4 9.4 0 1 0 21.4 12' stroke='%23E8EBEE' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='20.9' cy='8.6' r='2' fill='%23FFB54D'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=B612:ital,wght@0,400;0,700;1,400&family=B612+Mono:ital,wght@0,400;0,700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   arc face · explore v2 · variant open-c
+   THESIS: this is not software for looking at data. It is a deck for
+   commanding a company, and it borrows its discipline from the one field
+   that solved "one human, many machines, thirty minutes" decades ago:
+   the flight deck.
+
+   DOCTRINE (Airbus "quiet dark cockpit"): nothing announces that it is
+   fine. A lamp lights only when something needs the crew. Today exactly
+   one lamp is lit, and its glow falls on the queue it points to. That is
+   the entire hierarchy of the page.
+
+   COLOR LAW (from ECAM, applied without cosplay):
+     amber   = requires the human. The master lamp, the queue, nothing else.
+     green   = real money, and only real money. Today it prints a measured 0.
+     red     = something is wrong. RESERVED. There are zero red pixels on
+               this deck today, and that absence is the statement.
+     magenta = non-real substance (SIMULATED / REHEARSAL / DRILL), always
+               hatched, never summed, never touching the other three.
+   Everything else is steel, glass and engraving.
+
+   TYPE: B612 and B612 Mono, the typeface family Airbus commissioned for
+   cockpit displays: open forms, 0/O and 1/l/I unmistakable, built for
+   reading numbers under stress. The deck is set in it end to end.
+
+   HONESTY MECHANICS: every figure resolves to a receipt in the spine.
+   Three kinds of zero are typographically distinct: a measured 0, an
+   engraved NEVER FIRED, and NOT INSTRUMENTED (which never gets a lamp at
+   all). The system's own vocabulary appears verbatim, lowercase, mono.
+   ========================================================================== */
+
+:root{
+  --deck:      #08090b;
+  --panel:     #0d0f12;
+  --card:      #101317;
+  --raised:    #14181d;
+  --glass:     #07090c;
+  --hair:      #1d2227;
+  --hair-lite: #272d34;
+  --ink-hi:    #e8ebee;
+  --ink:       #aeb6bd;
+  --ink-lo:    #79828b;
+  --engrave:   #565f68;
+  --amber:     #ffb54d;
+  --amber-dim: #b97f2e;
+  --green:     #7fd49b;
+  --magenta:   #d783d2;
+  --red:       #ff5049; /* reserved for incident.raised · unused today, deliberately */
+  --mono: "B612 Mono", "Cascadia Mono", "Consolas", monospace;
+  --sans: "B612", "Segoe UI", system-ui, sans-serif;
+}
+
+*{ margin:0; padding:0; box-sizing:border-box; }
+html,body{ background:var(--deck); }
+body{
+  font-family:var(--sans);
+  color:var(--ink);
+  font-size:13px;
+  line-height:1.5;
+  min-height:100vh;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, #0c0e11 0%, var(--deck) 60%),
+    var(--deck);
+  overflow-x:hidden;
+}
+::selection{ background:rgba(255,181,77,.25); color:var(--ink-hi); }
+
+.deck{
+  position:relative;
+  max-width:1440px;
+  min-height:900px;
+  margin:0 auto;
+  padding:13px 26px 10px;
+  display:grid;
+  grid-template-rows:auto auto 1fr auto auto;
+  row-gap:10px;
+}
+
+/* the one light source on the deck: the lit master lamp, bleeding down
+   onto the queue it points to */
+.deck::before{
+  content:"";
+  position:absolute; inset:0;
+  background:radial-gradient(640px 520px at 15% 12%, rgba(255,181,77,.075), transparent 68%);
+  pointer-events:none;
+}
+/* machined grain */
+.deck::after{
+  content:"";
+  position:absolute; inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  opacity:.028;
+  pointer-events:none;
+}
+
+.mono{ font-family:var(--mono); }
+.kind{ font-family:var(--mono); font-size:11.5px; color:var(--ink-hi); letter-spacing:.01em; }
+
+.engraved{
+  font-size:10px; font-weight:400; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--engrave);
+}
+.label{
+  font-size:10px; font-weight:700; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--ink-lo);
+}
+
+/* ============================== masthead ============================== */
+.masthead{
+  display:flex; align-items:center; gap:18px;
+  padding-bottom:8px;
+  border-bottom:1px solid var(--hair);
+}
+.mark{ display:flex; align-items:center; gap:11px; }
+.mark svg{ display:block; }
+.mark .word{ font-weight:700; font-size:19px; color:var(--ink-hi); letter-spacing:.02em; }
+.mark .sub{ margin-top:1px; }
+.mast-right{ margin-left:auto; display:flex; align-items:center; gap:22px; }
+.mast-cell{ text-align:right; }
+.mast-cell .v{ font-family:var(--mono); font-size:12px; color:var(--ink-hi); }
+.mast-cell .k{ margin-top:2px; }
+.chip-live{
+  font-family:var(--mono); font-size:10px; letter-spacing:.14em; color:var(--ink-hi);
+  border:1px solid var(--hair-lite); border-radius:4px; padding:4px 9px;
+  background:linear-gradient(180deg, rgba(255,255,255,.035), transparent);
+}
+
+/* ============================ annunciators ============================ */
+.annunciators{
+  display:grid; grid-template-columns:repeat(4, 1fr); gap:14px;
+}
+.ann{
+  position:relative;
+  border:1px solid var(--hair);
+  border-radius:8px;
+  background:linear-gradient(180deg, var(--raised), var(--card) 55%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.035);
+  padding:10px 15px 9px;
+  min-height:78px;
+  display:flex; flex-direction:column; justify-content:space-between; gap:5px;
+}
+.ann .head{ display:flex; align-items:center; justify-content:space-between; }
+.ann .read{ display:flex; align-items:baseline; gap:12px; }
+.ann .big{ font-family:var(--mono); font-weight:700; font-size:37px; line-height:1; color:var(--ink-hi); }
+.ann .word-state{ font-family:var(--mono); font-weight:700; font-size:19px; letter-spacing:.06em; color:var(--engrave); }
+.ann .line{ font-family:var(--mono); font-size:11px; color:var(--ink-lo); }
+.ann .foot{ font-size:10px; color:var(--engrave); letter-spacing:.02em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+.lamp{ width:8px; height:8px; border-radius:50%; background:#171c21; border:1px solid var(--hair-lite); }
+
+/* the lit one */
+.ann-master{
+  border-color:rgba(255,181,77,.38);
+  background:
+    radial-gradient(320px 130px at 22% 0%, rgba(255,181,77,.14), transparent 70%),
+    linear-gradient(180deg, var(--raised), var(--card) 55%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.05),
+    0 0 44px rgba(255,181,77,.10),
+    0 0 90px rgba(255,181,77,.05);
+}
+.ann-master .big{ color:var(--amber); text-shadow:0 0 22px rgba(255,181,77,.45); }
+.ann-master .lamp{ background:var(--amber); border-color:var(--amber); box-shadow:0 0 10px rgba(255,181,77,.8); }
+.ann-master .label{ color:var(--amber-dim); }
+.ann-master .line{ color:var(--ink); }
+
+.ann-money .big{ color:var(--green); font-size:34px; }
+.tag-neverfired{
+  font-family:var(--mono); font-size:9px; letter-spacing:.14em; color:var(--engrave);
+  border:1px dashed #2b323a; border-radius:3px; padding:3px 7px; white-space:nowrap;
+}
+.swatch-sim{
+  display:inline-block; width:26px; height:11px; border-radius:2px; vertical-align:-2px;
+  border:1px solid rgba(215,131,210,.55);
+  background:repeating-linear-gradient(45deg, rgba(215,131,210,.5) 0 2px, transparent 2px 5px);
+  margin-right:7px;
+}
+.ann-sub .word-state{ color:var(--ink-hi); }
+
+/* =============================== main =============================== */
+.main{ display:grid; grid-template-columns:57.5% 1fr; gap:14px; min-height:0; }
+
+.block{
+  border:1px solid var(--hair);
+  border-radius:8px;
+  background:linear-gradient(180deg, var(--card), var(--panel) 70%);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+  padding:11px 16px;
+  display:flex; flex-direction:column;
+}
+.block-head{
+  display:flex; align-items:baseline; justify-content:space-between; gap:14px;
+  padding-bottom:8px; margin-bottom:10px;
+  border-bottom:1px solid var(--hair);
+}
+.block-head .mono-note{ font-family:var(--mono); font-size:10.5px; color:var(--ink-lo); }
+
+/* -------- the queue -------- */
+.queue{ display:flex; flex-direction:column; }
+.hero{
+  position:relative;
+  border:1px solid rgba(255,181,77,.30);
+  border-radius:7px;
+  background:
+    radial-gradient(420px 150px at 18% 0%, rgba(255,181,77,.07), transparent 70%),
+    linear-gradient(180deg, var(--raised), var(--card) 60%);
+  box-shadow:0 0 34px rgba(255,181,77,.05), inset 0 1px 0 rgba(255,255,255,.04);
+  padding:12px 16px 11px;
+}
+.hero-meta{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+.chip{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase;
+  border:1px solid var(--hair-lite); border-radius:4px; padding:3px 8px; color:var(--ink-lo);
+  background:rgba(255,255,255,.02);
+}
+.chip-amber{ color:var(--amber); border-color:rgba(255,181,77,.4); background:rgba(255,181,77,.06); }
+.hero-id{ font-family:var(--mono); font-size:11px; color:var(--ink-lo); letter-spacing:.02em; }
+.hero-body{
+  margin:9px 0 10px;
+  font-size:16px; line-height:1.48; color:var(--ink-hi); max-width:58ch;
+}
+.hero-body .q{ color:var(--ink-lo); }
+
+/* kill checkpoint fuse */
+.fuse{ display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+.fuse .engraved{ white-space:nowrap; }
+.fuse-track{
+  position:relative; flex:1; height:22px; border-radius:4px;
+  background:var(--glass); border:1px solid var(--hair);
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.5);
+}
+.fuse-fill{
+  position:absolute; left:0; top:0; bottom:0; width:90%;
+  border-radius:3px 0 0 3px;
+  background:linear-gradient(90deg, rgba(255,181,77,.14), rgba(255,181,77,.42));
+}
+.fuse-tick{ position:absolute; top:-3px; bottom:-3px; width:1px; background:var(--hair-lite); }
+.fuse-kill{
+  position:absolute; right:0; top:-4px; bottom:-4px; width:4px;
+  background:repeating-linear-gradient(45deg, #3a424b 0 2px, transparent 2px 4px);
+  border-right:1px solid #4a545e;
+}
+.fuse-num{
+  position:absolute; top:100%; margin-top:3px; transform:translateX(-50%);
+  font-family:var(--mono); font-size:8.5px; color:var(--engrave);
+}
+.fuse-val{ font-family:var(--mono); font-size:11px; color:var(--amber); white-space:nowrap; }
+
+/* decide strip: the one write path */
+.decide{
+  border-top:1px solid var(--hair); padding-top:10px;
+  display:grid; grid-template-columns:auto auto 1fr; gap:9px; align-items:center;
+}
+.btn{
+  font-family:var(--sans); font-weight:700; font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+  border-radius:6px; padding:10px 18px; cursor:pointer;
+}
+.btn-approve{
+  color:#1c1206; background:linear-gradient(180deg, #ffc36a, #f0a63c);
+  border:1px solid #c98a2e;
+  box-shadow:0 0 22px rgba(255,181,77,.22), inset 0 1px 0 rgba(255,255,255,.35);
+}
+.btn-reject{
+  color:var(--ink); background:transparent; border:1px solid var(--hair-lite);
+}
+.reason{
+  height:37px; border:1px solid var(--hair-lite); border-radius:6px;
+  background:var(--glass); box-shadow:inset 0 2px 6px rgba(0,0,0,.45);
+  display:flex; align-items:center; padding:0 12px;
+  font-style:italic; color:#5b646d; font-size:12.5px;
+}
+.reason .caret{ width:1px; height:15px; background:var(--ink-lo); margin-right:8px; }
+.decide-notes{
+  grid-column:1 / -1; display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;
+  margin-top:2px;
+}
+.cmd{ font-family:var(--mono); font-size:11px; color:var(--ink-lo); }
+.cmd .p{ color:var(--engrave); }
+.cmd b{ color:var(--ink-hi); font-weight:400; }
+
+/* queue groups */
+.qgroups{ margin-top:12px; display:flex; flex-direction:column; }
+.qrow{
+  display:grid; grid-template-columns:15px 178px 44px 1fr auto; gap:12px; align-items:center;
+  padding:7px 6px;
+  border-top:1px solid var(--hair);
+}
+.qrow:first-child{ border-top:0; }
+.qdot{ width:7px; height:7px; border-radius:50%; background:var(--amber); box-shadow:0 0 8px rgba(255,181,77,.55); justify-self:center; }
+.qrow .n{ font-family:var(--mono); font-weight:700; font-size:17px; color:var(--ink-hi); text-align:right; }
+.qrow .what{ font-size:12.5px; color:var(--ink); }
+.qrow .what .kind{ color:var(--ink-lo); font-size:10.5px; }
+.qrow .more{ font-family:var(--mono); font-size:10px; color:var(--engrave); white-space:nowrap; }
+
+/* -------- right column -------- */
+.rcol{ display:flex; flex-direction:column; gap:12px; min-height:0; }
+
+/* lamp-test panel: the 46 */
+.lamps{ }
+.lamp-grid{
+  display:grid; grid-template-columns:repeat(12, 1fr); gap:5px;
+  padding:10px; border-radius:6px;
+  background:var(--glass); border:1px solid var(--hair);
+  box-shadow:inset 0 2px 10px rgba(0,0,0,.5);
+}
+.cell{
+  height:14px; border-radius:3px;
+  background:#0c0f13; border:1px solid #1a2026;
+}
+.cell.lit{
+  background:linear-gradient(180deg, #efe9d8, #d9d2bd);
+  border-color:#8f8a77;
+  box-shadow:0 0 9px rgba(235,228,206,.28), inset 0 1px 0 rgba(255,255,255,.5);
+}
+.cell.ringed{
+  border-color:rgba(127,212,155,.75);
+  box-shadow:0 0 8px rgba(127,212,155,.22);
+}
+.lamp-notes{ display:flex; flex-direction:column; gap:3px; margin-top:8px; }
+.lamp-note{ display:flex; align-items:center; gap:8px; font-size:10.5px; color:var(--ink-lo); }
+.lamp-note .kind{ font-size:10.5px; }
+.key-dot{ width:9px; height:9px; border-radius:2px; flex:none; }
+.key-dot.on{ background:#e3dcc7; box-shadow:0 0 6px rgba(235,228,206,.3); }
+.key-dot.off{ background:#0c0f13; border:1px solid #232a31; }
+.key-dot.rev{ background:#0c0f13; border:1px solid rgba(127,212,155,.75); }
+.lamp-note .cnt{ font-family:var(--mono); color:var(--ink-hi); }
+
+/* lanes */
+.lanes table{ width:100%; border-collapse:collapse; }
+.lanes th{
+  text-align:left; font-size:9px; font-weight:400; letter-spacing:.16em; text-transform:uppercase;
+  color:var(--engrave); padding:0 0 7px;
+}
+.lanes th.r, .lanes td.r{ text-align:right; }
+.lanes td{ padding:4px 0; border-top:1px solid #14181d; font-family:var(--mono); font-size:11.5px; color:var(--ink); }
+.lanes td.lane{ color:var(--ink-hi); }
+.lanes td.ph{ color:var(--ink-lo); }
+.burn{ position:relative; height:9px; border-radius:2px; background:var(--glass); border:1px solid var(--hair); margin-right:12px; }
+.burn i{ position:absolute; left:0; top:0; bottom:0; border-radius:2px 0 0 2px; background:#414b55; }
+.burn .trip{ position:absolute; left:50%; top:-3px; bottom:-3px; width:1px; background:#39424b; }
+.burn.hot i{ background:linear-gradient(90deg, #8a6526, var(--amber)); box-shadow:0 0 10px rgba(255,181,77,.35); }
+.lanes .kill-tag{ font-family:var(--mono); font-size:9px; color:var(--amber); letter-spacing:.08em; white-space:nowrap; }
+.lanes .quiet{ margin-top:7px; font-size:10px; color:var(--engrave); letter-spacing:.03em; line-height:1.6; }
+.lanes .quiet .mono{ color:var(--ink-lo); font-size:10px; }
+
+/* =============================== tape =============================== */
+.tape{ position:relative; padding:10px 16px 7px; }
+.tape-inner{ display:grid; grid-template-columns:128px 1fr 138px; gap:18px; align-items:stretch; min-height:80px; }
+.seal-cell{
+  display:flex; flex-direction:column; align-items:flex-start; justify-content:center; gap:4px;
+  border-right:1px solid var(--hair); padding-right:14px;
+}
+.seal-cell.right{ border-right:0; border-left:1px solid var(--hair); padding-right:0; padding-left:16px; align-items:flex-end; text-align:right; }
+.seal-cell svg{ display:block; margin-bottom:2px; }
+.seal-cell .t1{ font-family:var(--mono); font-size:11px; color:var(--ink-hi); }
+.seal-cell .t2{ font-size:9.5px; color:var(--engrave); letter-spacing:.08em; }
+
+/* four non-intersecting annotation bands: above-high, above-low, below-high,
+   below-low. Labels are single-line, anchored off their tick with a vertical
+   leader, the way a strip chart is annotated. */
+.track{ position:relative; min-height:80px; }
+.track-line{ position:absolute; left:0; top:42px; height:1px; background:#39424b; width:39%; }
+.track-future{ position:absolute; left:39%; right:0; top:42px; border-top:1px dashed #232a31; }
+.ev{ position:absolute; top:0; bottom:0; }
+.ev .tick{ position:absolute; left:0; top:36px; width:2px; height:13px; background:#c6cdd3; transform:translateX(-50%); }
+.ev .lead{ position:absolute; left:0; width:1px; background:#2a323a; transform:translateX(-50%); }
+.ev .lbl{ position:absolute; white-space:nowrap; display:flex; align-items:baseline; gap:6px; }
+.ev .tm{ font-family:var(--mono); font-size:9px; color:var(--engrave); }
+.ev .lbl .kind{ font-size:10.5px; }
+.ev .lbl.anchor-l{ left:7px; }
+.ev .lbl.anchor-r{ right:calc(100% - 0px); margin-right:7px; left:auto; }
+.ev.up2 .lbl{ top:1px; }   .ev.up2 .lead{ top:14px; height:22px; }
+.ev.up  .lbl{ top:19px; }  .ev.up  .lead{ top:31px; height:5px; }
+.ev.dn  .lbl{ top:54px; }  .ev.dn  .lead{ top:49px; height:5px; }
+.ev.dn2 .lbl{ top:68px; }  .ev.dn2 .lead{ top:49px; height:19px; }
+.gate-chip{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.1em; color:var(--ink-hi);
+  border:1px solid var(--hair-lite); border-radius:3px; padding:1px 6px;
+}
+.gate-chip b{ font-weight:700; color:var(--ink-hi); } /* PASS is white: green belongs to money alone */
+.now{ position:absolute; left:39%; }
+.now .head-tri{
+  position:absolute; left:0; top:26px; transform:translateX(-50%);
+  width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent;
+  border-top:7px solid var(--ink-hi);
+}
+.now .stem{ position:absolute; left:0; top:33px; height:15px; width:1px; background:var(--ink-hi); transform:translateX(-50%); }
+.now .lbl{ position:absolute; top:26px; left:8px; font-family:var(--mono); font-size:9.5px; letter-spacing:.12em; color:var(--ink-hi); white-space:nowrap; }
+
+/* ============================== footer ============================== */
+.contract{
+  display:flex; align-items:center; justify-content:space-between; gap:18px;
+  border-top:1px solid var(--hair); padding-top:8px;
+  font-size:10.5px; color:var(--engrave);
+}
+.zero-key{ display:flex; align-items:center; gap:16px; white-space:nowrap; }
+.zk{ display:flex; align-items:center; gap:7px; }
+.zk .mono{ font-size:10px; color:var(--ink-lo); }
+.zk .z0{
+  font-family:var(--mono); font-weight:700; font-size:11px; color:var(--ink-hi);
+  border:1px solid var(--hair-lite); border-radius:3px; padding:0 5px;
+}
+.zk .znf{
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.12em; color:var(--engrave);
+  border:1px dashed #2b323a; border-radius:3px; padding:2px 5px;
+}
+.zk .zni{
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.12em; color:#3f474f;
+  padding:2px 0;
+}
+
+@media (max-width:1100px){
+  .deck{ min-height:0; }
+  .annunciators{ grid-template-columns:1fr 1fr; }
+  .main{ grid-template-columns:1fr; }
+  .tape-inner{ grid-template-columns:1fr; }
+  .seal-cell, .seal-cell.right{ border:0; padding:0; align-items:flex-start; text-align:left; }
+  .track{ min-height:110px; }
+}
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- ============================ masthead ============================ -->
+  <header class="masthead">
+    <div class="mark" title="the ring runs on its own; the gap in it is you">
+      <svg width="30" height="30" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M18.9 5.6 A 9.4 9.4 0 1 0 21.4 12" stroke="#E8EBEE" stroke-width="1.9" fill="none" stroke-linecap="round"/>
+        <circle cx="20.9" cy="8.6" r="1.9" fill="#FFB54D"/>
+      </svg>
+      <div>
+        <div class="word">arc</div>
+        <div class="sub engraved">operations deck · day 22</div>
+      </div>
+    </div>
+    <div class="mast-right">
+      <div class="mast-cell">
+        <div class="v">TUE 19 AUG 2026 · 09:12 IST</div>
+        <div class="k engraved">deck time</div>
+      </div>
+      <div class="mast-cell">
+        <div class="v">1,150 receipts</div>
+        <div class="k engraved">the spine · sole source</div>
+      </div>
+      <div class="mast-cell">
+        <div class="v">days 01-21 sealed · 22 open</div>
+        <div class="k engraved">day.closed &times;21</div>
+      </div>
+      <div class="chip-live">MODE&nbsp;&nbsp;LIVE</div>
+    </div>
+  </header>
+
+  <!-- ========================== annunciators ==========================
+       quiet-dark: a lamp lights only when something needs the crew.
+       One is lit. ============================================================ -->
+  <section class="annunciators" aria-label="master annunciators">
+
+    <div class="ann ann-master">
+      <div class="head">
+        <span class="label">needs you</span>
+        <span class="lamp"></span>
+      </div>
+      <div class="read">
+        <span class="big">13</span>
+        <span class="line"><span class="kind">approval.requested</span> open</span>
+      </div>
+      <div class="foot">oldest raised 4 days ago &middot; 55 raised &middot; 42 decided</div>
+    </div>
+
+    <div class="ann ann-money">
+      <div class="head">
+        <span class="label">real money</span>
+        <span class="lamp"></span>
+      </div>
+      <div class="read">
+        <span class="big">&#8377;0</span>
+        <span class="tag-neverfired">NEVER FIRED</span>
+      </div>
+      <div class="foot"><span class="kind" style="font-size:10px;color:var(--ink-lo)">revenue.received</span> &middot; 0 occurrences in 1,150 receipts</div>
+    </div>
+
+    <div class="ann">
+      <div class="head">
+        <span class="label">faults</span>
+        <span class="lamp"></span>
+      </div>
+      <div class="read">
+        <span class="word-state">NONE OPEN</span>
+        <span class="line"><span class="kind">incident.raised</span></span>
+      </div>
+      <div class="foot">red is reserved for this lamp. It has never lit.</div>
+    </div>
+
+    <div class="ann ann-sub">
+      <div class="head">
+        <span class="label">substance</span>
+        <span class="lamp"></span>
+      </div>
+      <div class="read">
+        <span class="word-state">ALL REAL</span>
+        <span class="line">held apart, never summed</span>
+      </div>
+      <div class="foot"><span class="swatch-sim" aria-label="hatched magenta swatch"></span>SIMULATED / REHEARSAL / DRILL wear this hatch</div>
+    </div>
+
+  </section>
+
+  <!-- ================================ main ================================ -->
+  <main class="main">
+
+    <!-- the queue: the difference between raised and decided -->
+    <section class="block queue" aria-label="waiting on you">
+      <div class="block-head">
+        <span class="label" style="color:var(--amber-dim)">waiting on you</span>
+        <span class="mono-note">the queue is the difference &middot; 55 raised &minus; 42 decided = 13 open</span>
+      </div>
+
+      <article class="hero">
+        <div class="hero-meta">
+          <span class="chip chip-amber">phase closure</span>
+          <span class="hero-id">01M05A4Y4QM54VRQWSNE9ENQMD</span>
+          <span class="chip chip-amber" style="margin-left:auto">oldest open &middot; 4 days</span>
+        </div>
+        <p class="hero-body">
+          <span class="q">&ldquo;</span>Approve moving past phase 04 in the engine lane. The day-5 kill
+          checkpoint is 0.5 days away with REQ-02 uncertified.<span class="q">&rdquo;</span>
+        </p>
+
+        <div class="fuse" aria-label="engine lane kill checkpoint, 4.5 of 5 days burned">
+          <span class="engraved">engine &middot; kill checkpoint</span>
+          <div class="fuse-track">
+            <div class="fuse-fill"></div>
+            <div class="fuse-tick" style="left:20%"></div>
+            <div class="fuse-tick" style="left:40%"></div>
+            <div class="fuse-tick" style="left:60%"></div>
+            <div class="fuse-tick" style="left:80%"></div>
+            <div class="fuse-kill"></div>
+            <span class="fuse-num" style="left:1%">d0</span>
+            <span class="fuse-num" style="left:98%">d5</span>
+          </div>
+          <span class="fuse-val">0.5 DAYS REMAIN</span>
+        </div>
+
+        <div class="decide">
+          <button class="btn btn-reject" type="button">Reject</button>
+          <button class="btn btn-approve" type="button">Approve</button>
+          <div class="reason"><span class="caret"></span>your reason, in your words. required.</div>
+          <div class="decide-notes">
+            <span class="cmd"><span class="p">$</span> arc-inbox approve <b>01M05A4Y4QM54VRQWSNE9ENQMD</b> --reason &quot;&hellip;&quot;</span>
+            <span class="engraved">no bulk action &middot; no default reason &middot; no undo</span>
+          </div>
+        </div>
+      </article>
+
+      <div class="qgroups">
+        <div class="qrow">
+          <span class="qdot"></span>
+          <span class="label">draft verdicts</span>
+          <span class="n">3</span>
+          <span class="what">accept or reject build-in-public draft 1 of 3<br>
+            <span class="kind">01M0B663APQMV49EQR9AGR1WJQ</span></span>
+          <span class="more">+ 2 more behind it</span>
+        </div>
+        <div class="qrow">
+          <span class="qdot"></span>
+          <span class="label">tier escalations</span>
+          <span class="n">7</span>
+          <span class="what">escalate a process to a stronger model tier<br>
+            <span class="kind">01M0ASG8JG8X6PQ0045MJ6TY8Q</span></span>
+          <span class="more">+ 6 more behind it</span>
+        </div>
+        <div class="qrow">
+          <span class="qdot"></span>
+          <span class="label">content gates</span>
+          <span class="n">2</span>
+          <span class="what">two pieces held at the publish gate for a human verdict</span>
+          <span class="more">nothing ships itself</span>
+        </div>
+      </div>
+
+      <div style="margin-top:auto; padding-top:9px; border-top:1px solid var(--hair); white-space:nowrap; overflow:hidden;" class="engraved">
+        the one write path: <span class="kind" style="font-size:10px; text-transform:none; letter-spacing:0; color:var(--ink-lo)">decision.recorded</span>,
+        a human verdict with a typed reason. everything else reads.
+      </div>
+    </section>
+
+    <!-- right column: the 46 + the lanes -->
+    <div class="rcol">
+
+      <section class="block lamps" aria-label="event kind coverage">
+        <div class="block-head">
+          <span class="label">event kinds</span>
+          <span class="mono-note">14 of 46 have ever fired</span>
+        </div>
+        <div class="lamp-grid" aria-label="46 lamps, 14 lit">
+          <div class="cell lit"></div><div class="cell"></div><div class="cell lit"></div><div class="cell lit"></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell lit"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell lit"></div><div class="cell"></div><div class="cell lit"></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell lit"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell lit"></div><div class="cell"></div><div class="cell ringed"></div>
+          <div class="cell lit"></div><div class="cell"></div><div class="cell"></div><div class="cell lit"></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell lit"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell lit"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell lit"></div><div class="cell"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell lit"></div><div class="cell"></div><div class="cell"></div>
+          <div class="cell"></div><div class="cell"></div>
+        </div>
+        <div class="lamp-notes">
+          <div class="lamp-note"><span class="key-dot on"></span><span class="kind">approval.requested</span> <span class="cnt">55</span> &middot; <span class="kind">day.closed</span> <span class="cnt">21</span> &middot; 12 others have fired</div>
+          <div class="lamp-note"><span class="key-dot off"></span>32 built, tested, never run in anger. A dark lamp is a sensor waiting, not absence.</div>
+          <div class="lamp-note"><span class="key-dot rev"></span><span class="kind">revenue.received</span> waits among the dark: the lamp the whole company exists to light.</div>
+        </div>
+      </section>
+
+      <section class="block lanes" aria-label="lanes">
+        <div class="block-head">
+          <span class="label">lanes</span>
+          <span class="mono-note">7 live of 16 &middot; burn vs appetite, days &middot; mid-tick = 50% tripwire</span>
+        </div>
+        <table>
+          <thead>
+            <tr><th>lane</th><th>ph</th><th style="width:44%">burn</th><th class="r">of appetite</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="lane">engine</td><td class="ph">04</td>
+              <td><div class="burn hot"><i style="width:90%"></i><span class="trip"></span></div></td>
+              <td class="r">4.5 / 5.0 d &nbsp;<span class="kill-tag">KILL 0.5 d</span></td>
+            </tr>
+            <tr>
+              <td class="lane">face</td><td class="ph">05</td>
+              <td><div class="burn"><i style="width:33%"></i><span class="trip"></span></div></td>
+              <td class="r">2.0 / 6.0 d</td>
+            </tr>
+            <tr>
+              <td class="lane">growth</td><td class="ph">03</td>
+              <td><div class="burn"><i style="width:50%"></i><span class="trip"></span></div></td>
+              <td class="r">2.5 / 5.0 d</td>
+            </tr>
+            <tr>
+              <td class="lane">bench</td><td class="ph">02</td>
+              <td><div class="burn"><i style="width:38%"></i><span class="trip"></span></div></td>
+              <td class="r">1.5 / 4.0 d</td>
+            </tr>
+            <tr>
+              <td class="lane">scheduler</td><td class="ph">02</td>
+              <td><div class="burn"><i style="width:38%"></i><span class="trip"></span></div></td>
+              <td class="r">1.5 / 4.0 d</td>
+            </tr>
+            <tr>
+              <td class="lane">leads</td><td class="ph">02</td>
+              <td><div class="burn"><i style="width:25%"></i><span class="trip"></span></div></td>
+              <td class="r">1.0 / 4.0 d</td>
+            </tr>
+            <tr>
+              <td class="lane">legal</td><td class="ph">01</td>
+              <td><div class="burn"><i style="width:17%"></i><span class="trip"></span></div></td>
+              <td class="r">0.5 / 3.0 d</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="quiet">
+          quiet, on the board: <span class="mono">absorb &middot; design &middot; develop &middot; evolve &middot; ledger &middot; memory &middot; model-policy &middot; policy &middot; portfolio</span>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ================================ tape ================================
+       today, drawn as the flight recorder would draw it: a strip running
+       from last night's seal toward tonight's. -->
+  <section class="block tape" aria-label="today, the tape">
+    <div class="block-head" style="margin-bottom:6px">
+      <span class="label">today &middot; the tape</span>
+      <span class="mono-note">day 22 &middot; 4 receipts so far &middot; every mark below is one</span>
+    </div>
+    <div class="tape-inner">
+
+      <div class="seal-cell">
+        <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+          <circle cx="13" cy="13" r="10.5" fill="none" stroke="#4d565f" stroke-width="1.4" stroke-dasharray="1.5 2.2"/>
+          <circle cx="13" cy="13" r="6.5" fill="none" stroke="#79828b" stroke-width="1.2"/>
+          <circle cx="13" cy="13" r="1.8" fill="#79828b"/>
+        </svg>
+        <span class="t1">day 21 sealed</span>
+        <span class="t2">day.closed &middot; 23:59</span>
+      </div>
+
+      <div class="track">
+        <div class="track-line"></div>
+        <div class="track-future"></div>
+
+        <div class="ev up2" style="left:29%">
+          <span class="lead"></span><span class="tick"></span>
+          <span class="lbl anchor-l"><span class="tm">06:58</span><span class="kind">decision.recorded</span></span>
+        </div>
+        <div class="ev dn" style="left:32.5%">
+          <span class="lead"></span><span class="tick"></span>
+          <span class="lbl anchor-r"><span class="tm">07:41</span><span class="kind">approval.requested</span></span>
+        </div>
+        <div class="ev up" style="left:35.5%">
+          <span class="lead"></span><span class="tick"></span>
+          <span class="lbl anchor-r"><span class="tm">08:31</span><span class="gate-chip">coverage check &middot; <b>PASS</b></span></span>
+        </div>
+        <div class="ev dn2" style="left:37%">
+          <span class="lead"></span><span class="tick"></span>
+          <span class="lbl anchor-l"><span class="tm">08:47</span><span class="kind">content.published</span></span>
+        </div>
+
+        <div class="now" aria-label="now, 09:12">
+          <span class="lbl">NOW &middot; 09:12</span>
+          <span class="head-tri"></span>
+          <span class="stem"></span>
+        </div>
+      </div>
+
+      <div class="seal-cell right">
+        <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+          <circle cx="13" cy="13" r="10.5" fill="none" stroke="#2b323a" stroke-width="1.2" stroke-dasharray="2 3"/>
+          <circle cx="13" cy="13" r="6.5" fill="none" stroke="#2b323a" stroke-width="1"/>
+        </svg>
+        <span class="t1" style="color:var(--ink-lo)">the 22nd seal</span>
+        <span class="t2">day.closed &middot; tonight</span>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- =============================== footer =============================== -->
+  <footer class="contract">
+    <span>Every figure on this deck resolves to a receipt in the spine. A number that cannot show its receipt does not appear.</span>
+    <span class="zero-key">
+      <span class="zk"><span class="z0">0</span><span class="mono">measured, and it is zero</span></span>
+      <span class="zk"><span class="znf">NEVER FIRED</span><span class="mono">built, has never happened</span></span>
+      <span class="zk"><span class="zni">NOT&nbsp;INSTRUMENTED</span><span class="mono">no sensor, no number</span></span>
+    </span>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc · the morning record</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Spline+Sans+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ================================================= no. zero em dashes in content.
+     THE MORNING RECORD · a ledger, not a dashboard.
+     Four colour meanings, law, nothing else may borrow them:
+       amber   = needs-you        (in use: 13 open)
+       green   = real money       (reserved, never yet printed)
+       red     = incident         (idle)
+       violet  = every non-real class, always hatched
+     Everything else is ink on paper. */
+
+  :root{
+    --paper:      #F6F2E9;
+    --paper-deep: #EAE4D5;
+    --paper-lift: #FBF8F0;
+    --ink:        #1B1812;
+    --ink-60:     #57503F;
+    --ink-40:     #8A8270;
+    --hair:       #D6CDBA;
+    --hair-dark:  #B9AE97;
+
+    --amber:      #B26A00;
+    --amber-deep: #7C4A00;
+    --amber-wash: #F4E3C4;
+    --money:      #1E6B3C;
+    --incident:   #A8332B;
+    --nonreal:    #6D5FA8;
+
+    --serif: "Fraunces", "Iowan Old Style", Georgia, serif;
+    --mono:  "Spline Sans Mono", "Cascadia Mono", "Courier New", monospace;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html{ -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility; }
+  body{
+    background:var(--paper-deep);
+    color:var(--ink);
+    font-family:var(--serif);
+    font-optical-sizing:auto;
+    line-height:1.4;
+  }
+
+  /* the sheet on the desk */
+  .sheet{
+    max-width:1408px;
+    margin:16px auto 28px;
+    background:var(--paper);
+    border:1px solid var(--hair-dark);
+    box-shadow:0 1px 0 rgba(27,24,18,.18), 0 12px 40px -28px rgba(27,24,18,.35);
+    padding:0 56px 0;
+  }
+
+  .label{
+    font-family:var(--mono);
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:.17em;
+    text-transform:uppercase;
+    color:var(--ink-60);
+  }
+  .mono{ font-family:var(--mono); }
+  .fine{ font-size:12.5px; color:var(--ink-60); }
+  .it{ font-style:italic; }
+
+  /* ======================= MASTHEAD ======================= */
+  .masthead{
+    display:grid;
+    grid-template-columns:auto 1fr auto;
+    align-items:end;
+    padding:26px 0 18px;
+    gap:24px;
+  }
+  .wordmark{
+    display:flex; align-items:baseline; gap:14px;
+  }
+  .wordmark .mark{
+    font-size:46px; font-weight:600; letter-spacing:-.02em; line-height:.9;
+    font-variation-settings:"opsz" 144;
+  }
+  .wordmark .mark sup{
+    font-family:var(--serif); font-style:italic; font-weight:300;
+    font-size:18px; color:var(--amber); vertical-align:super;
+  }
+  .wordmark .sub{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.22em; color:var(--ink-40);
+    text-transform:uppercase; padding-bottom:5px;
+  }
+  .motto{
+    justify-self:center; text-align:center;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--ink-60);
+    padding-bottom:6px; white-space:nowrap;
+  }
+  .dateblock{ text-align:right; }
+  .dateblock .day{
+    font-size:17px; font-style:italic; font-weight:400; letter-spacing:.01em;
+  }
+  .dateblock .edition{
+    font-family:var(--mono); font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--ink-60); margin-top:4px; white-space:nowrap;
+  }
+
+  .rule-double{
+    border-top:3px solid var(--ink);
+    border-bottom:1px solid var(--ink);
+    height:6px;
+  }
+
+  /* ======================= MAIN GRID ======================= */
+  .main{
+    display:grid;
+    grid-template-columns:288px 1fr 338px;
+  }
+  .col{ padding:26px 0 30px; min-width:0; }
+  .col-a{ padding-right:30px; }
+  .col-b{ padding-left:34px; padding-right:34px; border-left:1px solid var(--hair); border-right:1px solid var(--hair); }
+  .col-c{ padding-left:30px; }
+
+  .sect{ margin-bottom:26px; }
+  .sect-head{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom:1px solid var(--ink);
+    padding-bottom:6px; margin-bottom:12px;
+  }
+  .sect-head .n{ font-family:var(--mono); font-size:9.5px; color:var(--ink-40); letter-spacing:.1em; }
+
+  /* === the four meanings === */
+  .meaning{ display:grid; grid-template-columns:26px 1fr; gap:10px; align-items:start; padding:7px 0; border-bottom:1px solid var(--hair); }
+  .meaning:last-child{ border-bottom:0; }
+  .sw{ width:26px; height:15px; margin-top:2px; border:1px solid rgba(27,24,18,.28); }
+  .sw-amber{ background:var(--amber); border-color:var(--amber-deep); }
+  .sw-money{ background:var(--money); }
+  .sw-incident{ background:var(--incident); }
+  .sw-nonreal{
+    background:repeating-linear-gradient(45deg, rgba(109,95,168,.65) 0 1.5px, transparent 1.5px 5px);
+    border-color:rgba(109,95,168,.6);
+  }
+  .meaning b{ font-size:13.5px; font-weight:600; letter-spacing:.01em; }
+  .meaning .st{ font-family:var(--mono); font-size:10.5px; color:var(--ink-60); display:block; margin-top:2px; }
+  .meaning .st .live{ color:var(--amber-deep); font-weight:600; }
+
+  /* === lanes === */
+  .lane{ display:flex; align-items:baseline; gap:8px; padding:5.5px 0; border-bottom:1px solid var(--hair); }
+  .lane:last-of-type{ border-bottom:0; }
+  .lane .tick{ width:7px; height:7px; background:var(--ink); flex:none; align-self:center; }
+  .lane .nm{ font-size:14.5px; font-weight:500; }
+  .lane .ph{ font-family:var(--mono); font-size:10px; color:var(--ink-40); letter-spacing:.05em; margin-left:auto; }
+  .lane .owed{
+    font-family:var(--mono); font-size:10px; font-weight:600;
+    color:var(--paper); background:var(--amber);
+    padding:1px 5px; border-radius:8px; letter-spacing:.02em;
+  }
+  .lane-foot{ margin-top:9px; font-size:12px; color:var(--ink-60); font-style:italic; }
+
+  /* === honest instruments === */
+  .noninst{ display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--hair); }
+  .noninst:last-child{ border-bottom:0; }
+  .noninst .what{ font-size:13.5px; }
+  .tag-nonreal{
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:#4E4380;
+    border:1px solid rgba(109,95,168,.55);
+    background:repeating-linear-gradient(45deg, rgba(109,95,168,.18) 0 1.5px, transparent 1.5px 5px);
+    padding:2px 7px; white-space:nowrap;
+  }
+
+  /* ======================= CENTRE · THE DESK ======================= */
+  .kicker{
+    display:flex; align-items:baseline; gap:12px;
+  }
+  .kicker code{
+    font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.04em;
+    color:var(--amber-deep);
+  }
+  .kicker .rulefill{ flex:1; border-top:1px solid var(--hair); transform:translateY(-4px); }
+
+  .headline{
+    display:grid; grid-template-columns:auto 1fr; column-gap:28px; align-items:end;
+    margin:6px 0 8px;
+  }
+  .bignum{
+    font-size:168px; font-weight:300; line-height:.78;
+    letter-spacing:-.04em; color:var(--amber);
+    font-variation-settings:"opsz" 144;
+    font-feature-settings:"tnum";
+  }
+  .headline .side{ padding-bottom:10px; }
+  .headline .side .h{
+    font-size:25px; font-weight:400; font-style:italic; line-height:1.12; letter-spacing:-.005em;
+    max-width:20ch;
+  }
+  .counters{
+    display:flex; gap:0; margin-top:14px; border-top:1px solid var(--ink); width:max-content;
+  }
+  .counters div{ padding:7px 16px 0 0; margin-right:16px; border-right:1px solid var(--hair); padding-right:16px; }
+  .counters div:last-child{ border-right:0; margin-right:0; padding-right:0; }
+  .counters .v{ font-family:var(--mono); font-size:17px; font-weight:600; }
+  .counters .k{ font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-40); margin-top:1px; }
+  .counters .v.amb{ color:var(--amber-deep); }
+
+  /* === entries === */
+  .entry{ border-top:1px solid var(--ink); padding:14px 0 16px; }
+  .entry.open-first{ border-top:2px solid var(--ink); margin-top:18px; }
+  .entry-meta{ display:flex; align-items:baseline; gap:14px; }
+  .entry-meta .no{ font-family:var(--mono); font-size:10.5px; color:var(--ink-40); }
+  .entry-meta code.kind{
+    font-family:var(--mono); font-size:11px; font-weight:600; color:var(--ink);
+    letter-spacing:.02em;
+  }
+  .entry-meta code.kind .k2{ color:var(--amber-deep); }
+  .entry-meta .lane-of{ font-family:var(--mono); font-size:10.5px; color:var(--ink-40); }
+  .entry-meta .age{ margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--amber-deep); }
+  .entry-title{
+    font-size:23px; font-weight:500; letter-spacing:-.01em; line-height:1.15;
+    margin:7px 0 3px;
+  }
+  .entry-ulid{ font-family:var(--mono); font-size:10.5px; color:var(--ink-40); letter-spacing:.04em; }
+
+  /* the stamp block */
+  .stampwell{
+    display:grid; grid-template-columns:128px 1fr; gap:24px; align-items:start;
+    margin-top:16px;
+  }
+  .stampwell > div{ min-width:0; }
+  .stamp-emblem{ position:relative; width:128px; }
+  .stamp-emblem svg{ display:block; transform:rotate(-8deg); }
+  .stamp-emblem .cap{
+    text-align:center; margin-top:6px;
+    font-family:var(--mono); font-size:8.5px; letter-spacing:.22em; color:var(--ink-40);
+    text-transform:uppercase;
+  }
+
+  .reason-row{ display:block; }
+  .reason-row .rl{ display:flex; justify-content:space-between; align-items:baseline; }
+  .reason-req{ font-family:var(--mono); font-size:9px; letter-spacing:.12em; text-transform:uppercase; color:var(--amber-deep); }
+  .reason{
+    width:100%; margin-top:6px;
+    font-family:var(--serif); font-style:italic; font-size:16.5px; color:var(--ink);
+    background:transparent; border:0; border-bottom:1px solid var(--ink);
+    padding:6px 2px 7px; outline:none;
+  }
+  .reason::placeholder{ color:var(--ink-40); font-style:italic; }
+  .reason:focus{ border-bottom:2px solid var(--amber-deep); padding-bottom:6px; }
+
+  .stampacts{ display:flex; gap:12px; align-items:center; margin-top:14px; }
+  .stampbtn{
+    font-family:var(--mono); font-size:11.5px; font-weight:600; letter-spacing:.18em;
+    padding:11px 22px 10px; cursor:not-allowed;
+    background:transparent; color:var(--ink-40);
+    border:2px solid var(--hair-dark);
+    transition:all .15s ease;
+  }
+  .armed .stampbtn{ cursor:pointer; }
+  .armed .stampbtn.approve{ border-color:var(--ink); color:var(--paper); background:var(--ink); }
+  .armed .stampbtn.reject{ border-color:var(--ink); color:var(--ink); }
+  .armed .stampbtn.reject:hover{ background:var(--incident); border-color:var(--incident); color:var(--paper); }
+  .armed .stampbtn.approve:hover{ background:var(--amber-deep); border-color:var(--amber-deep); }
+  .stampnote{ font-size:12px; font-style:italic; color:var(--ink-60); }
+
+  /* chip */
+  .chip{
+    margin-top:16px; border:1px solid var(--hair-dark); background:var(--paper-lift);
+    display:flex; align-items:stretch;
+  }
+  .chip .chiplabel{
+    font-family:var(--mono); font-size:8.5px; letter-spacing:.2em; color:var(--ink-40);
+    writing-mode:vertical-rl; transform:rotate(180deg);
+    padding:8px 3px; border-right:1px solid var(--hair); text-align:center;
+  }
+  .chip pre{
+    font-family:var(--mono); font-size:11.5px; line-height:1.55; color:var(--ink);
+    padding:10px 14px; overflow-x:auto; flex:1; white-space:pre; min-width:0;
+  }
+  .chip pre .flag{ color:var(--ink-40); }
+  .chip .copy{
+    font-family:var(--mono); font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+    border:0; border-left:1px solid var(--hair); background:transparent; color:var(--ink-60);
+    padding:0 14px; cursor:pointer;
+  }
+  .chip .copy:hover{ background:var(--amber-wash); color:var(--amber-deep); }
+  .chip-cap{ font-size:11.5px; font-style:italic; color:var(--ink-60); margin-top:6px; }
+
+  /* seal */
+  .sealrow{
+    display:flex; gap:12px; align-items:flex-start;
+    margin-top:16px; padding-top:12px; border-top:1px solid var(--hair);
+  }
+  .afterwell{ margin-top:16px; }
+  .sealrow svg{ flex:none; margin-top:1px; }
+  .sealrow .q{ font-size:12.5px; line-height:1.5; color:var(--ink-60); }
+  .sealrow .q b{ font-family:var(--mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink); font-weight:600; margin-right:6px; }
+
+  /* collapsed entries */
+  .entry.closed{ display:grid; grid-template-columns:1fr auto; gap:6px 18px; align-items:center; }
+  .entry.closed .entry-title{ font-size:18.5px; margin:5px 0 2px; }
+  .well-empty{
+    width:44px; height:44px; border:1.5px dashed var(--hair-dark); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    grid-column:2; grid-row:1 / span 3; align-self:center;
+  }
+  .well-empty span{
+    font-family:var(--mono); font-size:7px; letter-spacing:.08em; color:var(--ink-40);
+    text-transform:uppercase; text-align:center; line-height:1.5;
+  }
+  .register-foot{
+    display:flex; align-items:baseline; gap:10px;
+    border-top:1px solid var(--ink); padding-top:10px;
+  }
+  .register-foot .more{ font-family:var(--mono); font-size:11px; font-weight:600; color:var(--amber-deep); }
+  .register-foot .expl{ font-size:12px; font-style:italic; color:var(--ink-60); }
+
+  /* ======================= RIGHT · REVENUE + SPINE ======================= */
+  .absent{
+    font-size:58px; font-weight:300; font-style:italic; letter-spacing:-.01em; line-height:1;
+    font-variation-settings:"opsz" 144;
+    margin:2px 0 10px;
+  }
+  .absent-note{ font-size:13px; line-height:1.5; color:var(--ink-60); max-width:34ch; }
+  .money-reserve{
+    margin-top:14px; border:1px solid var(--money); padding:10px 12px;
+    display:flex; align-items:baseline; justify-content:space-between; gap:10px;
+  }
+  .money-reserve .cur{ font-family:var(--mono); font-size:15px; color:var(--money); font-weight:600; }
+  .money-reserve .res{ font-size:11.5px; font-style:italic; color:var(--ink-60); text-align:right; }
+
+  .spine-nums{ display:flex; align-items:baseline; gap:10px; }
+  .spine-nums .big{
+    font-size:44px; font-weight:400; letter-spacing:-.02em; line-height:1;
+    font-feature-settings:"tnum";
+  }
+  .spine-nums .rest{ font-family:var(--mono); font-size:10.5px; color:var(--ink-60); line-height:1.6; }
+  .kinds{
+    margin-top:14px;
+    display:grid; grid-template-columns:repeat(23, 1fr); gap:3px;
+  }
+  .kinds i{
+    display:block; height:17px; border-radius:0;
+  }
+  .kinds i.f{ background:var(--ink); }
+  .kinds i.u{
+    background:repeating-linear-gradient(45deg, rgba(109,95,168,.55) 0 1.5px, transparent 1.5px 4.5px);
+    border:1px solid rgba(109,95,168,.45);
+  }
+  .kinds-cap{ margin-top:9px; font-size:12px; line-height:1.5; color:var(--ink-60); }
+  .kinds-cap b{ color:var(--ink); font-weight:600; }
+  .kinds-cap .uv{ color:#4E4380; }
+  .integrity{
+    margin-top:14px; padding-top:10px; border-top:1px solid var(--hair);
+    font-family:var(--mono); font-size:10px; line-height:1.7; color:var(--ink-60); letter-spacing:.02em;
+  }
+  .integrity b{ color:var(--ink); font-weight:600; }
+
+  /* ======================= SPINE STAVE ======================= */
+  .stave-band{ border-top:1px solid var(--ink); padding:18px 0 20px; }
+  .stave-head{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:4px; }
+  .stave-head .fine{ font-style:italic; }
+  .stave-band svg{ display:block; width:100%; height:auto; }
+  .stave-legend{
+    display:flex; gap:26px; margin-top:6px;
+    font-family:var(--mono); font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-40);
+  }
+  .stave-legend .dot{ display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--ink); margin-right:6px; vertical-align:1px; }
+  .stave-legend .odot{ display:inline-block; width:6px; height:6px; border-radius:50%; border:1px solid var(--ink-60); margin-right:6px; vertical-align:1px; background:transparent; }
+
+  /* ======================= COLOPHON ======================= */
+  .colophon{
+    border-top:3px solid var(--ink);
+    display:flex; justify-content:space-between; align-items:baseline;
+    padding:12px 0 22px; gap:24px;
+  }
+  .colophon .l{ font-family:var(--mono); font-size:10px; letter-spacing:.06em; color:var(--ink-60); }
+  .colophon .r{ font-size:12.5px; font-style:italic; color:var(--ink-60); text-align:right; }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- ============ MASTHEAD ============ -->
+  <header class="masthead">
+    <div class="wordmark">
+      <div class="mark">arc<sup>*</sup></div>
+      <div class="sub">The Operating Record</div>
+    </div>
+    <div class="motto">One human hand · a company of machines · every fact a receipt</div>
+    <div class="dateblock">
+      <div class="day">Tuesday, 19 August 2026</div>
+      <div class="edition">Day 22 of the record · morning edition · record open</div>
+    </div>
+  </header>
+  <div class="rule-double"></div>
+
+  <!-- ============ MAIN ============ -->
+  <div class="main">
+
+    <!-- === LEFT RAIL === -->
+    <aside class="col col-a">
+
+      <div class="sect">
+        <div class="sect-head"><span class="label">The four meanings</span><span class="n">law</span></div>
+        <div class="meaning">
+          <span class="sw sw-amber"></span>
+          <div><b>Needs you</b><span class="st"><span class="live">in use · 13 open</span></span></div>
+        </div>
+        <div class="meaning">
+          <span class="sw sw-money"></span>
+          <div><b>Real money</b><span class="st">reserved · never yet printed</span></div>
+        </div>
+        <div class="meaning">
+          <span class="sw sw-incident"></span>
+          <div><b>Incident</b><span class="st">idle · none open, day 22</span></div>
+        </div>
+        <div class="meaning">
+          <span class="sw sw-nonreal"></span>
+          <div><b>Non-real</b><span class="st">hatched, always · 32 kinds unexercised</span></div>
+        </div>
+      </div>
+
+      <div class="sect">
+        <div class="sect-head"><span class="label">Lanes</span><span class="n">7 live of 16</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">bench</span><span class="ph">phase 02</span><span class="owed">3</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">engine</span><span class="ph">phase 04 · gate</span><span class="owed">2</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">face</span><span class="ph">phase 05</span><span class="owed">1</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">growth</span><span class="ph">phase 03</span><span class="owed">1</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">leads</span><span class="ph">phase 01</span><span class="owed">2</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">legal</span><span class="ph">phase 00</span><span class="owed">3</span></div>
+        <div class="lane"><span class="tick"></span><span class="nm">scheduler</span><span class="ph">phase 02</span><span class="owed">1</span></div>
+        <p class="lane-foot">Nine more stand dormant, not failed: no receipt has moved them in 7 days. Amber counts are the 13 waiting on you, by lane.</p>
+      </div>
+
+      <div class="sect">
+        <div class="sect-head"><span class="label">Not measured</span><span class="n">honest</span></div>
+        <div class="noninst"><span class="what">Agent spend, today</span><span class="tag-nonreal">not instrumented</span></div>
+        <div class="noninst"><span class="what">Cycle time, raise to stamp</span><span class="tag-nonreal">not instrumented</span></div>
+        <div class="noninst"><span class="what">Operator hours</span><span class="tag-nonreal">never tracked</span></div>
+      </div>
+
+    </aside>
+
+    <!-- === CENTRE · THE DESK === -->
+    <section class="col col-b">
+
+      <div class="kicker">
+        <code>approval.requested</code>
+        <span class="rulefill"></span>
+        <span class="label" style="letter-spacing:.14em;">the desk</span>
+      </div>
+
+      <div class="headline">
+        <div class="bignum">13</div>
+        <div class="side">
+          <div class="h">decisions only you may make, standing open this morning.</div>
+          <div class="counters">
+            <div><div class="v">55</div><div class="k">raised</div></div>
+            <div><div class="v">42</div><div class="k">decided</div></div>
+            <div><div class="v amb">13</div><div class="k">open</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- entry 1, expanded -->
+      <article class="entry open-first">
+        <div class="entry-meta">
+          <span class="no">no. 46</span>
+          <code class="kind">approval.requested · <span class="k2">phase-done</span></code>
+          <span class="lane-of">lane: engine</span>
+          <span class="age">waiting 3 days</span>
+        </div>
+        <h2 class="entry-title">Approve moving past phase 04 (engine).</h2>
+        <div class="entry-ulid">01M05A4Y4QM54VRQWSNE9ENQMD</div>
+
+        <div class="stampwell">
+          <div class="stamp-emblem">
+            <svg width="128" height="128" viewBox="0 0 140 140" aria-hidden="true">
+              <circle cx="70" cy="70" r="66" fill="none" stroke="#1B1812" stroke-width="2.5"/>
+              <circle cx="70" cy="70" r="62" fill="none" stroke="#1B1812" stroke-width="1"/>
+              <circle cx="70" cy="70" r="42" fill="none" stroke="#1B1812" stroke-width="1"/>
+              <defs>
+                <path id="ringT" d="M 70,70 m -52,0 a 52,52 0 1,1 104,0 a 52,52 0 1,1 -104,0"/>
+              </defs>
+              <text font-family="'Spline Sans Mono', monospace" font-size="9.5" font-weight="600" letter-spacing="2.2" fill="#1B1812">
+                <textPath href="#ringT" startOffset="0">DECIDED BY HUMAN HAND · NEVER BY MACHINE ·</textPath>
+              </text>
+              <text x="70" y="66" text-anchor="middle" font-family="Fraunces, serif" font-size="40" font-style="italic" fill="#B26A00">*</text>
+              <text x="70" y="88" text-anchor="middle" font-family="'Spline Sans Mono', monospace" font-size="10" font-weight="600" letter-spacing="4" fill="#1B1812">ARC</text>
+            </svg>
+            <div class="cap">The stamp</div>
+          </div>
+
+          <div>
+            <div class="reason-row" id="well-46">
+              <div class="rl">
+                <span class="label" style="font-size:9px; white-space:nowrap;">Reason, into the record</span>
+                <span class="reason-req" style="white-space:nowrap;">required · refuses empty</span>
+              </div>
+              <input class="reason" id="reason-46" type="text" autocomplete="off" spellcheck="false"
+                     placeholder="Why you decided. Kept forever beside the receipt.">
+              <div class="stampacts">
+                <button class="stampbtn approve" disabled>APPROVE</button>
+                <button class="stampbtn reject" disabled>REJECT</button>
+                <span class="stampnote">Irreversible. There is no unstamp.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="afterwell">
+            <div class="chip">
+              <span class="chiplabel">CHIP</span>
+              <pre id="chip-46">arc stamp 01M05A4Y4QM54VRQWSNE9ENQMD <span class="flag">--approve --reason "..."</span></pre>
+              <button class="copy" data-for="chip-46">copy</button>
+            </div>
+            <p class="chip-cap">A chip is yours to run, by your own hand. This console never executes one.</p>
+
+            <div class="sealrow">
+              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+                <circle cx="9" cy="9" r="8" fill="none" stroke="#1B1812" stroke-width="1.4"/>
+                <path d="M9 3.4 L10.4 7 L14.2 7.2 L11.2 9.6 L12.3 13.3 L9 11.1 L5.7 13.3 L6.8 9.6 L3.8 7.2 L7.6 7 Z" fill="#1B1812"/>
+              </svg>
+              <p class="q"><b>Seal · forever human</b>"No <span class="mono" style="font-size:11px;">approval.decided</span> receipt exists without a human stamp and a written reason. The machine may raise. Only you may decide." · Rule 1 of the record, day 1.</p>
+            </div>
+        </div>
+      </article>
+
+      <!-- entry 2, collapsed -->
+      <article class="entry closed">
+        <div class="entry-meta" style="grid-column:1;">
+          <span class="no">no. 54</span>
+          <code class="kind">approval.requested · <span class="k2">draft-verdict</span></code>
+          <span class="lane-of">lane: growth</span>
+          <span class="age">waiting 11h</span>
+        </div>
+        <div class="well-empty"><span>await<br>stamp</span></div>
+        <h3 class="entry-title" style="grid-column:1;">Accept or reject build-in-public draft 1 of 3.</h3>
+        <div class="entry-ulid" style="grid-column:1;">01M0B663APQMV49EQR9AGR1WJQ</div>
+      </article>
+
+      <!-- entry 3, collapsed -->
+      <article class="entry closed">
+        <div class="entry-meta" style="grid-column:1;">
+          <span class="no">no. 55</span>
+          <code class="kind">approval.requested · <span class="k2">engine-escalation</span></code>
+          <span class="lane-of">lane: engine</span>
+          <span class="age">waiting 9h</span>
+        </div>
+        <div class="well-empty"><span>await<br>stamp</span></div>
+        <h3 class="entry-title" style="grid-column:1;">Escalate build-in-public-draft to a stronger tier.</h3>
+        <div class="entry-ulid" style="grid-column:1;">01M0ASG8JG8X6PQ0045MJ6TY8Q</div>
+      </article>
+
+      <div class="register-foot">
+        <span class="more">+ 10 more approval.requested</span>
+        <span class="expl">stand open in the register below, oldest first. None expire. All wait.</span>
+      </div>
+
+    </section>
+
+    <!-- === RIGHT · REVENUE + SPINE === -->
+    <aside class="col col-c">
+
+      <div class="sect">
+        <div class="sect-head"><span class="label">Revenue, real</span><span class="n">₹</span></div>
+        <div class="absent">Absent</div>
+        <div style="margin-bottom:10px;"><span class="tag-nonreal"><span style="text-transform:none;">revenue.received</span> · has never fired</span></div>
+        <p class="absent-note">Not a small number. No number: in 1,150 receipts across 22 days, this kind has not fired once. Nothing here is projected in its place.</p>
+        <div class="money-reserve">
+          <span class="cur">₹ ______</span>
+          <span class="res">green ink is reserved.<br>The first real rupee prints here.</span>
+        </div>
+      </div>
+
+      <div class="sect">
+        <div class="sect-head"><span class="label">The spine</span><span class="n">append-only</span></div>
+        <div class="spine-nums">
+          <div class="big">1,150</div>
+          <div class="rest">receipts · 22 days<br>21 sealed · today open</div>
+        </div>
+
+        <div class="kinds" aria-label="46 receipt kinds, 14 fired, 32 unexercised">
+          <i class="f" title="lane.born"></i><i class="f" title="plan.written"></i><i class="f" title="adr.recorded"></i><i class="f" title="phase.started"></i><i class="f" title="phase.done"></i><i class="f" title="approval.requested"></i><i class="f" title="approval.decided"></i><i class="f" title="receipt.sealed"></i><i class="f" title="ci.run"></i><i class="f" title="merge.landed"></i><i class="f" title="retro.filed"></i><i class="f" title="draft.written"></i><i class="f" title="draft.verdict"></i><i class="f" title="escalation.raised"></i><i class="u" title="revenue.received · unexercised"></i><i class="u" title="revenue.refunded · unexercised"></i><i class="u" title="invoice.sent · unexercised"></i><i class="u" title="customer.signed · unexercised"></i><i class="u" title="customer.churned · unexercised"></i><i class="u" title="incident.opened · unexercised"></i><i class="u" title="incident.closed · unexercised"></i><i class="u" title="deploy.landed · unexercised"></i><i class="u" title="deploy.rolled-back · unexercised"></i><i class="u" title="canary.passed · unexercised"></i><i class="u" title="canary.failed · unexercised"></i><i class="u" title="domain.acquired · unexercised"></i><i class="u" title="site.published · unexercised"></i><i class="u" title="sitemap.submitted · unexercised"></i><i class="u" title="lead.captured · unexercised"></i><i class="u" title="lead.converted · unexercised"></i><i class="u" title="outreach.sent · unexercised"></i><i class="u" title="reply.received · unexercised"></i><i class="u" title="contract.signed · unexercised"></i><i class="u" title="payroll.run · unexercised"></i><i class="u" title="audit.passed · unexercised"></i><i class="u" title="audit.failed · unexercised"></i><i class="u" title="budget.approved · unexercised"></i><i class="u" title="spend.recorded · unexercised"></i><i class="u" title="tier.changed · unexercised"></i><i class="u" title="agent.hired · unexercised"></i><i class="u" title="agent.retired · unexercised"></i><i class="u" title="kind.added · unexercised"></i><i class="u" title="seal.broken · unexercised"></i><i class="u" title="key.rotated · unexercised"></i><i class="u" title="backup.verified · unexercised"></i><i class="u" title="record.exported · unexercised"></i>
+        </div>
+        <p class="kinds-cap"><b>14 of 46 kinds</b> have ever fired. The other <span class="uv">32 are unexercised</span>: drawn hatched, never as zero. A kind that has not fired has no count at all.</p>
+
+        <div class="integrity">
+          chain verified 06:04 · head <b>01M0F3T9…RQ2V</b><br>
+          appended: 1,150 · amended: <b>none, ever</b> · deletable: <b>nothing</b>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- ============ THE STAVE · 22 DAYS ============ -->
+  <section class="stave-band">
+    <div class="stave-head">
+      <span class="label">Twenty-two days of record</span>
+      <span class="fine it">one stroke per day, height is receipts written; a dot beneath is that evening&#8217;s seal</span>
+    </div>
+
+    <svg viewBox="0 0 1321 152" role="img" aria-label="Receipts per day across 22 days, 21 sealed">
+      <!-- baseline -->
+      <line x1="14" y1="110.5" x2="1307" y2="110.5" stroke="#B9AE97" stroke-width="1"/>
+
+      <!-- day strokes: value scaled 95 to 84px -->
+      <rect x="20"   y="99" width="5" height="11" fill="#1B1812"/>
+      <rect x="81"   y="94" width="5" height="16" fill="#1B1812"/>
+      <rect x="142"  y="102" width="5" height="8"  fill="#1B1812"/>
+      <rect x="203"  y="89" width="5" height="21" fill="#1B1812"/>
+      <rect x="264"  y="83" width="5" height="27" fill="#1B1812"/>
+      <rect x="325"  y="75" width="5" height="35" fill="#1B1812"/>
+      <rect x="386"  y="91" width="5" height="19" fill="#1B1812"/>
+      <rect x="447"  y="61" width="5" height="49" fill="#1B1812"/>
+      <rect x="508"  y="56" width="5" height="54" fill="#1B1812"/>
+      <rect x="569"  y="76" width="5" height="34" fill="#1B1812"/>
+      <rect x="630"  y="68" width="5" height="42" fill="#1B1812"/>
+      <rect x="691"  y="46" width="5" height="64" fill="#1B1812"/>
+      <rect x="752"  y="59" width="5" height="51" fill="#1B1812"/>
+      <rect x="813"  y="52" width="5" height="58" fill="#1B1812"/>
+      <rect x="874"  y="38" width="5" height="72" fill="#1B1812"/>
+      <rect x="935"  y="67" width="5" height="43" fill="#1B1812"/>
+      <rect x="996"  y="30" width="5" height="80" fill="#1B1812"/>
+      <rect x="1057" y="43" width="5" height="67" fill="#1B1812"/>
+      <rect x="1118" y="53" width="5" height="57" fill="#1B1812"/>
+      <rect x="1179" y="32" width="5" height="78" fill="#1B1812"/>
+      <rect x="1240" y="26" width="5" height="84" fill="#1B1812"/>
+      <!-- today, still being written: hollow -->
+      <rect x="1301" y="62" width="5" height="48" fill="none" stroke="#1B1812" stroke-width="1.4"/>
+
+      <!-- peak + today counts -->
+      <text x="1242.5" y="18" text-anchor="middle" font-family="'Spline Sans Mono', monospace" font-size="9.5" fill="#57503F">95</text>
+      <text x="1303.5" y="54" text-anchor="middle" font-family="'Spline Sans Mono', monospace" font-size="9.5" fill="#57503F">54</text>
+
+      <!-- seal dots, days 1..21 -->
+      <circle cx="22.5"   cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="83.5"   cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="144.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="205.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="266.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="327.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="388.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="449.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="510.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="571.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="632.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="693.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="754.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="815.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="876.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="937.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="998.5"  cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="1059.5" cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="1120.5" cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="1181.5" cy="123" r="2.6" fill="#1B1812"/>
+      <circle cx="1242.5" cy="123" r="2.6" fill="#1B1812"/>
+      <!-- today: unsealed -->
+      <circle cx="1303.5" cy="123" r="2.6" fill="none" stroke="#57503F" stroke-width="1" stroke-dasharray="1.6 1.6"/>
+
+      <!-- date labels -->
+      <text x="20" y="145" font-family="'Spline Sans Mono', monospace" font-size="9" letter-spacing="1" fill="#8A8270">DAY 1 · 28 JUL</text>
+      <text x="447" y="145" text-anchor="middle" font-family="'Spline Sans Mono', monospace" font-size="9" letter-spacing="1" fill="#8A8270">DAY 8</text>
+      <text x="874" y="145" text-anchor="middle" font-family="'Spline Sans Mono', monospace" font-size="9" letter-spacing="1" fill="#8A8270">DAY 15</text>
+      <text x="1307" y="145" text-anchor="end" font-family="'Spline Sans Mono', monospace" font-size="9" letter-spacing="1" fill="#57503F">DAY 22 · TODAY · OPEN</text>
+    </svg>
+
+    <div class="stave-legend">
+      <span><span class="dot"></span>sealed at midnight, hash chained to the day before</span>
+      <span><span class="odot"></span>today, still being written · seals at 00:00</span>
+    </div>
+  </section>
+
+  <!-- ============ COLOPHON ============ -->
+  <footer class="colophon">
+    <div class="l">printed from the spine at 06:04 IST · 1,150 receipts · none amended, none deletable</div>
+    <div class="r">This page is not a dashboard over the company. It is the book the company is.</div>
+  </footer>
+
+</div>
+
+<script>
+  (function(){
+    "use strict";
+    // arm the stamp only when a reason exists. the stamp refuses an empty reason.
+    var reason = document.getElementById("reason-46");
+    var well = document.getElementById("well-46");
+    if (reason && well) {
+      reason.addEventListener("input", function () {
+        var armed = reason.value.trim().length > 0;
+        well.classList.toggle("armed", armed);
+        var btns = well.querySelectorAll(".stampbtn");
+        for (var i = 0; i < btns.length; i++) { btns[i].disabled = !armed; }
+      });
+    }
+    // chips are copyable, never executed.
+    var copies = document.querySelectorAll(".chip .copy");
+    for (var j = 0; j < copies.length; j++) {
+      copies[j].addEventListener("click", function () {
+        var pre = document.getElementById(this.getAttribute("data-for"));
+        var btn = this;
+        if (!pre) return;
+        var text = pre.textContent.replace(/\s+/g, " ").trim();
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () {
+            btn.textContent = "copied";
+            setTimeout(function () { btn.textContent = "copy"; }, 1400);
+          });
+        }
+      });
+    }
+  })();
+</script>
+</body>
+</html>
