@@ -114,6 +114,21 @@ generic → Map animation → Tape play (keep as-of).
   rewrite then caught a genuine gap — `spineHealth` exposed no `kindsSeen`, so the face's
   headline honesty number would have been copied from a doc rather than derived.
 
+## Assumptions ledger — adjudicated by running the measurement, not by opinion
+
+Four of seven now have a result. A trigger is scored by executing what it names; the three
+without one are named NOT YET EVALUABLE rather than quietly counted as holding.
+
+| # | assumption | verdict | the measurement |
+|---|---|---|---|
+| 1 | `spine.mjs` serves the read door <1 s p95 on a 10k-event fixture | **HELD** | walked all 10,000 events through the cursor in 20 pages: p50 56 ms, **p95 72 ms**, max 441 ms. The sqlite accelerator path stays unbuilt, correctly. |
+| 2 | `/api/decide` can emit a `decision.recorded` byte-identical to the CLI's | **HELD** | same approval, same reason, two doors, two spines: all 16 envelope keys identical except `id`/`ts`/`sha`, `actor` identical by name, and normalising id+ts makes the two shas coincide. The extraction was mechanical, as re-verification predicted. |
+| 3 | a `face:` section passes `product-lint` once `KNOWN_FIELDS` is extended | **HELD** | 16 of 16 manifests carry one; `product-lint: all manifests valid`. The `evolve:` precedent held exactly. |
+| 4 | three theses can differ ≥3/7 IA dimensions and ≥3/4 art axes | **HELD** | director's post-composition call on the rendered pages: **5 of 7** and **4 of 4**, no reassignment. The 20-line Map legibility half is NOT YET EVALUABLE — the Map needs L3. |
+| 5 | the owner will decide through the face on real days | **NOT YET EVALUABLE** | needs Phase 08 and a built L3. Nothing about it is knowable now, and calling it "on track" would be the fiction this column exists to prevent. |
+| 6 | `/arc-phase-done` accepts cross-repo evidence | **NOT YET EVALUABLE** | needs the `arc-face` repo, which is Phase 04's entry gate. |
+| 7 | file-borne truths have no usable history, so as-of applies to spine views only | **HOLDS, UNFALSIFIED** | no sanctioned file-history source appeared. The door enforces it: file-borne panels carry the `file, not log` badge, and `/api/pnl` refuses a day-granular `asof` with a named 501 rather than inventing one. |
+
 ## Now
 
 **Position:** Phases 00, 01 (to the owner gate), 03 and the Phase 05 birth-rule are built
