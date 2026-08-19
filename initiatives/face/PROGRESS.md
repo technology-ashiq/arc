@@ -123,10 +123,20 @@ closed via `/arc-phase-done` yet — closing needs CI per-job green plus the own
 **Next step (mine):** the jury reference item + three blind rankings, then re-verify CI
 per JOB against the head SHA.
 
+**Phase 07 status:** the deterministic half is BUILT and answers live-state questions with
+citations, needing no driver, no key and no spend (36 golden checks, proven non-vacuous by
+mutation). The model half is staged, not landed: `face-ask.process.yaml` sits in
+`contracts/` because the birth rule makes a process and its policy row one change, and that
+row is the owner's (below). Landing the process alone turned CI red on four jobs — the test
+was right.
+
 **Next step (owner's, batched — three keystrokes):**
 1. The Phase 01 **PICK + PREDICTION** after opening the three renders yourself
    (`.claude/state/design/renders/…variant-{a,b,c}…png`) — the design lane's law makes this
    a human act, and Cycle 3 is the record of what happens when pixels are judged by report.
 2. The `hq.policy.yaml` row for `process:face-ask` — that file is edit-denied to me by
-   design (the two-key model), so a machine cannot grant itself a subject.
+   design (the two-key model), so a machine cannot grant itself a subject. Add
+   `"process:face-ask":` with every capability L0 except `read: { level: L1 }`, then
+   `git mv initiatives/face/contracts/face-ask.process.yaml processes/` in the SAME commit
+   (the POL-I birth rule; landing the process without the row is what turned CI red).
 3. The brief's "purinjathu" read, to close Phase 00 against its commit SHA.

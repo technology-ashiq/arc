@@ -38,6 +38,28 @@ if squeezed)
 One coarse line, refined at phase start via `/arc-change`: golden-questions fixture
 (20/20 with citations) + zero-write tool-list fixture + offline-subset fixture.
 
+## Where the process file lives right now, and why it is not in `processes/`
+
+`face-ask.process.yaml` is **staged at `initiatives/face/contracts/face-ask.process.yaml`**,
+not in `processes/`. That is the POL-I birth rule being honoured rather than bent.
+
+I landed it in `processes/` first and CI went red on four jobs across three OS legs:
+`tests/kickoff-lint.bats` asserts, against the real tree, that every process carries its
+policy row — `0 ungoverned`. `face-ask` had none, because `hq.policy.yaml` is edit-denied
+to me by design (a machine that can grant itself a subject is not governed).
+
+The birth rule says a module's policy row lands **in the same change** as the module. I
+cannot write that row, so I cannot land the process — and the test is right to say so. The
+three pieces move into place together:
+
+1. the owner adds `"process:face-ask":` to `hq.policy.yaml` (all L0 except `read: L1` — the
+   brain answers from a pack the door hands it and needs nothing else);
+2. `git mv initiatives/face/contracts/face-ask.process.yaml processes/`;
+3. one commit.
+
+Until then `/api/ask` answers from the deterministic path and says so in its `source` field,
+which is true rather than degraded.
+
 ## Known gap, found 2026-08-19 by running it (not by review)
 
 **The zero-tools brain is not runnable on today's `claude-code` driver, and that is the
