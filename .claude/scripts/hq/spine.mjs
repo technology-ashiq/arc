@@ -166,12 +166,22 @@ export function spineHealth(root) {
       }
     }
   }
+  // Which kinds have EVER fired, derived from the log rather than assumed. The face's
+  // headline honesty number ("14 of 46 kinds have ever fired") is this set's size against
+  // KINDS.length, and it must be counted here rather than copied into a doc -- a copied
+  // count is the exact defect ADR-0107's derive-it rule exists to prevent, and the design
+  // source reproduced it while citing that rule.
+  const kindSet = new Set();
+  for (const e of events) if (e.event && typeof e.event.kind === "string") kindSet.add(e.event.kind);
+
   return {
     events: events.length,
     days: days.length,
     daysClosed: closed.length,
     torn: torn.map((t) => ({ day: t.day, line: t.line })),
     idemIndex: idemSize,
+    kindsSeen: kindSet.size,
+    kinds: [...kindSet].sort(),
     quarantined,
   };
 }

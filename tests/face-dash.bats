@@ -28,23 +28,16 @@ load 'test_helper'
 }
 
 @test "dash spine-health: torn line and quarantine counts come from the reader, not raw dirs" {
-  # spineHealth is part of spine.mjs (the ONE public API, ADR-1301) -- assert it exists as
-  # an export and reports the fixture's planted torn line through a plain import.
-  run node --input-type=module -e "
-    import { spineHealth } from '$(echo "$ARC_ROOT" | sed 's/\\\\/\//g')/.claude/scripts/hq/spine.mjs';
-    import { execFileSync } from 'node:child_process';
-    import { mkdtempSync } from 'node:fs';
-    import { tmpdir } from 'node:os';
-    import { join } from 'node:path';
-    const dir = join(mkdtempSync(join(tmpdir(), 'face-health-')), 'spine');
-    const gen = JSON.parse(execFileSync(process.execPath, ['$(echo "$ARC_ROOT" | sed 's/\\\\/\//g')/tests/fixtures/face/gen-spine.mjs', '--out', dir, '--count', '300', '--days', '3', '--seed', 'health-1'], {stdio:['ignore','pipe','inherit']}).toString());
-    if (gen.events !== 300) { console.log('FIXTURE NOT LOADED'); process.exit(1); }
-    const h = spineHealth(dir);
-    if (h.events !== 300) { console.log('health saw', h.events); process.exit(1); }
-    if (h.torn.length !== 1) { console.log('torn not reported:', JSON.stringify(h.torn)); process.exit(1); }
-    if (h.daysClosed !== 2) { console.log('seals wrong:', h.daysClosed); process.exit(1); }
-    console.log('RAN: spineHealth over 300-event fixture, torn=1, sealed=2');
-  "
+  run node "$ARC_ROOT/tests/face/dash-health.mjs"
   [ "$status" -eq 0 ] || { echo "$output"; false; }
-  [[ "$output" == *"RAN: spineHealth"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: "* ]] || { echo "no RAN line -- the suite did not finish: $output"; false; }
+  [[ "$output" == *"ok the torn line is REPORTED, not dropped"* ]] || { echo "$output"; false; }
+}
+
+@test "face-dash suite registers all 4 tests (a dropped test is indistinguishable from a pass)" {
+  # bats silently DROPS a @test whose name carries a non-ASCII character -- five tests once
+  # vanished that way and the file stayed green. This asserts the count itself.
+  run grep -c '^@test ' "$ARC_ROOT/tests/face-dash.bats"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 5 ]
 }
