@@ -269,7 +269,11 @@ function apiLane(ctx, laneName) {
 }
 
 function apiFile(ctx, id) {
-  const rel = FILE_ALLOW[id];
+  // Object.hasOwn, not a bare lookup: `constructor`/`toString`/`__proto__` resolve to
+  // INHERITED members, which are truthy, pass an `if (!rel)` guard, and then blow up in
+  // join() as a 500 with a TypeError echoed back. An allow-list must answer "no" to every
+  // key it does not itself contain.
+  const rel = Object.hasOwn(FILE_ALLOW, id) ? FILE_ALLOW[id] : undefined;
   if (!rel) throw new DashError("UNKNOWN_FILE_ID", `"${id}" is not on the sanctioned allow-list (${Object.keys(FILE_ALLOW).join(", ")})`);
   const path = join(ctx.repo, rel);
   if (!existsSync(path)) throw new DashError("UNKNOWN_FILE_ID", `allow-listed id "${id}" has no file at ${rel} on this tree`);
@@ -395,6 +399,7 @@ function boot(argv) {
 
   const ctx = { mode, root, repo, journalDir };
   const selfOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, `http://[::1]:${port}`]);
+  const selfHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`]);
 
   const journal = (entry) => {
     // Evidence, never truth (REQ-10): a failed journal line is reported, not fatal.
@@ -405,6 +410,10 @@ function boot(argv) {
   };
 
   const send = (res, status, obj) => {
+    // headersSent/writableEnded guard: an error AFTER a partial write would otherwise
+    // double-send -> ERR_HTTP_HEADERS_SENT thrown inside the .catch -> unhandled
+    // rejection -> crash. The HQ must survive a peer that resets mid-response.
+    if (res.headersSent || res.writableEnded) return;
     const body = JSON.stringify(escapeDeep(obj));
     res.writeHead(status, {
       "Content-Type": "application/json; charset=utf-8",
@@ -428,8 +437,24 @@ function boot(argv) {
   });
 
   function handleRequest(req, res) {
+    // A socket error after headers is an EVENT, not a throw -- unhandled, it takes the
+    // process down. Same class as the sync-throw fix below, on the stream siblings.
+    req.on("error", () => { try { res.destroy(); } catch { /* already gone */ } });
+    res.on("error", () => { /* peer vanished mid-write; nothing to say to it */ });
+
     const url = new URL(req.url, `http://127.0.0.1:${port}`);
     const path = url.pathname;
+
+    // Host, not just Origin (DNS-rebinding hardening): a page at attacker.com rebound to
+    // 127.0.0.1 sends Host: attacker.com and NO Origin on same-origin GETs, so the Origin
+    // check alone never fires. The token still blocks the data, but a localhost-only door
+    // should refuse the request outright rather than rely on one control.
+    const host = req.headers.host;
+    if (host !== undefined && !selfHosts.has(host)) {
+      res.writeHead(403, { "Content-Type": "application/json; charset=utf-8", "X-Content-Type-Options": "nosniff" });
+      res.end(JSON.stringify({ error: "BAD_ORIGIN", message: "this door answers only to a localhost Host header" }));
+      return;
+    }
 
     // Static shell: no data, no auth, no fourth affordance.
     if (req.method === "GET" && (path === "/" || path === "/index.html")) {
@@ -461,7 +486,14 @@ function boot(argv) {
     if (!route) return fail("UNKNOWN_ROUTE", `${req.method} ${path} is not a route on this door (see --routes)`);
     if (route.mutates && origin === undefined) return fail("NO_ORIGIN", "the mutating route requires an Origin header (a browser always sends one on POST; a fixture must set it deliberately)");
 
-    const tail = route.prefix ? decodeURIComponent(path.slice(route.prefix.length)) : null;
+    // decodeURIComponent throws URIError on malformed percent-encoding (/api/lane/%).
+    // Contained by the outer catch either way, but a client error deserves its own 400
+    // rather than a generic "dispatch failed" 500.
+    let tail = null;
+    if (route.prefix) {
+      try { tail = decodeURIComponent(path.slice(route.prefix.length)); }
+      catch { return fail("BAD_ARGS", "malformed percent-encoding in the path"); }
+    }
 
     const run = (body) => {
       // Promise.resolve().then(...) -- NOT Promise.resolve(handler(...)) -- so a handler
@@ -501,6 +533,21 @@ function boot(argv) {
       run(null);
     }
   }
+
+  // Process-level backstops. Every known throw path is contained above; these exist for
+  // the ones nobody enumerated -- an async callback, a stream event, a library throw. The
+  // HQ staying up is worth more than a clean crash: the owner's decisions run through it.
+  process.on("uncaughtException", (err) => {
+    process.stderr.write(`arc-dash: WARN uncaught exception contained -- ${err && err.stack ? err.stack.split("\n")[0] : err}\n`);
+  });
+  process.on("unhandledRejection", (reason) => {
+    process.stderr.write(`arc-dash: WARN unhandled rejection contained -- ${reason && reason.message ? reason.message : reason}\n`);
+  });
+
+  // Slowloris: pin the timeouts rather than inherit whatever the Node version defaults to.
+  server.requestTimeout = 30_000;
+  server.headersTimeout = 10_000;
+  server.keepAliveTimeout = 5_000;
 
   server.listen(port, bind, () => {
     process.stderr.write(`arc-dash: ${mode} mode on http://${bind === "::1" ? "[::1]" : bind}:${port} (spine: ${mode === "live" ? "canonical" : root})\n`);

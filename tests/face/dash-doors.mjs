@@ -8,6 +8,7 @@
 // line is what the bats wrapper asserts, so a suite that dies half-way cannot read green.
 
 import { execFileSync, spawn } from "node:child_process";
+import { connect } from "node:net";
 import { mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname, resolve } from "node:path";
@@ -125,6 +126,29 @@ try {
   const t1 = await (await fetch(`http://127.0.0.1:${PORT}/api/spine?asof=2026-07-22&limit=1000`, { headers: H })).text();
   const t2 = await (await fetch(`http://127.0.0.1:${PORT}/api/spine?asof=2026-07-22&limit=1000`, { headers: H })).text();
   check("as-of read is deterministic (byte-identical twice)", t1 === t2 && t1.length > 100);
+
+  // --- adversarial-pass regressions (HTTP/boundary attacker, 2026-08-19) ---
+  // Each pins ONE finding from that pass. A fix with no test is a fix that comes back.
+  r = await j("/api/file/constructor", { headers: H });
+  check("inherited key on the allow-list -> 404, not a 500 TypeError", r.status === 404 && r.body.error === "UNKNOWN_FILE_ID");
+  r = await j("/api/file/__proto__", { headers: H });
+  check("__proto__ on the allow-list -> 404", r.status === 404);
+  r = await j("/api/lane/%", { headers: H });
+  check("malformed percent-encoding -> 400 BAD_ARGS, not 500", r.status === 400 && r.body.error === "BAD_ARGS");
+  // Raw socket, not fetch: `Host` is a forbidden header in fetch/undici and is silently
+  // replaced -- a rebinding test written with fetch tests nothing (found by running it).
+  const rawHost = await new Promise((res2) => {
+    const sock = connect(PORT, "127.0.0.1", () => {
+      sock.write(`GET /api/health HTTP/1.1\r\nHost: attacker.example\r\nAuthorization: Bearer ${TOKEN}\r\nConnection: close\r\n\r\n`);
+    });
+    let buf = "";
+    sock.on("data", (d) => { buf += d.toString(); });
+    sock.on("close", () => res2(buf));
+    sock.on("error", () => res2(""));
+  });
+  check("foreign Host (DNS-rebinding) -> refused before auth", /^HTTP\/1\.1 403/.test(rawHost) && rawHost.includes("BAD_ORIGIN"), rawHost.split("\r\n")[0]);
+  r = await j("/api/health", { headers: H });
+  check("server alive after the whole adversarial set", r.status === 200);
 
   // route enumeration off the table the server actually dispatches from
   const routes = JSON.parse(execFileSync(process.execPath, [join(REPO, ".claude/scripts/hq/arc-dash.mjs"), "--routes"], { stdio: ["ignore", "pipe", "inherit"] }).toString());
