@@ -59,6 +59,7 @@ import { deriveKillPanel } from "./lib/ledger/kill-panel.mjs";
 import { repoRoot } from "./lib/spine-io.mjs";
 import { SpineError, ULID_RE, sha256Hex, formatIst, nowMs } from "./lib/canonical.mjs";
 import { laneHeader, validLaneName } from "../core/lane-resolve.mjs";
+import { askOffline } from "./lib/face/ask-offline.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ARC_BRIEF = join(HERE, "arc-brief.mjs");
@@ -293,28 +294,73 @@ async function apiDecide(ctx, body) {
   return { mode: ctx.mode, decided: id, verdict, decision };
 }
 
+/** The live-state pack, assembled by the READ DOOR -- the brain never gathers (ADR-1307). */
+async function askState(ctx) {
+  const health = spineHealth(ctx.root);
+  const { events } = await readAll(ctx.root);
+  const kinds = {};
+  for (const e of events) kinds[e.event.kind] = (kinds[e.event.kind] || 0) + 1;
+  const { requested, decidedIds } = await loadApprovals(ctx.root);
+  const open = requested.filter((e) => !decidedIds.has(e.event.id)).map((e) => {
+    const p = e.event.payload || {};
+    const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
+    const gate = typeof p.gate === "string" ? p.gate : (typeof p.subject === "string" ? p.subject.split(".")[0] : "?");
+    return { id: e.event.id, gate, what };
+  });
+  const board = apiBoard(ctx);
+  return {
+    events: health.events, days: health.days, daysClosed: health.daysClosed,
+    quarantined: health.quarantined.total, kinds,
+    open, raised: requested.length, decided: decidedIds.size,
+    lanes: board.lanes.map((l) => ({ lane: l.lane, ...(l.header || {}) })),
+  };
+}
+
 async function apiAsk(ctx, body) {
-  const proc = join(ctx.repo, "processes", "face-ask.process.yaml");
-  if (!existsSync(proc))
-    throw new DashError("PROCESS_NOT_LANDED", "face-ask is not on this tree yet (Phase 07); the honest answer is this refusal, not an ungoverned model call");
   const q = body && typeof body.q === "string" ? body.q : "";
   if (!q) throw new DashError("BAD_BODY", "ask needs { q: \"...\" }");
+
+  const state = await askState(ctx);
+
+  // DETERMINISTIC FIRST, and not as a consolation prize. Questions about live state have
+  // exact answers computed from the log; an exact answer beats a fluent one, needs no
+  // driver, no key and no spend, and cannot hallucinate a receipt. The model is for the
+  // questions this cannot reach -- so it is asked only when this says it cannot reach one,
+  // or when the caller explicitly wants the governed run (?mode=process).
+  const { matched, ...offline } = askOffline(q, state);
+  const wantsProcess = body && body.mode === "process";
+
+  // Route on whether the deterministic answerer REACHED an answer, never on how many
+  // citations it produced. The first cut escalated whenever `citations.length === 0`, and
+  // driving it live showed how wrong that is: "revenue is ₹0 because revenue.received has
+  // never fired" is a complete, correct answer that cites nothing (there is no receipt to
+  // cite — that IS the answer), and so is the spine-shape count. Worst of all, the
+  // action REFUSAL cites nothing, so the one answer that must never depend on a model —
+  // "I read; I do not act" — was being handed to a model. An unanswerable question and a
+  // correct citation-free answer are not the same thing, and only the first may escalate.
+  if (matched === "refusal:act" || (!wantsProcess && matched !== null)) {
+    return { mode: ctx.mode, source: "deterministic (L2 reads only, no driver)", ...offline };
+  }
+
+  const proc = join(ctx.repo, "processes", "face-ask.process.yaml");
+  if (!existsSync(proc)) {
+    // No governed process on this tree: the deterministic answer is ALL there is, and
+    // saying so is better than a refusal that hides an answer we actually have.
+    return { mode: ctx.mode, source: "deterministic (face-ask process not on this tree)", ...offline };
+  }
 
   // THE PROCESS DECLARES TWO REQUIRED INPUTS, and the first cut sent one. face-ask has
   // `tools: []` -- it cannot fetch anything -- so a call without `state` hands a brain with
   // no hands nothing to reason about, and the process's own input contract refuses it. The
-  // read door assembles the pack HERE, which is also the design: the brain never gathers.
-  const health = spineHealth(ctx.root);
-  const { requested, decidedIds } = await loadApprovals(ctx.root);
-  const open = requested.filter((e) => !decidedIds.has(e.event.id));
-  const state = [
-    `SPINE: ${health.events} receipts · ${health.daysClosed} day.closed seals · ${health.kindsSeen ?? "?"} of 46 kinds have ever fired.`,
-    `OPEN approval.requested (${open.length}): ${open.map((e) => {
-      const p = e.event.payload || {};
-      const what = typeof p.what === "string" ? p.what : (typeof p.subject === "string" ? p.subject : "");
-      return `${e.event.id} ${what}`;
-    }).join(" · ") || "none"}`,
-    `MODE: ${ctx.mode}${ctx.mode === "sim" ? " (SIMULATED — every value below is fixture data, never real)" : ""}`,
+  // pack is the SAME one the deterministic answerer just used, rendered for a reader: one
+  // assembly, one truth, no chance of the two halves of the brain seeing different states.
+  const pack = [
+    `SPINE: ${state.events} receipts · ${state.daysClosed} day.closed seals · ` +
+      `${Object.keys(state.kinds).length} of 46 kinds have ever fired · ${state.quarantined} refused (held separately, never counted as receipts).`,
+    `APPROVALS: ${state.raised} raised · ${state.decided} decided · ${state.open.length} OPEN` +
+      (state.open.length ? ` — ${state.open.map((o) => `${o.id} [${o.gate}] ${o.what}`).join(" · ")}` : ""),
+    `BOARD: ${state.lanes.filter((l) => l.status === "LIVE").map((l) => `${l.lane} phase ${l.phase || "—"} burn ${l.burn || "—"}/${l.appetite || "—"}`).join(" · ")}`,
+    `MODE: ${ctx.mode}${ctx.mode === "sim" ? " (SIMULATED — every value here is fixture data, never real)" : ""}`,
   ].join("\n");
 
   return new Promise((resolveP, rejectP) => {
@@ -323,7 +369,7 @@ async function apiAsk(ctx, body) {
     // rejected it by name, which is the good failure: an unknown flag is a refusal, never
     // a silently-dropped argument.
     execFile(process.execPath, [join(ctx.repo, ".claude", "scripts", "engine", "arc-run.mjs"),
-      "--process", "face-ask", "--input", JSON.stringify({ q, state })], {
+      "--process", "face-ask", "--input", JSON.stringify({ q, state: pack })], {
       cwd: ctx.repo, timeout: 120_000, maxBuffer: 4 * 1024 * 1024,
     }, (err, stdout, stderr) => {
       if (err) return rejectP(new DashError("ASK_FAILED", String(stderr || err.message).slice(0, 500)));

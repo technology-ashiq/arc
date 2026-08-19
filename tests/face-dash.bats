@@ -34,10 +34,17 @@ load 'test_helper'
   [[ "$output" == *"ok the torn line is REPORTED, not dropped"* ]] || { echo "$output"; false; }
 }
 
-@test "face-dash suite registers all 4 tests (a dropped test is indistinguishable from a pass)" {
+@test "ask golden: 20 live-state questions answered deterministically, refusals hold" {
+  run node "$ARC_ROOT/tests/face/ask-golden.mjs"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"ok GOLDEN BAR: 20 of 20 answered with their marker"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"ok every citation resolves to a ULID the state actually carries"* ]] || { echo "$output"; false; }
+}
+
+@test "face-dash suite registers all 6 tests (a dropped test is indistinguishable from a pass)" {
   # bats silently DROPS a @test whose name carries a non-ASCII character -- five tests once
   # vanished that way and the file stayed green. This asserts the count itself.
   run grep -c '^@test ' "$ARC_ROOT/tests/face-dash.bats"
   [ "$status" -eq 0 ]
-  [ "$output" -eq 5 ]
+  [ "$output" -eq 6 ]
 }
