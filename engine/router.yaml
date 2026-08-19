@@ -169,20 +169,30 @@ classes:
   # answers; it holds NO tools (the process declares `tools: []`, which ADR-0223 made mean
   # "grant nothing"), so it cannot act even if a prompt asked it to.
   #
-  # `hosted: local` is the DECISION, not a description of where it happens to run today
-  # (ADR-1307 + the ADR-0219 data boundary): every input is internal-only company state, so
-  # the boundary resolves to a local driver on effectively all traffic. A question that
-  # genuinely needs external context reopens this row by ADR before the row is widened --
-  # and `data-boundary.mjs` reads this value to explain its refusals, so a stale entry here
-  # makes the boundary wrong about where the data was going, which is the one thing it exists
-  # to be right about (the lesson the build-in-public row above paid for).
+  # NO `hosted:` LINE, AND THE ABSENCE IS DELIBERATE — do not "helpfully" add one.
   #
-  # Tier is balanced-workhorse per ADR-0069: this is a read-and-summarize job over supplied
-  # state, not a judgment call. Changing it is a reviewed diff citing that ADR, never a tweak.
+  # `cap`, `hosted`, `judge` and `review_by` are ONE group: carry any and you must carry all
+  # four (router-row.mjs REQUIRED). They describe a HIRED external agent runtime under
+  # tenure (ADR-0216/0217) -- a capped credential, a named human judge, a date the hire is
+  # re-justified or retired. `face-ask` is none of that: it runs on the in-house
+  # `claude-code` driver, so giving it a judge and a review date would be inventing a hire
+  # that does not exist, which is worse than saying nothing.
+  #
+  # The first cut wrote `hosted: local` alone, for the honest reason that ADR-1307 makes
+  # local-only a DECISION rather than an accident. That single field faulted all three of its
+  # missing siblings and the whole router refused to load -- taking every engine test with
+  # it. The validator was right: a lone tenure field constrains nothing while looking like it
+  # constrains something.
+  #
+  # Local-only is still the decision; it is carried where it belongs -- ADR-1307, plus the
+  # in-house driver named below. `data-boundary.mjs` only ever special-cases `hosted: cloud`,
+  # so an absent value is already read as "not leaving this machine", which is the truth here.
+  #
+  # Tier is balanced-workhorse per ADR-0069: a read-and-summarize job over supplied state,
+  # not a judgment call. Changing it is a reviewed diff citing that ADR, never a tweak.
   face-ask:
     tier: balanced-workhorse
     driver: claude-code
-    hosted: local
     fallback: []
 
 # The default for a process with no class row. Deliberately NOT a catch-all that silently
