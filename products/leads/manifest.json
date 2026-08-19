@@ -30,5 +30,34 @@
   "files": [
     ".claude/config/leads.json"
   ],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "leads",
+    "ring": "money",
+    "kinds": [
+      "deal.lost",
+      "deal.won",
+      "incident.raised",
+      "lead.researched",
+      "lead.suppressed",
+      "meeting.booked",
+      "outreach.replied",
+      "outreach.sent"
+    ],
+    "sanctioned": [
+      "LEADS_KINDS",
+      ".claude/config/leads.json",
+      "report output"
+    ],
+    "stations": [
+      "cap meters",
+      "funnel split",
+      "guard chain"
+    ],
+    "concepts": [
+      "REHEARSAL",
+      "send window (IST)",
+      "suppression / reply-stop"
+    ]
+  }
 }

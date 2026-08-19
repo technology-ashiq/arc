@@ -77,5 +77,48 @@
     ".claude/hooks/policy-decide.sh",
     ".claude/hooks/SessionStart.d/60-jobs.sh"
   ],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "spine",
+    "ring": "command",
+    "kinds": [
+      "day.closed",
+      "idea.captured",
+      "metric.observed",
+      "month.closed",
+      "note.logged",
+      "redaction.applied"
+    ],
+    "sanctioned": [
+      "spine.mjs reader",
+      "spine-health reader (Phase 03)"
+    ],
+    "stations": [
+      "L2 door",
+      "close-day",
+      "dedup",
+      "emit",
+      "receipt drawer",
+      "ring line",
+      "spine-health",
+      "tape",
+      "validate"
+    ],
+    "concepts": [
+      "ULID",
+      "arc dash (L2)",
+      "as-of",
+      "day.closed seal",
+      "envelope (15 keys)",
+      "idem key",
+      "playhead",
+      "quarantine",
+      "receipt",
+      "replay",
+      "request journal",
+      "spine",
+      "supersedes chain",
+      "torn line"
+    ]
+  }
 }

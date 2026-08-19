@@ -22,6 +22,7 @@
     ".claude/scripts/core/common.sh",
     ".claude/scripts/core/evolve-manifest.mjs",
     ".claude/scripts/core/face-coverage.mjs",
+    ".claude/scripts/core/face-sections.mjs",
     ".claude/scripts/core/freeze-check.sh",
     ".claude/scripts/core/json-strict.mjs",
     ".claude/scripts/core/lane-resolve.mjs",
@@ -85,5 +86,25 @@
       "src": "docs/plugins.md",
       "dest": "docs/plugins.md"
     }
-  ]
+  ],
+  "face": {
+    "room": "toolbelt",
+    "ring": "factory",
+    "kinds": [],
+    "sanctioned": [
+      "manifests",
+      "toolchain-health",
+      "arc-registry.json"
+    ],
+    "stations": [
+      "commands",
+      "face-coverage",
+      "product-lint"
+    ],
+    "concepts": [
+      "face: section",
+      "generated command (G)",
+      "room birth-rule"
+    ]
+  }
 }

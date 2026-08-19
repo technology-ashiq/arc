@@ -43,5 +43,23 @@
     "products/legal/templates/v2/shipping-delivery.tmpl.md",
     "products/legal/templates/v2/terms.tmpl.md"
   ],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "legal",
+    "ring": "money",
+    "kinds": [
+      "note.logged"
+    ],
+    "sanctioned": [
+      "products/legal/**",
+      "venture legal/",
+      "note.logged[legal]"
+    ],
+    "stations": [
+      "verify"
+    ],
+    "concepts": [
+      "hash-chain (legal)"
+    ]
+  }
 }

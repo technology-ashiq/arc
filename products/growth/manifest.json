@@ -29,5 +29,27 @@
     ".claude/scripts/growth/lib/spec-verify.mjs",
     ".claude/scripts/growth/lib/templates.mjs",
     ".claude/scripts/growth/lib/text.mjs"
-  ]
+  ],
+  "face": {
+    "room": "growth",
+    "ring": "money",
+    "kinds": [
+      "content.published",
+      "metric.observed"
+    ],
+    "sanctioned": [
+      "growth libs",
+      "content.published",
+      "metric.observed",
+      "site.json/sources.json"
+    ],
+    "stations": [
+      "feed clock",
+      "publish board"
+    ],
+    "concepts": [
+      "INDEXABLE clock",
+      "gate 1 / gate 2 (growth)"
+    ]
+  }
 }

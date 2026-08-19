@@ -1,7 +1,9 @@
 {
   "name": "plan",
   "version": "1.0.0",
-  "requires": ["core"],
+  "requires": [
+    "core"
+  ],
   "commands": [
     ".claude/commands/arc-kickoff.md",
     ".claude/commands/arc-change.md",
@@ -22,9 +24,47 @@
     ".claude/scripts/plan/arc-bytediff.sh"
   ],
   "docs": [
-    { "src": "docs/build-playbook.md", "dest": "docs/build-playbook.md" },
-    { "src": "docs/templates/PLAN-template.md", "dest": "docs/templates/PLAN-template.md" },
-    { "src": "docs/templates/phase-spec-template.md", "dest": "docs/templates/phase-spec-template.md" },
-    { "src": "docs/templates/adr-template.md", "dest": "docs/templates/adr-template.md" }
-  ]
+    {
+      "src": "docs/build-playbook.md",
+      "dest": "docs/build-playbook.md"
+    },
+    {
+      "src": "docs/templates/PLAN-template.md",
+      "dest": "docs/templates/PLAN-template.md"
+    },
+    {
+      "src": "docs/templates/phase-spec-template.md",
+      "dest": "docs/templates/phase-spec-template.md"
+    },
+    {
+      "src": "docs/templates/adr-template.md",
+      "dest": "docs/templates/adr-template.md"
+    }
+  ],
+  "face": {
+    "room": "lane",
+    "ring": "factory",
+    "kinds": [
+      "kickoff.done",
+      "phase.closed"
+    ],
+    "sanctioned": [],
+    "stations": [
+      "PLAN table",
+      "header",
+      "kickoff trail",
+      "phase 0",
+      "phase-done"
+    ],
+    "concepts": [
+      "50% tripwire",
+      "REQ",
+      "appetite / burn",
+      "assumptions ledger",
+      "evidence bundle",
+      "machine header",
+      "pre-mortem",
+      "steel thread"
+    ]
+  }
 }
