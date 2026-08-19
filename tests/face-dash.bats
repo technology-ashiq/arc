@@ -41,10 +41,10 @@ load 'test_helper'
   [[ "$output" == *"ok every citation resolves to a ULID the state actually carries"* ]] || { echo "$output"; false; }
 }
 
-@test "face-dash suite registers all 6 tests (a dropped test is indistinguishable from a pass)" {
-  # bats silently DROPS a @test whose name carries a non-ASCII character -- five tests once
-  # vanished that way and the file stayed green. This asserts the count itself.
-  run grep -c '^@test ' "$ARC_ROOT/tests/face-dash.bats"
-  [ "$status" -eq 0 ]
-  [ "$output" -eq 6 ]
-}
+# NOTE: this file used to end with a "suite registers all N tests" test. It was FALSE as
+# written -- `grep -c '^@test '` counts SOURCE LINES, so it cannot detect the very thing it
+# was named for (bats silently dropping a @test whose name carries a non-ASCII character); an
+# adversarial pass put a U+2014 in a test name and the count still returned N. CI's own
+# _reconcile step compares declared-vs-executed TAP counts and scans for `# bats warning` on
+# every leg, which catches non-execution globally and actually works. Deleted rather than
+# kept as a comfort.

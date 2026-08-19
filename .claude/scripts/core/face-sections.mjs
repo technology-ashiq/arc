@@ -13,35 +13,38 @@
 //
 // Exit: 0 in sync / written | 1 drift (with --check) | 2 could not read the inputs.
 
-import { readFileSync, writeFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, readdirSync, realpathSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/**
+ * "Was this file RUN, or imported?" -- realpath on BOTH sides.
+ *
+ * The cheap `endsWith` form silently answers NO behind a symlink or a renamed copy: an
+ * adversarial pass copied this gate to another filename, pointed it at a tree with three
+ * real gaps, and got a silent exit 0. A gate that no-ops under a different spelling is
+ * worse than no gate. Same fix as arc-event.mjs -- grep the pattern, not the file.
+ */
+function isMainModule() {
+  try {
+    const invoked = process.argv[1];
+    if (!invoked) return false;
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+}
+
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_DEFAULT = join(HERE, "..", "..", "..");
 
-// product -> room id. A product with no entry gets NO face: section: the face renders it
-// through the room its lane already owns, and inventing a room per product would put
-// sixteen doors on a building that has thirty-two rooms.
-const PRODUCT_ROOM = Object.freeze({
-  hq: "spine",
-  core: "toolbelt",
-  plan: "lane",
-  review: "review-ship",
-  git: "review-ship",
-  qa: "review-ship",
-  council: "council-chamber",
-  design: "design-studio",
-  develop: "develop",
-  engine: "engine-room",
-  evolve: "evolve",
-  absorb: "absorb",
-  growth: "growth",
-  leads: "leads",
-  legal: "legal",
-  memory: "memory",
-});
-
+// The product -> room map lives in the CONTRACT, not here. It used to be sixteen
+// hand-authored rows in this file -- a second spelling of the room map, which is precisely
+// what ADR-1306 exists to prevent, and an adversarial pass named it: change a row here and
+// the sanctioned regenerate makes the drift permanent and green. Now there is one spelling.
+function productRoom(contract, product) {
+  const map = contract.products?.map || {};
+  return Object.prototype.hasOwnProperty.call(map, product) ? map[product] : undefined;
+}
 function loadContract(repo) {
   const p = join(repo, "initiatives", "face", "contracts", "expected-set.json");
   if (!existsSync(p)) throw new Error(`expected-set.json not found at ${p}`);
@@ -50,7 +53,7 @@ function loadContract(repo) {
 
 /** The section a given product SHOULD carry, derived entirely from the contract. */
 export function sectionFor(product, contract) {
-  const room = PRODUCT_ROOM[product];
+  const room = productRoom(contract, product);
   if (!room) return null;
   // The TEMPLATE room ("lane") is a first-class home, not a missing one: it is the 6-zone
   // shell every born lane instantiates (ADR-1306), so it lives under rooms.template rather
@@ -95,13 +98,14 @@ function run(repo, check) {
   const contract = loadContract(repo);
   const productsDir = join(repo, "products");
   const drift = [];
-  let written = 0, skipped = 0;
+  let written = 0, skipped = 0, mapped = 0;
 
   for (const product of readdirSync(productsDir).sort()) {
     const mpath = join(productsDir, product, "manifest.json");
     if (!existsSync(mpath)) continue;
     const want = sectionFor(product, contract);
     if (want === null) { skipped++; continue; }
+    mapped++;
 
     const text = readFileSync(mpath, "utf8");
     const manifest = JSON.parse(text);
@@ -120,14 +124,14 @@ function run(repo, check) {
       process.stderr.write(`face-sections: ${drift.length} manifest(s) drifted from the contract\n`);
       return 1;
     }
-    process.stdout.write(`face-sections: every face: section matches the contract (${Object.keys(PRODUCT_ROOM).length} mapped, ${skipped} unmapped by design)\n`);
+    process.stdout.write(`face-sections: every face: section matches the contract (${mapped} mapped, ${skipped} unmapped by design)\n`);
     return 0;
   }
   process.stdout.write(`face-sections: wrote ${written} section(s); ${skipped} product(s) carry none by design\n`);
   return 0;
 }
 
-if (process.argv[1] && process.argv[1].endsWith("face-sections.mjs")) {
+if (isMainModule()) {
   const argv = process.argv.slice(2);
   const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
   try { process.exit(run(repo, argv.includes("--check"))); }
