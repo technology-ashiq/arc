@@ -32,5 +32,30 @@
     ".claude/scripts/develop/capability-allowlist.txt",
     ".claude/scripts/develop/capability-lock.json"
   ],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "develop",
+    "ring": "factory",
+    "kinds": [
+      "develop.started",
+      "handoff.ready",
+      "slice.done",
+      "slice.stuck"
+    ],
+    "sanctioned": [
+      "phase-NN-tasks.md",
+      "debt/learning ledgers",
+      "capability-lock.json",
+      "DEVELOP kinds"
+    ],
+    "stations": [
+      "slice ledger",
+      "stuck monitor"
+    ],
+    "concepts": [
+      "proof tier",
+      "slice",
+      "stuck fingerprint"
+    ]
+  }
 }

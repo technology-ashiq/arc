@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc — the company, drawn as a map</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+  /* ===== layout / type system — NO colour literals below this line ===== */
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  @media (prefers-reduced-motion: reduce){ html{scroll-behavior:auto;} }
+
+  body{
+    margin:0;
+    background:var(--surface);
+    color:var(--text);
+    font-family:var(--font-map);
+    line-height:var(--leading-read);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  .skip-link{
+    position:absolute; left:-999px; top:0;
+    background:var(--text); color:var(--surface);
+    padding:var(--space-2) var(--space-3);
+    z-index:100;
+  }
+  .skip-link:focus{ left:var(--space-2); top:var(--space-2); }
+
+  :focus-visible{
+    outline:3px solid var(--focus-ring);
+    outline-offset:2px;
+  }
+
+  h1,h2,h3,p,ul,ol,dl,dd{margin:0;}
+  ul{list-style:none;padding:0;}
+
+  .cap{
+    text-transform:uppercase;
+    letter-spacing:var(--tracking-wide);
+    font-family:var(--font-map);
+  }
+  .cap-wide{ letter-spacing:var(--tracking-wider); }
+
+  .mono{ font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+
+  /* five real type steps */
+  .step-ring{font-size:var(--step-ring); line-height:var(--leading-tight); font-weight:700;}
+  .step-line{font-size:var(--step-line); line-height:var(--leading-tight); font-weight:700;}
+  .step-station{font-size:var(--step-station); line-height:var(--leading-tight); font-weight:600;}
+  .step-meta{font-size:var(--step-meta); line-height:1.4;}
+  .step-legend{font-size:var(--step-legend); line-height:1.4;}
+
+  .quiet{ color:var(--text-quiet); }
+  .muted{ color:var(--text-muted); }
+
+  /* ---------- topbar : always-visible strip (answer 5) ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:var(--surface);
+    border-bottom:1px solid var(--hairline);
+  }
+  .topbar-row{
+    max-width:1320px; margin:0 auto;
+    display:flex; align-items:center; gap:var(--space-4);
+    padding:var(--space-2) var(--space-4);
+  }
+  .wordmark{ font-size:var(--step-line); font-weight:700; letter-spacing:var(--tracking-wider); }
+  .datamode{
+    display:inline-flex; align-items:center; gap:.4em;
+    border:1.5px solid var(--line-strong); padding:.25em .6em;
+    font-size:var(--step-meta); font-weight:700; letter-spacing:var(--tracking-wide);
+  }
+  .datamode::before{
+    content:""; width:8px; height:8px; border-radius:50%;
+    background:var(--money-real-green); display:inline-block;
+  }
+  .needsyou-badge{
+    display:inline-flex; align-items:center; gap:.5em;
+    background:var(--needs-you-amber-wash);
+    border:1.5px solid var(--needs-you-amber);
+    color:var(--needs-you-amber);
+    font-weight:700; font-size:var(--step-meta);
+    padding:.35em .7em; text-decoration:none;
+    min-height:var(--target-min);
+  }
+  .money-strip{ font-size:var(--step-meta); color:var(--text-quiet); }
+  .money-strip strong{ color:var(--money-real-green); font-family:var(--font-mono); }
+  .spacer{ flex:1; }
+  .arcring{ display:flex; align-items:center; gap:.5em; }
+  .arcring figcaption{ font-size:var(--step-legend); color:var(--text-quiet); }
+
+  .subbar{
+    background:var(--surface-alt);
+    border-bottom:1px solid var(--hairline);
+  }
+  .subbar-row{
+    max-width:1320px; margin:0 auto;
+    display:flex; align-items:center; gap:var(--space-4);
+    padding:var(--space-1) var(--space-4);
+    flex-wrap:wrap;
+  }
+  .kbd-row{ display:flex; gap:var(--space-2); align-items:center; flex-wrap:wrap; }
+  kbd{
+    font-family:var(--font-mono); font-size:var(--step-legend);
+    border:1px solid var(--line-mid); padding:.15em .45em;
+    background:var(--surface);
+  }
+  .kbd-row span{ font-size:var(--step-legend); color:var(--text-quiet); }
+
+  nav.mapnav{ display:flex; gap:var(--space-3); flex-wrap:wrap; margin-left:auto; }
+  nav.mapnav a{
+    color:var(--text); text-decoration:none;
+    font-size:var(--step-meta); font-weight:600; letter-spacing:var(--tracking-wide);
+    padding:.4em .2em; border-bottom:2px solid transparent;
+    min-height:var(--target-min); display:inline-flex; align-items:center;
+  }
+  nav.mapnav a:hover, nav.mapnav a:focus-visible{ border-bottom-color:var(--line-strong); }
+
+  main{ max-width:1320px; margin:0 auto; padding:0 var(--space-4); }
+  section{ padding:var(--space-7) 0; border-bottom:1px solid var(--hairline); }
+  section:last-of-type{ border-bottom:none; }
+  .kicker{
+    font-size:var(--step-legend); letter-spacing:var(--tracking-wider);
+    color:var(--text-quiet); margin-bottom:var(--space-2);
+  }
+  .section-head{ display:flex; align-items:baseline; gap:var(--space-3); margin-bottom:var(--space-5); flex-wrap:wrap; }
+  .section-head p{ max-width:56ch; color:var(--text-quiet); font-size:var(--step-meta); }
+
+  /* ---------- Today ---------- */
+  .brief-card{
+    background:var(--surface-alt); border:1px solid var(--hairline);
+    padding:var(--space-4); max-width:640px;
+  }
+  .brief-card + .brief-card{ margin-top:var(--space-3); }
+  .since-left{
+    display:flex; gap:var(--space-4); align-items:baseline; margin-bottom:var(--space-4);
+  }
+  .since-left b{ font-size:var(--step-ring); font-family:var(--font-mono); }
+  .needsyou-list{ display:grid; gap:var(--space-3); max-width:720px; margin-top:var(--space-3); }
+  .needsyou-card{
+    border:1.5px solid var(--needs-you-amber);
+    background:var(--needs-you-amber-wash);
+    padding:var(--space-3);
+    display:grid; gap:.4em;
+  }
+  .needsyou-card .id{ font-family:var(--font-mono); font-size:var(--step-meta); color:var(--needs-you-amber); }
+  .needsyou-card .to-station{
+    justify-self:start; margin-top:.4em;
+    display:inline-flex; align-items:center; min-height:var(--target-min);
+    padding:.3em .8em; border:1.5px solid var(--needs-you-amber);
+    color:var(--needs-you-amber); text-decoration:none; font-weight:700;
+    font-size:var(--step-meta); letter-spacing:var(--tracking-wide);
+  }
+  .receipt-list{ display:grid; gap:var(--space-2); margin-top:var(--space-2); max-width:720px; }
+  .receipt-row{
+    display:flex; gap:var(--space-3); align-items:baseline;
+    border-bottom:1px solid var(--hairline); padding-bottom:var(--space-1);
+  }
+  .receipt-row .kind{ font-family:var(--font-mono); font-size:var(--step-meta); font-weight:700; }
+  .receipt-row .id{ font-family:var(--font-mono); font-size:var(--step-legend); color:var(--text-quiet); }
+  .receipt-row .desc{ font-size:var(--step-meta); color:var(--text-quiet); }
+
+  .chip{
+    display:inline-flex; align-items:center; gap:.6em;
+    border:1.5px solid var(--line-strong); background:var(--surface);
+    padding:.4em .8em; font-family:var(--font-mono); font-size:var(--step-meta);
+    min-height:var(--target-min);
+  }
+  .chip button{
+    all:unset; cursor:pointer; font-size:var(--step-legend);
+    border:1px solid var(--line-mid); padding:.25em .5em;
+    font-family:var(--font-map); letter-spacing:var(--tracking-wide);
+    min-height:28px; display:inline-flex; align-items:center;
+  }
+  .chip button:hover, .chip button:focus-visible{ background:var(--surface-alt); }
+
+  /* ---------- Inbox ---------- */
+  .gate-panel{
+    border:2px solid var(--line-strong); background:var(--surface);
+    max-width:760px; margin-bottom:var(--space-5);
+  }
+  .gate-panel__head{
+    background:var(--needs-you-amber-wash); border-bottom:2px solid var(--needs-you-amber);
+    padding:var(--space-3) var(--space-4); display:flex; justify-content:space-between; gap:var(--space-3); flex-wrap:wrap;
+  }
+  .gate-panel__head .gate-kind{ font-family:var(--font-mono); font-weight:700; color:var(--needs-you-amber); }
+  .gate-panel__body{ padding:var(--space-4); display:grid; gap:var(--space-3); }
+  .kv{ display:grid; grid-template-columns:11ch 1fr; gap:var(--space-2); font-size:var(--step-meta); }
+  .kv dt{ color:var(--text-quiet); }
+  .kv dd{ font-family:var(--font-mono); }
+  details.drawer{ border-top:1px dashed var(--hairline); padding-top:var(--space-2); }
+  details.drawer summary{
+    cursor:pointer; font-size:var(--step-meta); font-weight:700; letter-spacing:var(--tracking-wide);
+    min-height:var(--target-min); display:flex; align-items:center;
+  }
+  .drawer pre{
+    font-family:var(--font-mono); font-size:var(--step-meta);
+    background:var(--surface-alt); padding:var(--space-3); overflow-x:auto;
+    border:1px solid var(--hairline); margin-top:var(--space-2);
+  }
+  .stamp-form{
+    display:grid; gap:var(--space-2); border-top:1px solid var(--hairline); padding-top:var(--space-3);
+  }
+  .stamp-form label{ font-size:var(--step-meta); font-weight:700; letter-spacing:var(--tracking-wide); }
+  .stamp-form textarea{
+    font-family:var(--font-map); font-size:var(--step-meta);
+    border:1.5px solid var(--line-strong); padding:var(--space-2);
+    min-height:64px; resize:vertical; background:var(--surface);
+    color:var(--text);
+  }
+  .stamp-actions{ display:flex; gap:var(--space-2); }
+  .btn{
+    min-height:var(--target-min); min-width:112px;
+    font-weight:700; letter-spacing:var(--tracking-wide); font-size:var(--step-meta);
+    border:2px solid var(--line-strong); background:var(--surface); color:var(--text);
+    cursor:pointer;
+  }
+  .btn.approve{ border-color:var(--money-real-green); color:var(--money-real-green); }
+  .btn.approve:hover, .btn.approve:focus-visible{ background:var(--surface-alt); }
+  .btn.reject{ border-color:var(--incident-red); color:var(--incident-red); }
+  .btn.reject:hover, .btn.reject:focus-visible{ background:var(--surface-alt); }
+
+  @keyframes stamp-land{
+    0%{ transform:scale(1); }
+    40%{ transform:scale(1.06); }
+    100%{ transform:scale(1); }
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .stamp-landed{ animation:stamp-land var(--motion-fast) var(--ease); }
+  }
+
+  .state-matrix{
+    margin-top:var(--space-6); border:1px dashed var(--line-mid); padding:var(--space-4);
+  }
+  .state-matrix .label{
+    display:inline-block; font-size:var(--step-legend); letter-spacing:var(--tracking-wider);
+    color:var(--text-quiet); border:1px solid var(--line-mid); padding:.2em .6em; margin-bottom:var(--space-3);
+  }
+  .state-grid{ display:grid; grid-template-columns:repeat(5, minmax(160px,1fr)); gap:var(--space-3); }
+  .state-cell{ border:1px solid var(--hairline); padding:var(--space-2); font-size:var(--step-legend); display:grid; gap:.4em; }
+  .state-cell h4{ font-size:var(--step-meta); letter-spacing:var(--tracking-wide); }
+  .state-cell.error code{ font-family:var(--font-mono); display:block; }
+  .lock-icon{ width:14px; height:14px; vertical-align:-2px; }
+
+  /* ---------- Map ---------- */
+  .map-frame{
+    border:1px solid var(--hairline); background:var(--surface);
+    padding:var(--space-3);
+  }
+  .map-svg{ width:100%; height:auto; display:block; }
+  .map-flex{ display:flex; gap:var(--space-5); align-items:flex-start; flex-wrap:wrap; }
+  .map-canvas{ flex:2 1 720px; min-width:520px; }
+  .legend{
+    flex:1 1 260px; border:1px solid var(--hairline); background:var(--surface-alt);
+    padding:var(--space-4);
+  }
+  .legend h3{ font-size:var(--step-station); margin-bottom:var(--space-3); }
+  .legend ul{ display:grid; gap:var(--space-2); }
+  .legend li{ display:flex; gap:var(--space-2); align-items:flex-start; font-size:var(--step-legend); }
+  .legend svg{ flex:none; margin-top:2px; }
+  .legend b{ display:block; font-size:var(--step-legend); letter-spacing:var(--tracking-wide); }
+
+  /* ---------- Spine/Tape ---------- */
+  .kind-table{ width:100%; border-collapse:collapse; max-width:640px; font-size:var(--step-meta); }
+  .kind-table th{ text-align:left; border-bottom:2px solid var(--line-strong); padding:var(--space-1) var(--space-2); font-size:var(--step-legend); letter-spacing:var(--tracking-wide); }
+  .kind-table td{ border-bottom:1px solid var(--hairline); padding:var(--space-1) var(--space-2); }
+  .kind-table td.n{ font-family:var(--font-mono); text-align:right; }
+  .unexercised-note{ max-width:640px; margin-top:var(--space-3); font-size:var(--step-meta); color:var(--text-quiet); }
+
+  .ruler-frame{ border:1px solid var(--hairline); padding:var(--space-3); margin-top:var(--space-5); overflow-x:auto; }
+  .ruler-svg{ min-width:1100px; display:block; }
+
+  /* ---------- Council ---------- */
+  .council-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:var(--space-4); max-width:900px; }
+  .council-card{ border:1px solid var(--hairline); padding:var(--space-4); display:grid; gap:.5em; }
+  .council-card .verdict{ font-size:var(--step-station); font-weight:700; }
+  .roster{ margin-top:var(--space-4); font-size:var(--step-meta); }
+  .dashed-note{ display:flex; gap:var(--space-2); align-items:center; margin-top:var(--space-4); font-size:var(--step-meta); color:var(--text-quiet); }
+
+  /* ---------- Money ---------- */
+  .money-block{ display:grid; grid-template-columns:1.2fr 1fr; gap:var(--space-6); align-items:start; }
+  @media (max-width:900px){ .money-block{ grid-template-columns:1fr; } }
+  .revenue-figure{ font-size:3.5rem; font-weight:700; font-family:var(--font-mono); color:var(--money-real-green); }
+  .cost-rows{ display:grid; gap:0; max-width:420px; margin-top:var(--space-4); }
+  .cost-row{ display:flex; justify-content:space-between; padding:var(--space-2) 0; border-bottom:1px solid var(--hairline); font-size:var(--step-meta); }
+  .cost-row .val{ font-family:var(--font-mono); color:var(--text-quiet); }
+  .simulated-panel{
+    border:2px dashed var(--nonreal-violet); background:var(--nonreal-violet-wash);
+    color:var(--nonreal-violet); padding:var(--space-4); position:relative;
+  }
+  .simulated-panel .wm{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:3rem; font-weight:700; letter-spacing:var(--tracking-wider);
+    opacity:.18; pointer-events:none; transform:rotate(-18deg);
+  }
+  .kv-strip{ display:grid; gap:.5em; margin-top:var(--space-3); font-size:var(--step-meta); }
+  .kv-strip .abs{ color:var(--text-quiet); }
+
+  /* ---------- Board ---------- */
+  table.board{ width:100%; border-collapse:collapse; }
+  table.board th{ text-align:left; font-size:var(--step-legend); letter-spacing:var(--tracking-wide); border-bottom:2px solid var(--line-strong); padding:var(--space-2); }
+  table.board td{ border-bottom:1px solid var(--hairline); padding:var(--space-2); font-size:var(--step-meta); vertical-align:top; }
+  table.board tr.live td:first-child{ font-weight:700; }
+  table.board td.status-live{ color:var(--money-real-green); font-weight:700; font-family:var(--font-mono); font-size:var(--step-legend); }
+  .idle-line{ margin-top:var(--space-4); font-size:var(--step-meta); color:var(--text-quiet); max-width:900px; }
+  .board-notes{ margin-top:var(--space-3); display:grid; gap:.4em; font-size:var(--step-meta); color:var(--text-quiet); }
+
+  /* ---------- Ask arc ---------- */
+  .ask-row{ display:flex; gap:var(--space-2); max-width:760px; }
+  .ask-row input[type=text]{
+    flex:1; min-height:var(--target-min); border:1.5px solid var(--line-strong);
+    padding:0 var(--space-3); font-family:var(--font-map); font-size:var(--step-station);
+    background:var(--surface); color:var(--text);
+  }
+  .ask-row button{
+    min-height:var(--target-min); min-width:96px; border:2px solid var(--line-strong);
+    background:var(--text); color:var(--surface); font-weight:700; letter-spacing:var(--tracking-wide);
+    cursor:pointer;
+  }
+  .ask-answer{ margin-top:var(--space-4); max-width:760px; border-left:3px solid var(--line-strong); padding-left:var(--space-3); font-size:var(--step-meta); }
+  .ask-answer .cite{ display:block; margin-top:var(--space-2); font-family:var(--font-mono); font-size:var(--step-legend); color:var(--text-quiet); }
+
+  footer{ padding:var(--space-6) var(--space-4); border-top:1px solid var(--hairline); font-size:var(--step-legend); color:var(--text-quiet); }
+  footer .foot-row{ max-width:1320px; margin:0 auto; display:flex; justify-content:space-between; gap:var(--space-4); flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#map">Skip to Map</a>
+
+<header class="topbar">
+  <div class="topbar-row">
+    <span class="wordmark cap-wide">arc</span>
+    <span class="datamode cap">LIVE</span>
+    <a class="needsyou-badge cap" href="#inbox">2 NEEDS-YOU</a>
+    <span class="money-strip">real revenue <strong>₹0</strong> · 0 ever</span>
+    <span class="spacer"></span>
+    <figure class="arcring" aria-label="arc ring — 21 day.closed seals">
+      <svg width="34" height="34" viewBox="0 0 34 34" role="img" aria-hidden="true">
+        <circle cx="17" cy="17" r="13" fill="none" stroke="var(--line-mid)" stroke-width="2"/>
+        <circle cx="17" cy="17" r="13" fill="none" stroke="var(--line-heavy)" stroke-width="2"
+          stroke-dasharray="6.2 81.4" stroke-dashoffset="0" stroke-linecap="round"/>
+      </svg>
+      <figcaption class="mono">21 day.closed</figcaption>
+    </figure>
+  </div>
+  <div class="subbar">
+    <div class="subbar-row">
+      <div class="kbd-row" aria-label="keyboard model">
+        <kbd>j</kbd><kbd>k</kbd><span>move</span>
+        <kbd>a</kbd><kbd>r</kbd><span>stamp</span>
+        <kbd>w</kbd><span>why</span>
+        <kbd>t</kbd><span>tape</span>
+        <kbd>/</kbd><span>search</span>
+        <kbd>⌘K</kbd><span>jump</span>
+      </div>
+      <nav class="mapnav" aria-label="signature screens">
+        <a href="#today">Today</a>
+        <a href="#inbox">Inbox</a>
+        <a href="#map">Map</a>
+        <a href="#spine-tape">Spine/Tape</a>
+        <a href="#council">Council room</a>
+        <a href="#money">Money</a>
+        <a href="#board">Board</a>
+        <a href="#ask-arc">Ask arc</a>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ TODAY ============ -->
+  <section id="today">
+    <div class="kicker cap-wide">screen 1 / 8 — today</div>
+    <div class="section-head">
+      <h2 class="step-ring">TODAY</h2>
+      <p>The brief, printed. needs-you first and never collapsed — everything else is one scroll to the Map, the company's real home.</p>
+    </div>
+
+    <div class="brief-card">
+      <div class="since-left">
+        <div><b class="mono">3</b><div class="quiet step-legend cap">receipts since you left</div></div>
+        <div><b class="mono" style="color:var(--needs-you-amber)">2</b><div class="quiet step-legend cap">need you</div></div>
+      </div>
+
+      <h3 class="step-station cap" style="color:var(--needs-you-amber); margin-bottom:.6em;">needs-you</h3>
+      <div class="needsyou-list">
+        <article class="needsyou-card">
+          <span class="id">01KZZRVSQJEAVD4YCZ8FDXR0DT</span>
+          <strong class="mono">approval.requested</strong>
+          <span class="step-meta">growth gate: exemplar articles review pack</span>
+          <span class="step-legend quiet">profile: growth gate 2 — review pack + preview URL</span>
+          <a class="to-station cap" href="#gate-1">stamp at growth →</a>
+        </article>
+        <article class="needsyou-card">
+          <span class="id">01KZZRW51QHTA9CFEX5JRRGY7C</span>
+          <strong class="mono">approval.requested</strong>
+          <span class="step-meta">growth gate: cluster c-001</span>
+          <span class="step-legend quiet">profile: growth gate 1 — cluster card</span>
+          <a class="to-station cap" href="#gate-2">stamp at growth →</a>
+        </article>
+      </div>
+    </div>
+
+    <div class="brief-card" style="margin-top:var(--space-4);">
+      <h3 class="step-station cap" style="margin-bottom:.6em;">today's receipts — 2026-08-19</h3>
+      <div class="receipt-list">
+        <div class="receipt-row">
+          <span class="kind">kickoff.done</span>
+          <span class="id">01M0B8T4ZQ1APZK5SJ7331K1KS</span>
+          <span class="desc">face — lane born</span>
+        </div>
+        <div class="receipt-row">
+          <span class="kind">approval.requested</span>
+          <span class="id">01M0B8T5F81RC6V06MRY289B6D</span>
+          <span class="desc">gate: kickoff</span>
+        </div>
+        <div class="receipt-row">
+          <span class="kind">decision.recorded</span>
+          <span class="id quiet">id — ABSENT (not exposed in this export)</span>
+          <span class="desc">approve — reason: "pannu; WIP 6 vs guideline 2 acknowledged"</span>
+        </div>
+      </div>
+      <div style="margin-top:var(--space-3);">
+        <span class="chip">/arc-kickoff &lt;goal&gt; [--lane &lt;name&gt;]
+          <button type="button" class="chip-copy" data-copy="/arc-kickoff <goal> [--lane <name>]">copy</button>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ INBOX ============ -->
+  <section id="inbox">
+    <div class="kicker cap-wide">screen 2 / 8 — inbox</div>
+    <div class="section-head">
+      <h2 class="step-ring">INBOX</h2>
+      <p>Opened from growth's two stamp stations on the Map. Everything here is a panel pinned to a station — not a full-screen queue.</p>
+    </div>
+
+    <p class="step-meta quiet" style="margin-bottom:var(--space-4); max-width:60ch;">growth — 2 open gates. The stamp is the product's only write: approve or reject, with a mandatory typed reason.</p>
+
+    <article class="gate-panel" id="gate-1">
+      <div class="gate-panel__head">
+        <span class="gate-kind">approval.requested</span>
+        <span class="mono step-meta" style="color:var(--needs-you-amber)">01KZZRVSQJEAVD4YCZ8FDXR0DT</span>
+      </div>
+      <div class="gate-panel__body">
+        <dl class="kv">
+          <dt>gate</dt><dd>growth gate: exemplar articles review pack</dd>
+          <dt>profile</dt><dd>growth gate 2 — review pack + preview URL</dd>
+          <dt>lane</dt><dd>growth · phase 06</dd>
+        </dl>
+        <details class="drawer">
+          <summary class="cap">receipt drawer</summary>
+          <pre>{
+  "kind": "approval.requested",
+  "id": "01KZZRVSQJEAVD4YCZ8FDXR0DT",
+  "gate": "growth gate: exemplar articles review pack",
+  "profile": "growth gate 2 — review pack + preview URL",
+  "sha": "ABSENT (not exposed in this export)",
+  "supersedes": "ABSENT (none recorded)"
+}</pre>
+        </details>
+        <form class="stamp-form" onsubmit="return false;">
+          <label class="cap" for="reason-1">reason — mandatory</label>
+          <textarea id="reason-1" placeholder='e.g. "pannu; WIP 6 vs guideline 2 acknowledged"'></textarea>
+          <div class="stamp-actions">
+            <button type="button" class="btn approve cap">approve</button>
+            <button type="button" class="btn reject cap">reject</button>
+          </div>
+        </form>
+      </div>
+    </article>
+
+    <article class="gate-panel" id="gate-2">
+      <div class="gate-panel__head">
+        <span class="gate-kind">approval.requested</span>
+        <span class="mono step-meta" style="color:var(--needs-you-amber)">01KZZRW51QHTA9CFEX5JRRGY7C</span>
+      </div>
+      <div class="gate-panel__body">
+        <dl class="kv">
+          <dt>gate</dt><dd>growth gate: cluster c-001</dd>
+          <dt>profile</dt><dd>growth gate 1 — cluster card</dd>
+          <dt>lane</dt><dd>growth · phase 06</dd>
+        </dl>
+        <details class="drawer">
+          <summary class="cap">receipt drawer</summary>
+          <pre>{
+  "kind": "approval.requested",
+  "id": "01KZZRW51QHTA9CFEX5JRRGY7C",
+  "gate": "growth gate: cluster c-001",
+  "profile": "growth gate 1 — cluster card",
+  "sha": "ABSENT (not exposed in this export)",
+  "supersedes": "ABSENT (none recorded)"
+}</pre>
+        </details>
+        <form class="stamp-form" onsubmit="return false;">
+          <label class="cap" for="reason-2">reason — mandatory</label>
+          <textarea id="reason-2" placeholder='e.g. "pannu; WIP 6 vs guideline 2 acknowledged"'></textarea>
+          <div class="stamp-actions">
+            <button type="button" class="btn approve cap">approve</button>
+            <button type="button" class="btn reject cap">reject</button>
+          </div>
+        </form>
+      </div>
+    </article>
+
+    <div class="state-matrix">
+      <span class="label cap">STATE MATRIX — REFERENCE, NOT LIVE DATA</span>
+      <div class="state-grid">
+        <div class="state-cell">
+          <h4 class="cap">empty</h4>
+          <p>"0 approval.requested open — needs-you is empty."</p>
+        </div>
+        <div class="state-cell">
+          <h4 class="cap">loading</h4>
+          <p>value greyed, last known kept on screen — "as-of 09:14 IST, refreshing…"</p>
+        </div>
+        <div class="state-cell error">
+          <h4 class="cap">error</h4>
+          <p>refusal code, verbatim:</p>
+          <code>ALREADY_DECIDED</code>
+          <code>UNKNOWN_APPROVAL</code>
+          <code>BAD_REASON</code>
+          <code>WRONG_KIND</code>
+        </div>
+        <div class="state-cell">
+          <h4 class="cap">success</h4>
+          <p>stamp lands (200ms), <span class="mono">decision.recorded</span> prints its ULID on the card — format like today's <span class="mono">01M0B8T5F81RC6V06MRY289B6D</span>.</p>
+        </div>
+        <div class="state-cell">
+          <h4 class="cap">disabled / sealed</h4>
+          <p>
+            <svg class="lock-icon" viewBox="0 0 14 14" aria-hidden="true">
+              <rect x="3" y="6" width="8" height="6" fill="none" stroke="var(--line-heavy)" stroke-width="1.3"/>
+              <path d="M4.5,6 V4 a2.5,2.5 0 0 1 5,0 V6" fill="none" stroke="var(--line-heavy)" stroke-width="1.3"/>
+            </svg>
+            Mode B — <strong>NOT CERTIFIED</strong>. No button; the seal is the design.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ MAP ============ -->
+  <section id="map">
+    <div class="kicker cap-wide">screen 3 / 8 — map (home)</div>
+    <div class="section-head">
+      <h2 class="step-ring">THE MAP</h2>
+      <p>The company, drawn. Rings for the loop and the spine, lines for the sixteen lanes, squares for open gates. Weight, dash and tint carry the difference between lines — never hue. Hue is spent on four meanings only.</p>
+    </div>
+
+    <div class="map-flex">
+      <div class="map-canvas">
+        <div class="map-frame">
+          <svg class="map-svg" viewBox="0 0 1200 820" role="img" aria-label="Transit map of the company: Golden Loop, Spine ring, sixteen lane lines, Inbox interchange, two open gates on growth.">
+            <defs>
+              <pattern id="snapgrid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M0,0 H40 M0,0 V40 M0,40 L40,0" stroke="var(--line-faint)" stroke-width="1"/>
+              </pattern>
+              <pattern id="hatch-violet" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="8" height="8" fill="var(--nonreal-violet-wash)"/>
+                <line x1="0" y1="0" x2="0" y2="8" stroke="var(--nonreal-violet)" stroke-width="2"/>
+              </pattern>
+            </defs>
+
+            <rect x="0" y="0" width="1200" height="820" fill="url(#snapgrid)"/>
+
+            <!-- ===== 16 lane lines + 2 spurs, orthogonal/45° routing only ===== -->
+            <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+              <!-- LIVE lanes: ink-85, 3px -->
+              <path d="M600,230 L530,160 L530,50"   stroke="var(--line-strong)" stroke-width="3"/>
+              <path d="M600,230 L670,160 L670,50"   stroke="var(--line-strong)" stroke-width="3"/>
+              <path d="M734,286 L804,216 L804,106"  stroke="var(--line-strong)" stroke-width="3"/>
+              <path d="M734,286 L824,286 L894,216"  stroke="var(--line-strong)" stroke-width="3"/>
+              <path d="M790,420 L970,420"           stroke="var(--line-strong)" stroke-width="3"/>
+              <path d="M790,420 L890,420 L960,490"  stroke="var(--line-strong)" stroke-width="3"/>
+              <path d="M790,420 L830,420 L930,520"  stroke="var(--line-strong)" stroke-width="3"/>
+
+              <!-- IDLE lanes: ink-45, 1.5px -->
+              <path d="M734,554 L734,624 L684,674"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M600,610 L600,720"           stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M600,610 L543,667 L543,737"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M466,554 L402,618 L402,678"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M466,554 L466,614 L409,671"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M410,420 L250,420"           stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M410,420 L320,420 L263,363"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M410,420 L320,420 L263,477"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <path d="M466,286 L388,208 L388,148"  stroke="var(--line-quiet)" stroke-width="1.5"/>
+
+              <!-- spurs: dashed unexercised-kinds, dotted planned-rooms -->
+              <path d="M734,554 L798,618 L798,688"  stroke="var(--line-mid)" stroke-width="2" stroke-dasharray="7 6"/>
+              <path d="M466,286 L466,226 L402,162"  stroke="var(--line-quiet)" stroke-width="2" stroke-dasharray="1 6"/>
+            </g>
+
+            <!-- ===== Spine ring ===== -->
+            <circle cx="600" cy="420" r="110" fill="none" stroke="var(--line-strong)" stroke-width="3"/>
+            <circle cx="600" cy="420" r="110" fill="none" stroke="var(--line-heavy)" stroke-width="1" stroke-dasharray="1 9"/>
+
+            <!-- ===== Golden Loop ===== -->
+            <circle cx="600" cy="420" r="190" fill="none" stroke="var(--line-heavy)" stroke-width="4.5"/>
+            <g fill="var(--line-heavy)">
+              <polygon points="776,343 784,349 776,355" transform="rotate(67.5 776 347)"/>
+              <polygon points="673,592 681,598 673,604" transform="rotate(157.5 673 596)"/>
+              <polygon points="425,489 433,495 425,501" transform="rotate(247.5 425 493)"/>
+              <polygon points="527,241 535,247 527,253" transform="rotate(337.5 527 245)"/>
+            </g>
+
+            <!-- ===== Inbox — the interchange ===== -->
+            <circle cx="600" cy="420" r="38" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="3"/>
+            <circle cx="600" cy="420" r="30" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="2"/>
+            <text x="600" y="416" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:11px; font-weight:700; fill:var(--text);">INBOX</text>
+            <text x="600" y="430" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">1,386</text>
+
+            <!-- ===== amber stamp squares — growth, the 2 real open gates ===== -->
+            <a href="#gate-2" aria-label="approval.requested 01KZZRW51QHTA9CFEX5JRRGY7C — growth gate: cluster c-001">
+              <rect x="663" y="123" width="16" height="16" fill="var(--needs-you-amber-wash)" stroke="var(--needs-you-amber)" stroke-width="2.5"/>
+            </a>
+            <a href="#gate-1" aria-label="approval.requested 01KZZRVSQJEAVD4YCZ8FDXR0DT — growth gate: exemplar articles review pack">
+              <rect x="663" y="83" width="16" height="16" fill="var(--needs-you-amber-wash)" stroke="var(--needs-you-amber)" stroke-width="2.5"/>
+            </a>
+            <text x="694" y="95" style="font-family:var(--font-map); font-size:10px; fill:var(--needs-you-amber); font-weight:700;">2 OPEN GATES</text>
+
+            <!-- ===== Golden Loop's own 4 stations — today's real sequence ===== -->
+            <circle cx="673" cy="245" r="8" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="3"/>
+            <text x="690" y="240" class="cap" style="font-family:var(--font-map); font-size:15px; font-weight:600; fill:var(--text);">KICKOFF.DONE</text>
+            <text x="690" y="256" style="font-family:var(--font-map); font-size:12px; fill:var(--text-quiet);">01M0B8T4ZQ1APZK5SJ7331K1KS</text>
+
+            <circle cx="776" cy="493" r="8" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="3"/>
+            <text x="793" y="490" class="cap" style="font-family:var(--font-map); font-size:15px; font-weight:600; fill:var(--text);">APPROVAL.REQUESTED</text>
+            <text x="793" y="506" style="font-family:var(--font-map); font-size:12px; fill:var(--text-quiet);">gate: kickoff · 01M0B8T5F81RC6V06MRY289B6D</text>
+
+            <circle cx="527" cy="596" r="8" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="3"/>
+            <text x="527" y="622" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:15px; font-weight:600; fill:var(--text);">DECISION.RECORDED</text>
+            <text x="527" y="638" text-anchor="middle" style="font-family:var(--font-map); font-size:11px; fill:var(--text-quiet);">approve · "pannu; WIP 6 vs guideline 2 acknowledged"</text>
+
+            <circle cx="425" cy="347" r="8" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="3"/>
+            <text x="408" y="342" text-anchor="end" class="cap" style="font-family:var(--font-map); font-size:15px; font-weight:600; fill:var(--text);">PHASE.CLOSED</text>
+            <text x="408" y="358" text-anchor="end" style="font-family:var(--font-map); font-size:12px; fill:var(--text-quiet);">29 ever</text>
+
+            <text x="600" y="200" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:22px; font-weight:700; fill:var(--text);">GOLDEN LOOP</text>
+
+            <!-- ===== Spine ring kind stations ===== -->
+            <g style="font-family:var(--font-map);">
+              <circle cx="600" cy="310" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+              <text x="600" y="298" text-anchor="middle" style="font-size:12px; fill:var(--text);">NOTE.LOGGED</text>
+              <text x="600" y="325" text-anchor="middle" style="font-size:11px; fill:var(--text-quiet);">917</text>
+
+              <circle cx="695" cy="365" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+              <text x="708" y="362" style="font-size:12px; fill:var(--text);">APPROVAL.REQUESTED</text>
+              <text x="708" y="377" style="font-size:11px; fill:var(--text-quiet);">49</text>
+
+              <circle cx="695" cy="475" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+              <text x="708" y="472" style="font-size:12px; fill:var(--text);">DECISION.RECORDED</text>
+              <text x="708" y="487" style="font-size:11px; fill:var(--text-quiet);">41</text>
+
+              <circle cx="600" cy="530" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+              <text x="600" y="552" text-anchor="middle" style="font-size:12px; fill:var(--text);">PHASE.CLOSED</text>
+              <text x="600" y="567" text-anchor="middle" style="font-size:11px; fill:var(--text-quiet);">29</text>
+
+              <circle cx="505" cy="475" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+              <text x="492" y="472" text-anchor="end" style="font-size:12px; fill:var(--text);">REVIEW.COMPLETED</text>
+              <text x="492" y="487" text-anchor="end" style="font-size:11px; fill:var(--text-quiet);">21</text>
+
+              <circle cx="505" cy="365" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+              <text x="492" y="362" text-anchor="end" style="font-size:12px; fill:var(--text);">RUN.COMPLETED</text>
+              <text x="492" y="377" text-anchor="end" style="font-size:11px; fill:var(--text-quiet);">17</text>
+            </g>
+            <text x="600" y="271" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:12px; letter-spacing:1px; fill:var(--text-quiet);">SPINE RING · +7 kinds, see Spine/Tape</text>
+
+            <!-- ===== LIVE lane termini ===== -->
+            <g style="font-family:var(--font-map); font-weight:600;">
+              <circle cx="530" cy="50" r="7" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2.5"/>
+              <text x="530" y="34" text-anchor="middle" class="cap" style="font-size:15px; fill:var(--text);">FACE</text>
+              <text x="530" y="20" text-anchor="middle" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 00 · born 08-19</text>
+
+              <circle cx="670" cy="50" r="7" fill="var(--surface)" stroke="var(--needs-you-amber)" stroke-width="2.5"/>
+              <text x="670" y="34" text-anchor="middle" class="cap" style="font-size:15px; fill:var(--text);">GROWTH</text>
+              <text x="670" y="20" text-anchor="middle" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 06 · feed reads 08-23</text>
+
+              <circle cx="804" cy="106" r="7" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2.5"/>
+              <text x="820" y="102" class="cap" style="font-size:15px; fill:var(--text);">ENGINE</text>
+              <text x="820" y="118" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 06 · 3 dispatches, 0 accepted</text>
+
+              <circle cx="894" cy="216" r="7" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2.5"/>
+              <text x="910" y="212" class="cap" style="font-size:15px; fill:var(--text);">SCHEDULER</text>
+              <text x="910" y="228" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 03 · proving week → 08-24</text>
+
+              <circle cx="970" cy="420" r="7" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2.5"/>
+              <text x="986" y="416" class="cap" style="font-size:15px; fill:var(--text);">BENCH</text>
+              <text x="986" y="432" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 04 · production receipts 0</text>
+
+              <circle cx="960" cy="490" r="7" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2.5"/>
+              <text x="976" y="486" class="cap" style="font-size:15px; fill:var(--text);">LEADS</text>
+              <text x="976" y="502" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 03</text>
+              <rect x="976" y="510" width="180" height="34" fill="url(#hatch-violet)" stroke="var(--nonreal-violet)" stroke-width="1.5"/>
+              <text x="984" y="524" style="font-size:10px; fill:var(--nonreal-violet); font-weight:700;">REHEARSAL ONLY</text>
+              <text x="984" y="537" style="font-size:9px; fill:var(--nonreal-violet);">live send = owner keystroke pending</text>
+
+              <circle cx="930" cy="520" r="7" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2.5"/>
+              <text x="946" y="516" class="cap" style="font-size:15px; fill:var(--text);">LEGAL</text>
+              <text x="946" y="532" style="font-size:11px; font-weight:400; fill:var(--text-quiet);">LIVE · phase 00 · awaiting owner approval</text>
+            </g>
+
+            <!-- ===== IDLE lane termini ===== -->
+            <g style="font-family:var(--font-map); font-weight:400;">
+              <circle cx="684" cy="674" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="698" y="682" class="cap" style="font-size:13px; fill:var(--text-quiet);">ABSORB</text>
+
+              <circle cx="600" cy="720" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="600" y="740" text-anchor="middle" class="cap" style="font-size:13px; fill:var(--text-quiet);">DEVELOP</text>
+
+              <circle cx="543" cy="737" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="529" y="753" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">EVOLVE</text>
+
+              <circle cx="402" cy="678" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="388" y="686" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">LEDGER</text>
+
+              <circle cx="409" cy="671" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="395" y="660" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">MEMORY</text>
+
+              <circle cx="250" cy="420" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="236" y="416" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">MODEL-POLICY</text>
+
+              <circle cx="263" cy="363" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="249" y="359" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">POLICY</text>
+
+              <circle cx="263" cy="477" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="249" y="473" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">PORTFOLIO</text>
+
+              <circle cx="388" cy="148" r="5" fill="var(--surface)" stroke="var(--line-quiet)" stroke-width="1.5"/>
+              <text x="374" y="144" text-anchor="end" class="cap" style="font-size:13px; fill:var(--text-quiet);">DESIGN</text>
+            </g>
+
+            <!-- ===== dashed cluster: unexercised kinds ===== -->
+            <g style="font-family:var(--font-map);">
+              <circle cx="798" cy="654" r="6" fill="none" stroke="var(--line-mid)" stroke-width="2" stroke-dasharray="3 3"/>
+              <text x="814" y="650" style="font-size:12px; fill:var(--text-quiet);">REVENUE.RECEIVED</text>
+              <circle cx="798" cy="688" r="6" fill="none" stroke="var(--line-mid)" stroke-width="2" stroke-dasharray="3 3"/>
+              <text x="814" y="692" style="font-size:12px; fill:var(--text-quiet);">INCIDENT.RAISED</text>
+              <circle cx="852" cy="706" r="6" fill="none" stroke="var(--line-mid)" stroke-width="2" stroke-dasharray="3 3"/>
+              <text x="868" y="710" style="font-size:12px; fill:var(--text-quiet);">COUNCIL.VERDICT</text>
+              <text x="798" y="732" class="cap" style="font-size:12px; font-weight:700; fill:var(--text-quiet);">0 EVER — FIXTURE-PROVEN, UNEXERCISED</text>
+              <text x="798" y="748" style="font-size:10px; fill:var(--text-quiet);">+ revenue.simulated · cost.incurred · month.closed · all experiment.* · all policy.* kinds</text>
+            </g>
+
+            <!-- ===== dotted cluster: planned rooms ===== -->
+            <g style="font-family:var(--font-map);">
+              <circle cx="362" cy="122" r="6" fill="none" stroke="var(--line-quiet)" stroke-width="2" stroke-dasharray="1 4"/>
+              <text x="348" y="118" text-anchor="end" style="font-size:12px; fill:var(--text-quiet);">OPS</text>
+              <circle cx="402" cy="102" r="6" fill="none" stroke="var(--line-quiet)" stroke-width="2" stroke-dasharray="1 4"/>
+              <text x="402" y="88" text-anchor="middle" style="font-size:12px; fill:var(--text-quiet);">TRADER</text>
+              <circle cx="442" cy="122" r="6" fill="none" stroke="var(--line-quiet)" stroke-width="2" stroke-dasharray="1 4"/>
+              <text x="456" y="118" style="font-size:12px; fill:var(--text-quiet);">DISCOVER</text>
+              <circle cx="402" cy="162" r="6" fill="none" stroke="var(--line-quiet)" stroke-width="2" stroke-dasharray="1 4"/>
+              <text x="402" y="184" text-anchor="middle" style="font-size:12px; fill:var(--text-quiet);">CHAT-MCP</text>
+              <text x="402" y="200" text-anchor="middle" class="cap" style="font-size:11px; font-weight:700; fill:var(--text-quiet);">PLANNED — NOT YET BUILT</text>
+            </g>
+
+          </svg>
+        </div>
+      </div>
+
+      <aside class="legend">
+        <h3 class="cap">legend</h3>
+        <ul>
+          <li><svg width="16" height="16"><circle cx="8" cy="8" r="6" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/></svg><span><b class="cap">station</b>a stop on a lane</span></li>
+          <li><svg width="16" height="16"><rect x="2" y="2" width="12" height="12" fill="var(--needs-you-amber-wash)" stroke="var(--needs-you-amber)" stroke-width="2"/></svg><span><b class="cap">stamp station</b>approval.requested gate — amber fill = open</span></li>
+          <li><svg width="20" height="16"><circle cx="10" cy="8" r="6" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="2"/><circle cx="10" cy="8" r="3" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="1.5"/></svg><span><b class="cap">interchange</b>inbox — shared across lanes</span></li>
+          <li><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="var(--line-mid)" stroke-width="2" stroke-dasharray="4 3"/></svg><span><b class="cap">dashed</b>fixture-proven, unexercised — 0 ever</span></li>
+          <li><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="var(--line-quiet)" stroke-width="2" stroke-dasharray="1 4"/></svg><span><b class="cap">dotted</b>planned room — not yet built</span></li>
+          <li><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="var(--line-strong)" stroke-width="3"/></svg><span><b class="cap">heavy ink</b>LIVE lane</span></li>
+          <li><svg width="24" height="10"><line x1="0" y1="5" x2="24" y2="5" stroke="var(--line-quiet)" stroke-width="1.5"/></svg><span><b class="cap">quiet ink</b>IDLE lane</span></li>
+          <li><svg width="16" height="16"><rect width="16" height="16" fill="url(#hatch-violet)" stroke="var(--nonreal-violet)" stroke-width="1.5"/></svg><span><b class="cap">hatched violet</b>non-real — SIMULATED · REHEARSAL · DRILL · EXPLORATORY</span></li>
+          <li><svg width="16" height="16"><circle cx="8" cy="8" r="6" fill="var(--incident-red-wash)" stroke="var(--incident-red)" stroke-width="2"/></svg><span><b class="cap">incident</b>station reddens — 0 open today</span></li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============ SPINE / TAPE ============ -->
+  <section id="spine-tape">
+    <div class="kicker cap-wide">screen 4 / 8 — spine / tape</div>
+    <div class="section-head">
+      <h2 class="step-ring">SPINE &amp; TAPE</h2>
+      <p>1,386 receipts · 21 day.closed seals · 14 of 46 kinds have ever fired. The tape anchors every obligation the company owes a date.</p>
+    </div>
+
+    <table class="kind-table">
+      <thead><tr><th>kind</th><th style="text-align:right;">count</th></tr></thead>
+      <tbody>
+        <tr><td class="mono">note.logged</td><td class="n">917</td></tr>
+        <tr><td class="mono">approval.requested</td><td class="n">49</td></tr>
+        <tr><td class="mono">decision.recorded</td><td class="n">41</td></tr>
+        <tr><td class="mono">phase.closed</td><td class="n">29</td></tr>
+        <tr><td class="mono">review.completed</td><td class="n">21</td></tr>
+        <tr><td class="mono">run.completed</td><td class="n">17</td></tr>
+        <tr><td class="mono">lead.researched</td><td class="n">15</td></tr>
+        <tr><td class="mono">kickoff.done</td><td class="n">11</td></tr>
+        <tr><td class="mono">commit.done</td><td class="n">2</td></tr>
+        <tr><td class="mono">constitution.adopted</td><td class="n">1</td></tr>
+        <tr><td class="mono">content.published</td><td class="n">1</td></tr>
+        <tr><td class="mono">develop.started</td><td class="n">1</td></tr>
+        <tr><td class="mono">slice.done</td><td class="n">1</td></tr>
+      </tbody>
+    </table>
+    <p class="unexercised-note">32 of 46 kinds render dashed on the Map — <em>fixture-proven, unexercised</em>: revenue.received · revenue.simulated · cost.incurred · incident.raised · all experiment.* · all policy.* kinds · council.verdict · month.closed.</p>
+
+    <div class="ruler-frame">
+      <svg class="ruler-svg" viewBox="0 0 1150 220" role="img" aria-label="Tape ruler of dated obligations from 2026-08-19 to 2027-05-14">
+        <line x1="30" y1="140" x2="1120" y2="140" stroke="var(--line-heavy)" stroke-width="2"/>
+        <!-- tick baseline decoration -->
+        <g stroke="var(--line-faint)" stroke-width="1">
+          <line x1="60" y1="135" x2="60" y2="145"/><line x1="654" y1="135" x2="654" y2="145"/>
+        </g>
+
+        <!-- TODAY -->
+        <line x1="60" y1="70" x2="60" y2="140" stroke="var(--line-heavy)" stroke-width="2.5"/>
+        <circle cx="60" cy="140" r="4" fill="var(--line-heavy)"/>
+        <text x="60" y="58" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:11px; font-weight:700; fill:var(--text);">TODAY</text>
+        <text x="60" y="44" text-anchor="middle" style="font-family:var(--font-mono); font-size:10px; fill:var(--text-quiet);">2026-08-19</text>
+
+        <!-- 08-23 short -->
+        <line x1="148" y1="105" x2="148" y2="140" stroke="var(--line-strong)" stroke-width="2"/>
+        <circle cx="148" cy="140" r="3.5" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="148" y="95" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; fill:var(--text);">GROWTH FEED</text>
+        <text x="148" y="82" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">2026-08-23</text>
+
+        <!-- 08-24 tall -->
+        <line x1="170" y1="60" x2="170" y2="140" stroke="var(--line-strong)" stroke-width="2"/>
+        <circle cx="170" cy="140" r="3.5" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="170" y="50" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; fill:var(--text);">SCHEDULER — PROVING WEEK</text>
+        <text x="170" y="38" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">2026-08-24</text>
+
+        <!-- 08-31 short -->
+        <line x1="324" y1="105" x2="324" y2="140" stroke="var(--line-strong)" stroke-width="2"/>
+        <circle cx="324" cy="140" r="3.5" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="324" y="95" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; fill:var(--text);">HERMES</text>
+        <text x="324" y="82" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">review_by 2026-08-31</text>
+
+        <!-- 09-01 tall -->
+        <line x1="346" y1="60" x2="346" y2="140" stroke="var(--line-strong)" stroke-width="2"/>
+        <circle cx="346" cy="140" r="3.5" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="346" y="50" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; fill:var(--text);">BENCH — GUARD</text>
+        <text x="346" y="38" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">2026-09-01</text>
+
+        <!-- 09-15 short, heavier -->
+        <line x1="654" y1="95" x2="654" y2="140" stroke="var(--line-heavy)" stroke-width="2.5"/>
+        <circle cx="654" cy="140" r="4" fill="var(--surface)" stroke="var(--line-heavy)" stroke-width="2.5"/>
+        <text x="654" y="85" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; font-weight:700; fill:var(--text);">COUNCIL 002 — REVIEW-BY</text>
+        <text x="654" y="72" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">2026-09-15</text>
+
+        <!-- scale break -->
+        <g stroke="var(--line-heavy)" stroke-width="2">
+          <line x1="686" y1="132" x2="696" y2="148"/>
+          <line x1="696" y1="132" x2="706" y2="148"/>
+        </g>
+        <text x="696" y="170" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:9px; fill:var(--text-quiet);">scale break</text>
+
+        <!-- T-01 tall -->
+        <line x1="800" y1="60" x2="800" y2="140" stroke="var(--line-strong)" stroke-width="2"/>
+        <circle cx="800" cy="140" r="3.5" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="800" y="50" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; fill:var(--text);">T-01</text>
+        <text x="800" y="38" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">review_by 2026-11-09</text>
+
+        <!-- council 001 short -->
+        <line x1="930" y1="105" x2="930" y2="140" stroke="var(--line-strong)" stroke-width="2"/>
+        <circle cx="930" cy="140" r="3.5" fill="var(--surface)" stroke="var(--line-strong)" stroke-width="2"/>
+        <text x="930" y="95" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; fill:var(--text);">COUNCIL 001 — REVIEW-BY</text>
+        <text x="930" y="82" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">2027-02-02</text>
+
+        <!-- DPDP tall -->
+        <line x1="1050" y1="60" x2="1050" y2="140" stroke="var(--incident-red)" stroke-width="2"/>
+        <circle cx="1050" cy="140" r="4" fill="var(--surface)" stroke="var(--incident-red)" stroke-width="2.5"/>
+        <text x="1050" y="50" text-anchor="middle" class="cap" style="font-family:var(--font-map); font-size:10px; font-weight:700; fill:var(--incident-red);">DPDP — COMMENCEMENT</text>
+        <text x="1050" y="38" text-anchor="middle" style="font-family:var(--font-mono); font-size:9px; fill:var(--text-quiet);">2027-05-13/14</text>
+      </svg>
+    </div>
+    <p class="step-legend quiet" style="max-width:70ch; margin-top:var(--space-2);">Near zone (today → 2026-09-15) is to scale; past the break, spacing is even, not proportional — dates are exact, distance is not. Only true incident.raised earns red; DPDP is marked red here as a hard external clock, not a live incident.</p>
+  </section>
+
+  <!-- ============ COUNCIL ROOM ============ -->
+  <section id="council">
+    <div class="kicker cap-wide">screen 5 / 8 — council room</div>
+    <div class="section-head">
+      <h2 class="step-ring">COUNCIL ROOM</h2>
+      <p>2 sessions, both file-borne. council.verdict has never fired on the spine — the room renders dashed, same glyph as the Map.</p>
+    </div>
+
+    <div class="council-grid">
+      <article class="council-card">
+        <span class="mono step-meta quiet">council 001</span>
+        <span class="verdict">CONDITIONAL / Medium</span>
+        <span class="step-meta">outcome: <strong>UNRESOLVED</strong></span>
+        <span class="step-meta quiet">Review-by 2027-02-02</span>
+      </article>
+      <article class="council-card">
+        <span class="mono step-meta quiet">council 002</span>
+        <span class="verdict">NO / Medium</span>
+        <span class="step-meta">standard mode</span>
+        <span class="step-meta quiet">Review-by 2026-09-15</span>
+      </article>
+    </div>
+
+    <div class="roster">
+      <p><strong>roster</strong> — 12 (3 stance · 1 researcher · 1 verifier · 7 experts)</p>
+      <p class="quiet">scored 0 · Brier — <em>(insufficient evidence)</em></p>
+    </div>
+
+    <div class="dashed-note">
+      <svg width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="var(--line-mid)" stroke-width="2" stroke-dasharray="3 3"/></svg>
+      <span><span class="mono">council.verdict</span> on the spine: <strong>0 ever</strong> — both sessions file-borne.</span>
+    </div>
+  </section>
+
+  <!-- ============ MONEY ============ -->
+  <section id="money">
+    <div class="kicker cap-wide">screen 6 / 8 — money</div>
+    <div class="section-head">
+      <h2 class="step-ring">MONEY</h2>
+      <p>Honest-empty. Nothing here is rounded, summed across honesty classes, or given a colour it hasn't earned.</p>
+    </div>
+
+    <div class="money-block">
+      <div>
+        <div class="kicker cap">real revenue</div>
+        <div class="revenue-figure">₹0</div>
+        <p class="step-meta quiet" style="max-width:40ch;">0 revenue.received receipts ever — mechanism proven, live value pending.</p>
+
+        <div class="kv-strip">
+          <div><span class="quiet">MRR</span> — <span class="mono">—</span></div>
+          <div><span class="quiet">kill-distance</span> — <span class="abs">NOT EVALUATED (no criteria receipt for a live venture month)</span></div>
+          <div><span class="quiet">north-star ₹/month per hour of the owner's attention</span> — <span class="abs">not instrumented</span></div>
+        </div>
+
+        <div class="cost-rows">
+          <div class="cost-row"><span>provider</span><span class="val">— not totalled</span></div>
+          <div class="cost-row"><span>infra</span><span class="val">— not totalled</span></div>
+          <div class="cost-row"><span>one-off</span><span class="val">— not totalled</span></div>
+          <div class="cost-row"><span>overhead</span><span class="val">— not totalled</span></div>
+        </div>
+        <p class="step-legend quiet" style="margin-top:var(--space-2); max-width:44ch;">Three cost lines plus overhead are never summed on this screen — a total here would be a number with no single receipt behind it.</p>
+      </div>
+
+      <div class="simulated-panel">
+        <span class="wm cap" aria-hidden="true">SIMULATED</span>
+        <div class="kicker cap" style="color:var(--nonreal-violet);">simulated panel</div>
+        <p class="mono step-meta">revenue.simulated — 0 ever</p>
+        <p class="step-legend" style="margin-top:var(--space-2);">Watermarked, hatched-violet class. Never co-rendered with real revenue — a summed figure mixing the two is a violation this screen refuses to commit.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ BOARD ============ -->
+  <section id="board">
+    <div class="kicker cap-wide">screen 7 / 8 — board</div>
+    <div class="section-head">
+      <h2 class="step-ring">BOARD</h2>
+      <p>16 lanes. 7 LIVE against a guideline of 2 — informational, not an alarm.</p>
+    </div>
+
+    <table class="board">
+      <thead>
+        <tr><th>lane</th><th>status</th><th>phase</th><th>appetite/burn</th><th>clock / note</th></tr>
+      </thead>
+      <tbody>
+        <tr class="live"><td>bench</td><td class="status-live">LIVE</td><td class="mono">04</td><td class="mono">8d / 7.25d</td><td>guard NEXT-CHECK 2026-09-01 · production receipts 0</td></tr>
+        <tr class="live"><td>engine</td><td class="status-live">LIVE</td><td class="mono">06</td><td class="mono">9.5d / 7.5d</td><td>Hermes v2026.8.3 hired · 3 dispatches, 0 accepted drafts · hermes <span class="mono">review_by</span> 2026-08-31</td></tr>
+        <tr class="live"><td>face</td><td class="status-live">LIVE</td><td class="mono">00</td><td class="mono">32d / 1d</td><td>born 2026-08-19 (this build)</td></tr>
+        <tr class="live"><td>growth</td><td class="status-live">LIVE</td><td class="mono">06</td><td class="mono">10d / 8.0d</td><td>INDEXABLE clock started 08-16 · feed earliest read 2026-08-23 · 2 approvals OPEN</td></tr>
+        <tr class="live"><td>leads</td><td class="status-live">LIVE</td><td class="mono">03</td><td class="mono">11d / 7.5d</td><td>rehearsal only — live send = owner keystroke pending</td></tr>
+        <tr class="live"><td>legal</td><td class="status-live">LIVE</td><td class="mono">00</td><td class="mono">5d / 0d</td><td>awaiting owner approval</td></tr>
+        <tr class="live"><td>scheduler</td><td class="status-live">LIVE</td><td class="mono">03</td><td class="mono">3d / 2.5d</td><td>proving week restarted 08-17 → runs to 2026-08-24</td></tr>
+      </tbody>
+    </table>
+
+    <p class="idle-line"><strong class="cap">IDLE</strong> — absorb · develop · evolve · ledger · memory · model-policy · policy · portfolio · design</p>
+
+    <div class="board-notes">
+      <p>Mode B — <strong class="quiet">NOT CERTIFIED</strong></p>
+      <p>centuries claimed 0001–1399 · next 1400</p>
+      <span class="chip" style="margin-top:var(--space-1);">/arc-phase-done &lt;n&gt; [--lane &lt;name&gt;]
+        <button type="button" class="chip-copy" data-copy="/arc-phase-done <n> [--lane <name>]">copy</button>
+      </span>
+    </div>
+  </section>
+
+  <!-- ============ ASK ARC ============ -->
+  <section id="ask-arc">
+    <div class="kicker cap-wide">screen 8 / 8 — ask arc</div>
+    <div class="section-head">
+      <h2 class="step-ring">ASK ARC</h2>
+      <p>Read-only. Every answer cites its receipts — arc never writes; only the stamp writes.</p>
+    </div>
+
+    <form class="ask-row" onsubmit="return false;">
+      <label class="skip-link" for="ask-input">ask arc a question</label>
+      <input id="ask-input" type="text" value="enna nadakuthu?">
+      <button type="button" class="cap">ask</button>
+    </form>
+
+    <div class="ask-answer">
+      <p>growth carries 2 open <span class="mono">approval.requested</span> — both needs-you, both unstamped. Nothing else is open company-wide.</p>
+      <span class="cite">via 2 receipts, as-of 2026-08-19 — 01KZZRVSQJEAVD4YCZ8FDXR0DT · 01KZZRW51QHTA9CFEX5JRRGY7C</span>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="foot-row">
+    <span>arc face — Phase 00 · variant B · paper-first cartographic · base 09c563f</span>
+    <span>data mode: LIVE · as-of 2026-08-19 IST</span>
+  </div>
+</footer>
+
+<script>
+  // minimal, no framework: copy-to-clipboard on chips only — the UI never runs, only copies.
+  document.querySelectorAll('.chip-copy').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var text = btn.getAttribute('data-copy');
+      if (navigator.clipboard && text) {
+        navigator.clipboard.writeText(text).then(function(){
+          var original = btn.textContent;
+          btn.textContent = 'copied';
+          setTimeout(function(){ btn.textContent = original; }, 1200);
+        });
+      }
+    });
+  });
+</script>
+</body>
+</html>

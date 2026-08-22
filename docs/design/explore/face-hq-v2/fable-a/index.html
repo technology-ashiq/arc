@@ -1,0 +1,584 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc · command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M3 16 A 8.6 8.6 0 1 1 17 16' stroke='%23E8EAED' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='10' cy='16.4' r='1.7' fill='%23F0A63C'/%3E%3C/svg%3E">
+<style>
+/* ============================================================================
+   arc face, explore v2, variant fable-a.
+   THESIS: the command surface is a sovereign instrument, not a dashboard.
+   It reads like the first page of a national register set in a dark room:
+   one warm light, one enormous number (the 13 that decides the morning),
+   serif for the ceremonial voice, grotesk for the working voice, mono for
+   the record itself. Reserved colours are law: amber needs-you, green real
+   money (never yet earned, so never present), red incident (none ever),
+   hatched violet for every non-real class. Absence is drawn, never zeroed.
+   ============================================================================ */
+
+:root{
+  --bg:        #0A0A0C;
+  --bg-deep:   #070708;
+  --panel:     rgba(255,255,255,.022);
+  --panel-hi:  rgba(255,255,255,.045);
+  --line:      rgba(226,230,238,.08);
+  --line-soft: rgba(226,230,238,.05);
+
+  /* neutral inks run COOL, so the one warm thing on the page is meaning */
+  --ink:  #E8EAED;
+  --ink2: #A2A7B0;
+  --ink3: #666C77;
+  --ink4: #3F444D;
+
+  /* Reserved meanings. Nothing else may borrow these. */
+  --amber:      #F0A63C;
+  --amber-deep: #1E1305;
+  --amber-glow: rgba(240,166,60,.14);
+  --amber-line: rgba(240,166,60,.38);
+  --green:      #4AAE63;   /* real money only. Appears solely in the law legend. */
+  --red:        #DE5449;   /* incident only. Appears solely in the law legend. */
+  --violet:     #A78BDF;   /* every non-real class, always hatched */
+  --violet-hatch: repeating-linear-gradient(135deg, rgba(167,139,223,.30) 0 3px, rgba(167,139,223,.06) 3px 6px);
+
+  --serif: "Instrument Serif", "Iowan Old Style", Georgia, serif;
+  --sans:  "Geist", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --mono:  "Geist Mono", "Cascadia Code", ui-monospace, Consolas, monospace;
+}
+
+*{box-sizing:border-box; margin:0; padding:0}
+html{-webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
+
+html,body{height:100%}
+body{
+  /* the one light source rises from the ring: what needs you is what is lit */
+  background:
+    radial-gradient(760px 560px at 31% 18%, rgba(240,166,60,.10), transparent 60%),
+    radial-gradient(1000px 700px at 90% 115%, rgba(110,115,175,.055), transparent 60%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:13px;
+  font-weight:400;
+  line-height:1.5;
+  letter-spacing:.005em;
+  overflow:hidden;
+}
+
+/* grain: the material of the page */
+.grain{
+  position:fixed; inset:0; z-index:40; pointer-events:none; opacity:.5;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.page{
+  height:100%; max-width:1440px; margin:0 auto;
+  display:grid; grid-template-rows:60px 1fr 42px;
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+header{
+  display:flex; align-items:center; gap:18px;
+  padding:0 28px; border-bottom:1px solid var(--line);
+}
+.mark{display:flex; align-items:baseline; gap:10px}
+.mark svg{transform:translateY(2px)}
+.mark .word{font-family:var(--serif); font-size:23px; letter-spacing:.01em}
+.mark .sub{
+  font-size:10px; letter-spacing:.24em; text-transform:uppercase;
+  color:var(--ink3); border-left:1px solid var(--line); padding-left:14px;
+}
+header .date{
+  margin-left:auto; display:flex; align-items:center; gap:22px;
+  font-size:11.5px; color:var(--ink2);
+}
+header .date .day{color:var(--ink)}
+.hsep{width:1px; height:16px; background:var(--line)}
+.asof{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:10.5px; color:var(--ink3)}
+.asof .dot{width:5px; height:5px; border-radius:50%; background:var(--ink2); box-shadow:0 0 8px rgba(236,234,227,.5)}
+
+/* ── main grid ──────────────────────────────────────────────────────────── */
+main{
+  display:grid; grid-template-columns:292px 1fr 336px;
+  min-height:0;
+}
+.rail{border-right:1px solid var(--line); padding:20px 22px; display:flex; flex-direction:column; gap:0; min-height:0}
+.side{border-left:1px solid var(--line); padding:20px 22px; display:flex; flex-direction:column; min-height:0}
+.centre{padding:8px 34px 0; display:flex; flex-direction:column; min-height:0}
+
+.sect{
+  font-size:9.5px; letter-spacing:.22em; text-transform:uppercase; color:var(--ink3);
+  display:flex; align-items:baseline; gap:10px; margin-bottom:12px;
+}
+.sect::after{content:""; flex:1; height:1px; background:var(--line-soft); transform:translateY(-2px)}
+.sect .aux{letter-spacing:.06em; text-transform:none; color:var(--ink4); font-size:10px}
+
+/* ── left rail: spine ───────────────────────────────────────────────────── */
+.spine-count{display:flex; align-items:baseline; gap:8px}
+.spine-count .n{font-family:var(--serif); font-size:34px; line-height:1; letter-spacing:.01em}
+.spine-count .u{font-size:11px; color:var(--ink2)}
+.why{
+  font-size:9.5px; color:var(--ink4); border-bottom:1px dotted var(--ink4);
+  cursor:pointer; align-self:center; margin-left:2px; font-style:italic; font-family:var(--serif);
+}
+.spine-sub{font-size:11px; color:var(--ink3); margin-top:3px}
+
+.tape{display:flex; gap:3px; align-items:flex-end; margin-top:14px; height:26px}
+.tape i{flex:1; background:var(--ink4); height:12px; border-radius:1px; position:relative}
+.tape i.s::after{ /* sealed: a diamond above the day */
+  content:""; position:absolute; left:50%; top:-8px; width:4px; height:4px;
+  background:var(--ink2); transform:translateX(-50%) rotate(45deg);
+}
+.tape i.open{
+  background:transparent; border:1px solid var(--amber-line); height:18px;
+  box-shadow:0 0 10px var(--amber-glow);
+}
+.tape-cap{font-size:10.5px; color:var(--ink3); margin-top:9px; line-height:1.55}
+.tape-cap b{color:var(--ink2); font-weight:500}
+
+/* chip: the exact CLI, copyable, never executed */
+.chip{
+  display:flex; align-items:center; gap:8px; margin-top:9px;
+  border:1px solid var(--line); border-radius:6px; padding:6px 9px;
+  background:rgba(0,0,0,.28);
+  font-family:var(--mono); font-size:10.5px; color:var(--ink2);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.03);
+}
+.chip .ps{color:var(--ink4); user-select:none}
+.chip svg{margin-left:auto; flex:none; opacity:.5}
+
+/* kinds coverage */
+.kinds{display:grid; grid-template-columns:repeat(23,1fr); gap:3px; margin-top:2px}
+.kinds i{height:7px; border-radius:1px; background:var(--ink2); opacity:.85}
+.kinds i.u{background:transparent; border:1px dashed var(--ink4); opacity:.9}
+.kinds-cap{font-size:10.5px; color:var(--ink3); margin-top:9px; line-height:1.55}
+.kinds-cap em{font-family:var(--serif); font-style:italic; color:var(--ink2)}
+
+/* lanes */
+.lanes{display:flex; flex-direction:column; margin-top:2px}
+.lane{
+  display:flex; align-items:center; gap:8px; padding:5.5px 0;
+  border-bottom:1px solid var(--line-soft); font-size:12px;
+}
+.lane:last-child{border-bottom:0}
+.lane .nm{color:var(--ink); font-weight:500; width:74px}
+.lane .st{
+  font-size:8.5px; letter-spacing:.14em; color:var(--ink3);
+  border:1px solid var(--line); border-radius:3px; padding:1px 5px;
+}
+.lane .note{margin-left:auto; font-size:10px; color:var(--ink3); text-align:right}
+.lane .gate{
+  width:6px; height:6px; flex:none; background:var(--amber);
+  box-shadow:0 0 8px var(--amber-glow); border-radius:1px;
+}
+.badge-nr{ /* non-real class: violet, always hatched */
+  font-size:8.5px; letter-spacing:.12em; color:var(--violet);
+  border:1px solid rgba(167,139,223,.4); border-radius:3px; padding:1px 5px;
+  background:var(--violet-hatch);
+}
+.lane-tail{font-size:10.5px; color:var(--ink4); padding-top:8px}
+.admits{margin-top:auto; padding-top:16px}
+.arow{display:flex; justify-content:space-between; gap:12px; padding:4px 0; font-size:10.5px; border-bottom:1px solid var(--line-soft)}
+.arow:last-child{border-bottom:0}
+.arow span:first-child{color:var(--ink3)}
+.arow span:last-child{color:var(--ink4); font-style:italic; font-family:var(--serif); font-size:11.5px; text-align:right}
+
+/* ── centre: needs-you ──────────────────────────────────────────────────── */
+.hero{display:flex; align-items:center; gap:34px; padding:6px 0 2px}
+.ringbox{position:relative; width:284px; height:284px; flex:none}
+.ringbox svg{position:absolute; inset:0; width:100%; height:100%}
+.ring-decided line{stroke:rgba(232,234,237,.26); stroke-width:2; stroke-linecap:round}
+.ring-open line{stroke:var(--amber); stroke-width:2.6; stroke-linecap:round}
+.ring-halo line{stroke:var(--amber); stroke-width:7; stroke-linecap:round; opacity:.16; filter:blur(4px)}
+.ring-n{
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:0;
+}
+.ring-n .big{
+  font-family:var(--serif); font-size:150px; line-height:.9; letter-spacing:-.01em;
+  color:var(--ink);
+  text-shadow:0 0 60px rgba(240,166,60,.22);
+}
+.ring-n .lab{
+  font-family:var(--mono); font-size:11px; color:var(--amber); letter-spacing:.04em;
+  margin-top:8px;
+}
+.hero-text h1{
+  font-family:var(--serif); font-style:italic; font-weight:400;
+  font-size:31px; line-height:1.18; color:var(--ink); max-width:430px;
+  letter-spacing:.002em;
+}
+.hero-text h1 .steady{font-style:normal}
+.hero-stats{margin-top:14px; display:flex; gap:20px; font-size:11.5px; color:var(--ink2)}
+.hero-stats b{display:block; font-family:var(--mono); font-size:14px; color:var(--ink); font-weight:500; margin-bottom:1px}
+.hero-stats .waits b{color:var(--amber)}
+.hero-note{margin-top:13px; font-size:11px; color:var(--ink3); max-width:420px}
+
+/* queue */
+.queue{margin-top:10px; display:flex; flex-direction:column; min-height:0}
+.hero, .queue > *{flex-shrink:0} /* a short window clips at the fold; it never crushes the stamp */
+.qhead{display:flex; align-items:baseline}
+.qhead .settled{margin-left:auto; font-size:10px; color:var(--ink4); letter-spacing:.02em}
+.qhead .settled b{color:var(--ink3); font-family:var(--mono); font-weight:500}
+
+.card{
+  border:1px solid rgba(240,166,60,.20); border-radius:10px;
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.016) 55%);
+  box-shadow:0 24px 60px rgba(0,0,0,.55), 0 2px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.07);
+  padding:16px 20px 18px; position:relative; overflow:hidden;
+}
+.card::before{ /* the amber presence of an open gate: a fine left rule */
+  content:""; position:absolute; left:0; top:0; bottom:0; width:2px;
+  background:linear-gradient(180deg, var(--amber), rgba(240,166,60,.15));
+}
+.card-top{display:flex; align-items:center; gap:10px; font-size:10.5px}
+.profile{
+  font-family:var(--mono); font-size:10px; color:var(--amber);
+  border:1px solid rgba(240,166,60,.35); border-radius:4px; padding:1.5px 7px;
+  background:rgba(240,166,60,.07);
+}
+.card-top .lane-ref{color:var(--ink3)}
+.card-top .age{margin-left:auto; color:var(--amber); font-family:var(--mono); font-size:10.5px}
+.card-top .age .quiet{color:var(--ink3)}
+.card h2{
+  font-family:var(--serif); font-weight:400; font-size:24px; line-height:1.2;
+  margin-top:9px; letter-spacing:.002em;
+}
+.ulid{font-family:var(--mono); font-size:10px; color:var(--ink4); letter-spacing:.02em; margin-top:5px}
+.evi{display:flex; gap:16px; margin-top:9px; font-size:11px; color:var(--ink2)}
+.evi a{color:var(--ink2); text-decoration:none; border-bottom:1px solid var(--line); padding-bottom:1px}
+.evi a::after{content:" ›"; color:var(--ink4)}
+
+.stampzone{display:flex; gap:22px; margin-top:15px; align-items:stretch}
+.stamp{
+  flex:1; border:1px solid var(--line); border-radius:8px;
+  background:rgba(0,0,0,.32);
+  box-shadow:inset 0 2px 10px rgba(0,0,0,.5), inset 0 1px 0 rgba(0,0,0,.6), 0 1px 0 rgba(255,255,255,.045);
+  padding:12px 14px;
+}
+.stamp .slab{font-size:9px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink3); display:flex; gap:8px; align-items:baseline}
+.stamp .slab .rule{color:var(--ink4); letter-spacing:.03em; text-transform:none; font-size:9.5px}
+.reason{
+  margin-top:9px; border-bottom:1px solid var(--line);
+  font-family:var(--serif); font-style:italic; font-size:14.5px; color:var(--ink3);
+  padding:3px 1px 7px; display:flex; align-items:baseline; gap:2px;
+}
+.reason .caret{width:1px; height:15px; background:var(--amber); align-self:center; margin-right:4px}
+.stamp-actions{display:flex; gap:10px; margin-top:12px; align-items:center}
+.btn{
+  font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.02em;
+  border-radius:6px; padding:8px 18px; cursor:pointer; border:1px solid transparent;
+}
+.btn.approve{
+  color:var(--amber-deep); background:linear-gradient(180deg, #F6B759, #E39A2E);
+  box-shadow:0 1px 0 rgba(255,225,170,.55) inset, 0 -6px 12px rgba(140,80,0,.35) inset, 0 8px 22px rgba(240,166,60,.22), 0 2px 5px rgba(0,0,0,.5);
+}
+.btn.reject{
+  color:var(--ink2); background:transparent; border-color:var(--line);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.stamp-actions .warn{font-size:9.5px; color:var(--ink4); margin-left:auto; max-width:170px; line-height:1.45; text-align:right}
+
+/* seal: quotes the rule that forbids the machine */
+.seal{
+  width:222px; flex:none; display:flex; flex-direction:column; gap:8px;
+  padding:2px 0 0 2px;
+}
+.seal .disc{align-self:flex-start; opacity:.9}
+.seal q{
+  font-family:var(--serif); font-style:italic; font-size:12.5px; line-height:1.45;
+  color:var(--ink2); quotes:"\201C" "\201D";
+}
+.seal .cite{font-family:var(--mono); font-size:9px; color:var(--ink4); letter-spacing:.05em}
+
+/* compact rows */
+.row{
+  display:flex; align-items:center; gap:12px; padding:10px 6px 10px 14px;
+  border-bottom:1px solid var(--line-soft); font-size:12.5px; position:relative;
+}
+.row::before{content:""; position:absolute; left:0; top:12px; bottom:12px; width:2px; background:rgba(240,166,60,.35); border-radius:1px}
+.row .t{color:var(--ink); font-weight:400}
+.row .u2{font-family:var(--mono); font-size:9.5px; color:var(--ink4); margin-left:auto}
+.row .age2{font-family:var(--mono); font-size:10px; color:var(--amber); width:86px; text-align:right; flex:none}
+.row .decide{
+  font-size:10.5px; color:var(--ink2); border:1px solid var(--line); border-radius:5px;
+  padding:3px 10px; flex:none;
+}
+.more{
+  padding:10px 6px 4px 14px; font-size:11px; color:var(--ink3);
+}
+.more b{color:var(--ink2); font-family:var(--mono); font-weight:500}
+
+/* ── right side ─────────────────────────────────────────────────────────── */
+.absent-plate{
+  border:1px dashed rgba(235,232,222,.16); border-radius:8px;
+  padding:14px 16px 13px; position:relative;
+}
+.absent-plate .line1{
+  font-family:var(--serif); font-style:italic; font-size:17.5px; line-height:1.25; color:var(--ink);
+}
+.absent-plate .line2{font-family:var(--mono); font-size:10px; color:var(--ink3); margin-top:7px}
+.absent-badge{
+  position:absolute; top:-8px; right:12px;
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.14em; color:var(--ink3);
+  background:var(--bg); border:1px solid var(--line); border-radius:3px; padding:1px 6px;
+}
+.mrow{display:grid; grid-template-columns:88px 1fr; gap:12px; align-items:baseline; padding:8px 0; border-bottom:1px solid var(--line-soft); font-size:11.5px}
+.mrow:last-of-type{border-bottom:0}
+.mrow .k{color:var(--ink2)}
+.mrow .v{color:var(--ink3); text-align:right; font-size:10.5px; line-height:1.5}
+.mrow .v b{color:var(--ink2); font-family:var(--mono); font-size:9.5px; font-weight:500; letter-spacing:.08em; white-space:nowrap}
+.money-law{
+  margin-top:10px; font-family:var(--serif); font-style:italic; font-size:12.5px;
+  color:var(--ink3); line-height:1.5; border-top:1px solid var(--line-soft); padding-top:10px;
+}
+
+/* today feed */
+.feed{display:flex; flex-direction:column; min-height:0}
+.frow{display:flex; align-items:baseline; gap:10px; padding:6px 0; border-bottom:1px solid var(--line-soft); font-size:11px}
+.frow:last-child{border-bottom:0}
+.frow .tm{font-family:var(--mono); font-size:9.5px; color:var(--ink4); width:34px; flex:none}
+.frow .kd{font-family:var(--mono); font-size:10.5px; color:var(--ink2); flex:none}
+.frow .kd.you{color:var(--amber)}
+.frow .dt{color:var(--ink3); font-size:10.5px; min-width:0}
+.feed-tail{font-size:10px; color:var(--ink4); padding-top:9px; font-style:italic; font-family:var(--serif)}
+.quarantine{margin-top:auto; padding-top:16px}
+.qtext{font-size:10.5px; color:var(--ink4); line-height:1.55}
+
+/* ── footer: the law ────────────────────────────────────────────────────── */
+footer{
+  border-top:1px solid var(--line); display:flex; align-items:center;
+  padding:0 28px; gap:26px; font-size:10px; color:var(--ink4);
+}
+footer .derive{font-family:var(--serif); font-style:italic; font-size:11.5px; color:var(--ink3)}
+.law{margin-left:auto; display:flex; align-items:center; gap:18px}
+.law .sw{display:flex; align-items:center; gap:6px; color:var(--ink3)}
+.law i{width:8px; height:8px; border-radius:2px; flex:none}
+.law .a i{background:var(--amber)}
+.law .g i{background:var(--green)}
+.law .r i{background:var(--red)}
+.law .v i{background:var(--violet-hatch); border:1px solid rgba(167,139,223,.5); width:10px; height:8px}
+.law .never{color:var(--ink4); font-style:italic}
+
+.gap14{height:14px; flex:none}
+.gap18{height:18px; flex:none}
+.gap20{height:20px; flex:none}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="page">
+
+  <!-- ═══ header ═══ -->
+  <header>
+    <div class="mark">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+        <path d="M3 16 A 8.6 8.6 0 1 1 17 16" stroke="#E8EAED" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="10" cy="16.4" r="1.7" fill="#F0A63C"/>
+      </svg>
+      <span class="word">arc</span>
+      <span class="sub">command</span>
+    </div>
+    <div class="date">
+      <span><span class="day">Tuesday 19 August 2026</span> &nbsp;·&nbsp; day 22 of the record</span>
+      <span class="hsep"></span>
+      <span class="asof"><span class="dot"></span> as-of 12:00 IST · replay any point</span>
+      <span class="hsep"></span>
+      <span class="asof">reader-only over the spine</span>
+    </div>
+  </header>
+
+  <!-- ═══ main ═══ -->
+  <main>
+
+    <!-- ── left rail: the record ── -->
+    <div class="rail">
+      <div class="sect">spine <span class="aux">append-only</span></div>
+      <div class="spine-count">
+        <span class="n">1,150</span><span class="u">receipts</span>
+        <span class="why">why?</span>
+      </div>
+      <div class="spine-sub">22 days on the record · 21 sealed by day.closed</div>
+      <div class="tape">
+        <i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="s"></i><i class="open"></i>
+      </div>
+      <div class="tape-cap">Today is not yet sealed. <b>Sealing is yours to run:</b></div>
+      <div class="chip">
+        <span class="ps">$</span> arc day close 2026-08-19
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="3.2" y="3.2" width="6.6" height="6.6" rx="1.4" stroke="#666C77"/><path d="M1.2 7.4 V2.6 A1.4 1.4 0 0 1 2.6 1.2 H7.4" stroke="#666C77"/></svg>
+      </div>
+
+      <div class="gap20"></div>
+
+      <div class="sect">kinds <span class="aux">14 of 46 have ever fired</span></div>
+      <div class="kinds">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i><i class="u"></i>
+      </div>
+      <div class="kinds-cap">The other 32 are <em>unexercised</em> · drawn hollow, never as zero.</div>
+
+      <div class="gap20"></div>
+
+      <div class="sect">lanes <span class="aux">16 · 7 live</span></div>
+      <div class="lanes">
+        <div class="lane"><span class="nm">bench</span><span class="st">LIVE</span><span class="note">production receipts 0</span></div>
+        <div class="lane"><span class="nm">engine</span><span class="st">LIVE</span><span class="gate"></span><span class="note">3 dispatches, 0 accepted drafts</span></div>
+        <div class="lane"><span class="nm">face</span><span class="st">LIVE</span><span class="note">this surface · reader-only</span></div>
+        <div class="lane"><span class="nm">growth</span><span class="st">LIVE</span><span class="gate"></span><span class="note">gates open on drafts</span></div>
+        <div class="lane"><span class="nm">leads</span><span class="badge-nr">REHEARSAL</span><span class="note">live send = owner keystroke pending</span></div>
+        <div class="lane"><span class="nm">legal</span><span class="st">LIVE</span><span class="note">no open gate</span></div>
+        <div class="lane"><span class="nm">scheduler</span><span class="st">LIVE</span><span class="note">heartbeat on the tape</span></div>
+      </div>
+      <div class="lane-tail">9 more lanes, dormant · drawn dim, not gone</div>
+
+      <div class="admits">
+        <div class="sect">the record admits <span class="aux">said plainly</span></div>
+        <div class="arow"><span>policy engine</span><span>fixture-proven, unexercised</span></div>
+        <div class="arow"><span>evolve</span><span>unexercised</span></div>
+        <div class="arow"><span>ledger</span><span>mechanism proven, live value pending</span></div>
+        <div class="arow"><span>Mode B</span><span>NOT CERTIFIED</span></div>
+      </div>
+    </div>
+
+    <!-- ── centre: needs-you ── -->
+    <div class="centre">
+      <div class="hero">
+        <div class="ringbox">
+          <svg viewBox="0 0 340 340" aria-label="55 approval.requested raised, 42 decided, 13 open">
+            <g class="ring-halo">
+              <line x1="309.1" y1="153.7" x2="326.9" y2="151.7"/><line x1="310.0" y1="167.3" x2="328.0" y2="166.9"/><line x1="309.6" y1="180.8" x2="327.5" y2="182.2"/><line x1="307.9" y1="194.3" x2="325.6" y2="197.4"/><line x1="304.9" y1="207.5" x2="322.2" y2="212.4"/><line x1="300.6" y1="220.4" x2="317.4" y2="226.9"/><line x1="295.1" y1="232.8" x2="311.2" y2="240.9"/><line x1="288.4" y1="244.6" x2="303.7" y2="254.2"/><line x1="280.7" y1="255.8" x2="294.9" y2="266.8"/><line x1="271.8" y1="266.1" x2="284.9" y2="278.4"/><line x1="262.1" y1="275.5" x2="273.9" y2="289.0"/><line x1="251.4" y1="283.9" x2="261.9" y2="298.5"/><line x1="240.0" y1="291.2" x2="249.0" y2="306.8"/>
+            </g>
+            <g class="ring-decided">
+              <line x1="95.5" y1="299.0" x2="91.0" y2="306.8"/><line x1="83.4" y1="291.2" x2="78.1" y2="298.5"/><line x1="72.0" y1="282.3" x2="66.1" y2="289.0"/><line x1="61.6" y1="272.3" x2="55.1" y2="278.4"/><line x1="52.2" y1="261.3" x2="45.1" y2="266.8"/><line x1="43.9" y1="249.4" x2="36.3" y2="254.2"/><line x1="36.8" y1="236.9" x2="28.8" y2="240.9"/><line x1="31.0" y1="223.7" x2="22.6" y2="226.9"/><line x1="26.5" y1="210.0" x2="17.8" y2="212.4"/><line x1="23.3" y1="195.9" x2="14.4" y2="197.4"/><line x1="21.4" y1="181.5" x2="12.5" y2="182.2"/><line x1="21.0" y1="167.1" x2="12.0" y2="166.9"/><line x1="22.0" y1="152.7" x2="13.1" y2="151.7"/><line x1="24.4" y1="138.5" x2="15.6" y2="136.6"/><line x1="28.1" y1="124.5" x2="19.5" y2="121.8"/><line x1="33.2" y1="111.0" x2="24.9" y2="107.4"/><line x1="39.5" y1="98.0" x2="31.7" y2="93.7"/><line x1="47.1" y1="85.7" x2="39.7" y2="80.6"/><line x1="55.9" y1="74.2" x2="49.0" y2="68.4"/><line x1="65.7" y1="63.6" x2="59.4" y2="57.2"/><line x1="76.5" y1="54.0" x2="70.8" y2="47.0"/><line x1="88.1" y1="45.5" x2="83.2" y2="38.0"/><line x1="100.6" y1="38.2" x2="96.4" y2="30.2"/><line x1="113.6" y1="32.1" x2="110.2" y2="23.7"/><line x1="127.3" y1="27.3" x2="124.7" y2="18.6"/><line x1="141.3" y1="23.8" x2="139.6" y2="15.0"/><line x1="155.6" y1="21.7" x2="154.7" y2="12.7"/><line x1="170.0" y1="21.0" x2="170.0" y2="12.0"/><line x1="184.4" y1="21.7" x2="185.3" y2="12.7"/><line x1="198.7" y1="23.8" x2="200.4" y2="15.0"/><line x1="212.7" y1="27.3" x2="215.3" y2="18.6"/><line x1="226.4" y1="32.1" x2="229.8" y2="23.7"/><line x1="239.4" y1="38.2" x2="243.6" y2="30.2"/><line x1="251.9" y1="45.5" x2="256.8" y2="38.0"/><line x1="263.5" y1="54.0" x2="269.2" y2="47.0"/><line x1="274.3" y1="63.6" x2="280.6" y2="57.2"/><line x1="284.1" y1="74.2" x2="291.0" y2="68.4"/><line x1="292.9" y1="85.7" x2="300.3" y2="80.6"/><line x1="300.5" y1="98.0" x2="308.3" y2="93.7"/><line x1="306.8" y1="111.0" x2="315.1" y2="107.4"/><line x1="311.9" y1="124.5" x2="320.5" y2="121.8"/><line x1="315.6" y1="138.5" x2="324.4" y2="136.6"/>
+            </g>
+            <g class="ring-open">
+              <line x1="309.1" y1="153.7" x2="326.9" y2="151.7"/><line x1="310.0" y1="167.3" x2="328.0" y2="166.9"/><line x1="309.6" y1="180.8" x2="327.5" y2="182.2"/><line x1="307.9" y1="194.3" x2="325.6" y2="197.4"/><line x1="304.9" y1="207.5" x2="322.2" y2="212.4"/><line x1="300.6" y1="220.4" x2="317.4" y2="226.9"/><line x1="295.1" y1="232.8" x2="311.2" y2="240.9"/><line x1="288.4" y1="244.6" x2="303.7" y2="254.2"/><line x1="280.7" y1="255.8" x2="294.9" y2="266.8"/><line x1="271.8" y1="266.1" x2="284.9" y2="278.4"/><line x1="262.1" y1="275.5" x2="273.9" y2="289.0"/><line x1="251.4" y1="283.9" x2="261.9" y2="298.5"/><line x1="240.0" y1="291.2" x2="249.0" y2="306.8"/>
+            </g>
+          </svg>
+          <div class="ring-n">
+            <div class="big">13</div>
+            <div class="lab">approval.requested · open</div>
+          </div>
+        </div>
+        <div class="hero-text">
+          <h1>The machines built through the night.<br><span class="steady">Thirteen gates wait for your stamp.</span></h1>
+          <div class="hero-stats">
+            <div><b>55</b>raised, ever</div>
+            <div><b>42</b>decided by hand</div>
+            <div class="waits"><b>2 d 18 h</b>oldest has waited <span class="why">why?</span></div>
+          </div>
+          <div class="hero-note">A stamp is the one act no machine may perform here. Each one demands a typed reason, and each reason enters the record.</div>
+        </div>
+      </div>
+
+      <div class="queue">
+        <div class="qhead">
+          <div class="sect" style="margin-bottom:10px">ready to decide <span class="aux">most at risk first</span></div>
+          <span class="settled">already settled today &nbsp;<b>1 decision.recorded</b></span>
+        </div>
+
+        <!-- the decision at the top of the morning -->
+        <div class="card">
+          <div class="card-top">
+            <span class="profile">phase-done</span>
+            <span class="lane-ref">lane engine</span>
+            <span class="age"><span class="quiet">raised 16 Aug 18:23 ·</span> waited 2 d 18 h</span>
+          </div>
+          <h2>approve moving past phase 04 (engine)</h2>
+          <div class="ulid">01M05A4Y4QM54VRQWSNE9ENQMD</div>
+          <div class="evi">
+            <a>receipt drawer</a>
+            <a>supersedes chain</a>
+            <a>evidence bundle · phase-04</a>
+          </div>
+
+          <div class="stampzone">
+            <div class="stamp">
+              <div class="slab">the stamp <span class="rule">irreversible · a typed reason is required</span></div>
+              <div class="reason"><span class="caret"></span>Type the reason. It enters the record verbatim, and it cannot be unsaid.</div>
+              <div class="stamp-actions">
+                <button class="btn approve">Approve</button>
+                <button class="btn reject">Reject</button>
+                <span class="warn">Nothing happens until the reason is written.</span>
+              </div>
+            </div>
+            <div class="seal">
+              <svg class="disc" width="34" height="34" viewBox="0 0 34 34" fill="none">
+                <circle cx="17" cy="17" r="15.5" stroke="#666C77" stroke-width="1"/>
+                <circle cx="17" cy="17" r="11.5" stroke="#3F444D" stroke-width="1" stroke-dasharray="2 2.6"/>
+                <path d="M11.5 20.5 A 7 7 0 1 1 22.5 20.5" stroke="#A2A7B0" stroke-width="1.3" stroke-linecap="round"/>
+                <circle cx="17" cy="21" r="1.3" fill="#A2A7B0"/>
+              </svg>
+              <q>The stamp belongs to the owner alone. No agent, schedule, or default may ever hold it, and no button for it exists anywhere a machine can reach.</q>
+              <span class="cite">SEAL · ADR-1302 · one write path, mandatory reason</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <span class="t">escalate build-in-public-draft to a stronger tier</span>
+          <span class="profile" style="order:-1">engine-escalation</span>
+          <span class="u2">01M0ASG8…TY8Q</span>
+          <span class="age2">waited 14 h</span>
+          <span class="decide">decide</span>
+        </div>
+        <div class="row">
+          <span class="t">accept or reject build-in-public draft 1 of 3</span>
+          <span class="profile" style="order:-1">draft-verdict</span>
+          <span class="u2">01M0B663…1WJQ</span>
+          <span class="age2">waited 10 h</span>
+          <span class="decide">decide</span>
+        </div>
+        <div class="more"><b>10 more</b> wait behind these, in the same order the risk runs.</div>
+      </div>
+    </div>
+
+    <!-- ── right: money + today ── -->
+    <div class="side">
+      <div class="sect">money <span class="aux">honest-empty</span></div>
+      <div class="absent-plate">
+        <span class="absent-badge">ABSENT</span>
+        <div class="line1">No rupee has entered the record.</div>
+        <div class="line2">revenue.received · 0 receipts ever · mechanism proven, live value pending</div>
+      </div>
+      <div class="gap14"></div>
+      <div class="mrow"><span class="k">MRR</span><span class="v"><b>ABSENT</b> · derives from revenue.received</span></div>
+      <div class="mrow"><span class="k">kill-distance</span><span class="v"><b>NOT EVALUATED</b> · no criteria receipt for a live venture month</span></div>
+      <div class="mrow"><span class="k">costs</span><span class="v">cost.incurred <b>unexercised</b> · three lines, never totalled</span></div>
+      <div class="mrow"><span class="k">north-star</span><span class="v">₹ per owner-hour · <b>not instrumented</b></span></div>
+      <div class="money-law">Green belongs to real money only. This screen will not borrow it before it is earned.</div>
+
+      <div class="gap20"></div>
+
+      <div class="sect">today <span class="aux">appended in order</span></div>
+      <div class="feed">
+        <div class="frow"><span class="tm">01:55</span><span class="kd">kickoff.done</span><span class="dt">face lane, plan adopted</span></div>
+        <div class="frow"><span class="tm">01:55</span><span class="kd you">approval.requested</span><span class="dt">{gate: kickoff}</span></div>
+        <div class="frow"><span class="tm">09:03</span><span class="kd">decision.recorded</span><span class="dt">approve · reason on file</span></div>
+        <div class="frow"><span class="tm">10:36</span><span class="kd">note.logged</span><span class="dt">jury confound closed</span></div>
+        <div class="frow"><span class="tm">11:42</span><span class="kd">content.published</span><span class="dt">post 3 · owner OK on file</span></div>
+      </div>
+      <div class="feed-tail">The tape runs on. Every line above is a receipt; none is a summary.</div>
+
+      <div class="quarantine">
+        <div class="sect">held apart <span class="aux">never on the tape</span></div>
+        <div class="qtext">245 records were refused at the door · 231 of them duplicates. None is counted among the 1,150, and none was thrown away.</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ═══ footer: the colour law ═══ -->
+  <footer>
+    <span class="derive">Every number here is derived at read time, through the door. Nothing is a stored copy.</span>
+    <div class="law">
+      <span class="sw a"><i></i> needs-you</span>
+      <span class="sw g"><i></i> real money <span class="never">· never yet</span></span>
+      <span class="sw r"><i></i> incident <span class="never">· none ever</span></span>
+      <span class="sw v"><i></i> SIMULATED / REHEARSAL / DRILL</span>
+    </div>
+  </footer>
+</div>
+</body>
+</html>

@@ -1,11 +1,31 @@
 {
   "name": "git",
   "version": "1.0.0",
-  "requires": ["core"],
+  "requires": [
+    "core"
+  ],
   "commands": [
     ".claude/commands/arc-commit.md",
     ".claude/commands/arc-pr.md",
     ".claude/commands/arc-fix-issue.md",
     ".claude/commands/arc-ship.md"
-  ]
+  ],
+  "face": {
+    "room": "review-ship",
+    "ring": "factory",
+    "kinds": [
+      "commit.done",
+      "qa.completed",
+      "review.completed",
+      "ship.done"
+    ],
+    "sanctioned": [
+      ".claude/state/{reviews,scan,rls}",
+      "docs/reviews",
+      "docs/security",
+      "docs/qa"
+    ],
+    "stations": [],
+    "concepts": []
+  }
 }

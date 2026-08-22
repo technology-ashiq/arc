@@ -1,0 +1,2 @@
+ERR  [brief-unreadable] docs/design/briefs/face-hq/brief.md: brief not found or unreadable
+design-lint: 1 error(s)

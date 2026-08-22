@@ -19,8 +19,9 @@
 // Test-only env doors (never set in production): ARC_SPINE_ROOT, ARC_SPINE_NOW,
 // ARC_SPINE_RAND, ARC_SPINE_LOCK_TIMEOUT_MS, ARC_SPINE_LOCK_STALE_MS.
 
-import { readFileSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   MAX_EVENT_BYTES, SpineError, canonicalize, dayOf, eventSha, formatIst, newUlid, nowMs,
   parseStrictJson, readJsonFile, sha256Hex,
@@ -35,6 +36,24 @@ import {
   appendEvent, appendEventUnlocked, dayFile, fileSha, isDayClosed,
   quarantine, spineRoot, withLock, writeCloseMarker,
 } from "./lib/spine-io.mjs";
+
+/**
+ * "Was this file RUN, or imported?" -- with realpath on BOTH sides.
+ *
+ * The cheap form (`process.argv[1].endsWith("arc-event.mjs")`) is what the sibling modules
+ * use, and it silently answers NO behind a symlink or a differently-spelled path: the guard
+ * no-ops and the CLI never runs, which is a failure this repo has now hit three separate
+ * times. Resolving both sides makes the comparison about the FILE rather than the spelling.
+ * A realpath that throws (the path is gone) means "not main" -- refusing to run is the safe
+ * direction for the one module whose main() WRITES to the spine.
+ */
+function isMainModule() {
+  try {
+    const invoked = process.argv[1];
+    if (!invoked) return false;
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+}
 
 const PROCESS_ID = "arc-event@1.0.0";
 // A hook must never hold a session up waiting for a lock; CI can afford to wait it out.
@@ -404,6 +423,16 @@ function readSourceText(flags) {
 
 // Hook mode's promise -- "never blocks" -- is only as good as this handler: EVERY failure
 // path below has to end in exit 0 when strict is off, including a failure to quarantine.
+//
+// GUARDED, 2026-08-19 (face lane adversarial pass). This was the FIFTH sibling and the one
+// that never got the fix: spine.mjs, arc-inbox.mjs, arc-brief.mjs and arc-pnl.mjs all gate
+// their CLI on argv[1], and this file -- the emitter, the one module whose main() WRITES --
+// ran its main at import time and called process.exit() inside whatever imported it. A
+// process.exit is not catchable by an uncaughtException handler, so the obvious future
+// optimisation (import the emitter instead of spawning it on the hot /api/decide path)
+// would have taken the whole HQ down on the first decision. Nothing imports it today; that
+// is luck, not design. Grep the pattern, not the file.
+if (isMainModule()) {
 try {
   process.exit(main(parsed));
 } catch (err) {
@@ -446,4 +475,5 @@ try {
   }
   process.stderr.write(`arc-event: SKIP ${code} -- ${message} (quarantined, session unaffected)\n`);
   process.exit(0);
+}
 }

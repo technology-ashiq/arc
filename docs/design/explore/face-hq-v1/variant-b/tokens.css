@@ -1,0 +1,95 @@
+/* variant-b tokens — the ONLY place colour values live for this variant.
+   thesis: This product wins because the user can see where every line is in
+   flight and which stamp stations hold an open gate in one glance at one
+   picture, without opening a session or reading a list.
+
+   Art direction: paper-first cartographic. Warm paper ground, ink linework.
+   Transit lines are told apart by WEIGHT, DASH and INK-TINT — never hue.
+   Hue is spent on exactly four reserved meanings and nothing else:
+   amber = needs-you · green = real money · red = incident · hatched violet
+   = every non-real class (SIMULATED / REHEARSAL / DRILL / EXPLORATORY).
+
+   Every pair this file declares is measured against WCAG 2.1 contrast math
+   (sRGB relative luminance) by hand at compose time; ratios are noted next
+   to each declaration. Brief's own declared pairs (prose, meta amber) are
+   carried through unchanged; every OTHER reserved-colour-on-paper pairing
+   below is this variant's own measurement, as B is required to make. */
+
+:root {
+  /* ---------- grounds — warm paper, one hue family, elevation by tone only ---------- */
+  --paper:        #F7F5F0;   /* base ground — brief-declared */
+  --paper-deep:   #EFEAE0;   /* legend / pinned station-panel surface — 14.4:1 ink, 5.9:1 meta */
+  --paper-edge:   #E3DCC9;   /* closed stamp-station fill / table zebra, quiet — decorative only */
+
+  /* ---------- ink scale — the whole line-weight system lives here ---------- */
+  --ink:          #1A1B1E;   /* prose + Golden Loop stroke (100%) — 15.8:1 on paper */
+  --ink-85:       #3B3C3E;   /* Spine ring + LIVE lane stroke, station labels */
+  --ink-70:       #5C5C5D;   /* secondary text, station meta — 6.13:1 on paper */
+  --ink-45:       #949392;   /* IDLE lane stroke — decorative, redundant with label text */
+  --ink-25:       #C0BFBC;   /* snap-grid guide lines only, never carries meaning alone */
+  --ink-meta:     #5B5852;   /* muted meta prose on paper — 6.51:1 */
+  --rule:         #8C8171;   /* hairline dividers / table rules — 3.51:1 (non-text floor) */
+
+  /* ---------- the four reserved hues — meaning fixed, re-toned for THIS paper ---------- */
+  --needs-you-amber:  #92400E;  /* brief-declared paper pair — 6.51:1 on --paper */
+  --money-real-green: #186B2B;  /* measured for this ground — 6.07:1 on --paper */
+  --incident-red:     #A32A1E;  /* measured for this ground — 6.63:1 on --paper */
+  --nonreal-violet:   #5B3A8E;  /* measured for this ground — 7.90:1 on --paper */
+
+  /* light washes of the same four hues — FILL ONLY, never carry text meaning alone */
+  --needs-you-amber-wash: #F0C48A;  /* stamp-station square fill, open gate — ink text on it: 10.6:1 */
+  --incident-red-wash:    #E3B3AC;  /* station-reddens fill, legend-only (0 open today) */
+  --nonreal-violet-wash:  #D9CBEE;  /* hatch background tone */
+
+  --focus-ring: #1E5FCC;  /* visible-focus outline, never reused as data colour — 5.41:1 on --paper */
+
+  /* ---------- semantic aliases (still every value traces to one literal above) ---------- */
+  --surface:        var(--paper);
+  --surface-alt:    var(--paper-deep);
+  --surface-edge:   var(--paper-edge);
+  --text:           var(--ink);
+  --text-quiet:     var(--ink-70);
+  --text-muted:     var(--ink-meta);
+  --line-heavy:     var(--ink);      /* Golden Loop */
+  --line-strong:    var(--ink-85);   /* Spine ring, LIVE lanes */
+  --line-mid:       var(--ink-70);   /* dashed unexercised stroke */
+  --line-quiet:     var(--ink-45);   /* IDLE lanes */
+  --line-faint:     var(--ink-25);   /* snap-grid substrate */
+  --hairline:       var(--rule);
+
+  /* ---------- type — geometric grotesque, Unimark register ---------- */
+  --font-map: "Univers Next", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  /* five real steps: ring / line / station / station-meta / legend */
+  --step-ring:    2.125rem;  /* 34px */
+  --step-line:    1.375rem;  /* 22px */
+  --step-station: 0.9375rem;/* 15px */
+  --step-meta:    0.75rem;  /* 12px */
+  --step-legend:  0.625rem; /* 10px */
+
+  --tracking-wide:  0.06em;
+  --tracking-wider: 0.14em;
+  --leading-tight:  1.15;
+  --leading-read:   1.5;
+
+  /* ---------- 8pt grid, airy spatial rhythm ---------- */
+  --space-1: 0.5rem;   /* 8  */
+  --space-2: 1rem;     /* 16 */
+  --space-3: 1.5rem;   /* 24 */
+  --space-4: 2rem;     /* 32 */
+  --space-5: 3rem;     /* 48 */
+  --space-6: 4rem;     /* 64 */
+  --space-7: 6rem;     /* 96 */
+
+  --radius: 0px;        /* flat — linework carries the system, not boxes */
+  --stroke-heavy: 4.5px;
+  --stroke-strong: 3px;
+  --stroke-mid: 2px;
+  --stroke-quiet: 1.5px;
+
+  --motion-fast: 200ms;
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  --target-min: 44px;
+}

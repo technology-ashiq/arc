@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>arc — command</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════════════════════════════════════
+   arc face — v2.
+   The v1 round scored 18/100 and deserved it: four variants of tiny monospace
+   on flat near-black, no hierarchy, no depth, no focal point. That is not a
+   composer failure, it is a BRIEF failure — the brief asked for "cold ink
+   monochrome, dense, keyboard-first" and got exactly that, which is the
+   boring-tech template with better manners.
+
+   What changed here:
+   · DEPTH. The canvas is lit, not painted. Layered surfaces, a real light
+     source, shadows that belong to the dark rather than sitting on it.
+   · HIERARCHY BY SCALE. The number that decides your morning is 96px. The
+     label above it is 10px. v1 rendered both at 13px and called it density.
+   · A LIVING MARK. The ring is one segment per born lane, lit by status,
+     breathing on the scheduler heartbeat. The company's pulse, not a logo.
+   · MATERIAL WHERE IT MEANS SOMETHING. The stamp is the only physical object
+     in the product, because it is the only irreversible act.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* ── canvas. Not #000: a cool near-black that can hold a light source. ── */
+  --void:        #07080A;
+  --canvas:      #0A0B0E;
+  --surface:     rgba(255,255,255,.028);
+  --surface-2:   rgba(255,255,255,.052);
+  --edge:        rgba(255,255,255,.07);
+  --edge-bright: rgba(255,255,255,.14);
+
+  /* ── ink. Four steps, wide apart. v1 had three, all similar, which is why
+        nothing on it had a foreground. ── */
+  --ink:   #F2F3F5;
+  --ink-2: #9AA0AA;
+  --ink-3: #5E646E;
+  --ink-4: #3A3F47;
+
+  /* ── the four reserved meanings. Nothing else may borrow them. ── */
+  --amber:  #FFB224;   /* needs-you */
+  --green:  #3FB950;   /* real money */
+  --red:    #F85149;   /* incident */
+  --violet: #A371F7;   /* every non-real class, always hatched */
+
+  --amber-glow: rgba(255,178,36,.16);
+  --amber-dim:  rgba(255,178,36,.30);
+
+  --font-ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --r: 10px;
+}
+
+*{box-sizing:border-box; margin:0; padding:0}
+html{-webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale}
+
+body{
+  background:var(--void);
+  color:var(--ink);
+  font-family:var(--font-ui);
+  font-size:14px;
+  line-height:1.5;
+  min-height:100dvh;
+  /* THE LIGHT SOURCE. One warm point, top-left, behind everything. This single
+     gradient is most of the difference between "designed" and "painted grey". */
+  background-image:
+    radial-gradient(900px 620px at 12% -6%, rgba(255,178,36,.055), transparent 62%),
+    radial-gradient(1100px 800px at 92% 4%, rgba(120,140,255,.035), transparent 60%);
+  background-attachment:fixed;
+}
+
+/* film grain — fixed, pointer-events none, never on a scrolling container */
+body::after{
+  content:""; position:fixed; inset:0; z-index:100; pointer-events:none; opacity:.16;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.42'/%3E%3C/svg%3E");
+}
+
+.shell{display:grid; grid-template-columns:236px 1fr; min-height:100dvh}
+
+/* ═══ RAIL ═══════════════════════════════════════════════════════════════ */
+.rail{
+  border-right:1px solid var(--edge);
+  padding:26px 18px 22px;
+  display:flex; flex-direction:column; gap:26px;
+  background:linear-gradient(180deg, rgba(255,255,255,.018), transparent 42%);
+}
+.brand{display:flex; align-items:center; gap:12px}
+.brand-name{font-size:15px; font-weight:600; letter-spacing:-.02em}
+.brand-sub{font-family:var(--font-mono); font-size:9.5px; color:var(--ink-3); letter-spacing:.14em; text-transform:uppercase; margin-top:2px}
+
+.nav{display:flex; flex-direction:column; gap:1px}
+.nav-group{font-family:var(--font-mono); font-size:9px; letter-spacing:.16em; color:var(--ink-4);
+  text-transform:uppercase; padding:14px 10px 6px}
+.nav a{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 10px; border-radius:7px; color:var(--ink-2);
+  text-decoration:none; font-size:13px; transition:background .16s, color .16s;
+}
+.nav a:hover{background:var(--surface); color:var(--ink)}
+.nav a.on{background:var(--surface-2); color:var(--ink)}
+.nav a.on::before{content:""; position:absolute; left:0; width:2px; height:16px; background:var(--amber); border-radius:2px}
+.nav a{position:relative}
+.count{font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3)}
+.count.hot{color:var(--amber)}
+.dim{color:var(--ink-4)}
+
+.mode{
+  margin-top:auto; display:flex; align-items:center; gap:8px;
+  font-family:var(--font-mono); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--ink-3); padding:8px 10px; border:1px solid var(--edge); border-radius:7px;
+}
+.mode b{color:var(--ink-2); font-weight:500}
+.pulse-dot{width:5px; height:5px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green)}
+
+/* ═══ MAIN ═══════════════════════════════════════════════════════════════ */
+main{padding:34px 40px 80px; max-width:1320px}
+
+.topline{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:34px}
+.date{font-size:13px; color:var(--ink-2)}
+.date b{color:var(--ink); font-weight:500}
+.since{font-family:var(--font-mono); font-size:11px; color:var(--ink-3)}
+
+/* ── THE MOMENT. One number, enormous, and the ring beside it. ────────────
+   v1's hero was a 13px row that said "needs-you (5)". This is the same fact
+   at the size of its actual importance. ─────────────────────────────────── */
+.moment{
+  display:grid; grid-template-columns:auto 1fr; gap:40px; align-items:center;
+  padding:30px 34px; margin-bottom:14px;
+  border:1px solid var(--edge); border-radius:16px;
+  background:
+    radial-gradient(560px 260px at 8% 0%, var(--amber-glow), transparent 66%),
+    var(--surface);
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset, 0 24px 60px -30px rgba(0,0,0,.9);
+}
+.ring-wrap{position:relative; width:132px; height:132px}
+.ring-centre{
+  position:absolute; inset:0; display:grid; place-content:center; text-align:center;
+}
+.ring-num{font-size:40px; font-weight:600; letter-spacing:-.04em; line-height:1; color:var(--amber)}
+.ring-lbl{font-family:var(--font-mono); font-size:8.5px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-3); margin-top:5px}
+@keyframes breathe{0%,100%{opacity:.5} 50%{opacity:.95}}
+.heartbeat{animation:breathe 4.2s ease-in-out infinite; transform-origin:center}
+@media (prefers-reduced-motion:reduce){.heartbeat{animation:none; opacity:.8}}
+
+.moment-copy .eyebrow{
+  font-family:var(--font-mono); font-size:9.5px; letter-spacing:.2em;
+  text-transform:uppercase; color:var(--amber); margin-bottom:12px;
+}
+.moment-copy h1{
+  font-size:44px; line-height:1.06; font-weight:600; letter-spacing:-.035em; margin-bottom:12px;
+}
+.moment-copy h1 em{font-style:italic; color:var(--amber); font-weight:600}
+.moment-copy p{font-size:14.5px; color:var(--ink-2); max-width:62ch}
+.moment-copy p code{font-family:var(--font-mono); font-size:12.5px; color:var(--ink)}
+
+/* ── the queue ─────────────────────────────────────────────────────────── */
+.queue{display:flex; flex-direction:column; gap:10px; margin-bottom:34px}
+
+.appr{
+  display:grid; grid-template-columns:1fr auto; gap:24px; align-items:center;
+  padding:16px 20px; border:1px solid var(--edge); border-radius:12px;
+  background:var(--surface); transition:border-color .18s, background .18s, transform .18s;
+}
+.appr:hover{border-color:var(--edge-bright); background:var(--surface-2); transform:translateY(-1px)}
+.appr.lead{
+  border-color:var(--amber-dim);
+  background:linear-gradient(90deg, rgba(255,178,36,.07), var(--surface) 44%);
+}
+.appr-main{min-width:0}
+.appr-kind{
+  font-family:var(--font-mono); font-size:10px; letter-spacing:.06em;
+  color:var(--amber); margin-bottom:6px;
+}
+.appr-what{font-size:15px; font-weight:500; letter-spacing:-.012em; margin-bottom:7px}
+.appr-meta{display:flex; gap:14px; font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3)}
+.appr-meta span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+
+.stampset{display:flex; align-items:center; gap:9px}
+/* THE STAMP. The only physical object in the product, because it is the only
+   irreversible act. It presses. Everything else is flat on purpose. */
+.stamp{
+  font-family:var(--font-ui); font-size:12px; font-weight:600; letter-spacing:.04em;
+  padding:9px 18px; min-height:38px; border-radius:8px; cursor:pointer;
+  border:1px solid var(--edge-bright); color:var(--ink-2); background:var(--surface-2);
+  box-shadow:0 1px 0 rgba(255,255,255,.07) inset, 0 2px 0 rgba(0,0,0,.5);
+  transition:transform .09s, box-shadow .09s, color .16s, border-color .16s;
+}
+.stamp:hover{color:var(--ink); border-color:rgba(255,255,255,.24)}
+.stamp:active{transform:translateY(2px); box-shadow:0 0 0 rgba(0,0,0,0) inset, 0 0 0 rgba(0,0,0,0)}
+.stamp.go{color:#1A1206; background:var(--amber); border-color:var(--amber);
+  box-shadow:0 1px 0 rgba(255,255,255,.34) inset, 0 2px 0 #7A5310, 0 8px 22px -10px var(--amber)}
+.stamp.go:hover{filter:brightness(1.06)}
+.stamp:disabled{opacity:.4; cursor:not-allowed; box-shadow:none}
+.reason-hint{
+  font-family:var(--font-mono); font-size:9.5px; color:var(--ink-4);
+  text-align:right; margin-top:6px; letter-spacing:.02em;
+}
+
+/* ── strip: three honest facts, three different weights ─────────────────── */
+.strip{display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:34px}
+.fact{
+  padding:20px 22px; border:1px solid var(--edge); border-radius:12px; background:var(--surface);
+  position:relative; overflow:hidden;
+}
+.fact .k{font-family:var(--font-mono); font-size:9.5px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--ink-3); margin-bottom:14px}
+.fact .v{font-size:38px; font-weight:600; letter-spacing:-.04em; line-height:1; margin-bottom:8px}
+.fact .v.money{color:var(--green)}
+.fact .n{font-size:12.5px; color:var(--ink-3); line-height:1.45}
+.why{
+  position:absolute; top:16px; right:18px; font-family:var(--font-mono); font-size:9.5px;
+  color:var(--ink-4); border:1px solid var(--edge); border-radius:5px; padding:2px 6px;
+  cursor:help; transition:color .16s, border-color .16s;
+}
+.why:hover{color:var(--amber); border-color:var(--amber-dim)}
+.hatch{
+  background-image:repeating-linear-gradient(-45deg, rgba(163,113,247,.15) 0 6px, transparent 6px 12px);
+}
+
+/* ── pulse: today's receipts as a stream, not a table ──────────────────── */
+.section-h{
+  display:flex; align-items:baseline; justify-content:space-between; margin-bottom:16px;
+}
+.section-h h2{font-size:17px; font-weight:600; letter-spacing:-.022em}
+.section-h .aside{font-family:var(--font-mono); font-size:10.5px; color:var(--ink-3)}
+
+.pulse{border:1px solid var(--edge); border-radius:12px; background:var(--surface); overflow:hidden}
+.rcpt{
+  display:grid; grid-template-columns:74px 190px 1fr auto; gap:18px; align-items:center;
+  padding:11px 20px; border-bottom:1px solid rgba(255,255,255,.045);
+  font-size:13px; transition:background .14s;
+}
+.rcpt:last-child{border-bottom:none}
+.rcpt:hover{background:rgba(255,255,255,.022)}
+.rcpt .t{font-family:var(--font-mono); font-size:11px; color:var(--ink-4)}
+.rcpt .kind{font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2)}
+.rcpt .kind.new{color:var(--amber)}
+.rcpt .what{color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rcpt .ulid{font-family:var(--font-mono); font-size:10px; color:var(--ink-4)}
+
+footer{margin-top:38px; padding-top:20px; border-top:1px solid var(--edge);
+  font-family:var(--font-mono); font-size:10px; color:var(--ink-4); letter-spacing:.04em}
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <aside class="rail">
+    <div class="brand">
+      <svg width="30" height="30" viewBox="0 0 40 40" aria-hidden="true">
+        <circle cx="20" cy="20" r="15" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="2.5"/>
+        <path d="M20 5 a15 15 0 0 1 13 7.5" fill="none" stroke="var(--amber)" stroke-width="2.5" stroke-linecap="round"/>
+        <circle cx="20" cy="20" r="3.2" fill="var(--amber)"/>
+      </svg>
+      <div>
+        <div class="brand-name">arc</div>
+        <div class="brand-sub">command</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-group">command</div>
+      <a class="on" href="#">Today <span class="count hot">13</span></a>
+      <a href="#">Inbox <span class="count hot">13</span></a>
+      <a href="#">Map <span class="count dim">18</span></a>
+      <a href="#">Spine <span class="count dim">1,150</span></a>
+      <a href="#">Board <span class="count dim">16</span></a>
+      <a href="#">Ask arc</a>
+
+      <div class="nav-group">money</div>
+      <a href="#">Money <span class="count dim">₹0</span></a>
+      <a href="#">Growth <span class="count dim">06</span></a>
+      <a href="#">Leads <span class="count dim">03</span></a>
+      <a href="#">Legal <span class="count dim">00</span></a>
+
+      <div class="nav-group">kernel</div>
+      <a href="#">Engine <span class="count dim">06</span></a>
+      <a href="#">Scheduler <span class="count dim">03</span></a>
+      <a href="#">Policy <span class="count dim">idle</span></a>
+    </nav>
+
+    <div class="mode">
+      <span class="pulse-dot"></span> <b>live</b> · canonical spine
+    </div>
+  </aside>
+
+  <main>
+    <div class="topline">
+      <div class="date">Tuesday <b>19 August 2026</b> · 02:14 IST</div>
+      <div class="since">since you left — 4 receipts, 2 need you</div>
+    </div>
+
+    <!-- THE MOMENT -->
+    <section class="moment">
+      <div class="ring-wrap">
+        <svg width="132" height="132" viewBox="0 0 132 132" aria-label="16 born lanes, 7 live">
+          <g class="heartbeat">
+            <circle cx="66" cy="66" r="57" fill="none" stroke="rgba(255,178,36,.07)" stroke-width="10"/>
+          </g>
+          <!-- one segment per born lane; lit = LIVE. 16 lanes, 7 live. -->
+          <circle cx="66" cy="66" r="57" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="2.5"
+                  stroke-dasharray="19 3.4"/>
+          <circle cx="66" cy="66" r="57" fill="none" stroke="var(--amber)" stroke-width="2.5"
+                  stroke-dasharray="19 3.4" stroke-dashoffset="0"
+                  style="stroke-dasharray:19 3.4; clip-path:inset(0 0 0 0)"
+                  pathLength="16" stroke-dashoffset="0"/>
+          <circle cx="66" cy="66" r="57" fill="none" stroke="var(--void)" stroke-width="3.4"
+                  pathLength="16" stroke-dasharray="9 7" stroke-dashoffset="-7" opacity=".92"/>
+          <circle cx="66" cy="66" r="48" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="1"/>
+        </svg>
+        <div class="ring-centre">
+          <div class="ring-num">13</div>
+          <div class="ring-lbl">need you</div>
+        </div>
+      </div>
+
+      <div class="moment-copy">
+        <div class="eyebrow">approval.requested</div>
+        <h1>Thirteen decisions are<br>waiting on <em>you</em>.</h1>
+        <p>Nothing else in the company is blocked on anything else. 55 raised, 42 decided — the
+          difference is your queue. Every one of them is a <code>reason</code> you type and a stamp
+          nobody else can press.</p>
+      </div>
+    </section>
+
+    <!-- THE QUEUE -->
+    <div class="queue">
+      <article class="appr lead">
+        <div class="appr-main">
+          <div class="appr-kind">phase-done · engine</div>
+          <div class="appr-what">approve moving past phase 04 — the day-5 kill checkpoint is 0.5d away with REQ-02 uncertified</div>
+          <div class="appr-meta">
+            <span>01M05A4Y4QM54VRQWSNE9ENQMD</span><span>raised 4d ago</span><span>oldest open</span>
+          </div>
+        </div>
+        <div>
+          <div class="stampset">
+            <button class="stamp">Reject</button>
+            <button class="stamp go">Approve</button>
+          </div>
+          <div class="reason-hint">a reason is required</div>
+        </div>
+      </article>
+
+      <article class="appr">
+        <div class="appr-main">
+          <div class="appr-kind">draft-verdict · engine</div>
+          <div class="appr-what">accept or reject build-in-public draft 1 of 3, with one line of reason</div>
+          <div class="appr-meta"><span>01M0B663APQMV49EQR9AGR1WJQ</span><span>raised today</span></div>
+        </div>
+        <div>
+          <div class="stampset">
+            <button class="stamp">Reject</button>
+            <button class="stamp go">Approve</button>
+          </div>
+          <div class="reason-hint">a reason is required</div>
+        </div>
+      </article>
+
+      <article class="appr">
+        <div class="appr-main">
+          <div class="appr-kind">engine-escalation · engine</div>
+          <div class="appr-what">escalate build-in-public-draft to a stronger tier</div>
+          <div class="appr-meta"><span>01M0ASG8JG8X6PQ0045MJ6TY8Q</span><span>raised today</span><span>4 of this kind</span></div>
+        </div>
+        <div>
+          <div class="stampset">
+            <button class="stamp">Reject</button>
+            <button class="stamp go">Approve</button>
+          </div>
+          <div class="reason-hint">a reason is required</div>
+        </div>
+      </article>
+    </div>
+
+    <!-- THREE HONEST FACTS -->
+    <div class="strip">
+      <div class="fact">
+        <div class="why">Why?</div>
+        <div class="k">real revenue</div>
+        <div class="v money">₹0</div>
+        <div class="n">An absent number, not a small one. <code>revenue.received</code> has never fired.
+          Mechanism proven, live value pending.</div>
+      </div>
+      <div class="fact">
+        <div class="why">Why?</div>
+        <div class="k">the spine</div>
+        <div class="v">1,150</div>
+        <div class="n">receipts across 22 days, 21 sealed. 14 of 46 kinds have ever fired — the
+          rest are drawn unexercised, never as zero.</div>
+      </div>
+      <div class="fact hatch">
+        <div class="why">Why?</div>
+        <div class="k">kill distance</div>
+        <div class="v" style="color:var(--violet)">NOT EVALUATED</div>
+        <div class="n">No criteria receipt exists for a live venture month. This is not a
+          zero and it is not a pass.</div>
+      </div>
+    </div>
+
+    <!-- THE PULSE -->
+    <div class="section-h">
+      <h2>Today</h2>
+      <div class="aside">7 receipts · 2 decisions · 0 incidents</div>
+    </div>
+    <div class="pulse">
+      <div class="rcpt">
+        <span class="t">02:11</span><span class="kind new">decision.recorded</span>
+        <span class="what">PICK: variant-a as the structural base, with two named grafts</span>
+        <span class="ulid">01M0CFT…</span>
+      </div>
+      <div class="rcpt">
+        <span class="t">02:08</span><span class="kind">approval.requested</span>
+        <span class="what">pick the face-hq-v1 design thesis and record its prediction</span>
+        <span class="ulid">01M0CFR…</span>
+      </div>
+      <div class="rcpt">
+        <span class="t">01:47</span><span class="kind">note.logged</span>
+        <span class="what">face-coverage: 46 kinds, 16 lanes, 26 commands, 30 agents — all covered</span>
+        <span class="ulid">01M0CAF…</span>
+      </div>
+      <div class="rcpt">
+        <span class="t">00:36</span><span class="kind">decision.recorded</span>
+        <span class="what">approve the plan to start building — "pannu; WIP 6 vs guideline 2 acknowledged"</span>
+        <span class="ulid">01M0B8T…</span>
+      </div>
+      <div class="rcpt">
+        <span class="t">00:14</span><span class="kind">content.published</span>
+        <span class="what">What a receipt-driven build system actually costs you</span>
+        <span class="ulid">01M0B30…</span>
+      </div>
+    </div>
+
+    <footer>arc face v2 · one write path · every number derived at read time · localhost + token</footer>
+  </main>
+</div>
+</body>
+</html>
