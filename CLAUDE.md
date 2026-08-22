@@ -45,8 +45,11 @@
   program wants any of those three characters, it belongs in its own file.
 - Code review ALWAYS runs through the `code-reviewer` agent (Task `subagent_type: code-reviewer`),
   never ad-hoc `general-purpose` reviewers — that agent is where the scanners + review method live.
-- Impact questions (callers, dependents, schema-dependent queries): query the **Graphify
-  knowledge graph first** — the index auto-refreshes at session start. Grep is the fallback.
+- Impact questions (callers, dependents, schema-dependent queries): **codegraph first**
+  (`codegraph explore`, or the MCP) — it is local, exact, and free of LLM tokens. Graphify's
+  `graphify-out/` **does NOT auto-refresh in arc** and answers from whenever it was last built
+  by hand: check its date before trusting it, and rebuild with `graphify update .` (a real
+  token cost) or fall back to grep. Details → `CLAUDE.local.md` § Graphify facts.
 - **Model tiers are law, not taste** — `docs/adr/0069-balanced-model-policy.md`. Changing any
   agent's frontmatter `model:` is a production tier change: it is a reviewed diff that cites
   that ADR, never a quiet edit. Tiers are *cheap-scan · balanced-workhorse · high-judgment ·
