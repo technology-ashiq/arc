@@ -61,9 +61,16 @@ test-results/
 *.wt
 **/.wt
 
-# Graphify: fully local + regenerable (rebuilds each session via the SessionStart hook)
-# and holds machine-specific paths (.graphify_root, .graphify_python) — never commit any of it.
+# Graphify: fully local + regenerable, and holds machine-specific paths (.graphify_root,
+# .graphify_python) — never commit any of it. It does NOT rebuild itself here: the global
+# auto-update hook is GSD-gated on .planning/config.json, which arc has not got, so this index
+# is only ever as fresh as the last manual `graphify update .` (checked 2026-08-22).
 graphify-out/
+
+# CodeGraph: local SQLite symbol/edge index (.codegraph/codegraph.db, ~14MB, machine-local
+# and regenerable via `codegraph init .`). Ignoring the whole directory keeps its own stray
+# .gitignore out of the tree too.
+.codegraph/
 
 # Codex
 .codex
