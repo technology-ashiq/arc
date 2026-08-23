@@ -1021,15 +1021,38 @@ arc_leave_the_repo() {
 # tenure refusal here would be a different test failing for a reason it does not name.
 _arc_runtime_grant_root() {
   local dest="$1" src="${2:-$ARC_ROOT}"
-  mkdir -p "$dest/engine" "$dest/processes" "$dest/.claude"
-  cp -r "$src/.claude/scripts" "$dest/.claude/"
+  mkdir -p "$dest/engine" "$dest/processes" "$dest/.claude/scripts" "$dest/tests/fixtures/engine/evals"
+  # `src/.` INTO an existing directory, never `src` into its parent. GNU cp merges either way; BSD
+  # `cp -R` on the macOS leg copies the directory INTO an existing target, producing
+  # `.claude/scripts/scripts` and a root with no driver at all. This helper is shared API with two
+  # callers now, so the flavour-dependent spelling is not something to leave to luck.
+  cp -r "$src/.claude/scripts/." "$dest/.claude/scripts/"
   cp "$src/processes/commit-msg-draft.process.yaml" "$dest/processes/"
   # The eval fixture rides along: arc-run reads it to decide whether a bad answer is the DRIVER's
   # fault or the PROCESS's, and without it every schema failure would be blamed on the process.
-  if [ -d "$src/tests/fixtures/engine/evals/commit-msg-draft" ]; then
-    mkdir -p "$dest/tests/fixtures/engine/evals"
-    cp -r "$src/tests/fixtures/engine/evals/commit-msg-draft" "$dest/tests/fixtures/engine/evals/"
-  fi
+  #
+  # UNCONDITIONAL, because the `if [ -d ... ]` it replaces was FAIL-OPEN and no test could see it.
+  # Rename the source directory -- the ordinary shape of a later refactor moving a fixture -- and
+  # the copy silently stopped happening while all 25 tests in the consuming suite stayed green.
+  # The sibling `cp` one line up is unguarded and therefore aborts the whole file under errexit,
+  # which is the behaviour worth having: a fixture builder that degrades quietly is a silent-pass
+  # generator.
+  cp -r "$src/tests/fixtures/engine/evals/commit-msg-draft" "$dest/tests/fixtures/engine/evals/"
+
+  # THE BUILDER ASSERTS ITS OWN FIXTURE, because exit 0 from a copy is not evidence anything was
+  # copied. A `.claude/scripts` that came out EMPTY -- a sparse checkout, a consumer repo, a
+  # partial copy -- left `setup_file` returning 0 and 8 of 25 tests still reporting `ok`, with the
+  # real failure surfacing far downstream as `driver hermes not installed` and
+  # `arc-event.sh: No such file or directory`. Both files below are load-bearing: one is the
+  # driver, the other is the emitter every receipt goes through.
+  [ -f "$dest/.claude/scripts/engine/drivers/hermes.sh" ] \
+    || { echo "_arc_runtime_grant_root: the driver did not land in $dest"; return 1; }
+  [ -f "$dest/.claude/scripts/hq/arc-event.sh" ] \
+    || { echo "_arc_runtime_grant_root: the emitter did not land in $dest"; return 1; }
+  [ -f "$dest/processes/commit-msg-draft.process.yaml" ] \
+    || { echo "_arc_runtime_grant_root: the process did not land in $dest"; return 1; }
+  [ -d "$dest/tests/fixtures/engine/evals/commit-msg-draft" ] \
+    || { echo "_arc_runtime_grant_root: the eval fixture did not land in $dest"; return 1; }
   cat > "$dest/engine/router.yaml" <<'GRANTYAML'
 version: 1
 tiers:
