@@ -104,3 +104,94 @@ load 'test_helper'
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"RAN: contract carries"* ]] || { echo "$output"; false; }
 }
+
+# ---------- the room registry (Phase 04/06 -- what the generic renderer reads) ----------
+#
+# The registry is generated from two files: expected-set.json (frozen, structural) and
+# room-copy.json (authored -- the sentence each room opens with, and how it renders).
+# Generation rather than hand-authoring is the same argument as the face: sections above:
+# the contract already knows what each room holds, and a second spelling of that in a
+# renderer is a guaranteed drift.
+#
+# Every assertion below prints a RAN marker before it checks anything, because a suite that
+# only asserts on output cannot tell "the check passed" from "the check never executed" --
+# the vacuous pass this repo has shipped three times.
+
+@test "the room registry is in sync with the contract, and every room carries a sentence" {
+  run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$ARC_ROOT" --check
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"registry in sync"* ]] || { echo "expected the registry line; got: $output"; false; }
+
+  run node -e "
+    const fs = require('fs');
+    const r = JSON.parse(fs.readFileSync(process.argv[1] + '/initiatives/face/contracts/rooms.generated.json', 'utf8'));
+    const s = JSON.parse(fs.readFileSync(process.argv[1] + '/initiatives/face/contracts/expected-set.json', 'utf8'));
+    // 32 named rooms + the lane template. The template is a first-class home (ADR-1306).
+    if (r.rooms.length !== s.rooms.list.length + 1) { console.log('room count', r.rooms.length); process.exit(1); }
+    const noSentence = r.rooms.filter((x) => !x.sentence || !x.sentence.trim()).map((x) => x.id);
+    if (noSentence.length) { console.log('rooms with no sentence:', noSentence.join(', ')); process.exit(1); }
+    const badRender = r.rooms.filter((x) => !['bespoke', 'generic', 'index'].includes(x.render)).map((x) => x.id);
+    if (badRender.length) { console.log('rooms with a bad render mode:', badRender.join(', ')); process.exit(1); }
+    // An empty room that LOOKS built is worse than a missing one -- D7 in room-map.md.
+    const empty = r.rooms.filter((x) => x.render !== 'index' && x.itemCount === 0).map((x) => x.id);
+    if (empty.length) { console.log('non-index rooms deriving nothing:', empty.join(', ')); process.exit(1); }
+    // Every room's ring must be one the contract declares.
+    const rings = new Set(s.rings || []);
+    const offRing = r.rooms.filter((x) => !rings.has(x.ring)).map((x) => x.id);
+    if (offRing.length) { console.log('rooms off-ring:', offRing.join(', ')); process.exit(1); }
+    console.log('RAN: registry carries', r.rooms.length, 'rooms, every one with a sentence and content');
+  " "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [[ "$output" == *"RAN: registry carries"* ]] || { echo "$output"; false; }
+}
+
+@test "face-sections REFUSES every broken registry input (mutant arms)" {
+  run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$ARC_ROOT" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # Assert each arm BY NAME. A count would pass while an arm silently stopped firing, which
+  # is exactly how a negative control rots into decoration.
+  for arm in "room absent from room-copy" "room with a blank sentence" \
+             "room with an unknown render mode" "index room over a non-inventory" \
+             "generic room deriving nothing"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+  [[ "$output" == *"hand-edited registry exits 1:"*"PASS"* ]] || { echo "$output"; false; }
+}
+
+@test "face-sections REFUSES a hand-edited registry (negative arm on disk, not in memory)" {
+  local t="$BATS_TEST_TMPDIR/repo"
+  mkdir -p "$t"
+  cp -R "$ARC_ROOT/.claude" "$t/.claude"
+  cp -R "$ARC_ROOT/products" "$t/products"
+  mkdir -p "$t/initiatives/face/contracts"
+  cp "$ARC_ROOT/initiatives/face/contracts/expected-set.json" "$t/initiatives/face/contracts/"
+  cp "$ARC_ROOT/initiatives/face/contracts/room-copy.json" "$t/initiatives/face/contracts/"
+  cp "$ARC_ROOT/initiatives/face/contracts/rooms.generated.json" "$t/initiatives/face/contracts/"
+
+  # Sanity: the copied tree passes BEFORE the edit. Without this the test below could pass
+  # for the wrong reason -- a tree that was already failing on something unrelated.
+  run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$t" --check
+  [ "$status" -eq 0 ] || { echo "copied tree did not start clean: $output"; false; }
+
+  node -e "
+    const fs = require('fs');
+    const p = process.argv[1] + '/initiatives/face/contracts/rooms.generated.json';
+    const r = JSON.parse(fs.readFileSync(p, 'utf8'));
+    r.rooms[0].sentence = 'hand-edited, which is the thing that must not survive';
+    fs.writeFileSync(p, JSON.stringify(r, null, 2) + '\n');
+  " "$t"
+
+  run node "$ARC_ROOT/.claude/scripts/core/face-sections.mjs" "$t" --check
+  [ "$status" -eq 1 ] || { echo "expected exit 1 on a hand-edited registry; got $status: $output"; false; }
+  [[ "$output" == *"rooms.generated.json"* ]] || { echo "$output"; false; }
+}
+
+@test "face-coverage watches all eleven inventories, not the original five" {
+  run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT"
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  # The six added 2026-08-23 were 164 contract rows nobody read. Assert the gate SAYS it
+  # read them -- a silent pass here is indistinguishable from the hole this closed.
+  [[ "$output" == *"rules"* ]] || { echo "no rules in the summary: $output"; false; }
+  [[ "$output" == *"processes"* ]] || { echo "no processes in the summary: $output"; false; }
+  [[ "$output" == *"homed contract rows"* ]] || { echo "no homed-rows count: $output"; false; }
+}
