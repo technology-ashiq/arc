@@ -39,8 +39,18 @@ load 'test_helper'
 @test "face/ imports nothing from .claude, so the repo split stays a directory move" {
   # ADR-1316 keeps FACE-A's Option 1 reachable, and this is the tax that keeps it cheap.
   # The dependency points ONE way: arc knows nothing about face/, face/ knows only HTTP.
-  run bash -c "grep -rlE '\\.claude/' '$ARC_ROOT/face/src' 2>/dev/null || true"
-  [ -z "$output" ] || { echo "face/src reaches into .claude: $output"; false; }
+  #
+  # The check is on IMPORTS, not on mentions. The first cut grepped for the string ".claude/"
+  # anywhere under face/src and went red on two innocent things: the generated banner in
+  # tokens.css naming the generator that wrote it, and App.tsx's error message telling the
+  # owner which command starts the door. Both are prose. A test that cannot tell an import
+  # from a sentence forces you to stop writing useful sentences, which is a worse outcome
+  # than the coupling it was guarding against.
+  run bash -c "grep -rnE \"(^|[^[:alnum:]])(import|require)[^;]*[\\\"'][^\\\"']*\\.claude/\" '$ARC_ROOT/face/src' 2>/dev/null || true"
+  [ -z "$output" ] || { echo "face/src IMPORTS from .claude: $output"; false; }
+  # Vacuous-pass guard: the grep must actually have files to scan.
+  local scanned; scanned=$(find "$ARC_ROOT/face/src" -type f \( -name '*.mjs' -o -name '*.tsx' -o -name '*.ts' \) | wc -l | tr -d " ")
+  [ "$scanned" -ge 5 ] || { echo "only $scanned source files under face/src; the grep above proves nothing"; false; }
   run bash -c "grep -rl 'face/src' '$ARC_ROOT/.claude/scripts' 2>/dev/null || true"
   # face-tokens.mjs WRITES the copy, so it names the path; nothing may IMPORT from it.
   local importers
