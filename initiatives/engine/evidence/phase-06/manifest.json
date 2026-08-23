@@ -1,0 +1,56 @@
+{
+  "phase": "06",
+  "commit": "67991185afe192b9267571f260dbb5be7a217f0f",
+  "short": "67991185",
+  "generated": "2026-08-23T14:41:19Z",
+  "files": [
+    {
+      "name": "absent-evidence.md",
+      "sha256": "10ca48d09e970cab34dbfc726c1ce2aeb92b52c146a28449b9915de39a945ffe"
+    },
+    {
+      "name": "adversarial-passes.md",
+      "sha256": "733a123116409e0ef9ced5d2e278099cba108314fb41d7fe40f41139406e1aec"
+    },
+    {
+      "name": "certification-results-12-fixtures.md",
+      "sha256": "fb86845b8a6ab0612e2934a1832d8a439e7284ba88691588865b7d33eca00713"
+    },
+    {
+      "name": "certification-run-01M07FX9ZAY3EHCQFKVVKA2RT7.md",
+      "sha256": "e408960bba9d6ec3905ca7b8f58e1fdd904f21e773d1d2b17ddb63dd38841ee8"
+    },
+    {
+      "name": "egress-trail-fa0391a11c61.log",
+      "sha256": "3e3ffc7265bab8299ce14b88bb4843e0c8f8505ee9452624e58832add7debc97"
+    },
+    {
+      "name": "fixture-04-07-confined-certified.md",
+      "sha256": "b53c6939d50f1d0fb20b64d41bd98aad3f4ba0a98a263074cef4dca7b899d1d2"
+    },
+    {
+      "name": "fixture-07-egress-orchestrated.md",
+      "sha256": "09aaddfe31679efd65be44884ee274ee113a76a5bfe039008bc839a6041cad2e"
+    },
+    {
+      "name": "fixture-08-memory.md",
+      "sha256": "ef12164bcd64f0ece0464ca75368eff37afc5b60da2aad676867fa29751e22c9"
+    },
+    {
+      "name": "fixture-10-capped-key.md",
+      "sha256": "9871a106160e1c9286cf39ab383fceb00b5b585af1c26effea2693d308c29532"
+    },
+    {
+      "name": "fixtures-1-4-6-7-confinement.md",
+      "sha256": "5799e38e09040c7e61856d4e98a1efa10f9b6b78a68de6be65e6f87dd4de523f"
+    },
+    {
+      "name": "real-dispatch-2026-08-17.md",
+      "sha256": "c89d017899c42a2ef93b4eb0a57a3f711ef22751d7d8b9aed1fa4357af83274a"
+    },
+    {
+      "name": "runtime-answer-reliability.md",
+      "sha256": "12812854813028a5e1afe0382b84fedf968e1ccda27020897f96f9b240b10365"
+    }
+  ]
+}

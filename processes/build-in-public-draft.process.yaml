@@ -20,7 +20,23 @@ permissions: declared
 # The pack bounds the DATA. It does not bound the ANGLE -- unless `angle` is set, the take belongs
 # to the runtime, because arc constrains boundaries and verifies outcomes and never prescribes
 # method (ADR-0218).
+# THE CLASSIFICATION IS AN INPUT, AND IT IS REQUIRED (REQ-06, ADR-0225's sibling rule).
+#
+# REQ-06 reads "draft inputs ARE external-ok context packs approved by the owner before dispatch".
+# That is a POSITIVE declaration. Until 2026-08-23 the boundary only refused a document carrying an
+# internal-only marker, so an unclassified blob and an owner-approved pack were indistinguishable to
+# it -- a pass condition that is only an absence, which is the shape this repo has a standing rule
+# against. `arc-run` now refuses an input that does not declare itself `external-ok` when the class
+# routes to a row carrying a `cap:`, and this row does (`cap: L1-drafts`).
+#
+# It rides the INPUT rather than being inferred from the pack text, for the same reason `pack` is
+# inlined: the boundary parses the input document structurally, and a classification line living
+# inside the pack STRING is a substring, not a declaration it can read.
 inputs:
+  - name: classification
+    type: string
+    description: "Must be `external-ok`. The owner's approval statement, travelling with the dispatch (REQ-06)."
+    required: true
   - name: pack_ref
     type: string
     description: "The approved pack's id, echoed back on the draft so a receipt names its material."

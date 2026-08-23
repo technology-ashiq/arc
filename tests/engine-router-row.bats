@@ -13,6 +13,21 @@
 bats_require_minimum_version 1.5.0
 load 'test_helper'
 
+# ONE granting root for the whole file. `_arc_runtime_grant_root` copies 229 files, and its own doc
+# comment says to call it from `setup_file` and never per test -- the copy is load-sensitive and this
+# repo already records a flake of exactly that shape (engine-driver-contract REQ-04, PASS and FAIL
+# observed on byte-identical trees). The first version of the tests below called it from a @test
+# body, which is the documented hazard re-armed by the change that documented it.
+#
+# Tests needing real drivers under `--root` write their own `engine/router.yaml` into this root
+# before running. bats runs a file's tests serially, so the overwrite is deterministic, and nothing
+# else in the root is mutated.
+setup_file() {
+  ARC_ROOT="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
+  export RT_ROOT="$BATS_FILE_TMPDIR/rt"
+  _arc_runtime_grant_root "$RT_ROOT" "$ARC_ROOT"
+}
+
 PROBE() { echo "$ARC_ROOT/tests/engine-router-row-probe.mjs"; }
 RUN()   { echo "$ARC_ROOT/.claude/scripts/engine/arc-run.mjs"; }
 
@@ -252,6 +267,244 @@ YAML
   [[ "$output" == *"fallback chain"* ]] || { echo "the reason does not name the fallback: $output"; false; }
 }
 
+# ---------------------------------------------------------------------------------------------
+# ADR-0225 -- termination is a fixture, not a comment
+# ---------------------------------------------------------------------------------------------
+
+# A root whose router carries NO class rows at all: the state after the termination spec's step 2.
+terminated_root() {
+  local root="$1"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/build-in-public-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes: {}
+default:
+  tier: balanced-workhorse
+  driver: claude-code
+  fallback: []
+YAML
+}
+
+@test "ADR-0225 TERMINATION: with the row deleted the runtime is unreachable, even named explicitly" {
+  # THE TERMINATION SPEC WAS FALSE TWICE, and this fixture exists because prose could not catch it.
+  # engine/router.yaml said deleting the row is "the only form with no reachable remainder: no row,
+  # no route". Measured 2026-08-23: arc-run printed `would run build-in-public-draft on hermes` and
+  # exited 0. The wording it REPLACED had been found false the same way on 2026-08-17 -- a false
+  # claim about a governance mechanism, corrected by another false claim about the same mechanism,
+  # inside the same comment. A termination step is a claim about behaviour and belongs here.
+  local root="$BATS_TEST_TMPDIR/terminated"
+  terminated_root "$root"
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes --dry-run
+  [ "$status" -eq 2 ] || { echo "a deleted row did not terminate the hire, got $status: $output"; false; }
+  [[ "$output" == *"does not grant the agent runtime"* ]] || { echo "the refusal does not name the cause: $output"; false; }
+  # Exit 5 is the DATA BOUNDARY and means the document may not go there; this is an operator error,
+  # and `[ "$status" -eq 2 ]` above is what tells them apart. The line that used to sit here --
+  # `[[ "$output" != *"internal-only"* ]]` -- was decoration: this fixture's router is `classes:
+  # {}`, so `boundaryRefusal` is a thousand lines further on and can never produce that word here
+  # under ANY mutation of the guard. An absence assertion that cannot fail is worse than none: it
+  # reads as coverage. Proved by removing the guard entirely and watching the line still hold.
+  [[ "$output" == *"ADR-0225"* ]] || { echo "the refusal does not cite the decision it enforces: $output"; false; }
+}
+
+@test "ADR-0225: a class whose row names ANOTHER driver does not vouch for the runtime" {
+  # "Any row exists for this class" would have been satisfied by commit-msg-draft, whose row names
+  # claude-code -- and that is precisely the near-miss guard shape this cycle keeps finding. The
+  # grant has to name the thing being granted. This is also the path arc-bench takes: it makes
+  # --driver MANDATORY, so the one lane that spends real money was the ungoverned one.
+  #
+  # AGAINST A FIXTURE ROUTER, and the first version was not -- it asserted exit 2 against whatever
+  # production routing happened to be. Adding hermes to commit-msg-draft's chain with all four hire
+  # terms is a fully reviewed change, and it is literally what this refusal tells the operator to
+  # do; it would have turned this test red for a reason it does not name. The sibling test below
+  # was moved off the live router in this same change, with a comment naming that exact failure,
+  # and this one ten lines above kept the coupling. Twin-fix, caught by an adversarial pass.
+  local root="$BATS_TEST_TMPDIR/other-driver"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/commit-msg-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - codex
+YAML
+  run node "$(RUN)" --root "$root" --process commit-msg-draft --driver hermes --dry-run
+  [ "$status" -eq 2 ] || { echo "an ungranted class dispatched the runtime, got $status: $output"; false; }
+  [[ "$output" == *"does not grant the agent runtime"* ]] || { echo "$output"; false; }
+  # The refusal names what the row DOES grant, so the operator is not left guessing.
+  [[ "$output" == *"claude-code"* ]] || { echo "the refusal does not name the row's own chain: $output"; false; }
+}
+
+@test "ADR-0225 NEGATIVE CONTROL: a granted class still dispatches, and in-house drivers are untouched" {
+  # Without this, a rule that refuses EVERY runtime dispatch passes both tests above -- and the
+  # cycle would have shipped a termination that works by breaking the hire.
+  #
+  # AGAINST A FIXTURE ROOT, NOT THE LIVE ROUTER, and an adversarial pass is what forced that. The
+  # first version asserted that PRODUCTION still hires hermes, which fails two ways that have
+  # nothing to do with this rule: the live row's `review_by` is 2026-08-31, so the control goes red
+  # on 2026-09-01 for a reason it does not name; and it goes red the moment anyone performs the
+  # ADR's own TERMINATION STEP -- the exact act the fixture above exists to make possible. A suite
+  # that breaks when the documented procedure is followed is pressure to undo the procedure.
+  # The shared root from `setup_file`, rather than a 229-file copy inside this test body -- see the
+  # comment on `setup_file`. This test does not overwrite the router; it wants the grant the helper
+  # writes.
+  run node "$(RUN)" --root "$RT_ROOT" --process commit-msg-draft --driver hermes --dry-run \
+    --input '{"classification":"external-ok","diff":"x"}'
+  [ "$status" -eq 0 ] || { echo "a granted class was refused: $output"; false; }
+  [[ "$output" == *"would run"* ]] || { echo "$output"; false; }
+  # And an in-house driver on an ungranted class is not a hire and is not touched by the rule.
+  run node "$(RUN)" --root "$ARC_ROOT" --process commit-msg-draft --driver mock --dry-run
+  [ "$status" -eq 0 ] || { echo "an in-house driver was caught by the runtime-grant rule: $output"; false; }
+}
+
+@test "ADR-0225: the refusal happens on a REAL dispatch, not only under --dry-run" {
+  # THE MUTANT THAT SURVIVED. All three fixtures above pass `--dry-run`, so changing the guard to
+  # `if (dryRun && RUNTIME_DRIVERS.has(driver))` passed every one of them while leaving every real
+  # dispatch ungoverned -- proved by an adversarial pass. A preview-only guard is not a guard.
+  local root="$BATS_TEST_TMPDIR/terminated-real"
+  terminated_root "$root"
+  export ARC_SPINE_ROOT="$root/spine"
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes \
+    --input '{"classification":"external-ok","pack_ref":"p","pack":"x"}'
+  [ "$status" -eq 2 ] || { echo "a REAL dispatch through a deleted row was not refused, got $status: $output"; false; }
+  [[ "$output" == *"does not grant the agent runtime"* ]] || { echo "$output"; false; }
+}
+
+@test "ADR-0225: the grant is an EXACT name, not a substring of the chain" {
+  # THE SECOND SURVIVING MUTANT. Replacing the exact comparison with
+  # `grantChain.join(" ").includes(driver)` passed every fixture, because no chain in them contains
+  # `hermes` as a substring -- so the exactness the ADR spends a paragraph on was pinned by nothing.
+  # This row's chain contains the runtime's name inside a LONGER in-house driver name and grants it
+  # nowhere.
+  local root="$BATS_TEST_TMPDIR/substring"
+  mkdir -p "$root/engine" "$root/processes"
+  cp "$ARC_ROOT/processes/build-in-public-draft.process.yaml" "$root/processes/"
+  cat > "$root/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  build-in-public-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - hermes-lookalike
+YAML
+  run node "$(RUN)" --root "$root" --process build-in-public-draft --driver hermes --dry-run \
+    --input '{"classification":"external-ok","pack_ref":"p","pack":"x"}'
+  [ "$status" -eq 2 ] || { echo "a substring of the chain was accepted as a grant, got $status: $output"; false; }
+  [[ "$output" == *"does not grant the agent runtime"* ]] || { echo "$output"; false; }
+}
+
+@test "ADR-0225: a fallback HOP into a runtime is validated too, and a path-shaped name is refused" {
+  # THE THIRD ENTRY POINT, and the ADR reintroduced at it the very shape it closes elsewhere. The
+  # loader decides a row is a hire by EXACT set membership on the trimmed name, so a fallback entry
+  # spelled `./hermes` is not a runtime to it -- the row needs none of the four terms and loads with
+  # ZERO faults. `invoke()` then builds the path with `join`, which normalises `./hermes` back to
+  # `hermes`, and the hire dispatched under a row carrying no terms at all. Proved by execution.
+  #
+  # Worse, nothing re-checked the closed driver set either: a fallback entry of `../../../evil`
+  # made arc-run `bash` an arbitrary script from anywhere on disk, named from a router row, with the
+  # process input on its argv.
+  # AGAINST A ROOT THAT HAS THE REAL DRIVERS. The first version pointed at a bare fixture root, so
+  # the fallback fired because the PRIMARY driver was missing from an incomplete fixture rather than
+  # because of a driver fault -- and `[ "$status" -ne 0 ]` could not tell "driver not installed"
+  # from "unknown driver on a fallback hop", since both exit 1. That is the same non-distinguishing
+  # assertion the TERMINATION test argues against in a comment further up this file.
+  cat > "$RT_ROOT/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - ./hermes
+YAML
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/hopspine"
+  mkdir -p "$ARC_SPINE_ROOT"
+  export ARC_DRIVER_FAKE="$ARC_ROOT/tests/fixtures/engine/driver-fakes/driverfail"
+  run node "$(RUN)" --root "$RT_ROOT" --process commit-msg-draft --driver auto --input '{"diff":"x"}'
+  [ "$status" -eq 1 ] || { echo "a path-shaped fallback was not refused with 1, got $status: $output"; false; }
+  [[ "$output" == *"unknown driver"* ]] || { echo "the chain was not validated: $output"; false; }
+  [[ "$output" == *"fallback chain"* ]] || { echo "the refusal does not say where it happened: $output"; false; }
+
+  # AND IT REFUSES BEFORE ANY DISPATCH, which is stronger than refusing at the hop and is why the
+  # check moved. Discovering a broken chain by WALKING it means attempt 1 has already spawned a
+  # driver and spent budget -- and the refusal exits 2, which ADR-0219 publishes as a PRE-dispatch
+  # operator error, so spending it mid-run was itself a contract violation. A row whose chain cannot
+  # be walked is a broken row, and a broken row fails before it routes.
+  [[ "$output" != *"falling back to"* ]] || { echo "the chain was walked before it was validated: $output"; false; }
+  # The paired positive, so a crash cannot satisfy the line above: the refusal names the entry.
+  [[ "$output" == *"./hermes"* ]] || { echo "the refusal does not name the offending entry: $output"; false; }
+}
+
+@test "ADR-0225 NEGATIVE CONTROL: a correctly-spelled, fully-termed fallback INTO the runtime DISPATCHES" {
+  # THE TEST THAT WOULD HAVE CAUGHT THE CRITICAL, and its absence is why the bug shipped. Every
+  # fixture around it asserts a REFUSAL: a row that fails to load without the four terms, a
+  # path-shaped fallback refused by name. Nothing asserted the complement -- that the configuration
+  # `router-row.mjs` was extended to POLICE actually works when it is correct.
+  #
+  # It did not. `fallbacks` aliased `routedRow.fallback`, and `fallbacks.shift()` mutated the router
+  # row itself; the grant check at the hop then rebuilt its chain from an array the shift had already
+  # emptied. So a fully-termed `fallback: [hermes]` was refused at the hop, with a message that
+  # MISSTATED router.yaml, after attempt 1 had spawned a driver and spent budget -- on exit 2, which
+  # ADR-0219 publishes as a PRE-dispatch operator error, and with no receipt at all.
+  cat > "$RT_ROOT/engine/router.yaml" <<YAML
+version: 1
+tiers:
+  - balanced-workhorse
+classes:
+  commit-msg-draft:
+    tier: balanced-workhorse
+    driver: claude-code
+    fallback:
+      - hermes
+    cap: L1-drafts
+    hosted: local
+    judge: ashiq
+    review_by: 2099-12-31
+YAML
+  export ARC_SPINE_ROOT="$BATS_TEST_TMPDIR/grantspine"
+  mkdir -p "$ARC_SPINE_ROOT" "$BATS_TEST_TMPDIR/hdata"
+  export ARC_DRIVER_FAKE="$ARC_ROOT/tests/fixtures/engine/driver-fakes/driverfail"
+  export ARC_HERMES_DOCKER="$ARC_ROOT/tests/fixtures/engine/hermes/fake-docker.mjs"
+  export ARC_HERMES_FAKE_CASE="commit-clean"
+  export ARC_HERMES_IMAGE="nousresearch/hermes-agent@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e"
+  export ARC_HERMES_DATA="$BATS_TEST_TMPDIR/hdata"
+  export ARC_HERMES_USAGE_FILE=""
+  run node "$(RUN)" --root "$RT_ROOT" --process commit-msg-draft --driver auto \
+    --input '{"classification":"external-ok","diff":"x"}'
+  # The primary driver faults, the chain is walked, and the runtime is REACHED rather than refused.
+  [[ "$output" == *"falling back to hermes"* ]] || { echo "the chain was not walked: $output"; false; }
+  [[ "$output" != *"does not grant the agent runtime"* ]] || { echo "a fully-termed fallback into the runtime was REFUSED at the hop: $output"; false; }
+}
+
+@test "ADR-0225: RUNTIME_DRIVERS names a driver that is actually installed" {
+  # Nothing tied the hire set to the driver set or to what is on disk, so shipping a second agent
+  # runtime and forgetting to add it to RUNTIME_DRIVERS would leave it needing no row, no cap, no
+  # tenure and no judge -- with every test green. The ADR claims one definition of "this is a hire"
+  # read by loader and dispatcher; that is true of the SET, and says nothing about drift between the
+  # set and reality. This is the missing half.
+  cd "$ARC_ROOT"
+  run node -e 'import("./.claude/scripts/engine/router-row.mjs").then((m) => { console.log([...m.RUNTIME_DRIVERS].join(" ")); });'
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  [ -n "$output" ] || { echo "RUNTIME_DRIVERS is empty -- every runtime would be ungoverned"; false; }
+  local d
+  for d in $output; do
+    [ -f ".claude/scripts/engine/drivers/$d.sh" ] \
+      || { echo "RUNTIME_DRIVERS names \`$d\`, which has no driver script"; false; }
+  done
+}
+
 @test "this file registers every test it declares" {
   # FIXED 2026-08-17. It counted `^@test ` lines in the SOURCE -- the DECLARED count. bats silently
   # DROPS a @test whose name carries a non-ASCII character and the source line survives the drop,
@@ -259,6 +512,6 @@ YAML
   # the fixed form; this one, written the same week in the same directory, carried the defeated one.
   declared="$(grep -c '^@test ' "$BATS_TEST_FILENAME")"
   registered="$(bats --count "$BATS_TEST_FILENAME")"
-  [ "$registered" = "16" ] || { echo "expected 16 REGISTERED tests, bats registered $registered"; false; }
+  [ "$registered" = "24" ] || { echo "expected 24 REGISTERED tests, bats registered $registered"; false; }
   [ "$declared" = "$registered" ] || { echo "declared $declared but bats registered $registered -- a test was silently dropped"; false; }
 }

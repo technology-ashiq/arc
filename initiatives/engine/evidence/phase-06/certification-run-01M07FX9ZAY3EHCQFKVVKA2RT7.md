@@ -18,9 +18,27 @@ driver   hermes
 by grepping the landed file for the ULID in both places — not by reading the emitter's exit code,
 which is the check this cycle has twice recorded as insufficient.
 
-The scrubbed transcript was stored at
-`initiatives/engine/evidence/phase-06/transcripts/`, which is REQ-03's storage half running for the
-first time on a real dispatch.
+~~The scrubbed transcript was stored at `initiatives/engine/evidence/phase-06/transcripts/`, which is
+REQ-03's storage half running for the first time on a real dispatch.~~
+
+**FALSE, AND CORRECTED 2026-08-23 BY LOOKING.** That directory has never existed in this repository:
+`git log --all -- initiatives/engine/evidence/phase-06/transcripts` returns nothing, and
+`.gitignore:30` un-ignores the path, so it is not a case of an artifact written and then excluded.
+No transcript was stored for this dispatch. `storeTranscript` is opt-in on `ARC_RUN_TRANSCRIPT_DIR`
+and this run did not set it, exactly as the three Phase 08 round-1 dispatches did not the next day —
+the same miss twice, recorded honestly there and asserted as done here.
+
+**Why the sentence was written at all is the reusable part.** The storage code had been built that
+same session, the destination path was in the plan, and the claim describes what *should* have
+happened rather than what was checked afterwards. It is the report-instead-of-artifact failure
+applied to a directory listing — one `ls` away, never run.
+
+**Closed 2026-08-23, not merely noted.** `arc-run` now takes `--transcript-dir PATH` (a flag a caller
+writes down on purpose, the ADR-0220 argument), and a dispatch that produces a transcript with **no
+destination configured says so on stderr** instead of discarding it in silence. Six tests in
+`tests/engine-hermes-secrets.bats` pin both halves, including a negative control proving the warning
+is bound to the absence rather than printed unconditionally. Opt-in storage was never the defect;
+opting out being *indistinguishable from having nothing to store* was.
 
 ## What the run proves
 
