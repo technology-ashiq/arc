@@ -111,6 +111,24 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
+  // Opening a room must start at its opening SENTENCE.
+  //
+  // The room column is what scrolls, and React keeps its scrollTop across a content swap --
+  // so leaving Money half-read and opening Bench showed Bench's FOOTER and then a screenful
+  // of nothing. Every room in this product leads with a declarative line that is the whole
+  // point of the screen, and a room you arrive at from the bottom has effectively lost it.
+  // Found by sweeping all 32 rooms and looking, not by any check.
+  // It is the WINDOW that scrolls, not the room column. The column carries overflowY:auto but
+  // nothing constrains its height, so it never overflows and the document scrolls instead --
+  // which is why resetting the column's scrollTop was a no-op, and why the check that
+  // "proved" the fix passed vacuously on 0 === 0. Asserting the precondition (that something
+  // had actually been scrolled) is what caught it.
+  const roomScrollRef = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    roomScrollRef.current?.scrollTo({ top: 0 })
+    window.scrollTo({ top: 0 })
+  }, [roomId])
+
   const orderRef = useRef(order)
   orderRef.current = order
   const roomRef = useRef(roomId)
@@ -192,7 +210,7 @@ export default function App() {
 
       <div style={frameStyle}>
         <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
-        <section style={roomStyle} aria-live="polite">
+        <section ref={roomScrollRef} style={roomStyle} aria-live="polite">
           {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} /> : <NoSuchRoom id={roomId} />}
         </section>
       </div>
