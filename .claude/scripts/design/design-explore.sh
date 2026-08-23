@@ -49,8 +49,18 @@ VARIANTS="a b c"
 case "$CMD" in
   init)
     BRIEF=""
+    # `shift 2` with one argument left FAILS and shifts nothing; set -e is off, so the loop
+    # re-reads the same $1 until the CI job times out. This is the identical defect
+    # design-render.sh documents in a nine-line comment, that five of its tests pin, and that
+    # this file's own `coverage` branch fixes correctly 160 lines below. Written twice in one
+    # tree and not carried to the sibling loop -- the twin-fix shape, third time this cycle.
+    # The catch-all is a refusal for the same reason: `--breif docs/x.md` used to vanish and
+    # report "init needs --brief", which is an omitted flag wearing a typo's clothes.
     while [ "$#" -gt 0 ]; do
-      case "$1" in --brief) BRIEF="${2:-}"; shift 2;; *) shift;; esac
+      case "$1" in
+        --brief) [ "$#" -ge 2 ] || { echo "design-explore: --brief needs a value" >&2; exit 1; }; BRIEF="$2"; shift 2;;
+        *) echo "design-explore: unknown argument '$1'" >&2; exit 1;;
+      esac
     done
     if [ -z "$BRIEF" ]; then
       echo "design-explore: init needs --brief <path> — exploration without declared intent is exploration of nothing" >&2
@@ -221,10 +231,24 @@ case "$CMD" in
       echo "design-explore: coverage needs --brief <path> -- the viewport set is DERIVED from the platform contract, never assumed" >&2
       exit 1
     fi
+    # init resolves the brief against $ROOT; this handed it straight to node, cwd-relative, so
+    # the same relative path worked in one subcommand and failed in the other whenever the
+    # caller was not standing at the repo root. Traversal is refused here as init refuses it.
+    case "$BRIEF" in
+      ..|../*|*/..|*/../*) echo "design-explore: --brief may not contain a '..' segment" >&2; exit 1;;
+    esac
+    case "$BRIEF" in /*|[A-Za-z]:*) ;; *) BRIEF="$ROOT/$BRIEF";; esac
     WANT="$(node "$DESIGN_DIR/design-lint.mjs" --viewports "$BRIEF")" || {
       echo "design-explore: could not derive the viewport set from $BRIEF" >&2
       exit 1
     }
+    # An empty derived set would make the loop below never iterate and report a clean pass --
+    # the exact shape the surfaces branch spells out twenty lines above ("an empty result set
+    # is the one thing a broken scanner and a clean tree agree on").
+    if [ -z "$WANT" ]; then
+      echo "design-explore: derived an EMPTY viewport set from $BRIEF -- that is a broken contract, not a pass" >&2
+      exit 1
+    fi
     cfails=0
     cseen=0
     for v in $VARIANTS; do
@@ -274,11 +298,28 @@ case "$CMD" in
 
       # Read a meta's published hash. Anchored to the whole pretty-printed line: an
       # unanchored match would let any line mentioning the key decide the comparison.
-      _sha_of() { sed -n 's/^  "screenshot_sha256": "\(.*\)",\{0,1\}$/\1/p' "$1" 2>/dev/null | head -1; }
+      # tr -d '\r' first: the $ anchor below cannot match past a CR, so a CRLF meta would
+      # yield an empty hash and fail every row with "the render published ". MSYS2 sed strips
+      # the CR silently, so the Windows leg reads clean while ubuntu and macOS fail -- an
+      # OS-asymmetric gate no Windows-authored test can pin.
+      _sha_of() { tr -d '\r' < "$1" 2>/dev/null | sed -n 's/^[[:space:]]*"screenshot_sha256": "\(.*\)",\{0,1\}[[:space:]]*$/\1/p' | head -1; }
       # The iteration's meta, found by GLOB rather than by recomputing the slug. _slug()
       # already exists in design-render.sh and design-critique.sh; a third copy is the
       # twin-fix shape, and this needs the file, not the name.
-      _meta_for() { ls "$sess"/*--iter-"$1".json 2>/dev/null | head -1; }
+      # `ls ... | head -1` picks by LC_COLLATE when a session holds more than one route, so a
+      # second page rendered into the same session made the gate compare the WRONG meta -- and
+      # which one wins differs between ubuntu, macOS and Git Bash, so one manifest passes on
+      # one leg and fails on another. design-render.sh already refuses when more than one line
+      # matches; same lesson, now carried. Ambiguity is a refusal, never a pick.
+      _meta_for() {
+        _mf_n=0; _mf_hit=""
+        for _mf in "$sess"/*--iter-"$1".json; do
+          [ -f "$_mf" ] || continue
+          _mf_n=$((_mf_n + 1)); _mf_hit="$_mf"
+        done
+        [ "$_mf_n" -eq 1 ] || { [ "$_mf_n" -eq 0 ] && return 1; echo "AMBIGUOUS"; return 0; }
+        printf '%s' "$_mf_hit"
+      }
 
       # Every iteration on disk past the first OWES a row. Without this, a manifest that
       # merely mentions a table in prose satisfies the gate by looking like one -- the
@@ -288,8 +329,9 @@ case "$CMD" in
         n="$(printf '%s' "$m" | sed -n 's/.*--iter-\([0-9]*\)\.json$/\1/p')"
         [ -n "$n" ] || continue
         [ "$n" -ge 2 ] 2>/dev/null || continue
-        if ! grep -qE "^[[:space:]]*\|[[:space:]]*$n[[:space:]]*\|[0-9a-f]{8,}" "$man" 2>/dev/null &&
-           ! grep -qE "^[[:space:]]*\|[[:space:]]*$n[[:space:]]*\|[[:space:]]*[0-9a-f]{8,}" "$man" 2>/dev/null; then
+        # One pattern, not two: the second subsumed the first ([[:space:]]* matches zero), so
+        # the pair read as two cases and was one, which is how a dead branch survives review.
+        if ! grep -qE "^[[:space:]]*\|[[:space:]]*$n[[:space:]]*\|[[:space:]]*[0-9a-f]{8,}" "$man" 2>/dev/null; then
           echo "ERR  [selfreview-row-missing] variant-$v: iteration $n was rendered and the manifest carries no row for it"
           rfails=$((rfails + 1))
         fi
@@ -299,9 +341,21 @@ case "$CMD" in
       # row can never be one.
       while IFS= read -r line; do
         [ -n "$line" ] || continue
-        n="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$2); print $2}')"
-        inh="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$3); print $3}')"
-        outh="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$4); print $4}')"
+        # Field COUNT first. An escaped pipe inside a prose cell (legal CommonMark) shifts
+        # every field right, so the defect/revision checks silently read the wrong cells and an
+        # empty revision substantiated a row. A row whose shape is not the shape is refused,
+        # rather than parsed into something that looks plausible.
+        nf="$(printf '%s' "$line" | awk -F'|' '{print NF}')"
+        case "$nf" in
+          7|8) ;;
+          *) echo "ERR  [selfreview-row-shape] a manifest row splits into $nf fields -- five cells and nothing else, and a literal pipe inside a cell is not supported"
+             rfails=$((rfails + 1)); continue;;
+        esac
+        # [[:space:]], not a literal space: a tab-delimited row was selected by the grep above
+        # and then failed with an unusable message.
+        n="$(printf '%s' "$line" | awk -F'|' '{gsub(/[[:space:]]/,"",$2); print $2}')"
+        inh="$(printf '%s' "$line" | awk -F'|' '{gsub(/[[:space:]]/,"",$3); print $3}')"
+        outh="$(printf '%s' "$line" | awk -F'|' '{gsub(/[[:space:]]/,"",$4); print $4}')"
         defect="$(printf '%s' "$line" | awk -F'|' '{print $5}' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
         revision="$(printf '%s' "$line" | awk -F'|' '{print $6}' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
 
@@ -311,12 +365,20 @@ case "$CMD" in
         fi
 
         cur="$(_meta_for "$n")"
+        if [ "$cur" = "AMBIGUOUS" ]; then
+          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render meta matches iteration $n in $sess -- refusing to pick one by directory order"
+          rfails=$((rfails + 1)); continue
+        fi
         if [ -z "$cur" ]; then
           echo "ERR  [selfreview-no-render] variant-$v: the manifest claims iteration $n and there is no render meta for it"
           rfails=$((rfails + 1)); continue
         fi
         prev_n=$((n - 1))
         prev="$(_meta_for "$prev_n")"
+        if [ "$prev" = "AMBIGUOUS" ]; then
+          echo "ERR  [selfreview-ambiguous] variant-$v: more than one render meta matches iteration $prev_n in $sess"
+          rfails=$((rfails + 1)); continue
+        fi
         if [ -z "$prev" ]; then
           echo "ERR  [selfreview-no-render] variant-$v: iteration $n names iteration $prev_n as its input and there is no render meta for it"
           rfails=$((rfails + 1)); continue

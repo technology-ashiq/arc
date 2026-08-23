@@ -168,6 +168,11 @@ EOF
 EOF
   _sr
   [ "$status" -ne 0 ]
+  # Named, not merely non-zero. A bare status check PASSED in the red run against a
+  # subcommand that did not exist: "command missing" and "cell empty" are different facts.
+  # This is the fourth instance of that shape in this cycle and testing.md already states
+  # the rule -- an assertion a crash satisfies is measuring nothing.
+  echo "$output" | grep -q "selfreview-empty"
 }
 
 @test "selfreview: a manifest that only MENTIONS the table in prose is refused" {
@@ -186,6 +191,8 @@ EOF
   # A header row alone is not evidence; there must be a real data row.
   _sr
   [ "$status" -ne 0 ]
+  # And named, for the same reason as the empty-cell case above.
+  echo "$output" | grep -q "selfreview-row-missing"
 }
 
 @test "selfreview: iteration 1 needs no row -- there is nothing before it to compare" {

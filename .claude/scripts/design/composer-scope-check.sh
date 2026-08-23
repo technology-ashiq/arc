@@ -52,7 +52,16 @@ if ! command -v arc_canon_path >/dev/null 2>&1 && ! type arc_canon_path >/dev/nu
   }
 fi
 
+# Control verbs are only honoured when this script is invoked DIRECTLY, never when a path is
+# forwarded into it as argv. A read of a file literally named "--end" would otherwise disarm
+# the boundary: the fragment forwards "$@", so a future caller passing the path positionally
+# turns a filename into a control command. lanes.md already prescribes this shape -- a value
+# is carried behind an explicit flag, never inferred from position.
+ARC_SCOPE_VERB=""
 case "${1:-}" in
+  --begin|--end) [ "${ARC_SCOPE_FORWARDED:-0}" = "1" ] || ARC_SCOPE_VERB="$1";; esac
+
+case "$ARC_SCOPE_VERB" in
   --begin)
     ex="${2:-}"; variant="${3:-}"
     if [ -z "$ex" ] || [ -z "$variant" ]; then

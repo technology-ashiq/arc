@@ -105,6 +105,10 @@ arc_canon_path() {
   done
   if [ -d "$_cp" ]; then
     _cbase="$(cd "$_cp" 2>/dev/null && pwd -P)" || _cbase="$_cp"
+    # A root of "/" would concatenate to "//path". On Cygwin/MSYS "//host/share" is a UNC
+    # path and in POSIX a leading "//" is implementation-defined, so the result stops being
+    # the thing both boundaries believe it is.
+    case "$_cbase" in /) _cbase="";; esac
     printf '%s' "$_cbase${_cs:+/$_cs}"
   else
     printf '%s' "$1"

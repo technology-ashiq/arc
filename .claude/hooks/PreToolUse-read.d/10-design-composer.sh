@@ -6,4 +6,6 @@
 set -uo pipefail
 SC="${CLAUDE_PROJECT_DIR:-.}/.claude/scripts/design/composer-scope-check.sh"
 [ -f "$SC" ] || exit 0
-exec bash "$SC" "$@"
+# Tell the scope check that whatever follows came from a tool payload, not from an operator.
+# Without this a read of a path named "--end" would be honoured as a control verb.
+ARC_SCOPE_FORWARDED=1 exec bash "$SC" "$@"
