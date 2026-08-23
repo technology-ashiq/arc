@@ -344,10 +344,55 @@ function recordingsWithCost(name, inr) {
     // construction. The property ADR-0904 actually states is that the ceiling never enters an
     // emitted PAYLOAD -- so that is what is searched, plus the envelope minus its machine-generated
     // identifiers.
+    // AND THE SAME FALSE POSITIVE CAME BACK ONE FIELD OVER, 2026-08-23, on the macOS leg.
+    //
+    // Excluding `id` and `idem` fixed the two identifiers that were KNOWN to be digests, and left
+    // `payload.scorecard_sha` -- another sha256, INSIDE the payload -- doing the identical thing.
+    // The comment above already states the general rule ("a hash cannot carry a semantic leak") and
+    // the fix applied it to two named fields instead of to the property. That is this repository's
+    // twin-fix shape: the pattern was written down and the grep was file-scoped.
+    //
+    // `duration_ms` is the same hazard without being a hash: a machine-generated number whose
+    // decimal digits can contain a four-digit ceiling by coincidence, and REQ-05 put it on every
+    // receipt.
+    //
+    // SO THE SEARCH IS BY FIELD, NOT BY SUBSTRING OF THE SERIALISED TEXT. ADR-0904's property is
+    // that the ceiling never enters an emitted payload -- a VALUE, not a byte sequence. A number
+    // field is compared for equality; a string field is compared for containment unless it is
+    // opaque machine output (a sha256 or a ULID), which cannot carry a semantic leak by
+    // construction. This cannot false-positive on any digest or duration, present or future, and it
+    // still catches a ceiling embedded in a real string like `cap=7919`.
+    //
+    // ONE RESIDUAL COLLISION REMAINS AND IS ACCEPTED KNOWINGLY: a machine number that happens to
+    // EQUAL a ceiling exactly -- `duration_ms: 3313` -- would be flagged. That is roughly 1e-5 per
+    // receipt against the substring version's ~2e-3, and when it fires the message names the field,
+    // so a human sees `$.payload.duration_ms=3313` instead of a truncated JSON blob. Two hundred
+    // times rarer and legible on sight, rather than pretending to zero by enumerating fields to
+    // skip -- which is the field-scoping that produced this defect twice already.
     const { id: _id, idem: _idem, ...semantic } = mine[0];
-    const text = JSON.stringify(semantic);
+    const OPAQUE = /^(?:[0-9a-f]{64}|[0-9A-HJKMNP-TV-Z]{26})$/;
+    const CEILINGS = ["7919", "3313"];
+    const leaks = [];
+    const walk = (v, path) => {
+      if (typeof v === "number") {
+        if (CEILINGS.includes(String(v))) leaks.push(`${path}=${v}`);
+        return;
+      }
+      if (typeof v === "string") {
+        if (OPAQUE.test(v)) return;
+        for (const c of CEILINGS) if (v.includes(c)) leaks.push(`${path}=${JSON.stringify(v)}`);
+        return;
+      }
+      if (v === null || typeof v !== "object") return;
+      if (Array.isArray(v)) { v.forEach((el, i) => walk(el, `${path}[${i}]`)); return; }
+      for (const [k, val] of Object.entries(v)) {
+        if (/worst_case/.test(k)) leaks.push(`${path}.${k} (key)`);
+        walk(val, `${path}.${k}`);
+      }
+    };
+    walk(semantic, "$");
     check("no ceiling value appears anywhere in the emitted receipt",
-      !text.includes("7919") && !text.includes("3313") && !/"worst_case/.test(text), text.slice(0, 200));
+      leaks.length === 0, leaks.join(" "));
     // And the exclusion is not a hole: assert the identifiers really are opaque machine values, so
     // a future change that started routing content through them would fail here rather than pass.
     check("the excluded identifiers are an opaque ULID and a sha256, carrying no content",
