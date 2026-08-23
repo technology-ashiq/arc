@@ -19,15 +19,22 @@ across is a deliberate act a reviewer can see. It is not used here. The receipts
 `run.completed` present in `events/` and absent from `_quarantine/` — have to be written where every
 reader looks.
 
-## Preconditions
+## Preconditions — MEASURED 2026-08-23, not listed from memory
 
 | What | State |
 |---|---|
-| This branch merged to `main` | the dispatches must run against the merged tree |
-| Docker Desktop up | `cmd /c start` exits 0 and launches nothing — start it from PowerShell and poll for the daemon |
-| `ARC_HERMES_API_KEY` set | the capped key, `limit: 0`, free-tier; a `:free` slug answers 200 |
-| The pinned free slug | `poolside/laguna-s-2.1:free`, verified 2026-08-18 — the free tier is a moving surface, so re-verify before the round and record the date |
-| **An owner pack approval** | the `N=3` from 2026-08-18 is SPENT. `initiatives/engine/packs/pack-2026-08-23-cycle7.md` needs its own, with N declared at approval (ADR-0214) |
+| Merged tree | **`761d4ae1` on `main`, CI 19/19 per JOB.** The main clone was at `ddbade9d` with 6 dirty files, so it needs a `git pull` |
+| Docker daemon | **UP** — 29.6.1, Docker Desktop |
+| The pinned image | **PRESENT locally** — `nousresearch/hermes-agent@sha256:16788311e2fa…3712c9e`, verified by digest |
+| `ARC_HERMES_API_KEY` | **SET** in the main clone's `.env.local` (one row; the value was never read). arc-run does NOT auto-load that file, so it has to be exported |
+| The runtime home template | **SEEDED at a durable path**: `E:/Work_Hub/01_Automemory/arc-runtime/or-template` — `_config_version: 33`, provider `openrouter`, model `poolside/laguna-s-2.1:free`, 1128 files. It previously lived in a session scratchpad that a cleanup would have destroyed. Copied with symlinks SKIPPED, which is ADR-0222's own rule: uv builds its wheel cache as symlinks whose targets are container-absolute and therefore dangling on the host, so `cp -r` aborts half-way — that is how `config.yaml` went missing on the first attempt, and the copy asserted its own fixture afterwards rather than trusting exit 0 |
+| **An owner pack approval** | the `N=3` from 2026-08-18 is SPENT. This is the one item nothing here can supply |
+
+**Why the approval is not mine to make, stated once.** ADR-0214 requires the owner to approve a pack
+before dispatch with N declared. Emitting both the `approval.requested` and the `decision.recorded`
+would be arc approving its own pack — the self-authorising subject POL-I exists to prevent, and the
+single act that would make this cycle's central claim (a governed contractor) false. It is not
+caution; it is the requirement being exercised.
 
 ## The approval payload is VALIDATED, not merely written
 
@@ -48,33 +55,44 @@ needs no extra flags. That was read out of `arc-event.mjs:289-290` rather than a
 
 ## The round
 
-From the main clone, on `main`, after the merge:
+From the **main clone**, after the merge. Every path below is one that was checked today.
 
 ```bash
-# 1. The approval. N is declared HERE and the dispatch count is bounded by it.
-bash .claude/scripts/hq/arc-event.sh emit approval.requested --strict \
-  --payload-file initiatives/engine/packs/pack-2026-08-23-approval.json
-bash .claude/scripts/hq/arc-inbox.mjs                 # read it, then approve or reject by id
+cd E:/Work_Hub/01_Automemory/arc
+git pull --ff-only origin main
 
-# 2. Build the dispatch input from the pack. The classification rides the INPUT, not the pack text:
-#    the boundary parses the document structurally, and a classification line inside the pack STRING
-#    is a substring rather than a declaration it can read.
-node .claude/scripts/engine/build-pack-input.mjs \
-  initiatives/engine/packs/pack-2026-08-23-cycle7.md pack-2026-08-23-cycle7 /tmp/req07-input.json
+set -a; . ./.env.local; set +a          # ARC_HERMES_API_KEY -- arc-run does not load this itself
+export ARC_HERMES_IMAGE=nousresearch/hermes-agent@sha256:16788311e2fa3035456bdc1bafb8ec2b1777db64ebf020af9bb7eb73c3712c9e
+export ARC_HERMES_DATA=E:/Work_Hub/01_Automemory/arc-runtime/or-template
 
-# 3. Three dispatches. --transcript-dir is NOT optional this time -- it is the whole point of the
-#    Phase 06 fix, and without it the round loses exactly what round 1 lost.
+# 1. arc ASKS. This is not the approval -- it is the request that makes one possible.
+bash .claude/scripts/hq/arc-event.sh emit approval.requested --strict   --payload-file initiatives/engine/packs/pack-2026-08-23-approval.json
+
+# 2. THE OWNER DECIDES. This is the keystroke, and it is the only one.
+node .claude/scripts/hq/arc-inbox.mjs                       # read it, take the ULID
+node .claude/scripts/hq/arc-inbox.mjs approve <ULID> --reason "external-ok, N=3"
+
+# 3. Confined egress, brought up around the session by a human (the driver never creates networks).
+bash .claude/scripts/engine/egress-session.sh up
+export ARC_HERMES_NETWORK=arc-egress
+export ARC_HERMES_PROXY=http://arc-eproxy:3128
+export ARC_HERMES_EGRESS=engine/egress-allowlist.txt
+
+# 4. The input. The classification rides the INPUT, not the pack text: the boundary parses the
+#    document structurally, and a classification line inside the pack STRING is a substring.
+node .claude/scripts/engine/build-pack-input.mjs   initiatives/engine/packs/pack-2026-08-23-cycle7.md pack-2026-08-23-cycle7 /tmp/req07-input.json
+
+# 5. Three dispatches. --transcript-dir is NOT optional -- it is the whole point of the Phase 06
+#    fix, and round 1 lost its evidence precisely by omitting it.
 for i in 1 2 3; do
-  node .claude/scripts/engine/arc-run.mjs \
-    --process build-in-public-draft --driver hermes \
-    --input @/tmp/req07-input.json \
-    --budget min=9 \
-    --transcript-dir initiatives/engine/evidence/phase-08/transcripts
+  node .claude/scripts/engine/arc-run.mjs     --process build-in-public-draft --driver hermes     --input @/tmp/req07-input.json     --budget min=9     --transcript-dir initiatives/engine/evidence/phase-08/transcripts
 done
 
-# 4. Count the receipts from the SPINE, never from the suite.
+bash .claude/scripts/engine/egress-session.sh down
+
+# 6. Count the receipts from the SPINE, never from the suite.
 grep -c '"kind":"run.completed"' .claude/state/hq/events/$(date +%F).jsonl
-grep -rc 'build-in-public-draft' .claude/state/hq/events/_quarantine/ 2>/dev/null || echo "0 quarantined"
+grep -rl 'build-in-public-draft' .claude/state/hq/events/_quarantine/ 2>/dev/null | wc -l
 ```
 
 ## What to expect, and what would be a finding
