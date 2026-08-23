@@ -88,6 +88,8 @@ teardown() { _arc_teardown; }
   # first place: the pipeline would look correct and cover nothing.
   run node "$(_lint)" --viewports "$BRIEF"
   [ "$status" -ne 0 ]
+  # Same reason: this passed red against a mode that did not exist.
+  echo "$output" | grep -q "platform-contract-missing"
 }
 
 @test "viewports: a Mobile row with an unreadable answer REFUSES, it does not guess" {
@@ -137,6 +139,10 @@ EOF
 EOF
   run bash "$(_explore)" surfaces lexos-v1
   [ "$status" -ne 0 ]
+  # Named, not merely non-zero. This test PASSED in the red run against a subcommand that did
+  # not exist at all -- "command missing" and "marker unknown" are different facts, and an
+  # assertion that cannot tell them apart is measuring nothing.
+  echo "$output" | grep -q "surface-unknown"
 }
 
 # ---------- 3. the failure this gate was actually built for ----------

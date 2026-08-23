@@ -31,7 +31,7 @@ shift 2>/dev/null || true
 shift 2>/dev/null || true
 
 if [ -z "$CMD" ] || [ -z "$ID" ]; then
-  echo "design-explore: usage: design-explore.sh {init|check|render|status|surfaces|coverage} <explore-id> [--brief <path>]" >&2
+  echo "design-explore: usage: design-explore.sh {init|check|render|status|surfaces|coverage|selfreview} <explore-id> [--brief <path>]" >&2
   exit 1
 fi
 # Characters spelled out, not `a-z`: a bracket range resolves through the locale's
@@ -247,6 +247,110 @@ case "$CMD" in
     fi
     [ "$cfails" -eq 0 ] || { echo "design-explore: $cfails declared-but-unrendered surface(s) -- a contract the run never rendered is one nobody signed"; exit 1; }
     echo "design-explore: coverage ok -- every declared viewport rendered across $cseen variant(s)"
+    exit 0
+    ;;
+
+  selfreview)
+    # REQ-02b / ADR-1401: the self-review manifest, checked against the ARTIFACTS.
+    #
+    # "Iteration 2 fixed what iteration 1 found" has to be provable from the hashes, not
+    # narrated in prose. The lane's own history is the reason this is a gate and not a
+    # convention: a whole cycle of critiques, rankings, receipts and a sealed prediction was
+    # built on pixels nobody in the session ever opened, and the owner scored it 23/100.
+    [ -d "$EX" ] || { echo "design-explore: no explore '$ID' -- run init first" >&2; exit 1; }
+    rfails=0
+    for v in $VARIANTS; do
+      srdir="$EX/variant-$v/self-review"
+      # A variant composed in one pass has nothing to prove. Absence is not a failure; only
+      # a CLAIM that cannot be substantiated is.
+      [ -d "$srdir" ] || continue
+      man="$srdir/manifest.md"
+      if [ ! -f "$man" ]; then
+        echo "ERR  [selfreview-manifest-missing] variant-$v: a self-review/ directory with no manifest.md -- iterations happened and nothing records what they were for"
+        rfails=$((rfails + 1))
+        continue
+      fi
+      sess="$ROOT/.claude/state/design/renders/$ID--variant-$v"
+
+      # Read a meta's published hash. Anchored to the whole pretty-printed line: an
+      # unanchored match would let any line mentioning the key decide the comparison.
+      _sha_of() { sed -n 's/^  "screenshot_sha256": "\(.*\)",\{0,1\}$/\1/p' "$1" 2>/dev/null | head -1; }
+      # The iteration's meta, found by GLOB rather than by recomputing the slug. _slug()
+      # already exists in design-render.sh and design-critique.sh; a third copy is the
+      # twin-fix shape, and this needs the file, not the name.
+      _meta_for() { ls "$sess"/*--iter-"$1".json 2>/dev/null | head -1; }
+
+      # Every iteration on disk past the first OWES a row. Without this, a manifest that
+      # merely mentions a table in prose satisfies the gate by looking like one -- the
+      # cosmetic-variant class this repo has logged twice.
+      for m in "$sess"/*--iter-*.json; do
+        [ -f "$m" ] || continue
+        n="$(printf '%s' "$m" | sed -n 's/.*--iter-\([0-9]*\)\.json$/\1/p')"
+        [ -n "$n" ] || continue
+        [ "$n" -ge 2 ] 2>/dev/null || continue
+        if ! grep -qE "^[[:space:]]*\|[[:space:]]*$n[[:space:]]*\|[0-9a-f]{8,}" "$man" 2>/dev/null &&
+           ! grep -qE "^[[:space:]]*\|[[:space:]]*$n[[:space:]]*\|[[:space:]]*[0-9a-f]{8,}" "$man" 2>/dev/null; then
+          echo "ERR  [selfreview-row-missing] variant-$v: iteration $n was rendered and the manifest carries no row for it"
+          rfails=$((rfails + 1))
+        fi
+      done
+
+      # Now judge the rows that ARE there. Anchored at line start so a sentence quoting a
+      # row can never be one.
+      while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        n="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$2); print $2}')"
+        inh="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$3); print $3}')"
+        outh="$(printf '%s' "$line" | awk -F'|' '{gsub(/ /,"",$4); print $4}')"
+        defect="$(printf '%s' "$line" | awk -F'|' '{print $5}' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+        revision="$(printf '%s' "$line" | awk -F'|' '{print $6}' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')"
+
+        if [ -z "$defect" ] || [ -z "$revision" ]; then
+          echo "ERR  [selfreview-empty] variant-$v iteration $n: the defect and revision cells are the whole point of the row"
+          rfails=$((rfails + 1)); continue
+        fi
+
+        cur="$(_meta_for "$n")"
+        if [ -z "$cur" ]; then
+          echo "ERR  [selfreview-no-render] variant-$v: the manifest claims iteration $n and there is no render meta for it"
+          rfails=$((rfails + 1)); continue
+        fi
+        prev_n=$((n - 1))
+        prev="$(_meta_for "$prev_n")"
+        if [ -z "$prev" ]; then
+          echo "ERR  [selfreview-no-render] variant-$v: iteration $n names iteration $prev_n as its input and there is no render meta for it"
+          rfails=$((rfails + 1)); continue
+        fi
+
+        real_out="$(_sha_of "$cur")"
+        real_in="$(_sha_of "$prev")"
+        if [ "$outh" != "$real_out" ]; then
+          echo "ERR  [selfreview-output-hash] variant-$v iteration $n: the manifest names output $outh and the render published $real_out"
+          rfails=$((rfails + 1)); continue
+        fi
+        if [ "$inh" != "$real_in" ]; then
+          echo "ERR  [selfreview-input-hash] variant-$v iteration $n: the manifest names input $inh and iteration $prev_n published $real_in"
+          rfails=$((rfails + 1)); continue
+        fi
+
+        # The load-bearing rule. Identical hashes mean the pixels did not move, so nothing was
+        # visibly fixed -- and a row claiming otherwise is the narrated verdict this gate
+        # exists to refuse. An honest null claim ("unchanged") is accepted: under ADR-1417
+        # "nothing changed" is a first-class RESULT, not a fault.
+        if [ "$inh" = "$outh" ]; then
+          case "$(printf '%s' "$defect" | tr 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' 'abcdefghijklmnopqrstuvwxyz')" in
+            unchanged*) ;;
+            *)
+              echo "ERR  [selfreview-unchanged-claim] variant-$v iteration $n: input and output hashes are identical, so the pixels did not move -- a row may not claim it fixed '$defect'"
+              rfails=$((rfails + 1));;
+          esac
+        fi
+      done <<EOF
+$(grep -E "^[[:space:]]*\|[[:space:]]*[0-9]+[[:space:]]*\|" "$man" 2>/dev/null || true)
+EOF
+    done
+    [ "$rfails" -eq 0 ] || { echo "design-explore: $rfails self-review error(s)"; exit 1; }
+    echo "design-explore: self-review manifests substantiated"
     exit 0
     ;;
 
