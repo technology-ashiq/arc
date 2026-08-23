@@ -1,11 +1,11 @@
 # PROGRESS.md — Cycle 7 · arc-engine "The Hired Hands"
 
-status: LIVE
+status: CLOSED
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
-phase: 08
+phase: 08 (cycle closed)
 appetite: 12d
-burn: 8.5d
-blocked-on: external — REQ-07: three real dispatches, which need the MAIN CLONE and an owner pack approval
+burn: 9.5d
+blocked-on: —
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -32,7 +32,7 @@ depends-on: —
 | 05 | The shim — `drivers/hermes` on the real 3-code contract, `drivers/mock` replay, two-surface adversarial pass on the output parser | 1.5 days | ✅ done 2026-08-17 |
 | 06 | **Certification or STOP** — 12 fixtures green against the real runtime with receipts, plus the scrubbed-transcript evidence path | 2 days | ✅ done 2026-08-23 |
 | 07 | The hire — ONE reviewed `router.yaml` diff carrying the policy row and termination spec, the capped key, the calibration baseline | 1 day | ✅ done 2026-08-23 |
-| 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | pending |
+| 08 | The job — draft process authored, context-pack flow, ≥3 real runs with per-draft verdicts, a hand-written results table, retro and seal | 1.5 days | ✅ done 2026-08-24 |
 
 **CAP RAISED TO 12 DAYS BY OWNER RULING, 2026-08-23 — and the ruling was "no scope cut, finish every
 phase".** At 7.5 of 9.5 (79%) with phases 06, 07 and 08 still allocating 4.5 days, the arithmetic did
@@ -55,6 +55,32 @@ written as the smaller, true number. Kill checkpoint is read at **day 5**, not a
 on-track run is one that learns to be ignored.
 
 ## Done log
+
+- 2026-08-24 — **PHASE 08 CLOSED. CYCLE 7 CLOSED. 6/6 phases, 8/8 REQ validated.**
+  `amendments: 2` · `reopened: n`. **Actual vs appetite: 9.5 of 12 days, ~79%** — the cap was raised
+  twice and both times in writing (7.5 → 9.5 at the day-5 checkpoint, 9.5 → 12 when the owner ruled
+  no scope cut). Neither raise bought new scope; the two pre-decided cuts stayed cut.
+  - **THE HIRE WORKS.** Three owner-approved dispatches, three `run.completed` receipts, **zero
+    quarantined**, **one attempt each**, 35.8–40.7 s: `01M0QZQ1SSKTCHXAZQZ5WGG917`,
+    `01M0QZSMMXZ0G4K4WPACMMHP4P`, `01M0QZV7A96F29EBR0MMY51SZ1`. Counted from the spine, never from
+    the suite. **2 accepted, 1 rejected**, one line of reason each.
+  - **The 2026-08-18 round took two attempts per dispatch and produced nothing** because the driver
+    sent a process name and never the brief. With the brief arriving the ladder was not needed once.
+  - **The transcript half earned its keep on the first round it applied to** — three transcripts
+    stored automatically, both streams. That round lost its own because storage was opt-in.
+  - **REQ-06 and REQ-07 `active` → `validated`.** All eight REQs are now validated.
+  - **Seven stale inbox items cleared with reasons**, including three verdict requests for drafts
+    that were never produced and four tier escalations whose cause was never the tier.
+  - **The retro is five pattern rows**, all recurring within the cycle, led by a correction that was
+    itself false three times over.
+  - **Production receipts across 2026-08-12..24:** 38 `approval.requested`, 38 `run.completed`, 33
+    `decision.recorded`, 14 `phase.closed`. 20 hermes dispatches, 6 ok — 3 this round, 3 the
+    isolation probes that closed the confound. The engine was pushed, not pulled.
+  - **What this cycle does NOT claim.** Fixture 5 has no real-container arm; fixture 9's
+    proposal-receipt arm was never read off the spine for the real dispatches; a transcript cannot
+    be joined to a receipt id by filename; and all three drafts chose the same pack entry out of
+    five, which three runs cannot explain. Each is in `absent-evidence.md` or the round's own
+    evidence rather than smoothed away.
 
 - 2026-08-23 — **PHASE 06 AND PHASE 07 CLOSED TOGETHER.** `amendments: 2` (ADR-0225, and REQ-06's
   classification input) · `reopened: n`. **Actual vs appetite: Phase 06 budgeted 2 days and cost

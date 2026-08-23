@@ -20,7 +20,7 @@
 - [x] Retro run via `/arc-retro --lane engine`, reading **accepted-draft quality** and not only safety counts — a pass condition that is only an absence cannot detect mediocrity. **DONE** — five pattern rows in `docs/retro-log.md`, and the quality read is explicit rather than a safety count: 2 of 3 accepted, the rejection on length and a malformed citation, and the finding that all three drafts chose the same pack entry out of five.
 - [x] The retro records the cycle's **production** receipt counts read from the spine, so the record shows whether the engine was pulled or pushed. **DONE** — counted over 2026-08-12..24 on the production spine: 38 `approval.requested`, 38 `run.completed`, 33 `decision.recorded`, 14 `phase.closed`, 7 `kickoff.done`. **20 hermes dispatches across the cycle, 6 ok** — of which 3 are this approved round and 3 were the 2026-08-19 isolation probes that closed the confound. The engine was pushed, not pulled.
 - [ ] tests added & green **on CI, read per-JOB**, head SHA confirmed equal to local HEAD.
-- [ ] tracker updated (PROGRESS.md row ✅ + done-log), and the lane header, the board and `docs/HISTORY.md` move in the same commit as the close — a lane whose HISTORY says CLOSED while its PROGRESS says LIVE is a defect, not a habit.
+- [x] tracker updated (PROGRESS.md row ✅ + done-log), and the lane header, the board and `docs/HISTORY.md` moved in the SAME commit as the close — **DONE**: phase 08 ✅, lane header `status: CLOSED`, `PORTFOLIO.md` engine row IDLE with `board-lint` green against the lane header, and the C7 row in `docs/HISTORY.md`. A lane whose HISTORY says CLOSED while its PROGRESS says LIVE is a defect, not a habit — and this repo has recorded exactly that going unnoticed for five days.
 
 ## Verification plan
 
