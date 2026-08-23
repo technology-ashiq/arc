@@ -43,6 +43,19 @@ and are otherwise disjoint. Measured the same day, on the same tree (2517 tracke
 arc is roughly half shell and markdown. Retiring graphify would have surrendered 1087 ADR/plan/rule
 files and 97 harness scripts to grep, for free, in order to avoid a cost that does not exist.
 
+**The `.bats` gap is structural, and the obvious cheap fix is a trap.** graphify already parses
+bash: `detect.py` carries `.sh` and `.bash` in `CODE_EXTENSIONS` and `extract.py` dispatches
+`".sh": extract_bash`. Adding `.bats` to both looks like a two-line fix. Measured, it is not.
+`tests/sync.bats` — 297 lines, 26 `@test` blocks — was handed to the bash extractor and yielded
+nine nodes: `setup()`, `teardown()`, `_claude_set()`, and four loose variables. **Not one of the
+26 tests.** `@test "name" { }` is not bash syntax; bats preprocesses it, and a bash parser walks
+straight past every block. Extension-mapping `.bats` would therefore produce an index that reads
+as coverage while holding almost nothing — strictly worse than a gap someone knows about, because
+an agent would trust it. There is also no config seam to try it through: `CODE_EXTENSIONS` is a
+module-level set imported directly, with no env var and no project override, so the only local
+route is patching site-packages — which dies on the next `uv tool upgrade`, never reaches CI, and
+puts arc's index behind a hand-patched dependency.
+
 **They are also different *kinds* of index.** codegraph returns an exact symbol with its file, line
 and callers. graphify runs a heuristic BFS over the graph: asked which scripts call `lane-resolve`,
 it returned the correct core — `resolveLane() → validLaneName() / laneStatus() / isEligible()` with
@@ -113,7 +126,9 @@ Four consequences of that split are binding:
   resolve by construction.
 - `docs/product-runbook.md` stops telling a reader to commit `graphify-out/`, which PR #213 had
   made a direct contradiction of `.gitignore` the day before.
-- The `.bats` gap is now written down rather than discovered per-incident. Closing it needs a
-  bats parser in one of the two tools; until then that column reads grep, and 165 files is a
-  large enough share of arc that this is worth revisiting rather than accepting forever.
+- The `.bats` gap is now written down rather than discovered per-incident, **and measured**:
+  closing it needs a genuinely bats-aware parser, not an extension entry. The extension entry
+  was tried against a real suite and returned three helper functions out of 26 tests, so it is
+  ruled out here rather than left as an inviting one-liner for the next person. Until a real
+  parser exists that column reads grep — 165 files, worth revisiting, not worth faking.
 - Cost of the whole arrangement: zero tokens, recurring. Both refreshes are AST-only.
