@@ -53,7 +53,17 @@ load 'test_helper'
   run node "$ARC_ROOT/.claude/scripts/core/face-coverage.mjs" "$ARC_ROOT" --selftest
   [ "$status" -eq 0 ] || { echo "$output"; false; }
   [[ "$output" == *"clean tree passes: PASS"* ]] || { echo "$output"; false; }
-  [[ "$output" == *"exit code on a real gap:      PASS"* ]] || { echo "$output"; false; }
+  # The exit-code arm became ELEVEN, one per gap CLASS, after an adversarial pass showed a
+  # mutant narrowing `if (findings.length)` to `[lane]` passing all seventeen mutant arms AND
+  # the bats negative arm while silently exiting 0 on four other kinds of gap. Assert the
+  # classes by name, so deleting one is visible here and not only inside the gate.
+  for cls in "lane" "kind" "command" "agent" "product" "rule" "process"; do
+    [[ "$output" == *"exit 1 on a $cls"*"PASS"* ]] || { echo "no exit arm for a $cls gap"; echo "$output"; false; }
+  done
+  [[ "$output" == *"command in a ghost room"*"PASS"* ]] || { echo "$output"; false; }
+  [[ "$output" == *"agent in a ghost room"*"PASS"* ]] || { echo "$output"; false; }
+  local exits; exits=$(printf '%s\n' "$output" | grep -c "^exit 1 on a ")
+  [ "$exits" -ge 11 ] || { echo "only $exits exit-code arms: $output"; false; }
   # every arm must report PASS, and there must be at least eight of them
   [[ "$output" != *"FAIL"* ]] || { echo "$output"; false; }
   local arms; arms=$(printf '%s\n' "$output" | grep -c "^mutant ")

@@ -55,14 +55,19 @@ export function tokenState(repo) {
   };
 }
 
-function run(repo, check) {
+function run(repo, check, quiet = false) {
   const { want, have, dstPath } = tokenState(repo);
   if (have === want) {
+    if (quiet) return 0;
     process.stdout.write(`face-tokens: face/src/tokens.css matches docs/design/system/tokens.css (${want.length} bytes)\n`);
     return 0;
   }
   if (check) {
-    process.stderr.write(`FAIL  [face-tokens-drift] face/src/tokens.css is ${have === null ? "missing" : "not a copy of"} docs/design/system/tokens.css -- run face-tokens.mjs (never hand-edit the copy)\n`);
+    // Quiet for the selftest: its drift arms EXPECT this failure, and printing the gate's own
+    // FAIL line inside a PASSING negative control puts the word "FAIL" into a transcript that
+    // other checks read for exactly that word.
+    if (!quiet)
+      process.stderr.write(`FAIL  [face-tokens-drift] face/src/tokens.css is ${have === null ? "missing" : "not a copy of"} docs/design/system/tokens.css -- run face-tokens.mjs (never hand-edit the copy)\n`);
     return 1;
   }
   mkdirSync(dirname(dstPath), { recursive: true });
@@ -101,17 +106,17 @@ function selftest(repo) {
   writeFileSync(tmpSrc, readFileSync(join(repo, ...SRC), "utf8"));
 
   writeFileSync(tmpDst, want.replace("--accent", "--hand-edited-accent"));
-  armed("a hand-edited copy exits 1", run(tmp, true) === 1);
+  armed("a hand-edited copy exits 1", run(tmp, true, true) === 1);
 
   // A LENGTH-PRESERVING edit, because comparing by length instead of by content is a real
   // mutant and the previous arm could not tell the two apart: `--accent` -> `--acceNt` keeps
   // the byte count identical and must still be caught.
   writeFileSync(tmpDst, want.replace("--accent", "--acceNt"));
-  armed("a length-preserving hand-edit exits 1", run(tmp, true) === 1);
+  armed("a length-preserving hand-edit exits 1", run(tmp, true, true) === 1);
 
   // An ABSENT copy is drift too, and this is the case the old in-place arm silently skipped.
   rmSync(tmpDst);
-  armed("a missing copy exits 1", run(tmp, true) === 1);
+  armed("a missing copy exits 1", run(tmp, true, true) === 1);
 
   // A source that is not the token file must be REFUSED rather than copied over the app's
   // styles. The cheap version of this generator would happily blank the product.

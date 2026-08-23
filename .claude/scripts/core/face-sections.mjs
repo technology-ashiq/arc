@@ -230,7 +230,7 @@ function loadCopy(repo) {
   return JSON.parse(readFileSync(p, "utf8"));
 }
 
-function run(repo, check) {
+function run(repo, check, quiet = false) {
   const contract = loadContract(repo);
   const productsDir = join(repo, "products");
   const drift = [];
@@ -266,6 +266,7 @@ function run(repo, check) {
     if (registryDrifted)
       drift.push("rooms.generated.json");
     if (drift.length) {
+      if (quiet) return 1;
       for (const p of drift) {
         if (p === "rooms.generated.json")
           process.stderr.write(`FAIL  [face-registry-drift] initiatives/face/contracts/rooms.generated.json is not what the contract + room-copy.json derive -- run face-sections.mjs (never hand-edit it)\n`);
@@ -275,6 +276,7 @@ function run(repo, check) {
       process.stderr.write(`face-sections: ${drift.length} artifact(s) drifted from the contract\n`);
       return 1;
     }
+    if (quiet) return 0;
     process.stdout.write(`face-sections: every face: section matches the contract (${mapped} mapped, ${skipped} unmapped by design); registry in sync (${wantRegistry.rooms.length} rooms)\n`);
     return 0;
   }
@@ -325,7 +327,9 @@ function selftest(repo) {
   let driftExit = null;
   try {
     writeFileSync(rpath, (before || "{}").replace(/"version": "1\.0\.0"/, '"version": "9.9.9"'));
-    driftExit = run(repo, true);
+    // Quiet: this arm EXPECTS the failure, and a passing negative control must not print the
+    // word "FAIL" into a transcript other checks read for exactly that word.
+    driftExit = run(repo, true, true);
   } finally {
     if (before !== null) writeFileSync(rpath, before);
   }
