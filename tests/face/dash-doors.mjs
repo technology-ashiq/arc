@@ -173,6 +173,41 @@ try {
   const receipts = routes.filter((x) => x.spineEffect === "receipt");
   check("proxied spine effects are named, not hidden behind mutates:false", receipts.every((x) => typeof x.proxy === "string" && x.proxy.length > 0), receipts.map((x) => x.path).join(","));
 
+  // ---- /api/rooms: the registry L3 renders from (REQ-01) ----
+  // L3 must not carry a second spelling of the room list; the door serves the generated
+  // registry and adds the one thing the registry cannot know -- what is actually alive.
+  {
+    const rr = await j("/api/rooms", { headers: H });
+    check("rooms door answers", rr.status === 200, `status=${rr.status}`);
+    check("rooms door serves the whole registry", rr.body.rooms && rr.body.rooms.length === 33, `rooms=${rr.body.rooms && rr.body.rooms.length}`);
+    check("rooms door serves the five rings", Array.isArray(rr.body.rings) && rr.body.rings.length === 5, JSON.stringify(rr.body.rings));
+
+    // THE REGRESSION PIN. readAll returns ENVELOPES ({ event, day, seq, line }), and the
+    // first cut of this handler counted `e.kind` -- undefined on an envelope -- so every
+    // event fell into ONE bucket and all 24 kind-bearing rooms reported "unexercised".
+    // The route answered 200 with a well-formed lie, and only a probe against a real
+    // fixture caught it. A bare-`e.kind` regression makes this exactly 1. The fixture is
+    // seeded, so the count is deterministic and a floor above 1 kills the defect.
+    check("kind counting reads THROUGH the envelope (bare e.kind gives exactly 1)",
+      rr.body.kindsEverFired > 1, `kindsEverFired=${rr.body.kindsEverFired}`);
+    const live = rr.body.rooms.filter((x) => x.live.state === "live");
+    check("the seeded fixture lights up real rooms, not zero", live.length >= 5, `live=${live.length}`);
+
+    // Honesty, both directions: no room may claim receipts the log does not hold, and every
+    // room must declare one of the four states rather than a bare zero.
+    const overclaim = rr.body.rooms.filter((x) => x.live.receipts > gen.events);
+    check("no room claims more receipts than the log holds", overclaim.length === 0, overclaim.map((x) => x.id).join(","));
+    const STATES = ["live", "unexercised", "file-borne", "index"];
+    const badState = rr.body.rooms.filter((x) => !STATES.includes(x.live.state));
+    check("every room declares an honest state, never a bare zero", badState.length === 0, badState.map((x) => `${x.id}:${x.live.state}`).join(","));
+    const noSentence = rr.body.rooms.filter((x) => !x.sentence || !x.sentence.trim());
+    check("every room the door serves carries its opening sentence", noSentence.length === 0, noSentence.map((x) => x.id).join(","));
+    // An index room derives no kinds by design; a NON-index room that homes kinds and
+    // reports zero homed would mean the registry's holds block was dropped in transit.
+    const lostHolds = rr.body.rooms.filter((x) => x.live.state !== "index" && x.live.kindsHomed === 0 && x.live.state !== "file-borne");
+    check("no room lost its holds block in transit", lostHolds.length === 0, lostHolds.map((x) => x.id).join(","));
+  }
+
   // journal wrote real entries
   const jf = readdirSync(JOURNAL).filter((f) => f.startsWith("journal-"));
   const jlines = jf.length ? readFileSync(join(JOURNAL, jf[0]), "utf8").trim().split("\n") : [];

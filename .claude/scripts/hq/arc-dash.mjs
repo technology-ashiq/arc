@@ -146,6 +146,67 @@ async function apiHealth(ctx) {
   };
 }
 
+/**
+ * The room registry, plus the one thing the registry cannot know: how much of each room is
+ * actually ALIVE right now.
+ *
+ * L3 renders 33 rooms and must not carry a second spelling of the contract -- that is the
+ * whole argument of ADR-1306, and a renderer with its own room list is exactly how a
+ * renamed room silently empties a screen. So the door serves the generated registry
+ * verbatim and adds a `live` block derived from the spine at read time.
+ *
+ * `live.kinds` answers the question a generic room has to answer honestly before it draws
+ * anything: of the kinds this room homes, which have EVER fired? A room whose kinds have
+ * all fired zero times is not broken and is not empty -- it is UNEXERCISED, and saying so
+ * is the difference between an honest room and a convincing blank one (room-map.md D7).
+ */
+async function apiRooms(ctx) {
+  const p = join(ctx.repo, "initiatives", "face", "contracts", "rooms.generated.json");
+  if (!existsSync(p))
+    throw new DashError("REGISTRY_ABSENT", "rooms.generated.json has not been generated -- run face-sections.mjs");
+  const registry = JSON.parse(readFileSync(p, "utf8"));
+
+  // Counted from the log, never from a stored total: a cached count is the second truth
+  // ADR-1301 forbids, and it is the one that goes stale without anyone noticing.
+  //
+  // readAll returns ENVELOPES -- { event, day, seq, line } -- not bare events. The first
+  // cut of this handler read `e.kind`, which is undefined on an envelope, so every kind
+  // counted as one bucket and all 24 kind-bearing rooms reported UNEXERCISED. That is
+  // precisely the dishonest-empty-room class room-map.md D7 exists to prevent, shipped by
+  // the code meant to prevent it, and only a probe against a real fixture caught it: the
+  // route answered 200 with a perfectly well-formed lie.
+  const seen = new Map();
+  for (const { event } of (await readAll(ctx.root)).events)
+    seen.set(event.kind, (seen.get(event.kind) || 0) + 1);
+
+  const rooms = registry.rooms.map((r) => {
+    const kinds = (r.holds && r.holds.kinds) || [];
+    const fired = kinds.filter((k) => seen.has(k));
+    return {
+      ...r,
+      live: {
+        kindsHomed: kinds.length,
+        kindsFired: fired.length,
+        receipts: fired.reduce((n, k) => n + seen.get(k), 0),
+        // Three honest states, none of them an error and none of them a bare zero:
+        //   live         at least one homed kind has fired
+        //   unexercised  the room homes kinds and not one has ever fired -- built, never run
+        //   file-borne   the room homes NO kinds; its content comes from the tree and the
+        //                contract, not from the log, so the log has nothing to say about it.
+        //                The door already uses "file, not log" for exactly this distinction
+        //                (/api/board), and reusing that vocabulary is the point: a reader
+        //                should never have to learn two names for one idea.
+        //   index        renders a whole inventory rather than a slice (org, concepts)
+        state: r.render === "index" ? "index"
+          : kinds.length === 0 ? "file-borne"
+            : fired.length === 0 ? "unexercised" : "live",
+      },
+    };
+  });
+
+  return { mode: ctx.mode, rings: registry.rings, rooms, kindsEverFired: seen.size };
+}
+
 async function apiSpine(ctx, url) {
   const asof = parseAsof(url);
   const limitRaw = url.searchParams.get("limit");
@@ -402,6 +463,7 @@ const ROUTES = Object.freeze([
   { method: "GET", path: "/api/inbox", mutates: false, spineEffect: "none", handler: (ctx, url) => apiInbox(ctx, url) },
   { method: "GET", path: "/api/pnl", mutates: false, spineEffect: "none", handler: (ctx, url) => apiPnl(ctx, url) },
   { method: "GET", path: "/api/board", mutates: false, spineEffect: "none", handler: (ctx) => apiBoard(ctx) },
+  { method: "GET", path: "/api/rooms", mutates: false, spineEffect: "none", handler: (ctx) => apiRooms(ctx) },
   { method: "GET", prefix: "/api/lane/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiLane(ctx, tail) },
   { method: "GET", prefix: "/api/file/", mutates: false, spineEffect: "none", handler: (ctx, url, tail) => apiFile(ctx, tail) },
   { method: "POST", path: "/api/decide", mutates: true, spineEffect: "write", handler: (ctx, url, tail, body) => apiDecide(ctx, body) },
