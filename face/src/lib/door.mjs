@@ -30,6 +30,67 @@ export const KNOWN_REFUSALS = {
   ASOF_UNSUPPORTED: "This panel is file-borne; it has no day-granular history to scrub to.",
 };
 
+/**
+ * Undo the door's own HTML escaping. THE canonical implementation -- there is exactly one.
+ *
+ * L2 runs `escapeDeep` over every string it serves, refusals included, so `isn't` arrives as
+ * `isn&#39;t` and React would render those five characters literally. The product's flagship
+ * line, "If it isn't an event, it didn't happen.", is the first casualty.
+ *
+ * THE ORDER IS THE WHOLE THING. The door escapes `&` FIRST, so the client must unescape
+ * `&amp;` LAST. Undoing it in the other order turns `&amp;lt;` -- a literal `&lt;` someone
+ * typed -- into a live `<`, which is a decoder manufacturing a character from text that
+ * never held one. React still escapes on render, so this is not the only defence, but a
+ * function that can invent a `<` is wrong on its own terms.
+ *
+ * It lives HERE, in the door client, because it undoes the door's contract and nothing else.
+ * Two independent agents each wrote their own copy in their own module (`unescapeDoorText`
+ * in rooms.mjs, `decodeDoorText` in inbox.mjs) and each left a comment saying a twin existed
+ * and must not drift. That is the exact shape this repo keeps paying for -- a rule with two
+ * spellings, fixed in one of them. Both now re-export this.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function unescapeDoorText(value) {
+  if (typeof value !== "string") return "";
+  if (value.indexOf("&") === -1) return value;
+  return value
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * Decode the registry's human text ONCE, where it enters.
+ *
+ * `Review & Ship` arrives from the door as `Review &amp; Ship` and rendered as five literal
+ * characters in the rail, in the Map's labels, and in every station's accessible name. It
+ * was missed in two places on the first pass -- which is the argument against decoding at
+ * each render site: a rule applied in N places is a rule forgotten in one of them, and here
+ * N was already 26 within an hour of the first component existing.
+ *
+ * Only the three HUMAN fields are decoded. Ids, ring names and inventory items are machine
+ * vocabulary that cannot legitimately contain an entity, and decoding them would be a second
+ * pass over strings some component may already have decoded -- the double-decode this
+ * function's own comment in unescapeDoorText warns about.
+ *
+ * @template {{ rooms?: unknown }} T
+ * @param {T} registry
+ * @returns {T}
+ */
+export function decodeRegistry(registry) {
+  if (!registry || !Array.isArray(registry.rooms)) return registry;
+  return {
+    ...registry,
+    rooms: registry.rooms.map((r) => (r && typeof r === "object"
+      ? { ...r, name: unescapeDoorText(r.name), sentence: unescapeDoorText(r.sentence), lede: unescapeDoorText(r.lede) }
+      : r)),
+  };
+}
+
 export class DoorError extends Error {
   /** @param {string} code @param {string} message @param {number} status */
   constructor(code, message, status) {

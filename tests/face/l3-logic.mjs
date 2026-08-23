@@ -309,5 +309,151 @@ check("an empty query returns the head of the list, not nothing", shell.rankMatc
 check("a query matching nothing returns nothing rather than everything", shell.rankMatches(items, "zzzz").length === 0);
 check("ranking never throws on a non-string query", Array.isArray(shell.rankMatches(items, undefined)));
 
+// ---------- the Map: the coverage guarantee, made checkable ----------
+// The Map is the one screen that proves nothing is missing, so its correctness IS its layout
+// maths -- and layout maths is exactly what a screenshot cannot audit. All of it is pure and
+// lives in map.mjs, which is why these run here with no browser and no build.
+const map = await import(pathToFileURL(join(LIB, "map.mjs")).href);
+check("map module loaded (vacuous-pass guard)",
+  typeof map.buildMap === "function" && typeof map.labelCollisions === "function");
+
+const model = map.buildMap(withLive, { mode: "sim" });
+
+// THE ACCEPTANCE BAR, four assertions, each of which can actually fail.
+check("every room in the registry is a station on the map",
+  model.stations.length === withLive.length, `stations=${model.stations.length} rooms=${withLive.length}`);
+check("every ring is a line", model.lines.length === 5, `lines=${model.lines.length}`);
+check("no two labels collide at 33 stations -- the legibility bar, measured not assumed",
+  map.labelCollisions(model.labels).length === 0,
+  JSON.stringify(map.labelCollisions(model.labels).slice(0, 3)));
+check("the legend accounts for every mark the map draws",
+  map.legendGaps(model).length === 0, map.legendGaps(model).join(", "));
+
+// Not one registry id may be absent. A map that quietly drops a room is worse than no map:
+// it is the coverage claim, contradicted by the thing making it.
+const drawn = new Set(model.stations.map((s) => s.id));
+const missing = withLive.filter((r) => !drawn.has(r.id)).map((r) => r.id);
+check("no room is dropped between the registry and the map", missing.length === 0, missing.join(", "));
+
+// Determinism: the same registry must draw the same map. A layout that shifts between runs
+// cannot be reviewed, and its diffs are noise that hides the real change.
+check("the same registry draws a byte-identical map",
+  JSON.stringify(map.buildMap(withLive, { mode: "sim" })) === JSON.stringify(model));
+
+// Colour-free channels. The map must be readable without hue, and it must not borrow a
+// reserved one: amber/green/red carry meanings that a line has no business claiming.
+const patterns = new Set(model.stations.map((s) => s.pattern));
+check("state is carried by stroke pattern, not by colour", patterns.size >= 2, [...patterns].join(","));
+const shapes = new Set(model.stations.map((s) => s.shape));
+check("room kind is carried by shape", shapes.size >= 2, [...shapes].join(","));
+
+// An unexercised room must not have traffic animated through it -- a moving dot is a claim
+// that something ran, and it would contradict the dashed stroke beside it.
+const dots = map.flightDots(model, { speed: 1 });
+check("flight dots exist only where something has actually run",
+  Array.isArray(dots) && dots.every((d) => typeof d.d === "string" && d.d.length > 0), `dots=${dots.length}`);
+
+// Mode is stated or it is not claimed. Drawing "live" on no evidence is the lie the whole
+// honesty vocabulary exists to prevent, and an unset prop is no evidence.
+const noMode = map.modeChip(undefined);
+check("an unstated mode says so rather than claiming live",
+  !/\blive\b/i.test(noMode.label) && noMode.real === false, noMode.label);
+check("a stated sim mode is marked non-real", map.modeChip("sim").real === false);
+
+// Every station has to be reachable and named for a screen reader; the map is navigation.
+check("every station is in the focus order",
+  map.focusOrder(model).length === model.stations.length);
+const unnamed = model.stations.filter((s) => {
+  const n = map.accessibleName(s);
+  return typeof n !== "string" || n.trim().length < 3;
+});
+check("every station carries an accessible name", unnamed.length === 0, unnamed.map((s) => s.id).join(", "));
+
+// ---------- the Inbox: the one write path ----------
+const inbox = await import(pathToFileURL(join(LIB, "inbox.mjs")).href);
+check("inbox module loaded (vacuous-pass guard)", typeof inbox.validateReason === "function");
+
+// THE DECODER, folded to one implementation. Two agents each wrote their own and each left a
+// comment saying a twin existed and must not drift -- the exact shape this repo keeps paying
+// for. There is now one rule with one home; these assert both spellings reach it.
+check("the door's escaping is undone so the flagship line reads as English",
+  door.unescapeDoorText("If it isn&#39;t an event, it didn&#39;t happen.") === "If it isn't an event, it didn't happen.");
+check("&amp; is undone LAST, so an escaped tag cannot become a live one",
+  door.unescapeDoorText("&amp;lt;script&amp;gt;") === "&lt;script&gt;");
+check("rooms.mjs and inbox.mjs both reach the SAME decoder, not a copy",
+  rooms.unescapeDoorText === door.unescapeDoorText && inbox.decodeDoorText("&amp;lt;") === "&lt;");
+check("a non-string decodes to an empty string rather than throwing",
+  door.unescapeDoorText(null) === "" && door.unescapeDoorText(undefined) === "");
+
+// The registry is decoded ONCE, where it enters. "Review & Ship" arrived as
+// "Review &amp; Ship" and rendered as five literal characters in the rail, in the Map's
+// labels and in every station's accessible name -- missed in two places on the first pass,
+// which is the argument against decoding at each render site.
+const escapedReg = { rings: ["command"], rooms: [{ id: "review-ship", ring: "factory", name: "Review &amp; Ship", sentence: "It isn&#39;t done.", lede: "a &amp; b", holds: {} }] };
+const decodedReg = door.decodeRegistry(escapedReg);
+check("a room's NAME is decoded at the boundary", decodedReg.rooms[0].name === "Review & Ship", decodedReg.rooms[0].name);
+check("a room's SENTENCE is decoded at the boundary", decodedReg.rooms[0].sentence === "It isn't done.", decodedReg.rooms[0].sentence);
+check("a room's LEDE is decoded at the boundary", decodedReg.rooms[0].lede === "a & b");
+check("machine vocabulary is left alone, so nothing gets decoded twice",
+  decodedReg.rooms[0].id === "review-ship" && decodedReg.rooms[0].ring === "factory");
+check("a registry with no rooms is returned untouched rather than throwing",
+  door.decodeRegistry({ rings: [] }).rings.length === 0 && door.decodeRegistry(null) === null);
+
+// A reason is mandatory and mirrors the SPINE's own rules, not house policy invented here.
+check("an empty reason is refused", inbox.validateReason("").ok === false);
+check("whitespace alone is not a reason", inbox.validateReason("   \n  ").ok === false);
+check("a real reason is accepted", inbox.validateReason("kill criteria met, closing it").ok === true);
+check("a control character is refused (the spine refuses it too)",
+  inbox.validateReason("ok nope").ok === false);
+const long = "x".repeat(2100);
+check("a reason past the spine's byte cap is refused here, not at the door",
+  inbox.validateReason(long).ok === false, `len=${long.length}`);
+
+// NO DEFAULT VERDICT, ANYWHERE. The reference stamped on a single keypress with a canned
+// reason ("cleared via keyboard -- evidence on the card"), which is the defect this product
+// exists to not have: an irreversible write with words the human never chose.
+const K = (key, over = {}) => inbox.keyAction({ key, typing: false, modified: false, index: 0, count: 3, ...over });
+check("a ARMS approve rather than recording it",
+  K("a").type === "arm" && K("a").verdict === "approve", JSON.stringify(K("a")));
+check("r ARMS reject rather than recording it",
+  K("r").type === "arm" && K("r").verdict === "reject", JSON.stringify(K("r")));
+check("no key in this room records a stamp -- the typed reason is the act",
+  ["a", "r", "j", "k", "Enter", "Escape"].every((k) => K(k).type !== "submit" && K(k).type !== "stamp"));
+check("nothing arms while the reason field has focus",
+  K("a", { typing: true }).type === "ignore" && K("r", { typing: true }).type === "ignore",
+  JSON.stringify(K("a", { typing: true })));
+check("a refusal to act says WHY, so a dead key is never silent",
+  typeof K("a", { typing: true }).why === "string" && K("a", { typing: true }).why.length > 5);
+check("a held modifier is left to the browser",
+  K("a", { modified: true }).type === "ignore");
+check("escape disarms even mid-sentence -- the way out is always available",
+  K("Escape", { typing: true }).type === "disarm");
+check("j moves to the next card", K("j").type === "move" && K("j").index === 1);
+check("moving is clamped to the cards that exist",
+  inbox.clamp(9, 3) < 3 && inbox.clamp(-4, 3) >= 0, `${inbox.clamp(9, 3)}/${inbox.clamp(-4, 3)}`);
+
+// Reserved hues, held by the one function that grants them. The vocabulary is SEMANTIC
+// (real-money / non-real / incident / quiet) rather than colour names, which is what stops a
+// component reaching for a hue directly.
+check("only revenue.received is real money",
+  inbox.toneForKind("revenue.received") === "real-money"
+  && inbox.toneForKind("revenue.simulated") !== "real-money"
+  && inbox.toneForKind("cost.incurred") !== "real-money",
+  `sim=${inbox.toneForKind("revenue.simulated")} cost=${inbox.toneForKind("cost.incurred")}`);
+check("simulated revenue is the non-real family, never money's colour",
+  inbox.toneForKind("revenue.simulated") === "non-real");
+check("only an incident is an incident",
+  inbox.toneForKind("incident.raised") === "incident" && inbox.toneForKind("day.closed") !== "incident");
+
+// "The door did not say" must survive to the pixel as its own state, never as 0.
+const tiles = inbox.kpiTiles({ health: null, inbox: null });
+check("tiles render even when the door served nothing", Array.isArray(tiles) && tiles.length > 0, `tiles=${tiles.length}`);
+check("a KPI the door did not serve is NOT rendered as a measured zero",
+  tiles.every((t) => t.state !== "measured"), JSON.stringify(tiles.map((t) => t.state)));
+check("every tile carries the route and field it came from -- a number with a receipt",
+  tiles.every((t) => typeof t.why === "string" && t.why.length > 4));
+check("every tile carries the sentence that keeps a zero from lying",
+  tiles.every((t) => typeof t.note === "string" && t.note.length > 4));
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;

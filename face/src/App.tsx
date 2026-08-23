@@ -8,7 +8,7 @@ import type { CSSProperties } from 'react'
 
 import './tokens.css'
 
-import { Door, DoorError, tokenFromHash } from './lib/door.mjs'
+import { Door, DoorError, decodeRegistry, tokenFromHash } from './lib/door.mjs'
 import { byRing, findRoom, defaultRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
 import { HOME, buildHash, isTextField, keyAction, moveRoom, navOrder, parseHash } from './lib/shell.mjs'
@@ -22,7 +22,7 @@ import Inbox from './rooms/Inbox'
 import MapRoom from './rooms/MapRoom'
 import { Failure, Loading } from './ui/kit'
 
-type Registry = { rings: string[]; rooms: Room[]; kindsEverFired: number }
+type Registry = { rings: string[]; rooms: Room[]; kindsEverFired: number; mode?: string }
 
 export default function App() {
   const [registry, setRegistry] = useState<Registry | null>(null)
@@ -44,7 +44,9 @@ export default function App() {
     const ac = new AbortController()
     door
       .rooms(ac.signal)
-      .then((r: Registry) => setRegistry(r))
+      // Decoded HERE, once, where the registry enters -- not at each of the render
+      // sites that show a room's name. See decodeRegistry for why that distinction matters.
+      .then((r: Registry) => setRegistry(decodeRegistry(r)))
       .catch((e: unknown) => {
         if (e instanceof DoorError || !ac.signal.aborted) setError(e)
       })
@@ -138,7 +140,7 @@ export default function App() {
       <div style={frameStyle}>
         <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
         <section style={roomStyle} aria-live="polite">
-          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} /> : <NoSuchRoom id={roomId} />}
+          {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} /> : <NoSuchRoom id={roomId} />}
         </section>
       </div>
     </main>
@@ -150,10 +152,10 @@ export default function App() {
  * kept here -- a second spelling of that decision would drift the moment a room changes mode.
  * The two bespoke ids are the exception and they are named, not guessed.
  */
-function RoomHost({ room, rooms, door, onOpen }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void }) {
+function RoomHost({ room, rooms, door, onOpen, mode, token }: { room: Room; rooms: Room[]; door: Door; onOpen: (id: string) => void; mode?: string; token: string | null }) {
   if (room.id === 'today') return <Today door={door} sentence={room.sentence} lede={room.lede} />
   if (room.id === 'inbox') return <Inbox door={door} sentence={room.sentence} lede={room.lede} />
-  if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} />
+  if (room.id === 'map') return <MapRoom rooms={rooms} onOpen={onOpen} mode={mode} token={token} />
   if (room.render === 'index') return <IndexRoom room={room} rooms={rooms} door={door} />
   return <GenericRoom room={room} />
 }
@@ -187,6 +189,12 @@ const faceLayerStyle: CSSProperties = {
   inset: 0,
   zIndex: 0,
   pointerEvents: 'none',
+  // The face is the shell, and a shell must not compete with the words in front of it.
+  // At full strength the particle field sat directly behind the room's opening sentence and
+  // made it hard to read -- the same defect the reference has on its own landing, where the
+  // paragraph beside the mask is barely legible. Presence drives SCALE, not opacity, so the
+  // dimming belongs here rather than in a prop.
+  opacity: 0.5,
 }
 
 const frameStyle: CSSProperties = {
@@ -202,6 +210,12 @@ const roomStyle: CSSProperties = {
   minWidth: 0,
   padding: 'calc(var(--grid) * 3)',
   overflowY: 'auto',
+  // A scrim, not a slab. The reference puts translucent panels over the face and lets it
+  // show through the gaps; the gaps are where a room's opening SENTENCE lives, and that is
+  // the largest text on the page. This keeps the face visible while giving every headline a
+  // ground to sit on -- the alternative, an opaque column, deletes the one element the owner
+  // said must not change.
+  background: 'linear-gradient(to bottom, rgba(0, 0, 0, 0.72), rgba(0, 0, 0, 0.55))',
 }
 
 const hintStyle: CSSProperties = {
