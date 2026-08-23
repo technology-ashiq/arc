@@ -89,7 +89,7 @@
     },
     "review-ship": {
       "sentence": "Every gate blocks by default.",
-      "lede": "seven gates, commit-keyed — a new commit is a new review, and a profile switches the whole set as one",
+      "lede": "seven gates, commit-keyed — a new commit is a new review, and a profile switches the whole set as one. The workflows below are what RUNS them; whether the last run was green is not instrumented here, and this room will not imply it from a list of names",
       "render": "generic"
     },
     "design-studio": {
