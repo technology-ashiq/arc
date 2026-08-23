@@ -178,5 +178,77 @@ check("the token rides as a bearer header, never in the query string",
 check("the reason is trimmed into the body, not sent raw",
   JSON.parse(seen.init.body).reason === "not yet");
 
+// ---------- the shell: routing and the keyboard model ----------
+const shell = await import(pathToFileURL(join(LIB, "shell.mjs")).href);
+check("shell module loaded (vacuous-pass guard)", typeof shell.keyAction === "function");
+
+// The address lives in the FRAGMENT so a room name never rides beside a token into a proxy
+// log, and so a reload of a static build cannot 404.
+check("a room is read out of the fragment", shell.parseHash("#/spine").room === "spine");
+check("a token rides alongside the room", shell.parseHash("#/spine&token=abc").token === "abc");
+check("the bare token URL arc-dash prints is the HOME route, not 'no route'",
+  shell.parseHash("#token=abc").room === null && shell.parseHash("#token=abc").token === "abc");
+check("an empty fragment is not a route", shell.parseHash("").room === null);
+check("a room id is decoded", shell.parseHash("#/council-chamber").room === "council-chamber");
+check("building a hash round-trips the room and the token", (() => {
+  const h = shell.buildHash("money", "tok");
+  const p = shell.parseHash(h);
+  return p.room === "money" && p.token === "tok";
+})());
+check("building a hash without a token carries no token key", !shell.buildHash("money").includes("token"));
+
+const order = shell.navOrder(rooms.byRing(withLive));
+check("nav order covers every openable room",
+  order.length === withLive.filter((r) => !r.template).length, `order=${order.length}`);
+check("nav order starts in the command ring", order[0] && withLive.find((r) => r.id === order[0]).ring === "command");
+
+// NOT wrapping is the deliberate choice: arriving back at Today after holding j teaches the
+// owner the company has no end, which is the opposite of what a coverage product should say.
+check("moving down stops at the last room rather than wrapping",
+  shell.moveRoom(order, order[order.length - 1], 1) === order[order.length - 1]);
+check("moving up stops at the first room rather than wrapping",
+  shell.moveRoom(order, order[0], -1) === order[0]);
+check("moving from the middle actually moves", shell.moveRoom(order, order[2], 1) === order[3]);
+check("moving from an unknown room lands somewhere real, never nowhere",
+  shell.moveRoom(order, "no-such-room", 1) === order[0]);
+check("moving in an empty nav does not throw or invent a room",
+  shell.moveRoom([], "today", 1) === "today");
+
+// The keyboard model. The rule that matters most: nothing fires while the owner is typing,
+// because this product's one write is irreversible and a reason box that eats "r" is a trap.
+const ctx = { inTextField: false, paletteOpen: false };
+check("j moves forward", shell.keyAction({ key: "j" }, ctx).type === "room-move");
+check("k moves back", shell.keyAction({ key: "k" }, ctx).delta === -1);
+check("g goes home", shell.keyAction({ key: "g" }, ctx).room === "today");
+check("an unbound key is left alone for the browser", shell.keyAction({ key: "q" }, ctx) === null);
+check("a modified key is left alone", shell.keyAction({ key: "j", ctrlKey: true }, ctx) === null);
+check("NOTHING fires while the owner is typing",
+  shell.keyAction({ key: "r" }, { inTextField: true, paletteOpen: false }) === null);
+check("the palette still opens from inside a text field -- it is how you leave",
+  shell.keyAction({ key: "k", metaKey: true }, { inTextField: true, paletteOpen: false }).type === "palette-toggle");
+check("while the palette is open it owns its keys",
+  shell.keyAction({ key: "j" }, { inTextField: false, paletteOpen: true }) === null);
+check("escape closes the palette",
+  shell.keyAction({ key: "Escape" }, { inTextField: false, paletteOpen: true }).type === "palette-close");
+
+check("a textarea counts as typing", shell.isTextField({ tagName: "TEXTAREA" }));
+check("a contenteditable div counts as typing, though it is not an input",
+  shell.isTextField({ tagName: "DIV", isContentEditable: true }));
+check("a plain div does not", !shell.isTextField({ tagName: "DIV" }));
+check("no element does not throw", !shell.isTextField(null));
+
+// Palette ranking: three letters must land on the thing the typist meant.
+const items = [
+  { id: "spine", label: "The spine" },
+  { id: "spine-health", label: "spine health" },
+  { id: "money", label: "Money", hint: "revenue" },
+];
+const ranked = shell.rankMatches(items, "spi");
+check("a prefix match outranks a substring match", ranked[0] && ranked[0].id === "spine-health", ranked.map((r) => r.id).join(">"));
+check("a hint match still surfaces", shell.rankMatches(items, "revenue").some((r) => r.id === "money"));
+check("an empty query returns the head of the list, not nothing", shell.rankMatches(items, "").length === 3);
+check("a query matching nothing returns nothing rather than everything", shell.rankMatches(items, "zzzz").length === 0);
+check("ranking never throws on a non-string query", Array.isArray(shell.rankMatches(items, undefined)));
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
-process.exitCode = failed === 0 && ran >= 35 ? 0 : 1;
+process.exitCode = failed === 0 && ran >= 60 ? 0 : 1;

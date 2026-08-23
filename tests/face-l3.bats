@@ -18,7 +18,7 @@ load 'test_helper'
   [[ "$output" == *"RAN: "*" checks, 0 failed"* ]] || { echo "$output"; false; }
   # Floor the count. "0 failed" is also what a suite that asserted nothing prints.
   local n; n=$(printf '%s\n' "$output" | sed -n 's/^RAN: \([0-9]\{1,\}\) checks.*/\1/p')
-  [ -n "$n" ] && [ "$n" -ge 35 ] || { echo "only $n checks ran: $output"; false; }
+  [ -n "$n" ] && [ "$n" -ge 60 ] || { echo "only $n checks ran: $output"; false; }
 }
 
 @test "the L3 logic layer imports NOTHING that needs an install" {
