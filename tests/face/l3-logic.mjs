@@ -309,6 +309,54 @@ check("an empty query returns the head of the list, not nothing", shell.rankMatc
 check("a query matching nothing returns nothing rather than everything", shell.rankMatches(items, "zzzz").length === 0);
 check("ranking never throws on a non-string query", Array.isArray(shell.rankMatches(items, undefined)));
 
+// ---------- the palette: how you REACH what the Map lets you SEE ----------
+// The Map draws 33 rooms. It cannot draw 107 concepts, and the contract anchors every one of
+// them to a room AND a station precisely so a search can land the reader in the right part of
+// the right room. If the palette knows less than arc does, coverage is a claim again.
+const CONTRACT = JSON.parse(readFileSync(join(REPO, "initiatives", "face", "contracts", "expected-set.json"), "utf8"));
+const conceptMap = CONTRACT.concepts.map;
+const paletteAll = shell.paletteItems(withLive, conceptMap);
+check("the contract still carries the full vocabulary (fixture guard)",
+  Object.keys(conceptMap).length >= 100, `concepts=${Object.keys(conceptMap).length}`);
+check("the palette reaches every room AND every concept -- 139, not 131",
+  paletteAll.length === withLive.length + Object.keys(conceptMap).length,
+  `items=${paletteAll.length} rooms=${withLive.length} concepts=${Object.keys(conceptMap).length}`);
+// The rail excludes the lane template because it is a shape, not a place. The PALETTE must
+// still reach it: eight concepts are anchored there, and skipping it made those eight words
+// of arc's own vocabulary unsearchable -- 131 items against a contract holding 139.
+check("the lane template is searchable even though the rail does not list it",
+  paletteAll.some((i) => i.id === "room:lane"));
+const laneConcepts = paletteAll.filter((i) => i.kind === "concept" && i.room === "lane");
+check("the concepts anchored in the template are reachable", laneConcepts.length > 0, `lane concepts=${laneConcepts.length}`);
+check("every concept carries the STATION as well as the room -- half a destination is not one",
+  paletteAll.filter((i) => i.kind === "concept").every((i) => typeof i.station === "string" && i.station.length > 0));
+
+// A concept homed in a room that does not exist is a result that opens nothing. face-coverage
+// now fails closed on exactly that, so it should be impossible -- which is the reason to skip
+// it here rather than render it: if the gate ever regresses, the palette must not be the place
+// the corruption is laundered into a working-looking link.
+const withGhost = shell.paletteItems(withLive, { ...conceptMap, "ghost-term": { room: "no-such-room", station: "nowhere" } });
+check("a concept pointing at a room that does not exist is NOT offered",
+  !withGhost.some((i) => i.id === "concept:ghost-term"), `items=${withGhost.length}`);
+
+// Reading the vocabulary out of the frozen contract, as the door actually serves it.
+const asDoorServes = { text: readFileSync(join(REPO, "initiatives", "face", "contracts", "expected-set.json"), "utf8") };
+const got = shell.conceptsFromContract(asDoorServes, door.unescapeDoorText);
+check("the vocabulary parses out of the contract the door serves",
+  got.ok === true && Object.keys(got.concepts).length === Object.keys(conceptMap).length);
+check("a body with no text is refused BY NAME, not returned as an empty vocabulary",
+  shell.conceptsFromContract({}, door.unescapeDoorText).code === "BAD_BODY");
+check("text that is not JSON is its own refusal",
+  shell.conceptsFromContract({ text: "not json" }, door.unescapeDoorText).code === "BAD_JSON");
+check("a contract with no concepts map is its own refusal",
+  shell.conceptsFromContract({ text: "{}" }, door.unescapeDoorText).code === "CONTRACT_SHAPE");
+
+// Ranking: three letters must land on the thing the typist meant, across rooms AND concepts.
+const hits = shell.rankMatches(paletteAll, "spine", 20);
+check("searching a word arc uses finds it", hits.length > 0, `hits=${hits.length}`);
+check("the room wins over the words homed in it when the query IS the room",
+  hits[0] && hits[0].kind === "room", hits[0] && `${hits[0].kind}:${hits[0].label}`);
+
 // ---------- the Map: the coverage guarantee, made checkable ----------
 // The Map is the one screen that proves nothing is missing, so its correctness IS its layout
 // maths -- and layout maths is exactly what a screenshot cannot audit. All of it is pure and

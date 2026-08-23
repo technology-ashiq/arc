@@ -8,13 +8,15 @@ import type { CSSProperties } from 'react'
 
 import './tokens.css'
 
-import { Door, DoorError, decodeRegistry, tokenFromHash } from './lib/door.mjs'
+import { Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
 import { byRing, findRoom, defaultRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
-import { HOME, buildHash, isTextField, keyAction, moveRoom, navOrder, parseHash } from './lib/shell.mjs'
+import { HOME, buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
 
 import FaceStage from './face/FaceStage'
 import Rings from './shell/Rings'
+import Palette from './shell/Palette'
+import type { PaletteItem } from './shell/Palette'
 import GenericRoom from './rooms/GenericRoom'
 import IndexRoom from './rooms/IndexRoom'
 import Today from './rooms/Today'
@@ -29,6 +31,8 @@ export default function App() {
   const [error, setError] = useState<unknown>(null)
   const [roomId, setRoomId] = useState<string>(() => parseHash(window.location.hash).room ?? HOME)
   const [talking] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [concepts, setConcepts] = useState<Record<string, { room: string; station: string }>>({})
   const token = useMemo(
     // The token arrives in the fragment, either as arc-dash prints it (`#token=...`) or
     // alongside a room. Both shapes are one function's problem, not this component's.
@@ -50,6 +54,17 @@ export default function App() {
       .catch((e: unknown) => {
         if (e instanceof DoorError || !ac.signal.aborted) setError(e)
       })
+    // The vocabulary comes from the frozen contract over the door's allow-listed file route
+    // -- the SAME file face-coverage validates, so the palette cannot quietly know less than
+    // arc does. A failure here dims the palette to rooms only; it never blocks the shell,
+    // because not being able to search is a smaller problem than not being able to look.
+    door
+      .file('expected-set', ac.signal)
+      .then((body: unknown) => {
+        const got = conceptsFromContract(body, unescapeDoorText)
+        if (got.ok) setConcepts(got.concepts)
+      })
+      .catch(() => { /* rooms-only palette; the shell still works */ })
     return () => ac.abort()
   }, [door])
 
@@ -80,14 +95,22 @@ export default function App() {
   orderRef.current = order
   const roomRef = useRef(roomId)
   roomRef.current = roomId
+  const paletteOpenRef = useRef(paletteOpen)
+  paletteOpenRef.current = paletteOpen
 
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       const action = keyAction(ev, {
         inTextField: isTextField(ev.target as Element | null),
-        paletteOpen: false,
+        paletteOpen: paletteOpenRef.current,
       })
       if (!action) return
+      if (action.type === 'palette-toggle') {
+        ev.preventDefault()
+        setPaletteOpen((o) => !o)
+        return
+      }
+      if (action.type === 'palette-close') { ev.preventDefault(); setPaletteOpen(false); return }
       if (action.type === 'room-move' && typeof action.delta === 'number') {
         ev.preventDefault()
         open(moveRoom(orderRef.current, roomRef.current, action.delta))
@@ -127,6 +150,7 @@ export default function App() {
   }
 
   const room = findRoom(registry.rooms, roomId) ?? defaultRoom(registry.rooms)
+  const items: PaletteItem[] = paletteItems(registry.rooms, concepts)
 
   return (
     <main style={pageStyle}>
@@ -136,6 +160,14 @@ export default function App() {
       <div style={faceLayerStyle} aria-hidden="true">
         <FaceStage presence={0.28} state={talking ? 'talking' : 'idle'} />
       </div>
+
+      {paletteOpen && (
+        <Palette
+          items={items}
+          onClose={() => setPaletteOpen(false)}
+          onOpen={(item: PaletteItem) => { setPaletteOpen(false); open(item.room) }}
+        />
+      )}
 
       <div style={frameStyle}>
         <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />

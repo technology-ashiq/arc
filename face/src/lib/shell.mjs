@@ -144,6 +144,91 @@ export function isTextField(el) {
 }
 
 /**
+ * Everything the palette can find, in one flat list.
+ *
+ * The Map is how you SEE that nothing is missing; this is how you REACH it. Thirty-three
+ * rooms in five rings is navigable, but a hundred and seven concepts are not -- and the
+ * contract anchors every one of them to a room AND a station precisely so a search can land
+ * you in the right part of the right room rather than merely near it.
+ *
+ * Concepts come from the frozen contract, served over the door's allow-listed file route.
+ * That is the same file `face-coverage` validates, so the palette cannot disagree with the
+ * gate about what exists -- a search index with its own copy of the vocabulary would be a
+ * second spelling, and the one thing this product must never do is quietly know less than
+ * arc does.
+ *
+ * @param {{ id: string, name: string, ring: string, sentence?: string, template?: boolean }[]} rooms
+ * @param {Record<string, { room: string, station: string }>} [concepts]
+ * @returns {{ id: string, label: string, hint: string, kind: "room" | "concept", room: string, station?: string }[]}
+ */
+export function paletteItems(rooms, concepts = {}) {
+  /** @type {{ id: string, label: string, hint: string, kind: "room" | "concept", room: string, station?: string }[]} */
+  const out = [];
+  const known = new Set();
+  for (const r of rooms) {
+    known.add(r.id);
+    // The lane TEMPLATE is reachable HERE but not in the rail, and the difference is exact:
+    // the rail lists places in the company's structure, and a template is a shape every lane
+    // instantiates rather than one of them. But it is a real thing the contract names, EIGHT
+    // concepts are anchored in it, and excluding it from search made those eight words
+    // unfindable -- 131 items where the contract has 139. A product whose entire claim is
+    // that nothing is missing cannot have eight of its own words be unsearchable.
+    out.push({
+      id: `room:${r.id}`,
+      label: r.name,
+      hint: r.template ? "the shape every lane instantiates" : `${r.ring} · ${r.sentence ?? ""}`,
+      kind: "room",
+      room: r.id,
+    });
+  }
+  for (const [term, anchor] of Object.entries(concepts || {})) {
+    if (!anchor || typeof anchor.room !== "string") continue;
+    // A concept homed in a room that does not exist would be a result that opens nothing.
+    // face-coverage now fails closed on exactly this, so it should be impossible -- which is
+    // the reason to skip it here rather than render it: if the gate ever regresses, the
+    // palette must not become the place the corruption is laundered into a working link.
+    if (!known.has(anchor.room)) continue;
+    out.push({
+      id: `concept:${term}`,
+      label: term,
+      hint: `${anchor.room} · ${anchor.station}`,
+      kind: "concept",
+      room: anchor.room,
+      station: anchor.station,
+    });
+  }
+  return out;
+}
+
+/**
+ * Pull the concept map out of the frozen contract as the door serves it.
+ *
+ * `/api/file/expected-set` returns `{ text }` -- the file's bytes, HTML-escaped like every
+ * other string the door sends. Parsing it here rather than in a component keeps the failure
+ * modes assertable: a body that is not JSON, a contract without a concepts map, and a
+ * concepts map that is not an object are three different problems and each gets its own
+ * refusal rather than a blank list.
+ *
+ * @param {unknown} body
+ * @param {(s: unknown) => string} unescape  the door's own decoder, injected so this file
+ *                                           stays dependency-free and testable
+ * @returns {{ ok: true, concepts: Record<string, { room: string, station: string }> } | { ok: false, code: string, human: string }}
+ */
+export function conceptsFromContract(body, unescape) {
+  const text = body && typeof body === "object" ? /** @type {{ text?: unknown }} */ (body).text : undefined;
+  if (typeof text !== "string" || !text.trim())
+    return { ok: false, code: "BAD_BODY", human: "the door served no contract text to read the vocabulary from" };
+  let parsed;
+  try { parsed = JSON.parse(unescape(text)); } catch {
+    return { ok: false, code: "BAD_JSON", human: "the frozen contract did not parse as JSON" };
+  }
+  const map = parsed && parsed.concepts && parsed.concepts.map;
+  if (!map || typeof map !== "object")
+    return { ok: false, code: "CONTRACT_SHAPE", human: "the contract carries no concepts map, so there is no vocabulary to search" };
+  return { ok: true, concepts: map };
+}
+
+/**
  * Rank rooms and concepts for the command palette.
  *
  * A prefix match beats a word-start match beats a substring, and ties break on the shorter
