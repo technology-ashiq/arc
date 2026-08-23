@@ -29,6 +29,23 @@ reader looks.
 | The pinned free slug | `poolside/laguna-s-2.1:free`, verified 2026-08-18 — the free tier is a moving surface, so re-verify before the round and record the date |
 | **An owner pack approval** | the `N=3` from 2026-08-18 is SPENT. `initiatives/engine/packs/pack-2026-08-23-cycle7.md` needs its own, with N declared at approval (ADR-0214) |
 
+## The approval payload is VALIDATED, not merely written
+
+A hand-written payload that quarantines on the owner's machine wastes a round trip he cannot get
+back, and this cycle has already lost receipts to a payload the spine refused. So
+`pack-2026-08-23-approval.json` was run through the spine's **own** `validateEvent()` here — the
+worktree guard refuses to WRITE a receipt, and nothing stops us running the check the emitter runs:
+
+```
+APPROVAL_PAYLOAD_VALID
+```
+
+Getting there took three rejections and each one is worth knowing, because they are envelope facts
+rather than payload facts: `UNKNOWN_FIELD "at"` (the timestamp key is `ts`), `BAD_VENTURE` (must be a
+slug, not null) and `BAD_RUN_ID` (must look like `r-...`). **`arc-event` supplies all three itself** —
+`venture` defaults to `arc` and `run_id` to `r-adhoc`, both overridable by env — so the command below
+needs no extra flags. That was read out of `arc-event.mjs:289-290` rather than assumed.
+
 ## The round
 
 From the main clone, on `main`, after the merge:
