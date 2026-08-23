@@ -62,14 +62,46 @@ The knowledge base in `src/data/arcKnowledge.js` is a snapshot of the repo's doc
 be stale; the counts it quotes (22 commands, 23 agents) are already behind the frozen
 contract in `initiatives/face/contracts/expected-set.json` (26 commands, 30 agents).
 
-## Collisions with the face's meaning contract — for the owner to rule on
+## Collisions with the face's meaning contract — found by reading the code
 
-| # | the reference does | the contract says | why it matters |
+The first pass over this drop reported ONE collision, read off the screenshots. Reading
+`src/ui/kit.jsx` afterwards found **three**, plus an accessibility defect the eye cannot
+see at all. That gap is the whole argument for reading the source and not the render: two
+of the three are invisible in a screenshot because they only appear on a screen carrying
+both meanings at once.
+
+All four are resolved in `docs/design/system/tokens.css`, with the reasoning in that
+file's header. The owner's drop is NOT edited — the reference is the target, the contract
+is the law, and the token file is where they are made to agree.
+
+| # | the reference does | the contract says | resolution |
 |---|---|---|---|
-| 1 | **cyan `#00ffd1` is the primary accent** — nav, buttons, headings, chart lines, focus rings | four reserved signals: amber = needs-you · green = real money · red = incident · hatched = non-real | cyan is NOT one of the four, so it does not collide. It reads as "the product's own colour". This is the resolution that costs nothing, and it is the reason the palette survives intact. |
-| 2 | `revenue.simulated` renders in **green** on the Money and Overview screens | green is reserved for **real** money, and real revenue is ₹0 | this one is a real collision. A green ₹9,976 next to a green ₹0 makes the simulated number wear the real number's colour. The `SIMULATED` badge is doing all the work, and a badge is weaker than a colour. |
-| 3 | `revenue.simulated` is a spine kind in the reference | the frozen 46-kind set is the authority | the drop's kind list is a snapshot and must be re-derived from `validate.mjs`, never copied |
-| 4 | ₹0 renders as a plain `0` | never a bare 0 that could mean two things | the reference labels it `REAL REVENUE · HONEST` in words, which is most of the fix; the hollow-zero idea from the v2 round finishes it |
+| 1 | `SimBadge` renders **amber** | amber = needs-you ONLY | the non-real family renders `--violet` on `--sim-hatch`. A simulated number is not a request for attention, and on a screen carrying both, the eye cannot separate them. |
+| 2 | `KIND_FAMILY.council` renders **violet** | violet = the non-real family ONLY | council renders `--accent-dim`. A council verdict is as real as any receipt; violet says the opposite. |
+| 3 | `StatusDot state="live"` and the Money room's simulated-revenue `Stat` both render **green** | green = real money ONLY, and real revenue is 0 | liveness is a DATA-MODE statement → `--mode-live` (accent). Simulated currency → `--sim-fg`. Green stays **unspent** until `revenue.received` fires for the first time. |
+| 4 | `COLOR.faint` = `rgba(255,255,255,0.42)`, carrying real text (every `Stat` label) | ≥4.5:1 is the brief's own floor | computed **3.94:1 — fails**. Raised to `0.46`, the first alpha that clears it, at 4.56:1. Every ratio in the token file was computed, not assumed. |
 
-Row 2 is the only one that needs a decision. Rows 1, 3 and 4 have obvious resolutions and
-are recorded here so they are not silently dropped.
+**What did NOT collide, and why it matters:** cyan `#00ffd1` is not one of the four
+reserved hues. That is the structural reason this palette survives the contract intact —
+chrome, nav, focus, panel titles, links and the live accent all have a colour of their own
+and never have to borrow a reserved one. A four-hue palette would have had to.
+
+Two further items are corrections rather than collisions: the drop's spine-kind list is a
+snapshot and must be re-derived from `validate.mjs` (never copied), and
+`src/data/arcKnowledge.js` quotes 22 commands / 23 agents where the frozen contract counts
+**26 / 30**.
+
+## Open for the owner — one ruling
+
+The brain's action protocol (`src/brain/persona.js`) lets the model emit
+`{"type":"approve","id":...,"reason":"..."}` and `{"type":"reject",...}`, which the UI then
+executes. It is told in the prompt not to auto-approve money or kill decisions.
+
+**A prompt is not a tool contract.** REQ-07 requires `face-ask` to have ZERO write tools,
+proven by a tool-list fixture, and E2 Human Sovereignty says the stamp belongs to the owner
+alone. A prompt instruction not to do something is exactly the decorative gate ADR-0049
+describes: a rule with nothing enforcing it.
+
+Recommended: drop `approve` and `reject` from the action list. `open_room`, `set_speed` and
+`enter_hq` are read and navigation, and stay. Nothing about the design changes; three words
+leave a protocol.
