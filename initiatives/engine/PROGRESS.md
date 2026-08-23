@@ -1,6 +1,6 @@
 # PROGRESS.md — Cycle 7 · arc-engine "The Hired Hands"
 
-status: CLOSED
+status: IDLE
 cycle: arc-engine (Cycle 7, opened 2026-08-12)
 phase: 08 (cycle closed)
 appetite: 12d
