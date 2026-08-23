@@ -1,0 +1,15 @@
+{
+  "note": "Eval fixture — WRITTEN, NEVER EXECUTED this cycle (a bench runner is a declared no-go; these exist so a later cycle has fuel rather than an archaeology project). `input` is keyed by the process's inputs[].name; `expected` satisfies the output schema. The question chosen is deliberately one the pack CANNOT fully answer: the honest response cites what exists and refuses to invent the rest, because a fixture showing a confident answer to a partly-unanswerable question teaches a later comparison exactly the wrong bar. The state pack carries CONTENT, not a reference, so the data boundary can scan what is actually leaving.",
+  "input": {
+    "q": "how much revenue has arc made, and what needs me right now?",
+    "state": "SPINE (live 2026-08-19): 1,386 receipts · 21 day.closed seals · 14 of 46 kinds have ever fired. revenue.received: 0 ever. revenue.simulated: 0 ever. cost.incurred: 0 ever. month.closed: 0 ever.\nMONEY: real revenue ₹0 across all ventures — mechanism proven, live value pending. MRR: not instrumented. kill-distance: NOT EVALUATED (no criteria receipt for a live venture month).\nOPEN approval.requested (2): 01KZZRVSQJEAVD4YCZ8FDXR0DT growth gate 2 — exemplar articles review pack · 01KZZRW51QHTA9CFEX5JRRGY7C growth gate 1 — cluster c-001.\nBOARD: 7 lanes LIVE vs guideline 2 (informational). growth phase 06, burn 8.0d of 10d.\n"
+  },
+  "expected": {
+    "answer": "Revenue is ₹0 — not a small number but an absent one: revenue.received has never fired on the spine, so there is nothing to report and nothing to sum. MRR is not instrumented and kill-distance reads NOT EVALUATED, because no criteria receipt exists for a live venture month. Two approval.requested need you, both on the growth lane: 01KZZRVSQJEAVD4YCZ8FDXR0DT (gate 2, exemplar articles review pack) and 01KZZRW51QHTA9CFEX5JRRGY7C (gate 1, cluster c-001). You stamp them yourself — `arc-inbox approve <id> --reason \"...\"` from the main clone.",
+    "citations": [
+      "01KZZRVSQJEAVD4YCZ8FDXR0DT",
+      "01KZZRW51QHTA9CFEX5JRRGY7C"
+    ],
+    "verified": true
+  }
+}

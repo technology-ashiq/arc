@@ -36,5 +36,32 @@
     ".claude/scripts/engine/router-row.mjs"
   ],
   "files": [],
-  "docs": []
+  "docs": [],
+  "face": {
+    "room": "engine-room",
+    "ring": "kernel",
+    "kinds": [
+      "run.completed"
+    ],
+    "sanctioned": [
+      "router.yaml",
+      "processes/*.yaml",
+      "run.completed",
+      "evidence dirs"
+    ],
+    "stations": [
+      "certification",
+      "dispatch",
+      "hire cards",
+      "hire line",
+      "router table"
+    ],
+    "concepts": [
+      "capped key",
+      "cert suite",
+      "context pack",
+      "router row",
+      "unlock ladder"
+    ]
+  }
 }

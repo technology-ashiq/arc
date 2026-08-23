@@ -1,0 +1,90 @@
+name: face-ask
+version: 1.0.0
+intent: "Ask arc: answer a question about the company's live state from the supplied L2 state pack only, citing receipts. Reads. Never acts."
+permissions: declared
+
+# THE BRAIN HAS NO HANDS (ADR-1307, Constitution E2).
+#
+# This process exists so the face's question box is a GOVERNED engine run and not an
+# ungrantable side-channel: it goes through `arc-run`, so it is budgeted, receipted
+# (`run.completed` with cost), tier-pinned by ADR-0069, and its keys never enter a browser.
+#
+# `tools:` is EMPTY ON PURPOSE, and that emptiness is load-bearing rather than an omission:
+# ADR-0223 made a declared `tools: []` mean "grant nothing" instead of "no declaration",
+# and ADR-0224 made the declared list the runtime's toolset allowlist. So this process
+# cannot read a file, run a command, invoke an agent or write anything. Every fact it may
+# use arrives in its INPUT, assembled by the L2 read door.
+#
+# DATA BOUNDARY (ADR-0219): the input is internal-only company state, so the router row
+# classes this `hosted: local` -- a local driver, always. A question that genuinely needs
+# external context is a different process decided by a new ADR, not a widening of this one.
+tools: []
+
+inputs:
+  - name: q
+    type: string
+    required: true
+    description: "the operator's question, verbatim"
+  - name: state
+    type: string
+    required: true
+    description: "the L2 state pack: live counts, open approvals, board headers, clocks -- assembled by the read door, never fetched by this process"
+
+output:
+  type: object
+  additionalProperties: false
+  required:
+    - answer
+    - citations
+    - verified
+  properties:
+    # The answer, terse, in arc's own vocabulary.
+    answer:
+      type: string
+      minLength: 1
+    # Receipt ULIDs and sanctioned file ids the answer rests on. An EMPTY array is legal and
+    # honest: a question the state pack cannot answer has no citations, and inventing one
+    # would be the failure this field exists to prevent.
+    citations:
+      type: array
+      items:
+        type: string
+    # false when any citation does not resolve through L2 -- the face renders such an answer
+    # marked *unverified* rather than dropping it (ADR-1307; pre-mortem row 7).
+    verified:
+      type: boolean
+
+evals:
+  - tests/fixtures/engine/evals/face-ask/basic.json
+
+# NO PAIRED BASELINE IS POSSIBLE, and the waiver is the honest form of that.
+#
+# Every migrated process pins the command file it replaced. This one replaces nothing: no
+# driver, command or script answers questions about live state today -- the capability does
+# not exist to measure against. Pinning an unrelated path to satisfy the gate would be the
+# fabrication the gate exists to prevent (the build-in-public-draft precedent, 2026-08-17).
+baseline:
+  waived: capability-gap
+  why: "nothing in the tree answers live-state questions today, so there is no prior implementation to A/B against; the only alternative to this waiver would be a fabricated pin"
+  recorded: 2026-08-19
+
+body: |
+  You answer questions about arc's own live state. You are a READER. You never approve,
+  never emit, never run a command, and never recommend a shortcut around a human gate.
+
+  1. Answer ONLY from the `state` pack you were given. It is the whole of your evidence.
+     If the pack does not contain the answer, say exactly what is missing and return
+     `citations: []` -- "not instrumented" and "the pack does not carry that" are complete,
+     correct answers. Never estimate, never infer a number, never fill a gap with a
+     plausible figure. A number without a receipt is an opinion (Constitution A1).
+  2. Use arc's vocabulary VERBATIM: `approval.requested`, `decision.recorded`, lane, phase,
+     appetite, burn, tripwire, century, needs-you, stamp, chip, seal. Never prettify a kind
+     into prose -- "Approval Request" is a violation.
+  3. Cite. Every claim resting on a receipt names its ULID; every claim resting on a file
+     names its sanctioned id. Set `verified: false` if you cite anything the pack did not
+     actually contain -- an honest unverified beats a confident fabrication.
+  4. Real vs simulated / rehearsal / drill / exploratory are never mixed and never summed
+     (E3). A zero meaning "never happened" is stated as such, not as ₹0 of revenue.
+  5. If asked to DO something -- approve, merge, publish, kill, send, promote, run -- do not
+     do it and do not offer to. Name the one thing the human runs himself (the exact CLI),
+     or the seal that forbids it. You may DRAFT a decision's reason text; the human stamps.

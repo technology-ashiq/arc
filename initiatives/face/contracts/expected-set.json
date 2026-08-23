@@ -1,0 +1,1303 @@
+{
+  "$comment": "face-coverage expected set — frozen at Phase 00 (2026-08-19) from docs/strategy/plans/PLAN-face.md Coverage map + Appendices A-D, re-verified against the live tree (KINDS imported from validate.mjs = 46; rules enumerated on disk = 7, design source said 6, tree wins). This exact artifact is what the face-coverage lint (Phase 05) consumes. Derived counts, never copied ones (ADR-0107 rule).",
+  "version": "1.0.0",
+  "frozen": "2026-08-19",
+  "rings": [
+    "command",
+    "kernel",
+    "factory",
+    "money",
+    "company"
+  ],
+  "rooms": {
+    "$comment": "32 rooms + the lane-room template. status: built = lane/product exists, planned = dotted from planned-rooms.json",
+    "template": {
+      "id": "lane",
+      "name": "Lane room",
+      "ring": "factory",
+      "note": "the 6-zone template every born lane instantiates (x15 today); ADR-1306"
+    },
+    "list": [
+      {
+        "id": "today",
+        "name": "Today",
+        "ring": "command",
+        "status": "built",
+        "sources": [
+          "arc-brief GROUPS",
+          "brief file",
+          "spine cursor"
+        ]
+      },
+      {
+        "id": "inbox",
+        "name": "Inbox",
+        "ring": "command",
+        "status": "built",
+        "sources": [
+          "arc-inbox fold",
+          "validate.mjs profiles"
+        ]
+      },
+      {
+        "id": "map",
+        "name": "Map",
+        "ring": "command",
+        "status": "built",
+        "sources": [
+          "manifests face: sections",
+          "spine"
+        ]
+      },
+      {
+        "id": "spine",
+        "name": "Spine",
+        "ring": "command",
+        "status": "built",
+        "sources": [
+          "spine.mjs reader",
+          "spine-health reader (Phase 03)"
+        ]
+      },
+      {
+        "id": "board",
+        "name": "Board",
+        "ring": "command",
+        "status": "built",
+        "sources": [
+          "PORTFOLIO.md",
+          "initiatives/*/PROGRESS.md",
+          "HISTORY milestones"
+        ]
+      },
+      {
+        "id": "ask-arc",
+        "name": "Ask arc",
+        "ring": "command",
+        "status": "built",
+        "sources": [
+          "L2 reads",
+          "engine process receipts"
+        ]
+      },
+      {
+        "id": "engine-room",
+        "name": "Engine room",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "router.yaml",
+          "processes/*.yaml",
+          "run.completed",
+          "evidence dirs"
+        ]
+      },
+      {
+        "id": "model-policy",
+        "name": "Model policy",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "agents frontmatter",
+          "ADR-0069",
+          "run.completed"
+        ]
+      },
+      {
+        "id": "policy",
+        "name": "Policy",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "hq.policy.yaml",
+          "policy-matrix.mjs",
+          "policy-lint"
+        ]
+      },
+      {
+        "id": "scheduler",
+        "name": "Scheduler",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "hq.jobs.yaml",
+          "run.completed{job}",
+          "job-logs/"
+        ]
+      },
+      {
+        "id": "memory",
+        "name": "Memory",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "index.json",
+          "golden-queries.tsv",
+          "surfaced-cited.jsonl"
+        ]
+      },
+      {
+        "id": "evolve",
+        "name": "Evolve",
+        "ring": "kernel",
+        "status": "built",
+        "badge": "fixture-proven, unexercised",
+        "sources": [
+          "EXPERIMENT_KINDS",
+          "metric.observed",
+          "manifests evolve:"
+        ]
+      },
+      {
+        "id": "bench",
+        "name": "Bench",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "arc-bench outputs",
+          "run.completed{process: bench}",
+          "ceilings.json"
+        ]
+      },
+      {
+        "id": "absorb",
+        "name": "Absorb",
+        "ring": "kernel",
+        "status": "built",
+        "sources": [
+          "registry.json",
+          "allowlist.txt",
+          "planoff evidence"
+        ]
+      },
+      {
+        "id": "council-chamber",
+        "name": "Council chamber",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          "docs/council/sessions/*.md",
+          "council.verdict/outcome",
+          "calibrate output"
+        ]
+      },
+      {
+        "id": "develop",
+        "name": "Develop",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          "phase-NN-tasks.md",
+          "debt/learning ledgers",
+          "capability-lock.json",
+          "DEVELOP kinds"
+        ]
+      },
+      {
+        "id": "review-ship",
+        "name": "Review & Ship",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          ".claude/state/{reviews,scan,rls}",
+          "docs/reviews",
+          "docs/security",
+          "docs/qa"
+        ]
+      },
+      {
+        "id": "design-studio",
+        "name": "Design studio",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          "docs/design/**",
+          ".claude/state/design",
+          "review.completed{lens: design}"
+        ]
+      },
+      {
+        "id": "toolbelt",
+        "name": "Toolbelt",
+        "ring": "factory",
+        "status": "built",
+        "sources": [
+          "manifests",
+          "toolchain-health",
+          "arc-registry.json"
+        ]
+      },
+      {
+        "id": "money",
+        "name": "Money",
+        "ring": "money",
+        "status": "built",
+        "badge": "honest-empty",
+        "sources": [
+          "arc pnl",
+          "revenue.*",
+          "cost.incurred",
+          "month.closed",
+          "ventures.yaml"
+        ]
+      },
+      {
+        "id": "growth",
+        "name": "Growth",
+        "ring": "money",
+        "status": "built",
+        "sources": [
+          "growth libs",
+          "content.published",
+          "metric.observed",
+          "site.json/sources.json"
+        ]
+      },
+      {
+        "id": "leads",
+        "name": "Leads",
+        "ring": "money",
+        "status": "built",
+        "sources": [
+          "LEADS_KINDS",
+          ".claude/config/leads.json",
+          "report output"
+        ]
+      },
+      {
+        "id": "legal",
+        "name": "Legal",
+        "ring": "money",
+        "status": "built",
+        "sources": [
+          "products/legal/**",
+          "venture legal/",
+          "note.logged[legal]"
+        ]
+      },
+      {
+        "id": "ops",
+        "name": "Ops",
+        "ring": "money",
+        "status": "planned",
+        "sources": [
+          "docs/canary/*.md",
+          "incident.raised"
+        ]
+      },
+      {
+        "id": "trader",
+        "name": "Trader",
+        "ring": "money",
+        "status": "planned",
+        "sources": [
+          "PLAN-trader (TRD-A..M)"
+        ]
+      },
+      {
+        "id": "discover",
+        "name": "Discover",
+        "ring": "money",
+        "status": "planned",
+        "sources": [
+          "PLAN-discover (DIS-A..D)",
+          "idea.captured"
+        ]
+      },
+      {
+        "id": "ventures",
+        "name": "Ventures",
+        "ring": "money",
+        "status": "built",
+        "sources": [
+          "ventures.yaml",
+          "PORTFOLIO passports",
+          "HISTORY",
+          "PLAN-cycle3"
+        ]
+      },
+      {
+        "id": "law",
+        "name": "Law",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "CONSTITUTION.md",
+          "constitution.adopted"
+        ]
+      },
+      {
+        "id": "learn",
+        "name": "Learn",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "docs/retro-log.md",
+          "docs/trial-ledger.md",
+          "docs/HISTORY.md"
+        ]
+      },
+      {
+        "id": "strategy",
+        "name": "Strategy",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "docs/strategy/**"
+        ]
+      },
+      {
+        "id": "org",
+        "name": "Org",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "arc-company-org-blueprint.md"
+        ]
+      },
+      {
+        "id": "concepts",
+        "name": "Concepts",
+        "ring": "company",
+        "status": "built",
+        "sources": [
+          "glossary inventory",
+          "manifests face: concepts"
+        ]
+      }
+    ]
+  },
+  "kinds": {
+    "$comment": "all 46, verified against validate.mjs KINDS export 2026-08-19. group = arc-brief group; homes = rooms that render it typed; every kind not listed in a room's face: section still renders generically (kind-driven), which is a home.",
+    "map": {
+      "idea.captured": {
+        "group": "background",
+        "homes": [
+          "discover",
+          "spine"
+        ]
+      },
+      "council.verdict": {
+        "group": "progress",
+        "homes": [
+          "council-chamber",
+          "evolve"
+        ]
+      },
+      "council.outcome": {
+        "group": "progress",
+        "homes": [
+          "council-chamber",
+          "evolve"
+        ]
+      },
+      "approval.requested": {
+        "group": "needs-you",
+        "homes": [
+          "inbox",
+          "*decide-zones"
+        ]
+      },
+      "decision.recorded": {
+        "group": "progress",
+        "homes": [
+          "inbox",
+          "council-chamber",
+          "design-studio",
+          "absorb"
+        ]
+      },
+      "kickoff.done": {
+        "group": "progress",
+        "homes": [
+          "lane"
+        ]
+      },
+      "phase.closed": {
+        "group": "progress",
+        "homes": [
+          "lane"
+        ]
+      },
+      "review.completed": {
+        "group": "progress",
+        "homes": [
+          "review-ship",
+          "design-studio"
+        ]
+      },
+      "qa.completed": {
+        "group": "progress",
+        "homes": [
+          "review-ship"
+        ]
+      },
+      "commit.done": {
+        "group": "progress",
+        "homes": [
+          "review-ship"
+        ]
+      },
+      "ship.done": {
+        "group": "progress",
+        "homes": [
+          "review-ship"
+        ]
+      },
+      "revenue.received": {
+        "group": "money",
+        "homes": [
+          "money",
+          "today"
+        ]
+      },
+      "revenue.simulated": {
+        "group": "money",
+        "homes": [
+          "money"
+        ]
+      },
+      "cost.incurred": {
+        "group": "money",
+        "homes": [
+          "money",
+          "today"
+        ]
+      },
+      "month.closed": {
+        "group": "money",
+        "homes": [
+          "money",
+          "spine"
+        ]
+      },
+      "run.completed": {
+        "group": "progress",
+        "homes": [
+          "engine-room",
+          "scheduler",
+          "bench",
+          "ask-arc"
+        ]
+      },
+      "incident.raised": {
+        "group": "needs-you",
+        "homes": [
+          "ops",
+          "policy",
+          "evolve",
+          "leads",
+          "scheduler",
+          "today"
+        ]
+      },
+      "redaction.applied": {
+        "group": "background",
+        "homes": [
+          "spine"
+        ]
+      },
+      "day.closed": {
+        "group": "background",
+        "homes": [
+          "spine",
+          "trader"
+        ]
+      },
+      "note.logged": {
+        "group": "background",
+        "homes": [
+          "spine",
+          "design-studio",
+          "legal"
+        ]
+      },
+      "develop.started": {
+        "group": "progress",
+        "homes": [
+          "develop"
+        ]
+      },
+      "slice.done": {
+        "group": "progress",
+        "homes": [
+          "develop"
+        ]
+      },
+      "handoff.ready": {
+        "group": "needs-you",
+        "homes": [
+          "develop"
+        ]
+      },
+      "slice.stuck": {
+        "group": "needs-you",
+        "homes": [
+          "develop"
+        ]
+      },
+      "experiment.opened": {
+        "group": "progress",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "experiment.assigned": {
+        "group": "background",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "experiment.measured": {
+        "group": "background",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "experiment.verdict": {
+        "group": "progress",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "promotion.proposed": {
+        "group": "needs-you",
+        "homes": [
+          "evolve",
+          "bench"
+        ]
+      },
+      "experiment.promoted": {
+        "group": "progress",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "experiment.rolled_back": {
+        "group": "progress",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "experiment.closed": {
+        "group": "progress",
+        "homes": [
+          "evolve"
+        ]
+      },
+      "lead.researched": {
+        "group": "background",
+        "homes": [
+          "leads"
+        ]
+      },
+      "outreach.sent": {
+        "group": "background",
+        "homes": [
+          "leads"
+        ]
+      },
+      "outreach.replied": {
+        "group": "progress",
+        "homes": [
+          "leads"
+        ]
+      },
+      "meeting.booked": {
+        "group": "needs-you",
+        "homes": [
+          "leads",
+          "ventures"
+        ]
+      },
+      "lead.suppressed": {
+        "group": "background",
+        "homes": [
+          "leads"
+        ]
+      },
+      "deal.won": {
+        "group": "money",
+        "homes": [
+          "leads",
+          "money",
+          "ventures"
+        ]
+      },
+      "deal.lost": {
+        "group": "progress",
+        "homes": [
+          "leads",
+          "ventures"
+        ]
+      },
+      "metric.observed": {
+        "group": "background",
+        "homes": [
+          "growth",
+          "evolve",
+          "spine"
+        ]
+      },
+      "policy.level.changed": {
+        "group": "progress",
+        "homes": [
+          "policy"
+        ]
+      },
+      "policy.demoted": {
+        "group": "needs-you",
+        "homes": [
+          "policy"
+        ]
+      },
+      "spend.reserved": {
+        "group": "money",
+        "homes": [
+          "policy",
+          "money"
+        ]
+      },
+      "spend.released": {
+        "group": "money",
+        "homes": [
+          "policy",
+          "money"
+        ]
+      },
+      "constitution.adopted": {
+        "group": "progress",
+        "homes": [
+          "law"
+        ]
+      },
+      "content.published": {
+        "group": "progress",
+        "homes": [
+          "growth",
+          "today"
+        ]
+      }
+    }
+  },
+  "lanes": {
+    "$comment": "every born lane (initiatives/<lane>/) -> the room(s) that render it. face-coverage FAILs on a lane dir with no entry (the birth-rule: a new lane lands its face: rows + this entry in the same change). A lane's own Lane room is the template instance; module lanes also get their named room.",
+    "map": {
+      "absorb": "absorb",
+      "bench": "bench",
+      "design": "design-studio",
+      "develop": "develop",
+      "engine": "engine-room",
+      "evolve": "evolve",
+      "face": "toolbelt",
+      "growth": "growth",
+      "leads": "leads",
+      "ledger": "money",
+      "legal": "legal",
+      "memory": "memory",
+      "model-policy": "model-policy",
+      "policy": "policy",
+      "portfolio": "board",
+      "scheduler": "scheduler"
+    }
+  },
+  "commands": {
+    "$comment": "26; (G) = generated from a process file, never hand-edited",
+    "map": {
+      "arc": "toolbelt",
+      "arc-toolcheck": "toolbelt",
+      "arc-resume": "lane",
+      "arc-freeze": "toolbelt",
+      "arc-unfreeze": "toolbelt",
+      "arc-kickoff (G)": "lane",
+      "arc-change": "lane",
+      "arc-phase-done": "lane",
+      "arc-retro": "learn",
+      "arc-diagram": "toolbelt",
+      "arc-review (G)": "review-ship",
+      "arc-audit": "review-ship",
+      "arc-second-opinion": "review-ship",
+      "arc-docs": "review-ship",
+      "arc-qa": "review-ship",
+      "arc-design (legacy)": "design-studio",
+      "arc-canary": "review-ship",
+      "arc-commit (G)": "review-ship",
+      "arc-pr": "review-ship",
+      "arc-fix-issue": "review-ship",
+      "arc-ship": "review-ship",
+      "arc-council": "council-chamber",
+      "arc-develop": "develop",
+      "arc-capability": "develop",
+      "arc-design-critique": "design-studio",
+      "arc-absorb": "absorb"
+    }
+  },
+  "agents": {
+    "$comment": "30; every card shows its ADR-0069 tier; census in model-policy",
+    "map": {
+      "council-advocate": "council-chamber",
+      "council-skeptic": "council-chamber",
+      "council-neutral": "council-chamber",
+      "council-researcher": "council-chamber",
+      "council-verifier": "council-chamber",
+      "council-strategist": "council-chamber",
+      "council-risk-analyst": "council-chamber",
+      "council-marketer": "council-chamber",
+      "council-designer": "council-chamber",
+      "council-engineer": "council-chamber",
+      "council-policy-analyst": "council-chamber",
+      "council-life-counselor": "council-chamber",
+      "question-planner": "lane",
+      "product-challenger": "lane",
+      "plan-attacker": "lane",
+      "plan-simulator": "lane",
+      "codebase-surveyor": "lane",
+      "researcher": "lane",
+      "code-reviewer": "review-ship",
+      "security-auditor": "review-ship",
+      "qa-tester": "review-ship",
+      "log-analyzer": "develop",
+      "spec-fidelity": "develop",
+      "pattern-miner": "develop",
+      "capability-scout": "develop",
+      "design-director": "design-studio",
+      "ui-composer": "design-studio",
+      "design-critic": "design-studio",
+      "design-jury": "design-studio",
+      "design-reviewer (legacy)": "design-studio"
+    }
+  },
+  "processes": {
+    "$comment": "6 live + face-ask lands in Phase 07",
+    "map": {
+      "commit-msg-draft": "engine-room",
+      "review-diff": "engine-room",
+      "kickoff-plan": "engine-room",
+      "build-in-public-draft": "engine-room",
+      "brief-materialize": "engine-room",
+      "day-close-roll": "engine-room",
+      "face-ask (Phase 07)": "ask-arc"
+    }
+  },
+  "gates": {
+    "map": {
+      "scan": "review-ship",
+      "coverage": "review-ship",
+      "reviews": "review-ship",
+      "docs": "review-ship",
+      "rls": "review-ship",
+      "spine-api": "review-ship",
+      "design": "review-ship"
+    }
+  },
+  "hooks": {
+    "map": {
+      "SessionStart": "toolbelt",
+      "SessionEnd": "toolbelt",
+      "PreToolUse": "toolbelt",
+      "PreToolUse-edit": "toolbelt",
+      "PostToolUse": "toolbelt",
+      "PreCompact": "toolbelt",
+      "_dispatch.sh": "toolbelt"
+    }
+  },
+  "rules": {
+    "$comment": "7 on disk 2026-08-19 (design source said 6 — tree wins): api, lanes, security-sensitive, stripe, supabase, testing, ui",
+    "map": {
+      "api": "toolbelt",
+      "lanes": "board",
+      "security-sensitive": "toolbelt",
+      "stripe": "toolbelt",
+      "supabase": "toolbelt",
+      "testing": "toolbelt",
+      "ui": "toolbelt"
+    }
+  },
+  "lints": {
+    "map": {
+      "kickoff-lint": "lane",
+      "develop-lint": "develop",
+      "process-lint": "engine-room",
+      "arc-compile-bytediff": "engine-room",
+      "policy-lint": "policy",
+      "policy-matrix": "policy",
+      "jobs-lint": "scheduler",
+      "board-lint": "board",
+      "ownership-lint": "board",
+      "product-lint": "toolbelt",
+      "council-lint": "council-chamber",
+      "design-lint": "design-studio",
+      "design-gate": "design-studio",
+      "render-hash": "design-studio",
+      "report-lint": "absorb",
+      "rebuild-lint": "absorb",
+      "registry-ref": "absorb",
+      "slop-lint": "growth",
+      "citation-lint": "growth",
+      "spec-verify": "growth",
+      "research-lint": "leads",
+      "pii-tripwire": "leads",
+      "rehearsal-check": "leads",
+      "publish-gate": "legal",
+      "legal-lints (4)": "legal",
+      "spine-reader-lint": "spine",
+      "capability-vet": "develop",
+      "arc-bytediff": "toolbelt",
+      "face-coverage": "toolbelt"
+    }
+  },
+  "concepts": {
+    "$comment": "the glossary inventory — the ⌘K backing store seed; term -> { room, station }. Grows with the tree; face-coverage asserts every term has a home.",
+    "map": {
+      "receipt": {
+        "room": "spine",
+        "station": "emit"
+      },
+      "spine": {
+        "room": "spine",
+        "station": "ring line"
+      },
+      "ULID": {
+        "room": "spine",
+        "station": "emit"
+      },
+      "idem key": {
+        "room": "spine",
+        "station": "dedup"
+      },
+      "quarantine": {
+        "room": "spine",
+        "station": "validate"
+      },
+      "supersedes chain": {
+        "room": "spine",
+        "station": "receipt drawer"
+      },
+      "day.closed seal": {
+        "room": "spine",
+        "station": "close-day"
+      },
+      "torn line": {
+        "room": "spine",
+        "station": "spine-health"
+      },
+      "envelope (15 keys)": {
+        "room": "spine",
+        "station": "validate"
+      },
+      "stamp": {
+        "room": "inbox",
+        "station": "decide"
+      },
+      "chip": {
+        "room": "inbox",
+        "station": "needs-you cards"
+      },
+      "seal": {
+        "room": "law",
+        "station": "E2 gallery"
+      },
+      "approval profile": {
+        "room": "inbox",
+        "station": "card body"
+      },
+      "refusal code": {
+        "room": "inbox",
+        "station": "decide"
+      },
+      "needs-you": {
+        "room": "today",
+        "station": "brief groups"
+      },
+      "money strip": {
+        "room": "today",
+        "station": "brief groups"
+      },
+      "since you left": {
+        "room": "today",
+        "station": "cursor diff"
+      },
+      "Why? precedents": {
+        "room": "today",
+        "station": "KPI row"
+      },
+      "arc ring": {
+        "room": "today",
+        "station": "the mark"
+      },
+      "line / station": {
+        "room": "map",
+        "station": "legend"
+      },
+      "interchange": {
+        "room": "map",
+        "station": "inbox station"
+      },
+      "dashed (unexercised)": {
+        "room": "map",
+        "station": "legend"
+      },
+      "dotted (planned)": {
+        "room": "map",
+        "station": "legend"
+      },
+      "as-of": {
+        "room": "spine",
+        "station": "tape"
+      },
+      "replay": {
+        "room": "spine",
+        "station": "tape"
+      },
+      "playhead": {
+        "room": "spine",
+        "station": "tape"
+      },
+      "honesty classes": {
+        "room": "money",
+        "station": "SIMULATED panel"
+      },
+      "SIMULATED watermark": {
+        "room": "money",
+        "station": "SIMULATED panel"
+      },
+      "REHEARSAL": {
+        "room": "leads",
+        "station": "funnel split"
+      },
+      "DRILL": {
+        "room": "scheduler",
+        "station": "fire-drill"
+      },
+      "EXPLORATORY": {
+        "room": "trader",
+        "station": "playground"
+      },
+      "kill line / kill-distance": {
+        "room": "money",
+        "station": "kill-distance meters"
+      },
+      "MRR": {
+        "room": "money",
+        "station": "pnl"
+      },
+      "month-close": {
+        "room": "money",
+        "station": "close board"
+      },
+      "ABSENT (reason)": {
+        "room": "money",
+        "station": "honest states"
+      },
+      "not instrumented": {
+        "room": "model-policy",
+        "station": "metrics"
+      },
+      "lane": {
+        "room": "board",
+        "station": "rows"
+      },
+      "century band": {
+        "room": "board",
+        "station": "ADR map"
+      },
+      "machine header": {
+        "room": "lane",
+        "station": "header"
+      },
+      "appetite / burn": {
+        "room": "lane",
+        "station": "header"
+      },
+      "50% tripwire": {
+        "room": "lane",
+        "station": "header"
+      },
+      "WIP guideline": {
+        "room": "board",
+        "station": "counter"
+      },
+      "Mode A / Mode B": {
+        "room": "board",
+        "station": "execution mode"
+      },
+      "passport": {
+        "room": "ventures",
+        "station": "passports"
+      },
+      "Golden Loop": {
+        "room": "map",
+        "station": "circle line"
+      },
+      "steel thread": {
+        "room": "lane",
+        "station": "phase 0"
+      },
+      "REQ": {
+        "room": "lane",
+        "station": "PLAN table"
+      },
+      "assumptions ledger": {
+        "room": "lane",
+        "station": "kickoff trail"
+      },
+      "pre-mortem": {
+        "room": "lane",
+        "station": "kickoff trail"
+      },
+      "evidence bundle": {
+        "room": "lane",
+        "station": "phase-done"
+      },
+      "PREDICTION": {
+        "room": "council-chamber",
+        "station": "intake"
+      },
+      "POINT-ID": {
+        "room": "council-chamber",
+        "station": "convene"
+      },
+      "Brier": {
+        "room": "council-chamber",
+        "station": "calibration"
+      },
+      "HIT/MISS/UNRESOLVED": {
+        "room": "council-chamber",
+        "station": "outcome"
+      },
+      "Review-by": {
+        "room": "council-chamber",
+        "station": "overdue queue"
+      },
+      "slice": {
+        "room": "develop",
+        "station": "slice ledger"
+      },
+      "proof tier": {
+        "room": "develop",
+        "station": "slice ledger"
+      },
+      "stuck fingerprint": {
+        "room": "develop",
+        "station": "stuck monitor"
+      },
+      "context pack": {
+        "room": "engine-room",
+        "station": "dispatch"
+      },
+      "capped key": {
+        "room": "engine-room",
+        "station": "hire line"
+      },
+      "unlock ladder": {
+        "room": "engine-room",
+        "station": "hire cards"
+      },
+      "cert suite": {
+        "room": "engine-room",
+        "station": "certification"
+      },
+      "router row": {
+        "room": "engine-room",
+        "station": "router table"
+      },
+      "tier (model)": {
+        "room": "model-policy",
+        "station": "census"
+      },
+      "trial (model_source)": {
+        "room": "model-policy",
+        "station": "open trials"
+      },
+      "ceiling / cap / effective": {
+        "room": "policy",
+        "station": "matrix"
+      },
+      "two-key model": {
+        "room": "policy",
+        "station": "matrix"
+      },
+      "spend reservation": {
+        "room": "policy",
+        "station": "reservations"
+      },
+      "proving week": {
+        "room": "scheduler",
+        "station": "clock"
+      },
+      "overdue (2x cadence)": {
+        "room": "scheduler",
+        "station": "jobs table"
+      },
+      "golden gate (recall)": {
+        "room": "memory",
+        "station": "golden queries"
+      },
+      "HISTORICAL DATA fence": {
+        "room": "memory",
+        "station": "recall"
+      },
+      "champion / challenger": {
+        "room": "evolve",
+        "station": "arms"
+      },
+      "holdout cohort": {
+        "room": "evolve",
+        "station": "arms"
+      },
+      "PENDING n/floor": {
+        "room": "evolve",
+        "station": "board"
+      },
+      "scorecard": {
+        "room": "bench",
+        "station": "scorecards"
+      },
+      "drift guard": {
+        "room": "bench",
+        "station": "champion drift"
+      },
+      "PLANOFF A/B": {
+        "room": "absorb",
+        "station": "sealed-blind"
+      },
+      "technique T-NN": {
+        "room": "absorb",
+        "station": "registry"
+      },
+      "allowlist / DO-NOT-WIDEN": {
+        "room": "absorb",
+        "station": "allowlist"
+      },
+      "thesis (design)": {
+        "room": "design-studio",
+        "station": "explore"
+      },
+      "blind jury / reference item": {
+        "room": "design-studio",
+        "station": "jury"
+      },
+      "BELOW-BAR": {
+        "room": "design-studio",
+        "station": "critique"
+      },
+      "deterministic render": {
+        "room": "design-studio",
+        "station": "render"
+      },
+      "tokens.css": {
+        "room": "design-studio",
+        "station": "canonical tokens"
+      },
+      "gate 1 / gate 2 (growth)": {
+        "room": "growth",
+        "station": "publish board"
+      },
+      "INDEXABLE clock": {
+        "room": "growth",
+        "station": "feed clock"
+      },
+      "suppression / reply-stop": {
+        "room": "leads",
+        "station": "guard chain"
+      },
+      "send window (IST)": {
+        "room": "leads",
+        "station": "cap meters"
+      },
+      "hash-chain (legal)": {
+        "room": "legal",
+        "station": "verify"
+      },
+      "E1/E2/E3": {
+        "room": "law",
+        "station": "constitution"
+      },
+      "the five ungrantables": {
+        "room": "law",
+        "station": "E2 seals"
+      },
+      "7-day cooling": {
+        "room": "law",
+        "station": "amendment rule"
+      },
+      "retro-log": {
+        "room": "learn",
+        "station": "retro line"
+      },
+      "trial ledger": {
+        "room": "learn",
+        "station": "promotions"
+      },
+      "twin-fix": {
+        "room": "learn",
+        "station": "lesson patterns"
+      },
+      "vacuous pass": {
+        "room": "learn",
+        "station": "lesson patterns"
+      },
+      "Build-out Mandate": {
+        "room": "strategy",
+        "station": "mandate citations"
+      },
+      "pull trigger": {
+        "room": "strategy",
+        "station": "trigger table"
+      },
+      "data mode (live/replay/sim)": {
+        "room": "today",
+        "station": "chrome"
+      },
+      "request journal": {
+        "room": "spine",
+        "station": "L2 door"
+      },
+      "one write path": {
+        "room": "inbox",
+        "station": "decide"
+      },
+      "planned room": {
+        "room": "map",
+        "station": "legend"
+      },
+      "room birth-rule": {
+        "room": "toolbelt",
+        "station": "face-coverage"
+      },
+      "face: section": {
+        "room": "toolbelt",
+        "station": "product-lint"
+      },
+      "generated command (G)": {
+        "room": "toolbelt",
+        "station": "commands"
+      },
+      "arc dash (L2)": {
+        "room": "spine",
+        "station": "L2 door"
+      }
+    }
+  },
+  "products": {
+    "$comment": "product -> room. Moved here from face-sections.mjs 2026-08-19: a hand-authored copy of the room map inside the generator is the second spelling ADR-1306 exists to prevent, and an adversarial pass named it. A product absent from this map carries NO face: section, and face-coverage FAILs if one appears anyway.",
+    "map": {
+      "hq": "spine",
+      "core": "toolbelt",
+      "plan": "lane",
+      "review": "review-ship",
+      "git": "review-ship",
+      "qa": "review-ship",
+      "council": "council-chamber",
+      "design": "design-studio",
+      "develop": "develop",
+      "engine": "engine-room",
+      "evolve": "evolve",
+      "absorb": "absorb",
+      "growth": "growth",
+      "leads": "leads",
+      "legal": "legal",
+      "memory": "memory"
+    }
+  }
+}

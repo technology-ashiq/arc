@@ -1,7 +1,9 @@
 {
   "name": "qa",
   "version": "1.0.0",
-  "requires": ["core"],
+  "requires": [
+    "core"
+  ],
   "commands": [
     ".claude/commands/arc-qa.md",
     ".claude/commands/arc-design.md",
@@ -10,5 +12,23 @@
   "agents": [
     ".claude/agents/qa-tester.md",
     ".claude/agents/design-reviewer.md"
-  ]
+  ],
+  "face": {
+    "room": "review-ship",
+    "ring": "factory",
+    "kinds": [
+      "commit.done",
+      "qa.completed",
+      "review.completed",
+      "ship.done"
+    ],
+    "sanctioned": [
+      ".claude/state/{reviews,scan,rls}",
+      "docs/reviews",
+      "docs/security",
+      "docs/qa"
+    ],
+    "stations": [],
+    "concepts": []
+  }
 }

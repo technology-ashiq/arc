@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>arc — review workspace</title>
+<link rel="stylesheet" href="tokens.css">
+<style>
+
+  /* ============================================================
+     RESET + BASE
+     thesis: decide one approval.requested on its whole evidence —
+     the queue stays a rail of identifiers, the record gets a dossier.
+     ============================================================ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+  body {
+    margin: 0;
+    background: var(--ground-surround);
+    color: var(--ink-prose);
+    font-family: var(--font-serif);
+    font-size: var(--step-support);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { margin: 0; font-weight: 600; }
+  p { margin: 0; }
+  ul, ol, dl { margin: 0; padding: 0; list-style: none; }
+  code, pre { font-family: var(--font-mono); }
+  a { color: inherit; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .num  { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink-prose); }
+  .absent { font-style: italic; color: var(--ink-absent); }
+
+  :focus { outline: none; }
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: var(--radius);
+  }
+
+  .skip-link {
+    position: absolute; left: -999px; top: 0;
+    background: var(--ground-sheet); color: var(--ink-prose);
+    padding: var(--space-3) var(--space-4);
+    z-index: 100;
+  }
+  .skip-link:focus { left: var(--space-3); top: var(--space-3); }
+
+  /* ============================================================
+     RAIL HEADER — the always-visible floor, rendered C's way:
+     a rail header, not a hairline text row (A) and not a printed
+     ruler (B). Sticky, dense, never a nav target.
+     ============================================================ */
+  .rail-header {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; gap: var(--space-6);
+    flex-wrap: wrap;
+    padding: var(--space-3) var(--space-6);
+    background: var(--ground-surround);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .brand {
+    font-family: var(--font-serif); font-style: italic;
+    font-size: var(--step-subhead); letter-spacing: 0.01em;
+    margin-right: var(--space-2);
+  }
+  .rail-header dl { display: flex; gap: var(--space-6); flex-wrap: wrap; }
+  .rail-header .stat { display: flex; align-items: baseline; gap: var(--space-2); }
+  .rail-header dt { font-size: var(--step-micro); color: var(--ink-dim); }
+  .rail-header dd { margin: 0; font-size: var(--step-caption); color: var(--ink-meta); }
+  .stat--needs dd { color: var(--needs-you); font-family: var(--font-mono); font-weight: 600; }
+  .stat--money .amt { color: var(--money-real); font-family: var(--font-mono); }
+  .arc-ring { margin-left: auto; flex-shrink: 0; }
+
+  .kbd-legend {
+    padding: var(--space-2) var(--space-6);
+    background: var(--ground-surround);
+    border-bottom: 1px solid var(--rule-soft);
+    font-family: var(--font-mono);
+    font-size: var(--step-micro);
+    color: var(--ink-dim);
+  }
+  kbd {
+    font-family: var(--font-mono);
+    background: var(--ground-chip);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius);
+    padding: 1px 5px;
+    color: var(--ink-meta);
+  }
+
+  /* ============================================================
+     ANCHOR NAV — the 8 signature screens, sentence case (this
+     variant refuses all-caps entirely, including in navigation)
+     ============================================================ */
+  .anchor-nav {
+    display: flex; flex-wrap: wrap; gap: var(--space-1);
+    padding: var(--space-3) var(--space-6);
+    background: var(--ground-surround);
+    border-bottom: 1px solid var(--rule);
+  }
+  .anchor-nav a {
+    display: inline-flex; align-items: center;
+    min-height: 44px; padding: 0 var(--space-4);
+    font-family: var(--font-serif);
+    font-size: var(--step-caption);
+    color: var(--ink-meta);
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+  }
+  .anchor-nav a:hover, .anchor-nav a:focus-visible {
+    color: var(--ink-prose);
+    border-bottom-color: var(--rule);
+  }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 0 var(--space-6); }
+
+  /* ============================================================
+     SECTIONS — paced, single-column reading rhythm.
+     ============================================================ */
+  .section { padding: var(--space-9) 0; border-bottom: 1px solid var(--rule-soft); }
+  .section:last-of-type { border-bottom: none; }
+  .eyebrow {
+    font-family: var(--font-serif); font-style: italic;
+    font-size: var(--step-caption); color: var(--ink-dim);
+    margin-bottom: var(--space-2);
+  }
+  .section-title {
+    font-size: var(--step-subhead); font-weight: 600;
+    color: var(--ink-prose); margin-bottom: var(--space-5);
+    max-width: var(--measure);
+  }
+  .lede { font-size: var(--step-body); line-height: 1.6; max-width: var(--measure); color: var(--ink-prose); }
+  .lede + .lede { margin-top: var(--space-4); }
+
+  /* Peripheral sections sit on the surround ground with no sheet
+     elevation — the sheet is reserved for the one open record. */
+  .section--peripheral { padding: var(--space-8) 0; }
+  .section--peripheral .section-title { font-size: var(--step-support); }
+
+  /* ============================================================
+     TODAY
+     ============================================================ */
+  .today-grid { display: flex; flex-direction: column; gap: var(--space-5); }
+  .today-pointer {
+    font-style: italic; font-size: var(--step-body);
+    color: var(--ink-prose); max-width: var(--measure);
+  }
+  .today-pointer .needs-num { color: var(--needs-you); font-family: var(--font-mono); font-style: normal; font-weight: 600; }
+  .today-pointer a { text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  .today-receipts { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+  .today-receipts li {
+    display: flex; gap: var(--space-3); align-items: baseline;
+    font-size: var(--step-caption); color: var(--ink-meta);
+    border-left: 2px solid var(--rule); padding-left: var(--space-3);
+  }
+  .today-receipts .kind { font-family: var(--font-mono); color: var(--ink-prose); }
+  .today-receipts .id { font-family: var(--font-mono); color: var(--ink-dim); font-size: var(--step-micro); }
+
+  /* ============================================================
+     INBOX — the hero. Workspace = rail (identifiers only) + the
+     one open dossier sheet (full evidence depth).
+     ============================================================ */
+  .workspace {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: var(--space-6);
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .workspace { grid-template-columns: 1fr; }
+  }
+
+  .rail { position: sticky; top: 130px; }
+  .rail-head { margin-bottom: var(--space-4); }
+  .rail-cursor-diff {
+    font-family: var(--font-mono); font-size: var(--step-caption);
+    color: var(--ink-prose); line-height: 1.5;
+  }
+  .rail-cursor-diff .num { color: var(--needs-you); font-weight: 600; }
+  .rail-queue-state {
+    font-family: var(--font-mono); font-size: var(--step-micro);
+    color: var(--ink-dim); margin-top: var(--space-1);
+  }
+  .rail-list { display: flex; flex-direction: column; gap: var(--space-2); }
+  .rail-item {
+    padding: var(--space-3);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius);
+    background: var(--ground-surround);
+  }
+  .rail-item--loaded {
+    border-color: var(--rule);
+    background: var(--ground-sheet-hover);
+  }
+  .rail-item-kind { font-family: var(--font-mono); font-size: var(--step-micro); color: var(--ink-dim); }
+  .rail-item-id { font-family: var(--font-mono); font-size: var(--step-caption); color: var(--ink-prose); word-break: break-all; margin-top: 2px; }
+  .rail-item-lane { font-size: var(--step-micro); color: var(--ink-meta); margin-top: var(--space-1); }
+  .rail-item-flag { font-size: var(--step-micro); font-style: italic; color: var(--ink-dim); margin-top: var(--space-2); }
+  .rail-item-shortcuts { font-size: var(--step-micro); color: var(--ink-dim); margin-top: var(--space-2); display: flex; gap: var(--space-2); align-items: center; }
+  .rail-foot { font-size: var(--step-micro); color: var(--ink-dim); font-style: italic; margin-top: var(--space-3); }
+
+  /* the dossier sheet — the one layered document */
+  .dossier-sheet {
+    background: var(--ground-sheet);
+    border: 1px solid var(--rule-soft);
+    border-left: 2px solid var(--rule);
+    border-radius: var(--radius);
+    padding: var(--space-6) var(--space-7);
+  }
+  .dossier-eyebrow { font-family: var(--font-mono); font-size: var(--step-micro); color: var(--ink-dim); }
+  .kind-display { font-size: var(--step-display); font-weight: 600; color: var(--ink-prose); margin-top: var(--space-1); }
+  .dossier-id { font-family: var(--font-mono); font-size: var(--step-caption); color: var(--ink-meta); margin-top: var(--space-1); }
+
+  .field-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: var(--space-4) var(--space-6);
+    margin-top: var(--space-6);
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .field-grid dt { font-size: var(--step-micro); color: var(--ink-dim); margin-bottom: 2px; }
+  .field-grid dd { font-size: var(--step-support); color: var(--ink-prose); }
+
+  .prose-body { max-width: var(--measure); margin-top: var(--space-6); }
+  .prose-body p { font-size: var(--step-body); line-height: 1.65; color: var(--ink-prose); }
+  .prose-body p + p { margin-top: var(--space-4); }
+  .prose-body code { font-size: 0.85em; color: var(--ink-meta); }
+
+  .subhead { font-size: var(--step-subhead); font-weight: 600; margin-top: var(--space-7); margin-bottom: var(--space-3); }
+
+  .receipt-drawer {
+    margin-top: var(--space-3);
+    background: var(--ground-chip);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius);
+    padding: var(--space-4) var(--space-5);
+  }
+  .drawer-label { font-size: var(--step-micro); color: var(--ink-dim); margin-bottom: var(--space-2); }
+  .drawer-json { font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: var(--ink-meta); overflow-x: auto; }
+  .drawer-json .k { color: var(--ink-dim); }
+  .drawer-json .v { color: var(--ink-prose); }
+  .drawer-note { font-size: var(--step-micro); margin-top: var(--space-3); }
+
+  .seal-block {
+    margin-top: var(--space-6);
+    display: flex; gap: var(--space-4); align-items: flex-start;
+    padding: var(--space-4) var(--space-5);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+  }
+  .seal-lock { flex-shrink: 0; margin-top: 2px; }
+  .seal-text { font-size: var(--step-support); color: var(--ink-meta); line-height: 1.5; }
+  .seal-text strong { color: var(--ink-prose); font-weight: 600; }
+
+  .stamp-form { margin-top: var(--space-7); }
+  .reason-label { display: block; font-size: var(--step-support); font-weight: 600; color: var(--ink-prose); margin-bottom: var(--space-2); }
+  .reason-label .required { font-weight: 400; font-style: italic; color: var(--incident); }
+  .reason-field {
+    width: 100%; min-height: 120px;
+    font-family: var(--font-serif); font-size: var(--step-body);
+    line-height: 1.6; color: var(--ink-prose);
+    background: var(--ground-chip);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: var(--space-4);
+    resize: vertical;
+  }
+  .reason-field::placeholder { color: var(--ink-dim); font-style: italic; }
+  .reason-field:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .reason-presets { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+  .preset-chip {
+    min-height: 44px; padding: 0 var(--space-4);
+    font-family: var(--font-mono); font-size: var(--step-micro);
+    color: var(--ink-meta); background: var(--ground-chip);
+    border: 1px solid var(--rule-soft); border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .preset-chip:hover { border-color: var(--rule); color: var(--ink-prose); }
+
+  .stamp-row { display: flex; gap: var(--space-4); margin-top: var(--space-5); }
+  .stamp-btn {
+    min-height: 52px; min-width: 160px;
+    padding: 0 var(--space-6);
+    font-family: var(--font-serif); font-size: var(--step-support); font-weight: 600;
+    letter-spacing: 0.02em;
+    background: transparent;
+    color: var(--ink-prose);
+    border: 2px solid var(--rule);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transform: rotate(-0.6deg);
+  }
+  .stamp-btn--reject { transform: rotate(0.5deg); }
+  .stamp-btn:not(:disabled):hover { border-color: var(--ink-prose); background: var(--ground-chip); }
+  .stamp-btn:disabled { color: var(--ink-dim); border-color: var(--rule-soft); cursor: not-allowed; }
+  @media (prefers-reduced-motion: no-preference) {
+    .stamp-btn:not(:disabled):active { animation: stamp-land 200ms ease-out; }
+  }
+  @keyframes stamp-land {
+    0% { transform: scale(1) rotate(-0.6deg); }
+    40% { transform: scale(1.06) rotate(-0.6deg); }
+    100% { transform: scale(1) rotate(-0.6deg); }
+  }
+  .stamp-hint { font-size: var(--step-micro); color: var(--ink-dim); margin-top: var(--space-2); }
+
+  /* ============================================================
+     STATE MATRIX — reference block
+     ============================================================ */
+  .state-matrix {
+    margin-top: var(--space-9);
+    border: 1px dashed var(--rule);
+    border-radius: var(--radius);
+    padding: var(--space-6);
+  }
+  .state-matrix-label {
+    font-family: var(--font-mono); font-size: var(--step-micro);
+    color: var(--ink-dim); letter-spacing: 0.03em;
+    margin-bottom: var(--space-5);
+  }
+  .state-grid { display: grid; grid-template-columns: 120px repeat(5, 1fr); gap: var(--space-3); font-size: var(--step-micro); }
+  .state-grid .rowhead, .state-grid .colhead { color: var(--ink-dim); font-style: italic; }
+  .state-grid .colhead { font-family: var(--font-mono); font-style: normal; }
+  .state-grid .cell {
+    padding: var(--space-3);
+    background: var(--ground-chip);
+    border: 1px solid var(--rule-soft);
+    border-radius: var(--radius);
+    color: var(--ink-meta);
+    line-height: 1.5;
+  }
+  .state-grid .cell code { color: var(--ink-prose); }
+  .state-grid .cell.error-door { border-color: var(--incident); }
+  .state-grid .cell.error-door .code { color: var(--incident); font-family: var(--font-mono); }
+  .state-grid .cell.error-evidence { border-color: var(--incident); border-style: dashed; }
+  .state-grid .cell.error-evidence .code { color: var(--incident); font-family: var(--font-mono); }
+  .state-grid .cell.disabled { color: var(--ink-dim); }
+  @media (max-width: 900px) {
+    .state-grid { grid-template-columns: 1fr; }
+    .state-grid .colhead { margin-top: var(--space-3); }
+  }
+
+  /* ============================================================
+     MAP (peripheral)
+     ============================================================ */
+  .lane-dots { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-4); }
+  .lane-dot { display: flex; align-items: center; gap: var(--space-2); font-size: var(--step-caption); color: var(--ink-meta); }
+  .lane-dot .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink-prose); flex-shrink: 0; }
+  .dashed-callout { margin-top: var(--space-6); max-width: var(--measure); }
+  .dashed-callout p.lede { margin-bottom: var(--space-3); }
+  .dashed-kinds { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+  .dashed-kind {
+    font-family: var(--font-mono); font-size: var(--step-micro);
+    color: var(--ink-dim); padding: var(--space-1) var(--space-3);
+    border: 1px dashed var(--rule); border-radius: var(--radius);
+  }
+
+  /* ============================================================
+     SPINE / TAPE (peripheral)
+     ============================================================ */
+  .kind-counts { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 var(--space-6); margin-top: var(--space-5); max-width: 720px; }
+  .kind-counts .row {
+    display: flex; justify-content: space-between; gap: var(--space-3);
+    padding: var(--space-2) 0; border-bottom: 1px solid var(--rule-soft);
+    font-size: var(--step-caption);
+  }
+  .kind-counts .row .k { font-family: var(--font-mono); color: var(--ink-meta); }
+  .kind-counts .row .v { font-family: var(--font-mono); color: var(--ink-prose); font-weight: 600; }
+
+  .tape-ticker { display: flex; flex-wrap: wrap; gap: 0; margin-top: var(--space-6); border-top: 1px solid var(--rule); padding-top: var(--space-4); }
+  .tick { display: flex; flex-direction: column; gap: var(--space-1); padding: 0 var(--space-4); border-left: 1px solid var(--rule); min-width: 150px; margin-bottom: var(--space-4); }
+  .tick .date { font-family: var(--font-mono); font-size: var(--step-caption); color: var(--ink-prose); }
+  .tick .what { font-size: var(--step-micro); color: var(--ink-meta); }
+
+  /* ============================================================
+     COUNCIL ROOM (peripheral)
+     ============================================================ */
+  .council-sessions { display: flex; flex-direction: column; gap: var(--space-4); margin-top: var(--space-5); max-width: var(--measure); }
+  .council-session { border-left: 2px solid var(--rule); padding-left: var(--space-4); }
+  .council-session .verdict { font-family: var(--font-mono); font-size: var(--step-caption); color: var(--ink-prose); }
+  .council-session .meta { font-size: var(--step-caption); color: var(--ink-meta); margin-top: 2px; }
+  .council-stats { display: flex; gap: var(--space-6); flex-wrap: wrap; margin-top: var(--space-5); font-size: var(--step-caption); color: var(--ink-meta); }
+  .council-stats .absent { display: block; }
+
+  /* ============================================================
+     MONEY (peripheral)
+     ============================================================ */
+  .money-primary { margin-top: var(--space-5); }
+  .money-primary .amount { font-family: var(--font-mono); font-size: var(--step-display); color: var(--money-real); }
+  .money-primary .caption { font-size: var(--step-caption); color: var(--ink-meta); margin-top: var(--space-2); max-width: var(--measure); }
+  .money-metrics { display: flex; gap: var(--space-7); flex-wrap: wrap; margin-top: var(--space-6); }
+  .money-metric dt { font-size: var(--step-micro); color: var(--ink-dim); }
+  .money-metric dd { font-size: var(--step-support); color: var(--ink-prose); margin-top: 2px; }
+  .money-metric dd.absent { font-family: var(--font-serif); }
+
+  .cost-lines { margin-top: var(--space-6); max-width: 420px; }
+  .cost-line { display: flex; justify-content: space-between; padding: var(--space-2) 0; border-bottom: 1px solid var(--rule-soft); font-size: var(--step-caption); }
+  .cost-line .label { color: var(--ink-meta); }
+  .cost-line .val { color: var(--ink-dim); font-style: italic; }
+  .cost-note { font-size: var(--step-micro); color: var(--ink-dim); font-style: italic; margin-top: var(--space-3); }
+
+  .simulated-panel {
+    margin-top: var(--space-7); position: relative;
+    border: 1px solid var(--non-real);
+    border-radius: var(--radius);
+    padding: var(--space-5);
+    max-width: 420px;
+    overflow: hidden;
+  }
+  .simulated-panel .hatch-bg { position: absolute; inset: 0; opacity: 0.5; }
+  .simulated-panel .content { position: relative; }
+  .simulated-panel .tag { font-family: var(--font-mono); font-size: var(--step-caption); color: var(--non-real); font-weight: 600; }
+  .simulated-panel p { font-size: var(--step-micro); color: var(--ink-meta); margin-top: var(--space-2); }
+
+  /* ============================================================
+     BOARD (peripheral)
+     ============================================================ */
+  .board-table { width: 100%; border-collapse: collapse; margin-top: var(--space-5); }
+  .board-table th { text-align: left; font-size: var(--step-micro); color: var(--ink-dim); font-weight: 400; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--rule); }
+  .board-table td { font-size: var(--step-caption); color: var(--ink-prose); padding: var(--space-3); border-bottom: 1px solid var(--rule-soft); vertical-align: top; }
+  .board-table td.lane-name { font-family: var(--font-mono); color: var(--ink-prose); }
+  .board-table td.status { font-family: var(--font-mono); color: var(--ink-meta); }
+  .board-table td.note { color: var(--ink-meta); }
+
+  .idle-block { margin-top: var(--space-7); }
+  .idle-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+  .idle-chip {
+    font-family: var(--font-mono); font-size: var(--step-caption);
+    padding: var(--space-2) var(--space-4); min-height: 44px;
+    display: inline-flex; align-items: center;
+    color: var(--ink-dim);
+    border: 1px dotted var(--rule);
+    border-radius: var(--radius);
+  }
+  .badge-note { font-size: var(--step-micro); color: var(--ink-dim); font-style: italic; margin-top: var(--space-5); max-width: var(--measure); }
+  .board-flags { display: flex; gap: var(--space-6); flex-wrap: wrap; margin-top: var(--space-5); font-size: var(--step-caption); color: var(--ink-meta); }
+
+  /* ============================================================
+     ASK ARC (peripheral)
+     ============================================================ */
+  .ask-form { margin-top: var(--space-5); max-width: 640px; }
+  .ask-input {
+    width: 100%; min-height: 52px; padding: var(--space-3) var(--space-4);
+    font-family: var(--font-serif); font-size: var(--step-support);
+    color: var(--ink-prose); background: var(--ground-chip);
+    border: 1px solid var(--rule); border-radius: var(--radius);
+  }
+  .ask-example { margin-top: var(--space-6); max-width: var(--measure); }
+  .ask-q { font-size: var(--step-support); font-style: italic; color: var(--ink-meta); }
+  .ask-a { font-size: var(--step-body); line-height: 1.6; color: var(--ink-prose); margin-top: var(--space-3); }
+  .ask-a a { text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 3px; }
+  .ask-seal { margin-top: var(--space-6); }
+
+  footer {
+    padding: var(--space-6);
+    text-align: left;
+    font-family: var(--font-mono); font-size: var(--step-micro);
+    color: var(--ink-dim);
+    border-top: 1px solid var(--rule-soft);
+  }
+
+</style>
+</head>
+<body>
+
+<a class="skip-link" href="#inbox">Skip to the open record</a>
+
+<!-- hatch pattern def, referenced via url(#hatch-violet) — the ONE
+     sanctioned exception to "reserved hues never as fills": the
+     non-real family's mandatory hatched-violet treatment. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <pattern id="hatch-violet" width="8" height="8" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="8" stroke="var(--non-real)" stroke-width="1.5" opacity="0.55"></line>
+    </pattern>
+  </defs>
+</svg>
+
+<header class="rail-header">
+  <span class="brand">arc</span>
+  <dl>
+    <div class="stat stat--needs">
+      <dt>needs-you</dt><dd>2</dd>
+    </div>
+    <div class="stat stat--money">
+      <dt>real revenue</dt><dd class="amt">₹0</dd>
+    </div>
+    <div class="stat">
+      <dt>data mode</dt><dd>live · as of 19 Aug 2026</dd>
+    </div>
+    <div class="stat">
+      <dt>tape</dt><dd>next — growth feed 08-23</dd>
+    </div>
+  </dl>
+  <svg class="arc-ring" width="28" height="28" viewBox="0 0 28 28" aria-hidden="true">
+    <circle cx="14" cy="14" r="11" fill="none" stroke="var(--rule)" stroke-width="1.5"></circle>
+    <path d="M14 3 A11 11 0 0 1 23.5 19" fill="none" stroke="var(--ink-prose)" stroke-width="1.5" stroke-linecap="round"></path>
+    <circle cx="14" cy="14" r="1.6" fill="var(--ink-prose)"></circle>
+  </svg>
+</header>
+
+<nav class="anchor-nav" aria-label="signature screens">
+  <a href="#today">Today</a>
+  <a href="#inbox">Inbox</a>
+  <a href="#map">Map</a>
+  <a href="#spine-tape">Spine/Tape</a>
+  <a href="#council-room">Council room</a>
+  <a href="#money">Money</a>
+  <a href="#board">Board</a>
+  <a href="#ask-arc">Ask arc</a>
+</nav>
+<p class="kbd-legend">keyboard — <kbd>j</kbd>/<kbd>k</kbd> move · <kbd>a</kbd>/<kbd>r</kbd> stamp (reason prompt) · <kbd>w</kbd> why · <kbd>t</kbd> tape · <kbd>/</kbd> search · <kbd>⌘K</kbd> jump</p>
+
+<main>
+
+  <!-- ============================================================
+       TODAY
+       ============================================================ -->
+  <section id="today" class="section section--peripheral">
+    <p class="eyebrow">Today</p>
+    <h2 class="section-title">19 Aug 2026, IST</h2>
+    <div class="today-grid">
+      <p class="lede">1,386 receipts on the spine · 21 <code class="mono">day.closed</code> seals · 14 of 46 kinds have ever fired.</p>
+      <p class="today-pointer"><span class="needs-num">2</span> need you today, both on the growth lane — read the open one whole in <a href="#inbox">Inbox ↓</a>.</p>
+      <ol class="today-receipts" aria-label="today's receipts">
+        <li><span class="kind mono">kickoff.done</span><span class="id">01M0B8T4ZQ1APZK5SJ7331K1KS</span></li>
+        <li><span class="kind mono">approval.requested</span><span class="id">01M0B8T5F81RC6V06MRY289B6D</span><span>gate: kickoff</span></li>
+        <li><span class="kind mono">decision.recorded</span><span>approve — reason: &ldquo;pannu; WIP 6 vs guideline 2 acknowledged&rdquo;</span></li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       INBOX — the hero
+       ============================================================ -->
+  <section id="inbox" class="section">
+    <p class="eyebrow">Inbox</p>
+    <h2 class="section-title">One record, full depth. The rest of the queue waits as a rail.</h2>
+
+    <div class="workspace">
+
+      <aside class="rail" aria-label="approval queue">
+        <div class="rail-head">
+          <p class="rail-cursor-diff">since you left: <span class="num">3</span> receipts, <span class="num">2</span> need you</p>
+          <p class="rail-queue-state">queue — <span class="num">2</span> open <code>approval.requested</code></p>
+        </div>
+        <ol class="rail-list">
+          <li class="rail-item rail-item--loaded" aria-current="true">
+            <p class="rail-item-kind">approval.requested</p>
+            <p class="rail-item-id">01KZZRVSQJEAVD4YCZ8FDXR0DT</p>
+            <p class="rail-item-lane">lane growth · gate exemplar articles review pack</p>
+            <p class="rail-item-flag">open in the dossier →</p>
+          </li>
+          <li class="rail-item rail-item--collapsed">
+            <p class="rail-item-kind">approval.requested</p>
+            <p class="rail-item-id">01KZZRW51QHTA9CFEX5JRRGY7C</p>
+            <p class="rail-item-lane">lane growth · gate cluster c-001</p>
+            <p class="rail-item-shortcuts"><kbd>a</kbd> approve <kbd>r</kbd> reject — without opening</p>
+          </li>
+        </ol>
+        <p class="rail-foot">rail ends &ldquo;0 open approval.requested&rdquo; once this pair clears.</p>
+      </aside>
+
+      <article class="dossier-sheet" aria-label="open approval.requested record">
+        <p class="dossier-eyebrow">approval.requested · lane growth</p>
+        <h3 class="kind-display">approval.requested</h3>
+        <p class="dossier-id mono">01KZZRVSQJEAVD4YCZ8FDXR0DT</p>
+
+        <dl class="field-grid">
+          <div><dt>gate</dt><dd>exemplar articles review pack</dd></div>
+          <div><dt>profile</dt><dd>growth gate 2 — review pack + preview URL</dd></div>
+          <div><dt>lane</dt><dd>growth · phase 06 · appetite 10d / burn 8.0d</dd></div>
+          <div><dt>₹ amount</dt><dd class="absent">n/a — no cost/revenue receipt attached to this gate</dd></div>
+        </dl>
+
+        <div class="prose-body">
+          <p>The growth lane opened its INDEXABLE clock on <span class="mono">2026-08-16</span>; the feed&rsquo;s earliest read is scheduled <span class="mono">2026-08-23</span>. This gate is one of two <code>approval.requested</code> records open in growth today — the review pack and its preview URL are the whole of the evidence for the decision below.</p>
+          <p class="absent">No prior <code>decision.recorded</code> exists yet on this gate — first request. 41 <code>decision.recorded</code> receipts exist on the spine overall; today&rsquo;s is on the kickoff gate, not this one.</p>
+        </div>
+
+        <h4 class="subhead">Receipt drawer</h4>
+        <section class="receipt-drawer">
+          <p class="drawer-label">canonical</p>
+          <pre class="drawer-json"><code><span class="k">{</span>
+  <span class="k">"id"</span>: <span class="v">"01KZZRVSQJEAVD4YCZ8FDXR0DT"</span>,
+  <span class="k">"kind"</span>: <span class="v">"approval.requested"</span>,
+  <span class="k">"lane"</span>: <span class="v">"growth"</span>,
+  <span class="k">"gate"</span>: <span class="v">"exemplar articles review pack"</span>,
+  <span class="k">"profile"</span>: <span class="v">"growth gate 2 — review pack + preview URL"</span>,
+  <span class="k">"sha256"</span>: <em class="absent">not captured in this pack</em>,
+  <span class="k">"supersedes"</span>: <span class="v">null</span>
+<span class="k">}</span></code></pre>
+          <p class="drawer-note absent">supersedes chain — empty. No prior receipt supersedes this one.</p>
+        </section>
+
+        <h4 class="subhead">Seals</h4>
+        <section class="seal-block">
+          <svg class="seal-lock" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+            <rect x="4" y="10" width="14" height="9" rx="1.5" fill="none" stroke="var(--ink-meta)" stroke-width="1.5"></rect>
+            <path d="M7 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="var(--ink-meta)" stroke-width="1.5"></path>
+            <circle cx="11" cy="14.5" r="1.4" fill="var(--ink-meta)"></circle>
+          </svg>
+          <p class="seal-text"><strong>Seal</strong> — this stamp is the only write this screen can make (one-write law). Approving does not publish; publishing the reviewed articles outward is a separate, forever-human keystroke arc cannot perform.</p>
+        </section>
+
+        <h4 class="subhead">Reason</h4>
+        <form class="stamp-form">
+          <label for="reason" class="reason-label">Reason <span class="required">— required, mandatory before either stamp lands</span></label>
+          <textarea id="reason" class="reason-field" rows="4" placeholder="Type the reason this decision is grounded in."></textarea>
+          <div class="reason-presets" aria-label="reason presets">
+            <button type="button" class="preset-chip" data-preset="evidence sufficient — review pack and preview URL both checked">[1] evidence sufficient</button>
+            <button type="button" class="preset-chip" data-preset="preview URL broken — cannot verify the exemplar articles">[2] preview broken</button>
+            <button type="button" class="preset-chip" data-preset="needs revision — flagged back to growth">[3] needs revision</button>
+          </div>
+          <div class="stamp-row">
+            <button type="button" class="stamp-btn stamp-btn--approve" id="approveBtn" disabled>Approve</button>
+            <button type="button" class="stamp-btn stamp-btn--reject" id="rejectBtn" disabled>Reject</button>
+          </div>
+          <p class="stamp-hint">a landed stamp prints its <code>decision.recorded</code> ULID here and slides this record into the receipts feed (200ms, once). a refused stamp holds this sheet exactly as loaded — see the state matrix below.</p>
+        </form>
+      </article>
+    </div>
+
+    <div class="state-matrix">
+      <p class="state-matrix-label mono">STATE MATRIX — REFERENCE, NOT LIVE DATA</p>
+      <div class="state-grid">
+        <div></div>
+        <div class="colhead">empty</div>
+        <div class="colhead">loading</div>
+        <div class="colhead">error</div>
+        <div class="colhead">success</div>
+        <div class="colhead">disabled</div>
+
+        <div class="rowhead">rail item<br>(door)</div>
+        <div class="cell">0 open <code>approval.requested</code> — queue empty, nothing waits</div>
+        <div class="cell">loading receipt — stale 0s, last known 01KZZRW51QHTA9CFEX5JRRGY7C</div>
+        <div class="cell error-door"><span class="code">ALREADY_DECIDED</span> — 01KZZRW51QHTA9CFEX5JRRGY7C. rail collapses this row, re-points at the next.</div>
+        <div class="cell"><code>decision.recorded</code> printed on the row — reason &ldquo;pannu; WIP 6 vs guideline 2 acknowledged&rdquo;. row slides into the receipts feed.</div>
+        <div class="cell disabled">sealed — publishing outward is forever-human (one-write law)</div>
+
+        <div class="rowhead">evidence pane<br>(sheet)</div>
+        <div class="cell">not instrumented — no receipt attached to this field yet</div>
+        <div class="cell">loading profile detail body — stale 0s</div>
+        <div class="cell error-evidence"><span class="code">BAD_REASON</span> — reason rejected. everything above stays loaded; retype and resubmit only.</div>
+        <div class="cell">profile detail body, receipt drawer and seals all loaded — 01KZZRVSQJEAVD4YCZ8FDXR0DT</div>
+        <div class="cell disabled">sealed — a <code>decision.recorded</code> cannot be un-recorded (one-write law)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       MAP (peripheral)
+       ============================================================ -->
+  <section id="map" class="section section--peripheral">
+    <p class="eyebrow">Map</p>
+    <h2 class="section-title">Where every line sits — context around the open record, never the screen.</h2>
+    <p class="lede">14 of 46 kinds have ever fired. Seven lanes are LIVE today; the rest of the map is quieter than this dossier on purpose.</p>
+    <div class="lane-dots">
+      <span class="lane-dot"><span class="dot"></span>bench</span>
+      <span class="lane-dot"><span class="dot"></span>engine</span>
+      <span class="lane-dot"><span class="dot"></span>face</span>
+      <span class="lane-dot"><span class="dot"></span>growth</span>
+      <span class="lane-dot"><span class="dot"></span>leads</span>
+      <span class="lane-dot"><span class="dot"></span>legal</span>
+      <span class="lane-dot"><span class="dot"></span>scheduler</span>
+    </div>
+    <div class="dashed-callout">
+      <p class="lede">Zero receipts ever, on the spine — these render dashed, labelled <em>fixture-proven, unexercised</em>:</p>
+      <div class="dashed-kinds">
+        <span class="dashed-kind">revenue.received</span>
+        <span class="dashed-kind">revenue.simulated</span>
+        <span class="dashed-kind">cost.incurred</span>
+        <span class="dashed-kind">incident.raised</span>
+        <span class="dashed-kind">experiment.*</span>
+        <span class="dashed-kind">policy.*</span>
+        <span class="dashed-kind">council.verdict</span>
+        <span class="dashed-kind">month.closed</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SPINE / TAPE (peripheral)
+       ============================================================ -->
+  <section id="spine-tape" class="section section--peripheral">
+    <p class="eyebrow">Spine / Tape</p>
+    <h2 class="section-title">1,386 receipts · 21 day.closed seals · 14 of 46 kinds have ever fired</h2>
+    <div class="kind-counts">
+      <div class="row"><span class="k">note.logged</span><span class="v">917</span></div>
+      <div class="row"><span class="k">approval.requested</span><span class="v">49</span></div>
+      <div class="row"><span class="k">decision.recorded</span><span class="v">41</span></div>
+      <div class="row"><span class="k">phase.closed</span><span class="v">29</span></div>
+      <div class="row"><span class="k">review.completed</span><span class="v">21</span></div>
+      <div class="row"><span class="k">run.completed</span><span class="v">17</span></div>
+      <div class="row"><span class="k">lead.researched</span><span class="v">15</span></div>
+      <div class="row"><span class="k">kickoff.done</span><span class="v">11</span></div>
+      <div class="row"><span class="k">commit.done</span><span class="v">2</span></div>
+      <div class="row"><span class="k">constitution.adopted</span><span class="v">1</span></div>
+      <div class="row"><span class="k">content.published</span><span class="v">1</span></div>
+      <div class="row"><span class="k">develop.started</span><span class="v">1</span></div>
+      <div class="row"><span class="k">slice.done</span><span class="v">1</span></div>
+    </div>
+
+    <h3 class="subhead">Tape — dated obligations</h3>
+    <div class="tape-ticker">
+      <div class="tick"><span class="date mono">2026-08-23</span><span class="what">growth feed earliest read</span></div>
+      <div class="tick"><span class="date mono">2026-08-24</span><span class="what">scheduler proving week runs to</span></div>
+      <div class="tick"><span class="date mono">2026-08-31</span><span class="what">hermes review_by</span></div>
+      <div class="tick"><span class="date mono">2026-09-01</span><span class="what">bench guard NEXT-CHECK</span></div>
+      <div class="tick"><span class="date mono">2026-09-15</span><span class="what">council 002 Review-by</span></div>
+      <div class="tick"><span class="date mono">2026-11-09</span><span class="what">T-01 review_by</span></div>
+      <div class="tick"><span class="date mono">2027-02-02</span><span class="what">council 001 Review-by</span></div>
+      <div class="tick"><span class="date mono">2027-05-13/14</span><span class="what">DPDP commencement</span></div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       COUNCIL ROOM (peripheral)
+       ============================================================ -->
+  <section id="council-room" class="section section--peripheral">
+    <p class="eyebrow">Council room</p>
+    <h2 class="section-title">2 sessions · scored 0</h2>
+    <div class="council-sessions">
+      <div class="council-session">
+        <p class="verdict">001 — CONDITIONAL / Medium → outcome UNRESOLVED</p>
+        <p class="meta">Review-by 2027-02-02</p>
+      </div>
+      <div class="council-session">
+        <p class="verdict">002 — NO / Medium (standard mode)</p>
+        <p class="meta">Review-by 2026-09-15</p>
+      </div>
+    </div>
+    <div class="council-stats">
+      <span>Brier — <span class="absent">insufficient evidence</span></span>
+      <span>roster 12 (3 stance · 1 researcher · 1 verifier · 7 experts)</span>
+      <span class="absent">council.verdict on the spine: 0 ever — dashed, fixture-proven, unexercised (both sessions file-borne)</span>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       MONEY (peripheral)
+       ============================================================ -->
+  <section id="money" class="section section--peripheral">
+    <p class="eyebrow">Money</p>
+    <h2 class="section-title">The hardest screen to render honestly</h2>
+    <div class="money-primary">
+      <p class="amount">₹0</p>
+      <p class="caption">real revenue — 0 <code class="mono">revenue.received</code> receipts ever. <em class="absent">mechanism proven, live value pending.</em></p>
+    </div>
+    <dl class="money-metrics">
+      <div class="money-metric"><dt>MRR</dt><dd class="absent">—</dd></div>
+      <div class="money-metric"><dt>kill-distance</dt><dd class="absent">NOT EVALUATED — no criteria receipt for a live venture month</dd></div>
+      <div class="money-metric"><dt>north-star, ₹/month per hour of the owner&rsquo;s attention</dt><dd class="absent">not instrumented</dd></div>
+    </dl>
+
+    <div class="cost-lines">
+      <div class="cost-line"><span class="label">provider</span><span class="val">not shown in this pack</span></div>
+      <div class="cost-line"><span class="label">infra</span><span class="val">not shown in this pack</span></div>
+      <div class="cost-line"><span class="label">one-off</span><span class="val">not shown in this pack</span></div>
+      <div class="cost-line"><span class="label">Overhead</span><span class="val">not shown in this pack</span></div>
+    </div>
+    <p class="cost-note">these three lines plus Overhead are never totalled.</p>
+
+    <div class="simulated-panel">
+      <div class="hatch-bg" style="background: url(#hatch-violet);"></div>
+      <div class="content">
+        <p class="tag">SIMULATED</p>
+        <p>watermarked, hatched-violet class — never co-rendered with the real revenue above.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       BOARD (peripheral)
+       ============================================================ -->
+  <section id="board" class="section section--peripheral">
+    <p class="eyebrow">Board</p>
+    <h2 class="section-title">16 lanes · 7 LIVE vs guideline 2 — informational</h2>
+    <table class="board-table">
+      <thead>
+        <tr><th>lane</th><th>status</th><th>phase</th><th>appetite/burn</th><th>clock / note</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="lane-name">bench</td><td class="status">LIVE</td><td>04</td><td class="mono">8d / 7.25d</td><td class="note">guard NEXT-CHECK 2026-09-01 · production receipts 0</td></tr>
+        <tr><td class="lane-name">engine</td><td class="status">LIVE</td><td>06</td><td class="mono">9.5d / 7.5d</td><td class="note">Hermes v2026.8.3 hired · 3 dispatches, 0 accepted drafts · review_by 2026-08-31</td></tr>
+        <tr><td class="lane-name">face</td><td class="status">LIVE</td><td>00</td><td class="mono">32d / 1d</td><td class="note">born 2026-08-19 (this build)</td></tr>
+        <tr><td class="lane-name">growth</td><td class="status">LIVE</td><td>06</td><td class="mono">10d / 8.0d</td><td class="note">INDEXABLE clock started 08-16 · feed earliest read 2026-08-23 · 2 approvals OPEN</td></tr>
+        <tr><td class="lane-name">leads</td><td class="status">LIVE</td><td>03</td><td class="mono">11d / 7.5d</td><td class="note">rehearsal only — live send = owner keystroke pending</td></tr>
+        <tr><td class="lane-name">legal</td><td class="status">LIVE</td><td>00</td><td class="mono">5d / 0d</td><td class="note">awaiting owner approval</td></tr>
+        <tr><td class="lane-name">scheduler</td><td class="status">LIVE</td><td>03</td><td class="mono">3d / 2.5d</td><td class="note">proving week restarted 08-17 → runs to 2026-08-24</td></tr>
+      </tbody>
+    </table>
+
+    <div class="idle-block">
+      <p class="eyebrow">IDLE</p>
+      <div class="idle-chips">
+        <span class="idle-chip">absorb</span>
+        <span class="idle-chip">develop</span>
+        <span class="idle-chip">evolve</span>
+        <span class="idle-chip">ledger</span>
+        <span class="idle-chip">memory</span>
+        <span class="idle-chip">model-policy</span>
+        <span class="idle-chip">policy</span>
+        <span class="idle-chip">portfolio</span>
+        <span class="idle-chip">design</span>
+      </div>
+      <p class="badge-note">policy engine — fixture-proven, unexercised · evolve — unexercised · ledger — mechanism proven, live value pending</p>
+    </div>
+
+    <div class="board-flags">
+      <span>Mode B <strong>NOT CERTIFIED</strong></span>
+      <span>centuries claimed 0001–1399 · next 1400</span>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       ASK ARC (peripheral)
+       ============================================================ -->
+  <section id="ask-arc" class="section section--peripheral">
+    <p class="eyebrow">Ask arc</p>
+    <h2 class="section-title">Reads receipts. Decides nothing.</h2>
+    <form class="ask-form">
+      <label for="ask" class="reason-label" style="margin-bottom: var(--space-2); display:block;">Ask</label>
+      <input id="ask" class="ask-input" type="text" value="why is growth's INDEXABLE clock ticking?" readonly>
+    </form>
+    <div class="ask-example">
+      <p class="ask-a">growth (phase 06, appetite 10d / burn 8.0d) — INDEXABLE clock started <span class="mono">2026-08-16</span> · feed earliest read <span class="mono">2026-08-23</span> · 2 approvals OPEN. <a href="#board">Why? → Board</a></p>
+    </div>
+    <div class="seal-block ask-seal">
+      <svg class="seal-lock" width="22" height="22" viewBox="0 0 22 22" aria-hidden="true">
+        <rect x="4" y="10" width="14" height="9" rx="1.5" fill="none" stroke="var(--ink-meta)" stroke-width="1.5"></rect>
+        <path d="M7 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="var(--ink-meta)" stroke-width="1.5"></path>
+        <circle cx="11" cy="14.5" r="1.4" fill="var(--ink-meta)"></circle>
+      </svg>
+      <p class="seal-text"><strong>Seal</strong> — arc cannot approve, reject or emit through this box. Every write happens at the stamp, on one open record, with a typed reason (one-write law).</p>
+    </div>
+  </section>
+
+</main>
+
+<footer>arc · review workspace · as-of 2026-08-19, IST</footer>
+
+<script>
+  // mandatory-reason affordance: the stamp cannot fire without a typed reason.
+  (function () {
+    var reason = document.getElementById('reason');
+    var approve = document.getElementById('approveBtn');
+    var reject = document.getElementById('rejectBtn');
+    if (!reason || !approve || !reject) return;
+    function sync() {
+      var has = reason.value.trim().length > 0;
+      approve.disabled = !has;
+      reject.disabled = !has;
+    }
+    reason.addEventListener('input', sync);
+
+    var presets = document.querySelectorAll('.preset-chip');
+    presets.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        reason.value = btn.getAttribute('data-preset');
+        sync();
+        reason.focus();
+      });
+    });
+  })();
+</script>
+
+</body>
+</html>

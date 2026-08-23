@@ -1,0 +1,85 @@
+/* variant-c tokens — the ONLY place colour values live for this variant.
+   thesis: This product wins because the user can decide one `approval.requested` on its
+   whole evidence — profile detail body, receipt drawer, supersedes chain, seals — without
+   assembling that evidence from receipts he has to go find.
+
+   Art direction: editorial-warm ink. Two warm grounds (elevation by tone, never shadow),
+   a text serif carrying the profile detail body at editorial measure, reserved hues surface
+   only at text scale inside prose — never as fills, never as badge washes. */
+
+:root{
+
+  /* ---------------------------------------------------------------
+     GROUNDS — warm oxidised ink. Surround is the deep ground the
+     rail and peripheral sections sit on; sheet is the lighter warm
+     ground the OPEN record sits on. Elevation is tone, not shadow.
+     --------------------------------------------------------------- */
+  --ground-surround:      #17140F;   /* deep warm near-black — page, rail, peripheral */
+  --ground-sheet:         #241F17;   /* lighter warm sheet — the open record only */
+  --ground-sheet-hover:   #2B2419;   /* rail item / interactive hover on sheet-toned rows */
+  --ground-rail-hover:    #1E1A13;   /* rail item hover on surround */
+  --ground-chip:          #1C1810;   /* recessed block — receipt drawer JSON, chip */
+
+  /* ---------------------------------------------------------------
+     INK — prose and meta. Measured against BOTH grounds; every pair
+     below clears 4.5:1 on --ground-surround and --ground-sheet.
+     --------------------------------------------------------------- */
+  --ink-prose:  #EDE3D0;  /* bone — primary reading colour. vs surround 14.4:1 · vs sheet 12.9:1 */
+  --ink-meta:   #B7A88C;  /* warm muted taupe — secondary meta. vs surround 7.9:1 · vs sheet 7.0:1 */
+  --ink-dim:    #9C8B6E;  /* tertiary meta / timestamps. vs surround 5.5:1 · vs sheet 4.9:1 */
+  --ink-absent: #B7A88C;  /* honest-absence italic marker — reuses meta tone, never a new hue */
+
+  /* rules — warm ochre-neutral, NON-RESERVED. Hairlines, the ruled
+     dossier margin, table rows. Decorative/structural only — never
+     carries text needing the 4.5:1 floor. */
+  --rule:       #7C6A50;
+  --rule-soft:  #3A3225;
+
+  /* ---------------------------------------------------------------
+     RESERVED — meaning is fixed across the whole product. In this
+     variant they render at TEXT SCALE INSIDE PROSE ONLY, never as a
+     fill, wash, or badge background. Declared ratios below (this
+     variant's grounds differ from the brief's #101114 ink pair, so
+     both are re-measured here per the axis instruction).
+     --------------------------------------------------------------- */
+  --needs-you:  #E8A23C;  /* amber — needs-you ONLY. vs surround 8.45:1 · vs sheet 7.53:1 */
+  --money-real: #6FCB8F;  /* green — REAL money ONLY, never simulated. vs surround 9.29:1 · vs sheet 8.27:1 */
+  --incident:   #E8735A;  /* red — incident ONLY. vs surround 6.15:1 · vs sheet 5.48:1 */
+  --non-real:   #B79AE0;  /* hatched violet family — every non-real class (SIMULATED / REHEARSAL / DRILL / EXPLORATORY). vs surround 7.62:1 · vs sheet 6.79:1 */
+
+  /* visible focus — deliberately NOT a reserved hue (amber is
+     needs-you only). A bright warm white ring, unmistakable. */
+  --focus: #F4EFE3;       /* vs surround 16.0:1 */
+
+  /* ---------------------------------------------------------------
+     TYPE — text serif, editorial measure. Mono confined to ids,
+     sha and ₹ only. Six real steps, incl. a genuine ≥30px display
+     for the kind name. No all-caps anywhere in this variant.
+     --------------------------------------------------------------- */
+  --font-serif: 'Source Serif 4', 'Source Serif Pro', Charter, 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --font-mono:  'IBM Plex Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+  --step-micro:   12px;  /* rail secondary meta, timestamps */
+  --step-caption: 14px;  /* rail primary line, eyebrow labels, nav */
+  --step-support: 16px;  /* seals, helper text, secondary prose */
+  --step-body:    18.5px;/* profile detail body — the editorial measure paragraph */
+  --step-subhead: 22px;  /* section subheads: Evidence · Seals · Reason */
+  --step-display: 34px;  /* the kind name, displayed */
+
+  --measure: 68ch;       /* 62–70ch editorial measure for the profile detail body */
+
+  /* ---------------------------------------------------------------
+     RHYTHM — paced, single-column. 8-pt grid, generous section air.
+     --------------------------------------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  --radius: 2px;         /* present but quiet — never a card, never a tile */
+}

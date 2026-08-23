@@ -500,10 +500,15 @@ async function main(argv) {
   return 0;
 }
 
-main(process.argv.slice(2))
-  .then((code) => process.exit(code))
-  .catch((err) => {
-    const code = err instanceof SpineError ? err.code : "INTERNAL";
-    process.stderr.write(`arc-pnl: ERROR ${code} -- ${err.message}\n`);
-    process.exit(2);
-  });
+// Only run the CLI when invoked directly (guard style: spine.mjs). Fixed here as the
+// TWIN of the arc-inbox/arc-brief unguarded-main defect the face lane found 2026-08-19 --
+// grep the pattern, not the file (the twin-fix rule).
+if (process.argv[1] && process.argv[1].endsWith("arc-pnl.mjs")) {
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((err) => {
+      const code = err instanceof SpineError ? err.code : "INTERNAL";
+      process.stderr.write(`arc-pnl: ERROR ${code} -- ${err.message}\n`);
+      process.exit(2);
+    });
+}
