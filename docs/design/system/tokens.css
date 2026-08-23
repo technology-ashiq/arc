@@ -133,8 +133,15 @@
      region. Hue alone is not enough — a colour-blind reader gets the texture. ── */
   --sim-fg:    var(--violet);
   --sim-line:  rgba(185,162,255,0.40);
+  /* The hatch lines are TRANSLUCENT, and that is a legibility requirement rather than a
+     taste call. At full --violet the stripes sit on top of body text and the Money room's
+     simulated panel became unreadable — a mark that says "not real" is worthless if it
+     also says nothing else. Measured on the rendered page, not reasoned about: 0.22 keeps
+     the texture unmistakable at a glance and leaves --prose above it legible. Anything
+     that needs a strong violet uses --sim-fg or --sim-line, which are for chips and
+     borders, where nothing is written underneath. */
   --sim-hatch: repeating-linear-gradient(135deg,
-      var(--violet) 0px, var(--violet) 1.5px,
+      rgba(185,162,255,0.22) 0px, rgba(185,162,255,0.22) 1.5px,
       transparent 1.5px, transparent 9px);
 
   /* ── data-mode chrome (ADR-1310) ──────────────────────────────────────────
