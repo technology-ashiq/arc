@@ -30,7 +30,7 @@ depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersede
 | 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | **BUILT** — 33 stations, gate squares, coverage gate now watches 11 inventories |
 | 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | **BUILT** — all 33 rooms render: 22 generic · 2 index · 9 bespoke; swept and looked at |
 | 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | deterministic half BUILT and proven through the face (VERIFIED, citations resolved); model half waits on the engine seam |
-| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | pending (needs L3 + 5 real days) |
+| 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | **EVIDENCE HARNESS BUILT** — `face-dogfood.mjs` matches L2’s journal against `decision.recorded` and today reads **NOT MET: 1 matched, 59 decided outside the face, 1 of 5 days**. The five days are calendar, not code |
 
 **Appetite burn: 7 of 32 days used (22%) — recomputed 2026-08-23.** Block A (6d): Phase 00
 1d + Phase 01 v1 ~2d + the v2 open-brief round ~1d + reference intake and token extraction

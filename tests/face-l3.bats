@@ -137,3 +137,33 @@ load 'test_helper'
   run bash -c "cd '$ARC_ROOT' && git ls-files face/ | wc -l | tr -d ' '"
   [ "$output" -ge 5 ] || { echo "face/ is barely tracked ($output files); the check above is vacuous"; false; }
 }
+
+@test "REQ-10's dogfood evidence can be FAILED, by every route it can be failed by" {
+  # The requirement is not "the owner used the face" -- it is that for five real days EVERY
+  # decision went THROUGH it, and both sides leave a record: L2's journal writes the receipt
+  # ULID it emitted, and the spine holds every decision.recorded there has ever been.
+  #
+  # The arm that matters is `spine-only`: a decision.recorded with no journal line is a
+  # decision made OUTSIDE the face, which is the one thing REQ-10 asks not to happen -- and
+  # it has to fail even while every other number still looks healthy.
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --selftest
+  [ "$status" -eq 0 ] || { echo "$output"; false; }
+  for arm in "five clean days meet the requirement" \
+             "a decision made OUTSIDE the face fails the requirement" \
+             "a journal line with no receipt fails the requirement" \
+             "four days does not pass as five" \
+             "nine decisions in one day is still one day" \
+             "an empty journal is NOT met, and does not throw" \
+             "a torn journal line makes the count a floor"; do
+    [[ "$output" == *"$arm"*"PASS"* ]] || { echo "arm did not pass: $arm"; echo "$output"; false; }
+  done
+}
+
+@test "face-dogfood fails CLOSED when it cannot find its inputs, and says which" {
+  # "0 decisions, requirement not met" and "I could not find the journal" are different facts,
+  # and the second must not wear the first's clothes -- reporting NOT MET because the wrong
+  # directory was read would send someone hunting a behaviour problem that does not exist.
+  run node "$ARC_ROOT/.claude/scripts/core/face-dogfood.mjs" --journal "$BATS_TEST_TMPDIR/nope" --spine "$BATS_TEST_TMPDIR/nope"
+  [ "$status" -eq 2 ] || { echo "expected exit 2 for an unreadable input; got $status: $output"; false; }
+  [[ "$output" == *"about this READ"* ]] || { echo "$output"; false; }
+}
