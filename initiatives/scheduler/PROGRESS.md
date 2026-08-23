@@ -5,7 +5,7 @@ cycle: arc-scheduler (Cycle 12, opened 2026-08-12)
 phase: 03
 appetite: 3d
 burn: 2.5d
-blocked-on: elapsed time — the proving week RESTARTED 2026-08-17 (a defect made every run after the first a no-op); runs to 2026-08-24
+blocked-on: elapsed time — the proving week RESTARTED 2026-08-17 (a defect made every run after the first a no-op), and the fire-drill armed 2026-08-23 needs its THIRD missed slot before the detector fires; earliest close 2026-08-26
 depends-on: —
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -17,7 +17,9 @@ depends-on: —
 > `initiatives/scheduler/evidence/phase-NN/` (ADR-0055).
 > Design source: `docs/strategy/plans/PLAN-scheduler.md` v1.0 (frozen — the decision record,
 > not the cycle). SCH-A..SCH-L are locked there; §13's five opens were resolved at kickoff as
-> ADR-0800/0801/0802/0804/0806.
+> ADR-0800/0801/0802/0804/0806. The proving week then added **ADR-0807** (Windows queues at most
+> one missed instance; recovery is a logon trigger) and **ADR-0808** (a gap is graded by class, not
+> by absence), so the band now holds 0800–0808.
 
 ## Phase table
 
@@ -26,7 +28,7 @@ depends-on: —
 | 00 | Steel thread — `hq.jobs.yaml` + `jobs-lint` (hostile corpus + adversarial pass) + wrapper core (per-job lock, slot computation, receipts + idem@slot, git-state guard, POL-D authorization, script timeout, mock-driver delegation) + the two job scripts + `processes/` stubs + the `arc-run` refusal guard | 1.0d | ✅ done 2026-08-12 |
 | 01 | The attended heartbeat — `run` / `catchup` / `list --next 7`, read-only SessionStart nudge, deterministic brief jobs panel with overdue needs-you | 0.5d | ✅ done 2026-08-12 |
 | 02 | The cron flip — `register`/`unregister` with ADR-0803's five explicit settings, next-minute smoke, fail-closed policy gate, rehearsed off-switch | 0.75d | ✅ done 2026-08-13 |
-| 03 | Proving week + retro — ≥2 jobs unattended ≥7d, zero manual starts by actor query, fire-drill, gap audit, metric pack, `/arc-retro` | 0.5d | ⏳ running — clock RESTARTED 2026-08-17, earliest close 2026-08-24 |
+| 03 | Proving week + retro — ≥2 jobs unattended ≥7d, zero manual starts by actor query, fire-drill, gap audit, metric pack, `/arc-retro` | 0.5d | ⏳ running — clock RESTARTED 2026-08-17, fire-drill armed 2026-08-23, earliest close **2026-08-26** |
 
 **Appetite burn: 2.5 of 3 days used (83%).** Phases allocate **2.75 of 3 days; 0.25 days reserved
 for Phase 0 adversarial rework** — named, not spare. The reserve exists because this repo's own
@@ -56,9 +58,34 @@ week is 0.5d of effort against ≥7d elapsed — elapsed is not burn.
 
 ## Now
 
-**Current position, 2026-08-13: Phases 00, 01 and 02 CLOSED. Phase 03 is RUNNING and it runs on a
-clock, not on effort.** Burn 2.5 of 3 days of *effort*; the remaining 0.5d is the audit and retro
-at the far end of a ≥7-day elapsed window that started today.
+**Current position, 2026-08-23: Phases 00, 01 and 02 CLOSED. Phase 03 is RUNNING, the week has been
+audited once, and it has already produced its finding.** Burn 2.5 of 3 days of *effort*; the
+remaining 0.5d is the audit and retro at the far end of the elapsed window.
+
+**The week is measured, and two of its numbers are the ones that matter most: manual starts 0, spend
+₹0.** The audit over the six finished days 2026-08-17..22 reads `attempted 9 · completed 9 · failed
+0 · missed 2`, all incident classes zero, and grades **NOT CLEAN on 2 unexplained gaps**, both on
+2026-08-20.
+
+**The gaps are the finding, not a blemish.** 2026-08-20 was an off day — no `events/2026-08-20.jsonl`
+exists at all — and on the next wake both jobs caught up exactly ONE slot each, the newer one:
+the 2026-08-21T14:56 receipts carry slot `2026-08-21`, never `2026-08-20`. **Windows queues at most
+one missed instance per task**, so the older of two missed slots is silently lost. That is the
+assumptions-ledger row firing at its own named trigger, and it is a sharper answer than the row
+asked for: not a time window that abandons queued runs, but a queue one deep. Recorded as
+**ADR-0807**, whose remedy — a logon trigger — ADR-0804 had already pre-committed to in writing
+before any of this evidence existed.
+
+**A second finding came out of trying to grade the week: the exit criterion itself was unreachable.**
+`audit.mjs` accepts an explanation only from actor `scheduler:<job>`, and a powered-off machine emits
+nothing — so no window containing an off day can ever grade CLEAN. The strict actor rule is right and
+stays (it is what stops hand-written notes grading a dead scheduler clean); the criterion is what was
+wrong, and it now reads "every gap classified, zero gaps in the class *arc was running and the job did
+not fire*" — **ADR-0808**.
+
+**A third: the fire-drill's own DoD contradicted itself** — "removed for ≥1 day" cannot produce the
+needs-you line the same DoD requires, because the detector fires at `missed > OVERDUE_SLOTS` and
+`OVERDUE_SLOTS = 2`. One day yields one missed slot and no line. Corrected in the spec.
 
 **THE HEARTBEAT IS INSTALLED.** Both v1 jobs are registered on the real Windows Task Scheduler
 from the canonical clone (`E:\Work_Hub\01_Automemory\arc`, main @ `4b7410b`), with all six pinned
@@ -74,21 +101,38 @@ the owner was asked and chose to merge now so the clock could start today.
 
 **What Phase 03 is waiting for, concretely:**
 
-| Item | When |
+| Item | State |
 |---|---|
-| ≥2 jobs running unattended | to 2026-08-20 (7 days) |
-| Zero manual starts, proven by an actor query on the spine | at close |
-| Fire-drill — remove one job's OS task while `hq.jobs.yaml` still says `enabled: true`, and check the panel notices | mid-window |
-| Gap audit, §8 metric pack, `/arc-retro` | at close |
+| ≥2 jobs running unattended | ✅ since 2026-08-17, both registered, `day-close-roll` still firing daily |
+| Zero manual starts, proven by an actor query on the spine | ✅ **0** over 2026-08-17..22 |
+| Spend vs ceiling | ✅ **₹0**, as designed — both jobs are script-jobs |
+| The ledger's `StartWhenAvailable` row answered with real data | ✅ answered: **DROPPED**, not merely late — ADR-0807 |
+| Fire-drill | ⏳ **ARMED 2026-08-23 ~17:00** — `brief-materialize` OS task removed, `hq.jobs.yaml` untouched at `enabled: true`, `day-close-roll` left registered as the control |
+| The needs-you line appears and is captured | ⏳ **2026-08-26 after 06:00** — computed by panel replay, not waited for: last real run 08-21T14:56, weekday slots 08-24/25/26, and `missed > 2` first holds on the third |
+| Gap audit, §8 metric pack, `/arc-retro` | ⏳ at close, re-run over the full window |
 
-**The one open watch item, carried forward from Phase 02 rather than ticked:** AV interference is
-not ruled out. OneDrive is settled (E: is a fixed NTFS volume outside the sync root), but the
-active real-time scanner on this machine is **McAfee**, whose exclusions `Get-MpPreference` cannot
-enumerate — it reports Defender only, and Defender's AM service is off here. The Phase-02 smoke
-proved Task Scheduler fires a `cmd.exe` task; it did not prove `node` launched by the task host
-against a git tree runs unmolested. If a run is ever late or missing with no receipt, the first
-hypothesis is scanner interference on first launch of `node.exe`, and the evidence is the per-job
-log at `<spine>/job-logs/<name>.log`.
+**The AV watch item is CLOSED, and closed as wrong.** McAfee interference was the leading hypothesis
+for the missing runs on 2026-08-13..16; the actual cause was a registered action that created its own
+log directory only on first run, so every later run exited 0 having launched nothing. The action
+launched cleanly and nothing was ever blocked. Recording that the hypothesis was wrong matters as
+much as recording what was right — see `evidence/phase-03/week-log.md`.
+
+**The open watch item now is the OTHER ledger row, and it has also FIRED:** the week records zero
+lock contentions and zero incidents of every class (`policy-declined=0 overlap=0
+receipt-write-failure=0 timeout=0 crash=0`). Two jobs on non-overlapping cadences were never going
+to contend, so the overlap lock and the incident taxonomy remain proven by fixture and **never in
+the real**. That is not a defect to fix inside this cycle — it is a limit on what this week is
+allowed to claim, and the retro must say so rather than let green numbers imply coverage they do
+not have.
+
+**The appetite position, stated plainly: this cycle cannot afford its own remedy.** Burn is 2.5 of
+3 days (83%), and the remaining 0.5d is the audit and retro. ADR-0807's logon trigger and ADR-0808's
+downtime classification are real build work — a second trigger, idempotency fixtures for N logons a
+day, and a re-read of the panel's overdue arithmetic against a job whose cadence becomes "scheduled
+OR at logon". Building them inside that 0.5d is the silent extension the kill criteria forbid, so
+both ADRs are recorded as decisions with implementation deferred to the next cycle's opening phase.
+**The proving week's job was to find this. It found it, in the first window that contained a real
+two-day outage.**
 
 **Owner actions: all three DONE.** The `hq.policy.yaml` scheduler rows, the SessionStart nudge at
 `.claude/hooks/SessionStart.d/60-jobs.sh`, and the opengrep pin in `.github/workflows/ci.yml` — the
