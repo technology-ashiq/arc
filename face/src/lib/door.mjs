@@ -138,11 +138,49 @@ export function tokenFromHash(hash) {
   return null;
 }
 
+/**
+ * The ONLY routes that take `?asof=`, read off arc-dash's own handlers rather than assumed:
+ * `apiSpine`, `apiBrief` and `apiInbox` call `parseAsof(url)`. Nothing else does.
+ *
+ * This list exists because appending the scrub blindly would BREAK the Money room -- the P&L
+ * refuses a day-granular asof by name (`ASOF_UNSUPPORTED`, 501), since its native scope is a
+ * month and the door will not re-derive the money core to fake one. A scrubber that silently
+ * 501s a room is worse than a scrubber that does not reach it: the first looks broken, the
+ * second is a boundary the room can explain.
+ */
+export const ASOF_ROUTES = Object.freeze(["/api/spine", "/api/brief", "/api/inbox"]);
+
+/**
+ * Attach the shell's as-of to a path, if that path takes one and does not already carry one.
+ *
+ * Pure and exported so a node test can hold every branch: the three routes that accept it,
+ * the routes that must be left alone, and the case where a room asked for a specific day
+ * itself. Kept out of `call()` for the reason every decision in this tree is kept out of a
+ * method a test cannot reach on its own.
+ *
+ * @param {string} path @param {string | null | undefined} asOf
+ * @returns {string}
+ */
+export function withAsOf(path, asOf) {
+  if (typeof asOf !== "string" || !asOf) return path;
+  const [base, existing] = path.split("?");
+  if (!ASOF_ROUTES.includes(base ?? "")) return path;
+  const q = new URLSearchParams(existing ?? "");
+  if (q.has("asof")) return path; // the room was explicit; it wins
+  q.set("asof", asOf);
+  return `${base}?${q.toString()}`;
+}
+
 export class Door {
-  /** @param {DoorOptions} [opts] */
+  /** @param {DoorOptions & { asOf?: string | null }} [opts] */
   constructor(opts = {}) {
     this.base = opts.base ?? "";
     this.token = opts.token ?? null;
+    /**
+     * The day every spine-derived read is scrubbed to, or null for live.
+     * @type {string | null}
+     */
+    this.asOf = opts.asOf ?? null;
     // BOUND, not merely referenced.
     //
     // `globalThis.fetch` stored on an instance and called as `this.fetchImpl(...)` loses its
@@ -167,7 +205,12 @@ export class Door {
     if (this.token) headers.Authorization = `Bearer ${this.token}`;
     if (init.body !== undefined) headers["Content-Type"] = "application/json";
 
-    const res = await this.fetchImpl(`${this.base}${path}`, {
+    // The scrub is applied HERE, once, so no room has to remember it -- and it is applied
+    // only to the routes that take it. A room that already asked for a specific `asof` keeps
+    // its own: an explicit argument outranks the shell's ambient setting, always.
+    const scrubbed = withAsOf(path, this.asOf);
+
+    const res = await this.fetchImpl(`${this.base}${scrubbed}`, {
       method: init.method ?? "GET",
       headers,
       ...(init.body !== undefined ? { body: JSON.stringify(init.body) } : {}),

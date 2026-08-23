@@ -8,7 +8,7 @@ import type { CSSProperties } from 'react'
 
 import './tokens.css'
 
-import { Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
+import { ASOF_ROUTES, Door, DoorError, decodeRegistry, tokenFromHash, unescapeDoorText } from './lib/door.mjs'
 import { byRing, findRoom, defaultRoom, errorSentence } from './lib/rooms.mjs'
 import type { Room } from './lib/rooms.mjs'
 import { HOME, buildHash, conceptsFromContract, isTextField, keyAction, moveRoom, navOrder, paletteItems, parseHash } from './lib/shell.mjs'
@@ -16,6 +16,7 @@ import { HOME, buildHash, conceptsFromContract, isTextField, keyAction, moveRoom
 import FaceStage from './face/FaceStage'
 import Rings from './shell/Rings'
 import Palette from './shell/Palette'
+import AsOf from './shell/AsOf'
 import type { PaletteItem } from './shell/Palette'
 import GenericRoom from './rooms/GenericRoom'
 import IndexRoom from './rooms/IndexRoom'
@@ -39,6 +40,8 @@ export default function App() {
   const [roomId, setRoomId] = useState<string>(() => parseHash(window.location.hash).room ?? HOME)
   const [talking] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [asOf, setAsOf] = useState<string | null>(() => parseHash(window.location.hash).asOf)
+  const [today, setToday] = useState<string | null>(null)
   const [concepts, setConcepts] = useState<Record<string, { room: string; station: string }>>({})
   // Only the two maps the Map needs; the rest of the frozen contract is not this shell's
   // business, and narrowing here keeps an `unknown` from travelling into a pure function.
@@ -50,7 +53,8 @@ export default function App() {
     () => parseHash(window.location.hash).token ?? tokenFromHash(window.location.hash),
     [],
   )
-  const door = useMemo(() => new Door({ token: token ?? undefined }), [token])
+  // The scrub lives on the DOOR, so every room inherits it without knowing it exists.
+  const door = useMemo(() => new Door({ token: token ?? undefined, asOf }), [token, asOf])
 
   // The registry is fetched ONCE and drives everything: the rail, the nav order, the room.
   // It is never imported from disk -- a second spelling of the room list in the renderer is
@@ -69,6 +73,12 @@ export default function App() {
     // -- the SAME file face-coverage validates, so the palette cannot quietly know less than
     // arc does. A failure here dims the palette to rooms only; it never blocks the shell,
     // because not being able to search is a smaller problem than not being able to look.
+    // The door's own day, never the browser's: a clock skew of one day would label a sealed
+    // day as open, or the reverse, and the two carry different guarantees.
+    door
+      .health(ac.signal)
+      .then((h: { now?: unknown }) => { if (typeof h.now === 'string') setToday(h.now.slice(0, 10)) })
+      .catch(() => { /* the control still works; it just cannot mark today */ })
     door
       .file('expected-set', ac.signal)
       .then((body: unknown) => {
@@ -96,16 +106,17 @@ export default function App() {
       setRoomId(id)
       // Replace, not push: holding j through the company should not bury the back button
       // under thirty entries. A room is a view, not a destination you navigate back through.
-      window.history.replaceState(null, '', buildHash(id, token))
+      window.history.replaceState(null, '', buildHash(id, token, asOf))
     },
-    [token],
+    [token, asOf],
   )
 
   // The browser's own back/forward, and anyone editing the address bar, stay authoritative.
   useEffect(() => {
     const onHash = () => {
-      const next = parseHash(window.location.hash).room
-      if (next) setRoomId(next)
+      const h = parseHash(window.location.hash)
+      if (h.room) setRoomId(h.room)
+      setAsOf(h.asOf)
     }
     window.addEventListener('hashchange', onHash)
     return () => window.removeEventListener('hashchange', onHash)
@@ -211,11 +222,34 @@ export default function App() {
       <div style={frameStyle}>
         <Rings groups={groups} current={room ? room.id : HOME} onOpen={open} />
         <section ref={roomScrollRef} style={roomStyle} aria-live="polite">
+          <AsOf
+            asOf={asOf}
+            today={today}
+            supported={asOfReaches(room)}
+            onChange={(day) => {
+              setAsOf(day)
+              window.history.replaceState(null, '', buildHash(room ? room.id : HOME, token, day))
+            }}
+          />
           {room ? <RoomHost room={room} rooms={registry.rooms} door={door} onOpen={open} mode={registry.mode} token={token} needs={needs.counts} needsUnplaced={needs.unplaced} /> : <NoSuchRoom id={roomId} />}
         </section>
       </div>
     </main>
   )
+}
+
+/**
+ * Whether the shell's as-of actually reaches this room.
+ *
+ * Only three routes take `?asof=` -- spine, brief and inbox -- so a room built on any other
+ * read is untouched by the scrub. Saying so is the point: a control that appears to apply
+ * everywhere and silently does nothing in half the product is worse than one that admits its
+ * edge. The Money room is the honest case, and the door refuses its day-asof BY NAME.
+ */
+function asOfReaches(room: Room | null): boolean {
+  if (!room) return false
+  if (room.live.state === 'file-borne' || room.live.state === 'index') return false
+  return ASOF_ROUTES.length > 0 && room.id !== 'money' && room.id !== 'ventures'
 }
 
 /**

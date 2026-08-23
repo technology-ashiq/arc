@@ -256,6 +256,43 @@ check("building a hash round-trips the room and the token", (() => {
 })());
 check("building a hash without a token carries no token key", !shell.buildHash("money").includes("token"));
 
+// ---------- the as-of scrub (REQ-05) ----------
+// The scrub reaches ONLY the three routes that take it, read off arc-dash's own handlers.
+// Appending it blindly would 501 the Money room, whose native scope is a month -- and a
+// control that silently 501s half the product looks broken rather than bounded.
+check("the scrub reaches the spine, the brief and the inbox",
+  door.ASOF_ROUTES.includes("/api/spine") && door.ASOF_ROUTES.includes("/api/brief") && door.ASOF_ROUTES.includes("/api/inbox"),
+  door.ASOF_ROUTES.join(","));
+check("the scrub does NOT reach the P&L, which refuses a day-asof by name",
+  !door.ASOF_ROUTES.includes("/api/pnl"));
+check("a scrubbed route carries the day", door.withAsOf("/api/spine", "2026-07-22") === "/api/spine?asof=2026-07-22");
+check("an unscrubbable route is left exactly as it was", door.withAsOf("/api/pnl", "2026-07-22") === "/api/pnl");
+check("a route that already asked for a day KEEPS its own -- explicit outranks ambient",
+  door.withAsOf("/api/spine?asof=2026-07-01", "2026-07-22") === "/api/spine?asof=2026-07-01");
+check("an existing query is preserved, not replaced",
+  door.withAsOf("/api/spine?limit=50", "2026-07-22").includes("limit=50")
+  && door.withAsOf("/api/spine?limit=50", "2026-07-22").includes("asof=2026-07-22"));
+check("live (no scrub) changes nothing at all",
+  door.withAsOf("/api/spine", null) === "/api/spine" && door.withAsOf("/api/spine", "") === "/api/spine");
+check("a malformed day never reaches the address bar", shell.buildHash("spine", null, "yesterday") === "#/spine");
+check("the scrub travels in the address, so a scrubbed view is a link you can send",
+  shell.parseHash(shell.buildHash("spine", "tok", "2026-07-22")).asOf === "2026-07-22");
+check("navigating rooms KEEPS the scrub -- a time machine that resets per room is useless",
+  shell.parseHash(shell.buildHash("money", "tok", "2026-07-22")).asOf === "2026-07-22");
+
+// The three states are three different PROMISES, and the product must not borrow the
+// stronger one for the weaker case.
+check("live is not a time at all", shell.asOfState(null, "2026-08-23").scrubbed === false);
+check("a sealed day promises a byte-identical replay",
+  shell.asOfState("2026-07-22", "2026-08-23").replayIdentical === true);
+check("TODAY is a snapshot of an open day and says so, NOT a replay",
+  shell.asOfState("2026-08-23", "2026-08-23").replayIdentical === false
+  && /still being written/i.test(shell.asOfState("2026-08-23", "2026-08-23").note));
+check("every as-of state carries its sentence, so the difference is readable and not implied",
+  ["live", "sealed", "today"].length === 3
+  && shell.asOfState("2026-07-22", "2026-08-23").note.length > 30
+  && shell.asOfState(null, null).note.length > 10);
+
 const order = shell.navOrder(rooms.byRing(withLive));
 check("nav order covers every openable room",
   order.length === withLive.filter((r) => !r.template).length, `order=${order.length}`);

@@ -9,6 +9,14 @@
 export const HOME = "today";
 
 /**
+ * A day, and only a day. The door's own `parseAsof` refuses anything else by name, so this
+ * exists to stop the shell putting a malformed value in the address bar in the first place --
+ * a refusal you never provoke is better than one you surface well.
+ */
+export const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+
+/**
  * The address bar is the FRAGMENT, not the path.
  *
  * Two reasons, and both are load-bearing. The door hands its dev token over in the fragment
@@ -20,13 +28,14 @@ export const HOME = "today";
  * Shape: `#/<room>` with the token, when present, riding alongside as `token=...`.
  *
  * @param {string} hash
- * @returns {{ room: string | null, token: string | null }}
+ * @returns {{ room: string | null, token: string | null, asOf: string | null }}
  */
 export function parseHash(hash) {
-  if (typeof hash !== "string" || !hash) return { room: null, token: null };
+  if (typeof hash !== "string" || !hash) return { room: null, token: null, asOf: null };
   const raw = hash.startsWith("#") ? hash.slice(1) : hash;
   let room = null;
   let token = null;
+  let asOf = null;
   for (const part of raw.split("&")) {
     if (!part) continue;
     if (part.startsWith("/")) {
@@ -39,20 +48,53 @@ export function parseHash(hash) {
     const k = part.slice(0, eq);
     const v = decodeURIComponent(part.slice(eq + 1));
     if (k === "token" && v) token = v;
+    // The scrub travels in the ADDRESS, so a scrubbed view is a link someone can send or
+    // reload into. A time machine you cannot bookmark is a toy.
+    if (k === "asof" && ISO_DAY.test(v)) asOf = v;
     // A bare `#token=...` with no room is what arc-dash prints. That is not an error and
     // must not be treated as "no route" -- it is the home route with a token attached.
   }
-  return { room, token };
+  return { room, token, asOf };
 }
 
 /**
- * Build the fragment for a room, carrying the token through so navigating never drops it.
- * @param {string} room @param {string | null} [token]
+ * Build the fragment for a room, carrying the token AND the scrub through so navigating never
+ * drops either. A scrubbed view that reverted to live the moment you changed room would make
+ * the time machine useless for the thing it is for: reading one past day across the company.
+ * @param {string} room
+ * @param {string | null} [token]
+ * @param {string | null} [asOf]
+ * @returns {string}
  */
-export function buildHash(room, token = null) {
+export function buildHash(room, token = null, asOf = null) {
   const parts = [`/${encodeURIComponent(room)}`];
   if (token) parts.push(`token=${encodeURIComponent(token)}`);
+  if (typeof asOf === "string" && ISO_DAY.test(asOf)) parts.push(`asof=${asOf}`);
   return `#${parts.join("&")}`;
+}
+
+/**
+ * What the as-of control should SAY about the day it is set to.
+ *
+ * Three cases and they are not the same fact. A sealed day replays byte-identically. TODAY is
+ * still being written, so a read of it is a snapshot and the product must not imply the
+ * stronger guarantee. And "live" is not a time at all.
+ *
+ * @param {string | null} asOf @param {string | null} today  the door's own day, never the browser's
+ * @returns {{ scrubbed: boolean, label: string, note: string, replayIdentical: boolean }}
+ */
+export function asOfState(asOf, today) {
+  if (typeof asOf !== "string" || !ISO_DAY.test(asOf))
+    return { scrubbed: false, label: "live", note: "reading the log as it stands now", replayIdentical: false };
+  if (today !== null && asOf === today)
+    return {
+      scrubbed: true, label: asOf, replayIdentical: false,
+      note: "today is still being written, so this is a snapshot of an open day — it is not guaranteed to replay to the same bytes, and that is a different promise from a sealed day",
+    };
+  return {
+    scrubbed: true, label: asOf, replayIdentical: true,
+    note: "a sealed day: every spine-derived view here is rebuilt from the log and replays to the same bytes",
+  };
 }
 
 /**
