@@ -124,6 +124,8 @@ flowchart TB
 | 0804 | the laptop is never woken; missed slots are caught on next wake | accepted |
 | 0805 | the idempotent multi-day roll lives in the job, because `close-day` is neither | accepted |
 | 0806 | v1 ships two script-jobs; the lexos canary is deferred, not built | accepted |
+| 0807 | Windows queues at most ONE missed instance; multi-slot recovery is a logon trigger | accepted — build deferred |
+| 0808 | a gap is graded by CLASS, not by absence; machine downtime is not a scheduler defect | accepted — criterion now, mechanism deferred |
 
 ## Non-negotiables
 
@@ -172,11 +174,11 @@ the `lexos-canary` probe (ADR-0806).
 
 | Assumption | How we'd know it's wrong (trigger) | Phase that tests it |
 |---|---|---|
-| Windows queues a missed `StartWhenAvailable` run indefinitely rather than abandoning it after some undocumented window (ADR-0804) | the Phase-3 gap audit finds a slot with no `run.completed` and no catch-up run after a wake — a dropped slot, not a late one | 3 |
+| Windows queues a missed `StartWhenAvailable` run indefinitely rather than abandoning it after some undocumented window (ADR-0804) | the Phase-3 gap audit finds a slot with no `run.completed` and no catch-up run after a wake — a dropped slot, not a late one — **FIRED 2026-08-23**: 2026-08-20 was an off day, and the catch-up receipts of 2026-08-21T14:56 carry slot `2026-08-21`, not `2026-08-20`. The mechanism is not a time window, which is what this row feared; it is that Windows queues **at most one** missed instance per task, so the older of two missed slots is dropped. Recorded in ADR-0807 | 3 |
 | S4U logon can reach the repo on this drive without stored credentials, despite S4U having no documented network access (ADR-0803) | the next-minute smoke task returns a non-zero `LastTaskResult` or the job cannot read the repo | 2 |
 | A per-job `processes/` stub plus its `arc-run` refusal guard closes the manual-run surface ADR-0802 opens | the adversarial pass reaches a job script by naming it to `arc-run --process` despite the guard | 0 |
 | The owner-applied `hq.policy.yaml` rows land before Phase 0 closes, since no agent can write that file | Phase 0 reaches its DoD with both jobs still returning an L0 denial from `authorizeRun` | 0 |
-| Two jobs exercise the overlap lock and incident taxonomy meaningfully enough to trust them (ADR-0806) | the proving week records zero lock contentions and zero incidents of any class, leaving both untested in the real | 3 |
+| Two jobs exercise the overlap lock and incident taxonomy meaningfully enough to trust them (ADR-0806) | the proving week records zero lock contentions and zero incidents of any class, leaving both untested in the real — **FIRED 2026-08-23**: the audit over 2026-08-17..22 reports `policy-declined=0 overlap=0 receipt-write-failure=0 timeout=0 crash=0` and no lock contention anywhere on the spine. Both mechanisms remain proven only by fixture, never in the real. Confirmed at close | 3 |
 | The wrapper's own slot-floor and idem-key **code** is right on first build — not merely the design behind it | REQ-02's slot-floor and `--slot` catchup fixtures fail on a boundary nobody constructed by hand: a `daily@00:15` IST slot floored against a UTC system clock lands on the wrong date, and the idem key then names a slot that never existed | 0 |
 
 ## External dependencies
