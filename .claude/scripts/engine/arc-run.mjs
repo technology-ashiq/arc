@@ -1284,11 +1284,17 @@ function invoke(name) {
     stdout: res.stdout ?? "", stderr: res.stderr ?? "", cost, timedOut, overflowed,
     // `spawned` IS SET ON EVERY RETURN, not only on the two that skip the spawn. Marking the
     // not-installed and policy-denied paths `false` and leaving this one undefined covered two of
-    // THREE ways a driver can fail to run: a `spawnSync` that never launches reports `res.error`
+    // THREE ways a driver can fail to run: a `spawnSync` that never LAUNCHES reports `res.error`
     // with `status: null` and both streams empty, and the transcript writer then produced an
-    // `.empty` marker for an attempt where no process existed -- the exact count inflation the
-    // marker exists to prevent. `status === null` with an `error` is the launch failure.
-    spawned: !(res.error && res.status === null && !timedOut),
+    // `.empty` marker for an attempt where no process existed.
+    //
+    // A TIMEOUT AND AN OVERFLOW ARE NOT LAUNCH FAILURES, and the first cut of this line got that
+    // wrong. Both set `res.error` with `status: null` -- so the naive test marked them unspawned
+    // and would have DISCARDED their transcripts. Those are precisely the two runs whose trail is
+    // most worth having: a driver that ran for the whole budget and one that produced more output
+    // than arc-run would hold. The property is "did a process exist", not "did spawnSync return an
+    // error", and the two named codes are the ones that mean it did.
+    spawned: !(res.error && res.status === null && !timedOut && !overflowed),
   };
 }
 
