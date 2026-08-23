@@ -5,7 +5,7 @@
 // consecutive days. Before this file, each of those mornings cost him:
 //
 //   1. node .claude/scripts/hq/arc-dash.mjs        (and read a random 32-char token off stderr)
-//   2. cd face && npm install && npm run dev       (a second terminal, and a first-run install)
+//   2. cd face && npm ci && npm run dev            (a second terminal, and a first-run install)
 //   3. open http://localhost:5180/#token=<paste that token by hand>
 //
 // Step 3 is the one that ends dogfoods. A freshly generated token every boot means the owner
@@ -78,7 +78,7 @@ export const APP_PORT_ENV = "ARC_FACE_APP_PORT";
  * this file spawned `npm.cmd run dev` and died exactly there, after the door had already
  * come up cleanly.
  *
- * So this name is used ONLY for `npm install`, which runs once, is spawned through a shell,
+ * So this name is used ONLY for `npm ci`, which runs once, is spawned through a shell,
  * and whose arguments are fixed literals -- no interpolated value ever reaches that command
  * string. The dev server, which runs every boot, does not go near it.
  *
@@ -128,8 +128,15 @@ export function appUrl(appPort, token) {
  * The door's argv. The token is NOT here: it goes through the environment.
  *
  * argv is world-readable in a process list; a per-user environment is not. The token is a
- * localhost dev credential either way, but there is no reason to broadcast it to every other
- * account on the machine when passing it invisibly costs nothing.
+ * localhost dev credential either way, but there is no reason to broadcast it for the whole
+ * session when passing it invisibly costs nothing.
+ *
+ * HONEST CAVEAT, because this file used to claim more than it delivered. `openBrowser` DOES put
+ * the token in argv -- it is a URL, and a URL is how you open a browser. An attacker pointed
+ * out the contradiction and was right to. What makes the two different is lifetime, not
+ * principle: the opener exists for about a second and then exits, while the door holds its argv
+ * for as long as the HQ is up. Shrinking the window from hours to a second is worth doing and
+ * is not the same as closing it, and `--no-open` closes it completely for anyone who wants that.
  *
  * @param {{ port: number, spine?: string | null }} opts @returns {string[]}
  */
@@ -438,15 +445,23 @@ async function main(argv) {
   //    reaches the network, and a command that quietly downloads things is one you stop
   //    trusting. It happens once, on the first morning.
   if (!existsSync(join(faceDir, "node_modules"))) {
-    process.stderr.write(`arc-face: the app has no dependencies installed yet -- running npm install in face/ (once).\n`);
+    // `npm ci`, not `npm install`.
+    //
+    // The lockfile is TRACKED and in sync with package.json (57 packages, both checked), so
+    // `ci` installs exactly what this branch was tested against instead of re-resolving version
+    // ranges on the morning a five-day dogfood starts. It is also the loud option: if the two
+    // ever disagree, `ci` says so, where a plain install would quietly resolve to a tree nobody
+    // has run. Safe in this branch specifically because `ci` deletes node_modules first and
+    // this is the one case where there is nothing to delete.
+    process.stderr.write(`arc-face: the app has no dependencies installed yet -- running npm ci in face/ (once, from the tracked lockfile).\n`);
     // `shell: true` is required on Windows to run npm's .cmd shim at all. It is safe HERE and
     // only here: every argument is a fixed literal, so nothing interpolated reaches the
     // command string. `cwd` is an option, not part of it.
-    const install = spawn(npmBin(process.platform), ["install"], { cwd: faceDir, stdio: "inherit", shell: process.platform === "win32" });
+    const install = spawn(npmBin(process.platform), ["ci"], { cwd: faceDir, stdio: "inherit", shell: process.platform === "win32" });
     const code = await new Promise((r) => install.on("close", r));
     if (code !== 0) {
       await shutdown();
-      process.stderr.write(`arc-face: ERROR -- npm install exited ${code}. The app cannot start without its dev server.\n`);
+      process.stderr.write(`arc-face: ERROR -- npm ci exited ${code}. If it reports the lockfile is out of sync with package.json, that IS the problem -- a plain install would only hide it. The app cannot start without its dev server.\n`);
       return 1;
     }
   }
@@ -486,7 +501,12 @@ async function main(argv) {
   return code;
 }
 
-/** Best-effort. A browser that does not open is a mild annoyance; the URL is already printed. */
+/**
+ * Best-effort. A browser that does not open is a mild annoyance; the URL is already printed.
+ *
+ * The token is in this argv for the life of the opener process -- a second or so. See doorArgs
+ * for why that is a different trade from the door's, and `--no-open` for the way out.
+ */
 function openBrowser(url) {
   const cmd = process.platform === "win32" ? "explorer.exe"
     : process.platform === "darwin" ? "open" : "xdg-open";
