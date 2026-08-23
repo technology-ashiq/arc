@@ -434,12 +434,17 @@ YAML
   export ARC_DRIVER_FAKE="$ARC_ROOT/tests/fixtures/engine/driver-fakes/driverfail"
   run node "$(RUN)" --root "$RT_ROOT" --process commit-msg-draft --driver auto --input '{"diff":"x"}'
   [ "$status" -eq 1 ] || { echo "a path-shaped fallback was not refused with 1, got $status: $output"; false; }
-  [[ "$output" == *"unknown driver"* ]] || { echo "the hop was not validated: $output"; false; }
-  [[ "$output" == *"on a fallback hop"* ]] || { echo "the refusal does not say where it happened: $output"; false; }
-  # THE POSITIVE HALF, and it now means something: the primary driver EXISTS in this root and
-  # reported a driver FAULT, so the hop was reached the way a real run reaches it.
-  [[ "$output" == *"reported a driver fault"* ]] || { echo "the primary driver did not fault -- the hop was reached some other way: $output"; false; }
-  [[ "$output" == *"falling back to ./hermes"* ]] || { echo "the fallback loop was never entered: $output"; false; }
+  [[ "$output" == *"unknown driver"* ]] || { echo "the chain was not validated: $output"; false; }
+  [[ "$output" == *"fallback chain"* ]] || { echo "the refusal does not say where it happened: $output"; false; }
+
+  # AND IT REFUSES BEFORE ANY DISPATCH, which is stronger than refusing at the hop and is why the
+  # check moved. Discovering a broken chain by WALKING it means attempt 1 has already spawned a
+  # driver and spent budget -- and the refusal exits 2, which ADR-0219 publishes as a PRE-dispatch
+  # operator error, so spending it mid-run was itself a contract violation. A row whose chain cannot
+  # be walked is a broken row, and a broken row fails before it routes.
+  [[ "$output" != *"falling back to"* ]] || { echo "the chain was walked before it was validated: $output"; false; }
+  # The paired positive, so a crash cannot satisfy the line above: the refusal names the entry.
+  [[ "$output" == *"./hermes"* ]] || { echo "the refusal does not name the offending entry: $output"; false; }
 }
 
 @test "ADR-0225 NEGATIVE CONTROL: a correctly-spelled, fully-termed fallback INTO the runtime DISPATCHES" {

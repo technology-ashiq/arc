@@ -1486,6 +1486,10 @@ function attempt(name) {
   return { ...r, verdict: "ok", output };
 }
 
+// THE ONE CONFINEMENT DECISION (REQ-06: one function, every path through it, never two call sites
+// that can drift). Computed here so the preview and the real dispatch consume the SAME verdict.
+const boundaryVerdict = boundaryRefusal({ input, processName, hosted, cap: routedCap });
+
 if (dryRun) {
   // --dry-run is the one surface whose entire job is "tell me what will happen", so it names the
   // two flags that change what happens. It was silent about both, which made it the worst place
@@ -1503,14 +1507,21 @@ if (dryRun) {
   // AND THE DATA BOUNDARY, for the identical reason, one branch over. The tenure arm above was
   // added because a preview that says "would run" for a dispatch that refuses is wrong in the
   // reassuring direction -- and the boundary refusal, which sits a hundred lines below this block's
-  // `process.exit(0)`, was left doing exactly that. REQ-06 made it materially worse: every capped-
-  // row dispatch is now boundary-gated, so the one command a caller runs BEFORE spending money was
-  // the one that would not tell them their pack is unclassified. Found by a code review.
+  // `process.exit(0)`, was left doing exactly that. REQ-06 made it materially worse: every
+  // capped-row dispatch is now boundary-gated, so the one command a caller runs BEFORE spending
+  // money was the one that would not tell them their pack is unclassified. Found by a code review.
   //
-  // The same `boundaryRefusal()` call, not a second copy -- REQ-06 is explicit that there is one
-  // confinement function and never two call sites that can drift.
-  const dryRefusal = boundaryRefusal({ input, processName, hosted, cap: routedCap });
-  if (dryRefusal) {
+  // ONE DECISION, COMPUTED ONCE, CONSUMED TWICE. The first cut called the confinement function a second
+  // time here, and REQ-06's own fixture counts the call sites -- correctly, because two call sites
+  // drift on the first change to either. `boundaryVerdict` above is the single call.
+  //
+  // ONLY WHEN AN INPUT WAS ACTUALLY SUPPLIED. A preview with no `--input` is a ROUTING preview --
+  // "how would you route this class" -- and there is no document to refuse; a real run with no
+  // input does dispatch `{}` and is still gated. Without that distinction this refused every
+  // capability probe in the tree, `arc-bench`'s model probe among them, which asks a question about
+  // the DRIVER and passes no document at all.
+  if (inputArg && boundaryVerdict) {
+    const dryRefusal = boundaryVerdict;
     console.log(`arc-run: would REFUSE \`${processName}\` — ${dryRefusal.reason}`);
     for (const m of dryRefusal.markers) console.log(`         ${m.path} ${m.why}`);
     process.exit(dryRefusal.code);
@@ -1612,7 +1623,7 @@ if (expiredRow) {
 //
 // Exit 5, its own code: arc-run already overloads 1 for "cannot proceed", and a boundary refusal
 // indistinguishable from a parse error is a boundary no fixture can assert.
-const refusal = boundaryRefusal({ input, processName, hosted, cap: routedCap });
+const refusal = boundaryVerdict;
 if (refusal) {
   console.error(`arc-run: ${refusal.reason}`);
   for (const m of refusal.markers) console.error(`arc-run:   ${m.path} ${m.why}`);
