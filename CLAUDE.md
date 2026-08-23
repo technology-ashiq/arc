@@ -45,11 +45,12 @@
   program wants any of those three characters, it belongs in its own file.
 - Code review ALWAYS runs through the `code-reviewer` agent (Task `subagent_type: code-reviewer`),
   never ad-hoc `general-purpose` reviewers — that agent is where the scanners + review method live.
-- Impact questions (callers, dependents, schema-dependent queries): **codegraph first**
-  (`codegraph explore`, or the MCP) — it is local, exact, and free of LLM tokens. Graphify's
-  `graphify-out/` **does NOT auto-refresh in arc** and answers from whenever it was last built
-  by hand: check its date before trusting it, and rebuild with `graphify update .` (a real
-  token cost) or fall back to grep. Details → `CLAUDE.local.md` § Graphify facts.
+- Impact questions: **two indexes with disjoint coverage, and one gap** (ADR-0075). codegraph
+  (`codegraph explore`) owns `.mjs/.js/.ts/.tsx/.yaml` — exact symbol, line, callers; its daemon
+  auto-refreshes it. graphify (`graphify query`) owns `.md/.sh/.json` — the 1087 docs and 97
+  harness scripts codegraph never parses; its refresh is AST-only and free. **Neither parses
+  `.bats`** — that is grep. An empty result means "not indexed", never "no dependents". Both
+  live in the MAIN clone, so from a worktree they answer about main's tree, not your branch.
 - **Model tiers are law, not taste** — `docs/adr/0069-balanced-model-policy.md`. Changing any
   agent's frontmatter `model:` is a production tier change: it is a reviewed diff that cites
   that ADR, never a quiet edit. Tiers are *cheap-scan · balanced-workhorse · high-judgment ·
