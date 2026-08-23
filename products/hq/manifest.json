@@ -9,6 +9,7 @@
   "scripts": [
     ".claude/scripts/hq/arc-brief.mjs",
     ".claude/scripts/hq/arc-dash.mjs",
+    ".claude/scripts/hq/arc-face.mjs",
     ".claude/scripts/hq/arc-event.mjs",
     ".claude/scripts/hq/arc-event.sh",
     ".claude/scripts/hq/arc-inbox.mjs",

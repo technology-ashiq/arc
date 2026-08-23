@@ -216,5 +216,29 @@ try {
   await new Promise((r) => { dash.on("exit", r); dash.kill(); setTimeout(r, 1500); });
 }
 
+// ---------------------------------------------------------------------------------------
+// The launcher's seam with the app's dev proxy.
+//
+// arc-face spawns both halves and tells the app where the door is, through an environment
+// variable. The app reads that name in face/vite.config.ts. Nothing links the two, so a
+// rename on either side compiles, starts, serves 200 -- and silently proxies to the DEFAULT
+// door port instead. That is not a hypothetical: the first cut of the launcher set
+// ARC_DASH_URL while the proxy read ARC_DASH_ORIGIN, and the app came up perfectly, showing
+// a DIFFERENT session's spine. A connection error would have been kinder.
+//
+// So the two names are pinned against each other, from the sources, in both directions.
+const launcherSrc = readFileSync(join(REPO, ".claude", "scripts", "hq", "arc-face.mjs"), "utf8");
+const viteSrc = readFileSync(join(REPO, "face", "vite.config.ts"), "utf8");
+const envName = (launcherSrc.match(/DOOR_ORIGIN_ENV\s*=\s*"([A-Z_]+)"/) || [])[1];
+check("the launcher declares its door-origin env var", Boolean(envName), `got ${envName}`);
+check("and the app's dev proxy reads that SAME name", Boolean(envName) && viteSrc.includes(`process.env.${envName}`), `${envName} not found in vite.config.ts`);
+// The other direction: the proxy must read no OTHER ARC_DASH_* name, or the pin above could
+// pass while the value that actually wins comes from a variable nobody sets.
+const proxyReads = [...viteSrc.matchAll(/process\.env\.(ARC_[A-Z_]+)/g)].map((m) => m[1]);
+check("the proxy reads exactly one ARC_ variable", proxyReads.length === 1, `reads ${JSON.stringify(proxyReads)}`);
+check("and it is the one the launcher sets", proxyReads.length === 1 && proxyReads[0] === envName, `proxy=${proxyReads[0]} launcher=${envName}`);
+// Positive control: the pin must be reading real files, not empty strings.
+check("both sources were actually read", launcherSrc.length > 2000 && viteSrc.length > 500, `launcher=${launcherSrc.length} vite=${viteSrc.length}`);
+
 console.log(`RAN: ${ran} checks, ${failed} failed`);
 process.exitCode = failed === 0 && ran >= 30 ? 0 : 1;
