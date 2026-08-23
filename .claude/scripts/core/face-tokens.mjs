@@ -13,7 +13,8 @@
 //
 // Exit: 0 in sync / written | 1 drift (with --check) | 2 could not read the inputs.
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, realpathSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -85,31 +86,88 @@ function selftest(repo) {
   armed("copy carries the reserved-hue tokens", want.includes("--amber") && want.includes("--green") && want.includes("--violet"));
   armed("copy carries the product accent", want.includes("--accent"));
 
-  // The drift arm, on disk: write a corrupted copy, assert --check exits 1, restore.
-  const dstPath = join(repo, ...DST);
-  const before = existsSync(dstPath) ? readFileSync(dstPath, "utf8") : null;
-  let driftExit = null;
-  try {
-    writeFileSync(dstPath, (before ?? want).replace("--accent", "--hand-edited-accent"));
-    driftExit = run(repo, true);
-  } finally {
-    if (before !== null) writeFileSync(dstPath, before);
-  }
-  armed("a hand-edited copy exits 1", driftExit === 1, `got ${driftExit}`);
+  // The drift arm, on disk -- but in a TEMP TREE, never the live one.
+  //
+  // It used to corrupt `face/src/tokens.css` in place and restore it in a `finally`. Two
+  // things wrong with that: a kill or a timeout between the two writes leaves a TRACKED file
+  // holding the corruption, and when the copy was absent the restore did nothing at all, so
+  // the selftest CREATED the drift it exists to detect, left it on disk, and exited 0. A
+  // negative control that damages the repo to prove a point is not a control.
+  const tmp = mkdtempSync(join(tmpdir(), "face-tokens-selftest-"));
+  const tmpSrc = join(tmp, ...SRC);
+  const tmpDst = join(tmp, ...DST);
+  mkdirSync(dirname(tmpSrc), { recursive: true });
+  mkdirSync(dirname(tmpDst), { recursive: true });
+  writeFileSync(tmpSrc, readFileSync(join(repo, ...SRC), "utf8"));
+
+  writeFileSync(tmpDst, want.replace("--accent", "--hand-edited-accent"));
+  armed("a hand-edited copy exits 1", run(tmp, true) === 1);
+
+  // A LENGTH-PRESERVING edit, because comparing by length instead of by content is a real
+  // mutant and the previous arm could not tell the two apart: `--accent` -> `--acceNt` keeps
+  // the byte count identical and must still be caught.
+  writeFileSync(tmpDst, want.replace("--accent", "--acceNt"));
+  armed("a length-preserving hand-edit exits 1", run(tmp, true) === 1);
+
+  // An ABSENT copy is drift too, and this is the case the old in-place arm silently skipped.
+  rmSync(tmpDst);
+  armed("a missing copy exits 1", run(tmp, true) === 1);
 
   // A source that is not the token file must be REFUSED rather than copied over the app's
   // styles. The cheap version of this generator would happily blank the product.
-  let refused = false;
-  try { tokenState(join(repo, "docs")); } catch { refused = true; }
-  armed("a wrong repo root is refused, not copied", refused);
+  //
+  // The old arm passed `join(repo, "docs")`, where the file simply does not exist -- so it
+  // exercised `existsSync` and never the `--accent` shape check at all. A mutant that deleted
+  // that check passed this arm AND replaced the app's entire stylesheet with 60 bytes of
+  // junk. The source now EXISTS and is the wrong content, which is the case that matters.
+  const wrongTree = mkdtempSync(join(tmpdir(), "face-tokens-wrong-"));
+  mkdirSync(dirname(join(wrongTree, ...SRC)), { recursive: true });
+  writeFileSync(join(wrongTree, ...SRC), "/* a stylesheet, but not THE stylesheet */\nbody { color: red; }\n");
+  let refusedWrongContent = false;
+  try { tokenState(wrongTree); } catch { refusedWrongContent = true; }
+  armed("a source that EXISTS but is not the token file is refused", refusedWrongContent);
+
+  let refusedAbsent = false;
+  try { tokenState(join(repo, "docs")); } catch { refusedAbsent = true; }
+  armed("an absent source is refused, not copied", refusedAbsent);
+
+  rmSync(tmp, { recursive: true, force: true });
+  rmSync(wrongTree, { recursive: true, force: true });
 
   for (const l of lines) process.stdout.write(l + "\n");
   process.stdout.write(`face-tokens selftest: ${ok ? "PASS -- the copy is marked, complete, and drift fails closed" : "FAIL"}\n`);
   return ok ? 0 : 1;
 }
 
+const KNOWN_FLAGS = ["--check", "--selftest"];
+
+/**
+ * Refuse an argument this gate does not know.
+ *
+ * `argv.includes("--check")` means every near-miss silently selects the WRITE path and exits
+ * 0. An adversarial pass ran `--check=true`, `--Check`, `--checks` and `--dry-run` against a
+ * drifted tree: each one repaired the drift and reported success. On `face-tokens` that
+ * silently discarded a hand-edit to the app's entire stylesheet.
+ *
+ * It matters more than it looks. The only correct spellings in existence are the literals in
+ * tests/*.bats -- any future hook, workflow line or pre-commit that types it slightly
+ * differently gets a green light AND a mutated working tree. An unrecognised `--` argument is
+ * exit 2: could not read the inputs, which is exactly what it is.
+ *
+ * @param {string[]} argv @param {string[]} known
+ */
+function refuseUnknownFlags(argv, known) {
+  const bad = argv.filter((a) => a.startsWith("--") && !known.includes(a));
+  if (bad.length) {
+    process.stderr.write(`face-tokens: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than silently taking the write path.
+`);
+    process.exit(2);
+  }
+}
+
 if (isMainModule()) {
   const argv = process.argv.slice(2);
+  refuseUnknownFlags(argv, KNOWN_FLAGS);
   const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
   try {
     process.exit(argv.includes("--selftest") ? selftest(repo) : run(repo, argv.includes("--check")));

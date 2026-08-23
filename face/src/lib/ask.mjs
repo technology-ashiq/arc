@@ -296,7 +296,11 @@ export function methodsOf(handle) {
  * @property {string[]} writeReachable methods that can reach a spine write. MUST be empty.
  * @property {string[]} unclassified   methods the door's route table does not name
  * @property {string[]} withheld       write-capable door methods this handle does NOT carry
- * @property {boolean}  clean          true only when nothing write-capable is reachable
+ * @property {boolean}  reachesItsReads true when the handle carries at least one read route
+ * @property {boolean}  clean          true only when nothing write-capable is reachable AND
+ *                                     the handle actually reaches its reads. `Object.freeze({})`
+ *                                     satisfied every other condition, and a handle that
+ *                                     reaches nothing is dead rather than safe.
  * @property {string}   line           the sentence the room prints
  */
 
@@ -314,7 +318,12 @@ export function noHandsAudit(handle) {
   /** @type {string[]} */ const writeReachable = [];
   /** @type {string[]} */ const unclassified = [];
   for (const m of methods) {
-    const effect = ROUTE_EFFECT[m];
+    // hasOwnProperty, for the same reason readOnly uses it: ROUTE_EFFECT is a frozen literal
+    // and still Object.prototype-backed, so a bound `constructor` on the handle resolved to
+    // `Object` here, took the `effect.writes === undefined` branch, and was filed as GRANTED.
+    // The auditor blessed the one method that can rebuild a fully-armed Door.
+    const own = Object.prototype.hasOwnProperty.call(ROUTE_EFFECT, m);
+    const effect = own ? ROUTE_EFFECT[m] : undefined;
     if (!effect) { unclassified.push(m); writeReachable.push(m); continue; }
     if (effect.writes) writeReachable.push(m); else granted.push(m);
   }
@@ -322,12 +331,20 @@ export function noHandsAudit(handle) {
     const e = ROUTE_EFFECT[k];
     return Boolean(e && e.writes) && !methods.includes(k);
   }).sort();
-  const clean = writeReachable.length === 0;
+  // A handle that reaches NOTHING is not clean, it is dead. `Object.freeze({})` satisfied
+  // every assertion this audit made -- no write routes, decide and call withheld, frozen --
+  // and it is Ask arc with no reads either. "Reaches no write" and "works" are two claims and
+  // the panel prints both, so both have to be checked.
+  const reachesItsReads = granted.length > 0;
+  const clean = writeReachable.length === 0 && reachesItsReads;
   return {
     granted, writeReachable, unclassified, withheld, clean,
-    line: clean
-      ? `${granted.length} read route${granted.length === 1 ? "" : "s"} reachable from this room · 0 write routes · ${withheld.join(", ") || "none"} withheld`
-      : `THIS ROOM CAN REACH A WRITE: ${writeReachable.join(", ")}. That is a defect in the wiring, not a feature of the page.`,
+    reachesItsReads,
+    line: writeReachable.length
+      ? `THIS ROOM CAN REACH A WRITE: ${writeReachable.join(", ")}. That is a defect in the wiring, not a feature of the page.`
+      : reachesItsReads
+        ? `${granted.length} read route${granted.length === 1 ? "" : "s"} reachable from this room · 0 write routes · ${withheld.join(", ") || "none"} withheld`
+        : "THIS ROOM REACHES NOTHING AT ALL. No write, but no read either — that is a dead handle, not a safe one.",
   };
 }
 
@@ -350,6 +367,25 @@ export function readOnly(door, grants) {
   const handle = {};
   const source = /** @type {Record<string, unknown>} */ (/** @type {unknown} */ (door));
   for (const name of grants) {
+    // OWN PROPERTY, never a plain lookup.
+    //
+    // `ROUTE_EFFECT` is a frozen object literal, and a frozen object is still backed by
+    // Object.prototype. `ROUTE_EFFECT["constructor"]` therefore resolves to `Object` --
+    // truthy, so it walked past `if (!effect)` -- and `effect.writes` is `undefined`, so it
+    // walked past the write guard too. `source["constructor"]` is the `Door` CLASS, a
+    // function, so it was bound and installed on the handle. From there:
+    //
+    //     new handle.constructor({ token, fetchImpl }).decide({ ... })
+    //
+    // lands a real POST /api/decide, and `noHandsAudit` certified that handle CLEAN.
+    //
+    // This module's own comment says the auditor walks the prototype chain precisely because
+    // an own-keys audit would clear a fully-armed client. The mirror image -- reading GRANTS
+    // through the prototype chain -- was never closed. `toString`, `valueOf`, `hasOwnProperty`
+    // and `__defineGetter__` all escalated the same way. Found by an adversarial pass that
+    // executed the write, not by reading.
+    if (!Object.prototype.hasOwnProperty.call(ROUTE_EFFECT, name))
+      throw new Error(`readOnly: "${name}" is not a route this shell knows`);
     const effect = ROUTE_EFFECT[name];
     if (!effect) throw new Error(`readOnly: "${name}" is not a route this shell knows`);
     if (effect.writes) throw new Error(`readOnly: "${name}" is write-capable and may never be granted to a reading room`);

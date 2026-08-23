@@ -144,6 +144,7 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
   for (const a of agents)
     if (!agentKeys.has(a)) findings.push(`[agent] "${a}" exists in .claude/agents/ with no room in the contract`);
 
+
   // ---- the six inventories that pointed at nothing ----------------------------------
   // Until 2026-08-23 this gate validated kinds, lanes, commands, agents and products, and
   // NOTHING ELSE. gates · hooks · rules · lints · processes · concepts — 164 contract rows
@@ -165,6 +166,26 @@ export function coverageFindings({ kinds, lanes, commands, agents, products, rul
     const map = contract[inv]?.map || {};
     for (const name of Object.keys(map)) roomRef(inv, name, map[name]);
   }
+
+  // ---- and the OTHER direction, which these two were missing ---------------------------
+  //
+  // Every other inventory got the "a key that exists is not a value that resolves" fix. These
+  // two kept only the tree->contract check, so the ROOM on the right-hand side was never read
+  // -- 56 rows, the two largest inventories in the contract, pointing anywhere at all.
+  //
+  // An adversarial pass aimed three commands and two agents at rooms that do not exist. The
+  // gate said "all covered" and exited 0; the sanctioned regenerate then wrote a registry
+  // with 23 command rows instead of 26 and 28 agent rows instead of 30 -- /arc-ship, /arc-qa,
+  // /arc-audit, code-reviewer and qa-tester absent from every room, gone from the rail, the
+  // Map and the palette -- and `--check`, the selftest and the whole L3 suite stayed green.
+  // `""`, `null` and `{}` as the room value all passed identically.
+  //
+  // That is precisely the defect the 2026-08-23 extension was written to close, left in 2 of
+  // 11 inventories: the twin-fix shape, inside the very change that was fixing the twins.
+  for (const [name, room] of Object.entries(cmdMap))
+    roomRef("command", `/${stripTag(name)}`, room);
+  for (const [name, room] of Object.entries(agentMap))
+    roomRef("agent", name.replace(/\s*\(legacy\)$/, "").trim(), room);
   // A concept carries a station as well as a room: "which room" without "where in it" is
   // half an answer, and ⌘K needs both to land the reader on the right zone.
   const conceptMap = contract.concepts?.map || {};
@@ -292,11 +313,35 @@ async function selftest(repo) {
     lines.push(`mutant ${label.padEnd(24)} named: ${named ? "PASS" : "FAIL"}`);
   }
 
-  // THE EXIT-CODE ARM. Everything above exercises the pure function; nothing proved that a
+  // THE EXIT-CODE ARMS. Everything above exercises the pure function; nothing proved that a
   // real gap makes the CLI exit non-zero, and two mutants that turned `return 1` into
   // `return 0` were invisible for exactly that reason.
-  const exitOnGap = await run({ ...clean, lanes: [...clean.lanes, "ghostlane"] }, true);
-  lines.push(`exit code on a real gap:      ${exitOnGap === 1 ? "PASS" : "FAIL (got " + exitOnGap + ")"}`);
+  //
+  // ONE arm was not enough, and an adversarial pass showed why: with only a ghost LANE here, a
+  // mutant that narrowed `if (findings.length)` to `findings.some(f => f.startsWith("[lane]"))`
+  // passed all seventeen arms AND the bats negative arm, while silently exiting 0 on a tree
+  // carrying a ghost rule, a homeless kind, a gate in a ghost room and a concept in a ghost
+  // room. Every gap CLASS the gate can raise now has its own exit arm.
+  const exitArms = [
+    ["lane", { ...clean, lanes: [...clean.lanes, "ghostlane"] }],
+    ["kind", { ...clean, kinds: [...clean.kinds, "ghost.kind"] }],
+    ["command", { ...clean, commands: [...clean.commands, "ghost-command"] }],
+    ["agent", { ...clean, agents: [...clean.agents, "ghost-agent"] }],
+    ["product", { ...clean, products: [...clean.products, { name: "ghostproduct", hasFace: true }] }],
+    ["rule", { ...clean, rules: [...clean.rules, "ghost-rule"] }],
+    ["process", { ...clean, processes: [...clean.processes, "ghost-process"] }],
+    ["gate in a ghost room", withMapRoom(clean, "gates", "ghost-room-xyz")],
+    ["concept in a ghost room", withConcept(clean, { room: "ghost-room-xyz", station: "x" })],
+    ["command in a ghost room", withMapRoom(clean, "commands", "ghost-room-xyz")],
+    ["agent in a ghost room", withMapRoom(clean, "agents", "ghost-room-xyz")],
+  ];
+  let allExits = true;
+  for (const [label, mutant] of exitArms) {
+    const code = await run(mutant, true);
+    if (code !== 1) allExits = false;
+    lines.push(`exit 1 on a ${label.padEnd(24)} gap: ${code === 1 ? "PASS" : "FAIL (got " + code + ")"}`);
+  }
+  const exitOnGap = allExits ? 1 : 0;
 
   for (const l of lines) process.stdout.write(l + "\n");
   const ok = cleanOk && allArms && exitOnGap === 1;
@@ -333,8 +378,35 @@ function withLaneRoom(data, room) {
   return { ...data, contract };
 }
 
+const KNOWN_FLAGS = ["--selftest"];
+
+/**
+ * Refuse an argument this gate does not know.
+ *
+ * `argv.includes("--check")` means every near-miss silently selects the WRITE path and exits
+ * 0. An adversarial pass ran `--check=true`, `--Check`, `--checks` and `--dry-run` against a
+ * drifted tree: each one repaired the drift and reported success. On `face-tokens` that
+ * silently discarded a hand-edit to the app's entire stylesheet.
+ *
+ * It matters more than it looks. The only correct spellings in existence are the literals in
+ * tests/*.bats -- any future hook, workflow line or pre-commit that types it slightly
+ * differently gets a green light AND a mutated working tree. An unrecognised `--` argument is
+ * exit 2: could not read the inputs, which is exactly what it is.
+ *
+ * @param {string[]} argv @param {string[]} known
+ */
+function refuseUnknownFlags(argv, known) {
+  const bad = argv.filter((a) => a.startsWith("--") && !known.includes(a));
+  if (bad.length) {
+    process.stderr.write(`face-coverage: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than silently taking the write path.
+`);
+    process.exit(2);
+  }
+}
+
 if (isMainModule()) {
   const argv = process.argv.slice(2);
+  refuseUnknownFlags(argv, KNOWN_FLAGS);
   const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
   const fn = argv.includes("--selftest") ? selftest : run;
   fn(repo)

@@ -181,7 +181,13 @@ export function findRoom(rooms, id) {
  * @param {Room[]} rooms
  */
 export function defaultRoom(rooms) {
-  return findRoom(rooms, "today") ?? rooms.find((r) => r.ring === "command" && !r.template) ?? rooms[0] ?? null;
+  // `!r.template` on the middle arm and NOT on the last one: a twin-fix miss inside a single
+  // expression. `defaultRoom` over a registry of templates alone returned the lane template --
+  // the one room this module asserts elsewhere is "not offered as a room you can open".
+  return findRoom(rooms, "today")
+    ?? rooms.find((r) => r.ring === "command" && !r.template)
+    ?? rooms.find((r) => !r.template)
+    ?? null;
 }
 
 /* ═════════════════════════════════════════════════════════════════════════════

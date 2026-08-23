@@ -94,6 +94,18 @@ for (const state of ["live", "unexercised", "file-borne", "index"]) {
 // Assert the CLAIM, not a chosen word. The first cut looked for /never/ and failed on a
 // title that says "has ever fired" -- a test that pins vocabulary breaks on a rewrite that
 // improves the sentence, which trains people to loosen tests instead of reading them.
+// AND THAT THEY DIFFER. Each badge was checked in isolation -- label non-empty, title long
+// enough, label not "0" -- so collapsing all four states to ONE identical badge passed the
+// entire suite. Four states that render the same are one state with extra bookkeeping.
+const allBadges = ["live", "unexercised", "file-borne", "index"]
+  .map((st) => rooms.stateBadge(withLive.find((r) => r.live.state === st)));
+check("the four honest states render four DIFFERENT labels",
+  new Set(allBadges.map((b) => b.label)).size === 4, allBadges.map((b) => b.label).join("|"));
+check("the four honest states render four DIFFERENT sentences",
+  new Set(allBadges.map((b) => b.title)).size === 4);
+check("the four honest states carry four DIFFERENT tones",
+  new Set(allBadges.map((b) => b.tone)).size === 4, allBadges.map((b) => b.tone).join("|"));
+
 const unex = rooms.stateBadge(withLive.find((r) => r.live.state === "unexercised"));
 check("UNEXERCISED says in words that this is NOT a zero",
   /not a zero/i.test(unex.title) && /no count/i.test(unex.title) && unex.label !== "0",
@@ -161,8 +173,14 @@ check("a 200 with a non-JSON body is refused, not treated as empty",
   caught && caught.code === "BAD_BODY", caught && caught.code);
 
 // The one write path, guarded before the request leaves.
+//
+// A real-shaped ULID, because the client now checks the id as well as the field name. The
+// first version of these checks used "X" and "01ABC" and they started failing the moment the
+// guard existed -- which is the guard working, and a reminder that a fixture shaped like the
+// thing it stands for costs nothing until the day it saves you.
+const VALID_ULID = "01M0Q01KDCARYDDD0B6XSA0GFC";
 caught = null;
-try { await new door.Door({ fetchImpl: refusingFetch }).decide({ id: "X", decision: "approve", reason: "   " }); }
+try { await new door.Door({ fetchImpl: refusingFetch }).decide({ id: VALID_ULID, decision: "approve", reason: "   " }); }
 catch (e) { caught = e; }
 check("an empty reason is refused locally, without a round trip",
   caught && caught.code === "BAD_REASON" && caught.status === 0, caught && caught.code);
@@ -170,13 +188,35 @@ check("an empty reason is refused locally, without a round trip",
 // The token must ride as a bearer header, and the write must be a POST with a JSON body.
 let seen = null;
 const spy = async (url, init) => { seen = { url, init }; return { ok: true, status: 200, statusText: "OK", json: async () => ({}) }; };
-await new door.Door({ token: "tok", fetchImpl: spy }).decide({ id: "01ABC", decision: "reject", reason: "not yet" });
+await new door.Door({ token: "tok", fetchImpl: spy }).decide({ id: VALID_ULID, decision: "reject", reason: "not yet" });
 check("the write is a POST to the one mutating route",
   seen && seen.init.method === "POST" && seen.url.endsWith("/api/decide"), seen && seen.url);
 check("the token rides as a bearer header, never in the query string",
   seen && seen.init.headers.Authorization === "Bearer tok" && !seen.url.includes("tok="), seen && seen.url);
 check("the reason is trimmed into the body, not sent raw",
   JSON.parse(seen.init.body).reason === "not yet");
+
+// The three rules that govern this call, all checked BEFORE the request leaves. An
+// adversarial pass sent every one of these down the wire: an empty id, a null id, no id key
+// at all, a 5000-byte reason, and a reason carrying a NUL. The cross-layer pin proved the
+// door destructures the field NAMES; nothing looked at the values.
+const cannotStamp = async (stamp) => {
+  try { await new door.Door({ fetchImpl: spy }).decide(stamp); return null; } catch (e) { return e.code; }
+};
+check("an empty id is refused, not sent", await cannotStamp({ id: "", decision: "approve", reason: "why" }) === "UNKNOWN_APPROVAL");
+check("a null id is refused, not sent", await cannotStamp({ id: null, decision: "approve", reason: "why" }) === "UNKNOWN_APPROVAL");
+check("NO id key at all is refused, not sent", await cannotStamp({ decision: "approve", reason: "why" }) === "UNKNOWN_APPROVAL");
+check("a non-ULID id is refused, not sent", await cannotStamp({ id: "not-a-ulid", decision: "approve", reason: "why" }) === "UNKNOWN_APPROVAL");
+check("a reason past the spine's byte cap is refused HERE, not at the door",
+  await cannotStamp({ id: VALID_ULID, decision: "approve", reason: "x".repeat(2100) }) === "BAD_REASON");
+check("a reason carrying a control character is refused HERE",
+  await cannotStamp({ id: VALID_ULID, decision: "approve", reason: `ok${String.fromCharCode(0)}nope` }) === "BAD_REASON");
+// A reason made of zero-width characters is not whitespace, so `.trim()` kept it and both
+// the client and the spine accepted it -- an irreversible stamp whose reason RENDERS AS
+// NOTHING, on a product whose central promise is that the typed reason IS the act.
+check("a reason of zero-width characters is refused -- an invisible reason is a default",
+  await cannotStamp({ id: VALID_ULID, decision: "approve", reason: "​​​" }) === "BAD_REASON");
+check("a real stamp still goes through", await cannotStamp({ id: VALID_ULID, decision: "approve", reason: "kill criteria met" }) === null);
 
 // THE RECEIVER PIN.
 //
@@ -232,7 +272,7 @@ check("the client sends NO field the door does not read (a silently ignored key 
 // The door refuses a verdict that is not approve/reject; the client must not be the thing
 // that discovers that over the network.
 caught = null;
-try { await new door.Door({ fetchImpl: spy }).decide({ id: "01ABC", decision: "maybe", reason: "hm" }); }
+try { await new door.Door({ fetchImpl: spy }).decide({ id: VALID_ULID, decision: "maybe", reason: "hm" }); }
 catch (e) { caught = e; }
 check("a verdict that is not approve or reject is refused before it leaves",
   caught && caught.code === "BAD_VERDICT", caught && caught.code);
@@ -411,6 +451,31 @@ check("every ring is a line", model.lines.length === 5, `lines=${model.lines.len
 check("no two labels collide at 33 stations -- the legibility bar, measured not assumed",
   map.labelCollisions(model.labels).length === 0,
   JSON.stringify(map.labelCollisions(model.labels).slice(0, 3)));
+// POSITIVE CONTROLS for the two absence-only assertions below.
+//
+// "no two labels collide" and "the legend accounts for every mark" both pass when the
+// detector is stubbed to return [] -- and an adversarial pass proved it: stubbing either, or
+// making buildMap return zero labels, left the suite fully green. An absence proves nothing
+// until you have shown the thing can be present.
+check("every station is actually LABELLED -- a map that labels nothing clears an empty bar",
+  model.labels.length === model.stations.length,
+  `labels=${model.labels.length} stations=${model.stations.length}`);
+const stacked = model.labels.map((l) => ({ ...l, ...model.labels[0] }));
+check("the collision detector FIRES when labels are stacked (positive control)",
+  map.labelCollisions(stacked).length > 0, `collisions=${map.labelCollisions(stacked).length}`);
+// legendGaps compares the marks the MAP draws against the LEGEND constant, so the way to
+// make it fire is to draw a mark the legend has no row for -- not to empty a `legend` field,
+// which is what my first attempt did and why it reported no gap. Reading the function beat
+// guessing at its shape, again.
+const withGhostMark = {
+  ...model,
+  lines: model.lines.map((l, i) => (i === 0
+    ? { ...l, stations: l.stations.map((st, j) => (j === 0 ? { ...st, shape: "hexagon", pattern: "zigzag" } : st)) }
+    : l)),
+};
+check("the legend gap detector FIRES on a mark the legend does not explain (positive control)",
+  map.legendGaps(withGhostMark).length > 0, JSON.stringify(map.legendGaps(withGhostMark)).slice(0, 80));
+
 check("the legend accounts for every mark the map draws",
   map.legendGaps(model).length === 0, map.legendGaps(model).join(", "));
 

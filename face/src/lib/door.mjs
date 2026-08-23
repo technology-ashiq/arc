@@ -97,6 +97,42 @@ export function decodeRegistry(registry) {
   };
 }
 
+/** A ULID as the spine writes them: Crockford base32, 26 chars, no I/L/O/U. */
+export const ULID_RE = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
+
+/** The spine's own ceiling on a reason, from `.claude/scripts/hq/lib/validate.mjs`. */
+export const MAX_REASON_BYTES = 2000;
+
+/**
+ * Why this reason cannot be stamped, or null if it can.
+ *
+ * These are the SPINE's rules, not house policy invented here: non-empty, at most 2000
+ * bytes, no control character. Checking them before the request leaves is the same courtesy
+ * as the empty-reason check, extended to the two the client used to skip.
+ *
+ * The zero-width case is the one worth naming. Three U+200B characters is not whitespace, so
+ * `.trim()` keeps it and both this client and the spine accepted it -- an irreversible stamp
+ * whose reason RENDERS AS NOTHING. The whole product turns on "no default verdict, the typed
+ * reason is the act"; a reason nobody can see is a default with extra steps.
+ *
+ * @param {string} reason  already trimmed
+ * @returns {string | null}
+ */
+export function badReason(reason) {
+  if (!reason) return "a reason is required, in your own words";
+  // Strip the invisible formatting characters before deciding it is non-empty.
+  if (!reason.replace(/[\u200B-\u200D\u2060\uFEFF\u00A0\u3000]/g, "").trim())
+    return "that reason is invisible — zero-width characters are not words, and a stamp needs words";
+  if (new TextEncoder().encode(reason).length > MAX_REASON_BYTES)
+    return `a reason is at most ${MAX_REASON_BYTES} bytes; the spine refuses longer and so does this`;
+  // C0, DEL and C1, matching validate.mjs. A control character in a reason is either a paste
+  // accident or an injection attempt, and the spine refuses it either way.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001F\u007F-\u009F]/.test(reason))
+    return "a reason may not contain a control character";
+  return null;
+}
+
 export class DoorError extends Error {
   /** @param {string} code @param {string} message @param {number} status */
   constructor(code, message, status) {
@@ -285,13 +321,26 @@ export class Door {
    * @param {{ id: string, decision: "approve" | "reject", reason: string }} stamp
    */
   decide(stamp) {
-    const reason = typeof stamp.reason === "string" ? stamp.reason.trim() : "";
     // Refused HERE as well as at the door. Not because the door cannot be trusted -- it can,
-    // and its BAD_REASON is the authority -- but because a round trip to be told the box was
+    // and its refusals are the authority -- but because a round trip to be told the box was
     // empty is a worse experience than being told before the request leaves.
-    if (!reason) throw new DoorError("BAD_REASON", "a reason is required, in your own words", 0);
+    //
+    // The first cut checked ONE of the three rules that govern this call, and an adversarial
+    // pass sent all of these straight down the wire: an empty `id`, a null `id`, NO id key at
+    // all, a 5000-byte reason, and a reason carrying a NUL. The cross-layer pin proved the
+    // door destructures `{id, verdict, reason}` -- the field NAMES -- and nothing ever looked
+    // at the values. Meanwhile `inbox.validateReason`, one module away, already enforced the
+    // spine's own byte cap and control-character rule byte-for-byte. Two guards for one act,
+    // disagreeing.
+    if (typeof stamp.id !== "string" || !ULID_RE.test(stamp.id))
+      throw new DoorError("UNKNOWN_APPROVAL", `a stamp needs the approval's ULID, not ${JSON.stringify(stamp.id)}`, 0);
     if (stamp.decision !== "approve" && stamp.decision !== "reject")
       throw new DoorError("BAD_VERDICT", `a stamp is approve or reject, not ${JSON.stringify(stamp.decision)}`, 0);
+
+    const reason = typeof stamp.reason === "string" ? stamp.reason.trim() : "";
+    const bad = badReason(reason);
+    if (bad) throw new DoorError("BAD_REASON", bad, 0);
+
     return this.call("/api/decide", { method: "POST", body: { id: stamp.id, verdict: stamp.decision, reason } });
   }
 

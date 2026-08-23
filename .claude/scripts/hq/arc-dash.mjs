@@ -46,7 +46,7 @@
 
 import { createServer } from "node:http";
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, readFileSync, mkdirSync, appendFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, appendFileSync, realpathSync } from "node:fs";
 import { join, dirname, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -113,6 +113,12 @@ const STATUS = Object.freeze({
   BODY_TOO_LARGE: 413,
   WRONG_KIND: 422,
   PROCESS_NOT_LANDED: 501, ASOF_UNSUPPORTED: 501,
+  // These three fell through `STATUS[code] || 500` and answered 500 INTERNAL. A missing
+  // generated file with a client-actionable message ("run face-sections.mjs") is not an
+  // internal fault, and any canary or log rule that treats 5xx as "the HQ is down" could not
+  // tell them apart. REGISTRY_ABSENT is a precondition the caller can fix; the two _FAILED
+  // codes are a dependency answering badly, which is a gateway problem, not ours.
+  REGISTRY_ABSENT: 503, ASK_FAILED: 502, BRIEF_FAILED: 502,
   DECISION_REFUSED: 502,
 });
 
@@ -702,7 +708,36 @@ function boot(argv) {
   return server;
 }
 
-if (process.argv[1] && process.argv[1].endsWith("arc-dash.mjs")) {
+/**
+ * "Was this file RUN, or imported?" -- realpath on BOTH sides.
+ *
+ * This file carried the cheap `endsWith("arc-dash.mjs")` form, which is the pattern the three
+ * face-*.mjs gates each call out and fixed, and it breaks in BOTH directions. An adversarial
+ * pass demonstrated both:
+ *
+ *   cp arc-dash.mjs dash-copy-attack.mjs && node dash-copy-attack.mjs --routes
+ *     -> exit 0, zero bytes on stdout, no server.
+ *   The --routes table is the single dispatch authority for the route-enumeration fixture,
+ *   so a supervisor reading $? sees success while nothing ran.
+ *
+ *   node probe-arc-dash.mjs        (any importer whose argv[1] merely ENDS WITH the string)
+ *     -> booted a live HTTP server, bound a port, created the journal dir and printed a
+ *        session token, as an IMPORT SIDE EFFECT. ROUTES, FILE_ALLOW and escapeDeep are all
+ *        exported, so importing this module is a legitimate thing to want to do.
+ *
+ * That makes this the sixth recurrence of one class in this repo. realpath resolves symlinks,
+ * junctions, renames and relative invocations, so the question is answered by identity rather
+ * than by spelling.
+ */
+function isMainModule() {
+  try {
+    const invoked = process.argv[1];
+    if (!invoked) return false;
+    return realpathSync(invoked) === realpathSync(fileURLToPath(import.meta.url));
+  } catch { return false; }
+}
+
+if (isMainModule()) {
   boot(process.argv.slice(2));
 }
 

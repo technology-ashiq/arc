@@ -117,14 +117,33 @@ function invert(map, pick) {
 export function roomRegistry(contract, copy) {
   const tpl = contract.rooms?.template;
   const rows = [...(contract.rooms?.list || []), ...(tpl ? [tpl] : [])];
+  // face-coverage catches a duplicate id; this generator did not, and an adversarial pass
+  // showed it emitting a 34-room registry carrying `today` TWICE with `--check` exiting 0.
+  // Two gates over one contract, one of them blind: the twin-fix shape between files.
+  const seenIds = new Set();
+  for (const r of rows) {
+    if (seenIds.has(r.id)) throw new Error(`room "${r.id}" appears twice -- a duplicate id makes one of the two unreachable, and which one is undefined`);
+    seenIds.add(r.id);
+  }
   const copyRooms = copy?.rooms || {};
 
   // A `*`-prefixed home is a legitimate non-room home (e.g. `*decide-zones`) and is skipped,
   // exactly as face-coverage skips it. A kind can be homed in several rooms; each gets it.
   const kindsBy = {};
   for (const [k, v] of Object.entries(contract.kinds?.map || {}))
-    for (const h of v.homes || [])
+    for (const h of v.homes || []) {
+      // BRACES. The original was a single-statement for-body; adding a second statement to it
+      // without them put the push OUTSIDE the loop, so every kind stopped being collected and
+      // `ops` -- a room with exactly one homed kind -- became "derives no content". The
+      // generator's own empty-room guard caught it immediately, which is the guard working.
+      //
+      // `*name` is a legitimate NON-ROOM home (e.g. `*decide-zones`). A bare `*`, or a `*`
+      // with nothing readable after it, is not a home at all -- and `homes: ["*"]` on every
+      // one of the 46 kinds produced zero findings while every kind rendered in no room.
+      if (typeof h === "string" && h.startsWith("*") && h.trim().length < 2)
+        throw new Error(`kind "${k}" is homed in "${h}" -- a bare "*" names nothing; a non-room home must say which non-room`);
       if (typeof h === "string" && !h.startsWith("*")) (kindsBy[h] = kindsBy[h] || []).push(k);
+    }
   for (const k of Object.keys(kindsBy)) kindsBy[k].sort();
 
   const byRoom = {
@@ -147,6 +166,12 @@ export function roomRegistry(contract, copy) {
       throw new Error(`room "${r.id}" has no sentence -- every room opens with one, that is the whole pattern`);
     if (!["bespoke", "generic", "index"].includes(c.render))
       throw new Error(`room "${r.id}" declares render "${c.render}" -- must be bespoke, generic or index`);
+    // A room with no NAME passed every gate, and the registry emitted a row with no `name`
+    // key at all -- so the rail, the Map's labels and every accessible name rendered blank.
+    // `sentence` and `render` were validated and the one thing a person actually reads was
+    // not. Found by an adversarial pass that deleted it and watched three gates stay green.
+    if (typeof r.name !== "string" || !r.name.trim())
+      throw new Error(`room "${r.id}" has no name -- the rail, the Map and every accessible name render it, and a blank one is a room nobody can point at`);
 
     const holds = {};
     let count = kindsBy[r.id] ? kindsBy[r.id].length : 0;
@@ -317,8 +342,35 @@ function selftest(repo) {
   return ok ? 0 : 1;
 }
 
+const KNOWN_FLAGS = ["--check", "--selftest"];
+
+/**
+ * Refuse an argument this gate does not know.
+ *
+ * `argv.includes("--check")` means every near-miss silently selects the WRITE path and exits
+ * 0. An adversarial pass ran `--check=true`, `--Check`, `--checks` and `--dry-run` against a
+ * drifted tree: each one repaired the drift and reported success. On `face-tokens` that
+ * silently discarded a hand-edit to the app's entire stylesheet.
+ *
+ * It matters more than it looks. The only correct spellings in existence are the literals in
+ * tests/*.bats -- any future hook, workflow line or pre-commit that types it slightly
+ * differently gets a green light AND a mutated working tree. An unrecognised `--` argument is
+ * exit 2: could not read the inputs, which is exactly what it is.
+ *
+ * @param {string[]} argv @param {string[]} known
+ */
+function refuseUnknownFlags(argv, known) {
+  const bad = argv.filter((a) => a.startsWith("--") && !known.includes(a));
+  if (bad.length) {
+    process.stderr.write(`face-sections: unknown flag(s) ${bad.join(", ")} -- known flags are ${known.join(", ")}. Refusing rather than silently taking the write path.
+`);
+    process.exit(2);
+  }
+}
+
 if (isMainModule()) {
   const argv = process.argv.slice(2);
+  refuseUnknownFlags(argv, KNOWN_FLAGS);
   const repo = argv.find((a) => !a.startsWith("--")) || REPO_DEFAULT;
   try {
     process.exit(argv.includes("--selftest") ? selftest(repo) : run(repo, argv.includes("--check")));
