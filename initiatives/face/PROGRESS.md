@@ -4,8 +4,8 @@ status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
 phase: 03
 appetite: 32d
-burn: 6d
-blocked-on: owner — the Phase 01 PICK across the SIX v2 directions (a design-lane human gate, ADR-1308; the v1 round was scored 18/100, which is BELOW-BAR strike 1 of the 2 that kill block A) · one `hq.policy.yaml` row for face-ask (that file is edit-denied to the machine by design)
+burn: 7d
+blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
 depends-on: arc-face — L3 build (separate repo, born at Phase 04 entry, ADR-1300)
 
 > Tracker for the initiative planned in `PLAN.md`. Rows flip ✅ only via `/arc-phase-done`
@@ -24,7 +24,7 @@ depends-on: arc-face — L3 build (separate repo, born at Phase 04 entry, ADR-13
 | Phase | Capability | Appetite | Status |
 |---|---|---|---|
 | 00 | Brief + coverage contract — four contracts pass `design-lint`; Coverage map frozen as the `face:` schema draft + planned-rooms registry; 8 signature screens named | 1d | built; owner "purinjathu" read outstanding |
-| 01 | Explore ×3 + design system — three theses, isolated variants, blind jury vs reference, owner PICK + PREDICTION → canonical `tokens.css` + core components (design source's Ph 02 folded in; block A = 6d unchanged) | 5d | **v1 round REJECTED by the owner at 18/100 (BELOW-BAR strike 1 of 2)**; brief rewritten open, v2 ran six directions, no pick recorded — owner PICK outstanding |
+| 01 | Explore ×3 + design system — **superseded by the owner’s reference**: he supplied a running eleven-room HQ instead of picking from the rounds, and `tokens.css` is now extracted from it | 5d | **tokens CANONICALISED** from `docs/design/reference/face-hq/`; explore rounds kept for the record, no longer an input; PICK moot |
 | 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | built, attacked twice, local green; CI verdict pending |
 | 04 | Shell — `arc-face` L3 repo born; Today · Inbox (stamps + needs-you cards) · Spine/Tape on live L2 + sim; keyboard model; ⌘K | 4d | blocked — needs the owner's PICK (tokens) + the L3 repo |
 | 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | birth-rule + coverage LANDED; Map + generic renderer need L3 |
@@ -32,10 +32,11 @@ depends-on: arc-face — L3 build (separate repo, born at Phase 04 entry, ADR-13
 | 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | process + router row landed; policy row is the owner's (edit-denied to me) |
 | 08 | Dogfood — 5 real days from the main clone; journal↔receipt match; retro; HISTORY entry | 5d | pending (needs L3 + 5 real days) |
 
-**Appetite burn: 6 of 32 days used (19%) — recomputed 2026-08-23 after the v2 design
-round, which the 4d figure predated.** Block A (6d): Phase 00 1d + Phase 01 v1 ~2d + the
-v2 open-brief round ~1d = **4d of 6d (67%) — past its 50 % tripwire**, and its kill
-condition (two BELOW-BAR owner scores) stands at **1 of 2**. Block B (8d): Phase 03 built
+**Appetite burn: 7 of 32 days used (22%) — recomputed 2026-08-23.** Block A (6d): Phase 00
+1d + Phase 01 v1 ~2d + the v2 open-brief round ~1d + reference intake and token extraction
+~1d = **5d of 6d (83%)**. It closes INSIDE its appetite and its kill condition can no
+longer fire: that kill needed two BELOW-BAR owner scores, and the owner ended the round by
+supplying the design instead of scoring a third one. Block A is spent, not blown. Block B (8d): Phase 03 built
 in ~1d of its 4, both adversarial passes included. Block C (13d): the Phase 05 birth-rule
 + coverage law and the Phase 07 deterministic half cost ~1d between them. Each block carries its own 50 % tripwire and kill
 (PLAN § Appetite); a block that finishes early banks its remainder forward, never silently
@@ -145,6 +146,28 @@ generic → Map animation → Tape play (keep as-of).
 - 2026-08-23 — **housekeeping**: six iteration screenshots that landed in the repo ROOT with
   the v2 commit moved under `docs/design/explore/face-hq-v2/shots/iterations/`; this tracker
   recomputed against what is actually built (burn, block A tripwire, strike count).
+- 2026-08-23 — **the owner supplied the design, and the explore loop stepped aside.** After
+  scoring v1 18/100 and finding the v2 round no better, he brought his own: a running
+  Vite + React app — `arc — Speak To The Company (v0.4)` — with a persistent particle face
+  and **eleven rooms**, every panel a derived view over an in-browser event spine, and
+  `GET /api/spine` already reading a real spine directory read-only. Landed at
+  `docs/design/reference/face-hq/` (a new tier: not a candidate, not judged, not gated —
+  the target). 70 source files committed; the 197 MB of `node_modules`, the prebuilt
+  `dist/` and two superseded rounds stayed out. `.env.local` was read BEFORE staging: a
+  filesystem path, no key. Two generations had been copied together with Windows `(2)`
+  suffixes; the `(2)` set is the NEWER eleven-room HQ and was promoted to canonical names
+  after reading BOTH entry points — the older six-section landing is archived beside it.
+- 2026-08-23 — **`tokens.css` re-canonicalised from the reference; v1 variant-a is out.**
+  Reading `src/ui/kit.jsx` found **three reserved-hue collisions where reading the
+  screenshots had found one**, two of them invisible in a render because they only appear
+  on a screen carrying both meanings at once: `SimBadge` wore **amber** (needs-you),
+  `KIND_FAMILY.council` wore **violet** (the non-real family), and both the live status dot
+  and the Money room's simulated-revenue stat wore **green** (real money, which is still 0).
+  All three are corrected in the token file, not in the owner's drop. A fourth defect no
+  eye can catch: `COLOR.faint` carries real text at **3.94:1**, below arc's own 4.5:1 floor
+  — raised to the first alpha that clears it (4.56:1). Every ratio in the file is computed,
+  none asserted. The structural finding is that the reference's fifth hue — cyan, carrying
+  no meaning — is what lets the four reserved hues survive untouched.
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
@@ -163,34 +186,37 @@ without one are named NOT YET EVALUABLE rather than quietly counted as holding.
 
 ## Now
 
-**Position:** Phase 03, the Phase 05 birth-rule + coverage law, and the Phase 07
-deterministic half are built and **green on CI per job at `eb760ae`**. Phase 00 is built
-and waits only on the owner read. **Phase 01 is the live blocker**: the v1 round was scored
-18/100, the brief was rewritten open, and six v2 directions now sit unranked. Phases 04, 06
-and 08 cannot start — 04 needs canonical tokens and the L3 repo, and both descend from the
-PICK. Nothing is closed via `/arc-phase-done` yet.
+**Position:** the design gate is **discharged** — not by a pick, but because the owner
+supplied the design. `tokens.css` is canonical and derived from a product that already
+runs. Phase 03, the Phase 05 birth-rule + coverage law and the Phase 07 deterministic half
+are built and **green on CI per job** (`8274f65`, 19/19). Phase 00 waits only on the owner
+read. Nothing is closed via `/arc-phase-done` yet.
 
-**Next step (mine):** everything that does not descend from the PICK — a written,
-evidence-backed read of the six v2 directions so the owner is choosing between two strong
-things rather than six adequate ones; and, once a direction exists, the `tokens.css`
-canonicalisation that unblocks Phase 04. Phase-closing is queued behind a merge to main,
-because a worktree cannot emit the spine receipts `/arc-phase-done` requires.
+**What the reference changes about the plan.** Phase 04 was "design and build the shell";
+it is now "wire an existing shell to L2's real doors" — the reference already reads a spine
+over an HTTP endpoint, so the seam exists and the work is substitution, not construction.
+Phase 06's bespoke wave-1 rooms (Council · Money · Portfolio · Engine · Spine · Law ·
+Learn) are **designed already**. What the reference does NOT contain is **REQ-04's Map** —
+there is no transit map in it, and that is still to be built. Recording that now so it is
+not a surprise at Phase 05.
+
+**Next step (mine):** extract the core components from the reference the way the tokens
+were extracted, then Phase 04 — point the shell at L2's `/api/inbox` and `/api/decide`
+instead of the in-browser simulator. Phase closing stays queued behind a merge to main: a
+worktree cannot emit the spine receipts `/arc-phase-done` requires.
 
 **Phase 07 status:** unchanged and correctly parked. The deterministic half is BUILT and
 answers live-state questions with citations, needing no driver, no key and no spend (36
-golden checks, proven non-vacuous by mutation). The model half is blocked on TWO things,
-not one: the owner's `hq.policy.yaml` row, and an engine-lane seam for an explicit empty
-tool allowlist (`tools: []` is currently refused by the `claude-code` driver, because an
-absent `--allowedTools` means UNRESTRICTED and so an empty grant fails closed — ADR-0223
-working as designed). The policy row alone would not make it runnable, so it is not urgent.
+golden checks, proven non-vacuous by mutation). The model half is blocked on TWO things:
+the owner's `hq.policy.yaml` row, and an engine-lane seam for an explicit empty tool
+allowlist (`tools: []` is refused by the `claude-code` driver, because an absent
+`--allowedTools` means UNRESTRICTED and an empty grant fails closed — ADR-0223 working as
+designed). The policy row alone would not make it runnable, so it is not urgent.
 
-**Next step (owner's, batched):**
-1. The Phase 01 **PICK + PREDICTION** across the six v2 directions, from
-   `docs/design/explore/face-hq-v2/COMPARE.html` and the shots beside it. This is the one
-   gate the whole back half of the cycle hangs from, and the design lane's law makes it a
-   human act. If none of the six clears the bar, saying so is the correct answer and costs
-   block A its second strike — but a least-bad pick spends the strike anyway and buys a
-   product nobody wants, so the honest verdict is cheaper.
-2. The brief's "purinjathu" read, to close Phase 00 against its commit SHA.
-3. Deferred, not pending: the `hq.policy.yaml` row for `process:face-ask` — worth doing
-   only once the engine-lane empty-allowlist seam exists.
+**Next step (owner's) — one ruling, and it is not a blocker:** the reference brain's action
+protocol lets the model emit `approve` / `reject` on a real inbox id. It is told in the
+prompt not to auto-approve money or kill decisions, but a prompt is not a tool contract,
+and REQ-07 requires ZERO write tools proven by a fixture. Recommended: drop those two
+actions and keep `open_room` / `set_speed` / `enter_hq`. Reasoning in
+`docs/design/reference/face-hq/SOURCE.md`. The brief's "purinjathu" read for Phase 00 rides
+along with it.
