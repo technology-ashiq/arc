@@ -808,7 +808,8 @@
       "PostToolUse": "toolbelt",
       "PreCompact": "toolbelt",
       "_dispatch.sh": "toolbelt",
-      "policy-decide.sh": "policy"
+      "policy-decide.sh": "policy",
+      "PreToolUse-read": "toolbelt"
     }
   },
   "rules": {
@@ -1325,7 +1326,8 @@
       "0600": "absorb",
       "0700": "memory",
       "0800": "scheduler",
-      "0900": "bench"
+      "0900": "bench",
+      "1400": "design-studio"
     }
   },
   "jobs": {
