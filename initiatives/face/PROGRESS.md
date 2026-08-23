@@ -4,7 +4,7 @@ status: LIVE
 cycle: arc-face (Cycle 15, opened 2026-08-19)
 phase: 03
 appetite: 32d
-burn: 8d
+burn: 10d
 blocked-on: nothing structural — the design gate is DISCHARGED. The owner supplied the design himself rather than picking from the explore rounds, so the PICK is moot and block A can no longer take its second BELOW-BAR strike. Two items remain and neither blocks the build: one `hq.policy.yaml` row for face-ask (edit-denied to the machine by design, and not useful until the engine-lane empty-allowlist seam exists), and one owner ruling on the reference brain’s approve/reject action (see `docs/design/reference/face-hq/SOURCE.md`).
 depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersedes ADR-1300 on placement). A new repo could not be given CI from this session, and an ungated layer is not a layer that ships.
 
@@ -26,7 +26,7 @@ depends-on: nothing external — L3 moved IN-REPO to `face/` (ADR-1316 supersede
 | 00 | Brief + coverage contract — four contracts pass `design-lint`; Coverage map frozen as the `face:` schema draft + planned-rooms registry; 8 signature screens named | 1d | built; owner "purinjathu" read outstanding |
 | 01 | Explore ×3 + design system — **superseded by the owner’s reference**: he supplied a running eleven-room HQ instead of picking from the rounds, and `tokens.css` is now extracted from it | 5d | **tokens CANONICALISED** from `docs/design/reference/face-hq/`; explore rounds kept for the record, no longer an input; PICK moot |
 | 03 | L2 `arc dash` — read door + spine-health reader + `arc-inbox` function extraction + decision door (parity fixture) + ask proxy + sim/replay + request journal; two fresh attackers | 4d | built, attacked twice, local green; CI verdict pending |
-| 04 | Shell — `arc-face` L3 repo born; Today · Inbox (stamps + needs-you cards) · Spine/Tape on live L2 + sim; keyboard model; ⌘K | 4d | blocked — needs the owner's PICK (tokens) + the L3 repo |
+| 04 | Shell — `face/` L3 born IN-REPO (ADR-1316); Today · Inbox on the live L2 doors; five-ring shell; keyboard model | 4d | **BUILT and proven — a real `decision.recorded` written from the face** |
 | 05 | Map + template + birth-rule + coverage — `face:` ×16 manifests + planned-rooms registry + `KNOWN_FIELDS` + generic renderer + `face-coverage` (mutant control) + Map with live dots | 5d | birth-rule + coverage LANDED; Map + generic renderer need L3 |
 | 06 | Rooms — bespoke panels wave 1 (Council · Money · Leads · Growth · Engine · Evolve · Board · Spine) → wave 2 (rest); honest states verified by a fresh agent | 5d | pending (needs L3) |
 | 07 | Ask arc — `face-ask` process + router row + `hq.policy.yaml` row + 20 golden questions + drafts-to-stamp; zero write tools | 3d | process + router row landed; policy row is the owner's (edit-denied to me) |
@@ -189,6 +189,23 @@ generic → Map animation → Tape play (keep as-of).
   `face/src/lib` module may import a package, and no arc script may import from `face/`.
   `face-tokens.mjs` copies the canonical tokens into the app with a `--check` drift gate and
   five mutant arms (a copy with no gate is drift with extra steps).
+- 2026-08-23 — **Phase 04 built, and the write path is PROVEN, not asserted.** The app runs:
+  five-ring shell over the persistent particle face, Today, Inbox, the Map, the generic and
+  index renderers. Opened it against a 2,000-event fixture, typed a reason, pressed approve,
+  and read the log back — `decision.recorded 01M0Q01KDCARYDDD0B6XSA0GFC` with the reason
+  verbatim. An empty reason first surfaced `BAD_REASON` with the door's own sentence. That
+  is REQ-03 end to end, through `/api/decide`, which IS `arc-inbox`'s own `decide()`.
+  Four agents built the layers in parallel; **every defect that mattered was found by
+  integrating and by opening the page**, never by a green suite:
+  the door client was dead on arrival in a browser (`fetch` stored unbound — Node does not
+  care, `window` does); the dev proxy sent the wrong Host and would have sent the wrong
+  Origin, which would have left every READ working and every STAMP refused; `modeChip`
+  claimed `real: true` for a mode nobody stated, directly under a comment saying that is the
+  mistake; and `Review & Ship` rendered as `Review &amp; Ship` in the rail, the Map labels
+  and all 33 accessible names. Two agents had each written their own decoder — 26 call sites
+  — and each left a comment saying a twin existed and must not drift. Folded to one, and the
+  registry is now decoded ONCE where it enters. Suites: L3 **123 checks**, doors **50**, both
+  with no install and no build.
 
 ## Assumptions ledger — adjudicated by running the measurement, not by opinion
 
