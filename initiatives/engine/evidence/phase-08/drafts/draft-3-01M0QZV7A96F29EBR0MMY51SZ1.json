@@ -1,0 +1,8 @@
+{
+  "draft": "Three assertions I wrote today all passed for six hours, then CI killed every one of them on the three-machine matrix. The first compared a value against a variable the test framework doesn't define, so it was really comparing against an empty string. The second asserted a fallback chain was never walked, in a configuration that had no fallback chain. The third searched a receipt for a field the receipt never emits. None of them would have failed on a single machine; all three fell on the matrix that was already there for other reasons.",
+  "sources": [
+    "# ci-killed-three-of-my-own-assertions"
+  ],
+  "task-class": "build-in-public-draft",
+  "pack-ref": "pack-2026-08-23-cycle7"
+}
